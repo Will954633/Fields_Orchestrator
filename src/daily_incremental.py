@@ -53,6 +53,8 @@ def write_for_sale_snapshot(
     mongo_uri: str,
     database: str,
     for_sale_collection: str = "properties_for_sale",
+    for_sale_database: str = "Gold_Coast_Currently_For_Sale",
+    target_suburbs: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Write a daily snapshot of current for-sale addresses to state/for_sale_snapshot.json."""
     logger = get_logger()
@@ -60,12 +62,23 @@ def write_for_sale_snapshot(
     state_dir.mkdir(parents=True, exist_ok=True)
     snapshot_file = state_dir / "for_sale_snapshot.json"
 
-    client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000)
-    db = client[database]
-    col = db[for_sale_collection]
+    client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000,
+                         retryWrites=False, tls=True, tlsAllowInvalidCertificates=True)
 
-    props = list(col.find({}, {"address": 1, "_id": 0}))
-    addresses = sorted([p.get("address") for p in props if p.get("address")])
+    address_list: List[str] = []
+    if target_suburbs:
+        db = client[for_sale_database]
+        for suburb in target_suburbs:
+            col = db[suburb]
+            for p in col.find({}, {"address": 1, "_id": 0}):
+                if p.get("address"):
+                    address_list.append(p["address"])
+    else:
+        db = client[database]
+        col = db[for_sale_collection]
+        address_list = [p.get("address") for p in col.find({}, {"address": 1, "_id": 0}) if p.get("address")]
+
+    addresses = sorted(set(address_list))
 
     payload = {
         "timestamp": _now_str(),
@@ -85,17 +98,28 @@ def compute_candidate_sets(
     database: str,
     pipeline_signature: Dict[str, Any],
     for_sale_collection: str = "properties_for_sale",
+    for_sale_database: str = "Gold_Coast_Currently_For_Sale",
+    target_suburbs: Optional[List[str]] = None,
 ) -> CandidateSets:
     """Compute daily candidates: new (vs prior snapshot), incomplete, stale signature."""
     logger = get_logger()
     snapshot_file = base_dir / "state" / "for_sale_snapshot.json"
     prev_addresses = _load_snapshot_addresses(snapshot_file)
 
-    client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000)
-    db = client[database]
-    col = db[for_sale_collection]
+    client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000,
+                         retryWrites=False, tls=True, tlsAllowInvalidCertificates=True)
 
-    current = list(col.find({}, {"address": 1, "orchestrator": 1, "_id": 0}))
+    current: List[Dict] = []
+    if target_suburbs:
+        db = client[for_sale_database]
+        for suburb in target_suburbs:
+            col = db[suburb]
+            current.extend(list(col.find({}, {"address": 1, "orchestrator": 1, "_id": 0})))
+    else:
+        db = client[database]
+        col = db[for_sale_collection]
+        current = list(col.find({}, {"address": 1, "orchestrator": 1, "_id": 0}))
+
     current_addresses = set(d.get("address") for d in current if d.get("address"))
 
     new_addresses = sorted(list(current_addresses - prev_addresses))

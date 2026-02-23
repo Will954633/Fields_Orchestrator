@@ -45,21 +45,26 @@ class UnknownStatusDetector:
     4. Alerts user via popup and logging
     """
     
-    def __init__(self, mongodb_uri: str = "mongodb://localhost:27017/"):
+    def __init__(self, mongodb_uri: str = "mongodb://localhost:27017/",
+                 for_sale_db: str = "Gold_Coast_Currently_For_Sale",
+                 target_suburbs: Optional[List[str]] = None):
         """
         Initialize the unknown status detector.
-        
+
         Args:
             mongodb_uri: MongoDB connection URI
+            for_sale_db: Database containing the per-suburb for-sale collections
+            target_suburbs: Collection names (suburb slugs) to monitor,
+                            e.g. ["robina", "varsity_lakes"]. If None, no snapshot is taken.
         """
         self.logger = get_logger()
         self.mongodb_uri = mongodb_uri
+        self.for_sale_db = for_sale_db
+        self.target_suburbs = target_suburbs or []
         self.client: Optional[MongoClient] = None
         self.db = None
-        
+
         # Snapshot storage
-        # NOTE: This detector is about identifying items that were present before Phase 2 but
-        # were not refreshed by the Phase 2 scrape.
         self.snapshot_file = Path(__file__).parent.parent / "state" / "pre_phase2_snapshot.json"
         self.pre_phase2_snapshot: Set[str] = set()  # canonical key: address
         self.unknown_properties: List[Dict[str, Any]] = []
@@ -72,10 +77,10 @@ class UnknownStatusDetector:
             True if connection successful, False otherwise
         """
         try:
-            self.client = MongoClient(self.mongodb_uri, serverSelectionTimeoutMS=5000)
-            # Test connection
+            self.client = MongoClient(self.mongodb_uri, serverSelectionTimeoutMS=5000,
+                                      retryWrites=False, tls=True, tlsAllowInvalidCertificates=True)
             self.client.admin.command('ping')
-            self.db = self.client['property_data']
+            self.db = self.client[self.for_sale_db]
             self.logger.info("✅ Connected to MongoDB")
             return True
         except Exception as e:
@@ -100,23 +105,24 @@ class UnknownStatusDetector:
             if self.db is None:
                 self.logger.error("Not connected to MongoDB")
                 return False
-            
-            collection = self.db['properties_for_sale']
 
-            # Canonical key: address (url is not reliably present in current schema)
-            properties = collection.find({}, {'address': 1, 'last_scraped': 1, 'last_updated': 1, '_id': 0})
+            if not self.target_suburbs:
+                self.logger.warning("⚠️ No target suburbs configured — skipping pre-Phase 2 snapshot")
+                return False
 
             snapshot_data = []
-            for prop in properties:
-                address = prop.get('address')
-                if address:
-                    self.pre_phase2_snapshot.add(address)
-                    snapshot_data.append({
-                        'address': address,
-                        'last_scraped': prop.get('last_scraped'),
-                        'last_updated': prop.get('last_updated'),
-                    })
-            
+            for suburb in self.target_suburbs:
+                col = self.db[suburb]
+                for prop in col.find({}, {'address': 1, 'last_updated': 1, '_id': 0}):
+                    address = prop.get('address')
+                    if address:
+                        self.pre_phase2_snapshot.add(address)
+                        snapshot_data.append({
+                            'address': address,
+                            'suburb': suburb,
+                            'last_updated': str(prop.get('last_updated', '')),
+                        })
+
             # Save snapshot to file
             self.snapshot_file.parent.mkdir(parents=True, exist_ok=True)
             with open(self.snapshot_file, 'w') as f:
@@ -125,10 +131,10 @@ class UnknownStatusDetector:
                     'count': len(snapshot_data),
                     'properties': snapshot_data
                 }, f, indent=2)
-            
-            self.logger.info(f"📸 Pre-Phase 2 Snapshot: {len(snapshot_data)} properties in for_sale collection (key=address)")
+
+            self.logger.info(f"📸 Pre-Phase 2 Snapshot: {len(snapshot_data)} properties across {len(self.target_suburbs)} suburb collections")
             return True
-            
+
         except Exception as e:
             self.logger.error(f"❌ Failed to take pre-Phase 2 snapshot: {e}")
             return False
@@ -178,29 +184,30 @@ class UnknownStatusDetector:
             if not self.pre_phase2_snapshot:
                 self.logger.warning("⚠️ No pre-Phase 2 snapshot available")
                 return []
-            
-            # Get current properties in for_sale collection
-            for_sale_collection = self.db['properties_for_sale']
-            current_for_sale = for_sale_collection.find({}, {
-                'address': 1,
-                'last_scraped': 1,
-                'last_updated': 1,
-                '_id': 0
-            })
 
+            # Get current addresses across all target suburb collections
             current_for_sale_by_address = {}
-            for prop in current_for_sale:
-                address = prop.get('address')
-                if address:
-                    current_for_sale_by_address[address] = prop
-            
-            # Get properties that were moved to sold
-            sold_collection = self.db['properties_sold']
-            moved_to_sold = sold_collection.find(
-                {'address': {'$in': list(self.pre_phase2_snapshot)}},
-                {'address': 1, '_id': 0}
-            )
-            moved_to_sold_addresses = set(prop['address'] for prop in moved_to_sold if prop.get('address'))
+            for suburb in self.target_suburbs:
+                col = self.db[suburb]
+                for prop in col.find({}, {'address': 1, 'last_updated': 1, '_id': 0}):
+                    address = prop.get('address')
+                    if address:
+                        current_for_sale_by_address[address] = prop
+
+            # Get properties moved to sold (Gold_Coast_Recently_Sold, same suburb collections)
+            sold_db = self.client['Gold_Coast_Recently_Sold']
+            moved_to_sold_addresses: Set[str] = set()
+            for suburb in self.target_suburbs:
+                try:
+                    sold_col = sold_db[suburb]
+                    for prop in sold_col.find(
+                        {'address': {'$in': list(self.pre_phase2_snapshot)}},
+                        {'address': 1, '_id': 0}
+                    ):
+                        if prop.get('address'):
+                            moved_to_sold_addresses.add(prop['address'])
+                except Exception:
+                    pass
             
             # Identify unknown status properties
             self.unknown_properties = []
@@ -213,29 +220,25 @@ class UnknownStatusDetector:
                         # This property is still in for_sale and wasn't moved to sold
                         # Check if it was recently scraped (found during Phase 2)
                         prop = current_for_sale_by_address[address]
-                        last_scraped = prop.get('last_scraped')
-                        
-                        # If last_scraped is recent (within last 24 hours), it was found
-                        # If not recent or missing, it's unknown status
+                        last_updated = prop.get('last_updated')
+
+                        # If last_updated is recent (within last 24 hours), it was re-scraped
                         is_recent = False
-                        if last_scraped:
+                        if last_updated:
                             try:
-                                if isinstance(last_scraped, str):
-                                    scraped_time = datetime.strptime(last_scraped, "%Y-%m-%d %H:%M:%S")
+                                if isinstance(last_updated, str):
+                                    updated_time = datetime.strptime(last_updated[:19], "%Y-%m-%dT%H:%M:%S")
                                 else:
-                                    scraped_time = last_scraped
-                                
-                                time_diff = (datetime.now() - scraped_time).total_seconds()
+                                    updated_time = last_updated
+                                time_diff = (datetime.now() - updated_time).total_seconds()
                                 is_recent = time_diff < 86400  # 24 hours
-                            except:
+                            except Exception:
                                 pass
-                        
+
                         if not is_recent:
-                            # This is an unknown status property
                             self.unknown_properties.append({
                                 'address': prop.get('address', 'Unknown Address'),
-                                'last_scraped': last_scraped if last_scraped else 'Never',
-                                'last_updated': prop.get('last_updated', 'Unknown')
+                                'last_updated': str(last_updated) if last_updated else 'Never',
                             })
             
             # Log results
@@ -248,7 +251,6 @@ class UnknownStatusDetector:
                 
                 for i, prop in enumerate(self.unknown_properties, 1):
                     self.logger.warning(f"\n{i}. {prop['address']}")
-                    self.logger.warning(f"   Last Scraped: {prop['last_scraped']}")
                     self.logger.warning(f"   Last Updated: {prop['last_updated']}")
                 
                 self.logger.warning("\n" + "=" * 80)

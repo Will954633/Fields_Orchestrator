@@ -596,8 +596,21 @@ class TaskExecutor:
         except Exception as e:
             self.logger.warning(f"Failed to load settings: {e}")
 
+        # Load target suburbs for unknown status detection and daily incremental
+        _target_suburbs_slugs: List[str] = []
+        try:
+            _settings_for_suburbs = yaml.safe_load(open(settings_path)) or {} if settings_path.exists() else {}
+            _suburbs_raw = _settings_for_suburbs.get("target_market", {}).get("suburbs", [])
+            _target_suburbs_slugs = [s.split(":")[0].strip().lower().replace(" ", "_") for s in _suburbs_raw]
+        except Exception as e:
+            self.logger.warning(f"Failed to load target suburbs for unknown status detection: {e}")
+
         # Initialize all MongoDB components with correct URI
-        unknown_detector = UnknownStatusDetector(mongodb_uri=mongo_uri)
+        unknown_detector = UnknownStatusDetector(
+            mongodb_uri=mongo_uri,
+            for_sale_db="Gold_Coast_Currently_For_Sale",
+            target_suburbs=_target_suburbs_slugs,
+        )
         unknown_detector.connect_mongodb()
 
         sold_mover = SoldMover(mongo_uri=mongo_uri, database=mongo_db)
@@ -672,12 +685,16 @@ class TaskExecutor:
                             base_dir=base_dir,
                             mongo_uri=mongo_uri,
                             database=mongo_db,
+                            for_sale_database="Gold_Coast_Currently_For_Sale",
+                            target_suburbs=_target_suburbs_slugs,
                         )
                         candidate_sets = compute_candidate_sets(
                             base_dir=base_dir,
                             mongo_uri=mongo_uri,
                             database=mongo_db,
                             pipeline_signature={"version": pipeline_sig.version, "signature": pipeline_sig.signature},
+                            for_sale_database="Gold_Coast_Currently_For_Sale",
+                            target_suburbs=_target_suburbs_slugs,
                         )
                         run_ctx.write_candidate_sets(
                             {
