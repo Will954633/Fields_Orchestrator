@@ -1,0 +1,40 @@
+# Logs and runtime state
+logs/
+state/
+*.log
+*.pid
+*.lock
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Sensitive config (contains credentials)
+config/settings.yaml
+settings.yaml
+
+# Old files with hardcoded credentials
+mongodb_monitor.py
+02_Deployment/scripts/fix_all_mongodb_connections.sh
+02_Deployment/scripts/update_systemd_service.sh
+02_Deployment/scripts/apply_remaining_fixes.sh
+02_Deployment/scripts/list_database_collections.py
+02_Deployment/scripts/check_today_data.py
+
+# MD docs with embedded credentials
+FLOOR_PLAN_OPENAI_FALLBACK_IMPLEMENTATION.md
+VM_NIGHT_RUN_FEB16_FIX_COMPLETE.md
+VM_ORCHESTRATOR_FIXES_COMPLETE.md
+VM_MONGODB_CONNECTION_FIX_SUMMARY.md
+VM_MONGODB_URI_EXPORT_FIX_COMPLETE.md
+VM_ORCHESTRATOR_NIGHT_RUN_ANALYSIS.md
+
+# Backup/temp files
+*.bak
+*.backup
+*.backup_*
+*.backup_paths
+*.BROKEN_LOCAL_PATHS_*
+.tmp.driveupload/
+.env

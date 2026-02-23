@@ -1,0 +1,14 @@
+# Deployment secrets - NEVER commit these
+.env
+
+# MongoDB export data (can be very large)
+migration/export_*/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# OS files
+.DS_Store
+Thumbs.db

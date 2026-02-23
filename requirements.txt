@@ -1,0 +1,13 @@
+# Fields Orchestrator Dependencies
+# Last Updated: 26/01/2026, 7:59 PM (Brisbane Time)
+#
+# Install with: pip3 install -r requirements.txt
+
+# YAML configuration parsing
+PyYAML>=6.0
+
+# MongoDB driver
+pymongo>=4.0
+
+# Note: tkinter is included with Python on macOS
+# Note: subprocess, threading, json, etc. are standard library

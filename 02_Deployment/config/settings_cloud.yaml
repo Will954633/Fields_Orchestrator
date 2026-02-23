@@ -1,0 +1,93 @@
+# Fields Orchestrator Configuration - CLOUD VERSION
+# Last Edit: 10/02/2026, 7:35 AM (Tuesday) - Brisbane Time
+# - Added skip_backup: true (Cosmos DB has built-in continuous backup)
+# Previous: 07/02/2026, 6:30 PM (Wednesday) - Brisbane Time
+#
+# This is the cloud deployment version of settings.yaml.
+# Key differences from local version:
+#   - MongoDB URI points to Azure Cosmos DB (via environment variable)
+#   - Paths updated for Google Cloud VM (/home/fields/)
+#   - Backup strategy changed (Cosmos DB has built-in backup)
+#   - No tkinter dialog (headless server - no GUI)
+#   - Cooldown periods adjusted for cloud latency
+
+schedule:
+  trigger_time: "21:17"  # 9:17 PM Brisbane time - TEST RUN
+  timezone: "Australia/Brisbane"
+  snooze_duration_minutes: 30
+  dialog_timeout_seconds: 300
+  skip_confirmation_dialogs: true  # CLOUD: No user interaction - start immediately
+  run_on_weekends: true
+  run_target_market_daily: true
+  run_other_suburbs_weekly: true
+  other_suburbs_day: "Sunday"
+
+mongodb:
+  # CLOUD: Uses COSMOS_CONNECTION_STRING environment variable
+  # The cosmos_db_config.py helper reads this automatically
+  # Fallback URI if env var not set (should never happen in production)
+  uri: "${COSMOS_CONNECTION_STRING}"
+  database: "property_data"
+  health_check_timeout: 30  # Increased for cloud latency
+  max_connection_retries: 5
+  retry_delay_seconds: 30
+  # Cooldown periods - slightly longer for cloud to avoid RU throttling
+  cooldown_after_heavy_write: 360  # 6 minutes (was 5 - extra buffer for RU recovery)
+  cooldown_after_moderate_write: 240  # 4 minutes (was 3)
+  cooldown_before_backup: 60  # 1 minute (Cosmos DB backup is automatic)
+  # Database references
+  gold_coast_database: "Gold_Coast_Currently_For_Sale"
+  gold_coast_master_database: "Gold_Coast"
+  sold_collection: "Gold_Coast_Recently_Sold"
+
+process_execution:
+  max_retries_per_step: 2
+  retry_delay_seconds: 60
+  log_output: true
+
+backup:
+  # CLOUD: Cosmos DB has built-in continuous backup (point-in-time restore)
+  # No local mongodump needed - skip_backup tells orchestrator to skip backup step
+  skip_backup: true
+  enabled: false
+  # Cloud backup locations
+  primary_dir: "/home/fields/backups"
+  secondary_dir: ""  # No secondary needed - Cosmos DB has built-in backup
+  tertiary_dir: ""
+  slots:
+    - "backup_latest"
+    - "backup_yesterday"
+    - "backup_3days"
+    - "backup_5days"
+  rotation_marker: ".last_daily_rotation"
+
+notifications:
+  show_progress_window: false  # CLOUD: No GUI on headless server
+  completion_notification: true
+  error_notification: true
+  window_stay_open_after_complete: false
+
+logging:
+  level: "INFO"
+  file: "/home/fields/Fields_Orchestrator/logs/orchestrator.log"
+  max_size_mb: 10
+  backup_count: 5
+  console_output: true
+
+paths:
+  base_dir: "/home/fields/Fields_Orchestrator"
+  property_scraping_dir: "/home/fields/Property_Data_Scraping"
+  lock_file: "/tmp/fields_orchestrator.lock"
+  pid_file: "/tmp/fields_orchestrator.pid"
+  state_file: "state/orchestrator_state.json"
+
+target_market:
+  suburbs:
+    - "Robina:4226"
+    - "Mudgeeraba:4213"
+    - "Varsity Lakes:4227"
+    - "Reedy Creek:4227"
+    - "Burleigh Waters:4220"
+    - "Merrimac:4226"
+    - "Worongary:4213"
+    - "Carrara:4211"

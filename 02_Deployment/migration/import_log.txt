@@ -1,0 +1,249 @@
+============================================================
+  Throttled Import to Azure Cosmos DB
+  2026-02-07 19:08:03 (Brisbane)
+============================================================
+
+  Batch Size: 5 documents
+  Drop Mode:  No (resume/skip existing)
+  Rate Limit: Auto-retry with exponential backoff
+
+🔗 Local MongoDB: Connected
+/Users/projects/Documents/Fields_Orchestrator/02_Deployment/migration/02_import_to_cosmos_throttled.py:246: UserWarning: You appear to be connected to a CosmosDB cluster. For more information regarding feature compatibility and support please visit https://www.mongodb.com/supportability/cosmosdb
+  cosmos_client = MongoClient(COSMOS_URI, serverSelectionTimeoutMS=10000)
+🔗 Cosmos DB: Connected
+
+📦 property_data (16 collections, 2,207 documents)
+   ──────────────────────────────────────────────────
+   ⏭️  [1/16] changes (0 docs) - already imported
+   ⏭️  [2/16] image_descriptions (38 docs) - already imported
+   ⏭️  [3/16] processing_status (94 docs) - already imported
+   ⏭️  [4/16] properties (53 docs) - already imported
+   ⏭️  [5/16] properties_for_sale (154 docs) - already imported
+   ⏭️  [6/16] properties_for_sale_enriched (148 docs) - already imported
+   ⏭️  [7/16] properties_sold (76 docs) - already imported
+   ⏭️  [8/16] property_changes (0 docs) - already imported
+   ⏭️  [9/16] property_floorplan_interactive (5 docs) - already imported
+   ⏭️  [10/16] property_snapshots (0 docs) - already imported
+   ⏭️  [11/16] room_descriptions (43 docs) - already imported
+   ⏭️  [12/16] room_image_matches (1092 docs) - already imported
+   ⏭️  [13/16] sold_last_6_months (416 docs) - already imported
+   ⏭️  [14/16] suburb_median_prices (76 docs) - already imported
+   ⏭️  [15/16] suburb_statistics (5 docs) - already imported
+   ⏭️  [16/16] teleprompter_prompts (7 docs) - already imported
+   ──────────────────────────────────────────────────
+   ✅ property_data: 0 inserted, 0 failed, 2,207 skipped
+
+📦 Gold_Coast_Currently_For_Sale (53 collections, 2,166 documents)
+   ──────────────────────────────────────────────────
+   ⏭️  [1/53] Gold_Coast_Recently_Sold (65 docs) - already imported
+   ⏭️  [2/53] advancetown (3 docs) - already imported
+   ⏭️  [3/53] arundel (15 docs) - already imported
+   ⏭️  [4/53] ashmore (36 docs) - already imported
+   ⏭️  [5/53] benowa (30 docs) - already imported
+   ⏭️  [6/53] biggera_waters (38 docs) - already imported
+   ⏭️  [7/53] bilinga (22 docs) - already imported
+   ⏭️  [8/53] bonogin (21 docs) - already imported
+   ⏭️  [9/53] broadbeach (125 docs) - already imported
+   ⏭️  [10/53] broadbeach_waters (44 docs) - already imported
+   ⏭️  [11/53] bundall (16 docs) - already imported
+   ⏭️  [12/53] burleigh_heads (107 docs) - already imported
+   ⏭️  [13/53] burleigh_waters (41 docs) - already imported
+   ⏭️  [14/53] carrara (31 docs) - already imported
+   ⏭️  [15/53] clear_island_waters (15 docs) - already imported
+   ⏭️  [16/53] coolangatta (30 docs) - already imported
+   ⏭️  [17/53] coomera (24 docs) - already imported
+   ⏭️  [18/53] currumbin (12 docs) - already imported
+   ⏭️  [19/53] currumbin_valley (19 docs) - already imported
+   ⏭️  [20/53] currumbin_waters (27 docs) - already imported
+   ⏭️  [21/53] elanora (23 docs) - already imported
+   ⏭️  [22/53] gaven (8 docs) - already imported
+   ⏭️  [23/53] gilston (11 docs) - already imported
+   ⏭️  [24/53] helensvale (57 docs) - already imported
+   ⏭️  [25/53] highland_park (7 docs) - already imported
+   ⏭️  [26/53] hollywell (13 docs) - already imported
+   ⏭️  [27/53] hope_island (136 docs) - already imported
+   ⏭️  [28/53] labrador (61 docs) - already imported
+   ⏭️  [29/53] main_beach (67 docs) - already imported
+   ⏭️  [30/53] mermaid_beach (45 docs) - already imported
+   ⏭️  [31/53] mermaid_waters (26 docs) - already imported
+   ⏭️  [32/53] merrimac (21 docs) - already imported
+   ⏭️  [33/53] miami (22 docs) - already imported
+   ⏭️  [34/53] molendinar (11 docs) - already imported
+   ⏭️  [35/53] mudgeeraba (33 docs) - already imported
+   ⏭️  [36/53] nerang (34 docs) - already imported
+   ⏭️  [37/53] oxenford (16 docs) - already imported
+   ⏭️  [38/53] pacific_pines (18 docs) - already imported
+   ⏭️  [39/53] palm_beach (108 docs) - already imported
+   ⏭️  [40/53] paradise_point (63 docs) - already imported
+   ⏭️  [41/53] parkwood (13 docs) - already imported
+   ⏭️  [42/53] reedy_creek (23 docs) - already imported
+   ⏭️  [43/53] robina (67 docs) - already imported
+   ⏭️  [44/53] runaway_bay (57 docs) - already imported
+   ⏭️  [45/53] southport (113 docs) - already imported
+   ⏭️  [46/53] surfers_paradise (229 docs) - already imported
+   ⏭️  [47/53] tallai (14 docs) - already imported
+   ⏭️  [48/53] tallebudgera (22 docs) - already imported
+   ⏭️  [49/53] tallebudgera_valley (15 docs) - already imported
+   ⏭️  [50/53] tugun (16 docs) - already imported
+   ⏭️  [51/53] upper_coomera (41 docs) - already imported
+   ⏭️  [52/53] varsity_lakes (27 docs) - already imported
+   ⏭️  [53/53] worongary (28 docs) - already imported
+   ──────────────────────────────────────────────────
+   ✅ Gold_Coast_Currently_For_Sale: 0 inserted, 0 failed, 2,166 skipped
+
+📦 Gold_Coast (81 collections, 331,224 documents)
+   ──────────────────────────────────────────────────
+   ⏭️  [1/81] advancetown (242 docs) - already imported
+   ⏭️  [2/81] alberton (335 docs) - already imported
+   ⏭️  [3/81] arundel (5431 docs) - already imported
+   ⏭️  [4/81] ashmore (6162 docs) - already imported
+   ⏭️  [5/81] austinville (134 docs) - already imported
+   ⏭️  [6/81] benowa (4408 docs) - already imported
+   ⏭️  [7/81] biggera_waters (5963 docs) - already imported
+   📝 [8/81] bilinga (1502 docs)... ✅ 1502 docs (19.6s)
+   📝 [9/81] bonogin (1810 docs)... ✅ 1810 docs (34.4s)
+   📝 [10/81] broadbeach (9834 docs)... ✅ 9834 docs (182.2s)
+   📝 [11/81] broadbeach_waters (4039 docs)... ✅ 4039 docs (78.7s)
+   📝 [12/81] bundall (2693 docs)... ✅ 2693 docs (50.5s)
+   📝 [13/81] burleigh_heads (9476 docs)... ✅ 9476 docs (173.4s)
+   📝 [14/81] burleigh_waters (6885 docs)... ✅ 6885 docs (143.0s)
+   📝 [15/81] carrara (6307 docs)... ✅ 6307 docs (128.3s)
+   📝 [16/81] cedar_creek_gold_coast_city (199 docs)... ✅ 199 docs (3.3s)
+   📝 [17/81] clagiraba (306 docs)... ✅ 306 docs (5.5s)
+   📝 [18/81] clear_island_waters (1936 docs)... ✅ 1936 docs (36.6s)
+   📝 [19/81] coolangatta (6519 docs)... ✅ 6519 docs (126.0s)
+   📝 [20/81] coombabah (5352 docs)... ✅ 5352 docs (99.6s)
+   📝 [21/81] coomera (8741 docs)... ✅ 8741 docs (167.4s)
+   📝 [22/81] currumbin (2062 docs)... ✅ 2062 docs (40.6s)
+   📝 [23/81] currumbin_valley (897 docs)... ✅ 897 docs (16.2s)
+   📝 [24/81] currumbin_waters (4629 docs)... ❌ 4627/4629 (2 failed, 111.0s)
+   📝 [25/81] elanora (5149 docs)... ✅ 5149 docs (100.7s)
+   📝 [26/81] gaven (658 docs)... ✅ 658 docs (12.2s)
+   📝 [27/81] gilberton_gold_coast_city (46 docs)... ✅ 46 docs (0.9s)
+   📝 [28/81] gilston (1031 docs)... ✅ 1031 docs (20.0s)
+   📝 [29/81] guanaba (368 docs)... ✅ 368 docs (7.1s)
+   📝 [30/81] helensvale (8342 docs)... ✅ 8342 docs (157.9s)
+   📝 [31/81] highland_park (2736 docs)... ✅ 2736 docs (52.8s)
+   📝 [32/81] hollywell (1455 docs)... ✅ 1455 docs (28.1s)
+   📝 [33/81] hope_island (8958 docs)... ✅ 8958 docs (167.2s)
+   📝 [34/81] jacobs_well (1586 docs)... ✅ 1586 docs (30.4s)
+   📝 [35/81] kingsholme (326 docs)... ✅ 326 docs (5.8s)
+   📝 [36/81] labrador (11684 docs)... ✅ 11684 docs (229.7s)
+   📝 [37/81] lower_beechmont (560 docs)... ✅ 560 docs (11.0s)
+   📝 [38/81] luscombe (237 docs)... ✅ 237 docs (4.5s)
+   📝 [39/81] main_beach (3658 docs)... ✅ 3658 docs (63.9s)
+   📝 [40/81] maudsland (2723 docs)... ✅ 2723 docs (52.1s)
+   📝 [41/81] mermaid_beach (5395 docs)... ✅ 5395 docs (100.8s)
+   📝 [42/81] mermaid_waters (6169 docs)... ✅ 6169 docs (117.6s)
+   📝 [43/81] merrimac (3001 docs)... ✅ 3001 docs (60.6s)
+   📝 [44/81] miami (4783 docs)... ✅ 4783 docs (90.6s)
+   📝 [45/81] molendinar (3592 docs)... ✅ 3592 docs (71.6s)
+   📝 [46/81] mount_nathan (582 docs)... ✅ 582 docs (10.6s)
+   📝 [47/81] mudgeeraba (5921 docs)... ✅ 5921 docs (119.8s)
+   📝 [48/81] natural_bridge (79 docs)... ✅ 79 docs (1.2s)
+   📝 [49/81] nerang (8001 docs)... ✅ 8001 docs (150.4s)
+   📝 [50/81] neranwood (53 docs)... ✅ 53 docs (0.9s)
+   📝 [51/81] norwell (156 docs)... ✅ 156 docs (2.5s)
+   📝 [52/81] numinbah_valley (89 docs)... ✅ 89 docs (1.1s)
+   📝 [53/81] ormeau (6640 docs)... ✅ 6640 docs (129.9s)
+   📝 [54/81] ormeau_hills (1737 docs)... ✅ 1737 docs (34.2s)
+   📝 [55/81] oxenford (5547 docs)... ✅ 5547 docs (103.1s)
+   📝 [56/81] pacific_pines (6301 docs)... ✅ 6301 docs (125.5s)
+   📝 [57/81] palm_beach (10706 docs)... ✅ 10706 docs (199.2s)
+   📝 [58/81] paradise_point (4040 docs)... ✅ 4040 docs (76.7s)
+   📝 [59/81] parkwood (3370 docs)... ✅ 3370 docs (64.4s)
+   📝 [60/81] pimpama (9868 docs)... ✅ 9868 docs (192.6s)
+   📝 [61/81] reedy_creek (2780 docs)... ✅ 2780 docs (59.4s)
+   📝 [62/81] robina (11761 docs)... ✅ 11761 docs (235.2s)
+   📝 [63/81] runaway_bay (5301 docs)... ✅ 5301 docs (110.1s)
+   📝 [64/81] south_stradbroke (617 docs)... ✅ 617 docs (10.2s)
+   📝 [65/81] southern_moreton_bay_islands (18 docs)... ✅ 18 docs (0.5s)
+   📝 [66/81] southport (20344 docs)... ✅ 20344 docs (384.2s)
+   📝 [67/81] springbrook (657 docs)... ✅ 657 docs (12.4s)
+   📝 [68/81] stapylton (646 docs)... ✅ 646 docs (12.3s)
+   📝 [69/81] steiglitz (379 docs)... ✅ 379 docs (7.0s)
+   📝 [70/81] surfers_paradise (25962 docs)... ✅ 25962 docs (501.2s)
+   📝 [71/81] tallai (1581 docs)... ✅ 1581 docs (31.1s)
+   📝 [72/81] tallebudgera (1388 docs)... ✅ 1388 docs (26.4s)
+   📝 [73/81] tallebudgera_valley (697 docs)... ✅ 697 docs (12.9s)
+   📝 [74/81] tugun (3941 docs)... ✅ 3941 docs (95.2s)
+   📝 [75/81] upper_coomera (10474 docs)... ✅ 10474 docs (205.0s)
+   📝 [76/81] varsity_lakes (7635 docs)... ✅ 7635 docs (152.2s)
+   📝 [77/81] willow_vale (904 docs)... ✅ 904 docs (17.6s)
+   📝 [78/81] wongawallan (613 docs)... ✅ 613 docs (11.7s)
+   📝 [79/81] woongoolba (221 docs)... ✅ 221 docs (3.7s)
+   📝 [80/81] worongary (2600 docs)... ✅ 2600 docs (50.6s)
+   📝 [81/81] yatala (1296 docs)... ✅ 1296 docs (23.4s)
+   ──────────────────────────────────────────────────
+   ✅ Gold_Coast: 308,547 inserted, 2 failed, 22,675 skipped
+
+📦 Gold_Coast_Recently_Sold (51 collections, 263 documents)
+   ──────────────────────────────────────────────────
+   📝 [1/51] advancetown (3 docs)... ✅ 3 docs (0.3s)
+   📝 [2/51] arundel (3 docs)... ✅ 3 docs (0.3s)
+   📝 [3/51] ashmore (3 docs)... ✅ 3 docs (0.3s)
+   📝 [4/51] benowa (0 docs)... ✅ 0 docs (0.0s)
+   📝 [5/51] biggera_waters (5 docs)... ✅ 5 docs (0.4s)
+   📝 [6/51] bilinga (4 docs)... ✅ 4 docs (0.4s)
+   📝 [7/51] bonogin (6 docs)... ✅ 6 docs (0.4s)
+   📝 [8/51] broadbeach (6 docs)... ✅ 6 docs (0.7s)
+   📝 [9/51] broadbeach_waters (5 docs)... ✅ 5 docs (0.3s)
+   📝 [10/51] burleigh_heads (5 docs)... ✅ 5 docs (0.3s)
+   📝 [11/51] burleigh_waters (5 docs)... ✅ 5 docs (0.3s)
+   📝 [12/51] clear_island_waters (3 docs)... ✅ 3 docs (0.4s)
+   📝 [13/51] coolangatta (4 docs)... ✅ 4 docs (0.4s)
+   📝 [14/51] coomera (8 docs)... ✅ 8 docs (0.4s)
+   📝 [15/51] currumbin (5 docs)... ✅ 5 docs (0.4s)
+   📝 [16/51] currumbin_valley (3 docs)... ✅ 3 docs (0.4s)
+   📝 [17/51] currumbin_waters (3 docs)... ✅ 3 docs (0.3s)
+   📝 [18/51] elanora (5 docs)... ✅ 5 docs (0.4s)
+   📝 [19/51] gaven (3 docs)... ✅ 3 docs (0.3s)
+   📝 [20/51] gilston (3 docs)... ✅ 3 docs (0.3s)
+   📝 [21/51] helensvale (4 docs)... ✅ 4 docs (0.4s)
+   📝 [22/51] highland_park (4 docs)... ✅ 4 docs (0.3s)
+   📝 [23/51] hollywell (3 docs)... ✅ 3 docs (0.4s)
+   📝 [24/51] hope_island (3 docs)... ✅ 3 docs (0.4s)
+   📝 [25/51] labrador (4 docs)... ✅ 4 docs (0.4s)
+   📝 [26/51] main_beach (3 docs)... ✅ 3 docs (0.3s)
+   📝 [27/51] mermaid_beach (4 docs)... ✅ 4 docs (0.3s)
+   📝 [28/51] mermaid_waters (6 docs)... ✅ 6 docs (0.4s)
+   📝 [29/51] merrimac (4 docs)... ✅ 4 docs (0.5s)
+   📝 [30/51] miami (3 docs)... ✅ 3 docs (0.4s)
+   📝 [31/51] molendinar (3 docs)... ✅ 3 docs (0.4s)
+   📝 [32/51] mudgeeraba (4 docs)... ✅ 4 docs (0.4s)
+   📝 [33/51] nerang (7 docs)... ✅ 7 docs (0.5s)
+   📝 [34/51] oxenford (3 docs)... ✅ 3 docs (0.4s)
+   📝 [35/51] pacific_pines (3 docs)... ✅ 3 docs (0.3s)
+   📝 [36/51] palm_beach (7 docs)... ✅ 7 docs (0.4s)
+   📝 [37/51] paradise_point (0 docs)... ✅ 0 docs (0.0s)
+   📝 [38/51] parkwood (4 docs)... ✅ 4 docs (0.5s)
+   📝 [39/51] reedy_creek (4 docs)... ✅ 4 docs (0.4s)
+   📝 [40/51] robina (4 docs)... ✅ 4 docs (0.4s)
+   📝 [41/51] runaway_bay (4 docs)... ✅ 4 docs (0.3s)
+   📝 [42/51] sold_properties (65 docs)... ✅ 65 docs (1.2s)
+   📝 [43/51] southport (5 docs)... ✅ 5 docs (0.4s)
+   📝 [44/51] surfers_paradise (7 docs)... ✅ 7 docs (0.6s)
+   📝 [45/51] tallai (3 docs)... ✅ 3 docs (0.5s)
+   📝 [46/51] tallebudgera (3 docs)... ✅ 3 docs (0.4s)
+   📝 [47/51] tallebudgera_valley (0 docs)... ✅ 0 docs (0.0s)
+   📝 [48/51] tugun (4 docs)... ✅ 4 docs (0.3s)
+   📝 [49/51] upper_coomera (5 docs)... ✅ 5 docs (0.4s)
+   📝 [50/51] varsity_lakes (4 docs)... ✅ 4 docs (0.4s)
+   📝 [51/51] worongary (4 docs)... ✅ 4 docs (0.3s)
+   ──────────────────────────────────────────────────
+   ✅ Gold_Coast_Recently_Sold: 263 inserted, 0 failed, 0 skipped
+
+============================================================
+  IMPORT SUMMARY
+============================================================
+  Total Inserted: 308,810
+  Total Failed:   2
+  Total Skipped:  27,048 (already imported)
+  Time:           99m 56s
+
+  ⚠️  Some documents failed. You can re-run this script
+     to retry failed imports (it will resume automatically).
+
+  Re-run command:
+    cd /Users/projects/Documents/Fields_Orchestrator/02_Deployment && python3 migration/02_import_to_cosmos_throttled.py
+============================================================

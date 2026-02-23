@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+Fields Orchestrator LaunchAgent
+Last Updated: 26/01/2026, 7:58 PM (Brisbane Time)
+
+This plist configures the Fields Orchestrator to start automatically on user login.
+
+Installation:
+1. Copy this file to ~/Library/LaunchAgents/
+   cp /Users/projects/Documents/Fields_Orchestrator/launchd/com.fields.orchestrator.plist ~/Library/LaunchAgents/
+
+2. Load the agent:
+   launchctl load ~/Library/LaunchAgents/com.fields.orchestrator.plist
+
+3. To unload:
+   launchctl unload ~/Library/LaunchAgents/com.fields.orchestrator.plist
+
+4. To check status:
+   launchctl list | grep fields.orchestrator
+-->
+<plist version="1.0">
+<dict>
+    <!-- Unique identifier for this launch agent -->
+    <key>Label</key>
+    <string>com.fields.orchestrator</string>
+    
+    <!-- Program to execute -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>/Users/projects/Documents/Fields_Orchestrator/src/orchestrator_daemon.py</string>
+    </array>
+    
+    <!-- Working directory -->
+    <key>WorkingDirectory</key>
+    <string>/Users/projects/Documents/Fields_Orchestrator</string>
+    
+    <!-- Start on login -->
+    <key>RunAtLoad</key>
+    <true/>
+    
+    <!-- Keep alive - restart if it crashes -->
+    <key>KeepAlive</key>
+    <dict>
+        <!-- Only keep alive if it exits with non-zero status -->
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    
+    <!-- Throttle restarts (minimum 60 seconds between restarts) -->
+    <key>ThrottleInterval</key>
+    <integer>60</integer>
+    
+    <!-- Standard output log -->
+    <key>StandardOutPath</key>
+    <string>/Users/projects/Documents/Fields_Orchestrator/logs/launchd_stdout.log</string>
+    
+    <!-- Standard error log -->
+    <key>StandardErrorPath</key>
+    <string>/Users/projects/Documents/Fields_Orchestrator/logs/launchd_stderr.log</string>
+    
+    <!-- Environment variables -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>PYTHONPATH</key>
+        <string>/Users/projects/Documents/Fields_Orchestrator</string>
+    </dict>
+    
+    <!-- Nice value (lower priority to not interfere with user work) -->
+    <key>Nice</key>
+    <integer>10</integer>
+    
+    <!-- Process type -->
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>

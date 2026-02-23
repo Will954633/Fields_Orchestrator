@@ -1,0 +1,83 @@
+# Fields Orchestrator Configuration
+# Last Updated: 06/02/2026, 3:17 PM (Friday) - Brisbane Time
+# - Reset trigger_time to 20:30 for production (was 14:58 for testing)
+# 
+# This file contains all configuration settings for the Fields Property Data Orchestrator.
+# The orchestrator runs the property data collection pipeline every night at 8:30 PM.
+
+schedule:
+  trigger_time: "15:23"  # TESTING - will reset to 20:30 after verification
+  timezone: "Australia/Brisbane"
+  snooze_duration_minutes: 30
+  dialog_timeout_seconds: 300  # 5 minutes before auto-snooze
+  run_on_weekends: true
+  # New Gold Coast monitoring schedule
+  run_target_market_daily: true  # Run target market suburbs every night
+  run_other_suburbs_weekly: true  # Run other suburbs weekly
+  other_suburbs_day: "Sunday"  # Day to run other suburbs (0 = Sunday)
+
+mongodb:
+  uri: "mongodb://REDACTED:REDACTED@REDACTED.mongo.cosmos.azure.com:10255/"
+  database: "property_data"
+  health_check_timeout: 10  # seconds
+  max_connection_retries: 5
+  retry_delay_seconds: 30
+  # Cooldown periods to prevent MongoDB instability
+  cooldown_after_heavy_write: 300  # 5 minutes (after scraping steps)
+  cooldown_after_moderate_write: 180  # 3 minutes (after GPT/enrichment steps)
+  cooldown_before_backup: 300  # 5 minutes before final backup
+  # New Gold Coast database references
+  gold_coast_database: "Gold_Coast_Currently_For_Sale"
+  gold_coast_master_database: "Gold_Coast"
+  sold_collection: "Gold_Coast_Recently_Sold"
+
+process_execution:
+  max_retries_per_step: 2  # Retry failed steps twice before continuing
+  retry_delay_seconds: 60  # Wait 1 minute before retrying
+  log_output: true  # Capture stdout/stderr from processes
+
+backup:
+  enabled: true
+  # Backup locations (same as existing system)
+  primary_dir: "/Volumes/T7/MongdbBackups"
+  secondary_dir: "/Users/projects/Documents/MongdbBackups"
+  tertiary_dir: "/Volumes/My Passport for Mac/MongdbBackups"
+  # Retention slots
+  slots:
+    - "backup_latest"      # Most recent (after pipeline)
+    - "backup_yesterday"   # Yesterday's backup
+    - "backup_3days"       # 3-day-old backup
+    - "backup_5days"       # 5-day-old backup
+  rotation_marker: ".last_daily_rotation"
+
+notifications:
+  show_progress_window: true
+  completion_notification: true
+  error_notification: true
+  window_stay_open_after_complete: true  # Keep window open for morning review
+
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  file: "logs/orchestrator.log"
+  max_size_mb: 10
+  backup_count: 5
+  console_output: true
+
+paths:
+  base_dir: "/Users/projects/Documents/Fields_Orchestrator"
+  property_scraping_dir: "/Users/projects/Documents/Property_Data_Scraping"
+  lock_file: "/tmp/fields_orchestrator.lock"
+  pid_file: "/tmp/fields_orchestrator.pid"
+  state_file: "state/orchestrator_state.json"
+
+# Target Market Configuration (8 key suburbs for nightly monitoring)
+target_market:
+  suburbs:
+    - "Robina:4226"
+    - "Mudgeeraba:4213"
+    - "Varsity Lakes:4227"
+    - "Reedy Creek:4227"
+    - "Burleigh Waters:4220"
+    - "Merrimac:4226"
+    - "Worongary:4213"
+    - "Carrara:4211"

@@ -1,0 +1,244 @@
+# Process Commands Configuration - CLOUD VERSION (GCP VM)
+# Last Updated: 10/02/2026, 7:32 AM (Tuesday) - Brisbane Time
+#
+# CLOUD DEPLOYMENT VERSION - Paths updated for GCP VM (/home/fields/)
+# This file is deployed to the VM at /home/fields/Fields_Orchestrator/config/process_commands.yaml
+#
+# Key differences from local (Mac) version:
+#   - All working_dir paths changed from /Users/projects/Documents/ to /home/fields/
+#   - Backup handled by Azure Cosmos DB built-in backup (no local mongodump needed)
+#
+# PROCESS ARCHITECTURE:
+# - Process 101-102: For-Sale Scraping (target market vs all suburbs)
+# - Process 103-104: Sold Monitoring (target market vs all suburbs)
+# - Process 105: Photo Analysis with Ollama (target market only)
+# - Process 106: Floor Plan Analysis with Ollama (target market only)
+# - Process 6, 11-16: Valuation + backend enrichment
+#
+# See: NEW_PROCESS_INTEGRATION_PLAN.md for full details
+
+processes:
+  # ============================================================================
+  # PHASE 1: FOR-SALE SCRAPING (Target Market + Other Suburbs)
+  # ============================================================================
+  
+  - id: 101
+    name: "Scrape For-Sale Properties (Target Market)"
+    description: "Scrapes first 10 suburbs (includes all 8 target market suburbs) using headless Chrome - stores in Gold_Coast_Currently_For_Sale database"
+    phase: "for_sale_target"
+    command: "python3 run_dynamic_10_suburbs.py --test --max-concurrent 2 --parallel-properties 1"
+    working_dir: "/home/fields/Property_Data_Scraping/03_Gold_Coast/Gold_Coast_Wide_Currently_For_Sale_AND_Recently_Sold"
+    mongodb_activity: "heavy_write"
+    requires_browser: true
+    estimated_duration_minutes: 40
+    cooldown_seconds: 300
+    
+  - id: 102
+    name: "Scrape For-Sale Properties (All Suburbs)"
+    description: "Scrapes all 52 Gold Coast suburbs weekly (Sunday) - comprehensive coverage"
+    phase: "for_sale_other"
+    command: "python3 run_dynamic_10_suburbs.py --all"
+    working_dir: "/home/fields/Property_Data_Scraping/03_Gold_Coast/Gold_Coast_Wide_Currently_For_Sale_AND_Recently_Sold"
+    mongodb_activity: "heavy_write"
+    requires_browser: true
+    estimated_duration_minutes: 180
+    cooldown_seconds: 300
+
+  # ============================================================================
+  # PHASE 2: SOLD MONITORING (Target Market + Other Suburbs)
+  # ============================================================================
+  
+  - id: 103
+    name: "Monitor Sold Properties (Target Market)"
+    description: "Monitors first 10 suburbs (includes all 8 target market suburbs) for sold properties - 10x faster with ChromeDriver optimization"
+    phase: "monitoring_target"
+    command: "python3 monitor_sold_properties.py --test --max-concurrent 5"
+    working_dir: "/home/fields/Property_Data_Scraping/03_Gold_Coast/Gold_Coast_Wide_Currently_For_Sale_AND_Recently_Sold"
+    mongodb_activity: "moderate_write"
+    requires_browser: true
+    estimated_duration_minutes: 45
+    cooldown_seconds: 300
+    depends_on: [101]
+    
+  - id: 104
+    name: "Monitor Sold Properties (All Suburbs)"
+    description: "Monitors all 52 suburbs for sold properties weekly (Sunday)"
+    phase: "monitoring_other"
+    command: "python3 monitor_sold_properties.py --all --max-concurrent 5"
+    working_dir: "/home/fields/Property_Data_Scraping/03_Gold_Coast/Gold_Coast_Wide_Currently_For_Sale_AND_Recently_Sold"
+    mongodb_activity: "moderate_write"
+    requires_browser: true
+    estimated_duration_minutes: 240
+    cooldown_seconds: 300
+    depends_on: [102]
+
+  # ============================================================================
+  # PHASE 3: VISUAL ANALYSIS (Target Market Only - Ollama)
+  # ============================================================================
+  
+  - id: 105
+    name: "Photo Analysis & Reorder (Target Market - Ollama)"
+    description: "Analyzes and reorders photos using Ollama LLaVA - local, free, no token limits"
+    phase: "enrichment_target"
+    command: "./run_target_market_photo_analysis.sh"
+    working_dir: "/home/fields/Property_Data_Scraping/03_Gold_Coast/Gold_Coast_Wide_Currently_For_Sale_AND_Recently_Sold/Ollama_Property_Analysis"
+    mongodb_activity: "moderate_write"
+    requires_browser: false
+    estimated_duration_minutes: 120
+    cooldown_seconds: 180
+    depends_on: [101]
+    
+  - id: 106
+    name: "Floor Plan Analysis (Target Market - Ollama)"
+    description: "Analyzes floor plans using Ollama LLaVA to extract room dimensions and areas"
+    phase: "enrichment_target"
+    command: "./run_target_market_floor_plan_analysis.sh"
+    working_dir: "/home/fields/Property_Data_Scraping/03_Gold_Coast/Gold_Coast_Wide_Currently_For_Sale_AND_Recently_Sold/Ollama_Property_Analysis"
+    mongodb_activity: "moderate_write"
+    requires_browser: false
+    estimated_duration_minutes: 60
+    cooldown_seconds: 180
+    depends_on: [101]
+
+  # ============================================================================
+  # PHASE 4: VALUATION
+  # ============================================================================
+    
+  - id: 6
+    name: "Property Valuation Model"
+    description: "Runs iteration_08 valuation model to predict property values and stores in iteration_08_valuation.predicted_value"
+    phase: "valuation"
+    command: "python3 batch_valuate_with_tracking.py"
+    working_dir: "/home/fields/Property_Valuation/04_Production_Valuation"
+    mongodb_activity: "moderate_write"
+    requires_browser: false
+    estimated_duration_minutes: 45
+    cooldown_seconds: 180
+    depends_on: [101, 106]
+
+  # ============================================================================
+  # PHASE 5: BACKEND DATA ENRICHMENT
+  # ============================================================================
+  
+  - id: 11
+    name: "Parse Room Dimensions"
+    description: "Extracts room dimensions from floor_plan_analysis and calculates total floor area for property insights"
+    phase: "backend_enrichment"
+    command: "python3 10_Floor_Plans/parse_room_dimensions.py"
+    working_dir: "/home/fields/Feilds_Website"
+    mongodb_activity: "moderate_write"
+    requires_browser: false
+    estimated_duration_minutes: 15
+    cooldown_seconds: 120
+    depends_on: [106]
+    
+  - id: 12
+    name: "Enrich Property Timeline"
+    description: "Extracts transaction history from Gold_Coast database to enable Capital Gain calculations"
+    phase: "backend_enrichment"
+    command: "python3 03_For_Sale_Coverage/enrich_property_timeline.py"
+    working_dir: "/home/fields/Feilds_Website"
+    mongodb_activity: "moderate_write"
+    requires_browser: false
+    estimated_duration_minutes: 20
+    cooldown_seconds: 120
+    depends_on: [101]
+    
+  - id: 13
+    name: "Generate Suburb Median Prices"
+    description: "Aggregates property_timeline data to create quarterly median prices for Capital Gain indexing"
+    phase: "backend_enrichment"
+    command: "python3 08_Market_Narrative_Engine/generate_suburb_medians.py"
+    working_dir: "/home/fields/Feilds_Website"
+    mongodb_activity: "moderate_write"
+    requires_browser: false
+    estimated_duration_minutes: 25
+    cooldown_seconds: 120
+    depends_on: [12]
+    
+  - id: 14
+    name: "Generate Suburb Statistics"
+    description: "Creates comprehensive suburb statistics for property comparison and rarity detection"
+    phase: "backend_enrichment"
+    command: "python3 03_For_Sale_Coverage/generate_suburb_statistics.py"
+    working_dir: "/home/fields/Feilds_Website"
+    mongodb_activity: "moderate_write"
+    requires_browser: false
+    estimated_duration_minutes: 30
+    cooldown_seconds: 120
+    depends_on: [11, 101]
+    
+  - id: 16
+    name: "Enrich Properties For Sale"
+    description: "Enriches properties with floor area, lot size, transaction history, and capital gain data - stores in enriched_data field for API"
+    phase: "backend_enrichment"
+    command: "python3 10_Floor_Plans/backend/enrich_properties_for_sale.py --new-only"
+    working_dir: "/home/fields/Feilds_Website"
+    mongodb_activity: "moderate_write"
+    requires_browser: false
+    estimated_duration_minutes: 15
+    cooldown_seconds: 180
+    depends_on: [11, 12]
+    
+  - id: 15
+    name: "Calculate Property Insights"
+    description: "Computes rarity insights and unique features for each property (ONLY 1, TOP 3, RARE badges) - MUST run AFTER enrichment to access enriched_data"
+    phase: "backend_enrichment"
+    command: "python3 03_For_Sale_Coverage/calculate_property_insights.py"
+    working_dir: "/home/fields/Feilds_Website"
+    mongodb_activity: "moderate_write"
+    requires_browser: false
+    estimated_duration_minutes: 20
+    cooldown_seconds: 300
+    depends_on: [14, 16]
+
+  # ============================================================================
+  # PHASE 6: BACKUP
+  # ============================================================================
+  # CLOUD NOTE: Azure Cosmos DB has built-in continuous backup with point-in-time
+  # restore. No local mongodump backup is needed in cloud deployment.
+  # The backup_coordinator step in orchestrator_daemon.py is skipped when
+  # skip_backup is set to true in settings.yaml.
+
+execution_order: [101, 102, 103, 104, 105, 106, 6, 11, 12, 13, 14, 16, 15]
+
+phases:
+  for_sale_target:
+    name: "For-Sale Scraping (Target Market)"
+    description: "Scrape 8 target market suburbs nightly"
+    steps: [101]
+    
+  for_sale_other:
+    name: "For-Sale Scraping (All Suburbs)"
+    description: "Scrape all 52 suburbs weekly (Sunday)"
+    steps: [102]
+    
+  monitoring_target:
+    name: "Sold Monitoring (Target Market)"
+    description: "Monitor target market for sold properties"
+    steps: [103]
+    
+  monitoring_other:
+    name: "Sold Monitoring (All Suburbs)"
+    description: "Monitor all suburbs for sold properties (Sunday)"
+    steps: [104]
+    
+  enrichment_target:
+    name: "Visual Analysis (Target Market)"
+    description: "Analyze photos and floor plans with Ollama"
+    steps: [105, 106]
+    
+  valuation:
+    name: "Property Valuation"
+    description: "Predict property values using ML model"
+    steps: [6]
+    
+  backend_enrichment:
+    name: "Backend Data Enrichment"
+    description: "Generate Capital Gain and Unique Features data for frontend"
+    steps: [11, 12, 13, 14, 16, 15]
+    
+  backup:
+    name: "Daily Backup"
+    description: "Handled by Azure Cosmos DB built-in continuous backup"
+    steps: []

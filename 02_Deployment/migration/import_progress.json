@@ -1,0 +1,1409 @@
+{
+  "property_data.changes": {
+    "complete": true,
+    "inserted": 0,
+    "failed": 0,
+    "local_count": 0,
+    "timestamp": "2026-02-07T18:53:21.726669"
+  },
+  "property_data.image_descriptions": {
+    "complete": true,
+    "inserted": 38,
+    "failed": 0,
+    "local_count": 38,
+    "timestamp": "2026-02-07T18:53:27.993096"
+  },
+  "property_data.processing_status": {
+    "complete": true,
+    "inserted": 94,
+    "failed": 0,
+    "local_count": 94,
+    "timestamp": "2026-02-07T18:53:38.454263"
+  },
+  "property_data.properties": {
+    "complete": true,
+    "inserted": 53,
+    "failed": 0,
+    "local_count": 53,
+    "timestamp": "2026-02-07T18:53:44.392735"
+  },
+  "property_data.properties_for_sale": {
+    "complete": true,
+    "inserted": 154,
+    "failed": 0,
+    "local_count": 154,
+    "timestamp": "2026-02-07T18:54:42.251213"
+  },
+  "property_data.properties_for_sale_enriched": {
+    "complete": true,
+    "inserted": 148,
+    "failed": 0,
+    "local_count": 148,
+    "timestamp": "2026-02-07T18:54:45.320964"
+  },
+  "property_data.properties_sold": {
+    "complete": true,
+    "inserted": 76,
+    "failed": 0,
+    "local_count": 76,
+    "timestamp": "2026-02-07T18:54:48.041642"
+  },
+  "property_data.property_changes": {
+    "complete": true,
+    "inserted": 0,
+    "failed": 0,
+    "local_count": 0,
+    "timestamp": "2026-02-07T18:54:48.043845"
+  },
+  "property_data.property_floorplan_interactive": {
+    "complete": true,
+    "inserted": 5,
+    "failed": 0,
+    "local_count": 5,
+    "timestamp": "2026-02-07T18:54:48.493116"
+  },
+  "property_data.property_snapshots": {
+    "complete": true,
+    "inserted": 0,
+    "failed": 0,
+    "local_count": 0,
+    "timestamp": "2026-02-07T18:54:48.494906"
+  },
+  "property_data.room_descriptions": {
+    "complete": true,
+    "inserted": 43,
+    "failed": 0,
+    "local_count": 43,
+    "timestamp": "2026-02-07T18:54:49.162190"
+  },
+  "property_data.room_image_matches": {
+    "complete": true,
+    "inserted": 1092,
+    "failed": 0,
+    "local_count": 1092,
+    "timestamp": "2026-02-07T18:55:25.598272"
+  },
+  "property_data.sold_last_6_months": {
+    "complete": true,
+    "inserted": 416,
+    "failed": 0,
+    "local_count": 416,
+    "timestamp": "2026-02-07T18:55:43.230321"
+  },
+  "property_data.suburb_median_prices": {
+    "complete": true,
+    "inserted": 76,
+    "failed": 0,
+    "local_count": 76,
+    "timestamp": "2026-02-07T18:55:44.498860"
+  },
+  "property_data.suburb_statistics": {
+    "complete": true,
+    "inserted": 5,
+    "failed": 0,
+    "local_count": 5,
+    "timestamp": "2026-02-07T18:55:45.055606"
+  },
+  "property_data.teleprompter_prompts": {
+    "complete": true,
+    "inserted": 7,
+    "failed": 0,
+    "local_count": 7,
+    "timestamp": "2026-02-07T18:55:45.457647"
+  },
+  "Gold_Coast_Currently_For_Sale.Gold_Coast_Recently_Sold": {
+    "complete": true,
+    "inserted": 65,
+    "failed": 0,
+    "local_count": 65,
+    "timestamp": "2026-02-07T18:55:46.685481"
+  },
+  "Gold_Coast_Currently_For_Sale.advancetown": {
+    "complete": true,
+    "inserted": 3,
+    "failed": 0,
+    "local_count": 3,
+    "timestamp": "2026-02-07T18:55:46.996200"
+  },
+  "Gold_Coast_Currently_For_Sale.arundel": {
+    "complete": true,
+    "inserted": 15,
+    "failed": 0,
+    "local_count": 15,
+    "timestamp": "2026-02-07T18:55:47.563851"
+  },
+  "Gold_Coast_Currently_For_Sale.ashmore": {
+    "complete": true,
+    "inserted": 36,
+    "failed": 0,
+    "local_count": 36,
+    "timestamp": "2026-02-07T18:55:48.254742"
+  },
+  "Gold_Coast_Currently_For_Sale.benowa": {
+    "complete": true,
+    "inserted": 30,
+    "failed": 0,
+    "local_count": 30,
+    "timestamp": "2026-02-07T18:55:48.921150"
+  },
+  "Gold_Coast_Currently_For_Sale.biggera_waters": {
+    "complete": true,
+    "inserted": 38,
+    "failed": 0,
+    "local_count": 38,
+    "timestamp": "2026-02-07T18:55:49.909767"
+  },
+  "Gold_Coast_Currently_For_Sale.bilinga": {
+    "complete": true,
+    "inserted": 22,
+    "failed": 0,
+    "local_count": 22,
+    "timestamp": "2026-02-07T18:55:50.511969"
+  },
+  "Gold_Coast_Currently_For_Sale.bonogin": {
+    "complete": true,
+    "inserted": 21,
+    "failed": 0,
+    "local_count": 21,
+    "timestamp": "2026-02-07T18:55:51.085675"
+  },
+  "Gold_Coast_Currently_For_Sale.broadbeach": {
+    "complete": true,
+    "inserted": 125,
+    "failed": 0,
+    "local_count": 125,
+    "timestamp": "2026-02-07T18:55:53.568094"
+  },
+  "Gold_Coast_Currently_For_Sale.broadbeach_waters": {
+    "complete": true,
+    "inserted": 44,
+    "failed": 0,
+    "local_count": 44,
+    "timestamp": "2026-02-07T18:55:54.440212"
+  },
+  "Gold_Coast_Currently_For_Sale.bundall": {
+    "complete": true,
+    "inserted": 16,
+    "failed": 0,
+    "local_count": 16,
+    "timestamp": "2026-02-07T18:55:55.018751"
+  },
+  "Gold_Coast_Currently_For_Sale.burleigh_heads": {
+    "complete": true,
+    "inserted": 107,
+    "failed": 0,
+    "local_count": 107,
+    "timestamp": "2026-02-07T18:55:57.003974"
+  },
+  "Gold_Coast_Currently_For_Sale.burleigh_waters": {
+    "complete": true,
+    "inserted": 41,
+    "failed": 0,
+    "local_count": 41,
+    "timestamp": "2026-02-07T18:55:58.025679"
+  },
+  "Gold_Coast_Currently_For_Sale.carrara": {
+    "complete": true,
+    "inserted": 31,
+    "failed": 0,
+    "local_count": 31,
+    "timestamp": "2026-02-07T18:55:58.815328"
+  },
+  "Gold_Coast_Currently_For_Sale.clear_island_waters": {
+    "complete": true,
+    "inserted": 15,
+    "failed": 0,
+    "local_count": 15,
+    "timestamp": "2026-02-07T18:55:59.330454"
+  },
+  "Gold_Coast_Currently_For_Sale.coolangatta": {
+    "complete": true,
+    "inserted": 30,
+    "failed": 0,
+    "local_count": 30,
+    "timestamp": "2026-02-07T18:56:00.043015"
+  },
+  "Gold_Coast_Currently_For_Sale.coomera": {
+    "complete": true,
+    "inserted": 24,
+    "failed": 0,
+    "local_count": 24,
+    "timestamp": "2026-02-07T18:56:00.652061"
+  },
+  "Gold_Coast_Currently_For_Sale.currumbin": {
+    "complete": true,
+    "inserted": 12,
+    "failed": 0,
+    "local_count": 12,
+    "timestamp": "2026-02-07T18:56:01.164782"
+  },
+  "Gold_Coast_Currently_For_Sale.currumbin_valley": {
+    "complete": true,
+    "inserted": 19,
+    "failed": 0,
+    "local_count": 19,
+    "timestamp": "2026-02-07T18:56:01.800073"
+  },
+  "Gold_Coast_Currently_For_Sale.currumbin_waters": {
+    "complete": true,
+    "inserted": 27,
+    "failed": 0,
+    "local_count": 27,
+    "timestamp": "2026-02-07T18:56:02.498437"
+  },
+  "Gold_Coast_Currently_For_Sale.elanora": {
+    "complete": true,
+    "inserted": 23,
+    "failed": 0,
+    "local_count": 23,
+    "timestamp": "2026-02-07T18:56:03.107750"
+  },
+  "Gold_Coast_Currently_For_Sale.gaven": {
+    "complete": true,
+    "inserted": 8,
+    "failed": 0,
+    "local_count": 8,
+    "timestamp": "2026-02-07T18:56:03.505492"
+  },
+  "Gold_Coast_Currently_For_Sale.gilston": {
+    "complete": true,
+    "inserted": 11,
+    "failed": 0,
+    "local_count": 11,
+    "timestamp": "2026-02-07T18:56:03.992485"
+  },
+  "Gold_Coast_Currently_For_Sale.helensvale": {
+    "complete": true,
+    "inserted": 57,
+    "failed": 0,
+    "local_count": 57,
+    "timestamp": "2026-02-07T18:56:05.188292"
+  },
+  "Gold_Coast_Currently_For_Sale.highland_park": {
+    "complete": true,
+    "inserted": 7,
+    "failed": 0,
+    "local_count": 7,
+    "timestamp": "2026-02-07T18:56:05.586690"
+  },
+  "Gold_Coast_Currently_For_Sale.hollywell": {
+    "complete": true,
+    "inserted": 13,
+    "failed": 0,
+    "local_count": 13,
+    "timestamp": "2026-02-07T18:56:06.131868"
+  },
+  "Gold_Coast_Currently_For_Sale.hope_island": {
+    "complete": true,
+    "inserted": 136,
+    "failed": 0,
+    "local_count": 136,
+    "timestamp": "2026-02-07T18:56:09.093078"
+  },
+  "Gold_Coast_Currently_For_Sale.labrador": {
+    "complete": true,
+    "inserted": 61,
+    "failed": 0,
+    "local_count": 61,
+    "timestamp": "2026-02-07T18:56:10.200422"
+  },
+  "Gold_Coast_Currently_For_Sale.main_beach": {
+    "complete": true,
+    "inserted": 67,
+    "failed": 0,
+    "local_count": 67,
+    "timestamp": "2026-02-07T18:56:11.303577"
+  },
+  "Gold_Coast_Currently_For_Sale.mermaid_beach": {
+    "complete": true,
+    "inserted": 45,
+    "failed": 0,
+    "local_count": 45,
+    "timestamp": "2026-02-07T18:56:12.218184"
+  },
+  "Gold_Coast_Currently_For_Sale.mermaid_waters": {
+    "complete": true,
+    "inserted": 26,
+    "failed": 0,
+    "local_count": 26,
+    "timestamp": "2026-02-07T18:56:12.952801"
+  },
+  "Gold_Coast_Currently_For_Sale.merrimac": {
+    "complete": true,
+    "inserted": 21,
+    "failed": 0,
+    "local_count": 21,
+    "timestamp": "2026-02-07T18:56:13.556319"
+  },
+  "Gold_Coast_Currently_For_Sale.miami": {
+    "complete": true,
+    "inserted": 22,
+    "failed": 0,
+    "local_count": 22,
+    "timestamp": "2026-02-07T18:56:14.225385"
+  },
+  "Gold_Coast_Currently_For_Sale.molendinar": {
+    "complete": true,
+    "inserted": 11,
+    "failed": 0,
+    "local_count": 11,
+    "timestamp": "2026-02-07T18:56:14.757736"
+  },
+  "Gold_Coast_Currently_For_Sale.mudgeeraba": {
+    "complete": true,
+    "inserted": 33,
+    "failed": 0,
+    "local_count": 33,
+    "timestamp": "2026-02-07T18:56:15.593441"
+  },
+  "Gold_Coast_Currently_For_Sale.nerang": {
+    "complete": true,
+    "inserted": 34,
+    "failed": 0,
+    "local_count": 34,
+    "timestamp": "2026-02-07T18:56:16.256927"
+  },
+  "Gold_Coast_Currently_For_Sale.oxenford": {
+    "complete": true,
+    "inserted": 16,
+    "failed": 0,
+    "local_count": 16,
+    "timestamp": "2026-02-07T18:56:16.770615"
+  },
+  "Gold_Coast_Currently_For_Sale.pacific_pines": {
+    "complete": true,
+    "inserted": 18,
+    "failed": 0,
+    "local_count": 18,
+    "timestamp": "2026-02-07T18:56:17.299823"
+  },
+  "Gold_Coast_Currently_For_Sale.palm_beach": {
+    "complete": true,
+    "inserted": 108,
+    "failed": 0,
+    "local_count": 108,
+    "timestamp": "2026-02-07T18:56:19.517689"
+  },
+  "Gold_Coast_Currently_For_Sale.paradise_point": {
+    "complete": true,
+    "inserted": 63,
+    "failed": 0,
+    "local_count": 63,
+    "timestamp": "2026-02-07T18:56:20.662913"
+  },
+  "Gold_Coast_Currently_For_Sale.parkwood": {
+    "complete": true,
+    "inserted": 13,
+    "failed": 0,
+    "local_count": 13,
+    "timestamp": "2026-02-07T18:56:21.203160"
+  },
+  "Gold_Coast_Currently_For_Sale.reedy_creek": {
+    "complete": true,
+    "inserted": 23,
+    "failed": 0,
+    "local_count": 23,
+    "timestamp": "2026-02-07T18:56:21.927028"
+  },
+  "Gold_Coast_Currently_For_Sale.robina": {
+    "complete": true,
+    "inserted": 67,
+    "failed": 0,
+    "local_count": 67,
+    "timestamp": "2026-02-07T18:56:23.632550"
+  },
+  "Gold_Coast_Currently_For_Sale.runaway_bay": {
+    "complete": true,
+    "inserted": 57,
+    "failed": 0,
+    "local_count": 57,
+    "timestamp": "2026-02-07T18:56:24.615131"
+  },
+  "Gold_Coast_Currently_For_Sale.southport": {
+    "complete": true,
+    "inserted": 113,
+    "failed": 0,
+    "local_count": 113,
+    "timestamp": "2026-02-07T18:56:26.712589"
+  },
+  "Gold_Coast_Currently_For_Sale.surfers_paradise": {
+    "complete": true,
+    "inserted": 229,
+    "failed": 0,
+    "local_count": 229,
+    "timestamp": "2026-02-07T18:56:31.499586"
+  },
+  "Gold_Coast_Currently_For_Sale.tallai": {
+    "complete": true,
+    "inserted": 14,
+    "failed": 0,
+    "local_count": 14,
+    "timestamp": "2026-02-07T18:56:32.049269"
+  },
+  "Gold_Coast_Currently_For_Sale.tallebudgera": {
+    "complete": true,
+    "inserted": 22,
+    "failed": 0,
+    "local_count": 22,
+    "timestamp": "2026-02-07T18:56:32.727322"
+  },
+  "Gold_Coast_Currently_For_Sale.tallebudgera_valley": {
+    "complete": true,
+    "inserted": 15,
+    "failed": 0,
+    "local_count": 15,
+    "timestamp": "2026-02-07T18:56:33.338502"
+  },
+  "Gold_Coast_Currently_For_Sale.tugun": {
+    "complete": true,
+    "inserted": 16,
+    "failed": 0,
+    "local_count": 16,
+    "timestamp": "2026-02-07T18:56:33.926846"
+  },
+  "Gold_Coast_Currently_For_Sale.upper_coomera": {
+    "complete": true,
+    "inserted": 41,
+    "failed": 0,
+    "local_count": 41,
+    "timestamp": "2026-02-07T18:56:34.763869"
+  },
+  "Gold_Coast_Currently_For_Sale.varsity_lakes": {
+    "complete": true,
+    "inserted": 27,
+    "failed": 0,
+    "local_count": 27,
+    "timestamp": "2026-02-07T18:56:35.552334"
+  },
+  "Gold_Coast_Currently_For_Sale.worongary": {
+    "complete": true,
+    "inserted": 28,
+    "failed": 0,
+    "local_count": 28,
+    "timestamp": "2026-02-07T18:56:36.367634"
+  },
+  "Gold_Coast.advancetown": {
+    "complete": true,
+    "inserted": 242,
+    "failed": 0,
+    "local_count": 242,
+    "timestamp": "2026-02-07T18:56:40.529434"
+  },
+  "Gold_Coast.alberton": {
+    "complete": true,
+    "inserted": 335,
+    "failed": 0,
+    "local_count": 335,
+    "timestamp": "2026-02-07T18:56:46.143689"
+  },
+  "Gold_Coast.arundel": {
+    "complete": true,
+    "inserted": 5431,
+    "failed": 0,
+    "local_count": 5431,
+    "timestamp": "2026-02-07T18:58:21.616871"
+  },
+  "Gold_Coast.ashmore": {
+    "complete": true,
+    "inserted": 6162,
+    "failed": 0,
+    "local_count": 6162,
+    "timestamp": "2026-02-07T19:00:19.886501"
+  },
+  "Gold_Coast.austinville": {
+    "complete": true,
+    "inserted": 134,
+    "failed": 0,
+    "local_count": 134,
+    "timestamp": "2026-02-07T19:00:22.090481"
+  },
+  "Gold_Coast.benowa": {
+    "complete": true,
+    "inserted": 4408,
+    "failed": 0,
+    "local_count": 4408,
+    "timestamp": "2026-02-07T19:01:41.795970"
+  },
+  "Gold_Coast.biggera_waters": {
+    "complete": true,
+    "inserted": 5963,
+    "failed": 0,
+    "local_count": 5963,
+    "timestamp": "2026-02-07T19:03:33.511926"
+  },
+  "Gold_Coast.bilinga": {
+    "complete": true,
+    "inserted": 1502,
+    "failed": 0,
+    "local_count": 1502,
+    "timestamp": "2026-02-07T19:08:24.442300"
+  },
+  "Gold_Coast.bonogin": {
+    "complete": true,
+    "inserted": 1810,
+    "failed": 0,
+    "local_count": 1810,
+    "timestamp": "2026-02-07T19:08:58.813996"
+  },
+  "Gold_Coast.broadbeach": {
+    "complete": true,
+    "inserted": 9834,
+    "failed": 0,
+    "local_count": 9834,
+    "timestamp": "2026-02-07T19:12:00.997758"
+  },
+  "Gold_Coast.broadbeach_waters": {
+    "complete": true,
+    "inserted": 4039,
+    "failed": 0,
+    "local_count": 4039,
+    "timestamp": "2026-02-07T19:13:19.715788"
+  },
+  "Gold_Coast.bundall": {
+    "complete": true,
+    "inserted": 2693,
+    "failed": 0,
+    "local_count": 2693,
+    "timestamp": "2026-02-07T19:14:10.213349"
+  },
+  "Gold_Coast.burleigh_heads": {
+    "complete": true,
+    "inserted": 9476,
+    "failed": 0,
+    "local_count": 9476,
+    "timestamp": "2026-02-07T19:17:03.658046"
+  },
+  "Gold_Coast.burleigh_waters": {
+    "complete": true,
+    "inserted": 6885,
+    "failed": 0,
+    "local_count": 6885,
+    "timestamp": "2026-02-07T19:19:26.626479"
+  },
+  "Gold_Coast.carrara": {
+    "complete": true,
+    "inserted": 6307,
+    "failed": 0,
+    "local_count": 6307,
+    "timestamp": "2026-02-07T19:21:34.966882"
+  },
+  "Gold_Coast.cedar_creek_gold_coast_city": {
+    "complete": true,
+    "inserted": 199,
+    "failed": 0,
+    "local_count": 199,
+    "timestamp": "2026-02-07T19:21:38.308526"
+  },
+  "Gold_Coast.clagiraba": {
+    "complete": true,
+    "inserted": 306,
+    "failed": 0,
+    "local_count": 306,
+    "timestamp": "2026-02-07T19:21:43.777811"
+  },
+  "Gold_Coast.clear_island_waters": {
+    "complete": true,
+    "inserted": 1936,
+    "failed": 0,
+    "local_count": 1936,
+    "timestamp": "2026-02-07T19:22:20.361328"
+  },
+  "Gold_Coast.coolangatta": {
+    "complete": true,
+    "inserted": 6519,
+    "failed": 0,
+    "local_count": 6519,
+    "timestamp": "2026-02-07T19:24:26.392381"
+  },
+  "Gold_Coast.coombabah": {
+    "complete": true,
+    "inserted": 5352,
+    "failed": 0,
+    "local_count": 5352,
+    "timestamp": "2026-02-07T19:26:06.002029"
+  },
+  "Gold_Coast.coomera": {
+    "complete": true,
+    "inserted": 8741,
+    "failed": 0,
+    "local_count": 8741,
+    "timestamp": "2026-02-07T19:28:53.441791"
+  },
+  "Gold_Coast.currumbin": {
+    "complete": true,
+    "inserted": 2062,
+    "failed": 0,
+    "local_count": 2062,
+    "timestamp": "2026-02-07T19:29:34.006928"
+  },
+  "Gold_Coast.currumbin_valley": {
+    "complete": true,
+    "inserted": 897,
+    "failed": 0,
+    "local_count": 897,
+    "timestamp": "2026-02-07T19:29:50.192013"
+  },
+  "Gold_Coast.currumbin_waters": {
+    "complete": false,
+    "inserted": 4627,
+    "failed": 2,
+    "local_count": 4629,
+    "timestamp": "2026-02-07T19:31:41.224537"
+  },
+  "Gold_Coast.elanora": {
+    "complete": true,
+    "inserted": 5149,
+    "failed": 0,
+    "local_count": 5149,
+    "timestamp": "2026-02-07T19:33:21.956912"
+  },
+  "Gold_Coast.gaven": {
+    "complete": true,
+    "inserted": 658,
+    "failed": 0,
+    "local_count": 658,
+    "timestamp": "2026-02-07T19:33:34.131130"
+  },
+  "Gold_Coast.gilberton_gold_coast_city": {
+    "complete": true,
+    "inserted": 46,
+    "failed": 0,
+    "local_count": 46,
+    "timestamp": "2026-02-07T19:33:34.988942"
+  },
+  "Gold_Coast.gilston": {
+    "complete": true,
+    "inserted": 1031,
+    "failed": 0,
+    "local_count": 1031,
+    "timestamp": "2026-02-07T19:33:54.946105"
+  },
+  "Gold_Coast.guanaba": {
+    "complete": true,
+    "inserted": 368,
+    "failed": 0,
+    "local_count": 368,
+    "timestamp": "2026-02-07T19:34:02.071170"
+  },
+  "Gold_Coast.helensvale": {
+    "complete": true,
+    "inserted": 8342,
+    "failed": 0,
+    "local_count": 8342,
+    "timestamp": "2026-02-07T19:36:39.981277"
+  },
+  "Gold_Coast.highland_park": {
+    "complete": true,
+    "inserted": 2736,
+    "failed": 0,
+    "local_count": 2736,
+    "timestamp": "2026-02-07T19:37:32.742026"
+  },
+  "Gold_Coast.hollywell": {
+    "complete": true,
+    "inserted": 1455,
+    "failed": 0,
+    "local_count": 1455,
+    "timestamp": "2026-02-07T19:38:00.891960"
+  },
+  "Gold_Coast.hope_island": {
+    "complete": true,
+    "inserted": 8958,
+    "failed": 0,
+    "local_count": 8958,
+    "timestamp": "2026-02-07T19:40:48.116371"
+  },
+  "Gold_Coast.jacobs_well": {
+    "complete": true,
+    "inserted": 1586,
+    "failed": 0,
+    "local_count": 1586,
+    "timestamp": "2026-02-07T19:41:18.543795"
+  },
+  "Gold_Coast.kingsholme": {
+    "complete": true,
+    "inserted": 326,
+    "failed": 0,
+    "local_count": 326,
+    "timestamp": "2026-02-07T19:41:24.394569"
+  },
+  "Gold_Coast.labrador": {
+    "complete": true,
+    "inserted": 11684,
+    "failed": 0,
+    "local_count": 11684,
+    "timestamp": "2026-02-07T19:45:14.142938"
+  },
+  "Gold_Coast.lower_beechmont": {
+    "complete": true,
+    "inserted": 560,
+    "failed": 0,
+    "local_count": 560,
+    "timestamp": "2026-02-07T19:45:25.193427"
+  },
+  "Gold_Coast.luscombe": {
+    "complete": true,
+    "inserted": 237,
+    "failed": 0,
+    "local_count": 237,
+    "timestamp": "2026-02-07T19:45:29.653991"
+  },
+  "Gold_Coast.main_beach": {
+    "complete": true,
+    "inserted": 3658,
+    "failed": 0,
+    "local_count": 3658,
+    "timestamp": "2026-02-07T19:46:33.529977"
+  },
+  "Gold_Coast.maudsland": {
+    "complete": true,
+    "inserted": 2723,
+    "failed": 0,
+    "local_count": 2723,
+    "timestamp": "2026-02-07T19:47:25.593287"
+  },
+  "Gold_Coast.mermaid_beach": {
+    "complete": true,
+    "inserted": 5395,
+    "failed": 0,
+    "local_count": 5395,
+    "timestamp": "2026-02-07T19:49:06.434646"
+  },
+  "Gold_Coast.mermaid_waters": {
+    "complete": true,
+    "inserted": 6169,
+    "failed": 0,
+    "local_count": 6169,
+    "timestamp": "2026-02-07T19:51:04.078260"
+  },
+  "Gold_Coast.merrimac": {
+    "complete": true,
+    "inserted": 3001,
+    "failed": 0,
+    "local_count": 3001,
+    "timestamp": "2026-02-07T19:52:04.692226"
+  },
+  "Gold_Coast.miami": {
+    "complete": true,
+    "inserted": 4783,
+    "failed": 0,
+    "local_count": 4783,
+    "timestamp": "2026-02-07T19:53:35.303655"
+  },
+  "Gold_Coast.molendinar": {
+    "complete": true,
+    "inserted": 3592,
+    "failed": 0,
+    "local_count": 3592,
+    "timestamp": "2026-02-07T19:54:46.937125"
+  },
+  "Gold_Coast.mount_nathan": {
+    "complete": true,
+    "inserted": 582,
+    "failed": 0,
+    "local_count": 582,
+    "timestamp": "2026-02-07T19:54:57.511678"
+  },
+  "Gold_Coast.mudgeeraba": {
+    "complete": true,
+    "inserted": 5921,
+    "failed": 0,
+    "local_count": 5921,
+    "timestamp": "2026-02-07T19:56:57.293589"
+  },
+  "Gold_Coast.natural_bridge": {
+    "complete": true,
+    "inserted": 79,
+    "failed": 0,
+    "local_count": 79,
+    "timestamp": "2026-02-07T19:56:58.503913"
+  },
+  "Gold_Coast.nerang": {
+    "complete": true,
+    "inserted": 8001,
+    "failed": 0,
+    "local_count": 8001,
+    "timestamp": "2026-02-07T19:59:28.894586"
+  },
+  "Gold_Coast.neranwood": {
+    "complete": true,
+    "inserted": 53,
+    "failed": 0,
+    "local_count": 53,
+    "timestamp": "2026-02-07T19:59:29.795600"
+  },
+  "Gold_Coast.norwell": {
+    "complete": true,
+    "inserted": 156,
+    "failed": 0,
+    "local_count": 156,
+    "timestamp": "2026-02-07T19:59:32.249464"
+  },
+  "Gold_Coast.numinbah_valley": {
+    "complete": true,
+    "inserted": 89,
+    "failed": 0,
+    "local_count": 89,
+    "timestamp": "2026-02-07T19:59:33.389224"
+  },
+  "Gold_Coast.ormeau": {
+    "complete": true,
+    "inserted": 6640,
+    "failed": 0,
+    "local_count": 6640,
+    "timestamp": "2026-02-07T20:01:43.283113"
+  },
+  "Gold_Coast.ormeau_hills": {
+    "complete": true,
+    "inserted": 1737,
+    "failed": 0,
+    "local_count": 1737,
+    "timestamp": "2026-02-07T20:02:17.448574"
+  },
+  "Gold_Coast.oxenford": {
+    "complete": true,
+    "inserted": 5547,
+    "failed": 0,
+    "local_count": 5547,
+    "timestamp": "2026-02-07T20:04:00.558779"
+  },
+  "Gold_Coast.pacific_pines": {
+    "complete": true,
+    "inserted": 6301,
+    "failed": 0,
+    "local_count": 6301,
+    "timestamp": "2026-02-07T20:06:06.036398"
+  },
+  "Gold_Coast.palm_beach": {
+    "complete": true,
+    "inserted": 10706,
+    "failed": 0,
+    "local_count": 10706,
+    "timestamp": "2026-02-07T20:09:25.217564"
+  },
+  "Gold_Coast.paradise_point": {
+    "complete": true,
+    "inserted": 4040,
+    "failed": 0,
+    "local_count": 4040,
+    "timestamp": "2026-02-07T20:10:41.965434"
+  },
+  "Gold_Coast.parkwood": {
+    "complete": true,
+    "inserted": 3370,
+    "failed": 0,
+    "local_count": 3370,
+    "timestamp": "2026-02-07T20:11:46.365104"
+  },
+  "Gold_Coast.pimpama": {
+    "complete": true,
+    "inserted": 9868,
+    "failed": 0,
+    "local_count": 9868,
+    "timestamp": "2026-02-07T20:14:58.920313"
+  },
+  "Gold_Coast.reedy_creek": {
+    "complete": true,
+    "inserted": 2780,
+    "failed": 0,
+    "local_count": 2780,
+    "timestamp": "2026-02-07T20:15:58.275901"
+  },
+  "Gold_Coast.robina": {
+    "complete": true,
+    "inserted": 11761,
+    "failed": 0,
+    "local_count": 11761,
+    "timestamp": "2026-02-07T20:19:53.514533"
+  },
+  "Gold_Coast.runaway_bay": {
+    "complete": true,
+    "inserted": 5301,
+    "failed": 0,
+    "local_count": 5301,
+    "timestamp": "2026-02-07T20:21:43.577617"
+  },
+  "Gold_Coast.south_stradbroke": {
+    "complete": true,
+    "inserted": 617,
+    "failed": 0,
+    "local_count": 617,
+    "timestamp": "2026-02-07T20:21:53.737205"
+  },
+  "Gold_Coast.southern_moreton_bay_islands": {
+    "complete": true,
+    "inserted": 18,
+    "failed": 0,
+    "local_count": 18,
+    "timestamp": "2026-02-07T20:21:54.201587"
+  },
+  "Gold_Coast.southport": {
+    "complete": true,
+    "inserted": 20344,
+    "failed": 0,
+    "local_count": 20344,
+    "timestamp": "2026-02-07T20:28:18.418372"
+  },
+  "Gold_Coast.springbrook": {
+    "complete": true,
+    "inserted": 657,
+    "failed": 0,
+    "local_count": 657,
+    "timestamp": "2026-02-07T20:28:30.822155"
+  },
+  "Gold_Coast.stapylton": {
+    "complete": true,
+    "inserted": 646,
+    "failed": 0,
+    "local_count": 646,
+    "timestamp": "2026-02-07T20:28:43.088916"
+  },
+  "Gold_Coast.steiglitz": {
+    "complete": true,
+    "inserted": 379,
+    "failed": 0,
+    "local_count": 379,
+    "timestamp": "2026-02-07T20:28:50.074571"
+  },
+  "Gold_Coast.surfers_paradise": {
+    "complete": true,
+    "inserted": 25962,
+    "failed": 0,
+    "local_count": 25962,
+    "timestamp": "2026-02-07T20:37:11.267054"
+  },
+  "Gold_Coast.tallai": {
+    "complete": true,
+    "inserted": 1581,
+    "failed": 0,
+    "local_count": 1581,
+    "timestamp": "2026-02-07T20:37:42.387803"
+  },
+  "Gold_Coast.tallebudgera": {
+    "complete": true,
+    "inserted": 1388,
+    "failed": 0,
+    "local_count": 1388,
+    "timestamp": "2026-02-07T20:38:08.755413"
+  },
+  "Gold_Coast.tallebudgera_valley": {
+    "complete": true,
+    "inserted": 697,
+    "failed": 0,
+    "local_count": 697,
+    "timestamp": "2026-02-07T20:38:21.685472"
+  },
+  "Gold_Coast.tugun": {
+    "complete": true,
+    "inserted": 3941,
+    "failed": 0,
+    "local_count": 3941,
+    "timestamp": "2026-02-07T20:39:56.904902"
+  },
+  "Gold_Coast.upper_coomera": {
+    "complete": true,
+    "inserted": 10474,
+    "failed": 0,
+    "local_count": 10474,
+    "timestamp": "2026-02-07T20:43:21.885945"
+  },
+  "Gold_Coast.varsity_lakes": {
+    "complete": true,
+    "inserted": 7635,
+    "failed": 0,
+    "local_count": 7635,
+    "timestamp": "2026-02-07T20:45:54.076377"
+  },
+  "Gold_Coast.willow_vale": {
+    "complete": true,
+    "inserted": 904,
+    "failed": 0,
+    "local_count": 904,
+    "timestamp": "2026-02-07T20:46:11.681662"
+  },
+  "Gold_Coast.wongawallan": {
+    "complete": true,
+    "inserted": 613,
+    "failed": 0,
+    "local_count": 613,
+    "timestamp": "2026-02-07T20:46:23.404892"
+  },
+  "Gold_Coast.woongoolba": {
+    "complete": true,
+    "inserted": 221,
+    "failed": 0,
+    "local_count": 221,
+    "timestamp": "2026-02-07T20:46:27.058082"
+  },
+  "Gold_Coast.worongary": {
+    "complete": true,
+    "inserted": 2600,
+    "failed": 0,
+    "local_count": 2600,
+    "timestamp": "2026-02-07T20:47:17.692027"
+  },
+  "Gold_Coast.yatala": {
+    "complete": true,
+    "inserted": 1296,
+    "failed": 0,
+    "local_count": 1296,
+    "timestamp": "2026-02-07T20:47:41.126901"
+  },
+  "Gold_Coast_Recently_Sold.advancetown": {
+    "complete": true,
+    "inserted": 3,
+    "failed": 0,
+    "local_count": 3,
+    "timestamp": "2026-02-07T20:47:41.490071"
+  },
+  "Gold_Coast_Recently_Sold.arundel": {
+    "complete": true,
+    "inserted": 3,
+    "failed": 0,
+    "local_count": 3,
+    "timestamp": "2026-02-07T20:47:41.831281"
+  },
+  "Gold_Coast_Recently_Sold.ashmore": {
+    "complete": true,
+    "inserted": 3,
+    "failed": 0,
+    "local_count": 3,
+    "timestamp": "2026-02-07T20:47:42.132589"
+  },
+  "Gold_Coast_Recently_Sold.benowa": {
+    "complete": true,
+    "inserted": 0,
+    "failed": 0,
+    "local_count": 0,
+    "timestamp": "2026-02-07T20:47:42.134776"
+  },
+  "Gold_Coast_Recently_Sold.biggera_waters": {
+    "complete": true,
+    "inserted": 5,
+    "failed": 0,
+    "local_count": 5,
+    "timestamp": "2026-02-07T20:47:42.549900"
+  },
+  "Gold_Coast_Recently_Sold.bilinga": {
+    "complete": true,
+    "inserted": 4,
+    "failed": 0,
+    "local_count": 4,
+    "timestamp": "2026-02-07T20:47:42.996484"
+  },
+  "Gold_Coast_Recently_Sold.bonogin": {
+    "complete": true,
+    "inserted": 6,
+    "failed": 0,
+    "local_count": 6,
+    "timestamp": "2026-02-07T20:47:43.442886"
+  },
+  "Gold_Coast_Recently_Sold.broadbeach": {
+    "complete": true,
+    "inserted": 6,
+    "failed": 0,
+    "local_count": 6,
+    "timestamp": "2026-02-07T20:47:44.152721"
+  },
+  "Gold_Coast_Recently_Sold.broadbeach_waters": {
+    "complete": true,
+    "inserted": 5,
+    "failed": 0,
+    "local_count": 5,
+    "timestamp": "2026-02-07T20:47:44.504222"
+  },
+  "Gold_Coast_Recently_Sold.burleigh_heads": {
+    "complete": true,
+    "inserted": 5,
+    "failed": 0,
+    "local_count": 5,
+    "timestamp": "2026-02-07T20:47:44.809474"
+  },
+  "Gold_Coast_Recently_Sold.burleigh_waters": {
+    "complete": true,
+    "inserted": 5,
+    "failed": 0,
+    "local_count": 5,
+    "timestamp": "2026-02-07T20:47:45.149715"
+  },
+  "Gold_Coast_Recently_Sold.clear_island_waters": {
+    "complete": true,
+    "inserted": 3,
+    "failed": 0,
+    "local_count": 3,
+    "timestamp": "2026-02-07T20:47:45.534672"
+  },
+  "Gold_Coast_Recently_Sold.coolangatta": {
+    "complete": true,
+    "inserted": 4,
+    "failed": 0,
+    "local_count": 4,
+    "timestamp": "2026-02-07T20:47:45.943497"
+  },
+  "Gold_Coast_Recently_Sold.coomera": {
+    "complete": true,
+    "inserted": 8,
+    "failed": 0,
+    "local_count": 8,
+    "timestamp": "2026-02-07T20:47:46.328446"
+  },
+  "Gold_Coast_Recently_Sold.currumbin": {
+    "complete": true,
+    "inserted": 5,
+    "failed": 0,
+    "local_count": 5,
+    "timestamp": "2026-02-07T20:47:46.770720"
+  },
+  "Gold_Coast_Recently_Sold.currumbin_valley": {
+    "complete": true,
+    "inserted": 3,
+    "failed": 0,
+    "local_count": 3,
+    "timestamp": "2026-02-07T20:47:47.216303"
+  },
+  "Gold_Coast_Recently_Sold.currumbin_waters": {
+    "complete": true,
+    "inserted": 3,
+    "failed": 0,
+    "local_count": 3,
+    "timestamp": "2026-02-07T20:47:47.542360"
+  },
+  "Gold_Coast_Recently_Sold.elanora": {
+    "complete": true,
+    "inserted": 5,
+    "failed": 0,
+    "local_count": 5,
+    "timestamp": "2026-02-07T20:47:47.941983"
+  },
+  "Gold_Coast_Recently_Sold.gaven": {
+    "complete": true,
+    "inserted": 3,
+    "failed": 0,
+    "local_count": 3,
+    "timestamp": "2026-02-07T20:47:48.290089"
+  },
+  "Gold_Coast_Recently_Sold.gilston": {
+    "complete": true,
+    "inserted": 3,
+    "failed": 0,
+    "local_count": 3,
+    "timestamp": "2026-02-07T20:47:48.632042"
+  },
+  "Gold_Coast_Recently_Sold.helensvale": {
+    "complete": true,
+    "inserted": 4,
+    "failed": 0,
+    "local_count": 4,
+    "timestamp": "2026-02-07T20:47:49.037839"
+  },
+  "Gold_Coast_Recently_Sold.highland_park": {
+    "complete": true,
+    "inserted": 4,
+    "failed": 0,
+    "local_count": 4,
+    "timestamp": "2026-02-07T20:47:49.369456"
+  },
+  "Gold_Coast_Recently_Sold.hollywell": {
+    "complete": true,
+    "inserted": 3,
+    "failed": 0,
+    "local_count": 3,
+    "timestamp": "2026-02-07T20:47:49.810403"
+  },
+  "Gold_Coast_Recently_Sold.hope_island": {
+    "complete": true,
+    "inserted": 3,
+    "failed": 0,
+    "local_count": 3,
+    "timestamp": "2026-02-07T20:47:50.240282"
+  },
+  "Gold_Coast_Recently_Sold.labrador": {
+    "complete": true,
+    "inserted": 4,
+    "failed": 0,
+    "local_count": 4,
+    "timestamp": "2026-02-07T20:47:50.661802"
+  },
+  "Gold_Coast_Recently_Sold.main_beach": {
+    "complete": true,
+    "inserted": 3,
+    "failed": 0,
+    "local_count": 3,
+    "timestamp": "2026-02-07T20:47:50.989317"
+  },
+  "Gold_Coast_Recently_Sold.mermaid_beach": {
+    "complete": true,
+    "inserted": 4,
+    "failed": 0,
+    "local_count": 4,
+    "timestamp": "2026-02-07T20:47:51.310292"
+  },
+  "Gold_Coast_Recently_Sold.mermaid_waters": {
+    "complete": true,
+    "inserted": 6,
+    "failed": 0,
+    "local_count": 6,
+    "timestamp": "2026-02-07T20:47:51.700485"
+  },
+  "Gold_Coast_Recently_Sold.merrimac": {
+    "complete": true,
+    "inserted": 4,
+    "failed": 0,
+    "local_count": 4,
+    "timestamp": "2026-02-07T20:47:52.172617"
+  },
+  "Gold_Coast_Recently_Sold.miami": {
+    "complete": true,
+    "inserted": 3,
+    "failed": 0,
+    "local_count": 3,
+    "timestamp": "2026-02-07T20:47:52.572777"
+  },
+  "Gold_Coast_Recently_Sold.molendinar": {
+    "complete": true,
+    "inserted": 3,
+    "failed": 0,
+    "local_count": 3,
+    "timestamp": "2026-02-07T20:47:52.975929"
+  },
+  "Gold_Coast_Recently_Sold.mudgeeraba": {
+    "complete": true,
+    "inserted": 4,
+    "failed": 0,
+    "local_count": 4,
+    "timestamp": "2026-02-07T20:47:53.422765"
+  },
+  "Gold_Coast_Recently_Sold.nerang": {
+    "complete": true,
+    "inserted": 7,
+    "failed": 0,
+    "local_count": 7,
+    "timestamp": "2026-02-07T20:47:53.901290"
+  },
+  "Gold_Coast_Recently_Sold.oxenford": {
+    "complete": true,
+    "inserted": 3,
+    "failed": 0,
+    "local_count": 3,
+    "timestamp": "2026-02-07T20:47:54.301766"
+  },
+  "Gold_Coast_Recently_Sold.pacific_pines": {
+    "complete": true,
+    "inserted": 3,
+    "failed": 0,
+    "local_count": 3,
+    "timestamp": "2026-02-07T20:47:54.626608"
+  },
+  "Gold_Coast_Recently_Sold.palm_beach": {
+    "complete": true,
+    "inserted": 7,
+    "failed": 0,
+    "local_count": 7,
+    "timestamp": "2026-02-07T20:47:55.004574"
+  },
+  "Gold_Coast_Recently_Sold.paradise_point": {
+    "complete": true,
+    "inserted": 0,
+    "failed": 0,
+    "local_count": 0,
+    "timestamp": "2026-02-07T20:47:55.007329"
+  },
+  "Gold_Coast_Recently_Sold.parkwood": {
+    "complete": true,
+    "inserted": 4,
+    "failed": 0,
+    "local_count": 4,
+    "timestamp": "2026-02-07T20:47:55.463855"
+  },
+  "Gold_Coast_Recently_Sold.reedy_creek": {
+    "complete": true,
+    "inserted": 4,
+    "failed": 0,
+    "local_count": 4,
+    "timestamp": "2026-02-07T20:47:55.818123"
+  },
+  "Gold_Coast_Recently_Sold.robina": {
+    "complete": true,
+    "inserted": 4,
+    "failed": 0,
+    "local_count": 4,
+    "timestamp": "2026-02-07T20:47:56.267604"
+  },
+  "Gold_Coast_Recently_Sold.runaway_bay": {
+    "complete": true,
+    "inserted": 4,
+    "failed": 0,
+    "local_count": 4,
+    "timestamp": "2026-02-07T20:47:56.584709"
+  },
+  "Gold_Coast_Recently_Sold.sold_properties": {
+    "complete": true,
+    "inserted": 65,
+    "failed": 0,
+    "local_count": 65,
+    "timestamp": "2026-02-07T20:47:57.791015"
+  },
+  "Gold_Coast_Recently_Sold.southport": {
+    "complete": true,
+    "inserted": 5,
+    "failed": 0,
+    "local_count": 5,
+    "timestamp": "2026-02-07T20:47:58.202395"
+  },
+  "Gold_Coast_Recently_Sold.surfers_paradise": {
+    "complete": true,
+    "inserted": 7,
+    "failed": 0,
+    "local_count": 7,
+    "timestamp": "2026-02-07T20:47:58.783349"
+  },
+  "Gold_Coast_Recently_Sold.tallai": {
+    "complete": true,
+    "inserted": 3,
+    "failed": 0,
+    "local_count": 3,
+    "timestamp": "2026-02-07T20:47:59.248325"
+  },
+  "Gold_Coast_Recently_Sold.tallebudgera": {
+    "complete": true,
+    "inserted": 3,
+    "failed": 0,
+    "local_count": 3,
+    "timestamp": "2026-02-07T20:47:59.652923"
+  },
+  "Gold_Coast_Recently_Sold.tallebudgera_valley": {
+    "complete": true,
+    "inserted": 0,
+    "failed": 0,
+    "local_count": 0,
+    "timestamp": "2026-02-07T20:47:59.655800"
+  },
+  "Gold_Coast_Recently_Sold.tugun": {
+    "complete": true,
+    "inserted": 4,
+    "failed": 0,
+    "local_count": 4,
+    "timestamp": "2026-02-07T20:47:59.970669"
+  },
+  "Gold_Coast_Recently_Sold.upper_coomera": {
+    "complete": true,
+    "inserted": 5,
+    "failed": 0,
+    "local_count": 5,
+    "timestamp": "2026-02-07T20:48:00.373688"
+  },
+  "Gold_Coast_Recently_Sold.varsity_lakes": {
+    "complete": true,
+    "inserted": 4,
+    "failed": 0,
+    "local_count": 4,
+    "timestamp": "2026-02-07T20:48:00.786917"
+  },
+  "Gold_Coast_Recently_Sold.worongary": {
+    "complete": true,
+    "inserted": 4,
+    "failed": 0,
+    "local_count": 4,
+    "timestamp": "2026-02-07T20:48:01.127444"
+  }
+}
