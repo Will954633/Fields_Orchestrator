@@ -209,7 +209,7 @@ processes:
     mongodb_activity: "moderate_write"
     requires_browser: false
     estimated_duration_minutes: 30  # 82 suburbs with rate limiting (500ms delays)
-    cooldown_seconds: 20 pre-computation
+    cooldown_seconds: 20
     depends_on: [13]  # Depends on Generate Suburb Median Prices
     
   - id: 18
