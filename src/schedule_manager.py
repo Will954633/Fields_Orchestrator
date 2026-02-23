@@ -61,7 +61,7 @@ class ScheduleManager:
         self.other_suburbs_day = schedule_config.get('other_suburbs_day', 'Sunday')
         
         # Process ID sets
-        self.target_market_processes = {101, 103, 105, 106}  # Scrape, Monitor, Photo, Floor Plan
+        self.target_market_processes = {101, 103, 105, 106, 108}  # Scrape, Monitor, Photo, Floor Plan, Valuation Enrichment
         self.other_suburbs_processes = {102, 104}  # Scrape All, Monitor All
         self.always_run_processes = {6, 11, 12, 13, 14, 15, 16, 17, 18, 19, 107}  # Valuation + Backend Enrichment + Pre-computation + Audit
         
