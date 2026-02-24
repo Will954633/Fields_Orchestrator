@@ -318,22 +318,31 @@ class UnknownStatusDetector:
         """Save a detailed report of unknown status properties to file."""
         if not self.unknown_properties:
             return
-        
+
         try:
             report_file = Path(__file__).parent.parent / "logs" / "unknown_status_report.json"
             report_file.parent.mkdir(parents=True, exist_ok=True)
-            
-            report = {
+
+            # Load existing history or start fresh
+            history = []
+            if report_file.exists():
+                try:
+                    history = json.loads(report_file.read_text(encoding="utf-8"))
+                    if not isinstance(history, list):
+                        history = []
+                except Exception:
+                    history = []
+
+            history.append({
                 'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 'count': len(self.unknown_properties),
                 'properties': self.unknown_properties,
                 'action_required': 'Manual investigation needed for these properties'
-            }
-            
-            with open(report_file, 'w') as f:
-                json.dump(report, f, indent=2)
-            
-            self.logger.info(f"📄 Unknown status report saved: {report_file}")
+            })
+
+            report_file.write_text(json.dumps(history, indent=2), encoding="utf-8")
+
+            self.logger.info(f"📄 Unknown status report saved: {report_file} ({len(history)} total entries)")
             
         except Exception as e:
             self.logger.error(f"❌ Failed to save report: {e}")
