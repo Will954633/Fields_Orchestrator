@@ -46,11 +46,11 @@ processes:
     name: "Scrape For-Sale Properties (All Suburbs)"
     description: "Scrapes all 52 Gold Coast suburbs weekly (Sunday) - comprehensive coverage"
     phase: "for_sale_other"
-    command: "python3 run_dynamic_10_suburbs.py --all"
+    command: "python3 run_dynamic_10_suburbs.py --all --max-concurrent 1"
     working_dir: "/home/fields/Property_Data_Scraping/03_Gold_Coast/Gold_Coast_Wide_Currently_For_Sale_AND_Recently_Sold"
     mongodb_activity: "heavy_write"
     requires_browser: true
-    estimated_duration_minutes: 180  # 52 suburbs × ~3-4 min each
+    estimated_duration_minutes: 420  # 81 suburbs × ~5 min each, 1 concurrent to avoid Cosmos 429 throttling
     cooldown_seconds: 20
 
   # ============================================================================
