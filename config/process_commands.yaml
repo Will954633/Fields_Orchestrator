@@ -250,7 +250,23 @@ processes:
     depends_on: [101]  # Needs up-to-date for-sale scrape data
 
   # ============================================================================
-  # PHASE 6: DATA QUALITY AUDIT
+  # PHASE 6: COVERAGE CHECK (Domain vs DB count comparison)
+  # ============================================================================
+
+  - id: 109
+    name: "Coverage Check (Domain vs DB)"
+    description: "For each monitored suburb, fetches the current for-sale property count from Domain.com.au and compares to the count in Gold_Coast_Currently_For_Sale. Logs ERROR lines to logs/coverage_check.log when counts differ."
+    phase: "data_quality"
+    command: "python3 scripts/coverage_check.py --no-fail"
+    working_dir: "/home/fields/Fields_Orchestrator"
+    mongodb_activity: "light_read"
+    requires_browser: true
+    estimated_duration_minutes: 5
+    cooldown_seconds: 20
+    depends_on: [101, 102]  # Run after for-sale scraping completes
+
+  # ============================================================================
+  # PHASE 7: DATA QUALITY AUDIT
   # ============================================================================
 
   - id: 107
@@ -273,9 +289,9 @@ processes:
 
 # Execution order (processes will run in this order based on schedule)
 # Note: Schedule manager determines which processes run based on day of week
-# - Monday-Saturday: 101, 103, 105, 106, 6, 11, 12, 13, 14, 16, 15, 17, 18, 107 (target market only + audit)
-# - Sunday: 102, 104, 101, 103, 105, 106, 6, 11, 12, 13, 14, 16, 15, 17, 18, 107 (all suburbs + target market + audit)
-execution_order: [101, 102, 103, 104, 105, 106, 108, 6, 11, 12, 13, 14, 16, 15, 17, 19, 18, 107]
+# - Monday-Saturday: 101, 103, 105, 106, 6, 11, 12, 13, 14, 16, 15, 17, 18, 109, 107 (target market only + coverage check + audit)
+# - Sunday: 102, 104, 101, 103, 105, 106, 6, 11, 12, 13, 14, 16, 15, 17, 18, 109, 107 (all suburbs + target market + coverage check + audit)
+execution_order: [101, 102, 103, 104, 105, 106, 108, 6, 11, 12, 13, 14, 16, 15, 17, 19, 18, 109, 107]
 
 # Phase descriptions for UI display
 phases:
@@ -316,8 +332,8 @@ phases:
 
   data_quality:
     name: "Data Quality Audit"
-    description: "Validate database integrity and detect misplaced properties"
-    steps: [107]
+    description: "Validate database integrity, detect misplaced properties, and check scraping coverage against Domain"
+    steps: [109, 107]
 
   backup:
     name: "Daily Backup"
