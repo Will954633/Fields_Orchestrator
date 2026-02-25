@@ -1,0 +1,53 @@
+name: Phase - Visual Analysis
+on:
+  workflow_call:
+  workflow_dispatch:
+
+jobs:
+  visual-analysis:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      MONGODB_URI: ${{ secrets.COSMOS_CONNECTION_STRING }}
+      COSMOS_CONNECTION_STRING: ${{ secrets.COSMOS_CONNECTION_STRING }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - name: Checkout Property_Data_Scraping
+        uses: actions/checkout@v4
+        with:
+          repository: Will954633/Property_Data_Scraping
+          path: Property_Data_Scraping
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Write .env for Ollama Analysis scripts
+        run: |
+          DIR=Property_Data_Scraping/03_Gold_Coast/Gold_Coast_Wide_Currently_For_Sale_AND_Recently_Sold/Ollama_Property_Analysis
+          echo "MONGODB_URI=${{ secrets.COSMOS_CONNECTION_STRING }}" > $DIR/.env
+          echo "COSMOS_CONNECTION_STRING=${{ secrets.COSMOS_CONNECTION_STRING }}" >> $DIR/.env
+          echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> $DIR/.env
+
+      - name: Install Python dependencies
+        run: |
+          pip install -r Property_Data_Scraping/03_Gold_Coast/Gold_Coast_Wide_Currently_For_Sale_AND_Recently_Sold/Ollama_Property_Analysis/requirements.txt
+          pip install openai
+
+      - name: "Process 105 - Photo Analysis"
+        working-directory: Property_Data_Scraping/03_Gold_Coast/Gold_Coast_Wide_Currently_For_Sale_AND_Recently_Sold/Ollama_Property_Analysis
+        run: bash run_target_market_photo_analysis.sh
+
+      - name: "Process 106 - Floor Plan Analysis"
+        working-directory: Property_Data_Scraping/03_Gold_Coast/Gold_Coast_Wide_Currently_For_Sale_AND_Recently_Sold/Ollama_Property_Analysis
+        run: bash run_target_market_floor_plan_analysis.sh
+
+      - name: "Process 108 - Valuation Enrichment"
+        working-directory: Property_Data_Scraping/03_Gold_Coast/Gold_Coast_Wide_Currently_For_Sale_AND_Recently_Sold/Ollama_Property_Analysis
+        run: bash run_target_market_valuation_enrichment.sh
+
+      - name: Write job summary
+        if: always()
+        run: |
+          echo "## Visual Analysis Phase" >> $GITHUB_STEP_SUMMARY
+          echo "- Status: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Completed: $(date -u)" >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,73 @@
+name: Phase - Scraping
+on:
+  workflow_call:
+    inputs:
+      mode:
+        type: string
+        required: true
+        description: "'daily' | 'sunday-forsale' | 'sunday-sold'"
+  workflow_dispatch:
+    inputs:
+      mode:
+        type: choice
+        description: "Which scraping mode to run"
+        options:
+          - daily
+          - sunday-forsale
+          - sunday-sold
+        default: daily
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      MONGODB_URI: ${{ secrets.COSMOS_CONNECTION_STRING }}
+      COSMOS_CONNECTION_STRING: ${{ secrets.COSMOS_CONNECTION_STRING }}
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - name: Checkout Property_Data_Scraping
+        uses: actions/checkout@v4
+        with:
+          repository: Will954633/Property_Data_Scraping
+          path: Property_Data_Scraping
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Install Chrome
+        uses: browser-actions/setup-chrome@v1
+
+      - name: Set Chrome paths
+        run: |
+          echo "CHROME_BINARY_PATH=$(which google-chrome)" >> $GITHUB_ENV
+          echo "CHROMEDRIVER_PATH=$(which chromedriver)" >> $GITHUB_ENV
+
+      - name: Install Python dependencies
+        run: pip install selenium pymongo requests beautifulsoup4 python-dotenv
+
+      - name: "Process 101 - Scrape For-Sale (Target Market)"
+        if: inputs.mode == 'daily'
+        working-directory: Property_Data_Scraping/03_Gold_Coast/Gold_Coast_Wide_Currently_For_Sale_AND_Recently_Sold
+        run: python3 run_dynamic_10_suburbs.py --test --max-concurrent 1 --parallel-properties 1
+
+      - name: "Process 103 - Monitor Sold (Target Market)"
+        if: inputs.mode == 'daily'
+        working-directory: Property_Data_Scraping/03_Gold_Coast/Gold_Coast_Wide_Currently_For_Sale_AND_Recently_Sold
+        run: python3 monitor_sold_properties.py --suburbs "Robina:4226" --max-concurrent 5
+
+      - name: "Process 102 - Scrape For-Sale (All Suburbs)"
+        if: inputs.mode == 'sunday-forsale'
+        working-directory: Property_Data_Scraping/03_Gold_Coast/Gold_Coast_Wide_Currently_For_Sale_AND_Recently_Sold
+        run: python3 run_dynamic_10_suburbs.py --all
+
+      - name: "Process 104 - Monitor Sold (All Suburbs)"
+        if: inputs.mode == 'sunday-sold'
+        working-directory: Property_Data_Scraping/03_Gold_Coast/Gold_Coast_Wide_Currently_For_Sale_AND_Recently_Sold
+        run: python3 monitor_sold_properties.py --all --max-concurrent 5
+
+      - name: Write job summary
+        if: always()
+        run: |
+          echo "## Scraping Phase (mode: ${{ inputs.mode }})" >> $GITHUB_STEP_SUMMARY
+          echo "- Status: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Completed: $(date -u)" >> $GITHUB_STEP_SUMMARY

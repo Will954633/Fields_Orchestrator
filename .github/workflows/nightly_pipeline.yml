@@ -1,0 +1,52 @@
+name: Nightly Pipeline
+on:
+  # Disabled until GHA is validated - enable by uncommenting the schedule block below
+  # schedule:
+  #   - cron: '30 10 * * *'   # 8:30 PM Brisbane (AEST = UTC+10, no DST)
+  workflow_dispatch:
+    inputs:
+      sunday_mode:
+        description: "Force Sunday mode (run all-suburb scraping in addition to daily)"
+        type: boolean
+        default: false
+
+jobs:
+  scraping-daily:
+    name: "Scraping - Daily (Processes 101 + 103)"
+    uses: ./.github/workflows/phase_scraping.yml
+    with:
+      mode: daily
+    secrets: inherit
+
+  scraping-sunday-forsale:
+    name: "Scraping - All Suburbs For Sale (Process 102)"
+    if: |
+      (github.event_name == 'schedule' && github.event.schedule == '30 10 * * 0') ||
+      (github.event_name == 'workflow_dispatch' && inputs.sunday_mode == true)
+    uses: ./.github/workflows/phase_scraping.yml
+    with:
+      mode: sunday-forsale
+    secrets: inherit
+
+  scraping-sunday-sold:
+    name: "Scraping - All Suburbs Sold (Process 104)"
+    needs: scraping-sunday-forsale
+    if: |
+      (github.event_name == 'schedule' && github.event.schedule == '30 10 * * 0') ||
+      (github.event_name == 'workflow_dispatch' && inputs.sunday_mode == true)
+    uses: ./.github/workflows/phase_scraping.yml
+    with:
+      mode: sunday-sold
+    secrets: inherit
+
+  visual-analysis:
+    name: "Visual Analysis (Processes 105, 106, 108)"
+    needs: scraping-daily
+    uses: ./.github/workflows/phase_visual_analysis.yml
+    secrets: inherit
+
+  enrichment:
+    name: "Enrichment + Audit (Processes 6, 11-19, 107)"
+    needs: [visual-analysis, scraping-daily]
+    uses: ./.github/workflows/phase_enrichment.yml
+    secrets: inherit

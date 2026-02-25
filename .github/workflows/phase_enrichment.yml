@@ -1,0 +1,105 @@
+name: Phase - Enrichment + Audit
+on:
+  workflow_call:
+  workflow_dispatch:
+
+jobs:
+  enrichment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      MONGODB_URI: ${{ secrets.COSMOS_CONNECTION_STRING }}
+      COSMOS_CONNECTION_STRING: ${{ secrets.COSMOS_CONNECTION_STRING }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - name: Checkout Fields_Orchestrator
+        uses: actions/checkout@v4
+        with:
+          repository: Will954633/Fields_Orchestrator
+          path: Fields_Orchestrator
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Checkout Feilds_Website
+        uses: actions/checkout@v4
+        with:
+          repository: Will954633/Website_Version_Feb_2026
+          path: Feilds_Website
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Checkout Property_Valuation
+        uses: actions/checkout@v4
+        with:
+          repository: Will954633/Property_Valuation
+          path: Property_Valuation
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Write .env files for scripts using load_dotenv
+        run: |
+          for dir in Feilds_Website/07_Valuation_Comps Feilds_Website/08_Market_Narrative_Engine; do
+            echo "COSMOS_CONNECTION_STRING=${{ secrets.COSMOS_CONNECTION_STRING }}" > $dir/.env
+            echo "MONGODB_URI=${{ secrets.COSMOS_CONNECTION_STRING }}" >> $dir/.env
+          done
+
+      - name: Install Python dependencies
+        run: pip install pymongo catboost pandas numpy requests scikit-learn python-dotenv openai
+
+      - name: "Process 6 - Property Valuation Model"
+        working-directory: Property_Valuation/04_Production_Valuation
+        run: python3 batch_valuate_with_tracking.py
+
+      - name: "Process 11 - Parse Room Dimensions"
+        working-directory: Feilds_Website
+        run: python3 10_Floor_Plans/parse_room_dimensions.py
+
+      - name: "Process 12 - Enrich Property Timeline"
+        working-directory: Feilds_Website
+        run: python3 03_For_Sale_Coverage/enrich_property_timeline.py
+
+      - name: "Process 13 - Suburb Median Prices"
+        working-directory: Feilds_Website
+        run: python3 08_Market_Narrative_Engine/generate_suburb_medians.py
+
+      - name: "Process 14 - Suburb Statistics"
+        working-directory: Feilds_Website
+        run: python3 03_For_Sale_Coverage/generate_suburb_statistics.py
+
+      - name: "Process 16 - Enrich Properties For Sale"
+        working-directory: Feilds_Website
+        run: python3 10_Floor_Plans/backend/enrich_properties_for_sale.py --new-only
+
+      - name: "Process 15 - Property Insights"
+        working-directory: Feilds_Website
+        run: python3 03_For_Sale_Coverage/calculate_property_insights.py
+
+      - name: "Process 17 - Market Narrative Pre-computation"
+        working-directory: Feilds_Website/08_Market_Narrative_Engine
+        run: bash RUN_PRECOMPUTE.sh
+
+      - name: "Process 19 - Active Listings Snapshot"
+        working-directory: Feilds_Website
+        run: python3 08_Market_Narrative_Engine/precompute_active_listings.py
+
+      - name: "Process 18 - Valuation Pre-computation"
+        working-directory: Feilds_Website/07_Valuation_Comps
+        run: bash RUN_PRECOMPUTE_VALUATIONS.sh
+
+      - name: "Process 107 - Database Audit"
+        working-directory: Fields_Orchestrator
+        run: python3 scripts/database_audit.py --export /tmp/database_audit_$(date +%Y%m%d_%H%M%S).log --limit 100 --no-fail
+
+      - name: Upload audit log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-log-${{ github.run_id }}
+          path: /tmp/database_audit_*.log
+          retention-days: 30
+
+      - name: Write job summary
+        if: always()
+        run: |
+          echo "## Enrichment + Audit Phase" >> $GITHUB_STEP_SUMMARY
+          echo "- Status: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Completed: $(date -u)" >> $GITHUB_STEP_SUMMARY
