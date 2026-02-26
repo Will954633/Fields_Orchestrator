@@ -460,6 +460,25 @@ class OrchestratorDaemon:
                 'error': str(e)
             }
     
+    def _cleanup_chromium_snap_tmp(self) -> None:
+        """Clear Chromium snap private tmp to prevent disk exhaustion."""
+        snap_tmp = "/tmp/snap-private-tmp/snap.chromium/tmp"
+        try:
+            result = subprocess.run(
+                ['sudo', 'rm', '-rf', snap_tmp],
+                capture_output=True, text=True, timeout=30
+            )
+            subprocess.run(
+                ['sudo', 'mkdir', '-p', snap_tmp],
+                capture_output=True, text=True, timeout=10
+            )
+            if result.returncode == 0:
+                self.logger.info("✓ Chromium snap tmp cleared")
+            else:
+                self.logger.warning(f"Chromium snap tmp cleanup warning: {result.stderr.strip()}")
+        except Exception as e:
+            self.logger.warning(f"Chromium snap tmp cleanup failed (non-fatal): {e}")
+
     def _on_step_progress(self, step_id: int, step_name: str, status: str) -> None:
         """
         Callback for step progress updates.
@@ -517,7 +536,11 @@ class OrchestratorDaemon:
                     "Fields Orchestrator - Cleanup",
                     f"Cleaned up {cleanup_results['killed_count']} zombie ChromeDriver processes"
                 )
-            
+
+            # Clear Chromium snap tmp to prevent disk exhaustion
+            self.logger.info("PRE-RUN CLEANUP: Clearing Chromium snap tmp")
+            self._cleanup_chromium_snap_tmp()
+
             # Execute the main pipeline
             self.logger.info("Starting pipeline execution...")
             results = self.task_executor.execute_pipeline()
