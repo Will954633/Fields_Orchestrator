@@ -11,7 +11,7 @@ Blob path structure:
   {db_label}/{suburb}/{property_id}/photos/{index:02d}.jpg
   {db_label}/{suburb}/{property_id}/floor_plans/{index:02d}.jpg
 
-Where db_label is "for_sale" or "sold".
+Where db_label is "for_sale", "sold", or "target_sold".
 
 Skip logic: properties with images_uploaded_to_blob=True are skipped (idempotent).
 Belt-and-braces: also skips if property_images[0] already contains blob.core.windows.net.
@@ -43,8 +43,9 @@ from azure.storage.blob import BlobServiceClient, ContentSettings
 MONGODB_URI = os.getenv('MONGODB_URI', 'mongodb://127.0.0.1:27017/')
 AZURE_STORAGE_CONNECTION_STRING = os.getenv('AZURE_STORAGE_CONNECTION_STRING', '')
 
-DB_FOR_SALE = 'Gold_Coast_Currently_For_Sale'
-DB_SOLD     = 'Gold_Coast_Recently_Sold'
+DB_FOR_SALE        = 'Gold_Coast_Currently_For_Sale'
+DB_SOLD            = 'Gold_Coast_Recently_Sold'
+DB_TARGET_SOLD     = 'Target_Market_Sold_Last_12_Months'
 
 CONTAINER_NAME   = 'property-images'
 BLOB_DOMAIN      = 'blob.core.windows.net'
@@ -258,8 +259,9 @@ Examples:
                         help='Always exit 0 (for orchestrator integration)')
     parser.add_argument('--suburbs',  type=str,
                         help='Comma-separated Name:postcode pairs to limit scope')
-    parser.add_argument('--db',       type=str, choices=['for_sale', 'sold', 'both'],
-                        default='both', help='Which database(s) to process (default: both)')
+    parser.add_argument('--db',       type=str,
+                        choices=['for_sale', 'sold', 'target_sold', 'all'],
+                        default='all', help='Which database(s) to process (default: all)')
     parser.add_argument('--dry-run',  action='store_true',
                         help='Log what would be uploaded without actually uploading')
     args = parser.parse_args()
@@ -278,7 +280,7 @@ Examples:
     print(f"DOWNLOAD IMAGES TO BLOB STORAGE{dry_tag}")
     print(f"{'=' * 70}")
     print(f"Timestamp:      {run_ts}")
-    print(f"Database scope: {args.db}")
+    print(f"Database scope: {args.db} (for_sale, sold, target_sold, or all)")
     print(f"Log file:       {LOG_FILE}")
     print(f"{'=' * 70}\n")
 
@@ -311,10 +313,12 @@ Examples:
 
     # Determine database scope
     db_scope = []
-    if args.db in ('for_sale', 'both'):
+    if args.db in ('for_sale', 'all'):
         db_scope.append(('for_sale', DB_FOR_SALE))
-    if args.db in ('sold', 'both'):
+    if args.db in ('sold', 'all'):
         db_scope.append(('sold', DB_SOLD))
+    if args.db in ('target_sold', 'all'):
+        db_scope.append(('target_sold', DB_TARGET_SOLD))
 
     overall   = {"total": 0, "uploaded": 0, "skipped": 0, "failed": 0}
     log_lines = ["", "=" * 70, f"DOWNLOAD IMAGES RUN: {run_ts}{dry_tag}", "=" * 70]

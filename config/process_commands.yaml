@@ -87,7 +87,7 @@ processes:
 
   - id: 110
     name: "Download Property Images to Blob Storage"
-    description: "Downloads property_images and floor_plans from Domain CDN URLs into Azure Blob Storage. Updates MongoDB to use blob URLs. Skips already-uploaded properties (idempotent). Processes both Gold_Coast_Currently_For_Sale and Gold_Coast_Recently_Sold databases."
+    description: "Downloads property_images and floor_plans from Domain CDN URLs into Azure Blob Storage. Updates MongoDB to use blob URLs. Skips already-uploaded properties (idempotent). Processes Gold_Coast_Currently_For_Sale, Gold_Coast_Recently_Sold, and Target_Market_Sold_Last_12_Months databases."
     phase: "image_archival"
     command: "python3 scripts/download_images_to_blob.py --no-fail"
     working_dir: "/home/fields/Fields_Orchestrator"
