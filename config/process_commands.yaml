@@ -82,6 +82,22 @@ processes:
     depends_on: [102]
 
   # ============================================================================
+  # PHASE 2.5: IMAGE ARCHIVAL (Domain CDN -> Azure Blob Storage)
+  # ============================================================================
+
+  - id: 110
+    name: "Download Property Images to Blob Storage"
+    description: "Downloads property_images and floor_plans from Domain CDN URLs into Azure Blob Storage. Updates MongoDB to use blob URLs. Skips already-uploaded properties (idempotent). Processes both Gold_Coast_Currently_For_Sale and Gold_Coast_Recently_Sold databases."
+    phase: "image_archival"
+    command: "python3 scripts/download_images_to_blob.py --no-fail"
+    working_dir: "/home/fields/Fields_Orchestrator"
+    mongodb_activity: "moderate_write"
+    requires_browser: false
+    estimated_duration_minutes: 120
+    cooldown_seconds: 20
+    depends_on: [104]
+
+  # ============================================================================
   # PHASE 3: VISUAL ANALYSIS (Target Market Only - Ollama)
   # ============================================================================
   
@@ -291,7 +307,7 @@ processes:
 # Note: Schedule manager determines which processes run based on day of week
 # - Monday-Saturday: 101, 103, 105, 106, 6, 11, 12, 13, 14, 16, 15, 17, 18, 109, 107 (Robina, Varsity Lakes, Burleigh Waters only + coverage check + audit)
 # - Sunday: 102, 104, 101, 103, 105, 106, 6, 11, 12, 13, 14, 16, 15, 17, 18, 109, 107 (all suburbs + target market + coverage check + audit)
-execution_order: [101, 102, 103, 104, 105, 106, 108, 6, 11, 12, 13, 14, 16, 15, 17, 19, 18, 109, 107]
+execution_order: [101, 102, 103, 104, 110, 105, 106, 108, 6, 11, 12, 13, 14, 16, 15, 17, 19, 18, 109, 107]
 
 # Phase descriptions for UI display
 phases:
@@ -329,6 +345,11 @@ phases:
     name: "Backend Data Enrichment"
     description: "Generate Capital Gain and Unique Features data for frontend"
     steps: [11, 12, 13, 14, 16, 15, 17, 19, 18]
+
+  image_archival:
+    name: "Image Archival"
+    description: "Download property images from Domain CDN into Azure Blob Storage"
+    steps: [110]
 
   data_quality:
     name: "Data Quality Audit"

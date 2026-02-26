@@ -285,7 +285,15 @@ class TaskExecutor:
                 self.logger.debug(f"Passing MONGODB_URI to subprocess (from MONGODB_URI)")
             else:
                 self.logger.warning("No COSMOS_CONNECTION_STRING or MONGODB_URI found in environment!")
-            
+
+            # Pass Azure Blob Storage connection string to subprocess (for process 110)
+            azure_conn = os.getenv('AZURE_STORAGE_CONNECTION_STRING')
+            if azure_conn:
+                env['AZURE_STORAGE_CONNECTION_STRING'] = azure_conn
+                self.logger.debug("Passing AZURE_STORAGE_CONNECTION_STRING to subprocess")
+            else:
+                self.logger.debug("AZURE_STORAGE_CONNECTION_STRING not set (only needed for process 110)")
+
             proc = subprocess.Popen(
                 process.command,
                 shell=True,
