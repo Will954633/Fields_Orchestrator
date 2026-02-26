@@ -3,7 +3,7 @@
 # 
 # MAJOR UPDATE: Integrated Gold Coast-wide property monitoring system
 # - Replaced old Domain scraping processes (1-5, 7-8) with new Gold Coast monitoring
-# - Added target market differentiation (8 suburbs nightly, 44 suburbs weekly)
+# - Added target market differentiation (3 suburbs nightly, all other suburbs weekly)
 # - Uses OpenAI GPT vision models for photo and floor plan analysis
 # - 10x faster sold monitoring with ChromeDriver optimization
 # - Kept valuation (6) and backend enrichment (11-16) processes unchanged
@@ -33,7 +33,7 @@ processes:
   
   - id: 101
     name: "Scrape For-Sale Properties (Target Market)"
-    description: "Scrapes first 10 suburbs (includes all 8 target market suburbs) using headless Chrome - stores in Gold_Coast_Currently_For_Sale database"
+    description: "Scrapes first 10 suburbs (Robina, Varsity Lakes, Burleigh Waters are first 3) using headless Chrome - stores in Gold_Coast_Currently_For_Sale database"
     phase: "for_sale_target"
     command: "python3 run_dynamic_10_suburbs.py --test --max-concurrent 1 --parallel-properties 1"
     working_dir: "/home/fields/Property_Data_Scraping/03_Gold_Coast/Gold_Coast_Wide_Currently_For_Sale_AND_Recently_Sold"
@@ -59,9 +59,9 @@ processes:
   
   - id: 103
     name: "Monitor Sold Properties (Target Market)"
-    description: "Monitors target market suburbs for sold properties - 10x faster with ChromeDriver optimization"
+    description: "Monitors target market suburbs (Robina, Varsity Lakes, Burleigh Waters) for sold properties - 10x faster with ChromeDriver optimization"
     phase: "monitoring_target"
-    command: "python3 monitor_sold_properties.py --suburbs \"Robina:4226\" --max-concurrent 5"
+    command: "python3 monitor_sold_properties.py --suburbs \"Robina:4226\" \"Varsity Lakes:4227\" \"Burleigh Waters:4220\" --max-concurrent 5"
     working_dir: "/home/fields/Property_Data_Scraping/03_Gold_Coast/Gold_Coast_Wide_Currently_For_Sale_AND_Recently_Sold"
     mongodb_activity: "moderate_write"
     requires_browser: true
@@ -93,10 +93,10 @@ processes:
     working_dir: "/home/fields/Property_Data_Scraping/03_Gold_Coast/Gold_Coast_Wide_Currently_For_Sale_AND_Recently_Sold/Ollama_Property_Analysis"
     mongodb_activity: "moderate_write"
     requires_browser: false
-    estimated_duration_minutes: 120  # 8 suburbs × ~15 min each
+    estimated_duration_minutes: 45  # 3 suburbs × ~15 min each
     cooldown_seconds: 20
     depends_on: [101]
-    
+
   - id: 106
     name: "Floor Plan Analysis (Target Market - OpenAI GPT)"
     description: "Analyzes floor plans using OpenAI GPT Vision to extract room dimensions and areas"
@@ -105,19 +105,19 @@ processes:
     working_dir: "/home/fields/Property_Data_Scraping/03_Gold_Coast/Gold_Coast_Wide_Currently_For_Sale_AND_Recently_Sold/Ollama_Property_Analysis"
     mongodb_activity: "moderate_write"
     requires_browser: false
-    estimated_duration_minutes: 60  # 8 suburbs × ~7-8 min each
+    estimated_duration_minutes: 25  # 3 suburbs × ~7-8 min each
     cooldown_seconds: 20
     depends_on: [101]
 
   - id: 108
     name: "Valuation-Grade Photo & Floor Plan Enrichment (Target Market)"
-    description: "GPT valuation-grade analysis of property photos and floor plans for all 8 target market suburbs. Writes property_valuation_data, floor_plan_analysis, and processing_status to Gold_Coast_Currently_For_Sale. Fields are preserved when properties migrate to Gold_Coast_Recently_Sold."
+    description: "GPT valuation-grade analysis of property photos and floor plans for 3 target market suburbs (Robina, Varsity Lakes, Burleigh Waters). Writes property_valuation_data, floor_plan_analysis, and processing_status to Gold_Coast_Currently_For_Sale. Fields are preserved when properties migrate to Gold_Coast_Recently_Sold."
     phase: "enrichment_target"
     command: "./run_target_market_valuation_enrichment.sh"
     working_dir: "/home/fields/Property_Data_Scraping/03_Gold_Coast/Gold_Coast_Wide_Currently_For_Sale_AND_Recently_Sold/Ollama_Property_Analysis"
     mongodb_activity: "moderate_write"
     requires_browser: false
-    estimated_duration_minutes: 120  # 8 suburbs × ~15 min each (2 GPT calls per property)
+    estimated_duration_minutes: 45  # 3 suburbs × ~15 min each (2 GPT calls per property)
     cooldown_seconds: 20
     depends_on: [101]
 
@@ -289,7 +289,7 @@ processes:
 
 # Execution order (processes will run in this order based on schedule)
 # Note: Schedule manager determines which processes run based on day of week
-# - Monday-Saturday: 101, 103, 105, 106, 6, 11, 12, 13, 14, 16, 15, 17, 18, 109, 107 (target market only + coverage check + audit)
+# - Monday-Saturday: 101, 103, 105, 106, 6, 11, 12, 13, 14, 16, 15, 17, 18, 109, 107 (Robina, Varsity Lakes, Burleigh Waters only + coverage check + audit)
 # - Sunday: 102, 104, 101, 103, 105, 106, 6, 11, 12, 13, 14, 16, 15, 17, 18, 109, 107 (all suburbs + target market + coverage check + audit)
 execution_order: [101, 102, 103, 104, 105, 106, 108, 6, 11, 12, 13, 14, 16, 15, 17, 19, 18, 109, 107]
 
@@ -297,7 +297,7 @@ execution_order: [101, 102, 103, 104, 105, 106, 108, 6, 11, 12, 13, 14, 16, 15, 
 phases:
   for_sale_target:
     name: "For-Sale Scraping (Target Market)"
-    description: "Scrape 8 target market suburbs nightly"
+    description: "Scrape 3 target market suburbs nightly (Robina, Varsity Lakes, Burleigh Waters)"
     steps: [101]
     
   for_sale_other:
@@ -307,7 +307,7 @@ phases:
     
   monitoring_target:
     name: "Sold Monitoring (Target Market)"
-    description: "Monitor target market for sold properties"
+    description: "Monitor target market (Robina, Varsity Lakes, Burleigh Waters) for sold properties"
     steps: [103]
     
   monitoring_other:
@@ -317,7 +317,7 @@ phases:
     
   enrichment_target:
     name: "Visual Analysis (Target Market)"
-    description: "Analyze photos and floor plans with OpenAI GPT Vision"
+    description: "Analyze photos and floor plans with OpenAI GPT Vision for Robina, Varsity Lakes, Burleigh Waters"
     steps: [105, 106, 108]
     
   valuation:
