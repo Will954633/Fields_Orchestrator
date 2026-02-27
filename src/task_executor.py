@@ -844,6 +844,23 @@ class TaskExecutor:
                         
                         # Add cooldown after detection
                         self.mongodb_monitor.start_cooldown(60, "after unknown status detection")
+
+                        # Write scraper health + audit snapshot to MongoDB for OpsPage
+                        import subprocess as _sp
+                        for _snap_script in [
+                            "/home/fields/Fields_Orchestrator/write-scraper-health.py",
+                            "/home/fields/Fields_Orchestrator/write-audit-snapshot.py",
+                        ]:
+                            try:
+                                self.logger.info(f"📊 Running {_snap_script.split('/')[-1]}")
+                                _sp.run(
+                                    ["python3", _snap_script],
+                                    timeout=60,
+                                    check=False,
+                                    capture_output=True,
+                                )
+                            except Exception as _e:
+                                self.logger.warning(f"Snapshot script failed (non-fatal): {_e}")
                 
                 # Apply cooldown after the step
                 if i < len(self.processes) - 1:  # Don't cooldown after last step
