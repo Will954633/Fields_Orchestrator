@@ -78,6 +78,18 @@ from .daily_incremental import write_for_sale_snapshot, compute_candidate_sets
 from .field_change_tracker import FieldChangeTracker
 from .property_change_detector import PropertyChangeDetector
 from .schedule_manager import ScheduleManager
+try:
+    from shared.monitor_client import MonitorClient as _MonitorClient
+    _MONITOR_AVAILABLE = True
+except ImportError:
+    _MONITOR_AVAILABLE = False
+    _MonitorClient = None
+
+try:
+    from .auto_triage import triage_step as _triage_step, TA as _TA
+    _TRIAGE_AVAILABLE = True
+except ImportError:
+    _TRIAGE_AVAILABLE = False
 
 # Import process failures logger
 import sys
@@ -459,6 +471,20 @@ class TaskExecutor:
         error_message = None
         output = None
 
+        # MonitorClient — record step start
+        _monitor = None
+        if _MONITOR_AVAILABLE:
+            try:
+                _monitor = _MonitorClient(
+                    system="orchestrator",
+                    pipeline="orchestrator_daily",
+                    process_id=str(process.id),
+                    process_name=process.name,
+                )
+                _monitor.start()
+            except Exception:
+                _monitor = None
+
         # Try up to max_retries + 1 times
         for attempt in range(self.max_retries + 1):
             attempts = attempt + 1
@@ -504,6 +530,58 @@ class TaskExecutor:
             )
 
         log_step_complete(process.id, process.name, duration, success)
+
+        # MonitorClient — record step completion
+        if _monitor is not None:
+            try:
+                if error_message:
+                    _monitor.log_error(error_message, file=process.command.split()[0] if process.command else "unknown")
+                _monitor.log_metric("attempts", attempts)
+                _monitor.log_metric("duration_seconds", round(duration, 1))
+                _monitor.finish(status="success" if success else "failed")
+            except Exception:
+                pass
+
+        # Auto-triage on step failure: classify root cause, queue the right repair
+        if not success and _TRIAGE_AVAILABLE:
+            try:
+                _decision = _triage_step(
+                    step_id=process.id,
+                    step_name=process.name,
+                    stdout=output or "",
+                    attempts=attempts,
+                )
+                _icons = {_TA.NONE: "🔕", _TA.PROCESS_RERUN: "🔄", _TA.ESCALATE: "🤖"}
+                self.logger.info(
+                    f"{_icons.get(_decision.action, '❓')} Triage [{process.id}] "
+                    f"[{_decision.diagnostic.failure_class.upper()}] — {_decision.repair_note}"
+                )
+                if _decision.request_id:
+                    self.logger.info(
+                        f"   ↳ Repair queued: {_decision.request_id} "
+                        f"(action={_decision.action})"
+                    )
+                # Write triage result onto the process_runs document so the
+                # ops dashboard can surface it in the expanded step view.
+                if _monitor is not None and _monitor._run_id is not None:
+                    try:
+                        _d = _decision.diagnostic
+                        _monitor._get_collection("process_runs").update_one(
+                            {"_id": _monitor._run_id},
+                            {"$set": {"triage": {
+                                "failure_class": _d.failure_class,
+                                "cause":         _d.cause,
+                                "root_step":     _d.root_step,
+                                "action":        _decision.action,
+                                "suggested_actions": _d.suggested_actions,
+                                "auto_fixable":  _d.auto_fixable,
+                                "request_id":    _decision.request_id,
+                            }}}
+                        )
+                    except Exception:
+                        pass  # Never break the pipeline over a monitoring write
+            except Exception as _te:
+                self.logger.warning(f"Auto-triage error for step {process.id}: {_te}")
 
         status = "completed" if success else "failed"
         self._notify_progress(process.id, process.name, status)
