@@ -259,6 +259,58 @@ Examples:
                 missing = domain_count - db_count if domain_count and db_count >= 0 else '?'
                 print(f"  ERROR  Domain={domain_count}  DB={db_count}  (missing {missing} properties)")
 
+        # Write results to system_monitor.data_integrity for OPS dashboard
+        try:
+            monitor_db = client["system_monitor"]
+            di_col = monitor_db["data_integrity"]
+            now_utc = datetime.utcnow()
+            for r in results:
+                suburb_key = r['suburb'].lower().replace(' ', '_')
+                domain_ct = r.get('domain_count') or 0
+                db_ct = r.get('db_count') or 0
+
+                # Determine status for OPS dashboard
+                if r['status'] == 'OK':
+                    di_status = 'ok'
+                elif r['status'] == 'GAP' and db_ct < domain_ct:
+                    di_status = 'critical'  # Missing listings
+                elif r['status'] == 'GAP' and db_ct > domain_ct:
+                    di_status = 'ok'  # We have more than Domain — not a problem
+                else:
+                    di_status = 'warning'
+
+                # Count enriched properties (with valuation_data)
+                enriched = 0
+                try:
+                    enriched = db.get_collection(suburb_key).count_documents({"valuation_data": {"$exists": True}})
+                except Exception:
+                    pass
+
+                di_col.update_one(
+                    {"check_name": f"coverage_{suburb_key}"},
+                    {"$set": {
+                        "check_name": f"coverage_{suburb_key}",
+                        "check_type": "data_coverage",
+                        "suburb": suburb_key,
+                        "status": di_status,
+                        "checked_at": now_utc,
+                        "total_listings": db_ct,
+                        "domain_count": domain_ct,
+                        "last_listing_update": now_utc,
+                        "coverage": {
+                            "valuation": {
+                                "count": enriched,
+                                "ratio": round(enriched / db_ct, 3) if db_ct > 0 else None,
+                                "status": "ok" if (db_ct > 0 and enriched / db_ct >= 0.7) else ("critical" if db_ct > 0 else "unknown"),
+                            },
+                        },
+                    }},
+                    upsert=True,
+                )
+            print(f"\nWrote {len(results)} records to system_monitor.data_integrity")
+        except Exception as e:
+            print(f"WARNING: Failed to write data_integrity: {e}")
+
     finally:
         driver.quit()
         client.close()
