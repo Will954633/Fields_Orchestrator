@@ -65,7 +65,7 @@ processes:
     working_dir: "/home/fields/Property_Data_Scraping/03_Gold_Coast/Gold_Coast_Wide_Currently_For_Sale_AND_Recently_Sold"
     mongodb_activity: "moderate_write"
     requires_browser: true
-    estimated_duration_minutes: 45  # ~10 properties/min with optimization
+    estimated_duration_minutes: 60  # ~151 properties; 60s page timeout + 7s overhead each = ~25min normal, 170min worst case
     cooldown_seconds: 20
     depends_on: [101]
     
