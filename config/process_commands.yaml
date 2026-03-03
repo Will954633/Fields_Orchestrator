@@ -33,13 +33,13 @@ processes:
   
   - id: 101
     name: "Scrape For-Sale Properties (Target Market)"
-    description: "Scrapes first 10 suburbs (Robina, Varsity Lakes, Burleigh Waters are first 3) using headless Chrome - stores in Gold_Coast_Currently_For_Sale database"
+    description: "Scrapes 3 target suburbs (Robina, Varsity Lakes, Burleigh Waters) using headless Chrome - stores in Gold_Coast_Currently_For_Sale database"
     phase: "for_sale_target"
-    command: "python3 run_dynamic_10_suburbs.py --test --max-concurrent 1 --parallel-properties 1"
+    command: "python3 run_dynamic_10_suburbs.py --suburbs 'Robina,Varsity Lakes,Burleigh Waters' --max-concurrent 1 --parallel-properties 1"
     working_dir: "/home/fields/Property_Data_Scraping/03_Gold_Coast/Gold_Coast_Wide_Currently_For_Sale_AND_Recently_Sold"
     mongodb_activity: "heavy_write"
     requires_browser: true
-    estimated_duration_minutes: 50  # 10 suburbs × ~5 min each (reduced to 1 concurrent for memory)
+    estimated_duration_minutes: 90  # 3 suburbs (~114 listings) × ~1 min each at concurrency 1
     cooldown_seconds: 20
 
   - id: 102
