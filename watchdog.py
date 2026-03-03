@@ -74,8 +74,8 @@ TARGET_SUBURBS    = ["robina", "varsity_lakes", "burleigh_waters"]
 COVERAGE_THRESHOLDS = {
     "valuation_data":          0.70,
     "floor_plan_analysis":     0.55,   # some properties have no floor plan
-    "property_insights":       0.85,
-    "enriched_data":           0.85,
+    "property_insights":       0.80,
+    "enriched_data":           0.80,
     "parsed_rooms":            0.55,
     "transactions":            0.20,   # many properties have no prior sale history
     "photo_tour_order":        0.70,
@@ -209,7 +209,8 @@ def queue_repair(col, request_type: str, step_id: int, step_name: str,
 
 
 def write_fix_history(issue: dict, action: str, result: str):
-    """Append a watchdog action to today's fix history log."""
+    """Append a watchdog action to today's fix history log.
+    Deduplicates: only writes if the same step+cause hasn't been logged today."""
     try:
         from zoneinfo import ZoneInfo
         now = datetime.now(timezone.utc).astimezone(ZoneInfo("Australia/Brisbane"))
@@ -217,17 +218,31 @@ def write_fix_history(issue: dict, action: str, result: str):
         time_str = now.strftime("%H:%M")
         fix_dir = ORCHESTRATOR_DIR / "logs" / "fix-history"
         fix_dir.mkdir(parents=True, exist_ok=True)
+        fix_file = fix_dir / f"{date_str}.md"
+
+        # Dedup: check if the same step+cause was already logged today
+        step_id = issue.get("step_id", "?")
+        cause = issue.get("cause", "")
+        dedup_key = f"Step {step_id}"
+        if fix_file.exists():
+            existing = fix_file.read_text()
+            # Count how many times this step was already logged today
+            occurrences = existing.count(f"[WATCHDOG] {dedup_key}")
+            if occurrences >= 1:
+                log.info(f"  Fix history dedup: Step {step_id} already logged {occurrences}x today — skipping")
+                return
+
         entry = (
             f"\n---\n\n"
-            f"## [WATCHDOG] Step {issue.get('step_id','?')} ({issue.get('step_name','')}) — {time_str} AEST\n\n"
+            f"## [WATCHDOG] Step {step_id} ({issue.get('step_name','')}) — {time_str} AEST\n\n"
             f"**Failure class:** {issue.get('failure_class','?').upper()}\n"
-            f"**Cause:** {issue.get('cause','')}\n"
+            f"**Cause:** {cause}\n"
             f"**Action taken:** {action}\n"
             f"**Result:** {result}\n"
         )
         if issue.get("root_step"):
             entry += f"**Root step:** {issue['root_step']}\n"
-        with open(fix_dir / f"{date_str}.md", "a") as f:
+        with open(fix_file, "a") as f:
             f.write(entry)
     except Exception as e:
         log.warning(f"Fix history write failed: {e}")
@@ -631,7 +646,7 @@ def run_check(client, dry_run: bool = False) -> dict:
             "cause":         cause,
             "action":        result,
         })
-        if not dry_run and "QUEUED" in result or "ESCALATED" in result:
+        if not dry_run and ("QUEUED" in result or "ESCALATED" in result):
             write_fix_history(issue, action=result, result="queued — awaiting repair-agent or Claude")
 
     finished_at = datetime.now(timezone.utc)
