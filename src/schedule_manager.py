@@ -131,16 +131,28 @@ class ScheduleManager:
             check_date = datetime.now()
         
         processes = set()
-        
+
+        run_other = self.should_run_other_suburbs(check_date)
+
         # Check target market
+        # On days when all-suburbs processes run (102, 104), skip the target-market
+        # scraping/monitoring (101, 103) to avoid redundant work — 102/104 already
+        # cover the target suburbs.  Photo/floor plan analysis (105, 106, 108) still
+        # runs because those only process target-market properties.
         if self.should_run_target_market(check_date):
-            processes.update(self.target_market_processes)
-            self.logger.info(f"✅ Target market processes scheduled: {sorted(self.target_market_processes)}")
+            if run_other:
+                # Sunday: skip 101/103 (redundant with 102/104), keep 105/106/108
+                target_without_scrape = self.target_market_processes - {101, 103}
+                processes.update(target_without_scrape)
+                self.logger.info(f"✅ Target market processes scheduled (scrape/monitor skipped — covered by all-suburbs): {sorted(target_without_scrape)}")
+            else:
+                processes.update(self.target_market_processes)
+                self.logger.info(f"✅ Target market processes scheduled: {sorted(self.target_market_processes)}")
         else:
             self.logger.info(f"⏭️  Target market processes skipped (not scheduled for today)")
-        
+
         # Check other suburbs
-        if self.should_run_other_suburbs(check_date):
+        if run_other:
             processes.update(self.other_suburbs_processes)
             self.logger.info(f"✅ Other suburbs processes scheduled: {sorted(self.other_suburbs_processes)}")
         else:
