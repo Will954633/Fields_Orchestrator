@@ -287,15 +287,19 @@ Examples:
                     pass
 
                 di_col.update_one(
-                    {"check_name": f"coverage_{suburb_key}"},
+                    {"_id": suburb_key},
                     {"$set": {
                         "check_name": f"coverage_{suburb_key}",
                         "check_type": "data_coverage",
                         "suburb": suburb_key,
                         "status": di_status,
                         "checked_at": now_utc,
+                        "db_count": db_ct,
+                        "enriched_count": enriched,
+                        "enrichment_ratio": round(enriched / db_ct, 3) if db_ct > 0 else 0,
                         "total_listings": db_ct,
                         "domain_count": domain_ct,
+                        "last_updated": now_utc,
                         "last_listing_update": now_utc,
                         "coverage": {
                             "valuation": {
