@@ -62,6 +62,36 @@ def fetch_daily_spend(days=14):
     return data.get("data", [])
 
 
+def fetch_ads():
+    """Fetch all ads with status, creative details, and campaign info."""
+    data = fb_get(f"/{AD_ACCOUNT_ID}/ads", {
+        "fields": ("name,status,effective_status,campaign_id,adset_id,"
+                   "creative{id,body,title,thumbnail_url,image_url,link_url},"
+                   "campaign{name,objective,status},"
+                   "adset{name,status}"),
+        "limit": 50,
+        "filtering": json.dumps([{
+            "field": "effective_status",
+            "operator": "IN",
+            "value": ["ACTIVE", "PAUSED", "CAMPAIGN_PAUSED",
+                      "ADSET_PAUSED", "PENDING_REVIEW"],
+        }]),
+    })
+    return data.get("data", [])
+
+
+def fetch_ad_insights():
+    """Fetch per-ad performance metrics for the last 7 days."""
+    data = fb_get(f"/{AD_ACCOUNT_ID}/insights", {
+        "fields": ("ad_id,ad_name,impressions,reach,clicks,spend,"
+                   "ctr,cpc,cpm,frequency,actions,cost_per_action_type"),
+        "date_preset": "last_7d",
+        "level": "ad",
+        "limit": 50,
+    })
+    return data.get("data", [])
+
+
 def build_snapshot():
     today = fb_get(f"/{AD_ACCOUNT_ID}/insights", {
         "fields": "impressions,reach,clicks,spend,ctr,cpc,frequency",
@@ -85,6 +115,53 @@ def build_snapshot():
         return "0"
 
     link_clicks_7d = get_action(last7.get("actions", []), "link_click")
+
+    # Per-ad data
+    ads_meta = fetch_ads()
+    ad_insights_raw = fetch_ad_insights()
+
+    # Build insights lookup by ad_id
+    insights_by_id = {}
+    for row in ad_insights_raw:
+        ad_id = row.get("ad_id")
+        lc = get_action(row.get("actions", []), "link_click")
+        insights_by_id[ad_id] = {
+            "impressions": int(row.get("impressions", 0)),
+            "reach": int(row.get("reach", 0)),
+            "clicks": int(row.get("clicks", 0)),
+            "link_clicks": int(lc),
+            "spend_aud": float(row.get("spend", 0)),
+            "ctr": float(row.get("ctr", 0)),
+            "cpc": float(row.get("cpc", 0)) if row.get("cpc") else None,
+            "cpm": float(row.get("cpm", 0)),
+            "frequency": float(row.get("frequency", 0)),
+        }
+
+    # Merge metadata with insights
+    ads = []
+    for ad in ads_meta:
+        ad_id = ad.get("id")
+        campaign = ad.get("campaign", {})
+        adset = ad.get("adset", {})
+        creative = ad.get("creative", {})
+        perf = insights_by_id.get(ad_id, {})
+
+        ads.append({
+            "ad_id": ad_id,
+            "name": ad.get("name", ""),
+            "status": ad.get("status", ""),
+            "effective_status": ad.get("effective_status", ""),
+            "campaign_id": ad.get("campaign_id", ""),
+            "campaign_name": campaign.get("name", ""),
+            "campaign_objective": campaign.get("objective", ""),
+            "adset_id": ad.get("adset_id", ""),
+            "adset_name": adset.get("name", ""),
+            "creative_id": creative.get("id", ""),
+            "creative_body": (creative.get("body") or "")[:200],
+            "creative_title": creative.get("title", ""),
+            "creative_thumbnail": creative.get("thumbnail_url", ""),
+            "last_7d": perf,
+        })
 
     return {
         "fetched_at": datetime.now(timezone.utc).isoformat(),
@@ -131,16 +208,27 @@ def build_snapshot():
             }
             for d in daily
         ],
+        "ads": ads,
+        "ads_count": len(ads),
+        "ads_active_count": len([a for a in ads if a.get("effective_status") == "ACTIVE"]),
     }
 
 
 def save_to_mongo(snapshot):
     client = MongoClient(COSMOS_URI)
     db = client["system_monitor"]
-    col = db["facebook_ads"]
-    col.replace_one({"_id": "latest"}, {"_id": "latest", **snapshot}, upsert=True)
+    db["facebook_ads"].replace_one({"_id": "latest"}, {"_id": "latest", **snapshot}, upsert=True)
+    # Daily history snapshot for trend analysis
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    history_doc = {
+        "_id": today_str,
+        "ads": snapshot.get("ads", []),
+        "account_7d": snapshot.get("last_7d", {}),
+        "fetched_at": snapshot["fetched_at"],
+    }
+    db["facebook_ads_history"].replace_one({"_id": today_str}, history_doc, upsert=True)
     client.close()
-    print("Saved to system_monitor.facebook_ads")
+    print("Saved to system_monitor.facebook_ads + facebook_ads_history")
 
 
 def main():
@@ -158,7 +246,8 @@ def main():
         save_to_mongo(snapshot)
         print(f"Done. Spend last 7d: ${snapshot['last_7d']['spend_aud']:.2f} AUD, "
               f"Impressions: {snapshot['last_7d']['impressions']:,}, "
-              f"Active campaigns: {snapshot['campaigns']['active']}")
+              f"Active campaigns: {snapshot['campaigns']['active']}, "
+              f"Ads tracked: {snapshot['ads_count']} ({snapshot['ads_active_count']} active)")
 
 
 if __name__ == "__main__":
