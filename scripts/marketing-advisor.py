@@ -462,7 +462,9 @@ Suggest 2-4 actions. For each suggest_article_post, you MUST:
 
 Also review the per-ad performance data in facebook_ads.ads. If any ads are clearly underperforming (high spend, low CTR, zero link clicks), suggest pausing or editing them.
 
-Start with high-urgency market intelligence signals. Do not repeat articles or insights from recent_page_posts."""
+Start with high-urgency market intelligence signals. Do not repeat articles or insights from recent_page_posts.
+
+IMPORTANT: You MUST call ALL your suggested tools in a single response. Make multiple tool calls — do not stop after one. Include both content suggestions AND ad performance actions in the same response."""
 
     response = client.messages.create(
         model="claude-sonnet-4-20250514",
