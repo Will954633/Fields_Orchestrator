@@ -30,105 +30,78 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY") or open("/etc/environmen
 
 ACTION_TOOLS = [
     {
-        "name": "suggest_page_post",
-        "description": "Suggest an organic post to the Facebook page. The post will be queued for human approval before publishing. Use live data from the context to create data-led, insight-driven posts. Follow the Fields editorial voice: no superlatives, no real estate clichés, data-first.",
+        "name": "suggest_article_post",
+        "description": "Suggest a Facebook post that delivers genuine market insight and links to a specific published article on fieldsestate.com.au. Write 3-5 sentences of original analysis using live market data, targeted at a specific audience. The article link gives readers the full picture. This is the PRIMARY tool — use it for most suggestions.",
         "input_schema": {
             "type": "object",
             "properties": {
-                "message": {
+                "article_id": {
                     "type": "string",
-                    "description": "The full post text to publish to the Facebook page. Include line breaks for readability."
+                    "description": "The Ghost post ID of the article to link to (from article_index)."
+                },
+                "article_title": {
+                    "type": "string",
+                    "description": "Title of the article being linked (for verification)."
+                },
+                "article_url": {
+                    "type": "string",
+                    "description": "Full URL: https://fieldsestate.com.au/article/{article_id}"
+                },
+                "insight_text": {
+                    "type": "string",
+                    "description": "The full Facebook post text. 3-5 sentences of original analysis using specific numbers from the market data. Do NOT just summarize the article — deliver a standalone insight that makes the reader want to read more."
+                },
+                "audience": {
+                    "type": "string",
+                    "description": "Who specifically benefits from this insight.",
+                    "enum": ["buyers_robina", "buyers_burleigh_waters", "buyers_varsity_lakes",
+                             "sellers_robina", "sellers_burleigh_waters", "sellers_varsity_lakes",
+                             "buyers_gold_coast", "sellers_gold_coast",
+                             "investors_gold_coast", "general_gold_coast"]
                 },
                 "reasoning": {
                     "type": "string",
-                    "description": "Why this post, why now. Reference data or patterns from institutional memory."
+                    "description": "Why this post, why now, why this article. Must reference: (1) specific data signal from market_intelligence, (2) why this audience needs this insight, (3) what changed that makes it timely."
                 },
                 "priority": {
                     "type": "integer",
                     "description": "1 = do this first, 2 = important, 3 = nice to have",
                     "enum": [1, 2, 3]
+                }
+            },
+            "required": ["article_id", "article_title", "article_url", "insight_text",
+                          "audience", "reasoning", "priority"]
+        }
+    },
+    {
+        "name": "suggest_page_post",
+        "description": "Suggest an organic Facebook post WITHOUT linking to an article. Use ONLY when no published article is relevant. The post must still deliver genuine market insight using live data — not just list facts.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string",
+                    "description": "The full post text. 3-5 sentences of original market analysis with specific numbers."
+                },
+                "reasoning": {
+                    "type": "string",
+                    "description": "Why this post, why now. Explain why no existing article is suitable."
+                },
+                "priority": {
+                    "type": "integer",
+                    "enum": [1, 2, 3]
                 },
                 "link": {
                     "type": "string",
-                    "description": "Optional URL to attach to the post (e.g. fieldsestate.com.au/for-sale)"
+                    "description": "Optional URL (e.g. fieldsestate.com.au/for-sale or /market)"
                 }
             },
             "required": ["message", "reasoning", "priority"]
         }
     },
     {
-        "name": "suggest_image_post",
-        "description": "Suggest a branded data card image post. The system will generate a 1080x1080 branded image using live data and post it with your caption. Choose a template and suburb, then write a caption that complements the visual. Image posts tend to get higher engagement than text-only posts.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "template": {
-                    "type": "string",
-                    "description": "Which data card template to use",
-                    "enum": ["suburb_snapshot", "price_comparison", "sold_highlight"]
-                },
-                "suburb": {
-                    "type": "string",
-                    "description": "Suburb name (required for suburb_snapshot and sold_highlight, optional for price_comparison)"
-                },
-                "message": {
-                    "type": "string",
-                    "description": "Caption text to accompany the image. Keep it concise — the image contains the data."
-                },
-                "reasoning": {
-                    "type": "string",
-                    "description": "Why this image post, why this template/suburb."
-                },
-                "priority": {
-                    "type": "integer",
-                    "enum": [1, 2, 3]
-                }
-            },
-            "required": ["template", "message", "reasoning", "priority"]
-        }
-    },
-    {
-        "name": "suggest_ad_edit",
-        "description": "Suggest editing an existing Facebook ad's copy (headline or body text). Only suggest changes backed by performance data or institutional memory patterns.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "ad_id": {
-                    "type": "string",
-                    "description": "The Facebook Ad ID to edit (from the ads context data)"
-                },
-                "campaign_name": {
-                    "type": "string",
-                    "description": "Name of the campaign containing the ad"
-                },
-                "field": {
-                    "type": "string",
-                    "description": "Which field to edit",
-                    "enum": ["headline", "body", "cta"]
-                },
-                "current_value": {
-                    "type": "string",
-                    "description": "Current text (if known from context)"
-                },
-                "proposed_value": {
-                    "type": "string",
-                    "description": "New text to replace it with"
-                },
-                "reasoning": {
-                    "type": "string",
-                    "description": "Why this change. Reference performance data."
-                },
-                "priority": {
-                    "type": "integer",
-                    "enum": [1, 2, 3]
-                }
-            },
-            "required": ["campaign_name", "field", "proposed_value", "reasoning", "priority"]
-        }
-    },
-    {
         "name": "suggest_pipeline_run",
-        "description": "Suggest running an article generation pipeline. Only suggest if there's a clear reason (e.g. new sold data, stale content, performance gap).",
+        "description": "Suggest running an article generation pipeline. Only suggest if there's a clear reason (e.g. new sold data, stale content, market shift that warrants new analysis).",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -271,29 +244,25 @@ def collect_context():
     ).sort("_id", -1).limit(20))
     ctx["post_verdicts"] = verdicts
 
-    # Aggregate performance by template and content type
-    if verdicts:
-        by_template = {}
-        by_content_type = {}
-        for v in verdicts:
-            tpl = v.get("template_type", "unknown")
-            ct = v.get("content_type", "text")
-            eng = v.get("metrics", {}).get("total_engagements", 0)
+    # 11. Article index (for matching insights to articles)
+    article_docs = list(sm["article_index"].find(
+        {},
+        {"_id": 1, "title": 1, "url": 1, "excerpt": 1, "category": 1,
+         "suburbs": 1, "tags": 1, "published_at": 1, "key_topics": 1}
+    ))
+    # Convert _id to string for JSON serialisation
+    for doc in article_docs:
+        doc["article_id"] = str(doc.pop("_id"))
+    ctx["article_index"] = article_docs
+    ctx["article_count"] = len(article_docs)
 
-            by_template.setdefault(tpl, []).append(eng)
-            by_content_type.setdefault(ct, []).append(eng)
+    # 12. Market intelligence snapshot
+    intel_doc = sm["market_intelligence_snapshot"].find_one({"_id": "latest"})
+    if intel_doc:
+        intel_doc.pop("_id", None)
+        ctx["market_intelligence"] = intel_doc
 
-        ctx["performance_by_template"] = {
-            k: {"avg_engagements": round(sum(v) / len(v), 1), "count": len(v),
-                 "best": max(v), "worst": min(v)}
-            for k, v in by_template.items()
-        }
-        ctx["performance_by_content_type"] = {
-            k: {"avg_engagements": round(sum(v) / len(v), 1), "count": len(v)}
-            for k, v in by_content_type.items()
-        }
-
-    # 11. Current date/time
+    # 13. Current date/time
     ctx["current_time"] = datetime.now(timezone.utc).isoformat()
     ctx["current_time_aest"] = (datetime.now(timezone.utc) + timedelta(hours=10)).strftime("%Y-%m-%d %H:%M AEST")
 
@@ -306,58 +275,69 @@ def build_system_prompt(ctx):
     stage = ctx.get("marketing_stage", {})
     stage_num = stage.get("stage", 0)
     stage_name = stage.get("stage_name", "Cold Start")
-    stage_obj = stage.get("stage_objective", "Awareness / Reach")
+    article_count = ctx.get("article_count", 0)
+    intel = ctx.get("market_intelligence", {})
+    high_urgency = intel.get("summary", {}).get("high_urgency", 0)
 
-    return f"""You are the Fields Estate marketing advisor. You run 2-3 times per day and suggest marketing actions for Will Simpson to approve.
+    return f"""You are the Fields Estate property intelligence advisor. Your job is to distribute genuine market insight to buyers and sellers on the Gold Coast via Facebook posts.
+
+Mantra: "Right data to the right person at the right time."
 
 ## Current Stage: {stage_num} — {stage_name}
-Objective: {stage_obj}
 
-## Your Role
-- Analyse all available data and suggest 2-5 prioritised actions
-- Every suggestion must include clear reasoning backed by data
-- Only suggest actions appropriate to the current stage
-- Use the tools provided to structure your suggestions
+## Your Mission
+Every post must pass the "Would I find this useful?" test. You are NOT a social media scheduler. You are a property intelligence distribution engine. Each post should help a buyer or seller make a better decision, backed by specific data.
 
-## Stage 0 Rules (Cold Start)
-- Focus on organic page posts with real data from live listings
-- Post variety: suburb snapshots, price comparisons, listing counts, bedroom breakdowns
-- No selling, no calls to action about services — pure data and insight
-- Content should be interesting to a stranger who doesn't know Fields Estate
-- Track what content types get saves and shares (these are the signals that matter)
-- Ad objective should be awareness/reach, not traffic or conversions
+Before suggesting any post, evaluate it against this framework:
+- WHO: Which buyer/seller segment benefits? (Be specific: "First-home buyers in Robina")
+- WHAT: What specific market signal or insight am I delivering?
+- WHY NOW: What changed in the data that makes this timely?
+- WHERE NEXT: Which article gives them the full picture?
+- DATA: What specific numbers back this up?
+
+If you cannot answer all five, do not suggest the post.
+
+## Tools (in order of preference)
+1. **suggest_article_post** (PRIMARY) — Write 3-5 sentences of original market analysis using live data, linked to a specific published article. The insight must stand on its own AND lead naturally to the article.
+2. **suggest_page_post** (SECONDARY) — Only when no published article matches the insight. Must still deliver genuine analysis.
+3. **suggest_pipeline_run** — Trigger article generation when data warrants new content.
+4. **suggest_insight** — Strategic observations for Will.
+
+## Article Library
+You have {article_count} published articles. Check the article_index in your context to find the right article for each insight. Match by suburb, category, and key_topics.
+
+Article categories:
+- market-analysis: State of market, suburb comparisons, price trends
+- market-update: How It Sold (recent sales case studies), Watch This Sale (listing spotlights)
+- suburb-profile: Major projects, infrastructure (Light Rail, Olympics, etc.)
+- buyer-guide: Timing strategy, what to look for, auction playbook
+- seller-guide: Pricing strategy, market positioning
+
+## Market Intelligence
+You have {len(intel.get('insights', []))} fresh insights from tonight's data pipeline ({high_urgency} high-urgency signals). Start with high-urgency insights when choosing what to post about.
 
 ## Editorial Voice
-- Brand tagline: "Know your ground"
-- Never use: "stunning", "nestled", "boasting", "rare opportunity", "robust market"
+- Brand: "Know your ground"
+- Tone: Data-led, specific, honest, no hype
+- NEVER use: "stunning", "nestled", "boasting", "rare opportunity", "robust market"
 - Numbers: $1,250,000 not "$1.25m", suburbs always capitalised
-- Tone: data-led, honest, no hype
 
-## Image Posts
-- You can now suggest branded data card image posts using suggest_image_post
-- Templates: suburb_snapshot (suburb stats), price_comparison (multi-suburb), sold_highlight (recent sales)
-- Image posts typically get higher engagement than text-only posts
-- Mix text posts and image posts for variety — don't do all of one type
+## What a GOOD post looks like
+"Robina houses are selling in 23 days this quarter — essentially at the historical average of 21, but supply just jumped 32% month-on-month (63 to 83 active listings). More choice for buyers, but sellers are still getting results in under a month. If you're weighing up your options in Robina, our latest analysis breaks down exactly what's happening: [article link]"
 
-## Performance Feedback
-- Check post_verdicts for past performance data
-- Check performance_by_template and performance_by_content_type for aggregated patterns
-- Verdicts: "strong" (10+ engagements), "moderate" (3-9), "weak" (<3)
-- Prioritise templates/formats that show "strong" verdicts
-- If a template consistently shows "weak", suggest alternatives or different content angles
-- Use this data to justify your suggestions
+## What a BAD post looks like
+"3 properties sold in Burleigh Waters this week. Prices ranged from $800,000 to $1,200,000. Check out our analysis at fieldsestate.com.au"
+(This just lists facts. It doesn't interpret, doesn't target an audience, doesn't help anyone make a decision.)
 
-## What NOT to suggest
-- Don't suggest the same type of post that was just posted recently (check recent_page_posts)
-- Don't suggest actions that are already pending approval (check pending_actions)
-- Don't suggest ad changes if there's insufficient performance data
-- Don't suggest budget increases at Stage 0
-- Don't repeat insights from previous runs
-
-## Data Available
-You'll receive a JSON context with: marketing stage + milestones, Facebook Ads performance, recent page posts, listing data by suburb, sold data, institutional memory from past tests, post performance verdicts, and previous advisor run summaries.
-
-Use this data to make specific, actionable suggestions. Reference specific numbers, suburbs, and trends."""
+## Rules
+- Suggest 2-4 actions per run (quality over quantity)
+- Never repeat the same insight/article combo from recent_page_posts
+- Never suggest actions already pending approval
+- High-urgency market signals should be addressed first
+- Vary audience targeting across runs (don't always post about the same suburb)
+- suggest_article_post MUST link to a real article from the article_index — use the exact article_id and url
+- Prefer recently published articles, but older articles are fine if the insight is timely
+- Each post must advance the reader's understanding — not just list numbers"""
 
 
 def call_claude(ctx, system_prompt):
@@ -371,9 +351,13 @@ def call_claude(ctx, system_prompt):
 {json.dumps(ctx, indent=2, default=str)}
 ```
 
-IMPORTANT: You MUST suggest between 3 and 5 actions using the tools. Each action must be a separate tool call. Aim for variety — mix different action types (page posts, insights, pipeline runs). For page posts, write the COMPLETE post text ready to publish, using specific numbers from the data.
+Suggest 2-4 actions. For each suggest_article_post, you MUST:
+1. Pick a specific article from article_index — use its exact article_id and url
+2. Write 3-5 sentences of original insight using numbers from market_intelligence
+3. The insight must stand alone (useful even without reading the article) AND lead naturally to the article
+4. Specify the target audience
 
-Do not repeat the same content type as the most recent page post. Start with a brief analysis (2-3 sentences), then make your tool calls."""
+Start with high-urgency market intelligence signals. Do not repeat articles or insights from recent_page_posts."""
 
     response = client.messages.create(
         model="claude-sonnet-4-20250514",
@@ -399,12 +383,10 @@ def extract_actions(response):
                 **block.input,
             }
             # Build a summary for display
-            if block.name == "suggest_page_post":
+            if block.name == "suggest_article_post":
+                action["summary"] = f"[ARTICLE] {block.input.get('article_title', '')[:60]} — {block.input.get('audience', '')}"
+            elif block.name == "suggest_page_post":
                 action["summary"] = block.input.get("message", "")[:100] + "..."
-            elif block.name == "suggest_image_post":
-                action["summary"] = f"[IMG:{block.input.get('template', '')}] {block.input.get('message', '')[:80]}..."
-            elif block.name == "suggest_ad_edit":
-                action["summary"] = f"Edit {block.input.get('field', '')} on {block.input.get('campaign_name', '')}"
             elif block.name == "suggest_pipeline_run":
                 action["summary"] = f"Run {block.input.get('pipeline', '')} pipeline"
             elif block.name == "suggest_insight":
@@ -468,6 +450,9 @@ def main():
     print(f"Context collected: {len(json.dumps(ctx, default=str)):,} chars")
     print(f"Stage: {ctx.get('marketing_stage', {}).get('stage', '?')} — {ctx.get('marketing_stage', {}).get('stage_name', '?')}")
     print(f"Active listings: {ctx.get('total_active_listings', 0)}")
+    print(f"Articles indexed: {ctx.get('article_count', 0)}")
+    intel = ctx.get("market_intelligence", {})
+    print(f"Market insights: {intel.get('summary', {}).get('total_insights', 0)} ({intel.get('summary', {}).get('high_urgency', 0)} high-urgency)")
     print(f"Pending actions: {len(ctx.get('pending_actions', []))}")
     print()
 
