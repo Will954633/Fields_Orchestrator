@@ -222,6 +222,58 @@ ACTION_TOOLS = [
                           "proposed_value", "reasoning", "priority"]
         }
     },
+    {
+        "name": "suggest_ad_create",
+        "description": "Propose creating a new Facebook ad. Use to scale winning content themes (exploit) or test untried article/audience combinations (explore). New ads are always created in PAUSED state for Will to review before activating.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "ad_name": {
+                    "type": "string",
+                    "description": "Descriptive name for the ad (e.g. 'Is Now a Good Time to Buy: Burleigh Waters')."
+                },
+                "adset_id": {
+                    "type": "string",
+                    "description": "The ad set ID to place this ad in (from facebook_ads.ads context — use an existing traffic ad set)."
+                },
+                "article_id": {
+                    "type": "string",
+                    "description": "Ghost article ID to link to (from article_index)."
+                },
+                "article_url": {
+                    "type": "string",
+                    "description": "Full article URL: https://fieldsestate.com.au/article/{article_id}"
+                },
+                "headline": {
+                    "type": "string",
+                    "description": "The ad headline/title. Should be the article title or a compelling variant."
+                },
+                "body": {
+                    "type": "string",
+                    "description": "The ad copy. 3-5 sentences of data-led insight that makes someone want to click through. Follow editorial voice: specific numbers, no hype."
+                },
+                "image_source": {
+                    "type": "string",
+                    "description": "Use 'article_feature_image' to auto-download the article's Ghost feature image, or provide an existing image_hash from the ad account."
+                },
+                "strategy": {
+                    "type": "string",
+                    "description": "Is this scaling a proven winner (exploit) or testing a new hypothesis (explore)?",
+                    "enum": ["exploit", "explore"]
+                },
+                "reasoning": {
+                    "type": "string",
+                    "description": "What pattern or data supports this ad? For exploit: which winning ad pattern are you replicating? For explore: what hypothesis are you testing?"
+                },
+                "priority": {
+                    "type": "integer",
+                    "enum": [1, 2, 3]
+                }
+            },
+            "required": ["ad_name", "adset_id", "article_id", "article_url",
+                          "headline", "body", "image_source", "strategy", "reasoning", "priority"]
+        }
+    },
 ]
 
 
@@ -376,12 +428,13 @@ Before suggesting any post, evaluate it against this framework:
 If you cannot answer all five, do not suggest the post.
 
 ## Tools (in order of preference)
-1. **suggest_article_post** (PRIMARY) — Write 3-5 sentences of original market analysis using live data, linked to a specific published article. The insight must stand on its own AND lead naturally to the article.
-2. **suggest_page_post** (SECONDARY) — Only when no published article matches the insight. Must still deliver genuine analysis.
-3. **suggest_pipeline_run** — Trigger article generation when data warrants new content.
-4. **suggest_insight** — Strategic observations for Will.
-5. **suggest_ad_pause** — Recommend pausing an underperforming ad (must cite specific metrics).
-6. **suggest_ad_edit** — Recommend changing ad copy/headline/CTA (must explain hypothesis).
+1. **suggest_article_post** (PRIMARY) — Write 3-5 sentences of original market analysis using live data, linked to a specific published article.
+2. **suggest_ad_create** — Propose a new Facebook ad linking to an article. Always created PAUSED for Will to review. Mark as "exploit" (scaling a winner) or "explore" (testing new).
+3. **suggest_page_post** (SECONDARY) — Only when no published article matches the insight.
+4. **suggest_pipeline_run** — Trigger article generation when data warrants new content.
+5. **suggest_insight** — Strategic observations for Will.
+6. **suggest_ad_pause** — Recommend pausing an underperforming ad (must cite specific metrics).
+7. **suggest_ad_edit** — Recommend changing ad copy/headline/CTA (must explain hypothesis).
 
 ## Article Library
 You have {article_count} published articles. Check the article_index in your context to find the right article for each insight. Match by suburb, category, and key_topics.
@@ -431,6 +484,26 @@ You have per-ad performance data in the context under facebook_ads.ads. For each
 
 Always cite specific numbers when recommending changes.
 
+## Ad Strategy: Exploit + Explore
+You are also an ad strategist. At Stage {stage_num}, the balance is:
+- **Stage 0-1 (Cold Start / Engagement)**: 60% explore, 40% exploit — test broadly, learn what works
+- **Stage 2-3 (Lead Capture / Sales)**: 40% explore, 60% exploit — scale winners, keep testing
+- **Stage 4+ (Listings)**: 20% explore, 80% exploit — optimize what works
+
+**Exploit** (scale what works): Look at top-performing ads (highest CTR, most link clicks). What content theme, audience, and copy style made them work? Create similar ads for different articles or suburbs using the same pattern.
+Example: "The 'Is Now a Good Time to Buy: Robina' ad has 0.59% CTR — best in the account. Create a similar buyer-timing ad for Burleigh Waters."
+
+**Explore** (test new hypotheses): Check article_ad_coverage — which article categories or suburbs have NO ads? Those are untested opportunities. Also test different angles: seller content, infrastructure articles, investment insights.
+Example: "We have zero seller-focused ads. Test an ad linking to the seller guide article to see if seller content drives engagement."
+
+**When to suggest new ads:**
+- When you've paused an underperformer — replace it with something better
+- When an article category has no ad coverage — explore opportunity
+- When a winning pattern could be replicated for another suburb — exploit opportunity
+- Limit: 1-2 new ads per run maximum. Don't flood the account.
+
+**Important:** New ads always start PAUSED. Use an existing traffic ad set (adset_id from facebook_ads.ads context). Write the body copy yourself — data-led, specific, following editorial voice.
+
 ## Rules
 - Suggest 2-4 actions per run (quality over quantity)
 - Never repeat the same insight/article combo from recent_page_posts
@@ -440,7 +513,9 @@ Always cite specific numbers when recommending changes.
 - suggest_article_post MUST link to a real article from the article_index — use the exact article_id and url
 - Prefer recently published articles, but older articles are fine if the insight is timely
 - Each post must advance the reader's understanding — not just list numbers
-- Review ad performance every run — if any ads are clearly underperforming, include a suggest_ad_pause or suggest_ad_edit"""
+- Review ad performance every run — if any ads are clearly underperforming, include a suggest_ad_pause or suggest_ad_edit
+- When creating ads: use suggest_ad_create with a real article from article_index, write data-led copy, always use an existing traffic adset_id
+- Check article_ad_coverage in context — articles without ads are opportunities to explore"""
 
 
 def call_claude(ctx, system_prompt):
@@ -502,6 +577,9 @@ def extract_actions(response):
                 action["summary"] = f"[PAUSE] {block.input.get('ad_name', '')[:40]} — {block.input.get('metrics_cited', '')[:60]}"
             elif block.name == "suggest_ad_edit":
                 action["summary"] = f"[EDIT {block.input.get('field', '').upper()}] {block.input.get('ad_name', '')[:40]}"
+            elif block.name == "suggest_ad_create":
+                strat = block.input.get('strategy', '?').upper()
+                action["summary"] = f"[CREATE/{strat}] {block.input.get('ad_name', '')[:50]}"
             actions.append(action)
         elif block.type == "text":
             text_parts.append(block.text)
