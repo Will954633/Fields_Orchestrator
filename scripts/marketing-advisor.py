@@ -497,9 +497,10 @@ Example: "The 'Is Now a Good Time to Buy: Robina' ad has 0.59% CTR — best in t
 Example: "We have zero seller-focused ads. Test an ad linking to the seller guide article to see if seller content drives engagement."
 
 **When to suggest new ads:**
-- When you've paused an underperformer — replace it with something better
-- When an article category has no ad coverage — explore opportunity
+- When you pause an underperformer, ALSO suggest a replacement ad in the same run
+- When an article category has no ad coverage — explore opportunity (28 of 33 articles have no ads!)
 - When a winning pattern could be replicated for another suburb — exploit opportunity
+- At Stage 0, you SHOULD suggest at least 1 new ad per run — we need to test broadly
 - Limit: 1-2 new ads per run maximum. Don't flood the account.
 
 **Important:** New ads always start PAUSED. Use an existing traffic ad set (adset_id from facebook_ads.ads context). Write the body copy yourself — data-led, specific, following editorial voice.
@@ -537,9 +538,11 @@ Suggest 2-4 actions. For each suggest_article_post, you MUST:
 
 Also review the per-ad performance data in facebook_ads.ads. If any ads are clearly underperforming (high spend, low CTR, zero link clicks), suggest pausing or editing them.
 
+Check article_ad_coverage: only {ctx.get('facebook_ads', {}).get('article_ad_coverage', {}).get('articles_with_ads', '?')}/{ctx.get('facebook_ads', {}).get('article_ad_coverage', {}).get('articles_total', '?')} articles have ads. At Stage 0, you SHOULD suggest at least 1 suggest_ad_create to test a new article-ad combination — especially if you're pausing an underperformer.
+
 Start with high-urgency market intelligence signals. Do not repeat articles or insights from recent_page_posts.
 
-IMPORTANT: You MUST call ALL your suggested tools in a single response. Make multiple tool calls — do not stop after one. Include both content suggestions AND ad performance actions in the same response."""
+IMPORTANT: You MUST call ALL your suggested tools in a single response. Make multiple tool calls — do not stop after one. Include content suggestions, ad pauses, AND ad creation in the same response."""
 
     response = client.messages.create(
         model="claude-sonnet-4-20250514",
