@@ -66,7 +66,7 @@ def fetch_ads():
     """Fetch all ads with status, creative details, and campaign info."""
     data = fb_get(f"/{AD_ACCOUNT_ID}/ads", {
         "fields": ("name,status,effective_status,campaign_id,adset_id,"
-                   "creative{id,body,title,thumbnail_url,image_url,link_url},"
+                   "creative{id,body,title,thumbnail_url,image_url,link_url,object_story_spec},"
                    "campaign{name,objective,status},"
                    "adset{name,status}"),
         "limit": 50,
@@ -90,6 +90,61 @@ def fetch_ad_insights():
         "limit": 50,
     })
     return data.get("data", [])
+
+
+def build_article_ad_coverage(ads):
+    """Compare ads' link URLs against article_index to find coverage gaps."""
+    try:
+        client = MongoClient(COSMOS_URI)
+        sm = client["system_monitor"]
+        articles = list(sm["article_index"].find(
+            {}, {"_id": 1, "title": 1, "url": 1, "category": 1, "suburbs": 1}
+        ))
+        client.close()
+    except Exception:
+        return {"error": "Could not read article_index"}
+
+    if not articles:
+        return {"articles_total": 0}
+
+    # Extract article IDs from ad link URLs
+    # Ad links look like: https://fieldsestate.com.au/article/69a623cfebbfe70001709927
+    ad_article_ids = set()
+    for ad in ads:
+        link = ad.get("link_url", "")
+        if "/article/" in link:
+            article_id = link.split("/article/")[-1].split("?")[0].split("#")[0]
+            ad_article_ids.add(article_id)
+
+    articles_with_ads = []
+    articles_without_ads = []
+    for article in articles:
+        aid = str(article["_id"])
+        info = {
+            "article_id": aid,
+            "title": article.get("title", "")[:80],
+            "category": article.get("category", ""),
+            "suburbs": article.get("suburbs", []),
+        }
+        if aid in ad_article_ids:
+            articles_with_ads.append(info)
+        else:
+            articles_without_ads.append(info)
+
+    # Summarise by category
+    uncovered_categories = {}
+    for a in articles_without_ads:
+        cat = a.get("category", "unknown")
+        uncovered_categories[cat] = uncovered_categories.get(cat, 0) + 1
+
+    return {
+        "articles_total": len(articles),
+        "articles_with_ads": len(articles_with_ads),
+        "articles_without_ads_count": len(articles_without_ads),
+        "uncovered_categories": uncovered_categories,
+        "covered_article_ids": [a["article_id"] for a in articles_with_ads],
+        "sample_uncovered": articles_without_ads[:10],
+    }
 
 
 def build_snapshot():
@@ -160,8 +215,13 @@ def build_snapshot():
             "creative_body": (creative.get("body") or "")[:200],
             "creative_title": creative.get("title", ""),
             "creative_thumbnail": creative.get("thumbnail_url", ""),
+            "link_url": (creative.get("object_story_spec", {})
+                         .get("link_data", {}).get("link", "")),
             "last_7d": perf,
         })
+
+    # Article-ad coverage gap: which articles have ads, which don't
+    article_ad_coverage = build_article_ad_coverage(ads)
 
     return {
         "fetched_at": datetime.now(timezone.utc).isoformat(),
@@ -211,6 +271,7 @@ def build_snapshot():
         "ads": ads,
         "ads_count": len(ads),
         "ads_active_count": len([a for a in ads if a.get("effective_status") == "ACTIVE"]),
+        "article_ad_coverage": article_ad_coverage,
     }
 
 
