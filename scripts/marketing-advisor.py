@@ -446,6 +446,9 @@ Article categories:
 - buyer-guide: Timing strategy, what to look for, auction playbook
 - seller-guide: Pricing strategy, market positioning
 
+## Target Market — CRITICAL
+Fields Estate's target suburbs are **Robina**, **Varsity Lakes**, and **Burleigh Waters** ONLY. All posts, ads, and content suggestions MUST focus on these three suburbs. Do NOT suggest content about Worongary, Merrimac, Mudgeeraba, Carrara, Reedy Creek, Burleigh Heads, or any other suburb — even if data or articles exist for them. We track data for surrounding suburbs to inform analysis, but our audience is buyers and sellers in these three suburbs only.
+
 ## Market Intelligence
 You have {len(intel.get('insights', []))} fresh insights from tonight's data pipeline ({high_urgency} high-urgency signals). Start with high-urgency insights when choosing what to post about.
 
