@@ -57,11 +57,46 @@ ACTION_TOOLS = [
         }
     },
     {
+        "name": "suggest_image_post",
+        "description": "Suggest a branded data card image post. The system will generate a 1080x1080 branded image using live data and post it with your caption. Choose a template and suburb, then write a caption that complements the visual. Image posts tend to get higher engagement than text-only posts.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "template": {
+                    "type": "string",
+                    "description": "Which data card template to use",
+                    "enum": ["suburb_snapshot", "price_comparison", "sold_highlight"]
+                },
+                "suburb": {
+                    "type": "string",
+                    "description": "Suburb name (required for suburb_snapshot and sold_highlight, optional for price_comparison)"
+                },
+                "message": {
+                    "type": "string",
+                    "description": "Caption text to accompany the image. Keep it concise — the image contains the data."
+                },
+                "reasoning": {
+                    "type": "string",
+                    "description": "Why this image post, why this template/suburb."
+                },
+                "priority": {
+                    "type": "integer",
+                    "enum": [1, 2, 3]
+                }
+            },
+            "required": ["template", "message", "reasoning", "priority"]
+        }
+    },
+    {
         "name": "suggest_ad_edit",
         "description": "Suggest editing an existing Facebook ad's copy (headline or body text). Only suggest changes backed by performance data or institutional memory patterns.",
         "input_schema": {
             "type": "object",
             "properties": {
+                "ad_id": {
+                    "type": "string",
+                    "description": "The Facebook Ad ID to edit (from the ads context data)"
+                },
                 "campaign_name": {
                     "type": "string",
                     "description": "Name of the campaign containing the ad"
@@ -229,7 +264,36 @@ def collect_context():
     ).sort("_id", -1).limit(10))
     ctx["pending_actions"] = pending
 
-    # 10. Current date/time
+    # 10. Post performance verdicts (institutional memory feedback)
+    verdicts = list(sm["fb_ad_tests"].find(
+        {"type": "post_performance"},
+        {"_id": 0}
+    ).sort("_id", -1).limit(20))
+    ctx["post_verdicts"] = verdicts
+
+    # Aggregate performance by template and content type
+    if verdicts:
+        by_template = {}
+        by_content_type = {}
+        for v in verdicts:
+            tpl = v.get("template_type", "unknown")
+            ct = v.get("content_type", "text")
+            eng = v.get("metrics", {}).get("total_engagements", 0)
+
+            by_template.setdefault(tpl, []).append(eng)
+            by_content_type.setdefault(ct, []).append(eng)
+
+        ctx["performance_by_template"] = {
+            k: {"avg_engagements": round(sum(v) / len(v), 1), "count": len(v),
+                 "best": max(v), "worst": min(v)}
+            for k, v in by_template.items()
+        }
+        ctx["performance_by_content_type"] = {
+            k: {"avg_engagements": round(sum(v) / len(v), 1), "count": len(v)}
+            for k, v in by_content_type.items()
+        }
+
+    # 11. Current date/time
     ctx["current_time"] = datetime.now(timezone.utc).isoformat()
     ctx["current_time_aest"] = (datetime.now(timezone.utc) + timedelta(hours=10)).strftime("%Y-%m-%d %H:%M AEST")
 
@@ -269,6 +333,20 @@ Objective: {stage_obj}
 - Numbers: $1,250,000 not "$1.25m", suburbs always capitalised
 - Tone: data-led, honest, no hype
 
+## Image Posts
+- You can now suggest branded data card image posts using suggest_image_post
+- Templates: suburb_snapshot (suburb stats), price_comparison (multi-suburb), sold_highlight (recent sales)
+- Image posts typically get higher engagement than text-only posts
+- Mix text posts and image posts for variety — don't do all of one type
+
+## Performance Feedback
+- Check post_verdicts for past performance data
+- Check performance_by_template and performance_by_content_type for aggregated patterns
+- Verdicts: "strong" (10+ engagements), "moderate" (3-9), "weak" (<3)
+- Prioritise templates/formats that show "strong" verdicts
+- If a template consistently shows "weak", suggest alternatives or different content angles
+- Use this data to justify your suggestions
+
 ## What NOT to suggest
 - Don't suggest the same type of post that was just posted recently (check recent_page_posts)
 - Don't suggest actions that are already pending approval (check pending_actions)
@@ -277,7 +355,7 @@ Objective: {stage_obj}
 - Don't repeat insights from previous runs
 
 ## Data Available
-You'll receive a JSON context with: marketing stage + milestones, Facebook Ads performance, recent page posts, listing data by suburb, sold data, institutional memory from past tests, and previous advisor run summaries.
+You'll receive a JSON context with: marketing stage + milestones, Facebook Ads performance, recent page posts, listing data by suburb, sold data, institutional memory from past tests, post performance verdicts, and previous advisor run summaries.
 
 Use this data to make specific, actionable suggestions. Reference specific numbers, suburbs, and trends."""
 
@@ -323,6 +401,8 @@ def extract_actions(response):
             # Build a summary for display
             if block.name == "suggest_page_post":
                 action["summary"] = block.input.get("message", "")[:100] + "..."
+            elif block.name == "suggest_image_post":
+                action["summary"] = f"[IMG:{block.input.get('template', '')}] {block.input.get('message', '')[:80]}..."
             elif block.name == "suggest_ad_edit":
                 action["summary"] = f"Edit {block.input.get('field', '')} on {block.input.get('campaign_name', '')}"
             elif block.name == "suggest_pipeline_run":
