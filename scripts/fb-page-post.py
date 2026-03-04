@@ -7,6 +7,7 @@ Usage:
     python3 scripts/fb-page-post.py --generate --post    # Generate and publish
     python3 scripts/fb-page-post.py --message "text"     # Post custom message
     python3 scripts/fb-page-post.py --message "text" --link https://fieldsestate.com.au/market
+    python3 scripts/fb-page-post.py --message "text" --image /tmp/card.png --post  # Post with image
 """
 
 import os
@@ -61,7 +62,22 @@ def post_to_page(message, link=None):
     return data.get("id")
 
 
-def log_post(post_id, message, link, template_type):
+def post_photo_to_page(image_path, message):
+    """Post a photo with caption to the Facebook page. Returns post_id."""
+    page_token = get_page_token()
+    with open(image_path, "rb") as img_file:
+        r = requests.post(
+            f"{BASE}/{PAGE_ID}/photos",
+            data={"message": message, "access_token": page_token},
+            files={"source": img_file},
+            timeout=30,
+        )
+    r.raise_for_status()
+    data = r.json()
+    return data.get("post_id") or data.get("id")
+
+
+def log_post(post_id, message, link, template_type, content_type="text"):
     """Log the post to MongoDB for tracking."""
     client = MongoClient(COSMOS_URI)
     db = client["system_monitor"]
@@ -70,8 +86,10 @@ def log_post(post_id, message, link, template_type):
         "message": message[:200],
         "link": link,
         "template_type": template_type,
+        "content_type": content_type,
         "posted_at": datetime.now(timezone.utc).isoformat(),
         "source": "fb-page-post.py",
+        "finalized": False,
     })
     client.close()
 
@@ -297,6 +315,7 @@ def main():
     parser.add_argument("--post", action="store_true", help="Actually publish (default: dry run)")
     parser.add_argument("--message", type=str, help="Custom message to post")
     parser.add_argument("--link", type=str, help="URL to attach to the post")
+    parser.add_argument("--image", type=str, help="Path to image file to post as photo")
     args = parser.parse_args()
 
     if args.generate:
@@ -322,9 +341,14 @@ def main():
     elif args.message:
         print(f"Message: {args.message[:100]}...")
         if args.post:
-            print("Publishing to Facebook page...")
-            post_id = post_to_page(args.message, args.link)
-            log_post(post_id, args.message, args.link, "manual")
+            if args.image:
+                print(f"Publishing photo to Facebook page ({args.image})...")
+                post_id = post_photo_to_page(args.image, args.message)
+                log_post(post_id, args.message, args.link, "manual", content_type="image")
+            else:
+                print("Publishing to Facebook page...")
+                post_id = post_to_page(args.message, args.link)
+                log_post(post_id, args.message, args.link, "manual")
             print(f"Published! Post ID: {post_id}")
             print(f"View: https://facebook.com/{post_id}")
         else:
