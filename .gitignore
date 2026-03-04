@@ -13,6 +13,7 @@ __pycache__/
 # Sensitive config (contains credentials)
 config/settings.yaml
 settings.yaml
+config/config-data
 
 # Old files with hardcoded credentials
 mongodb_monitor.py
