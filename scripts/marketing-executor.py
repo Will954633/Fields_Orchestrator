@@ -33,7 +33,8 @@ def get_approved_actions():
     sm = client["system_monitor"]
     actions = list(sm["marketing_actions"].find(
         {"status": "approved"}
-    ).sort("priority", 1))  # priority 1 first
+    ))
+    actions.sort(key=lambda x: x.get("priority", 2))  # priority 1 first, in-memory sort
     client.close()
     return actions
 
