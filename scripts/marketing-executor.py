@@ -338,11 +338,58 @@ def execute_ad_edit(action):
         return {"success": False, "error": str(e)}
 
 
+def execute_ad_pause(action):
+    """Execute a suggest_ad_pause action — pause an ad via Facebook Marketing API."""
+    details = action.get("details", {})
+    ad_id = details.get("ad_id", "")
+
+    if not ad_id:
+        return {"success": False, "error": "No ad_id in action details"}
+
+    if not ADS_TOKEN:
+        return {"success": False, "error": "Facebook Ads credentials not configured"}
+
+    try:
+        r = requests.post(f"{FB_BASE}/{ad_id}", data={
+            "access_token": ADS_TOKEN,
+            "status": "PAUSED",
+        }, timeout=15)
+        r.raise_for_status()
+
+        # Log to institutional memory
+        client = MongoClient(COSMOS_URI)
+        sm = client["system_monitor"]
+        sm["fb_ad_tests"].insert_one({
+            "type": "ad_pause",
+            "ad_id": ad_id,
+            "ad_name": details.get("ad_name", ""),
+            "campaign_name": details.get("campaign_name", ""),
+            "metrics_cited": details.get("metrics_cited", ""),
+            "reasoning": details.get("reasoning", ""),
+            "executed_at": datetime.now(timezone.utc).isoformat(),
+        })
+        client.close()
+
+        return {
+            "success": True,
+            "ad_id": ad_id,
+            "new_status": "PAUSED",
+            "ad_name": details.get("ad_name", ""),
+        }
+
+    except requests.exceptions.HTTPError as e:
+        return {"success": False, "error": f"FB API error: {str(e)[:300]}"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 EXECUTORS = {
     "suggest_article_post": execute_article_post,
     "suggest_page_post": execute_page_post,
     "suggest_pipeline_run": execute_pipeline_run,
     "suggest_insight": execute_insight,
+    "suggest_ad_pause": execute_ad_pause,
+    "suggest_ad_edit": execute_ad_edit,
 }
 
 
