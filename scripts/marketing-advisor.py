@@ -144,6 +144,84 @@ ACTION_TOOLS = [
             "required": ["title", "body", "priority"]
         }
     },
+    {
+        "name": "suggest_ad_pause",
+        "description": "Recommend pausing an underperforming Facebook ad. Use when an ad has accumulated enough data (1,000+ impressions) but is clearly underperforming relative to other ads in the account. Cite specific metrics.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "ad_id": {
+                    "type": "string",
+                    "description": "The Facebook ad ID to pause."
+                },
+                "ad_name": {
+                    "type": "string",
+                    "description": "Name of the ad (for verification)."
+                },
+                "campaign_name": {
+                    "type": "string",
+                    "description": "Campaign this ad belongs to."
+                },
+                "metrics_cited": {
+                    "type": "string",
+                    "description": "Specific metrics justifying the pause (e.g., 'CTR 0.0% on 968 impressions, $2.47 spent with 0 clicks, 0 link clicks')."
+                },
+                "reasoning": {
+                    "type": "string",
+                    "description": "Full reasoning: why pause, what's wrong, what would be better."
+                },
+                "priority": {
+                    "type": "integer",
+                    "enum": [1, 2, 3]
+                }
+            },
+            "required": ["ad_id", "ad_name", "campaign_name", "metrics_cited", "reasoning", "priority"]
+        }
+    },
+    {
+        "name": "suggest_ad_edit",
+        "description": "Recommend editing the creative of an existing Facebook ad. Use when an ad has decent reach but poor engagement — suggesting the copy, headline, or CTA could be improved rather than the ad being paused entirely.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "ad_id": {
+                    "type": "string",
+                    "description": "The Facebook ad ID to edit."
+                },
+                "ad_name": {
+                    "type": "string",
+                    "description": "Name of the ad."
+                },
+                "campaign_name": {
+                    "type": "string",
+                    "description": "Campaign this ad belongs to."
+                },
+                "field": {
+                    "type": "string",
+                    "description": "Which creative field to change.",
+                    "enum": ["body", "headline", "cta"]
+                },
+                "current_value": {
+                    "type": "string",
+                    "description": "The current value of the field being changed."
+                },
+                "proposed_value": {
+                    "type": "string",
+                    "description": "The new value to replace it with."
+                },
+                "reasoning": {
+                    "type": "string",
+                    "description": "Why this change, what hypothesis it tests, what metric should improve."
+                },
+                "priority": {
+                    "type": "integer",
+                    "enum": [1, 2, 3]
+                }
+            },
+            "required": ["ad_id", "ad_name", "campaign_name", "field", "current_value",
+                          "proposed_value", "reasoning", "priority"]
+        }
+    },
 ]
 
 
@@ -302,6 +380,8 @@ If you cannot answer all five, do not suggest the post.
 2. **suggest_page_post** (SECONDARY) — Only when no published article matches the insight. Must still deliver genuine analysis.
 3. **suggest_pipeline_run** — Trigger article generation when data warrants new content.
 4. **suggest_insight** — Strategic observations for Will.
+5. **suggest_ad_pause** — Recommend pausing an underperforming ad (must cite specific metrics).
+6. **suggest_ad_edit** — Recommend changing ad copy/headline/CTA (must explain hypothesis).
 
 ## Article Library
 You have {article_count} published articles. Check the article_index in your context to find the right article for each insight. Match by suburb, category, and key_topics.
@@ -329,6 +409,28 @@ You have {len(intel.get('insights', []))} fresh insights from tonight's data pip
 "3 properties sold in Burleigh Waters this week. Prices ranged from $800,000 to $1,200,000. Check out our analysis at fieldsestate.com.au"
 (This just lists facts. It doesn't interpret, doesn't target an audience, doesn't help anyone make a decision.)
 
+## Ad Performance Evaluation
+You have per-ad performance data in the context under facebook_ads.ads. For each ad you see its 7-day metrics (impressions, reach, clicks, link_clicks, spend, CTR, CPC, CPM) and creative details.
+
+**When to suggest pausing an ad:**
+- The ad has 1,000+ impressions (enough data to judge)
+- CTR is below 0.5% AND below the account average CTR
+- Or: spend exceeds $5 with zero link clicks
+- Or: CPC is more than 3x the account average CPC
+- NEVER recommend pausing the only active ad in a campaign — suggest editing instead
+
+**When to suggest editing creative:**
+- The ad has decent reach but below-average CTR — people are seeing it but not clicking
+- The ad has been running with high frequency (>2.0) — creative fatigue
+- When you edit, propose specific replacement copy that follows the editorial voice ("Know your ground", data-led, no hype)
+
+**When to leave an ad alone:**
+- Less than 500 impressions — not enough data yet
+- Performing at or above account average — don't fix what works
+- Only ad in its campaign and it has <1,000 impressions — give it time
+
+Always cite specific numbers when recommending changes.
+
 ## Rules
 - Suggest 2-4 actions per run (quality over quantity)
 - Never repeat the same insight/article combo from recent_page_posts
@@ -337,7 +439,8 @@ You have {len(intel.get('insights', []))} fresh insights from tonight's data pip
 - Vary audience targeting across runs (don't always post about the same suburb)
 - suggest_article_post MUST link to a real article from the article_index — use the exact article_id and url
 - Prefer recently published articles, but older articles are fine if the insight is timely
-- Each post must advance the reader's understanding — not just list numbers"""
+- Each post must advance the reader's understanding — not just list numbers
+- Review ad performance every run — if any ads are clearly underperforming, include a suggest_ad_pause or suggest_ad_edit"""
 
 
 def call_claude(ctx, system_prompt):
@@ -356,6 +459,8 @@ Suggest 2-4 actions. For each suggest_article_post, you MUST:
 2. Write 3-5 sentences of original insight using numbers from market_intelligence
 3. The insight must stand alone (useful even without reading the article) AND lead naturally to the article
 4. Specify the target audience
+
+Also review the per-ad performance data in facebook_ads.ads. If any ads are clearly underperforming (high spend, low CTR, zero link clicks), suggest pausing or editing them.
 
 Start with high-urgency market intelligence signals. Do not repeat articles or insights from recent_page_posts."""
 
@@ -391,6 +496,10 @@ def extract_actions(response):
                 action["summary"] = f"Run {block.input.get('pipeline', '')} pipeline"
             elif block.name == "suggest_insight":
                 action["summary"] = block.input.get("title", "")
+            elif block.name == "suggest_ad_pause":
+                action["summary"] = f"[PAUSE] {block.input.get('ad_name', '')[:40]} — {block.input.get('metrics_cited', '')[:60]}"
+            elif block.name == "suggest_ad_edit":
+                action["summary"] = f"[EDIT {block.input.get('field', '').upper()}] {block.input.get('ad_name', '')[:40]}"
             actions.append(action)
         elif block.type == "text":
             text_parts.append(block.text)
