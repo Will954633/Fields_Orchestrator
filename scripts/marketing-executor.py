@@ -62,6 +62,54 @@ def update_action_status(action_id, status, result=None):
     client.close()
 
 
+def execute_article_post(action):
+    """Execute a suggest_article_post action — post insight with article link."""
+    details = action.get("details", {})
+    insight_text = details.get("insight_text", "")
+    article_url = details.get("article_url", "")
+    article_id = details.get("article_id", "")
+    article_title = details.get("article_title", "")
+    audience = details.get("audience", "")
+
+    if not insight_text:
+        return {"success": False, "error": "No insight_text in action details"}
+    if not article_url:
+        return {"success": False, "error": "No article_url in action details"}
+
+    cmd = [VENV_PYTHON, f"{SCRIPTS_DIR}/fb-page-post.py",
+           "--message", insight_text, "--link", article_url, "--post"]
+
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True, text=True, timeout=30,
+            env={**os.environ, "PATH": os.environ.get("PATH", "")}
+        )
+        if result.returncode == 0:
+            post_id = None
+            for line in result.stdout.split("\n"):
+                if "Post ID:" in line:
+                    post_id = line.split("Post ID:")[-1].strip()
+            return {
+                "success": True,
+                "post_id": post_id,
+                "article_id": article_id,
+                "article_title": article_title,
+                "audience": audience,
+                "output": result.stdout[-500:],
+            }
+        else:
+            return {
+                "success": False,
+                "error": result.stderr[-500:],
+                "output": result.stdout[-500:],
+            }
+    except subprocess.TimeoutExpired:
+        return {"success": False, "error": "Timed out after 30s"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 def execute_page_post(action):
     """Execute a suggest_page_post action."""
     details = action.get("details", {})
@@ -291,9 +339,8 @@ def execute_ad_edit(action):
 
 
 EXECUTORS = {
+    "suggest_article_post": execute_article_post,
     "suggest_page_post": execute_page_post,
-    "suggest_image_post": execute_image_post,
-    "suggest_ad_edit": execute_ad_edit,
     "suggest_pipeline_run": execute_pipeline_run,
     "suggest_insight": execute_insight,
 }
