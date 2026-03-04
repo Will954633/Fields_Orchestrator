@@ -27,8 +27,11 @@ load_dotenv("/home/fields/Fields_Orchestrator/.env")
 COSMOS_URI = os.environ["COSMOS_CONNECTION_STRING"]
 ADS_TOKEN = os.environ.get("FACEBOOK_ADS_TOKEN", "")
 AD_ACCOUNT_ID = os.environ.get("FACEBOOK_AD_ACCOUNT_ID", "")
+PAGE_ID = os.environ.get("FACEBOOK_PAGE_ID", "")
 API_VERSION = os.environ.get("FACEBOOK_API_VERSION", "v18.0")
 FB_BASE = f"https://graph.facebook.com/{API_VERSION}"
+GHOST_HOST = "https://fields-articles.ghost.io"
+GHOST_CONTENT_API_KEY = os.environ.get("GHOST_CONTENT_API_KEY", "")
 SCRIPTS_DIR = "/home/fields/Fields_Orchestrator/scripts"
 VENV_PYTHON = "/home/fields/venv/bin/python3"
 
@@ -383,6 +386,130 @@ def execute_ad_pause(action):
         return {"success": False, "error": str(e)}
 
 
+def execute_ad_create(action):
+    """Execute a suggest_ad_create action — create a new Facebook ad (always PAUSED)."""
+    details = action.get("details", {})
+    ad_name = details.get("ad_name", "")
+    adset_id = details.get("adset_id", "")
+    article_id = details.get("article_id", "")
+    article_url = details.get("article_url", "")
+    headline = details.get("headline", "")
+    body = details.get("body", "")
+    image_source = details.get("image_source", "article_feature_image")
+    strategy = details.get("strategy", "explore")
+
+    if not adset_id or not article_url or not body:
+        return {"success": False, "error": "Missing required fields (adset_id, article_url, body)"}
+
+    if not ADS_TOKEN or not AD_ACCOUNT_ID or not PAGE_ID:
+        return {"success": False, "error": "Facebook Ads credentials not configured"}
+
+    try:
+        # 1. Get image hash
+        image_hash = None
+        if image_source == "article_feature_image" and GHOST_CONTENT_API_KEY:
+            # Fetch article feature image from Ghost
+            ghost_url = (f"{GHOST_HOST}/ghost/api/content/posts/{article_id}/"
+                         f"?key={GHOST_CONTENT_API_KEY}&fields=feature_image")
+            r = requests.get(ghost_url, timeout=10)
+            r.raise_for_status()
+            feature_image = r.json().get("posts", [{}])[0].get("feature_image", "")
+
+            if feature_image:
+                # Upload image to FB ad account
+                r = requests.post(
+                    f"{FB_BASE}/act_{AD_ACCOUNT_ID}/adimages",
+                    data={"access_token": ADS_TOKEN},
+                    files={"filename": ("image.jpg", requests.get(feature_image, timeout=15).content)},
+                    timeout=30,
+                )
+                r.raise_for_status()
+                images_data = r.json().get("images", {})
+                # Response format: {"images": {"image.jpg": {"hash": "abc123"}}}
+                for key, val in images_data.items():
+                    image_hash = val.get("hash")
+                    break
+        elif image_source and image_source != "article_feature_image":
+            # Use provided image hash directly
+            image_hash = image_source
+
+        if not image_hash:
+            return {"success": False, "error": "Could not obtain image hash for the ad"}
+
+        # 2. Create AdCreative
+        creative_spec = {
+            "name": f"Creative: {ad_name[:60]}",
+            "object_story_spec": json.dumps({
+                "page_id": PAGE_ID,
+                "link_data": {
+                    "link": article_url,
+                    "message": body,
+                    "name": headline or ad_name,
+                    "image_hash": image_hash,
+                    "call_to_action": {"type": "LEARN_MORE"},
+                },
+            }),
+            "access_token": ADS_TOKEN,
+        }
+        r = requests.post(f"{FB_BASE}/act_{AD_ACCOUNT_ID}/adcreatives",
+                          data=creative_spec, timeout=15)
+        r.raise_for_status()
+        creative_id = r.json().get("id", "")
+
+        # 3. Create Ad (always PAUSED)
+        ad_data = {
+            "name": ad_name,
+            "adset_id": adset_id,
+            "creative": json.dumps({"creative_id": creative_id}),
+            "status": "PAUSED",
+            "access_token": ADS_TOKEN,
+        }
+        r = requests.post(f"{FB_BASE}/act_{AD_ACCOUNT_ID}/ads",
+                          data=ad_data, timeout=15)
+        r.raise_for_status()
+        new_ad_id = r.json().get("id", "")
+
+        # 4. Log to institutional memory
+        client = MongoClient(COSMOS_URI)
+        sm = client["system_monitor"]
+        sm["fb_ad_tests"].insert_one({
+            "type": "ad_create",
+            "ad_id": new_ad_id,
+            "ad_name": ad_name,
+            "creative_id": creative_id,
+            "image_hash": image_hash,
+            "article_id": article_id,
+            "article_url": article_url,
+            "headline": headline[:200],
+            "body": body[:300],
+            "adset_id": adset_id,
+            "strategy": strategy,
+            "status": "PAUSED",
+            "executed_at": datetime.now(timezone.utc).isoformat(),
+        })
+        client.close()
+
+        return {
+            "success": True,
+            "ad_id": new_ad_id,
+            "creative_id": creative_id,
+            "image_hash": image_hash,
+            "strategy": strategy,
+            "status": "PAUSED",
+            "note": f"Ad created in PAUSED state. Activate in Ads Manager when ready.",
+        }
+
+    except requests.exceptions.HTTPError as e:
+        error_body = ""
+        try:
+            error_body = e.response.json().get("error", {}).get("message", "")[:300]
+        except Exception:
+            error_body = str(e)[:300]
+        return {"success": False, "error": f"FB API error: {error_body}"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 EXECUTORS = {
     "suggest_article_post": execute_article_post,
     "suggest_page_post": execute_page_post,
@@ -390,6 +517,7 @@ EXECUTORS = {
     "suggest_insight": execute_insight,
     "suggest_ad_pause": execute_ad_pause,
     "suggest_ad_edit": execute_ad_edit,
+    "suggest_ad_create": execute_ad_create,
 }
 
 
