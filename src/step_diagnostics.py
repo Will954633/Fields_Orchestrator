@@ -135,7 +135,7 @@ _DATA_QUALITY_PATTERNS = [
 # ─── Target market config ─────────────────────────────────────────────────────
 
 TARGET_SUBURBS = ["robina", "varsity_lakes", "burleigh_waters"]
-ACTIVE_DB = "Gold_Coast_Currently_For_Sale"
+ACTIVE_DB = "Gold_Coast"
 
 # The DB field that signals a step's output is present on a property document.
 # Steps that write to their own collection (e.g. step 13 → suburb_median_prices)
