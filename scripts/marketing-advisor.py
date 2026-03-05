@@ -396,6 +396,87 @@ def collect_context():
     ctx["current_time"] = datetime.now(timezone.utc).isoformat()
     ctx["current_time_aest"] = (datetime.now(timezone.utc) + timedelta(hours=10)).strftime("%Y-%m-%d %H:%M AEST")
 
+    # 14. Pre-join ad creation reasoning with live performance
+    # Link fb_ad_tests (why we created/paused an ad) with facebook_ads (how it's performing)
+    ad_creation_log = list(sm["fb_ad_tests"].find(
+        {"type": {"$in": ["ad_create", "ad_pause", "ad_edit"]}},
+        {"_id": 0}
+    ).sort("_id", -1).limit(30))
+    ads_live = {a["ad_id"]: a for a in ctx.get("facebook_ads", {}).get("ads", [])}
+    for entry in ad_creation_log:
+        ad_id = entry.get("ad_id", "")
+        live = ads_live.get(ad_id)
+        if live:
+            entry["current_performance"] = live.get("last_7d", {})
+            entry["current_status"] = live.get("effective_status", "")
+            entry["days_running"] = None
+            try:
+                created = datetime.fromisoformat(entry.get("executed_at", ""))
+                entry["days_running"] = (datetime.now(timezone.utc) - created).days
+            except Exception:
+                pass
+    ctx["ad_decision_history"] = ad_creation_log
+
+    # 15. Ad performance trending — week-over-week trajectory from daily history
+    history_docs = list(sm["facebook_ads_history"].find(
+        {}, {"_id": 1, "ads": 1}
+    ).sort("_id", -1).limit(14))
+    if history_docs:
+        # Build per-ad trajectory: {ad_id: [{date, ctr, impressions, spend}, ...]}
+        ad_trends = {}
+        for day_doc in history_docs:
+            date_str = day_doc.get("_id", "")
+            for ad in day_doc.get("ads", []):
+                ad_id = ad.get("ad_id", "")
+                if not ad_id:
+                    continue
+                perf = ad.get("last_7d", {})
+                ad_trends.setdefault(ad_id, {"name": ad.get("name", ""), "trend": []})
+                ad_trends[ad_id]["trend"].append({
+                    "date": date_str,
+                    "ctr": perf.get("ctr", 0),
+                    "impressions": perf.get("impressions", 0),
+                    "clicks": perf.get("clicks", 0),
+                    "spend": perf.get("spend_aud", 0),
+                })
+        # Only include ads with 2+ data points (enough to see a trend)
+        ctx["ad_performance_trends"] = {
+            aid: data for aid, data in ad_trends.items()
+            if len(data["trend"]) >= 2
+        }
+
+    # 16. Enriched post verdicts — add content type and article category
+    article_by_id = {a["article_id"]: a for a in ctx.get("article_index", [])}
+    for verdict in ctx.get("post_verdicts", []):
+        # Try to match post to an article via link
+        link = verdict.get("link", "")
+        if "/article/" in link:
+            art_id = link.split("/article/")[-1].split("?")[0].split("#")[0]
+            article = article_by_id.get(art_id)
+            if article:
+                verdict["article_category"] = article.get("category", "")
+                verdict["article_title"] = article.get("title", "")[:80]
+                verdict["article_suburbs"] = article.get("suburbs", [])
+    # Compute aggregate verdicts by content type
+    verdict_summary = {}
+    for v in ctx.get("post_verdicts", []):
+        cat = v.get("article_category", v.get("template_type", "unknown"))
+        verdict_summary.setdefault(cat, {"strong": 0, "moderate": 0, "weak": 0, "total": 0})
+        verdict_summary[cat][v.get("verdict", "weak")] += 1
+        verdict_summary[cat]["total"] += 1
+    if verdict_summary:
+        ctx["verdict_summary_by_type"] = verdict_summary
+
+    # 17. Seed institutional memory with marketing_actions history (executed actions)
+    # This ensures even if fb_ad_tests is empty, the advisor sees past decisions
+    executed_actions = list(sm["marketing_actions"].find(
+        {"status": "executed"},
+        {"_id": 0, "action_type": 1, "summary": 1, "details": 1,
+         "reasoning": 1, "created_at": 1, "executed_at": 1,
+         "execution_result": 1}
+    ).sort("_id", -1).limit(20))
+    ctx["executed_actions_history"] = executed_actions
+
     client.close()
     return ctx
 
@@ -643,6 +724,15 @@ You have per-ad performance data in the context under facebook_ads.ads. For each
 - Only ad in its campaign and it has <1,000 impressions — give it time
 
 Always cite specific numbers when recommending changes.
+
+## Decision History & Learning
+You have access to rich institutional memory:
+- **ad_decision_history**: Past ad creates/pauses/edits with the ORIGINAL REASONING and CURRENT LIVE PERFORMANCE side-by-side. Check `days_running` and `current_performance` to see if past decisions paid off.
+- **ad_performance_trends**: Week-over-week trajectory for each ad (CTR, impressions, spend over time). Look for ads trending up (let them run) vs trending down (consider pausing).
+- **verdict_summary_by_type**: Aggregate performance by content category — which types of content get "strong" vs "weak" verdicts? Use this to guide future content choices.
+- **executed_actions_history**: Complete log of all past advisor decisions that were executed — what was suggested, why, and what happened.
+
+Use this data to learn: what content categories, suburbs, and copy styles work best? Don't repeat strategies that produced "weak" verdicts.
 
 ## Ad Strategy: Exploit + Explore
 You are also an ad strategist. At Stage {stage_num}, the balance is:
