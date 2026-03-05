@@ -65,7 +65,7 @@ def fmt_price(p):
 def get_suburb_stats(suburb=None):
     """Get suburb statistics from MongoDB."""
     client = MongoClient(COSMOS_URI)
-    db = client["Gold_Coast_Currently_For_Sale"]
+    db = client["Gold_Coast"]
 
     if suburb:
         suburbs_to_check = [suburb.lower().replace(" ", "_")]
@@ -123,11 +123,11 @@ def get_suburb_stats(suburb=None):
 def get_recent_sold(suburb):
     """Get recent sold properties for a suburb."""
     client = MongoClient(COSMOS_URI)
-    db = client["Gold_Coast_Recently_Sold"]
+    db = client["Gold_Coast"]
     sub_key = suburb.lower().replace(" ", "_")
 
     docs = list(db[sub_key].find(
-        {},
+        {"listing_status": "sold"},
         {"address": 1, "price": 1, "bedrooms": 1, "bathrooms": 1,
          "property_type": 1, "sold_date": 1}
     ).sort("_id", -1).limit(5))
