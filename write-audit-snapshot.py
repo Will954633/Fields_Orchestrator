@@ -41,7 +41,7 @@ def main():
         from pymongo import MongoClient
         uri = get_mongo_uri()
         client = MongoClient(uri, serverSelectionTimeoutMS=15000, retryWrites=False)
-        data_db = client["Gold_Coast_Currently_For_Sale"]
+        data_db = client["Gold_Coast"]
         monitor_db = client["system_monitor"]
         audit_col = monitor_db["audit_log"]
     except Exception as e:
