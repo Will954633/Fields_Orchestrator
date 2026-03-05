@@ -100,6 +100,46 @@ ACTION_TOOLS = [
         }
     },
     {
+        "name": "suggest_photo_post",
+        "description": "Suggest posting a professional local photography photo to the Facebook page. One photo post per day maximum. The photo manager handles selection and download — you write the caption. The caption MUST connect the photo's location to live market data. This is the brand-building pillar — it's about showing buyers WHY people want to live here.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "caption": {
+                    "type": "string",
+                    "description": "The caption for the photo post. 2-3 sentences: (1) describe the scene/moment, (2) connect to market data or buyer/seller decision, (3) optional: link to fieldsestate.com.au. End with location pin emoji. No hashtags."
+                },
+                "preferred_theme": {
+                    "type": "string",
+                    "description": "Preferred photo theme to select from inventory. The photo manager will try to match this but may vary for rotation.",
+                    "enum": ["beaches", "coastal", "sunsets", "lifestyle", "landmarks", "aerials", "waterways", "general"]
+                },
+                "preferred_location": {
+                    "type": "string",
+                    "description": "Preferred location for the photo.",
+                    "enum": ["Burleigh", "Robina", "Varsity Lakes", "Gold Coast"]
+                },
+                "audience": {
+                    "type": "string",
+                    "description": "Who this resonates with most.",
+                    "enum": ["buyers_robina", "buyers_burleigh_waters", "buyers_varsity_lakes",
+                             "sellers_robina", "sellers_burleigh_waters", "sellers_varsity_lakes",
+                             "buyers_gold_coast", "sellers_gold_coast",
+                             "investors_gold_coast", "general_gold_coast"]
+                },
+                "reasoning": {
+                    "type": "string",
+                    "description": "Why this theme/location today. What emotional or data connection does it make?"
+                },
+                "priority": {
+                    "type": "integer",
+                    "enum": [1, 2, 3]
+                }
+            },
+            "required": ["caption", "preferred_theme", "preferred_location", "audience", "reasoning", "priority"]
+        }
+    },
+    {
         "name": "suggest_pipeline_run",
         "description": "Suggest running an article generation pipeline. Only suggest if there's a clear reason (e.g. new sold data, stale content, market shift that warrants new analysis).",
         "input_schema": {
@@ -467,7 +507,33 @@ def collect_context():
     if verdict_summary:
         ctx["verdict_summary_by_type"] = verdict_summary
 
-    # 17. Seed institutional memory with marketing_actions history (executed actions)
+    # 17. Photo inventory stats
+    photo_col = sm["photo_inventory"]
+    photo_total = photo_col.count_documents({})
+    photo_available = photo_col.count_documents({"posted": {"$ne": True}})
+    # Recent photo posts (to avoid theme repetition)
+    recent_photos = list(photo_col.find(
+        {"posted": True},
+        {"_id": 0, "filename": 1, "theme": 1, "location": 1, "posted_at": 1}
+    ).sort("posted_at", -1).limit(7))
+    # Theme distribution of available photos
+    photo_themes = {}
+    for doc in photo_col.find({"posted": {"$ne": True}}, {"theme": 1}):
+        t = doc.get("theme", "general")
+        photo_themes[t] = photo_themes.get(t, 0) + 1
+    ctx["photo_inventory"] = {
+        "total": photo_total,
+        "available": photo_available,
+        "days_of_content": photo_available,
+        "recent_posted": recent_photos,
+        "available_by_theme": photo_themes,
+        "posted_today": any(
+            p.get("posted_at", "")[:10] == datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            for p in recent_photos
+        ),
+    }
+
+    # 18. Seed institutional memory with marketing_actions history (executed actions)
     # This ensures even if fb_ad_tests is empty, the advisor sees past decisions
     executed_actions = list(sm["marketing_actions"].find(
         {"status": "executed"},
@@ -667,12 +733,21 @@ If you cannot answer all five, do not suggest the post.
 
 ## Tools (in order of preference)
 1. **suggest_article_post** (PRIMARY) — Write 3-5 sentences of original market analysis using live data, linked to a specific published article.
-2. **suggest_ad_create** — Propose a new Facebook ad linking to an article. Always created PAUSED for Will to review. Mark as "exploit" (scaling a winner) or "explore" (testing new).
-3. **suggest_page_post** (SECONDARY) — Only when no published article matches the insight.
-4. **suggest_pipeline_run** — Trigger article generation when data warrants new content.
-5. **suggest_insight** — Strategic observations for Will.
-6. **suggest_ad_pause** — Recommend pausing an underperforming ad (must cite specific metrics).
-7. **suggest_ad_edit** — Recommend changing ad copy/headline/CTA (must explain hypothesis).
+2. **suggest_photo_post** (DAILY) — Suggest a professional local photography post. One per day maximum. Check photo_inventory.posted_today — if True, skip. Write a 2-3 sentence caption connecting the photo's location to market data. This is the brand-building pillar.
+3. **suggest_ad_create** — Propose a new Facebook ad linking to an article. Always created PAUSED for Will to review. Mark as "exploit" (scaling a winner) or "explore" (testing new).
+4. **suggest_page_post** (SECONDARY) — Only when no published article matches the insight.
+5. **suggest_pipeline_run** — Trigger article generation when data warrants new content.
+6. **suggest_insight** — Strategic observations for Will.
+7. **suggest_ad_pause** — Recommend pausing an underperforming ad (must cite specific metrics).
+8. **suggest_ad_edit** — Recommend changing ad copy/headline/CTA (must explain hypothesis).
+
+## Photo Post Guidelines
+You have {ctx.get('photo_inventory', {}).get('available', 0)} professional local photos available ({ctx.get('photo_inventory', {}).get('total', 0)} total). Post ONE photo per day — this is the anchor of organic page content.
+- Check photo_inventory.posted_today: if True, do NOT suggest another photo post
+- Check photo_inventory.recent_posted: rotate themes (don't repeat the same theme two days in a row)
+- Check photo_inventory.available_by_theme: pick from themes with remaining inventory
+- The caption should connect the PLACE to the MARKET. Example: "Burleigh Headland at dawn — the walk that makes Burleigh Waters one of the most sought-after suburbs on the Gold Coast. 52 properties are currently for sale within 5 minutes of this trail."
+- Your caption will be used as a fallback — the photo manager may regenerate a caption specific to the selected photo. But make yours good.
 
 ## Article Library
 You have {article_count} published articles. Check the article_index in your context to find the right article for each insight. Match by suburb, category, and key_topics.
@@ -815,6 +890,8 @@ def extract_actions(response):
             # Build a summary for display
             if block.name == "suggest_article_post":
                 action["summary"] = f"[ARTICLE] {block.input.get('article_title', '')[:60]} — {block.input.get('audience', '')}"
+            elif block.name == "suggest_photo_post":
+                action["summary"] = f"[PHOTO/{block.input.get('preferred_theme', '?')}] {block.input.get('preferred_location', '')} — {block.input.get('audience', '')}"
             elif block.name == "suggest_page_post":
                 action["summary"] = block.input.get("message", "")[:100] + "..."
             elif block.name == "suggest_pipeline_run":
