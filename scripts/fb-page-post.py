@@ -384,20 +384,86 @@ This changes daily. See every listing with our analysis at fieldsestate.com.au/f
     return msg, "buyer_intelligence"
 
 
-TEMPLATES = [
-    template_suburb_snapshot,
-    template_price_comparison,
-    template_listing_count,
-    template_bedroom_breakdown,
-    template_seller_insight,
-    template_buyer_intelligence,
-]
+def template_weekly_wrap(suburbs):
+    """Sunday weekly market wrap — summary of the week across all suburbs."""
+    total = sum(s["total"] for s in suburbs.values())
+
+    # Build per-suburb summary
+    suburb_lines = []
+    for key in sorted(suburbs.keys(), key=lambda k: -suburbs[k]["total"]):
+        s = suburbs[key]
+        if s["total"] == 0:
+            continue
+        line = f"  {s['display_name']}: {s['total']} listings"
+        if s["median_price"]:
+            line += f", median {fmt_price(s['median_price'])}"
+        suburb_lines.append(line)
+
+    # Find interesting stats
+    most_listings = max(suburbs.values(), key=lambda s: s["total"])
+    highest_median = max(
+        (s for s in suburbs.values() if s["median_price"]),
+        key=lambda s: s["median_price"],
+        default=None,
+    )
+    most_houses = max(
+        (s for s in suburbs.values() if s["types"].get("House", 0) > 0),
+        key=lambda s: s["types"].get("House", 0),
+        default=None,
+    )
+
+    msg = f"""Southern Gold Coast — Weekly Market Summary
+
+{total} properties are currently for sale across the suburbs we track.
+
+""" + "\n".join(suburb_lines[:6])
+
+    msg += f"""
+
+This week's numbers:
+"""
+    if most_listings:
+        msg += f"  Most choice: {most_listings['display_name']} ({most_listings['total']} active listings)\n"
+    if highest_median:
+        msg += f"  Highest median: {highest_median['display_name']} ({fmt_price(highest_median['median_price'])})\n"
+    if most_houses:
+        msg += f"  Most houses: {most_houses['display_name']} ({most_houses['types'].get('House', 0)} houses for sale)\n"
+
+    msg += f"""
+We update every number on this page daily. If you're buying or selling on the southern Gold Coast, this is your starting point.
+
+fieldsestate.com.au/for-sale"""
+
+    return msg, "weekly_wrap"
 
 
-def generate_post(suburbs):
-    """Pick a random template and generate a post."""
-    random.shuffle(TEMPLATES)
-    for template_fn in TEMPLATES:
+TEMPLATE_MAP = {
+    "suburb_snapshot": template_suburb_snapshot,
+    "price_comparison": template_price_comparison,
+    "listing_count": template_listing_count,
+    "bedroom_breakdown": template_bedroom_breakdown,
+    "seller_insight": template_seller_insight,
+    "buyer_intelligence": template_buyer_intelligence,
+    "weekly_wrap": template_weekly_wrap,
+}
+
+TEMPLATES = list(TEMPLATE_MAP.values())
+
+
+def generate_post(suburbs, template_name=None):
+    """Pick a template and generate a post. If template_name given, use that specific one."""
+    if template_name:
+        fn = TEMPLATE_MAP.get(template_name)
+        if not fn:
+            print(f"ERROR: Unknown template '{template_name}'. Available: {', '.join(TEMPLATE_MAP.keys())}")
+            return None, None
+        msg, ttype = fn(suburbs)
+        return msg, ttype
+
+    # Random selection (excluding weekly_wrap — that's scheduler-only)
+    daily_templates = [fn for name, fn in TEMPLATE_MAP.items() if name != "weekly_wrap"]
+    random.shuffle(daily_templates)
+    for template_fn in daily_templates:
         msg, template_type = template_fn(suburbs)
         if msg:
             return msg, template_type
@@ -407,6 +473,7 @@ def generate_post(suburbs):
 def main():
     parser = argparse.ArgumentParser(description="Post to Fields Real Estate Facebook page")
     parser.add_argument("--generate", action="store_true", help="Auto-generate a data-led post")
+    parser.add_argument("--template", type=str, help=f"Use specific template: {', '.join(TEMPLATE_MAP.keys())}")
     parser.add_argument("--post", action="store_true", help="Actually publish (default: dry run)")
     parser.add_argument("--message", type=str, help="Custom message to post")
     parser.add_argument("--link", type=str, help="URL to attach to the post")
@@ -416,7 +483,7 @@ def main():
     if args.generate:
         print("Pulling suburb data...")
         suburbs = get_suburb_data()
-        message, template_type = generate_post(suburbs)
+        message, template_type = generate_post(suburbs, template_name=args.template)
         if not message:
             print("ERROR: Could not generate a post from available data.")
             sys.exit(1)
