@@ -43,8 +43,8 @@ from azure.storage.blob import BlobServiceClient, ContentSettings
 MONGODB_URI = os.getenv('MONGODB_URI', 'mongodb://127.0.0.1:27017/')
 AZURE_STORAGE_CONNECTION_STRING = os.getenv('AZURE_STORAGE_CONNECTION_STRING', '')
 
-DB_FOR_SALE        = 'Gold_Coast_Currently_For_Sale'
-DB_SOLD            = 'Gold_Coast_Recently_Sold'
+DB_FOR_SALE        = 'Gold_Coast'
+DB_SOLD            = 'Gold_Coast'
 DB_TARGET_SOLD     = 'Target_Market_Sold_Last_12_Months'
 
 CONTAINER_NAME   = 'property-images'
