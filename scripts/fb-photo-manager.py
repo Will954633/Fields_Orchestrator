@@ -32,6 +32,14 @@ load_dotenv("/home/fields/Fields_Orchestrator/.env")
 
 COSMOS_URI = os.environ["COSMOS_CONNECTION_STRING"]
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+if not ANTHROPIC_API_KEY:
+    try:
+        for line in open("/etc/environment"):
+            if line.startswith("ANTHROPIC_API_KEY="):
+                ANTHROPIC_API_KEY = line.split("=", 1)[1].strip().strip('"')
+                break
+    except Exception:
+        pass
 GITHUB_REPO = "Will954633/fields-local-photography"
 GH_CONFIG_DIR = "/home/projects/.config/gh"
 VENV_PYTHON = "/home/fields/venv/bin/python3"
@@ -132,7 +140,7 @@ def sync_inventory():
     # Get repo tree recursively
     try:
         tree_json = gh_api(
-            f"repos/{GITHUB_REPO}/git/trees/main",
+            f"repos/{GITHUB_REPO}/git/trees/main?recursive=1",
             jq=".tree"
         )
         tree = json.loads(tree_json)
@@ -301,7 +309,7 @@ def show_status():
             print(f"  {loc['_id']:20s} — {loc['available']}/{loc['total']} available")
 
     # Recently posted
-    recent = list(col.find({"posted": True}).sort("posted_at", -1).limit(5))
+    recent = list(col.find({"posted": True}).sort("_id", -1).limit(5))
     if recent:
         print(f"\nRecently posted:")
         for p in recent:
@@ -325,7 +333,7 @@ def select_next_photo():
     # Get recently posted themes to avoid repeating
     recent_posted = list(col.find(
         {"posted": True}
-    ).sort("posted_at", -1).limit(5))
+    ).sort("_id", -1).limit(5))
     recent_themes = [p.get("theme") for p in recent_posted]
 
     # Score each photo: prefer themes not recently used
