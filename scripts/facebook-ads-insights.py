@@ -170,6 +170,9 @@ def build_snapshot():
         return "0"
 
     link_clicks_7d = get_action(last7.get("actions", []), "link_click")
+    page_engagements_7d = int(get_action(last7.get("actions", []), "page_engagement"))
+    spend_7d = float(last7.get("spend", 0))
+    cost_per_engagement_7d = round(spend_7d / page_engagements_7d, 4) if page_engagements_7d > 0 else None
 
     # Per-ad data
     ads_meta = fetch_ads()
@@ -255,6 +258,8 @@ def build_snapshot():
             "cpc": float(last7.get("cpc", 0)) if last7.get("cpc") else None,
             "cpm": float(last7.get("cpm", 0)),
             "frequency": float(last7.get("frequency", 0)),
+            "page_engagements": page_engagements_7d,
+            "cost_per_engagement": cost_per_engagement_7d,
         },
         "last_30d": {
             "impressions": int(last30.get("impressions", 0)),
