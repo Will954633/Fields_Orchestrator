@@ -46,7 +46,7 @@ SUBURBS_JSON = Path(__file__).parent.parent.parent / (
 LOG_FILE = Path(__file__).parent.parent / "logs" / "coverage_check.log"
 
 MONGODB_URI = os.getenv('MONGODB_URI', 'mongodb://127.0.0.1:27017/')
-DATABASE_NAME = 'Gold_Coast_Currently_For_Sale'
+DATABASE_NAME = 'Gold_Coast'
 
 # How long to wait for Domain page to load before reading content
 PAGE_LOAD_WAIT = 8
