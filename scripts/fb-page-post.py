@@ -291,11 +291,106 @@ fieldsestate.com.au"""
     return msg, "bedroom_breakdown"
 
 
+def template_seller_insight(suburbs):
+    """Actionable insight for sellers — days on market and pricing signals."""
+    suburb_key = random.choice([s for s in suburbs if suburbs[s]["total"] >= 10])
+    s = suburbs[suburb_key]
+    name = s["display_name"]
+
+    # Price segmentation: identify fast-movers vs slow stock
+    prices = s["prices"]
+    if len(prices) < 5:
+        return None, None
+
+    median = s["median_price"]
+    below_median = [p for p in prices if p <= median]
+    above_median = [p for p in prices if p > median]
+
+    # Property type mix
+    types = s["types"]
+    dominant_type = max(types.items(), key=lambda x: x[1]) if types else ("properties", 0)
+    dominant_pct = round(dominant_type[1] / s["total"] * 100) if s["total"] > 0 else 0
+
+    msg = f"""{name} — What sellers should know right now
+
+{s['total']} properties are competing for buyer attention in {name}.
+
+{len(below_median)} are listed at or below the median ({fmt_price(median)}), and {len(above_median)} are above it. {dominant_type[0]}s make up {dominant_pct}% of all listings.
+
+If you're selling in {name}, your pricing relative to this competition matters. A property priced at {fmt_price(median)} sits right in the middle of {s['total']} active listings — above it, you need a clear reason for buyers to pay more. Below it, you've got the volume advantage.
+
+The data updates daily. Full suburb analysis at fieldsestate.com.au/for-sale"""
+
+    return msg, "seller_insight"
+
+
+def template_buyer_intelligence(suburbs):
+    """Cross-suburb comparison for buyers at a specific price point."""
+    # Pick a price bracket with decent representation
+    brackets = [
+        (500000, 700000, "under $700,000"),
+        (700000, 900000, "$700,000 – $900,000"),
+        (900000, 1200000, "$900,000 – $1,200,000"),
+        (1200000, 1800000, "$1,200,000 – $1,800,000"),
+    ]
+
+    random.shuffle(brackets)
+    for low, high, label in brackets:
+        results = []
+        for key, s in suburbs.items():
+            matches = [p for p in s["prices"] if low <= p <= high]
+            if matches:
+                # Bedroom breakdown within price bracket
+                results.append({
+                    "name": s["display_name"],
+                    "count": len(matches),
+                    "min": min(matches),
+                    "max": max(matches),
+                    "mid": sorted(matches)[len(matches) // 2],
+                })
+        if len(results) >= 2:
+            break
+    else:
+        return None, None
+
+    results.sort(key=lambda x: -x["count"])
+
+    lines = []
+    for r in results[:4]:
+        lines.append(f"  {r['name']}: {r['count']} properties ({fmt_price(r['min'])} – {fmt_price(r['max'])})")
+
+    most = results[0]
+    least = results[-1]
+
+    msg = f"""Buying {label}? Here's where your options are.
+
+We track every active listing across {len(suburbs)} Southern Gold Coast suburbs. In this price range right now:
+
+""" + "\n".join(lines)
+
+    msg += f"""
+
+{most['name']} gives you the most choice with {most['count']} listings in this range. """
+
+    if least["count"] <= 3:
+        msg += f"{least['name']} is tight — only {least['count']}."
+    else:
+        msg += f"{least['name']} has {least['count']}."
+
+    msg += f"""
+
+This changes daily. See every listing with our analysis at fieldsestate.com.au/for-sale"""
+
+    return msg, "buyer_intelligence"
+
+
 TEMPLATES = [
     template_suburb_snapshot,
     template_price_comparison,
     template_listing_count,
     template_bedroom_breakdown,
+    template_seller_insight,
+    template_buyer_intelligence,
 ]
 
 
