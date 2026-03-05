@@ -309,7 +309,7 @@ def get_aest_now():
 def get_suburb_data():
     """Pull aggregate listing data per suburb for aggregate templates."""
     client = MongoClient(COSMOS_URI)
-    db = client["Gold_Coast_Currently_For_Sale"]
+    db = client["Gold_Coast"]
 
     suburbs = {}
     for suburb in TARGET_SUBURBS:
@@ -355,7 +355,7 @@ def get_suburb_data():
 def get_individual_properties():
     """Pull individual property records with full detail for property-level templates."""
     client = MongoClient(COSMOS_URI)
-    db = client["Gold_Coast_Currently_For_Sale"]
+    db = client["Gold_Coast"]
 
     properties = []
     for suburb in CORE_SUBURBS:
@@ -379,14 +379,14 @@ def get_individual_properties():
 
 
 def get_recently_sold_properties():
-    """Pull recently sold properties from Gold_Coast_Recently_Sold with enrichment data."""
+    """Pull recently sold properties from Gold_Coast with listing_status: sold."""
     client = MongoClient(COSMOS_URI)
-    db = client["Gold_Coast_Recently_Sold"]
+    db = client["Gold_Coast"]
 
     sold = []
     for suburb in CORE_SUBURBS:
         try:
-            listings = list(db[suburb].find({}, {
+            listings = list(db[suburb].find({"listing_status": "sold"}, {
                 "address": 1, "street_address": 1, "suburb": 1,
                 "price": 1, "sale_price": 1, "listing_price": 1,
                 "sold_date": 1, "sold_date_text": 1,
