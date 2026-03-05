@@ -400,6 +400,133 @@ def collect_context():
     return ctx
 
 
+# --- Pre-computed strategic suggestions ---
+TARGET_SUBURBS = {"robina", "varsity_lakes", "burleigh_waters"}
+SUBURB_TITLE_MAP = {
+    "robina": "Robina",
+    "varsity_lakes": "Varsity Lakes",
+    "burleigh_waters": "Burleigh Waters",
+}
+
+
+def infer_suburb(article):
+    """Get target suburb from article's suburbs array, or infer from title."""
+    if article.get("suburbs"):
+        matches = [s for s in article["suburbs"] if s in TARGET_SUBURBS]
+        if matches:
+            return matches
+    title = article.get("title", "")
+    return [k for k, v in SUBURB_TITLE_MAP.items() if v in title]
+
+
+def compute_strategic_suggestions(ctx):
+    """Pre-compute exploit/explore opportunities so Claude doesn't have to discover them."""
+    suggestions = {"exploit": [], "explore": []}
+
+    ads = ctx.get("facebook_ads", {}).get("ads", [])
+    articles = ctx.get("article_index", [])
+    coverage = ctx.get("facebook_ads", {}).get("article_ad_coverage", {})
+    covered_ids = set(coverage.get("covered_article_ids", []))
+
+    # Build article lookup by ID
+    article_by_id = {a["article_id"]: a for a in articles}
+
+    # --- EXPLOIT: find sister articles for top-performing ads ---
+    top_ads = sorted(
+        [a for a in ads if a.get("last_7d", {}).get("impressions", 0) >= 100
+         and a.get("last_7d", {}).get("ctr", 0) > 0.3
+         and a.get("link_url")],
+        key=lambda a: a["last_7d"]["ctr"],
+        reverse=True,
+    )
+
+    for ad in top_ads[:3]:
+        # Extract article ID from link URL
+        link = ad.get("link_url", "")
+        if "/article/" not in link:
+            continue
+        linked_id = link.split("/article/")[-1].split("?")[0].split("#")[0]
+        linked_article = article_by_id.get(linked_id)
+        if not linked_article:
+            continue
+
+        category = linked_article.get("category", "")
+        ad_suburbs = infer_suburb(linked_article)
+
+        # Find same-category articles without ads, in different target suburbs
+        sisters = []
+        for art in articles:
+            if art["article_id"] in covered_ids:
+                continue
+            if art.get("category") != category:
+                continue
+            art_suburbs = infer_suburb(art)
+            # Must be in a target suburb AND different from the ad's suburb
+            if not art_suburbs:
+                continue
+            if set(art_suburbs) & set(ad_suburbs):
+                continue  # Same suburb, skip
+            sisters.append({
+                "article_id": art["article_id"],
+                "title": art.get("title", ""),
+                "url": art.get("url", ""),
+                "suburb": art_suburbs[0] if art_suburbs else "",
+            })
+
+        if sisters:
+            sister_names = ", ".join(f'"{s["title"][:60]}"' for s in sisters[:3])
+            suggestions["exploit"].append({
+                "source_ad": ad["name"],
+                "source_ctr": ad["last_7d"]["ctr"],
+                "category": category,
+                "sister_articles": sisters[:5],
+                "suggestion": (
+                    f'Top performer "{ad["name"]}" ({ad["last_7d"]["ctr"]:.2f}% CTR, '
+                    f'category: {category}). Create similar ads for: {sister_names}'
+                ),
+            })
+
+    # --- EXPLORE: categories with zero or low ad coverage ---
+    # Group articles by category, count ads per category
+    category_articles = {}
+    category_ad_count = {}
+    for art in articles:
+        cat = art.get("category", "unknown")
+        # Only count articles in target suburbs (or agnostic)
+        art_suburbs = infer_suburb(art)
+        if art_suburbs or not art.get("suburbs"):  # target suburb or agnostic
+            category_articles.setdefault(cat, []).append(art)
+            if art["article_id"] in covered_ids:
+                category_ad_count[cat] = category_ad_count.get(cat, 0) + 1
+
+    for cat, cat_arts in category_articles.items():
+        ad_count = category_ad_count.get(cat, 0)
+        uncovered = [a for a in cat_arts if a["article_id"] not in covered_ids]
+        if ad_count == 0 and uncovered:
+            # Pick best sample (prefer target-suburb articles)
+            sample = uncovered[0]
+            for a in uncovered:
+                if infer_suburb(a):
+                    sample = a
+                    break
+            suggestions["explore"].append({
+                "category": cat,
+                "ads_count": 0,
+                "articles_available": len(uncovered),
+                "sample": {
+                    "article_id": sample["article_id"],
+                    "title": sample.get("title", ""),
+                    "url": sample.get("url", ""),
+                },
+                "suggestion": (
+                    f'Zero {cat} ads running. {len(uncovered)} articles available — '
+                    f'untested audience. Try: "{sample.get("title", "")[:70]}"'
+                ),
+            })
+
+    ctx["strategic_suggestions"] = suggestions
+
+
 def build_system_prompt(ctx):
     """Build the system prompt with current stage context."""
     stage = ctx.get("marketing_stage", {})
@@ -408,6 +535,36 @@ def build_system_prompt(ctx):
     article_count = ctx.get("article_count", 0)
     intel = ctx.get("market_intelligence", {})
     high_urgency = intel.get("summary", {}).get("high_urgency", 0)
+
+    # Format pre-computed strategic suggestions
+    strat = ctx.get("strategic_suggestions", {})
+    strategic_lines = []
+    if strat.get("exploit"):
+        strategic_lines.append("### PRE-COMPUTED EXPLOIT OPPORTUNITIES (scale what works):")
+        strategic_lines.append("These are ready-to-go ad creation opportunities based on your top-performing ads:")
+        for opp in strat["exploit"]:
+            strategic_lines.append(f"- {opp['suggestion']}")
+            for sister in opp.get("sister_articles", [])[:3]:
+                strategic_lines.append(
+                    f"  → article_id: {sister['article_id']}, "
+                    f"url: {sister.get('url', '')}, "
+                    f"suburb: {sister.get('suburb', 'agnostic')}"
+                )
+    if strat.get("explore"):
+        strategic_lines.append("")
+        strategic_lines.append("### PRE-COMPUTED EXPLORE OPPORTUNITIES (test untested themes):")
+        strategic_lines.append("These content categories have ZERO ads — untested audiences:")
+        for opp in strat["explore"]:
+            strategic_lines.append(f"- {opp['suggestion']}")
+            sample = opp.get("sample", {})
+            if sample:
+                strategic_lines.append(
+                    f"  → article_id: {sample.get('article_id', '')}, "
+                    f"url: {sample.get('url', '')}"
+                )
+    if not strategic_lines:
+        strategic_lines.append("No pre-computed suggestions available — use your judgement based on ad performance data.")
+    strategic_text = "\n".join(strategic_lines)
 
     return f"""You are the Fields Estate property intelligence advisor. Your job is to distribute genuine market insight to buyers and sellers on the Gold Coast via Facebook posts.
 
@@ -493,16 +650,11 @@ You are also an ad strategist. At Stage {stage_num}, the balance is:
 - **Stage 2-3 (Lead Capture / Sales)**: 40% explore, 60% exploit — scale winners, keep testing
 - **Stage 4+ (Listings)**: 20% explore, 80% exploit — optimize what works
 
-**Exploit** (scale what works): Look at top-performing ads (highest CTR, most link clicks). What content theme, audience, and copy style made them work? Create similar ads for different articles or suburbs using the same pattern.
-Example: "The 'Is Now a Good Time to Buy: Robina' ad has 0.59% CTR — best in the account. Create a similar buyer-timing ad for Burleigh Waters."
-
-**Explore** (test new hypotheses): Check article_ad_coverage — which article categories or suburbs have NO ads? Those are untested opportunities. Also test different angles: seller content, infrastructure articles, investment insights.
-Example: "We have zero seller-focused ads. Test an ad linking to the seller guide article to see if seller content drives engagement."
+{strategic_text}
 
 **When to suggest new ads:**
 - When you pause an underperformer, ALSO suggest a replacement ad in the same run
-- When an article category has no ad coverage — explore opportunity (28 of 33 articles have no ads!)
-- When a winning pattern could be replicated for another suburb — exploit opportunity
+- When pre-computed suggestions above identify an opportunity — ACT ON IT
 - At Stage 0, you SHOULD suggest at least 1 new ad per run — we need to test broadly
 - Limit: 1-2 new ads per run maximum. Don't flood the account.
 
@@ -519,7 +671,7 @@ Example: "We have zero seller-focused ads. Test an ad linking to the seller guid
 - Each post must advance the reader's understanding — not just list numbers
 - Review ad performance every run — if any ads are clearly underperforming, include a suggest_ad_pause or suggest_ad_edit
 - When creating ads: use suggest_ad_create with a real article from article_index, write data-led copy, always use an existing traffic adset_id
-- Check article_ad_coverage in context — articles without ads are opportunities to explore"""
+- PRIORITIZE pre-computed strategic suggestions above — they contain specific article_ids and URLs ready to use"""
 
 
 def call_claude(ctx, system_prompt):
@@ -541,7 +693,7 @@ Suggest 2-4 actions. For each suggest_article_post, you MUST:
 
 Also review the per-ad performance data in facebook_ads.ads. If any ads are clearly underperforming (high spend, low CTR, zero link clicks), suggest pausing or editing them.
 
-Check article_ad_coverage: only {ctx.get('facebook_ads', {}).get('article_ad_coverage', {}).get('articles_with_ads', '?')}/{ctx.get('facebook_ads', {}).get('article_ad_coverage', {}).get('articles_total', '?')} articles have ads. At Stage 0, you SHOULD suggest at least 1 suggest_ad_create to test a new article-ad combination — especially if you're pausing an underperformer.
+CRITICAL: Check the strategic_suggestions in context — they contain PRE-COMPUTED exploit and explore opportunities with specific article_ids and URLs. Use suggest_ad_create for at least 1 of these pre-identified opportunities. They are ready-to-go — you just need to write the ad copy.
 
 Start with high-urgency market intelligence signals. Do not repeat articles or insights from recent_page_posts.
 
@@ -635,6 +787,7 @@ def main():
     # Collect context
     print("Collecting context...")
     ctx = collect_context()
+    compute_strategic_suggestions(ctx)
 
     if args.print:
         print(json.dumps(ctx, indent=2, default=str))
@@ -649,6 +802,15 @@ def main():
     intel = ctx.get("market_intelligence", {})
     print(f"Market insights: {intel.get('summary', {}).get('total_insights', 0)} ({intel.get('summary', {}).get('high_urgency', 0)} high-urgency)")
     print(f"Pending actions: {len(ctx.get('pending_actions', []))}")
+    strat = ctx.get("strategic_suggestions", {})
+    if strat.get("exploit"):
+        print(f"Exploit opportunities: {len(strat['exploit'])}")
+        for opp in strat["exploit"]:
+            print(f"  → {opp['suggestion'][:120]}")
+    if strat.get("explore"):
+        print(f"Explore opportunities: {len(strat['explore'])}")
+        for opp in strat["explore"]:
+            print(f"  → {opp['suggestion'][:120]}")
     print()
 
     print("Calling Claude...")
