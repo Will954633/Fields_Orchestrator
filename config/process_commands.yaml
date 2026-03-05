@@ -33,7 +33,7 @@ processes:
   
   - id: 101
     name: "Scrape For-Sale Properties (Target Market)"
-    description: "Scrapes 3 target suburbs (Robina, Varsity Lakes, Burleigh Waters) using headless Chrome - stores in Gold_Coast_Currently_For_Sale database"
+    description: "Scrapes 3 target suburbs (Robina, Varsity Lakes, Burleigh Waters) using headless Chrome - stores in Gold_Coast database"
     phase: "for_sale_target"
     command: "python3 run_dynamic_10_suburbs.py --suburbs 'Robina,Varsity Lakes,Burleigh Waters' --max-concurrent 1 --parallel-properties 1"
     working_dir: "/home/fields/Property_Data_Scraping/03_Gold_Coast/Gold_Coast_Wide_Currently_For_Sale_AND_Recently_Sold"
@@ -87,7 +87,7 @@ processes:
 
   - id: 110
     name: "Download Property Images to Blob Storage"
-    description: "Downloads property_images and floor_plans from Domain CDN URLs into Azure Blob Storage. Updates MongoDB to use blob URLs. Skips already-uploaded properties (idempotent). Processes Gold_Coast_Currently_For_Sale, Gold_Coast_Recently_Sold, and Target_Market_Sold_Last_12_Months databases."
+    description: "Downloads property_images and floor_plans from Domain CDN URLs into Azure Blob Storage. Updates MongoDB to use blob URLs. Skips already-uploaded properties (idempotent). Processes Gold_Coast, Gold_Coast_Recently_Sold, and Target_Market_Sold_Last_12_Months databases."
     phase: "image_archival"
     command: "python3 scripts/download_images_to_blob.py --no-fail"
     working_dir: "/home/fields/Fields_Orchestrator"
@@ -127,7 +127,7 @@ processes:
 
   - id: 108
     name: "Valuation-Grade Photo & Floor Plan Enrichment (Target Market)"
-    description: "GPT valuation-grade analysis of property photos and floor plans for 3 target market suburbs (Robina, Varsity Lakes, Burleigh Waters). Writes property_valuation_data, floor_plan_analysis, and processing_status to Gold_Coast_Currently_For_Sale. Fields are preserved when properties migrate to Gold_Coast_Recently_Sold."
+    description: "GPT valuation-grade analysis of property photos and floor plans for 3 target market suburbs (Robina, Varsity Lakes, Burleigh Waters). Writes property_valuation_data, floor_plan_analysis, and processing_status to Gold_Coast. Fields are preserved when properties migrate to Gold_Coast_Recently_Sold."
     phase: "enrichment_target"
     command: "./run_target_market_valuation_enrichment.sh"
     working_dir: "/home/fields/Property_Data_Scraping/03_Gold_Coast/Gold_Coast_Wide_Currently_For_Sale_AND_Recently_Sold/Ollama_Property_Analysis"
@@ -271,7 +271,7 @@ processes:
 
   - id: 109
     name: "Coverage Check (Domain vs DB)"
-    description: "For each target market suburb, fetches the current for-sale property count from Domain.com.au and compares to the count in Gold_Coast_Currently_For_Sale. Logs ERROR lines to logs/coverage_check.log when counts differ. Only checks target market suburbs (Robina, Varsity Lakes, Burleigh Waters) since those are the only ones scraped nightly."
+    description: "For each target market suburb, fetches the current for-sale property count from Domain.com.au and compares to the count in Gold_Coast. Logs ERROR lines to logs/coverage_check.log when counts differ. Only checks target market suburbs (Robina, Varsity Lakes, Burleigh Waters) since those are the only ones scraped nightly."
     phase: "data_quality"
     command: "python3 scripts/coverage_check.py --suburbs \"Robina:4226,Varsity Lakes:4227,Burleigh Waters:4220\" --no-fail"
     working_dir: "/home/fields/Fields_Orchestrator"
@@ -287,7 +287,7 @@ processes:
 
   - id: 107
     name: "Database Audit & Validation"
-    description: "Audits Gold_Coast_Currently_For_Sale database for misplaced properties, detects root causes, and logs errors with verbose descriptions for developers"
+    description: "Audits Gold_Coast database for misplaced properties, detects root causes, and logs errors with verbose descriptions for developers"
     phase: "data_quality"
     command: "python3 scripts/database_audit.py --export /tmp/database_audit_$(date +%Y%m%d_%H%M%S).log --limit 100 --no-fail"
     working_dir: "/home/fields/Fields_Orchestrator"
