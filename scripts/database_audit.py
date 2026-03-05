@@ -39,7 +39,7 @@ from bson import ObjectId
 
 # MongoDB configuration
 MONGODB_URI = os.getenv('MONGODB_URI', 'mongodb://127.0.0.1:27017/')
-DATABASE_NAME = 'Gold_Coast_Currently_For_Sale'
+DATABASE_NAME = 'Gold_Coast'
 
 # Australian states for address parsing
 AUSTRALIAN_STATES = ['QLD', 'NSW', 'VIC', 'SA', 'WA', 'TAS', 'NT', 'ACT']
@@ -228,9 +228,7 @@ class DatabaseAuditor:
         all_errors = []
 
         # Collections to exclude (catch-all/aggregate collections with intentional cross-suburb data)
-        EXCLUDED_COLLECTIONS = [
-            'Gold_Coast_Recently_Sold',  # Catch-all for sold properties across all suburbs
-        ]
+        EXCLUDED_COLLECTIONS = []
 
         # Get collections to audit
         if specific_collection:
