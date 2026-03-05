@@ -53,7 +53,7 @@ def write_for_sale_snapshot(
     mongo_uri: str,
     database: str,
     for_sale_collection: str = "properties_for_sale",
-    for_sale_database: str = "Gold_Coast_Currently_For_Sale",
+    for_sale_database: str = "Gold_Coast",
     target_suburbs: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Write a daily snapshot of current for-sale addresses to state/for_sale_snapshot.json."""
@@ -98,7 +98,7 @@ def compute_candidate_sets(
     database: str,
     pipeline_signature: Dict[str, Any],
     for_sale_collection: str = "properties_for_sale",
-    for_sale_database: str = "Gold_Coast_Currently_For_Sale",
+    for_sale_database: str = "Gold_Coast",
     target_suburbs: Optional[List[str]] = None,
 ) -> CandidateSets:
     """Compute daily candidates: new (vs prior snapshot), incomplete, stale signature."""
