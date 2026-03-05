@@ -71,7 +71,7 @@ HEALTH_RANGES = {
         "label": "Cost per Engagement",
         "unit": "$",
         "excellent": (0.02, 0.10),    # $0.02-$0.10
-        "normal": (0.10, 0.25),       # $0.10-$0.25
+        "normal": (0.10, 0.50),       # $0.10-$0.50
         "problem": (0.50, None),      # > $0.50
     },
     "frequency_7d": {
@@ -403,7 +403,10 @@ def save_to_mongo(metrics):
     col = db["marketing_stage"]
 
     existing = col.find_one({"_id": "current"})
-    current_stage = existing["stage"] if existing else 1  # Start at Stage 1
+    current_stage = existing["stage"] if existing else 1
+    # Migrate from old 0-based 5-stage system to new 1-based 3-stage system
+    if current_stage not in STAGES:
+        current_stage = 1
 
     doc = build_stage_document(metrics, current_stage)
     col.replace_one({"_id": "current"}, doc, upsert=True)
