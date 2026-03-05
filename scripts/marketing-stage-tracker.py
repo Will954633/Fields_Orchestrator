@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """
-Marketing Stage Tracker — collects Facebook page + ads metrics and
-evaluates progress against growth ladder milestones.
+Marketing Stage Tracker — 3-stage Facebook marketing framework.
+
+Stages:
+  1. Audience Discovery  — find content that works (CPM, CTR, cost/engagement, frequency)
+  2. Audience Building    — grow local audience (engagers, video viewers, website visitors, followers)
+  3. Seller Conversion    — get listings (funnel: engaged → visitors → enquiries → appointments → listing)
 
 Run daily via cron. Updates system_monitor.marketing_stage in MongoDB.
 
@@ -11,7 +15,6 @@ Usage:
 """
 
 import os
-import sys
 import json
 import argparse
 import requests
@@ -28,58 +31,89 @@ API_VERSION = os.environ.get("FACEBOOK_API_VERSION", "v18.0")
 BASE = f"https://graph.facebook.com/{API_VERSION}"
 COSMOS_URI = os.environ["COSMOS_CONNECTION_STRING"]
 
-# ── Stage milestones ──────────────────────────────────────────────────────
+# ── 3-Stage Framework ────────────────────────────────────────────────────
 
-MILESTONES = {
-    0: {
-        "name": "Cold Start",
-        "objective": "Awareness / Reach",
-        "exit": {
-            "page_followers": 100,
-            "weekly_reach": 2000,
-            "weekly_post_saves": 5,
-            "posts_with_data": 20,
-        },
-    },
+STAGES = {
     1: {
-        "name": "Credibility Building",
-        "objective": "Page Likes + Engagement",
-        "exit": {
-            "page_followers": 300,
-            "avg_post_engagements": 50,
-            "page_engager_audience": 500,
-            "weekly_real_comments": 5,
-            "weekly_post_saves": 15,
-        },
+        "name": "Audience Discovery",
+        "goal": "Find content that people respond to",
+        "duration": "First 2-4 weeks",
     },
     2: {
-        "name": "Audience Depth + Website Traffic",
-        "objective": "Traffic to warm audiences",
-        "exit": {
-            "page_followers": 500,
-            "website_pixel_audience": 1000,
-            "weekly_sessions_from_fb": 200,
-            "retargeting_pool": 500,
-        },
+        "name": "Audience Building",
+        "goal": "Build a local audience",
+        "duration": "Weeks 4-12",
     },
     3: {
-        "name": "Lead Capture",
-        "objective": "Lead Generation",
-        "exit": {
-            "email_subscribers": 100,
-            "monthly_valuation_requests": 5,
-            "retargeting_audience": 1000,
-            "monthly_inbound_dms": 5,
-        },
+        "name": "Seller Conversion",
+        "goal": "Get listings",
+        "duration": "Ongoing",
     },
-    4: {
-        "name": "Listing Presentations",
-        "objective": "Conversions — appraisal bookings",
-        "exit": {
-            "listing_presentations": 3,
-            "signed_listings": 1,
-        },
+}
+
+# Health metric ranges for Stage 1
+HEALTH_RANGES = {
+    "cpm_7d": {
+        "label": "CPM",
+        "unit": "$",
+        "excellent": (None, 6),       # < $6
+        "normal": (6, 12),            # $6-$12
+        "problem": (15, None),        # > $15
     },
+    "ctr_7d": {
+        "label": "CTR",
+        "unit": "%",
+        "excellent": (2, None),       # > 2%
+        "normal": (0.5, 2),           # 0.5-2%
+        "problem": (None, 0.5),       # < 0.5%
+    },
+    "cost_per_engagement": {
+        "label": "Cost per Engagement",
+        "unit": "$",
+        "excellent": (0.02, 0.10),    # $0.02-$0.10
+        "normal": (0.10, 0.25),       # $0.10-$0.25
+        "problem": (0.50, None),      # > $0.50
+    },
+    "frequency_7d": {
+        "label": "Frequency",
+        "unit": "x",
+        "excellent": (2, 4),          # 2-4x
+        "normal": (1, 2),             # 1-2x (building up)
+        "problem": (None, 1),         # < 1 or no data
+    },
+}
+
+# Audience targets for Stage 2
+AUDIENCE_TARGETS = {
+    "page_engager_audience": {"target": 1000, "label": "Page Engagement Audience"},
+    "video_viewers": {"target": 500, "label": "Video Viewers"},
+    "website_visitors": {"target": 500, "label": "Website Visitors"},
+    "page_followers": {"target": 200, "label": "Followers"},
+}
+
+# Conversion funnel for Stage 3
+FUNNEL_TEMPLATE = [
+    {"key": "engaged_locals", "label": "Engaged locals", "target": 1500},
+    {"key": "website_visitors", "label": "Website visitors", "target": 50},
+    {"key": "valuation_enquiries", "label": "Valuation enquiries", "target": 10},
+    {"key": "listing_appointments", "label": "Listing appointments", "target": 2},
+    {"key": "listings", "label": "Listings", "target": 1},
+]
+
+# Milestone roadmap
+MILESTONE_ROADMAP = [
+    {"month": "1", "target": "CTR > 1%, Cost per engagement < $0.20"},
+    {"month": "2", "target": "1,000 engaged locals"},
+    {"month": "3-4", "target": "3-5 appraisal enquiries"},
+    {"month": "4-6", "target": "First listing"},
+]
+
+# Success benchmarks (what a mature presence looks like)
+SUCCESS_BENCHMARKS = {
+    "followers": 1200,
+    "engagement_audience": 4000,
+    "video_viewers": 2000,
+    "website_visitors": 1000,
 }
 
 
@@ -96,6 +130,7 @@ def get_page_token():
 
 
 def collect_metrics():
+    """Collect all metrics from Meta APIs and existing MongoDB data."""
     page_token = get_page_token()
 
     # ── Page basics ──
@@ -121,21 +156,32 @@ def collect_metrics():
     except Exception as e:
         print(f"Warning: page insights failed: {e}")
 
-    # ── Recent posts (last 7 days engagements) ──
-    weekly_saves = 0
+    # ── Video views (last 7 days) ──
+    video_viewers = 0
+    try:
+        vid_insights = fb_get(
+            f"/{PAGE_ID}/insights",
+            {"metric": "page_video_views", "period": "week"},
+            token=page_token,
+        )
+        for metric in vid_insights.get("data", []):
+            values = metric.get("values", [])
+            if values:
+                video_viewers = values[-1]["value"]
+    except Exception as e:
+        print(f"Warning: video views fetch failed (may not have videos): {e}")
+
+    # ── Recent posts (last 7 days engagement detail) ──
     weekly_comments = 0
     total_posts = 0
     total_post_engagements = 0
     try:
+        from datetime import timedelta
         posts = fb_get(
             f"/{PAGE_ID}/posts",
-            {
-                "fields": "created_time,likes.summary(true),comments.summary(true),shares",
-                "limit": 20,
-            },
+            {"fields": "created_time,likes.summary(true),comments.summary(true),shares", "limit": 20},
             token=page_token,
         )
-        from datetime import timedelta
         cutoff = datetime.now(timezone.utc) - timedelta(days=7)
         for post in posts.get("data", []):
             created = datetime.fromisoformat(post["created_time"].replace("+0000", "+00:00"))
@@ -159,110 +205,223 @@ def collect_metrics():
     except Exception:
         pass
 
-    # ── Ads performance (last 7 days) ──
+    # ── Cross-read ads data from facebook_ads collection (avoid duplicate API calls) ──
+    cpm_7d = 0
+    ctr_7d = 0
+    frequency_7d = 0
+    cost_per_engagement = 0
     ads_spend_7d = 0
     ads_impressions_7d = 0
     ads_clicks_7d = 0
     try:
-        insights = fb_get(f"/{AD_ACCOUNT_ID}/insights", {
-            "fields": "spend,impressions,clicks",
-            "date_preset": "last_7d",
-        })
-        data = insights.get("data", [{}])
-        if data:
-            d = data[0]
-            ads_spend_7d = float(d.get("spend", 0))
-            ads_impressions_7d = int(d.get("impressions", 0))
-            ads_clicks_7d = int(d.get("clicks", 0))
+        client = MongoClient(COSMOS_URI)
+        fb_doc = client["system_monitor"]["facebook_ads"].find_one({"_id": "latest"})
+        client.close()
+        if fb_doc:
+            last7 = fb_doc.get("last_7d", {})
+            cpm_7d = last7.get("cpm", 0)
+            ctr_7d = last7.get("ctr", 0)
+            frequency_7d = last7.get("frequency", 0)
+            cost_per_engagement = last7.get("cost_per_engagement") or 0
+            ads_spend_7d = last7.get("spend_aud", 0)
+            ads_impressions_7d = last7.get("impressions", 0)
+            ads_clicks_7d = last7.get("clicks", 0)
     except Exception as e:
-        print(f"Warning: ads insights failed: {e}")
+        print(f"Warning: couldn't read facebook_ads from MongoDB: {e}")
+        # Fallback: fetch directly from Meta API
+        try:
+            insights = fb_get(f"/{AD_ACCOUNT_ID}/insights", {
+                "fields": "spend,impressions,clicks,cpm,ctr,frequency,actions",
+                "date_preset": "last_7d",
+            })
+            data = insights.get("data", [{}])
+            if data:
+                d = data[0]
+                ads_spend_7d = float(d.get("spend", 0))
+                ads_impressions_7d = int(d.get("impressions", 0))
+                ads_clicks_7d = int(d.get("clicks", 0))
+                cpm_7d = float(d.get("cpm", 0))
+                ctr_7d = float(d.get("ctr", 0))
+                frequency_7d = float(d.get("frequency", 0))
+                # Calculate cost per engagement from actions
+                for a in d.get("actions", []):
+                    if a.get("action_type") == "page_engagement":
+                        eng = int(a.get("value", 0))
+                        if eng > 0:
+                            cost_per_engagement = round(ads_spend_7d / eng, 4)
+        except Exception as e2:
+            print(f"Warning: ads fallback failed: {e2}")
+
+    # ── Page engagement audience size (Custom Audience) ──
+    page_engager_audience = 0
+    # TODO: read from Custom Audience API when audience IDs are configured
+
+    # ── Website visitors (pixel audience) ──
+    website_visitors = 0
+    # TODO: read from Custom Audience API when audience ID is configured
 
     return {
+        # Stage 1 metrics
+        "cpm_7d": round(cpm_7d, 2),
+        "ctr_7d": round(ctr_7d, 2),
+        "cost_per_engagement": round(cost_per_engagement, 4) if cost_per_engagement else 0,
+        "frequency_7d": round(frequency_7d, 2),
+        # Stage 2 metrics
         "page_followers": followers,
+        "page_engager_audience": page_engager_audience,
+        "video_viewers": video_viewers,
+        "website_visitors": website_visitors,
+        # Stage 3 / funnel metrics (manual tracking)
+        "engaged_locals": page_engager_audience,  # Same as engagement audience
+        "valuation_enquiries": 0,  # Manual
+        "listing_appointments": 0,  # Manual
+        "listings": 0,  # Manual
+        # Supporting metrics
         "weekly_reach": weekly_reach,
-        "weekly_post_saves": weekly_saves,  # Graph API v18 doesn't expose saves directly
         "weekly_engagements": weekly_engagements,
         "avg_post_engagements": avg_post_engagements,
         "weekly_real_comments": weekly_comments,
         "posts_with_data": all_posts_count,
         "total_posts_this_week": total_posts,
-        "page_engager_audience": 0,  # Needs Custom Audience API (later)
-        "website_pixel_audience": 0,  # Needs pixel stats (later)
-        "weekly_sessions_from_fb": 0,  # Needs Google Analytics or similar
-        "retargeting_pool": 0,
-        "email_subscribers": 0,  # Manual update or Ghost API
-        "monthly_valuation_requests": 0,  # Manual
-        "monthly_inbound_dms": 0,  # Manual
-        "monthly_listing_presentations": 0,  # Manual
-        "signed_listings": 0,  # Manual
         "ads_spend_7d": ads_spend_7d,
         "ads_impressions_7d": ads_impressions_7d,
         "ads_clicks_7d": ads_clicks_7d,
     }
 
 
-def evaluate_stage(metrics, current_stage):
-    """Check if all exit milestones for the current stage are met."""
-    if current_stage not in MILESTONES:
-        return {"ready_to_advance": False, "progress": {}}
+def evaluate_health(value, ranges):
+    """Evaluate a Stage 1 metric against its health ranges. Returns 'excellent', 'normal', or 'problem'."""
+    if value is None or value == 0:
+        return "problem"
 
-    exit_criteria = MILESTONES[current_stage]["exit"]
-    progress = {}
-    all_met = True
+    lo, hi = ranges.get("excellent", (None, None))
+    if lo is not None and hi is not None and lo <= value <= hi:
+        return "excellent"
+    if lo is not None and hi is None and value >= lo:
+        return "excellent"
+    if lo is None and hi is not None and value < hi:
+        return "excellent"
 
-    for metric_name, target in exit_criteria.items():
-        current = metrics.get(metric_name, 0)
-        pct = min(round((current / target) * 100, 1), 100) if target > 0 else 0
-        met = current >= target
-        if not met:
-            all_met = False
-        progress[metric_name] = {
-            "current": current,
-            "target": target,
-            "percent": pct,
-            "met": met,
+    lo, hi = ranges.get("normal", (None, None))
+    if lo is not None and hi is not None and lo <= value <= hi:
+        return "normal"
+    if lo is not None and hi is None and value >= lo:
+        return "normal"
+    if lo is None and hi is not None and value < hi:
+        return "normal"
+
+    return "problem"
+
+
+def build_stage_document(metrics, current_stage):
+    """Build the full marketing stage document for MongoDB."""
+    stage = STAGES.get(current_stage, STAGES[1])
+
+    # ── Stage 1: Health indicators ──
+    health = {}
+    for key, ranges in HEALTH_RANGES.items():
+        val = metrics.get(key, 0)
+        health[key] = {
+            "value": val,
+            "status": evaluate_health(val, ranges),
+            "label": ranges["label"],
+            "unit": ranges["unit"],
         }
 
-    return {"ready_to_advance": all_met, "progress": progress}
+    # ── Stage 2: Audience progress ──
+    audience_progress = {}
+    for key, info in AUDIENCE_TARGETS.items():
+        current = metrics.get(key, 0)
+        target = info["target"]
+        audience_progress[key] = {
+            "current": current,
+            "target": target,
+            "percent": min(round((current / target) * 100, 1), 100) if target > 0 else 0,
+            "label": info["label"],
+        }
+
+    # ── Stage 3: Conversion funnel ──
+    funnel = []
+    for step in FUNNEL_TEMPLATE:
+        current = metrics.get(step["key"], 0)
+        funnel.append({
+            "key": step["key"],
+            "label": step["label"],
+            "target": step["target"],
+            "current": current,
+        })
+
+    # ── Milestone roadmap — check which are met ──
+    milestone_roadmap = []
+    m1_met = metrics.get("ctr_7d", 0) >= 1.0 and (metrics.get("cost_per_engagement", 0) > 0 and metrics.get("cost_per_engagement", 999) <= 0.20)
+    m2_met = metrics.get("engaged_locals", 0) >= 1000
+    m3_met = metrics.get("valuation_enquiries", 0) >= 3
+    m4_met = metrics.get("listings", 0) >= 1
+
+    for i, m in enumerate(MILESTONE_ROADMAP):
+        met = [m1_met, m2_met, m3_met, m4_met][i]
+        milestone_roadmap.append({**m, "met": met})
+
+    # ── Success benchmarks ──
+    success_benchmarks = {}
+    benchmark_metric_map = {
+        "followers": "page_followers",
+        "engagement_audience": "page_engager_audience",
+        "video_viewers": "video_viewers",
+        "website_visitors": "website_visitors",
+    }
+    for label, target in SUCCESS_BENCHMARKS.items():
+        metric_key = benchmark_metric_map[label]
+        success_benchmarks[label] = {
+            "target": target,
+            "current": metrics.get(metric_key, 0),
+        }
+
+    # ── Cost per engaged local (hero metric) ──
+    cpe = metrics.get("cost_per_engagement", 0)
+
+    return {
+        "_id": "current",
+        "stage": current_stage,
+        "stage_name": stage["name"],
+        "stage_goal": stage["goal"],
+        "stage_duration": stage["duration"],
+        "metrics": metrics,
+        "health": health,
+        "audience_progress": audience_progress,
+        "funnel": funnel,
+        "milestone_roadmap": milestone_roadmap,
+        "success_benchmarks": success_benchmarks,
+        "cost_per_engaged_local": cpe,
+        "last_updated": datetime.now(timezone.utc).isoformat(),
+    }
 
 
-def save_to_mongo(metrics, stage_info):
+def save_to_mongo(metrics):
     client = MongoClient(COSMOS_URI)
     db = client["system_monitor"]
     col = db["marketing_stage"]
 
     existing = col.find_one({"_id": "current"})
-    current_stage = existing["stage"] if existing else 0
+    current_stage = existing["stage"] if existing else 1  # Start at Stage 1
 
-    evaluation = evaluate_stage(metrics, current_stage)
-
-    doc = {
-        "_id": "current",
-        "stage": current_stage,
-        "stage_name": MILESTONES.get(current_stage, {}).get("name", "Unknown"),
-        "stage_objective": MILESTONES.get(current_stage, {}).get("objective", ""),
-        "stage_entered_at": existing.get("stage_entered_at", datetime.now(timezone.utc).isoformat()) if existing else datetime.now(timezone.utc).isoformat(),
-        "metrics": metrics,
-        "milestones": evaluation["progress"],
-        "ready_to_advance": evaluation["ready_to_advance"],
-        "last_updated": datetime.now(timezone.utc).isoformat(),
-    }
-
+    doc = build_stage_document(metrics, current_stage)
     col.replace_one({"_id": "current"}, doc, upsert=True)
 
-    # Also append a daily snapshot for history
+    # Daily history snapshot
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     history_doc = {
-        "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        "date": today_str,
         "stage": current_stage,
         "metrics": metrics,
-        "milestones": evaluation["progress"],
+        "health": doc["health"],
     }
     db["marketing_stage_history"].replace_one(
-        {"date": history_doc["date"]}, history_doc, upsert=True
+        {"date": today_str}, history_doc, upsert=True
     )
 
     client.close()
-    return current_stage, evaluation
+    return current_stage, doc
 
 
 def main():
@@ -274,23 +433,32 @@ def main():
     metrics = collect_metrics()
 
     if args.print:
-        print(json.dumps(metrics, indent=2))
-        evaluation = evaluate_stage(metrics, 0)
-        print("\n--- Stage 0 milestone progress ---")
-        for name, info in evaluation["progress"].items():
-            bar = "=" * int(info["percent"] / 5) + "." * (20 - int(info["percent"] / 5))
-            status = "DONE" if info["met"] else f"{info['percent']}%"
-            print(f"  {name}: [{bar}] {info['current']}/{info['target']} ({status})")
-        if evaluation["ready_to_advance"]:
-            print("\n  >>> Ready to advance to Stage 1!")
+        doc = build_stage_document(metrics, 1)
+        del doc["_id"]
+        print(json.dumps(doc, indent=2, default=str))
+
+        print("\n--- Stage 1: Health Indicators ---")
+        for key, h in doc["health"].items():
+            status_icon = {"excellent": "++", "normal": "ok", "problem": "!!"}[h["status"]]
+            print(f"  [{status_icon}] {h['label']}: {h['unit']}{h['value']} ({h['status']})")
+
+        print("\n--- Stage 2: Audience Progress ---")
+        for key, a in doc["audience_progress"].items():
+            bar = "=" * int(a["percent"] / 5) + "." * (20 - int(a["percent"] / 5))
+            print(f"  {a['label']}: [{bar}] {a['current']}/{a['target']} ({a['percent']}%)")
+
+        print(f"\n  Hero metric — Cost per engaged local: ${doc['cost_per_engaged_local']}")
     else:
-        stage, evaluation = save_to_mongo(metrics, MILESTONES)
-        print(f"Stage {stage}: {MILESTONES[stage]['name']}")
-        for name, info in evaluation["progress"].items():
-            status = "DONE" if info["met"] else f"{info['percent']}%"
-            print(f"  {name}: {info['current']}/{info['target']} ({status})")
-        if evaluation["ready_to_advance"]:
-            print(f"\n  >>> All milestones met — ready to advance to Stage {stage + 1}!")
+        stage, doc = save_to_mongo(metrics)
+        stage_info = STAGES[stage]
+        print(f"Stage {stage}: {stage_info['name']} — {stage_info['goal']}")
+
+        print("\n  Health:")
+        for key, h in doc["health"].items():
+            status_icon = {"excellent": "++", "normal": "ok", "problem": "!!"}[h["status"]]
+            print(f"    [{status_icon}] {h['label']}: {h['unit']}{h['value']}")
+
+        print(f"\n  Cost per engaged local: ${doc['cost_per_engaged_local']}")
         print(f"\nSaved to system_monitor.marketing_stage")
 
 
