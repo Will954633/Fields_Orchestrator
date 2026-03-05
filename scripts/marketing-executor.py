@@ -195,6 +195,48 @@ def execute_insight(action):
     return {"success": True, "note": "Insight acknowledged"}
 
 
+def execute_photo_post(action):
+    """Execute a suggest_photo_post action — select photo, generate caption, post."""
+    details = action.get("details", {})
+    advisor_caption = details.get("caption", "")
+    preferred_theme = details.get("preferred_theme", "")
+    preferred_location = details.get("preferred_location", "")
+
+    try:
+        # Use the photo manager to select + post
+        cmd_args = [VENV_PYTHON, f"{SCRIPTS_DIR}/fb-photo-manager.py", "post"]
+        if advisor_caption:
+            cmd_args.extend(["--caption", advisor_caption])
+
+        result = subprocess.run(
+            cmd_args, capture_output=True, text=True, timeout=90,
+            env={**os.environ, "PATH": os.environ.get("PATH", "")}
+        )
+
+        if result.returncode == 0:
+            post_id = None
+            for line in result.stdout.split("\n"):
+                if "Post ID:" in line:
+                    post_id = line.split("Post ID:")[-1].strip()
+            return {
+                "success": True,
+                "post_id": post_id,
+                "preferred_theme": preferred_theme,
+                "preferred_location": preferred_location,
+                "output": result.stdout[-500:],
+            }
+        else:
+            return {
+                "success": False,
+                "error": result.stderr[-500:],
+                "output": result.stdout[-500:],
+            }
+    except subprocess.TimeoutExpired:
+        return {"success": False, "error": "Photo post timed out after 90s"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 def execute_image_post(action):
     """Execute a suggest_image_post action — generate data card and post."""
     details = action.get("details", {})
@@ -516,8 +558,10 @@ def execute_ad_create(action):
 EXECUTORS = {
     "suggest_article_post": execute_article_post,
     "suggest_page_post": execute_page_post,
+    "suggest_photo_post": execute_photo_post,
     "suggest_pipeline_run": execute_pipeline_run,
     "suggest_insight": execute_insight,
+    "suggest_image_post": execute_image_post,
     "suggest_ad_pause": execute_ad_pause,
     "suggest_ad_edit": execute_ad_edit,
     "suggest_ad_create": execute_ad_create,
