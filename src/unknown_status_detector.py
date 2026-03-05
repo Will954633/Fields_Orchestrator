@@ -46,7 +46,7 @@ class UnknownStatusDetector:
     """
     
     def __init__(self, mongodb_uri: str = "mongodb://localhost:27017/",
-                 for_sale_db: str = "Gold_Coast_Currently_For_Sale",
+                 for_sale_db: str = "Gold_Coast",
                  target_suburbs: Optional[List[str]] = None):
         """
         Initialize the unknown status detector.
@@ -194,14 +194,13 @@ class UnknownStatusDetector:
                     if address:
                         current_for_sale_by_address[address] = prop
 
-            # Get properties moved to sold (Gold_Coast_Recently_Sold, same suburb collections)
-            sold_db = self.client['Gold_Coast_Recently_Sold']
+            # Get properties moved to sold (now in Gold_Coast with listing_status: "sold")
             moved_to_sold_addresses: Set[str] = set()
             for suburb in self.target_suburbs:
                 try:
-                    sold_col = sold_db[suburb]
+                    sold_col = self.for_sale_db[suburb]
                     for prop in sold_col.find(
-                        {'address': {'$in': list(self.pre_phase2_snapshot)}},
+                        {'listing_status': 'sold', 'address': {'$in': list(self.pre_phase2_snapshot)}},
                         {'address': 1, '_id': 0}
                     ):
                         if prop.get('address'):
