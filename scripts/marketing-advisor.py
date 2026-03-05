@@ -354,7 +354,7 @@ def collect_context():
     ctx["institutional_memory"] = past_tests
 
     # 5. Active listing counts per suburb
-    fs_db = client["Gold_Coast_Currently_For_Sale"]
+    fs_db = client["Gold_Coast"]
     suburb_counts = {}
     for col_name in fs_db.list_collection_names():
         if col_name in ("suburb_median_prices", "suburb_statistics",
@@ -377,12 +377,13 @@ def collect_context():
         ctx["suburb_statistics"] = medians
 
     # 7. Recent sold properties (sample from each suburb)
-    sold_db = client["Gold_Coast_Recently_Sold"]
     recent_sold = []
-    for col_name in sold_db.list_collection_names():
+    for col_name in fs_db.list_collection_names():
+        if col_name in ("suburb_median_prices", "suburb_statistics", "change_detection_snapshots"):
+            continue
         try:
-            docs = list(sold_db[col_name].find(
-                {},
+            docs = list(fs_db[col_name].find(
+                {"listing_status": "sold"},
                 {"_id": 0, "address": 1, "price": 1, "suburb": 1,
                  "sold_date": 1, "bedrooms": 1, "property_type": 1}
             ).sort("_id", -1).limit(5))
