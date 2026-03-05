@@ -67,7 +67,7 @@ POLL_INTERVAL     = 3600          # seconds between full checks
 MAX_ATTEMPTS      = 3             # stop retrying an issue after this many attempts
 ATTEMPT_WINDOW_H  = 48            # hours to look back when counting prior attempts
 STALE_SCRAPE_H    = 26            # hours before a suburb's scrape is considered stale
-ACTIVE_DB         = "Gold_Coast_Currently_For_Sale"
+ACTIVE_DB         = "Gold_Coast"
 TARGET_SUBURBS    = ["robina", "varsity_lakes", "burleigh_waters"]
 
 # Coverage thresholds — % of target-suburb properties that must have the field
