@@ -379,7 +379,7 @@ def get_individual_properties():
 
 
 def get_recently_sold_properties():
-    """Pull recently sold properties from Gold_Coast_Recently_Sold."""
+    """Pull recently sold properties from Gold_Coast_Recently_Sold with enrichment data."""
     client = MongoClient(COSMOS_URI)
     db = client["Gold_Coast_Recently_Sold"]
 
@@ -388,10 +388,19 @@ def get_recently_sold_properties():
         try:
             listings = list(db[suburb].find({}, {
                 "address": 1, "street_address": 1, "suburb": 1,
-                "price": 1, "sale_price": 1, "sold_date": 1,
-                "sold_date_text": 1, "property_type": 1,
-                "bedrooms": 1, "bathrooms": 1, "days_on_market": 1,
-                "moved_to_sold_date": 1,
+                "price": 1, "sale_price": 1, "listing_price": 1,
+                "sold_date": 1, "sold_date_text": 1,
+                "property_type": 1, "bedrooms": 1, "bathrooms": 1,
+                "carspaces": 1, "days_on_market": 1, "days_on_domain": 1,
+                "moved_to_sold_date": 1, "listing_url": 1,
+                # Enrichment data for insights
+                "enriched_data.lot_size_sqm": 1,
+                "enriched_data.floor_area_sqm": 1,
+                "enriched_data.transactions": 1,
+                "floor_plan_analysis.internal_floor_area": 1,
+                "valuation_data.confidence": 1,
+                "valuation_data.subject_property.predicted_value": 1,
+                "property_insights": 1,
             }))
             for l in listings:
                 l["_suburb_key"] = suburb
@@ -971,25 +980,159 @@ Follow us — Monday we'll post what sold and for how much."""
     return msg, "saturday_open_list"
 
 
+def _sold_insight(p, all_sold):
+    """Generate a specific insight for one sold property using enriched data."""
+    address = p.get("street_address", "")
+    sale_price = p.get("sale_price", "")
+    sale_val = parse_price_value(str(sale_price)) if sale_price else None
+    listing_price = p.get("listing_price", "")
+    list_val = parse_price_value(str(listing_price)) if listing_price else None
+    days = p.get("days_on_market")
+    bed = p.get("bedrooms")
+    ptype = clean_property_type(p.get("property_type", ""))
+    suburb = p.get("_suburb_display", "")
+    ed = p.get("enriched_data") or {}
+    lot = ed.get("lot_size_sqm")
+    floor = ed.get("floor_area_sqm")
+    if not floor:
+        fp = p.get("floor_plan_analysis", {})
+        floor = fp.get("internal_floor_area", {}).get("value") if fp else None
+    txns = ed.get("transactions", [])
+    pi = p.get("property_insights", {})
+
+    # Priority-ordered insights — we'll pick the best 1-2
+    high = []   # Most compelling
+    medium = []  # Good context
+    low = []     # Fallback
+
+    # Speed of sale (high impact — people notice fast/slow sales)
+    if days is not None:
+        all_days = [s.get("days_on_market") for s in all_sold if s.get("days_on_market")]
+        avg_days = sum(all_days) / len(all_days) if all_days else 25
+        if days <= 5:
+            high.append(f"Sold in just {days} days — fastest confirmed sale this period.")
+        elif days <= 10 and avg_days > 20:
+            high.append(f"Sold in {days} days, well under the {avg_days:.0f}-day average.")
+        elif days >= 45:
+            medium.append(f"Took {days} days — longer campaigns usually mean the price needed adjusting.")
+
+    # Prior transaction history / capital gain (high impact — people love growth stories)
+    if txns and sale_val:
+        prior_sales = [t for t in txns if t.get("price") and t.get("price") < sale_val * 0.95]
+        if prior_sales:
+            last = prior_sales[-1]
+            prior_price = last.get("price", 0)
+            prior_date = str(last.get("date", ""))[:4]
+            if prior_price > 0 and prior_date:
+                gain_pct = (sale_val - prior_price) / prior_price * 100
+                high.append(f"Last sold in {prior_date} for {fmt_price(int(prior_price))} — a {gain_pct:.0f}% gain.")
+
+    # Listing vs sale price gap (medium — interesting but common)
+    if sale_val and list_val and list_val > 0:
+        gap_pct = (sale_val - list_val) / list_val * 100
+        if gap_pct >= 5:
+            medium.append(f"Sold {abs(gap_pct):.0f}% above asking — multiple buyers likely competed.")
+        elif gap_pct <= -5:
+            medium.append(f"Sold {abs(gap_pct):.0f}% below asking — initial price was ahead of the market.")
+
+    # Rarity / percentile (medium — useful for scarcity signal)
+    if pi:
+        beds_pi = pi.get("bedrooms", {})
+        sc = beds_pi.get("suburbComparison", {})
+        pctl = sc.get("percentile")
+        if pctl and pctl >= 85 and bed:
+            medium.append(f"{bed}-bed homes are top {100-pctl}% for size in {suburb} — rare stock.")
+        lot_pi = pi.get("lot_size", {})
+        lsc = lot_pi.get("suburbComparison", {})
+        lpctl = lsc.get("percentile")
+        if lpctl and lpctl >= 85 and lot:
+            medium.append(f"{lot:.0f}sqm lot — larger than {lpctl}% of {suburb} listings.")
+
+    # $/sqm (low priority — useful as fallback only)
+    if lot and sale_val:
+        price_per_sqm_land = sale_val / lot
+        low.append(f"{lot:.0f}sqm lot at {fmt_price(int(price_per_sqm_land))}/sqm of land.")
+    elif floor and sale_val:
+        price_per_sqm_floor = sale_val / floor
+        low.append(f"{floor:.0f}sqm internal at {fmt_price(int(price_per_sqm_floor))}/sqm of living space.")
+
+    # Return best insights: up to 1 high + 1 medium, or fallback to low
+    result = []
+    if high:
+        result.append(high[0])
+    if medium:
+        result.append(medium[0])
+    if not result and low:
+        result.append(low[0])
+    return result
+
+
 def template_sold_results(suburbs, properties=None, **kw):
-    """Monday — what sold, with context and stories."""
+    """Monday — what sold, with context and insight per sale."""
     sold_properties = get_recently_sold_properties()
 
     if not sold_properties:
-        msg = """Sales update — Southern Gold Coast
+        msg = """Sales update — Robina, Burleigh Waters, Varsity Lakes
 
-No confirmed sales in our target suburbs this past week. Settlement timelines and delayed reporting mean some sales take weeks to appear.
+No confirmed sales this past week. Settlement timelines and delayed reporting mean some sales take weeks to appear.
 
-When they land, we'll break them down — what sold, what it sold for, and how long it took.
+When they land, we break them down — what sold, what it sold for, and what it means for prices in your suburb.
 
 Follow us to see them first."""
         return msg, "sold_results"
 
-    sold_properties.sort(key=lambda p: p.get("moved_to_sold_date", p.get("sold_date", "")), reverse=True)
-    recent = sold_properties[:8]
+    # Dedup by address (keep most recent)
+    seen_addrs = {}
+    for p in sold_properties:
+        addr = p.get("street_address", "")
+        if addr not in seen_addrs:
+            seen_addrs[addr] = p
+        else:
+            # Keep the one with more data
+            existing = seen_addrs[addr]
+            if ("valuation_data" in p and "valuation_data" not in existing) or \
+               (p.get("days_on_market") and not existing.get("days_on_market")):
+                seen_addrs[addr] = p
+    sold_deduped = list(seen_addrs.values())
 
-    lines = []
-    stories = []
+    # Validate: filter out suspect prices (>$5M for <5 beds, or no sale price)
+    valid_sold = []
+    for p in sold_deduped:
+        sp = parse_price_value(str(p.get("sale_price", "")))
+        beds = p.get("bedrooms", 0) or 0
+        if sp and sp > 5_000_000 and beds < 5:
+            continue  # Likely corrupt
+        # Must have address and listing URL in correct suburb
+        url = p.get("listing_url", "")
+        suburb_key = p.get("_suburb_key", "")
+        if url and suburb_key:
+            expected = suburb_key.replace("_", "-")
+            addr_in_url = p.get("street_address", "").lower().replace(" ", "-")
+            if expected not in url and addr_in_url not in url:
+                continue  # URL doesn't match suburb or address — cross-contaminated
+        valid_sold.append(p)
+
+    if not valid_sold:
+        msg = """Sales update — Robina, Burleigh Waters, Varsity Lakes
+
+No verified sales to report this week. We only publish confirmed results we can validate.
+
+Follow us — when sales land, we'll break down what they mean for prices in your suburb."""
+        return msg, "sold_results"
+
+    # Sort by sold date (most recent first), fall back to _id
+    valid_sold.sort(key=lambda p: str(p.get("sold_date", p.get("_id", ""))), reverse=True)
+    recent = valid_sold[:6]  # Top 6 for readability
+
+    # Count by suburb for headline
+    suburb_counts = {}
+    for p in recent:
+        s = p.get("_suburb_display", "")
+        suburb_counts[s] = suburb_counts.get(s, 0) + 1
+    suburb_parts = [f"{count} in {name}" for name, count in sorted(suburb_counts.items(), key=lambda x: -x[1])]
+    headline_suburbs = ", ".join(suburb_parts)
+
+    entries = []
     for p in recent:
         address = p.get("street_address", p.get("address", ""))
         suburb = p.get("_suburb_display", "")
@@ -998,39 +1141,32 @@ Follow us to see them first."""
         days = p.get("days_on_market")
         ptype = clean_property_type(p.get("property_type", ""))
         bed = p.get("bedrooms", "?")
-        sold_text = p.get("sold_date_text", "")
 
-        line = f"  {address} ({suburb}) — {bed}-bed {ptype}"
+        # Build the property line
         if sale_val:
-            line += f", sold {fmt_price(sale_val)}"
-        elif sale_price and "undisclosed" not in str(sale_price).lower():
-            line += f", sold {sale_price}"
-        if days:
-            line += f" ({days} days)"
-        lines.append(line)
+            price_str = fmt_price(sale_val)
+        elif sale_price and str(sale_price).strip() and str(sale_price).strip().lower() != "none":
+            price_str = clean_price_display(str(sale_price))
+        else:
+            price_str = "price undisclosed"
+        dom_str = f", {days} days on market" if days else ""
+        header = f"{address} ({suburb}) — {bed}-bed {ptype}, {price_str}{dom_str}"
 
-        # Find stories
-        if days and days <= 5:
-            stories.append(f"{address} sold in just {days} days — strong demand at that price point.")
-        elif days and days >= 60:
-            stories.append(f"{address} took {days} days to sell. Longer campaigns usually mean the market needed time to find the right buyer at the right price.")
-        if sale_val and sale_val >= 5000000:
-            stories.append(f"{address} at {fmt_price(sale_val)} — a premium result that will shift the suburb's price ceiling.")
+        # Generate insights
+        insights = _sold_insight(p, valid_sold)
+
+        if insights:
+            # Pick the best 1-2 insights
+            entry = header + "\n  " + " ".join(insights[:2])
+        else:
+            entry = header
+
+        entries.append(entry)
 
     total = len(recent)
-
-    msg = f"""What sold — {plural(total, 'sale')} confirmed in our target suburbs
-
-""" + "\n".join(lines)
-
-    if stories:
-        msg += "\n\n" + stories[0]  # Just the best story
-
-    msg += """
-
-Every sale is a data point. We track them all so you can see what the market is actually paying — not just what sellers are asking.
-
-Follow us for daily updates."""
+    msg = f"What sold this week — {plural(total, 'confirmed sale')} ({headline_suburbs})\n\n"
+    msg += "\n\n".join(entries)
+    msg += "\n\nFollow us — we track every sale and break down what it means for your suburb."
 
     return msg, "sold_results"
 
