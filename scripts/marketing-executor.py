@@ -26,7 +26,7 @@ load_dotenv("/home/fields/Fields_Orchestrator/.env")
 
 COSMOS_URI = os.environ["COSMOS_CONNECTION_STRING"]
 ADS_TOKEN = os.environ.get("FACEBOOK_ADS_TOKEN", "")
-AD_ACCOUNT_ID = os.environ.get("FACEBOOK_AD_ACCOUNT_ID", "")
+AD_ACCOUNT_ID = os.environ.get("FACEBOOK_AD_ACCOUNT_ID", "").replace("act_", "")
 PAGE_ID = os.environ.get("FACEBOOK_PAGE_ID", "")
 API_VERSION = os.environ.get("FACEBOOK_API_VERSION", "v18.0")
 FB_BASE = f"https://graph.facebook.com/{API_VERSION}"
@@ -502,7 +502,10 @@ def execute_ad_create(action):
     except requests.exceptions.HTTPError as e:
         error_body = ""
         try:
-            error_body = e.response.json().get("error", {}).get("message", "")[:300]
+            err = e.response.json().get("error", {})
+            error_body = err.get("message", "")[:200]
+            if err.get("error_user_msg"):
+                error_body += f" — {err['error_user_msg']}"
         except Exception:
             error_body = str(e)[:300]
         return {"success": False, "error": f"FB API error: {error_body}"}
