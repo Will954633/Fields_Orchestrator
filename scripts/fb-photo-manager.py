@@ -394,7 +394,7 @@ def download_photo(photo_path):
 def get_live_data_context():
     """Pull live listing data for caption generation."""
     client = MongoClient(COSMOS_URI)
-    fs_db = client["Gold_Coast_Currently_For_Sale"]
+    fs_db = client["Gold_Coast"]
 
     context = {}
     target_suburbs = ["robina", "burleigh_waters", "varsity_lakes"]
