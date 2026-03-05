@@ -694,7 +694,7 @@ class TaskExecutor:
         # Initialize all MongoDB components with correct URI
         unknown_detector = UnknownStatusDetector(
             mongodb_uri=mongo_uri,
-            for_sale_db="Gold_Coast_Currently_For_Sale",
+            for_sale_db="Gold_Coast",
             target_suburbs=_target_suburbs_slugs,
         )
         unknown_detector.connect_mongodb()
@@ -771,7 +771,7 @@ class TaskExecutor:
                             base_dir=base_dir,
                             mongo_uri=mongo_uri,
                             database=mongo_db,
-                            for_sale_database="Gold_Coast_Currently_For_Sale",
+                            for_sale_database="Gold_Coast",
                             target_suburbs=_target_suburbs_slugs,
                         )
                         candidate_sets = compute_candidate_sets(
@@ -779,7 +779,7 @@ class TaskExecutor:
                             mongo_uri=mongo_uri,
                             database=mongo_db,
                             pipeline_signature={"version": pipeline_sig.version, "signature": pipeline_sig.signature},
-                            for_sale_database="Gold_Coast_Currently_For_Sale",
+                            for_sale_database="Gold_Coast",
                             target_suburbs=_target_suburbs_slugs,
                         )
                         run_ctx.write_candidate_sets(
