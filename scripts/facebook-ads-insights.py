@@ -179,12 +179,20 @@ def build_snapshot():
     insights_by_id = {}
     for row in ad_insights_raw:
         ad_id = row.get("ad_id")
-        lc = get_action(row.get("actions", []), "link_click")
+        actions = row.get("actions", [])
+        lc = get_action(actions, "link_click")
+        lpv = get_action(actions, "landing_page_view")
+        vc = get_action(actions, "view_content")
+        cost_per = row.get("cost_per_action_type", [])
+        cpvc = get_action(cost_per, "view_content") if cost_per else "0"
         insights_by_id[ad_id] = {
             "impressions": int(row.get("impressions", 0)),
             "reach": int(row.get("reach", 0)),
             "clicks": int(row.get("clicks", 0)),
             "link_clicks": int(lc),
+            "landing_page_views": int(lpv),
+            "view_content": int(vc),
+            "cost_per_view_content": float(cpvc) if cpvc != "0" else None,
             "spend_aud": float(row.get("spend", 0)),
             "ctr": float(row.get("ctr", 0)),
             "cpc": float(row.get("cpc", 0)) if row.get("cpc") else None,
@@ -240,6 +248,8 @@ def build_snapshot():
             "reach": int(last7.get("reach", 0)),
             "clicks": int(last7.get("clicks", 0)),
             "link_clicks": int(link_clicks_7d),
+            "landing_page_views": int(get_action(last7.get("actions", []), "landing_page_view")),
+            "view_content": int(get_action(last7.get("actions", []), "view_content")),
             "spend_aud": float(last7.get("spend", 0)),
             "ctr": float(last7.get("ctr", 0)),
             "cpc": float(last7.get("cpc", 0)) if last7.get("cpc") else None,
