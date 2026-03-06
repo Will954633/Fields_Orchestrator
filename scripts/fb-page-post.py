@@ -42,8 +42,21 @@ SUBURB_DISPLAY = {
     "varsity_lakes": "Varsity Lakes",
 }
 
-HOUSE_FILTER = {"listing_status": "for_sale", "property_type": "House"}
-SOLD_HOUSE_FILTER = {"listing_status": "sold", "property_type": "House"}
+# Use classified_property_type (from GPT vision) when available, fall back to Domain's property_type
+HOUSE_FILTER = {
+    "listing_status": "for_sale",
+    "$or": [
+        {"classified_property_type": "House"},
+        {"classified_property_type": {"$exists": False}, "property_type": "House"},
+    ],
+}
+SOLD_HOUSE_FILTER = {
+    "listing_status": "sold",
+    "$or": [
+        {"classified_property_type": "House"},
+        {"classified_property_type": {"$exists": False}, "property_type": "House"},
+    ],
+}
 
 
 # ── Facebook API ─────────────────────────────────────────────────────────
@@ -476,7 +489,7 @@ Follow us — we track this daily."""
 
 def template_price_comparison(suburbs, **kw):
     """What does $X buy across suburbs — practical guide for buyers."""
-    price_point = random.choice([700000, 800000, 900000, 1000000, 1200000])
+    price_point = random.choice([1000000, 1300000, 1500000, 1800000, 2200000])
     results = []
 
     for key, s in suburbs.items():
@@ -609,10 +622,10 @@ Follow us to track the numbers."""
 def template_buyer_intelligence(suburbs, **kw):
     """Cross-suburb comparison for buyers at a specific price point."""
     brackets = [
-        (500000, 700000, "under $700,000"),
-        (700000, 900000, "$700,000 – $900,000"),
-        (900000, 1200000, "$900,000 – $1,200,000"),
-        (1200000, 1800000, "$1,200,000 – $1,800,000"),
+        (800000, 1300000, "under $1,300,000"),
+        (1300000, 1700000, "$1,300,000 – $1,700,000"),
+        (1700000, 2200000, "$1,700,000 – $2,200,000"),
+        (2200000, 3500000, "$2,200,000 – $3,500,000"),
     ]
 
     random.shuffle(brackets)
