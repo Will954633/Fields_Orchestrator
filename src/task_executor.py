@@ -254,7 +254,7 @@ class TaskExecutor:
         if not os.path.isdir(process.working_dir):
             return False, "", f"Working directory does not exist: {process.working_dir}"
 
-        timeout_seconds = process.estimated_duration_minutes * 60 * 3  # 3x estimated time as timeout
+        timeout_seconds = process.estimated_duration_minutes * 60 * 2  # 2x estimated time as hard timeout
 
         # Open per-step log files if step_paths provided
         stdout_file = None
@@ -345,7 +345,7 @@ class TaskExecutor:
                 
                 # Timeout check
                 if (now - start_time) > timeout_seconds:
-                    error_msg = f"Process timed out after {timeout_seconds/60:.0f} minutes (configured: {process.estimated_duration_minutes * 3} minutes)"
+                    error_msg = f"Process timed out after {timeout_seconds/60:.0f} minutes (limit: {process.estimated_duration_minutes}m estimated × 2)"
                     self.logger.error(error_msg)
                     
                     # Log to debug system
