@@ -856,9 +856,17 @@ class TaskExecutor:
                     steps_failed += 1
                     self.logger.warning(f"Step {process.id} failed after {result.attempts} attempts")
 
+                # Kill leftover Chrome processes after any browser-using step
+                if process.requires_browser:
+                    self.logger.info(f"Post-step cleanup: killing Chrome processes after step {process.id}")
+                    import subprocess as _cleanup_sp
+                    for _pat in ['chromedriver', 'chrome_crashpad', 'chromium', 'chrome']:
+                        _cleanup_sp.run(['pkill', '-9', '-f', _pat],
+                                        capture_output=True, text=True, timeout=10)
+
                 run_summary["counts"]["steps_completed"] = steps_completed
                 run_summary["counts"]["steps_failed"] = steps_failed
-                
+
                 # Check if Phase 2 just completed
                 if process.phase in ("for_sale", "for_sale_target", "for_sale_other") and phase2_started:
                     # Check if next ENABLED process is not for_sale (meaning Phase 2 is done)
