@@ -59,27 +59,39 @@ processes:
   
   - id: 103
     name: "Monitor Sold Properties (Target Market)"
-    description: "Monitors target market suburbs (Robina, Varsity Lakes, Burleigh Waters) for sold properties - 10x faster with ChromeDriver optimization"
+    description: "Search-based sold detection — loads Domain sold-listings search pages (2-3 per suburb) and cross-references listing IDs. Also detects under_contract/under_offer status. 97% fewer page loads than old per-property approach."
     phase: "monitoring_target"
-    command: "python3 monitor_sold_properties.py --suburbs \"Robina:4226\" \"Varsity Lakes:4227\" \"Burleigh Waters:4220\" --max-concurrent 5"
-    working_dir: "/home/fields/Property_Data_Scraping/03_Gold_Coast/Gold_Coast_Wide_Currently_For_Sale_AND_Recently_Sold"
+    command: "python3 sold_backfill/search_based_sold_monitor.py --suburbs \"Robina:4226\" \"Varsity Lakes:4227\" \"Burleigh Waters:4220\""
+    working_dir: "/home/fields/Fields_Orchestrator"
     mongodb_activity: "moderate_write"
     requires_browser: true
-    estimated_duration_minutes: 60  # ~151 properties; 60s page timeout + 7s overhead each = ~25min normal, 170min worst case
+    estimated_duration_minutes: 10  # 3 suburbs × ~3 pages each = ~2 min scraping + DB ops
     cooldown_seconds: 20
     depends_on: [101]
-    
+
   - id: 104
     name: "Monitor Sold Properties (All Suburbs)"
-    description: "Monitors all 52 suburbs for sold properties weekly (Sunday)"
+    description: "Search-based sold detection for all suburbs weekly (Sunday). Also detects under_contract."
     phase: "monitoring_other"
-    command: "python3 monitor_sold_properties.py --all --max-concurrent 5"
-    working_dir: "/home/fields/Property_Data_Scraping/03_Gold_Coast/Gold_Coast_Wide_Currently_For_Sale_AND_Recently_Sold"
+    command: "python3 sold_backfill/search_based_sold_monitor.py --all"
+    working_dir: "/home/fields/Fields_Orchestrator"
     mongodb_activity: "moderate_write"
     requires_browser: true
-    estimated_duration_minutes: 240  # All suburbs, more properties
+    estimated_duration_minutes: 60  # ~52 suburbs × ~3 pages each
     cooldown_seconds: 20
     depends_on: [102]
+
+  - id: 111
+    name: "Sold Listings Backfill (Target Market)"
+    description: "Scrapes Domain.com.au sold-listings search results for last 7 days to catch sales missed by the reactive monitor (step 103). Idempotent — duplicates are skipped."
+    phase: "monitoring_target"
+    command: "python3 scripts/scrape_recent_sold.py --days 7"
+    working_dir: "/home/fields/Fields_Orchestrator"
+    mongodb_activity: "moderate_write"
+    requires_browser: true
+    estimated_duration_minutes: 5
+    cooldown_seconds: 20
+    depends_on: [103]
 
   # ============================================================================
   # PHASE 2.5: IMAGE ARCHIVAL (Domain CDN -> Azure Blob Storage)
@@ -305,9 +317,9 @@ processes:
 
 # Execution order (processes will run in this order based on schedule)
 # Note: Schedule manager determines which processes run based on day of week
-# - Monday-Saturday: 101, 103, 105, 106, 6, 11, 12, 13, 14, 16, 15, 17, 18, 109, 107 (Robina, Varsity Lakes, Burleigh Waters only + coverage check + audit)
-# - Sunday: 102, 104, 101, 103, 105, 106, 6, 11, 12, 13, 14, 16, 15, 17, 18, 109, 107 (all suburbs + target market + coverage check + audit)
-execution_order: [101, 102, 103, 104, 110, 105, 106, 108, 6, 11, 12, 13, 14, 16, 15, 17, 19, 18, 109, 107]
+# - Monday-Saturday: 101, 103, 111, 105, 106, 6, 11, 12, 13, 14, 16, 15, 17, 18, 109, 107 (Robina, Varsity Lakes, Burleigh Waters only + coverage check + audit)
+# - Sunday: 102, 104, 101, 103, 111, 105, 106, 6, 11, 12, 13, 14, 16, 15, 17, 18, 109, 107 (all suburbs + target market + coverage check + audit)
+execution_order: [101, 102, 103, 104, 111, 110, 105, 106, 108, 6, 11, 12, 13, 14, 16, 15, 17, 19, 18, 109, 107]
 
 # Phase descriptions for UI display
 phases:
@@ -324,7 +336,7 @@ phases:
   monitoring_target:
     name: "Sold Monitoring (Target Market)"
     description: "Monitor target market (Robina, Varsity Lakes, Burleigh Waters) for sold properties"
-    steps: [103]
+    steps: [103, 111]
     
   monitoring_other:
     name: "Sold Monitoring (All Suburbs)"
