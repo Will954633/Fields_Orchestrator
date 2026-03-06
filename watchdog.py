@@ -158,7 +158,7 @@ def count_total(db) -> int:
     total = 0
     for suburb in TARGET_SUBURBS:
         try:
-            total += db[suburb].count_documents({}, limit=1000)
+            total += db[suburb].count_documents({"listing_status": "for_sale"}, limit=1000)
         except Exception:
             pass
     return total
