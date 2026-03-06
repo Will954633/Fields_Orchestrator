@@ -110,6 +110,22 @@ processes:
     depends_on: [104]
 
   # ============================================================================
+  # PHASE 2.6: PROPERTY TYPE CLASSIFICATION (GPT Vision)
+  # ============================================================================
+
+  - id: 112
+    name: "Classify Property Type (GPT Vision)"
+    description: "Uses GPT-4o-mini vision to classify each property's dwelling type from photos. Writes classified_property_type field. Catches misclassified Domain listings (e.g. units labelled as houses)."
+    phase: "property_classification"
+    command: "python3 scripts/classify_property_type.py --no-fail"
+    working_dir: "/home/fields/Fields_Orchestrator"
+    mongodb_activity: "moderate_write"
+    requires_browser: false
+    estimated_duration_minutes: 10  # ~112 properties × ~1s each (only unclassified)
+    cooldown_seconds: 20
+    depends_on: [110]  # Run after images are downloaded
+
+  # ============================================================================
   # PHASE 3: VISUAL ANALYSIS (Target Market Only - Ollama)
   # ============================================================================
   
@@ -317,9 +333,9 @@ processes:
 
 # Execution order (processes will run in this order based on schedule)
 # Note: Schedule manager determines which processes run based on day of week
-# - Monday-Saturday: 101, 103, 111, 105, 106, 6, 11, 12, 13, 14, 16, 15, 17, 18, 109, 107 (Robina, Varsity Lakes, Burleigh Waters only + coverage check + audit)
-# - Sunday: 102, 104, 101, 103, 111, 105, 106, 6, 11, 12, 13, 14, 16, 15, 17, 18, 109, 107 (all suburbs + target market + coverage check + audit)
-execution_order: [101, 102, 103, 104, 111, 110, 105, 106, 108, 6, 11, 12, 13, 14, 16, 15, 17, 19, 18, 109, 107]
+# - Monday-Saturday: 101, 103, 111, 112, 105, 106, 6, 11, 12, 13, 14, 16, 15, 17, 18, 109, 107 (Robina, Varsity Lakes, Burleigh Waters only + coverage check + audit)
+# - Sunday: 102, 104, 101, 103, 111, 112, 105, 106, 6, 11, 12, 13, 14, 16, 15, 17, 18, 109, 107 (all suburbs + target market + coverage check + audit)
+execution_order: [101, 102, 103, 104, 111, 110, 112, 105, 106, 108, 6, 11, 12, 13, 14, 16, 15, 17, 19, 18, 109, 107]
 
 # Phase descriptions for UI display
 phases:
@@ -343,6 +359,11 @@ phases:
     description: "Monitor all suburbs for sold properties (Sunday)"
     steps: [104]
     
+  property_classification:
+    name: "Property Type Classification"
+    description: "Classify dwelling type from photos using GPT vision"
+    steps: [112]
+
   enrichment_target:
     name: "Visual Analysis (Target Market)"
     description: "Analyze photos and floor plans with OpenAI GPT Vision for Robina, Varsity Lakes, Burleigh Waters"
