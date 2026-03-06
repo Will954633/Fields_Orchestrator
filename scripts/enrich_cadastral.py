@@ -306,7 +306,26 @@ def process_suburb(db, suburb, stats_coll, medians_coll, limit=None, dry_run=Fal
     if limit:
         cursor = cursor.limit(limit)
 
-    for doc in cursor:
+    while True:
+        try:
+            doc = next(cursor)
+        except StopIteration:
+            break
+        except Exception as cursor_err:
+            # Handle 429 during cursor batch fetch
+            if '429' in str(cursor_err) or '16500' in str(cursor_err):
+                print(f"    Cursor 429 at {processed} docs, sleeping 10s...", flush=True)
+                time.sleep(10)
+                # Re-create cursor skipping already-processed docs
+                cursor = coll.find(query).batch_size(batch_size).skip(processed)
+                if limit:
+                    remaining = limit - processed
+                    if remaining <= 0:
+                        break
+                    cursor = cursor.limit(remaining)
+                continue
+            raise
+
         try:
             update = {}
 
