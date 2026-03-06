@@ -133,14 +133,46 @@ def fetch_domain_count(driver: webdriver.Chrome, suburb: Dict) -> Optional[int]:
 
 
 def get_db_count(db, suburb: Dict) -> int:
-    """Count documents in the suburb's collection in Gold_Coast_Currently_For_Sale."""
+    """Count active for-sale documents in the suburb's collection."""
     collection_name = suburb['name'].lower().replace(' ', '_').replace('-', '_')
     try:
         collection = db[collection_name]
-        return collection.count_documents({})
+        return collection.count_documents({"listing_status": "for_sale"})
     except Exception as e:
         print(f"  WARNING: Failed to count DB docs for {suburb['name']}: {e}")
         return -1
+
+
+def get_db_sold_count(db, suburb: Dict, days: int = 30) -> int:
+    """Count sold documents in the last N days."""
+    collection_name = suburb['name'].lower().replace(' ', '_').replace('-', '_')
+    cutoff = (datetime.now() - __import__('datetime').timedelta(days=days)).strftime('%Y-%m-%d')
+    try:
+        collection = db[collection_name]
+        return collection.count_documents({
+            "listing_status": "sold",
+            "sold_date": {"$gte": cutoff}
+        })
+    except Exception:
+        return -1
+
+
+def fetch_domain_sold_count(driver: webdriver.Chrome, suburb: Dict) -> Optional[int]:
+    """Fetch the sold property count from Domain for a given suburb (last 30 days approx)."""
+    slug = suburb.get('slug', '')
+    url = f"https://www.domain.com.au/sold-listings/{slug}/?ssubs=0"
+    try:
+        driver.set_page_load_timeout(30)
+        driver.get(url)
+        time.sleep(PAGE_LOAD_WAIT)
+        html = driver.page_source
+        # Domain sold page H1: "5571 Properties sold in Robina, QLD, 4226"
+        match = re.search(r'(\d+)\s+Propert\w+\s*sold\s+in', html, re.IGNORECASE)
+        if match:
+            return int(match.group(1))
+        return None
+    except Exception:
+        return None
 
 
 def write_log(lines: List[str]):
@@ -258,6 +290,17 @@ Examples:
             else:
                 missing = domain_count - db_count if domain_count and db_count >= 0 else '?'
                 print(f"  ERROR  Domain={domain_count}  DB={db_count}  (missing {missing} properties)")
+
+        # --- SOLD COVERAGE CHECK ---
+        print(f"\n{'=' * 70}")
+        print(f"SOLD COVERAGE CHECK (last 30 days)")
+        print(f"{'=' * 70}\n")
+        sold_results = []
+        for suburb in suburbs:
+            name = suburb.get('name', 'Unknown')
+            db_sold = get_db_sold_count(db, suburb, days=30)
+            print(f"  {name:30s}  DB sold (30d): {db_sold}")
+            sold_results.append({'suburb': name, 'db_sold_30d': db_sold})
 
         # Write results to system_monitor.data_integrity for OPS dashboard
         try:
