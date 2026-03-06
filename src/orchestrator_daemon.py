@@ -342,80 +342,50 @@ class OrchestratorDaemon:
             self.logger.info("ENHANCED ZOMBIE CLEANUP: Chrome + ChromeDriver")
             self.logger.info("=" * 60)
             
-            # STEP 1: Scan for ChromeDriver processes FIRST
-            self.logger.info("Step 1: Scanning for ChromeDriver processes...")
+            # STEP 1: Count all Chrome-related processes (covers snap, apt, chromedriver, crashpad)
+            self.logger.info("Step 1: Scanning for Chrome/Chromium processes...")
+            check_cmd = "ps aux | grep -Ei 'chrom(e|ium|edriver|e_crashpad)' | grep -v grep"
             result = subprocess.run(
-                ['ps', 'aux'],
-                capture_output=True,
-                text=True,
-                timeout=10
+                check_cmd, shell=True,
+                capture_output=True, text=True, timeout=10
             )
-            
-            zombie_count = 0
+
+            lines = [l for l in result.stdout.strip().split('\n') if l.strip()]
+            zombie_count = len(lines)
             killed_count = 0
             ue_count = 0
             ue_pids = []
-            
-            for line in result.stdout.split('\n'):
-                if 'chromedriver' in line.lower() and 'grep' not in line:
-                    zombie_count += 1
-                    parts = line.split()
-                    
-                    if len(parts) >= 8:
-                        # Check STAT column for UE state
-                        stat = parts[7] if len(parts) > 7 else ''
-                        pid = parts[1]
-                        
-                        if 'U' in stat or 'D' in stat:
-                            # Unkillable process
-                            ue_count += 1
-                            ue_pids.append(pid)
-                            self.logger.warning(f"⚠️ ChromeDriver PID {pid} in UNKILLABLE state: {stat}")
-                        else:
-                            # Try to kill normal process
-                            try:
-                                subprocess.run(['kill', '-9', pid], check=False, timeout=5)
-                                killed_count += 1
-                            except subprocess.TimeoutExpired:
-                                pass
-            
-            # STEP 2: Only kill Chrome if we found zombie ChromeDrivers
+
+            for line in lines:
+                parts = line.split()
+                if len(parts) >= 8:
+                    stat = parts[7]
+                    pid = parts[1]
+                    if 'D' in stat:
+                        ue_count += 1
+                        ue_pids.append(pid)
+                        self.logger.warning(f"ChromeDriver PID {pid} in uninterruptible state: {stat}")
+
+            # STEP 2: Kill all Chrome-related processes with pkill -f (matches command line)
             if zombie_count > 0:
-                self.logger.info("Step 2: Killing Chrome browsers (zombies detected)...")
-                chrome_result = subprocess.run(
-                    ['killall', '-9', 'Google Chrome'],
-                    capture_output=True,
-                    text=True,
-                    timeout=10
-                )
-                if chrome_result.returncode == 0:
-                    self.logger.info("✓ Chrome browsers terminated")
-                time.sleep(2)
+                self.logger.info(f"Found {zombie_count} Chrome processes — killing...")
+                for pattern in ['chromedriver', 'chrome_crashpad', 'chromium', 'chrome']:
+                    subprocess.run(
+                        ['pkill', '-9', '-f', pattern],
+                        capture_output=True, text=True, timeout=10
+                    )
+                time.sleep(3)
+                killed_count = zombie_count  # approximate
             else:
-                self.logger.info("Step 2: No zombies found - Chrome left running")
-            
-            # STEP 3: Use killall as backup for ChromeDrivers
-            if zombie_count > 0:
-                self.logger.info("Step 3: Running killall for remaining ChromeDrivers...")
-                subprocess.run(
-                    ['killall', '-9', 'chromedriver'],
-                    capture_output=True,
-                    text=True,
-                    timeout=10
-                )
-                time.sleep(2)
-            
-            # STEP 4: Verify cleanup
-            self.logger.info("Step 4: Verifying cleanup...")
+                self.logger.info("No Chrome processes found — clean")
+
+            # STEP 3: Verify cleanup
+            self.logger.info("Step 3: Verifying cleanup...")
             verify_result = subprocess.run(
-                ['ps', 'aux'],
-                capture_output=True,
-                text=True,
-                timeout=10
+                check_cmd, shell=True,
+                capture_output=True, text=True, timeout=10
             )
-            
-            remaining = sum(1 for line in verify_result.stdout.split('\n') 
-                          if 'chromedriver' in line.lower() and 'grep' not in line)
+            remaining = len([l for l in verify_result.stdout.strip().split('\n') if l.strip()])
             
             # Log results
             self.logger.info("=" * 60)
