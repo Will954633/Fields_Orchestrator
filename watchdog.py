@@ -437,6 +437,77 @@ def check_recent_process_failures(client) -> list:
     return issues
 
 
+def check_memory_pressure() -> list:
+    """Check system memory and kill Chrome if usage exceeds 85% of total RAM."""
+    issues = []
+    try:
+        with open("/proc/meminfo") as f:
+            meminfo = {}
+            for line in f:
+                parts = line.split()
+                meminfo[parts[0].rstrip(":")] = int(parts[1])
+
+        total_kb = meminfo.get("MemTotal", 0)
+        avail_kb = meminfo.get("MemAvailable", 0)
+        if total_kb == 0:
+            return issues
+
+        used_pct = (1 - avail_kb / total_kb) * 100
+
+        if used_pct > 85:
+            # Find Chrome processes and their total RSS
+            result = subprocess.run(
+                "ps aux | grep -Ei 'chrom(e|ium|edriver)' | grep -v grep",
+                shell=True, capture_output=True, text=True, timeout=10
+            )
+            chrome_lines = [l for l in result.stdout.strip().split('\n') if l.strip()]
+
+            if chrome_lines:
+                # Sum RSS (column 6 in ps aux, in KB)
+                chrome_rss_kb = 0
+                for line in chrome_lines:
+                    parts = line.split()
+                    if len(parts) >= 6:
+                        try:
+                            chrome_rss_kb += int(parts[5])
+                        except ValueError:
+                            pass
+
+                chrome_rss_mb = chrome_rss_kb // 1024
+                log.warning(
+                    f"MEMORY PRESSURE: {used_pct:.0f}% used, "
+                    f"{len(chrome_lines)} Chrome processes using {chrome_rss_mb}MB — killing them"
+                )
+
+                for pattern in ['chromedriver', 'chrome_crashpad', 'chromium', 'chrome']:
+                    subprocess.run(['pkill', '-9', '-f', pattern],
+                                   capture_output=True, text=True, timeout=10)
+
+                issues.append({
+                    "type": "memory_pressure",
+                    "step_id": None,
+                    "step_name": "System Memory",
+                    "failure_class": "infrastructure",
+                    "cause": (
+                        f"Memory at {used_pct:.0f}% — killed {len(chrome_lines)} Chrome "
+                        f"processes ({chrome_rss_mb}MB RSS) to prevent OOM"
+                    ),
+                    "root_step": None,
+                    "metric": None,
+                    "auto_fixable": False,
+                    "evidence": {
+                        "memory_used_pct": round(used_pct, 1),
+                        "chrome_count": len(chrome_lines),
+                        "chrome_rss_mb": chrome_rss_mb,
+                    },
+                })
+            else:
+                log.warning(f"MEMORY PRESSURE: {used_pct:.0f}% used but no Chrome processes found")
+    except Exception as e:
+        log.warning(f"Memory pressure check error: {e}")
+    return issues
+
+
 def check_api_health(client) -> list:
     """Check recent API health records. Flag any endpoint unhealthy in last 2 checks."""
     issues = []
@@ -600,6 +671,9 @@ def run_check(client, dry_run: bool = False) -> dict:
         }
 
     # --- Run all health checks ---
+    log.info("0. Memory pressure...")
+    memory_issues   = check_memory_pressure()
+
     log.info("1. Scraper health...")
     scraper_issues  = check_scraper_health(client)
 
@@ -615,7 +689,7 @@ def run_check(client, dry_run: bool = False) -> dict:
     log.info("5. API health...")
     api_issues      = check_api_health(client)
 
-    all_issues = scraper_issues + coverage_issues + collection_issues + failure_issues + api_issues
+    all_issues = memory_issues + scraper_issues + coverage_issues + collection_issues + failure_issues + api_issues
 
     # Deduplicate: if the same step_id appears in multiple categories, keep the one
     # from process_failures (has most context) and skip the coverage issue for it.
