@@ -19,10 +19,12 @@ import sys
 import re
 import random
 import argparse
+import time
 import requests
 from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
 from pymongo import MongoClient
+from pymongo.errors import OperationFailure
 
 load_dotenv("/home/fields/Fields_Orchestrator/.env")
 
@@ -32,18 +34,16 @@ API_VERSION = os.environ.get("FACEBOOK_API_VERSION", "v18.0")
 BASE = f"https://graph.facebook.com/{API_VERSION}"
 COSMOS_URI = os.environ["COSMOS_CONNECTION_STRING"]
 
-TARGET_SUBURBS = ["robina", "burleigh_waters", "varsity_lakes", "carrara", "worongary", "merrimac"]
-CORE_SUBURBS = ["robina", "burleigh_waters", "varsity_lakes"]
+TARGET_SUBURBS = ["robina", "burleigh_waters", "varsity_lakes"]
+CORE_SUBURBS = TARGET_SUBURBS
 SUBURB_DISPLAY = {
     "robina": "Robina",
     "burleigh_waters": "Burleigh Waters",
     "varsity_lakes": "Varsity Lakes",
-    "carrara": "Carrara",
-    "worongary": "Worongary",
-    "merrimac": "Merrimac",
-    "mudgeeraba": "Mudgeeraba",
-    "reedy_creek": "Reedy Creek",
 }
+
+HOUSE_FILTER = {"listing_status": "for_sale", "property_type": "House"}
+SOLD_HOUSE_FILTER = {"listing_status": "sold", "property_type": "House"}
 
 
 # ── Facebook API ─────────────────────────────────────────────────────────
@@ -145,12 +145,15 @@ def clean_price_display(price_str):
         return "Contact agent"
     # Strip "FOR SALE" / "FOR SALE -" prefix
     p = re.sub(r'(?i)^for\s+sale\s*[-–—]?\s*', '', p)
+    # Strip property type suffixes that leak into price text
+    p = re.sub(r'\s*[-–—]\s*(?:Retirement|House|Unit|Townhouse|Duplex)\s*$', '', p, flags=re.IGNORECASE)
     # Normalize whitespace around $
     p = re.sub(r'\$\s+', '$', p)
     # Shorten "Offers Over" / "Offers above" to just the price or short prefix
     p = re.sub(r'(?i)offers?\s+over\s+', '', p)
     p = re.sub(r'(?i)offers?\s+above\s+', '', p)
     p = re.sub(r'(?i)offers?\s+from\s+', 'From ', p)
+    p = re.sub(r'(?i)offers?\s+(\$)', r'\1', p)
     p = re.sub(r'(?i)price\s+guide\s*-?\s*', '', p)
     p = re.sub(r'(?i)PRICE GUIDE\s*', '', p)
     p = re.sub(r'(?i)expressions?\s+of\s+interest.*', 'EOI', p)
@@ -160,6 +163,8 @@ def clean_price_display(price_str):
     p = re.sub(r'(?i)submit\s+all\s+offers.*', 'EOI', p)
     p = re.sub(r'(?i)by\s+negotiation', 'By negotiation', p)
     p = re.sub(r'(?i)for\s+sale\s*$', 'Contact agent', p)
+    # Strip trailing "for" / "from" fragments
+    p = re.sub(r'\s+(?:for|from)\s*$', '', p, flags=re.IGNORECASE)
     p = re.sub(r'(?i)open\s+to\s+offers?\s*', '', p)
     # Normalize "$975 000" → "$975,000" (space instead of comma)
     p = re.sub(r'\$(\d{1,3})\s(\d{3})\b', lambda m: f"${m.group(1)},{m.group(2)}", p)
@@ -174,6 +179,10 @@ def clean_price_display(price_str):
     p = re.sub(r'\s*/?\s*EOI\s*$', '', p)
     p = re.sub(r'\s+plus\s*$', '+', p, flags=re.IGNORECASE)
     p = re.sub(r'\s*Above\s*$', '', p)
+    # Strip trailing .00 from prices like $2,259,000.00
+    p = re.sub(r'(\$[\d,]+)\.00\b', r'\1', p)
+    # Fix truncated prices like $1,099,00 (missing digit) → $1,099,000
+    p = re.sub(r'(\$[\d,]+),(\d{2})\b(?!\d)', lambda m: m.group(1) + ',' + m.group(2) + '0', p)
     p = p.strip().rstrip('+').strip()
     if not p or p.lower() == "contact agent" or p.lower() == "auction":
         return p.title() if p else "Contact agent"
@@ -304,19 +313,45 @@ def get_aest_now():
     return datetime.now(timezone.utc) + timedelta(hours=10)
 
 
+def query_with_retry(collection, filter_doc, projection, max_retries=3):
+    """Query CosmosDB with retry on 429 rate limit errors."""
+    for attempt in range(max_retries):
+        try:
+            return list(collection.find(filter_doc, projection))
+        except OperationFailure as e:
+            if e.code == 16500 and attempt < max_retries - 1:
+                wait = (attempt + 1) * 0.5
+                time.sleep(wait)
+                continue
+            raise
+
+
+def normalise_address(prop):
+    """Return a clean street address — no suburb/state/postcode, title-cased."""
+    addr = prop.get("street_address") or prop.get("address") or ""
+    # Strip trailing ", Suburb, QLD 4226" style suffixes
+    addr = re.sub(r',\s*(?:Robina|Burleigh Waters|Varsity Lakes)\b.*$', '', addr, flags=re.IGNORECASE)
+    # Strip standalone QLD / postcode fragments
+    addr = re.sub(r',?\s*QLD\s*\d{4}\s*$', '', addr, flags=re.IGNORECASE)
+    # Title-case if ALL CAPS
+    if addr == addr.upper() and len(addr) > 3:
+        addr = addr.title()
+    return addr.strip()
+
+
 # ── Data collection ──────────────────────────────────────────────────────
 
 def get_suburb_data():
-    """Pull aggregate listing data per suburb for aggregate templates."""
+    """Pull aggregate listing data per suburb — houses only."""
     client = MongoClient(COSMOS_URI)
     db = client["Gold_Coast"]
 
     suburbs = {}
     for suburb in TARGET_SUBURBS:
-        listings = list(db[suburb].find({}, {
+        listings = query_with_retry(db[suburb], HOUSE_FILTER, {
             "price": 1, "bedrooms": 1, "bathrooms": 1,
             "property_type": 1, "address": 1, "suburb": 1,
-        }))
+        })
         if not listings:
             continue
 
@@ -325,11 +360,6 @@ def get_suburb_data():
             val = parse_price_value(l.get("price", ""))
             if val:
                 prices.append(val)
-
-        types = {}
-        for l in listings:
-            pt = l.get("property_type", "Unknown")
-            types[pt] = types.get(pt, 0) + 1
 
         beds = {}
         for l in listings:
@@ -340,11 +370,11 @@ def get_suburb_data():
         suburbs[suburb] = {
             "display_name": SUBURB_DISPLAY.get(suburb, suburb.replace("_", " ").title()),
             "total": len(listings),
+            "priced_count": len(prices),
             "prices": sorted(prices),
             "median_price": sorted(prices)[len(prices) // 2] if prices else None,
             "min_price": min(prices) if prices else None,
             "max_price": max(prices) if prices else None,
-            "types": types,
             "beds": beds,
         }
 
@@ -353,13 +383,13 @@ def get_suburb_data():
 
 
 def get_individual_properties():
-    """Pull individual property records with full detail for property-level templates."""
+    """Pull individual house listings from target suburbs."""
     client = MongoClient(COSMOS_URI)
     db = client["Gold_Coast"]
 
     properties = []
     for suburb in CORE_SUBURBS:
-        listings = list(db[suburb].find({}, {
+        listings = query_with_retry(db[suburb], HOUSE_FILTER, {
             "address": 1, "street_address": 1, "suburb": 1,
             "price": 1, "property_type": 1, "bedrooms": 1,
             "bathrooms": 1, "carspaces": 1, "inspection_times": 1,
@@ -368,7 +398,7 @@ def get_individual_properties():
             "first_listed_timestamp": 1,
             "valuation_data.subject_property.valuation_price": 1,
             "valuation_data.summary.value_gap_pct": 1,
-        }))
+        })
         for l in listings:
             l["_suburb_key"] = suburb
             l["_suburb_display"] = SUBURB_DISPLAY.get(suburb, suburb.replace("_", " ").title())
@@ -379,21 +409,20 @@ def get_individual_properties():
 
 
 def get_recently_sold_properties():
-    """Pull recently sold properties from Gold_Coast with listing_status: sold."""
+    """Pull recently sold houses from target suburbs."""
     client = MongoClient(COSMOS_URI)
     db = client["Gold_Coast"]
 
     sold = []
     for suburb in CORE_SUBURBS:
         try:
-            listings = list(db[suburb].find({"listing_status": "sold"}, {
+            listings = query_with_retry(db[suburb], SOLD_HOUSE_FILTER, {
                 "address": 1, "street_address": 1, "suburb": 1,
                 "price": 1, "sale_price": 1, "listing_price": 1,
                 "sold_date": 1, "sold_date_text": 1,
                 "property_type": 1, "bedrooms": 1, "bathrooms": 1,
                 "carspaces": 1, "days_on_market": 1, "days_on_domain": 1,
                 "moved_to_sold_date": 1, "listing_url": 1,
-                # Enrichment data for insights
                 "enriched_data.lot_size_sqm": 1,
                 "enriched_data.floor_area_sqm": 1,
                 "enriched_data.transactions": 1,
@@ -401,7 +430,7 @@ def get_recently_sold_properties():
                 "valuation_data.confidence": 1,
                 "valuation_data.subject_property.predicted_value": 1,
                 "property_insights": 1,
-            }))
+            })
             for l in listings:
                 l["_suburb_key"] = suburb
                 l["_suburb_display"] = SUBURB_DISPLAY.get(suburb, suburb.replace("_", " ").title())
@@ -417,27 +446,27 @@ def get_recently_sold_properties():
 
 def template_suburb_snapshot(suburbs, **kw):
     """Single suburb market snapshot — what's the state of play."""
-    candidates = [s for s in suburbs if suburbs[s]["total"] >= 10]
+    candidates = [s for s in suburbs if suburbs[s]["total"] >= 5]
     if not candidates:
         return None, None
     suburb_key = random.choice(candidates)
     s = suburbs[suburb_key]
     name = s["display_name"]
 
-    type_lines = []
-    for pt, count in sorted(s["types"].items(), key=lambda x: -x[1]):
-        pct = round(count / s["total"] * 100)
-        pt_clean = clean_property_type(pt)
-        type_lines.append(f"  {pluralize_type(pt_clean)}: {count} ({pct}%)")
+    # Bedroom breakdown instead of property type (all houses now)
+    bed_lines = []
+    for bed_count in sorted(s["beds"].keys(), key=lambda x: int(x)):
+        count = s["beds"][bed_count]
+        bed_lines.append(f"  {bed_count}-bed: {count}")
 
-    type_section = "\n".join(type_lines[:4])
+    bed_section = "\n".join(bed_lines) if bed_lines else ""
 
-    msg = f"""{name} right now — {s['total']} properties for sale
+    msg = f"""{name} right now — {s['total']} houses for sale
 
 Price range: {fmt_price(s['min_price'])} to {fmt_price(s['max_price'])}
 Median asking price: {fmt_price(s['median_price'])}
 
-{type_section}
+{bed_section}
 
 If you're a buyer, this tells you how much competition you're facing. If you're a seller, this is who you're competing against.
 
@@ -467,13 +496,13 @@ def template_price_comparison(suburbs, **kw):
         return None, None
 
     results.sort(key=lambda x: -x["count"])
-    lines = [f"  {r['name']}: {plural(r['count'], 'option')} (of {r['total']} total)" for r in results[:4]]
+    lines = [f"  {r['name']}: {plural(r['count'], 'house', 'houses')} (of {r['total']} total)" for r in results[:3]]
 
     most = results[0]
 
     msg = f"""Got {fmt_price(price_point)}? Here's where you have the most options.
 
-Across our target suburbs, here's how many properties are listed within 15% of that budget:
+Houses listed within 15% of that budget:
 
 """ + "\n".join(lines) + f"""
 
@@ -493,11 +522,11 @@ def template_listing_count(suburbs, **kw):
     most = by_count[0][1]
     least = by_count[-1][1] if by_count[-1][1]["total"] > 0 else by_count[-2][1]
 
-    msg = f"""{total} properties for sale right now across the southern Gold Coast.
+    msg = f"""{total} houses for sale right now across Robina, Burleigh Waters and Varsity Lakes.
 
 """ + "\n".join(lines) + f"""
 
-Buyers have the most choice in {most['display_name']} ({most['total']} listings). {least['display_name']} is tighter with just {least['total']}.
+Buyers have the most choice in {most['display_name']} ({most['total']} houses). {least['display_name']} is tighter with just {least['total']}.
 
 More listings = more negotiating power for buyers. Fewer listings = sellers hold the cards. Follow us to see how this shifts week to week."""
     return msg, "listing_count"
@@ -505,7 +534,7 @@ More listings = more negotiating power for buyers. Fewer listings = sellers hold
 
 def template_bedroom_breakdown(suburbs, **kw):
     """What bedroom counts are available — helps buyers gauge their options."""
-    candidates = [s for s in suburbs if suburbs[s]["total"] >= 10 and suburbs[s]["beds"]]
+    candidates = [s for s in suburbs if suburbs[s]["total"] >= 5 and suburbs[s]["beds"]]
     if not candidates:
         return None, None
     suburb_key = random.choice(candidates)
@@ -517,7 +546,7 @@ def template_bedroom_breakdown(suburbs, **kw):
     for bed_count in sorted(s["beds"].keys(), key=lambda x: int(x)):
         count = s["beds"][bed_count]
         pct = round(count / total * 100)
-        lines.append(f"  {bed_count}-bed: {plural(count, 'listing')} ({pct}%)")
+        lines.append(f"  {bed_count}-bed: {plural(count, 'house', 'houses')} ({pct}%)")
 
     most_common = max(s["beds"].items(), key=lambda x: x[1])
     least_common = min(
@@ -527,11 +556,11 @@ def template_bedroom_breakdown(suburbs, **kw):
 
     msg = f"""Looking for a specific size in {name}? Here's what's available.
 
-{s['total']} properties for sale, broken down by bedrooms:
+{s['total']} houses for sale, broken down by bedrooms:
 
 """ + "\n".join(lines) + f"""
 
-{most_common[0]}-bedroom properties make up {round(most_common[1] / total * 100)}% of the market. If you need a {least_common[0]}-bed, {"there's" if least_common[1] == 1 else "there are"} only {least_common[1]} — worth moving quickly when one comes up.
+{most_common[0]}-bedroom houses make up {round(most_common[1] / total * 100)}% of the market. If you need a {least_common[0]}-bed, {"there's" if least_common[1] == 1 else "there are"} only {least_common[1]} — worth moving quickly when one comes up.
 
 Follow us — we flag new listings the week they appear."""
     return msg, "bedroom_breakdown"
@@ -539,7 +568,7 @@ Follow us — we flag new listings the week they appear."""
 
 def template_seller_insight(suburbs, **kw):
     """Actionable insight for sellers — your competition and what it means."""
-    candidates = [s for s in suburbs if suburbs[s]["total"] >= 10]
+    candidates = [s for s in suburbs if suburbs[s]["priced_count"] >= 5]
     if not candidates:
         return None, None
     suburb_key = random.choice(candidates)
@@ -547,24 +576,30 @@ def template_seller_insight(suburbs, **kw):
     name = s["display_name"]
 
     prices = s["prices"]
-    if len(prices) < 5:
-        return None, None
-
     median = s["median_price"]
     below_median = len([p for p in prices if p <= median])
     above_median = len([p for p in prices if p > median])
-
-    types = s["types"]
-    dominant_type = max(types.items(), key=lambda x: x[1]) if types else ("properties", 0)
-    dominant_pct = round(dominant_type[1] / s["total"] * 100) if s["total"] > 0 else 0
+    unpriced = s["total"] - s["priced_count"]
 
     msg = f"""Selling in {name}? Here's your competition.
 
-Right now there are {s['total']} properties for sale in {name}. {below_median} are priced at or below {fmt_price(median)}, and {above_median} are above it.
+Right now there are {s['total']} houses for sale in {name}. Of the {s['priced_count']} with a listed price, {below_median} are at or below {fmt_price(median)} and {above_median} are above it."""
 
-{clean_property_type(dominant_type[0]).title()}s make up {dominant_pct}% of all listings. If you're selling a different type, that's either an advantage (less direct competition) or a challenge (fewer comparable sales).
+    if unpriced > 0:
+        msg += f" ({unpriced} more are listed without a public price.)"
 
-The question for every seller: at your price point, how many other properties is a buyer choosing between? The answer changes every week.
+    # Bedroom split insight
+    beds = s["beds"]
+    if beds:
+        most_bed = max(beds.items(), key=lambda x: x[1])
+        most_pct = round(most_bed[1] / s["total"] * 100)
+        msg += f"""
+
+{most_bed[0]}-bedroom houses make up {most_pct}% of listings. If yours is a different size, you may have less direct competition — but also fewer recent sales to benchmark against."""
+
+    msg += """
+
+The question for every seller: at your price point, how many other houses is a buyer choosing between? The answer changes every week.
 
 Follow us to track the numbers."""
 
@@ -598,13 +633,13 @@ def template_buyer_intelligence(suburbs, **kw):
         return None, None
 
     results.sort(key=lambda x: -x["count"])
-    lines = [f"  {r['name']}: {plural(r['count'], 'property', 'properties')} ({fmt_price(r['min'])} – {fmt_price(r['max'])})" for r in results[:4]]
+    lines = [f"  {r['name']}: {plural(r['count'], 'house', 'houses')} ({fmt_price(r['min'])} – {fmt_price(r['max'])})" for r in results[:3]]
 
     most = results[0]
 
     msg = f"""Buying {label}? Here's where to look.
 
-Active listings in this price range right now:
+Houses in this price range right now:
 
 """ + "\n".join(lines) + f"""
 
@@ -619,13 +654,12 @@ def template_weekly_wrap(suburbs, **kw):
     """Sunday evening — the week's market summary."""
     total = sum(s["total"] for s in suburbs.values())
 
-    # Only show suburbs with meaningful data (> 2 listings)
     suburb_lines = []
     for key in sorted(suburbs.keys(), key=lambda k: -suburbs[k]["total"]):
         s = suburbs[key]
-        if s["total"] <= 2:
+        if s["total"] == 0:
             continue
-        line = f"  {s['display_name']}: {s['total']} listings"
+        line = f"  {s['display_name']}: {s['total']} houses"
         if s["median_price"] and s["median_price"] >= 200000:
             line += f", median {fmt_price(s['median_price'])}"
         suburb_lines.append(line)
@@ -636,13 +670,13 @@ def template_weekly_wrap(suburbs, **kw):
 
     msg = f"""Southern Gold Coast — This week's market in numbers
 
-{total} properties for sale across the suburbs we track.
+{total} houses for sale across Robina, Burleigh Waters and Varsity Lakes.
 
-""" + "\n".join(suburb_lines[:6])
+""" + "\n".join(suburb_lines)
 
     msg += "\n\n"
     if most_listings:
-        msg += f"Most buyer choice: {most_listings['display_name']} ({most_listings['total']} listings).\n"
+        msg += f"Most buyer choice: {most_listings['display_name']} ({most_listings['total']} houses).\n"
     if highest_median:
         msg += f"Highest median asking price: {highest_median['display_name']} at {fmt_price(highest_median['median_price'])}.\n"
 
@@ -666,12 +700,8 @@ def template_open_home_spotlight(suburbs, properties=None, **kw):
     else:
         return None, None
 
-    # Price all candidates and filter to standard residential (skip retirement)
     priced = []
     for p in candidates:
-        ptype = (p.get("property_type") or "").lower()
-        if "retirement" in ptype:
-            continue
         price = parse_price_value(p.get("price", ""))
         if price and price >= 300000:
             priced.append((p, price))
@@ -679,7 +709,6 @@ def template_open_home_spotlight(suburbs, properties=None, **kw):
     if not priced:
         return None, None
 
-    # Pick strategically: near median, entry level, or premium — with reason
     random.shuffle(priced)
     prop, price = priced[0]
     suburb = prop["_suburb_display"]
@@ -689,9 +718,7 @@ def template_open_home_spotlight(suburbs, properties=None, **kw):
     insp = prop["_inspections"][0]
     bed = prop.get("bedrooms", "?")
     bath = prop.get("bathrooms", "?")
-    ptype = clean_property_type(prop.get("property_type", ""))
 
-    # Build the "why you should see this" angle
     why = ""
     action = ""
     if price and median:
@@ -701,18 +728,18 @@ def template_open_home_spotlight(suburbs, properties=None, **kw):
             action = "See it, then compare it to what else is out there at this price."
         elif diff_pct < -15:
             why = f"At {fmt_price(price)}, this is well below the {suburb} median of {fmt_price(median)}. If you're looking for a way into this suburb, this is what entry-level looks like right now."
-            action = "Worth seeing in person — entry-level homes set the floor for the whole suburb."
+            action = "Worth seeing in person — entry-level houses set the floor for the whole suburb."
         elif diff_pct < 0:
             why = f"Listed below the {suburb} median of {fmt_price(median)}, this is on the more affordable side of the market."
             action = "A good benchmark if you're comparing value across suburbs."
         else:
-            why = f"At {fmt_price(price)}, this is above the {suburb} median of {fmt_price(median)}. If you're a seller wondering what buyers pay for a premium {ptype} here, this sale will tell you."
+            why = f"At {fmt_price(price)}, this is above the {suburb} median of {fmt_price(median)}. If you're a seller wondering what buyers pay for a premium house here, this sale will tell you."
             action = "Follow us to see what it sells for — it'll set a benchmark."
 
-    address = prop.get("street_address", prop.get("address", "A property"))
+    address = normalise_address(prop)
 
     msg = f"""{address}, {suburb}
-{bed}-bed {bath}-bath {ptype} — {clean_price_display(prop.get('price', ''))}
+{bed}-bed {bath}-bath house — {clean_price_display(prop.get('price', ''))}
 
 Open {insp['day']} at {insp['start']}.
 
@@ -724,19 +751,15 @@ Open {insp['day']} at {insp['start']}.
 
 
 def template_entry_price_watch(suburbs, properties=None, **kw):
-    """The cheapest standard-residential property per suburb — what entry level looks like."""
+    """The cheapest house per suburb — what entry level looks like."""
     if not properties:
         properties = get_individual_properties()
 
     entries = []
     for suburb_key in CORE_SUBURBS:
         suburb_props = [p for p in properties if p["_suburb_key"] == suburb_key]
-        # Filter: skip retirement, management rights, sub-$200k outliers
         priced = []
         for p in suburb_props:
-            ptype = (p.get("property_type") or "").lower()
-            if "retirement" in ptype:
-                continue
             val = parse_price_value(p.get("price", ""))
             if val and val >= 300000:
                 priced.append((p, val))
@@ -758,19 +781,19 @@ def template_entry_price_watch(suburbs, properties=None, **kw):
     for e in entries:
         p = e["prop"]
         bed = p.get("bedrooms", "?")
-        ptype = clean_property_type(p.get("property_type", ""))
-        addr = p.get("street_address", "")
+        addr = normalise_address(p)
         gap = ""
         if e["median"]:
             pct_below = round((1 - e["price_val"] / e["median"]) * 100)
-            gap = f" — {pct_below}% below median"
-        lines.append(f"  {e['suburb']}: {fmt_price(e['price_val'])} — {bed}-bed {ptype}, {addr}{gap}")
+            if pct_below > 0:
+                gap = f" — {pct_below}% below median"
+        lines.append(f"  {e['suburb']}: {fmt_price(e['price_val'])} — {bed}-bed house, {addr}{gap}")
 
     cheapest_overall = min(entries, key=lambda e: e["price_val"])
 
-    msg = f"""Entry-level prices right now — what's the cheapest way in?
+    msg = f"""Entry-level house prices right now — what's the cheapest way in?
 
-The lowest-priced property in each of our target suburbs today:
+The lowest-priced house in each suburb today:
 
 """ + "\n".join(lines) + f"""
 
@@ -782,7 +805,7 @@ These shift as new stock comes on. Follow us — we track entry prices daily and
 
 
 def template_median_showcase(suburbs, properties=None, **kw):
-    """What does median money buy? Specific property at the median mark."""
+    """What does median money buy? Specific house at the median mark."""
     if not properties:
         properties = get_individual_properties()
 
@@ -796,9 +819,7 @@ def template_median_showcase(suburbs, properties=None, **kw):
     total_listings = suburbs[suburb_key]["total"]
 
     suburb_props = [p for p in properties if p["_suburb_key"] == suburb_key]
-    # Skip retirement
-    priced = [(p, parse_price_value(p.get("price", ""))) for p in suburb_props
-              if "retirement" not in (p.get("property_type") or "").lower()]
+    priced = [(p, parse_price_value(p.get("price", ""))) for p in suburb_props]
     priced = [(p, v) for p, v in priced if v is not None]
     if not priced:
         return None, None
@@ -809,11 +830,6 @@ def template_median_showcase(suburbs, properties=None, **kw):
     bed = prop.get("bedrooms", "?")
     bath = prop.get("bathrooms", "?")
     car = prop.get("carspaces", "?")
-    ptype = clean_property_type(prop.get("property_type", ""))
-
-    # Count how many are above and below
-    above = len([v for _, v in priced if v > median])
-    below = len([v for _, v in priced if v <= median])
 
     insp_line = ""
     inspections = prop.get("inspection_times") or []
@@ -822,17 +838,17 @@ def template_median_showcase(suburbs, properties=None, **kw):
         if details["start"]:
             insp_line = f"Open for inspection {details['day']} at {details['start']}. "
 
-    address = prop.get("street_address", prop.get("address", ""))
+    address = normalise_address(prop)
 
     msg = f"""What does {fmt_price(median)} buy in {suburb_name}?
 
-{suburb_name} has {total_listings} properties for sale right now. Half are above {fmt_price(median)}, half below. This property is right on that line:
+{suburb_name} has {total_listings} houses for sale right now. Half are above {fmt_price(median)}, half below. This house is right on that line:
 
 {address}
-{bed} bed · {bath} bath · {car} car — {ptype}
+{bed} bed · {bath} bath · {car} car
 {clean_price_display(prop.get('price', ''))}
 
-{insp_line}Walk through a home at the median and you'll know what "average" really means in this suburb. Everything else is either a step up or a compromise from here.
+{insp_line}Walk through a house at the median and you'll know what "average" really means in this suburb. Everything else is either a step up or a compromise from here.
 
 Follow us — we post this data every day."""
 
@@ -851,12 +867,10 @@ def template_weekend_preview(suburbs, properties=None, **kw):
     seen_ids = set()
     for p in sat_props + sun_props:
         pid = str(p.get("_id", ""))
-        ptype = (p.get("property_type") or "").lower()
-        if pid not in seen_ids and "retirement" not in ptype:
+        if pid not in seen_ids:
             seen_ids.add(pid)
             all_weekend.append(p)
 
-    # Price all candidates
     entries = [(p, parse_price_value(p.get("price", ""))) for p in all_weekend]
     entries = [(p, v) for p, v in entries if v and v >= 300000]
 
@@ -866,7 +880,6 @@ def template_weekend_preview(suburbs, properties=None, **kw):
     entries.sort(key=lambda x: x[1])
     total_weekend = len(all_weekend)
 
-    # Curate picks with REASONS
     picks = []
 
     # 1. Entry-level pick
@@ -889,7 +902,7 @@ def template_weekend_preview(suburbs, properties=None, **kw):
     if str(pp[0].get("_id")) not in {str(x[0].get("_id")) for x in picks}:
         picks.append((pp[0], pp[1], "Highest asking price this weekend"))
 
-    # 4. One more if room — newest listing
+    # 4. Newest listing if room
     seen_pick_ids = {str(x[0].get("_id")) for x in picks}
     for p, v in entries:
         days = p.get("days_on_domain")
@@ -902,15 +915,14 @@ def template_weekend_preview(suburbs, properties=None, **kw):
         insp = prop["_inspections"][0]
         suburb = prop["_suburb_display"]
         bed = prop.get("bedrooms", "?")
-        ptype = clean_property_type(prop.get("property_type", ""))
-        addr = prop.get("street_address", "")
-        lines.append(f"  {addr} ({suburb})\n  {bed}-bed {ptype}, {fmt_price(price)} — Open {insp['day']} {insp['start']}\n  Why: {reason}")
+        addr = normalise_address(prop)
+        lines.append(f"  {addr} ({suburb})\n  {bed}-bed house, {fmt_price(price)} — Open {insp['day']} {insp['start']}\n  Why: {reason}")
 
-    msg = f"""Weekend open homes — {total_weekend} properties open, here are {len(picks)} worth your time
+    msg = f"""Weekend open homes — {total_weekend} houses open, here are {len(picks)} worth your time
 
 """ + "\n\n".join(lines) + f"""
 
-Walking through homes at different price points is the fastest way to calibrate what the market actually feels like.
+Walking through houses at different price points is the fastest way to calibrate what the market actually feels like.
 
 Follow us — tomorrow at 6am we'll post the full open home list."""
 
@@ -918,7 +930,7 @@ Follow us — tomorrow at 6am we'll post the full open home list."""
 
 
 def template_saturday_open_list(suburbs, properties=None, **kw):
-    """Saturday 6am — full curated open home list for today, sorted by time."""
+    """Saturday 6am — curated open home list for today, sorted by time. Capped for readability."""
     if not properties:
         properties = get_individual_properties()
 
@@ -926,6 +938,8 @@ def template_saturday_open_list(suburbs, properties=None, **kw):
 
     if not sat_props:
         return None, None
+
+    MAX_PER_SUBURB = 8
 
     # Group by suburb
     by_suburb = {}
@@ -935,45 +949,48 @@ def template_saturday_open_list(suburbs, properties=None, **kw):
             by_suburb[suburb] = []
         by_suburb[suburb].append(p)
 
-    # Build highlights: cheapest, most expensive, newest
+    # Build highlights: cheapest, most expensive
     all_priced = [(p, parse_price_value(p.get("price", ""))) for p in sat_props]
     all_priced = [(p, v) for p, v in all_priced if v and v >= 300000]
     highlights = []
     if all_priced:
         all_priced.sort(key=lambda x: x[1])
         cheapest = all_priced[0]
-        highlights.append(f"  Cheapest open today: {cheapest[0].get('street_address', '')} ({cheapest[0]['_suburb_display']}) at {fmt_price(cheapest[1])}")
+        highlights.append(f"  Cheapest open today: {normalise_address(cheapest[0])} ({cheapest[0]['_suburb_display']}) at {fmt_price(cheapest[1])}")
         most_exp = all_priced[-1]
-        highlights.append(f"  Most expensive: {most_exp[0].get('street_address', '')} ({most_exp[0]['_suburb_display']}) at {fmt_price(most_exp[1])}")
+        highlights.append(f"  Most expensive: {normalise_address(most_exp[0])} ({most_exp[0]['_suburb_display']}) at {fmt_price(most_exp[1])}")
 
     sections = []
     unique_count = 0
     for suburb in sorted(by_suburb.keys()):
         props = by_suburb[suburb]
-        # Sort by actual time (not string sort)
         props.sort(key=lambda p: time_sort_key(p["_inspections"][0].get("start", "")))
 
         seen_addrs = set()
         prop_lines = []
         for p in props:
-            addr = p.get("street_address", "")
-            if addr in seen_addrs:
+            addr = normalise_address(p)
+            if addr in seen_addrs or not addr:
                 continue
             seen_addrs.add(addr)
             unique_count += 1
             insp = p["_inspections"][0]
             price = clean_price_display(p.get("price", ""))
             bed = p.get("bedrooms", "?")
-            ptype = clean_property_type(p.get("property_type", ""))
-            prop_lines.append(f"  {insp['start']} — {addr} ({bed}-bed {ptype}, {price})")
+            prop_lines.append(f"  {insp['start']} — {addr} ({bed}-bed, {price})")
 
-        sections.append(f"{suburb}:\n" + "\n".join(prop_lines))
+        shown = prop_lines[:MAX_PER_SUBURB]
+        overflow = len(prop_lines) - MAX_PER_SUBURB
+        section = f"{suburb}:\n" + "\n".join(shown)
+        if overflow > 0:
+            section += f"\n  + {overflow} more"
+        sections.append(section)
 
-    msg = f"""Your open home list for today — {unique_count} properties open.
+    msg = f"""Your open home list for today — {unique_count} houses open.
 
 """ + "\n\n".join(highlights) + "\n\n" + "\n\n".join(sections) + """
 
-Even if you're not buying today, walking through 2-3 homes gives you a real feel for what the market looks like right now.
+Even if you're not buying today, walking through 2-3 houses gives you a real feel for what the market looks like right now.
 
 Follow us — Monday we'll post what sold and for how much."""
 
@@ -989,7 +1006,6 @@ def _sold_insight(p, all_sold):
     list_val = parse_price_value(str(listing_price)) if listing_price else None
     days = p.get("days_on_market")
     bed = p.get("bedrooms")
-    ptype = clean_property_type(p.get("property_type", ""))
     suburb = p.get("_suburb_display", "")
     ed = p.get("enriched_data") or {}
     lot = ed.get("lot_size_sqm")
@@ -1041,7 +1057,7 @@ def _sold_insight(p, all_sold):
         sc = beds_pi.get("suburbComparison", {})
         pctl = sc.get("percentile")
         if pctl and pctl >= 85 and bed:
-            medium.append(f"{bed}-bed homes are top {100-pctl}% for size in {suburb} — rare stock.")
+            medium.append(f"{bed}-bed houses are top {100-pctl}% for size in {suburb} — rare stock.")
         lot_pi = pi.get("lot_size", {})
         lsc = lot_pi.get("suburbComparison", {})
         lpctl = lsc.get("percentile")
@@ -1067,106 +1083,118 @@ def _sold_insight(p, all_sold):
     return result
 
 
+def _parse_sold_date(p):
+    """Parse sold_date from a property record. Returns datetime or None."""
+    raw = p.get("sold_date") or p.get("moved_to_sold_date") or p.get("sold_date_text")
+    if not raw:
+        return None
+    if isinstance(raw, datetime):
+        return raw
+    try:
+        return datetime.strptime(str(raw)[:10], "%Y-%m-%d")
+    except (ValueError, TypeError):
+        return None
+
+
 def template_sold_results(suburbs, properties=None, **kw):
-    """Monday — what sold, with context and insight per sale."""
+    """Monday — what sold last week, with context and insight per sale."""
     sold_properties = get_recently_sold_properties()
 
     if not sold_properties:
         msg = """Sales update — Robina, Burleigh Waters, Varsity Lakes
 
-No confirmed sales this past week. Settlement timelines and delayed reporting mean some sales take weeks to appear.
+No confirmed house sales this past week. Settlement timelines and delayed reporting mean some sales take weeks to appear.
 
 When they land, we break them down — what sold, what it sold for, and what it means for prices in your suburb.
 
 Follow us to see them first."""
         return msg, "sold_results"
 
+    # Filter to last 7 days only
+    cutoff = datetime.now() - timedelta(days=7)
+    time_filtered = []
+    for p in sold_properties:
+        sold_dt = _parse_sold_date(p)
+        if sold_dt and sold_dt >= cutoff:
+            p["_sold_dt"] = sold_dt
+            time_filtered.append(p)
+
     # Dedup by address (keep most recent)
     seen_addrs = {}
-    for p in sold_properties:
+    for p in time_filtered:
         addr = p.get("street_address", "")
         if addr not in seen_addrs:
             seen_addrs[addr] = p
         else:
-            # Keep the one with more data
             existing = seen_addrs[addr]
-            if ("valuation_data" in p and "valuation_data" not in existing) or \
-               (p.get("days_on_market") and not existing.get("days_on_market")):
+            if p.get("_sold_dt", datetime.min) > existing.get("_sold_dt", datetime.min):
                 seen_addrs[addr] = p
     sold_deduped = list(seen_addrs.values())
 
-    # Validate: filter out suspect prices (>$5M for <5 beds, or no sale price)
-    valid_sold = []
-    for p in sold_deduped:
-        sp = parse_price_value(str(p.get("sale_price", "")))
-        beds = p.get("bedrooms", 0) or 0
-        if sp and sp > 5_000_000 and beds < 5:
-            continue  # Likely corrupt
-        # Must have address and listing URL in correct suburb
-        url = p.get("listing_url", "")
-        suburb_key = p.get("_suburb_key", "")
-        if url and suburb_key:
-            expected = suburb_key.replace("_", "-")
-            addr_in_url = p.get("street_address", "").lower().replace(" ", "-")
-            if expected not in url and addr_in_url not in url:
-                continue  # URL doesn't match suburb or address — cross-contaminated
-        valid_sold.append(p)
+    valid_sold = list(sold_deduped)
 
-    if not valid_sold:
-        msg = """Sales update — Robina, Burleigh Waters, Varsity Lakes
+    # Sort by sold date (most recent first)
+    valid_sold.sort(key=lambda p: p.get("_sold_dt", datetime.min), reverse=True)
 
-No verified sales to report this week. We only publish confirmed results we can validate.
+    # Group by suburb in fixed order: Robina, Varsity Lakes, Burleigh Waters
+    suburb_order = [
+        ("robina", "Robina"),
+        ("varsity_lakes", "Varsity Lakes"),
+        ("burleigh_waters", "Burleigh Waters"),
+    ]
+    by_suburb = {}
+    for p in valid_sold:
+        key = p.get("_suburb_key", "")
+        by_suburb.setdefault(key, []).append(p)
 
-Follow us — when sales land, we'll break down what they mean for prices in your suburb."""
+    # Count total
+    total = len(valid_sold)
+
+    # Build headline with counts per suburb in order
+    headline_parts = []
+    for key, display in suburb_order:
+        count = len(by_suburb.get(key, []))
+        headline_parts.append(f"{display}: {count}")
+    headline_suburbs = " | ".join(headline_parts)
+
+    if total == 0:
+        msg = f"Sales update — {headline_suburbs}\n\n"
+        msg += "No confirmed house sales this past week. Settlement timelines and delayed reporting mean some sales take weeks to appear.\n\n"
+        msg += "Follow us — when they land, we break them down here."
         return msg, "sold_results"
 
-    # Sort by sold date (most recent first), fall back to _id
-    valid_sold.sort(key=lambda p: str(p.get("sold_date", p.get("_id", ""))), reverse=True)
-    recent = valid_sold[:6]  # Top 6 for readability
+    msg = f"What sold this week — {plural(total, 'confirmed sale')}\n{headline_suburbs}\n"
 
-    # Count by suburb for headline
-    suburb_counts = {}
-    for p in recent:
-        s = p.get("_suburb_display", "")
-        suburb_counts[s] = suburb_counts.get(s, 0) + 1
-    suburb_parts = [f"{count} in {name}" for name, count in sorted(suburb_counts.items(), key=lambda x: -x[1])]
-    headline_suburbs = ", ".join(suburb_parts)
+    for key, display in suburb_order:
+        suburb_sold = by_suburb.get(key, [])
+        if not suburb_sold:
+            msg += f"\n{display} — no house sales this week\n"
+            continue
 
-    entries = []
-    for p in recent:
-        address = p.get("street_address", p.get("address", ""))
-        suburb = p.get("_suburb_display", "")
-        sale_price = p.get("sale_price", "")
-        sale_val = parse_price_value(str(sale_price)) if sale_price else None
-        days = p.get("days_on_market")
-        ptype = clean_property_type(p.get("property_type", ""))
-        bed = p.get("bedrooms", "?")
+        msg += f"\n{display}\n"
+        for p in suburb_sold[:4]:
+            address = normalise_address(p)
+            sale_price = p.get("sale_price", "")
+            sale_val = parse_price_value(str(sale_price)) if sale_price else None
+            days = p.get("days_on_market")
+            bed = p.get("bedrooms", "?")
 
-        # Build the property line
-        if sale_val:
-            price_str = fmt_price(sale_val)
-        elif sale_price and str(sale_price).strip() and str(sale_price).strip().lower() != "none":
-            price_str = clean_price_display(str(sale_price))
-        else:
-            price_str = "price undisclosed"
-        dom_str = f", {days} days on market" if days else ""
-        header = f"{address} ({suburb}) — {bed}-bed {ptype}, {price_str}{dom_str}"
+            if sale_val:
+                price_str = fmt_price(sale_val)
+            elif sale_price and str(sale_price).strip() and str(sale_price).strip().lower() != "none":
+                price_str = clean_price_display(str(sale_price))
+            else:
+                price_str = "price undisclosed"
+            dom_str = f", {days} days on market" if days else ""
+            line = f"  {address} — {bed}-bed house, {price_str}{dom_str}"
 
-        # Generate insights
-        insights = _sold_insight(p, valid_sold)
+            insights = _sold_insight(p, valid_sold)
+            if insights:
+                line += "\n    " + " ".join(insights[:2])
 
-        if insights:
-            # Pick the best 1-2 insights
-            entry = header + "\n  " + " ".join(insights[:2])
-        else:
-            entry = header
+            msg += line + "\n"
 
-        entries.append(entry)
-
-    total = len(recent)
-    msg = f"What sold this week — {plural(total, 'confirmed sale')} ({headline_suburbs})\n\n"
-    msg += "\n\n".join(entries)
-    msg += "\n\nFollow us — we track every sale and break down what it means for your suburb."
+    msg += "\nFollow us — we track every sale and break down what it means for your suburb."
 
     return msg, "sold_results"
 
@@ -1212,22 +1240,20 @@ def template_new_to_market(suburbs, properties=None, **kw):
         suburb = p["_suburb_display"]
         price = clean_price_display(p.get("price", ""))
         bed = p.get("bedrooms", "?")
-        ptype = clean_property_type(p.get("property_type", ""))
-        addr = p.get("street_address", "")
-        lines.append(f"  {addr} ({suburb}) — {bed}-bed {ptype}, {price}")
+        addr = normalise_address(p)
+        lines.append(f"  {addr} ({suburb}) — {bed}-bed house, {price}")
 
     total = len(new_listings)
     suburb_summary = ", ".join(f"{c} in {s}" for s, c in sorted(suburb_counts.items(), key=lambda x: -x[1]))
 
-    msg = f"""{plural(total, 'new listing')} this week — {suburb_summary}
+    msg = f"""{plural(total, 'new house', 'new houses')} listed this week — {suburb_summary}
 
 """ + "\n".join(lines)
 
-    # Add buyer/seller relevance
     if total >= 10:
         msg += f"""
 
-More new stock means more choice for buyers, and more competition for sellers. If you're selling, these are the properties your home is now being compared against."""
+More new stock means more choice for buyers, and more competition for sellers. If you're selling, these are the houses your home is now being compared against."""
     else:
         msg += """
 
