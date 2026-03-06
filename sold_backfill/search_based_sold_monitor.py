@@ -355,10 +355,11 @@ class SearchBasedSoldMonitor:
         domain_sold = self.get_recently_sold_from_domain(suburb_name, postcode)
         print(f"  {suburb_name}: {len(domain_sold)} recently sold on Domain")
 
-        # Get our active listings
+        # Get our active listings (include valuation fields for margin of error calc)
         our_active = list(retry_db(lambda: list(collection.find(
             {"listing_status": "for_sale"},
-            {"listing_url": 1, "address": 1, "_id": 1}
+            {"listing_url": 1, "address": 1, "_id": 1, "price": 1,
+             "domain_valuation_at_listing": 1, "scraped_data.valuation": 1}
         ))))
         print(f"  {suburb_name}: {len(our_active)} active for_sale in DB")
 
@@ -394,6 +395,42 @@ class SearchBasedSoldMonitor:
                 }
                 # Preserve listing price
                 update_fields["listing_price"] = doc.get("price")
+
+                # Compute Domain valuation margin of error
+                domain_val = (doc.get("domain_valuation_at_listing")
+                              or doc.get("scraped_data", {}).get("valuation"))
+                sale_price_str = sold_rec.get("sale_price")
+                if domain_val and domain_val.get("mid") and sale_price_str:
+                    try:
+                        sale_price_num = int(re.sub(r'[^\d]', '', sale_price_str))
+                        mid = domain_val["mid"]
+                        low = domain_val.get("low")
+                        high = domain_val.get("high")
+                        error_dollars = sale_price_num - mid
+                        error_pct = round((error_dollars / mid) * 100, 2)
+                        within_range = (low and high
+                                        and low <= sale_price_num <= high)
+                        # Snapshot the valuation used for this calculation
+                        if not doc.get("domain_valuation_at_listing"):
+                            update_fields["domain_valuation_at_listing"] = {
+                                **domain_val,
+                                "captured_at": now,
+                                "source": "scraped_data_snapshot_at_sold"
+                            }
+                        update_fields["domain_valuation_accuracy"] = {
+                            "domain_mid": mid,
+                            "domain_low": low,
+                            "domain_high": high,
+                            "sale_price": sale_price_num,
+                            "error_dollars": error_dollars,
+                            "error_pct": error_pct,
+                            "within_range": bool(within_range),
+                            "computed_at": now,
+                        }
+                        print(f"      Domain valuation accuracy: {error_pct:+.1f}% (${error_dollars:+,})")
+                    except (ValueError, TypeError, ZeroDivisionError):
+                        pass
+
                 # Remove None values
                 update_fields = {k: v for k, v in update_fields.items() if v is not None}
 
