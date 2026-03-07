@@ -159,7 +159,12 @@ def backtest_single_property(db, subject_doc, all_sold_in_suburb, sold_by_suburb
     subject_land = resolve_land_size(subject_doc)
     subject_is_acreage = subject_land is not None and subject_land > 5000
 
-    # Filter by waterfront status, bedroom band, and dwelling type
+    # Detect prestige tier
+    from precompute_valuations import infer_prestige_tier
+    subject_prestige = infer_prestige_tier(subject_doc)
+    subject_is_prestige = subject_prestige in ('prestige', 'ultra_prestige')
+
+    # Filter by waterfront status, bedroom band, dwelling type, and prestige tier
     subject_beds = subject_doc.get('bedrooms')
     bed_band = [max(1, subject_beds - 1), subject_beds + 1] if subject_beds is not None else None
 
@@ -168,6 +173,7 @@ def backtest_single_property(db, subject_doc, all_sold_in_suburb, sold_by_suburb
             return False
         if not subject_is_waterfront and is_waterfront(doc):
             return False
+        # Prestige tier: soft filter via weighting (not hard exclude)
         if bed_band:
             beds = doc.get('bedrooms')
             if beds is None or beds < bed_band[0] or beds > bed_band[1]:
@@ -281,6 +287,7 @@ def backtest_single_property(db, subject_doc, all_sold_in_suburb, sold_by_suburb
                 'npui_breakdown': bd,
             },
             'images': [],
+            '_source_doc': s,
         })
 
         chart_points.append({
@@ -385,6 +392,26 @@ def backtest_single_property(db, subject_doc, all_sold_in_suburb, sold_by_suburb
     # Pass 3: Weights
     for pt in all_enriched_points:
         pt['weight'] = calculate_weight(pt)
+
+    # Pass 3.5: Prestige tier weight adjustment
+    # Prestige properties are a fundamentally different market segment.
+    # The NPUI adjustment pipeline systematically undervalues prestige homes because
+    # the regression line and adjustment rates are fitted on the full cohort (~$1.5-2M avg).
+    # Fix: for prestige subjects, use raw sale prices of prestige comps instead of
+    # adjusted prices, and near-zero weight for non-prestige comps.
+    for pt in all_enriched_points:
+        comp_doc = pt.get('_source_doc', {})
+        comp_tier = infer_prestige_tier(comp_doc) if comp_doc else 'standard'
+        comp_is_p = comp_tier in ('prestige', 'ultra_prestige')
+        if subject_is_prestige and comp_is_p:
+            # Override adjusted_price with raw sale price — the adjustment pipeline
+            # distorts prestige values because rates are derived from standard homes
+            pt['adjustment_result']['adjusted_price'] = pt['price']
+            pt['weight']['raw_weight'] *= 3.0
+        elif subject_is_prestige and not comp_is_p:
+            pt['weight']['raw_weight'] *= 0.05  # near-zero
+        elif not subject_is_prestige and comp_is_p:
+            pt['weight']['raw_weight'] *= 0.15
 
     # Quality comp selection
     select_quality_comps(all_enriched_points, min_comps=3, target_comps=8)
