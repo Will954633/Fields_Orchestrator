@@ -13,12 +13,13 @@ Steps:
     1. Load property from Gold_Coast.[suburb]
     2. Resolve coordinates (cadastral DB → Nominatim fallback)
     3. Enrich with OSM features if missing
-    4. Run ComprehensiveFeatureCalculator (126 features)
-    5. Run FeatureAligner (fill missing with defaults)
-    6. Run CatBoost model prediction → iteration_08_valuation
-    7. Run precompute_valuations logic → valuation_data (NPUI, comparables,
+    4. GPT Vision enrichment (if property has photos but no analysis)
+    5. Run ComprehensiveFeatureCalculator (126 features)
+    6. Run FeatureAligner (fill missing with defaults)
+    7. Run CatBoost model prediction → iteration_08_valuation
+    8. Run precompute_valuations logic → valuation_data (NPUI, comparables,
        confidence intervals, adjustment rates, verification)
-    8. Store both fields on the property document
+    9. Store all fields on the property document
 """
 
 import argparse
@@ -34,6 +35,12 @@ from bson import ObjectId
 # Environment setup
 from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent.parent / '.env')
+# Also load OpenAI key from enrichment script env
+load_dotenv(Path(
+    '/home/fields/Property_Data_Scraping/03_Gold_Coast/'
+    'Gold_Coast_Wide_Currently_For_Sale_AND_Recently_Sold/'
+    'Ollama_Property_Analysis/.env'
+))
 
 # Add production valuation to sys.path
 VALUATION_DIR = Path('/home/fields/Property_Valuation/04_Production_Valuation')
@@ -66,6 +73,217 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# GPT VISION ENRICHMENT (photo + floor plan analysis)
+# ---------------------------------------------------------------------------
+
+GPT_MODEL = "gpt-5-nano-2025-08-07"
+GPT_MAX_TOKENS = 16000
+GPT_MAX_PHOTOS = 20
+GPT_IMAGE_TIMEOUT = 15
+GPT_REQUEST_TIMEOUT = 180
+
+# Lazy-loaded — only imported if we actually need GPT enrichment
+_openai_client = None
+
+
+def _get_openai_client():
+    global _openai_client
+    if _openai_client is None:
+        from openai import OpenAI
+        api_key = os.environ.get('OPENAI_API_KEY')
+        if not api_key:
+            raise RuntimeError('OPENAI_API_KEY not set — cannot run GPT enrichment')
+        _openai_client = OpenAI(api_key=api_key)
+    return _openai_client
+
+
+def _image_key(url):
+    import re
+    match = re.search(r'(\d{10}_\d+_\d+_\d+_\d+)', url)
+    return match.group(1) if match else url
+
+
+def _clean_image_urls(raw_urls):
+    best = {}
+    for url in raw_urls:
+        if not url or not isinstance(url, str):
+            continue
+        url = url.rstrip('\\').strip()
+        key = _image_key(url)
+        if key not in best:
+            best[key] = url
+        elif 'rimh2.domainstatic.com' in url:
+            best[key] = url
+    return list(best.values())[:GPT_MAX_PHOTOS]
+
+
+def _url_to_base64(url):
+    import base64
+    from io import BytesIO
+    import requests
+    from PIL import Image
+    try:
+        resp = requests.get(url, timeout=GPT_IMAGE_TIMEOUT)
+        resp.raise_for_status()
+        img = Image.open(BytesIO(resp.content)).convert("RGB")
+        buf = BytesIO()
+        img.save(buf, format="JPEG", quality=85)
+        encoded = base64.b64encode(buf.getvalue()).decode("utf-8")
+        return f"data:image/jpeg;base64,{encoded}"
+    except Exception:
+        return None
+
+
+def _build_image_content(urls):
+    blocks = []
+    for url in urls:
+        data_uri = _url_to_base64(url)
+        if data_uri:
+            blocks.append({
+                "type": "image_url",
+                "image_url": {"url": data_uri, "detail": "high"}
+            })
+    return blocks
+
+
+def _call_gpt(system_prompt, user_prompt, image_content):
+    import json as _json
+    client = _get_openai_client()
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": [{"type": "text", "text": user_prompt}] + image_content}
+    ]
+    response = client.chat.completions.create(
+        model=GPT_MODEL,
+        messages=messages,
+        max_completion_tokens=GPT_MAX_TOKENS,
+        response_format={"type": "json_object"},
+        timeout=GPT_REQUEST_TIMEOUT,
+    )
+    content = response.choices[0].message.content
+    if not content or not content.strip():
+        raise ValueError("Empty response from GPT")
+    return _json.loads(content)
+
+
+# Import prompts from the enrichment script directory
+def _get_prompts():
+    """Load photo and floor plan prompts from the enrichment script."""
+    enrichment_dir = Path(
+        '/home/fields/Property_Data_Scraping/03_Gold_Coast/'
+        'Gold_Coast_Wide_Currently_For_Sale_AND_Recently_Sold/'
+        'Ollama_Property_Analysis'
+    )
+    sys.path.insert(0, str(enrichment_dir))
+    try:
+        from enrich_for_sale_batch import PHOTO_ANALYSIS_PROMPT, FLOOR_PLAN_PROMPT
+        return PHOTO_ANALYSIS_PROMPT, FLOOR_PLAN_PROMPT
+    finally:
+        sys.path.pop(0)
+
+
+def run_gpt_enrichment(doc, collection):
+    """Run GPT Vision photo + floor plan analysis on a single property.
+
+    Returns dict with keys: property_valuation_data, floor_plan_analysis,
+    processing_status, or None if no photos.
+    """
+    raw_images = doc.get('property_images', [])
+    raw_floor_plans = doc.get('floor_plans', [])
+
+    photo_urls = _clean_image_urls(raw_images)
+    floor_plan_urls = [u.rstrip('\\').strip() for u in raw_floor_plans
+                       if u and isinstance(u, str)]
+
+    if not photo_urls:
+        logger.info('  No photos available — skipping GPT enrichment')
+        return None
+
+    logger.info(f'  Running GPT Vision enrichment ({len(photo_urls)} photos, '
+                f'{len(floor_plan_urls)} floor plans)...')
+
+    PHOTO_PROMPT, FLOOR_PLAN_PROMPT = _get_prompts()
+
+    # Call 1: Photo analysis
+    start = time.time()
+    image_content = _build_image_content(photo_urls)
+    if not image_content:
+        logger.warning('  Could not download any photos — skipping GPT enrichment')
+        return None
+
+    photo_result = _call_gpt(
+        system_prompt="You are a professional property valuer with expertise in market comparison analysis.",
+        user_prompt=PHOTO_PROMPT,
+        image_content=image_content,
+    )
+    photo_elapsed = time.time() - start
+    logger.info(f'  Photo analysis complete ({photo_elapsed:.1f}s)')
+
+    # Call 2: Floor plan analysis (if available)
+    floor_plan_result = None
+    if floor_plan_urls:
+        try:
+            fp_start = time.time()
+            fp_content = _build_image_content(floor_plan_urls)
+            if fp_content:
+                floor_plan_result = _call_gpt(
+                    system_prompt="You are a professional floor plan analyst extracting detailed room dimensions and layout information.",
+                    user_prompt=FLOOR_PLAN_PROMPT,
+                    image_content=fp_content,
+                )
+                fp_elapsed = time.time() - fp_start
+                logger.info(f'  Floor plan analysis complete ({fp_elapsed:.1f}s)')
+        except Exception as e:
+            logger.warning(f'  Floor plan analysis failed (non-fatal): {e}')
+
+    # Build processing_status
+    from datetime import timezone
+    now = datetime.now(timezone.utc)
+    processing_status = {
+        "images_processed": True,
+        "photos_analysed": len(photo_urls),
+        "floor_plan_analysed": floor_plan_result is not None,
+        "floor_plans_analysed": len(floor_plan_urls) if floor_plan_result else 0,
+        "processed_at": now,
+        "model_used": GPT_MODEL,
+        "on_demand": True,
+    }
+
+    if floor_plan_result:
+        internal = floor_plan_result.get("internal_floor_area") or {}
+        external = floor_plan_result.get("external_floor_area") or {}
+        total = floor_plan_result.get("total_floor_area") or {}
+        processing_status["internal_floor_area_sqm"] = internal.get("value")
+        processing_status["external_floor_area_sqm"] = external.get("value")
+        processing_status["total_floor_area_sqm"] = total.get("value")
+
+    # Write to DB immediately (so CatBoost can use the enriched data)
+    update_set = {
+        "property_valuation_data": photo_result,
+        "processing_status": processing_status,
+    }
+    if floor_plan_result:
+        update_set["floor_plan_analysis"] = floor_plan_result
+
+    try:
+        collection.update_one({"_id": doc["_id"]}, {"$set": update_set})
+        logger.info('  GPT enrichment stored to DB')
+    except Exception as e:
+        logger.warning(f'  Failed to store GPT enrichment: {e}')
+
+    # Also update the in-memory doc so downstream steps see enriched data
+    doc['property_valuation_data'] = photo_result
+    doc['processing_status'] = processing_status
+    if floor_plan_result:
+        doc['floor_plan_analysis'] = floor_plan_result
+
+    return {
+        'property_valuation_data': photo_result,
+        'floor_plan_analysis': floor_plan_result,
+        'processing_status': processing_status,
+    }
 
 
 def _geocode_with_nominatim(address, suburb=None):
@@ -292,10 +510,30 @@ def valuate_single_property(suburb_key, property_id_str):
         except Exception as e:
             logger.warning(f'  OSM enrichment failed (non-fatal): {e}')
 
-    # Step 3: CatBoost valuation
+    # Step 3: GPT Vision enrichment (if property has photos but no analysis)
+    gpt_result = None
+    has_photos = bool(doc.get('property_images'))
+    has_gpt = bool(doc.get('property_valuation_data'))
+    if has_photos and not has_gpt:
+        try:
+            gpt_result = run_gpt_enrichment(doc, db[suburb_key])
+            if gpt_result:
+                # Re-read the doc from DB to get the enriched fields for CatBoost
+                doc = db[suburb_key].find_one({'_id': oid})
+                doc['LATITUDE'] = lat
+                doc['LONGITUDE'] = lon
+                logger.info('  Re-loaded property with GPT enrichment data')
+        except Exception as e:
+            logger.warning(f'  GPT enrichment failed (non-fatal): {e}')
+    elif has_gpt:
+        logger.info('  GPT enrichment already exists — skipping')
+    else:
+        logger.info('  No photos available — skipping GPT enrichment')
+
+    # Step 4: CatBoost valuation
     catboost_result = run_catboost_valuation(doc, client)
 
-    # Step 4: Precompute valuation data (NPUI, comparables, confidence intervals)
+    # Step 5: Precompute valuation data (NPUI, comparables, confidence intervals)
     logger.info('  Loading sold comparables...')
     sold_by_suburb = _load_sold_comparables(client)
     total_sold = sum(len(v) for v in sold_by_suburb.values())
@@ -316,7 +554,7 @@ def valuate_single_property(suburb_key, property_id_str):
         gc_coord_lookup, gc_timeline_lookup,
     )
 
-    # Step 5: Store results
+    # Step 6: Store results
     update_fields = {
         'last_valuation_date': datetime.now(),
         'on_demand_valuation': True,
