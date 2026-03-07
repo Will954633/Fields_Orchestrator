@@ -225,7 +225,10 @@ class SearchBasedSoldMonitor:
 
     def quit_driver(self):
         if self.driver:
-            self.driver.quit()
+            try:
+                self.driver.quit()
+            except Exception:
+                pass
             self.driver = None
 
     def load_page(self, url: str) -> str:
@@ -541,13 +544,12 @@ class SearchBasedSoldMonitor:
                 print(f"  Results — sold: {sold_stats}, under_contract: {uc_stats}")
 
         finally:
+            print(f"\n{'='*70}")
+            print(f"  TOTALS")
+            print(f"  Sold: {total_sold}")
+            print(f"  Under Contract: {total_uc}")
+            print(f"{'='*70}")
             self.quit_driver()
-
-        print(f"\n{'='*70}")
-        print(f"  TOTALS")
-        print(f"  Sold: {total_sold}")
-        print(f"  Under Contract: {total_uc}")
-        print(f"{'='*70}")
 
         return total_sold, total_uc
 
