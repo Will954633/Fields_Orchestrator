@@ -301,23 +301,32 @@ def process_suburb(db, suburb, stats_coll, medians_coll, limit=None, dry_run=Fal
     processed = 0
     enriched = 0
     batch_size = 50
+    last_id = None
+    cursor_retries = 0
 
-    cursor = coll.find(query).batch_size(batch_size)
+    cursor = coll.find(query).sort('_id', 1).batch_size(batch_size)
     if limit:
         cursor = cursor.limit(limit)
 
     while True:
         try:
             doc = next(cursor)
+            cursor_retries = 0
+            last_id = doc['_id']
         except StopIteration:
             break
         except Exception as cursor_err:
             # Handle 429 during cursor batch fetch
             if '429' in str(cursor_err) or '16500' in str(cursor_err):
-                print(f"    Cursor 429 at {processed} docs, sleeping 10s...", flush=True)
-                time.sleep(10)
-                # Re-create cursor skipping already-processed docs
-                cursor = coll.find(query).batch_size(batch_size).skip(processed)
+                cursor_retries += 1
+                wait = min(10 * cursor_retries, 60)
+                print(f"    Cursor 429 at {processed} docs (retry {cursor_retries}), sleeping {wait}s...", flush=True)
+                time.sleep(wait)
+                # Re-create cursor using _id pagination (cheap, unlike .skip())
+                resume_query = dict(query)
+                if last_id:
+                    resume_query['_id'] = {'$gt': last_id}
+                cursor = coll.find(resume_query).sort('_id', 1).batch_size(batch_size)
                 if limit:
                     remaining = limit - processed
                     if remaining <= 0:
