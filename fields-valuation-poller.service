@@ -1,0 +1,18 @@
+[Unit]
+Description=Fields On-Demand Valuation Poller
+After=network.target
+
+[Service]
+Type=simple
+User=projects
+Group=projects
+WorkingDirectory=/home/fields/Fields_Orchestrator
+EnvironmentFile=/home/fields/Fields_Orchestrator/.env
+ExecStart=/home/fields/venv/bin/python3 /home/fields/Fields_Orchestrator/scripts/valuation_poller.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
