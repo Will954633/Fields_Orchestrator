@@ -286,6 +286,161 @@ def run_gpt_enrichment(doc, collection):
     }
 
 
+# ---------------------------------------------------------------------------
+# LIGHTWEIGHT GEOREFERENCE (embedded POI database for target suburbs)
+# ---------------------------------------------------------------------------
+
+import math
+
+def _haversine_km(lat1, lon1, lat2, lon2):
+    lat1, lon1, lat2, lon2 = map(math.radians, [lat1, lon1, lat2, lon2])
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
+    return 6371 * 2 * math.asin(math.sqrt(a))
+
+# Key Gold Coast POIs — curated for Robina / Burleigh Waters / Varsity Lakes corridor
+_EMBEDDED_POIS = {
+    'primary_schools': [
+        ('Robina State School', -28.0770, 153.3850),
+        ('Varsity College Primary', -28.0870, 153.4100),
+        ('Burleigh Waters State School', -28.1016, 153.4268),
+        ('Mudgeeraba State School', -28.0830, 153.3640),
+        ('Merrimac State School', -28.0530, 153.3890),
+        ('Worongary State School', -28.0700, 153.3580),
+        ('Elanora State School', -28.1160, 153.4560),
+        ('Caningeraba State School', -28.0940, 153.4360),
+    ],
+    'secondary_schools': [
+        ('Robina State High School', -28.0690, 153.3800),
+        ('Varsity College Secondary', -28.0870, 153.4100),
+        ('Miami State High School', -28.0680, 153.4400),
+        ('Merrimac State High School', -28.0510, 153.3840),
+        ('Somerset College', -28.0750, 153.3450),
+        ("King's Christian College", -28.0580, 153.3700),
+    ],
+    'supermarkets': [
+        ('Woolworths Robina', -28.0770, 153.3930),
+        ('Coles Robina Town Centre', -28.0700, 153.3850),
+        ('Aldi Robina', -28.0760, 153.3960),
+        ('Woolworths Varsity Lakes', -28.0900, 153.4110),
+        ('Coles Varsity Lakes', -28.0910, 153.4100),
+        ('Woolworths Burleigh Waters', -28.0930, 153.4280),
+        ('Coles Stockland Burleigh Heads', -28.0920, 153.4430),
+        ('Aldi Burleigh Heads', -28.0940, 153.4400),
+        ('Woolworths Mudgeeraba', -28.0820, 153.3650),
+    ],
+    'shopping_malls': [
+        ('Robina Town Centre', -28.0700, 153.3850),
+        ('Stockland Burleigh Heads', -28.0920, 153.4430),
+        ('Varsity Lakes Shopping Centre', -28.0900, 153.4110),
+        ('Bond University Plaza', -28.0730, 153.4130),
+    ],
+    'hospitals': [
+        ('Robina Hospital', -28.0730, 153.3920),
+        ('Gold Coast University Hospital', -28.0030, 153.4100),
+        ('John Flynn Private Hospital', -28.1280, 153.4750),
+    ],
+    'parks': [
+        ('Robina Common', -28.0650, 153.3880),
+        ('Central Park Robina', -28.0690, 153.3920),
+        ('Lake Orr Park', -28.0870, 153.4060),
+        ('Stockland Park', -28.0630, 153.3900),
+        ('Burleigh Heads National Park', -28.0890, 153.4510),
+        ('NightQuarter Helensvale', -27.9280, 153.3400),
+    ],
+    'public_transport': [
+        ('Robina Station', -28.0710, 153.3840),
+        ('Varsity Lakes Station', -28.0850, 153.4120),
+        ('Mudgeeraba Station (future)', -28.0800, 153.3650),
+        ('Merrimac Station (future)', -28.0530, 153.3890),
+    ],
+}
+
+_BEACHES = [
+    ('Burleigh Heads Beach', -28.1003, 153.4508),
+    ('Broadbeach', -28.0264, 153.4294),
+    ('Surfers Paradise Beach', -28.0023, 153.4295),
+    ('Coolangatta Beach', -28.1682, 153.5376),
+    ('Main Beach', -27.9605, 153.4278),
+]
+
+_AIRPORT = ('Gold Coast Airport', -28.164444, 153.504722)
+
+
+def compute_georeference(lat, lon):
+    """Compute georeference_data using embedded POI coordinates. No API calls."""
+    distances = {}
+
+    for category, pois in _EMBEDDED_POIS.items():
+        items = []
+        for name, plat, plon in pois:
+            d = round(_haversine_km(lat, lon, plat, plon), 2)
+            items.append({
+                'name': name,
+                'distance_meters': int(d * 1000),
+                'distance_km': d,
+                'coordinates': {'latitude': plat, 'longitude': plon},
+            })
+        items.sort(key=lambda x: x['distance_km'])
+        distances[category] = items[:5]
+
+    # Beaches
+    beach_items = []
+    for name, blat, blon in _BEACHES:
+        d = round(_haversine_km(lat, lon, blat, blon), 2)
+        beach_items.append({
+            'name': name,
+            'distance_meters': int(d * 1000),
+            'distance_km': d,
+            'coordinates': {'latitude': blat, 'longitude': blon},
+        })
+    beach_items.sort(key=lambda x: x['distance_km'])
+    distances['beaches'] = beach_items[:3]
+
+    # Airport
+    aname, alat, alon = _AIRPORT
+    ad = round(_haversine_km(lat, lon, alat, alon), 2)
+    distances['airport'] = {
+        'name': aname,
+        'distance_meters': int(ad * 1000),
+        'distance_km': ad,
+        'coordinates': {'latitude': alat, 'longitude': alon},
+    }
+
+    # Summary stats
+    def get_closest(cat):
+        items = distances.get(cat, [])
+        if isinstance(items, list) and items:
+            return items[0]['distance_km']
+        return None
+
+    all_pois = []
+    for cat, items in distances.items():
+        if isinstance(items, list):
+            all_pois.extend(items)
+
+    summary_stats = {
+        'closest_primary_school_km': get_closest('primary_schools'),
+        'closest_secondary_school_km': get_closest('secondary_schools'),
+        'closest_supermarket_km': get_closest('supermarkets'),
+        'closest_beach_km': get_closest('beaches'),
+        'closest_hospital_km': get_closest('hospitals'),
+        'airport_distance_km': ad,
+        'total_amenities_within_1km': len([p for p in all_pois if p['distance_km'] <= 1]),
+        'total_amenities_within_2km': len([p for p in all_pois if p['distance_km'] <= 2]),
+        'total_amenities_within_5km': len([p for p in all_pois if p['distance_km'] <= 5]),
+    }
+
+    return {
+        'last_updated': datetime.now(),
+        'coordinates': {'latitude': lat, 'longitude': lon},
+        'distances': distances,
+        'summary_stats': summary_stats,
+        'calculation_method': 'embedded_poi_database',
+    }
+
+
 def _geocode_with_nominatim(address, suburb=None):
     """Geocode an address using Nominatim. Returns {LATITUDE, LONGITUDE} or None."""
     import requests
@@ -498,6 +653,24 @@ def valuate_single_property(suburb_key, property_id_str):
     doc['LATITUDE'] = lat
     doc['LONGITUDE'] = lon
     logger.info(f'  Coordinates: ({lat:.6f}, {lon:.6f})')
+
+    # Step 1b: Georeference enrichment (if missing)
+    if not doc.get('georeference_data'):
+        logger.info('  Computing georeference data (POI distances)...')
+        geo_data = compute_georeference(lat, lon)
+        try:
+            db[suburb_key].update_one(
+                {'_id': oid},
+                {'$set': {'georeference_data': geo_data}}
+            )
+            doc['georeference_data'] = geo_data
+            within_1km = geo_data['summary_stats']['total_amenities_within_1km']
+            within_2km = geo_data['summary_stats']['total_amenities_within_2km']
+            logger.info(f'  Georeference complete: {within_1km} amenities within 1km, {within_2km} within 2km')
+        except Exception as e:
+            logger.warning(f'  Failed to store georeference data: {e}')
+    else:
+        logger.info('  Georeference data already exists — skipping')
 
     # Step 2: OSM enrichment
     osm_enricher = OSMEnricher()
