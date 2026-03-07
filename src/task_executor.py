@@ -284,14 +284,22 @@ class TaskExecutor:
             # so we must explicitly pass them. This fixes the "127.0.0.1:27017 connection refused" issue.
             env = os.environ.copy()
             env['PYTHONUNBUFFERED'] = '1'  # Forces unbuffered stdout/stderr for Python subprocesses
-            
+
+            # Activate venv by prepending its bin dir to PATH so all `python3` calls
+            # use the venv (which has openai, pandas, azure, etc. installed).
+            venv_bin = '/home/fields/venv/bin'
+            if os.path.isdir(venv_bin):
+                env['PATH'] = venv_bin + ':' + env.get('PATH', '')
+                env['VIRTUAL_ENV'] = '/home/fields/venv'
+
             # Pass MongoDB connection string to subprocess
             # Try COSMOS_CONNECTION_STRING first (systemd service), then MONGODB_URI (shell)
             cosmos_uri = os.getenv('COSMOS_CONNECTION_STRING')
             mongodb_uri = os.getenv('MONGODB_URI')
             if cosmos_uri:
                 env['MONGODB_URI'] = cosmos_uri
-                self.logger.debug(f"Passing MONGODB_URI to subprocess (from COSMOS_CONNECTION_STRING)")
+                env['COSMOS_CONNECTION_STRING'] = cosmos_uri  # Some scripts read this directly
+                self.logger.debug(f"Passing MONGODB_URI + COSMOS_CONNECTION_STRING to subprocess")
             elif mongodb_uri:
                 env['MONGODB_URI'] = mongodb_uri
                 self.logger.debug(f"Passing MONGODB_URI to subprocess (from MONGODB_URI)")
