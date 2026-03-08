@@ -215,7 +215,24 @@ class RecentSoldScraper:
         self.mongo_client.admin.command("ping")
         print(f"  MongoDB connected — database: {DATABASE_NAME}")
 
-    def setup_driver(self):
+    def _cleanup_zombie_chrome(self):
+        """Kill any zombie Chrome/ChromeDriver processes to free resources."""
+        import subprocess as _sp
+        try:
+            result = _sp.run(
+                ["pgrep", "-c", "-f", "chrome|chromedriver"],
+                capture_output=True, text=True, timeout=5
+            )
+            count = int(result.stdout.strip()) if result.stdout.strip() else 0
+            if count > 0:
+                _sp.run(["pkill", "-9", "-f", "chrome|chromedriver"],
+                        capture_output=True, timeout=5)
+                import time as _t; _t.sleep(2)
+                print(f"  Cleaned up {count} zombie Chrome processes", flush=True)
+        except Exception:
+            pass
+
+    def setup_driver(self, max_retries=3):
         chrome_options = Options()
         chrome_options.add_argument("--headless=new")
         chrome_options.add_argument("--no-sandbox")
@@ -231,12 +248,23 @@ class RecentSoldScraper:
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         )
         service = Service("/usr/bin/chromedriver")
-        self.driver = webdriver.Chrome(service=service, options=chrome_options)
-        print("  Chrome WebDriver ready (headless)")
+        for attempt in range(1, max_retries + 1):
+            try:
+                self.driver = webdriver.Chrome(service=service, options=chrome_options)
+                print("  Chrome WebDriver ready (headless)", flush=True)
+                return
+            except Exception as e:
+                print(f"  WebDriver creation failed (attempt {attempt}/{max_retries}): {e}", flush=True)
+                self._cleanup_zombie_chrome()
+                if attempt == max_retries:
+                    raise
 
     def quit_driver(self):
         if self.driver:
-            self.driver.quit()
+            try:
+                self.driver.quit()
+            except Exception:
+                pass
             self.driver = None
 
     def scrape_search_page(self, url: str) -> str:
