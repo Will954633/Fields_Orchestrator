@@ -68,7 +68,7 @@ def process_one(req):
 
     try:
         result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=600, env=env,
+            cmd, capture_output=True, text=True, timeout=900, env=env,
             cwd=str(Path(__file__).parent.parent),
         )
 
@@ -99,14 +99,14 @@ def process_one(req):
         client.close()
 
     except subprocess.TimeoutExpired:
-        logger.error(f'Request {req_id} timed out after 600s')
+        logger.error(f'Request {req_id} timed out after 900s')
         client = get_client()
         client['system_monitor']['valuation_requests'].update_one(
             {'_id': req_id},
             {'$set': {
                 'status': 'failed',
                 'completed_at': datetime.utcnow(),
-                'error': 'Valuation timed out after 600 seconds',
+                'error': 'Valuation timed out after 900 seconds',
             }}
         )
         client.close()
@@ -138,11 +138,8 @@ def poll_loop():
             client = get_client()
             queue = client['system_monitor']['valuation_requests']
 
-            # Find oldest pending request
-            req = queue.find_one(
-                {'status': 'pending'},
-                sort=[('requested_at', 1)]
-            )
+            # Find a pending request (no sort — avoids Cosmos index requirement)
+            req = queue.find_one({'status': 'pending'})
             client.close()
 
             if req:
