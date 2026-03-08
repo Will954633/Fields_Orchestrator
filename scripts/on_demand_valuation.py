@@ -621,6 +621,66 @@ def run_precompute_valuation(db, doc, suburb_key, sold_by_suburb,
     return valuation_data
 
 
+def _load_sold_comparables_scoped(client, target_suburbs):
+    """Load sold comparables from only the specified suburbs (fast for on-demand)."""
+    result = {}
+    SUBURB_DISPLAY = {
+        'robina': 'Robina', 'varsity_lakes': 'Varsity Lakes',
+        'burleigh_waters': 'Burleigh Waters', 'burleigh_heads': 'Burleigh Heads',
+        'mudgeeraba': 'Mudgeeraba', 'reedy_creek': 'Reedy Creek',
+        'merrimac': 'Merrimac', 'worongary': 'Worongary', 'carrara': 'Carrara',
+    }
+
+    # Source 1: Gold_Coast sold properties
+    gc_db = client['Gold_Coast']
+    for suburb_key in target_suburbs:
+        try:
+            docs = list(gc_db[suburb_key].find({
+                'listing_status': 'sold',
+                'sale_price': {'$exists': True, '$ne': None}
+            }))
+            for doc in docs:
+                if not doc.get('suburb_scraped'):
+                    doc['suburb_scraped'] = SUBURB_DISPLAY.get(suburb_key, '')
+                doc['_sold_source'] = 'recently_sold'
+            if docs:
+                result.setdefault(suburb_key, []).extend(docs)
+        except Exception as e:
+            logger.warning(f'  Error loading Gold_Coast.{suburb_key} sold: {e}')
+
+    # Source 2: Target_Market_Sold_Last_12_Months
+    try:
+        tdb = client['Target_Market_Sold_Last_12_Months']
+        available_cols = set(tdb.list_collection_names())
+        for suburb_key in target_suburbs:
+            # Try both formats
+            col_name = None
+            display_suburb = SUBURB_DISPLAY.get(suburb_key, suburb_key.replace('_', ' ').title())
+            if suburb_key in available_cols:
+                col_name = suburb_key
+            elif display_suburb in available_cols:
+                col_name = display_suburb
+            if not col_name:
+                continue
+            docs = list(tdb[col_name].find({'sale_price': {'$exists': True, '$ne': None}}))
+            existing_addrs = {
+                d.get('address', '').lower().strip()
+                for d in result.get(suburb_key, [])
+            }
+            new_docs = []
+            for doc in docs:
+                doc['suburb_scraped'] = display_suburb
+                doc['_sold_source'] = 'target_market_12m'
+                if doc.get('address', '').lower().strip() not in existing_addrs:
+                    new_docs.append(doc)
+            if new_docs:
+                result.setdefault(suburb_key, []).extend(new_docs)
+    except Exception as e:
+        logger.warning(f'  Error loading Target_Market_Sold data: {e}')
+
+    return result
+
+
 def valuate_single_property(suburb_key, property_id_str):
     """Full valuation pipeline for a single property."""
     logger.info(f'Starting on-demand valuation: suburb={suburb_key}, id={property_id_str}')
@@ -703,21 +763,29 @@ def valuate_single_property(suburb_key, property_id_str):
     else:
         logger.info('  No photos available — skipping GPT enrichment')
 
-    # Step 4: CatBoost valuation
-    catboost_result = run_catboost_valuation(doc, client)
+    # Step 4: CatBoost valuation — skip for on-demand (too slow, queries all 98 collections)
+    # The website displays reconciled_valuation from precompute, not CatBoost
+    catboost_result = None
+    logger.info('  Skipping CatBoost (on-demand mode — precompute valuation is primary)')
 
     # Step 5: Precompute valuation data (NPUI, comparables, confidence intervals)
-    logger.info('  Loading sold comparables...')
-    sold_by_suburb = _load_sold_comparables(client)
+    # Only load sold records from nearby suburbs (not all 82 collections)
+    NEARBY_SUBURBS = {
+        'robina': ['robina', 'varsity_lakes', 'merrimac', 'mudgeeraba', 'worongary', 'carrara'],
+        'varsity_lakes': ['varsity_lakes', 'robina', 'burleigh_waters', 'reedy_creek'],
+        'burleigh_waters': ['burleigh_waters', 'burleigh_heads', 'varsity_lakes', 'merrimac'],
+        'burleigh_heads': ['burleigh_heads', 'burleigh_waters', 'varsity_lakes'],
+        'mudgeeraba': ['mudgeeraba', 'robina', 'worongary', 'reedy_creek'],
+        'reedy_creek': ['reedy_creek', 'mudgeeraba', 'varsity_lakes', 'burleigh_waters'],
+        'merrimac': ['merrimac', 'robina', 'carrara', 'burleigh_waters'],
+        'worongary': ['worongary', 'mudgeeraba', 'robina'],
+        'carrara': ['carrara', 'merrimac', 'robina'],
+    }
+    target_suburbs = NEARBY_SUBURBS.get(suburb_key, [suburb_key])
+    logger.info(f'  Loading sold comparables for {len(target_suburbs)} nearby suburbs...')
+    sold_by_suburb = _load_sold_comparables_scoped(client, target_suburbs)
     total_sold = sum(len(v) for v in sold_by_suburb.values())
     logger.info(f'  Loaded {total_sold} sold records')
-
-    # Pre-load coordinates and timelines for the target suburb + neighbouring suburbs
-    target_suburbs = [suburb_key]
-    # Add any suburbs that have sold data for comparable lookups
-    for sk in sold_by_suburb:
-        if sk not in target_suburbs:
-            target_suburbs.append(sk)
 
     gc_coord_lookup = _preload_gc_coordinates(client, target_suburbs)
     gc_timeline_lookup = _preload_gc_timelines(client, target_suburbs)
