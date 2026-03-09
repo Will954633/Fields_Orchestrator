@@ -1449,17 +1449,39 @@ def template_buyer_intelligence(suburbs, **kw):
         if r["new"] > 0:
             msg += f"\n  {r['new']} new this week."
 
-    total_underpriced = sum(r["underpriced"] for r in results[:3])
-    if total_underpriced > 0:
-        msg += f"\n\n{total_underpriced} across these suburbs are priced below our valuation. We can't tell you which ones in a Facebook post — but you can see them all with our analysis."
+    # List the underpriced properties by name
+    underpriced_props = []
+    for r in results[:3]:
+        suburb_props = [p for p in properties if p.get("_suburb_key") == r["key"]]
+        for p in suburb_props:
+            pv = parse_price_value(p.get("price", ""))
+            if not pv or pv < low or pv > high:
+                continue
+            vd = p.get("valuation_data", {}) or {}
+            pos = (vd.get("summary") or {}).get("positioning")
+            insuf = (vd.get("summary") or {}).get("insufficient_data", True)
+            if not insuf and pos in ("underpriced", "good_value"):
+                reconciled = (vd.get("confidence") or {}).get("reconciled_valuation")
+                gap_pct = (pv - reconciled) / reconciled * 100 if reconciled else 0
+                underpriced_props.append((p, pv, reconciled, gap_pct, r["name"]))
 
-    # Close with links
+    if underpriced_props:
+        underpriced_props.sort(key=lambda x: x[3])  # most underpriced first
+        msg += "\n\nPriced below our valuation:"
+        for p, pv, reconciled, gap_pct, suburb_name in underpriced_props[:4]:
+            addr = normalise_address(p)
+            bed = p.get("bedrooms", "?")
+            prop_id = str(p.get("_id", ""))
+            val_str = f" (valued at {fmt_price(int(reconciled))})" if reconciled else ""
+            link = f" → fieldsestate.com.au/property/{prop_id}" if prop_id else ""
+            msg += f"\n  {addr}, {suburb_name} — {bed}bd, {fmt_price(pv)}{val_str}{link}"
+
+    # Close with suburb article link
     most_common_key = results[0]["key"] if results else None
     buy_key = {"robina": "buy_robina", "varsity_lakes": "buy_varsity", "burleigh_waters": "buy_burleigh"}.get(most_common_key)
     link = article_link(buy_key) if buy_key else ""
     if link:
-        msg += f"\n\nFull breakdown by suburb: {link}"
-    msg += "\n\nfieldsestate.com.au/for-sale — every listing with our independent valuation."
+        msg += f"\n\nFull suburb analysis: {link}"
 
     return msg, "buyer_intelligence"
 
