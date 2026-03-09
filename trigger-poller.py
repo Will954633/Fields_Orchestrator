@@ -141,7 +141,44 @@ def run_trigger(trigger_doc, process_map, dry_run=False):
 # Poll loop
 # ---------------------------------------------------------------------------
 
+def publish_approved_posts(db, dry_run=False):
+    """Check for approved Facebook posts and publish them."""
+    col = db["fb_pending_posts"]
+    approved = list(col.find({"status": "approved"}).limit(5))
+    if not approved:
+        return 0
+
+    log.info(f"Found {len(approved)} approved post(s) to publish")
+    if dry_run:
+        log.info("DRY RUN — skipping publish")
+        return 0
+
+    cmd = [
+        "/home/fields/venv/bin/python3",
+        "/home/fields/Fields_Orchestrator/scripts/fb-page-post.py",
+        "--publish-approved",
+    ]
+    try:
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=60,
+            env={**os.environ, "PATH": os.environ.get("PATH", "")},
+        )
+        log.info(f"publish-approved exit={result.returncode}")
+        if result.stdout:
+            for line in result.stdout.strip().split("\n"):
+                log.info(f"  {line}")
+        if result.returncode != 0 and result.stderr:
+            log.error(f"  stderr: {result.stderr[-500:]}")
+    except Exception as e:
+        log.error(f"publish-approved error: {e}")
+
+    return len(approved)
+
+
 def poll_once(db, process_map, dry_run=False):
+    # Check for approved Facebook posts first
+    publish_approved_posts(db, dry_run=dry_run)
+
     col = db["trigger_requests"]
 
     # Find the oldest pending trigger
