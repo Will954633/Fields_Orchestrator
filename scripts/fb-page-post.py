@@ -1860,83 +1860,9 @@ def template_median_showcase(suburbs, properties=None, **kw):
     msg += f"\n{address}\n{spec_line}\n{clean_price_display(prop.get('price', ''))}{insp_line}\n"
 
     # Value Drivers summary — what you get for median money
-    pvd = prop.get("property_valuation_data", {}) or {}
-    cs = pvd.get("condition_summary", {}) or {}
-    overall = cs.get("overall_score")
-    kitchen = pvd.get("kitchen", {}) or {}
-    kitchen_score = kitchen.get("condition_score")
-    kitchen_bench = kitchen.get("benchtop_material", "")
-    kitchen_island = kitchen.get("island_bench")
-    exterior = (pvd.get("exterior", {}) or {}).get("condition_score")
-    outdoor = (pvd.get("outdoor", {}) or {}).get("outdoor_entertainment_score")
-
-    strengths = []
-    tradeoffs = []
-
-    # Kitchen
-    if kitchen_score is not None:
-        extras = []
-        if kitchen_bench:
-            extras.append(kitchen_bench.lower() + " benchtops")
-        if kitchen_island:
-            extras.append("island bench")
-        detail = f" ({', '.join(extras)})" if extras else ""
-        if kitchen_score >= 8:
-            strengths.append(f"Kitchen {kitchen_score}/10{detail}")
-        elif kitchen_score <= 6:
-            tradeoffs.append(f"Kitchen {kitchen_score}/10{detail}")
-
-    # Outdoor
-    outdoor_data = pvd.get("outdoor", {}) or {}
-    if outdoor is not None and outdoor >= 8:
-        outdoor_features = []
-        if outdoor_data.get("pool_present"):
-            outdoor_features.append(outdoor_data.get("pool_type", "pool"))
-        if outdoor_data.get("alfresco_present"):
-            outdoor_features.append("alfresco")
-        detail = f" ({', '.join(outdoor_features)})" if outdoor_features else ""
-        strengths.append(f"Outdoor {outdoor}/10{detail}")
-
-    # Room standouts/compact from parsed_rooms
-    rooms = prop.get("parsed_rooms", {}) or {}
-    standouts = []
-    compacts = []
-    for room_key, room_data in rooms.items():
-        if not isinstance(room_data, dict):
-            continue
-        pctl = room_data.get("percentile")
-        area = room_data.get("area")
-        if pctl is not None and area:
-            label = room_key.replace("_", " ").title()
-            if pctl >= 80:
-                standouts.append(f"{label} ({area:.0f}m², top {100-pctl}%)")
-            elif pctl <= 15:
-                compacts.append(f"{label} ({area:.0f}m², {pctl}th pctl)")
-
-    if standouts:
-        strengths.append("Standout rooms: " + ", ".join(standouts[:2]))
-    if compacts:
-        tradeoffs.append("Compact rooms: " + ", ".join(compacts[:2]))
-
-    # Overall condition as framing
-    if overall is not None:
-        if overall >= 8:
-            cond_label = "move-in ready"
-        elif overall >= 6:
-            cond_label = "good condition"
-        else:
-            cond_label = "may need updating"
-    else:
-        cond_label = None
-
-    if strengths or tradeoffs or cond_label:
-        msg += "\nWhat median money gets you:"
-        if cond_label and overall is not None:
-            msg += f"\nCondition: {overall}/10 — {cond_label}."
-        if strengths:
-            msg += "\n✓ " + " · ".join(strengths)
-        if tradeoffs:
-            msg += "\n↓ " + " · ".join(tradeoffs)
+    vd_section = _build_value_drivers_section(prop, suburb_props)
+    if vd_section:
+        msg += f"\n{vd_section}"
 
     # YoY median context from market data
     suburb_mkt = mkt.get(suburb_key, {})
@@ -2746,6 +2672,164 @@ def template_new_to_market(suburbs, properties=None, **kw):
         msg += "\n* Adjusted sale price accounts for differences in land size, floor area, bedrooms, and age between the comparable and the subject property."
 
     return msg, "new_to_market"
+
+
+def _compute_room_percentiles(subject_rooms, all_listings):
+    """Compute room-size percentiles for a property vs all listings in the suburb.
+
+    Mirrors the website's property-insights.mjs computeRoomPercentiles() logic.
+    Returns list of dicts: {label, area, percentile, median}.
+    """
+    if not subject_rooms or not isinstance(subject_rooms, dict):
+        return []
+
+    # Collect room areas by normalised room type across all listings
+    room_pools = {}
+    for listing in all_listings:
+        rooms = listing.get("parsed_rooms", {}) or {}
+        for rk, rv in rooms.items():
+            if not isinstance(rv, dict):
+                continue
+            area = rv.get("area")
+            if area and area > 0:
+                # Normalise: bedroom, bedroom_2, bedroom_3 → bedroom
+                base = rk.split("_")[0] if rk.replace("_", "").replace("bedroom", "").isdigit() or rk.startswith("bedroom") else rk
+                # Actually group all bedrooms together, all living rooms, etc.
+                if rk.startswith("bedroom"):
+                    base = "bedroom"
+                elif rk.startswith("living"):
+                    base = "living_room"
+                elif rk.startswith("dining"):
+                    base = "dining_room"
+                else:
+                    base = rk
+                room_pools.setdefault(base, []).append(area)
+
+    results = []
+    for rk, rv in subject_rooms.items():
+        if not isinstance(rv, dict):
+            continue
+        area = rv.get("area")
+        if not area or area <= 0:
+            continue
+
+        # Match to pool
+        if rk.startswith("bedroom"):
+            base = "bedroom"
+        elif rk.startswith("living"):
+            base = "living_room"
+        elif rk.startswith("dining"):
+            base = "dining_room"
+        else:
+            base = rk
+
+        pool = room_pools.get(base, [])
+        if len(pool) < 3:
+            continue
+
+        pool_sorted = sorted(pool)
+        count_below = sum(1 for v in pool_sorted if v < area)
+        pctl = round(count_below / len(pool_sorted) * 100)
+        median = pool_sorted[len(pool_sorted) // 2]
+
+        label = rk.replace("_", " ").title()
+        results.append({
+            "label": label,
+            "area": round(area, 1),
+            "percentile": pctl,
+            "median": round(median, 1),
+            "key": rk,
+        })
+
+    return results
+
+
+def _build_value_drivers_section(prop, suburb_props):
+    """Build a Value Drivers summary section for a property.
+
+    Computes room percentiles on the fly, extracts condition data,
+    and formats strengths & trade-offs like the website's Value Drivers tab.
+    """
+    pvd = prop.get("property_valuation_data", {}) or {}
+    cs = pvd.get("condition_summary", {}) or {}
+    overall = cs.get("overall_score")
+    kitchen = pvd.get("kitchen", {}) or {}
+    kitchen_score = kitchen.get("condition_score")
+    kitchen_bench = kitchen.get("benchtop_material", "")
+    kitchen_island = kitchen.get("island_bench")
+    outdoor_data = pvd.get("outdoor", {}) or {}
+    outdoor_score = outdoor_data.get("outdoor_entertainment_score")
+
+    strengths = []
+    tradeoffs = []
+
+    # Compute room percentiles vs suburb
+    rooms = prop.get("parsed_rooms", {}) or {}
+    room_pctls = _compute_room_percentiles(rooms, suburb_props)
+
+    for rp in room_pctls:
+        # Skip non-living rooms
+        if rp["key"] in ("garage", "laundry", "hallway", "entry", "foyer"):
+            continue
+        if rp["percentile"] >= 75:
+            strengths.append(f"{rp['label']}: {rp['area']}m² ({rp['percentile']}th percentile)")
+        elif rp["percentile"] <= 20:
+            tradeoffs.append(f"{rp['label']}: {rp['area']}m² ({rp['percentile']}th percentile)")
+
+    # Kitchen
+    if kitchen_score is not None:
+        extras = []
+        if kitchen_bench:
+            extras.append(kitchen_bench.lower() + " benchtops")
+        if kitchen_island:
+            extras.append("island bench")
+        detail = f" — {', '.join(extras)}" if extras else ""
+        item = f"Kitchen: {kitchen_score}/10{detail}"
+        if kitchen_score >= 7:
+            strengths.append(item)
+        else:
+            tradeoffs.append(item)
+
+    # Outdoor
+    if outdoor_score is not None and outdoor_score >= 7:
+        features = []
+        if outdoor_data.get("pool_present"):
+            pool_type = outdoor_data.get("pool_type", "")
+            features.append(f"{pool_type} pool" if pool_type else "pool")
+        if outdoor_data.get("alfresco_present"):
+            covered = "covered " if outdoor_data.get("alfresco_covered") else ""
+            features.append(f"{covered}alfresco")
+        detail = f" — {', '.join(features)}" if features else ""
+        strengths.append(f"Outdoor entertaining: {outdoor_score}/10{detail}")
+    elif outdoor_score is not None and outdoor_score <= 4:
+        tradeoffs.append(f"Outdoor entertaining: {outdoor_score}/10")
+
+    if not strengths and not tradeoffs and overall is None:
+        return ""
+
+    lines = []
+
+    # Overall condition header
+    if overall is not None:
+        if overall >= 8:
+            cond_label = "move-in ready"
+        elif overall >= 6:
+            cond_label = "good condition"
+        else:
+            cond_label = "may need updating"
+        lines.append(f"Condition: {overall}/10 — {cond_label}.")
+
+    if strengths:
+        lines.append("Strengths")
+        for s in strengths[:4]:
+            lines.append(f"  ✓ {s}")
+
+    if tradeoffs:
+        lines.append("Trade-offs")
+        for t in tradeoffs[:3]:
+            lines.append(f"  ↓ {t}")
+
+    return "\n".join(lines)
 
 
 def _get_condition_tradeoffs(prop):
