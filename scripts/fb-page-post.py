@@ -442,6 +442,12 @@ def get_individual_properties():
             "valuation_data.summary.value_gap_pct": 1,
             "valuation_data.summary.positioning": 1,
             "valuation_data.summary.insufficient_data": 1,
+            # Comparables for context (id, price, adjustment_result, weight, included_in_valuation)
+            "valuation_data.recent_sales.id": 1,
+            "valuation_data.recent_sales.price": 1,
+            "valuation_data.recent_sales.adjustment_result.adjusted_price": 1,
+            "valuation_data.recent_sales.weight.raw_weight": 1,
+            "valuation_data.recent_sales.included_in_valuation": 1,
             # Domain's own valuation
             "domain_valuation_at_listing.mid": 1,
             "domain_valuation_at_listing.low": 1,
@@ -2101,6 +2107,69 @@ def _find_active_comparables(active_properties, sold_prop, sale_val):
     return matches
 
 
+def _format_top_comps(p, n=3):
+    """Format the top N valuation comparables for a property as a short text block.
+    Returns a string like 'Based on: 38 Nardoo St (sold $1,585,000, adj. $1,476,670), ...'
+    or empty string if no comps available."""
+    from bson import ObjectId
+    vd = p.get("valuation_data") or {}
+    rs = vd.get("recent_sales", [])
+    if not rs:
+        return ""
+
+    included = [r for r in rs if r.get("included_in_valuation")]
+    if not included:
+        return ""
+    included.sort(key=lambda r: (r.get("weight") or {}).get("raw_weight", 0), reverse=True)
+
+    suburb_key = p.get("_suburb_key", "")
+    suburbs_to_check = [suburb_key] if suburb_key else []
+    # Also check neighbouring suburbs
+    for s in CORE_SUBURBS:
+        if s != suburb_key and s not in suburbs_to_check:
+            suburbs_to_check.append(s)
+
+    try:
+        client = MongoClient(COSMOS_URI)
+        db = client["Gold_Coast"]
+        comp_lines = []
+        for r in included[:n]:
+            comp_id = r.get("id")
+            sale_price = r.get("price")
+            adj_price = (r.get("adjustment_result") or {}).get("adjusted_price")
+            if not comp_id or not sale_price:
+                continue
+
+            # Resolve address from DB
+            addr = None
+            for s in suburbs_to_check:
+                try:
+                    sold_doc = db[s].find_one({"_id": ObjectId(comp_id)}, {"street_address": 1, "address": 1})
+                    if sold_doc:
+                        addr = sold_doc.get("street_address") or sold_doc.get("address")
+                        break
+                except Exception:
+                    continue
+            if not addr:
+                continue
+            # Clean address: strip suburb/state/postcode suffix, fix double spaces
+            import re
+            addr = re.sub(r',?\s*(Robina|Burleigh\s*Waters|Varsity\s*Lakes|Burleigh\s*Heads|Mudgeeraba|Reedy\s*Creek|Merrimac|Worongary|Carrara)\b.*$', '', addr, flags=re.IGNORECASE).strip()
+            addr = re.sub(r'\s+', ' ', addr)
+
+            if adj_price:
+                comp_lines.append(f"{addr} (sold {fmt_price(int(sale_price))}, adj. {fmt_price(int(adj_price))})")
+            else:
+                comp_lines.append(f"{addr} (sold {fmt_price(int(sale_price))})")
+
+        client.close()
+        if comp_lines:
+            return "Based on: " + " · ".join(comp_lines)
+    except Exception:
+        pass
+    return ""
+
+
 def _sold_insight(p, all_sold, active_properties=None):
     """Generate specific insights for one sold property — backward-looking data
     translated into forward-looking advice for buyers."""
@@ -2504,6 +2573,11 @@ def template_new_to_market(suburbs, properties=None, **kw):
         if non_obvious:
             raw = non_obvious[0][1]
             entry += f"\n  {_reframe_intel_as_advice(raw, p, price_val)}"
+
+        # Add top 3 valuation comparables
+        comps_str = _format_top_comps(p, n=3)
+        if comps_str:
+            entry += f"\n  {comps_str}"
         lines.append(entry)
 
     msg += "\n\n" + "\n\n".join(lines)
