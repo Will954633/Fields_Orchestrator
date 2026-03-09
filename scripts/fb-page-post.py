@@ -602,14 +602,14 @@ def property_intel(prop, suburbs=None, all_properties=None):
         best = standout_rooms[0]
         if len(standout_rooms) >= 2:
             second = standout_rooms[1]
-            insights.append((2, f"Standout rooms: {best[0]} ({best[1]:.0f}m², top {100-best[2]}%) and {second[0]} ({second[1]:.0f}m², top {100-second[2]}%) are larger than most in {suburb}."))
+            insights.append((2, f"Standout rooms: {best[0]} ({best[1]:.0f}m²) and {second[0]} ({second[1]:.0f}m²) are larger than most in {suburb}."))
         else:
-            insights.append((2, f"{best[0]} is {best[1]:.0f}m² — larger than {best[2]}% of {suburb} listings."))
+            insights.append((2, f"{best[0]} is {best[1]:.0f}m² — larger than most in {suburb}."))
 
     if compact_rooms and not standout_rooms:
         compact_rooms.sort(key=lambda x: x[2])
         worst = compact_rooms[0]
-        insights.append((3, f"Trade-off: {worst[0]} is {worst[1]:.0f}m² ({worst[2]}th percentile) — compact for {suburb}."))
+        insights.append((3, f"Trade-off: {worst[0]} is {worst[1]:.0f}m² — smaller than most in {suburb}."))
 
     # ── Condition assessment (from GPT photo analysis) ──
     overall_score = cs.get("overall_score")
@@ -2772,9 +2772,9 @@ def _build_value_drivers_section(prop, suburb_props):
         if rp["key"] in ("garage", "laundry", "hallway", "entry", "foyer"):
             continue
         if rp["percentile"] >= 75:
-            strengths.append(f"{rp['label']}: {rp['area']}m² ({rp['percentile']}th percentile)")
+            strengths.append(f"{rp['label']}: {rp['area']}m² — larger than most in the suburb")
         elif rp["percentile"] <= 20:
-            tradeoffs.append(f"{rp['label']}: {rp['area']}m² ({rp['percentile']}th percentile)")
+            tradeoffs.append(f"{rp['label']}: {rp['area']}m² — smaller than most in the suburb")
 
     # Kitchen
     if kitchen_score is not None:
