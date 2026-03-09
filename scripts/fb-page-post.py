@@ -1764,13 +1764,21 @@ def template_entry_price_watch(suburbs, properties=None, **kw):
         lot_note = f" on {lot:.0f}sqm" if lot else ""
         msg += f"\n{e['suburb']} at {fmt_price(e['price_val'])} — {addr}. {bed}-bed {bath}-bath{lot_note}."
 
-        # Frame as trade-off
+        # Frame as trade-off with specific condition data
         if e["median"]:
             pct_below = round((1 - e["price_val"] / e["median"]) * 100)
-            if pct_below >= 20:
-                msg += f" That's {pct_below}% below the suburb median — you're trading something for that discount, whether it's size, condition, or location within the suburb."
-            elif pct_below >= 10:
-                msg += f" {pct_below}% under the median — entry-level price, but check what you're giving up."
+            if pct_below >= 10:
+                tradeoff_note = _get_condition_tradeoffs(p)
+                if pct_below >= 20:
+                    if tradeoff_note:
+                        msg += f" That's {pct_below}% below the suburb median. {tradeoff_note}"
+                    else:
+                        msg += f" That's {pct_below}% below the suburb median — worth investigating what's behind that discount."
+                else:
+                    if tradeoff_note:
+                        msg += f" {pct_below}% under the median. {tradeoff_note}"
+                    else:
+                        msg += f" {pct_below}% under the median — entry-level price, check the details on-site."
 
         # Valuation context as opportunity signal
         vd = p.get("valuation_data", {}) or {}
@@ -2657,6 +2665,80 @@ def template_new_to_market(suburbs, properties=None, **kw):
         msg += "\n* Adjusted sale price accounts for differences in land size, floor area, bedrooms, and age between the comparable and the subject property."
 
     return msg, "new_to_market"
+
+
+def _get_condition_tradeoffs(prop):
+    """Extract specific condition notes from Value Drivers data for entry-price properties.
+
+    Returns a sentence describing the property's condition — either explaining
+    why it's cheap (low scores) or noting it's good value (high scores at low price).
+    """
+    pvd = prop.get("property_valuation_data", {}) or {}
+    if not pvd:
+        return ""
+
+    cs = pvd.get("condition_summary", {}) or {}
+    overall = cs.get("overall_score")
+    kitchen = pvd.get("kitchen", {}) or {}
+    kitchen_score = kitchen.get("condition_score")
+    benchtop = kitchen.get("benchtop_material", "")
+    island = kitchen.get("island_bench")
+    exterior = (pvd.get("exterior", {}) or {}).get("condition_score")
+    outdoor = (pvd.get("outdoor", {}) or {}).get("outdoor_entertainment_score")
+
+    negatives = []
+    positives = []
+
+    # Kitchen — the biggest renovation cost
+    if kitchen_score is not None:
+        bench_lower = benchtop.lower() if benchtop else ""
+        premium_bench = bench_lower in ("stone", "marble", "granite", "quartz", "engineered stone")
+        if kitchen_score <= 6:
+            detail = f" ({bench_lower} benchtop)" if bench_lower else ""
+            neg = f"kitchen {kitchen_score}/10{detail}"
+            if not island:
+                neg += ", no island bench"
+            negatives.append(neg)
+        elif kitchen_score >= 8:
+            extras = []
+            if premium_bench:
+                extras.append(bench_lower + " benchtop")
+            if island:
+                extras.append("island bench")
+            detail = f" ({', '.join(extras)})" if extras else ""
+            positives.append(f"kitchen {kitchen_score}/10{detail}")
+        else:
+            # 7/10 — middling, still worth noting specifics
+            details = []
+            if bench_lower:
+                details.append(f"{bench_lower} benchtop")
+            if not island:
+                details.append("no island bench")
+            elif island:
+                details.append("island bench")
+            detail = f" ({', '.join(details)})" if details else ""
+            negatives.append(f"kitchen {kitchen_score}/10{detail}")
+
+    # Exterior
+    if exterior is not None:
+        if exterior <= 6:
+            negatives.append(f"exterior {exterior}/10")
+        elif exterior >= 8:
+            positives.append(f"exterior {exterior}/10")
+
+    # Overall as fallback if no kitchen data
+    if overall is not None and not negatives and not positives:
+        if overall <= 6:
+            negatives.append(f"overall condition {overall}/10")
+        elif overall >= 8:
+            positives.append(f"overall condition {overall}/10")
+
+    # Build output — trade-offs take priority (they explain the discount)
+    if negatives:
+        return f"Our data: {', '.join(negatives).capitalize()} — that's likely part of the discount."
+    elif positives:
+        return f"Our data: {', '.join(positives).capitalize()} — solid condition for an entry price."
+    return ""
 
 
 def _reframe_intel_as_advice(raw_insight, prop, price_val):
