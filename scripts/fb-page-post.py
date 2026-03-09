@@ -1064,91 +1064,104 @@ def template_suburb_snapshot(suburbs, **kw):
 
 
 def template_price_comparison(suburbs, **kw):
-    """What does $X buy across suburbs — framed as trade-offs, not just counts."""
-    price_point = random.choice([1000000, 1300000, 1500000, 1800000, 2200000])
+    """Side-by-side comparison: two houses at similar prices in different suburbs."""
     properties = get_individual_properties()
 
-    results = []
-    for key, s in suburbs.items():
-        if not s["prices"]:
-            continue
-        lower = price_point * 0.85
-        upper = price_point * 1.15
-        matches = [p for p in s["prices"] if lower <= p <= upper]
-        if matches:
-            # Find properties in this bracket with intel
-            suburb_props = [p for p in properties if p.get("_suburb_key") == key]
-            bracket_props = []
-            for p in suburb_props:
-                pv = parse_price_value(p.get("price", ""))
-                if pv and lower <= pv <= upper:
-                    bracket_props.append(p)
+    # Build priced list per suburb
+    suburb_priced = {}
+    for key in CORE_SUBURBS:
+        suburb_props = [p for p in properties if p.get("_suburb_key") == key]
+        for p in suburb_props:
+            pv = parse_price_value(p.get("price", ""))
+            if pv and pv >= 300000:
+                suburb_priced.setdefault(key, []).append((p, pv))
 
-            # Count underpriced in this bracket
-            underpriced = 0
-            for p in bracket_props:
-                vd = p.get("valuation_data", {}) or {}
-                pos = (vd.get("summary") or {}).get("positioning")
-                insuf = (vd.get("summary") or {}).get("insufficient_data", True)
-                if not insuf and pos in ("underpriced", "good_value"):
-                    underpriced += 1
-
-            # Average lot size in bracket
-            lots = [p.get("lot_size_sqm") or (p.get("enriched_data") or {}).get("lot_size_sqm") for p in bracket_props]
-            lots = [l for l in lots if l and l > 50]
-            avg_lot = round(sum(lots) / len(lots)) if lots else None
-
-            results.append({
-                "name": s["display_name"],
-                "key": key,
-                "count": len(matches),
-                "total": s["total"],
-                "underpriced": underpriced,
-                "avg_lot": avg_lot,
-                "median_dom": s.get("median_dom"),
-            })
-
-    if len(results) < 2:
+    # Need at least 2 suburbs with priced listings
+    if len(suburb_priced) < 2:
         return None, None
 
-    results.sort(key=lambda x: -x["count"])
+    # Find the best pair: two properties from different suburbs within 10% of each other
+    best_pair = None
+    best_diff = float("inf")
+    suburb_keys = list(suburb_priced.keys())
 
-    msg = f"If your budget is around {fmt_price(price_point)}, here's the real trade-off between suburbs."
+    for i, sk1 in enumerate(suburb_keys):
+        for sk2 in suburb_keys[i+1:]:
+            for p1, v1 in suburb_priced[sk1]:
+                for p2, v2 in suburb_priced[sk2]:
+                    pct_diff = abs(v1 - v2) / max(v1, v2) * 100
+                    if pct_diff <= 10:
+                        # Prefer pairs with good data (valuation + condition)
+                        has_val = bool((p1.get("valuation_data") or {}).get("confidence")) and bool((p2.get("valuation_data") or {}).get("confidence"))
+                        has_pvd = bool(p1.get("property_valuation_data")) and bool(p2.get("property_valuation_data"))
+                        score = pct_diff - (20 if has_val else 0) - (10 if has_pvd else 0)
+                        if score < best_diff:
+                            best_diff = score
+                            best_pair = (p1, v1, sk1, p2, v2, sk2)
 
-    # Frame each suburb as a trade-off narrative
-    for r in results[:3]:
-        msg += f"\n\n{r['name']}: {plural(r['count'], 'option', 'options')}"
-        pieces = []
-        if r["median_dom"]:
-            if r["median_dom"] <= 30:
-                pieces.append(f"median DOM is {r['median_dom']}d — they move fast")
-            elif r["median_dom"] <= 60:
-                pieces.append(f"median DOM is {r['median_dom']}d — reasonable pace")
+    if not best_pair:
+        return None, None
+
+    p1, v1, sk1, p2, v2, sk2 = best_pair
+    name1 = SUBURB_DISPLAY.get(sk1, sk1)
+    name2 = SUBURB_DISPLAY.get(sk2, sk2)
+
+    avg_price = (v1 + v2) / 2
+    msg = f"Same budget, different suburbs. Here's what {fmt_price(round(avg_price / 50000) * 50000)} buys you right now.\n"
+
+    # Build side-by-side for each property
+    for idx, (p, pv, sk, name) in enumerate([(p1, v1, sk1, name1), (p2, v2, sk2, name2)]):
+        addr = normalise_address(p)
+        bed = p.get("bedrooms", "?")
+        bath = p.get("bathrooms", "?")
+        car = p.get("carspaces", "?")
+        lot = p.get("lot_size_sqm") or (p.get("enriched_data") or {}).get("lot_size_sqm")
+        days = p.get("days_on_domain")
+
+        specs = [f"{bed}bd {bath}ba"]
+        if car:
+            specs.append(f"{car}car")
+        if lot:
+            specs.append(f"{lot:.0f}sqm")
+        spec_line = " · ".join(specs)
+
+        msg += f"\n{'—' * 30}"
+        msg += f"\n{name} — {addr}"
+        msg += f"\n{fmt_price(pv)} · {spec_line}"
+
+        # Value Drivers summary
+        suburb_props = [pr for pr in properties if pr.get("_suburb_key") == sk]
+        vd_section = _build_value_drivers_section(p, suburb_props)
+        if vd_section:
+            msg += f"\n{vd_section}"
+
+        # Valuation context
+        vd = p.get("valuation_data", {}) or {}
+        conf = (vd.get("confidence") or {})
+        reconciled = conf.get("reconciled_valuation")
+        insufficient = (vd.get("summary") or {}).get("insufficient_data", True)
+        if reconciled and not insufficient:
+            val_gap = (pv - reconciled) / reconciled * 100
+            if val_gap < -5:
+                msg += f"\nPriced {abs(val_gap):.0f}% below our valuation ({fmt_price(reconciled)})."
+            elif val_gap > 5:
+                msg += f"\nPriced {val_gap:.0f}% above our valuation ({fmt_price(reconciled)})."
             else:
-                pieces.append(f"median DOM is {r['median_dom']}d — more time to think")
-        if r["underpriced"] > 0:
-            pieces.append(f"{r['underpriced']} already priced below our valuation")
-        if pieces:
-            msg += f". {pieces[0]}"
-            if len(pieces) > 1:
-                msg += f", and {pieces[1]}"
-            msg += "."
+                msg += f"\nIn line with our valuation ({fmt_price(reconciled)})."
 
-    # Lot size comparison if data available for 2+ suburbs
-    lot_results = [r for r in results[:3] if r["avg_lot"]]
-    if len(lot_results) >= 2:
-        lot_results.sort(key=lambda x: -x["avg_lot"])
-        biggest = lot_results[0]
-        smallest = lot_results[-1]
-        if biggest["avg_lot"] != smallest["avg_lot"]:
-            msg += f"\n\nFor the same money, {biggest['name']} gives you ~{biggest['avg_lot']}sqm vs ~{smallest['avg_lot']}sqm in {smallest['name']}."
+        if isinstance(days, (int, float)):
+            if days <= 7:
+                msg += f"\nJust listed."
+            elif days >= 45:
+                msg += f"\n{int(days)} days on market — room to negotiate."
 
-    msg += "\n\nThe question isn't just where you can afford to buy — it's where your money works hardest."
+        # Property link
+        prop_id = str(p.get("_id", ""))
+        if prop_id:
+            msg += f"\nFull report: fieldsestate.com.au/property/{prop_id}"
 
-    # Close with article link
-    link = article_link("indicators")
-    if link:
-        msg += f"\n\n{link}"
+    msg += f"\n\n{'—' * 30}"
+    msg += "\n\nSame money, different trade-offs. Which one works for your life?"
 
     return msg, "price_comparison"
 
