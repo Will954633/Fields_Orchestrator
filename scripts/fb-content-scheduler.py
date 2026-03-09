@@ -19,11 +19,11 @@ Weekly Calendar (AEST):
     EVENING:
       Mon  → New to market (freshest listings)
       Tue  → Data snapshot (ads-weighted template)
-      Wed  → Article share (marketing advisor handles)
+      Wed  → Price movement (stale + fresh listings)
       Thu  → Buyer intelligence (price bracket comparison)
       Fri  → Open home spotlight (don't miss this weekend)
       Sat  → Seller insight (market competition data)
-      Sun  → Weekly market wrap
+      Sun  → Sold preview (weekend sales teaser)
 
 Usage:
     python3 scripts/fb-content-scheduler.py --slot morning         # Post morning content
@@ -61,11 +61,11 @@ MORNING_CALENDAR = {
 EVENING_CALENDAR = {
     0: "new_to_market",       # Monday — freshest listings this week
     1: "data_snapshot",       # Tuesday — ads-weighted template
-    2: "article_share",       # Wednesday — marketing advisor handles
+    2: "price_movement",      # Wednesday — stale listings + fresh arrivals
     3: "buyer_intelligence",  # Thursday — price bracket comparison
     4: "open_home_spotlight",  # Friday — don't miss this weekend
     5: "seller_insight",      # Saturday — seller competition data
-    6: "weekly_wrap",         # Sunday — weekly market summary
+    6: "sold_preview",        # Sunday — preview of weekend sales (full results Mon)
 }
 
 # Templates for data_snapshot day — weighted by ads feedback
@@ -217,10 +217,10 @@ def show_status():
     pillar_labels = {
         "photo": "Local Photo (1x/week)",
         "data_snapshot": "Data Snapshot (ads-weighted)",
-        "article_share": "Article Share (marketing-advisor)",
+        "price_movement": "Price Movement (stale + fresh)",
         "seller_insight": "Seller Insight",
         "buyer_intelligence": "Buyer Intelligence",
-        "weekly_wrap": "Weekly Market Wrap",
+        "sold_preview": "Sold Preview (weekend sales)",
         "sold_results": "Sold Results (last week)",
         "entry_price_watch": "Entry Price Watch",
         "median_showcase": "Median Price Showcase",
@@ -241,7 +241,7 @@ def show_status():
     for day_idx, pillar in EVENING_CALENDAR.items():
         marker = " <-" if day_idx == now.weekday() else ""
         label = pillar_labels.get(pillar, pillar)
-        llm = "LLM" if pillar == "article_share" else "no LLM"
+        llm = "no LLM"
         print(f"  {day_names[day_idx]:3s}  {label:40s}  [{llm}]{marker}")
 
     # Ads performance weights
@@ -356,16 +356,11 @@ def main():
         success = post_data_template(template, dry_run=args.dry_run)
         template_used = template
 
-    elif pillar == "article_share":
-        print("Wednesday evening = article share. Handled by marketing-advisor.py.")
-        print("Run: python3 scripts/marketing-advisor.py")
-        print("Skipping automated post.")
-        return
-
     elif pillar in (
         "open_home_spotlight", "entry_price_watch", "median_showcase",
         "weekend_preview", "saturday_open_list", "sold_results",
-        "new_to_market", "seller_insight", "buyer_intelligence", "weekly_wrap",
+        "new_to_market", "seller_insight", "buyer_intelligence",
+        "sold_preview", "price_movement",
         "suburb_snapshot", "listing_count", "bedroom_breakdown",
     ):
         print(f"Posting {pillar}...")
