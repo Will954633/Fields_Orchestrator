@@ -1866,7 +1866,22 @@ def template_entry_price_watch(suburbs, properties=None, **kw):
         msg += "\n\nfieldsestate.com.au/for-sale — every house with our independent valuation."
 
     msg += f"\n\n{BUYER_CTA}"
-    return msg, "entry_price_watch"
+
+    # Hero image — pick the entry with most reasons to click (below valuation, or best condition)
+    best_hero = None
+    for e in entries:
+        p = e["prop"]
+        vd = p.get("valuation_data", {}) or {}
+        reconciled = (vd.get("confidence") or {}).get("reconciled_valuation")
+        insufficient = (vd.get("summary") or {}).get("insufficient_data", True)
+        if reconciled and not insufficient and e["price_val"] < reconciled:
+            best_hero = p
+            break
+    if not best_hero:
+        best_hero = entries[0]["prop"]
+    hero_image = _get_hero_image(best_hero)
+
+    return msg, "entry_price_watch", hero_image
 
 
 
