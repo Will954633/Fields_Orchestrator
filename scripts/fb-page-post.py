@@ -97,6 +97,19 @@ def post_photo_to_page(image_path, message):
     return data.get("post_id") or data.get("id")
 
 
+def post_photo_url_to_page(image_url, message):
+    """Post a photo by URL with caption to the Facebook page. Returns post_id."""
+    page_token = get_page_token()
+    r = requests.post(
+        f"{BASE}/{PAGE_ID}/photos",
+        data={"message": message, "url": image_url, "access_token": page_token},
+        timeout=30,
+    )
+    r.raise_for_status()
+    data = r.json()
+    return data.get("post_id") or data.get("id")
+
+
 def log_post(post_id, message, link, template_type, content_type="text"):
     """Log the post to MongoDB for tracking."""
     client = MongoClient(COSMOS_URI)
@@ -478,6 +491,9 @@ def get_individual_properties():
             "features": 1,
             # History
             "history": 1,
+            # Images for photo posts
+            "photo_tour_order": 1,
+            "property_images": 1,
         })
         for l in listings:
             l["_suburb_key"] = suburb
@@ -1894,7 +1910,8 @@ def template_median_showcase(suburbs, properties=None, **kw):
     if link:
         msg += f"\n{suburb_name} market data: {link}"
 
-    return msg, "median_showcase"
+    hero = _get_hero_image(prop)
+    return msg, "median_showcase", hero
 
 
 
@@ -2674,6 +2691,27 @@ def template_new_to_market(suburbs, properties=None, **kw):
     return msg, "new_to_market"
 
 
+def _get_hero_image(prop):
+    """Get the best image URL for a property.
+
+    Prefers photo_tour_order position 1 (curated front exterior),
+    falls back to first property_image.
+    """
+    tour = prop.get("photo_tour_order") or []
+    if tour:
+        # Sort by reorder_position, take first
+        sorted_tour = sorted(tour, key=lambda x: x.get("reorder_position", 999))
+        url = sorted_tour[0].get("url")
+        if url:
+            return url
+
+    images = prop.get("property_images") or []
+    if images:
+        return images[0]
+
+    return None
+
+
 def _compute_room_percentiles(subject_rooms, all_listings):
     """Compute room-size percentiles for a property vs all listings in the suburb.
 
@@ -2768,8 +2806,9 @@ def _build_value_drivers_section(prop, suburb_props):
     room_pctls = _compute_room_percentiles(rooms, suburb_props)
 
     for rp in room_pctls:
-        # Skip non-living rooms
-        if rp["key"] in ("garage", "laundry", "hallway", "entry", "foyer"):
+        # Skip non-living rooms and rooms covered by condition section
+        if rp["key"] in ("garage", "laundry", "hallway", "entry", "foyer",
+                          "kitchen", "bathroom", "bathroom_2", "bathroom_3", "ensuite"):
             continue
         if rp["percentile"] >= 75:
             strengths.append(f"{rp['label']}: {rp['area']}m² — larger than most in the suburb")
@@ -2977,22 +3016,37 @@ PROPERTY_TEMPLATES = {
 TEMPLATE_MAP = {**AGGREGATE_TEMPLATES, **PROPERTY_TEMPLATES}
 
 
+def _unpack_template_result(result):
+    """Unpack a template return value — handles both 2-tuple and 3-tuple.
+
+    Templates return (message, template_type) or (message, template_type, image_url).
+    """
+    if result is None:
+        return None, None, None
+    if len(result) == 3:
+        return result
+    return result[0], result[1], None
+
+
 def generate_post(suburbs, template_name=None):
-    """Pick a template and generate a post. If template_name given, use that specific one."""
+    """Pick a template and generate a post. If template_name given, use that specific one.
+
+    Returns (message, template_type, image_url). image_url may be None.
+    """
     properties = None
 
     if template_name:
         fn = TEMPLATE_MAP.get(template_name)
         if not fn:
             print(f"ERROR: Unknown template '{template_name}'. Available: {', '.join(TEMPLATE_MAP.keys())}")
-            return None, None
+            return None, None, None
 
         if template_name in PROPERTY_TEMPLATES:
             properties = get_individual_properties()
-            msg, ttype = fn(suburbs, properties=properties)
+            result = fn(suburbs, properties=properties)
         else:
-            msg, ttype = fn(suburbs)
-        return msg, ttype
+            result = fn(suburbs)
+        return _unpack_template_result(result)
 
     # Random selection (excluding scheduler-only templates)
     scheduler_only = {"sold_preview", "saturday_open_list", "weekend_preview", "sold_results", "price_movement"}
@@ -3003,12 +3057,13 @@ def generate_post(suburbs, template_name=None):
         if name in PROPERTY_TEMPLATES:
             if properties is None:
                 properties = get_individual_properties()
-            msg, template_type = template_fn(suburbs, properties=properties)
+            result = template_fn(suburbs, properties=properties)
         else:
-            msg, template_type = template_fn(suburbs)
+            result = template_fn(suburbs)
+        msg, template_type, image_url = _unpack_template_result(result)
         if msg:
-            return msg, template_type
-    return None, None
+            return msg, template_type, image_url
+    return None, None, None
 
 
 def main():
@@ -3024,18 +3079,25 @@ def main():
     if args.generate:
         print("Pulling suburb data...")
         suburbs = get_suburb_data()
-        message, template_type = generate_post(suburbs, template_name=args.template)
+        message, template_type, image_url = generate_post(suburbs, template_name=args.template)
         if not message:
             print("ERROR: Could not generate a post from available data.")
             sys.exit(1)
         print(f"\n--- Generated post (template: {template_type}) ---\n")
         print(message)
+        if image_url:
+            print(f"\n[Photo: {image_url}]")
         print("\n---")
 
         if args.post:
-            print("\nPublishing to Facebook page...")
-            post_id = post_to_page(message)
-            log_post(post_id, message, None, template_type)
+            if image_url:
+                print(f"\nPublishing photo post to Facebook page...")
+                post_id = post_photo_url_to_page(image_url, message)
+                log_post(post_id, message, None, template_type, content_type="photo")
+            else:
+                print("\nPublishing to Facebook page...")
+                post_id = post_to_page(message)
+                log_post(post_id, message, None, template_type)
             print(f"Published! Post ID: {post_id}")
             print(f"View: https://facebook.com/{post_id}")
         else:
