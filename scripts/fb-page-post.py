@@ -1844,8 +1844,11 @@ Follow us to see them first."""
     # Dedup by address (keep most recent)
     seen_addrs = {}
     for p in time_filtered:
-        addr = p.get("street_address", "")
-        if addr not in seen_addrs:
+        addr = normalise_address(p)
+        if not addr:
+            # No address at all — can't dedup, just include
+            seen_addrs[id(p)] = p
+        elif addr not in seen_addrs:
             seen_addrs[addr] = p
         else:
             existing = seen_addrs[addr]
