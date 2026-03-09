@@ -1296,7 +1296,7 @@ def template_seller_insight(suburbs, **kw):
 
 
 def template_buyer_intelligence(suburbs, **kw):
-    """Cross-suburb comparison with valuation context and market speed per bracket."""
+    """Cross-suburb comparison reframed as strategic advice per price bracket."""
     brackets = [
         (800000, 1300000, "under $1,300,000"),
         (1300000, 1700000, "$1,300,000 – $1,700,000"),
@@ -1312,7 +1312,6 @@ def template_buyer_intelligence(suburbs, **kw):
         for key, s in suburbs.items():
             matches = [p for p in s["prices"] if low <= p <= high]
             if matches:
-                # Find matching properties for intel
                 suburb_props = [p for p in properties if p.get("_suburb_key") == key]
                 bracket_props = []
                 for p in suburb_props:
@@ -1320,12 +1319,10 @@ def template_buyer_intelligence(suburbs, **kw):
                     if pv and low <= pv <= high:
                         bracket_props.append(p)
 
-                # Days on market for this bracket
                 dom_list = [p["days_on_domain"] for p in bracket_props if isinstance(p.get("days_on_domain"), (int, float))]
                 dom_list.sort()
                 bracket_median_dom = dom_list[len(dom_list) // 2] if dom_list else None
 
-                # Underpriced count
                 underpriced = 0
                 for p in bracket_props:
                     vd = p.get("valuation_data", {}) or {}
@@ -1334,7 +1331,6 @@ def template_buyer_intelligence(suburbs, **kw):
                     if not insuf and pos in ("underpriced", "good_value"):
                         underpriced += 1
 
-                # New this week
                 new = len([p for p in bracket_props if isinstance(p.get("days_on_domain"), (int, float)) and p["days_on_domain"] <= 7])
 
                 results.append({
@@ -1353,42 +1349,37 @@ def template_buyer_intelligence(suburbs, **kw):
         return None, None
 
     results.sort(key=lambda x: -x["count"])
-    lines = []
+
+    msg = f"If your budget is {label}, here's what the last 30 days tell you about how this price bracket behaves.\n"
+
     for r in results[:3]:
-        line = f"  {r['name']}: {plural(r['count'], 'house', 'houses')} ({fmt_price(r['min'])} – {fmt_price(r['max'])})"
-        extras = []
+        msg += f"\n{r['name']}: {plural(r['count'], 'house', 'houses')} ({fmt_price(r['min'])} – {fmt_price(r['max'])})"
+
         if r["median_dom"]:
-            extras.append(f"{r['median_dom']}d median on market")
+            if r["median_dom"] >= 45:
+                msg += f"\n  {r['median_dom']}-day median DOM. That's slow — sellers in this bracket are overpricing. Your leverage: make fair offers and wait."
+            elif r["median_dom"] <= 25:
+                msg += f"\n  {r['median_dom']}-day median DOM. Faster-moving — if you like something, don't wait for the second open home."
+            else:
+                msg += f"\n  {r['median_dom']}-day median DOM. Middle of the road — you have time to inspect properly, but don't sit on a good one."
+
         if r["new"] > 0:
-            extras.append(f"{r['new']} new this week")
-        if extras:
-            line += f"\n    {' · '.join(extras)}"
-        if r["underpriced"] > 0:
-            line += f"\n    {r['underpriced']} below our valuation estimate"
-        lines.append(line)
-
-    most = results[0]
-
-    msg = f"""Buying {label}? Here's what the market actually looks like.
-
-Houses in this price range right now:
-
-""" + "\n\n".join(lines)
-
-    # Add insight
-    fastest = min((r for r in results[:3] if r["median_dom"]), key=lambda r: r["median_dom"], default=None)
-    if fastest and fastest["median_dom"] and fastest["median_dom"] <= 25:
-        msg += f"\n\n{fastest['name']} is moving fastest at this price point ({fastest['median_dom']}-day median). If you see something you like, don't wait for the second open home."
+            msg += f"\n  {r['new']} new this week."
 
     total_underpriced = sum(r["underpriced"] for r in results[:3])
     if total_underpriced > 0:
-        msg += f"\n\n{total_underpriced} of these are priced below what our analysis says they're worth."
+        msg += f"\n\n{total_underpriced} across these suburbs are priced below our valuation. We can't tell you which ones in a Facebook post — but you can see them all with our analysis."
 
-    msg += """
-
-fieldsestate.com.au/for-sale — every house with an independent valuation."""
+    # Close with links
+    most_common_key = results[0]["key"] if results else None
+    buy_key = {"robina": "buy_robina", "varsity_lakes": "buy_varsity", "burleigh_waters": "buy_burleigh"}.get(most_common_key)
+    link = article_link(buy_key) if buy_key else ""
+    if link:
+        msg += f"\n\nFull breakdown by suburb: {link}"
+    msg += "\n\nfieldsestate.com.au/for-sale — every listing with our independent valuation."
 
     return msg, "buyer_intelligence"
+
 
 
 def template_sold_preview(suburbs, properties=None, **kw):
@@ -1481,11 +1472,16 @@ Follow us so you see it first."""
 
 
 def template_price_movement(suburbs, properties=None, **kw):
-    """Wednesday evening — stale listings (negotiation signal) and fresh arrivals."""
+    """Stale and fresh listings reframed as two types of buyer opportunity."""
     if not properties:
         properties = get_individual_properties()
 
-    # Split into stale (60+ days) and fresh (≤7 days)
+    # Get overall market DOM for context
+    all_dom = [p.get("days_on_domain") for p in properties if isinstance(p.get("days_on_domain"), (int, float))]
+    all_dom.sort()
+    overall_median_dom = all_dom[len(all_dom) // 2] if all_dom else None
+
+    # Split into stale (60+ days) and fresh (7 days or less)
     stale = []
     fresh = []
     for p in properties:
@@ -1497,74 +1493,85 @@ def template_price_movement(suburbs, properties=None, **kw):
         elif dom <= 7:
             fresh.append(p)
 
-    # Sort stale by DOM descending, fresh by DOM ascending
     stale.sort(key=lambda p: -(p.get("days_on_domain") or p.get("days_on_market", 0)))
     fresh.sort(key=lambda p: (p.get("days_on_domain") or p.get("days_on_market", 999)))
 
     if not stale and not fresh:
         return None, None
 
-    msg = f"Market movement — southern Gold Coast\n"
+    msg = "Two types of opportunity in the market right now — properties where sellers may be ready to deal, and brand-new listings where you can be first.\n"
 
     # Stale listings section
     if stale:
-        msg += f"\n{plural(len(stale), 'listing')} on the market 60+ days:"
+        dom_context = f" In a market where the average house sells in {overall_median_dom} days, that's a signal." if overall_median_dom else ""
+        msg += f"\nThese have been sitting 60+ days.{dom_context} Either the price is wrong, the marketing hasn't found the right buyer, or both. Either way, there's room to negotiate.\n"
+
         for p in stale[:5]:
             address = normalise_address(p)
             dom = p.get("days_on_domain") or p.get("days_on_market", 0)
             price_str = p.get("price", "")
             price_val = parse_price_value(str(price_str)) if price_str else None
 
-            line = f"\n  {address} — {dom} days"
+            line = f"\n{address} — {dom} days"
             if price_val and price_val >= 200000:
                 line += f" — {fmt_price(price_val)}"
 
-            # Add intelligence if available
-            intel = property_intel(p)
-            if intel:
-                top_insight = intel[0][1]  # Highest priority insight
-                # Truncate to keep post readable
-                if len(top_insight) <= 80:
-                    line += f"\n    {top_insight}"
+            # Valuation gap as negotiation leverage
+            vd = p.get("valuation_data", {}) or {}
+            conf = (vd.get("confidence") or {})
+            reconciled = conf.get("reconciled_valuation")
+            insufficient = (vd.get("summary") or {}).get("insufficient_data", True)
+            if reconciled and price_val and not insufficient:
+                gap_pct = (price_val - reconciled) / reconciled * 100
+                if gap_pct > 5:
+                    line += f"\n  Our analysis says it's worth {fmt_price(int(reconciled))}. They're asking {fmt_price(price_val)}. That {gap_pct:.0f}% gap? That's your starting point for a conversation."
+                elif gap_pct < -5:
+                    line += f"\n  Already below our {fmt_price(int(reconciled))} valuation — and still sitting. Worth a serious look."
 
             msg += line
 
-        msg += "\n\nProperties sitting this long often have room to negotiate. Worth a look if the location works for you."
-
     # Fresh listings section
     if fresh:
-        if stale:
-            msg += "\n"
-        msg += f"\n{plural(len(fresh), 'new listing')} in the last 7 days:"
+        msg += "\n"
+        msg += f"\n{plural(len(fresh), 'new listing')} this week. First open homes draw the biggest crowds and the best offers tend to come early.\n"
+
         for p in fresh[:5]:
             address = normalise_address(p)
-            dom = p.get("days_on_domain") or p.get("days_on_market", 0)
             price_str = p.get("price", "")
             price_val = parse_price_value(str(price_str)) if price_str else None
             beds = p.get("bedrooms", "")
+            suburb = p.get("_suburb_display", "")
 
-            line = f"\n  {address}"
+            line = f"\n{address}"
+            if suburb:
+                line += f", {suburb}"
             if beds:
                 line += f" — {beds}-bed"
             if price_val and price_val >= 200000:
                 line += f" — {fmt_price(price_val)}"
-            line += f" — {plural(dom, 'day')} on market"
 
             msg += line
 
-        msg += "\n\nNew listings get the most attention in their first 2 weeks. If one catches your eye, don't wait."
-
-    msg += """
-
-fieldsestate.com.au/for-sale — every listing with our independent valuation."""
+    # Close with link
+    suburb_counts = {}
+    for p in (stale[:5] + fresh[:5]):
+        sk = p.get("_suburb_key", "")
+        suburb_counts[sk] = suburb_counts.get(sk, 0) + 1
+    most_common = max(suburb_counts, key=suburb_counts.get) if suburb_counts else None
+    buy_key = {"robina": "buy_robina", "varsity_lakes": "buy_varsity", "burleigh_waters": "buy_burleigh"}.get(most_common)
+    link = article_link(buy_key) if buy_key else ""
+    if link:
+        msg += f"\n\nFull analysis: {link}"
+    msg += "\n\nfieldsestate.com.au/for-sale — every listing with our independent valuation."
 
     return msg, "price_movement"
+
 
 
 # ── PROPERTY TEMPLATES (individual property posts) ───────────────────────
 
 def template_open_home_spotlight(suburbs, properties=None, **kw):
-    """Individual property spotlight — deep intelligence on why this specific home is worth seeing."""
+    """Individual property spotlight — intelligence reframed as reasons to act."""
     if not properties:
         properties = get_individual_properties()
 
@@ -1582,12 +1589,10 @@ def template_open_home_spotlight(suburbs, properties=None, **kw):
     scored = []
     for p in candidates:
         intel = property_intel(p, suburbs, properties)
-        # Prefer properties with strong insights (priority 1 or 2)
         score = sum(3 - pri for pri, _ in intel[:3])
         price_val = parse_price_value(p.get("price", ""))
         scored.append((p, intel, score, price_val))
 
-    # Pick from top 3 most interesting
     scored.sort(key=lambda x: -x[2])
     top = scored[:3]
     prop, intel, _, price_val = random.choice(top) if top else (None, [], 0, None)
@@ -1595,6 +1600,7 @@ def template_open_home_spotlight(suburbs, properties=None, **kw):
         return None, None
 
     suburb = prop["_suburb_display"]
+    suburb_key = prop.get("_suburb_key", "")
     insp = prop["_inspections"][0]
     bed = prop.get("bedrooms", "?")
     bath = prop.get("bathrooms", "?")
@@ -1602,7 +1608,7 @@ def template_open_home_spotlight(suburbs, properties=None, **kw):
     address = normalise_address(prop)
     lot = prop.get("lot_size_sqm") or (prop.get("enriched_data") or {}).get("lot_size_sqm")
 
-    # Build the property card
+    # Property card (the hook)
     specs = [f"{bed}-bed", f"{bath}-bath"]
     car = prop.get("carspaces")
     if car:
@@ -1611,32 +1617,58 @@ def template_open_home_spotlight(suburbs, properties=None, **kw):
         specs.append(f"{lot:.0f}sqm")
     spec_line = " · ".join(specs)
 
-    msg = f"""{address}, {suburb}
-{spec_line} — {clean_price_display(prop.get('price', ''))}
-Open {insp['day']} at {insp['start']}"""
+    msg = f"{address}, {suburb}\n{spec_line} — {clean_price_display(prop.get('price', ''))}\nOpen {insp['day']} at {insp['start']}\n"
 
-    # Add top 2 intelligence insights
-    intel_lines = [text for pri, text in intel[:2]]
-    if intel_lines:
-        msg += "\n\n" + "\n".join(intel_lines)
+    # Reframe valuation intelligence as reasons to act
+    vd = prop.get("valuation_data", {}) or {}
+    conf = (vd.get("confidence") or {})
+    reconciled = conf.get("reconciled_valuation")
+    insufficient = (vd.get("summary") or {}).get("insufficient_data", True)
 
-    # Add market context
-    median = suburbs.get(prop.get("_suburb_key"), {}).get("median_price")
-    dom_median = suburbs.get(prop.get("_suburb_key"), {}).get("median_dom")
-    if median and price_val:
-        diff_pct = (price_val - median) / median * 100
-        if abs(diff_pct) <= 10:
-            msg += f"\n\nThis house sits right at the {suburb} median. Walk through it and you'll know exactly what middle-of-the-market buys here."
-        elif diff_pct < -10:
-            msg += f"\n\nOne of the more affordable houses in {suburb} right now. Entry-level price — go see what you actually get for the money."
+    if reconciled and price_val and not insufficient:
+        gap_pct = (price_val - reconciled) / reconciled * 100
+        if gap_pct < -5:
+            msg += f"\nOur analysis values this at {fmt_price(int(reconciled))} — the asking price is {abs(gap_pct):.0f}% lower. That gap doesn't last. If the numbers stack up for you, be at this open home early."
+        elif gap_pct > 10:
+            msg += f"\nOur valuation sits at {fmt_price(int(reconciled))} — the asking price is above that. Room to negotiate, especially if it's been sitting."
 
-    msg += "\n\nfieldsestate.com.au — independent property intelligence for the southern Gold Coast."
+    # Condition insight reframed
+    pvd = prop.get("property_valuation_data", {}) or {}
+    cs = pvd.get("condition_summary", {}) or {}
+    overall_score = cs.get("overall_score")
+    kitchen_bench = (pvd.get("kitchen") or {}).get("benchtop_material")
+    kitchen_island = (pvd.get("kitchen") or {}).get("island_bench")
+
+    if overall_score and overall_score >= 8:
+        extras = []
+        if kitchen_bench and kitchen_bench.lower() in ("stone", "marble", "granite", "quartz", "engineered stone"):
+            extras.append("stone benchtops")
+        if kitchen_island:
+            extras.append("island bench")
+        detail = f" with {' and '.join(extras)}" if extras else ""
+        msg += f"\nCondition scores {overall_score}/10{detail}. In a market where renovation adds 6-12 months to your timeline, move-in ready matters."
+    elif overall_score and overall_score <= 5:
+        msg += f"\nCondition: {overall_score}/10 — renovation opportunity. Factor $20,000-$80,000 into your budget, but that's where the upside is."
+
+    # DOM context as advice
+    if isinstance(days, (int, float)):
+        if days <= 3:
+            msg += "\nJust listed — first open homes attract the most serious buyers. Be there."
+        elif days <= 7:
+            msg += "\nFirst week on market. Early inspections tend to draw the strongest offers."
+        elif days >= 60:
+            msg += f"\nBeen on {days} days — the seller may be more flexible than you think."
+        elif days >= 45:
+            msg += f"\n{days} days on market. Getting past the fresh-listing window — there may be room to talk."
+
+    msg += "\n\nFull property analysis on fieldsestate.com.au"
 
     return msg, "open_home_spotlight"
 
 
+
 def template_entry_price_watch(suburbs, properties=None, **kw):
-    """The cheapest house per suburb — with valuation context and what you actually get."""
+    """The cheapest house per suburb -- framed as trade-offs and buyer advice."""
     if not properties:
         properties = get_individual_properties()
 
@@ -1663,7 +1695,10 @@ def template_entry_price_watch(suburbs, properties=None, **kw):
     if not entries:
         return None, None
 
-    lines = []
+    entries.sort(key=lambda e: e["price_val"])
+
+    msg = "What's the absolute cheapest way into each suburb right now? These are the floor prices — when they sell, they reset what 'affordable' means.\n"
+
     for e in entries:
         p = e["prop"]
         bed = p.get("bedrooms", "?")
@@ -1672,20 +1707,18 @@ def template_entry_price_watch(suburbs, properties=None, **kw):
         days = p.get("days_on_domain")
         lot = p.get("lot_size_sqm") or (p.get("enriched_data") or {}).get("lot_size_sqm")
 
-        gap = ""
+        lot_note = f" on {lot:.0f}sqm" if lot else ""
+        msg += f"\n{e['suburb']} at {fmt_price(e['price_val'])} — {addr}. {bed}-bed {bath}-bath{lot_note}."
+
+        # Frame as trade-off
         if e["median"]:
             pct_below = round((1 - e["price_val"] / e["median"]) * 100)
-            if pct_below > 0:
-                gap = f" ({pct_below}% below median)"
+            if pct_below >= 20:
+                msg += f" That's {pct_below}% below the suburb median — you're trading something for that discount, whether it's size, condition, or location within the suburb."
+            elif pct_below >= 10:
+                msg += f" {pct_below}% under the median — entry-level price, but check what you're giving up."
 
-        specs = [f"{bed}bd {bath}ba"]
-        if lot:
-            specs.append(f"{lot:.0f}sqm")
-        spec = " · ".join(specs)
-
-        line = f"  {e['suburb']}: {fmt_price(e['price_val'])} — {addr}{gap}\n  {spec}"
-
-        # Add valuation context
+        # Valuation context as opportunity signal
         vd = p.get("valuation_data", {}) or {}
         conf = (vd.get("confidence") or {})
         reconciled = conf.get("reconciled_valuation")
@@ -1693,32 +1726,33 @@ def template_entry_price_watch(suburbs, properties=None, **kw):
         if reconciled and not insufficient:
             val_gap = (e["price_val"] - reconciled) / reconciled * 100
             if val_gap < -5:
-                line += f" — Listed below our {fmt_price(int(reconciled))} valuation."
-            elif val_gap > 15:
-                line += f" — Our valuation: {fmt_price(int(reconciled))}. Room to negotiate."
+                msg += " Listed below our valuation — that gap usually closes at auction or in the first week."
 
+        # DOM as leverage
         if isinstance(days, (int, float)) and days >= 45:
-            line += f" {days} days on market."
+            msg += f" {days} days on market means the seller has been waiting. That's your leverage."
+        elif isinstance(days, (int, float)) and days <= 7:
+            msg += " Just listed — be early if the numbers work for you."
 
-        lines.append(line)
-
-    cheapest_overall = min(entries, key=lambda e: e["price_val"])
-
-    msg = f"""Entry-level house prices — what does the cheapest way in actually look like?
-
-""" + "\n\n".join(lines) + f"""
-
-{cheapest_overall['suburb']} has the lowest entry point at {fmt_price(cheapest_overall['price_val'])}. When this sells, it sets the floor for the suburb.
-
-fieldsestate.com.au/for-sale — every house with an independent valuation estimate."""
+    # Close with article link for cheapest suburb
+    cheapest = entries[0]
+    buy_key = {"robina": "buy_robina", "varsity_lakes": "buy_varsity", "burleigh_waters": "buy_burleigh"}.get(cheapest["suburb_key"])
+    link = article_link(buy_key) if buy_key else ""
+    if link:
+        msg += f"\n\nFull suburb breakdown: {link}"
+    else:
+        msg += "\n\nfieldsestate.com.au/for-sale — every house with our independent valuation."
 
     return msg, "entry_price_watch"
 
 
+
 def template_median_showcase(suburbs, properties=None, **kw):
-    """What does median money buy? Deep look at the house that defines 'middle of the market'."""
+    """What does median money buy? The house that defines 'average' with YoY context."""
     if not properties:
         properties = get_individual_properties()
+
+    mkt = get_market_context()
 
     candidates = [s for s in CORE_SUBURBS if s in suburbs and suburbs[s].get("median_price")]
     if not candidates:
@@ -1760,31 +1794,43 @@ def template_median_showcase(suburbs, properties=None, **kw):
 
     address = normalise_address(prop)
 
-    msg = f"""What does {fmt_price(median)} buy in {suburb_name}?
+    msg = f"Half the houses in {suburb_name} are above {fmt_price(median)}. Half below. This is the one sitting right on the line — and it tells you exactly what 'average' costs here.\n"
+    msg += f"\n{address}\n{spec_line}\n{clean_price_display(prop.get('price', ''))}{insp_line}\n"
 
-{total_listings} houses for sale. Half above {fmt_price(median)}, half below. This one sits right on the line:
+    # YoY median context from market data
+    suburb_mkt = mkt.get(suburb_key, {})
+    yoy = suburb_mkt.get("yoy_change_pct")
+    if yoy is not None:
+        if abs(yoy) < 2:
+            msg += f"\nA year ago, the median was roughly the same. Steady — but 'average' hasn't moved much, which means buyers have time to be selective."
+        elif yoy > 0:
+            msg += f"\nA year ago, the median was {abs(yoy):.1f}% lower. That context matters — 'average' keeps moving, and this is where it sits today."
+        else:
+            msg += f"\nA year ago, the median was {abs(yoy):.1f}% higher. The market has softened — what felt expensive a year ago is closer to the norm now."
 
-{address}
-{spec_line}
-{clean_price_display(prop.get('price', ''))}{insp_line}"""
-
-    # Add intelligence
+    # Intelligence insight
     intel = property_intel(prop, suburbs, properties)
     non_timing = [(pri, t) for pri, t in intel if "Brand new" not in t and "Fresh to" not in t]
     if non_timing:
         msg += f"\n\n{non_timing[0][1]}"
 
-    msg += f"""
+    # Buyer advice
+    msg += f"\n\nIf this house feels like good value, anything below it is worth a closer look. If it feels overpriced, adjust your expectations — the market has moved."
 
-Walk through the median house and you'll know what "average" actually means in {suburb_name}. Everything else is either a step up or a compromise from here.
-
-fieldsestate.com.au/for-sale — every house, independently valued."""
+    # Close with market metrics link
+    market_key = {"robina": "market_robina", "varsity_lakes": "market_varsity", "burleigh_waters": "market_burleigh"}.get(suburb_key)
+    link = article_link(market_key) if market_key else ""
+    if link:
+        msg += f"\n\n{suburb_name} market data: {link}"
+    else:
+        msg += f"\n\nfieldsestate.com.au/for-sale — every house, independently valued."
 
     return msg, "median_showcase"
 
 
+
 def template_weekend_preview(suburbs, properties=None, **kw):
-    """Friday post — curated picks for the weekend with specific intelligence on each."""
+    """Friday post — curated picks framed as reasons to walk through each one."""
     if not properties:
         properties = get_individual_properties()
 
@@ -1809,7 +1855,6 @@ def template_weekend_preview(suburbs, properties=None, **kw):
     for p in all_weekend:
         intel = property_intel(p, suburbs, properties)
         price_val = parse_price_value(p.get("price", ""))
-        # Weight: priority 1 insights = 3pts, priority 2 = 2pts, priority 3 = 1pt
         score = sum(4 - pri for pri, _ in intel[:3])
         scored.append((p, intel, score, price_val))
 
@@ -1827,7 +1872,6 @@ def template_weekend_preview(suburbs, properties=None, **kw):
         if len(picks) >= 4:
             break
 
-    # If not enough diverse picks, fill from top scores
     if len(picks) < 3:
         for p, intel, score, price_val in scored:
             if all(str(p.get("_id")) != str(pk[0].get("_id")) for pk in picks):
@@ -1835,7 +1879,8 @@ def template_weekend_preview(suburbs, properties=None, **kw):
                 if len(picks) >= 4:
                     break
 
-    lines = []
+    msg = f"{total_weekend} houses open this weekend. We looked at every one. These {len(picks)} are the ones we'd walk through first — and here's why.\n"
+
     for prop, intel, price_val in picks:
         insp = prop["_inspections"][0]
         suburb = prop["_suburb_display"]
@@ -1850,26 +1895,44 @@ def template_weekend_preview(suburbs, properties=None, **kw):
             specs.append(f"{lot:.0f}sqm")
         spec = " · ".join(specs)
 
-        # Use the top intelligence insight as the reason
-        reason = intel[0][1] if intel else ""
-        second = intel[1][1] if len(intel) > 1 and intel[1][0] <= 2 else ""
+        entry = f"\n{addr}, {suburb}\n{spec} — {price_str} — Open {insp['day']} {insp['start']}"
 
-        entry = f"  {addr}, {suburb}\n  {spec} — {price_str} — Open {insp['day']} {insp['start']}"
-        if reason:
-            entry += f"\n  {reason}"
-        if second:
-            entry += f"\n  {second}"
-        lines.append(entry)
+        # Reframe intelligence as REASONS to visit
+        vd = prop.get("valuation_data", {}) or {}
+        conf = (vd.get("confidence") or {})
+        reconciled = conf.get("reconciled_valuation")
+        insufficient = (vd.get("summary") or {}).get("insufficient_data", True)
+        days = prop.get("days_on_domain")
 
-    msg = f"""{total_weekend} houses open this weekend. Here are {len(picks)} that stood out in our data.
+        if reconciled and price_val and not insufficient:
+            gap_pct = (price_val - reconciled) / reconciled * 100
+            if gap_pct < -5:
+                entry += f"\nOur valuation sits at {fmt_price(int(reconciled))}. The asking price is well below that — this is the kind of gap that disappears after the first open home."
+            elif gap_pct > 10:
+                entry += f"\nListed above our {fmt_price(int(reconciled))} valuation. There's room to negotiate — go see it and make your own call."
 
-""" + "\n\n".join(lines) + """
+        # Condition reframed
+        pvd = prop.get("property_valuation_data", {}) or {}
+        cs = pvd.get("condition_summary", {}) or {}
+        overall_score = cs.get("overall_score")
+        if overall_score and overall_score >= 8:
+            entry += "\nMove-in ready. No renovation timeline to worry about."
+        elif overall_score and overall_score <= 5:
+            entry += "\nNeeds work — but that's where the upside is if you've got the budget."
 
-These picks are based on valuation analysis, days on market, and suburb comparisons — not agent marketing.
+        # DOM reframed
+        if isinstance(days, (int, float)):
+            if days <= 3:
+                entry += "\nJust listed. First open home. Expect serious buyer interest — this is when the best offers happen."
+            elif days >= 60:
+                entry += f"\n{days} days on market. The seller may be ready to deal."
 
-fieldsestate.com.au/for-sale — full listings with valuations."""
+        msg += entry + "\n"
+
+    msg += "\nThese picks are based on our valuation analysis and market data, not agent marketing. Full details: fieldsestate.com.au/for-sale"
 
     return msg, "weekend_preview"
+
 
 
 def template_saturday_open_list(suburbs, properties=None, **kw):
