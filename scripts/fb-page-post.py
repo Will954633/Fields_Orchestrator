@@ -2014,7 +2014,14 @@ def template_weekend_preview(suburbs, properties=None, **kw):
 
         entry = f"\n{addr}, {suburb}\n{spec} — {price_str} — Open {insp['day']} {insp['start']}"
 
-        # Reframe intelligence as REASONS to visit
+        # Value Drivers
+        suburb_key = prop.get("_suburb_key", "")
+        suburb_listings = [p for p in properties if p.get("_suburb_key") == suburb_key]
+        vd_section = _build_value_drivers_section(prop, suburb_listings)
+        if vd_section:
+            entry += f"\n{vd_section}"
+
+        # Valuation context
         vd = prop.get("valuation_data", {}) or {}
         conf = (vd.get("confidence") or {})
         reconciled = conf.get("reconciled_valuation")
@@ -2024,29 +2031,25 @@ def template_weekend_preview(suburbs, properties=None, **kw):
         if reconciled and price_val and not insufficient:
             gap_pct = (price_val - reconciled) / reconciled * 100
             if gap_pct < -5:
-                entry += f"\nOur valuation sits at {fmt_price(int(reconciled))}. The asking price is well below that — this is the kind of gap that disappears after the first open home."
+                entry += f"\nPriced {abs(gap_pct):.0f}% below our valuation ({fmt_price(int(reconciled))})."
             elif gap_pct > 10:
-                entry += f"\nListed above our {fmt_price(int(reconciled))} valuation. There's room to negotiate — go see it and make your own call."
+                entry += f"\nPriced {gap_pct:.0f}% above our valuation ({fmt_price(int(reconciled))}) — room to negotiate."
+            else:
+                entry += f"\nIn line with our valuation ({fmt_price(int(reconciled))})."
 
-        # Condition reframed
-        pvd = prop.get("property_valuation_data", {}) or {}
-        cs = pvd.get("condition_summary", {}) or {}
-        overall_score = cs.get("overall_score")
-        if overall_score and overall_score >= 8:
-            entry += "\nMove-in ready. No renovation timeline to worry about."
-        elif overall_score and overall_score <= 5:
-            entry += "\nNeeds work — but that's where the upside is if you've got the budget."
-
-        # DOM reframed
+        # DOM context
         if isinstance(days, (int, float)):
             if days <= 3:
-                entry += "\nJust listed. First open home. Expect serious buyer interest — this is when the best offers happen."
+                entry += "\nJust listed — first open home."
             elif days >= 60:
-                entry += f"\n{days} days on market. The seller may be ready to deal."
+                entry += f"\n{int(days)} days on market — the seller may be ready to deal."
+
+        # Property link
+        prop_id = str(prop.get("_id", ""))
+        if prop_id:
+            entry += f"\nFull report: fieldsestate.com.au/property/{prop_id}"
 
         msg += entry + "\n"
-
-    msg += "\nThese picks are based on our valuation analysis and market data, not agent marketing. Full details: fieldsestate.com.au/for-sale"
 
     return msg, "weekend_preview"
 
