@@ -189,10 +189,10 @@ def post_photo(dry_run=False):
 
 
 def post_data_template(template_name, dry_run=False):
-    """Post a specific data template via fb-page-post.py."""
+    """Stage a specific data template via fb-page-post.py for approval in Marketing Monitor."""
     cmd = [VENV_PYTHON, f"{SCRIPTS_DIR}/fb-page-post.py", "--generate", "--template", template_name]
     if not dry_run:
-        cmd.append("--post")
+        cmd.append("--stage")
 
     result = subprocess.run(
         cmd, capture_output=True, text=True, timeout=30,
@@ -375,7 +375,10 @@ def main():
     log_scheduler_run(args.slot, pillar, template_used, success, args.dry_run)
 
     if success:
-        print(f"\nDone. {args.slot} post ({pillar}) posted successfully.")
+        if pillar == "photo":
+            print(f"\nDone. {args.slot} post ({pillar}) posted successfully.")
+        else:
+            print(f"\nDone. {args.slot} post ({pillar}) staged for approval in Marketing Monitor.")
     elif not args.dry_run:
         print(f"\nWARNING: {args.slot} post ({pillar}) may have failed. Check logs.")
 
