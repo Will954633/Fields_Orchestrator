@@ -961,7 +961,8 @@ def template_suburb_snapshot(suburbs, **kw):
         scarce = [(k, v) for k, v in s["beds"].items() if v > 0 and v <= 3]
         if scarce:
             sc = scarce[0]
-            msg += f" If you want a {sc[0]}-bed, there are only {sc[1]} — fewer options but less competition."
+            article = 'an' if sc[0] in ('8', '11', '18') else 'a'
+            msg += f" If you want {article} {sc[0]}-bed, there {'is' if sc[1] == 1 else 'are'} only {sc[1]} — fewer options but less competition."
 
     # Market speed as advice
     if s.get("median_dom"):
@@ -1280,7 +1281,7 @@ def template_seller_insight(suburbs, **kw):
         if others:
             least_bed = min(others, key=lambda x: x[1])
             if least_bed[1] <= 5:
-                msg += f" If yours is {'an' if least_bed[0] == 8 else 'a'} {least_bed[0]}-bed, you have a smaller pool of competitors — that's an advantage."
+                msg += f" If yours is {'an' if least_bed[0] in ('8', '11', '18') else 'a'} {least_bed[0]}-bed, you have a smaller pool of competitors — that's an advantage."
             else:
                 msg += f" If yours is a different size, your competitive set is smaller — use that."
 
@@ -2020,7 +2021,8 @@ def template_saturday_open_list(suburbs, properties=None, **kw):
     if value_count > 0:
         strategic_parts.append(f"Properties tagged VALUE are priced below our independent valuation")
     if strategic_parts:
-        msg += f"\n\n{'. '.join(strategic_parts).capitalize()}."
+        joined = '. '.join(strategic_parts)
+        msg += f"\n\n{joined[0].upper() + joined[1:]}."
 
     msg += "\n\n" + "\n\n".join(sections)
 
