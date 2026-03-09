@@ -1280,7 +1280,7 @@ def template_seller_insight(suburbs, **kw):
         if others:
             least_bed = min(others, key=lambda x: x[1])
             if least_bed[1] <= 5:
-                msg += f" If yours is a {least_bed[0]}-bed, you have a smaller pool of competitors — that's an advantage."
+                msg += f" If yours is {'an' if least_bed[0] == 8 else 'a'} {least_bed[0]}-bed, you have a smaller pool of competitors — that's an advantage."
             else:
                 msg += f" If yours is a different size, your competitive set is smaller — use that."
 
@@ -2018,7 +2018,7 @@ def template_saturday_open_list(suburbs, properties=None, **kw):
     if new_fresh_count > 0:
         strategic_parts.append(f"{new_fresh_count} of these are first or second open homes — that's where the serious buyers will be")
     if value_count > 0:
-        strategic_parts.append(f"properties tagged VALUE are priced below our independent valuation")
+        strategic_parts.append(f"Properties tagged VALUE are priced below our independent valuation")
     if strategic_parts:
         msg += f"\n\n{'. '.join(strategic_parts).capitalize()}."
 
@@ -2423,10 +2423,12 @@ def _reframe_intel_as_advice(raw_insight, prop, price_val):
     # Condition pattern: "Condition: X/10"
     if raw_insight.startswith("Condition:") or "condition" in raw_insight.lower()[:15]:
         detail = raw_insight.split("—", 1)[-1].strip() if "—" in raw_insight else ""
+        # Strip trailing "Move-in ready." from detail to avoid duplication
+        detail = re.sub(r'\s*Move-in ready\.?\s*$', '', detail).rstrip('. ')
         score_match = re.search(r"(\d+)/10", raw_insight)
         if score_match and int(score_match.group(1)) >= 8:
             if detail:
-                return f"Move-in ready — {detail}. No renovation cost to factor in, which is worth something."
+                return f"Move-in ready — {detail}. No renovation cost to factor in."
             return "Move-in ready — no major renovation costs to factor in."
         elif score_match and int(score_match.group(1)) <= 5:
             return "Needs work — factor renovation costs into your offer. That's also your negotiation leverage."
