@@ -2295,6 +2295,9 @@ def template_new_to_market(suburbs, properties=None, **kw):
     total = len(new_listings)
     suburb_summary = ", ".join(f"{c} in {s}" for s, c in sorted(suburb_counts.items(), key=lambda x: -x[1]))
 
+    msg = f"{plural(total, 'new house', 'new houses')} hit the market this week — {suburb_summary}."
+    msg += "\n\nNew listings get the most buyer attention in their first 14 days — if one of these catches your eye, be at the first open home."
+
     lines = []
     for p, dt in new_listings[:6]:
         suburb = p["_suburb_display"]
@@ -2312,30 +2315,70 @@ def template_new_to_market(suburbs, properties=None, **kw):
 
         entry = f"  {addr}, {suburb} — {price}\n  {spec}"
 
-        # Add one key insight
+        # Add narrative-framed insight instead of raw data
         intel = property_intel(p, suburbs, properties)
-        # Skip the "brand new listing" insight since they're ALL new
         non_obvious = [(pri, t) for pri, t in intel if "Brand new" not in t and "Fresh to market" not in t]
         if non_obvious:
-            entry += f"\n  {non_obvious[0][1]}"
+            raw = non_obvious[0][1]
+            entry += f"\n  {_reframe_intel_as_advice(raw, p, price_val)}"
         lines.append(entry)
 
-    median_dom = suburbs.get("robina", {}).get("median_dom")
-    speed_context = ""
-    if median_dom and median_dom <= 30:
-        speed_context = f" The median house in Robina is on the market {median_dom} days — first impressions count, so get to the first open home if you can."
+    msg += "\n\n" + "\n\n".join(lines)
 
-    msg = f"""{plural(total, 'new house', 'new houses')} listed this week — {suburb_summary}
-
-""" + "\n\n".join(lines)
-
-    msg += f"""
-
-New listings get the most attention in their first 2 weeks.{speed_context}
-
-fieldsestate.com.au/for-sale — see every listing with our independent valuation."""
+    # Close with suburb-specific buy article for the most common suburb
+    busiest_suburb_display = max(suburb_counts.items(), key=lambda x: x[1])[0]
+    busiest_key = {v: k for k, v in SUBURB_DISPLAY.items()}.get(busiest_suburb_display)
+    buy_key = {"robina": "buy_robina", "varsity_lakes": "buy_varsity", "burleigh_waters": "buy_burleigh"}.get(busiest_key or "")
+    link = article_link(buy_key) if buy_key else ""
+    if link:
+        msg += f"\n\nIs now a good time to buy in {busiest_suburb_display}? {link}"
+    else:
+        msg += "\n\nfieldsestate.com.au/for-sale — see every listing with our independent valuation."
 
     return msg, "new_to_market"
+
+
+def _reframe_intel_as_advice(raw_insight, prop, price_val):
+    """Reframe a raw property_intel string into actionable buyer advice."""
+    # Overpriced pattern: "Priced X% above our valuation"
+    if "above our valuation" in raw_insight or "above estimated" in raw_insight:
+        vd = prop.get("valuation_data", {}) or {}
+        reconciled = (vd.get("confidence") or {}).get("reconciled_valuation")
+        if reconciled and price_val:
+            pct = abs(price_val - reconciled) / reconciled * 100
+            return f"Our analysis values this at {fmt_price(int(reconciled))}. The asking price is {pct:.0f}% higher. Unless something has changed that the data doesn't capture, there's room to negotiate."
+        return raw_insight
+
+    # Underpriced / good value pattern
+    if "below our valuation" in raw_insight or "good value" in raw_insight.lower() or "underpriced" in raw_insight.lower():
+        vd = prop.get("valuation_data", {}) or {}
+        reconciled = (vd.get("confidence") or {}).get("reconciled_valuation")
+        if reconciled and price_val:
+            return f"Priced below our {fmt_price(int(reconciled))} valuation. Worth a close look — this kind of pricing doesn't last long."
+        return raw_insight
+
+    # Condition pattern: "Condition: X/10"
+    if raw_insight.startswith("Condition:") or "condition" in raw_insight.lower()[:15]:
+        detail = raw_insight.split("—", 1)[-1].strip() if "—" in raw_insight else ""
+        score_match = re.search(r"(\d+)/10", raw_insight)
+        if score_match and int(score_match.group(1)) >= 8:
+            if detail:
+                return f"Move-in ready — {detail}. No renovation cost to factor in, which is worth something."
+            return "Move-in ready — no major renovation costs to factor in."
+        elif score_match and int(score_match.group(1)) <= 5:
+            return "Needs work — factor renovation costs into your offer. That's also your negotiation leverage."
+        return raw_insight
+
+    # Walkability pattern: "High walkability" or "X amenities within"
+    if "walkability" in raw_insight.lower() or "amenities within" in raw_insight.lower():
+        count_match = re.search(r"(\d+)\s+amenities", raw_insight)
+        if count_match:
+            count = count_match.group(1)
+            return f"{count} amenities within walking distance. If you're coming from further out, the lifestyle difference is real."
+        return raw_insight
+
+    # Default: return as-is
+    return raw_insight
 
 
 # ── Template registry ────────────────────────────────────────────────────
