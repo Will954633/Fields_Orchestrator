@@ -2167,6 +2167,14 @@ def _sold_insight(p, all_sold, active_properties=None):
     forward_matches = _get_forward_impact(p, suburb_key)
     if forward_matches:
         n = len(forward_matches)
+        # Determine directional influence on valuations
+        match_vals = [(m.get("valuation_data") or {}).get("confidence", {}).get("reconciled_valuation") for m in forward_matches]
+        match_vals = [v for v in match_vals if v]
+        if match_vals and sale_val:
+            avg_val = sum(match_vals) / len(match_vals)
+            direction = " lower" if sale_val < avg_val else " higher" if sale_val > avg_val else ""
+        else:
+            direction = ""
         # Pick the most notable one to mention
         named = []
         for m in forward_matches[:3]:
@@ -2175,23 +2183,31 @@ def _sold_insight(p, all_sold, active_properties=None):
                 named.append(maddr)
         if named:
             if n == 1:
-                high.append(f"This sale is a direct comparable for {named[0]} — it may shift that listing's valuation.")
+                high.append(f"This sale is a direct comparable for {named[0]} — it may shift that listing's valuation{direction}.")
             elif n <= 3:
-                high.append(f"This sale is a comp for {n} active listings including {named[0]}. If you're watching those, it could affect their valuations.")
+                high.append(f"This sale is a comp for {n} active listings including {named[0]}. It could push their valuations{direction}.")
             else:
-                high.append(f"This sale feeds into the valuation of {n} active listings including {named[0]}. It could reprice a portion of the market.")
+                high.append(f"This sale feeds into the valuation of {n} active listings including {named[0]}. It could reprice a portion of the market{direction}.")
 
-    # 5. Active comparable callout (medium — what's still available)
+    # 5. Active comparable callout (medium — what's still available, with direction)
     if sale_val and active_properties:
         similar = _find_active_comparables(active_properties, p, sale_val)
         if similar and not forward_matches:  # Don't double up with forward impact
+            # Determine directional influence
+            sim_prices = [parse_price_value(s.get("price", "")) for s in similar]
+            sim_prices = [sp for sp in sim_prices if sp]
+            if sim_prices:
+                sim_median = sorted(sim_prices)[len(sim_prices) // 2]
+                direction = " lower" if sale_val < sim_median else " higher" if sale_val > sim_median else ""
+            else:
+                direction = ""
             n = len(similar)
             if n == 1:
                 sim_addr = normalise_address(similar[0])
                 if sim_addr:
-                    medium.append(f"1 similar {bed}-bed still on market: {sim_addr}. This sale could reset its pricing benchmark.")
+                    medium.append(f"1 similar {bed}-bed still on market: {sim_addr}. This sale could reset its pricing benchmark{direction}.")
             elif n >= 2:
-                medium.append(f"{n} similar {bed}-beds still on market in {suburb}. This sale could reset their pricing benchmark.")
+                medium.append(f"{n} similar {bed}-beds still on market in {suburb}. This sale could reset their pricing benchmark{direction}.")
 
     # 6. Prior transaction history / capital gain
     if txns and sale_val:
