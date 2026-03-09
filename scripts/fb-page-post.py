@@ -1133,58 +1133,175 @@ fieldsestate.com.au/for-sale — every house with an independent valuation."""
     return msg, "buyer_intelligence"
 
 
-def template_weekly_wrap(suburbs, **kw):
-    """Sunday evening — the week's intelligence summary."""
-    total = sum(s["total"] for s in suburbs.values())
-    total_new = sum(s.get("new_this_week", 0) for s in suburbs.values())
-    total_stale = sum(s.get("stale_listings", 0) for s in suburbs.values())
-    total_underpriced = sum(s.get("underpriced_count", 0) for s in suburbs.values())
+def template_sold_preview(suburbs, properties=None, **kw):
+    """Sunday evening — preview of what sold this weekend, full breakdown tomorrow."""
+    sold_properties = get_recently_sold_properties()
 
-    suburb_lines = []
-    for key in sorted(suburbs.keys(), key=lambda k: -suburbs[k]["total"]):
-        s = suburbs[key]
-        if s["total"] == 0:
-            continue
-        line = f"  {s['display_name']}: {s['total']} houses"
-        if s["median_price"] and s["median_price"] >= 200000:
-            line += f" | median {fmt_price(s['median_price'])}"
-        if s.get("median_dom"):
-            line += f" | {s['median_dom']}d avg on market"
-        suburb_lines.append(line)
+    # Filter to last 3 days (weekend window: Fri-Sun)
+    cutoff = datetime.now() - timedelta(days=3)
+    weekend_sold = []
+    for p in sold_properties:
+        sold_dt = _parse_sold_date(p)
+        if sold_dt and sold_dt >= cutoff:
+            p["_sold_dt"] = sold_dt
+            weekend_sold.append(p)
 
-    msg = f"""Southern Gold Coast — your weekly market briefing
+    # Dedup by address
+    seen_addrs = {}
+    for p in weekend_sold:
+        addr = p.get("street_address", "")
+        if addr not in seen_addrs or p.get("_sold_dt", datetime.min) > seen_addrs[addr].get("_sold_dt", datetime.min):
+            seen_addrs[addr] = p
+    weekend_sold = list(seen_addrs.values())
 
-{total} houses for sale across our 3 suburbs.
+    # Count per suburb
+    suburb_counts = {}
+    for p in weekend_sold:
+        key = p.get("_suburb_key", "unknown")
+        display = p.get("_suburb_display", key.replace("_", " ").title())
+        suburb_counts[key] = suburb_counts.get(key, {"count": 0, "display": display})
+        suburb_counts[key]["count"] += 1
 
-""" + "\n".join(suburb_lines)
+    total = len(weekend_sold)
 
-    # Market dynamics
-    dynamics = []
-    if total_new > 0:
-        dynamics.append(f"{total_new} new listings this week")
-    if total_stale > 0:
-        dynamics.append(f"{total_stale} on the market 60+ days")
-    if total_underpriced > 0:
-        dynamics.append(f"{total_underpriced} flagged below estimated value by our analysis")
+    if total == 0:
+        # Fallback — still useful: tease Monday's full sold results
+        msg = """Sales preview — southern Gold Coast
 
-    if dynamics:
-        msg += "\n\n" + ". ".join(dynamics) + "."
+No confirmed sales recorded this weekend. Settlement timelines mean some take days or weeks to appear in the data.
 
-    # Fastest/slowest market
-    suburbs_with_dom = [(k, v) for k, v in suburbs.items() if v.get("median_dom")]
-    if suburbs_with_dom:
-        fastest = min(suburbs_with_dom, key=lambda x: x[1]["median_dom"])
-        slowest = max(suburbs_with_dom, key=lambda x: x[1]["median_dom"])
-        if fastest[1]["median_dom"] != slowest[1]["median_dom"]:
-            msg += f"\n\nFastest-moving suburb: {fastest[1]['display_name']} ({fastest[1]['median_dom']}-day median). Slowest: {slowest[1]['display_name']} ({slowest[1]['median_dom']} days)."
+Tomorrow morning we publish the full weekly sold results — every confirmed sale, what it sold for, and how it compares to our independent valuation.
+
+Follow us so you don't miss it.
+
+fieldsestate.com.au — independent property intelligence."""
+        return msg, "sold_preview"
+
+    # Build suburb breakdown
+    suburb_parts = []
+    for key in ["robina", "varsity_lakes", "burleigh_waters"]:
+        if key in suburb_counts:
+            sc = suburb_counts[key]
+            word = "sale" if sc["count"] == 1 else "sales"
+            suburb_parts.append(f"{sc['display']}: {sc['count']} {word}")
+
+    # Add any other suburbs not in the main 3
+    for key, sc in suburb_counts.items():
+        if key not in ["robina", "varsity_lakes", "burleigh_waters"]:
+            word = "sale" if sc["count"] == 1 else "sales"
+            suburb_parts.append(f"{sc['display']}: {sc['count']} {word}")
+
+    sale_word = "property sold" if total == 1 else "properties sold"
+    msg = f"""{total} {sale_word} this weekend — southern Gold Coast
+
+{chr(10).join('  ' + s for s in suburb_parts)}"""
+
+    # Tease details for tomorrow
+    # Show price range if available
+    prices = []
+    for p in weekend_sold:
+        sp = p.get("sale_price")
+        if sp:
+            val = parse_price_value(str(sp))
+            if val and val >= 200000:
+                prices.append(val)
+
+    if prices:
+        if len(prices) == 1:
+            msg += f"\n\nSale price: {fmt_price(prices[0])}."
+        else:
+            msg += f"\n\nPrice range: {fmt_price(min(prices))} to {fmt_price(max(prices))}."
 
     msg += """
 
-Most people make property decisions based on emotion and agent marketing. These numbers are what the market actually looks like right now.
+Full breakdown tomorrow morning — what each sold for, how long it was on the market, and how the sale price compares to our independent valuation.
+
+Follow us to see it first.
 
 fieldsestate.com.au — independent property intelligence."""
 
-    return msg, "weekly_wrap"
+    return msg, "sold_preview"
+
+
+def template_price_movement(suburbs, properties=None, **kw):
+    """Wednesday evening — stale listings (negotiation signal) and fresh arrivals."""
+    if not properties:
+        properties = get_individual_properties()
+
+    # Split into stale (60+ days) and fresh (≤7 days)
+    stale = []
+    fresh = []
+    for p in properties:
+        dom = p.get("days_on_domain") or p.get("days_on_market")
+        if not dom:
+            continue
+        if dom >= 60:
+            stale.append(p)
+        elif dom <= 7:
+            fresh.append(p)
+
+    # Sort stale by DOM descending, fresh by DOM ascending
+    stale.sort(key=lambda p: -(p.get("days_on_domain") or p.get("days_on_market", 0)))
+    fresh.sort(key=lambda p: (p.get("days_on_domain") or p.get("days_on_market", 999)))
+
+    if not stale and not fresh:
+        return None, None
+
+    msg = f"Market movement — southern Gold Coast\n"
+
+    # Stale listings section
+    if stale:
+        msg += f"\n{plural(len(stale), 'listing')} on the market 60+ days:"
+        for p in stale[:5]:
+            address = normalise_address(p)
+            dom = p.get("days_on_domain") or p.get("days_on_market", 0)
+            price_str = p.get("price", "")
+            price_val = parse_price_value(str(price_str)) if price_str else None
+
+            line = f"\n  {address} — {dom} days"
+            if price_val and price_val >= 200000:
+                line += f" — {fmt_price(price_val)}"
+
+            # Add intelligence if available
+            intel = property_intel(p)
+            if intel:
+                top_insight = intel[0][1]  # Highest priority insight
+                # Truncate to keep post readable
+                if len(top_insight) <= 80:
+                    line += f"\n    {top_insight}"
+
+            msg += line
+
+        msg += "\n\nProperties sitting this long often have room to negotiate. Worth a look if the location works for you."
+
+    # Fresh listings section
+    if fresh:
+        if stale:
+            msg += "\n"
+        msg += f"\n{plural(len(fresh), 'new listing')} in the last 7 days:"
+        for p in fresh[:5]:
+            address = normalise_address(p)
+            dom = p.get("days_on_domain") or p.get("days_on_market", 0)
+            price_str = p.get("price", "")
+            price_val = parse_price_value(str(price_str)) if price_str else None
+            beds = p.get("bedrooms", "")
+
+            line = f"\n  {address}"
+            if beds:
+                line += f" — {beds}-bed"
+            if price_val and price_val >= 200000:
+                line += f" — {fmt_price(price_val)}"
+            line += f" — {plural(dom, 'day')} on market"
+
+            msg += line
+
+        msg += "\n\nNew listings get the most attention in their first 2 weeks. If one catches your eye, don't wait."
+
+    msg += """
+
+fieldsestate.com.au/for-sale — every listing with our independent valuation."""
+
+    return msg, "price_movement"
 
 
 # ── PROPERTY TEMPLATES (individual property posts) ───────────────────────
@@ -1895,7 +2012,6 @@ AGGREGATE_TEMPLATES = {
     "bedroom_breakdown": template_bedroom_breakdown,
     "seller_insight": template_seller_insight,
     "buyer_intelligence": template_buyer_intelligence,
-    "weekly_wrap": template_weekly_wrap,
 }
 
 PROPERTY_TEMPLATES = {
@@ -1906,6 +2022,8 @@ PROPERTY_TEMPLATES = {
     "saturday_open_list": template_saturday_open_list,
     "sold_results": template_sold_results,
     "new_to_market": template_new_to_market,
+    "price_movement": template_price_movement,
+    "sold_preview": template_sold_preview,
 }
 
 TEMPLATE_MAP = {**AGGREGATE_TEMPLATES, **PROPERTY_TEMPLATES}
@@ -1929,7 +2047,7 @@ def generate_post(suburbs, template_name=None):
         return msg, ttype
 
     # Random selection (excluding scheduler-only templates)
-    scheduler_only = {"weekly_wrap", "saturday_open_list", "weekend_preview", "sold_results"}
+    scheduler_only = {"sold_preview", "saturday_open_list", "weekend_preview", "sold_results", "price_movement"}
     daily_templates = [(name, fn) for name, fn in TEMPLATE_MAP.items() if name not in scheduler_only]
     random.shuffle(daily_templates)
 
