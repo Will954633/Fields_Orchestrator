@@ -326,14 +326,14 @@ def get_aest_now():
     return datetime.now(timezone.utc) + timedelta(hours=10)
 
 
-def query_with_retry(collection, filter_doc, projection, max_retries=3):
+def query_with_retry(collection, filter_doc, projection, max_retries=5):
     """Query CosmosDB with retry on 429 rate limit errors."""
     for attempt in range(max_retries):
         try:
             return list(collection.find(filter_doc, projection))
         except OperationFailure as e:
             if e.code == 16500 and attempt < max_retries - 1:
-                wait = (attempt + 1) * 0.5
+                wait = (attempt + 1) * 1.0
                 time.sleep(wait)
                 continue
             raise
@@ -446,8 +446,21 @@ def get_individual_properties():
             "domain_valuation_at_listing.mid": 1,
             "domain_valuation_at_listing.low": 1,
             "domain_valuation_at_listing.high": 1,
-            # Property condition (GPT photo assessment)
+            # Property condition (GPT photo assessment) — full PVD for Value Drivers data
             "property_valuation_data.condition_summary": 1,
+            "property_valuation_data.kitchen.condition_score": 1,
+            "property_valuation_data.kitchen.benchtop_material": 1,
+            "property_valuation_data.kitchen.island_bench": 1,
+            "property_valuation_data.bathrooms": 1,
+            "property_valuation_data.exterior.condition_score": 1,
+            "property_valuation_data.outdoor.outdoor_entertainment_score": 1,
+            "property_valuation_data.layout.study_present": 1,
+            "property_valuation_data.property_overview": 1,
+            # Room dimensions + percentiles
+            "parsed_rooms": 1,
+            # Georeference / location intelligence
+            "georeference_data.summary_stats": 1,
+            "georeference_data.distances": 1,
             # Enriched data
             "enriched_data.floor_area_sqm": 1,
             "enriched_data.lot_size_sqm": 1,
@@ -464,6 +477,7 @@ def get_individual_properties():
             l["_suburb_key"] = suburb
             l["_suburb_display"] = SUBURB_DISPLAY.get(suburb, suburb.replace("_", " ").title())
         properties.extend(listings)
+        time.sleep(0.5)  # Cosmos 429 rate limit spacing
 
     client.close()
     return properties
@@ -493,6 +507,9 @@ def get_suburb_dom_stats(properties):
 def property_intel(prop, suburbs=None, all_properties=None):
     """Generate actionable intelligence bullets for a single property.
 
+    Uses Value Drivers data: room dimensions, condition scores, location,
+    valuation gap, days on market, lot/floor percentiles, capital gain.
+
     Returns a list of (priority, text) tuples sorted by impact.
     Priority: 1=urgent/actionable, 2=high-value context, 3=useful background.
     """
@@ -502,6 +519,7 @@ def property_intel(prop, suburbs=None, all_properties=None):
     suburb_key = prop.get("_suburb_key", "")
     days = prop.get("days_on_domain")
     bed = prop.get("bedrooms")
+    bath = prop.get("bathrooms")
 
     # ── Valuation gap (highest impact — is this property priced well?) ──
     vd = prop.get("valuation_data", {}) or {}
@@ -531,7 +549,6 @@ def property_intel(prop, suburbs=None, all_properties=None):
 
     # ── Days on market (urgency signal) ──
     if isinstance(days, (int, float)):
-        # Get suburb average
         suburb_median_dom = None
         if all_properties:
             suburb_days = [
@@ -554,6 +571,96 @@ def property_intel(prop, suburbs=None, all_properties=None):
         elif days >= 45:
             insights.append((3, f"{days} days on market. Getting past the fresh-listing phase."))
 
+    # ── Room dimensions from parsed_rooms (Value Drivers data) ──
+    rooms = prop.get("parsed_rooms", {}) or {}
+    pvd = prop.get("property_valuation_data", {}) or {}
+    cs = pvd.get("condition_summary", {}) or {}
+
+    # Standout rooms (large for the suburb)
+    standout_rooms = []
+    compact_rooms = []
+    for room_key, room_data in rooms.items():
+        if not isinstance(room_data, dict):
+            continue
+        area = room_data.get("area")
+        pctl = room_data.get("percentile")
+        if area and pctl is not None:
+            room_label = room_key.replace("_", " ").title()
+            if pctl >= 85:
+                standout_rooms.append((room_label, area, pctl))
+            elif pctl <= 15:
+                compact_rooms.append((room_label, area, pctl))
+
+    if standout_rooms:
+        standout_rooms.sort(key=lambda x: -x[2])
+        best = standout_rooms[0]
+        if len(standout_rooms) >= 2:
+            second = standout_rooms[1]
+            insights.append((2, f"Standout rooms: {best[0]} ({best[1]:.0f}m², top {100-best[2]}%) and {second[0]} ({second[1]:.0f}m², top {100-second[2]}%) are larger than most in {suburb}."))
+        else:
+            insights.append((2, f"{best[0]} is {best[1]:.0f}m² — larger than {best[2]}% of {suburb} listings."))
+
+    if compact_rooms and not standout_rooms:
+        compact_rooms.sort(key=lambda x: x[2])
+        worst = compact_rooms[0]
+        insights.append((3, f"Trade-off: {worst[0]} is {worst[1]:.0f}m² ({worst[2]}th percentile) — compact for {suburb}."))
+
+    # ── Condition assessment (from GPT photo analysis) ──
+    overall_score = cs.get("overall_score")
+    kitchen_cond = (pvd.get("kitchen") or {}).get("condition_score")
+    kitchen_bench = (pvd.get("kitchen") or {}).get("benchtop_material")
+    kitchen_island = (pvd.get("kitchen") or {}).get("island_bench")
+    outdoor_score = (pvd.get("outdoor") or {}).get("outdoor_entertainment_score")
+
+    if overall_score and overall_score >= 8:
+        extras = []
+        if kitchen_bench and kitchen_bench.lower() in ("stone", "marble", "granite", "quartz", "engineered stone"):
+            extras.append(f"stone kitchen")
+        if kitchen_island:
+            extras.append("island bench")
+        if outdoor_score and outdoor_score >= 8:
+            extras.append("great outdoor entertaining")
+        cond_note = f"Condition: {overall_score}/10"
+        if extras:
+            cond_note += f" — {', '.join(extras)}"
+        cond_note += ". Move-in ready."
+        insights.append((2, cond_note))
+    elif overall_score and overall_score <= 5:
+        insights.append((2, f"Condition: {overall_score}/10 — could need renovation. Factor $20K-80K into your budget."))
+    elif kitchen_cond and kitchen_cond >= 9:
+        extras = []
+        if kitchen_bench and kitchen_bench.lower() in ("stone", "marble", "granite", "quartz", "engineered stone"):
+            extras.append(kitchen_bench.lower())
+        if kitchen_island:
+            extras.append("island bench")
+        detail = f" ({', '.join(extras)})" if extras else ""
+        insights.append((3, f"Kitchen rated {kitchen_cond}/10{detail} — standout feature."))
+
+    # ── Location intelligence (from georeference_data) ──
+    geo = prop.get("georeference_data", {}) or {}
+    geo_stats = geo.get("summary_stats", {}) or {}
+    geo_dists = geo.get("distances", {}) or {}
+
+    closest_school = geo_stats.get("closest_primary_school_km")
+    closest_beach = geo_stats.get("closest_beach_km")
+    amenities_1km = geo_stats.get("total_amenities_within_1km")
+
+    if closest_school and closest_school < 0.8:
+        school_name = None
+        primary = geo_dists.get("primary_schools") or geo_dists.get("schools") or []
+        if primary and isinstance(primary, list) and len(primary) > 0:
+            school_name = primary[0].get("name")
+        if school_name:
+            insights.append((2, f"Walking distance to {school_name} ({closest_school*1000:.0f}m)."))
+        else:
+            insights.append((2, f"Primary school within walking distance ({closest_school*1000:.0f}m)."))
+
+    if closest_beach and closest_beach < 2:
+        insights.append((3, f"Beach {closest_beach:.1f}km away."))
+
+    if amenities_1km and amenities_1km >= 10:
+        insights.append((3, f"High walkability — {amenities_1km} amenities within 1km."))
+
     # ── Lot size comparison ──
     pi = prop.get("property_insights", {}) or {}
     lot = prop.get("lot_size_sqm") or (prop.get("enriched_data") or {}).get("lot_size_sqm")
@@ -575,21 +682,8 @@ def property_intel(prop, suburbs=None, all_properties=None):
     # ── Bedroom rarity ──
     bed_pi = pi.get("bedrooms", {})
     bed_pctl = (bed_pi.get("suburbComparison") or {}).get("percentile")
-    bed_median = (bed_pi.get("suburbComparison") or {}).get("suburbMedian")
     if bed and bed_pctl and bed_pctl >= 90:
         insights.append((2, f"{bed}-bed houses are rare in {suburb} — only {100-bed_pctl}% of current listings."))
-    elif bed and bed_median and bed < bed_median:
-        pass  # don't highlight being below median bedrooms
-
-    # ── Condition scores ──
-    pvd = prop.get("property_valuation_data", {}) or {}
-    cs = pvd.get("condition_summary", {}) or {}
-    overall_score = cs.get("overall_score")
-    kitchen_score = cs.get("kitchen_score")
-    if overall_score and overall_score >= 8:
-        insights.append((3, f"Condition rated {overall_score}/10 from photo analysis — well-presented throughout."))
-    elif kitchen_score and kitchen_score >= 9:
-        insights.append((3, f"Kitchen rated {kitchen_score}/10 — standout feature from our photo analysis."))
 
     # ── Price per sqm (land) ──
     if lot and price_val and lot > 100:
