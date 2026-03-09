@@ -114,6 +114,27 @@ def post_photo_url_to_page(image_url, message):
     return data.get("post_id") or data.get("id")
 
 
+def stage_post(message, template_type, image_url=None, slot=None):
+    """Save a generated post to fb_pending_posts for approval in the Marketing Monitor."""
+    client = MongoClient(COSMOS_URI)
+    db = client["system_monitor"]
+    now_aest = datetime.now(timezone.utc) + timedelta(hours=10)
+    doc = {
+        "message": message,
+        "template_type": template_type,
+        "image_url": image_url,
+        "content_type": "photo" if image_url else "text",
+        "slot": slot,
+        "status": "pending",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_date": now_aest.strftime("%Y-%m-%d"),
+        "generated_day": now_aest.strftime("%A"),
+    }
+    result = db["fb_pending_posts"].insert_one(doc)
+    client.close()
+    return str(result.inserted_id)
+
+
 def log_post(post_id, message, link, template_type, content_type="text"):
     """Log the post to MongoDB for tracking."""
     client = MongoClient(COSMOS_URI)
@@ -3199,12 +3220,52 @@ def main():
     parser.add_argument("--generate", action="store_true", help="Auto-generate a data-led post")
     parser.add_argument("--template", type=str, help=f"Use specific template: {', '.join(TEMPLATE_MAP.keys())}")
     parser.add_argument("--post", action="store_true", help="Actually publish (default: dry run)")
+    parser.add_argument("--stage", action="store_true", help="Stage post for approval in Marketing Monitor")
     parser.add_argument("--message", type=str, help="Custom message to post")
     parser.add_argument("--link", type=str, help="URL to attach to the post")
     parser.add_argument("--image", type=str, help="Path to image file to post as photo")
+    parser.add_argument("--publish-approved", action="store_true", help="Publish all approved pending posts")
     args = parser.parse_args()
 
-    if args.generate:
+    if args.publish_approved:
+        # Publish all approved pending posts from the Marketing Monitor
+        from bson import ObjectId
+        client = MongoClient(COSMOS_URI)
+        db = client["system_monitor"]
+        approved = list(db["fb_pending_posts"].find({"status": "approved"}))
+        if not approved:
+            print("No approved posts to publish.")
+            client.close()
+            return
+        print(f"Found {len(approved)} approved post(s) to publish.\n")
+        for doc in approved:
+            doc_id = doc["_id"]
+            msg = doc["message"]
+            img = doc.get("image_url")
+            ttype = doc.get("template_type", "unknown")
+            print(f"Publishing {ttype}...")
+            try:
+                if img:
+                    post_id = post_photo_url_to_page(img, msg)
+                    log_post(post_id, msg, None, ttype, content_type="photo")
+                else:
+                    post_id = post_to_page(msg)
+                    log_post(post_id, msg, None, ttype)
+                db["fb_pending_posts"].update_one(
+                    {"_id": doc_id},
+                    {"$set": {"status": "published", "post_id": post_id, "published_at": datetime.now(timezone.utc).isoformat()}}
+                )
+                print(f"  Published! Post ID: {post_id}")
+            except Exception as e:
+                db["fb_pending_posts"].update_one(
+                    {"_id": doc_id},
+                    {"$set": {"status": "failed", "error": str(e)}}
+                )
+                print(f"  FAILED: {e}")
+        client.close()
+        return
+
+    elif args.generate:
         print("Pulling suburb data...")
         suburbs = get_suburb_data()
         message, template_type, image_url = generate_post(suburbs, template_name=args.template)
@@ -3228,8 +3289,12 @@ def main():
                 log_post(post_id, message, None, template_type)
             print(f"Published! Post ID: {post_id}")
             print(f"View: https://facebook.com/{post_id}")
+        elif args.stage:
+            pending_id = stage_post(message, template_type, image_url)
+            print(f"\nStaged for approval. Pending ID: {pending_id}")
+            print("View in Marketing Monitor at https://fieldsestate.com.au/ops")
         else:
-            print("\n(Dry run — add --post to publish)")
+            print("\n(Dry run — add --post to publish or --stage to queue for approval)")
 
     elif args.message:
         print(f"Message: {args.message[:100]}...")
