@@ -58,6 +58,10 @@ SOLD_HOUSE_FILTER = {
     ],
 }
 
+BUYER_CTA = "Looking to buy? Message us your budget and the type of home you're after — we'll personally search for properties that match, including ones that haven't listed yet. Complimentary Fields buyer assist."
+SELLER_CTA = "Thinking about selling? Message us your address and we'll send you a complimentary property report — what your home is worth, how it compares, and what the current market means for your timeline. No obligation."
+TAGLINE = "Fields Real Estate: Smarter with data."
+
 
 # ── Facebook API ─────────────────────────────────────────────────────────
 
@@ -1060,6 +1064,7 @@ def template_suburb_snapshot(suburbs, **kw):
     if links:
         msg += f"\n\n{links[0]}"
 
+    msg += f"\n\n{TAGLINE}"
     return msg, "suburb_snapshot"
 
 
@@ -1163,6 +1168,7 @@ def template_price_comparison(suburbs, **kw):
     msg += f"\n\n{'—' * 30}"
     msg += "\n\nSame money, different trade-offs. Which one works for your life?"
 
+    msg += f"\n\n{TAGLINE}"
     return msg, "price_comparison"
 
 
@@ -1218,6 +1224,7 @@ def template_listing_count(suburbs, **kw):
     if link:
         msg += f"\n\n{link}"
 
+    msg += f"\n\n{SELLER_CTA}"
     return msg, "listing_count"
 
 
@@ -1312,6 +1319,7 @@ def template_bedroom_breakdown(suburbs, **kw):
     if market_link:
         msg += f"\n\n{market_link}"
 
+    msg += f"\n\n{TAGLINE}"
     return msg, "bedroom_breakdown"
 
 
@@ -1375,6 +1383,7 @@ def template_seller_insight(suburbs, **kw):
     else:
         msg += "\n\nfieldsestate.com.au — independent property intelligence."
 
+    msg += f"\n\n{SELLER_CTA}"
     return msg, "seller_insight"
 
 
@@ -1483,6 +1492,7 @@ def template_buyer_intelligence(suburbs, **kw):
     if link:
         msg += f"\n\nFull suburb analysis: {link}"
 
+    msg += f"\n\n{BUYER_CTA}"
     return msg, "buyer_intelligence"
 
 
@@ -1519,13 +1529,10 @@ def template_sold_preview(suburbs, properties=None, **kw):
     total = len(weekend_sold)
 
     if total == 0:
-        msg = """Quiet weekend — no confirmed sales yet across the southern Gold Coast.
-
-No confirmed sales doesn't mean nothing happened — settlement reporting lags by days or weeks. Properties that exchanged this weekend may not appear in the data for a while.
-
-Tomorrow morning: the full weekly breakdown — what each sold for, how long it took, and how the sale price compares to our independent valuation.
-
-Looking to buy? Message us your budget and the type of home you're after — we'll personally search for properties that match, including ones that haven't listed yet. It's a complimentary service from Fields."""
+        msg = "Quiet weekend — no confirmed sales yet across the southern Gold Coast."
+        msg += "\n\nNo confirmed sales doesn't mean nothing happened — settlement reporting lags by days or weeks. Properties that exchanged this weekend may not appear in the data for a while."
+        msg += "\n\nTomorrow morning: the full weekly breakdown — what each sold for, how long it took, and how the sale price compares to our independent valuation."
+        msg += f"\n\n{BUYER_CTA}"
         return msg, "sold_preview"
 
     # Build suburb breakdown
@@ -1572,7 +1579,7 @@ Looking to buy? Message us your budget and the type of home you're after — we'
 
     msg += "\n\nTomorrow morning: the full breakdown — what each sold for, how long it took, and how the sale price compares to our independent valuation."
 
-    msg += "\n\nLooking to buy? Message us your budget and the type of home you're after — we'll personally search for properties that match, including ones that haven't listed yet. Complimentary Fields buyer assist."
+    msg += f"\n\n{BUYER_CTA}"
 
     return msg, "sold_preview"
 
@@ -1670,6 +1677,7 @@ def template_price_movement(suburbs, properties=None, **kw):
         msg += f"\n\nFull analysis: {link}"
     msg += "\n\nfieldsestate.com.au/for-sale — every listing with our independent valuation."
 
+    msg += f"\n\n{TAGLINE}"
     return msg, "price_movement"
 
 
@@ -1764,6 +1772,7 @@ def template_open_home_spotlight(suburbs, properties=None, **kw):
     else:
         msg += "\n\nfieldsestate.com.au/for-sale"
 
+    msg += f"\n\n{TAGLINE}"
     hero = _get_hero_image(prop)
     return msg, "open_home_spotlight", hero
 
@@ -1853,6 +1862,7 @@ def template_entry_price_watch(suburbs, properties=None, **kw):
     else:
         msg += "\n\nfieldsestate.com.au/for-sale — every house with our independent valuation."
 
+    msg += f"\n\n{BUYER_CTA}"
     return msg, "entry_price_watch"
 
 
@@ -1941,6 +1951,8 @@ def template_median_showcase(suburbs, properties=None, **kw):
     link = article_link(market_key) if market_key else ""
     if link:
         msg += f"\n{suburb_name} market data: {link}"
+
+    msg += f"\n\n{SELLER_CTA}"
 
     hero = _get_hero_image(prop)
     return msg, "median_showcase", hero
@@ -2052,6 +2064,7 @@ def template_weekend_preview(suburbs, properties=None, **kw):
 
         msg += entry + "\n"
 
+    msg += f"\n{BUYER_CTA}"
     return msg, "weekend_preview"
 
 
@@ -2238,6 +2251,7 @@ def template_saturday_open_list(suburbs, properties=None, **kw):
 
     msg += "\n\nNEW = this week. FRESH = under 7 days. VALUE = below our valuation."
 
+    msg += f"\n\n{TAGLINE}"
     return msg, "saturday_open_list"
 
 
@@ -2801,6 +2815,7 @@ def template_new_to_market(suburbs, properties=None, **kw):
     if any_adjusted:
         msg += "\n* Adjusted sale price accounts for differences in land size, floor area, bedrooms, and age between the comparable and the subject property."
 
+    msg += f"\n\n{BUYER_CTA}"
     return msg, "new_to_market"
 
 
