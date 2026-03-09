@@ -459,7 +459,7 @@ def get_individual_properties():
             "property_valuation_data.kitchen.island_bench": 1,
             "property_valuation_data.bathrooms": 1,
             "property_valuation_data.exterior.condition_score": 1,
-            "property_valuation_data.outdoor.outdoor_entertainment_score": 1,
+            "property_valuation_data.outdoor": 1,
             "property_valuation_data.layout.study_present": 1,
             "property_valuation_data.property_overview": 1,
             # Room dimensions + percentiles
@@ -1859,16 +1859,95 @@ def template_median_showcase(suburbs, properties=None, **kw):
     msg = f"Half the houses in {suburb_name} are above {fmt_price(median)}. Half below. This is the one sitting right on the line — and it tells you exactly what 'average' costs here.\n"
     msg += f"\n{address}\n{spec_line}\n{clean_price_display(prop.get('price', ''))}{insp_line}\n"
 
+    # Value Drivers summary — what you get for median money
+    pvd = prop.get("property_valuation_data", {}) or {}
+    cs = pvd.get("condition_summary", {}) or {}
+    overall = cs.get("overall_score")
+    kitchen = pvd.get("kitchen", {}) or {}
+    kitchen_score = kitchen.get("condition_score")
+    kitchen_bench = kitchen.get("benchtop_material", "")
+    kitchen_island = kitchen.get("island_bench")
+    exterior = (pvd.get("exterior", {}) or {}).get("condition_score")
+    outdoor = (pvd.get("outdoor", {}) or {}).get("outdoor_entertainment_score")
+
+    strengths = []
+    tradeoffs = []
+
+    # Kitchen
+    if kitchen_score is not None:
+        extras = []
+        if kitchen_bench:
+            extras.append(kitchen_bench.lower() + " benchtops")
+        if kitchen_island:
+            extras.append("island bench")
+        detail = f" ({', '.join(extras)})" if extras else ""
+        if kitchen_score >= 8:
+            strengths.append(f"Kitchen {kitchen_score}/10{detail}")
+        elif kitchen_score <= 6:
+            tradeoffs.append(f"Kitchen {kitchen_score}/10{detail}")
+
+    # Outdoor
+    outdoor_data = pvd.get("outdoor", {}) or {}
+    if outdoor is not None and outdoor >= 8:
+        outdoor_features = []
+        if outdoor_data.get("pool_present"):
+            outdoor_features.append(outdoor_data.get("pool_type", "pool"))
+        if outdoor_data.get("alfresco_present"):
+            outdoor_features.append("alfresco")
+        detail = f" ({', '.join(outdoor_features)})" if outdoor_features else ""
+        strengths.append(f"Outdoor {outdoor}/10{detail}")
+
+    # Room standouts/compact from parsed_rooms
+    rooms = prop.get("parsed_rooms", {}) or {}
+    standouts = []
+    compacts = []
+    for room_key, room_data in rooms.items():
+        if not isinstance(room_data, dict):
+            continue
+        pctl = room_data.get("percentile")
+        area = room_data.get("area")
+        if pctl is not None and area:
+            label = room_key.replace("_", " ").title()
+            if pctl >= 80:
+                standouts.append(f"{label} ({area:.0f}m², top {100-pctl}%)")
+            elif pctl <= 15:
+                compacts.append(f"{label} ({area:.0f}m², {pctl}th pctl)")
+
+    if standouts:
+        strengths.append("Standout rooms: " + ", ".join(standouts[:2]))
+    if compacts:
+        tradeoffs.append("Compact rooms: " + ", ".join(compacts[:2]))
+
+    # Overall condition as framing
+    if overall is not None:
+        if overall >= 8:
+            cond_label = "move-in ready"
+        elif overall >= 6:
+            cond_label = "good condition"
+        else:
+            cond_label = "may need updating"
+    else:
+        cond_label = None
+
+    if strengths or tradeoffs or cond_label:
+        msg += "\nWhat median money gets you:"
+        if cond_label and overall is not None:
+            msg += f"\nCondition: {overall}/10 — {cond_label}."
+        if strengths:
+            msg += "\n✓ " + " · ".join(strengths)
+        if tradeoffs:
+            msg += "\n↓ " + " · ".join(tradeoffs)
+
     # YoY median context from market data
     suburb_mkt = mkt.get(suburb_key, {})
     yoy = suburb_mkt.get("yoy_change_pct")
     if yoy is not None:
         if abs(yoy) < 2:
-            msg += f"\nA year ago, the median was roughly the same. Steady — but 'average' hasn't moved much, which means buyers have time to be selective."
+            msg += f"\n\nA year ago, the median was roughly the same. Steady — but 'average' hasn't moved much, which means buyers have time to be selective."
         elif yoy > 0:
-            msg += f"\nA year ago, the median was {abs(yoy):.1f}% lower. That context matters — 'average' keeps moving, and this is where it sits today."
+            msg += f"\n\nA year ago, the median was {abs(yoy):.1f}% lower. That context matters — 'average' keeps moving, and this is where it sits today."
         else:
-            msg += f"\nA year ago, the median was {abs(yoy):.1f}% higher. The market has softened — what felt expensive a year ago is closer to the norm now."
+            msg += f"\n\nA year ago, the median was {abs(yoy):.1f}% higher. The market has softened — what felt expensive a year ago is closer to the norm now."
 
     # Intelligence insight
     intel = property_intel(prop, suburbs, properties)
@@ -1879,13 +1958,15 @@ def template_median_showcase(suburbs, properties=None, **kw):
     # Buyer advice
     msg += f"\n\nIf this house feels like good value, anything below it is worth a closer look. If it feels overpriced, adjust your expectations — the market has moved."
 
-    # Close with market metrics link
+    # Property link + market data link
+    prop_id = str(prop.get("_id", ""))
+    if prop_id:
+        msg += f"\n\nFull report: fieldsestate.com.au/property/{prop_id}"
+
     market_key = {"robina": "market_robina", "varsity_lakes": "market_varsity", "burleigh_waters": "market_burleigh"}.get(suburb_key)
     link = article_link(market_key) if market_key else ""
     if link:
-        msg += f"\n\n{suburb_name} market data: {link}"
-    else:
-        msg += f"\n\nfieldsestate.com.au/for-sale — every house, independently valued."
+        msg += f"\n{suburb_name} market data: {link}"
 
     return msg, "median_showcase"
 
