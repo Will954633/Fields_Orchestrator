@@ -1086,7 +1086,24 @@ def template_suburb_snapshot(suburbs, **kw):
         msg += f"\n\n{links[0]}"
 
     msg += f"\n\n{TAGLINE}"
-    return msg, "suburb_snapshot"
+
+    # Hero image — pick an underpriced or notable property from this suburb
+    properties = get_individual_properties()
+    suburb_props = [p for p in properties if p.get("_suburb_key") == suburb_key]
+    hero_image = None
+    # Prefer underpriced
+    for p in suburb_props:
+        vd = p.get("valuation_data", {}) or {}
+        pos = (vd.get("summary") or {}).get("positioning")
+        insuf = (vd.get("summary") or {}).get("insufficient_data", True)
+        if not insuf and pos in ("underpriced", "good_value"):
+            hero_image = _get_hero_image(p)
+            if hero_image:
+                break
+    if not hero_image and suburb_props:
+        hero_image = _get_hero_image(suburb_props[0])
+
+    return msg, "suburb_snapshot", hero_image
 
 
 def template_price_comparison(suburbs, **kw):
@@ -1190,7 +1207,10 @@ def template_price_comparison(suburbs, **kw):
     msg += "\n\nSame money, different trade-offs. Which one works for your life?"
 
     msg += f"\n\n{TAGLINE}"
-    return msg, "price_comparison"
+
+    # Hero image from the better-value property
+    hero_image = _get_hero_image(p1) or _get_hero_image(p2)
+    return msg, "price_comparison", hero_image
 
 
 def template_listing_count(suburbs, **kw):
@@ -1246,7 +1266,22 @@ def template_listing_count(suburbs, **kw):
         msg += f"\n\n{link}"
 
     msg += f"\n\n{SELLER_CTA}"
-    return msg, "listing_count"
+
+    # Hero image — pick an underpriced property across all suburbs
+    properties = get_individual_properties()
+    hero_image = None
+    for p in properties:
+        vd = p.get("valuation_data", {}) or {}
+        pos = (vd.get("summary") or {}).get("positioning")
+        insuf = (vd.get("summary") or {}).get("insufficient_data", True)
+        if not insuf and pos in ("underpriced", "good_value"):
+            hero_image = _get_hero_image(p)
+            if hero_image:
+                break
+    if not hero_image and properties:
+        hero_image = _get_hero_image(properties[0])
+
+    return msg, "listing_count", hero_image
 
 
 def template_bedroom_breakdown(suburbs, **kw):
@@ -1341,7 +1376,19 @@ def template_bedroom_breakdown(suburbs, **kw):
         msg += f"\n\n{market_link}"
 
     msg += f"\n\n{TAGLINE}"
-    return msg, "bedroom_breakdown"
+
+    # Hero image from the dominant bedroom count in this suburb
+    hero_image = None
+    most_bed_count = most_common[0]
+    for p in suburb_props:
+        if str(p.get("bedrooms")) == most_bed_count:
+            hero_image = _get_hero_image(p)
+            if hero_image:
+                break
+    if not hero_image and suburb_props:
+        hero_image = _get_hero_image(suburb_props[0])
+
+    return msg, "bedroom_breakdown", hero_image
 
 
 def template_seller_insight(suburbs, **kw):
@@ -1405,7 +1452,15 @@ def template_seller_insight(suburbs, **kw):
         msg += "\n\nfieldsestate.com.au — independent property intelligence."
 
     msg += f"\n\n{SELLER_CTA}"
-    return msg, "seller_insight"
+
+    # Hero image from a property in this suburb
+    properties = get_individual_properties()
+    suburb_props = [p for p in properties if p.get("_suburb_key") == suburb_key]
+    hero_image = None
+    if suburb_props:
+        hero_image = _get_hero_image(suburb_props[0])
+
+    return msg, "seller_insight", hero_image
 
 
 def template_buyer_intelligence(suburbs, **kw):
@@ -1536,7 +1591,10 @@ def template_sold_preview(suburbs, properties=None, **kw):
         msg += "\n\nNo confirmed sales doesn't mean nothing happened — settlement reporting lags by days or weeks. Properties that exchanged this weekend may not appear in the data for a while."
         msg += "\n\nTomorrow morning: the full weekly breakdown — what each sold for, how long it took, and how the sale price compares to our independent valuation."
         msg += f"\n\n{BUYER_CTA}"
-        return msg, "sold_preview"
+        # Still attach a property image for engagement
+        active = get_individual_properties()
+        hero = _get_hero_image(active[0]) if active else None
+        return msg, "sold_preview", hero
 
     # Build suburb breakdown
     suburb_parts = []
@@ -1584,7 +1642,16 @@ def template_sold_preview(suburbs, properties=None, **kw):
 
     msg += f"\n\n{BUYER_CTA}"
 
-    return msg, "sold_preview"
+    # Hero image from the first sold property or fall back to active listing
+    hero_image = None
+    if weekend_sold:
+        hero_image = _get_hero_image(weekend_sold[0])
+    if not hero_image:
+        active = get_individual_properties()
+        if active:
+            hero_image = _get_hero_image(active[0])
+
+    return msg, "sold_preview", hero_image
 
 
 def template_price_movement(suburbs, properties=None, **kw):
@@ -1681,7 +1748,15 @@ def template_price_movement(suburbs, properties=None, **kw):
     msg += "\n\nfieldsestate.com.au/for-sale — every listing with our independent valuation."
 
     msg += f"\n\n{TAGLINE}"
-    return msg, "price_movement"
+
+    # Hero image — prefer the top stale listing (negotiation angle), fall back to fresh
+    hero_image = None
+    if stale:
+        hero_image = _get_hero_image(stale[0])
+    if not hero_image and fresh:
+        hero_image = _get_hero_image(fresh[0])
+
+    return msg, "price_movement", hero_image
 
 
 
@@ -2540,7 +2615,9 @@ def template_sold_results(suburbs, properties=None, **kw):
         msg = "No confirmed house sales last week across Robina, Burleigh Waters or Varsity Lakes."
         msg += "\n\nThat doesn't mean nothing happened — settlement reporting lags by days or weeks. We'll publish them as soon as they land."
         msg += "\n\nFull suburb breakdowns updated daily at fieldsestate.com.au/for-sale"
-        return msg, "sold_results"
+        active = get_individual_properties()
+        hero = _get_hero_image(active[0]) if active else None
+        return msg, "sold_results", hero
 
     # Filter to last 7 days only
     cutoff = datetime.now() - timedelta(days=7)
@@ -2575,7 +2652,9 @@ def template_sold_results(suburbs, properties=None, **kw):
     total = len(valid_sold)
     if total == 0:
         msg = "No confirmed house sales last week. We'll publish them as soon as settlement data comes through."
-        return msg, "sold_results"
+        active = get_individual_properties()
+        hero = _get_hero_image(active[0]) if active else None
+        return msg, "sold_results", hero
 
     busiest_key = max(by_suburb, key=lambda k: len(by_suburb[k]))
     busiest_display = SUBURB_DISPLAY.get(busiest_key, busiest_key.replace("_", " ").title())
@@ -2649,7 +2728,17 @@ def template_sold_results(suburbs, properties=None, **kw):
     msg += "\n\nFull sold data with sale prices, days on market, and how each compares to our valuations at fieldsestate.com.au/for-sale"
 
     msg += f"\n\n{SELLER_CTA}"
-    return msg, "sold_results"
+
+    # Hero image from the first sold property, fall back to active listing
+    hero_image = None
+    if valid_sold:
+        hero_image = _get_hero_image(valid_sold[0])
+    if not hero_image:
+        active = get_individual_properties()
+        if active:
+            hero_image = _get_hero_image(active[0])
+
+    return msg, "sold_results", hero_image
 
 
 def template_new_to_market(suburbs, properties=None, **kw):
