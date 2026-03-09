@@ -841,7 +841,51 @@ def get_market_context():
     return result
 
 
-# ── Article index — hardcoded mapping of topic keywords to published article URLs ──
+# ── Article index — mapping of topic keywords to published article URLs ──
+# Buy/sell articles are refreshed from Ghost API to always use the latest slug.
+
+def _refresh_article_slugs():
+    """Fetch latest 'Is now a good time to buy/sell' article slugs from Ghost.
+    Returns dict of updates to merge into ARTICLE_INDEX."""
+    try:
+        import requests
+        ghost_key = os.environ.get("GHOST_CONTENT_API_KEY", "")
+        if not ghost_key:
+            return {}
+        url = f"https://fields-articles.ghost.io/ghost/api/content/posts/?key={ghost_key}&fields=title,slug,updated_at&order=updated_at%20desc&limit=50"
+        r = requests.get(url, timeout=10)
+        posts = r.json().get("posts", [])
+
+        # Match patterns: "Is Now a Good Time to Buy/Sell in <Suburb>?"
+        # Keep the most recently updated slug for each suburb+action combo
+        suburb_map = {
+            "robina": {"buy": "buy_robina", "sell": "sell_robina"},
+            "burleigh waters": {"buy": "buy_burleigh", "sell": "sell_burleigh"},
+            "varsity lakes": {"buy": "buy_varsity", "sell": "sell_varsity"},
+        }
+        updates = {}
+        seen = set()
+        for p in posts:
+            title_lower = p["title"].lower()
+            if "good time to" not in title_lower:
+                continue
+            action = "buy" if "buy" in title_lower else "sell" if "sell" in title_lower else None
+            if not action:
+                continue
+            for suburb_name, keys in suburb_map.items():
+                if suburb_name in title_lower:
+                    key = keys[action]
+                    if key not in seen:  # First match = most recently updated
+                        seen.add(key)
+                        updates[key] = {
+                            "title": p["title"],
+                            "url": f"fieldsestate.com.au/articles/{p['slug']}"
+                        }
+                    break
+        return updates
+    except Exception:
+        return {}
+
 
 ARTICLE_INDEX = {
     "buy_robina": {"title": "Is Now a Good Time to Buy in Robina?", "url": "fieldsestate.com.au/articles/is-now-a-good-time-to-buy-in-robina-2"},
@@ -865,6 +909,9 @@ ARTICLE_INDEX = {
     "market_burleigh": {"title": "fieldsestate.com.au/market-metrics/Burleigh Waters", "url": "fieldsestate.com.au/market-metrics/Burleigh%20Waters"},
     "market_varsity": {"title": "fieldsestate.com.au/market-metrics/Varsity Lakes", "url": "fieldsestate.com.au/market-metrics/Varsity%20Lakes"},
 }
+
+# Refresh buy/sell slugs from Ghost on import (overrides hardcoded defaults if newer versions exist)
+ARTICLE_INDEX.update(_refresh_article_slugs())
 
 
 def get_article_index():
@@ -2552,53 +2599,62 @@ def template_new_to_market(suburbs, properties=None, **kw):
     msg = f"{plural(total, 'new house', 'new houses')} hit the market this week — {suburb_summary}."
     msg += "\n\nNew listings get the most buyer attention in their first 14 days — if one of these catches your eye, be at the first open home."
 
-    lines = []
+    # Group by suburb, maintaining order within each group
+    suburb_order = [
+        ("robina", "Robina"),
+        ("burleigh_waters", "Burleigh Waters"),
+        ("varsity_lakes", "Varsity Lakes"),
+    ]
+    by_suburb = {}
+    for p, dt in new_listings:
+        key = p.get("_suburb_key", "")
+        by_suburb.setdefault(key, []).append((p, dt))
+
     any_adjusted = False
-    for p, dt in new_listings[:6]:
-        suburb = p["_suburb_display"]
-        price = clean_price_display(p.get("price", ""))
-        price_val = parse_price_value(p.get("price", ""))
-        bed = p.get("bedrooms", "?")
-        bath = p.get("bathrooms", "?")
-        addr = normalise_address(p)
-        lot = p.get("lot_size_sqm") or (p.get("enriched_data") or {}).get("lot_size_sqm")
+    for key, display in suburb_order:
+        suburb_new = by_suburb.get(key, [])
+        if not suburb_new:
+            continue
 
-        specs = [f"{bed}bd {bath}ba"]
-        if lot:
-            specs.append(f"{lot:.0f}sqm")
-        spec = " · ".join(specs)
+        msg += f"\n\n{display}:\n"
+        for p, dt in suburb_new:
+            price = clean_price_display(p.get("price", ""))
+            price_val = parse_price_value(p.get("price", ""))
+            bed = p.get("bedrooms", "?")
+            bath = p.get("bathrooms", "?")
+            addr = normalise_address(p)
+            lot = p.get("lot_size_sqm") or (p.get("enriched_data") or {}).get("lot_size_sqm")
 
-        entry = f"  {addr}, {suburb} — {price}\n  {spec}"
+            specs = [f"{bed}bd {bath}ba"]
+            if lot:
+                specs.append(f"{lot:.0f}sqm")
+            spec = " · ".join(specs)
 
-        # Add narrative-framed insight instead of raw data
-        intel = property_intel(p, suburbs, properties)
-        non_obvious = [(pri, t) for pri, t in intel if "Brand new" not in t and "Fresh to market" not in t]
-        if non_obvious:
-            raw = non_obvious[0][1]
-            entry += f"\n  {_reframe_intel_as_advice(raw, p, price_val)}"
+            entry = f"  {addr} — {price}\n  {spec}"
 
-        # Add top 3 valuation comparables
-        comps_str, has_adj = _format_top_comps(p, n=3)
-        if comps_str:
-            entry += f"\n  {comps_str}"
-            if has_adj:
-                any_adjusted = True
-        lines.append(entry)
+            # Add narrative-framed insight instead of raw data
+            intel = property_intel(p, suburbs, properties)
+            non_obvious = [(pri, t) for pri, t in intel if "Brand new" not in t and "Fresh to market" not in t]
+            if non_obvious:
+                raw = non_obvious[0][1]
+                entry += f"\n  {_reframe_intel_as_advice(raw, p, price_val)}"
 
-    msg += "\n\n" + "\n\n".join(lines)
+            # Add top 3 valuation comparables
+            comps_str, has_adj = _format_top_comps(p, n=3)
+            if comps_str:
+                entry += f"\n  {comps_str}"
+                if has_adj:
+                    any_adjusted = True
+            msg += entry + "\n"
+
+        # Per-suburb article link
+        buy_key = {"robina": "buy_robina", "varsity_lakes": "buy_varsity", "burleigh_waters": "buy_burleigh"}.get(key)
+        link = article_link(buy_key) if buy_key else ""
+        if link:
+            msg += f"  Full analysis: {link}\n"
 
     if any_adjusted:
-        msg += "\n\n* Adjusted sale price accounts for differences in land size, floor area, bedrooms, and age between the comparable and the subject property."
-
-    # Close with suburb-specific buy article for the most common suburb
-    busiest_suburb_display = max(suburb_counts.items(), key=lambda x: x[1])[0]
-    busiest_key = {v: k for k, v in SUBURB_DISPLAY.items()}.get(busiest_suburb_display)
-    buy_key = {"robina": "buy_robina", "varsity_lakes": "buy_varsity", "burleigh_waters": "buy_burleigh"}.get(busiest_key or "")
-    link = article_link(buy_key) if buy_key else ""
-    if link:
-        msg += f"\n\nIs now a good time to buy in {busiest_suburb_display}? {link}"
-    else:
-        msg += "\n\nfieldsestate.com.au/for-sale — see every listing with our independent valuation."
+        msg += "\n* Adjusted sale price accounts for differences in land size, floor area, bedrooms, and age between the comparable and the subject property."
 
     return msg, "new_to_market"
 
