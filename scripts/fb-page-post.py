@@ -2056,7 +2056,7 @@ def template_weekend_preview(suburbs, properties=None, **kw):
 
 
 def template_saturday_open_list(suburbs, properties=None, **kw):
-    """Saturday 6am — today's open homes with brief intelligence tags."""
+    """Saturday 6am — today's open homes with top picks + full list."""
     if not properties:
         properties = get_individual_properties()
 
@@ -2067,15 +2067,7 @@ def template_saturday_open_list(suburbs, properties=None, **kw):
 
     MAX_PER_SUBURB = 8
 
-    # Group by suburb
-    by_suburb = {}
-    for p in sat_props:
-        suburb = p["_suburb_display"]
-        if suburb not in by_suburb:
-            by_suburb[suburb] = []
-        by_suburb[suburb].append(p)
-
-    # Quick-tag function: one short label per property
+    # Quick-tag function
     def quick_tag(p):
         days = p.get("days_on_domain")
         vd = p.get("valuation_data", {}) or {}
@@ -2084,26 +2076,138 @@ def template_saturday_open_list(suburbs, properties=None, **kw):
         if isinstance(days, (int, float)) and days <= 3:
             return "NEW"
         if isinstance(days, (int, float)) and days >= 90:
-            return f"{days}d"
+            return f"{int(days)}d"
         if not insufficient and positioning in ("underpriced", "good_value"):
             return "VALUE"
         if isinstance(days, (int, float)) and days <= 7:
             return "FRESH"
         return ""
 
-    # Count value and new tags for the strategic note
-    value_count = 0
-    new_fresh_count = 0
+    # ── Score every property for top picks ──
+    scored_picks = []
     for p in sat_props:
-        tag = quick_tag(p)
-        if tag == "VALUE":
-            value_count += 1
-        if tag in ("NEW", "FRESH"):
-            new_fresh_count += 1
+        pv = parse_price_value(p.get("price", ""))
+        vd = p.get("valuation_data", {}) or {}
+        reconciled = (vd.get("confidence") or {}).get("reconciled_valuation")
+        insufficient = (vd.get("summary") or {}).get("insufficient_data", True)
+        pvd = p.get("property_valuation_data", {}) or {}
+        overall = (pvd.get("condition_summary") or {}).get("overall_score")
+        days = p.get("days_on_domain")
 
-    # Build suburb sections
+        score = 0
+        reasons = []
+
+        # Undervalued
+        if reconciled and pv and not insufficient:
+            gap_pct = (pv - reconciled) / reconciled * 100
+            if gap_pct < -5:
+                score += 30
+                reasons.append(f"Priced {abs(gap_pct):.0f}% below our valuation ({fmt_price(int(reconciled))})")
+
+        # Good condition
+        if overall and overall >= 8:
+            score += 15
+            kitchen = pvd.get("kitchen", {}) or {}
+            k_score = kitchen.get("condition_score")
+            bench = kitchen.get("benchtop_material", "")
+            island = kitchen.get("island_bench")
+            extras = []
+            if bench and bench.lower() in ("stone", "marble", "granite", "quartz", "engineered stone"):
+                extras.append(bench.lower() + " kitchen")
+            if island:
+                extras.append("island bench")
+            outdoor_data = pvd.get("outdoor", {}) or {}
+            if outdoor_data.get("pool_present"):
+                extras.append("pool")
+            cond_note = f"Condition {overall}/10"
+            if extras:
+                cond_note += f" — {', '.join(extras)}"
+            reasons.append(cond_note)
+        elif overall and overall <= 5:
+            score += 5
+            reasons.append(f"Condition {overall}/10 — renovation upside")
+
+        # Negotiation leverage (DOM)
+        if isinstance(days, (int, float)) and days >= 60:
+            score += 10
+            reasons.append(f"{int(days)} days on market — room to negotiate")
+
+        # Just listed
+        if isinstance(days, (int, float)) and days <= 3:
+            score += 10
+            reasons.append("Just listed — first open home")
+
+        # Large lot
+        lot = p.get("lot_size_sqm") or (p.get("enriched_data") or {}).get("lot_size_sqm")
+        if lot and lot >= 800:
+            score += 5
+            reasons.append(f"{lot:.0f}sqm lot")
+
+        if reasons:
+            scored_picks.append((p, pv, score, reasons))
+
+    scored_picks.sort(key=lambda x: -x[2])
+
+    # Pick top 3-4 with suburb diversity
+    top_picks = []
+    seen_suburbs = {}
+    for p, pv, score, reasons in scored_picks:
+        sk = p.get("_suburb_key", "")
+        if seen_suburbs.get(sk, 0) >= 2:
+            continue
+        seen_suburbs[sk] = seen_suburbs.get(sk, 0) + 1
+        top_picks.append((p, pv, reasons))
+        if len(top_picks) >= 4:
+            break
+
+    # ── Build unique count ──
+    unique_addrs = set()
+    for p in sat_props:
+        addr = normalise_address(p)
+        if addr:
+            unique_addrs.add(addr)
+    unique_count = len(unique_addrs)
+    suburb_count = len(set(p["_suburb_display"] for p in sat_props))
+
+    msg = f"Your open home list for today. {unique_count} houses, {suburb_count} suburbs."
+
+    # ── Top picks section ──
+    if top_picks:
+        msg += f"\n\nIf you only have time for a few, these are the ones we'd prioritise:"
+
+        for p, pv, reasons in top_picks:
+            addr = normalise_address(p)
+            suburb = p["_suburb_display"]
+            bed = p.get("bedrooms", "?")
+            bath = p.get("bathrooms", "?")
+            lot = p.get("lot_size_sqm") or (p.get("enriched_data") or {}).get("lot_size_sqm")
+            insp = p["_inspections"][0]
+            price_str = clean_price_display(p.get("price", ""))
+
+            specs = [f"{bed}bd {bath}ba"]
+            if lot:
+                specs.append(f"{lot:.0f}sqm")
+            spec = " · ".join(specs)
+
+            # Filter out lot size from reasons if already in specs
+            display_reasons = [r for r in reasons if "sqm lot" not in r]
+
+            msg += f"\n\n★ {addr}, {suburb}"
+            msg += f"\n{spec} — {price_str} — {insp['start']}"
+            msg += f"\n{'. '.join(display_reasons)}."
+            prop_id = str(p.get("_id", ""))
+            if prop_id:
+                msg += f"\nfieldsestate.com.au/property/{prop_id}"
+
+    # ── Full list section ──
+    msg += "\n\n— Full list —\n"
+
+    by_suburb = {}
+    for p in sat_props:
+        suburb = p["_suburb_display"]
+        by_suburb.setdefault(suburb, []).append(p)
+
     sections = []
-    unique_count = 0
     for suburb in sorted(by_suburb.keys()):
         props = by_suburb[suburb]
         props.sort(key=lambda p: time_sort_key(p["_inspections"][0].get("start", "")))
@@ -2115,7 +2219,6 @@ def template_saturday_open_list(suburbs, properties=None, **kw):
             if addr in seen_addrs or not addr:
                 continue
             seen_addrs.add(addr)
-            unique_count += 1
             insp = p["_inspections"][0]
             price = clean_price_display(p.get("price", ""))
             bed = p.get("bedrooms", "?")
@@ -2130,34 +2233,9 @@ def template_saturday_open_list(suburbs, properties=None, **kw):
             section += f"\n  + {overflow} more"
         sections.append(section)
 
-    suburb_count = len(by_suburb)
-    msg = f"Your open home list for today. {unique_count} houses, {suburb_count} suburbs, sorted by time."
+    msg += "\n" + "\n\n".join(sections)
 
-    # Strategic note before the list
-    strategic_parts = []
-    if new_fresh_count > 0:
-        strategic_parts.append(f"{new_fresh_count} of these are first or second open homes — that's where the serious buyers will be")
-    if value_count > 0:
-        strategic_parts.append(f"Properties tagged VALUE are priced below our independent valuation")
-    if strategic_parts:
-        joined = '. '.join(strategic_parts)
-        msg += f"\n\n{joined[0].upper() + joined[1:]}."
-
-    msg += "\n\n" + "\n\n".join(sections)
-
-    msg += "\n\nNEW = listed this week. FRESH = under 7 days. VALUE = below our valuation estimate."
-
-    # Price range with helpful framing
-    all_priced = [(p, parse_price_value(p.get("price", ""))) for p in sat_props]
-    all_priced = [(p, v) for p, v in all_priced if v and v >= 300000]
-    if all_priced:
-        all_priced.sort(key=lambda x: x[1])
-        low = all_priced[0][1]
-        high = all_priced[-1][1]
-        if low != high:
-            msg += f"\n\nToday's range: {fmt_price(low)} (entry-level) to {fmt_price(high)} (premium). If you're touring multiple, start with the ones tagged VALUE or NEW — those have the most to learn from."
-
-    msg += "\n\nFull details and valuations at fieldsestate.com.au/for-sale — check our analysis before you walk in."
+    msg += "\n\nNEW = this week. FRESH = under 7 days. VALUE = below our valuation."
 
     return msg, "saturday_open_list"
 
