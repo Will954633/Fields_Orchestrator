@@ -2134,11 +2134,11 @@ def _sold_insight(p, all_sold, active_properties=None):
     if sale_val and reconciled:
         val_error = (sale_val - reconciled) / reconciled * 100
         if abs(val_error) <= 5:
-            high.append(f"Sold within 5% of our {fmt_price(int(reconciled))} valuation — our model nailed this one.")
+            high.append(f"Sold within 5% of our {fmt_price(int(reconciled))} valuation — closely aligned with our estimate.")
         elif val_error > 10:
-            high.append(f"Sold {val_error:.0f}% above our {fmt_price(int(reconciled))} estimate — competitive bidding likely pushed it beyond market value.")
+            high.append(f"Sold {val_error:.0f}% above our {fmt_price(int(reconciled))} estimate — competitive bidding may have pushed it above market value.")
         elif val_error < -10:
-            high.append(f"Sold {abs(val_error):.0f}% below our {fmt_price(int(reconciled))} estimate — the buyer got a deal here.")
+            high.append(f"Sold {abs(val_error):.0f}% below our {fmt_price(int(reconciled))} estimate — suggests the buyer may have found value here.")
 
     # 2. Speed of sale (high impact — people notice fast/slow sales)
     if days is not None:
@@ -2149,7 +2149,7 @@ def _sold_insight(p, all_sold, active_properties=None):
         elif days <= 10 and avg_days > 20:
             high.append(f"Sold in {days} days, well under the {avg_days:.0f}-day average. Well-priced homes don't last here.")
         elif days >= 45:
-            medium.append(f"Took {days} days — that's a seller who adjusted expectations. If you see similar DOM on a listing you like, there's room to negotiate.")
+            medium.append(f"Took {days} days — the seller may have had to adjust expectations. If you see similar DOM on a listing you like, there could be room to negotiate.")
 
     # 3. Bedroom median comparison (medium — contextualises the sale price)
     if sale_val and bed:
@@ -2157,9 +2157,9 @@ def _sold_insight(p, all_sold, active_properties=None):
         if bed_median:
             diff_pct = (sale_val - bed_median) / bed_median * 100
             if diff_pct <= -15:
-                medium.append(f"Sold {abs(diff_pct):.0f}% below the current {bed}-bed median of {fmt_price(int(bed_median))} — this resets what 'affordable' looks like for {bed}-beds in {suburb}.")
+                medium.append(f"Sold {abs(diff_pct):.0f}% below the current {bed}-bed median of {fmt_price(int(bed_median))} — could shift what 'affordable' looks like for {bed}-beds in {suburb}.")
             elif diff_pct >= 15:
-                medium.append(f"Sold {diff_pct:.0f}% above the current {bed}-bed median of {fmt_price(int(bed_median))} — this pushes the benchmark up for similar homes.")
+                medium.append(f"Sold {diff_pct:.0f}% above the current {bed}-bed median of {fmt_price(int(bed_median))} — may push the benchmark up for similar homes.")
             elif abs(diff_pct) <= 5:
                 medium.append(f"Right on the {bed}-bed median of {fmt_price(int(bed_median))} — textbook market-rate sale.")
 
@@ -2175,11 +2175,11 @@ def _sold_insight(p, all_sold, active_properties=None):
                 named.append(maddr)
         if named:
             if n == 1:
-                high.append(f"This sale is a direct comparable for {named[0]} — it just repriced that listing's valuation.")
+                high.append(f"This sale is a direct comparable for {named[0]} — it may shift that listing's valuation.")
             elif n <= 3:
-                high.append(f"This sale is a comp for {n} active listings including {named[0]}. If you're watching those, this sale just moved their valuations.")
+                high.append(f"This sale is a comp for {n} active listings including {named[0]}. If you're watching those, it could affect their valuations.")
             else:
-                high.append(f"This sale feeds into the valuation of {n} active listings including {named[0]}. It just repriced a chunk of the market.")
+                high.append(f"This sale feeds into the valuation of {n} active listings including {named[0]}. It could reprice a portion of the market.")
 
     # 5. Active comparable callout (medium — what's still available)
     if sale_val and active_properties:
@@ -2189,9 +2189,9 @@ def _sold_insight(p, all_sold, active_properties=None):
             if n == 1:
                 sim_addr = normalise_address(similar[0])
                 if sim_addr:
-                    medium.append(f"1 similar {bed}-bed still on market: {sim_addr}. This sale just set its pricing benchmark.")
+                    medium.append(f"1 similar {bed}-bed still on market: {sim_addr}. This sale could reset its pricing benchmark.")
             elif n >= 2:
-                medium.append(f"{n} similar {bed}-beds still on market in {suburb}. This sale just set their pricing benchmark.")
+                medium.append(f"{n} similar {bed}-beds still on market in {suburb}. This sale could reset their pricing benchmark.")
 
     # 6. Prior transaction history / capital gain
     if txns and sale_val:
