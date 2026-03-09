@@ -883,7 +883,7 @@ def get_recently_sold_properties():
     for suburb in CORE_SUBURBS:
         try:
             listings = query_with_retry(db[suburb], SOLD_HOUSE_FILTER, {
-                "address": 1, "street_address": 1, "suburb": 1,
+                "_id": 1, "address": 1, "street_address": 1, "suburb": 1,
                 "price": 1, "sale_price": 1, "listing_price": 1,
                 "sold_date": 1, "sold_date_text": 1,
                 "property_type": 1, "bedrooms": 1, "bathrooms": 1,
@@ -2043,8 +2043,67 @@ def template_saturday_open_list(suburbs, properties=None, **kw):
     return msg, "saturday_open_list"
 
 
-def _sold_insight(p, all_sold):
-    """Generate a specific insight for one sold property using enriched data."""
+def _get_forward_impact(sold_prop, suburb_key):
+    """Find active listings that use this sold property as a valuation comparable.
+    Returns list of dicts with address, reconciled_valuation, bedrooms."""
+    sold_id = str(sold_prop.get("_id", ""))
+    if not sold_id:
+        return []
+    try:
+        client = MongoClient(COSMOS_URI)
+        db = client["Gold_Coast"]
+        matches = list(query_with_retry(db[suburb_key], {
+            "listing_status": "for_sale",
+            "property_type": {"$in": ["House", "house"]},
+            "valuation_data.recent_sales.id": sold_id
+        }, {
+            "street_address": 1, "address": 1, "bedrooms": 1, "price": 1,
+            "valuation_data.confidence.reconciled_valuation": 1,
+        }))
+        client.close()
+        return matches
+    except Exception:
+        return []
+
+
+def _get_bedroom_median(active_properties, suburb_key, bedrooms):
+    """Get median asking price for a specific bedroom count in a suburb from active listings."""
+    if not bedrooms or not active_properties:
+        return None
+    prices = []
+    for p in active_properties:
+        if p.get("_suburb_key") == suburb_key and p.get("bedrooms") == bedrooms:
+            val = parse_price_value(p.get("price", ""))
+            if val:
+                prices.append(val)
+    if len(prices) >= 3:
+        prices.sort()
+        return prices[len(prices) // 2]
+    return None
+
+
+def _find_active_comparables(active_properties, sold_prop, sale_val):
+    """Find active listings in same suburb with same bed count and similar price."""
+    suburb_key = sold_prop.get("_suburb_key", "")
+    bed = sold_prop.get("bedrooms")
+    if not suburb_key or not bed or not sale_val:
+        return []
+    matches = []
+    for p in active_properties:
+        if p.get("_suburb_key") != suburb_key or p.get("bedrooms") != bed:
+            continue
+        asking = parse_price_value(p.get("price", ""))
+        if not asking:
+            continue
+        # Within 25% of sale price
+        if abs(asking - sale_val) / sale_val <= 0.25:
+            matches.append(p)
+    return matches
+
+
+def _sold_insight(p, all_sold, active_properties=None):
+    """Generate specific insights for one sold property — backward-looking data
+    translated into forward-looking advice for buyers."""
     address = p.get("street_address", "")
     sale_price = p.get("sale_price", "")
     sale_val = parse_price_value(str(sale_price)) if sale_price else None
@@ -2053,6 +2112,7 @@ def _sold_insight(p, all_sold):
     days = p.get("days_on_market")
     bed = p.get("bedrooms")
     suburb = p.get("_suburb_display", "")
+    suburb_key = p.get("_suburb_key", "")
     ed = p.get("enriched_data") or {}
     lot = ed.get("lot_size_sqm")
     floor = ed.get("floor_area_sqm")
@@ -2061,24 +2121,79 @@ def _sold_insight(p, all_sold):
         floor = fp.get("internal_floor_area", {}).get("value") if fp else None
     txns = ed.get("transactions", [])
     pi = p.get("property_insights", {})
+    active_properties = active_properties or []
 
-    # Priority-ordered insights — we'll pick the best 1-2
+    # Priority-ordered insights — we'll pick the best 2-3
     high = []   # Most compelling
     medium = []  # Good context
     low = []     # Fallback
 
-    # Speed of sale (high impact — people notice fast/slow sales)
+    # 1. Our valuation vs sale price (highest impact — validates model, helps buyers trust data)
+    vd = p.get("valuation_data", {}) or {}
+    reconciled = (vd.get("confidence") or {}).get("reconciled_valuation")
+    if sale_val and reconciled:
+        val_error = (sale_val - reconciled) / reconciled * 100
+        if abs(val_error) <= 5:
+            high.append(f"Sold within 5% of our {fmt_price(int(reconciled))} valuation — our model nailed this one.")
+        elif val_error > 10:
+            high.append(f"Sold {val_error:.0f}% above our {fmt_price(int(reconciled))} estimate — competitive bidding likely pushed it beyond market value.")
+        elif val_error < -10:
+            high.append(f"Sold {abs(val_error):.0f}% below our {fmt_price(int(reconciled))} estimate — the buyer got a deal here.")
+
+    # 2. Speed of sale (high impact — people notice fast/slow sales)
     if days is not None:
         all_days = [s.get("days_on_market") for s in all_sold if s.get("days_on_market")]
         avg_days = sum(all_days) / len(all_days) if all_days else 25
         if days <= 5:
-            high.append(f"Sold in just {days} days — fastest confirmed sale this period.")
+            high.append(f"Sold in just {days} days — if you're watching a similar property, don't wait.")
         elif days <= 10 and avg_days > 20:
-            high.append(f"Sold in {days} days, well under the {avg_days:.0f}-day average.")
+            high.append(f"Sold in {days} days, well under the {avg_days:.0f}-day average. Well-priced homes don't last here.")
         elif days >= 45:
-            medium.append(f"Took {days} days — longer campaigns usually mean the price needed adjusting.")
+            medium.append(f"Took {days} days — that's a seller who adjusted expectations. If you see similar DOM on a listing you like, there's room to negotiate.")
 
-    # Prior transaction history / capital gain (high impact — people love growth stories)
+    # 3. Bedroom median comparison (medium — contextualises the sale price)
+    if sale_val and bed:
+        bed_median = _get_bedroom_median(active_properties, suburb_key, bed)
+        if bed_median:
+            diff_pct = (sale_val - bed_median) / bed_median * 100
+            if diff_pct <= -15:
+                medium.append(f"Sold {abs(diff_pct):.0f}% below the current {bed}-bed median of {fmt_price(int(bed_median))} — this resets what 'affordable' looks like for {bed}-beds in {suburb}.")
+            elif diff_pct >= 15:
+                medium.append(f"Sold {diff_pct:.0f}% above the current {bed}-bed median of {fmt_price(int(bed_median))} — this pushes the benchmark up for similar homes.")
+            elif abs(diff_pct) <= 5:
+                medium.append(f"Right on the {bed}-bed median of {fmt_price(int(bed_median))} — textbook market-rate sale.")
+
+    # 4. Forward impact — active listings using this sale as a comparable (highest impact for buyers)
+    forward_matches = _get_forward_impact(p, suburb_key)
+    if forward_matches:
+        n = len(forward_matches)
+        # Pick the most notable one to mention
+        named = []
+        for m in forward_matches[:3]:
+            maddr = normalise_address(m)
+            if maddr:
+                named.append(maddr)
+        if named:
+            if n == 1:
+                high.append(f"This sale is a direct comparable for {named[0]} — it just repriced that listing's valuation.")
+            elif n <= 3:
+                high.append(f"This sale is a comp for {n} active listings including {named[0]}. If you're watching those, this sale just moved their valuations.")
+            else:
+                high.append(f"This sale feeds into the valuation of {n} active listings including {named[0]}. It just repriced a chunk of the market.")
+
+    # 5. Active comparable callout (medium — what's still available)
+    if sale_val and active_properties:
+        similar = _find_active_comparables(active_properties, p, sale_val)
+        if similar and not forward_matches:  # Don't double up with forward impact
+            n = len(similar)
+            if n == 1:
+                sim_addr = normalise_address(similar[0])
+                if sim_addr:
+                    medium.append(f"1 similar {bed}-bed still on market: {sim_addr}. This sale just set its pricing benchmark.")
+            elif n >= 2:
+                medium.append(f"{n} similar {bed}-beds still on market in {suburb}. This sale just set their pricing benchmark.")
+
+    # 6. Prior transaction history / capital gain
     if txns and sale_val:
         prior_sales = [t for t in txns if t.get("price") and t.get("price") < sale_val * 0.95]
         if prior_sales:
@@ -2087,42 +2202,25 @@ def _sold_insight(p, all_sold):
             prior_date = str(last.get("date", ""))[:4]
             if prior_price > 0 and prior_date:
                 gain_pct = (sale_val - prior_price) / prior_price * 100
-                high.append(f"Last sold in {prior_date} for {fmt_price(int(prior_price))} — a {gain_pct:.0f}% gain.")
+                medium.append(f"Last sold in {prior_date} for {fmt_price(int(prior_price))} — {gain_pct:.0f}% growth. That's the kind of equity this suburb builds.")
 
-    # Listing vs sale price gap (medium — interesting but common)
+    # 7. Listing vs sale price gap
     if sale_val and list_val and list_val > 0:
         gap_pct = (sale_val - list_val) / list_val * 100
         if gap_pct >= 5:
-            medium.append(f"Sold {abs(gap_pct):.0f}% above asking — multiple buyers likely competed.")
+            medium.append(f"Sold {abs(gap_pct):.0f}% above asking — multiple buyers competed for this one.")
         elif gap_pct <= -5:
-            medium.append(f"Sold {abs(gap_pct):.0f}% below asking — initial price was ahead of the market.")
+            medium.append(f"Sold {abs(gap_pct):.0f}% below asking — the seller started too high. A lesson for overpriced listings.")
 
-    # Our valuation vs sale price (high impact — validates or challenges our model)
-    vd = p.get("valuation_data", {}) or {}
-    reconciled = (vd.get("confidence") or {}).get("reconciled_valuation")
-    if sale_val and reconciled:
-        val_error = (sale_val - reconciled) / reconciled * 100
-        if abs(val_error) <= 5:
-            high.append(f"Sold within 5% of our {fmt_price(int(reconciled))} valuation.")
-        elif val_error > 10:
-            medium.append(f"Sold {val_error:.0f}% above our {fmt_price(int(reconciled))} estimate — we undervalued this one.")
-        elif val_error < -10:
-            medium.append(f"Sold {abs(val_error):.0f}% below our {fmt_price(int(reconciled))} estimate.")
-
-    # Rarity / percentile (medium — useful for scarcity signal)
+    # 8. Rarity / percentile
     if pi:
         beds_pi = pi.get("bedrooms", {})
         sc = beds_pi.get("suburbComparison", {})
         pctl = sc.get("percentile")
         if pctl and pctl >= 85 and bed:
-            medium.append(f"{bed}-bed houses are top {100-pctl}% for size in {suburb} — rare stock.")
-        lot_pi = pi.get("lot_size", {})
-        lsc = lot_pi.get("suburbComparison", {})
-        lpctl = lsc.get("percentile")
-        if lpctl and lpctl >= 85 and lot:
-            medium.append(f"{lot:.0f}sqm lot — larger than {lpctl}% of {suburb} listings.")
+            low.append(f"{bed}-bed houses are top {100-pctl}% for size in {suburb} — rare stock that rarely comes up.")
 
-    # $/sqm (low priority — useful as fallback only)
+    # 9. $/sqm (fallback)
     if lot and sale_val:
         price_per_sqm_land = sale_val / lot
         low.append(f"{lot:.0f}sqm lot at {fmt_price(int(price_per_sqm_land))}/sqm of land.")
@@ -2130,12 +2228,14 @@ def _sold_insight(p, all_sold):
         price_per_sqm_floor = sale_val / floor
         low.append(f"{floor:.0f}sqm internal at {fmt_price(int(price_per_sqm_floor))}/sqm of living space.")
 
-    # Return best insights: up to 1 high + 1 medium, or fallback to low
+    # Return best insights: up to 2 high, then fill with medium, fallback to low
     result = []
-    if high:
-        result.append(high[0])
-    if medium:
-        result.append(medium[0])
+    for h in high[:2]:
+        result.append(h)
+    for m in medium:
+        if len(result) >= 3:
+            break
+        result.append(m)
     if not result and low:
         result.append(low[0])
     return result
@@ -2155,9 +2255,11 @@ def _parse_sold_date(p):
 
 
 def template_sold_results(suburbs, properties=None, **kw):
-    """Monday — what sold last week, with narrative context for buyers."""
+    """Monday — what sold last week, with forward-looking context for buyers."""
     sold_properties = get_recently_sold_properties()
     mkt = get_market_context()
+    # Load active properties for comparable/benchmark analysis
+    active_properties = properties if properties else get_individual_properties()
 
     if not sold_properties:
         msg = """No confirmed house sales last week across Robina, Burleigh Waters or Varsity Lakes.
@@ -2291,10 +2393,10 @@ In the meantime, if you're actively looking, our full suburb breakdowns are upda
 
             line = f"  {address} — {bed}bd, {price_str}{dom_str}"
 
-            # Actionable insight (1 line max)
-            insights = _sold_insight(p, valid_sold)
-            if insights:
-                line += f"\n    → {insights[0]}"
+            # Actionable insights (up to 2 lines)
+            insights = _sold_insight(p, valid_sold, active_properties)
+            for ins in insights[:2]:
+                line += f"\n    → {ins}"
 
             msg += line + "\n"
 
