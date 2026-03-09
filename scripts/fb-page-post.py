@@ -1702,7 +1702,13 @@ def template_open_home_spotlight(suburbs, properties=None, **kw):
 
     msg = f"{address}, {suburb}\n{spec_line} — {clean_price_display(prop.get('price', ''))}\nOpen {insp['day']} at {insp['start']}\n"
 
-    # Reframe valuation intelligence as reasons to act
+    # Value Drivers — strengths and trade-offs
+    suburb_props = [p for p in properties if p.get("_suburb_key") == suburb_key]
+    vd_section = _build_value_drivers_section(prop, suburb_props)
+    if vd_section:
+        msg += f"\n{vd_section}"
+
+    # Valuation context
     vd = prop.get("valuation_data", {}) or {}
     conf = (vd.get("confidence") or {})
     reconciled = conf.get("reconciled_valuation")
@@ -1711,42 +1717,32 @@ def template_open_home_spotlight(suburbs, properties=None, **kw):
     if reconciled and price_val and not insufficient:
         gap_pct = (price_val - reconciled) / reconciled * 100
         if gap_pct < -5:
-            msg += f"\nOur analysis values this at {fmt_price(int(reconciled))} — the asking price is {abs(gap_pct):.0f}% lower. That gap doesn't last. If the numbers stack up for you, be at this open home early."
+            msg += f"\nOur analysis values this at {fmt_price(int(reconciled))} — the asking price is {abs(gap_pct):.0f}% lower. That gap doesn't last."
         elif gap_pct > 10:
-            msg += f"\nOur valuation sits at {fmt_price(int(reconciled))} — the asking price is above that. Room to negotiate, especially if it's been sitting."
-
-    # Condition insight reframed
-    pvd = prop.get("property_valuation_data", {}) or {}
-    cs = pvd.get("condition_summary", {}) or {}
-    overall_score = cs.get("overall_score")
-    kitchen_bench = (pvd.get("kitchen") or {}).get("benchtop_material")
-    kitchen_island = (pvd.get("kitchen") or {}).get("island_bench")
-
-    if overall_score and overall_score >= 8:
-        extras = []
-        if kitchen_bench and kitchen_bench.lower() in ("stone", "marble", "granite", "quartz", "engineered stone"):
-            extras.append("stone benchtops")
-        if kitchen_island:
-            extras.append("island bench")
-        detail = f" with {' and '.join(extras)}" if extras else ""
-        msg += f"\nCondition scores {overall_score}/10{detail}. In a market where renovation adds 6-12 months to your timeline, move-in ready matters."
-    elif overall_score and overall_score <= 5:
-        msg += f"\nCondition: {overall_score}/10 — renovation opportunity. Factor $20,000-$80,000 into your budget, but that's where the upside is."
+            msg += f"\nOur valuation sits at {fmt_price(int(reconciled))} — asking price is above that. Room to negotiate."
+        else:
+            msg += f"\nIn line with our valuation ({fmt_price(int(reconciled))})."
 
     # DOM context as advice
     if isinstance(days, (int, float)):
         if days <= 3:
-            msg += "\nJust listed — first open homes attract the most serious buyers. Be there."
+            msg += "\nJust listed — first open homes attract the most serious buyers."
         elif days <= 7:
-            msg += "\nFirst week on market. Early inspections tend to draw the strongest offers."
+            msg += "\nFirst week on market."
         elif days >= 60:
-            msg += f"\nBeen on {days} days — the seller may be more flexible than you think."
+            msg += f"\n{int(days)} days on market — the seller may be more flexible than you think."
         elif days >= 45:
-            msg += f"\n{days} days on market. Getting past the fresh-listing window — there may be room to talk."
+            msg += f"\n{int(days)} days on market — there may be room to negotiate."
 
-    msg += "\n\nFull property analysis on fieldsestate.com.au"
+    # Property link
+    prop_id = str(prop.get("_id", ""))
+    if prop_id:
+        msg += f"\n\nFull report: fieldsestate.com.au/property/{prop_id}"
+    else:
+        msg += "\n\nfieldsestate.com.au/for-sale"
 
-    return msg, "open_home_spotlight"
+    hero = _get_hero_image(prop)
+    return msg, "open_home_spotlight", hero
 
 
 
