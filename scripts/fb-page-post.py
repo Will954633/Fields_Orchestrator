@@ -2109,17 +2109,17 @@ def _find_active_comparables(active_properties, sold_prop, sale_val):
 
 def _format_top_comps(p, n=3):
     """Format the top N valuation comparables for a property as a short text block.
-    Returns a string like 'Based on: 38 Nardoo St (sold $1,585,000, adj. $1,476,670), ...'
-    or empty string if no comps available."""
+    Returns (text, has_adjusted) tuple. text is empty string if no comps available.
+    has_adjusted is True if any comp has an adjusted price (needs footnote)."""
     from bson import ObjectId
     vd = p.get("valuation_data") or {}
     rs = vd.get("recent_sales", [])
     if not rs:
-        return ""
+        return "", False
 
     included = [r for r in rs if r.get("included_in_valuation")]
     if not included:
-        return ""
+        return "", False
     included.sort(key=lambda r: (r.get("weight") or {}).get("raw_weight", 0), reverse=True)
 
     suburb_key = p.get("_suburb_key", "")
@@ -2133,6 +2133,7 @@ def _format_top_comps(p, n=3):
         client = MongoClient(COSMOS_URI)
         db = client["Gold_Coast"]
         comp_lines = []
+        has_adjusted = False
         for r in included[:n]:
             comp_id = r.get("id")
             sale_price = r.get("price")
@@ -2158,16 +2159,17 @@ def _format_top_comps(p, n=3):
             addr = re.sub(r'\s+', ' ', addr)
 
             if adj_price:
-                comp_lines.append(f"{addr} (sold {fmt_price(int(sale_price))}, adj. {fmt_price(int(adj_price))})")
+                comp_lines.append(f"{addr} (sold {fmt_price(int(sale_price))}, {fmt_price(int(adj_price))}*)")
+                has_adjusted = True
             else:
                 comp_lines.append(f"{addr} (sold {fmt_price(int(sale_price))})")
 
         client.close()
         if comp_lines:
-            return "Based on: " + " · ".join(comp_lines)
+            return "Valuation comparables: " + " · ".join(comp_lines), has_adjusted
     except Exception:
         pass
-    return ""
+    return "", False
 
 
 def _sold_insight(p, all_sold, active_properties=None):
@@ -2551,6 +2553,7 @@ def template_new_to_market(suburbs, properties=None, **kw):
     msg += "\n\nNew listings get the most buyer attention in their first 14 days — if one of these catches your eye, be at the first open home."
 
     lines = []
+    any_adjusted = False
     for p, dt in new_listings[:6]:
         suburb = p["_suburb_display"]
         price = clean_price_display(p.get("price", ""))
@@ -2575,12 +2578,17 @@ def template_new_to_market(suburbs, properties=None, **kw):
             entry += f"\n  {_reframe_intel_as_advice(raw, p, price_val)}"
 
         # Add top 3 valuation comparables
-        comps_str = _format_top_comps(p, n=3)
+        comps_str, has_adj = _format_top_comps(p, n=3)
         if comps_str:
             entry += f"\n  {comps_str}"
+            if has_adj:
+                any_adjusted = True
         lines.append(entry)
 
     msg += "\n\n" + "\n\n".join(lines)
+
+    if any_adjusted:
+        msg += "\n\n* Adjusted sale price accounts for differences in land size, floor area, bedrooms, and age between the comparable and the subject property."
 
     # Close with suburb-specific buy article for the most common suburb
     busiest_suburb_display = max(suburb_counts.items(), key=lambda x: x[1])[0]
