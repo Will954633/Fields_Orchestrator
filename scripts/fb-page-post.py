@@ -1525,7 +1525,7 @@ No confirmed sales doesn't mean nothing happened — settlement reporting lags b
 
 Tomorrow morning: the full weekly breakdown — what each sold for, how long it took, and how the sale price compares to our independent valuation.
 
-Follow us so you see it first."""
+Looking to buy? Message us your budget and the type of home you're after — we'll personally search for properties that match, including ones that haven't listed yet. It's a complimentary service from Fields."""
         return msg, "sold_preview"
 
     # Build suburb breakdown
@@ -1571,7 +1571,8 @@ Follow us so you see it first."""
         msg += f"\n\nSale price: {fmt_price(prices[0])}."
 
     msg += "\n\nTomorrow morning: the full breakdown — what each sold for, how long it took, and how the sale price compares to our independent valuation."
-    msg += "\n\nFollow us so you see it first."
+
+    msg += "\n\nLooking to buy? Message us your budget and the type of home you're after — we'll personally search for properties that match, including ones that haven't listed yet. Complimentary Fields buyer assist."
 
     return msg, "sold_preview"
 
