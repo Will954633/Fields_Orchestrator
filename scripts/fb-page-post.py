@@ -377,17 +377,22 @@ def query_with_retry(collection, filter_doc, projection, max_retries=5):
             raise
 
 
-def normalise_address(prop):
-    """Return a clean street address — no suburb/state/postcode, title-cased."""
+def normalise_address(prop, include_suburb=True):
+    """Return a clean address — with suburb by default, title-cased."""
     addr = prop.get("street_address") or prop.get("address") or ""
     # Strip trailing ", Suburb, QLD 4226" style suffixes
-    addr = re.sub(r',\s*(?:Robina|Burleigh Waters|Varsity Lakes)\b.*$', '', addr, flags=re.IGNORECASE)
+    addr = re.sub(r',\s*(?:Robina|Burleigh Waters|Varsity Lakes|Burleigh Heads|Mudgeeraba|Reedy Creek|Merrimac|Worongary|Carrara)\b.*$', '', addr, flags=re.IGNORECASE)
     # Strip standalone QLD / postcode fragments
     addr = re.sub(r',?\s*QLD\s*\d{4}\s*$', '', addr, flags=re.IGNORECASE)
     # Title-case if ALL CAPS
     if addr == addr.upper() and len(addr) > 3:
         addr = addr.title()
-    return addr.strip()
+    addr = addr.strip()
+    if include_suburb:
+        suburb = prop.get("_suburb_display", "")
+        if suburb and suburb.lower() not in addr.lower():
+            addr = f"{addr}, {suburb}"
+    return addr
 
 
 # ── Data collection ──────────────────────────────────────────────────────
@@ -1485,7 +1490,7 @@ def template_buyer_intelligence(suburbs, **kw):
             addr = normalise_address(p)
             bed = p.get("bedrooms", "?")
             prop_id = str(p.get("_id", ""))
-            msg += f"\n{addr}, {suburb_name} — {bed}bd, {fmt_price(pv)} — {int(dom)} days"
+            msg += f"\n{addr} — {bed}bd, {fmt_price(pv)} — {int(dom)} days"
             if prop_id:
                 msg += f"\nfieldsestate.com.au/property/{prop_id}"
 
@@ -1744,7 +1749,7 @@ def template_open_home_spotlight(suburbs, properties=None, **kw):
         specs.append(f"{lot:.0f}sqm")
     spec_line = " · ".join(specs)
 
-    msg = f"{address}, {suburb}\n{spec_line} — {clean_price_display(prop.get('price', ''))}\nOpen {insp['day']} at {insp['start']}\n"
+    msg = f"{address}\n{spec_line} — {clean_price_display(prop.get('price', ''))}\nOpen {insp['day']} at {insp['start']}\n"
 
     # Value Drivers — strengths and trade-offs
     suburb_props = [p for p in properties if p.get("_suburb_key") == suburb_key]
@@ -2068,7 +2073,7 @@ def template_weekend_preview(suburbs, properties=None, **kw):
         if lot:
             specs.append(f"{lot:.0f}sqm")
 
-        msg += f"\n{addr}, {suburb}"
+        msg += f"\n{addr}"
         msg += f"\n{' · '.join(specs)} — {price_str} — Open {insp['day']} {insp['start']}"
         display_reasons = [r for r in reasons if "sqm lot" not in r]
         if display_reasons:
@@ -2191,7 +2196,7 @@ def template_saturday_open_list(suburbs, properties=None, **kw):
 
             display_reasons = [r for r in reasons if "sqm lot" not in r]
 
-            msg += f"\n{addr}, {suburb}"
+            msg += f"\n{addr}"
             msg += f"\n{' · '.join(specs)} — {price_str} — {insp['start']}"
             if display_reasons:
                 msg += f"\n{'. '.join(display_reasons)}."
@@ -2596,7 +2601,7 @@ def template_sold_results(suburbs, properties=None, **kw):
             price_str = "price undisclosed"
         dom_str = f" · {days} days" if days else ""
 
-        msg += f"\n{address}, {suburb} — {bed}bd, {price_str}{dom_str}"
+        msg += f"\n{address} — {bed}bd, {price_str}{dom_str}"
         shown += 1
 
     remaining = total - shown
@@ -2732,7 +2737,7 @@ def template_new_to_market(suburbs, properties=None, **kw):
         if lot:
             specs.append(f"{lot:.0f}sqm")
 
-        msg += f"\n{addr}, {suburb}"
+        msg += f"\n{addr}"
         msg += f"\n{' · '.join(specs)} — {price_str}"
         # Show reasons (filter out lot size if already in specs)
         display_reasons = [r for r in reasons if "sqm lot" not in r]
