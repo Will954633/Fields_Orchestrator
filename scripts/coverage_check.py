@@ -88,16 +88,29 @@ def parse_suburbs_arg(arg: str) -> List[Dict]:
     return suburbs
 
 
-def setup_driver() -> webdriver.Chrome:
-    """Create headless Chrome WebDriver."""
+def setup_driver(max_retries=3) -> webdriver.Chrome:
+    """Create headless Chrome WebDriver with retry logic."""
     options = Options()
     options.add_argument('--headless=new')
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
     options.add_argument('--disable-gpu')
+    options.add_argument('--disable-software-rasterizer')
+    options.add_argument('--disable-extensions')
     options.add_argument('--window-size=1280,800')
     service = Service('/usr/bin/chromedriver')
-    return webdriver.Chrome(service=service, options=options)
+    for attempt in range(1, max_retries + 1):
+        try:
+            return webdriver.Chrome(service=service, options=options)
+        except Exception as e:
+            print(f"  WebDriver creation failed (attempt {attempt}/{max_retries}): {e}", flush=True)
+            # Kill any zombie Chrome processes
+            import subprocess as _sp
+            for _pat in ['chromedriver', 'chrome_crashpad', 'chrome']:
+                _sp.run(['pkill', '-9', '-f', _pat], capture_output=True, timeout=5)
+            time.sleep(5)
+            if attempt == max_retries:
+                raise
 
 
 def fetch_domain_count(driver: webdriver.Chrome, suburb: Dict) -> Optional[int]:
