@@ -339,22 +339,22 @@ def cmd_status():
     site_url = "sc-domain:fieldsestate.com.au"
     # Try URL prefix if domain property doesn't work
     try:
-        result = service.searchAnalytics().query(
+        result = service.searchanalytics().query(
             siteUrl=site_url,
             body={
                 "startDate": "2026-03-01",
-                "endDate": "2026-03-09",
+                "endDate": "2026-03-10",
                 "dimensions": ["page"],
                 "rowLimit": 25,
             }
         ).execute()
     except Exception:
         site_url = "https://fieldsestate.com.au/"
-        result = service.searchAnalytics().query(
+        result = service.searchanalytics().query(
             siteUrl=site_url,
             body={
                 "startDate": "2026-03-01",
-                "endDate": "2026-03-09",
+                "endDate": "2026-03-10",
                 "dimensions": ["page"],
                 "rowLimit": 25,
             }
