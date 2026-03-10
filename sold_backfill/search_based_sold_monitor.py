@@ -245,6 +245,7 @@ class SearchBasedSoldMonitor:
             except Exception as e:
                 print(f"  WebDriver creation failed (attempt {attempt}/{max_retries}): {e}", flush=True)
                 self._cleanup_zombie_chrome()
+                import time as _t; _t.sleep(5)  # Give OS time to release resources
                 if attempt == max_retries:
                     raise
 
