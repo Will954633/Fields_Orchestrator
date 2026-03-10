@@ -568,32 +568,6 @@ def property_intel(prop, suburbs=None, all_properties=None):
     bed = prop.get("bedrooms")
     bath = prop.get("bathrooms")
 
-    # ── Valuation gap (highest impact — is this property priced well?) ──
-    vd = prop.get("valuation_data", {}) or {}
-    summary = vd.get("summary", {}) or {}
-    conf = vd.get("confidence", {}) or {}
-    reconciled = conf.get("reconciled_valuation")
-    positioning = summary.get("positioning")
-    insufficient = summary.get("insufficient_data", True)
-
-    if reconciled and price_val and not insufficient:
-        gap_pct = (price_val - reconciled) / reconciled * 100
-        val_range = conf.get("range", {}) or {}
-        if gap_pct < -10:
-            insights.append((1, f"Listed {abs(gap_pct):.0f}% below our valuation of {fmt_price(int(reconciled))}. Worth a closer look."))
-        elif gap_pct < -3:
-            insights.append((2, f"Asking price sits below our {fmt_price(int(reconciled))} valuation — could be a negotiation opportunity."))
-        elif gap_pct > 20:
-            insights.append((2, f"Priced {gap_pct:.0f}% above our {fmt_price(int(reconciled))} valuation. Expect room to negotiate."))
-        elif gap_pct > 10:
-            insights.append((3, f"Listed above our valuation of {fmt_price(int(reconciled))} — typical in this suburb."))
-        elif val_range:
-            low_r = val_range.get("low")
-            high_r = val_range.get("high")
-            if low_r and high_r and price_val:
-                if low_r <= price_val <= high_r:
-                    insights.append((2, f"Priced within our valuation range ({fmt_price(int(low_r))} – {fmt_price(int(high_r))}). Fair asking."))
-
     # ── Days on market (urgency signal) ──
     if isinstance(days, (int, float)):
         suburb_median_dom = None
@@ -1178,20 +1152,6 @@ def template_price_comparison(suburbs, **kw):
         if vd_section:
             msg += f"\n{vd_section}"
 
-        # Valuation context
-        vd = p.get("valuation_data", {}) or {}
-        conf = (vd.get("confidence") or {})
-        reconciled = conf.get("reconciled_valuation")
-        insufficient = (vd.get("summary") or {}).get("insufficient_data", True)
-        if reconciled and not insufficient:
-            val_gap = (pv - reconciled) / reconciled * 100
-            if val_gap < -5:
-                msg += f"\nPriced {abs(val_gap):.0f}% below our valuation ({fmt_price(reconciled)})."
-            elif val_gap > 5:
-                msg += f"\nPriced {val_gap:.0f}% above our valuation ({fmt_price(reconciled)})."
-            else:
-                msg += f"\nIn line with our valuation ({fmt_price(reconciled)})."
-
         if isinstance(days, (int, float)):
             if days <= 7:
                 msg += f"\nJust listed."
@@ -1256,10 +1216,6 @@ def template_listing_count(suburbs, **kw):
         else:
             msg += f"\n{s['display_name']} ({s['total']} houses): balanced market. Neither side has a clear upper hand."
 
-    # Underpriced insight
-    if total_underpriced > 0:
-        msg += f"\n\n{total_underpriced} houses are priced below our valuation. That doesn't mean they're bargains — it means the data suggests room between asking and market value. Worth investigating."
-
     # Close with article link
     link = article_link("indicators")
     if link:
@@ -1267,18 +1223,10 @@ def template_listing_count(suburbs, **kw):
 
     msg += f"\n\n{SELLER_CTA}"
 
-    # Hero image — pick an underpriced property across all suburbs
+    # Hero image — pick a property with the most days on market
     properties = get_individual_properties()
     hero_image = None
-    for p in properties:
-        vd = p.get("valuation_data", {}) or {}
-        pos = (vd.get("summary") or {}).get("positioning")
-        insuf = (vd.get("summary") or {}).get("insufficient_data", True)
-        if not insuf and pos in ("underpriced", "good_value"):
-            hero_image = _get_hero_image(p)
-            if hero_image:
-                break
-    if not hero_image and properties:
+    if properties:
         hero_image = _get_hero_image(properties[0])
 
     return msg, "listing_count", hero_image
@@ -1423,10 +1371,8 @@ def template_seller_insight(suburbs, **kw):
         else:
             msg += " Not fast, not slow — but the well-priced ones are moving noticeably quicker than the rest."
 
-    # Overpriced analysis as warning
-    if s.get("overpriced_count") and s["overpriced_count"] > 0:
-        msg += f"\n\n{s['overpriced_count']} of {total} listings our analysis flags as above market value. These are the ones sitting 60+ days. Don't be one of them."
-    elif s.get("stale_listings") and s["stale_listings"] > 0:
+    # Stale listings as warning
+    if s.get("stale_listings") and s["stale_listings"] > 0:
         msg += f"\n\n{s['stale_listings']} listings have been on the market 60+ days. The pattern is almost always the same: priced too high at launch, then a slow grind of price cuts. Don't be one of them."
 
     # Bedroom competition
@@ -1519,32 +1465,27 @@ def template_buyer_intelligence(suburbs, **kw):
             else:
                 msg += f"\nSelling in {r['median_dom']} days — time to inspect, but don't sit on a good one."
 
-    # Find the best value properties across all brackets
-    underpriced_props = []
+    # Find properties with extended days on market (negotiation opportunities)
+    long_dom_props = []
     for r in results[:3]:
         for p in r["bracket_props"]:
             pv = parse_price_value(p.get("price", ""))
-            if not pv:
+            dom = p.get("days_on_domain")
+            if not pv or not isinstance(dom, (int, float)):
                 continue
-            vd = p.get("valuation_data", {}) or {}
-            pos = (vd.get("summary") or {}).get("positioning")
-            insuf = (vd.get("summary") or {}).get("insufficient_data", True)
-            if not insuf and pos in ("underpriced", "good_value"):
-                reconciled = (vd.get("confidence") or {}).get("reconciled_valuation")
-                gap_pct = (pv - reconciled) / reconciled * 100 if reconciled else 0
-                underpriced_props.append((p, pv, reconciled, gap_pct, r["name"]))
+            if dom >= 45:
+                long_dom_props.append((p, pv, dom, r["name"]))
 
     hero_image = None
-    if underpriced_props:
-        underpriced_props.sort(key=lambda x: x[3])
-        hero_image = _get_hero_image(underpriced_props[0][0])
-        msg += "\n\nPriced below our valuation right now:"
-        for p, pv, reconciled, gap_pct, suburb_name in underpriced_props[:4]:
+    if long_dom_props:
+        long_dom_props.sort(key=lambda x: -x[2])
+        hero_image = _get_hero_image(long_dom_props[0][0])
+        msg += "\n\nBeen sitting — room to negotiate:"
+        for p, pv, dom, suburb_name in long_dom_props[:4]:
             addr = normalise_address(p)
             bed = p.get("bedrooms", "?")
-            val_str = f" (valued {fmt_price(int(reconciled))})" if reconciled else ""
             prop_id = str(p.get("_id", ""))
-            msg += f"\n{addr}, {suburb_name} — {bed}bd, {fmt_price(pv)}{val_str}"
+            msg += f"\n{addr}, {suburb_name} — {bed}bd, {fmt_price(pv)} — {int(dom)} days"
             if prop_id:
                 msg += f"\nfieldsestate.com.au/property/{prop_id}"
 
@@ -1589,7 +1530,7 @@ def template_sold_preview(suburbs, properties=None, **kw):
     if total == 0:
         msg = "Quiet weekend — no confirmed sales yet across the southern Gold Coast."
         msg += "\n\nNo confirmed sales doesn't mean nothing happened — settlement reporting lags by days or weeks. Properties that exchanged this weekend may not appear in the data for a while."
-        msg += "\n\nTomorrow morning: the full weekly breakdown — what each sold for, how long it took, and how the sale price compares to our independent valuation."
+        msg += "\n\nTomorrow morning: the full weekly breakdown — what each sold for, how long it took, and what it means for your suburb."
         msg += f"\n\n{BUYER_CTA}"
         # Still attach a property image for engagement
         active = get_individual_properties()
@@ -1638,7 +1579,7 @@ def template_sold_preview(suburbs, properties=None, **kw):
     elif prices and len(prices) == 1:
         msg += f"\n\nSale price: {fmt_price(prices[0])}."
 
-    msg += "\n\nTomorrow morning: the full breakdown — what each sold for, how long it took, and how the sale price compares to our independent valuation."
+    msg += "\n\nTomorrow morning: the full breakdown — what each sold for, how long it took, and what it means for your suburb."
 
     msg += f"\n\n{BUYER_CTA}"
 
@@ -1699,17 +1640,11 @@ def template_price_movement(suburbs, properties=None, **kw):
             if price_val and price_val >= 200000:
                 line += f" — {fmt_price(price_val)}"
 
-            # Valuation gap as negotiation leverage
-            vd = p.get("valuation_data", {}) or {}
-            conf = (vd.get("confidence") or {})
-            reconciled = conf.get("reconciled_valuation")
-            insufficient = (vd.get("summary") or {}).get("insufficient_data", True)
-            if reconciled and price_val and not insufficient:
-                gap_pct = (price_val - reconciled) / reconciled * 100
-                if gap_pct > 5:
-                    line += f"\n  Our analysis says it's worth {fmt_price(int(reconciled))}. They're asking {fmt_price(price_val)}. That {gap_pct:.0f}% gap? That's your starting point for a conversation."
-                elif gap_pct < -5:
-                    line += f"\n  Already below our {fmt_price(int(reconciled))} valuation — and still sitting. Worth a serious look."
+            # Extended DOM as negotiation signal
+            if dom >= 90:
+                line += f"\n  {dom} days and counting. The longer it sits, the more flexible the seller becomes."
+            elif dom >= 60:
+                line += f"\n  {dom} days on market — that's well beyond the typical selling window. There's room to negotiate."
 
             msg += line
 
@@ -1745,7 +1680,7 @@ def template_price_movement(suburbs, properties=None, **kw):
     link = article_link(buy_key) if buy_key else ""
     if link:
         msg += f"\n\nFull analysis: {link}"
-    msg += "\n\nfieldsestate.com.au/for-sale — every listing with our independent valuation."
+    msg += "\n\nfieldsestate.com.au/for-sale — every listing with days on market, price history, and suburb data."
 
     msg += f"\n\n{TAGLINE}"
 
@@ -1816,21 +1751,6 @@ def template_open_home_spotlight(suburbs, properties=None, **kw):
     vd_section = _build_value_drivers_section(prop, suburb_props)
     if vd_section:
         msg += f"\n{vd_section}"
-
-    # Valuation context
-    vd = prop.get("valuation_data", {}) or {}
-    conf = (vd.get("confidence") or {})
-    reconciled = conf.get("reconciled_valuation")
-    insufficient = (vd.get("summary") or {}).get("insufficient_data", True)
-
-    if reconciled and price_val and not insufficient:
-        gap_pct = (price_val - reconciled) / reconciled * 100
-        if gap_pct < -5:
-            msg += f"\nOur analysis values this at {fmt_price(int(reconciled))} — the asking price is {abs(gap_pct):.0f}% lower. That gap doesn't last."
-        elif gap_pct > 10:
-            msg += f"\nOur valuation sits at {fmt_price(int(reconciled))} — asking price is above that. Room to negotiate."
-        else:
-            msg += f"\nIn line with our valuation ({fmt_price(int(reconciled))})."
 
     # DOM context as advice
     if isinstance(days, (int, float)):
@@ -1915,16 +1835,6 @@ def template_entry_price_watch(suburbs, properties=None, **kw):
                     else:
                         msg += f" {pct_below}% under the median — entry-level price, check the details on-site."
 
-        # Valuation context as opportunity signal
-        vd = p.get("valuation_data", {}) or {}
-        conf = (vd.get("confidence") or {})
-        reconciled = conf.get("reconciled_valuation")
-        insufficient = (vd.get("summary") or {}).get("insufficient_data", True)
-        if reconciled and not insufficient:
-            val_gap = (e["price_val"] - reconciled) / reconciled * 100
-            if val_gap < -5:
-                msg += " Listed below our valuation — that gap usually closes at auction or in the first week."
-
         # DOM as leverage
         if isinstance(days, (int, float)) and days >= 45:
             msg += f" {days} days on market means the seller has been waiting. That's your leverage."
@@ -1938,7 +1848,7 @@ def template_entry_price_watch(suburbs, properties=None, **kw):
     if link:
         msg += f"\n\nFull suburb breakdown: {link}"
     else:
-        msg += "\n\nfieldsestate.com.au/for-sale — every house with our independent valuation."
+        msg += "\n\nfieldsestate.com.au/for-sale — every house with days on market, price history, and suburb data."
 
     msg += f"\n\n{BUYER_CTA}"
 
@@ -2087,16 +1997,6 @@ def template_weekend_preview(suburbs, properties=None, **kw):
         score = 0
         reasons = []
 
-        if reconciled and pv and not insufficient:
-            gap_pct = (pv - reconciled) / reconciled * 100
-            if gap_pct < -5:
-                score += 30
-                reasons.append(f"Priced {abs(gap_pct):.0f}% below our valuation ({fmt_price(int(reconciled))})")
-            elif gap_pct > 15:
-                reasons.append(f"Priced {gap_pct:.0f}% above our valuation — room to negotiate")
-            else:
-                reasons.append(f"In line with our valuation ({fmt_price(int(reconciled))})")
-
         if overall and overall >= 8:
             score += 15
             kitchen = pvd.get("kitchen", {}) or {}
@@ -2180,7 +2080,7 @@ def template_weekend_preview(suburbs, properties=None, **kw):
 
     remaining = total_weekend - len(picks)
     if remaining > 0:
-        msg += f"\n{remaining} more open this weekend — full list with valuations at fieldsestate.com.au/for-sale"
+        msg += f"\n{remaining} more open this weekend — full list at fieldsestate.com.au/for-sale"
 
     msg += f"\n\n{BUYER_CTA}"
     return msg, "weekend_preview", hero_image
@@ -2210,12 +2110,6 @@ def template_saturday_open_list(suburbs, properties=None, **kw):
 
         score = 0
         reasons = []
-
-        if reconciled and pv and not insufficient:
-            gap_pct = (pv - reconciled) / reconciled * 100
-            if gap_pct < -5:
-                score += 30
-                reasons.append(f"Priced {abs(gap_pct):.0f}% below our valuation ({fmt_price(int(reconciled))})")
 
         if overall and overall >= 8:
             score += 15
@@ -2308,7 +2202,7 @@ def template_saturday_open_list(suburbs, properties=None, **kw):
 
     remaining = unique_count - len(top_picks)
     if remaining > 0:
-        msg += f"\n{remaining} more open today — full list with times, prices and valuations at fieldsestate.com.au/for-sale"
+        msg += f"\n{remaining} more open today — full list with times and prices at fieldsestate.com.au/for-sale"
 
     msg += f"\n\n{TAGLINE}"
     return msg, "saturday_open_list", hero_image
@@ -2464,19 +2358,7 @@ def _sold_insight(p, all_sold, active_properties=None):
     medium = []  # Good context
     low = []     # Fallback
 
-    # 1. Our valuation vs sale price (highest impact — validates model, helps buyers trust data)
-    vd = p.get("valuation_data", {}) or {}
-    reconciled = (vd.get("confidence") or {}).get("reconciled_valuation")
-    if sale_val and reconciled:
-        val_error = (sale_val - reconciled) / reconciled * 100
-        if abs(val_error) <= 5:
-            high.append(f"Sold within 5% of our {fmt_price(int(reconciled))} valuation — closely aligned with our estimate.")
-        elif val_error > 10:
-            high.append(f"Sold {val_error:.0f}% above our {fmt_price(int(reconciled))} estimate — competitive bidding may have pushed it above market value.")
-        elif val_error < -10:
-            high.append(f"Sold {abs(val_error):.0f}% below our {fmt_price(int(reconciled))} estimate — suggests the buyer may have found value here.")
-
-    # 2. Speed of sale (high impact — people notice fast/slow sales)
+    # 1. Speed of sale (high impact — people notice fast/slow sales)
     if days is not None:
         all_days = [s.get("days_on_market") for s in all_sold if s.get("days_on_market")]
         avg_days = sum(all_days) / len(all_days) if all_days else 25
@@ -2519,11 +2401,11 @@ def _sold_insight(p, all_sold, active_properties=None):
                 named.append(maddr)
         if named:
             if n == 1:
-                high.append(f"This sale is a direct comparable for {named[0]} — it may shift that listing's valuation{direction}.")
+                high.append(f"This sale is a direct comparable for {named[0]} — it sets the benchmark{direction} for that listing.")
             elif n <= 3:
-                high.append(f"This sale is a comp for {n} active listings including {named[0]}. It could push their valuations{direction}.")
+                high.append(f"This sale is a comp for {n} active listings including {named[0]}. It could shift expectations{direction}.")
             else:
-                high.append(f"This sale feeds into the valuation of {n} active listings including {named[0]}. It could reprice a portion of the market{direction}.")
+                high.append(f"This sale is a comp for {n} active listings including {named[0]}. It could reprice a portion of the market{direction}.")
 
     # 5. Active comparable callout (medium — what's still available, with direction)
     if sale_val and active_properties:
@@ -2725,7 +2607,7 @@ def template_sold_results(suburbs, properties=None, **kw):
     if sale_prices and len(sale_prices) >= 2:
         msg += f"\n\nSales ranged {fmt_price(min(sale_prices))} to {fmt_price(max(sale_prices))}."
 
-    msg += "\n\nFull sold data with sale prices, days on market, and how each compares to our valuations at fieldsestate.com.au/for-sale"
+    msg += "\n\nFull sold data with sale prices and days on market at fieldsestate.com.au/for-sale"
 
     msg += f"\n\n{SELLER_CTA}"
 
@@ -2789,17 +2671,6 @@ def template_new_to_market(suburbs, properties=None, **kw):
 
         score = 0
         reasons = []
-
-        # Undervalued
-        if reconciled and pv and not insufficient:
-            gap_pct = (pv - reconciled) / reconciled * 100
-            if gap_pct < -5:
-                score += 30
-                reasons.append(f"Priced {abs(gap_pct):.0f}% below our valuation ({fmt_price(int(reconciled))})")
-            elif gap_pct > 15:
-                reasons.append(f"Priced {gap_pct:.0f}% above our valuation — expect room to negotiate")
-            else:
-                reasons.append(f"In line with our valuation ({fmt_price(int(reconciled))})")
 
         # Condition
         if overall and overall >= 8:
@@ -2874,7 +2745,7 @@ def template_new_to_market(suburbs, properties=None, **kw):
 
     remaining = total - len(picks)
     if remaining > 0:
-        msg += f"\n{remaining} more new listings this week — full list with valuations and property reports at fieldsestate.com.au/for-sale"
+        msg += f"\n{remaining} more new listings this week — full list with property reports at fieldsestate.com.au/for-sale"
 
     msg += f"\n\n{BUYER_CTA}"
     return msg, "new_to_market", hero_image
@@ -3136,22 +3007,18 @@ def _get_condition_tradeoffs(prop):
 
 def _reframe_intel_as_advice(raw_insight, prop, price_val):
     """Reframe a raw property_intel string into actionable buyer advice."""
-    # Overpriced pattern: "Priced X% above our valuation"
+    # Skip valuation-based insights entirely
     if "above our valuation" in raw_insight or "above estimated" in raw_insight:
-        vd = prop.get("valuation_data", {}) or {}
-        reconciled = (vd.get("confidence") or {}).get("reconciled_valuation")
-        if reconciled and price_val:
-            pct = abs(price_val - reconciled) / reconciled * 100
-            return f"Our analysis values this at {fmt_price(int(reconciled))}. The asking price is {pct:.0f}% higher. Unless something has changed that the data doesn't capture, there's room to negotiate."
-        return raw_insight
+        days = prop.get("days_on_domain")
+        if isinstance(days, (int, float)) and days >= 45:
+            return f"{int(days)} days on market — there may be room to negotiate."
+        return ""
 
-    # Underpriced / good value pattern
     if "below our valuation" in raw_insight or "good value" in raw_insight.lower() or "underpriced" in raw_insight.lower():
-        vd = prop.get("valuation_data", {}) or {}
-        reconciled = (vd.get("confidence") or {}).get("reconciled_valuation")
-        if reconciled and price_val:
-            return f"Priced below our {fmt_price(int(reconciled))} valuation. Worth a close look — this kind of pricing doesn't last long."
-        return raw_insight
+        days = prop.get("days_on_domain")
+        if isinstance(days, (int, float)) and days <= 7:
+            return "Just listed — move early if the numbers work."
+        return ""
 
     # Condition pattern: "Condition: X/10"
     if raw_insight.startswith("Condition:") or "condition" in raw_insight.lower()[:15]:
