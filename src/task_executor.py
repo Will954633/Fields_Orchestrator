@@ -871,6 +871,27 @@ class TaskExecutor:
                     for _pat in ['chromedriver', 'chrome_crashpad', 'chromium', 'chrome']:
                         _cleanup_sp.run(['pkill', '-9', '-f', _pat],
                                         capture_output=True, text=True, timeout=10)
+                    # Wait for processes to fully exit before next step tries to launch Chrome
+                    time.sleep(3)
+                    # Clean up Chrome temp dirs that accumulate and cause SessionNotCreatedException
+                    import glob as _cleanup_glob
+                    import shutil as _cleanup_shutil
+                    for _pattern in ['/tmp/.com.google.Chrome*', '/tmp/chrome_crashpad_*',
+                                     '/tmp/.org.chromium.*', '/tmp/chromium-*']:
+                        for _tmp in _cleanup_glob.glob(_pattern):
+                            _cleanup_shutil.rmtree(_tmp, ignore_errors=True)
+                    # Verify no chrome processes remain
+                    _check = _cleanup_sp.run(['pgrep', '-c', '-f', 'chrome'],
+                                             capture_output=True, text=True, timeout=5)
+                    _remaining = int(_check.stdout.strip()) if _check.stdout.strip() and _check.returncode == 0 else 0
+                    if _remaining > 0:
+                        self.logger.warning(f"  {_remaining} Chrome processes still alive — force kill + 5s wait")
+                        time.sleep(5)
+                        for _pat in ['chromedriver', 'chrome_crashpad', 'chromium', 'chrome']:
+                            _cleanup_sp.run(['pkill', '-9', '-f', _pat],
+                                            capture_output=True, text=True, timeout=10)
+                    else:
+                        self.logger.info(f"  Chrome cleanup OK — 0 processes remaining")
 
                 run_summary["counts"]["steps_completed"] = steps_completed
                 run_summary["counts"]["steps_failed"] = steps_failed
