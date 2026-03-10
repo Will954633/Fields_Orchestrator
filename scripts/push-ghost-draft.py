@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """
-push-ghost-draft.py — Push draft articles directly to Ghost CMS
+push-ghost-draft.py — Push draft articles to MongoDB (replaces Ghost CMS)
+
+Articles are stored in system_monitor.content_articles collection.
+The website reads from this collection at build time via fetch-articles.js.
 
 Usage:
     # From an HTML file:
@@ -28,30 +31,26 @@ Usage:
     # List existing drafts:
     python3 scripts/push-ghost-draft.py --list-drafts
 
-    # Update an existing draft:
-    python3 scripts/push-ghost-draft.py --update <post_id> --md-file updated.md
+    # Update an existing article:
+    python3 scripts/push-ghost-draft.py --update <article_id> --md-file updated.md
 
 Requires:
     source /home/fields/venv/bin/activate
-    GHOST_ADMIN_API_KEY in /home/fields/Fields_Orchestrator/.env
-    pip: PyJWT, requests, markdown (for --md-file)
+    COSMOS_CONNECTION_STRING in /home/fields/Fields_Orchestrator/.env
+    pip: pymongo, markdown (for --md-file)
 """
 
 import sys
 import os
-import time
 import argparse
 import json
-import jwt
-import requests
+from datetime import datetime, timezone
 
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
 
 ENV_PATH = "/home/fields/Fields_Orchestrator/.env"
-GHOST_URL = "https://fields-articles.ghost.io"
-GHOST_ADMIN_BASE = f"{GHOST_URL}/ghost/api/admin"
 NETLIFY_BUILD_HOOK = "https://api.netlify.com/build_hooks/699faf0aa7c588800d79f95d"
 
 
@@ -69,29 +68,15 @@ def load_env():
                 os.environ.setdefault(key.strip(), val)
 
 
-def get_ghost_token():
-    """Create a short-lived JWT for Ghost Admin API."""
-    api_key = os.environ.get("GHOST_ADMIN_API_KEY", "")
-    if not api_key or ":" not in api_key:
-        print("ERROR: GHOST_ADMIN_API_KEY not set or invalid format (expected id:secret)")
+def get_db():
+    """Get MongoDB connection to system_monitor database."""
+    from pymongo import MongoClient
+    uri = os.environ.get("COSMOS_CONNECTION_STRING", "")
+    if not uri:
+        print("ERROR: COSMOS_CONNECTION_STRING not set")
         sys.exit(1)
-    api_id, secret = api_key.split(":")
-    iat = int(time.time())
-    payload = {"iat": iat, "exp": iat + 300, "aud": "/admin/"}
-    token = jwt.encode(
-        payload,
-        bytes.fromhex(secret),
-        algorithm="HS256",
-        headers={"kid": api_id, "typ": "JWT", "alg": "HS256"},
-    )
-    return token
-
-
-def ghost_headers():
-    return {
-        "Authorization": f"Ghost {get_ghost_token()}",
-        "Content-Type": "application/json",
-    }
+    client = MongoClient(uri, serverSelectionTimeoutMS=10000, retryWrites=False)
+    return client.system_monitor
 
 
 # ---------------------------------------------------------------------------
@@ -126,156 +111,153 @@ def read_markdown_file(path):
     return html
 
 
+def generate_slug(title):
+    """Generate a URL-friendly slug from a title."""
+    import re
+    slug = title.lower()
+    slug = re.sub(r'[^a-z0-9]+', '-', slug)
+    slug = slug.strip('-')
+    return slug[:120]
+
+
 # ---------------------------------------------------------------------------
 # Commands
 # ---------------------------------------------------------------------------
 
-def create_post(title, html, tags=None, excerpt=None, feature_image=None,
-                slug=None, publish=False):
-    """Create a new Ghost post (draft by default)."""
-    post_data = {
+def create_article(title, html, tags=None, excerpt=None, feature_image=None,
+                   slug=None, publish=False, author=None, author_slug=None):
+    """Create a new article in MongoDB."""
+    db = get_db()
+    now = datetime.now(timezone.utc).isoformat()
+
+    doc = {
         "title": title,
+        "slug": slug or generate_slug(title),
         "html": html,
         "status": "published" if publish else "draft",
+        "tags": tags or [],
+        "custom_excerpt": excerpt or "",
+        "feature_image": feature_image or "",
+        "author": author or "Fields Research",
+        "author_slug": author_slug or "fields",
+        "author_image": "",
+        "created_at": now,
+        "updated_at": now,
+        "published_at": now if publish else None,
     }
-    if tags:
-        post_data["tags"] = [{"name": t} for t in tags]
-    if excerpt:
-        post_data["custom_excerpt"] = excerpt
-    if feature_image:
-        post_data["feature_image"] = feature_image
-    if slug:
-        post_data["slug"] = slug
 
-    r = requests.post(
-        f"{GHOST_ADMIN_BASE}/posts/",
-        json={"posts": [post_data]},
-        headers=ghost_headers(),
-    )
+    result = db.content_articles.insert_one(doc)
+    article_id = str(result.inserted_id)
 
-    if r.status_code in (200, 201):
-        post = r.json()["posts"][0]
-        status_label = "PUBLISHED" if publish else "DRAFT"
-        print(f"{status_label} created successfully!")
-        print(f"  Title:  {post['title']}")
-        print(f"  ID:     {post['id']}")
-        print(f"  Slug:   {post['slug']}")
-        print(f"  Status: {post['status']}")
-        print(f"  URL:    {post.get('url', 'N/A')}")
-        print(f"  Edit:   {GHOST_URL}/ghost/#/editor/post/{post['id']}")
+    status_label = "PUBLISHED" if publish else "DRAFT"
+    print(f"{status_label} created successfully!")
+    print(f"  Title:  {doc['title']}")
+    print(f"  ID:     {article_id}")
+    print(f"  Slug:   {doc['slug']}")
+    print(f"  Status: {doc['status']}")
+    print(f"  Tags:   {', '.join(doc['tags'])}")
 
-        if publish:
-            print("\nTriggering Netlify rebuild...")
+    if publish:
+        print("\nTriggering Netlify rebuild...")
+        try:
+            import requests
             rb = requests.post(NETLIFY_BUILD_HOOK)
             if rb.status_code == 200:
                 print("Netlify rebuild triggered. Site will update in ~2-3 minutes.")
             else:
                 print(f"WARNING: Netlify rebuild returned {rb.status_code}")
-        return post
-    else:
-        print(f"ERROR: Ghost returned {r.status_code}")
-        try:
-            err = r.json()
-            print(json.dumps(err, indent=2))
-        except Exception:
-            print(r.text)
+        except Exception as e:
+            print(f"WARNING: Could not trigger rebuild: {e}")
+
+    return article_id
+
+
+def update_article(article_id, html=None, title=None, tags=None, excerpt=None,
+                   feature_image=None, publish=False):
+    """Update an existing article in MongoDB."""
+    from bson import ObjectId
+    db = get_db()
+
+    try:
+        oid = ObjectId(article_id)
+    except Exception:
+        print(f"ERROR: Invalid article ID: {article_id}")
         sys.exit(1)
 
-
-def update_post(post_id, html=None, title=None, tags=None, excerpt=None,
-                feature_image=None, publish=False):
-    """Update an existing Ghost post."""
-    # Fetch current post to get updated_at (required by Ghost)
-    r = requests.get(
-        f"{GHOST_ADMIN_BASE}/posts/{post_id}/",
-        headers=ghost_headers(),
-    )
-    if r.status_code == 404:
-        print(f"ERROR: Post {post_id} not found.")
+    existing = db.content_articles.find_one({"_id": oid})
+    if not existing:
+        print(f"ERROR: Article {article_id} not found.")
         sys.exit(1)
-    r.raise_for_status()
-    current = r.json()["posts"][0]
 
-    update_data = {"updated_at": current["updated_at"]}
+    now = datetime.now(timezone.utc).isoformat()
+    updates = {"updated_at": now}
+
     if html:
-        update_data["html"] = html
+        updates["html"] = html
     if title:
-        update_data["title"] = title
+        updates["title"] = title
     if tags:
-        update_data["tags"] = [{"name": t} for t in tags]
+        updates["tags"] = tags
     if excerpt:
-        update_data["custom_excerpt"] = excerpt
+        updates["custom_excerpt"] = excerpt
     if feature_image:
-        update_data["feature_image"] = feature_image
+        updates["feature_image"] = feature_image
     if publish:
-        update_data["status"] = "published"
+        updates["status"] = "published"
+        if not existing.get("published_at"):
+            updates["published_at"] = now
 
-    r = requests.put(
-        f"{GHOST_ADMIN_BASE}/posts/{post_id}/",
-        json={"posts": [update_data]},
-        headers=ghost_headers(),
-    )
+    db.content_articles.update_one({"_id": oid}, {"$set": updates})
 
-    if r.status_code == 200:
-        post = r.json()["posts"][0]
-        print(f"UPDATED successfully!")
-        print(f"  Title:  {post['title']}")
-        print(f"  ID:     {post['id']}")
-        print(f"  Status: {post['status']}")
-        print(f"  Edit:   {GHOST_URL}/ghost/#/editor/post/{post['id']}")
+    print(f"UPDATED successfully!")
+    print(f"  Title:  {existing.get('title', '(untitled)')}")
+    print(f"  ID:     {article_id}")
+    print(f"  Status: {updates.get('status', existing.get('status', 'draft'))}")
 
-        if publish and current["status"] == "draft":
-            print("\nTriggering Netlify rebuild...")
+    if publish and existing.get("status") == "draft":
+        print("\nTriggering Netlify rebuild...")
+        try:
+            import requests
             rb = requests.post(NETLIFY_BUILD_HOOK)
             if rb.status_code == 200:
                 print("Netlify rebuild triggered.")
-        return post
-    else:
-        print(f"ERROR: Ghost returned {r.status_code}")
-        try:
-            print(json.dumps(r.json(), indent=2))
-        except Exception:
-            print(r.text)
-        sys.exit(1)
+        except Exception as e:
+            print(f"WARNING: Could not trigger rebuild: {e}")
 
 
 def list_drafts():
-    """List all Ghost draft posts."""
-    page = 1
-    drafts = []
-    while True:
-        r = requests.get(
-            f"{GHOST_ADMIN_BASE}/posts/",
-            headers=ghost_headers(),
-            params={
-                "fields": "id,title,slug,status,created_at,updated_at",
-                "filter": "status:draft",
-                "limit": 100,
-                "page": page,
-                "order": "updated_at desc",
-            },
-        )
-        r.raise_for_status()
-        data = r.json()
-        posts = data.get("posts", [])
-        if not posts:
-            break
-        drafts.extend(posts)
-        meta = data.get("meta", {}).get("pagination", {})
-        if page >= meta.get("pages", 1):
-            break
-        page += 1
+    """List all draft articles from MongoDB."""
+    db = get_db()
+    drafts = list(db.content_articles.find({"status": "draft"}))
 
     if not drafts:
-        print("No drafts found in Ghost.")
+        print("No drafts found.")
         return
 
     print(f"{'UPDATED':<22} {'ID':<26} {'TITLE'}")
     print("-" * 80)
     for d in drafts:
         updated = (d.get("updated_at") or "")[:19].replace("T", " ")
-        print(f"{updated:<22} {d['id']:<26} {d.get('title', '(untitled)')}")
+        print(f"{updated:<22} {str(d['_id']):<26} {d.get('title', '(untitled)')}")
     print(f"\n{len(drafts)} draft(s)")
+
+
+def list_all():
+    """List all articles from MongoDB."""
+    db = get_db()
+    articles = list(db.content_articles.find())
+
+    if not articles:
+        print("No articles found.")
+        return
+
+    print(f"{'STATUS':<12} {'UPDATED':<22} {'ID':<26} {'TITLE'}")
+    print("-" * 100)
+    for a in articles:
+        updated = (a.get("updated_at") or "")[:19].replace("T", " ")
+        status = a.get("status", "draft").upper()
+        print(f"{status:<12} {updated:<22} {str(a['_id']):<26} {a.get('title', '(untitled)')}")
+    print(f"\n{len(articles)} article(s)")
 
 
 # ---------------------------------------------------------------------------
@@ -284,15 +266,16 @@ def list_drafts():
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Push draft articles directly to Ghost CMS",
+        description="Push articles to MongoDB (replaces Ghost CMS)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Examples:\n"
             "  %(prog)s --title 'My Article' --md-file article.md\n"
             "  %(prog)s --title 'My Article' --html '<p>Hello</p>' --tag market-insight\n"
             "  %(prog)s --title 'My Article' --html-file article.html --publish\n"
-            "  %(prog)s --update POST_ID --md-file updated.md\n"
+            "  %(prog)s --update ARTICLE_ID --md-file updated.md\n"
             "  %(prog)s --list-drafts\n"
+            "  %(prog)s --list-all\n"
         ),
     )
 
@@ -303,18 +286,21 @@ def main():
     content.add_argument("--md-file", help="Path to a Markdown file (converted to HTML)")
 
     # Post metadata
-    parser.add_argument("--title", help="Article title (required for new posts)")
+    parser.add_argument("--title", help="Article title (required for new articles)")
     parser.add_argument("--tag", action="append", dest="tags", help="Tag name (repeatable)")
     parser.add_argument("--excerpt", help="Custom excerpt / meta description")
     parser.add_argument("--feature-image", help="URL for the feature/hero image")
     parser.add_argument("--slug", help="URL slug (auto-generated from title if omitted)")
     parser.add_argument("--publish", action="store_true", help="Publish immediately instead of draft")
+    parser.add_argument("--author", help="Author name (default: Fields Research)")
+    parser.add_argument("--author-slug", help="Author slug (default: fields)")
 
     # Update mode
-    parser.add_argument("--update", metavar="POST_ID", help="Update an existing post by ID")
+    parser.add_argument("--update", metavar="ARTICLE_ID", help="Update an existing article by ID")
 
-    # List mode
-    parser.add_argument("--list-drafts", action="store_true", help="List all draft posts")
+    # List modes
+    parser.add_argument("--list-drafts", action="store_true", help="List all draft articles")
+    parser.add_argument("--list-all", action="store_true", help="List all articles")
 
     args = parser.parse_args()
     load_env()
@@ -324,7 +310,12 @@ def main():
         list_drafts()
         return
 
-    # --- Update existing post ---
+    # --- List all ---
+    if args.list_all:
+        list_all()
+        return
+
+    # --- Update existing article ---
     if args.update:
         html = None
         if args.html:
@@ -338,7 +329,7 @@ def main():
             print("ERROR: Nothing to update. Provide --html, --md-file, --html-file, --title, --tag, --excerpt, or --feature-image.")
             sys.exit(1)
 
-        update_post(
+        update_article(
             args.update,
             html=html,
             title=args.title,
@@ -349,9 +340,9 @@ def main():
         )
         return
 
-    # --- Create new post ---
+    # --- Create new article ---
     if not args.title:
-        print("ERROR: --title is required for new posts.")
+        print("ERROR: --title is required for new articles.")
         parser.print_help()
         sys.exit(1)
 
@@ -366,7 +357,7 @@ def main():
         print("ERROR: Provide content via --html, --html-file, or --md-file.")
         sys.exit(1)
 
-    create_post(
+    create_article(
         title=args.title,
         html=html,
         tags=args.tags,
@@ -374,6 +365,8 @@ def main():
         feature_image=args.feature_image,
         slug=args.slug,
         publish=args.publish,
+        author=args.author,
+        author_slug=args.author_slug,
     )
 
 
