@@ -64,7 +64,7 @@ processes:
     command: "python3 sold_backfill/search_based_sold_monitor.py --suburbs \"Robina:4226\" \"Varsity Lakes:4227\" \"Burleigh Waters:4220\""
     working_dir: "/home/fields/Fields_Orchestrator"
     mongodb_activity: "moderate_write"
-    requires_browser: true
+    requires_browser: false  # Migrated from Selenium to curl_cffi (2026-03-11)
     estimated_duration_minutes: 10  # 3 suburbs × ~3 pages each = ~2 min scraping + DB ops
     cooldown_seconds: 20
     depends_on: [101]
@@ -76,7 +76,7 @@ processes:
     command: "python3 sold_backfill/search_based_sold_monitor.py --all"
     working_dir: "/home/fields/Fields_Orchestrator"
     mongodb_activity: "moderate_write"
-    requires_browser: true
+    requires_browser: false  # Migrated from Selenium to curl_cffi (2026-03-11)
     estimated_duration_minutes: 60  # ~52 suburbs × ~3 pages each
     cooldown_seconds: 20
     depends_on: [102]
@@ -88,7 +88,7 @@ processes:
     command: "python3 scripts/scrape_recent_sold.py --days 7"
     working_dir: "/home/fields/Fields_Orchestrator"
     mongodb_activity: "moderate_write"
-    requires_browser: true
+    requires_browser: false  # Migrated from Selenium to curl_cffi (2026-03-11)
     estimated_duration_minutes: 5
     cooldown_seconds: 20
     depends_on: [103]
@@ -304,7 +304,7 @@ processes:
     command: "python3 scripts/coverage_check.py --suburbs \"Robina:4226,Varsity Lakes:4227,Burleigh Waters:4220\" --no-fail"
     working_dir: "/home/fields/Fields_Orchestrator"
     mongodb_activity: "light_read"
-    requires_browser: true
+    requires_browser: false  # Migrated from Selenium to curl_cffi (2026-03-11)
     estimated_duration_minutes: 5
     cooldown_seconds: 20
     depends_on: [101]  # Run after target market for-sale scraping completes
