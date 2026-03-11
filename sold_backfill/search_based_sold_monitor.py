@@ -8,12 +8,15 @@ sold-listings search pages per suburb and cross-references listing IDs.
 
 Also detects "Under Contract" / "Under Offer" status from the for-sale search pages.
 
+Now uses curl_cffi with Chrome impersonation instead of Selenium/Chrome.
+
 Improvements over old monitor:
   - 97% fewer page loads (2-3 pages vs 120+)
   - Captures sale_method (private treaty / auction)
   - Captures agent name + agency from search cards
   - Detects under_contract / under_offer as intermediate state
   - CosmosDB 429 retry with backoff
+  - No Chrome/Selenium dependency — uses curl_cffi
 
 Usage:
     python3 search_based_sold_monitor.py --suburbs "Robina:4226" "Varsity Lakes:4227" "Burleigh Waters:4220"
@@ -38,11 +41,9 @@ from pymongo import MongoClient
 from bs4 import BeautifulSoup
 
 try:
-    from selenium import webdriver
-    from selenium.webdriver.chrome.service import Service
-    from selenium.webdriver.chrome.options import Options
+    from curl_cffi.requests import Session
 except ImportError:
-    print("ERROR: selenium not installed")
+    print("ERROR: curl_cffi not installed. Install with: pip install curl_cffi")
     sys.exit(1)
 
 try:
@@ -55,11 +56,11 @@ except ImportError:
 # Configuration
 MONGODB_URI = os.getenv('MONGODB_URI', 'mongodb://127.0.0.1:27017/')
 DATABASE_NAME = 'Gold_Coast'
-PAGE_LOAD_WAIT = 5
-SCROLL_WAIT = 1.0
-BETWEEN_PAGE_DELAY = 3
+BETWEEN_PAGE_DELAY = 3       # seconds between page fetches
+HTTP_RETRY_ATTEMPTS = 3
+HTTP_RETRY_DELAY = 5         # seconds between retries
 SOLD_PAGES_TO_CHECK = 3      # Check first N pages of sold results (~60 most recent)
-FOR_SALE_PAGES_TO_CHECK = 5   # Check for-sale pages for under_contract detection
+FOR_SALE_PAGES_TO_CHECK = 5  # Check for-sale pages for under_contract detection
 
 MONTH_MAP = {
     "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
@@ -196,74 +197,53 @@ def retry_db(fn, max_retries=3):
 class SearchBasedSoldMonitor:
     def __init__(self, test_mode=False):
         self.test_mode = test_mode
-        self.driver = None
+        self.session = None
         conn_str = os.environ.get("COSMOS_CONNECTION_STRING") or MONGODB_URI
         self.client = MongoClient(conn_str)
         self.db = self.client[DATABASE_NAME]
         self.client.admin.command("ping")
         print(f"  MongoDB connected — {DATABASE_NAME}")
 
-    def _cleanup_zombie_chrome(self):
-        """Kill any zombie Chrome/ChromeDriver processes to free resources."""
-        import subprocess as _sp
-        try:
-            result = _sp.run(
-                ["pgrep", "-c", "-f", "chrome|chromedriver"],
-                capture_output=True, text=True, timeout=5
-            )
-            count = int(result.stdout.strip()) if result.stdout.strip() else 0
-            if count > 0:
-                _sp.run(["pkill", "-9", "-f", "chrome|chromedriver"],
-                        capture_output=True, timeout=5)
-                import time as _t; _t.sleep(2)
-                print(f"  Cleaned up {count} zombie Chrome processes", flush=True)
-        except Exception:
-            pass
+    def setup_session(self):
+        """Create a curl_cffi session with Chrome impersonation."""
+        self.session = Session(impersonate="chrome120")
+        print("  curl_cffi session ready (chrome120 impersonation)", flush=True)
 
-    def setup_driver(self, max_retries=3):
-        opts = Options()
-        opts.add_argument("--headless=new")
-        opts.add_argument("--no-sandbox")
-        opts.add_argument("--disable-dev-shm-usage")
-        opts.add_argument("--disable-gpu")
-        opts.add_argument("--disable-software-rasterizer")
-        opts.add_argument("--disable-extensions")
-        opts.add_argument("--js-flags=--max-old-space-size=256")
-        opts.add_argument("--window-size=1920,1080")
-        opts.add_experimental_option("excludeSwitches", ["enable-automation"])
-        opts.add_argument(
-            "user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        )
-        svc = Service("/usr/bin/chromedriver")
-        for attempt in range(1, max_retries + 1):
+    def close_session(self):
+        """Close the curl_cffi session."""
+        if self.session:
             try:
-                self.driver = webdriver.Chrome(service=svc, options=opts)
-                self.driver.set_page_load_timeout(60)
-                print("  Chrome WebDriver ready (headless)", flush=True)
-                return
-            except Exception as e:
-                print(f"  WebDriver creation failed (attempt {attempt}/{max_retries}): {e}", flush=True)
-                self._cleanup_zombie_chrome()
-                import time as _t; _t.sleep(5)  # Give OS time to release resources
-                if attempt == max_retries:
-                    raise
-
-    def quit_driver(self):
-        if self.driver:
-            try:
-                self.driver.quit()
+                self.session.close()
             except Exception:
                 pass
-            self.driver = None
+            self.session = None
 
-    def load_page(self, url: str) -> str:
-        self.driver.get(url)
-        time.sleep(PAGE_LOAD_WAIT)
-        for _ in range(5):
-            self.driver.execute_script("window.scrollBy(0, 1000);")
-            time.sleep(SCROLL_WAIT)
-        return self.driver.page_source
+    def fetch_page(self, url: str) -> str:
+        """Fetch a page with retry logic. Returns HTML string."""
+        for attempt in range(1, HTTP_RETRY_ATTEMPTS + 1):
+            try:
+                response = self.session.get(url, timeout=30)
+                if response.status_code == 200:
+                    return response.text
+                elif response.status_code == 429:
+                    print(f"    Rate limited (429), waiting {HTTP_RETRY_DELAY}s (attempt {attempt}/{HTTP_RETRY_ATTEMPTS})")
+                    time.sleep(HTTP_RETRY_DELAY)
+                    continue
+                else:
+                    print(f"    HTTP {response.status_code} for {url} (attempt {attempt}/{HTTP_RETRY_ATTEMPTS})")
+                    if attempt < HTTP_RETRY_ATTEMPTS:
+                        time.sleep(HTTP_RETRY_DELAY)
+                        continue
+                    # Return whatever we got on last attempt
+                    return response.text
+            except Exception as e:
+                print(f"    Fetch error: {e} (attempt {attempt}/{HTTP_RETRY_ATTEMPTS})")
+                if attempt < HTTP_RETRY_ATTEMPTS:
+                    time.sleep(HTTP_RETRY_DELAY)
+                    continue
+                raise
+        # Should not reach here, but just in case
+        return ""
 
     # ------------------------------------------------------------------
     # Sold detection via search results
@@ -282,7 +262,7 @@ class SearchBasedSoldMonitor:
             url = base if page_num == 1 else f"{base}&page={page_num}"
             print(f"  [SOLD] Page {page_num}: {url}")
             try:
-                html = self.load_page(url)
+                html = self.fetch_page(url)
                 cards_data = extract_listing_urls(html)
                 if not cards_data:
                     break
@@ -337,7 +317,7 @@ class SearchBasedSoldMonitor:
             url = base if page_num == 1 else f"{base}&page={page_num}"
             print(f"  [UC] Page {page_num}: {url}")
             try:
-                html = self.load_page(url)
+                html = self.fetch_page(url)
                 cards_data = extract_listing_urls(html)
                 if not cards_data:
                     break
@@ -545,11 +525,11 @@ class SearchBasedSoldMonitor:
     def run(self, suburbs: List[Tuple[str, str]]):
         """Main entry point."""
         print(f"\n{'='*70}")
-        print(f"  Search-Based Sold Monitor")
+        print(f"  Search-Based Sold Monitor (curl_cffi)")
         print(f"  Suburbs: {len(suburbs)}")
         print(f"{'='*70}")
 
-        self.setup_driver()
+        self.setup_session()
         total_sold = {"sold_detected": 0, "already_sold": 0, "not_in_db": 0, "errors": 0}
         total_uc = {"under_contract_detected": 0, "already_uc": 0, "not_in_db": 0}
 
@@ -575,7 +555,7 @@ class SearchBasedSoldMonitor:
             print(f"  Sold: {total_sold}")
             print(f"  Under Contract: {total_uc}")
             print(f"{'='*70}")
-            self.quit_driver()
+            self.close_session()
 
         return total_sold, total_uc
 
@@ -655,10 +635,7 @@ def main():
     sold_stats, uc_stats = scraper.run(suburbs)
 
     if monitor:
-        monitor.complete(details={
-            "sold": sold_stats,
-            "under_contract": uc_stats,
-        })
+        monitor.finish(status="success")
 
 
 if __name__ == "__main__":
