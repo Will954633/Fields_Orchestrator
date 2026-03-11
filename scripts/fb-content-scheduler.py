@@ -83,14 +83,30 @@ def get_aest_now():
 
 
 def already_posted_slot(slot):
-    """Check if we've already posted for this slot (morning/evening) today."""
+    """Check if we've already posted for this slot (morning/evening) today.
+
+    Returns False if the staged post was declined, allowing re-generation.
+    """
     client = MongoClient(COSMOS_URI)
     sm = client["system_monitor"]
     today = get_aest_now().strftime("%Y-%m-%d")
 
     run = sm["fb_scheduler_runs"].find_one({"_id": f"{today}_{slot}"})
+    if run is None or not run.get("success", False):
+        client.close()
+        return False
+
+    # Check if the pending post was declined — if so, allow re-generation
+    pending_id = run.get("pending_id")
+    if pending_id:
+        from bson import ObjectId
+        pending = sm["fb_pending_posts"].find_one({"_id": ObjectId(pending_id)})
+        if pending and pending.get("status") == "declined":
+            client.close()
+            return False
+
     client.close()
-    return run is not None and run.get("success", False)
+    return True
 
 
 def get_ads_performance_weights():
@@ -189,7 +205,11 @@ def post_photo(dry_run=False):
 
 
 def post_data_template(template_name, dry_run=False):
-    """Stage a specific data template via fb-page-post.py for approval in Marketing Monitor."""
+    """Stage a specific data template via fb-page-post.py for approval in Marketing Monitor.
+
+    Returns (success, pending_id) tuple.
+    """
+    import re
     cmd = [VENV_PYTHON, f"{SCRIPTS_DIR}/fb-page-post.py", "--generate", "--template", template_name]
     if not dry_run:
         cmd.append("--stage")
@@ -203,7 +223,14 @@ def post_data_template(template_name, dry_run=False):
         for line in result.stderr.split("\n"):
             if "UserWarning" not in line and "CosmosDB" not in line and line.strip():
                 print(f"  stderr: {line}", file=sys.stderr)
-    return result.returncode == 0
+
+    # Extract pending ID from output
+    pending_id = None
+    match = re.search(r"Pending ID:\s*([a-f0-9]{24})", result.stdout or "")
+    if match:
+        pending_id = match.group(1)
+
+    return result.returncode == 0, pending_id
 
 
 def show_status():
@@ -279,24 +306,27 @@ def show_status():
     print(f"\nPhoto Inventory: {photo_avail}/{photo_total} available (~{photo_avail} weeks at 1x/week)")
 
 
-def log_scheduler_run(slot, pillar, template, success, dry_run):
+def log_scheduler_run(slot, pillar, template, success, dry_run, pending_id=None):
     """Log this scheduler run to MongoDB."""
     if dry_run:
         return
     client = MongoClient(COSMOS_URI)
     sm = client["system_monitor"]
     today = get_aest_now().strftime("%Y-%m-%d")
+    doc = {
+        "date": today,
+        "slot": slot,
+        "day_of_week": get_aest_now().strftime("%A"),
+        "pillar": pillar,
+        "template": template,
+        "success": success,
+        "run_at": datetime.now(timezone.utc).isoformat(),
+    }
+    if pending_id:
+        doc["pending_id"] = pending_id
     sm["fb_scheduler_runs"].update_one(
         {"_id": f"{today}_{slot}"},
-        {"$set": {
-            "date": today,
-            "slot": slot,
-            "day_of_week": get_aest_now().strftime("%A"),
-            "pillar": pillar,
-            "template": template,
-            "success": success,
-            "run_at": datetime.now(timezone.utc).isoformat(),
-        }},
+        {"$set": doc},
         upsert=True,
     )
     client.close()
@@ -342,6 +372,7 @@ def main():
 
     success = False
     template_used = pillar
+    pending_id = None
 
     if pillar == "photo":
         print("Posting weekly local photo...")
@@ -353,7 +384,7 @@ def main():
         weights = get_ads_performance_weights()
         template = pick_weighted_template(weights)
         print(f"Template selected: {template} (weights: {', '.join(f'{k}={v:.1f}' for k, v in weights.items())})")
-        success = post_data_template(template, dry_run=args.dry_run)
+        success, pending_id = post_data_template(template, dry_run=args.dry_run)
         template_used = template
 
     elif pillar in (
@@ -364,7 +395,7 @@ def main():
         "suburb_snapshot", "listing_count", "bedroom_breakdown",
     ):
         print(f"Posting {pillar}...")
-        success = post_data_template(pillar, dry_run=args.dry_run)
+        success, pending_id = post_data_template(pillar, dry_run=args.dry_run)
         template_used = pillar
 
     else:
@@ -372,7 +403,7 @@ def main():
         sys.exit(1)
 
     # Log the run
-    log_scheduler_run(args.slot, pillar, template_used, success, args.dry_run)
+    log_scheduler_run(args.slot, pillar, template_used, success, args.dry_run, pending_id)
 
     if success:
         if pillar == "photo":
