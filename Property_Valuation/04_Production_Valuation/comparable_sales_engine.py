@@ -14,6 +14,7 @@ Author: Property Valuation Production System
 Date: 20th November 2025
 """
 
+import time
 import pymongo
 import pandas as pd
 import numpy as np
@@ -21,6 +22,8 @@ from datetime import datetime, timedelta
 from math import radians, cos, sin, asin, sqrt
 from typing import Dict, List, Optional, Tuple
 import logging
+
+from cosmos_retry import cosmos_retry_call
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +60,10 @@ class ComparableSalesEngine:
 
         # Growth rates cache
         self.suburb_growth_rates = {}
+
+        # Cache collection names to avoid repeated list_collection_names() calls (RU-expensive on Cosmos DB)
+        self._gold_coast_collection_names_cache = cosmos_retry_call(self.gold_coast_db.list_collection_names)
+        self._recent_collection_names_cache = cosmos_retry_call(self.recent_db.list_collection_names)
         
     def haversine_distance(self, lat1: float, lon1: float, 
                           lat2: float, lon2: float) -> float:
@@ -98,15 +105,15 @@ class ComparableSalesEngine:
         cutoff_date = datetime.now() - timedelta(days=days)
         all_sales = []
         
-        # Get all collections (suburbs)
-        collections = [c for c in self.gold_coast_db.list_collection_names() 
+        # Get all collections (suburbs) from cache
+        collections = [c for c in self._gold_coast_collection_names_cache
                       if not c.startswith('system.')]
-        
+
         logger.info(f"Querying {len(collections)} suburb collections...")
-        
+
         for coll_name in collections:
             collection = self.gold_coast_db[coll_name]
-            
+
             # Query for properties with sales in timeline
             # Based on extract_all_enriched_properties.py
             query = {
@@ -116,8 +123,8 @@ class ComparableSalesEngine:
                 'LATITUDE': {'$exists': True, '$ne': None},
                 'LONGITUDE': {'$exists': True, '$ne': None}
             }
-            
-            properties = collection.find(query)
+
+            properties = cosmos_retry_call(collection.find, query)
             
             for prop in properties:
                 # Extract sale data from property_timeline
@@ -186,13 +193,13 @@ class ComparableSalesEngine:
             date_key = d.strftime('%Y-%m-%d') if hasattr(d, 'strftime') else str(d)[:10]
             seen.add((date_key, int(s['sale_price']) if s['sale_price'] else 0))
 
-        recent_collections = [c for c in self.recent_db.list_collection_names()
+        recent_collections = [c for c in self._recent_collection_names_cache
                               if not c.startswith('system.')]
         added_from_recent = 0
 
         for coll_name in recent_collections:
             collection = self.recent_db[coll_name]
-            for prop in collection.find({}):
+            for prop in cosmos_retry_call(collection.find, {}):
                 raw_price = prop.get('sale_price')
                 raw_date = prop.get('sale_date')
                 if not raw_price or not raw_date:
