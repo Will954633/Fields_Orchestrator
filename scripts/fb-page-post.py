@@ -1662,11 +1662,8 @@ def template_price_movement(suburbs, properties=None, **kw):
             price_str = p.get("price", "")
             price_val = parse_price_value(str(price_str)) if price_str else None
             beds = p.get("bedrooms", "")
-            suburb = p.get("_suburb_display", "")
 
             line = f"\n{address}"
-            if suburb:
-                line += f", {suburb}"
             if beds:
                 line += f" — {beds}-bed"
             if price_val and price_val >= 200000:
