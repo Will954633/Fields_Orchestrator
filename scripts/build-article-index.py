@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-Article Index Builder — fetches all published Ghost articles and stores
-a structured index in system_monitor.article_index for the marketing advisor.
+Article Index Builder — fetches all published articles from MongoDB
+(system_monitor.content_articles) and stores a structured index in
+system_monitor.article_index for the marketing advisor.
 
 Usage:
     python3 scripts/build-article-index.py              # Build index
@@ -12,15 +13,12 @@ import os
 import re
 import json
 import argparse
-import requests
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 from pymongo import MongoClient
 
 load_dotenv("/home/fields/Fields_Orchestrator/.env")
 
-GHOST_HOST = "https://fields-articles.ghost.io"
-GHOST_CONTENT_API_KEY = os.environ["GHOST_CONTENT_API_KEY"]
 COSMOS_URI = os.environ["COSMOS_CONNECTION_STRING"]
 
 # ── Category mapping (mirrored from fetch-articles.js) ────────────────────
@@ -50,57 +48,75 @@ SIGNAL_WORDS = [
 ]
 
 
-def fetch_all_posts():
-    """Fetch all published posts from Ghost Content API."""
-    url = f"{GHOST_HOST}/ghost/api/content/posts/"
-    params = {
-        "key": GHOST_CONTENT_API_KEY,
-        "fields": "id,title,slug,excerpt,custom_excerpt,published_at,updated_at,feature_image,html",
-        "filter": "status:published",
-        "limit": "all",
-        "include": "tags,authors",
-    }
-    r = requests.get(url, params=params, timeout=30)
-    r.raise_for_status()
-    return r.json().get("posts", [])
+def fetch_all_articles(client):
+    """Fetch all published articles from system_monitor.content_articles."""
+    docs = list(
+        client["system_monitor"]["content_articles"].find({"status": "published"})
+    )
+    return docs
 
 
 def resolve_category(tags):
-    """Determine category + scope from Ghost tags."""
+    """Determine category + scope from tag slugs (flat string list)."""
     if not tags:
         return "market-analysis", "agnostic", None
-    for tag in tags:
-        slug = tag.get("slug", "")
+    for slug in tags:
         if slug in TAG_TO_CATEGORY:
             info = TAG_TO_CATEGORY[slug]
             return info["category"], info["scope"], slug
     return "market-analysis", "agnostic", None
 
 
-def resolve_suburbs(post, scope):
-    """Determine suburbs from post slug and tags."""
+def resolve_suburbs(doc, scope):
+    """Determine suburbs from article slug, tags, and title."""
     if scope == "agnostic":
         return []
-    post_slug = post.get("slug", "")
+
+    suburb_underscored = [s.replace("-", "_") for s in SUBURB_SLUGS]
+
+    # 1. Check custom_data.suburb if present
+    custom_suburb = (doc.get("custom_data") or {}).get("suburb")
+    if custom_suburb and custom_suburb in suburb_underscored:
+        return [custom_suburb]
+
+    # 2. Check article slug
+    post_slug = doc.get("slug", "")
     matched = [s for s in SUBURB_SLUGS if s in post_slug]
     if matched:
         return [s.replace("-", "_") for s in matched]
-    tags = post.get("tags", [])
+
+    # 3. Check tags
+    tags = doc.get("tags", [])
     if tags:
-        tagged = [t.get("slug", "") for t in tags if t.get("slug", "") in SUBURB_SLUGS]
+        tagged = [t for t in tags if t in SUBURB_SLUGS or t in suburb_underscored]
         if tagged:
             return [s.replace("-", "_") for s in tagged]
+
+    # 4. Check article title for suburb names
+    title = (doc.get("title", "") or "").lower()
+    if title:
+        title_map = {
+            "robina": "robina", "varsity lakes": "varsity_lakes",
+            "burleigh waters": "burleigh_waters", "burleigh heads": "burleigh_heads",
+            "mudgeeraba": "mudgeeraba", "worongary": "worongary",
+            "reedy creek": "reedy_creek", "merrimac": "merrimac",
+            "palm beach": "palm_beach", "currumbin": "currumbin",
+            "elanora": "elanora", "tugun": "tugun", "carrara": "carrara",
+        }
+        title_matched = [v for k, v in title_map.items() if k in title]
+        if title_matched:
+            return title_matched
+
     return []
 
 
-def extract_key_topics(post):
-    """Extract key topics from title and tags."""
+def extract_key_topics(doc):
+    """Extract key topics from title and tags (flat string list)."""
     topics = set()
-    for tag in post.get("tags", []):
-        slug = tag.get("slug", "")
+    for slug in doc.get("tags", []):
         if slug:
             topics.add(slug)
-    title_lower = (post.get("title", "") or "").lower()
+    title_lower = (doc.get("title", "") or "").lower()
     for suburb in SUBURB_SLUGS:
         if suburb.replace("-", " ") in title_lower:
             topics.add(suburb.replace("-", "_"))
@@ -118,42 +134,42 @@ def word_count(html):
     return len(text.split())
 
 
-def build_index(posts):
-    """Transform Ghost posts into index documents."""
+def build_index(articles):
+    """Transform content_articles documents into index documents."""
     docs = []
-    for post in posts:
-        tags = post.get("tags", [])
+    for article in articles:
+        tags = article.get("tags", [])
         category, scope, matched_tag = resolve_category(tags)
-        suburbs = resolve_suburbs(post, scope)
-        topics = extract_key_topics(post)
-        wc = word_count(post.get("html", ""))
+        suburbs = resolve_suburbs(article, scope)
+        topics = extract_key_topics(article)
+        wc = word_count(article.get("html", ""))
+        article_id = str(article["_id"])
 
         doc = {
-            "_id": post["id"],
-            "title": post.get("title", ""),
-            "slug": post.get("slug", ""),
-            "url": f"https://fieldsestate.com.au/article/{post['id']}",
-            "excerpt": post.get("custom_excerpt") or post.get("excerpt", "") or "",
+            "_id": article_id,
+            "title": article.get("title", ""),
+            "slug": article.get("slug", ""),
+            "url": f"https://fieldsestate.com.au/article/{article_id}",
+            "excerpt": article.get("custom_excerpt", "") or "",
             "category": category,
             "scope": scope,
             "matched_tag": matched_tag,
             "suburbs": suburbs,
-            "tags": [t.get("slug", "") for t in tags if t.get("slug")],
-            "published_at": post.get("published_at", ""),
-            "updated_at": post.get("updated_at", ""),
-            "feature_image": post.get("feature_image"),
+            "tags": [t for t in tags if t],
+            "published_at": str(article.get("published_at", "")),
+            "updated_at": str(article.get("updated_at", "")),
+            "feature_image": article.get("feature_image"),
             "key_topics": topics,
             "word_count": wc,
-            "author": (post.get("authors", [{}]) or [{}])[0].get("name", "Fields Research"),
+            "author": article.get("author", "Fields Research"),
             "indexed_at": datetime.now(timezone.utc).isoformat(),
         }
         docs.append(doc)
     return docs
 
 
-def save_index(docs):
+def save_index(client, docs):
     """Save index to MongoDB using upserts."""
-    client = MongoClient(COSMOS_URI)
     sm = client["system_monitor"]
 
     saved = 0
@@ -183,22 +199,22 @@ def save_index(docs):
         upsert=True,
     )
 
-    client.close()
     return saved
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Build article index from Ghost CMS")
+    parser = argparse.ArgumentParser(description="Build article index from MongoDB")
     parser.add_argument("--print", action="store_true", help="Print index without saving")
     args = parser.parse_args()
 
     print(f"[{datetime.now(timezone.utc).isoformat()}] Article Index Builder starting...")
-    print(f"Fetching articles from {GHOST_HOST}...")
+    print("Fetching articles from system_monitor.content_articles...")
 
-    posts = fetch_all_posts()
-    print(f"Fetched {len(posts)} published articles")
+    client = MongoClient(COSMOS_URI)
+    articles = fetch_all_articles(client)
+    print(f"Fetched {len(articles)} published articles")
 
-    docs = build_index(posts)
+    docs = build_index(articles)
 
     # Summary
     categories = {}
@@ -218,10 +234,12 @@ def main():
             print(f"    Suburbs: {suburbs_str}")
             print(f"    Topics: {', '.join(d.get('key_topics', [])[:8])}")
             print(f"    Published: {d.get('published_at', '')[:10]}")
+        client.close()
         return
 
-    saved = save_index(docs)
+    saved = save_index(client, docs)
     print(f"\nSaved {saved} articles to system_monitor.article_index")
+    client.close()
 
 
 if __name__ == "__main__":
