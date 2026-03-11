@@ -2,6 +2,7 @@
 """
 Coverage Check Script - Domain vs Database Listing Count Comparison
 Created: 2026-02-25
+Updated: 2026-03-11 — replaced Selenium/Chrome with curl_cffi
 
 For each suburb in gold_coast_suburbs.json, fetches the current for-sale property count
 from Domain.com.au and compares it to the count in Gold_Coast_Currently_For_Sale.
@@ -28,15 +29,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from pymongo import MongoClient
-
-try:
-    from selenium import webdriver
-    from selenium.webdriver.chrome.service import Service
-    from selenium.webdriver.chrome.options import Options
-    from selenium.common.exceptions import TimeoutException, WebDriverException
-    SELENIUM_AVAILABLE = True
-except ImportError:
-    SELENIUM_AVAILABLE = False
+from curl_cffi import requests as cffi_requests
 
 # Paths
 SUBURBS_JSON = Path(__file__).parent.parent.parent / (
@@ -45,17 +38,18 @@ SUBURBS_JSON = Path(__file__).parent.parent.parent / (
 )
 LOG_FILE = Path(__file__).parent.parent / "logs" / "coverage_check.log"
 
-MONGODB_URI = os.getenv('MONGODB_URI', 'mongodb://127.0.0.1:27017/')
+MONGODB_URI = os.getenv('COSMOS_CONNECTION_STRING') or os.getenv('MONGODB_URI', 'mongodb://127.0.0.1:27017/')
 DATABASE_NAME = 'Gold_Coast'
-
-# How long to wait for Domain page to load before reading content
-PAGE_LOAD_WAIT = 8
 
 # Domain URL template — swap in suburb slug (e.g. "robina-qld-4226")
 DOMAIN_URL_TEMPLATE = "https://www.domain.com.au/sale/{slug}/?excludeunderoffer=1&ssubs=0"
 
 # data-testid for the count element: <h1 data-testid="summary">...<strong>54 Properties</strong>...
 COUNT_PATTERN = re.compile(r'<strong[^>]*>\s*(\d+)\s+Propert', re.IGNORECASE)
+
+# Retry settings
+MAX_RETRIES = 3
+RETRY_DELAY = 5  # seconds
 
 
 def load_suburbs_from_json(path: Path) -> List[Dict]:
@@ -88,61 +82,52 @@ def parse_suburbs_arg(arg: str) -> List[Dict]:
     return suburbs
 
 
-def setup_driver(max_retries=3) -> webdriver.Chrome:
-    """Create headless Chrome WebDriver with retry logic."""
-    options = Options()
-    options.add_argument('--headless=new')
-    options.add_argument('--no-sandbox')
-    options.add_argument('--disable-dev-shm-usage')
-    options.add_argument('--disable-gpu')
-    options.add_argument('--disable-software-rasterizer')
-    options.add_argument('--disable-extensions')
-    options.add_argument('--window-size=1280,800')
-    service = Service('/usr/bin/chromedriver')
-    for attempt in range(1, max_retries + 1):
-        try:
-            return webdriver.Chrome(service=service, options=options)
-        except Exception as e:
-            print(f"  WebDriver creation failed (attempt {attempt}/{max_retries}): {e}", flush=True)
-            # Kill any zombie Chrome processes
-            import subprocess as _sp
-            for _pat in ['chromedriver', 'chrome_crashpad', 'chrome']:
-                _sp.run(['pkill', '-9', '-f', _pat], capture_output=True, timeout=5)
-            time.sleep(5)
-            if attempt == max_retries:
-                raise
-
-
-def fetch_domain_count(driver: webdriver.Chrome, suburb: Dict) -> Optional[int]:
+def fetch_domain_count(suburb: Dict) -> Optional[int]:
     """
     Fetch the for-sale property count from Domain for a given suburb.
+    Uses curl_cffi with Chrome impersonation and 3-attempt retry logic.
     Returns the integer count, or None on failure.
     """
     slug = suburb.get('slug', '')
     url = DOMAIN_URL_TEMPLATE.format(slug=slug)
-    try:
-        driver.set_page_load_timeout(30)
-        driver.get(url)
-        time.sleep(PAGE_LOAD_WAIT)
-        html = driver.page_source
-        match = COUNT_PATTERN.search(html)
-        if match:
-            return int(match.group(1))
-        # Fallback: look for data-testid="summary"
-        summary_match = re.search(
-            r'data-testid="summary"[^>]*>.*?<strong[^>]*>(\d+)\s+Propert',
-            html, re.IGNORECASE | re.DOTALL
-        )
-        if summary_match:
-            return int(summary_match.group(1))
-        print(f"  WARNING: Could not extract count from Domain page for {suburb['name']} ({url})")
-        return None
-    except TimeoutException:
-        print(f"  WARNING: Timeout loading Domain page for {suburb['name']}")
-        return None
-    except WebDriverException as e:
-        print(f"  WARNING: WebDriver error for {suburb['name']}: {e}")
-        return None
+
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            resp = cffi_requests.get(
+                url,
+                impersonate="chrome120",
+                timeout=30,
+            )
+            if resp.status_code != 200:
+                print(f"  Attempt {attempt}/{MAX_RETRIES}: HTTP {resp.status_code} for {suburb['name']}", flush=True)
+                if attempt < MAX_RETRIES:
+                    time.sleep(RETRY_DELAY)
+                continue
+
+            html = resp.text
+            match = COUNT_PATTERN.search(html)
+            if match:
+                return int(match.group(1))
+
+            # Fallback: look for data-testid="summary"
+            summary_match = re.search(
+                r'data-testid="summary"[^>]*>.*?<strong[^>]*>(\d+)\s+Propert',
+                html, re.IGNORECASE | re.DOTALL
+            )
+            if summary_match:
+                return int(summary_match.group(1))
+
+            print(f"  Attempt {attempt}/{MAX_RETRIES}: Could not extract count from Domain page for {suburb['name']}", flush=True)
+            if attempt < MAX_RETRIES:
+                time.sleep(RETRY_DELAY)
+
+        except Exception as e:
+            print(f"  Attempt {attempt}/{MAX_RETRIES}: Request error for {suburb['name']}: {e}", flush=True)
+            if attempt < MAX_RETRIES:
+                time.sleep(RETRY_DELAY)
+
+    print(f"  WARNING: All {MAX_RETRIES} attempts failed for {suburb['name']} ({url})")
+    return None
 
 
 def get_db_count(db, suburb: Dict) -> int:
@@ -170,22 +155,37 @@ def get_db_sold_count(db, suburb: Dict, days: int = 30) -> int:
         return -1
 
 
-def fetch_domain_sold_count(driver: webdriver.Chrome, suburb: Dict) -> Optional[int]:
+def fetch_domain_sold_count(suburb: Dict) -> Optional[int]:
     """Fetch the sold property count from Domain for a given suburb (last 30 days approx)."""
     slug = suburb.get('slug', '')
     url = f"https://www.domain.com.au/sold-listings/{slug}/?ssubs=0"
-    try:
-        driver.set_page_load_timeout(30)
-        driver.get(url)
-        time.sleep(PAGE_LOAD_WAIT)
-        html = driver.page_source
-        # Domain sold page H1: "5571 Properties sold in Robina, QLD, 4226"
-        match = re.search(r'(\d+)\s+Propert\w+\s*sold\s+in', html, re.IGNORECASE)
-        if match:
-            return int(match.group(1))
-        return None
-    except Exception:
-        return None
+
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            resp = cffi_requests.get(
+                url,
+                impersonate="chrome120",
+                timeout=30,
+            )
+            if resp.status_code != 200:
+                if attempt < MAX_RETRIES:
+                    time.sleep(RETRY_DELAY)
+                continue
+
+            html = resp.text
+            # Domain sold page H1: "5571 Properties sold in Robina, QLD, 4226"
+            match = re.search(r'(\d+)\s+Propert\w+\s*sold\s+in', html, re.IGNORECASE)
+            if match:
+                return int(match.group(1))
+
+            if attempt < MAX_RETRIES:
+                time.sleep(RETRY_DELAY)
+
+        except Exception:
+            if attempt < MAX_RETRIES:
+                time.sleep(RETRY_DELAY)
+
+    return None
 
 
 def write_log(lines: List[str]):
@@ -211,10 +211,6 @@ Examples:
     parser.add_argument('--no-fail', action='store_true',
                         help='Exit 0 even when coverage gaps found (for orchestrator integration)')
     args = parser.parse_args()
-
-    if not SELENIUM_AVAILABLE:
-        print("ERROR: Selenium not installed. Cannot fetch Domain counts.")
-        sys.exit(1)
 
     # Load suburb list
     if args.suburbs:
@@ -245,15 +241,6 @@ Examples:
         print(f"ERROR: MongoDB connection failed: {e}")
         sys.exit(1)
 
-    # Setup Chrome
-    try:
-        driver = setup_driver()
-        print("Chrome WebDriver ready.\n")
-    except Exception as e:
-        print(f"ERROR: Failed to start Chrome WebDriver: {e}")
-        client.close()
-        sys.exit(1)
-
     results = []
     gaps_found = 0
 
@@ -262,7 +249,7 @@ Examples:
             name = suburb.get('name', 'Unknown')
             print(f"Checking {name}...", flush=True)
 
-            domain_count = fetch_domain_count(driver, suburb)
+            domain_count = fetch_domain_count(suburb)
             db_count = get_db_count(db, suburb)
 
             if domain_count is None:
@@ -372,7 +359,6 @@ Examples:
             print(f"WARNING: Failed to write data_integrity: {e}")
 
     finally:
-        driver.quit()
         client.close()
 
     # Print summary
