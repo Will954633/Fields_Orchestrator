@@ -22,6 +22,8 @@ from math import radians, cos, sin, asin, sqrt
 from typing import Dict, Optional
 import logging
 
+from cosmos_retry import cosmos_retry_call
+
 logger = logging.getLogger(__name__)
 
 
@@ -42,6 +44,9 @@ class SuburbStatisticsEngine:
         self.gold_coast_db = mongo_client[config.GOLD_COAST_DB]
         self.recent_db = mongo_client[config.DB_RECENT_SOLD]
         self.cache = {}
+        # Cache collection names to avoid repeated list_collection_names() calls (RU-expensive on Cosmos DB)
+        self._gold_coast_collection_names_cache = cosmos_retry_call(self.gold_coast_db.list_collection_names)
+        self._recent_collection_names_cache = cosmos_retry_call(self.recent_db.list_collection_names)
         
     def calculate_suburb_statistics(self, suburb: str) -> dict:
         """Calculate 12 suburb statistics features"""
@@ -54,7 +59,7 @@ class SuburbStatisticsEngine:
         try:
             # Get suburb collection
             collection_name = suburb.lower().replace(' ', '_')
-            if collection_name not in self.gold_coast_db.list_collection_names():
+            if collection_name not in self._gold_coast_collection_names_cache:
                 return self._get_null_suburb_stats()
             
             collection = self.gold_coast_db[collection_name]
@@ -65,7 +70,7 @@ class SuburbStatisticsEngine:
             cutoff_3m = datetime.now() - timedelta(days=90)
             
             # Get all properties with sales (don't filter by date in query as dates are strings)
-            properties = list(collection.find({
+            properties = list(cosmos_retry_call(collection.find, {
                 'scraped_data.property_timeline': {
                     '$elemMatch': {
                         'category': 'Sale',
@@ -127,9 +132,9 @@ class SuburbStatisticsEngine:
                 date_key = d.strftime('%Y-%m-%d') if hasattr(d, 'strftime') else str(d)[:10]
                 seen.add((date_key, int(s['price']) if s['price'] else 0))
 
-            if collection_name in (self.recent_db.list_collection_names() or []):
+            if collection_name in self._recent_collection_names_cache:
                 recent_coll = self.recent_db[collection_name]
-                for prop in recent_coll.find({}):
+                for prop in cosmos_retry_call(recent_coll.find, {}):
                     raw_price = prop.get('sale_price')
                     raw_date = prop.get('sale_date')
                     if not raw_price or not raw_date:
