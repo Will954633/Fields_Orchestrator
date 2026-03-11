@@ -5,6 +5,8 @@ Scrape Recently Sold Properties from Domain.com.au
 Scrapes the sold-listings search results for target suburbs and updates
 the Gold_Coast database with sold records from the last N days.
 
+Uses curl_cffi with Chrome impersonation (no Selenium/Chrome needed).
+
 Usage:
     python3 scripts/scrape_recent_sold.py                     # Default: 3 suburbs, last 60 days
     python3 scripts/scrape_recent_sold.py --days 90           # Last 90 days
@@ -15,6 +17,7 @@ Usage:
 Requires:
     source /home/fields/venv/bin/activate
     set -a && source /home/fields/Fields_Orchestrator/.env && set +a
+    pip install curl_cffi
 """
 
 import os
@@ -28,11 +31,9 @@ from pymongo import MongoClient
 from bs4 import BeautifulSoup
 
 try:
-    from selenium import webdriver
-    from selenium.webdriver.chrome.service import Service
-    from selenium.webdriver.chrome.options import Options
+    from curl_cffi.requests import Session
 except ImportError:
-    print("ERROR: selenium not installed. pip install selenium")
+    print("ERROR: curl_cffi not installed. pip install curl_cffi")
     sys.exit(1)
 
 # ---------------------------------------------------------------------------
@@ -46,9 +47,9 @@ TARGET_SUBURBS = [
 
 DATABASE_NAME = "Gold_Coast"
 MAX_PAGES = 15          # Safety cap per suburb
-PAGE_LOAD_WAIT = 5      # Seconds to wait after page load
-SCROLL_WAIT = 1.0       # Seconds between scroll steps
 BETWEEN_PAGE_DELAY = 3  # Seconds between search result pages
+HTTP_RETRIES = 3        # Number of HTTP fetch attempts
+HTTP_RETRY_DELAY = 5    # Seconds between HTTP retries
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -202,7 +203,7 @@ class RecentSoldScraper:
     def __init__(self, dry_run: bool = False, verbose: bool = False):
         self.dry_run = dry_run
         self.verbose = verbose
-        self.driver = None
+        self.session = None
         self.db = None
 
         # Connect to MongoDB
@@ -215,67 +216,50 @@ class RecentSoldScraper:
         self.mongo_client.admin.command("ping")
         print(f"  MongoDB connected — database: {DATABASE_NAME}")
 
-    def _cleanup_zombie_chrome(self):
-        """Kill any zombie Chrome/ChromeDriver processes to free resources."""
-        import subprocess as _sp
-        try:
-            result = _sp.run(
-                ["pgrep", "-c", "-f", "chrome|chromedriver"],
-                capture_output=True, text=True, timeout=5
-            )
-            count = int(result.stdout.strip()) if result.stdout.strip() else 0
-            if count > 0:
-                _sp.run(["pkill", "-9", "-f", "chrome|chromedriver"],
-                        capture_output=True, timeout=5)
-                import time as _t; _t.sleep(2)
-                print(f"  Cleaned up {count} zombie Chrome processes", flush=True)
-        except Exception:
-            pass
+    def setup_session(self):
+        """Create a curl_cffi session with Chrome impersonation."""
+        self.session = Session(impersonate="chrome120")
+        print("  HTTP session ready (curl_cffi, chrome120 impersonation)", flush=True)
 
-    def setup_driver(self, max_retries=3):
-        chrome_options = Options()
-        chrome_options.add_argument("--headless=new")
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--disable-gpu")
-        chrome_options.add_argument("--disable-software-rasterizer")
-        chrome_options.add_argument("--disable-extensions")
-        chrome_options.add_argument("--window-size=1920,1080")
-        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        chrome_options.add_experimental_option("useAutomationExtension", False)
-        chrome_options.add_argument(
-            "user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        )
-        service = Service("/usr/bin/chromedriver")
-        for attempt in range(1, max_retries + 1):
+    def close_session(self):
+        """Close the HTTP session."""
+        if self.session:
             try:
-                self.driver = webdriver.Chrome(service=service, options=chrome_options)
-                print("  Chrome WebDriver ready (headless)", flush=True)
-                return
-            except Exception as e:
-                print(f"  WebDriver creation failed (attempt {attempt}/{max_retries}): {e}", flush=True)
-                self._cleanup_zombie_chrome()
-                import time as _t; _t.sleep(5)  # Give OS time to release resources
-                if attempt == max_retries:
-                    raise
-
-    def quit_driver(self):
-        if self.driver:
-            try:
-                self.driver.quit()
+                self.session.close()
             except Exception:
                 pass
-            self.driver = None
+            self.session = None
 
-    def scrape_search_page(self, url: str) -> str:
-        """Load a search results page, scroll to load lazy content, return HTML."""
-        self.driver.get(url)
-        time.sleep(PAGE_LOAD_WAIT)
-        for _ in range(5):
-            self.driver.execute_script("window.scrollBy(0, 1000);")
-            time.sleep(SCROLL_WAIT)
-        return self.driver.page_source
+    def fetch_page(self, url: str) -> str:
+        """Fetch a URL with retry logic. Returns HTML string."""
+        for attempt in range(1, HTTP_RETRIES + 1):
+            try:
+                resp = self.session.get(url, timeout=30)
+                if resp.status_code == 200:
+                    return resp.text
+                elif resp.status_code == 429:
+                    wait = HTTP_RETRY_DELAY * attempt
+                    print(f"    Rate limited (429), waiting {wait}s (attempt {attempt}/{HTTP_RETRIES})", flush=True)
+                    time.sleep(wait)
+                    continue
+                elif resp.status_code == 403:
+                    print(f"    Blocked (403) on attempt {attempt}/{HTTP_RETRIES}", flush=True)
+                    if attempt < HTTP_RETRIES:
+                        time.sleep(HTTP_RETRY_DELAY)
+                    continue
+                else:
+                    print(f"    HTTP {resp.status_code} on attempt {attempt}/{HTTP_RETRIES}", flush=True)
+                    if attempt < HTTP_RETRIES:
+                        time.sleep(HTTP_RETRY_DELAY)
+                    continue
+            except Exception as e:
+                print(f"    Fetch error (attempt {attempt}/{HTTP_RETRIES}): {e}", flush=True)
+                if attempt < HTTP_RETRIES:
+                    time.sleep(HTTP_RETRY_DELAY)
+                continue
+
+        print(f"    FAILED to fetch {url} after {HTTP_RETRIES} attempts", flush=True)
+        return ""
 
     def parse_listing_cards(self, html: str, suburb_info: Dict) -> List[Dict]:
         """Parse all listing cards from a search results page."""
@@ -360,7 +344,11 @@ class RecentSoldScraper:
             print(f"  Page {page_num}: {url}")
 
             try:
-                html = self.scrape_search_page(url)
+                html = self.fetch_page(url)
+                if not html:
+                    print(f"    Empty response — stopping pagination")
+                    break
+
                 records = self.parse_listing_cards(html, suburb_info)
 
                 if not records:
@@ -546,12 +534,12 @@ class RecentSoldScraper:
     def run(self, suburbs: List[Dict], days: int):
         """Main entry point."""
         cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
-        print(f"\nRecently Sold Scraper — backfill")
+        print(f"\nRecently Sold Scraper — backfill (curl_cffi)")
         print(f"  Suburbs: {', '.join(s['name'] for s in suburbs)}")
         print(f"  Cutoff date: {cutoff} ({days} days)")
         print(f"  Dry run: {self.dry_run}")
 
-        self.setup_driver()
+        self.setup_session()
         total_stats = {"matched": 0, "updated": 0, "inserted": 0, "skipped": 0, "errors": 0}
 
         try:
@@ -565,7 +553,7 @@ class RecentSoldScraper:
                 else:
                     print(f"\n  {suburb_info['name']}: no new sold records found")
         finally:
-            self.quit_driver()
+            self.close_session()
 
         print(f"\n{'='*70}")
         print(f"  TOTAL: {total_stats}")
