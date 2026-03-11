@@ -1048,10 +1048,9 @@ def template_suburb_snapshot(suburbs, **kw):
         else:
             msg += " Houses are sitting longer than usual. That's leverage for buyers — use it."
 
-    # Valuation insight
+    # Value hint (softened — no valuation figures or methodology references)
     if s.get("underpriced_count") and s["underpriced_count"] > 0:
-        total_valued = s.get("underpriced_count", 0) + s.get("overpriced_count", 0)
-        msg += f"\n\n{s['underpriced_count']} of {total_valued} valued houses are priced below our estimate. Worth a closer look."
+        msg += f"\n\n{s['underpriced_count']} {'property' if s['underpriced_count'] == 1 else 'properties'} could represent good value at {'its' if s['underpriced_count'] == 1 else 'their'} current asking price."
 
     # Close with article link
     buy_link = article_link(_article_keys.get(suburb_key, ""))
