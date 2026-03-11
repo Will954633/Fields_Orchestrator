@@ -30,8 +30,7 @@ AD_ACCOUNT_ID = os.environ.get("FACEBOOK_AD_ACCOUNT_ID", "").replace("act_", "")
 PAGE_ID = os.environ.get("FACEBOOK_PAGE_ID", "")
 API_VERSION = os.environ.get("FACEBOOK_API_VERSION", "v18.0")
 FB_BASE = f"https://graph.facebook.com/{API_VERSION}"
-GHOST_HOST = "https://fields-articles.ghost.io"
-GHOST_CONTENT_API_KEY = os.environ.get("GHOST_CONTENT_API_KEY", "")
+COSMOS_URI = os.environ.get("COSMOS_CONNECTION_STRING", "")
 SCRIPTS_DIR = "/home/fields/Fields_Orchestrator/scripts"
 VENV_PYTHON = "/home/fields/venv/bin/python3"
 
@@ -449,13 +448,16 @@ def execute_ad_create(action):
     try:
         # 1. Get image hash
         image_hash = None
-        if image_source == "article_feature_image" and GHOST_CONTENT_API_KEY:
-            # Fetch article feature image from Ghost
-            ghost_url = (f"{GHOST_HOST}/ghost/api/content/posts/{article_id}/"
-                         f"?key={GHOST_CONTENT_API_KEY}&fields=feature_image")
-            r = requests.get(ghost_url, timeout=10)
-            r.raise_for_status()
-            feature_image = r.json().get("posts", [{}])[0].get("feature_image", "")
+        if image_source == "article_feature_image" and COSMOS_URI:
+            # Fetch article feature image from MongoDB
+            from pymongo import MongoClient
+            from bson import ObjectId
+            mc = MongoClient(COSMOS_URI)
+            adoc = mc["system_monitor"]["content_articles"].find_one(
+                {"_id": ObjectId(article_id)}, {"feature_image": 1}
+            ) if article_id and len(article_id) == 24 else None
+            feature_image = (adoc or {}).get("feature_image", "")
+            mc.close()
 
             if feature_image:
                 # Upload image to FB ad account
