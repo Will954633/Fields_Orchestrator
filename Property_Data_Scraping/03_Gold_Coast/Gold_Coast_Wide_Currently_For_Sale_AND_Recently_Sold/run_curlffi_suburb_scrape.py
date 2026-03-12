@@ -604,25 +604,53 @@ Examples:
     )
 
     parser.add_argument(
-        '--suburbs', nargs='+', required=True,
-        help='Suburb:Postcode pairs (e.g., "Robina:4226" "Varsity Lakes:4227")',
+        '--suburbs', nargs='+',
+        help='Suburb:Postcode pairs (e.g., "Robina:4226" "Varsity Lakes:4227") or comma-separated names (e.g., "Robina,Varsity Lakes,Burleigh Waters")',
     )
+    parser.add_argument('--all', action='store_true', help='Scrape all suburbs from gold_coast_suburbs.json')
     # Kept for CLI compatibility — ignored (no browser to parallelise)
     parser.add_argument('--max-concurrent', type=int, default=1, help=argparse.SUPPRESS)
     parser.add_argument('--parallel-properties', type=int, default=1, help=argparse.SUPPRESS)
 
     args = parser.parse_args()
 
+    # Load suburbs JSON for postcode lookups
+    suburbs_json_path = os.path.join(os.path.dirname(__file__), 'gold_coast_suburbs.json')
+    postcode_map = {}
+    if os.path.exists(suburbs_json_path):
+        with open(suburbs_json_path) as f:
+            postcode_map = {s['name'].lower(): s['postcode'] for s in json.load(f)['suburbs']}
+
     # Parse suburb arguments
     suburbs = []
-    for suburb_arg in args.suburbs:
-        try:
-            name, postcode = suburb_arg.split(':')
-            suburbs.append((name.strip(), postcode.strip()))
-        except ValueError:
-            print(f"✗ Invalid suburb format: {suburb_arg}")
-            print("  Expected format: 'Suburb Name:Postcode'")
-            return 1
+    if args.all:
+        suburbs = [(name.title(), pc) for name, pc in postcode_map.items()]
+    elif args.suburbs:
+        for suburb_arg in args.suburbs:
+            # Handle comma-separated names: "Robina,Varsity Lakes,Burleigh Waters"
+            if ':' not in suburb_arg and ',' in suburb_arg:
+                for name in suburb_arg.split(','):
+                    name = name.strip()
+                    pc = postcode_map.get(name.lower())
+                    if pc:
+                        suburbs.append((name, pc))
+                    else:
+                        print(f"✗ Unknown suburb (no postcode found): {name}")
+                        return 1
+            elif ':' in suburb_arg:
+                name, postcode = suburb_arg.split(':', 1)
+                suburbs.append((name.strip(), postcode.strip()))
+            else:
+                # Single name without colon — look up postcode
+                pc = postcode_map.get(suburb_arg.strip().lower())
+                if pc:
+                    suburbs.append((suburb_arg.strip(), pc))
+                else:
+                    print(f"✗ Unknown suburb (no postcode found): {suburb_arg}")
+                    return 1
+    else:
+        print("ERROR: Provide --suburbs or --all")
+        return 1
 
     print("\n" + "=" * 80)
     print("CURL_CFFI SUBURB PROPERTY SCRAPER (CHROME-FREE)")
