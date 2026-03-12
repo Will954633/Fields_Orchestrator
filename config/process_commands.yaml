@@ -33,24 +33,24 @@ processes:
   
   - id: 101
     name: "Scrape For-Sale Properties (Target Market)"
-    description: "Scrapes 3 target suburbs (Robina, Varsity Lakes, Burleigh Waters) using headless Chrome - stores in Gold_Coast database"
+    description: "Scrapes 3 target suburbs (Robina, Varsity Lakes, Burleigh Waters) using curl_cffi - stores in Gold_Coast database. Chrome-free since 2026-03-13."
     phase: "for_sale_target"
-    command: "python3 run_dynamic_10_suburbs.py --suburbs 'Robina,Varsity Lakes,Burleigh Waters' --max-concurrent 1 --parallel-properties 1"
+    command: "python3 run_curlffi_suburb_scrape.py --suburbs 'Robina,Varsity Lakes,Burleigh Waters'"
     working_dir: "/home/fields/Property_Data_Scraping/03_Gold_Coast/Gold_Coast_Wide_Currently_For_Sale_AND_Recently_Sold"
     mongodb_activity: "heavy_write"
-    requires_browser: true
-    estimated_duration_minutes: 90  # 3 suburbs (~114 listings) × ~1 min each at concurrency 1
+    requires_browser: false  # Migrated from Selenium to curl_cffi (2026-03-13)
+    estimated_duration_minutes: 30  # ~120 listings × ~5s each with curl_cffi (much faster than Chrome)
     cooldown_seconds: 20
 
   - id: 102
     name: "Scrape For-Sale Properties (All Suburbs)"
-    description: "Scrapes all 52 Gold Coast suburbs weekly (Sunday) - comprehensive coverage"
+    description: "Scrapes all 81 Gold Coast suburbs weekly (Sunday) using curl_cffi - comprehensive coverage. Chrome-free since 2026-03-13."
     phase: "for_sale_other"
-    command: "python3 run_dynamic_10_suburbs.py --all --max-concurrent 1"
+    command: "python3 run_curlffi_suburb_scrape.py --all"
     working_dir: "/home/fields/Property_Data_Scraping/03_Gold_Coast/Gold_Coast_Wide_Currently_For_Sale_AND_Recently_Sold"
     mongodb_activity: "heavy_write"
-    requires_browser: true
-    estimated_duration_minutes: 420  # 81 suburbs × ~5 min each, 1 concurrent to avoid Cosmos 429 throttling
+    requires_browser: false  # Migrated from Selenium to curl_cffi (2026-03-13)
+    estimated_duration_minutes: 120  # 81 suburbs, ~5s per property with curl_cffi
     cooldown_seconds: 20
 
   # ============================================================================
@@ -149,7 +149,7 @@ processes:
     working_dir: "/home/fields/Property_Data_Scraping/03_Gold_Coast/Gold_Coast_Wide_Currently_For_Sale_AND_Recently_Sold/Ollama_Property_Analysis"
     mongodb_activity: "moderate_write"
     requires_browser: false
-    estimated_duration_minutes: 25  # 3 suburbs × ~7-8 min each
+    estimated_duration_minutes: 60  # ~80 properties × ~50-80s each via GPT vision (timeout = 2x = 120 min)
     cooldown_seconds: 20
     depends_on: [101]
 
