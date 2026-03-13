@@ -2,31 +2,39 @@
 """
 Search Intent Data Collector — multi-source search query intelligence.
 
-Collects search intent data from 4 sources and stores in MongoDB for use
+Collects search intent data from 6 sources and stores in MongoDB for use
 in content production, landing pages, and advertising decisions.
 
 Sources:
   1. Google Autocomplete Suggestions (free, no auth)
-  2. Google Trends via pytrends (free, rate-limited)
-  3. Google Ads Search Terms Report (requires Basic Access — now approved)
+  2. Google Trends (direct API, free, rate-limited)
+  3. Google Ads Search Terms Report (Basic Access approved)
   4. Google Search Console API (requires site verification)
+  5. Google People Also Ask (PAA) — SERP scraping for question chains
+  6. Reddit/Forum Monitor — r/AusProperty, r/AusFinance, r/GoldCoast
+
+Seed queries: ~310 (214 core + ~96 from Halo Strategy topic clusters)
 
 Collections written (all in system_monitor):
   - search_suggestions      : autocomplete results per seed query per day
   - search_trends           : relative volume + related/rising queries per keyword
   - search_ad_queries       : actual search queries triggering our Google Ads
   - search_console_queries  : queries where our site appeared in Google SERPs
+  - search_paa_questions    : People Also Ask question chains from Google SERPs
+  - search_reddit_posts     : property-related posts from Reddit
   - search_intent_summary   : cross-source aggregation per run
 
 Usage:
-    python3 scripts/search-intent-collector.py                 # Full collection
-    python3 scripts/search-intent-collector.py --source auto   # Autocomplete only
-    python3 scripts/search-intent-collector.py --source trends # Trends only
-    python3 scripts/search-intent-collector.py --source ads    # Google Ads search terms only
-    python3 scripts/search-intent-collector.py --source gsc    # Google Search Console only
-    python3 scripts/search-intent-collector.py --report        # Show 30-day summary
+    python3 scripts/search-intent-collector.py                  # Full collection (all 6)
+    python3 scripts/search-intent-collector.py --source auto    # Autocomplete only
+    python3 scripts/search-intent-collector.py --source trends  # Trends only
+    python3 scripts/search-intent-collector.py --source ads     # Google Ads search terms only
+    python3 scripts/search-intent-collector.py --source gsc     # Google Search Console only
+    python3 scripts/search-intent-collector.py --source paa     # People Also Ask only
+    python3 scripts/search-intent-collector.py --source reddit  # Reddit monitor only
+    python3 scripts/search-intent-collector.py --report         # Show 30-day summary
     python3 scripts/search-intent-collector.py --report --days 7
-    python3 scripts/search-intent-collector.py --dry-run       # Collect but don't save
+    python3 scripts/search-intent-collector.py --dry-run        # Collect but don't save
 
 Schedule: Every 3 days at 02:00 AEST via cron.
 Retention: 180 days.
@@ -43,7 +51,9 @@ import traceback
 from datetime import datetime, timezone, timedelta
 from urllib.parse import quote_plus
 
+import yaml
 import requests
+from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from pymongo import MongoClient, UpdateOne
 from pymongo.errors import BulkWriteError
@@ -268,6 +278,39 @@ SENTIMENT_QUERIES = {
 }
 
 
+def _load_halo_seeds():
+    """Load Halo Strategy seed queries from config/halo_seeds.yaml."""
+    halo_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config", "halo_seeds.yaml")
+    if not os.path.exists(halo_path):
+        return []
+
+    with open(halo_path) as f:
+        data = yaml.safe_load(f) or {}
+
+    seeds = []  # list of (query_text, intent_label, suburb_key_or_none)
+
+    # Topic cluster seeds and fears
+    for topic_key, topic in (data.get("topics") or {}).items():
+        for q in topic.get("seeds", []):
+            if "{suburb}" in q:
+                for suburb_key, info in SUBURBS.items():
+                    expanded = q.format(suburb=info["display"].lower())
+                    seeds.append((expanded, "sell", suburb_key))
+            else:
+                seeds.append((q, "sell", None))
+        for q in topic.get("fears", []):
+            seeds.append((q, "fear", None))
+
+    # Avatar fears and barriers
+    for avatar_key, avatar in (data.get("avatars") or {}).items():
+        for q in avatar.get("fears", []):
+            seeds.append((q, "fear", None))
+        for q in avatar.get("barriers", []):
+            seeds.append((q, "decision", None))
+
+    return seeds
+
+
 def expand_seed_queries():
     """Expand templates into concrete queries with intent and suburb labels."""
     queries = []  # list of (query_text, intent, suburb_key_or_none)
@@ -304,6 +347,18 @@ def expand_seed_queries():
             if q not in seen:
                 seen.add(q)
                 queries.append((q, sentiment, None))
+
+    # Halo Strategy seeds (from config/halo_seeds.yaml)
+    halo_seeds = _load_halo_seeds()
+    halo_count = 0
+    for q, intent, suburb_key in halo_seeds:
+        q_lower = q.lower().strip()
+        if q_lower not in seen:
+            seen.add(q_lower)
+            queries.append((q_lower, intent, suburb_key))
+            halo_count += 1
+    if halo_count:
+        print(f"  (+{halo_count} Halo Strategy seeds from config/halo_seeds.yaml)")
 
     return queries
 
@@ -689,6 +744,290 @@ def collect_search_console():
 
 
 # ---------------------------------------------------------------------------
+# Source 5: Question Discovery (autocomplete question-prefix expansion)
+# ---------------------------------------------------------------------------
+# Google PAA boxes aren't accessible from cloud IPs. Instead, we use
+# autocomplete with question prefixes (why, how, what, can I, should I, etc.)
+# to discover the same questions people are asking. This is actually richer
+# than PAA because we get ~10 suggestions per prefix per topic.
+
+PAA_SEEDS = [
+    # Top Halo Strategy topics
+    "real estate agent fees",
+    "real estate agent commission",
+    "choose a real estate agent",
+    "property settlement queensland",
+    "capital gains tax property",
+    "selling property with tenant",
+    "property valuation",
+    "best time to sell house",
+    "auction vs private sale",
+    "sell house without agent",
+    "cost of selling a house",
+    "same day settlement property",
+    "cooling off period property",
+    "stamp duty queensland",
+    "building and pest inspection",
+    "property contract conditions",
+    # Avatar fears
+    "sell my house",
+    "sell house fast",
+    "sell house as is",
+    "coordinate selling and buying house",
+    # Macro
+    "house prices australia",
+    "gold coast property market",
+    "interest rates property",
+    "gold coast real estate",
+    "investment property gold coast",
+    # Suburb
+    "robina property",
+    "burleigh waters property",
+    "varsity lakes property",
+]
+
+QUESTION_PREFIXES = [
+    "why", "how", "how much", "what", "what is", "what are",
+    "can I", "should I", "do I need to", "is it",
+    "when to", "where to",
+]
+
+
+def collect_paa(seeds=None):
+    """Discover questions via autocomplete question-prefix expansion.
+
+    For each seed topic, prepends question prefixes (why, how, what, can I, etc.)
+    and fetches autocomplete suggestions. This reveals the exact questions people
+    are typing into Google — equivalent to PAA question chains.
+    """
+    if seeds is None:
+        seeds = PAA_SEEDS
+
+    results = []
+    errors = []
+    date_str = datetime.now(AEST).strftime("%Y-%m-%d")
+    seen_questions = set()
+    ua_idx = 0
+
+    for seed in seeds:
+        for prefix in QUESTION_PREFIXES:
+            query = f"{prefix} {seed}"
+            ua = USER_AGENTS[ua_idx % len(USER_AGENTS)]
+            ua_idx += 1
+
+            try:
+                resp = requests.get(
+                    "https://suggestqueries.google.com/complete/search",
+                    params={"client": "firefox", "q": query, "gl": "au", "hl": "en"},
+                    headers={"User-Agent": ua},
+                    timeout=10,
+                )
+
+                if resp.status_code == 429:
+                    errors.append(f"paa: rate limited at '{query[:50]}'")
+                    time.sleep(5)
+                    continue
+
+                if resp.status_code != 200:
+                    continue
+
+                data = resp.json()
+                suggestions = data[1] if isinstance(data, list) and len(data) > 1 else []
+
+                for s in suggestions:
+                    s_norm = s.lower().strip()
+                    if s_norm in seen_questions:
+                        continue
+                    # Filter: must be question-like or contain the seed topic
+                    if not (s_norm.startswith(("how", "why", "what", "can", "should",
+                                               "do", "is", "when", "where"))
+                            or "?" in s_norm):
+                        continue
+                    seen_questions.add(s_norm)
+                    results.append({
+                        "_id": f"paa_{slug(s_norm)}_{date_str}",
+                        "source": "google_paa",
+                        "seed_query": seed,
+                        "question": s,
+                        "prefix": prefix,
+                        "depth": 0,
+                        "date": date_str,
+                        "collected_at": datetime.now(timezone.utc).isoformat(),
+                    })
+
+                time.sleep(0.5)
+
+            except Exception as e:
+                errors.append(f"paa: {query[:40]} — {str(e)[:80]}")
+                time.sleep(1)
+
+        if len(results) > 1000:
+            errors.append("paa: hit 1000 question cap, stopping early")
+            break
+
+    return results, errors
+
+
+# ---------------------------------------------------------------------------
+# Source 6: Reddit/Forum Monitor
+# ---------------------------------------------------------------------------
+REDDIT_SUBREDDITS = ["AusProperty", "AusFinance", "GoldCoast"]
+REDDIT_SEARCH_TERMS = [
+    "gold coast property", "gold coast house", "gold coast real estate",
+    "robina", "burleigh waters", "varsity lakes",
+    "sell house queensland", "buy house gold coast",
+    "property market crash", "house prices falling", "interest rates property",
+    "real estate agent fees", "property valuation",
+    "should I sell", "should I buy",
+]
+REDDIT_UA = "FieldsEstate/1.0 (property research; will@fieldsestate.com.au)"
+
+
+def collect_reddit():
+    """Monitor Reddit for property-related questions and fears.
+
+    Uses RSS feeds (JSON API blocked from cloud VMs since ~2025).
+    Fetches new/hot posts from target subreddits plus targeted searches.
+    """
+    results = []
+    errors = []
+    date_str = datetime.now(AEST).strftime("%Y-%m-%d")
+    seen_ids = set()
+    headers = {"User-Agent": REDDIT_UA}
+
+    def _fetch_rss(url, params=None):
+        """Fetch a Reddit RSS feed and parse entries."""
+        try:
+            resp = requests.get(url, params=params, headers=headers, timeout=15)
+            if resp.status_code == 429:
+                errors.append(f"reddit: rate limited on {url[:60]}")
+                time.sleep(10)
+                return []
+            if resp.status_code != 200:
+                return []
+            soup = BeautifulSoup(resp.text, "xml")
+            return soup.find_all("entry")
+        except Exception as e:
+            errors.append(f"reddit: {url[:50]} — {str(e)[:80]}")
+            return []
+
+    def _is_property_relevant(title, content=""):
+        """Quick keyword check for property relevance."""
+        text = (title + " " + content).lower()
+        kw = ["property", "house", "real estate", "mortgage", "sell", "buy",
+              "auction", "agent", "valuation", "settlement", "stamp duty",
+              "gold coast", "robina", "burleigh", "varsity", "investment property",
+              "rent", "tenant", "strata", "conveyancer", "cgt", "capital gains",
+              "home loan", "interest rate", "downsizing", "upgrading"]
+        return any(k in text for k in kw)
+
+    def _entry_to_doc(entry, subreddit, search_term):
+        """Convert an RSS entry to a MongoDB document."""
+        # Extract post ID from link
+        link_el = entry.find("link")
+        href = link_el.get("href", "") if link_el else ""
+        m = re.search(r"/comments/([a-z0-9]+)/", href)
+        post_id = m.group(1) if m else ""
+
+        if not post_id or post_id in seen_ids:
+            return None
+        seen_ids.add(post_id)
+
+        title = entry.find("title").text.strip() if entry.find("title") else ""
+        # Extract text content from HTML content field
+        content_el = entry.find("content")
+        content_html = content_el.text if content_el else ""
+        # Strip HTML to get plain text
+        content_text = BeautifulSoup(content_html, "html.parser").get_text(" ", strip=True)[:500]
+
+        author_el = entry.find("author")
+        author = ""
+        if author_el:
+            name_el = author_el.find("name")
+            author = name_el.text.replace("/u/", "") if name_el else ""
+
+        updated = entry.find("updated")
+        updated_str = updated.text if updated else ""
+
+        if not _is_property_relevant(title, content_text):
+            return None
+
+        return {
+            "_id": f"reddit_{post_id}",
+            "source": "reddit",
+            "subreddit": subreddit,
+            "title": title,
+            "selftext": content_text,
+            "author": author,
+            "score": 0,  # Not available in RSS
+            "num_comments": 0,  # Not available in RSS
+            "permalink": href,
+            "created_utc": updated_str,
+            "search_term": search_term,
+            "date": date_str,
+            "collected_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    # 1. Fetch "new" posts from each subreddit (RSS gives ~25 per feed)
+    for sub in REDDIT_SUBREDDITS:
+        entries = _fetch_rss(f"https://www.reddit.com/r/{sub}/new.rss")
+        for entry in entries:
+            doc = _entry_to_doc(entry, sub, "feed_new")
+            if doc:
+                results.append(doc)
+        time.sleep(1)
+
+    # 2. Fetch "hot" posts
+    for sub in REDDIT_SUBREDDITS:
+        entries = _fetch_rss(f"https://www.reddit.com/r/{sub}/hot.rss")
+        for entry in entries:
+            doc = _entry_to_doc(entry, sub, "feed_hot")
+            if doc:
+                results.append(doc)
+        time.sleep(1)
+
+    # 3. Search each subreddit for key terms (RSS search)
+    for sub in REDDIT_SUBREDDITS:
+        for term in REDDIT_SEARCH_TERMS:
+            entries = _fetch_rss(
+                f"https://www.reddit.com/r/{sub}/search.rss",
+                params={"q": term, "sort": "new", "restrict_sr": "1", "t": "month"},
+            )
+            for entry in entries:
+                doc = _entry_to_doc(entry, sub, term)
+                if doc:
+                    results.append(doc)
+            time.sleep(1)
+
+    # Classify intent and sentiment on results
+    for doc in results:
+        text = doc.get("title", "") + " " + doc.get("selftext", "")
+        doc["intent"] = classify_intent(text)
+        doc["sentiment"] = _classify_sentiment(text)
+
+    return results, errors
+
+
+def _classify_sentiment(text):
+    """Simple sentiment classification for a text snippet."""
+    text_lower = text.lower()
+    fear_words = ["crash", "bubble", "fall", "drop", "worried", "scared", "afraid",
+                  "can't afford", "stress", "nightmare", "disaster", "rip off",
+                  "scam", "losing", "lost", "negative equity", "downturn", "recession"]
+    hope_words = ["growth", "opportunity", "recovery", "going up", "boom", "best time",
+                  "good time", "optimistic", "positive", "excited", "upgrade", "dream"]
+
+    fear_score = sum(1 for w in fear_words if w in text_lower)
+    hope_score = sum(1 for w in hope_words if w in text_lower)
+
+    if fear_score > hope_score:
+        return "fear"
+    elif hope_score > fear_score:
+        return "hope"
+    return "neutral"
+
+
+# ---------------------------------------------------------------------------
 # Intent classification
 # ---------------------------------------------------------------------------
 INTENT_PATTERNS = {
@@ -748,7 +1087,8 @@ def detect_new_queries(sm_db, current_suggestions, lookback_days=30):
 # ---------------------------------------------------------------------------
 # Summary builder
 # ---------------------------------------------------------------------------
-def build_summary(auto_results, trends_results, ads_results, gsc_results, new_queries, errors):
+def build_summary(auto_results, trends_results, ads_results, gsc_results,
+                   paa_results, reddit_results, new_queries, errors):
     """Build a cross-source summary document."""
     date_str = datetime.now(AEST).strftime("%Y-%m-%d")
 
@@ -761,6 +1101,8 @@ def build_summary(auto_results, trends_results, ads_results, gsc_results, new_qu
         all_queries.add(doc.get("search_term", "").lower().strip())
     for doc in gsc_results:
         all_queries.add(doc.get("query", "").lower().strip())
+    for doc in paa_results:
+        all_queries.add(doc.get("question", "").lower().strip())
 
     # Intent distribution
     intent_dist = {}
@@ -774,6 +1116,15 @@ def build_summary(auto_results, trends_results, ads_results, gsc_results, new_qu
         for rq in doc.get("related_queries_rising", []):
             trending_up.append(rq["query"])
 
+    # Reddit sentiment breakdown
+    reddit_sentiment = {"fear": 0, "hope": 0, "neutral": 0}
+    for doc in reddit_results:
+        s = doc.get("sentiment", "neutral")
+        reddit_sentiment[s] = reddit_sentiment.get(s, 0) + 1
+
+    # Top PAA questions (unique)
+    paa_questions = list({doc.get("question", ""): doc for doc in paa_results}.keys())[:30]
+
     return {
         "_id": f"summary_{date_str}",
         "date": date_str,
@@ -782,9 +1133,13 @@ def build_summary(auto_results, trends_results, ads_results, gsc_results, new_qu
         "total_trends_keywords": len(trends_results),
         "total_ad_queries": len(ads_results),
         "total_gsc_queries": len(gsc_results),
+        "total_paa_questions": len(paa_results),
+        "total_reddit_posts": len(reddit_results),
         "new_queries": new_queries[:50],  # Cap at 50
         "new_query_count": len(new_queries),
         "trending_up": trending_up[:20],
+        "top_paa_questions": paa_questions,
+        "reddit_sentiment": reddit_sentiment,
         "intent_distribution": intent_dist,
         "errors": errors,
         "collected_at": datetime.now(timezone.utc).isoformat(),
@@ -827,7 +1182,8 @@ def batched_bulk_write(collection, ops, batch_size=10, delay=0.5, label=""):
 
 def ensure_indexes(sm_db):
     """Create indexes on search collections (idempotent)."""
-    for coll_name in ["search_suggestions", "search_trends", "search_ad_queries", "search_console_queries"]:
+    for coll_name in ["search_suggestions", "search_trends", "search_ad_queries",
+                       "search_console_queries", "search_paa_questions", "search_reddit_posts"]:
         coll = sm_db[coll_name]
         coll.create_index("date")
     sm_db["search_intent_summary"].create_index("date")
@@ -838,7 +1194,8 @@ def prune_old_data(sm_db, retention_days=180):
     cutoff = (datetime.now(AEST) - timedelta(days=retention_days)).strftime("%Y-%m-%d")
     total = 0
     for coll_name in ["search_suggestions", "search_trends", "search_ad_queries",
-                       "search_console_queries", "search_intent_summary"]:
+                       "search_console_queries", "search_paa_questions",
+                       "search_reddit_posts", "search_intent_summary"]:
         result = sm_db[coll_name].delete_many({"date": {"$lt": cutoff}})
         total += result.deleted_count
     if total > 0:
@@ -988,12 +1345,60 @@ def print_report(sm_db, days=30):
             print(f"  {d['query']:<40} {d['impressions']:>6} "
                   f"{d['clicks']:>6} {d['ctr']:>5.1%} {d['position']:>5.1f}")
 
+    # PAA Questions
+    paa_docs = list(sm_db["search_paa_questions"].find(
+        {"date": {"$gte": cutoff}},
+        {"question": 1, "seed_query": 1, "depth": 1},
+    ))
+    if paa_docs:
+        print(f"\nPeople Also Ask — {len(paa_docs)} questions discovered:")
+        # Frequency: how many times each question appeared across runs
+        q_freq = {}
+        for doc in paa_docs:
+            q = doc.get("question", "")
+            q_freq[q] = q_freq.get(q, 0) + 1
+        for q, freq in sorted(q_freq.items(), key=lambda x: -x[1])[:15]:
+            intent = classify_intent(q)
+            print(f"  {freq}x  [{intent:<8}]  {q}")
+
+    # Reddit Pulse
+    reddit_docs = list(sm_db["search_reddit_posts"].find(
+        {"date": {"$gte": cutoff}},
+        {"title": 1, "subreddit": 1, "score": 1, "num_comments": 1, "sentiment": 1},
+    ))
+    if reddit_docs:
+        print(f"\nReddit Pulse — {len(reddit_docs)} property-related posts:")
+        # Sentiment breakdown
+        r_sent = {"fear": 0, "hope": 0, "neutral": 0}
+        for doc in reddit_docs:
+            s = doc.get("sentiment", "neutral")
+            r_sent[s] = r_sent.get(s, 0) + 1
+        total_r = sum(r_sent.values())
+        if total_r > 0:
+            print(f"  Sentiment: fear {r_sent['fear']}/{total_r} ({r_sent['fear']/total_r*100:.0f}%) | "
+                  f"hope {r_sent['hope']}/{total_r} ({r_sent['hope']/total_r*100:.0f}%) | "
+                  f"neutral {r_sent['neutral']}/{total_r} ({r_sent['neutral']/total_r*100:.0f}%)")
+
+        # Top posts by engagement (score + comments)
+        top_posts = sorted(reddit_docs,
+                          key=lambda d: d.get("score", 0) + d.get("num_comments", 0),
+                          reverse=True)[:10]
+        for doc in top_posts:
+            score = doc.get("score", 0)
+            comments = doc.get("num_comments", 0)
+            sub = doc.get("subreddit", "?")
+            title = doc.get("title", "")[:70]
+            sent = doc.get("sentiment", "?")
+            print(f"  [{sent:<7}] r/{sub}: {title}  (+{score}, {comments}💬)")
+
     # Data source status
     print(f"\nData Sources:")
     print(f"  Autocomplete:    {sm_db['search_suggestions'].count_documents({'date': {'$gte': cutoff}})} docs")
     print(f"  Google Trends:   {sm_db['search_trends'].count_documents({'date': {'$gte': cutoff}})} docs")
     print(f"  Google Ads:      {sm_db['search_ad_queries'].count_documents({'date': {'$gte': cutoff}})} docs")
     print(f"  Search Console:  {sm_db['search_console_queries'].count_documents({'date': {'$gte': cutoff}})} docs")
+    print(f"  PAA Questions:   {sm_db['search_paa_questions'].count_documents({'date': {'$gte': cutoff}})} docs")
+    print(f"  Reddit Posts:    {sm_db['search_reddit_posts'].count_documents({'date': {'$gte': cutoff}})} docs")
 
     print(f"\n{'='*60}\n")
 
@@ -1003,7 +1408,7 @@ def print_report(sm_db, days=30):
 # ---------------------------------------------------------------------------
 def main():
     parser = argparse.ArgumentParser(description="Search Intent Data Collector")
-    parser.add_argument("--source", choices=["all", "auto", "trends", "ads", "gsc"],
+    parser.add_argument("--source", choices=["all", "auto", "trends", "ads", "gsc", "paa", "reddit"],
                         default="all", help="Which source(s) to collect from")
     parser.add_argument("--report", action="store_true", help="Print summary report instead of collecting")
     parser.add_argument("--days", type=int, default=30, help="Days to include in report (default: 30)")
@@ -1031,17 +1436,19 @@ def main():
     trends_results = []
     ads_results = []
     gsc_results = []
+    paa_results = []
+    reddit_results = []
 
     # Collect from each source
     if args.source in ("all", "auto"):
-        print("\n[1/4] Google Autocomplete...")
+        print("\n[1/6] Google Autocomplete...")
         auto_results, errs = collect_autocomplete(seed_queries)
         all_errors.extend(errs)
         total_suggestions = sum(d.get("suggestion_count", 0) for d in auto_results)
         print(f"  Collected {len(auto_results)} seed results with {total_suggestions} total suggestions")
 
     if args.source in ("all", "trends"):
-        print("\n[2/4] Google Trends...")
+        print("\n[2/6] Google Trends...")
         # Only send a subset of queries to trends (most important ones)
         trend_queries = [(q, i, s) for q, i, s in seed_queries if i in ("buy", "sell", "value")][:30]
         trends_results, errs = collect_trends(trend_queries)
@@ -1049,30 +1456,52 @@ def main():
         print(f"  Collected {len(trends_results)} trend docs")
 
     if args.source in ("all", "ads"):
-        print("\n[3/4] Google Ads Search Terms...")
+        print("\n[3/6] Google Ads Search Terms...")
         ads_results, errs = collect_ads_search_terms()
         all_errors.extend(errs)
 
     if args.source in ("all", "gsc"):
-        print("\n[4/4] Google Search Console...")
+        print("\n[4/6] Google Search Console...")
         gsc_results, errs = collect_search_console()
         all_errors.extend(errs)
+
+    if args.source in ("all", "paa"):
+        print("\n[5/6] Google People Also Ask...")
+        paa_results, errs = collect_paa()
+        all_errors.extend(errs)
+        print(f"  Collected {len(paa_results)} PAA questions")
+
+    if args.source in ("all", "reddit"):
+        print("\n[6/6] Reddit Monitor...")
+        reddit_results, errs = collect_reddit()
+        all_errors.extend(errs)
+        print(f"  Collected {len(reddit_results)} Reddit posts")
 
     # Detect new queries
     new_queries = detect_new_queries(sm_db, auto_results) if auto_results else []
 
     # Build summary
-    summary = build_summary(auto_results, trends_results, ads_results, gsc_results, new_queries, all_errors)
+    summary = build_summary(auto_results, trends_results, ads_results, gsc_results,
+                            paa_results, reddit_results, new_queries, all_errors)
 
     if args.dry_run:
         print(f"\n--- DRY RUN (not saving) ---")
         print(f"Would save: {len(auto_results)} autocomplete, {len(trends_results)} trends, "
-              f"{len(ads_results)} ad queries, {len(gsc_results)} gsc queries")
+              f"{len(ads_results)} ad queries, {len(gsc_results)} gsc queries, "
+              f"{len(paa_results)} PAA questions, {len(reddit_results)} Reddit posts")
         print(f"New queries: {len(new_queries)}")
         if new_queries:
             for q in new_queries[:10]:
                 print(f"  NEW: {q}")
-        print(f"Intent distribution: {summary.get('intent_distribution', {})}")
+        if paa_results:
+            print(f"\nTop PAA Questions:")
+            for doc in paa_results[:10]:
+                print(f"  ? {doc['question']}")
+        if reddit_results:
+            print(f"\nReddit Posts:")
+            for doc in reddit_results[:10]:
+                print(f"  [{doc.get('sentiment','?'):<7}] r/{doc.get('subreddit','?')}: {doc['title'][:70]}")
+        print(f"\nIntent distribution: {summary.get('intent_distribution', {})}")
         if all_errors:
             print(f"\nErrors ({len(all_errors)}):")
             for e in all_errors:
@@ -1099,6 +1528,14 @@ def main():
     if gsc_results:
         ops = [UpdateOne({"_id": d["_id"]}, {"$set": d}, upsert=True) for d in gsc_results]
         batched_bulk_write(sm_db["search_console_queries"], ops, label="search_console_queries")
+
+    if paa_results:
+        ops = [UpdateOne({"_id": d["_id"]}, {"$set": d}, upsert=True) for d in paa_results]
+        batched_bulk_write(sm_db["search_paa_questions"], ops, label="search_paa_questions")
+
+    if reddit_results:
+        ops = [UpdateOne({"_id": d["_id"]}, {"$set": d}, upsert=True) for d in reddit_results]
+        batched_bulk_write(sm_db["search_reddit_posts"], ops, label="search_reddit_posts")
 
     # Save summary
     sm_db["search_intent_summary"].update_one(
