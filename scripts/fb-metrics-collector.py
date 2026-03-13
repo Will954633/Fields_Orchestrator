@@ -155,6 +155,62 @@ def fetch_ad_daily_insights(days=14):
     return results
 
 
+def fetch_ad_lifetime_insights():
+    """Per-ad lifetime metrics (all-time aggregate)."""
+    fields = ("ad_id,ad_name,impressions,reach,clicks,spend,ctr,cpc,cpm,"
+              "frequency,actions,cost_per_action_type")
+    results = fb_get_all(f"/{AD_ACCOUNT_ID}/insights", {
+        "fields": fields,
+        "date_preset": "maximum",
+        "level": "ad",
+        "limit": 500,
+    })
+    return results
+
+
+def fetch_ad_30d_insights():
+    """Per-ad last 30d metrics."""
+    fields = ("ad_id,ad_name,impressions,reach,clicks,spend,ctr,cpc,cpm,"
+              "frequency,actions,cost_per_action_type")
+    results = fb_get_all(f"/{AD_ACCOUNT_ID}/insights", {
+        "fields": fields,
+        "date_preset": "last_30d",
+        "level": "ad",
+        "limit": 500,
+    })
+    return results
+
+
+def parse_aggregate_row(row):
+    """Parse a non-daily insight row into a clean dict."""
+    actions = row.get("actions", [])
+    cost_per = row.get("cost_per_action_type", [])
+    spend = float(row.get("spend", 0))
+    impressions = int(row.get("impressions", 0))
+    clicks = int(row.get("clicks", 0))
+    link_clicks = int(get_action_value(actions, "link_click"))
+    return {
+        "ad_id": row.get("ad_id", ""),
+        "impressions": impressions,
+        "reach": int(row.get("reach", 0)),
+        "clicks": clicks,
+        "spend_aud": round(spend, 2),
+        "ctr": round(float(row.get("ctr", 0)), 4),
+        "cpc_aud": round(float(row.get("cpc", 0)), 4) if row.get("cpc") else None,
+        "cpm_aud": round(float(row.get("cpm", 0)), 2) if row.get("cpm") else None,
+        "frequency": round(float(row.get("frequency", 0)), 4),
+        "link_clicks": link_clicks,
+        "landing_page_views": int(get_action_value(actions, "landing_page_view")),
+        "view_content": int(get_action_value(actions, "view_content")),
+        "post_engagement": int(get_action_value(actions, "post_engagement")),
+        "page_engagement": int(get_action_value(actions, "page_engagement")),
+        "video_views": int(get_action_value(actions, "video_view")),
+        "cost_per_link_click": (
+            round(spend / link_clicks, 4) if link_clicks > 0 else None
+        ),
+    }
+
+
 def fetch_ad_demographics():
     """Age × gender breakdown per ad (last 7d aggregate)."""
     fields = "ad_id,ad_name,impressions,reach,clicks,spend,ctr,actions"
@@ -218,7 +274,8 @@ def parse_daily_row(row):
     }
 
 
-def build_ad_profile(ad_meta, daily_rows, demo_rows, placement_rows):
+def build_ad_profile(ad_meta, daily_rows, demo_rows, placement_rows,
+                     agg_30d=None, agg_lifetime=None):
     """Build a unified ad profile document from all data sources."""
     ad_id = ad_meta.get("id", "")
     creative = ad_meta.get("creative", {})
@@ -227,8 +284,57 @@ def build_ad_profile(ad_meta, daily_rows, demo_rows, placement_rows):
     story_spec = creative.get("object_story_spec", {})
     link_data = story_spec.get("link_data", {})
 
-    # Full creative body (NOT truncated)
-    full_body = creative.get("body") or link_data.get("message") or ""
+    # Full creative body — try multiple sources
+    video_data = story_spec.get("video_data", {})
+    full_body = (creative.get("body")
+                 or link_data.get("message")
+                 or video_data.get("message")
+                 or story_spec.get("text_data", {}).get("message")
+                 or "")
+
+    # Detect catalog/dynamic ads (OSS has page_id but no link_data/video_data)
+    is_catalog_ad = (not full_body
+                     and "page_id" in story_spec
+                     and not link_data
+                     and not video_data)
+
+    # --- Creative classification ---
+    ad_name = ad_meta.get("name", "")
+    campaign_name = campaign.get("name", "")
+
+    # Content type classification based on campaign/ad name patterns
+    content_type = "unknown"
+    if "watch this sale" in campaign_name.lower():
+        content_type = "property_spotlight"
+    elif "how it sold" in campaign_name.lower():
+        content_type = "sold_analysis"
+    elif "is now a good time" in campaign_name.lower() or "is now a good time" in ad_name.lower():
+        content_type = "market_timing"
+    elif "analyst" in campaign_name.lower():
+        content_type = "market_analysis"
+    elif "photography" in campaign_name.lower() or "photography" in ad_name.lower():
+        content_type = "brand_photography"
+    elif "page like" in campaign_name.lower() or "property data" in campaign_name.lower():
+        content_type = "data_post"
+    elif "awareness" in campaign.get("objective", "").lower():
+        content_type = "awareness"
+    elif "traffic" in campaign.get("objective", "").lower():
+        content_type = "traffic"
+
+    # Text style classification
+    text_style = "none"
+    if full_body:
+        body_lower = full_body.lower()
+        if any(w in body_lower for w in ["$", "median", "price", "quartile", "%"]):
+            text_style = "data_driven"
+        elif any(w in body_lower for w in ["question", "?", "what does", "how much"]):
+            text_style = "question_hook"
+        elif any(w in body_lower for w in ["bought", "sold", "paid", "asking"]):
+            text_style = "transaction_narrative"
+        else:
+            text_style = "editorial"
+    elif is_catalog_ad:
+        text_style = "dynamic_catalog"
 
     # Extract CTA
     cta = (creative.get("call_to_action_type") or
@@ -268,6 +374,25 @@ def build_ad_profile(ad_meta, daily_rows, demo_rows, placement_rows):
     # Placement summary
     placement_summary = summarize_placements(placement_rows)
 
+    # Extract targeting from adset
+    targeting_raw = adset.get("targeting", {})
+    targeting = {}
+    if targeting_raw:
+        targeting = {
+            "age_min": targeting_raw.get("age_min"),
+            "age_max": targeting_raw.get("age_max"),
+            "geo_locations": targeting_raw.get("geo_locations", {}),
+            "custom_audiences": [
+                {"id": ca.get("id", ""), "name": ca.get("name", "")}
+                for ca in targeting_raw.get("custom_audiences", [])
+            ],
+            "excluded_custom_audiences": [
+                {"id": ca.get("id", ""), "name": ca.get("name", "")}
+                for ca in targeting_raw.get("excluded_custom_audiences", [])
+            ],
+            "targeting_automation": targeting_raw.get("targeting_automation"),
+        }
+
     return {
         "_id": ad_id,
         "ad_id": ad_id,
@@ -284,6 +409,8 @@ def build_ad_profile(ad_meta, daily_rows, demo_rows, placement_rows):
         "adset_id": ad_meta.get("adset_id", ""),
         "adset_name": adset.get("name", ""),
         "adset_status": adset.get("status", ""),
+        # Targeting (audiences, geo, age range)
+        "targeting": targeting,
         # Creative details (FULL, not truncated)
         "creative": {
             "id": creative.get("id", ""),
@@ -291,16 +418,22 @@ def build_ad_profile(ad_meta, daily_rows, demo_rows, placement_rows):
             "title": creative.get("title") or link_data.get("name", ""),
             "description": link_data.get("description", ""),
             "cta": cta,
-            "format": ad_format,
+            "format": "catalog" if is_catalog_ad else ad_format,
             "image_url": image_url,
             "image_hash": creative.get("image_hash", ""),
             "thumbnail_url": creative.get("thumbnail_url", ""),
             "link_url": link_url,
+            "is_catalog_ad": is_catalog_ad,
+            "content_type": content_type,
+            "text_style": text_style,
         },
         # Performance aggregates
         "last_7d": agg_7d,
         "last_14d": agg_14d,
         "trend_7d_vs_prev": trend,
+        # 30-day and lifetime aggregates (from API, not computed from daily)
+        "last_30d": agg_30d or {},
+        "lifetime": agg_lifetime or {},
         # Daily performance (last 14 days for quick charting)
         "daily": [
             {
@@ -872,12 +1005,35 @@ def main():
     else:
         print("Skipping placements (--quick mode)")
 
-    # Step 5: Campaigns + account daily
+    # Step 5: 30d and lifetime per-ad aggregates
+    print("Fetching 30d per-ad aggregates...")
+    agg_30d_by_ad = {}
+    try:
+        raw_30d = fetch_ad_30d_insights()
+        for row in raw_30d:
+            parsed = parse_aggregate_row(row)
+            agg_30d_by_ad[parsed["ad_id"]] = parsed
+        print(f"  Got 30d data for {len(agg_30d_by_ad)} ads")
+    except Exception as e:
+        print(f"  WARNING: 30d fetch failed: {e}")
+
+    print("Fetching lifetime per-ad aggregates...")
+    agg_lifetime_by_ad = {}
+    try:
+        raw_lifetime = fetch_ad_lifetime_insights()
+        for row in raw_lifetime:
+            parsed = parse_aggregate_row(row)
+            agg_lifetime_by_ad[parsed["ad_id"]] = parsed
+        print(f"  Got lifetime data for {len(agg_lifetime_by_ad)} ads")
+    except Exception as e:
+        print(f"  WARNING: Lifetime fetch failed: {e}")
+
+    # Step 6: Campaigns + account daily
     print("Fetching campaigns and account daily spend...")
     campaigns = fetch_campaigns()
     account_daily = fetch_account_daily(14)
 
-    # Step 6: Build ad profiles
+    # Step 7: Build ad profiles
     print("Building ad profiles...")
     ad_profiles = []
     for ad in ads_meta:
@@ -887,10 +1043,12 @@ def main():
             daily_by_ad.get(ad_id, []),
             demo_by_ad.get(ad_id, []),
             placement_by_ad.get(ad_id, []),
+            agg_30d=agg_30d_by_ad.get(ad_id),
+            agg_lifetime=agg_lifetime_by_ad.get(ad_id),
         )
         ad_profiles.append(profile)
 
-    # Step 7: Build legacy snapshot
+    # Step 8: Build legacy snapshot
     print("Building legacy-compatible snapshot...")
     legacy = build_legacy_snapshot(ad_profiles, campaigns, account_daily)
 
@@ -924,7 +1082,7 @@ def main():
                   f"Trend: {p['trend_7d_vs_prev'].get('direction', '?')}")
         return
 
-    # Step 8: Save everything
+    # Step 9: Save everything
     print("\nSaving to MongoDB...")
     save_all(
         ad_profiles=ad_profiles,
