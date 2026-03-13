@@ -158,6 +158,115 @@ COMPARISON_QUERIES = [
     ("burleigh waters", "varsity lakes"),
 ]
 
+# ---------------------------------------------------------------------------
+# Macro / Sentiment queries — national + QLD + Gold Coast level
+# These capture fears, hopes, and decision triggers that drive behaviour
+# ---------------------------------------------------------------------------
+SENTIMENT_QUERIES = {
+    # Fear / bearish sentiment
+    "fear": [
+        "will house prices fall",
+        "will house prices fall australia",
+        "will house prices fall 2026",
+        "will house prices crash",
+        "housing market crash australia",
+        "property market crash",
+        "property bubble australia",
+        "is the housing market going to crash",
+        "should i wait to buy a house",
+        "housing market downturn",
+        "will interest rates go up",
+        "interest rate rise australia",
+        "mortgage stress australia",
+        "can't afford to buy a house",
+        "housing affordability crisis",
+        "property prices dropping",
+        "worst time to buy property",
+        "negative equity australia",
+        "will gold coast property prices drop",
+        "gold coast property bubble",
+        "gold coast housing market crash",
+        "is gold coast overpriced",
+        "queensland property market crash",
+    ],
+    # Hope / bullish sentiment
+    "hope": [
+        "will house prices go up",
+        "will house prices go up australia",
+        "best time to buy property",
+        "best time to buy a house 2026",
+        "property market recovery",
+        "housing market outlook australia",
+        "is now a good time to buy",
+        "is now a good time to buy a house",
+        "property market forecast 2026",
+        "house prices going up",
+        "gold coast property growth",
+        "gold coast property forecast 2026",
+        "gold coast best time to buy",
+        "queensland property growth",
+        "will interest rates go down",
+        "interest rate cut australia",
+        "property boom australia",
+        "housing market recovery australia",
+    ],
+    # Decision triggers — people on the edge
+    "decision": [
+        "should i sell my house",
+        "should i sell my house now",
+        "should i buy a house now",
+        "should i wait to sell",
+        "is it a buyers market",
+        "is it a sellers market",
+        "buy or rent australia",
+        "buy vs rent calculator",
+        "how long to sell a house",
+        "how long does it take to sell a house gold coast",
+        "cost of selling a house",
+        "real estate commission australia",
+        "real estate agent fees gold coast",
+        "sell without agent australia",
+        "how to choose a real estate agent",
+        "first home buyer australia",
+        "first home buyer grant qld",
+        "first home buyer gold coast",
+        "stamp duty qld",
+        "stamp duty calculator qld",
+    ],
+    # Economic / rate watchers
+    "economic": [
+        "rba interest rate decision",
+        "rba interest rate",
+        "cash rate australia",
+        "will rba cut rates",
+        "rba meeting date",
+        "inflation australia",
+        "australian economy outlook",
+        "recession australia",
+        "cost of living australia",
+        "migration australia numbers",
+        "population growth gold coast",
+        "gold coast economy",
+        "gold coast jobs",
+        "queensland migration",
+    ],
+    # Lifestyle / relocation sentiment
+    "relocation": [
+        "move to gold coast",
+        "moving to gold coast from sydney",
+        "moving to gold coast from melbourne",
+        "relocating to gold coast",
+        "living on the gold coast pros and cons",
+        "is gold coast a good place to live",
+        "gold coast vs sunshine coast",
+        "gold coast vs brisbane",
+        "best places to live gold coast",
+        "gold coast lifestyle",
+        "gold coast family suburbs",
+        "safest suburbs gold coast",
+    ],
+}
+
 
 def expand_seed_queries():
     """Expand templates into concrete queries with intent and suburb labels."""
@@ -188,6 +297,13 @@ def expand_seed_queries():
         if q not in seen:
             seen.add(q)
             queries.append((q, "research", None))
+
+    # Sentiment / macro queries
+    for sentiment, qs in SENTIMENT_QUERIES.items():
+        for q in qs:
+            if q not in seen:
+                seen.add(q)
+                queries.append((q, sentiment, None))
 
     return queries
 
@@ -576,10 +692,17 @@ def collect_search_console():
 # Intent classification
 # ---------------------------------------------------------------------------
 INTENT_PATTERNS = {
+    # Sentiment categories (check first — these are broader macro queries)
+    "fear": re.compile(r"\b(crash|bubble|fall|drop|downturn|negative equity|overpriced|worst time|can't afford|affordability crisis|mortgage stress)\b", re.I),
+    "hope": re.compile(r"\b(go up|recovery|boom|best time to buy|good time to buy|forecast|outlook|growth)\b", re.I),
+    "decision": re.compile(r"\b(should i (sell|buy|wait)|buyers market|sellers market|buy or rent|buy vs rent|first home buyer|stamp duty|choose a real estate|without agent|commission)\b", re.I),
+    "economic": re.compile(r"\b(rba|interest rate|cash rate|inflation|recession|cost of living|migration|population growth|economy)\b", re.I),
+    "relocation": re.compile(r"\b(move to|moving to|relocating|pros and cons|good place to live|lifestyle|family suburb|safest suburb)\b", re.I),
+    # Property-specific intents
     "buy": re.compile(r"\b(for sale|buy|buying|purchase|houses for sale|units for sale|townhouse for sale)\b", re.I),
     "sell": re.compile(r"\b(sell|selling|agent fee|what is my house worth|how to sell|best time to sell|list my)\b", re.I),
     "value": re.compile(r"\b(price|valuation|value|median|how much|worth|house prices)\b", re.I),
-    "invest": re.compile(r"\b(invest|yield|growth|rental yield|capital growth|roi)\b", re.I),
+    "invest": re.compile(r"\b(invest|yield|rental yield|capital growth|roi)\b", re.I),
     "rent": re.compile(r"\b(rent|rental|lease|tenant)\b", re.I),
     "research": re.compile(r"\b(suburb profile|demographics|schools|crime|vs |comparison|report|data|trends|living in)\b", re.I),
 }
@@ -759,6 +882,51 @@ def print_report(sm_db, days=30):
             pct = count / total * 100 if total > 0 else 0
             bar = "█" * int(pct / 2)
             print(f"  {intent:<12} {count:>4}  ({pct:5.1f}%)  {bar}")
+
+    # Sentiment Gauge — fear vs hope balance
+    SENTIMENT_CATS = ["fear", "hope", "decision", "economic", "relocation"]
+    sentiment_counts = {cat: intent_dist.get(cat, 0) for cat in SENTIMENT_CATS}
+    sentiment_total = sum(sentiment_counts.values())
+    if sentiment_total > 0:
+        fear_count = sentiment_counts.get("fear", 0)
+        hope_count = sentiment_counts.get("hope", 0)
+        fear_hope_total = fear_count + hope_count
+        if fear_hope_total > 0:
+            fear_pct = fear_count / fear_hope_total * 100
+            hope_pct = hope_count / fear_hope_total * 100
+            # Visual gauge: FEAR ████░░░░ HOPE
+            gauge_width = 30
+            fear_bars = int(fear_pct / 100 * gauge_width)
+            hope_bars = gauge_width - fear_bars
+            print(f"\nSentiment Gauge:")
+            print(f"  FEAR {'█' * fear_bars}{'░' * hope_bars} HOPE")
+            print(f"  {fear_pct:.0f}% fearful / {hope_pct:.0f}% hopeful  ({fear_count} vs {hope_count} queries)")
+
+        print(f"\nSentiment Breakdown:")
+        for cat in SENTIMENT_CATS:
+            count = sentiment_counts[cat]
+            if count > 0:
+                pct = count / sentiment_total * 100
+                emoji = {"fear": "😰", "hope": "🟢", "decision": "🤔", "economic": "📊", "relocation": "🏠"}
+                print(f"  {emoji.get(cat, '  ')} {cat:<12} {count:>3}  ({pct:5.1f}%)")
+
+        # Show top sentiment queries from autocomplete
+        auto_sentiment_docs = list(sm_db["search_suggestions"].find(
+            {"date": latest["date"], "intent": {"$in": SENTIMENT_CATS}},
+            {"seed_query": 1, "suggestions": 1, "intent": 1},
+        ))
+        if auto_sentiment_docs:
+            print(f"\n  Top Sentiment Autocomplete (what people are actually typing):")
+            sent_suggestions = {}
+            for doc in auto_sentiment_docs:
+                cat = doc.get("intent", "other")
+                for s in doc.get("suggestions", []):
+                    key = (cat, s.lower().strip())
+                    sent_suggestions[key] = sent_suggestions.get(key, 0) + 1
+            for (cat, q), freq in sorted(sent_suggestions.items(), key=lambda x: -x[1])[:15]:
+                label = {"fear": "FEAR", "hope": "HOPE", "decision": "DECIDE",
+                         "economic": "ECON", "relocation": "RELO"}.get(cat, cat.upper())
+                print(f"    {freq}x  [{label:<6}]  {q}")
 
     # New queries from latest run
     new_queries = latest.get("new_queries", [])
