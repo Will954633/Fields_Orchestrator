@@ -97,15 +97,16 @@ def get_ad_detail(sm, crm, ad_id, days=14):
     """Deep dive into a single ad."""
     profile = sm["ad_profiles"].find_one({"_id": ad_id})
     attribution = sm["ad_attribution"].find_one({"_id": ad_id})
-    demographics = sm["ad_demographics"].find_one({"_id": ad_id})
-    placements = sm["ad_placements"].find_one({"_id": ad_id})
+    demographics = sm["ad_demographics"].find_one({"_id": f"{ad_id}_demographics"})
+    placements = sm["ad_placements"].find_one({"_id": f"{ad_id}_placements"})
 
-    # Daily metrics
+    # Daily metrics (sort in Python — Cosmos DB can't sort on unindexed fields)
     cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
     daily = list(sm["ad_daily_metrics"].find({
         "ad_id": ad_id,
         "date": {"$gte": cutoff}
-    }).sort("date", 1))
+    }))
+    daily.sort(key=lambda d: d.get("date", ""))
 
     # Recent sessions from this ad
     sessions = list(crm["sessions"].find({
@@ -175,9 +176,27 @@ def print_ad_table(profiles, attributions_map):
         print(f"    Spend: {fmt_money(spend_7d)}  |  Impressions: {fmt_num(impressions)}  |  CPM: {fmt_money(cpm)}")
         print(f"    Clicks: {fmt_num(clicks)}  |  Link clicks: {fmt_num(link_clicks)}  |  CTR: {fmt_pct(ctr)}")
 
-        if s14:
+        if s14 and s14.get("impressions", 0) > 0:
             print(f"  --- FB Metrics (14d) ---")
             print(f"    Spend: {fmt_money(s14.get('spend_aud', 0))}  |  Impressions: {fmt_num(s14.get('impressions', 0))}  |  CTR: {fmt_pct(s14.get('ctr', 0))}")
+
+        lt = p.get("lifetime", {})
+        if lt and lt.get("impressions", 0) > 0:
+            print(f"  --- Lifetime ---")
+            print(f"    Spend: {fmt_money(lt.get('spend_aud', 0))}  |  Impressions: {fmt_num(lt.get('impressions', 0))}  |  CTR: {fmt_pct(lt.get('ctr', 0))}  |  Link clicks: {fmt_num(lt.get('link_clicks', 0))}")
+
+        # Targeting summary (one line)
+        targeting = p.get("targeting", {})
+        if targeting:
+            audiences = [ca.get("name", "?")[:30] for ca in targeting.get("custom_audiences", [])]
+            geo_places = [pl.get("name", "?").split(",")[0] for pl in targeting.get("geo_locations", {}).get("places", [])]
+            parts = []
+            if geo_places:
+                parts.append(f"Geo: {', '.join(geo_places[:3])}")
+            if audiences:
+                parts.append(f"Audiences: {', '.join(audiences[:2])}")
+            if parts:
+                print(f"  Targeting: {' | '.join(parts)}")
 
         if sessions > 0:
             print(f"  --- Website Attribution ---")
@@ -193,9 +212,10 @@ def print_ad_table(profiles, attributions_map):
         # Creative info
         creative = p.get("creative", {})
         if creative:
-            if creative.get("image_description"):
-                print(f"  --- Creative ---")
-                print(f"    Image: {creative['image_description'][:80]}")
+            content_type = creative.get("content_type", "?")
+            text_style = creative.get("text_style", "?")
+            fmt_str = creative.get("format", "?")
+            print(f"  Creative: {content_type} / {text_style} / {fmt_str}")
             if creative.get("body"):
                 print(f"    Text: {creative['body'][:100]}...")
 
@@ -222,19 +242,26 @@ def print_ad_detail(data, ad_id):
     print(f"  Ad ID: {ad_id}")
     print(f"  Campaign: {p.get('campaign_name', '?')}  |  Adset: {p.get('adset_name', '?')}")
     print(f"  Status: {p.get('effective_status', '?')}")
-    print(f"  Objective: {p.get('objective', '?')}")
+    print(f"  Objective: {p.get('campaign_objective', '?')}")
     print(f"  Created: {p.get('created_time', '?')}")
 
     # Creative
     creative = p.get("creative", {})
     if creative:
         print(f"\n  --- Creative ---")
+        print(f"  Format: {creative.get('format', '?')}")
         print(f"  Title: {creative.get('title', 'n/a')}")
-        print(f"  Body: {creative.get('body', 'n/a')}")
+        body = creative.get('body', '')
+        if body:
+            print(f"  Body: {body}")
+        elif creative.get('is_catalog_ad'):
+            print(f"  Body: [catalog/dynamic ad — text resolved from product catalog at delivery]")
+        else:
+            print(f"  Body: [empty]")
         print(f"  Link: {creative.get('link_url', 'n/a')}")
-        print(f"  CTA: {creative.get('call_to_action', 'n/a')}")
+        print(f"  CTA: {creative.get('cta', 'n/a')}")
         if creative.get("image_url"):
-            print(f"  Image URL: {creative['image_url']}")
+            print(f"  Image URL: {creative['image_url'][:120]}")
         if creative.get("image_description"):
             print(f"  Image desc: {creative['image_description']}")
         if creative.get("image_category"):
@@ -244,8 +271,24 @@ def print_ad_detail(data, ad_id):
     targeting = p.get("targeting", {})
     if targeting:
         print(f"\n  --- Targeting ---")
-        for k, v in targeting.items():
-            print(f"  {k}: {json.dumps(v, default=str)[:100]}")
+        if targeting.get("age_min") or targeting.get("age_max"):
+            print(f"  Age: {targeting.get('age_min', '?')}-{targeting.get('age_max', '?')}")
+        geo = targeting.get("geo_locations", {})
+        if geo.get("places"):
+            places = [f"{pl.get('name', '?')} ({pl.get('radius', '?')}mi)" for pl in geo["places"]]
+            print(f"  Geo: {', '.join(places)}")
+        elif geo.get("countries"):
+            print(f"  Geo: {', '.join(geo['countries'])}")
+        audiences = targeting.get("custom_audiences", [])
+        if audiences:
+            print(f"  Custom audiences ({len(audiences)}):")
+            for ca in audiences:
+                print(f"    - {ca.get('name', ca.get('id', '?'))}")
+        excluded = targeting.get("excluded_custom_audiences", [])
+        if excluded:
+            print(f"  Excluded audiences ({len(excluded)}):")
+            for ca in excluded:
+                print(f"    - {ca.get('name', ca.get('id', '?'))}")
 
     # Performance windows
     for window in ["last_7d", "last_14d", "last_30d", "lifetime"]:
@@ -287,23 +330,35 @@ def print_ad_detail(data, ad_id):
         if attr.get("devices"):
             print(f"    Devices: {attr['devices']}")
 
-    # Demographics
+    # Demographics (stored under "segments" key in ad_demographics collection)
     demo = data["demographics"]
-    if demo and demo.get("breakdowns"):
-        print(f"\n  --- Demographics ---")
-        for b in sorted(demo["breakdowns"], key=lambda x: x.get("spend", 0), reverse=True)[:10]:
-            print(f"    {b.get('age', '?')} {b.get('gender', '?')}: "
-                  f"spend={fmt_money(b.get('spend', 0))} imp={fmt_num(b.get('impressions', 0))} "
-                  f"clicks={b.get('clicks', 0)} ctr={fmt_pct(b.get('ctr', 0))}")
+    if demo:
+        segments = demo.get("segments", [])
+        if segments:
+            print(f"\n  --- Demographics ({len(segments)} segments) ---")
+            for b in sorted(segments, key=lambda x: float(x.get("spend", 0)), reverse=True)[:10]:
+                spend = float(b.get("spend", 0))
+                imp = int(b.get("impressions", 0))
+                clicks = int(b.get("clicks", 0))
+                ctr_val = round(clicks / imp * 100, 2) if imp > 0 else 0
+                print(f"    {b.get('age', '?')} {b.get('gender', '?')}: "
+                      f"spend={fmt_money(spend)} imp={fmt_num(imp)} "
+                      f"clicks={clicks} ctr={fmt_pct(ctr_val)}")
 
-    # Placements
+    # Placements (stored under "placements" key in ad_placements collection)
     plc = data["placements"]
-    if plc and plc.get("breakdowns"):
-        print(f"\n  --- Placements ---")
-        for b in sorted(plc["breakdowns"], key=lambda x: x.get("spend", 0), reverse=True)[:10]:
-            print(f"    {b.get('publisher_platform', '?')}/{b.get('platform_position', '?')}: "
-                  f"spend={fmt_money(b.get('spend', 0))} imp={fmt_num(b.get('impressions', 0))} "
-                  f"clicks={b.get('clicks', 0)} ctr={fmt_pct(b.get('ctr', 0))}")
+    if plc:
+        place_list = plc.get("placements", [])
+        if place_list:
+            print(f"\n  --- Placements ({len(place_list)} positions) ---")
+            for b in sorted(place_list, key=lambda x: float(x.get("spend", 0)), reverse=True)[:10]:
+                spend = float(b.get("spend", 0))
+                imp = int(b.get("impressions", 0))
+                clicks = int(b.get("clicks", 0))
+                ctr_val = round(clicks / imp * 100, 2) if imp > 0 else 0
+                print(f"    {b.get('publisher_platform', '?')}/{b.get('platform_position', '?')}: "
+                      f"spend={fmt_money(spend)} imp={fmt_num(imp)} "
+                      f"clicks={clicks} ctr={fmt_pct(ctr_val)}")
 
     # Daily trend
     daily = data["daily_metrics"]
