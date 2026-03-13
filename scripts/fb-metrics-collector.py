@@ -141,7 +141,7 @@ def fetch_ads_metadata():
     return data
 
 
-def fetch_ad_daily_insights(days=14):
+def fetch_ad_daily_insights(days=90):
     """Per-ad, per-day metrics for the last N days."""
     fields = ("ad_id,ad_name,impressions,reach,clicks,spend,ctr,cpc,cpm,"
               "frequency,actions,cost_per_action_type")
@@ -964,9 +964,9 @@ def main():
     ads_meta = fetch_ads_metadata()
     print(f"  Found {len(ads_meta)} ads")
 
-    # Step 2: Fetch per-ad daily metrics (14 days)
-    print("Fetching per-ad daily metrics (14 days)...")
-    raw_daily = fetch_ad_daily_insights(14)
+    # Step 2: Fetch per-ad daily metrics (90 days — permanent history)
+    print("Fetching per-ad daily metrics (90 days)...")
+    raw_daily = fetch_ad_daily_insights(90)
     print(f"  Got {len(raw_daily)} daily rows")
     daily_metrics = [parse_daily_row(r) for r in raw_daily]
 
