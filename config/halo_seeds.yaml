@@ -1,0 +1,240 @@
+# Halo Strategy Seed Queries — derived from 2,351 seller conversations
+# Source: 05_Sabri_Subri/Halo-Strategy/ (472 topic clusters, 3 avatars)
+# These bridge static research with live search monitoring.
+# Seeds use {suburb} placeholder (expanded by search-intent-collector.py)
+
+topics:
+  agent_selection:
+    weight: 10.7
+    seeds:
+      - "real estate agent commission rates"
+      - "real estate agent fees queensland"
+      - "how to choose a real estate agent"
+      - "best real estate agent {suburb}"
+      - "real estate agent reviews {suburb}"
+      - "real estate agent commission negotiation"
+      - "is my real estate agent any good"
+      - "how much do real estate agents charge"
+    fears:
+      - "agent hiding offers from seller"
+      - "agent overpricing my home to win listing"
+      - "agent underquoting my property"
+      - "agent commission rip off"
+
+  legal_requirements:
+    weight: 10.24
+    seeds:
+      - "selling property legal requirements queensland"
+      - "same day settlement property australia"
+      - "building and pest inspection queensland"
+      - "strata rules selling property"
+      - "cooling off period property queensland"
+      - "property settlement process qld"
+      - "conveyancer vs solicitor property sale"
+      - "selling property disclosure requirements qld"
+    fears:
+      - "what if settlement falls through"
+      - "contract loopholes property sale"
+      - "can buyer pull out after signing contract"
+
+  tax_implications:
+    weight: 6.04
+    seeds:
+      - "capital gains tax selling property australia"
+      - "stamp duty calculator gold coast"
+      - "CGT selling investment property"
+      - "land tax queensland 2026"
+      - "GST on property sale australia"
+      - "capital gains tax exemption primary residence"
+    fears:
+      - "unexpected tax bill selling house"
+      - "CGT on primary residence turned rental"
+      - "stamp duty trap downsizing"
+
+  mortgage_considerations:
+    weight: 5.35
+    seeds:
+      - "mortgage approval process australia"
+      - "refinancing home loan gold coast"
+      - "what do lenders look for home loan"
+      - "bridging loan property australia"
+      - "sell first or buy first property"
+      - "mortgage stress help australia"
+    fears:
+      - "can't get finance to buy next home"
+      - "mortgage repayments too high"
+      - "negative equity home loan australia"
+
+  tenant_considerations:
+    weight: 5.25
+    seeds:
+      - "selling property with tenant queensland"
+      - "tenant rights when property sold qld"
+      - "break lease to sell property queensland"
+      - "selling investment property with tenant"
+      - "how to end tenancy to sell property"
+    fears:
+      - "tenant refusing to leave for sale"
+      - "tenant damaging property before sale"
+      - "selling with tenant reduces price"
+
+  property_valuation:
+    weight: 3.74
+    seeds:
+      - "why do agents give different valuations"
+      - "bank valuation vs agent appraisal"
+      - "how to get accurate property valuation"
+      - "property valuation for selling"
+      - "free property valuation gold coast"
+    fears:
+      - "agent overvaluing to get listing"
+      - "bank valuation lower than purchase price"
+      - "property worth less than I think"
+
+  market_analysis:
+    weight: 3.32
+    seeds:
+      - "gold coast property market forecast"
+      - "property market supply and demand gold coast"
+      - "is gold coast market oversupplied"
+      - "property market cycle australia"
+    fears:
+      - "market dropping after I buy"
+      - "buying at the peak property"
+      - "oversupply apartments gold coast"
+
+  home_improvements:
+    weight: 3.12
+    seeds:
+      - "renovations that add value before selling"
+      - "is it worth renovating before selling"
+      - "cheapest way to improve house for sale"
+      - "staging a house for sale gold coast"
+    fears:
+      - "spending money on renovations that don't add value"
+      - "overcapitalising on renovations before sale"
+
+  contract_terms:
+    weight: 3.0
+    seeds:
+      - "subject to finance clause property"
+      - "sunset clause property contract"
+      - "building and pest clause qld"
+      - "deposit refund property contract qld"
+    fears:
+      - "buyer pulling out after building inspection"
+      - "losing deposit on property purchase"
+      - "contract conditions not met property"
+
+  selling_costs:
+    weight: 3.0
+    seeds:
+      - "total cost of selling a house australia"
+      - "real estate marketing fees australia"
+      - "conveyancer fees queensland"
+      - "how much does it cost to sell a house gold coast"
+    fears:
+      - "hidden costs selling property"
+      - "marketing fees wasted if house doesn't sell"
+      - "agent charging too much for marketing"
+
+  listing_platforms:
+    weight: 2.82
+    seeds:
+      - "domain vs realestate.com.au which is better"
+      - "selling property privately online australia"
+      - "how long to list property before it goes stale"
+    fears:
+      - "property listing going stale"
+      - "online estimate wrong for my property"
+      - "misleading price guides on listings"
+
+  auction_process:
+    weight: 2.8
+    seeds:
+      - "auction vs private sale which is better"
+      - "auction reserve price strategy"
+      - "what happens if property doesn't sell at auction"
+      - "pre auction offer strategy"
+    fears:
+      - "property passing in at auction"
+      - "no bidders at auction"
+      - "auction costs if property doesn't sell"
+
+  private_sale:
+    weight: 2.66
+    seeds:
+      - "sell house without agent australia"
+      - "FSBO for sale by owner queensland"
+      - "private sale property process qld"
+    fears:
+      - "selling without agent getting lower price"
+      - "legal mistakes selling privately"
+      - "can't handle buyer negotiations alone"
+
+  market_timing:
+    weight: 2.62
+    seeds:
+      - "best time of year to sell house gold coast"
+      - "should I wait to sell my property"
+      - "spring market vs autumn market property"
+      - "best month to sell property queensland"
+    fears:
+      - "selling at the wrong time"
+      - "missing the peak of the market"
+      - "waiting too long and prices dropping"
+
+  selling_strategy:
+    weight: 2.53
+    seeds:
+      - "pricing strategy selling house"
+      - "should I accept first offer on house"
+      - "how to negotiate property sale"
+    fears:
+      - "leaving money on the table"
+      - "accepting too low an offer"
+      - "buyers failing to get finance after offer"
+
+# Avatar-specific fears (from Client-Avatars.md)
+avatars:
+  stressed_upgrader:
+    weight: 40
+    fears:
+      - "homeless between selling and buying house"
+      - "coordinating sale and purchase same day"
+      - "buyers failing to get finance"
+      - "choosing wrong real estate agent"
+      - "selling too early or too late"
+    barriers:
+      - "how to coordinate selling and buying at same time"
+      - "should I sell first or buy first house"
+      - "what if buyers can't get finance for my property"
+      - "how to avoid being homeless between properties"
+
+  reluctant_seller:
+    weight: 35
+    fears:
+      - "being taken advantage of by real estate agent"
+      - "spending money on repairs before selling"
+      - "selling house for less than it's worth"
+      - "complicated legal process selling property"
+      - "losing control of property sale"
+    barriers:
+      - "can I sell house as is no repairs"
+      - "how to know if agent is trustworthy"
+      - "sell property privately save commission"
+      - "how much does it really cost to sell a house"
+
+  savvy_investor:
+    weight: 25
+    fears:
+      - "leaving money on the table property sale"
+      - "wasting time with incompetent agent"
+      - "tenant issues affecting property sale"
+      - "tax implications not optimised property"
+      - "bad market timing investment property"
+    barriers:
+      - "optimal timing to sell investment property"
+      - "sell investment property with tenant in place"
+      - "maximise property sale price without wasting time"
+      - "tax implications selling investment property"
