@@ -135,7 +135,7 @@ def fetch_ads_metadata():
             "field": "effective_status",
             "operator": "IN",
             "value": ["ACTIVE", "PAUSED", "CAMPAIGN_PAUSED",
-                      "ADSET_PAUSED", "PENDING_REVIEW"],
+                      "ADSET_PAUSED", "PENDING_REVIEW", "WITH_ISSUES"],
         }]),
     })
     return data
