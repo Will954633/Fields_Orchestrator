@@ -33,6 +33,7 @@ Usage:
 import os
 import re
 import sys
+import math
 import argparse
 from datetime import datetime, timezone, timedelta
 from collections import defaultdict, Counter
@@ -127,6 +128,37 @@ def load_all_data(sm_db, cutoff):
             "source": "gsc",
         })
     data["gsc"] = gsc
+
+    # Google Trends
+    trends = []
+    for doc in sm_db["search_trends"].find({"date": {"$gte": cutoff}}):
+        iot = doc.get("interest_over_time", [])
+        rising = doc.get("related_queries_rising", [])
+        top_related = doc.get("related_queries_top", [])
+        max_interest = max((p.get("value", 0) for p in iot), default=0)
+        recent_vals = [p.get("value", 0) for p in iot[-4:]]
+        recent_avg = sum(recent_vals) / len(recent_vals) if recent_vals else 0
+        # Trend direction: compare last 4 weeks to previous 4 weeks
+        prev_vals = [p.get("value", 0) for p in iot[-8:-4]]
+        prev_avg = sum(prev_vals) / len(prev_vals) if prev_vals else 0
+        if prev_avg > 0:
+            trend_direction = round((recent_avg - prev_avg) / prev_avg * 100)
+        elif recent_avg > 0:
+            trend_direction = 100  # new activity
+        else:
+            trend_direction = 0
+
+        trends.append({
+            "keyword": doc.get("keyword", ""),
+            "max_interest": max_interest,
+            "recent_avg": round(recent_avg, 1),
+            "trend_direction": trend_direction,  # +/- percentage
+            "rising_queries": [{"query": r.get("query", ""), "value": str(r.get("value", ""))} for r in rising],
+            "top_related": [{"query": r.get("query", ""), "value": r.get("value", 0)} for r in top_related],
+            "weekly_data": [{"week": p.get("week", ""), "value": p.get("value", 0)} for p in iot],
+            "source": "trends",
+        })
+    data["trends"] = trends
 
     # Articles
     articles = []
@@ -533,6 +565,255 @@ def analyse_reddit(data):
 
 
 # ---------------------------------------------------------------------------
+# Analysis 9: Trends analysis
+# ---------------------------------------------------------------------------
+def analyse_trends(data):
+    """Summarise Google Trends data — rising queries, momentum, weekly patterns."""
+    trends = data.get("trends", [])
+    if not trends:
+        return {"total": 0}
+
+    # Sort by recent_avg (proxy for search volume)
+    by_volume = sorted(trends, key=lambda t: -t.get("recent_avg", 0))
+
+    # Collect all rising queries across all keywords
+    all_rising = []
+    for t in trends:
+        for rq in t.get("rising_queries", []):
+            all_rising.append({
+                "query": rq["query"],
+                "value": rq["value"],  # "Breakout" or percentage
+                "parent_keyword": t["keyword"],
+            })
+    # Sort: "Breakout" first, then by numeric value
+    def rising_sort(r):
+        v = r["value"]
+        if isinstance(v, str) and "breakout" in v.lower():
+            return (0, 0)
+        try:
+            return (1, -int(str(v).replace("%", "").replace("+", "").replace(",", "")))
+        except (ValueError, TypeError):
+            return (2, 0)
+    all_rising.sort(key=rising_sort)
+
+    # Momentum: which keywords are accelerating vs declining
+    momentum = []
+    for t in trends:
+        td = t.get("trend_direction", 0)
+        momentum.append({
+            "keyword": t["keyword"],
+            "recent_avg": t["recent_avg"],
+            "max_interest": t["max_interest"],
+            "trend_direction": td,
+            "direction_label": "rising" if td > 10 else ("falling" if td < -10 else "stable"),
+            "weekly_data": t.get("weekly_data", []),
+        })
+    momentum.sort(key=lambda m: -abs(m["trend_direction"]))
+
+    return {
+        "total": len(trends),
+        "by_volume": [{
+            "keyword": t["keyword"],
+            "recent_avg": t["recent_avg"],
+            "max_interest": t["max_interest"],
+            "trend_direction": t["trend_direction"],
+        } for t in by_volume],
+        "rising_queries": all_rising[:40],
+        "momentum": momentum,
+        "keywords_rising": [m for m in momentum if m["direction_label"] == "rising"],
+        "keywords_falling": [m for m in momentum if m["direction_label"] == "falling"],
+        "keywords_stable": [m for m in momentum if m["direction_label"] == "stable"],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Analysis 10: Importance scoring
+# ---------------------------------------------------------------------------
+def score_importance(data, frequency, questions, fears, trends_analysis):
+    """
+    Assign a composite importance score to every unique query.
+    Combines: seed spread, cross-source presence, Google Trends volume,
+    GSC impressions, fear signal presence, and frequency.
+    """
+    # Build a unified query → signals map
+    query_signals = defaultdict(lambda: {
+        "sources": set(),
+        "frequency": 0,
+        "seed_spread": 0,
+        "gsc_impressions": 0,
+        "gsc_clicks": 0,
+        "gsc_position": 0,
+        "trends_volume": 0,
+        "trend_direction": 0,
+        "is_fear": False,
+        "is_question": False,
+        "ad_impressions": 0,
+    })
+
+    # From frequency analysis (has seed_spread)
+    freq_map = {f["query"]: f for f in frequency}
+
+    # Autocomplete
+    for s in data["suggestions"]:
+        q = query_signals[s["text"]]
+        q["sources"].add("autocomplete")
+        q["frequency"] += 1
+
+    # PAA
+    for p in data["paa"]:
+        q = query_signals[p["text"]]
+        q["sources"].add("paa")
+        q["frequency"] += 1
+
+    # Reddit
+    for r in data["reddit"]:
+        title = r.get("title", "").lower().strip()
+        if title:
+            q = query_signals[title]
+            q["sources"].add("reddit")
+            q["frequency"] += 1
+
+    # GSC
+    for g in data["gsc"]:
+        q = query_signals[g["text"]]
+        q["sources"].add("gsc")
+        q["gsc_impressions"] = max(q["gsc_impressions"], g.get("impressions", 0))
+        q["gsc_clicks"] = max(q["gsc_clicks"], g.get("clicks", 0))
+        q["gsc_position"] = g.get("position", 0)
+
+    # Google Ads
+    for a in data["ads"]:
+        q = query_signals[a["text"]]
+        q["sources"].add("google_ads")
+        q["ad_impressions"] = max(q["ad_impressions"], a.get("impressions", 0))
+
+    # Copy seed_spread from frequency analysis
+    for text, info in freq_map.items():
+        query_signals[text]["seed_spread"] = info.get("seed_spread", 0)
+
+    # Mark fear queries
+    fear_texts = set()
+    for f_entry in fears.get("all", []):
+        fear_texts.add(f_entry["text"].lower().strip())
+    for text in fear_texts:
+        if text in query_signals:
+            query_signals[text]["is_fear"] = True
+
+    # Mark questions
+    question_texts = set(q["question"] for q in questions)
+    for text in question_texts:
+        if text in query_signals:
+            query_signals[text]["is_question"] = True
+
+    # Map Google Trends volume to matching queries
+    trends_volume_map = {}
+    for t in data.get("trends", []):
+        kw = t.get("keyword", "").lower()
+        trends_volume_map[kw] = {
+            "recent_avg": t.get("recent_avg", 0),
+            "trend_direction": t.get("trend_direction", 0),
+        }
+
+    for text, signals in query_signals.items():
+        # Direct match
+        if text in trends_volume_map:
+            signals["trends_volume"] = trends_volume_map[text]["recent_avg"]
+            signals["trend_direction"] = trends_volume_map[text]["trend_direction"]
+        else:
+            # Partial match: if a trends keyword is contained in the query
+            for kw, tv in trends_volume_map.items():
+                if kw in text or text in kw:
+                    signals["trends_volume"] = max(signals["trends_volume"], tv["recent_avg"])
+                    if abs(tv["trend_direction"]) > abs(signals["trend_direction"]):
+                        signals["trend_direction"] = tv["trend_direction"]
+
+    # Calculate composite score
+    scored = []
+    for text, signals in query_signals.items():
+        if not text or len(text) < 3:
+            continue
+
+        score = 0.0
+
+        # 1. Cross-source presence (0-30 pts) — most important
+        source_count = len(signals["sources"])
+        score += min(source_count * 10, 30)
+
+        # 2. Frequency (0-20 pts)
+        score += min(signals["frequency"] * 2, 20)
+
+        # 3. Seed spread (0-15 pts)
+        score += min(signals["seed_spread"] * 3, 15)
+
+        # 4. GSC impressions (0-15 pts) — real search volume
+        if signals["gsc_impressions"] > 0:
+            score += min(math.log10(signals["gsc_impressions"] + 1) * 5, 15)
+
+        # 5. Google Trends volume (0-10 pts)
+        if signals["trends_volume"] > 0:
+            score += min(signals["trends_volume"] / 10, 10)
+
+        # 6. Trend momentum bonus (0-5 pts)
+        if signals["trend_direction"] > 20:
+            score += min(signals["trend_direction"] / 20, 5)
+
+        # 7. Fear signal bonus (+5 pts) — fears deserve attention
+        if signals["is_fear"]:
+            score += 5
+
+        # 8. Question bonus (+3 pts) — questions are actionable
+        if signals["is_question"]:
+            score += 3
+
+        # 9. Ad impressions (0-7 pts) — people spend money on these
+        if signals["ad_impressions"] > 0:
+            score += min(math.log10(signals["ad_impressions"] + 1) * 3, 7)
+
+        scored.append({
+            "query": text,
+            "score": round(score, 1),
+            "source_count": source_count,
+            "sources": sorted(signals["sources"]),
+            "frequency": signals["frequency"],
+            "seed_spread": signals["seed_spread"],
+            "gsc_impressions": signals["gsc_impressions"],
+            "gsc_clicks": signals["gsc_clicks"],
+            "trends_volume": signals["trends_volume"],
+            "trend_direction": signals["trend_direction"],
+            "is_fear": signals["is_fear"],
+            "is_question": signals["is_question"],
+            "ad_impressions": signals["ad_impressions"],
+        })
+
+    scored.sort(key=lambda s: -s["score"])
+
+    # Score distribution
+    scores = [s["score"] for s in scored]
+    if scores:
+        avg_score = sum(scores) / len(scores)
+        max_score = max(scores)
+        high_importance = len([s for s in scores if s >= 40])
+        medium_importance = len([s for s in scores if 20 <= s < 40])
+        low_importance = len([s for s in scores if s < 20])
+    else:
+        avg_score = max_score = high_importance = medium_importance = low_importance = 0
+
+    return {
+        "total_scored": len(scored),
+        "avg_score": round(avg_score, 1),
+        "max_score": max_score,
+        "distribution": {
+            "high": high_importance,
+            "medium": medium_importance,
+            "low": low_importance,
+        },
+        "top_queries": scored[:100],
+        "top_fears": [s for s in scored if s["is_fear"]][:30],
+        "top_questions": [s for s in scored if s["is_question"]][:30],
+    }
+
+
+# ---------------------------------------------------------------------------
 # Report
 # ---------------------------------------------------------------------------
 def print_analysis(analysis):
@@ -633,8 +914,58 @@ def print_analysis(analysis):
         for sub, info in reddit.get("by_subreddit", {}).items():
             print(f"\n  r/{sub} ({info['count']} posts):")
             for p in info.get("posts", [])[:8]:
-                sent_icon = "😰" if p["sentiment"] == "fear" else ("🟢" if p["sentiment"] == "hope" else "  ")
+                sent_icon = "!" if p["sentiment"] == "fear" else ("+" if p["sentiment"] == "hope" else " ")
                 print(f"    {sent_icon} {p['title'][:75]}")
+
+    # 9. Google Trends
+    trends = analysis.get("trends_analysis", {})
+    if trends.get("total"):
+        print(f"\n--- GOOGLE TRENDS ({trends['total']} keywords tracked) ---")
+        rising_kw = trends.get("keywords_rising", [])
+        falling_kw = trends.get("keywords_falling", [])
+        stable_kw = trends.get("keywords_stable", [])
+        print(f"  Momentum: {len(rising_kw)} rising, {len(falling_kw)} falling, {len(stable_kw)} stable")
+
+        if rising_kw:
+            print(f"\n  RISING:")
+            for m in rising_kw[:10]:
+                print(f"    +{m['trend_direction']:>3}%  {m['keyword']} (vol: {m['recent_avg']})")
+        if falling_kw:
+            print(f"\n  FALLING:")
+            for m in falling_kw[:5]:
+                print(f"    {m['trend_direction']:>4}%  {m['keyword']} (vol: {m['recent_avg']})")
+
+        rq = trends.get("rising_queries", [])
+        if rq:
+            print(f"\n  TOP RISING QUERIES (Google's breakout/growing signals):")
+            for r in rq[:15]:
+                label = f"BREAKOUT" if "breakout" in str(r["value"]).lower() else f"+{r['value']}"
+                print(f"    {label:>12}  {r['query']}  (from: {r['parent_keyword']})")
+
+    # 10. Importance scoring
+    importance = analysis.get("importance", {})
+    if importance.get("total_scored"):
+        dist = importance.get("distribution", {})
+        print(f"\n--- IMPORTANCE SCORING ({importance['total_scored']} queries scored) ---")
+        print(f"  Distribution: {dist.get('high', 0)} high / {dist.get('medium', 0)} medium / {dist.get('low', 0)} low")
+        print(f"  Avg score: {importance.get('avg_score', 0)} / Max: {importance.get('max_score', 0)}")
+
+        top = importance.get("top_queries", [])
+        if top:
+            print(f"\n  TOP 25 QUERIES BY IMPORTANCE:")
+            print(f"  {'Score':>5}  {'Src':>3}  {'Freq':>4}  {'GSC':>6}  {'Trend':>5}  Query")
+            for q in top[:25]:
+                trend_str = f"+{q['trend_direction']}%" if q['trend_direction'] > 0 else (f"{q['trend_direction']}%" if q['trend_direction'] < 0 else "")
+                flags = ""
+                if q.get("is_fear"): flags += " [FEAR]"
+                if q.get("is_question"): flags += " [Q]"
+                print(f"  {q['score']:>5.1f}  {q['source_count']:>3}  {q['frequency']:>4}  {q['gsc_impressions']:>6}  {trend_str:>5}  {q['query'][:60]}{flags}")
+
+        top_fears = importance.get("top_fears", [])
+        if top_fears:
+            print(f"\n  TOP FEARS BY IMPORTANCE:")
+            for q in top_fears[:10]:
+                print(f"    {q['score']:>5.1f}  {q['query'][:65]}")
 
     print(f"\n{'='*70}\n")
 
@@ -678,43 +1009,55 @@ def main():
         "reddit": len(data["reddit"]),
         "google_ads": len(data["ads"]),
         "gsc": len(data["gsc"]),
+        "trends": len(data["trends"]),
     }
     total = sum(source_counts.values())
     print(f"  {total} records loaded")
 
     # Run all analyses
-    print("\n[1/8] Frequency analysis...")
+    print("\n[1/10] Frequency analysis...")
     frequency = analyse_frequency(data)
     print(f"  Top signal: \"{frequency[0]['query']}\" ({frequency[0]['frequency']}x)" if frequency else "  No data")
 
-    print("[2/8] Cluster discovery...")
+    print("[2/10] Cluster discovery...")
     clusters = analyse_clusters(data)
     print(f"  {len(clusters)} emergent clusters found")
 
-    print("[3/8] Fear monitor...")
+    print("[3/10] Fear monitor...")
     fears = analyse_fears(data)
     print(f"  {fears['total']} fear signals across {len(fears['by_type'])} categories")
 
-    print("[4/8] Suburb insights...")
+    print("[4/10] Suburb insights...")
     suburbs = analyse_suburbs(data)
     for name, info in suburbs.items():
         print(f"  {name}: {info['total_queries']} queries, {len(info['fears'])} fears, {len(info['lifestyle'])} lifestyle")
 
-    print("[5/8] Question discovery...")
+    print("[5/10] Question discovery...")
     questions = analyse_questions(data)
     print(f"  {len(questions)} unique questions ranked")
 
-    print("[6/8] Velocity detection...")
+    print("[6/10] Velocity detection...")
     velocity = analyse_velocity(sm_db, current_cutoff, previous_cutoff)
     print(f"  {velocity['new_query_count']} new queries, {len(velocity['growing'])} growing")
 
-    print("[7/8] Content gap scan...")
+    print("[7/10] Content gap scan...")
     content_gaps = analyse_content_gaps(questions, data["articles"])
     print(f"  {content_gaps['covered']}/{content_gaps['total_questions']} covered ({content_gaps['coverage_pct']}%)")
 
-    print("[8/8] Reddit pulse...")
+    print("[8/10] Reddit pulse...")
     reddit_pulse = analyse_reddit(data)
     print(f"  {reddit_pulse.get('total', 0)} posts analysed")
+
+    print("[9/10] Trends analysis...")
+    trends_analysis = analyse_trends(data)
+    rising = len(trends_analysis.get("keywords_rising", []))
+    falling = len(trends_analysis.get("keywords_falling", []))
+    print(f"  {trends_analysis.get('total', 0)} keywords — {rising} rising, {falling} falling")
+
+    print("[10/10] Importance scoring...")
+    importance = score_importance(data, frequency, questions, fears, trends_analysis)
+    dist = importance.get("distribution", {})
+    print(f"  {importance['total_scored']} queries scored — {dist.get('high', 0)} high / {dist.get('medium', 0)} medium / {dist.get('low', 0)} low")
 
     # Assemble
     analysis = {
@@ -731,6 +1074,8 @@ def main():
         "velocity": velocity,
         "content_gaps": content_gaps,
         "reddit_pulse": reddit_pulse,
+        "trends_analysis": trends_analysis,
+        "importance": importance,
         "analysed_at": datetime.now(timezone.utc).isoformat(),
     }
 
