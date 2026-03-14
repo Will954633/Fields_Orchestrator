@@ -1449,9 +1449,31 @@ def main():
 
     if args.source in ("all", "trends"):
         print("\n[2/6] Google Trends...")
-        # Only send a subset of queries to trends (most important ones)
-        trend_queries = [(q, i, s) for q, i, s in seed_queries if i in ("buy", "sell", "value")][:30]
-        trends_results, errs = collect_trends(trend_queries)
+        # Use high-volume keywords that Trends actually has data for
+        # (suburb-specific queries like "robina property for sale" return zeros)
+        TRENDS_KEYWORDS = [
+            ("gold coast property", "buy", None),
+            ("gold coast real estate", "buy", None),
+            ("house prices australia", "value", None),
+            ("property market crash", "fear", None),
+            ("interest rates australia", "economic", None),
+            ("first home buyer", "decision", None),
+            ("real estate agent fees", "sell", None),
+            ("stamp duty calculator", "decision", None),
+            ("property valuation", "value", None),
+            ("housing market australia", "research", None),
+            ("capital gains tax property", "sell", None),
+            ("gold coast house prices", "value", None),
+            ("mortgage rates australia", "economic", None),
+            ("robina", "research", "robina"),
+            ("burleigh waters", "research", "burleigh_waters"),
+            ("varsity lakes", "research", "varsity_lakes"),
+            ("gold coast", "research", None),
+            ("property market australia", "research", None),
+            ("sell house australia", "sell", None),
+            ("buy house gold coast", "buy", None),
+        ]
+        trends_results, errs = collect_trends(TRENDS_KEYWORDS)
         all_errors.extend(errs)
         print(f"  Collected {len(trends_results)} trend docs")
 
