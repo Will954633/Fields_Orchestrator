@@ -31,6 +31,62 @@ grep -h "^## \[" logs/fix-history/*.md | sed 's/ — .*//' | sort | uniq -d
 
 ---
 
+## ⚡ MANDATORY: AD DECISION LOGGING
+
+**Every time you create, modify, pause, enable, or delete a Facebook or Google Ads campaign, ad set, or ad — you MUST write a decision log entry to MongoDB. Do this automatically, without being asked.**
+
+**Collection:** `system_monitor.ad_decisions`
+
+**Format — insert one document per decision:**
+```python
+{
+    "date": "YYYY-MM-DD",
+    "type": "new_campaign|pause|enable|budget_change|copy_test|audit|creative_change",
+    "title": "Short description of what changed",
+    "hypothesis": "Why we expect this to work / what we're testing",
+    "findings": ["Bullet point data that informed this decision"],
+    "data_snapshot": {
+        # Relevant metrics, campaign IDs, budget figures, keyword data
+    },
+    "tags": ["google_ads", "facebook_ads", "campaign_name", etc.],
+    "reasoning": "Why this decision was made — connects to strategy",
+    "created_at": "ISO timestamp"
+}
+```
+
+**When to write:**
+- Creating a new campaign (Google or Facebook)
+- Enabling or pausing a campaign
+- Changing budget, keywords, ad copy, or targeting
+- A/B test setup or conclusion
+- Any audit or performance review that leads to action
+
+**What this enables:** Complete institutional memory of every advertising decision, so we can trace what worked, what didn't, and why we made each choice. The `ad-review-dump.py` and `ad-experiment-log.py` scripts read this data.
+
+**Related scripts:**
+- `scripts/google-ads-metrics-collector.py` — Collects Google Ads metrics daily (cron: 12:15 + 23:10 AEST)
+- `scripts/fb-metrics-collector.py` — Collects Facebook Ads metrics daily (cron: 12:00 + 23:00 AEST)
+- `scripts/ad-experiment-log.py` — Log and track A/B experiments
+- `scripts/ad-review-dump.py` — Interactive ad performance review
+- `scripts/google_ads_manager.py` — Create/manage Google Ads campaigns
+
+**Monitoring collections:**
+| Collection | Platform | Purpose |
+|---|---|---|
+| `ad_decisions` | Both | Audit log of all advertising decisions |
+| `ad_daily_metrics` | Facebook | Per-ad daily performance |
+| `ad_profiles` | Facebook | Per-ad creative, targeting, aggregates |
+| `ad_demographics` | Facebook | Age × gender breakdowns |
+| `ad_placements` | Facebook | Platform × position performance |
+| `ad_attribution` | Facebook | Website session attribution |
+| `ad_experiments` | Facebook | A/B test tracking |
+| `google_ads_daily_metrics` | Google | Per-campaign daily performance |
+| `google_ads_profiles` | Google | Per-campaign config + aggregates |
+| `google_ads_keywords` | Google | Keyword performance per 7d window |
+| `google_ads` | Google | Latest snapshot |
+
+---
+
 ## ⚡ MANDATORY: PUSH ALL CODE CHANGES TO GITHUB
 
 **GitHub is our backup and source of truth. Every time you create, modify, or fix a file — you MUST push it to the appropriate GitHub repo. Do this automatically, without being asked. Code that only exists on the VM is not safe.**
