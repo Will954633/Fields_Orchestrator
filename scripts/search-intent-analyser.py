@@ -1,28 +1,33 @@
 #!/usr/bin/env python3
 """
-Search Intent Analyser — turns raw search data into actionable intelligence.
+Search Intent Analyser — data-driven discovery of what people actually ask.
 
-Runs after search-intent-collector.py and produces:
-  1. Topic × Question hierarchy — groups queries under Halo Strategy topics
-  2. Velocity alerts — new queries, growing queries, Reddit spikes
-  3. Content gap report — unmatched questions vs existing articles
-  4. Weekly digest — top actionable insights saved to MongoDB
+This is a BOTTOM-UP analyser. It does NOT use predefined categories or the
+Halo Strategy taxonomy. Instead it discovers clusters, themes, and signals
+directly from the raw search data.
+
+Produces:
+  1. Frequency-ranked signals — what queries appear most across seeds
+  2. Emergent clusters — groups of queries that share n-gram phrases
+  3. Fear/anxiety monitor — every fear signal with source and frequency
+  4. Suburb-specific insights — what people ask about each target suburb
+  5. Question discovery — actual questions people type, ranked by frequency
+  6. Velocity alerts — new/growing queries vs previous period
+  7. Content gap scan — which discovered questions have no matching article
+  8. Reddit pulse — real discussions, sentiment, and emerging concerns
 
 Collections read (system_monitor):
   - search_suggestions, search_paa_questions, search_reddit_posts
-  - search_trends, search_ad_queries, search_console_queries
-  - search_intent_summary, content_articles
+  - search_ad_queries, search_console_queries, content_articles
 
 Collection written:
-  - search_intent_analysis — one doc per run with full analysis
+  - search_intent_analysis — one doc per run
 
 Usage:
     python3 scripts/search-intent-analyser.py                  # Full analysis + save
     python3 scripts/search-intent-analyser.py --dry-run        # Analyse + print, don't save
     python3 scripts/search-intent-analyser.py --report         # Print latest saved analysis
-    python3 scripts/search-intent-analyser.py --days 7         # Lookback window (default: 14)
-
-Schedule: Run after each collector run (cron or manual).
+    python3 scripts/search-intent-analyser.py --days 14        # Lookback window (default: 14)
 """
 
 import os
@@ -30,533 +35,617 @@ import re
 import sys
 import argparse
 from datetime import datetime, timezone, timedelta
-from collections import defaultdict
+from collections import defaultdict, Counter
 
-import yaml
 from dotenv import load_dotenv
-from pymongo import MongoClient, UpdateOne
-from pymongo.errors import BulkWriteError
+from pymongo import MongoClient
 
 load_dotenv("/home/fields/Fields_Orchestrator/.env")
 
 COSMOS_URI = os.environ["COSMOS_CONNECTION_STRING"]
 AEST = timezone(timedelta(hours=10))
-HALO_SEEDS_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config", "halo_seeds.yaml")
 
-# ---------------------------------------------------------------------------
-# Topic taxonomy — loaded from halo_seeds.yaml
-# ---------------------------------------------------------------------------
-def load_topic_taxonomy():
-    """Load Halo Strategy topics and build keyword matchers for each."""
-    if not os.path.exists(HALO_SEEDS_PATH):
-        return {}
-
-    with open(HALO_SEEDS_PATH) as f:
-        data = yaml.safe_load(f) or {}
-
-    taxonomy = {}
-
-    for topic_key, topic in (data.get("topics") or {}).items():
-        # Build keyword set from seeds + fears
-        keywords = set()
-        for seed in topic.get("seeds", []):
-            # Strip {suburb} placeholder, split into significant words
-            clean = re.sub(r"\{suburb\}", "", seed).strip()
-            for word in clean.lower().split():
-                if len(word) > 3 and word not in ("with", "this", "that", "from", "your", "does", "what", "have"):
-                    keywords.add(word)
-        for fear in topic.get("fears", []):
-            for word in fear.lower().split():
-                if len(word) > 3 and word not in ("with", "this", "that", "from", "your", "does", "what", "have"):
-                    keywords.add(word)
-
-        taxonomy[topic_key] = {
-            "display": topic_key.replace("_", " ").title(),
-            "weight": topic.get("weight", 0),
-            "keywords": keywords,
-            "seeds": topic.get("seeds", []),
-            "fears": topic.get("fears", []),
-        }
-
-    # Add avatar topics
-    for avatar_key, avatar in (data.get("avatars") or {}).items():
-        keywords = set()
-        for text in avatar.get("fears", []) + avatar.get("barriers", []):
-            for word in text.lower().split():
-                if len(word) > 3 and word not in ("with", "this", "that", "from", "your", "does", "what", "have"):
-                    keywords.add(word)
-
-        taxonomy[f"avatar_{avatar_key}"] = {
-            "display": avatar_key.replace("_", " ").title() + " (Avatar)",
-            "weight": avatar.get("weight", 0),
-            "keywords": keywords,
-            "seeds": [],
-            "fears": avatar.get("fears", []),
-        }
-
-    return taxonomy
-
-
-def classify_topic(text, taxonomy):
-    """Assign a query to the best-matching topic based on keyword overlap."""
-    text_lower = text.lower()
-    text_words = set(text_lower.split())
-
-    best_topic = "uncategorised"
-    best_score = 0
-
-    for topic_key, info in taxonomy.items():
-        # Score = number of keyword matches, weighted slightly by topic weight
-        matches = text_words & info["keywords"]
-        # Also check for multi-word keyword phrases in the text
-        phrase_bonus = 0
-        for seed in info.get("seeds", []) + info.get("fears", []):
-            clean = re.sub(r"\{suburb\}", "", seed).strip().lower()
-            if len(clean) > 8 and clean in text_lower:
-                phrase_bonus += 2
-
-        score = len(matches) + phrase_bonus
-        if score > best_score:
-            best_score = score
-            best_topic = topic_key
-
-    return best_topic if best_score >= 1 else "uncategorised"
-
+TARGET_SUBURBS = ["robina", "burleigh waters", "varsity lakes", "burleigh", "varsity"]
+STOPWORDS = frozenset(
+    "a an the and or but in on of to for is it at by as with from my i we you he she "
+    "they this that these those do does did are was were be been being have has had not "
+    "no so if how what when where why which who whom can could should would will shall "
+    "may might must very much more most some any all each every than about up down out "
+    "into over after before between under again further then once here there its".split()
+)
 
 # ---------------------------------------------------------------------------
 # Data loading
 # ---------------------------------------------------------------------------
-def load_all_queries(sm_db, cutoff_date):
-    """Load all queries from all sources within the date window."""
-    queries = []  # list of {text, source, intent, sentiment, topic, date, meta}
+def load_all_data(sm_db, cutoff):
+    """Load all raw data from MongoDB."""
+    data = {}
 
-    # Autocomplete suggestions (flatten)
-    for doc in sm_db["search_suggestions"].find({"date": {"$gte": cutoff_date}}):
+    # Autocomplete: flatten to (suggestion_text, seed_query, intent, suburb, date)
+    suggestions = []
+    for doc in sm_db["search_suggestions"].find({"date": {"$gte": cutoff}}):
         for s in doc.get("suggestions", []):
-            queries.append({
+            suggestions.append({
                 "text": s.lower().strip(),
-                "source": "autocomplete",
-                "intent": doc.get("intent", "other"),
-                "date": doc.get("date", ""),
                 "seed": doc.get("seed_query", ""),
+                "intent": doc.get("intent", ""),
+                "suburb": doc.get("suburb", ""),
+                "date": doc.get("date", ""),
+                "source": "autocomplete",
             })
+    data["suggestions"] = suggestions
 
     # PAA questions
-    for doc in sm_db["search_paa_questions"].find({"date": {"$gte": cutoff_date}}):
-        queries.append({
+    paa = []
+    for doc in sm_db["search_paa_questions"].find({"date": {"$gte": cutoff}}):
+        paa.append({
             "text": doc.get("question", "").lower().strip(),
-            "source": "paa",
-            "intent": "",  # will classify
-            "date": doc.get("date", ""),
             "seed": doc.get("seed_query", ""),
-        })
-
-    # Reddit posts (title as query)
-    for doc in sm_db["search_reddit_posts"].find({"date": {"$gte": cutoff_date}}):
-        queries.append({
-            "text": doc.get("title", "").lower().strip(),
-            "source": "reddit",
-            "intent": doc.get("intent", "other"),
-            "sentiment": doc.get("sentiment", "neutral"),
+            "prefix": doc.get("prefix", ""),
             "date": doc.get("date", ""),
+            "source": "paa",
+        })
+    data["paa"] = paa
+
+    # Reddit
+    reddit = []
+    for doc in sm_db["search_reddit_posts"].find({"date": {"$gte": cutoff}}):
+        reddit.append({
+            "title": doc.get("title", ""),
+            "text": (doc.get("title", "") + " " + (doc.get("selftext") or "")).lower().strip(),
             "subreddit": doc.get("subreddit", ""),
-        })
-
-    # Google Ads search terms
-    for doc in sm_db["search_ad_queries"].find({"date": {"$gte": cutoff_date}}):
-        queries.append({
-            "text": doc.get("search_term", "").lower().strip(),
-            "source": "google_ads",
-            "intent": "",
+            "sentiment": doc.get("sentiment", "neutral"),
+            "intent": doc.get("intent", ""),
+            "permalink": doc.get("permalink", ""),
             "date": doc.get("date", ""),
+            "source": "reddit",
+        })
+    data["reddit"] = reddit
+
+    # Google Ads
+    ads = []
+    for doc in sm_db["search_ad_queries"].find({"date": {"$gte": cutoff}}):
+        ads.append({
+            "text": doc.get("search_term", "").lower().strip(),
             "impressions": doc.get("impressions", 0),
             "clicks": doc.get("clicks", 0),
-        })
-
-    # GSC queries
-    for doc in sm_db["search_console_queries"].find({"date": {"$gte": cutoff_date}}):
-        queries.append({
-            "text": doc.get("query", "").lower().strip(),
-            "source": "gsc",
-            "intent": "",
+            "cost": doc.get("cost_aud", 0),
             "date": doc.get("date", ""),
+            "source": "google_ads",
+        })
+    data["ads"] = ads
+
+    # GSC
+    gsc = []
+    for doc in sm_db["search_console_queries"].find({"date": {"$gte": cutoff}}):
+        gsc.append({
+            "text": doc.get("query", "").lower().strip(),
             "impressions": doc.get("impressions", 0),
             "clicks": doc.get("clicks", 0),
             "position": doc.get("position", 0),
+            "date": doc.get("date", ""),
+            "source": "gsc",
         })
+    data["gsc"] = gsc
 
-    return queries
-
-
-def load_articles(sm_db):
-    """Load published articles with titles and tags for content gap matching."""
+    # Articles
     articles = []
     for doc in sm_db["content_articles"].find({"status": "published"}, {"title": 1, "slug": 1, "tags": 1, "custom_excerpt": 1}):
         title = doc.get("title", "").lower()
         excerpt = (doc.get("custom_excerpt") or "").lower()
         tags = []
         for t in (doc.get("tags") or []):
-            if isinstance(t, dict):
-                tags.append(t.get("name", "").lower())
-            else:
-                tags.append(str(t).lower())
-
+            tags.append((t.get("name", "") if isinstance(t, dict) else str(t)).lower())
         articles.append({
             "title": doc.get("title", ""),
             "slug": doc.get("slug", ""),
-            "tags": tags,
             "searchable": f"{title} {excerpt} {' '.join(tags)}",
         })
-    return articles
+    data["articles"] = articles
+
+    return data
 
 
 # ---------------------------------------------------------------------------
-# Analysis functions
+# Analysis 1: Frequency-ranked signals
 # ---------------------------------------------------------------------------
-def build_topic_hierarchy(queries, taxonomy):
-    """Group all queries under topics, producing parent → child structure."""
-    hierarchy = defaultdict(lambda: {
-        "queries": [],
-        "sources": defaultdict(int),
-        "unique_queries": set(),
-        "question_count": 0,
-    })
+def analyse_frequency(data):
+    """Rank all suggestions by how often they appear across different seeds."""
+    freq = Counter()
+    seed_spread = defaultdict(set)  # query → set of seeds that surfaced it
 
-    for q in queries:
-        topic = classify_topic(q["text"], taxonomy)
-        q["topic"] = topic
-        node = hierarchy[topic]
-        node["unique_queries"].add(q["text"])
-        node["sources"][q["source"]] += 1
-        if q["text"].startswith(("how", "why", "what", "can", "should", "do ", "is ", "when", "where")):
-            node["question_count"] += 1
+    for s in data["suggestions"]:
+        text = s["text"]
+        freq[text] += 1
+        seed_spread[text].add(s["seed"])
 
-    # Convert sets to counts for serialisation
-    result = {}
-    for topic_key, node in hierarchy.items():
-        display = taxonomy.get(topic_key, {}).get("display", topic_key.replace("_", " ").title())
-        weight = taxonomy.get(topic_key, {}).get("weight", 0)
-        unique = node["unique_queries"]
-        result[topic_key] = {
-            "display": display,
-            "weight": weight,
-            "unique_query_count": len(unique),
-            "question_count": node["question_count"],
-            "sources": dict(node["sources"]),
-            "top_queries": sorted(unique, key=lambda x: len(x))[:20],  # Shortest = most specific
-        }
+    # Also count PAA and Reddit contributions
+    for q in data["paa"]:
+        freq[q["text"]] += 1
+        seed_spread[q["text"]].add(f"paa:{q['seed']}")
 
-    return result
+    ranked = []
+    for text, count in freq.most_common(200):
+        ranked.append({
+            "query": text,
+            "frequency": count,
+            "seed_spread": len(seed_spread[text]),
+            "seeds": sorted(seed_spread[text])[:5],
+        })
+
+    return ranked
 
 
-def detect_velocity(sm_db, current_cutoff, previous_cutoff):
-    """Detect new and growing queries by comparing current vs previous window."""
-    alerts = {
-        "new_queries": [],        # appeared in current but not previous
-        "growing_queries": [],    # seen_count increased >50%
-        "reddit_spikes": [],      # Reddit posts with unusual engagement
+# ---------------------------------------------------------------------------
+# Analysis 2: Emergent clusters (n-gram based, no predefined categories)
+# ---------------------------------------------------------------------------
+def analyse_clusters(data):
+    """Discover topic clusters from 2-gram and 3-gram phrase frequency."""
+    all_texts = set()
+    for s in data["suggestions"]:
+        all_texts.add(s["text"])
+    for q in data["paa"]:
+        all_texts.add(q["text"])
+
+    # Extract 2-grams and 3-grams
+    bigrams = Counter()
+    trigrams = Counter()
+
+    for text in all_texts:
+        words = [w for w in text.split() if w not in STOPWORDS and len(w) > 2]
+        for i in range(len(words) - 1):
+            bigrams[f"{words[i]} {words[i+1]}"] += 1
+        for i in range(len(words) - 2):
+            trigrams[f"{words[i]} {words[i+1]} {words[i+2]}"] += 1
+
+    # Build clusters: for each significant phrase, find all queries containing it
+    clusters = []
+    seen_phrases = set()
+
+    # Prefer trigrams (more specific), then bigrams
+    for phrase, count in trigrams.most_common(100):
+        if count < 3:
+            break
+        # Skip if this phrase is a subset of an already-seen cluster
+        if any(phrase in sp for sp in seen_phrases):
+            continue
+        seen_phrases.add(phrase)
+        matching = sorted([t for t in all_texts if phrase in t])
+        clusters.append({
+            "phrase": phrase,
+            "query_count": len(matching),
+            "frequency": count,
+            "sample_queries": matching[:10],
+        })
+
+    for phrase, count in bigrams.most_common(200):
+        if count < 4:
+            break
+        if any(phrase in sp for sp in seen_phrases):
+            continue
+        # Skip very generic bigrams
+        if phrase in ("gold coast", "real estate", "house prices", "property market"):
+            continue
+        seen_phrases.add(phrase)
+        matching = sorted([t for t in all_texts if phrase in t])
+        clusters.append({
+            "phrase": phrase,
+            "query_count": len(matching),
+            "frequency": count,
+            "sample_queries": matching[:10],
+        })
+
+    clusters.sort(key=lambda c: -c["query_count"])
+    return clusters[:50]
+
+
+# ---------------------------------------------------------------------------
+# Analysis 3: Fear/anxiety monitor
+# ---------------------------------------------------------------------------
+FEAR_PATTERNS = [
+    (re.compile(r'\b(crash|crashes|crashing)\b'), "crash"),
+    (re.compile(r'\b(bubble)\b'), "bubble"),
+    (re.compile(r'\b(fall|falling|fell)\b'), "price fall"),
+    (re.compile(r'\b(drop|dropping|dropped)\b'), "price drop"),
+    (re.compile(r'\b(overpriced|over.?valued)\b'), "overvaluation"),
+    (re.compile(r'\b(stress|stressed)\b'), "stress"),
+    (re.compile(r"\bcan'?t afford\b"), "affordability"),
+    (re.compile(r'\b(negative equity)\b'), "negative equity"),
+    (re.compile(r'\b(worst time)\b'), "timing fear"),
+    (re.compile(r'\b(downturn|recession)\b'), "economic fear"),
+    (re.compile(r'\b(flood|flooding)\b'), "flood risk"),
+    (re.compile(r'\b(crime|unsafe|dangerous)\b'), "safety"),
+    (re.compile(r'\b(scam|rip.?off|ripped)\b'), "trust"),
+    (re.compile(r'\b(losing|lost money)\b'), "loss"),
+]
+
+
+def analyse_fears(data):
+    """Find every fear signal across all sources, categorised by fear type."""
+    fears = []  # {text, source, fear_type, frequency}
+    seen = {}
+
+    def check_text(text, source, extra=None):
+        for pattern, fear_type in FEAR_PATTERNS:
+            if pattern.search(text):
+                key = text.lower().strip()
+                if key in seen:
+                    seen[key]["frequency"] += 1
+                    seen[key]["sources"].add(source)
+                else:
+                    entry = {
+                        "text": text.strip(),
+                        "fear_type": fear_type,
+                        "frequency": 1,
+                        "sources": {source},
+                    }
+                    if extra:
+                        entry.update(extra)
+                    seen[key] = entry
+                return
+
+    # Autocomplete suggestions
+    for s in data["suggestions"]:
+        check_text(s["text"], "autocomplete")
+
+    # PAA questions
+    for q in data["paa"]:
+        check_text(q["text"], "paa")
+
+    # Reddit posts
+    for r in data["reddit"]:
+        check_text(r["text"], "reddit", {"subreddit": r.get("subreddit", "")})
+
+    # GSC
+    for g in data["gsc"]:
+        check_text(g["text"], "gsc")
+
+    # Convert sets and sort
+    for entry in seen.values():
+        entry["sources"] = sorted(entry["sources"])
+        fears.append(entry)
+    fears.sort(key=lambda f: -f["frequency"])
+
+    # Group by fear type
+    by_type = defaultdict(list)
+    for f in fears:
+        by_type[f["fear_type"]].append(f)
+
+    return {
+        "total": len(fears),
+        "by_type": {k: {"count": len(v), "signals": v[:15]} for k, v in sorted(by_type.items(), key=lambda x: -len(x[1]))},
+        "all": fears[:100],
     }
 
-    # --- New PAA questions ---
-    current_paa = set()
-    for doc in sm_db["search_paa_questions"].find({"date": {"$gte": current_cutoff}}):
-        current_paa.add(doc.get("question", "").lower().strip())
 
-    previous_paa = set()
-    for doc in sm_db["search_paa_questions"].find({"date": {"$gte": previous_cutoff, "$lt": current_cutoff}}):
-        previous_paa.add(doc.get("question", "").lower().strip())
+# ---------------------------------------------------------------------------
+# Analysis 4: Suburb-specific insights
+# ---------------------------------------------------------------------------
+def analyse_suburbs(data):
+    """What people specifically ask about each target suburb."""
+    suburbs = {}
 
-    new_paa = current_paa - previous_paa
-    alerts["new_queries"] = sorted(new_paa)[:50]
+    for suburb_name in ["robina", "burleigh waters", "varsity lakes"]:
+        short = suburb_name.split()[0]  # "robina", "burleigh", "varsity"
+        queries = set()
+        questions = []
+        fears_list = []
+        lifestyle = []  # non-property queries (schools, safety, lifestyle)
 
-    # --- New autocomplete suggestions ---
-    current_auto = set()
+        all_texts = set()
+        for s in data["suggestions"]:
+            if short in s["text"]:
+                all_texts.add(s["text"])
+        for q in data["paa"]:
+            if short in q["text"]:
+                all_texts.add(q["text"])
+
+        for text in all_texts:
+            queries.add(text)
+            # Classify
+            if text.startswith(("how", "why", "what", "can", "should", "do ", "is ", "when", "where")):
+                questions.append(text)
+            for pattern, fear_type in FEAR_PATTERNS:
+                if pattern.search(text):
+                    fears_list.append({"text": text, "fear_type": fear_type})
+                    break
+            if any(w in text for w in ["school", "live", "safe", "crime", "flood", "lifestyle", "family", "shops", "good place"]):
+                lifestyle.append(text)
+
+        # Non-property queries (interesting signals — what else people associate with the suburb)
+        non_property = [q for q in queries
+                       if not any(w in q for w in ["for sale", "for rent", "real estate", "houses for", "property for"])]
+
+        suburbs[suburb_name] = {
+            "total_queries": len(queries),
+            "questions": sorted(questions)[:20],
+            "fears": fears_list[:10],
+            "lifestyle": sorted(lifestyle)[:15],
+            "non_property": sorted(non_property)[:20],
+            "top_queries": sorted(queries, key=len)[:20],
+        }
+
+    return suburbs
+
+
+# ---------------------------------------------------------------------------
+# Analysis 5: Question discovery
+# ---------------------------------------------------------------------------
+def analyse_questions(data):
+    """All question-format queries, ranked by how often they appeared."""
+    questions = Counter()
+    sources = defaultdict(set)
+
+    for s in data["suggestions"]:
+        text = s["text"]
+        if text.startswith(("how", "why", "what", "can", "should", "do ", "is ", "when", "where")):
+            questions[text] += 1
+            sources[text].add("autocomplete")
+
+    for q in data["paa"]:
+        text = q["text"]
+        questions[text] += 1
+        sources[text].add("paa")
+
+    for r in data["reddit"]:
+        title = r.get("title", "").lower().strip()
+        if title.endswith("?") or title.startswith(("how", "why", "what", "can", "should", "is ", "when", "where", "do ")):
+            questions[title] += 1
+            sources[title].add("reddit")
+
+    ranked = []
+    for text, count in questions.most_common(200):
+        # Filter out non-Australian queries
+        if any(loc in text for loc in ["california", "florida", "texas", "ontario", "new york", "uk ", "toronto", "india", " nj", " ny"]):
+            continue
+        ranked.append({
+            "question": text,
+            "frequency": count,
+            "sources": sorted(sources[text]),
+        })
+
+    return ranked[:150]
+
+
+# ---------------------------------------------------------------------------
+# Analysis 6: Velocity — new and growing signals
+# ---------------------------------------------------------------------------
+def analyse_velocity(sm_db, current_cutoff, previous_cutoff):
+    """Compare current period to previous period to find emerging signals."""
+    # Current period suggestions
+    current = set()
     for doc in sm_db["search_suggestions"].find({"date": {"$gte": current_cutoff}}):
         for s in doc.get("suggestions", []):
-            current_auto.add(s.lower().strip())
+            current.add(s.lower().strip())
+    for doc in sm_db["search_paa_questions"].find({"date": {"$gte": current_cutoff}}):
+        current.add(doc.get("question", "").lower().strip())
 
-    previous_auto = set()
+    # Previous period
+    previous = set()
     for doc in sm_db["search_suggestions"].find({"date": {"$gte": previous_cutoff, "$lt": current_cutoff}}):
         for s in doc.get("suggestions", []):
-            previous_auto.add(s.lower().strip())
+            previous.add(s.lower().strip())
+    for doc in sm_db["search_paa_questions"].find({"date": {"$gte": previous_cutoff, "$lt": current_cutoff}}):
+        previous.add(doc.get("question", "").lower().strip())
 
-    new_auto = current_auto - previous_auto
-    # Merge with new_paa (deduplicated)
-    all_new = sorted((new_paa | new_auto) - set(alerts["new_queries"]))
-    alerts["new_queries"].extend(all_new[:50])
-    alerts["new_queries"] = alerts["new_queries"][:100]
+    new_queries = sorted(current - previous)
 
-    # --- Growing autocomplete suggestions ---
-    # Count how many times each suggestion appears across seed queries
-    def count_suggestions(date_filter):
-        counts = defaultdict(int)
-        for doc in sm_db["search_suggestions"].find(date_filter):
-            for s in doc.get("suggestions", []):
-                counts[s.lower().strip()] += 1
-        return counts
+    # Frequency comparison for growing queries
+    curr_freq = Counter()
+    for doc in sm_db["search_suggestions"].find({"date": {"$gte": current_cutoff}}):
+        for s in doc.get("suggestions", []):
+            curr_freq[s.lower().strip()] += 1
+    prev_freq = Counter()
+    for doc in sm_db["search_suggestions"].find({"date": {"$gte": previous_cutoff, "$lt": current_cutoff}}):
+        for s in doc.get("suggestions", []):
+            prev_freq[s.lower().strip()] += 1
 
-    current_counts = count_suggestions({"date": {"$gte": current_cutoff}})
-    previous_counts = count_suggestions({"date": {"$gte": previous_cutoff, "$lt": current_cutoff}})
-
-    for query, curr_count in current_counts.items():
-        prev_count = previous_counts.get(query, 0)
+    growing = []
+    for q, curr_count in curr_freq.items():
+        prev_count = prev_freq.get(q, 0)
         if prev_count > 0 and curr_count > prev_count * 1.5:
-            alerts["growing_queries"].append({
-                "query": query,
+            growing.append({
+                "query": q,
                 "previous": prev_count,
                 "current": curr_count,
-                "growth": round((curr_count - prev_count) / prev_count * 100),
+                "growth_pct": round((curr_count - prev_count) / prev_count * 100),
             })
+    growing.sort(key=lambda g: -g["growth_pct"])
 
-    alerts["growing_queries"].sort(key=lambda x: -x["growth"])
-    alerts["growing_queries"] = alerts["growing_queries"][:30]
-
-    # --- Reddit spikes (posts with high engagement relative to average) ---
-    reddit_docs = list(sm_db["search_reddit_posts"].find(
-        {"date": {"$gte": current_cutoff}},
-        {"title": 1, "subreddit": 1, "score": 1, "num_comments": 1, "sentiment": 1, "permalink": 1},
-    ))
-
-    if reddit_docs:
-        # RSS doesn't give score/comments, but check for ones that do have them
-        scored = [d for d in reddit_docs if d.get("score", 0) > 0 or d.get("num_comments", 0) > 0]
-        if scored:
-            avg_engagement = sum(d.get("score", 0) + d.get("num_comments", 0) for d in scored) / len(scored)
-            for doc in scored:
-                engagement = doc.get("score", 0) + doc.get("num_comments", 0)
-                if engagement > avg_engagement * 2:
-                    alerts["reddit_spikes"].append({
-                        "title": doc.get("title", ""),
-                        "subreddit": doc.get("subreddit", ""),
-                        "engagement": engagement,
-                        "sentiment": doc.get("sentiment", "neutral"),
-                    })
-        # Also include all unique Reddit post titles as signals (even without scores)
-        alerts["reddit_topics"] = list({d.get("title", ""): d.get("sentiment", "neutral") for d in reddit_docs}.items())[:30]
-
-    return alerts
+    return {
+        "new_query_count": len(new_queries),
+        "new_queries": new_queries[:80],
+        "growing": growing[:30],
+    }
 
 
-def find_content_gaps(queries, articles, taxonomy):
-    """Cross-reference discovered questions against existing articles."""
-    gaps = []
+# ---------------------------------------------------------------------------
+# Analysis 7: Content gaps
+# ---------------------------------------------------------------------------
+def analyse_content_gaps(questions, articles):
+    """Which questions have no matching article?"""
+    if not articles:
+        return {"total_questions": len(questions), "covered": 0, "uncovered": len(questions), "coverage_pct": 0, "gaps": questions[:50]}
 
-    # Build a set of question-like queries
-    questions = set()
-    for q in queries:
-        text = q["text"]
-        if text.startswith(("how", "why", "what", "can", "should", "do ", "is ", "when", "where")):
-            questions.add(text)
-
-    # For each question, check if any article covers it
-    article_text = " ".join(a["searchable"] for a in articles)
+    article_corpus = " ".join(a["searchable"] for a in articles)
 
     covered = []
     uncovered = []
 
-    for question in sorted(questions):
-        # Check if key words from the question appear in article text
-        words = [w for w in question.split() if len(w) > 3
-                 and w not in ("what", "does", "with", "this", "that", "from", "your", "have",
-                               "much", "many", "should", "when", "where", "which", "could")]
+    for q_entry in questions:
+        text = q_entry["question"]
+        # Extract significant words
+        words = [w for w in text.split() if w not in STOPWORDS and len(w) > 3]
         if not words:
             continue
-
-        # A question is "covered" if >=60% of its significant words appear in article corpus
-        matches = sum(1 for w in words if w in article_text)
-        coverage = matches / len(words) if words else 0
-
-        topic = classify_topic(question, taxonomy)
-
-        entry = {
-            "question": question,
-            "topic": topic,
-            "coverage": round(coverage, 2),
-            "source_count": sum(1 for q in queries if q["text"] == question),
-        }
+        matches = sum(1 for w in words if w in article_corpus)
+        coverage = matches / len(words)
 
         if coverage >= 0.6:
-            covered.append(entry)
+            covered.append(q_entry)
         else:
-            uncovered.append(entry)
+            uncovered.append(q_entry)
 
-    # Sort uncovered by how many sources surfaced the question (higher = more important)
-    uncovered.sort(key=lambda x: (-x["source_count"], x["question"]))
-
-    # Group uncovered by topic
-    gaps_by_topic = defaultdict(list)
-    for entry in uncovered:
-        gaps_by_topic[entry["topic"]].append(entry)
-
+    total = len(covered) + len(uncovered)
     return {
-        "total_questions": len(questions),
+        "total_questions": total,
         "covered": len(covered),
         "uncovered": len(uncovered),
-        "coverage_pct": round(len(covered) / len(questions) * 100, 1) if questions else 0,
-        "top_uncovered": uncovered[:40],
-        "gaps_by_topic": {k: v[:10] for k, v in sorted(gaps_by_topic.items(), key=lambda x: -len(x[1]))},
+        "coverage_pct": round(len(covered) / total * 100, 1) if total else 0,
+        "gaps": uncovered[:60],
     }
 
 
-def build_digest(hierarchy, velocity, content_gaps, queries):
-    """Build a concise weekly digest of actionable insights."""
-    insights = []
+# ---------------------------------------------------------------------------
+# Analysis 8: Reddit pulse
+# ---------------------------------------------------------------------------
+def analyse_reddit(data):
+    """Summarise Reddit discussion themes and sentiment."""
+    posts = data["reddit"]
+    if not posts:
+        return {"total": 0}
 
-    # Insight 1: Biggest uncovered topic
-    if content_gaps["gaps_by_topic"]:
-        biggest_gap = max(content_gaps["gaps_by_topic"].items(), key=lambda x: len(x[1]))
-        insights.append({
-            "type": "content_gap",
-            "priority": "high",
-            "message": f"Biggest content gap: '{biggest_gap[0].replace('_', ' ')}' — {len(biggest_gap[1])} unanswered questions discovered",
-            "action": f"Write an article addressing: {', '.join(e['question'][:60] for e in biggest_gap[1][:3])}",
-        })
+    sentiment = Counter(p.get("sentiment", "neutral") for p in posts)
+    by_sub = defaultdict(list)
+    for p in posts:
+        by_sub[p.get("subreddit", "?")].append(p)
 
-    # Insight 2: New queries emerging
-    new_count = len(velocity.get("new_queries", []))
-    if new_count > 0:
-        samples = velocity["new_queries"][:3]
-        insights.append({
-            "type": "velocity",
-            "priority": "medium",
-            "message": f"{new_count} new queries detected this period",
-            "action": f"Review new signals: {', '.join(s[:50] for s in samples)}",
-        })
+    # Find the most-discussed topics (from titles)
+    title_words = Counter()
+    for p in posts:
+        words = [w for w in p.get("title", "").lower().split()
+                if w not in STOPWORDS and len(w) > 3]
+        for w in words:
+            title_words[w] += 1
 
-    # Insight 3: Growing queries
-    growing = velocity.get("growing_queries", [])
-    if growing:
-        top = growing[0]
-        insights.append({
-            "type": "velocity",
-            "priority": "medium",
-            "message": f"Growing query: '{top['query']}' (+{top['growth']}% vs previous period)",
-            "action": "Consider creating targeted content or ad copy for this rising query",
-        })
-
-    # Insight 4: Reddit sentiment
-    reddit_queries = [q for q in queries if q.get("source") == "reddit"]
-    if reddit_queries:
-        fear_count = sum(1 for q in reddit_queries if q.get("sentiment") == "fear")
-        hope_count = sum(1 for q in reddit_queries if q.get("sentiment") == "hope")
-        total = len(reddit_queries)
-        if fear_count > hope_count and fear_count > total * 0.3:
-            insights.append({
-                "type": "sentiment",
-                "priority": "high",
-                "message": f"Reddit sentiment skewing fearful: {fear_count}/{total} posts ({fear_count/total*100:.0f}%)",
-                "action": "Consider reassuring content addressing common fears (market crash, rate rises)",
-            })
-        elif hope_count > fear_count:
-            insights.append({
-                "type": "sentiment",
-                "priority": "low",
-                "message": f"Reddit sentiment is positive: {hope_count}/{total} posts hopeful",
-                "action": "Market receptive — good time for buyer-focused content",
-            })
-
-    # Insight 5: Content coverage score
-    cov_pct = content_gaps.get("coverage_pct", 0)
-    insights.append({
-        "type": "coverage",
-        "priority": "info",
-        "message": f"Content coverage: {cov_pct}% of discovered questions have matching articles",
-        "action": f"{content_gaps['uncovered']} questions remain uncovered" if content_gaps["uncovered"] else "Good coverage — focus on depth over breadth",
-    })
-
-    return insights
+    return {
+        "total": len(posts),
+        "sentiment": dict(sentiment),
+        "by_subreddit": {sub: {
+            "count": len(ps),
+            "posts": [{"title": p["title"], "sentiment": p.get("sentiment", "neutral"),
+                       "permalink": p.get("permalink", "")} for p in ps[:15]],
+        } for sub, ps in sorted(by_sub.items(), key=lambda x: -len(x[1]))},
+        "top_words": title_words.most_common(20),
+        "fear_posts": [{"title": p["title"], "subreddit": p.get("subreddit", ""), "permalink": p.get("permalink", "")}
+                      for p in posts if p.get("sentiment") == "fear"][:20],
+    }
 
 
 # ---------------------------------------------------------------------------
-# Report printing
+# Report
 # ---------------------------------------------------------------------------
 def print_analysis(analysis):
-    """Print formatted analysis report to stdout."""
-    print(f"\n{'='*65}")
-    print(f"SEARCH INTENT ANALYSIS — {analysis.get('date', '?')}")
-    print(f"{'='*65}")
-    print(f"Queries analysed: {analysis.get('total_queries', 0)} from {analysis.get('total_sources', 0)} sources")
-    print(f"Lookback: {analysis.get('lookback_days', 14)} days")
+    """Print formatted analysis to stdout."""
+    print(f"\n{'='*70}")
+    print(f"SEARCH INTENT ANALYSIS — {analysis.get('date', '?')}  (data-driven, bottom-up)")
+    print(f"{'='*70}")
 
-    # Topic hierarchy
-    hierarchy = analysis.get("topic_hierarchy", {})
-    if hierarchy:
-        print(f"\n--- TOPIC HIERARCHY ({len(hierarchy)} topics) ---")
-        sorted_topics = sorted(hierarchy.items(), key=lambda x: -x[1].get("unique_query_count", 0))
-        for topic_key, info in sorted_topics[:15]:
-            display = info.get("display", topic_key)
-            uq = info.get("unique_query_count", 0)
-            qc = info.get("question_count", 0)
-            weight = info.get("weight", 0)
-            sources = info.get("sources", {})
-            src_str = ", ".join(f"{k}:{v}" for k, v in sorted(sources.items(), key=lambda x: -x[1]))
-            weight_str = f" ({weight}%)" if weight else ""
-            print(f"\n  {display}{weight_str} — {uq} queries, {qc} questions")
-            print(f"    Sources: {src_str}")
-            top = info.get("top_queries", [])
-            for q in top[:5]:
-                print(f"      • {q}")
-            if len(top) > 5:
-                print(f"      ... +{len(top) - 5} more")
+    src = analysis.get("source_counts", {})
+    print(f"Data: {analysis.get('total_records', 0)} records from {len(src)} sources")
+    for s, c in sorted(src.items(), key=lambda x: -x[1]):
+        print(f"  {s}: {c}")
 
-    # Velocity alerts
+    # 1. Top signals
+    freq = analysis.get("frequency", [])
+    if freq:
+        print(f"\n--- TOP SIGNALS (queries appearing across multiple seeds) ---")
+        for f in freq[:25]:
+            spread = f.get("seed_spread", 0)
+            print(f"  {f['frequency']:>3}x  (spread: {spread} seeds)  {f['query']}")
+
+    # 2. Emergent clusters
+    clusters = analysis.get("clusters", [])
+    if clusters:
+        print(f"\n--- EMERGENT CLUSTERS (discovered from n-gram analysis) ---")
+        for c in clusters[:20]:
+            print(f"\n  \"{c['phrase']}\" — {c['query_count']} queries")
+            for q in c.get("sample_queries", [])[:4]:
+                print(f"    • {q}")
+
+    # 3. Fear monitor
+    fears = analysis.get("fears", {})
+    if fears.get("total"):
+        print(f"\n--- FEAR MONITOR ({fears['total']} signals) ---")
+        for fear_type, info in fears.get("by_type", {}).items():
+            print(f"\n  {fear_type.upper()} ({info['count']} signals):")
+            for s in info.get("signals", [])[:5]:
+                sources = ", ".join(s.get("sources", []))
+                print(f"    {s['frequency']}x [{sources}] {s['text']}")
+
+    # 4. Suburb insights
+    suburbs = analysis.get("suburbs", {})
+    if suburbs:
+        print(f"\n--- SUBURB INSIGHTS ---")
+        for suburb, info in suburbs.items():
+            print(f"\n  {suburb.upper()} ({info['total_queries']} queries)")
+            if info.get("fears"):
+                print(f"    Fears:")
+                for f in info["fears"][:5]:
+                    print(f"      😰 [{f['fear_type']}] {f['text']}")
+            if info.get("lifestyle"):
+                print(f"    Lifestyle queries:")
+                for q in info["lifestyle"][:5]:
+                    print(f"      🏠 {q}")
+            if info.get("non_property"):
+                print(f"    Non-property (what else people associate):")
+                for q in info["non_property"][:8]:
+                    print(f"      • {q}")
+
+    # 5. Top questions
+    questions = analysis.get("questions", [])
+    if questions:
+        print(f"\n--- TOP QUESTIONS ({len(questions)} discovered) ---")
+        for q in questions[:25]:
+            sources = ", ".join(q.get("sources", []))
+            print(f"  {q['frequency']:>2}x [{sources}] {q['question']}")
+
+    # 6. Velocity
     velocity = analysis.get("velocity", {})
-    new_queries = velocity.get("new_queries", [])
-    growing = velocity.get("growing_queries", [])
-
-    if new_queries:
-        print(f"\n--- NEW QUERIES ({len(new_queries)} emerged) ---")
-        for q in new_queries[:15]:
+    new_qs = velocity.get("new_queries", [])
+    growing = velocity.get("growing", [])
+    if new_qs:
+        print(f"\n--- NEW THIS PERIOD ({velocity.get('new_query_count', 0)} queries) ---")
+        for q in new_qs[:20]:
             print(f"  NEW  {q}")
-        if len(new_queries) > 15:
-            print(f"  ... +{len(new_queries) - 15} more")
-
     if growing:
         print(f"\n--- GROWING QUERIES ---")
         for g in growing[:10]:
-            print(f"  +{g['growth']:>3}%  {g['query']}")
+            print(f"  +{g['growth_pct']:>3}%  {g['query']}")
 
-    reddit_spikes = velocity.get("reddit_spikes", [])
-    if reddit_spikes:
-        print(f"\n--- REDDIT SPIKES ---")
-        for r in reddit_spikes[:5]:
-            print(f"  [{r['sentiment']}] r/{r['subreddit']}: {r['title'][:65]} (engagement: {r['engagement']})")
-
-    # Content gaps
+    # 7. Content gaps
     gaps = analysis.get("content_gaps", {})
     if gaps:
         print(f"\n--- CONTENT GAPS ---")
-        print(f"  Total questions discovered: {gaps.get('total_questions', 0)}")
-        print(f"  Covered by articles:        {gaps.get('covered', 0)} ({gaps.get('coverage_pct', 0)}%)")
-        print(f"  Uncovered:                  {gaps.get('uncovered', 0)}")
+        print(f"  Questions found: {gaps.get('total_questions', 0)}")
+        print(f"  Covered: {gaps.get('covered', 0)} ({gaps.get('coverage_pct', 0)}%)")
+        print(f"  Uncovered: {gaps.get('uncovered', 0)}")
+        for g in gaps.get("gaps", [])[:20]:
+            print(f"    ? {g['question']}")
 
-        gaps_by_topic = gaps.get("gaps_by_topic", {})
-        if gaps_by_topic:
-            print(f"\n  Top uncovered topics:")
-            for topic, entries in sorted(gaps_by_topic.items(), key=lambda x: -len(x[1]))[:8]:
-                print(f"    {topic.replace('_', ' ').title()} ({len(entries)} gaps):")
-                for e in entries[:3]:
-                    print(f"      ? {e['question'][:70]}")
+    # 8. Reddit
+    reddit = analysis.get("reddit_pulse", {})
+    if reddit.get("total"):
+        print(f"\n--- REDDIT PULSE ({reddit['total']} posts) ---")
+        sent = reddit.get("sentiment", {})
+        total_r = reddit["total"]
+        print(f"  Sentiment: fear {sent.get('fear',0)}/{total_r} | hope {sent.get('hope',0)}/{total_r} | neutral {sent.get('neutral',0)}/{total_r}")
+        for sub, info in reddit.get("by_subreddit", {}).items():
+            print(f"\n  r/{sub} ({info['count']} posts):")
+            for p in info.get("posts", [])[:8]:
+                sent_icon = "😰" if p["sentiment"] == "fear" else ("🟢" if p["sentiment"] == "hope" else "  ")
+                print(f"    {sent_icon} {p['title'][:75]}")
 
-    # Digest
-    digest = analysis.get("digest", [])
-    if digest:
-        print(f"\n--- ACTIONABLE INSIGHTS ---")
-        for i, insight in enumerate(digest, 1):
-            priority = insight.get("priority", "info").upper()
-            print(f"\n  [{priority}] {insight.get('message', '')}")
-            print(f"    -> {insight.get('action', '')}")
-
-    print(f"\n{'='*65}\n")
+    print(f"\n{'='*70}\n")
 
 
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 def main():
-    parser = argparse.ArgumentParser(description="Search Intent Analyser")
-    parser.add_argument("--days", type=int, default=14, help="Lookback window in days (default: 14)")
-    parser.add_argument("--dry-run", action="store_true", help="Analyse and print but don't save to MongoDB")
+    parser = argparse.ArgumentParser(description="Search Intent Analyser (data-driven)")
+    parser.add_argument("--days", type=int, default=14, help="Lookback window (default: 14)")
+    parser.add_argument("--dry-run", action="store_true", help="Analyse + print, don't save")
     parser.add_argument("--report", action="store_true", help="Print latest saved analysis")
     args = parser.parse_args()
 
@@ -572,75 +661,79 @@ def main():
         client.close()
         return
 
-    print(f"Search Intent Analyser — {datetime.now(AEST).strftime('%Y-%m-%d %H:%M AEST')}")
-    print(f"Lookback: {args.days} days\n")
-
-    # Date boundaries
     now = datetime.now(AEST)
+    date_str = now.strftime("%Y-%m-%d")
     current_cutoff = (now - timedelta(days=args.days)).strftime("%Y-%m-%d")
     previous_cutoff = (now - timedelta(days=args.days * 2)).strftime("%Y-%m-%d")
-    date_str = now.strftime("%Y-%m-%d")
 
-    # Load taxonomy
-    taxonomy = load_topic_taxonomy()
-    print(f"Loaded {len(taxonomy)} topics from halo_seeds.yaml")
+    print(f"Search Intent Analyser — {now.strftime('%Y-%m-%d %H:%M AEST')}")
+    print(f"Lookback: {args.days} days (cutoff: {current_cutoff})\n")
 
-    # Load all queries
-    print("Loading queries from all sources...")
-    queries = load_all_queries(sm_db, current_cutoff)
-    print(f"  {len(queries)} total query records loaded")
+    # Load data
+    print("Loading data...")
+    data = load_all_data(sm_db, current_cutoff)
+    source_counts = {
+        "autocomplete": len(data["suggestions"]),
+        "paa": len(data["paa"]),
+        "reddit": len(data["reddit"]),
+        "google_ads": len(data["ads"]),
+        "gsc": len(data["gsc"]),
+    }
+    total = sum(source_counts.values())
+    print(f"  {total} records loaded")
 
-    # Deduplicate by text
-    unique_texts = set(q["text"] for q in queries if q["text"])
-    print(f"  {len(unique_texts)} unique query strings")
+    # Run all analyses
+    print("\n[1/8] Frequency analysis...")
+    frequency = analyse_frequency(data)
+    print(f"  Top signal: \"{frequency[0]['query']}\" ({frequency[0]['frequency']}x)" if frequency else "  No data")
 
-    # Load articles
-    articles = load_articles(sm_db)
-    print(f"  {len(articles)} published articles loaded")
+    print("[2/8] Cluster discovery...")
+    clusters = analyse_clusters(data)
+    print(f"  {len(clusters)} emergent clusters found")
 
-    # --- Analysis ---
-    print("\n[1/4] Building topic hierarchy...")
-    hierarchy = build_topic_hierarchy(queries, taxonomy)
-    print(f"  {len(hierarchy)} topics identified")
+    print("[3/8] Fear monitor...")
+    fears = analyse_fears(data)
+    print(f"  {fears['total']} fear signals across {len(fears['by_type'])} categories")
 
-    print("[2/4] Detecting velocity signals...")
-    velocity = detect_velocity(sm_db, current_cutoff, previous_cutoff)
-    print(f"  {len(velocity.get('new_queries', []))} new queries, "
-          f"{len(velocity.get('growing_queries', []))} growing, "
-          f"{len(velocity.get('reddit_spikes', []))} Reddit spikes")
+    print("[4/8] Suburb insights...")
+    suburbs = analyse_suburbs(data)
+    for name, info in suburbs.items():
+        print(f"  {name}: {info['total_queries']} queries, {len(info['fears'])} fears, {len(info['lifestyle'])} lifestyle")
 
-    print("[3/4] Finding content gaps...")
-    content_gaps = find_content_gaps(queries, articles, taxonomy)
-    print(f"  {content_gaps['total_questions']} questions, "
-          f"{content_gaps['covered']} covered ({content_gaps['coverage_pct']}%), "
-          f"{content_gaps['uncovered']} uncovered")
+    print("[5/8] Question discovery...")
+    questions = analyse_questions(data)
+    print(f"  {len(questions)} unique questions ranked")
 
-    print("[4/4] Building digest...")
-    digest = build_digest(hierarchy, velocity, content_gaps, queries)
-    print(f"  {len(digest)} actionable insights")
+    print("[6/8] Velocity detection...")
+    velocity = analyse_velocity(sm_db, current_cutoff, previous_cutoff)
+    print(f"  {velocity['new_query_count']} new queries, {len(velocity['growing'])} growing")
 
-    # Source breakdown
-    source_counts = defaultdict(int)
-    for q in queries:
-        source_counts[q.get("source", "unknown")] += 1
+    print("[7/8] Content gap scan...")
+    content_gaps = analyse_content_gaps(questions, data["articles"])
+    print(f"  {content_gaps['covered']}/{content_gaps['total_questions']} covered ({content_gaps['coverage_pct']}%)")
 
-    # Assemble analysis document
+    print("[8/8] Reddit pulse...")
+    reddit_pulse = analyse_reddit(data)
+    print(f"  {reddit_pulse.get('total', 0)} posts analysed")
+
+    # Assemble
     analysis = {
         "_id": f"analysis_{date_str}",
         "date": date_str,
         "lookback_days": args.days,
-        "total_queries": len(queries),
-        "unique_queries": len(unique_texts),
-        "total_sources": len(source_counts),
-        "source_breakdown": dict(source_counts),
-        "topic_hierarchy": hierarchy,
+        "total_records": total,
+        "source_counts": source_counts,
+        "frequency": frequency[:100],
+        "clusters": clusters,
+        "fears": fears,
+        "suburbs": suburbs,
+        "questions": questions,
         "velocity": velocity,
         "content_gaps": content_gaps,
-        "digest": digest,
+        "reddit_pulse": reddit_pulse,
         "analysed_at": datetime.now(timezone.utc).isoformat(),
     }
 
-    # Print
     print_analysis(analysis)
 
     if args.dry_run:
@@ -648,17 +741,16 @@ def main():
         client.close()
         return
 
-    # Save to MongoDB
-    print("Saving analysis to MongoDB...")
+    print("Saving to MongoDB...")
     sm_db["search_intent_analysis"].update_one(
         {"_id": analysis["_id"]}, {"$set": analysis}, upsert=True
     )
     sm_db["search_intent_analysis"].create_index("date")
     print("  Saved to search_intent_analysis")
 
-    # Prune old analyses (keep 90 days)
-    cutoff_prune = (now - timedelta(days=90)).strftime("%Y-%m-%d")
-    pruned = sm_db["search_intent_analysis"].delete_many({"date": {"$lt": cutoff_prune}})
+    # Prune
+    prune_cutoff = (now - timedelta(days=90)).strftime("%Y-%m-%d")
+    pruned = sm_db["search_intent_analysis"].delete_many({"date": {"$lt": prune_cutoff}})
     if pruned.deleted_count:
         print(f"  Pruned {pruned.deleted_count} old analyses")
 
