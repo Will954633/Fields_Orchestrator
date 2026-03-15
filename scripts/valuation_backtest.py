@@ -529,6 +529,8 @@ def main():
     parser.add_argument("--max-price", type=int, default=5000000, help="Maximum sale price to include")
     parser.add_argument("--no-new-factors", action="store_true",
                         help="Disable renovation quality, street premium, and micro-location factors for A/B comparison")
+    parser.add_argument("--save-results", action="store_true",
+                        help="Save backtest results to MongoDB (system_monitor.valuation_accuracy) for website display")
     args = parser.parse_args()
 
     load_dotenv("/home/fields/Fields_Orchestrator/.env")
@@ -801,6 +803,123 @@ def main():
     print(f"\n{'=' * 70}")
     print(f"Backtest complete.")
     print(f"{'=' * 70}")
+
+    # === Save results to MongoDB if --save-results flag is set ===
+    if args.save_results and fields_results:
+        print("\nSaving results to MongoDB (system_monitor.valuation_accuracy)...")
+        sm_db = client["system_monitor"]
+        acc_coll = sm_db["valuation_accuracy"]
+
+        overall_metrics = compute_metrics(fields_results)
+        domain_metrics = compute_metrics(domain_results) if domain_results else {}
+
+        # Build by-suburb metrics
+        by_suburb = {}
+        for sub, data in per_suburb.items():
+            m = compute_metrics(data["fields"])
+            if m:
+                by_suburb[sub] = {
+                    "count": m["count"], "mae_pct": round(m["mae_pct"], 1),
+                    "median_ae_pct": round(m["median_ae_pct"], 1),
+                    "within_10pct": round(m["within_10pct"]),
+                    "within_15pct": round(m["within_15pct"]),
+                }
+
+        # Build by-price-band metrics
+        by_band = {}
+        for band_key in ["<$700K", "$700K-$1M", "$1M-$1.5M", "$1.5M-$2M", "$2M+"]:
+            if band_key in per_price_band:
+                m = compute_metrics(per_price_band[band_key]["fields"])
+                if m:
+                    by_band[band_key] = {
+                        "count": m["count"], "mae_pct": round(m["mae_pct"], 1),
+                        "within_10pct": round(m["within_10pct"]),
+                    }
+
+        # By confidence level
+        by_confidence = {}
+        for conf in ['high', 'medium', 'low', 'very_low']:
+            if conf in per_confidence:
+                m = compute_metrics(per_confidence[conf])
+                if m:
+                    by_confidence[conf] = {
+                        "count": m["count"], "mae_pct": round(m["mae_pct"], 1),
+                        "within_10pct": round(m["within_10pct"]),
+                    }
+
+        # Range accuracy
+        with_range = [r for r in fields_results if r.get("range_low") and r.get("range_high")]
+        in_range_count = sum(1 for r in with_range if r["range_low"] <= r["actual"] <= r["range_high"]) if with_range else 0
+        range_accuracy = round(in_range_count / len(with_range) * 100) if with_range else None
+
+        run_date = datetime.utcnow()
+
+        # Document 1: Summary
+        summary_doc = {
+            "type": "summary",
+            "run_date": run_date,
+            "model_version": "comparable_sales_v3",
+            "total_tested": len(fields_results),
+            "total_skipped": skipped,
+            "total_errors": errors,
+            "metrics": {
+                "mae_pct": round(overall_metrics["mae_pct"], 1),
+                "median_ae_pct": round(overall_metrics["median_ae_pct"], 1),
+                "mean_error_pct": round(overall_metrics["mean_error_pct"], 1),
+                "mae_dollars": round(overall_metrics["mae_dollars"]),
+                "within_5pct": round(overall_metrics["within_5pct"]),
+                "within_10pct": round(overall_metrics["within_10pct"]),
+                "within_15pct": round(overall_metrics["within_15pct"]),
+                "within_20pct": round(overall_metrics["within_20pct"]),
+                "p90_error": round(overall_metrics.get("p90_error", 0), 1),
+                "range_accuracy_pct": range_accuracy,
+            },
+            "by_suburb": by_suburb,
+            "by_price_band": by_band,
+            "by_confidence": by_confidence,
+            "domain_benchmark": {
+                "mae_pct": round(domain_metrics.get("mae_pct", 0), 1),
+                "within_10pct": round(domain_metrics.get("within_10pct", 0)),
+                "count": domain_metrics.get("count", 0),
+            } if domain_metrics else {},
+            "model_updates": [
+                {"date": "2026-03-15", "description": "Added renovation quality, street premium, and micro-location adjustment factors"},
+                {"date": "2026-02-28", "description": "Removed NPUI from comp selection — switched to feature-level adjustments"},
+                {"date": "2026-02-28", "description": "Added beach proximity adjustment factor"},
+                {"date": "2026-02-23", "description": "Initial comparable sales valuation model with 12 adjustment factors"},
+            ],
+        }
+
+        # Document 2: 20 most recent sold properties with predictions
+        # Sort by sold_date descending, take 20
+        dated_results = [r for r in fields_results if r.get("sold_date")]
+        dated_results.sort(key=lambda x: x["sold_date"], reverse=True)
+        recent_20 = dated_results[:20]
+
+        properties_doc = {
+            "type": "properties",
+            "run_date": run_date,
+            "properties": [
+                {
+                    "address": r["address"],
+                    "suburb": r["suburb"],
+                    "sale_price": round(r["actual"]),
+                    "sale_date": r["sold_date"].isoformat()[:10] if r.get("sold_date") else None,
+                    "predicted": round(r["predicted"]),
+                    "error_pct": round(r["error_pct"], 1),
+                    "confidence": r["confidence"],
+                    "n_comps": r.get("n_comps"),
+                    "bedrooms": None,  # not stored in result dict
+                    "property_type": r.get("type", "House"),
+                }
+                for r in recent_20
+            ],
+        }
+
+        # Upsert (replace previous run)
+        acc_coll.replace_one({"type": "summary"}, summary_doc, upsert=True)
+        acc_coll.replace_one({"type": "properties"}, properties_doc, upsert=True)
+        print(f"  Saved summary ({len(fields_results)} tested) + {len(recent_20)} recent properties to MongoDB")
 
 
 if __name__ == "__main__":
