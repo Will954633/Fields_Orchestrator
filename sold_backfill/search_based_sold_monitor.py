@@ -111,10 +111,13 @@ def parse_features(card) -> Dict:
     if beds: features["bedrooms"] = int(beds.group(1))
     if baths: features["bathrooms"] = int(baths.group(1))
     if park: features["parking"] = int(park.group(1))
-    land = re.search(r'([\d,]+)\s*m²', text)
-    if land:
-        features["land_size"] = land.group(0)
-        features["land_size_sqm"] = int(land.group(1).replace(",", ""))
+    # Take the LARGEST m² value — room dimensions appear before land size
+    land_matches = re.findall(r'([\d,]+)\s*m²', text)
+    if land_matches:
+        sqm_values = [int(m.replace(",", "")) for m in land_matches]
+        best = max(sqm_values)
+        features["land_size"] = f"{best}m²"
+        features["land_size_sqm"] = best
     ptype = re.search(r'(House|Townhouse|Apartment|Unit|Villa|Duplex|Land|Studio|Acreage|Rural)\s*$', text, re.IGNORECASE)
     if ptype: features["property_type"] = ptype.group(1).title()
     return features
