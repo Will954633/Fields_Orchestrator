@@ -345,6 +345,18 @@ processes:
   # PHASE 7: DATA QUALITY AUDIT
   # ============================================================================
 
+  - id: 112
+    name: "Data Quality Validator"
+    description: "Scans property data for implausible values (e.g. scraper grabbing room dimensions as land size). Auto-corrects using cadastral data and logs errors to system_monitor.data_quality_errors"
+    phase: "data_quality"
+    command: "python3 scripts/data_quality_validator.py --fix"
+    working_dir: "/home/fields/Fields_Orchestrator"
+    mongodb_activity: "light_read"
+    requires_browser: false
+    estimated_duration_minutes: 5
+    cooldown_seconds: 30
+    depends_on: [103, 104]  # Run after sold monitoring, before valuation
+
   - id: 107
     name: "Database Audit & Validation"
     description: "Audits Gold_Coast database for misplaced properties, detects root causes, and logs errors with verbose descriptions for developers"
@@ -355,7 +367,7 @@ processes:
     requires_browser: false
     estimated_duration_minutes: 5  # Quick audit scan
     cooldown_seconds: 60  # 1 minute before backup
-    depends_on: [101, 102, 103, 104]  # Run after all scraping processes complete
+    depends_on: [101, 102, 103, 104, 112]  # Run after data quality validator
 
   # ============================================================================
   # PHASE 7: BACKUP (handled separately by backup_coordinator)
