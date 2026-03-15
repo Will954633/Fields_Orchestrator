@@ -119,6 +119,51 @@ This VM is a single point of failure. If it goes down, we lose everything that i
 
 ---
 
+## ⚡ MANDATORY: WEBSITE CHANGE LOGGING
+
+**Every time you push a website file to GitHub, you MUST log the deployment and (if applicable) the change. Do this automatically, without being asked.**
+
+### After every website file push:
+```bash
+# 1. Log the deploy event (always)
+python3 scripts/website-deploy-tracker.py log \
+    --commit <COMMIT_SHA> \
+    --files "path/to/file1.tsx,path/to/file2.css" \
+    --message "Short description of change"
+
+# 2. If the change has a hypothesis or is testable (not just a bug fix):
+python3 scripts/website-change-log.py log \
+    --title "Short description" \
+    --type layout_change \
+    --hypothesis "Expected impact on visitor behavior" \
+    --files "file1.tsx,file2.css" \
+    --pages "/for-sale,/property" \
+    --commit <COMMIT_SHA> \
+    --tags "cta,conversion"
+
+# 3. If there's an active A/B experiment on affected pages:
+python3 scripts/website-experiment-log.py snapshot --experiment <ID>
+```
+
+### Change types: `layout_change`, `copy_change`, `new_page`, `bug_fix`, `performance`, `style_change`, `feature`, `config`
+
+### Review cadence:
+```bash
+# Check for changes needing review (7+ days old, no impact assessment):
+python3 scripts/website-change-log.py pending
+
+# Review a change (captures post-change metrics + compares to baseline):
+python3 scripts/website-change-log.py review --change <ID>
+
+# Full website performance dump:
+python3 scripts/website-review-dump.py
+```
+
+### Why this matters
+Without logging changes, we can't link visitor behavior shifts to specific code changes. This is how we build institutional knowledge about what works and what doesn't on the website.
+
+---
+
 ## ⚡ MANDATORY: VISUAL VERIFICATION OF WEBSITE CHANGES
 
 **After ANY change to website files (`Feilds_Website/01_Website/`, `netlify/functions/`, `src/`, `public/`), you MUST visually verify the affected page(s) before considering the task done. Do this automatically, without being asked.**
