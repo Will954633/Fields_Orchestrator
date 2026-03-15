@@ -110,6 +110,22 @@ processes:
     depends_on: [103]  # Run after sold detection so sold properties are already flagged
 
   # ============================================================================
+  # PHASE 2.4: URL SLUG BACKFILL (SEO-friendly URLs)
+  # ============================================================================
+
+  - id: 114
+    name: "Backfill URL Slugs"
+    description: "Generates url_slug field for any new properties missing it. Enables SEO-friendly URLs like /sold/49-dixon-street-robina instead of /sold/690bd8778b8f54659263a089."
+    phase: "monitoring_target"
+    command: "python3 scripts/backfill_url_slugs.py"
+    working_dir: "/home/fields/Fields_Orchestrator"
+    mongodb_activity: "low_write"
+    requires_browser: false
+    estimated_duration_minutes: 2
+    cooldown_seconds: 10
+    depends_on: [104, 113]
+
+  # ============================================================================
   # PHASE 2.5: IMAGE ARCHIVAL (Domain CDN -> Azure Blob Storage)
   # ============================================================================
 
