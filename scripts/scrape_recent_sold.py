@@ -110,10 +110,14 @@ def parse_features(card) -> Dict:
         features["parking"] = int(park_m.group(1))
 
     # Land size — "568m²"
-    land_m = re.search(r'([\d,]+)\s*m²', text)
-    if land_m:
-        features["land_size"] = land_m.group(0)
-        features["land_size_sqm"] = int(land_m.group(1).replace(",", ""))
+    # Take the LARGEST m² value — room dimensions (e.g. "21m²") appear before
+    # the actual land size and the old regex grabbed the first match
+    land_matches = re.findall(r'([\d,]+)\s*m²', text)
+    if land_matches:
+        sqm_values = [int(m.replace(",", "")) for m in land_matches]
+        best = max(sqm_values)
+        features["land_size"] = f"{best}m²"
+        features["land_size_sqm"] = best
 
     # Property type — last word-like token (House, Townhouse, Apartment, Unit, etc.)
     type_m = re.search(r'(House|Townhouse|Apartment|Unit|Villa|Duplex|Land|Studio|Acreage|Rural)\s*$', text, re.IGNORECASE)
