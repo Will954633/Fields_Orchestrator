@@ -64,6 +64,11 @@ try:
         _load_sold_comparables,
         _preload_gc_coordinates,
         _preload_gc_timelines,
+        _build_suburb_median_cache,
+        _build_street_premium_cache,
+        _extract_street_name,
+        compute_micro_location_premium,
+        compute_renovation_quality_score,
     )
 except ImportError:
     _resolve_coordinates = None
@@ -103,7 +108,9 @@ def get_sold_date(doc):
 
 
 def backtest_single_property(db, subject_doc, all_sold_in_suburb, sold_by_suburb,
-                              gc_coord_lookup, gc_timeline_lookup):
+                              gc_coord_lookup, gc_timeline_lookup,
+                              median_cache=None, street_premium_cache=None,
+                              no_new_factors=False):
     """
     Run the valuation pipeline on a single sold property, using other sold
     properties as comparables. Returns the reconciled_valuation or None.
@@ -336,6 +343,16 @@ def backtest_single_property(db, subject_doc, all_sold_in_suburb, sold_by_suburb
         'kitchen_score': subject_basic.get('kitchen_score'),
         'ac_ducted': subject_basic.get('ac_ducted', False),
         'approximate_build_year': subject_build_year,
+        'renovation_quality_score': None if no_new_factors else subject_basic.get('renovation_quality_score'),
+        'street_premium_pct': None if no_new_factors else (
+            (street_premium_cache or {}).get(
+                (suburb_key, _extract_street_name(subject_doc)), (None,))[0]
+            if _extract_street_name and street_premium_cache else None),
+        'micro_location_premium_pct': None if no_new_factors else (
+            compute_micro_location_premium(
+                subject_lat, subject_lon, suburb_key,
+                all_sold_in_suburb, median_cache or {})[0]
+            if subject_lat and subject_lon and compute_micro_location_premium else None),
     }
 
     # Pass 1: Compute adjustments for all comparables
@@ -369,6 +386,18 @@ def backtest_single_property(db, subject_doc, all_sold_in_suburb, sold_by_suburb
             'kitchen_score': basic.get('kitchen_score'),
             'ac_ducted': basic.get('ac_ducted', False),
             'approximate_build_year': basic.get('approximate_build_year'),
+            'renovation_quality_score': None if no_new_factors else basic.get('renovation_quality_score'),
+            'street_premium_pct': None if no_new_factors else (
+                (street_premium_cache or {}).get(
+                    (suburb_key, _extract_street_name(pt.get('_source_doc') or pt)), (None,))[0]
+                if _extract_street_name and street_premium_cache else None),
+            'micro_location_premium_pct': None if no_new_factors else (
+                compute_micro_location_premium(
+                    float(s_lat) if s_lat else None,
+                    float(s_lon) if s_lon else None,
+                    suburb_key, all_sold_in_suburb,
+                    median_cache or {})[0]
+                if s_lat and s_lon and compute_micro_location_premium else None),
         }
         adj_result = calculate_adjustments(subject_features, comp_features, comp_price, adj_rates)
         pt['adjustment_result'] = adj_result
@@ -498,6 +527,8 @@ def main():
     parser.add_argument("--verbose", action="store_true", help="Show each property result")
     parser.add_argument("--min-price", type=int, default=300000, help="Minimum sale price to include")
     parser.add_argument("--max-price", type=int, default=5000000, help="Maximum sale price to include")
+    parser.add_argument("--no-new-factors", action="store_true",
+                        help="Disable renovation quality, street premium, and micro-location factors for A/B comparison")
     args = parser.parse_args()
 
     load_dotenv("/home/fields/Fields_Orchestrator/.env")
@@ -533,6 +564,19 @@ def main():
         gc_coord_lookup = _preload_gc_coordinates(client, all_suburb_keys)
         gc_timeline_lookup = _preload_gc_timelines(client, all_suburb_keys)
     print("  Done")
+
+    # Build caches for new factors (street premium, micro-location)
+    median_cache = {}
+    street_premium_cache = {}
+    if not args.no_new_factors and _build_suburb_median_cache:
+        print("Building suburb median cache...")
+        median_cache = _build_suburb_median_cache(sold_by_suburb)
+        print(f"  {len(median_cache)} month-suburb medians cached")
+        print("Building street premium cache...")
+        street_premium_cache = _build_street_premium_cache(sold_by_suburb, median_cache)
+        print(f"  {len(street_premium_cache)} streets with premium data")
+    elif args.no_new_factors:
+        print("New factors DISABLED (--no-new-factors)")
 
     # Build test set: sold properties with known sale prices
     suburbs_to_test = [args.suburb] if args.suburb else SUBURBS
@@ -590,7 +634,9 @@ def main():
         try:
             result = backtest_single_property(
                 db, doc, all_sold_in_suburb, sold_by_suburb,
-                gc_coord_lookup, gc_timeline_lookup
+                gc_coord_lookup, gc_timeline_lookup,
+                median_cache, street_premium_cache,
+                no_new_factors=args.no_new_factors
             )
         except Exception as e:
             if args.verbose:
