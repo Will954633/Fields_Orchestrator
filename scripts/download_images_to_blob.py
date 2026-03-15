@@ -105,27 +105,37 @@ def get_blob_url(account_name, blob_name):
     return f"https://{account_name}.{BLOB_DOMAIN}/{CONTAINER_NAME}/{blob_name}"
 
 
-def upload_images_for_property(blob_service_client, doc, db_label, suburb, dry_run):
+def upload_images_for_property(blob_service_client, doc, db_label, suburb, dry_run,
+                                date_prefix=None):
     property_id = str(doc.get('_id', 'unknown'))
-    photo_urls  = doc.get('property_images', [])
-    fp_urls     = doc.get('floor_plans', [])
+    # Prefer scraped_property_images (fresh Domain URLs) over property_images (may be blob URLs)
+    photo_urls  = doc.get('scraped_property_images') or doc.get('property_images', [])
+    fp_urls     = doc.get('scraped_floor_plans') or doc.get('floor_plans', [])
 
     if not isinstance(photo_urls, list):
         photo_urls = []
     if not isinstance(fp_urls, list):
         fp_urls = []
 
+    # Skip if source URLs are already blob URLs (nothing to download)
+    if photo_urls and isinstance(photo_urls[0], str) and BLOB_DOMAIN in photo_urls[0]:
+        return (photo_urls, fp_urls)
+
     account_name = blob_service_client.account_name
+
+    # Use dated subfolder for historical image tracking
+    if date_prefix is None:
+        date_prefix = datetime.now().strftime('%Y-%m-%d')
 
     # Build list of (source_url, blob_name, category, index) tuples
     tasks = []
     for i, url in enumerate(photo_urls):
         if isinstance(url, str) and url:
-            blob_name = f"{db_label}/{suburb}/{property_id}/photos/{i:02d}.jpg"
+            blob_name = f"{db_label}/{suburb}/{property_id}/photos/{date_prefix}/{i:02d}.jpg"
             tasks.append((url, blob_name, 'photo', i))
     for i, url in enumerate(fp_urls):
         if isinstance(url, str) and url:
-            blob_name = f"{db_label}/{suburb}/{property_id}/floor_plans/{i:02d}.jpg"
+            blob_name = f"{db_label}/{suburb}/{property_id}/floor_plans/{date_prefix}/{i:02d}.jpg"
             tasks.append((url, blob_name, 'floor_plan', i))
 
     new_photo_urls = [None] * len(photo_urls)
@@ -190,9 +200,15 @@ def process_collection(mongo_client, blob_service_client, db_name, db_label,
     db = mongo_client[db_name]
     collection = db[collection_name]
 
+    # Find properties that need image download:
+    # 1. images_uploaded_to_blob is not True (new or reset by scraper)
+    # 2. Has image URLs to download (property_images or scraped_property_images)
     query = {
-        "property_images": {"$exists": True, "$ne": []},
         "images_uploaded_to_blob": {"$ne": True},
+        "$or": [
+            {"property_images": {"$exists": True, "$ne": []}},
+            {"scraped_property_images": {"$exists": True, "$ne": []}},
+        ],
     }
     docs = list(collection.find(query))
 
@@ -201,33 +217,61 @@ def process_collection(mongo_client, blob_service_client, db_name, db_label,
     skipped  = 0
     failed   = 0
 
+    date_prefix = datetime.now().strftime('%Y-%m-%d')
+
     for doc in docs:
-        if is_already_uploaded(doc):
+        # Skip if property_images already contains blob URLs AND no scraped_ URLs waiting
+        if is_already_uploaded(doc) and not doc.get('scraped_property_images'):
             skipped += 1
             continue
 
         property_id = str(doc.get('_id', 'unknown'))
-        n_photos = len(doc.get('property_images', []))
-        n_fps    = len(doc.get('floor_plans', []))
+        source_photos = doc.get('scraped_property_images') or doc.get('property_images', [])
+        source_fps = doc.get('scraped_floor_plans') or doc.get('floor_plans', [])
+        n_photos = len(source_photos) if isinstance(source_photos, list) else 0
+        n_fps    = len(source_fps) if isinstance(source_fps, list) else 0
         print(f"  {collection_name}/{property_id}  ({n_photos} photos, {n_fps} floor plans)",
               flush=True)
 
         try:
             new_photos, new_fps = upload_images_for_property(
-                blob_service_client, doc, db_label, collection_name, dry_run
+                blob_service_client, doc, db_label, collection_name, dry_run,
+                date_prefix=date_prefix
             )
 
             if not dry_run:
+                now_iso = datetime.now(timezone.utc).isoformat()
+
+                # Build image_history entry for this upload
+                history_entry = {
+                    "captured_at": now_iso,
+                    "source": "new_listing" if doc.get('listing_status') == 'for_sale' else "scrape",
+                    "listing_url": doc.get("listing_url", ""),
+                    "image_count": len(new_photos),
+                    "floor_plan_count": len(new_fps),
+                    "blob_prefix": f"{db_label}/{collection_name}/{property_id}/photos/{date_prefix}/",
+                    "urls": new_photos,
+                }
+
+                # Preserve original source URLs
+                original_photos = doc.get('scraped_property_images') or doc.get('property_images', [])
+                original_fps = doc.get('scraped_floor_plans') or doc.get('floor_plans', [])
+
                 collection.update_one(
                     {"_id": doc["_id"]},
-                    {"$set": {
-                        "property_images":          new_photos,
-                        "floor_plans":              new_fps,
-                        "property_images_original": doc.get("property_images", []),
-                        "floor_plans_original":     doc.get("floor_plans", []),
-                        "images_uploaded_to_blob":  True,
-                        "images_blob_uploaded_at":  datetime.now(timezone.utc).isoformat(),
-                    }}
+                    {
+                        "$set": {
+                            "property_images":          new_photos,
+                            "floor_plans":              new_fps,
+                            "property_images_original": original_photos,
+                            "floor_plans_original":     original_fps,
+                            "images_uploaded_to_blob":  True,
+                            "images_blob_uploaded_at":  now_iso,
+                        },
+                        "$push": {
+                            "image_history": history_entry,
+                        },
+                    }
                 )
 
             uploaded += 1
