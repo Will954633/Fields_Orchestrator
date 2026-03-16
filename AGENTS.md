@@ -6,38 +6,84 @@ Current date context: check `/home/fields/Fields_Orchestrator/OPS_STATUS.md` for
 
 ---
 
-## MANDATORY BEHAVIORS
+## ⚡ MANDATORY — NO EXCEPTIONS
 
-### 1. Fix History — write after every fix
-File: `logs/fix-history/YYYY-MM-DD.md` (AEST date, create if missing)
+These are non-negotiable. A task is NOT complete until all applicable steps below are done.
+
+### ⚡ 1. FIX HISTORY — after EVERY code change, bug fix, or script repair
+
+Do this automatically. Do not wait to be asked.
+
+```bash
+# Get AEST date
+DATE=$(TZ=Australia/Brisbane date +%Y-%m-%d)
+TIME=$(TZ=Australia/Brisbane date +%H:%M)
+FILE="logs/fix-history/${DATE}.md"
+mkdir -p logs/fix-history
+```
+
+Append to `logs/fix-history/YYYY-MM-DD.md`:
 ```
 ## [PROBLEM-ID] Short description — HH:MM AEST
-**Symptom:** ...  **Root cause:** ...  **Fix:** ...  **Files:** ...  **Recurrence:** N
+**Symptom:** What was broken.
+**Root cause:** Why it was broken.
+**Fix:** What you changed and why.
+**Files:** List of files modified.
+**Recurrence:** First occurrence / Nth occurrence
 ```
 
-### 2. Push all code changes to GitHub
-- `git push` HANGS on this VM — always use `gh api`
-- Orchestrator files → `Will954633/Fields_Orchestrator`
-- Website files → `Will954633/Website_Version_Feb_2026` (repo root = `01_Website/` locally)
-- Never push: `.env`, credentials, `node_modules/`, `__pycache__/`, logs
+**Triggers:** Any time you edit a file to fix a bug, repair a script, or change behaviour.
+
+---
+
+### ⚡ 2. PUSH TO GITHUB — after EVERY file you create or modify
+
+Do this automatically. Do not wait to be asked. Code that only exists on this VM is not backed up.
+
+`git push` HANGS on this VM — ALWAYS use `gh api`:
 
 ```bash
-# Update existing file:
+# Existing file:
 SHA=$(gh api 'repos/OWNER/REPO/contents/PATH' --jq '.sha')
-CONTENT=$(base64 -w0 < /local/path)
+CONTENT=$(base64 -w0 < /local/path/to/file)
 gh api 'repos/OWNER/REPO/contents/PATH' \
   --method PUT --field message="fix: description" --field content="$CONTENT" --field sha="$SHA"
+
+# New file (no sha needed):
+CONTENT=$(base64 -w0 < /local/path/to/file)
+gh api 'repos/OWNER/REPO/contents/PATH' \
+  --method PUT --field message="add: description" --field content="$CONTENT"
 ```
 
-### 3. Ad decision logging — after every ad change
-Write to `system_monitor.ad_decisions` in MongoDB. Fields: date, type, title, hypothesis, findings, data_snapshot, tags, reasoning, created_at.
+Repo routing:
+- `Fields_Orchestrator/` files → `Will954633/Fields_Orchestrator`
+- `Feilds_Website/01_Website/` files → `Will954633/Website_Version_Feb_2026` (strip `01_Website/` prefix)
 
-### 4. Website change logging — after every website file push
+NEVER push: `.env`, credentials, `node_modules/`, `__pycache__/`, `logs/`, `*.sqlite`
+
+**Triggers:** Every time you write or edit any file.
+
+---
+
+### ⚡ 3. AD DECISION LOG — after EVERY advertising change
+
+Write to `system_monitor.ad_decisions` in MongoDB before ending the session.
+Fields: `date`, `type`, `title`, `hypothesis`, `findings`, `data_snapshot`, `tags`, `reasoning`, `created_at`.
+
+**Triggers:** Creating, pausing, enabling, or changing any Facebook or Google Ads campaign/adset/ad/budget.
+
+---
+
+### ⚡ 4. WEBSITE CHANGE LOG — after EVERY website file push
+
 ```bash
-python3 scripts/website-deploy-tracker.py log --commit <SHA> --files "..." --message "..."
-# If testable change:
-python3 scripts/website-change-log.py log --title "..." --type layout_change --hypothesis "..."
+# Always log the deploy:
+python3 scripts/website-deploy-tracker.py log --commit <SHA> --files "path" --message "desc"
+# If the change is testable (not just a typo fix):
+python3 scripts/website-change-log.py log --title "desc" --type bug_fix --hypothesis "expected effect"
 ```
+
+**Triggers:** Any push to `Will954633/Website_Version_Feb_2026`.
 
 ---
 
