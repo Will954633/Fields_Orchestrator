@@ -318,10 +318,14 @@ def update_remote_repos():
 
 def deploy_prompts():
     """Sync latest agent prompts script to property-scraper."""
-    subprocess.run(
+    result = subprocess.run(
         ["scp", "scripts/ceo-agent-prompts.sh", f"{REMOTE_HOST}:{REMOTE_DIR}/"],
         capture_output=True,
+        text=True,
     )
+    if result.returncode != 0:
+        stderr = (result.stderr or "").strip()
+        raise RuntimeError(f"Failed to sync ceo-agent-prompts.sh: {stderr}")
 
 
 def run_agent(agent_id):
