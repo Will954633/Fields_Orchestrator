@@ -1,7 +1,7 @@
 # AGENTS.md — Fields Estate Orchestrator VM
 
 You are a coding agent operating on the Fields Estate orchestrator VM (Google Cloud, australia-southeast1-b).
-Working directory: `/home/fields/Fields_Orchestrator`
+Working directory: `/home/fields/Fields_Orchestratorg
 Current date context: check `/home/fields/Fields_Orchestrator/OPS_STATUS.md` for live system state.
 
 ---
@@ -194,33 +194,12 @@ cat /home/fields/Fields_Orchestrator/SCHEMA_SNAPSHOT.md
 _Run `python3 scripts/sync-memory-to-codex.py` to refresh this section from Claude's memory._
 
 <!-- MEMORY_SECTION_START -->
-_Last synced: 2026-03-17 00:26 AEST_
+_Last synced: 2026-03-17 00:32 AEST_
 
 
-### CEO Agent Proposals — Action Required
+### CEO Agent Proposals
 
-> These are findings and proposals from the management agent team. Pending items need implementation.
-
-
-#### ENGINEERING Agent — 2026-03-16 [⚠️ PENDING]
-
-Floor-plan enrichment is still falling over under Cosmos DB throttling, Calculate Property Insights reports failure on every transient write error, the public recently-sold API endpoint is 404ing while its health check passes, and scraper health telemetry has been stale since the curl_cffi migration — these gaps are burning pipeline time, hiding missing data, and breaking consumer endpoints.
-
-**Findings:**
-
-- `[HIGH]` **Floor plan analysis silently skips work when Cosmos throttles** — Step 106 has triggered at least two watchdog escalations today and five failures in the last 24h; the auto-repair summary shows get_floor_plan_stats() and get_properties_needing_floor_plan_analysis() 
-- `[HIGH]` **Calculate Property Insights marks the whole step failed on any single error** — Process 15 calls monitor.finish(status='success' if total_errors == 0 else 'failed') at line ~609, so even one Cosmos write error makes the watchdog think the step failed despite the script completing
-- `[MEDIUM]` **`/api/v1/properties/recently-sold` has regressed to 404** — The ops probe now records 404s for /api/v1/properties/recently-sold even though /api/v1/recently-sold/health still returns 200, which means the primary listing endpoint disappeared (likely after the S
-- `[MEDIUM]` **Scraper health dashboard has been frozen since curl_cffi migration** — Even though step 101 succeeded at 638s tonight, the Scraper Health table still shows the last run for every suburb on 2026-03-06–03-04, so the ops dashboard can no longer tell if scrapes are actually 
-
-**Proposed fixes:**
-
-- `[HIGH]` **Add RU-aware retry layer to floor-plan analysis** — 
-- `[MEDIUM]` **Harden Calculate Property Insights error handling** — 
-- `[MEDIUM]` **Restore `/api/v1/properties/recently-sold` contract** — 
-- `[MEDIUM]` **Emit scraper heartbeat metrics from curl_cffi** — 
-
-> To mark implemented: update `status` to `'completed'` in `system_monitor.ceo_proposals` where `agent='{p.get('agent')}'` and `date='{date}'`
+_No pending proposals._
 
 
 ### User Feedback & Corrections
@@ -310,7 +289,7 @@ All data in `system_monitor` database in Cosmos DB:
 - **Cost per session** — lower is better. Calculated from `ad_attribution.sessions` / `ad_profiles.lifetime.spend_aud`
 - **Engagement rate** — % of sessions that are "engaged" or "deep" (not bounce/light)
 - **Average session duration** — how long people stay
-- **Properties viewed** — did they actually look at property pages?
+- **Propertyes viewed** — did they actually look at property pages?
 
 ### Tier 2 metrics (diagnostic)
 - **CTR** — click-through rate (are people interested?)
@@ -527,17 +506,17 @@ Three AI agents (Engineering, Growth, Product) collectively act as strategic adv
 - **Context:** `Will954633/fields-ceo-context` — daily snapshot from orchestrator VM
 - **Sandbox:** `Will954633/fields-ceo-sandbox` — proposals + PoC code
 - **Proposals:** `system_monitor.ceo_proposals` MongoDB collection
-- **Model:** `gpt-5.1-codex` via Codex CLI (authenticated via `codex login --with-api-key`)
+- **Model:** `gpt-5.4-codex` via Codex CLI (authenticated via `codex login --with-api-key`)
 
 ## Daily Flow (cron on orchestrator VM)
 1. **02:03 AEST** — `ceo-context-export.py` exports data bundle to `fields-ceo-context` repo
-2. **02:33 AEST** — `ceo-agent-launcher-remote.sh` SSHs to property-scraper, runs agents via `codex exec`
+2. **02:33 AEST** — `ceo-agent-launcher.py` SSHs to property-scraper, runs agents via `codex exec`
 3. Agents read context, produce `proposals/<date>_<agent>.json`
 4. Proposals pushed to GitHub sandbox repo + MongoDB
 
 ## Key Scripts
 - `scripts/ceo-context-export.py` — bundles CLAUDE.md, OPS_STATUS, fix history, metrics, schema, memory
-- `scripts/ceo-agent-launcher-remote.sh` — SSH orchestrator that triggers agents on property-scraper
+- `scripts/ceo-agent-launcher.py` — SSH orchestrator that triggers agents on property-scraper
 - `scripts/ceo-agent-prompts.sh` — generates role-specific prompts (deployed on property-scraper at `~/ceo-agents/`)
 
 ## SSH Access
@@ -548,11 +527,11 @@ ssh fields-orchestrator-vm@35.201.6.222  # or internal: 10.152.0.3 (didn't work,
 ## Manual Run
 ```bash
 # From orchestrator VM:
-bash scripts/ceo-agent-launcher-remote.sh engineering  # single agent
-bash scripts/ceo-agent-launcher-remote.sh              # all three
+python3 scripts/ceo-agent-launcher.py --agent engineering  # single agent
+python3 scripts/ceo-agent-launcher.py              # all three
 
 # Directly on property-scraper:
-cd ~/ceo-agents/sandbox && codex exec -m gpt-5.1-codex --full-auto "$(bash ~/ceo-agents/ceo-agent-prompts.sh engineering 2026-03-16)"
+cd ~/ceo-agents/sandbox && codex exec -m gpt-5.4-codex --full-auto "$(bash ~/ceo-agents/ceo-agent-prompts.sh engineering 2026-03-16)"
 ```
 
 ## Cost
