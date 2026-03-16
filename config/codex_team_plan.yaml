@@ -1,0 +1,229 @@
+version: 1
+name: codex_team_plan
+created_at_aest: "2026-03-17"
+purpose: >
+  Operating blueprint for the second Google VM that runs Codex as a
+  management and analysis team for Fields.
+
+vm_topology:
+  orchestrator_vm:
+    role: production_executor
+    responsibilities:
+      - production code
+      - cron jobs
+      - database writes
+      - website logging
+      - ad workflows
+      - context export
+  codex_vm:
+    role: analysis_and_planning
+    responsibilities:
+      - pull context repo
+      - run agent analysis
+      - write sandbox proposals
+      - write proof_of_concept_code
+    restrictions:
+      - no_production_db_writes
+      - no_direct_deploys
+      - no_direct_ad_changes
+
+team:
+  chief_of_staff:
+    layer: command
+    status: planned
+    cadence: daily
+    runs_after:
+      - engineering
+      - product
+      - growth
+      - data_quality
+    output_file: proposals/YYYY-MM-DD_chief_of_staff.json
+    mandate:
+      - synthesize all agent outputs
+      - rank top priorities
+      - identify conflicts
+      - produce founder brief
+
+  engineering:
+    layer: core
+    status: active
+    cadence: daily
+    output_file: proposals/YYYY-MM-DD_engineering.json
+    mandate:
+      - reliability
+      - technical_debt
+      - infrastructure_risk
+      - recurring_bugs
+
+  product:
+    layer: core
+    status: active
+    cadence: daily
+    output_file: proposals/YYYY-MM-DD_product.json
+    mandate:
+      - ux
+      - feature_prioritization
+      - differentiation
+      - data_trust_implications
+
+  growth:
+    layer: core
+    status: active
+    cadence: daily
+    output_file: proposals/YYYY-MM-DD_growth.json
+    mandate:
+      - ads
+      - funnel
+      - experiments
+      - content_distribution
+
+  data_quality:
+    layer: core
+    status: planned_next
+    cadence: daily
+    output_file: proposals/YYYY-MM-DD_data_quality.json
+    mandate:
+      - listing_coverage
+      - enrichment_gaps
+      - stale_data
+      - schema_drift
+      - trust_risks
+
+  qa_release:
+    layer: specialist
+    status: phase_2
+    cadence: triggered
+    triggers:
+      - website_change
+      - api_change
+      - pipeline_refactor
+    mandate:
+      - regression_review
+      - release_risk
+      - test_gap_detection
+
+  content_seo:
+    layer: specialist
+    status: phase_2
+    cadence: weekly
+    mandate:
+      - search_intent_coverage
+      - topical_authority
+      - article_pipeline_priorities
+
+  market_intelligence:
+    layer: specialist
+    status: phase_2
+    cadence: weekly
+    mandate:
+      - competitor_tracking
+      - suburb_opportunity_mapping
+      - positioning
+
+cadence:
+  daily:
+    - time_aest: "02:03"
+      step: export_context
+      owner: orchestrator_vm
+    - time_aest: "02:15"
+      step: codex_preflight
+      owner: codex_vm
+    - time_aest: "02:20"
+      step: run_core_agents_in_parallel
+      owner: codex_vm
+    - time_aest: "02:35"
+      step: chief_of_staff_synthesis
+      owner: codex_vm
+    - time_aest: "02:40"
+      step: push_sandbox_and_upsert_proposals
+      owner: orchestrator_vm
+
+proposal_contract:
+  required_fields:
+    - agent
+    - date
+    - summary
+    - findings
+    - proposals
+    - status
+    - created_at
+    - updated_at
+  recommended_fields:
+    - priority_score
+    - time_horizon
+    - depends_on
+    - blocks
+    - owner
+    - decision_required
+  chief_of_staff_fields:
+    - daily_brief
+    - top_3
+    - do_not_do
+    - conflicts
+    - recommended_sequence
+
+handoffs:
+  - from: engineering
+    to: product
+    rule: reliability_issues_with_user_or_data_impact_must_be_flagged
+  - from: product
+    to: growth
+    rule: product_gaps_affecting_conversion_become_growth_tests
+  - from: growth
+    to: product
+    rule: promise_mismatch_from_ads_or_landing_pages_becomes_product_work
+  - from: data_quality
+    to: all
+    rule: low_trust_data_can_block_product_or_growth_recommendations
+  - from: chief_of_staff
+    to: founder
+    rule: only_synthesized_brief_goes_first
+
+decision_rights:
+  agents_can:
+    - analyze
+    - prioritize
+    - propose
+    - write_sandbox_poc_code
+  agents_cannot:
+    - deploy_to_production
+    - modify_ads_directly
+    - write_to_production_db
+    - change_live_services_without_approval
+  founder_controls:
+    - implementation_approval
+    - deferral
+    - specialist_activation
+    - experiment_authorization
+
+rollout:
+  phase_1:
+    goal: smallest_complete_management_loop
+    agents:
+      - engineering
+      - product
+      - growth
+      - chief_of_staff
+  phase_2:
+    goal: add_data_trust_coverage
+    agents:
+      - data_quality
+  phase_3:
+    goal: targeted_specialists_only_after_stability
+    agents:
+      - qa_release
+      - content_seo
+      - market_intelligence
+
+success_metrics:
+  - actionable_briefs_rate
+  - proposal_acceptance_rate
+  - implementation_rate
+  - duplicate_proposal_rate
+  - founder_review_time_minutes
+  - measurable_impact_rate
+
+targets_14d:
+  actionable_briefs_rate_min: 0.60
+  duplicate_proposal_rate_max: 0.20
+  founder_review_time_minutes_max: 10
