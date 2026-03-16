@@ -29,6 +29,25 @@ WEBSITE_DIR = "/home/fields/Feilds_Website/01_Website"
 
 DRY_RUN = "--dry-run" in sys.argv
 
+# SHA cache: populated once per run to avoid a separate GET call per file
+_SHA_CACHE: dict = {}
+
+
+def load_sha_cache() -> None:
+    """Fetch all file SHAs from the repo in one API call (git tree)."""
+    global _SHA_CACHE
+    result = subprocess.run(
+        ["gh", "api", f"repos/{REPO}/git/trees/main?recursive=1",
+         "--jq", '.tree[] | select(.type == "blob") | "\(.path)\t\(.sha)"'],
+        capture_output=True, text=True, timeout=60,
+    )
+    _SHA_CACHE = {}
+    for line in result.stdout.splitlines():
+        if "\t" in line:
+            path, sha = line.split("\t", 1)
+            _SHA_CACHE[path] = sha.strip()
+    print(f"  Loaded {len(_SHA_CACHE)} file SHAs from repo")
+
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -40,17 +59,8 @@ def gh_api_put(repo_path, local_content, message):
 
     content_b64 = base64.b64encode(local_content.encode("utf-8")).decode("utf-8")
 
-    # Check if file exists (get SHA for update)
-    sha = None
-    try:
-        result = subprocess.run(
-            ["gh", "api", f"repos/{REPO}/contents/{repo_path}", "--jq", ".sha"],
-            capture_output=True, text=True, timeout=30
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            sha = result.stdout.strip()
-    except Exception:
-        pass
+    # Use cached SHA — avoids a per-file GET call (saved by load_sha_cache at run start)
+    sha = _SHA_CACHE.get(repo_path)
 
     # For large files, use --input with a temp JSON file to avoid arg list too long
     import tempfile as _tempfile
@@ -196,134 +206,112 @@ def export_pipeline_config():
 
 
 def export_metrics():
-    """Export key metrics from MongoDB."""
-    print("\n📈 Exporting metrics...")
+    """Export all metrics, experiments, and recent changes — one MongoDB connection."""
+    print("\n📈 Exporting metrics, experiments, and recent changes...")
 
-    # --- Active listing counts ---
-    listing_counts = query_mongodb("""
-db = client['Gold_Coast']
-collections = [c for c in db.list_collection_names() if not c.startswith('system') and c not in ('suburb_median_prices', 'suburb_statistics', 'change_detection_snapshots')]
-result = {}
-for coll in sorted(collections):
-    count = db[coll].count_documents({'listing_status': 'for_sale'})
+    raw = query_mongodb("""
+from datetime import datetime, timedelta
+
+all_results = {}
+skip_colls = {'suburb_median_prices', 'suburb_statistics', 'change_detection_snapshots'}
+
+# --- Active listing counts ---
+db_gc = client['Gold_Coast']
+suburb_colls = sorted(
+    c for c in db_gc.list_collection_names()
+    if not c.startswith('system') and c not in skip_colls
+)
+listing_counts = {}
+for coll in suburb_colls:
+    count = db_gc[coll].count_documents({'listing_status': 'for_sale'})
     if count > 0:
-        result[coll] = count
-print(json.dumps(result, indent=2))
-""")
-    gh_api_put("metrics/active_listings.json", listing_counts, "update: active listing counts")
+        listing_counts[coll] = count
+all_results['active_listings'] = json.dumps(listing_counts, indent=2)
 
-    # --- Recent pipeline runs ---
-    pipeline_runs = query_mongodb("""
-db = client['system_monitor']
-runs = list(db['orchestrator_runs'].find({}, {'_id': 0}).sort('started_at', -1).limit(7))
+# --- Recent pipeline runs ---
+db_sm = client['system_monitor']
+runs = list(db_sm['orchestrator_runs'].find({}, {'_id': 0}).sort('started_at', -1).limit(7))
 for r in runs:
     for k, v in r.items():
         if hasattr(v, 'isoformat'):
             r[k] = v.isoformat()
-print(json.dumps(runs, indent=2, default=str))
-""")
-    gh_api_put("metrics/recent_pipeline_runs.json", pipeline_runs, "update: recent pipeline runs")
+all_results['pipeline_runs'] = json.dumps(runs, indent=2, default=str)
 
-    # --- Ad performance summary (last 7 days) ---
-    ad_metrics = query_mongodb("""
-from datetime import datetime, timedelta
-db = client['system_monitor']
-cutoff = (datetime.utcnow() - timedelta(days=7)).strftime('%Y-%m-%d')
+# --- Ad performance (last 7 days) ---
+cutoff_7d = (datetime.utcnow() - timedelta(days=7)).strftime('%Y-%m-%d')
+fb = list(db_sm['ad_daily_metrics'].find({'date': {'$gte': cutoff_7d}}, {'_id': 0}).sort('date', -1).limit(50))
+goog = list(db_sm['google_ads_daily_metrics'].find({'date': {'$gte': cutoff_7d}}, {'_id': 0}).sort('date', -1).limit(50))
+for row in fb + goog:
+    for k, v in row.items():
+        if hasattr(v, 'isoformat'):
+            row[k] = v.isoformat()
+all_results['ad_performance_7d'] = json.dumps({'facebook': fb, 'google': goog}, indent=2, default=str)
 
-# Facebook
-fb = list(db['ad_daily_metrics'].find({'date': {'$gte': cutoff}}, {'_id': 0}).sort('date', -1).limit(50))
-for r in fb:
+# --- Website metrics (last 7 days) ---
+web_docs = list(db_sm['website_daily_metrics'].find({'date': {'$gte': cutoff_7d}}, {'_id': 0}).sort('date', -1))
+for r in web_docs:
     for k, v in r.items():
         if hasattr(v, 'isoformat'):
             r[k] = v.isoformat()
+all_results['website_metrics_7d'] = json.dumps(web_docs, indent=2, default=str)
 
-# Google
-goog = list(db['google_ads_daily_metrics'].find({'date': {'$gte': cutoff}}, {'_id': 0}).sort('date', -1).limit(50))
-for r in goog:
-    for k, v in r.items():
-        if hasattr(v, 'isoformat'):
-            r[k] = v.isoformat()
-
-print(json.dumps({'facebook': fb, 'google': goog}, indent=2, default=str))
-""")
-    gh_api_put("metrics/ad_performance_7d.json", ad_metrics, "update: ad performance (7d)")
-
-    # --- Website metrics (last 7 days) ---
-    web_metrics = query_mongodb("""
-from datetime import datetime, timedelta
-db = client['system_monitor']
-cutoff = (datetime.utcnow() - timedelta(days=7)).strftime('%Y-%m-%d')
-docs = list(db['website_daily_metrics'].find({'date': {'$gte': cutoff}}, {'_id': 0}).sort('date', -1))
-for r in docs:
-    for k, v in r.items():
-        if hasattr(v, 'isoformat'):
-            r[k] = v.isoformat()
-print(json.dumps(docs, indent=2, default=str))
-""")
-    gh_api_put("metrics/website_metrics_7d.json", web_metrics, "update: website metrics (7d)")
-
-    # --- Data coverage / enrichment status ---
-    coverage = query_mongodb("""
-db = client['Gold_Coast']
-collections = [c for c in db.list_collection_names() if not c.startswith('system') and c not in ('suburb_median_prices', 'suburb_statistics', 'change_detection_snapshots')]
-result = {}
-for coll in sorted(collections):
-    total = db[coll].count_documents({'listing_status': 'for_sale'})
+# --- Data coverage ---
+coverage = {}
+for coll in suburb_colls:
+    total = db_gc[coll].count_documents({'listing_status': 'for_sale'})
     if total == 0:
         continue
-    enriched = db[coll].count_documents({'listing_status': 'for_sale', 'valuation_data': {'$exists': True}})
-    result[coll] = {'active': total, 'enriched': enriched, 'pct': round(enriched/total*100, 1) if total else 0}
-print(json.dumps(result, indent=2))
-""")
-    gh_api_put("metrics/data_coverage.json", coverage, "update: data coverage stats")
+    enriched = db_gc[coll].count_documents({'listing_status': 'for_sale', 'valuation_data': {'$exists': True}})
+    coverage[coll] = {'active': total, 'enriched': enriched, 'pct': round(enriched / total * 100, 1) if total else 0}
+all_results['data_coverage'] = json.dumps(coverage, indent=2)
 
-    # --- CEO proposals (for agent awareness of prior proposals) ---
-    proposals = query_mongodb("""
-db = client['system_monitor']
-docs = list(db['ceo_proposals'].find({}, {'_id': 0}).sort('date', -1).limit(20))
-for r in docs:
+# --- Recent CEO proposals ---
+proposal_docs = list(db_sm['ceo_proposals'].find({}, {'_id': 0}).sort('date', -1).limit(20))
+for r in proposal_docs:
     for k, v in r.items():
         if hasattr(v, 'isoformat'):
             r[k] = v.isoformat()
-print(json.dumps(docs, indent=2, default=str))
-""")
-    gh_api_put("metrics/recent_proposals.json", proposals, "update: recent CEO proposals")
+all_results['recent_proposals'] = json.dumps(proposal_docs, indent=2, default=str)
 
-
-def export_experiments():
-    """Export active experiment status."""
-    print("\n🧪 Exporting experiment data...")
-    experiments = query_mongodb("""
-db = client['system_monitor']
-docs = list(db['website_experiments'].find({}, {'_id': 0}))
-for r in docs:
+# --- Active experiments ---
+exp_docs = list(db_sm['website_experiments'].find({}, {'_id': 0}))
+for r in exp_docs:
     for k, v in r.items():
         if hasattr(v, 'isoformat'):
             r[k] = v.isoformat()
-print(json.dumps(docs, indent=2, default=str))
-""")
-    gh_api_put("experiments/active_experiments.json", experiments, "update: active experiments")
+all_results['experiments'] = json.dumps(exp_docs, indent=2, default=str)
 
-
-def export_recent_changes():
-    """Export recent website changes and deploy events."""
-    print("\n🚀 Exporting recent changes...")
-    changes = query_mongodb("""
-from datetime import datetime, timedelta
-db = client['system_monitor']
-cutoff = (datetime.utcnow() - timedelta(days=14)).isoformat()
-
-deploys = list(db['website_deploy_events'].find({'timestamp': {'$gte': cutoff}}, {'_id': 0}).sort('timestamp', -1).limit(20))
-changes = list(db['website_change_log'].find({}, {'_id': 0}).sort('created_at', -1).limit(20))
-
+# --- Recent website changes + deploys ---
+cutoff_14d = (datetime.utcnow() - timedelta(days=14)).isoformat()
+deploys = list(db_sm['website_deploy_events'].find({'timestamp': {'$gte': cutoff_14d}}, {'_id': 0}).sort('timestamp', -1).limit(20))
+changes = list(db_sm['website_change_log'].find({}, {'_id': 0}).sort('created_at', -1).limit(20))
 for doc in deploys + changes:
     for k, v in doc.items():
         if hasattr(v, 'isoformat'):
             doc[k] = v.isoformat()
+all_results['recent_website_changes'] = json.dumps({'deploys': deploys, 'changes': changes}, indent=2, default=str)
 
-print(json.dumps({'deploys': deploys, 'changes': changes}, indent=2, default=str))
+print(json.dumps(all_results))
 """)
-    gh_api_put("metrics/recent_website_changes.json", changes, "update: recent website changes")
+
+    try:
+        results = json.loads(raw)
+    except Exception as e:
+        print(f"  ✗ Failed to parse metric results: {e}\n  Raw: {raw[:300]}")
+        return
+
+    file_map = {
+        "metrics/active_listings.json":         ("active_listings",        "update: active listing counts"),
+        "metrics/recent_pipeline_runs.json":     ("pipeline_runs",          "update: recent pipeline runs"),
+        "metrics/ad_performance_7d.json":        ("ad_performance_7d",      "update: ad performance (7d)"),
+        "metrics/website_metrics_7d.json":       ("website_metrics_7d",     "update: website metrics (7d)"),
+        "metrics/data_coverage.json":            ("data_coverage",          "update: data coverage stats"),
+        "metrics/recent_proposals.json":         ("recent_proposals",       "update: recent CEO proposals"),
+        "experiments/active_experiments.json":   ("experiments",            "update: active experiments"),
+        "metrics/recent_website_changes.json":   ("recent_website_changes", "update: recent website changes"),
+    }
+    for repo_path, (key, msg) in file_map.items():
+        gh_api_put(repo_path, results.get(key, "{}"), msg)
 
 
 def export_git_activity():
@@ -378,15 +366,14 @@ def main():
     print(f"{'[DRY RUN] ' if DRY_RUN else ''}CEO Context Export — {datetime.now().strftime('%Y-%m-%d %H:%M AEST')}")
     print(f"Target repo: {REPO}")
 
+    load_sha_cache()
     export_claude_md()
     export_memory()
     export_ops_status()
     export_schema()
     export_fix_history()
     export_pipeline_config()
-    export_metrics()
-    export_experiments()
-    export_recent_changes()
+    export_metrics()  # includes experiments + recent changes
     export_git_activity()
     export_timestamp()
 
