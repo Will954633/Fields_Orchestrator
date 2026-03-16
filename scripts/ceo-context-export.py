@@ -204,6 +204,13 @@ def export_pipeline_config():
     except Exception as e:
         print(f"  ✗ settings.yaml: {e}")
 
+    # codex team operating model
+    try:
+        content = read_file(f"{ORCHESTRATOR_DIR}/config/codex_team_plan.yaml")
+        gh_api_put("config/codex_team_plan.yaml", content, "update: codex team plan")
+    except Exception as e:
+        print(f"  ✗ codex_team_plan.yaml: {e}")
+
 
 def export_metrics():
     """Export all metrics, experiments, and recent changes — one MongoDB connection."""
