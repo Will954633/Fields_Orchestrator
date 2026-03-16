@@ -27,7 +27,7 @@ import yaml
 
 REMOTE_HOST = "fields-orchestrator-vm@35.201.6.222"
 REMOTE_DIR = "/home/fields-orchestrator-vm/ceo-agents"
-CODEX_MODEL = "gpt-5.4-codex"
+CODEX_MODEL = "gpt-5.1-codex"
 DATE_STR = datetime.now().strftime("%Y-%m-%d")
 DRY_RUN = "--dry-run" in sys.argv
 TEAM_PLAN_PATH = Path(__file__).resolve().parent.parent / "config" / "codex_team_plan.yaml"
