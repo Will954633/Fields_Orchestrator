@@ -30,7 +30,7 @@ vm_topology:
 team:
   chief_of_staff:
     layer: command
-    status: planned
+    status: active
     cadence: daily
     runs_after:
       - engineering
