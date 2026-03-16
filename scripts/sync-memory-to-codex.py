@@ -36,8 +36,18 @@ TYPE_LABELS = {
 SEVERITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 
+MEMORY_NORMALIZATIONS = {
+    "`gpt-5.1-codex`": "`gpt-5.4-codex`",
+    "`gpt-5.3-codex`": "`gpt-5.4-codex`",
+    "gpt-5.1-codex": "gpt-5.4-codex",
+    "gpt-5.3-codex": "gpt-5.4-codex",
+    "ceo-agent-launcher-remote.sh": "ceo-agent-launcher.py",
+    "bash scripts/ceo-agent-launcher.py engineering  # single agent": "python3 scripts/ceo-agent-launcher.py --agent engineering  # single agent",
+    "bash scripts/ceo-agent-launcher.py              # all three": "python3 scripts/ceo-agent-launcher.py              # all three",
+}
 
-# ── Claude memory ──────────────────────────────────────────────────────────────
+
+# ── Claude memory ─────────────────────────────────────────────────────────────
 
 def parse_frontmatter(content: str) -> tuple[dict, str]:
     meta = {}
@@ -67,11 +77,17 @@ def load_memories() -> dict[str, list[dict]]:
             mem_type = meta.get("type", "reference")
             name = meta.get("name", path.stem)
             memories.setdefault(mem_type, []).append(
-                {"name": name, "type": mem_type, "body": body}
+                {"name": name, "type": mem_type, "body": normalize_memory_text(body)}
             )
         except Exception as e:
             print(f"Warning: could not parse {path.name}: {e}", file=sys.stderr)
     return memories
+
+
+def normalize_memory_text(text: str) -> str:
+    for old, new in MEMORY_NORMALIZATIONS.items():
+        text = text.replace(old, new)
+    return text
 
 
 def render_memories(memories: dict[str, list[dict]]) -> list[str]:
@@ -90,7 +106,7 @@ def render_memories(memories: dict[str, list[dict]]) -> list[str]:
     return lines
 
 
-# ── CEO proposals ──────────────────────────────────────────────────────────────
+# ── CEO proposals ─────────────────────────────────────────────────────────────
 
 def load_env():
     """Load .env file into os.environ."""
@@ -183,7 +199,7 @@ def render_proposals(proposals: list[dict]) -> list[str]:
     return lines
 
 
-# ── Main ───────────────────────────────────────────────────────────────────────
+# ── Main ──────────────────────────────────────────────────────────────────────
 
 def update_agents_md(content: str) -> None:
     if not AGENTS_MD.exists():
