@@ -25,7 +25,7 @@ from pathlib import Path
 
 REMOTE_HOST = "fields-orchestrator-vm@35.201.6.222"
 REMOTE_DIR = "/home/fields-orchestrator-vm/ceo-agents"
-CODEX_MODEL = "gpt-5.3-codex"
+CODEX_MODEL = "gpt-5.4-codex"
 DATE_STR = datetime.now().strftime("%Y-%m-%d")
 DRY_RUN = "--dry-run" in sys.argv
 
@@ -241,7 +241,7 @@ You MUST produce a proposal file at `proposals/{date}_product.json`:
     },
 }
 
-# ── Helpers ──────────────────────────────────────────────────────────────────
+# ── Helpers ─────────────────────────────────────────────────────────────────
 
 def log(msg):
     print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}")
