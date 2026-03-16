@@ -194,7 +194,33 @@ cat /home/fields/Fields_Orchestrator/SCHEMA_SNAPSHOT.md
 _Run `python3 scripts/sync-memory-to-codex.py` to refresh this section from Claude's memory._
 
 <!-- MEMORY_SECTION_START -->
-_Last synced: 2026-03-17 00:14 AEST_
+_Last synced: 2026-03-17 00:26 AEST_
+
+
+### CEO Agent Proposals — Action Required
+
+> These are findings and proposals from the management agent team. Pending items need implementation.
+
+
+#### ENGINEERING Agent — 2026-03-16 [⚠️ PENDING]
+
+Floor-plan enrichment is still falling over under Cosmos DB throttling, Calculate Property Insights reports failure on every transient write error, the public recently-sold API endpoint is 404ing while its health check passes, and scraper health telemetry has been stale since the curl_cffi migration — these gaps are burning pipeline time, hiding missing data, and breaking consumer endpoints.
+
+**Findings:**
+
+- `[HIGH]` **Floor plan analysis silently skips work when Cosmos throttles** — Step 106 has triggered at least two watchdog escalations today and five failures in the last 24h; the auto-repair summary shows get_floor_plan_stats() and get_properties_needing_floor_plan_analysis() 
+- `[HIGH]` **Calculate Property Insights marks the whole step failed on any single error** — Process 15 calls monitor.finish(status='success' if total_errors == 0 else 'failed') at line ~609, so even one Cosmos write error makes the watchdog think the step failed despite the script completing
+- `[MEDIUM]` **`/api/v1/properties/recently-sold` has regressed to 404** — The ops probe now records 404s for /api/v1/properties/recently-sold even though /api/v1/recently-sold/health still returns 200, which means the primary listing endpoint disappeared (likely after the S
+- `[MEDIUM]` **Scraper health dashboard has been frozen since curl_cffi migration** — Even though step 101 succeeded at 638s tonight, the Scraper Health table still shows the last run for every suburb on 2026-03-06–03-04, so the ops dashboard can no longer tell if scrapes are actually 
+
+**Proposed fixes:**
+
+- `[HIGH]` **Add RU-aware retry layer to floor-plan analysis** — 
+- `[MEDIUM]` **Harden Calculate Property Insights error handling** — 
+- `[MEDIUM]` **Restore `/api/v1/properties/recently-sold` contract** — 
+- `[MEDIUM]` **Emit scraper heartbeat metrics from curl_cffi** — 
+
+> To mark implemented: update `status` to `'completed'` in `system_monitor.ceo_proposals` where `agent='{p.get('agent')}'` and `date='{date}'`
 
 
 ### User Feedback & Corrections
