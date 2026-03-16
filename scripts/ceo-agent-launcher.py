@@ -21,6 +21,8 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 
+import yaml
+
 # ── Config ──────────────────────────────────────────────────────────────────
 
 REMOTE_HOST = "fields-orchestrator-vm@35.201.6.222"
@@ -28,6 +30,7 @@ REMOTE_DIR = "/home/fields-orchestrator-vm/ceo-agents"
 CODEX_MODEL = "gpt-5.4-codex"
 DATE_STR = datetime.now().strftime("%Y-%m-%d")
 DRY_RUN = "--dry-run" in sys.argv
+TEAM_PLAN_PATH = Path(__file__).resolve().parent.parent / "config" / "codex_team_plan.yaml"
 
 # ── Agent Definitions ───────────────────────────────────────────────────────
 
@@ -239,12 +242,57 @@ You MUST produce a proposal file at `proposals/{date}_product.json`:
 - The founder is technical — you can propose ambitious features, but rank by impact/effort.
 """,
     },
+    "data_quality": {
+        "name": "Data Quality Agent",
+        "focus": "Coverage, freshness, schema drift, trust risks, enrichment gaps",
+    },
+    "chief_of_staff": {
+        "name": "Chief of Staff Agent",
+        "focus": "Synthesis, prioritisation, conflict resolution, founder brief",
+    },
 }
 
-# ── Helpers ─────────────────────────────────────────────────────────────────
+# ── Helpers ──────────────────────────────────────────────────────────────────
 
 def log(msg):
     print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}")
+
+
+def load_team_plan():
+    """Load team plan YAML if available."""
+    if not TEAM_PLAN_PATH.exists():
+        return {}
+    try:
+        return yaml.safe_load(TEAM_PLAN_PATH.read_text()) or {}
+    except Exception as exc:
+        log(f"Warning: could not load {TEAM_PLAN_PATH.name}: {exc}")
+        return {}
+
+
+def build_default_agent_groups():
+    """Return default daily execution order based on the team plan."""
+    team = load_team_plan().get("team", {})
+    specialists = []
+    chief = []
+
+    for agent_id, agent_cfg in team.items():
+        if agent_id not in AGENTS:
+            continue
+        if agent_cfg.get("cadence") != "daily":
+            continue
+        if agent_cfg.get("status") != "active":
+            continue
+        if agent_id == "chief_of_staff":
+            chief.append(agent_id)
+        else:
+            specialists.append(agent_id)
+
+    if not specialists:
+        specialists = ["engineering", "growth", "product"]
+    groups = [specialists]
+    if chief:
+        groups.append(chief)
+    return groups
 
 
 def ssh_run(cmd, timeout=600):
@@ -404,10 +452,13 @@ def collect_and_store_proposals():
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
+    team_plan = load_team_plan()
     if "--list" in sys.argv:
         print("Available agents:")
         for aid, agent in AGENTS.items():
-            print(f"  {aid:15s} — {agent['name']}: {agent['focus']}")
+            status = team_plan.get("team", {}).get(aid, {}).get("status", "untracked")
+            cadence = team_plan.get("team", {}).get(aid, {}).get("cadence", "manual")
+            print(f"  {aid:15s} — {agent['name']}: {agent['focus']} [{status}, {cadence}]")
         return
 
     agent_filter = None
@@ -415,11 +466,15 @@ def main():
         if arg == "--agent" and i < len(sys.argv):
             agent_filter = sys.argv[i + 1]
 
-    agents_to_run = [agent_filter] if agent_filter else list(AGENTS.keys())
-    for aid in agents_to_run:
-        if aid not in AGENTS:
-            print(f"Unknown agent: {aid}. Use --list.")
+    if agent_filter:
+        if agent_filter not in AGENTS:
+            print(f"Unknown agent: {agent_filter}. Use --list.")
             sys.exit(1)
+        agent_groups = [[agent_filter]]
+    else:
+        agent_groups = build_default_agent_groups()
+
+    agents_to_run = [aid for group in agent_groups for aid in group]
 
     print(f"CEO Agent Launcher — {DATE_STR}")
     print(f"Agents: {', '.join(agents_to_run)}")
@@ -431,8 +486,9 @@ def main():
         update_remote_repos()
         deploy_prompts()
 
-    for aid in agents_to_run:
-        run_agent(aid)
+    for group in agent_groups:
+        for aid in group:
+            run_agent(aid)
 
     if not DRY_RUN:
         push_to_github()
