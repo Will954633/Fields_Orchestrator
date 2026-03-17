@@ -29,6 +29,8 @@ operating_rules:
   - "Chief of Staff must synthesize only after successful specialist runs or explicitly degraded inputs."
   - "Blank telemetry exports are a blocking context failure, not an acceptable warning."
   - "All proposal findings should state confidence, evidence freshness, blocked_by, and data_gaps."
+  - "Tuesday CEO reviews must explicitly check both the latest daily orchestrator run and the most recent weekly all-suburbs orchestrator run."
+  - "Every CEO growth review must check both Facebook Ads and Google Ads and alert the founder to anything material."
 
 target_market:
   suburbs:
@@ -56,6 +58,10 @@ ads:
     - "Broad targeting with Advantage Audience outperforms custom audiences."
   policy_constraints:
     - "No valuation references in Facebook posts."
+  ceo_review_rules:
+    - "Compare ad performance against established learnings and documented tests before suggesting changes."
+    - "Report early results, completed tests, delivery problems, tracking issues, and wasted spend."
+    - "Only suggest a new ad test when there is a clear high-upside opportunity that has not already been run."
 
 experimentation:
   minimum_samples:
@@ -67,4 +73,3 @@ telemetry_slas:
   context_export_max_age_hours: 12
   scraper_freshness_max_age_hours: 12
   blank_export_policy: "abort_agent_run"
-
