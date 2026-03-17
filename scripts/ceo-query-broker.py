@@ -12,7 +12,9 @@ import argparse
 from datetime import timedelta
 from typing import Any
 
-from ceo_agent_lib import dumps_json, get_client, load_founder_truths, now_aest, to_jsonable
+import time
+
+from ceo_agent_lib import dumps_json, get_client, load_founder_truths, now_aest, retry_cosmos_read, to_jsonable
 
 
 def fetch_ops_summary(sm) -> dict[str, Any]:
@@ -91,7 +93,7 @@ def fetch_collection_counts(sm) -> dict[str, Any]:
         "website_deploy_events",
         "ad_daily_metrics",
     ]
-    counts = {name: sm[name].count_documents({}) for name in keys}
+    counts = {name: retry_cosmos_read(lambda coll=sm[name]: coll.count_documents({})) for name in keys}
     return {"generated_at": now_aest().isoformat(), "counts": counts}
 
 
@@ -101,12 +103,14 @@ def fetch_active_listings() -> dict[str, Any]:
         db_gc = client["Gold_Coast"]
         skip = {"suburb_median_prices", "suburb_statistics", "change_detection_snapshots"}
         counts = {}
-        for coll in sorted(db_gc.list_collection_names()):
+        coll_names = retry_cosmos_read(lambda: db_gc.list_collection_names())
+        for coll in sorted(coll_names):
             if coll.startswith("system") or coll in skip:
                 continue
-            total = db_gc[coll].count_documents({"listing_status": "for_sale"})
+            total = retry_cosmos_read(lambda coll_name=coll: db_gc[coll_name].count_documents({"listing_status": "for_sale"}))
             if total > 0:
                 counts[coll] = total
+            time.sleep(0.12)
         return {"generated_at": now_aest().isoformat(), "counts": counts}
     finally:
         client.close()
