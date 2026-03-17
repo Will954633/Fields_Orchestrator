@@ -1,0 +1,20 @@
+[Unit]
+Description=Fields Builder Telegram Bridge
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=projects
+Group=projects
+WorkingDirectory=/home/fields/Fields_Orchestrator
+EnvironmentFile=/home/fields/Fields_Orchestrator/.env
+ExecStart=/home/fields/venv/bin/python3 /home/fields/Fields_Orchestrator/scripts/builder-telegram-bridge.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=fields-builder-telegram
+
+[Install]
+WantedBy=multi-user.target
