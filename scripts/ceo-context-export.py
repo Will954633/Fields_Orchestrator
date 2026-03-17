@@ -330,11 +330,13 @@ def export_founder_requests() -> None:
         if not folder.exists():
             continue
         for path in sorted(folder.glob("*.md")):
-            if path.name == "README.md":
+            if path.name in {"README.md", "TEMPLATE.md"}:
                 continue
             gh_api_put(f"founder-requests/{folder_name}/{path.name}", read_file(path), f"update: founder request {folder_name}/{path.name}")
 
     for path in open_files:
+        if path.name == "TEMPLATE.md":
+            continue
         meta, body = _parse_frontmatter(path)
         response_path = response_map.get(path.stem)
         latest_update = datetime.fromtimestamp(path.stat().st_mtime)
