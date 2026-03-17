@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -15,6 +16,7 @@ from zoneinfo import ZoneInfo
 
 import yaml
 from pymongo import MongoClient
+from pymongo.errors import OperationFailure
 
 
 ROOT = Path("/home/fields/Fields_Orchestrator")
@@ -80,3 +82,26 @@ def slugify(value: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
     return slug or "item"
 
+
+def retry_cosmos_read(fn, *, attempts: int = 6, base_sleep: float = 0.35):
+    last_exc = None
+    for attempt in range(1, attempts + 1):
+        try:
+            return fn()
+        except OperationFailure as exc:
+            if getattr(exc, "code", None) != 16500:
+                raise
+            last_exc = exc
+            retry_after_ms = 0
+            details = getattr(exc, "details", {}) or {}
+            raw = ""
+            if isinstance(details, dict):
+                raw = str(details.get("errmsg", ""))
+            if "RetryAfterMs=" in str(exc):
+                match = re.search(r"RetryAfterMs=(\d+)", str(exc))
+                if match:
+                    retry_after_ms = int(match.group(1))
+            sleep_s = max(base_sleep * attempt, retry_after_ms / 1000 if retry_after_ms else 0)
+            time.sleep(sleep_s)
+    if last_exc:
+        raise last_exc
