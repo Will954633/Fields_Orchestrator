@@ -34,6 +34,7 @@ EXPORT_RECORDS: list[dict[str, Any]] = []
 EXPORT_ERRORS: list[str] = []
 
 REQUIRED_JSON_EXPORTS = {
+    "metrics/orchestrator_health.json": "Tuesday CEO reviews must verify daily and weekly orchestrator health.",
     "metrics/ad_performance_7d.json": "Ad telemetry is required for growth analysis.",
     "metrics/website_metrics_7d.json": "Website telemetry is required for experiment and funnel analysis.",
     "metrics/data_coverage.json": "Coverage telemetry is required for product and data-trust analysis.",
@@ -42,6 +43,7 @@ REQUIRED_JSON_EXPORTS = {
 }
 
 REQUIRED_EXPORT_VALIDATORS = {
+    "metrics/orchestrator_health.json": lambda payload: bool(payload.get("daily") and payload.get("weekly")),
     "metrics/ad_performance_7d.json": lambda payload: bool(payload.get("facebook") or payload.get("google")),
     "metrics/website_metrics_7d.json": lambda payload: bool(payload.get("rows")),
     "metrics/data_coverage.json": lambda payload: bool(payload),
@@ -63,6 +65,7 @@ READ_ONLY_TOOL_CONTRACT = {
     "commands": [
         "founder-truths",
         "ops-summary",
+        "orchestrator-health",
         "collection-counts",
         "pipeline-runs --days N --limit N",
         "website-metrics --days N",
@@ -269,6 +272,7 @@ def export_pipeline_config() -> None:
 def export_metrics_and_memory() -> None:
     print("\n📈 Exporting metrics, timelines, and structured memory...")
     metrics = {
+        "metrics/orchestrator_health.json": query_json(["/home/fields/venv/bin/python3", "scripts/ceo-query-broker.py", "orchestrator-health"]),
         "metrics/active_listings.json": query_json(["/home/fields/venv/bin/python3", "scripts/ceo-query-broker.py", "active-listings"]),
         "metrics/recent_pipeline_runs.json": query_json(["/home/fields/venv/bin/python3", "scripts/ceo-query-broker.py", "pipeline-runs", "--days", "7", "--limit", "20"]),
         "metrics/ad_performance_7d.json": query_json(["/home/fields/venv/bin/python3", "scripts/ceo-query-broker.py", "ad-metrics", "--days", "7", "--limit", "50"]),
