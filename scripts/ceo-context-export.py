@@ -302,25 +302,27 @@ def _coverage_query_script() -> str:
 import json
 import os
 import sys
+import time
 sys.path.insert(0, '/home/fields/Fields_Orchestrator/scripts')
-from ceo_agent_lib import get_client, to_jsonable
+from ceo_agent_lib import get_client, retry_cosmos_read, to_jsonable
 
 client = get_client()
 db_gc = client['Gold_Coast']
 skip = {'suburb_median_prices', 'suburb_statistics', 'change_detection_snapshots'}
 coverage = {}
-for coll in sorted(db_gc.list_collection_names()):
+for coll in sorted(retry_cosmos_read(lambda: db_gc.list_collection_names())):
     if coll.startswith('system') or coll in skip:
         continue
-    total = db_gc[coll].count_documents({'listing_status': 'for_sale'})
+    total = retry_cosmos_read(lambda coll_name=coll: db_gc[coll_name].count_documents({'listing_status': 'for_sale'}))
     if total == 0:
         continue
-    enriched = db_gc[coll].count_documents({'listing_status': 'for_sale', 'valuation_data': {'$exists': True}})
+    enriched = retry_cosmos_read(lambda coll_name=coll: db_gc[coll_name].count_documents({'listing_status': 'for_sale', 'valuation_data': {'$exists': True}}))
     coverage[coll] = {
         'active': total,
         'enriched': enriched,
         'pct': round(enriched / total * 100, 1) if total else 0,
     }
+    time.sleep(0.12)
 print(json.dumps(to_jsonable(coverage)))
 client.close()
 """
