@@ -23,6 +23,7 @@ import json
 import time
 import argparse
 import traceback
+from urllib.parse import urlparse
 from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
 from pymongo import MongoClient
@@ -82,6 +83,22 @@ def connect():
     crm = client["CRM_All_Data"]
     sm = client["system_monitor"]
     return client, crm, sm
+
+
+def normalize_page_path(path):
+    """Collapse malformed absolute URLs back to canonical website paths."""
+    if not path:
+        return "/"
+    value = str(path).strip()
+    if value.startswith("/http://") or value.startswith("/https://"):
+        value = value[1:]
+    if value.startswith("http://") or value.startswith("https://"):
+        parsed = urlparse(value)
+        normalized = parsed.path or "/"
+        if parsed.query:
+            normalized = f"{normalized}?{parsed.query}"
+        return normalized
+    return value
 
 
 def collect_day_metrics(crm, sm, target_date):
@@ -221,20 +238,27 @@ def collect_day_metrics(crm, sm, target_date):
 
     pages = {}
     for p in page_agg:
-        pages[p["_id"]] = {
-            "views": p["views"],
-            "unique_sessions": p["unique_sessions_count"],
-        }
+        normalized_path = normalize_page_path(p["_id"])
+        entry = pages.setdefault(normalized_path, {"views": 0, "unique_sessions": 0})
+        entry["views"] += p["views"]
+        entry["unique_sessions"] += p["unique_sessions_count"]
 
-    # Get per-page duration and scroll from session-level data for top pages
+    # Get per-page duration and scroll from page-level events, not whole-session metrics
     top_paths = list(pages.keys())[:10]
     for path in top_paths:
-        path_stats = cosmos_retry(lambda pp=path: list(sessions_col.aggregate([
-            {"$match": {**day_filter, "pages.path": pp, "metrics.is_bounce": False}},
+        raw_candidates = [path]
+        if path.startswith("/"):
+            raw_candidates.append(path[1:])
+            raw_candidates.append(f"https://fieldsestate.com.au{path}")
+            raw_candidates.append(f"/https://fieldsestate.com.au{path}")
+        path_stats = cosmos_retry(lambda pp=raw_candidates: list(sessions_col.aggregate([
+            {"$match": {**day_filter, "pages.path": {"$in": pp}, "metrics.is_bounce": False}},
+            {"$unwind": "$pages"},
+            {"$match": {"pages.path": {"$in": pp}}},
             {"$group": {
                 "_id": None,
-                "avg_duration": {"$avg": "$metrics.duration_seconds"},
-                "avg_scroll": {"$avg": "$metrics.max_scroll_depth"},
+                "avg_duration": {"$avg": "$pages.time_on_page"},
+                "avg_scroll": {"$avg": "$pages.scroll_depth"},
             }},
         ])))
         if path_stats:
