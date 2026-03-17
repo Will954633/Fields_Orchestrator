@@ -12,6 +12,7 @@ import base64
 import glob
 import json
 import os
+import re
 import subprocess
 import sys
 from datetime import datetime, timedelta
@@ -27,6 +28,7 @@ REPO = "Will954633/fields-ceo-context"
 ORCHESTRATOR_DIR = Path("/home/fields/Fields_Orchestrator")
 MEMORY_DIR = Path("/home/projects/.claude/projects/-home-fields-Fields-Orchestrator/memory")
 WEBSITE_DIR = Path("/home/fields/Feilds_Website/01_Website")
+FOUNDER_REQUESTS_DIR = ORCHESTRATOR_DIR / "ceo-founder-requests"
 DRY_RUN = "--dry-run" in sys.argv
 
 SHA_CACHE: dict[str, str] = {}
@@ -258,6 +260,109 @@ def export_fix_history() -> None:
             continue
 
 
+def _parse_frontmatter(path: Path) -> tuple[dict[str, Any], str]:
+    raw = read_file(path)
+    if not raw.startswith("---\n"):
+        return {}, raw
+
+    match = re.match(r"^---\n(.*?)\n---\n?(.*)$", raw, re.DOTALL)
+    if not match:
+        return {}, raw
+
+    try:
+        meta = yaml.safe_load(match.group(1)) or {}
+        if not isinstance(meta, dict):
+            meta = {}
+    except Exception:
+        meta = {}
+    body = match.group(2)
+    return meta, body
+
+
+def _extract_title(path: Path, meta: dict[str, Any], body: str) -> str:
+    if meta.get("title"):
+        return str(meta["title"]).strip()
+    for line in body.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            return stripped.lstrip("#").strip()
+        if stripped:
+            return stripped[:120]
+    return path.stem.replace("-", " ")
+
+
+def _extract_summary(body: str, limit: int = 220) -> str:
+    lines: list[str] = []
+    for line in body.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        lines.append(stripped)
+        if len(" ".join(lines)) >= limit:
+            break
+    summary = " ".join(lines)
+    if len(summary) > limit:
+        return summary[: limit - 3].rstrip() + "..."
+    return summary
+
+
+def export_founder_requests() -> None:
+    print("\n📬 Exporting founder request threads...")
+    if not FOUNDER_REQUESTS_DIR.exists():
+        print("  [no founder request directory]")
+        return
+
+    readme_path = FOUNDER_REQUESTS_DIR / "README.md"
+    if readme_path.exists():
+        gh_api_put("founder-requests/README.md", read_file(readme_path), "update: founder requests readme")
+
+    open_dir = FOUNDER_REQUESTS_DIR / "open"
+    responses_dir = FOUNDER_REQUESTS_DIR / "responses"
+    closed_dir = FOUNDER_REQUESTS_DIR / "closed"
+
+    open_files = sorted(open_dir.glob("*.md")) if open_dir.exists() else []
+    response_files = sorted(responses_dir.glob("*.md")) if responses_dir.exists() else []
+
+    response_map: dict[str, Path] = {path.stem: path for path in response_files}
+    threads: list[dict[str, Any]] = []
+
+    for folder_name, folder in (("open", open_dir), ("responses", responses_dir), ("closed", closed_dir)):
+        if not folder.exists():
+            continue
+        for path in sorted(folder.glob("*.md")):
+            if path.name == "README.md":
+                continue
+            gh_api_put(f"founder-requests/{folder_name}/{path.name}", read_file(path), f"update: founder request {folder_name}/{path.name}")
+
+    for path in open_files:
+        meta, body = _parse_frontmatter(path)
+        response_path = response_map.get(path.stem)
+        latest_update = datetime.fromtimestamp(path.stat().st_mtime)
+        if response_path is not None:
+            response_mtime = datetime.fromtimestamp(response_path.stat().st_mtime)
+            if response_mtime > latest_update:
+                latest_update = response_mtime
+        threads.append(
+            {
+                "id": str(meta.get("id") or path.stem),
+                "request_file": f"founder-requests/open/{path.name}",
+                "response_file": f"founder-requests/responses/{response_path.name}" if response_path else None,
+                "title": _extract_title(path, meta, body),
+                "area": meta.get("area"),
+                "priority": meta.get("priority"),
+                "status": meta.get("status", "open"),
+                "type": meta.get("type"),
+                "owner": meta.get("owner"),
+                "created_at": meta.get("created_at"),
+                "latest_update": latest_update.isoformat(),
+                "summary": _extract_summary(body),
+            }
+        )
+
+    threads.sort(key=lambda row: (str(row.get("priority") or ""), str(row.get("latest_update") or "")), reverse=True)
+    gh_api_put("founder-requests/index.json", dumps_json({"generated_at": datetime.now().isoformat(), "open_threads": threads}), "update: founder requests index")
+
+
 def export_pipeline_config() -> None:
     print("\n⚙️ Exporting pipeline config...")
     gh_api_put("config/process_commands.yaml", read_file(ORCHESTRATOR_DIR / "config" / "process_commands.yaml"), "update: pipeline process commands")
@@ -471,6 +576,7 @@ def main() -> None:
     export_claude_md()
     export_memory()
     export_founder_truths()
+    export_founder_requests()
     export_ops_status()
     export_schema()
     export_fix_history()
