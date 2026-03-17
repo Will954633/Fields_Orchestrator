@@ -383,6 +383,8 @@ def render_run_summary(
     proposals: list[dict[str, Any]],
     manifest: dict[str, Any],
     agent_results: dict[str, Any],
+    run_status: str = "unknown",
+    error_message: str | None = None,
     invalid_files: list[dict[str, Any]] | None = None,
 ) -> str:
     generated_at = now_aest().strftime("%Y-%m-%d %H:%M:%S AEST")
@@ -391,12 +393,14 @@ def render_run_summary(
         "",
         f"- Date: `{DATE_STR}`",
         f"- Generated: `{generated_at}`",
+        f"- Run status: `{run_status}`",
         f"- Context degraded: `{manifest.get('degraded', False)}`",
         f"- Agents with proposals: `{', '.join(sorted(p.get('agent', 'unknown') for p in proposals)) or 'none'}`",
         "",
-        "## Agent Status",
-        "",
     ]
+    if error_message:
+        lines.extend(["## Run Error", "", error_message, ""])
+    lines.extend(["## Agent Status", ""])
     if agent_results:
         for agent_id in sorted(agent_results):
             result = agent_results[agent_id]
@@ -453,6 +457,8 @@ def write_local_run_artifacts(
     proposals: list[dict[str, Any]],
     manifest: dict[str, Any],
     agent_results: dict[str, Any],
+    run_status: str = "unknown",
+    error_message: str | None = None,
     invalid_files: list[dict[str, Any]] | None = None,
 ) -> Path:
     run_dir = LOCAL_RUNS_DIR / DATE_STR / run_id
@@ -460,7 +466,7 @@ def write_local_run_artifacts(
 
     summary_path = run_dir / "summary.md"
     summary_path.write_text(
-        render_run_summary(run_id, proposals, manifest, agent_results, invalid_files),
+        render_run_summary(run_id, proposals, manifest, agent_results, run_status, error_message, invalid_files),
         encoding="utf-8",
     )
 
@@ -468,6 +474,8 @@ def write_local_run_artifacts(
         "run_id": run_id,
         "date": DATE_STR,
         "generated_at": now_aest().isoformat(),
+        "run_status": run_status,
+        "error_message": error_message,
         "context_degraded": manifest.get("degraded", False),
         "agent_results": agent_results,
         "proposal_agents": sorted(proposal.get("agent", "unknown") for proposal in proposals),
@@ -495,6 +503,25 @@ def write_local_run_artifacts(
     (latest_dir / "LATEST_RUN.txt").write_text(f"{run_dir}\n", encoding="utf-8")
     (latest_dir / "LATEST_SUMMARY.md").write_text(summary_path.read_text(encoding="utf-8"), encoding="utf-8")
     return run_dir
+
+
+def write_run_failure_artifact(
+    run_id: str,
+    manifest: dict[str, Any] | None,
+    agent_results: dict[str, Any],
+    error_message: str,
+    proposals: list[dict[str, Any]] | None = None,
+    invalid_files: list[dict[str, Any]] | None = None,
+) -> Path:
+    return write_local_run_artifacts(
+        run_id=run_id,
+        proposals=proposals or [],
+        manifest=manifest or {"degraded": True},
+        agent_results=agent_results,
+        run_status="failed",
+        error_message=error_message,
+        invalid_files=invalid_files,
+    )
 
 
 def upsert_memory(sm, proposal: dict[str, Any]) -> None:
@@ -616,6 +643,11 @@ def main() -> None:
     load_env_file()
     args = parse_args()
     team_plan = load_team_plan()
+    run_id: str | None = None
+    manifest: dict[str, Any] | None = None
+    all_results: dict[str, Any] = {}
+    successful_agents: list[str] = []
+    client = None
 
     if args.list:
         print("Available agents:")
@@ -638,22 +670,30 @@ def main() -> None:
         proposals = [normalize_proposal(item, run_id) for item in fetched]
         if not proposals:
             raise RuntimeError("No remote proposals found to sync.")
-        run_dir = write_local_run_artifacts(run_id, proposals, manifest, {}, invalid_files)
+        run_dir = write_local_run_artifacts(
+            run_id,
+            proposals,
+            manifest,
+            {},
+            run_status="synced",
+            invalid_files=invalid_files,
+        )
         print(f"Synced {len(proposals)} proposal files to {run_dir}")
         return
     if args.dry_run:
         print("[DRY RUN MODE]")
         return
 
-    update_remote_repos()
-    deploy_prompts()
-    manifest = read_remote_context_manifest()
-    ensure_context_is_healthy(manifest)
-
-    client = get_client()
-    sm = client["system_monitor"]
-    run_id = start_run(sm, agents_requested, manifest)
     try:
+        update_remote_repos()
+        deploy_prompts()
+        manifest = read_remote_context_manifest()
+        run_id = f"{DATE_STR}_{now_aest().strftime('%H%M%S')}"
+        ensure_context_is_healthy(manifest)
+
+        client = get_client()
+        sm = client["system_monitor"]
+        run_id = start_run(sm, agents_requested, manifest)
         specialist_results = {}
         for agent_id in specialists:
             result = run_agent(agent_id)
@@ -675,11 +715,11 @@ def main() -> None:
         push_to_github()
         proposals = fetch_remote_proposals(successful_agents)
         stored_agents = store_proposals(sm, run_id, proposals)
-        run_dir = write_local_run_artifacts(run_id, proposals, manifest, all_results)
 
         status = "success" if len(successful_agents) == len(agents_requested if not chiefs or not specialist_failures else specialists) else "partial_failure"
         if specialist_failures:
             status = "partial_failure"
+        run_dir = write_local_run_artifacts(run_id, proposals, manifest, all_results, run_status=status)
         update_run(
             sm,
             run_id,
@@ -693,8 +733,33 @@ def main() -> None:
             finished_at=now_aest().isoformat(),
         )
         print(f"\nCEO agent run complete.\nLocal artifacts: {run_dir}")
+    except Exception as exc:
+        if run_id is None:
+            run_id = f"{DATE_STR}_{now_aest().strftime('%H%M%S')}"
+        error_message = str(exc)
+        run_dir = write_run_failure_artifact(run_id, manifest, all_results, error_message)
+        if client is not None:
+            try:
+                sm = client["system_monitor"]
+                existing = sm["ceo_runs"].find_one({"_id": run_id}, {"_id": 1})
+                if existing:
+                    update_run(
+                        sm,
+                        run_id,
+                        status="failed",
+                        agents_completed=successful_agents,
+                        agent_results=all_results,
+                        local_artifact_dir=str(run_dir),
+                        error_message=error_message,
+                        finished_at=now_aest().isoformat(),
+                    )
+            except Exception as update_exc:
+                log(f"Warning: could not update failed run record: {update_exc}")
+        print(f"\nCEO agent run failed.\nLocal artifacts: {run_dir}", file=sys.stderr)
+        raise
     finally:
-        client.close()
+        if client is not None:
+            client.close()
 
 
 if __name__ == "__main__":
