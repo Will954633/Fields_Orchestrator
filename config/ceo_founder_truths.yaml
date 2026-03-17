@@ -1,0 +1,70 @@
+version: 1
+updated_at_aest: "2026-03-17"
+
+brand:
+  company_name: "Fields Estate"
+  tagline: "Smarter with data"
+  mission: "Help buyers and sellers make informed real estate decisions through original analysis, local expertise, and transparent methodology."
+  stage: "Pre-revenue"
+
+systems:
+  primary_database: "Gold_Coast"
+  deprecated_databases:
+    - "Gold_Coast_Currently_For_Sale"
+    - "Gold_Coast_Recently_Sold"
+  active_listings_filter:
+    listing_status: "for_sale"
+  sold_listings_filter:
+    listing_status: "sold"
+  enriched_listing_requirement: "valuation_data exists"
+  website_repo: "Will954633/Website_Version_Feb_2026"
+  orchestrator_repo: "Will954633/Fields_Orchestrator"
+  context_repo: "Will954633/fields-ceo-context"
+  sandbox_repo: "Will954633/fields-ceo-sandbox"
+
+operating_rules:
+  - "No production DB writes from the remote CEO VM."
+  - "No direct deploys from the remote CEO VM."
+  - "No direct ad changes from the remote CEO VM."
+  - "Chief of Staff must synthesize only after successful specialist runs or explicitly degraded inputs."
+  - "Blank telemetry exports are a blocking context failure, not an acceptable warning."
+  - "All proposal findings should state confidence, evidence freshness, blocked_by, and data_gaps."
+
+target_market:
+  suburbs:
+    - "Robina"
+    - "Burleigh Waters"
+    - "Varsity Lakes"
+
+website:
+  deploy: "GitHub push to website repo triggers Netlify auto-deploy."
+  database_env_var: "COSMOS_CONNECTION_STRING"
+  health_contracts:
+    - "/api/v1/properties/for-sale"
+    - "/api/v1/properties/recently-sold"
+    - "/api/v1/address-search"
+    - "/api/v1/analyse-property"
+
+ads:
+  primary_metric: "Cost per website session"
+  established_learnings:
+    - "Sell-focused Facebook content does not work."
+    - "Lifestyle imagery is a poor performer."
+    - "Informational tone outperforms aspirational tone."
+    - "Property-specific stories outperform generic market content."
+    - "OFFSITE_CONVERSIONS is the correct optimisation goal for website traffic."
+    - "Broad targeting with Advantage Audience outperforms custom audiences."
+  policy_constraints:
+    - "No valuation references in Facebook posts."
+
+experimentation:
+  minimum_samples:
+    for_sale_page_v1_sessions: 800
+    discover_mode_v1_sessions: 300
+  review_rule: "Do not call an experiment before the minimum sample or when telemetry is degraded."
+
+telemetry_slas:
+  context_export_max_age_hours: 12
+  scraper_freshness_max_age_hours: 12
+  blank_export_policy: "abort_agent_run"
+
