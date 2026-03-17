@@ -27,6 +27,7 @@ REMOTE_HOST = "fields-orchestrator-vm@35.201.6.222"
 REMOTE_DIR = "/home/fields-orchestrator-vm/ceo-agents"
 CODEX_MODEL = "gpt-5.1-codex"
 TEAM_PLAN_PATH = Path(__file__).resolve().parent.parent / "config" / "codex_team_plan.yaml"
+LOCAL_RUNS_DIR = Path(__file__).resolve().parent.parent / "artifacts" / "ceo-runs"
 DATE_STR = now_aest().strftime("%Y-%m-%d")
 
 PROPOSAL_DEFAULTS = {
@@ -264,24 +265,40 @@ fi
 def fetch_remote_proposals(agent_ids: list[str]) -> list[dict[str, Any]]:
     if not agent_ids:
         return []
-    refs = " ".join(f"{REMOTE_DIR}/sandbox/proposals/{DATE_STR}_{agent}.json" for agent in agent_ids)
-    result = ssh_run(f"cat {refs} 2>/dev/null", timeout=60)
-    raw = (result.stdout or "").strip()
-    if not raw:
-        return []
-
+    refs = [f"{REMOTE_DIR}/sandbox/proposals/{DATE_STR}_{agent}.json" for agent in agent_ids]
     proposals: list[dict[str, Any]] = []
-    decoder = json.JSONDecoder()
-    pos = 0
-    while pos < len(raw):
-        tail = raw[pos:].lstrip()
-        if not tail:
-            break
-        pos += len(raw[pos:]) - len(tail)
-        obj, consumed = decoder.raw_decode(tail)
-        proposals.append(obj)
-        pos += consumed
+    for ref in refs:
+        result = ssh_run(f"cat {ref} 2>/dev/null", timeout=30)
+        raw = (result.stdout or "").strip()
+        if not raw:
+            continue
+        try:
+            proposals.append(json.loads(raw))
+        except json.JSONDecodeError as exc:
+            log(f"Skipping malformed proposal file {ref}: {exc}")
     return proposals
+
+
+def fetch_available_remote_proposals() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    result = ssh_run(
+        f"cd {REMOTE_DIR}/sandbox/proposals && ls -1 {DATE_STR}_*.json 2>/dev/null | sed 's#^#{REMOTE_DIR}/sandbox/proposals/#'",
+        timeout=30,
+    )
+    refs = [line.strip() for line in (result.stdout or "").splitlines() if line.strip()]
+    if not refs:
+        return [], []
+    proposals: list[dict[str, Any]] = []
+    invalid: list[dict[str, Any]] = []
+    for ref in refs:
+        fetched = ssh_run(f"cat {ref} 2>/dev/null", timeout=30)
+        raw = (fetched.stdout or "").strip()
+        if not raw:
+            continue
+        try:
+            proposals.append(json.loads(raw))
+        except json.JSONDecodeError as exc:
+            invalid.append({"path": ref, "raw": raw, "error": str(exc)})
+    return proposals, invalid
 
 
 def normalize_proposal(proposal: dict[str, Any], run_id: str) -> dict[str, Any]:
@@ -301,6 +318,183 @@ def normalize_proposal(proposal: dict[str, Any], run_id: str) -> dict[str, Any]:
         item.setdefault("blocked_by", [])
         item.setdefault("data_gaps", [])
     return proposal
+
+
+def format_list(values: list[Any]) -> str:
+    clean = [str(value).strip() for value in values if str(value).strip()]
+    return ", ".join(clean) if clean else "None"
+
+
+def render_findings_md(findings: list[dict[str, Any]]) -> list[str]:
+    lines: list[str] = []
+    if not findings:
+        return ["No findings recorded.", ""]
+    for finding in findings:
+        severity = str(finding.get("severity", "unknown")).upper()
+        title = finding.get("title", "Untitled finding")
+        lines.append(f"- [{severity}] **{title}**")
+        detail = finding.get("detail")
+        if detail:
+            lines.append(f"  {detail}")
+        recommendation = finding.get("recommendation")
+        if recommendation:
+            lines.append(f"  Recommendation: {recommendation}")
+        lines.append(
+            f"  Confidence: `{finding.get('confidence', 'unknown')}` | Freshness: `{finding.get('evidence_freshness', 'unknown')}`"
+        )
+        blocked_by = format_list(finding.get("blocked_by", []))
+        data_gaps = format_list(finding.get("data_gaps", []))
+        lines.append(f"  Blocked by: {blocked_by}")
+        lines.append(f"  Data gaps: {data_gaps}")
+    lines.append("")
+    return lines
+
+
+def render_proposals_md(items: list[dict[str, Any]]) -> list[str]:
+    lines: list[str] = []
+    if not items:
+        return ["No proposals recorded.", ""]
+    for item in items:
+        priority = str(item.get("priority", "unknown")).upper()
+        title = item.get("title", "Untitled proposal")
+        lines.append(f"- [{priority}] **{title}**")
+        problem = item.get("problem")
+        if problem:
+            lines.append(f"  Problem: {problem}")
+        detail = item.get("proposal") or item.get("description") or item.get("solution")
+        if detail:
+            lines.append(f"  Proposal: {detail}")
+        lines.append(
+            f"  Owner: `{item.get('owner', 'unknown')}` | Time horizon: `{item.get('time_horizon', 'unknown')}` | Decision required: `{item.get('decision_required', False)}`"
+        )
+        lines.append(
+            f"  Confidence: `{item.get('confidence', 'unknown')}` | Freshness: `{item.get('evidence_freshness', 'unknown')}`"
+        )
+        lines.append(f"  Depends on: {format_list(item.get('depends_on', []))}")
+        lines.append(f"  Blocks: {format_list(item.get('blocks', []))}")
+        lines.append(f"  Blocked by: {format_list(item.get('blocked_by', []))}")
+        lines.append(f"  Data gaps: {format_list(item.get('data_gaps', []))}")
+    lines.append("")
+    return lines
+
+
+def render_run_summary(
+    run_id: str,
+    proposals: list[dict[str, Any]],
+    manifest: dict[str, Any],
+    agent_results: dict[str, Any],
+    invalid_files: list[dict[str, Any]] | None = None,
+) -> str:
+    generated_at = now_aest().strftime("%Y-%m-%d %H:%M:%S AEST")
+    lines = [
+        f"# CEO Agent Run Summary - {run_id}",
+        "",
+        f"- Date: `{DATE_STR}`",
+        f"- Generated: `{generated_at}`",
+        f"- Context degraded: `{manifest.get('degraded', False)}`",
+        f"- Agents with proposals: `{', '.join(sorted(p.get('agent', 'unknown') for p in proposals)) or 'none'}`",
+        "",
+        "## Agent Status",
+        "",
+    ]
+    if agent_results:
+        for agent_id in sorted(agent_results):
+            result = agent_results[agent_id]
+            proposal_state = "present" if result.get("proposal", {}).get("present") else "missing"
+            lines.append(
+                f"- `{agent_id}`: success=`{result.get('success', False)}` exit_code=`{result.get('exit_code')}` proposal=`{proposal_state}`"
+            )
+    else:
+        lines.append("- No agent execution metadata captured in this artifact.")
+    lines.append("")
+    if invalid_files:
+        lines.extend(["## Parse Warnings", ""])
+        for item in invalid_files:
+            lines.append(f"- `{Path(item.get('path', 'unknown')).name}`: {item.get('error', 'Unknown parse error')}")
+        lines.append("")
+
+    for proposal in sorted(proposals, key=lambda item: item.get("agent", "")):
+        agent = proposal.get("agent", "unknown")
+        lines.extend(
+            [
+                f"## {agent.replace('_', ' ').title()}",
+                "",
+                f"**Summary:** {proposal.get('summary', 'No summary provided.')}",
+                "",
+                "### Findings",
+                "",
+            ]
+        )
+        lines.extend(render_findings_md(proposal.get("findings", [])))
+        lines.extend(["### Proposals", ""])
+        lines.extend(render_proposals_md(proposal.get("proposals", [])))
+        if agent == "chief_of_staff":
+            top_3 = proposal.get("top_3") or []
+            do_not_do = proposal.get("do_not_do") or []
+            sequence = proposal.get("recommended_sequence") or []
+            lines.extend(["### Chief Of Staff Notes", ""])
+            if top_3:
+                lines.append("Top 3:")
+                lines.extend([f"- {item}" for item in top_3])
+                lines.append("")
+            if do_not_do:
+                lines.append("Do not do:")
+                lines.extend([f"- {item}" for item in do_not_do])
+                lines.append("")
+            if sequence:
+                lines.append("Recommended sequence:")
+                lines.extend([f"{index}. {item}" for index, item in enumerate(sequence, start=1)])
+                lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def write_local_run_artifacts(
+    run_id: str,
+    proposals: list[dict[str, Any]],
+    manifest: dict[str, Any],
+    agent_results: dict[str, Any],
+    invalid_files: list[dict[str, Any]] | None = None,
+) -> Path:
+    run_dir = LOCAL_RUNS_DIR / DATE_STR / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    summary_path = run_dir / "summary.md"
+    summary_path.write_text(
+        render_run_summary(run_id, proposals, manifest, agent_results, invalid_files),
+        encoding="utf-8",
+    )
+
+    metadata = {
+        "run_id": run_id,
+        "date": DATE_STR,
+        "generated_at": now_aest().isoformat(),
+        "context_degraded": manifest.get("degraded", False),
+        "agent_results": agent_results,
+        "proposal_agents": sorted(proposal.get("agent", "unknown") for proposal in proposals),
+        "invalid_files": invalid_files or [],
+    }
+    (run_dir / "run.json").write_text(json.dumps(metadata, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
+    (run_dir / "context_manifest.json").write_text(
+        json.dumps(manifest, indent=2, ensure_ascii=True) + "\n",
+        encoding="utf-8",
+    )
+
+    for proposal in proposals:
+        agent = proposal.get("agent", "unknown")
+        filename = f"{DATE_STR}_{agent}.json"
+        (run_dir / filename).write_text(json.dumps(proposal, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
+
+    for item in invalid_files or []:
+        path = Path(item.get("path", "unknown.json"))
+        filename = f"{path.stem}.invalid.json"
+        (run_dir / filename).write_text((item.get("raw", "") + "\n"), encoding="utf-8")
+        (run_dir / f"{path.stem}.error.txt").write_text(f"{item.get('error', 'Unknown parse error')}\n", encoding="utf-8")
+
+    latest_dir = LOCAL_RUNS_DIR
+    latest_dir.mkdir(parents=True, exist_ok=True)
+    (latest_dir / "LATEST_RUN.txt").write_text(f"{run_dir}\n", encoding="utf-8")
+    (latest_dir / "LATEST_SUMMARY.md").write_text(summary_path.read_text(encoding="utf-8"), encoding="utf-8")
+    return run_dir
 
 
 def upsert_memory(sm, proposal: dict[str, Any]) -> None:
@@ -414,6 +608,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--agent", help="Run one agent only")
     parser.add_argument("--dry-run", action="store_true", help="Print plan without executing")
     parser.add_argument("--list", action="store_true", help="List configured agents")
+    parser.add_argument("--sync-latest", action="store_true", help="Fetch today's remote proposals and write local artifacts only")
     return parser.parse_args()
 
 
@@ -435,6 +630,17 @@ def main() -> None:
     print(f"CEO Agent Launcher — {DATE_STR}")
     print(f"Agents: {', '.join(agents_requested) if agents_requested else '(none)'}")
     print(f"Model:  {CODEX_MODEL}")
+    if args.sync_latest:
+        update_remote_repos()
+        manifest = read_remote_context_manifest()
+        run_id = f"{DATE_STR}_sync_{now_aest().strftime('%H%M%S')}"
+        fetched, invalid_files = fetch_available_remote_proposals()
+        proposals = [normalize_proposal(item, run_id) for item in fetched]
+        if not proposals:
+            raise RuntimeError("No remote proposals found to sync.")
+        run_dir = write_local_run_artifacts(run_id, proposals, manifest, {}, invalid_files)
+        print(f"Synced {len(proposals)} proposal files to {run_dir}")
+        return
     if args.dry_run:
         print("[DRY RUN MODE]")
         return
@@ -469,6 +675,7 @@ def main() -> None:
         push_to_github()
         proposals = fetch_remote_proposals(successful_agents)
         stored_agents = store_proposals(sm, run_id, proposals)
+        run_dir = write_local_run_artifacts(run_id, proposals, manifest, all_results)
 
         status = "success" if len(successful_agents) == len(agents_requested if not chiefs or not specialist_failures else specialists) else "partial_failure"
         if specialist_failures:
@@ -482,9 +689,10 @@ def main() -> None:
             specialist_failures=specialist_failures,
             chief_skipped=bool(chiefs and specialist_failures),
             stored_agents=stored_agents,
+            local_artifact_dir=str(run_dir),
             finished_at=now_aest().isoformat(),
         )
-        print("\nCEO agent run complete.")
+        print(f"\nCEO agent run complete.\nLocal artifacts: {run_dir}")
     finally:
         client.close()
 
