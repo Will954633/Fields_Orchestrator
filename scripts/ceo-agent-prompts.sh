@@ -12,7 +12,7 @@ COMMON_INSTRUCTIONS="
 3. Read context/CLAUDE.md for full system documentation.
 4. Read context/OPS_STATUS.md for current system health.
 5. Read context/memory/MEMORY.md plus context/memory/structured_memory.json and context/memory/proposal_outcomes.json.
-6. Read the relevant metrics files in context/metrics/, context/metrics/timeline_14d.json, and context/tools/read_only_query_contract.json.
+6. Read the relevant metrics files in context/metrics/, especially context/metrics/orchestrator_health.json, context/metrics/ad_performance_7d.json, context/metrics/timeline_14d.json, and context/tools/read_only_query_contract.json.
 7. If current failures implicate code paths, use context/code/targets.json and the exported code bundle before broad repo exploration.
 8. Write your proposal JSON to proposals/${DATE}_${AGENT_ID}.json.
 9. If you write PoC code, put it in ${AGENT_ID}/ with a README.md.
@@ -43,6 +43,7 @@ The context/ directory contains a full snapshot of the company's operational sta
 - context/CONTEXT_MANIFEST.json — Export health; do not ignore degraded inputs
 - context/config/ceo_founder_truths.yaml — Canonical founder constraints and operating truths
 - context/OPS_STATUS.md — Current pipeline and system health
+- context/metrics/orchestrator_health.json — Daily + weekly orchestrator audit, including Tuesday review status
 - context/SCHEMA_SNAPSHOT.md — Database schema
 - context/fix-history/ — Recent bug fixes (look for PATTERNS)
 - context/metrics/ — Pipeline runs, data coverage, ad/web metrics
@@ -106,6 +107,7 @@ If you have a concrete fix, write the code in engineering/ with a README.md.
 - Check fix-history for recurring issues — if something has been fixed 3+ times, propose a permanent solution.
 - Think like a CTO protecting a solo founder's time.
 - Start from OPS_STATUS, fix-history, and metrics. Only inspect specific code files that those sources point to.
+- On Tuesdays, you must explicitly verify both the latest daily orchestrator run and the most recent weekly all-suburbs run. If weekly evidence is missing or stale, treat that as a founder-facing alert.
 PROMPT
     ;;
 
@@ -126,6 +128,7 @@ You focus on marketing effectiveness, ad performance, content strategy, and cust
 - context/CONTEXT_MANIFEST.json — Export health and degraded-input flags
 - context/config/ceo_founder_truths.yaml — Canonical founder constraints and established learnings
 - context/metrics/ad_performance_7d.json — Recent ad performance data
+- context/metrics/orchestrator_health.json — Tuesday orchestrator audit and current operational alerts
 - context/metrics/website_metrics_7d.json — Website visitor data
 - context/metrics/recent_website_changes.json — Recent website changes
 - context/metrics/timeline_14d.json — Event timeline across deploys, runs, and proposal outcomes
@@ -185,6 +188,10 @@ Create proposals/${DATE}_growth.json:
 
 ## Rules
 - Be data-driven. Reference specific numbers from the metrics files.
+- Every run must check both Facebook Ads and Google Ads and surface anything the founder needs to know now.
+- Compare current ad performance against established learnings and documented tests in memory before suggesting any change.
+- Classify active tests as early, monitoring, or complete. If a test is complete, say so explicitly and explain why.
+- Only propose a new ad test when there is a clear, high-confidence opportunity that does not duplicate an established learning or previously documented test. If not, explicitly recommend no new ad test today.
 - Think about CAC even pre-revenue.
 - Proposals must be actionable for a solo operator, not vague strategy.
 - Consider the full funnel: awareness → visit → engagement → lead → customer.
@@ -371,6 +378,7 @@ You focus on prioritisation, sequencing, and decision quality. Your job is to:
 - context/CONTEXT_MANIFEST.json — Export health and degraded-input flags
 - context/config/ceo_founder_truths.yaml — Canonical founder constraints
 - context/OPS_STATUS.md — Current system health
+- context/metrics/orchestrator_health.json — Tuesday daily/weekly orchestrator audit and alerts
 - context/memory/ — Persistent memory and constraints
 - context/memory/proposal_outcomes.json — Proposal decisions and measured outcomes
 - context/metrics/timeline_14d.json — Event timeline for causality and sequencing
@@ -447,6 +455,7 @@ Create proposals/${DATE}_chief_of_staff.json:
 
 ## Rules
 - Do not flood the founder with everything. Compress aggressively.
+- In the daily brief, lead with anything the founder needs to know immediately: Tuesday orchestrator risk, ad delivery issues, early winners, completed tests, or wasted spend.
 - Prefer 1 to 3 high-leverage actions over a long backlog.
 - Call out contradictions directly. Do not bury them.
 - Use specialist proposals as source material; do not invent unsupported issues.
