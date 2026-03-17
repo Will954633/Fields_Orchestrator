@@ -16,9 +16,12 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+import yaml
+
 MEMORY_DIR = Path("/home/projects/.claude/projects/-home-fields-Fields-Orchestrator/memory")
 AGENTS_MD = Path("/home/fields/Fields_Orchestrator/AGENTS.md")
 ENV_FILE = Path("/home/fields/Fields_Orchestrator/.env")
+FOUNDER_TRUTHS = Path("/home/fields/Fields_Orchestrator/config/ceo_founder_truths.yaml")
 AEST = ZoneInfo("Australia/Brisbane")
 
 START_MARKER = "<!-- MEMORY_SECTION_START -->"
@@ -47,7 +50,7 @@ MEMORY_NORMALIZATIONS = {
 }
 
 
-# ── Claude memory ─────────────────────────────────────────────────────────────
+# ── Claude memory ──────────────────────────────────────────────────────────────
 
 def parse_frontmatter(content: str) -> tuple[dict, str]:
     meta = {}
@@ -106,7 +109,7 @@ def render_memories(memories: dict[str, list[dict]]) -> list[str]:
     return lines
 
 
-# ── CEO proposals ─────────────────────────────────────────────────────────────
+# ── CEO proposals ──────────────────────────────────────────────────────────────
 
 def load_env():
     """Load .env file into os.environ."""
@@ -156,6 +159,42 @@ def load_ceo_proposals() -> list[dict]:
         return []
 
 
+def load_proposal_outcomes() -> list[dict]:
+    try:
+        from pymongo import MongoClient
+    except ImportError:
+        return []
+
+    conn = os.environ.get("COSMOS_CONNECTION_STRING")
+    if not conn:
+        return []
+    try:
+        client = MongoClient(conn, serverSelectionTimeoutMS=8000)
+        cutoff = (datetime.now(AEST) - timedelta(days=14)).strftime("%Y-%m-%d")
+        rows = list(client["system_monitor"]["ceo_proposal_outcomes"].find({"date": {"$gte": cutoff}}))
+        client.close()
+        rows.sort(key=lambda x: (x.get("date", ""), x.get("updated_at", "")), reverse=True)
+        return rows[:20]
+    except Exception:
+        return []
+
+
+def render_founder_truths() -> list[str]:
+    if not FOUNDER_TRUTHS.exists():
+        return []
+    truths = yaml.safe_load(FOUNDER_TRUTHS.read_text(encoding="utf-8")) or {}
+    lines = ["\n### Founder Truths\n"]
+    brand = truths.get("brand", {})
+    systems = truths.get("systems", {})
+    lines.append(f"- **Tagline:** {brand.get('tagline', 'Unknown')}")
+    lines.append(f"- **Mission:** {brand.get('mission', 'Unknown')}")
+    lines.append(f"- **Primary database:** `{systems.get('primary_database', 'Unknown')}`")
+    for rule in truths.get("operating_rules", []):
+        lines.append(f"- {rule}")
+    lines.append("")
+    return lines
+
+
 def render_proposals(proposals: list[dict]) -> list[str]:
     if not proposals:
         return ["\n### CEO Agent Proposals\n", "_No pending proposals._\n"]
@@ -199,7 +238,21 @@ def render_proposals(proposals: list[dict]) -> list[str]:
     return lines
 
 
-# ── Main ──────────────────────────────────────────────────────────────────────
+def render_proposal_outcomes(rows: list[dict]) -> list[str]:
+    if not rows:
+        return []
+    lines = ["\n### Proposal Outcomes\n"]
+    for row in rows:
+        title = row.get("proposal_title", "(untitled)")
+        result = row.get("result") or row.get("decision") or "unknown"
+        agent = row.get("agent", "unknown")
+        note = row.get("impact_summary") or row.get("decision_notes") or ""
+        lines.append(f"- `{row.get('date', '?')}` `{agent}` **{title}** — `{result}` {note[:180]}")
+    lines.append("")
+    return lines
+
+
+# ── Main ───────────────────────────────────────────────────────────────────────
 
 def update_agents_md(content: str) -> None:
     if not AGENTS_MD.exists():
@@ -231,9 +284,13 @@ def main():
     proposals = load_ceo_proposals()
     pending = sum(1 for p in proposals if p.get("status") == "pending_review")
     print(f"  {len(proposals)} relevant proposals ({pending} pending review)")
+    outcomes = load_proposal_outcomes()
+    print(f"  {len(outcomes)} recent proposal outcomes")
 
     lines = [f"_Last synced: {now}_\n"]
+    lines += render_founder_truths()
     lines += render_proposals(proposals)
+    lines += render_proposal_outcomes(outcomes)
     lines += render_memories(memories)
 
     print(f"Updating {AGENTS_MD}...")
