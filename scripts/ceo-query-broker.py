@@ -17,8 +17,16 @@ import time
 from ceo_agent_lib import dumps_json, get_client, load_founder_truths, now_aest, retry_cosmos_read, to_jsonable
 
 
+def get_pipeline_collection(sm):
+    process_runs = sm["process_runs"]
+    if retry_cosmos_read(lambda: process_runs.count_documents({}, limit=1)) > 0:
+        return process_runs, "process_runs"
+    return sm["orchestrator_runs"], "orchestrator_runs"
+
+
 def fetch_ops_summary(sm) -> dict[str, Any]:
-    runs = list(sm["orchestrator_runs"].find({}, {"_id": 0}).limit(20))
+    run_coll, run_source = get_pipeline_collection(sm)
+    runs = list(run_coll.find({}, {"_id": 0}).limit(20))
     latest_run = sorted(runs, key=lambda row: str(row.get("started_at", "")), reverse=True)[0] if runs else None
     latest_errors = list(sm["watchdog_runs"].find({}, {"_id": 0}).limit(20))
     latest_errors.sort(key=lambda row: str(row.get("started_at", "")), reverse=True)
@@ -26,6 +34,7 @@ def fetch_ops_summary(sm) -> dict[str, Any]:
     latest_props.sort(key=lambda row: (row.get("date", ""), str(row.get("updated_at", ""))), reverse=True)
     return {
         "generated_at": now_aest().isoformat(),
+        "pipeline_source": run_source,
         "latest_run": to_jsonable(latest_run),
         "recent_watchdog_runs": to_jsonable(latest_errors[:5]),
         "recent_proposals": to_jsonable(latest_props[:10]),
@@ -34,9 +43,10 @@ def fetch_ops_summary(sm) -> dict[str, Any]:
 
 def fetch_pipeline_runs(sm, days: int, limit: int) -> dict[str, Any]:
     cutoff = now_aest() - timedelta(days=days)
-    rows = list(sm["orchestrator_runs"].find({"started_at": {"$gte": cutoff}}, {"_id": 0}).limit(limit * 3))
+    run_coll, run_source = get_pipeline_collection(sm)
+    rows = list(run_coll.find({"started_at": {"$gte": cutoff}}, {"_id": 0}).limit(limit * 5))
     rows.sort(key=lambda row: str(row.get("started_at", "")), reverse=True)
-    return {"days": days, "limit": limit, "runs": to_jsonable(rows[:limit])}
+    return {"days": days, "limit": limit, "pipeline_source": run_source, "runs": to_jsonable(rows[:limit])}
 
 
 def fetch_website_metrics(sm, days: int) -> dict[str, Any]:
@@ -65,8 +75,9 @@ def fetch_proposal_outcomes(sm, days: int, limit: int) -> dict[str, Any]:
 def fetch_timeline(sm, days: int) -> dict[str, Any]:
     cutoff_iso = (now_aest() - timedelta(days=days)).isoformat()
     cutoff_date = (now_aest() - timedelta(days=days)).strftime("%Y-%m-%d")
+    run_coll, run_source = get_pipeline_collection(sm)
     timeline = {
-        "pipeline_runs": list(sm["orchestrator_runs"].find({"started_at": {"$gte": now_aest() - timedelta(days=days)}}, {"_id": 0}).limit(50)),
+        "pipeline_runs": list(run_coll.find({"started_at": {"$gte": now_aest() - timedelta(days=days)}}, {"_id": 0}).limit(50)),
         "website_deploys": list(sm["website_deploy_events"].find({"timestamp": {"$gte": cutoff_iso}}, {"_id": 0}).limit(50)),
         "website_changes": list(sm["website_change_log"].find({"created_at": {"$gte": cutoff_iso}}, {"_id": 0}).limit(50)),
         "proposal_outcomes": list(sm["ceo_proposal_outcomes"].find({"date": {"$gte": cutoff_date}}, {"_id": 0}).limit(50)),
@@ -77,7 +88,7 @@ def fetch_timeline(sm, days: int) -> dict[str, Any]:
     timeline["website_changes"].sort(key=lambda row: row.get("created_at", ""), reverse=True)
     timeline["proposal_outcomes"].sort(key=lambda row: (row.get("date", ""), str(row.get("updated_at", ""))), reverse=True)
     timeline["proposals"].sort(key=lambda row: (row.get("date", ""), str(row.get("updated_at", ""))), reverse=True)
-    return {"days": days, "timeline": to_jsonable(timeline)}
+    return {"days": days, "pipeline_source": run_source, "timeline": to_jsonable(timeline)}
 
 
 def fetch_collection_counts(sm) -> dict[str, Any]:
