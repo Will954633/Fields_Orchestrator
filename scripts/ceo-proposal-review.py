@@ -124,7 +124,6 @@ def record_outcome(sm, args) -> dict[str, Any]:
             },
             "$setOnInsert": {
                 "first_seen": now,
-                "times_seen": 0,
             },
             "$inc": {"times_seen": 1},
         },
