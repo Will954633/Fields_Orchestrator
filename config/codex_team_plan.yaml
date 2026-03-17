@@ -32,6 +32,8 @@ team:
     layer: command
     status: active
     cadence: daily
+    requires_healthy_context: true
+    requires_successful_specialists: true
     runs_after:
       - engineering
       - product
@@ -125,6 +127,7 @@ cadence:
     - time_aest: "02:03"
       step: export_context
       owner: orchestrator_vm
+      fail_closed_on_blank_exports: true
     - time_aest: "02:15"
       step: codex_preflight
       owner: codex_vm
@@ -148,6 +151,7 @@ proposal_contract:
     - status
     - created_at
     - updated_at
+    - run_id
   recommended_fields:
     - priority_score
     - time_horizon
@@ -155,6 +159,10 @@ proposal_contract:
     - blocks
     - owner
     - decision_required
+    - confidence
+    - evidence_freshness
+    - blocked_by
+    - data_gaps
   chief_of_staff_fields:
     - daily_brief
     - top_3
@@ -218,6 +226,7 @@ rollout:
 success_metrics:
   - actionable_briefs_rate
   - proposal_acceptance_rate
+  - proposal_outcome_accuracy
   - implementation_rate
   - duplicate_proposal_rate
   - founder_review_time_minutes
