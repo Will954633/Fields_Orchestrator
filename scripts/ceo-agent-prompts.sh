@@ -9,16 +9,17 @@ COMMON_INSTRUCTIONS="
 ## Getting Started
 1. First, read context/CONTEXT_MANIFEST.json. If it says degraded, explicitly say which inputs are degraded and how that limits confidence.
 2. Read context/config/ceo_founder_truths.yaml for canonical founder constraints and company truths.
-3. Read context/CLAUDE.md for full system documentation.
-4. Read context/OPS_STATUS.md for current system health.
-5. Read context/memory/MEMORY.md plus context/memory/structured_memory.json and context/memory/proposal_outcomes.json.
-6. Read the relevant metrics files in context/metrics/, especially context/metrics/orchestrator_health.json, context/metrics/ad_performance_7d.json, context/metrics/timeline_14d.json, and context/tools/read_only_query_contract.json.
-7. If current failures implicate code paths, use context/code/targets.json and the exported code bundle before broad repo exploration.
-8. Write your proposal JSON to proposals/${DATE}_${AGENT_ID}.json.
-9. If you write PoC code, put it in ${AGENT_ID}/ with a README.md.
-10. Prefer 3 strong findings over broad exploration. Inspect only the minimum code/files needed to support your conclusions.
-11. Every finding and proposal must include confidence, evidence_freshness, blocked_by, and data_gaps.
-12. Your primary deliverable is the JSON file. Produce it even if some context is incomplete.
+3. Read context/founder-requests/index.json and any relevant files under context/founder-requests/open/ plus matching files in context/founder-requests/responses/. These are active founder concerns, instructions, and unresolved threads that must persist across runs until resolved.
+4. Read context/CLAUDE.md for full system documentation.
+5. Read context/OPS_STATUS.md for current system health.
+6. Read context/memory/MEMORY.md plus context/memory/structured_memory.json and context/memory/proposal_outcomes.json.
+7. Read the relevant metrics files in context/metrics/, especially context/metrics/orchestrator_health.json, context/metrics/ad_performance_7d.json, context/metrics/timeline_14d.json, and context/tools/read_only_query_contract.json.
+8. If current failures implicate code paths, use context/code/targets.json and the exported code bundle before broad repo exploration.
+9. Write your proposal JSON to proposals/${DATE}_${AGENT_ID}.json.
+10. If you write PoC code, put it in ${AGENT_ID}/ with a README.md.
+11. Prefer 3 strong findings over broad exploration. Inspect only the minimum code/files needed to support your conclusions.
+12. Every finding and proposal must include confidence, evidence_freshness, blocked_by, and data_gaps.
+13. Your primary deliverable is the JSON file. Produce it even if some context is incomplete.
 
 Today's date: ${DATE}
 Begin your analysis now.
@@ -42,6 +43,9 @@ The context/ directory contains a full snapshot of the company's operational sta
 - context/CLAUDE.md — Full system documentation (READ THIS FIRST)
 - context/CONTEXT_MANIFEST.json — Export health; do not ignore degraded inputs
 - context/config/ceo_founder_truths.yaml — Canonical founder constraints and operating truths
+- context/founder-requests/index.json — Active founder concerns and standing instructions
+- context/founder-requests/open/ — Founder-authored request threads
+- context/founder-requests/responses/ — Prior CEO-team replies and open questions
 - context/OPS_STATUS.md — Current pipeline and system health
 - context/metrics/orchestrator_health.json — Daily + weekly orchestrator audit, including Tuesday review status
 - context/SCHEMA_SNAPSHOT.md — Database schema
@@ -127,6 +131,9 @@ You focus on marketing effectiveness, ad performance, content strategy, and cust
 - context/CLAUDE.md — Full system documentation (READ THIS FIRST)
 - context/CONTEXT_MANIFEST.json — Export health and degraded-input flags
 - context/config/ceo_founder_truths.yaml — Canonical founder constraints and established learnings
+- context/founder-requests/index.json — Active founder concerns and standing instructions
+- context/founder-requests/open/ — Founder-authored request threads
+- context/founder-requests/responses/ — Prior CEO-team replies and open questions
 - context/metrics/ad_performance_7d.json — Recent ad performance data
 - context/metrics/orchestrator_health.json — Tuesday orchestrator audit and current operational alerts
 - context/metrics/website_metrics_7d.json — Website visitor data
@@ -215,6 +222,9 @@ You focus on data quality, user experience, feature prioritisation, and competit
 - context/CLAUDE.md — Full system documentation (READ THIS FIRST)
 - context/CONTEXT_MANIFEST.json — Export health and degraded-input flags
 - context/config/ceo_founder_truths.yaml — Canonical founder constraints and business truths
+- context/founder-requests/index.json — Active founder concerns and standing instructions
+- context/founder-requests/open/ — Founder-authored request threads
+- context/founder-requests/responses/ — Prior CEO-team replies and open questions
 - context/SCHEMA_SNAPSHOT.md — Database schema (shows what data we have)
 - context/metrics/data_coverage.json — Per-suburb enrichment percentages
 - context/metrics/active_listings.json — Current listing counts
@@ -301,6 +311,9 @@ You focus on data coverage, freshness, enrichment quality, schema drift, and tru
 - context/CLAUDE.md — Full system documentation (READ THIS FIRST)
 - context/CONTEXT_MANIFEST.json — Export health and degraded-input flags
 - context/config/ceo_founder_truths.yaml — Canonical founder constraints
+- context/founder-requests/index.json — Active founder concerns and standing instructions
+- context/founder-requests/open/ — Founder-authored request threads
+- context/founder-requests/responses/ — Prior CEO-team replies and open questions
 - context/OPS_STATUS.md — Current pipeline and system health
 - context/SCHEMA_SNAPSHOT.md — Database schema
 - context/metrics/data_coverage.json — Per-suburb enrichment percentages
@@ -377,6 +390,9 @@ You focus on prioritisation, sequencing, and decision quality. Your job is to:
 - context/CLAUDE.md — Full system documentation (READ THIS FIRST)
 - context/CONTEXT_MANIFEST.json — Export health and degraded-input flags
 - context/config/ceo_founder_truths.yaml — Canonical founder constraints
+- context/founder-requests/index.json — Active founder concerns and standing instructions
+- context/founder-requests/open/ — Founder-authored request threads
+- context/founder-requests/responses/ — Prior CEO-team replies and open questions
 - context/OPS_STATUS.md — Current system health
 - context/metrics/orchestrator_health.json — Tuesday daily/weekly orchestrator audit and alerts
 - context/memory/ — Persistent memory and constraints
@@ -459,6 +475,7 @@ Create proposals/${DATE}_chief_of_staff.json:
 - Prefer 1 to 3 high-leverage actions over a long backlog.
 - Call out contradictions directly. Do not bury them.
 - Use specialist proposals as source material; do not invent unsupported issues.
+- Every unresolved founder request thread must be acknowledged explicitly as one of: action now, defer, blocked, or waiting on founder input.
 - If a specialist proposal is missing or failed, continue with what is available and state the gap explicitly.
 - Do not inspect the full repo. This role should primarily read proposal files plus high-level context.
 PROMPT
