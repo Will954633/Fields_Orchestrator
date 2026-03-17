@@ -397,7 +397,7 @@ def render_ops_status(orch, api, coverage, repairs, articles, listing_counts, er
         lines.append("|--------|-------------|-----------|--------|")
         for doc in scraper:
             suburb = doc.get("suburb", "?")
-            last_scrape = doc.get("last_scrape_time") or doc.get("checked_at")
+            last_scrape = doc.get("last_scrape_time") or doc.get("last_scraped_at") or doc.get("checked_at")
             age = age_str(last_scrape)
             st = doc.get("status", "?")
             icon = status_icon(st)
