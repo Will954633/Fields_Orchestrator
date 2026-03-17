@@ -70,7 +70,6 @@ def main():
             # Compute status based on how recently data was scraped
             # Pipeline runs nightly so anything under 26h is healthy
             if last_scraped_at:
-                from datetime import timedelta
                 last_dt = last_scraped_at if hasattr(last_scraped_at, 'tzinfo') else None
                 if last_dt and last_dt.tzinfo:
                     age_hours = (checked_at - last_dt).total_seconds() / 3600
@@ -92,6 +91,8 @@ def main():
                 "checked_at": checked_at,
                 "total_listings": total,
                 "last_scraped_at": last_scraped_at,
+                "last_scrape_time": last_scraped_at,
+                "staleness_hours": round(age_hours, 1) if age_hours is not None else None,
                 "new_listings": new_listings,
                 "removed_listings": removed_listings,
                 "prev_total": prev_total,
