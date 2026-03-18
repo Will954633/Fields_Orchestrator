@@ -37,7 +37,69 @@ BUILDER_TELEGRAM_HISTORY_LIMIT=12
 - `/status` — bridge/session status
 - `/reset` — start a fresh builder session
 
-Everything else is sent to local Codex as a task in this repository.
+## Implementation Workflow
+
+The Implementor bridge now supports an approval gate for CEO-team-driven work.
+
+### 1. Review only
+
+Send a message like:
+
+```text
+review ceo team's recommendations for today
+```
+
+This triggers a local Codex review pass that:
+- reads the latest CEO run artifacts
+- reads founder request threads and CEO responses
+- validates or invalidates CEO suggestions
+- returns a proposed implementation plan to Telegram
+
+No code changes are allowed in this step.
+
+### 2. Revise the plan
+
+If you want to amend the plan before implementation:
+
+```text
+revise plan: do telemetry first, defer API work
+```
+
+This updates the pending plan and returns a revised review. No code changes are made here either.
+
+### 3. Approve implementation
+
+Only after a plan is in place:
+
+```text
+approve plan
+```
+
+Or:
+
+```text
+implement items 1 and 3
+```
+
+This triggers execution against the approved scope only.
+
+### 4. Cancel
+
+```text
+cancel plan
+```
+
+This clears the pending plan. No code changes are made.
+
+## Artifacts
+
+Implementation review and execution runs are written under:
+
+```text
+artifacts/implementation-runs/YYYY-MM-DD/
+```
+
+Each run stores the founder request, generated prompt, result, and metadata.
 
 ## MongoDB collections
 
