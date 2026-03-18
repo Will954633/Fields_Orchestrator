@@ -19,6 +19,7 @@ Optional env vars:
   BUILDER_TELEGRAM_POLL_SECONDS
   BUILDER_TELEGRAM_TIMEOUT_SECONDS
   BUILDER_TELEGRAM_HISTORY_LIMIT
+  BUILDER_TELEGRAM_CODEX_UNSANDBOXED
 """
 
 from __future__ import annotations
@@ -86,6 +87,17 @@ def parse_int_env(name: str, default: int) -> int:
         raise RuntimeError(f"Invalid integer for {name}: {raw}") from exc
 
 
+def parse_bool_env(name: str, default: bool = False) -> bool:
+    raw = os.environ.get(name, "").strip().lower()
+    if not raw:
+        return default
+    if raw in {"1", "true", "yes", "on"}:
+        return True
+    if raw in {"0", "false", "no", "off"}:
+        return False
+    raise RuntimeError(f"Invalid boolean for {name}: {raw}")
+
+
 def parse_chat_ids(raw: str) -> set[int]:
     values = set()
     for piece in raw.split(","):
@@ -112,6 +124,7 @@ BUILDER_ROLE = os.environ.get("BUILDER_TELEGRAM_ROLE", "builder").strip() or "bu
 POLL_SECONDS = parse_int_env("BUILDER_TELEGRAM_POLL_SECONDS", 2)
 RUN_TIMEOUT_SECONDS = parse_int_env("BUILDER_TELEGRAM_TIMEOUT_SECONDS", 1800)
 HISTORY_LIMIT = parse_int_env("BUILDER_TELEGRAM_HISTORY_LIMIT", 12)
+CODEX_UNSANDBOXED = parse_bool_env("BUILDER_TELEGRAM_CODEX_UNSANDBOXED", False)
 
 TELEGRAM_API_BASE = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
@@ -555,6 +568,16 @@ def append_error_todo(sm, session_id: str, summary: str) -> None:
     )
 
 
+def founder_display_name(session: dict[str, Any]) -> str:
+    first_name = (session.get("telegram_first_name") or "").strip()
+    username = (session.get("telegram_username") or "").strip()
+    if first_name:
+        return first_name
+    if username:
+        return username
+    return "Will"
+
+
 def error_todo_summary(session: dict[str, Any]) -> str:
     items = session.get("error_todo_items", []) or []
     if not items:
@@ -567,6 +590,22 @@ def read_text_tail(path: Path, max_chars: int = JOB_LOG_TAIL_CHARS) -> str:
     if not path.exists():
         return ""
     return path.read_text(encoding="utf-8", errors="replace")[-max_chars:].strip()
+
+
+def build_codex_command(prompt_path: Path, output_path: Path, log_path: Path) -> list[str]:
+    launch_mode = (
+        "--dangerously-bypass-approvals-and-sandbox"
+        if CODEX_UNSANDBOXED
+        else "--full-auto"
+    )
+    command = (
+        f"codex exec -m {shlex.quote(BUILDER_MODEL)} "
+        f"--skip-git-repo-check {launch_mode} "
+        f"-o {shlex.quote(str(output_path))} "
+        f"\"$(cat {shlex.quote(str(prompt_path))})\" "
+        f"> {shlex.quote(str(log_path))} 2>&1"
+    )
+    return ["bash", "-lc", command]
 
 
 def elapsed_label(started_at: str | None) -> str:
@@ -685,6 +724,8 @@ Operating context:
 
 Behavior:
 - Treat the Telegram user as the founder/operator.
+- Keep the tone warm, upbeat, and encouraging while staying concise and useful.
+- Greet the founder naturally when it fits, especially on simple conversational turns.
 - If the message asks for code or operational work, do the work in the repository rather than only describing it.
 - Be concise in the final response, but include concrete outcomes, blockers, or next actions.
 - Do not reveal secrets from env files, tokens, or credentials.
@@ -852,17 +893,7 @@ def process_job(job_id: str) -> None:
         prompt_path.write_text(job["prompt"], encoding="utf-8")
         (run_dir / "request.txt").write_text(job["founder_message"] + "\n", encoding="utf-8")
 
-        cmd = [
-            "bash",
-            "-lc",
-            (
-                f"codex exec -m {shlex.quote(BUILDER_MODEL)} "
-                f"--skip-git-repo-check --full-auto "
-                f"-o {shlex.quote(str(output_path))} "
-                f"\"$(cat {shlex.quote(str(prompt_path))})\" "
-                f"> {shlex.quote(str(log_path))} 2>&1"
-            ),
-        ]
+        cmd = build_codex_command(prompt_path, output_path, log_path)
         proc = subprocess.Popen(
             cmd,
             cwd=ROOT,
@@ -877,7 +908,11 @@ def process_job(job_id: str) -> None:
                 "pid": proc.pid,
                 "started_at": iso_now(),
                 "last_heartbeat_at": iso_now(),
-                "progress_message": "Job started.",
+                "progress_message": (
+                    "Job started in unsandboxed Codex mode."
+                    if CODEX_UNSANDBOXED
+                    else "Job started in sandboxed Codex mode."
+                ),
             },
         )
 
@@ -1056,6 +1091,7 @@ def format_status(sm, session: dict[str, Any]) -> str:
 def run_workflow_action(sm, session: dict[str, Any], chat_id: int, action: str, instruction: str) -> None:
     active_job = get_active_job(sm, session)
     pending = get_pending_plan(session)
+    founder_name = founder_display_name(session)
 
     if action == "cancel":
         clear_pending_plan(sm, session["_id"])
@@ -1070,7 +1106,7 @@ def run_workflow_action(sm, session: dict[str, Any], chat_id: int, action: str, 
             append_message(sm, session["_id"], "assistant", reply, {"mode": "review_blocked", "job_id": active_job["_id"]})
             send_message(chat_id, reply)
             return
-        send_message(chat_id, "Running an implementation review only. I’ll validate the recommendations and send a plan for approval before any changes.")
+        send_message(chat_id, f"Hey, {founder_name}! I’m reviewing it now and I’ll send back a plan before I change anything.")
         prompt = build_review_prompt(session, instruction)
         job = create_job(sm, session=session, mode="review", founder_message=instruction, prompt=prompt)
         launch_background_job(job["_id"])
@@ -1087,7 +1123,7 @@ def run_workflow_action(sm, session: dict[str, Any], chat_id: int, action: str, 
             append_message(sm, session["_id"], "assistant", reply, {"mode": "revise_blocked", "job_id": active_job["_id"]})
             send_message(chat_id, reply)
             return
-        send_message(chat_id, "Revising the pending implementation plan. No code changes will be made in this step.")
+        send_message(chat_id, f"Hey, {founder_name}! I’m tightening up the plan now. No code changes in this step.")
         founder_message = f"Revise the pending implementation plan using this founder amendment:\n{instruction}"
         prompt = build_review_prompt(session, founder_message, pending_plan=pending["text"])
         job = create_job(
@@ -1112,7 +1148,7 @@ def run_workflow_action(sm, session: dict[str, Any], chat_id: int, action: str, 
             append_message(sm, session["_id"], "assistant", reply, {"mode": "approve_blocked", "job_id": active_job["_id"]})
             send_message(chat_id, reply)
             return
-        send_message(chat_id, "Approval received. I’m implementing only the approved scope from the pending plan and will report back here.")
+        send_message(chat_id, f"Love it, {founder_name}. I’m on it and I’ll stick to the approved scope, then report back here.")
         prompt = build_execute_prompt(session, instruction or "approve plan", pending["text"])
         job = create_job(
             sm,
@@ -1134,11 +1170,12 @@ def handle_command(sm, chat: dict[str, Any], user: dict[str, Any], text: str) ->
     command = command.lower()
     remainder = remainder.strip()
     session = get_or_create_active_session(sm, chat, user)
+    founder_name = founder_display_name(session)
 
     if command in {"/start", "/help"}:
         send_message(
             chat["id"],
-            "Fields Implementer bot is ready on this VM.\n"
+            f"Hey, {founder_name}! Fields Implementer is live on the VM and ready to help.\n"
             "Plain text messages stay in chat mode.\n"
             "Workflow commands are explicit: `/review ...`, `/revise ...`, `/approve`, `/cancelplan`.\n"
             "Create a durable founder request with `/task ...`.\n"
@@ -1153,7 +1190,7 @@ def handle_command(sm, chat: dict[str, Any], user: dict[str, Any], text: str) ->
 
     if command == "/reset":
         new_session = reset_session(sm, chat, user)
-        send_message(chat["id"], f"Started a new builder session: {new_session['_id']}")
+        send_message(chat["id"], f"Fresh start, {founder_name}. New builder session: {new_session['_id']}")
         return True
 
     if command == "/task":
@@ -1209,6 +1246,7 @@ def handle_text_message(sm, update: dict[str, Any], message: dict[str, Any], tex
         return
 
     session = get_or_create_active_session(sm, chat, user)
+    founder_name = founder_display_name(session)
     session = append_message(
         sm,
         session["_id"],
@@ -1230,7 +1268,7 @@ def handle_text_message(sm, update: dict[str, Any], message: dict[str, Any], tex
         send_message(chat_id, reply)
         return
 
-    send_message(chat_id, "Working on it here on the VM. I’ll send the result back in this chat.")
+    send_message(chat_id, f"Hey, {founder_name}! I’m on it here on the VM. I’ll send the result back in this chat.")
     prompt = build_prompt(session, text)
     job = create_job(sm, session=session, mode="chat", founder_message=text, prompt=prompt)
     launch_background_job(job["_id"])
