@@ -117,17 +117,21 @@ def classify_source(session):
     qp_source = str(first_qp.get("utm_source") or "").lower()
     has_gclid = bool(utm.get("gclid") or first_qp.get("gclid") or utm.get("gbraid") or first_qp.get("gbraid") or utm.get("gad_source") or first_qp.get("gad_source"))
     has_fbclid = bool(utm.get("fbclid") or first_qp.get("fbclid"))
-    # Combine session-level and page-level referrer for classification
-    ref = ref or first_page_ref
+    has_fb_utm_id = bool(first_qp.get("utm_id"))  # Facebook campaign ID parameter
+    # Check both session-level and page-level referrer (entry_referrer may be a
+    # self-referral when Facebook in-app browser navigates internally first)
+    combined_ref = f"{ref} {first_page_ref}"
 
     if (
         utm_source in {"fb", "facebook", "ig", "instagram", "meta"}
         or qp_source in {"fb", "facebook", "ig", "instagram", "meta"}
-        or "facebook.com" in ref
-        or "fb.com" in ref
-        or "l.facebook" in ref
-        or "instagram.com" in ref
+        or "facebook.com" in combined_ref
+        or "fb.com" in combined_ref
+        or "l.facebook" in combined_ref
+        or "m.facebook" in combined_ref
+        or "instagram.com" in combined_ref
         or has_fbclid
+        or has_fb_utm_id
     ):
         return "facebook"
 
