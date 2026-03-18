@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from datetime import datetime
@@ -28,6 +29,7 @@ REMOTE_DIR = "/home/fields-orchestrator-vm/ceo-agents"
 CODEX_MODEL = "gpt-5.1-codex"
 TEAM_PLAN_PATH = Path(__file__).resolve().parent.parent / "config" / "codex_team_plan.yaml"
 LOCAL_RUNS_DIR = Path(__file__).resolve().parent.parent / "artifacts" / "ceo-runs"
+FOUNDER_REQUESTS_DIR = Path(__file__).resolve().parent.parent / "ceo-founder-requests"
 DATE_STR = now_aest().strftime("%Y-%m-%d")
 
 PROPOSAL_DEFAULTS = {
@@ -68,9 +70,263 @@ AGENTS = {
     },
 }
 
+STOP_WORDS = {
+    "a", "an", "and", "are", "as", "at", "be", "been", "being", "but", "by", "clear", "clearly",
+    "current", "daily", "day", "days", "do", "for", "from", "general", "get", "had", "has", "have",
+    "how", "i", "if", "im", "in", "into", "is", "it", "its", "me", "milestones", "monitor", "monitoring",
+    "need", "needs", "new", "not", "of", "on", "or", "our", "out", "perhaps", "right", "should",
+    "so", "some", "stage", "stats", "strategy", "system", "team", "that", "the", "their", "them",
+    "there", "these", "they", "this", "to", "too", "up", "us", "we", "what", "where", "which", "will",
+    "with", "work", "working", "you", "your",
+}
+
 
 def log(msg: str) -> None:
     print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}")
+
+
+def parse_frontmatter(path: Path) -> tuple[dict[str, Any], str]:
+    raw = path.read_text(encoding="utf-8")
+    if not raw.startswith("---\n"):
+        return {}, raw
+    match = re.match(r"^---\n(.*?)\n---\n?(.*)$", raw, re.DOTALL)
+    if not match:
+        return {}, raw
+    try:
+        meta = yaml.safe_load(match.group(1)) or {}
+        if not isinstance(meta, dict):
+            meta = {}
+    except Exception:
+        meta = {}
+    return meta, match.group(2)
+
+
+def tokenize(text: str) -> set[str]:
+    return {
+        token
+        for token in re.findall(r"[a-z0-9]{3,}", text.lower())
+        if token not in STOP_WORDS and not token.isdigit()
+    }
+
+
+def is_template_request(path: Path, meta: dict[str, Any], body: str) -> bool:
+    name = path.name.upper()
+    if name.startswith("TEMPLATE"):
+        return True
+    body_lower = body.lower()
+    placeholder_markers = (
+        "describe the concern",
+        "state the exact outcome",
+        "add follow-up answers here",
+    )
+    return sum(1 for marker in placeholder_markers if marker in body_lower) >= 2
+
+
+def load_founder_requests() -> list[dict[str, Any]]:
+    open_dir = FOUNDER_REQUESTS_DIR / "open"
+    if not open_dir.exists():
+        return []
+
+    requests: list[dict[str, Any]] = []
+    for path in sorted(open_dir.glob("*.md")):
+        meta, body = parse_frontmatter(path)
+        if is_template_request(path, meta, body):
+            continue
+        request_id = str(meta.get("id") or path.stem)
+        title = str(meta.get("title") or path.stem.replace("-", " ")).strip()
+        combined = " ".join(part for part in [path.name, path.stem, request_id, title, body] if str(part).strip())
+        requests.append(
+            {
+                "path": path,
+                "filename": path.name,
+                "stem": path.stem,
+                "id": request_id,
+                "title": title,
+                "body": body,
+                "tokens": tokenize(combined),
+            }
+        )
+    return requests
+
+
+def score_request_match(request: dict[str, Any], proposal: dict[str, Any], raw_text: str) -> int:
+    score = 0
+    lowered = raw_text.lower()
+    direct_match = False
+    for marker in (request["filename"].lower(), request["stem"].lower(), str(request["id"]).lower()):
+        if marker and marker in lowered:
+            score += 20
+            direct_match = True
+    score += len(request["tokens"] & tokenize(raw_text))
+    if proposal.get("agent") == "chief_of_staff" and ("founder request" in lowered or "will asked" in lowered):
+        score += 4
+    return score, direct_match
+
+
+def derive_request_status(matches: list[dict[str, Any]]) -> tuple[str, list[str]]:
+    blocked_by = sorted(
+        {item for match in matches for item in match.get("blocked_by", []) if str(item).strip()}
+    )
+    combined_text = " ".join(match["text"].lower() for match in matches)
+    if "waiting on founder input" in combined_text or "waiting on will" in combined_text or "founder clarification" in combined_text:
+        return "waiting_on_will", blocked_by
+    if "blocked" in combined_text or blocked_by:
+        return "action_now_blocked", blocked_by
+    if "defer" in combined_text:
+        return "deferred", blocked_by
+    return "action_now", blocked_by
+
+
+def mentions_other_request(text: str, request: dict[str, Any], all_requests: list[dict[str, Any]]) -> bool:
+    lowered = text.lower()
+    for other in all_requests:
+        if other["filename"] == request["filename"]:
+            continue
+        markers = [other["filename"].lower(), other["stem"].lower(), str(other["id"]).lower()]
+        if any(marker and marker in lowered for marker in markers):
+            return True
+    return False
+
+
+def build_request_response_section(
+    run_id: str,
+    request: dict[str, Any],
+    proposals: list[dict[str, Any]],
+    all_requests: list[dict[str, Any]],
+) -> str | None:
+    matches: list[dict[str, Any]] = []
+    for proposal in proposals:
+        segments: list[tuple[str, dict[str, Any]]] = []
+        if proposal.get("daily_brief"):
+            segments.append((str(proposal["daily_brief"]), {}))
+        for finding in proposal.get("findings", []):
+            segments.append(
+                (
+                    " ".join(str(finding.get(key, "")) for key in ("title", "detail", "recommendation")),
+                    finding,
+                )
+            )
+        for item in proposal.get("proposals", []):
+            segments.append(
+                (
+                    " ".join(str(item.get(key, "")) for key in ("title", "problem", "proposal")),
+                    item,
+                )
+            )
+        for text, payload in segments:
+            if not text.strip():
+                continue
+            if mentions_other_request(text, request, all_requests):
+                continue
+            score, direct_match = score_request_match(request, proposal, text)
+            if score <= 0:
+                continue
+            matches.append(
+                {
+                    "agent": proposal.get("agent", "unknown"),
+                    "text": text.strip(),
+                    "score": score,
+                    "direct_match": direct_match,
+                    "blocked_by": payload.get("blocked_by", []),
+                    "title": payload.get("title"),
+                    "recommendation": payload.get("recommendation") or payload.get("proposal"),
+                }
+            )
+
+    matches.sort(key=lambda item: item["score"], reverse=True)
+    direct_matches = [match for match in matches if match.get("direct_match")]
+    if direct_matches:
+        top_direct = direct_matches[0]["score"]
+        matches = [
+            match
+            for match in matches
+            if match.get("direct_match") or match["score"] >= max(10, top_direct - 20)
+        ]
+    matches = matches[:6]
+    if not matches:
+        return None
+
+    status, blocked_by = derive_request_status(matches)
+    timestamp = now_aest().strftime("%Y-%m-%d %H:%M AEST")
+    agents = sorted({match["agent"] for match in matches})
+    findings: list[str] = []
+    next_steps: list[str] = []
+    seen_titles: set[str] = set()
+    seen_recommendations: set[str] = set()
+
+    for match in matches:
+        title = str(match.get("title") or "").strip()
+        recommendation = str(match.get("recommendation") or "").strip()
+        if title and title not in seen_titles:
+            findings.append(f"{match['agent']}: {title}")
+            seen_titles.add(title)
+        if recommendation and recommendation not in seen_recommendations:
+            next_steps.append(recommendation)
+            seen_recommendations.add(recommendation)
+
+    lines = [
+        f"## {timestamp} - CEO Team",
+        "",
+        "### Status",
+        status,
+        "",
+        "### Run",
+        f"- `run_id`: `{run_id}`",
+        f"- `agents`: {', '.join(agents)}",
+        "",
+        "### What we concluded",
+    ]
+    for line in [match["text"] for match in matches[:2] if match["text"]]:
+        lines.append(f"- {line}")
+
+    lines.extend(["", "### Findings"])
+    if findings:
+        lines.extend([f"- {item}" for item in findings[:5]])
+    else:
+        lines.append("- No structured findings captured for this thread in this run.")
+
+    lines.extend(["", "### Blockers"])
+    if blocked_by:
+        lines.extend([f"- {item}" for item in blocked_by])
+    else:
+        lines.append("- None recorded.")
+
+    lines.extend(["", "### Next steps"])
+    if next_steps:
+        lines.extend([f"- {item}" for item in next_steps[:4]])
+    else:
+        lines.append("- No next step recorded yet.")
+
+    if status == "waiting_on_will":
+        lines.extend(
+            [
+                "",
+                "### Questions for Will",
+                "- Please add the missing scope, desired outcome, and constraints in the original request file so we can schedule this properly.",
+            ]
+        )
+
+    lines.append("")
+    return "\n".join(lines)
+
+
+def sync_founder_request_responses(run_id: str, proposals: list[dict[str, Any]]) -> list[Path]:
+    responses_dir = FOUNDER_REQUESTS_DIR / "responses"
+    responses_dir.mkdir(parents=True, exist_ok=True)
+    updated_paths: list[Path] = []
+    requests = load_founder_requests()
+    for request in requests:
+        section = build_request_response_section(run_id, request, proposals, requests)
+        if not section:
+            continue
+        response_path = responses_dir / request["filename"]
+        existing = response_path.read_text(encoding="utf-8") if response_path.exists() else ""
+        if run_id in existing:
+            continue
+        prefix = "" if not existing.strip() else "\n"
+        response_path.write_text(existing + prefix + section, encoding="utf-8")
+        updated_paths.append(response_path)
+    return updated_paths
 
 
 def load_team_plan() -> dict[str, Any]:
@@ -678,6 +934,9 @@ def main() -> None:
             run_status="synced",
             invalid_files=invalid_files,
         )
+        response_paths = sync_founder_request_responses(run_id, proposals)
+        if response_paths:
+            print(f"Updated founder responses: {', '.join(path.name for path in response_paths)}")
         print(f"Synced {len(proposals)} proposal files to {run_dir}")
         return
     if args.dry_run:
@@ -715,6 +974,7 @@ def main() -> None:
         push_to_github()
         proposals = fetch_remote_proposals(successful_agents)
         stored_agents = store_proposals(sm, run_id, proposals)
+        response_paths = sync_founder_request_responses(run_id, proposals)
 
         status = "success" if len(successful_agents) == len(agents_requested if not chiefs or not specialist_failures else specialists) else "partial_failure"
         if specialist_failures:
@@ -729,6 +989,7 @@ def main() -> None:
             specialist_failures=specialist_failures,
             chief_skipped=bool(chiefs and specialist_failures),
             stored_agents=stored_agents,
+            founder_response_files=[str(path) for path in response_paths],
             local_artifact_dir=str(run_dir),
             finished_at=now_aest().isoformat(),
         )
