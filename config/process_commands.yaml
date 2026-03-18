@@ -167,22 +167,22 @@ processes:
     phase: "enrichment_target"
     command: "./run_target_market_photo_analysis.sh"
     working_dir: "/home/fields/Property_Data_Scraping/03_Gold_Coast/Gold_Coast_Wide_Currently_For_Sale_AND_Recently_Sold/Ollama_Property_Analysis"
-    mongodb_activity: "moderate_write"
+    mongodb_activity: "heavy_write"
     requires_browser: false
     estimated_duration_minutes: 45  # 3 suburbs × ~15 min each
-    cooldown_seconds: 20
+    cooldown_seconds: 120  # 2 minutes — let Cosmos RUs recover before floor plan analysis
     depends_on: [101]
 
   - id: 106
     name: "Floor Plan Analysis (Target Market - OpenAI GPT)"
     description: "Analyzes floor plans using OpenAI GPT Vision to extract room dimensions and areas"
     phase: "enrichment_target"
-    command: "./run_target_market_floor_plan_analysis.sh"
+    command: "python3 /home/fields/Fields_Orchestrator/scripts/step106_floor_plan.py"
     working_dir: "/home/fields/Property_Data_Scraping/03_Gold_Coast/Gold_Coast_Wide_Currently_For_Sale_AND_Recently_Sold/Ollama_Property_Analysis"
-    mongodb_activity: "moderate_write"
+    mongodb_activity: "heavy_write"
     requires_browser: false
     estimated_duration_minutes: 60  # ~80 properties × ~50-80s each via GPT vision (timeout = 2x = 120 min)
-    cooldown_seconds: 20
+    cooldown_seconds: 120  # 2 minutes — let Cosmos RUs recover before valuation enrichment
     depends_on: [101]
 
   - id: 108
@@ -191,10 +191,10 @@ processes:
     phase: "enrichment_target"
     command: "./run_target_market_valuation_enrichment.sh"
     working_dir: "/home/fields/Property_Data_Scraping/03_Gold_Coast/Gold_Coast_Wide_Currently_For_Sale_AND_Recently_Sold/Ollama_Property_Analysis"
-    mongodb_activity: "moderate_write"
+    mongodb_activity: "heavy_write"
     requires_browser: false
     estimated_duration_minutes: 45  # 3 suburbs × ~15 min each (2 GPT calls per property)
-    cooldown_seconds: 20
+    cooldown_seconds: 120  # 2 minutes — let Cosmos RUs recover before valuation model
     depends_on: [101]
 
   # ============================================================================
@@ -207,10 +207,10 @@ processes:
     phase: "valuation"
     command: "python3 batch_valuate_with_tracking.py"
     working_dir: "/home/fields/Property_Valuation/04_Production_Valuation"
-    mongodb_activity: "moderate_write"
+    mongodb_activity: "heavy_write"
     requires_browser: false
     estimated_duration_minutes: 45  # Depends on number of properties needing valuation
-    cooldown_seconds: 20
+    cooldown_seconds: 120  # 2 minutes — let Cosmos RUs recover before backend enrichment
     depends_on: [101, 106]  # Needs for-sale data and floor plans
 
   # ============================================================================
@@ -221,8 +221,8 @@ processes:
     name: "Parse Room Dimensions"
     description: "Extracts room dimensions from floor_plan_analysis and calculates total floor area for property insights"
     phase: "backend_enrichment"
-    command: "python3 10_Floor_Plans/parse_room_dimensions.py"
-    working_dir: "/home/fields/Feilds_Website"
+    command: "python3 scripts/backend_enrichment/parse_room_dimensions.py"
+    working_dir: "/home/fields/Fields_Orchestrator"
     mongodb_activity: "moderate_write"
     requires_browser: false
     estimated_duration_minutes: 15  # Depends on number of properties with floor plans
@@ -281,8 +281,8 @@ processes:
     name: "Calculate Property Insights"
     description: "Computes rarity insights and unique features for each property (ONLY 1, TOP 3, RARE badges) - MUST run AFTER enrichment to access enriched_data"
     phase: "backend_enrichment"
-    command: "python3 03_For_Sale_Coverage/calculate_property_insights.py"
-    working_dir: "/home/fields/Feilds_Website"
+    command: "python3 scripts/backend_enrichment/calculate_property_insights.py"
+    working_dir: "/home/fields/Fields_Orchestrator"
     mongodb_activity: "moderate_write"
     requires_browser: false
     estimated_duration_minutes: 20  # Comparison calculations per property
