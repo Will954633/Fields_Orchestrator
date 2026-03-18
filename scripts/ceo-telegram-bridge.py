@@ -52,6 +52,10 @@ SESSION_COLL = "ceo_chat_sessions"
 MESSAGE_COLL = "ceo_chat_messages"
 STATE_COLL = "ceo_chat_bridge_state"
 MAX_TELEGRAM_MESSAGE = 4000
+MODEL_ALIASES = {
+    "gpt-5.4-codex": "gpt-5.4",
+}
+DEFAULT_CEO_MODEL = "gpt-5.4"
 
 
 def load_env_file(path: Path) -> None:
@@ -99,10 +103,17 @@ def parse_chat_ids(raw: str) -> set[int]:
     return values
 
 
+def resolve_ceo_model(raw: str) -> str:
+    requested = raw.strip()
+    if not requested:
+        return DEFAULT_CEO_MODEL
+    return MODEL_ALIASES.get(requested, requested)
+
+
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
 ALLOWED_CHAT_IDS = parse_chat_ids(os.environ["TELEGRAM_ALLOWED_CHAT_IDS"]) if os.environ.get("TELEGRAM_ALLOWED_CHAT_IDS") else set()
 COSMOS_URI = os.environ.get("COSMOS_CONNECTION_STRING", "").strip()
-CEO_MODEL = os.environ.get("CEO_TELEGRAM_MODEL", "gpt-5.4-codex").strip() or "gpt-5.4-codex"
+CEO_MODEL = resolve_ceo_model(os.environ.get("CEO_TELEGRAM_MODEL", DEFAULT_CEO_MODEL))
 REMOTE_HOST = os.environ.get("CEO_TELEGRAM_REMOTE_HOST", "fields-orchestrator-vm@35.201.6.222").strip()
 REMOTE_CONTEXT_DIR = os.environ.get(
     "CEO_TELEGRAM_REMOTE_CONTEXT_DIR",
