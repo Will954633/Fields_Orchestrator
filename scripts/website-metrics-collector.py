@@ -32,6 +32,7 @@ from pymongo.errors import OperationFailure
 load_dotenv("/home/fields/Fields_Orchestrator/.env")
 COSMOS_URI = os.environ["COSMOS_CONNECTION_STRING"]
 RETENTION_DAYS = 90
+MAX_REASONABLE_DURATION_SECONDS = 60 * 60
 
 # Bot IP prefixes to exclude (mirrors visitor-track.mjs and system-monitor.mjs)
 BOT_IP_PREFIXES = [
@@ -90,6 +91,8 @@ def normalize_page_path(path):
     if not path:
         return "/"
     value = str(path).strip()
+    if value.startswith("fieldsestate.com.au"):
+        value = f"https://{value}"
     if value.startswith("/http://") or value.startswith("/https://"):
         value = value[1:]
     if value.startswith("http://") or value.startswith("https://"):
@@ -98,7 +101,59 @@ def normalize_page_path(path):
         if parsed.query:
             normalized = f"{normalized}?{parsed.query}"
         return normalized
+    if not value.startswith("/"):
+        return f"/{value}"
     return value
+
+
+def classify_source(session):
+    """Classify traffic source with support for UTM tags, click IDs, and query param fallback."""
+    ref = (session.get("entry_referrer") or "").lower()
+    utm = session.get("utm") or {}
+    utm_source = str(utm.get("source") or "").lower()
+    utm_medium = str(utm.get("medium") or "").lower()
+
+    # Fallback: check first page's query_params and referrer for attribution signals
+    # when the utm/entry_referrer are missing (covers SPA referrer and UTM race condition)
+    pages = session.get("pages") or []
+    first_qp = {}
+    first_page_ref = ""
+    if pages and isinstance(pages, list) and len(pages) > 0:
+        first_qp = pages[0].get("query_params") or {}
+        first_page_ref = (pages[0].get("referrer") or "").lower()
+    qp_source = str(first_qp.get("utm_source") or "").lower()
+    has_gclid = bool(utm.get("gclid") or first_qp.get("gclid"))
+    has_fbclid = bool(utm.get("fbclid") or first_qp.get("fbclid"))
+    # Combine session-level and page-level referrer for classification
+    ref = ref or first_page_ref
+
+    if (
+        utm_source in {"fb", "facebook", "ig", "instagram", "meta"}
+        or qp_source in {"fb", "facebook", "ig", "instagram", "meta"}
+        or "facebook.com" in ref
+        or "fb.com" in ref
+        or "l.facebook" in ref
+        or "instagram.com" in ref
+        or has_fbclid
+    ):
+        return "facebook"
+
+    if (
+        utm_source in {"google", "googleads", "adwords"}
+        or qp_source in {"google", "googleads", "adwords"}
+        or utm_medium in {"cpc", "ppc", "paid", "paid_search", "search"}
+        or "google." in ref
+        or "googleads." in ref
+        or "googleadservices.com" in ref
+        or "android-app://com.google.android.googlequicksearchbox" in ref
+        or has_gclid
+    ):
+        return "google"
+
+    if not ref or "fieldsestate.com" in ref:
+        return "direct"
+
+    return "other"
 
 
 def collect_day_metrics(crm, sm, target_date):
@@ -150,6 +205,7 @@ def collect_day_metrics(crm, sm, target_date):
             "actions": {"property_views": 0, "searches": 0, "cta_clicks": 0,
                         "deep_scrolls_75pct": 0},
             "experiments": {},
+            "warnings": ["no_sessions_for_day"],
         }
 
     # ── 2. Unique visitors + returning ──
@@ -208,7 +264,7 @@ def collect_day_metrics(crm, sm, target_date):
     # Average duration (non-bounce sessions)
     duration_agg = cosmos_retry(lambda: list(sessions_col.aggregate([
         {"$match": {**day_filter, "metrics.is_bounce": False,
-                    "metrics.duration_seconds": {"$gt": 0}}},
+                    "metrics.duration_seconds": {"$gt": 0, "$lte": MAX_REASONABLE_DURATION_SECONDS}}},
         {"$group": {
             "_id": None,
             "avg_duration": {"$avg": "$metrics.duration_seconds"},
@@ -237,8 +293,12 @@ def collect_day_metrics(crm, sm, target_date):
     ])))
 
     pages = {}
+    malformed_paths = set()
     for p in page_agg:
-        normalized_path = normalize_page_path(p["_id"])
+        raw_path = p["_id"]
+        normalized_path = normalize_page_path(raw_path)
+        if raw_path != normalized_path:
+            malformed_paths.add(str(raw_path))
         entry = pages.setdefault(normalized_path, {"views": 0, "unique_sessions": 0})
         entry["views"] += p["views"]
         entry["unique_sessions"] += p["unique_sessions_count"]
@@ -254,7 +314,10 @@ def collect_day_metrics(crm, sm, target_date):
         path_stats = cosmos_retry(lambda pp=raw_candidates: list(sessions_col.aggregate([
             {"$match": {**day_filter, "pages.path": {"$in": pp}, "metrics.is_bounce": False}},
             {"$unwind": "$pages"},
-            {"$match": {"pages.path": {"$in": pp}}},
+            {"$match": {
+                "pages.path": {"$in": pp},
+                "pages.time_on_page": {"$gte": 0, "$lte": MAX_REASONABLE_DURATION_SECONDS},
+            }},
             {"$group": {
                 "_id": None,
                 "avg_duration": {"$avg": "$pages.time_on_page"},
@@ -267,21 +330,17 @@ def collect_day_metrics(crm, sm, target_date):
         time.sleep(0.2)
 
     # ── 6. Traffic sources (classify in Python to avoid Cosmos $regexMatch issues) ──
-    all_sessions = cosmos_retry(lambda: list(sessions_col.find(
-        day_filter, {"entry_referrer": 1, "utm": 1}
-    )))
+    # Include pages (first element) for fallback referrer/query_params classification
+    all_sessions = cosmos_retry(lambda: list(sessions_col.aggregate([
+        {"$match": day_filter},
+        {"$project": {
+            "entry_referrer": 1, "utm": 1,
+            "pages": {"$slice": ["$pages", 1]},
+        }},
+    ])))
     sources = {"facebook": 0, "google": 0, "direct": 0, "other": 0}
     for s in all_sessions:
-        ref = (s.get("entry_referrer") or "").lower()
-        utm_source = ((s.get("utm") or {}).get("source") or "").lower()
-        if "facebook.com" in ref or "fb.com" in ref or "l.facebook" in ref or utm_source == "fb":
-            sources["facebook"] += 1
-        elif "google." in ref or utm_source == "google":
-            sources["google"] += 1
-        elif not ref or "fieldsestate.com" in ref:
-            sources["direct"] += 1
-        else:
-            sources["other"] += 1
+        sources[classify_source(s)] += 1
 
     print(f"  Sources: fb={sources.get('facebook', 0)}, google={sources.get('google', 0)}, "
           f"direct={sources.get('direct', 0)}, other={sources.get('other', 0)}")
@@ -305,10 +364,12 @@ def collect_day_metrics(crm, sm, target_date):
 
     # ── 8. Active experiment variant metrics ──
     experiments_data = {}
+    active_experiment_count = 0
     try:
         active_experiments = cosmos_retry(
             lambda: list(sm["website_experiments"].find({"status": "active"}))
         )
+        active_experiment_count = len(active_experiments)
         for exp in active_experiments:
             variant_key = exp.get("variant_key", "")
             if not variant_key:
@@ -320,7 +381,10 @@ def collect_day_metrics(crm, sm, target_date):
                 # Sessions where active_variants.<key> == vid
                 v_filter = {
                     **day_filter,
-                    f"pages.active_variants.{variant_key}": vid,
+                    "$or": [
+                        {f"active_variants.{variant_key}": vid},
+                        {f"pages.active_variants.{variant_key}": vid},
+                    ],
                 }
                 v_sessions = cosmos_retry(lambda f=v_filter: sessions_col.count_documents(f))
                 if v_sessions > 0:
@@ -344,6 +408,26 @@ def collect_day_metrics(crm, sm, target_date):
     except Exception:
         # website_experiments collection may not exist yet
         pass
+
+    impossible_duration_count = cosmos_retry(lambda: sessions_col.count_documents({
+        **day_filter,
+        "$or": [
+            {"metrics.duration_seconds": {"$gt": MAX_REASONABLE_DURATION_SECONDS}},
+            {"pages.time_on_page": {"$gt": MAX_REASONABLE_DURATION_SECONDS}},
+        ],
+    }))
+
+    warnings = []
+    if malformed_paths:
+        warnings.append(f"normalized_{len(malformed_paths)}_malformed_page_paths")
+    if impossible_duration_count:
+        warnings.append(f"ignored_{impossible_duration_count}_impossible_duration_records")
+    if active_experiment_count and not experiments_data:
+        warnings.append("active_experiments_have_no_variant_telemetry")
+    if any((s.get("utm") or {}).get("gclid") for s in all_sessions) and sources["google"] == 0:
+        warnings.append("google_click_ids_present_but_google_sessions_zero")
+    if any((s.get("utm") or {}).get("fbclid") for s in all_sessions) and sources["facebook"] == 0:
+        warnings.append("facebook_click_ids_present_but_facebook_sessions_zero")
 
     # ── Build final document ──
     doc = {
@@ -381,6 +465,7 @@ def collect_day_metrics(crm, sm, target_date):
             "deep_scrolls_75pct": deep_scrolls,
         },
         "experiments": experiments_data,
+        "warnings": warnings,
     }
 
     return doc
