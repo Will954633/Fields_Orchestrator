@@ -30,6 +30,7 @@ import argparse
 import json
 import logging
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -46,6 +47,7 @@ from pymongo import MongoClient, ReturnDocument
 
 ROOT = Path("/home/fields/Fields_Orchestrator")
 ENV_PATH = ROOT / ".env"
+FOUNDER_REQUESTS_DIR = ROOT / "ceo-founder-requests"
 AEST = ZoneInfo("Australia/Brisbane")
 STATE_ID = "telegram"
 SESSION_COLL = "ceo_chat_sessions"
@@ -119,11 +121,21 @@ REMOTE_CONTEXT_DIR = os.environ.get(
     "CEO_TELEGRAM_REMOTE_CONTEXT_DIR",
     "/home/fields-orchestrator-vm/ceo-agents/context",
 ).strip()
+REMOTE_BROWSER_DIR = os.environ.get(
+    "CEO_TELEGRAM_REMOTE_BROWSER_DIR",
+    "/home/fields-orchestrator-vm/ceo-agents/sandbox/browser-tools",
+).strip()
 CONTEXT_SYNC_MINUTES = parse_int_env("CEO_TELEGRAM_CONTEXT_SYNC_MINUTES", 30)
 POLL_SECONDS = parse_int_env("CEO_TELEGRAM_POLL_SECONDS", 2)
 REMOTE_TIMEOUT_SECONDS = parse_int_env("CEO_TELEGRAM_REMOTE_TIMEOUT_SECONDS", 1200)
 HISTORY_LIMIT = parse_int_env("CEO_TELEGRAM_HISTORY_LIMIT", 12)
 TELEGRAM_TIMEOUT_SECONDS = 35
+REMOTE_BROWSER_TIMEOUT_SECONDS = parse_int_env("CEO_TELEGRAM_REMOTE_BROWSER_TIMEOUT_SECONDS", 180)
+BROWSER_TRIGGER_TERMS = (
+    "website", "site", "browser", "landing page", "landing pages", "ui", "ux", "screenshot",
+    "console", "scroll", "for-sale", "for sale", "discover", "analyse", "analyze",
+    "fieldsestate.com.au", "/for-sale", "/discover", "/analyse", "recently-sold",
+)
 
 TELEGRAM_API_BASE = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
@@ -148,6 +160,77 @@ def iso_now() -> str:
     return utc_now().isoformat()
 
 
+def aest_label() -> str:
+    return aest_now().strftime("%Y-%m-%d %H:%M AEST")
+
+
+def title_from_text(text: str, fallback: str = "Telegram request") -> str:
+    for line in text.splitlines():
+        stripped = line.strip().lstrip("#").strip()
+        if stripped:
+            return stripped[:100]
+    return fallback
+
+
+def slugify(value: str, fallback: str = "request") -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
+    return slug[:60] or fallback
+
+
+def latest_user_message_text(session: dict[str, Any]) -> str | None:
+    for item in reversed(session.get("history_tail", [])):
+        if item.get("role") != "user":
+            continue
+        text = (item.get("text") or "").strip()
+        if text and not text.startswith("/"):
+            return text
+    return None
+
+
+def create_founder_request_file(area: str, text: str, source: str) -> Path:
+    open_dir = FOUNDER_REQUESTS_DIR / "open"
+    open_dir.mkdir(parents=True, exist_ok=True)
+
+    now_label = aest_label()
+    date_label = aest_now().strftime("%Y-%m-%d")
+    title = title_from_text(text)
+    slug = slugify(title)
+    base_name = f"{date_label}-{area}-{slug}"
+    path = open_dir / f"{base_name}.md"
+    counter = 2
+    while path.exists():
+        path = open_dir / f"{base_name}-{counter}.md"
+        counter += 1
+
+    request_id = path.stem
+    body = (
+        f"---\n"
+        f"id: {request_id}\n"
+        f"title: {title}\n"
+        f"created_at: {now_label}\n"
+        f"owner: will\n"
+        f"area: {area}\n"
+        f"priority: medium\n"
+        f"status: open\n"
+        f"type: task\n"
+        f"source: {source}\n"
+        f"---\n\n"
+        f"## {now_label} - Will\n\n"
+        f"### Issue\n"
+        f"{text.strip()}\n\n"
+        f"### What I want investigated or changed\n"
+        f"Captured from Telegram. Add follow-up detail in this thread or Telegram if needed.\n\n"
+        f"### New standing behaviour\n"
+        f"None specified yet.\n\n"
+        f"### Constraints\n"
+        f"None specified yet.\n\n"
+        f"### Success looks like\n"
+        f"A clear response, plan, or completed next action tied to this request.\n"
+    )
+    path.write_text(body, encoding="utf-8")
+    return path
+
+
 def get_client() -> MongoClient:
     return MongoClient(COSMOS_URI, retryWrites=False, serverSelectionTimeoutMS=30000)
 
@@ -163,6 +246,33 @@ def telegram_call(method: str, payload: dict[str, Any], timeout: int = TELEGRAM_
     if not data.get("ok"):
         raise RuntimeError(f"Telegram API {method} failed: {data}")
     return data
+
+
+def workflow_reply_markup() -> dict[str, Any]:
+    return {
+        "keyboard": [
+            [{"text": "/status"}, {"text": "/sync"}],
+            [{"text": "/task"}, {"text": "/reset"}],
+        ],
+        "resize_keyboard": True,
+        "is_persistent": True,
+        "input_field_placeholder": "Chat normally, or tap a management command",
+    }
+
+
+def register_bot_commands() -> None:
+    commands = [
+        {"command": "start", "description": "Show advisory chat help"},
+        {"command": "help", "description": "Show advisory chat help"},
+        {"command": "status", "description": "Show bridge status"},
+        {"command": "sync", "description": "Refresh CEO context now"},
+        {"command": "task", "description": "Create a durable founder request"},
+        {"command": "reset", "description": "Start a new CEO chat session"},
+    ]
+    try:
+        telegram_call("setMyCommands", {"commands": commands}, timeout=30)
+    except Exception as exc:
+        log.warning("Failed to register CEO bot commands: %s", exc)
 
 
 def send_chat_action(chat_id: int, action: str = "typing") -> None:
@@ -192,17 +302,18 @@ def chunk_text(text: str, chunk_size: int = MAX_TELEGRAM_MESSAGE) -> list[str]:
     return chunks
 
 
-def send_message(chat_id: int, text: str) -> None:
-    for chunk in chunk_text(text):
-        telegram_call(
-            "sendMessage",
-            {
-                "chat_id": chat_id,
-                "text": chunk,
-                "disable_web_page_preview": True,
-            },
-            timeout=30,
-        )
+def send_message(chat_id: int, text: str, reply_markup: dict[str, Any] | None = None) -> None:
+    markup = reply_markup if reply_markup is not None else workflow_reply_markup()
+    chunks = chunk_text(text)
+    for index, chunk in enumerate(chunks):
+        payload = {
+            "chat_id": chat_id,
+            "text": chunk,
+            "disable_web_page_preview": True,
+        }
+        if index == 0 and markup is not None:
+            payload["reply_markup"] = markup
+        telegram_call("sendMessage", payload, timeout=30)
 
 
 def get_bridge_state(sm) -> dict[str, Any]:
@@ -378,7 +489,12 @@ def maybe_refresh_context(sm, force: bool = False) -> tuple[bool, str]:
     return True, "Context refreshed."
 
 
-def build_prompt(session: dict[str, Any], latest_user_message: str, context_warning: str | None = None) -> str:
+def build_prompt(
+    session: dict[str, Any],
+    latest_user_message: str,
+    context_warning: str | None = None,
+    browser_context_note: str | None = None,
+) -> str:
     history_lines = []
     for item in session.get("history_tail", [])[-HISTORY_LIMIT:]:
         role = item.get("role", "unknown").upper()
@@ -389,6 +505,7 @@ def build_prompt(session: dict[str, Any], latest_user_message: str, context_warn
     history_block = "\n".join(history_lines) if history_lines else "No prior conversation."
     now_aest = aest_now().strftime("%Y-%m-%d %H:%M AEST")
     context_warning_block = f"\nContext sync note:\n{context_warning}\n" if context_warning else ""
+    browser_note_block = f"\nLive browser note:\n{browser_context_note}\n" if browser_context_note else ""
 
     return f"""You are the Fields Estate CEO team responding to the founder inside Telegram.
 
@@ -397,7 +514,7 @@ You represent three perspectives at once:
 - Growth
 - Product
 
-Work in read-only mode. Use the local `context/` directory as the source of truth for company state. Read files as needed before answering. Do not create proposals, branches, commits, or code changes. This is a direct advisory response, not a batch proposal run.
+Work in read-only mode. Use the local `context/` directory as the source of truth for company state. If a local `browser_artifacts/` directory is present, treat it as fresh live website evidence gathered immediately before this reply. Read files as needed before answering. Do not create proposals, branches, commits, or code changes. This is a direct advisory response, not a batch proposal run.
 
 Response style:
 - Be concise, direct, and operational.
@@ -410,6 +527,7 @@ Response style:
 Current time: {now_aest}
 Telegram session: {session["_id"]}
 {context_warning_block}
+{browser_note_block}
 
 Conversation history:
 {history_block}
@@ -419,10 +537,109 @@ Latest founder message:
 """
 
 
-def run_remote_ceo_reply(prompt: str) -> str:
+def message_needs_browser_artifacts(text: str) -> bool:
+    lowered = text.lower()
+    return any(term in lowered for term in BROWSER_TRIGGER_TERMS)
+
+
+def browser_urls_for_message(text: str) -> list[str]:
+    lowered = text.lower()
+    urls: list[str] = []
+    candidates = [
+        (("/for-sale", "for sale"), "/for-sale"),
+        (("/discover", "discover"), "/discover"),
+        (("/analyse", "/analyze", "analyse", "analyze"), "/analyse"),
+        (("home page", "homepage", "home"), "/"),
+    ]
+    for terms, url in candidates:
+        if any(term in lowered for term in terms) and url not in urls:
+            urls.append(url)
+    if not urls:
+        urls = ["/for-sale", "/discover"]
+    return urls[:3]
+
+
+def prepare_remote_browser_artifacts(latest_user_message: str) -> dict[str, Any] | None:
+    if not message_needs_browser_artifacts(latest_user_message):
+        return None
+
+    run_token = uuid.uuid4().hex[:10]
+    urls = browser_urls_for_message(latest_user_message)
+    remote_dir = f"{REMOTE_BROWSER_DIR}/artifacts/telegram-inspections/{run_token}"
+    log_path = f"/tmp/ceo_browser_{run_token}.log"
+    remote_script = f"""
+set -e
+if [ ! -f {shlex.quote(REMOTE_BROWSER_DIR)}/scripts/site-inspector.js ]; then
+  printf '%s\\n' '{{{{"status":"missing_tools","detail":"browser-tools/scripts/site-inspector.js not found"}}}}'
+  exit 0
+fi
+mkdir -p {shlex.quote(remote_dir)}
+if [ ! -d {shlex.quote(REMOTE_BROWSER_DIR)}/node_modules ]; then
+  printf '%s\\n' '{{{{"status":"missing_dependencies","detail":"browser-tools/node_modules missing","remote_dir":"{remote_dir}"}}}}'
+  exit 0
+fi
+RC=0
+node {shlex.quote(REMOTE_BROWSER_DIR)}/scripts/site-inspector.js --url {shlex.quote(",".join(urls))} --wait 1500 --output-dir {shlex.quote(remote_dir)} >{shlex.quote(log_path)} 2>&1 || RC=$?
+export CEO_BROWSER_RC="$RC"
+export CEO_BROWSER_REMOTE_DIR={shlex.quote(remote_dir)}
+export CEO_BROWSER_LOG_PATH={shlex.quote(log_path)}
+python3 - <<'PY'
+import json
+import os
+from pathlib import Path
+
+remote_dir = Path(os.environ["CEO_BROWSER_REMOTE_DIR"])
+summary_path = remote_dir / "summary.json"
+log_path = Path(os.environ["CEO_BROWSER_LOG_PATH"])
+payload = dict(
+    status="ok" if summary_path.exists() else "failed",
+    remote_dir=str(remote_dir),
+    summary_path=str(summary_path),
+    log_path=str(log_path),
+    exit_code=int(os.environ.get("CEO_BROWSER_RC", "1")),
+)
+if summary_path.exists():
+    try:
+        payload["summary"] = json.loads(summary_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        payload["status"] = "failed"
+        payload["detail"] = "Failed to parse summary.json: " + str(exc)
+else:
+    payload["detail"] = "summary.json not written"
+
+if log_path.exists():
+    payload["log_tail"] = log_path.read_text(encoding="utf-8", errors="replace").splitlines()[-20:]
+
+print(json.dumps(payload))
+PY
+"""
+    result = ssh_run(remote_script, timeout=REMOTE_BROWSER_TIMEOUT_SECONDS)
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "Remote browser preparation failed")[-1200:]
+        return {"status": "failed", "detail": detail, "urls": urls}
+
+    raw = (result.stdout or "").strip()
+    if not raw:
+        return {"status": "failed", "detail": "Remote browser preparation returned no output", "urls": urls}
+
+    try:
+        payload = json.loads(raw.splitlines()[-1])
+    except json.JSONDecodeError:
+        payload = {"status": "failed", "detail": raw[-1200:]}
+    payload["urls"] = urls
+    return payload
+
+
+def run_remote_ceo_reply(prompt: str, browser_context: dict[str, Any] | None = None) -> str:
     remote_token = uuid.uuid4().hex
     prompt_path = f"/tmp/ceo_telegram_prompt_{remote_token}.txt"
     quoted_prompt_path = shlex.quote(prompt_path)
+    browser_copy_block = ""
+    if browser_context and browser_context.get("remote_dir"):
+        browser_copy_block = (
+            'mkdir -p "$WORKDIR/browser_artifacts"\n'
+            f'cp -r {shlex.quote(str(browser_context["remote_dir"]))}/. "$WORKDIR/browser_artifacts"/ 2>/dev/null || true\n'
+        )
 
     upload = subprocess.run(
         ["ssh", "-o", "BatchMode=yes", REMOTE_HOST, f"cat > {quoted_prompt_path}"],
@@ -441,6 +658,7 @@ set -e
 WORKDIR=$(mktemp -d /tmp/ceo-telegram-XXXXXX)
 trap 'rm -rf "$WORKDIR" {quoted_prompt_path}' EXIT
 cp -r {shlex.quote(REMOTE_CONTEXT_DIR)} "$WORKDIR/context"
+{browser_copy_block}
 cd "$WORKDIR"
 LOGFILE=/tmp/ceo_telegram_codex_{remote_token}.log
 if ! codex exec -m {shlex.quote(CEO_MODEL)} --full-auto --skip-git-repo-check -o "$WORKDIR/output.txt" "$(cat {quoted_prompt_path})" >"$LOGFILE" 2>&1; then
@@ -475,14 +693,18 @@ def format_status(sm, session: dict[str, Any]) -> str:
 
 
 def handle_command(sm, chat: dict[str, Any], user: dict[str, Any], text: str) -> bool:
-    command = text.strip().split()[0].lower()
+    stripped = text.strip()
+    command, _, remainder = stripped.partition(" ")
+    command = command.lower()
+    remainder = remainder.strip()
     session = get_or_create_active_session(sm, chat, user)
 
-    if command == "/start":
+    if command in {"/start", "/help"}:
         send_message(
             chat["id"],
-            "CEO Telegram bridge is ready. Send any message to route it to the Codex CEO team.\n"
-            "Commands: /status, /reset, /sync",
+            "CEO Telegram bridge is ready. Plain text messages stay in advisory chat mode.\n"
+            "Create a durable founder request with `/task ...`.\n"
+            "Commands: `/status`, `/reset`, `/sync`.",
         )
         return True
 
@@ -499,6 +721,20 @@ def handle_command(sm, chat: dict[str, Any], user: dict[str, Any], text: str) ->
         send_chat_action(chat["id"])
         ok, detail = maybe_refresh_context(sm, force=True)
         send_message(chat["id"], "Context refreshed." if ok else f"Context refresh failed.\n{detail[-800:]}")
+        return True
+
+    if command == "/task":
+        task_text = remainder or latest_user_message_text(session)
+        if not task_text:
+            send_message(chat["id"], "Provide task text after `/task ...`, or send the task in chat first and then reply with `/task`.")
+            return True
+        path = create_founder_request_file("management", task_text, "telegram_ceo")
+        reply = (
+            f"Created founder request `{path.name}` in `ceo-founder-requests/open`.\n"
+            "It will persist for future CEO review cycles."
+        )
+        append_message(sm, session["_id"], "assistant", reply, {"mode": "task_create", "path": str(path)})
+        send_message(chat["id"], reply)
         return True
 
     return False
@@ -554,8 +790,27 @@ def handle_text_message(sm, update: dict[str, Any], message: dict[str, Any], tex
             return
 
     try:
-        prompt = build_prompt(session, text, context_warning=context_warning)
-        reply = run_remote_ceo_reply(prompt)
+        browser_context = prepare_remote_browser_artifacts(text)
+        browser_note = None
+        if browser_context:
+            if browser_context.get("status") == "ok":
+                browser_note = (
+                    f"Fresh browser artifacts were captured immediately before this reply for {', '.join(browser_context.get('urls', []))}. "
+                    "Read browser_artifacts/summary.json plus any screenshots, page text, console logs, network logs, and preflight.json."
+                )
+            else:
+                browser_note = (
+                    f"Browser artifact capture did not succeed. Status: {browser_context.get('status')}. "
+                    f"Detail: {(browser_context.get('detail') or '')[-300:]}"
+                )
+
+        prompt = build_prompt(
+            session,
+            text,
+            context_warning=context_warning,
+            browser_context_note=browser_note,
+        )
+        reply = run_remote_ceo_reply(prompt, browser_context=browser_context)
         append_message(
             sm,
             session["_id"],
@@ -658,6 +913,7 @@ def main() -> None:
     log.info("Allowed chat IDs: %s", ",".join(str(v) for v in sorted(ALLOWED_CHAT_IDS)))
     log.info("Remote host: %s", REMOTE_HOST)
     log.info("Model: %s", CEO_MODEL)
+    register_bot_commands()
 
     client = get_client()
     sm = client["system_monitor"]
