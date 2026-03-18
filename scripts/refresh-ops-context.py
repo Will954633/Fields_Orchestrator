@@ -130,10 +130,14 @@ def fetch_orchestrator_status(db):
         sort=[("started_at", -1)]
     )
 
-    # All steps from the last 36h
+    # All steps from the last 36h — exclude stale zombie records
     recent_steps = list(
         col.find(
-            {"system": "orchestrator", "started_at": {"$gte": cutoff}},
+            {
+                "system": "orchestrator",
+                "started_at": {"$gte": cutoff},
+                "status": {"$nin": ["failed_stale"]},
+            },
         ).sort("started_at", -1).limit(200)
     )
 
@@ -317,18 +321,28 @@ def render_ops_status(orch, api, coverage, repairs, articles, listing_counts, er
     failed = orch["failed"]
     running = orch["running"]
 
-    if lp:
-        overall = lp.get("status", "unknown")
-        lines.append(f"**Last run date:** {date}  ")
-        lines.append(f"**Pipeline status:** {status_icon(overall)} {overall}  ")
-        lines.append(f"**Steps:** {success}/{total} succeeded, {failed} failed, {running} running  ")
-        if lp.get("started_at"):
-            lines.append(f"**Started:** {fmt_dt(lp['started_at'])} ({age_str(lp['started_at'])})  ")
-        if lp.get("finished_at"):
-            lines.append(f"**Finished:** {fmt_dt(lp['finished_at'])}  ")
+    # Derive pipeline status from step results (more reliable than pipeline-level record on Cosmos)
+    if failed > 0:
+        overall = "failed"
+    elif running > 0:
+        overall = "running"
+    elif success == total and total > 0:
+        overall = "ok"
     else:
-        lines.append(f"**Last run date:** {date}  ")
-        lines.append(f"**Steps:** {success}/{total} succeeded, {failed} failed, {running} running  ")
+        overall = "unknown"
+
+    lines.append(f"**Last run date:** {date}  ")
+    lines.append(f"**Pipeline status:** {status_icon(overall)} {overall}  ")
+    lines.append(f"**Steps:** {success}/{total} succeeded, {failed} failed, {running} running  ")
+
+    # Try to show start time from the earliest step or pipeline record
+    start_ref = lp if lp and lp.get("started_at") else None
+    if not start_ref and orch["steps"]:
+        earliest = min((s for s in orch["steps"] if s.get("started_at")), key=lambda s: s["started_at"], default=None)
+        if earliest:
+            start_ref = earliest
+    if start_ref and start_ref.get("started_at"):
+        lines.append(f"**Started:** {fmt_dt(start_ref['started_at'])} ({age_str(start_ref['started_at'])})  ")
 
     if orch["steps"]:
         lines.append("\n**Step-by-step status (most recent run):**")
