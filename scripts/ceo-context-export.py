@@ -260,6 +260,38 @@ def export_founder_truths() -> None:
     gh_api_put("memory/founder_truths.json", dumps_json(truths), "update: founder truths")
 
 
+def refresh_live_data_sources() -> None:
+    """Run data collectors before export so CEO agents get fresh data, not stale snapshots."""
+    print("\n🔄 Refreshing live data sources before export...")
+
+    collectors = [
+        {
+            "name": "website-metrics-collector (backfill today)",
+            "cmd": ["/home/fields/venv/bin/python3", "scripts/website-metrics-collector.py", "--backfill", "1"],
+            "timeout": 180,
+        },
+        {
+            "name": "api-health-check",
+            "cmd": ["/home/fields/venv/bin/python3", "scripts/api-health-check.py"],
+            "timeout": 120,
+        },
+        {
+            "name": "write-scraper-health",
+            "cmd": ["/home/fields/venv/bin/python3", "write-scraper-health.py"],
+            "timeout": 120,
+        },
+    ]
+    for coll in collectors:
+        try:
+            result = run_command(coll["cmd"], cwd=ORCHESTRATOR_DIR, timeout=coll["timeout"])
+            status = "ok" if result.returncode == 0 else f"exit {result.returncode}"
+            print(f"  {coll['name']}: {status}")
+            if result.returncode != 0 and result.stderr:
+                print(f"    stderr: {result.stderr.strip()[:200]}")
+        except Exception as exc:
+            print(f"  {coll['name']}: FAILED ({exc})")
+
+
 def export_ops_status() -> None:
     print("\n📊 Exporting OPS_STATUS.md...")
     run_command(["/home/fields/venv/bin/python3", str(ORCHESTRATOR_DIR / "scripts" / "refresh-ops-context.py")], cwd=ORCHESTRATOR_DIR, timeout=120)
@@ -670,6 +702,7 @@ def main() -> None:
     print(f"Target repo: {REPO}")
 
     load_sha_cache()
+    refresh_live_data_sources()
     export_claude_md()
     export_memory()
     export_founder_truths()
