@@ -19,12 +19,24 @@
  */
 
 const puppeteer = require('puppeteer-core');
+const dns = require('dns').promises;
 const fs = require('fs');
+const https = require('https');
 const path = require('path');
 
-const BASE_URL = 'https://fieldsestate.com.au';
-const CHROME_PATH = '/usr/bin/google-chrome';
-const OUTPUT_DIR = '/tmp/site-inspect';
+const DEFAULT_BASE_URL = process.env.SITE_INSPECTOR_BASE_URL || 'https://fieldsestate.com.au';
+const DEFAULT_CHROME_PATH = process.env.SITE_INSPECTOR_CHROME_PATH || '/usr/bin/google-chrome';
+const DEFAULT_OUTPUT_DIR = process.env.SITE_INSPECTOR_OUTPUT_DIR || '/tmp/site-inspect';
+const IGNORED_ERROR_HOSTS = [
+  'google-analytics.com',
+  'googletagmanager.com',
+  'google.com',
+  'doubleclick.net',
+  'googleadservices.com',
+  'stape.au',
+  'facebook.com',
+  'facebook.net',
+];
 
 const VIEWPORTS = {
   desktop: { width: 1440, height: 900 },
@@ -35,6 +47,7 @@ const VIEWPORTS = {
 function parseArgs() {
   const args = process.argv.slice(2);
   const opts = {
+    rawUrls: [],
     urls: [],
     viewport: 'desktop',
     element: null,
@@ -42,17 +55,16 @@ function parseArgs() {
     screenshot: true,
     fullPage: true,
     actionsFile: null,
+    baseUrl: DEFAULT_BASE_URL,
+    chromePath: DEFAULT_CHROME_PATH,
+    outputDir: DEFAULT_OUTPUT_DIR,
+    preflightOnly: false,
   };
 
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
       case '--url':
-        opts.urls = args[++i].split(',').map(u => {
-          u = u.trim();
-          if (u.startsWith('/')) u = BASE_URL + u;
-          if (!u.startsWith('http')) u = BASE_URL + '/' + u;
-          return u;
-        });
+        opts.rawUrls = args[++i].split(',').map(u => u.trim()).filter(Boolean);
         break;
       case '--mobile':
         opts.viewport = 'mobile';
@@ -72,29 +84,46 @@ function parseArgs() {
       case '--no-full-page':
         opts.fullPage = false;
         break;
+      case '--base-url':
+        opts.baseUrl = args[++i];
+        break;
+      case '--chrome-path':
+        opts.chromePath = args[++i];
+        break;
+      case '--output-dir':
+        opts.outputDir = args[++i];
+        break;
+      case '--preflight-only':
+        opts.preflightOnly = true;
+        break;
       case '--help':
         console.log(`
 site-inspector.js — Visual inspection for fieldsestate.com.au
 
 Options:
   --url <url[,url2,...]>  Page(s) to inspect. Paths like /for-sale are expanded.
+  --base-url <url>        Base URL for relative paths (default: ${DEFAULT_BASE_URL})
+  --chrome-path <path>    Chrome executable path (default: ${DEFAULT_CHROME_PATH})
+  --output-dir <path>     Output directory (default: ${DEFAULT_OUTPUT_DIR})
   --mobile                Use mobile viewport (375x812)
   --tablet                Use tablet viewport (768x1024)
   --element <selector>    Screenshot a specific CSS element
   --wait <ms>             Extra wait after load (default: 2000)
   --actions-file <path>   JSON file with scripted interactions to run after load
+  --preflight-only        Run browser/network diagnostics without launching a page
   --no-screenshot         Skip screenshot, capture text + console only
   --no-full-page          Viewport-only screenshot (not full scrollable page)
   --help                  Show this help
 
-Output goes to /tmp/site-inspect/<slug>/
+Output goes to <output-dir>/<slug>/
   screenshot.png          Full page screenshot
   screenshot-mobile.png   If --mobile
   console.log             All console output
-  network-errors.log      Failed requests (4xx, 5xx, blocked)
+  network-errors.log      Relevant failed requests (excluding analytics beacons)
   page-text.txt           All visible text on the page
   page-info.json          Page metadata (title, URL, viewport, timing)
   action-log.json         Steps executed from --actions-file
+  preflight.json          DNS / HTTPS / Chrome diagnostics
 `);
         process.exit(0);
       case '--actions-file':
@@ -103,10 +132,16 @@ Output goes to /tmp/site-inspect/<slug>/
     }
   }
 
-  if (opts.urls.length === 0) {
+  if (opts.rawUrls.length === 0) {
     console.error('Error: --url is required. Use --help for usage.');
     process.exit(1);
   }
+
+  opts.urls = opts.rawUrls.map(u => {
+    if (u.startsWith('/')) return opts.baseUrl + u;
+    if (!u.startsWith('http')) return opts.baseUrl + '/' + u;
+    return u;
+  });
 
   return opts;
 }
@@ -126,6 +161,14 @@ function sanitizeArtifactName(name) {
     .substring(0, 60) || 'snapshot';
 }
 
+function sanitizeError(error) {
+  if (!error) return null;
+  return {
+    message: error.message || String(error),
+    name: error.name || 'Error',
+  };
+}
+
 function loadActions(actionsFile) {
   if (!actionsFile) return [];
   const raw = fs.readFileSync(actionsFile, 'utf8');
@@ -134,6 +177,80 @@ function loadActions(actionsFile) {
     throw new Error('--actions-file must contain a JSON array of action objects');
   }
   return actions;
+}
+
+function ensureDir(dirpath) {
+  fs.mkdirSync(dirpath, { recursive: true });
+}
+
+function isIgnoredNetworkEntry(entry) {
+  try {
+    const hostname = new URL(entry.url).hostname;
+    return IGNORED_ERROR_HOSTS.some(host => hostname === host || hostname.endsWith(`.${host}`));
+  } catch {
+    return false;
+  }
+}
+
+function httpsHead(url, timeoutMs = 8000) {
+  return new Promise(resolve => {
+    const req = https.request(url, { method: 'HEAD', timeout: timeoutMs }, res => {
+      resolve({
+        ok: true,
+        statusCode: res.statusCode || null,
+        statusMessage: res.statusMessage || null,
+      });
+      res.resume();
+    });
+    req.on('timeout', () => {
+      req.destroy(new Error('HTTPS preflight timed out'));
+    });
+    req.on('error', err => {
+      resolve({
+        ok: false,
+        error: err.message,
+      });
+    });
+    req.end();
+  });
+}
+
+async function runPreflight(opts) {
+  const startedAt = new Date().toISOString();
+  const chromePath = opts.chromePath;
+  const chromeExists = fs.existsSync(chromePath);
+  const urlChecks = [];
+
+  for (const url of opts.urls) {
+    let dnsCheck = { ok: false, error: 'No hostname' };
+    try {
+      const hostname = new URL(url).hostname;
+      const lookup = await dns.lookup(hostname);
+      dnsCheck = {
+        ok: true,
+        hostname,
+        address: lookup.address,
+        family: lookup.family,
+      };
+    } catch (err) {
+      dnsCheck = { ok: false, error: err.message };
+    }
+
+    const httpsCheck = await httpsHead(url);
+    urlChecks.push({ url, dns: dnsCheck, https: httpsCheck });
+  }
+
+  return {
+    startedAt,
+    completedAt: new Date().toISOString(),
+    chromePath,
+    chromeExists,
+    urls: urlChecks,
+  };
+}
+
+function writeSummary(outputDir, summary) {
+  fs.writeFileSync(path.join(outputDir, 'summary.json'), JSON.stringify(summary, null, 2));
 }
 
 async function writePageText(page, filepath) {
@@ -265,8 +382,8 @@ async function runAction(page, action) {
 
 async function inspectPage(browser, url, opts) {
   const slug = urlToSlug(url);
-  const outDir = path.join(OUTPUT_DIR, slug);
-  fs.mkdirSync(outDir, { recursive: true });
+  const outDir = path.join(opts.outputDir, slug);
+  ensureDir(outDir);
 
   const suffix = opts.viewport !== 'desktop' ? `-${opts.viewport}` : '';
   const consoleLogs = [];
@@ -293,23 +410,29 @@ async function inspectPage(browser, url, opts) {
 
   // Capture network failures
   page.on('requestfailed', req => {
-    networkErrors.push({
+    const entry = {
       url: req.url(),
       method: req.method(),
       failure: req.failure()?.errorText || 'unknown',
       resourceType: req.resourceType(),
-    });
+    };
+    if (!isIgnoredNetworkEntry(entry)) {
+      networkErrors.push(entry);
+    }
   });
 
   // Capture HTTP errors (4xx, 5xx)
   page.on('response', resp => {
     if (resp.status() >= 400) {
-      networkErrors.push({
+      const entry = {
         url: resp.url(),
         status: resp.status(),
         statusText: resp.statusText(),
         resourceType: resp.request().resourceType(),
-      });
+      };
+      if (!isIgnoredNetworkEntry(entry)) {
+        networkErrors.push(entry);
+      }
     }
   });
 
@@ -391,9 +514,12 @@ async function inspectPage(browser, url, opts) {
     networkErrors: networkErrors.length,
     timestamp: new Date().toISOString(),
     outputDir: outDir,
-    files: fs.readdirSync(outDir),
+    files: [],
   };
-  fs.writeFileSync(path.join(outDir, `page-info${suffix}.json`), JSON.stringify(pageInfo, null, 2));
+  const pageInfoPath = path.join(outDir, `page-info${suffix}.json`);
+  fs.writeFileSync(pageInfoPath, JSON.stringify(pageInfo, null, 2));
+  pageInfo.files = fs.readdirSync(outDir);
+  fs.writeFileSync(pageInfoPath, JSON.stringify(pageInfo, null, 2));
 
   await page.close();
   return pageInfo;
@@ -402,54 +528,87 @@ async function inspectPage(browser, url, opts) {
 async function main() {
   const opts = parseArgs();
   opts.actions = loadActions(opts.actionsFile);
+  ensureDir(opts.outputDir);
 
-  // Clean previous runs
-  if (fs.existsSync(OUTPUT_DIR)) {
-    fs.rmSync(OUTPUT_DIR, { recursive: true });
+  const preflight = await runPreflight(opts);
+  fs.writeFileSync(path.join(opts.outputDir, 'preflight.json'), JSON.stringify(preflight, null, 2));
+
+  if (opts.preflightOnly) {
+    writeSummary(opts.outputDir, {
+      inspectedAt: new Date().toISOString(),
+      viewport: opts.viewport,
+      baseUrl: opts.baseUrl,
+      outputDir: opts.outputDir,
+      preflight,
+      pages: [],
+      status: 'preflight_only',
+    });
+    console.log(`Preflight complete. Output: ${opts.outputDir}/`);
+    return;
   }
-  fs.mkdirSync(OUTPUT_DIR, { recursive: true });
-
-  const browser = await puppeteer.launch({
-    executablePath: CHROME_PATH,
-    headless: 'new',
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-gpu',
-      '--disable-extensions',
-      '--window-size=1440,900',
-    ],
-  });
 
   const results = [];
+  let browser;
+  try {
+    browser = await puppeteer.launch({
+      executablePath: opts.chromePath,
+      headless: 'new',
+      ignoreDefaultArgs: ['--enable-crash-reporter'],
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--disable-extensions',
+        '--disable-crash-reporter',
+        '--disable-breakpad',
+        '--disable-crashpad',
+        '--no-crash-upload',
+        '--disable-background-networking',
+        '--disable-component-update',
+        '--window-size=1440,900',
+      ],
+    });
 
-  for (const url of opts.urls) {
-    try {
-      console.log(`Inspecting: ${url} (${opts.viewport})`);
-      const info = await inspectPage(browser, url, opts);
-      results.push(info);
-      console.log(`  -> ${info.outputDir}/`);
-      console.log(`     Title: ${info.title}`);
-      console.log(`     Load: ${info.loadTimeMs}ms | Console: ${info.consoleMessages} msgs | Network errors: ${info.networkErrors}`);
-      info.files.forEach(f => console.log(`     ${f}`));
-    } catch (err) {
-      console.error(`  ERROR inspecting ${url}: ${err.message}`);
-      results.push({ url, error: err.message });
+    for (const url of opts.urls) {
+      try {
+        console.log(`Inspecting: ${url} (${opts.viewport})`);
+        const info = await inspectPage(browser, url, opts);
+        results.push(info);
+        console.log(`  -> ${info.outputDir}/`);
+        console.log(`     Title: ${info.title}`);
+        console.log(`     Load: ${info.loadTimeMs}ms | Console: ${info.consoleMessages} msgs | Network errors: ${info.networkErrors}`);
+        info.files.forEach(f => console.log(`     ${f}`));
+      } catch (err) {
+        console.error(`  ERROR inspecting ${url}: ${err.message}`);
+        results.push({ url, error: err.message });
+      }
+    }
+  } catch (err) {
+    results.push({
+      stage: 'browser_launch',
+      error: err.message,
+      preflight,
+    });
+  } finally {
+    if (browser) {
+      await browser.close();
     }
   }
 
-  await browser.close();
-
-  // Write summary
+  const status = results.some(item => item.error) ? 'failed' : 'passed';
   const summary = {
     inspectedAt: new Date().toISOString(),
     viewport: opts.viewport,
+    baseUrl: opts.baseUrl,
+    outputDir: opts.outputDir,
+    preflight,
     pages: results,
+    status,
   };
-  fs.writeFileSync(path.join(OUTPUT_DIR, 'summary.json'), JSON.stringify(summary, null, 2));
-  console.log(`\nDone. Output: ${OUTPUT_DIR}/`);
-  console.log(`Summary: ${OUTPUT_DIR}/summary.json`);
+  writeSummary(opts.outputDir, summary);
+  console.log(`\nDone. Output: ${opts.outputDir}/`);
+  console.log(`Summary: ${opts.outputDir}/summary.json`);
 }
 
 main().catch(err => {
