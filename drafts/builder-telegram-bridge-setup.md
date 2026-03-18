@@ -56,6 +56,7 @@ This triggers a local Codex review pass that:
 - returns a proposed implementation plan to Telegram
 
 No code changes are allowed in this step.
+Any error, missing dependency, or blocked step encountered during review should be turned into an explicit TODO item in the proposed plan.
 
 ### 2. Revise the plan
 
@@ -82,6 +83,7 @@ implement items 1 and 3
 ```
 
 This triggers execution against the approved scope only.
+Any execution error or blocked step should be turned into an explicit TODO item in the final implementation response.
 
 ### 4. Cancel
 
@@ -100,6 +102,14 @@ artifacts/implementation-runs/YYYY-MM-DD/
 ```
 
 Each run stores the founder request, generated prompt, result, and metadata.
+
+## Error TODOs
+
+The Implementor session now keeps a small persistent list of error TODOs in session state.
+
+- Bridge-level failures are added automatically.
+- Review and execution prompts also instruct Codex to convert encountered errors into explicit TODO items.
+- `/status` shows whether the session currently has pending error TODOs.
 
 ## MongoDB collections
 
