@@ -414,6 +414,7 @@ def export_metrics_and_memory() -> None:
         "metrics/website_metrics_7d.json": query_json(["/home/fields/venv/bin/python3", "scripts/ceo-query-broker.py", "website-metrics", "--days", "7"]),
         "metrics/data_coverage.json": query_json(["/home/fields/venv/bin/python3", "-c", _coverage_query_script()]),
         "metrics/ops_summary.json": query_json(["/home/fields/venv/bin/python3", "scripts/ceo-query-broker.py", "ops-summary"]),
+        "metrics/cost_summary_30d.json": query_json(["/home/fields/venv/bin/python3", "scripts/ceo-query-broker.py", "cost-summary", "--days", "30"]),
         "metrics/timeline_14d.json": query_json(["/home/fields/venv/bin/python3", "scripts/ceo-query-broker.py", "timeline", "--days", "14"]),
         "memory/proposal_outcomes.json": query_json(["/home/fields/venv/bin/python3", "scripts/ceo-query-broker.py", "proposal-outcomes", "--days", "30", "--limit", "100"]),
         "tools/read_only_query_contract.json": READ_ONLY_TOOL_CONTRACT,
@@ -543,6 +544,69 @@ def export_code_context() -> None:
     gh_api_put("code/targets.json", dumps_json(targets), "update: code context index")
 
 
+BACKUP_SCRAPER_HOST = "fields-orchestrator-vm@35.201.6.222"
+BACKUP_SCRAPER_DIR = "/home/projects/scraper"
+BACKUP_SCRAPER_SCRIPTS = [
+    "url_tracking_run.py",
+    "continuous_monitor.py",
+    "hybrid_extraction_poc.py",
+    "robust_extractor.py",
+    "url_tracker.py",
+    "direct_agency_scraper.py",
+    "gpt_verifier.py",
+    "selfhosted_searxng_search.py",
+    "launcher.py",
+    "status.sh",
+    "start_scraper.sh",
+    "run_scraper.sh",
+    "stop_scraper.sh",
+    "coverage_comparison.py",
+    "property_timelines.py",
+]
+
+
+def export_backup_scraper() -> None:
+    """Export backup scraper status, recent logs, and code from property-scraper VM."""
+    print("\n🕷️ Exporting backup scraper context from property-scraper VM...")
+
+    def ssh_cmd(cmd: str, timeout: int = 30) -> str:
+        try:
+            result = subprocess.run(
+                ["ssh", "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=15", BACKUP_SCRAPER_HOST, cmd],
+                capture_output=True, text=True, timeout=timeout,
+            )
+            return result.stdout.strip() if result.returncode == 0 else f"[SSH error: {result.stderr.strip()[:200]}]"
+        except Exception as exc:
+            return f"[SSH exception: {exc}]"
+
+    # 1. Scraper status
+    status = ssh_cmd(f"sudo bash {BACKUP_SCRAPER_DIR}/status.sh")
+    gh_api_put("backup-scraper/status.txt", status, "update: backup scraper status")
+
+    # 2. Recent log (last 200 lines)
+    log_tail = ssh_cmd(f"sudo tail -200 {BACKUP_SCRAPER_DIR}/scraper.log", timeout=15)
+    gh_api_put("backup-scraper/recent_log.txt", log_tail, "update: backup scraper recent log")
+
+    # 3. Discovered URLs summary
+    url_summary = ssh_cmd(f"sudo find {BACKUP_SCRAPER_DIR}/discovered_urls -name '*.json' -exec wc -l {{}} + 2>/dev/null | tail -10")
+    gh_api_put("backup-scraper/discovered_urls_summary.txt", url_summary, "update: backup scraper URL discovery summary")
+
+    # 4. Export key code files
+    for script in BACKUP_SCRAPER_SCRIPTS:
+        content = ssh_cmd(f"sudo cat {BACKUP_SCRAPER_DIR}/{script}", timeout=15)
+        if content and not content.startswith("[SSH"):
+            gh_api_put(f"backup-scraper/code/{script}", content, f"update: backup scraper {script}")
+
+    # 5. CLAUDE.md from the scraper project (if exists)
+    claude_md = ssh_cmd(f"sudo cat {BACKUP_SCRAPER_DIR}/CLAUDE.md 2>/dev/null")
+    if claude_md and not claude_md.startswith("[SSH"):
+        gh_api_put("backup-scraper/CLAUDE.md", claude_md, "update: backup scraper CLAUDE.md")
+
+    # 6. Directory listing
+    dir_listing = ssh_cmd(f"sudo ls -la {BACKUP_SCRAPER_DIR}/")
+    gh_api_put("backup-scraper/directory_listing.txt", dir_listing, "update: backup scraper directory listing")
+
+
 def export_git_activity() -> None:
     print("\n📋 Exporting git activity...")
     repos = {"Fields_Orchestrator": ORCHESTRATOR_DIR}
@@ -616,6 +680,7 @@ def main() -> None:
     export_pipeline_config()
     export_metrics_and_memory()
     export_code_context()
+    export_backup_scraper()
     export_git_activity()
     manifest = export_manifest_and_timestamp()
 
