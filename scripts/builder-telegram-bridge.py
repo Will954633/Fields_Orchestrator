@@ -96,7 +96,7 @@ def parse_chat_ids(raw: str) -> set[int]:
 BOT_TOKEN = os.environ.get("BUILDER_TELEGRAM_BOT_TOKEN", "").strip()
 ALLOWED_CHAT_IDS = parse_chat_ids(os.environ["BUILDER_TELEGRAM_ALLOWED_CHAT_IDS"]) if os.environ.get("BUILDER_TELEGRAM_ALLOWED_CHAT_IDS") else set()
 COSMOS_URI = os.environ.get("COSMOS_CONNECTION_STRING", "").strip()
-BUILDER_MODEL = os.environ.get("BUILDER_TELEGRAM_MODEL", "gpt-5.1-codex").strip() or "gpt-5.1-codex"
+BUILDER_MODEL = os.environ.get("BUILDER_TELEGRAM_MODEL", "gpt-5.4-codex").strip() or "gpt-5.4-codex"
 BUILDER_ROLE = os.environ.get("BUILDER_TELEGRAM_ROLE", "builder").strip() or "builder"
 POLL_SECONDS = parse_int_env("BUILDER_TELEGRAM_POLL_SECONDS", 2)
 RUN_TIMEOUT_SECONDS = parse_int_env("BUILDER_TELEGRAM_TIMEOUT_SECONDS", 1800)
