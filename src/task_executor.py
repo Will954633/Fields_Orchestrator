@@ -449,6 +449,28 @@ class TaskExecutor:
             
             return False, "", str(e)
     
+    def _step_lock_path(self, step_id: int) -> Path:
+        return Path(f"/tmp/fields_step_{step_id}.lock")
+
+    def _acquire_step_lock(self, step_id: int) -> bool:
+        """Acquire a file-based lock for a step. Returns False if already running."""
+        lock = self._step_lock_path(step_id)
+        if lock.exists():
+            try:
+                content = lock.read_text().strip().split("\n")
+                pid = int(content[0])
+                os.kill(pid, 0)  # Check if PID is alive
+                self.logger.warning(f"Step {step_id} already running (PID {pid}) — skipping duplicate")
+                return False
+            except (ProcessLookupError, ValueError, IndexError):
+                self.logger.info(f"Removing stale lock for step {step_id}")
+                lock.unlink(missing_ok=True)
+        lock.write_text(f"{os.getpid()}\n{datetime.now().isoformat()}\n")
+        return True
+
+    def _release_step_lock(self, step_id: int) -> None:
+        self._step_lock_path(step_id).unlink(missing_ok=True)
+
     def execute_step(self, process: ProcessConfig, run_logger=None) -> StepResult:
         """
         Execute a single step with retries.
@@ -460,6 +482,20 @@ class TaskExecutor:
         Returns:
             StepResult with execution details
         """
+        # Prevent duplicate step execution
+        if not self._acquire_step_lock(process.id):
+            return StepResult(
+                step_id=process.id,
+                step_name=process.name,
+                success=False,
+                start_time=datetime.now(),
+                end_time=datetime.now(),
+                duration_seconds=0,
+                attempts=0,
+                output="",
+                error_message=f"Step {process.id} already running (duplicate prevented)",
+            )
+
         log_step_start(process.id, process.name)
         self._notify_progress(process.id, process.name, "running")
 
@@ -594,6 +630,7 @@ class TaskExecutor:
         status = "completed" if success else "failed"
         self._notify_progress(process.id, process.name, status)
 
+        self._release_step_lock(process.id)
         return result
     
     def execute_pipeline(self) -> Dict[str, Any]:
