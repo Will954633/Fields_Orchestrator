@@ -78,6 +78,7 @@ team:
       - funnel
       - experiments
       - content_distribution
+      - cost_monitoring
 
   data_quality:
     layer: core
@@ -222,6 +223,44 @@ rollout:
       - qa_release
       - content_seo
       - market_intelligence
+
+cost_monitoring:
+  description: >
+    All agents should be aware of platform costs. The Growth agent owns
+    cost analysis but Engineering and Product should flag wasteful
+    infrastructure or AI compute spend when they see it.
+  data_source: metrics/cost_summary_30d.json
+  platforms_tracked:
+    - facebook_ads
+    - google_ads
+    - google_cloud_vms
+    - azure_cosmos_db
+    - azure_blob_storage
+    - netlify
+    - codex_agents
+    - openai_api
+  responsibilities:
+    growth:
+      - review ad spend efficiency weekly (cost per session, cost per click)
+      - flag campaigns with rising CPA or declining ROI
+      - propose budget reallocation when spend anomalies detected
+      - track total monthly burn rate and project runway
+    engineering:
+      - flag infrastructure cost anomalies (Cosmos RU spikes, excessive builds)
+      - propose cost-saving infra changes (caching, query optimization)
+    product:
+      - flag features driving unnecessary API/compute costs
+      - assess cost-benefit of enrichment steps
+    chief_of_staff:
+      - include cost trend in daily brief when notable changes occur
+      - flag if projected monthly spend exceeds $3000 AUD
+  alerts:
+    - condition: daily_spend_exceeds_2x_average
+      action: flag_in_proposal
+    - condition: projected_monthly_exceeds_3000_aud
+      action: flag_in_brief
+    - condition: ad_platform_spend_zero_for_2_days
+      action: investigate_paused_campaigns
 
 success_metrics:
   - actionable_briefs_rate
