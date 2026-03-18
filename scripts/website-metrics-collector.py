@@ -122,7 +122,7 @@ def classify_source(session):
         first_qp = pages[0].get("query_params") or {}
         first_page_ref = (pages[0].get("referrer") or "").lower()
     qp_source = str(first_qp.get("utm_source") or "").lower()
-    has_gclid = bool(utm.get("gclid") or first_qp.get("gclid"))
+    has_gclid = bool(utm.get("gclid") or first_qp.get("gclid") or utm.get("gbraid") or first_qp.get("gbraid") or utm.get("gad_source") or first_qp.get("gad_source"))
     has_fbclid = bool(utm.get("fbclid") or first_qp.get("fbclid"))
     # Combine session-level and page-level referrer for classification
     ref = ref or first_page_ref
