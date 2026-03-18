@@ -224,6 +224,7 @@ def create_session(sm, chat: dict[str, Any], user: dict[str, Any]) -> dict[str, 
         "telegram_last_name": user.get("last_name"),
         "message_count": 0,
         "history_tail": [],
+        "error_todo_items": [],
         "created_at": now,
         "updated_at": now,
         "last_message_at": None,
@@ -352,6 +353,30 @@ def pending_plan_summary(plan_text: str | None) -> str:
     return "pending review ready"
 
 
+def append_error_todo(sm, session_id: str, summary: str) -> None:
+    now = iso_now()
+    sm[SESSION_COLL].update_one(
+        {"_id": session_id},
+        {
+            "$push": {
+                "error_todo_items": {
+                    "$each": [{"summary": summary, "created_at": now}],
+                    "$slice": -20,
+                }
+            },
+            "$set": {"updated_at": now},
+        },
+    )
+
+
+def error_todo_summary(session: dict[str, Any]) -> str:
+    items = session.get("error_todo_items", []) or []
+    if not items:
+        return "none"
+    latest = items[-1]
+    return f"{len(items)} item(s), latest: {str(latest.get('summary', ''))[:120]}"
+
+
 def get_pending_plan(session: dict[str, Any]) -> dict[str, Any] | None:
     if not session.get("pending_plan_text"):
         return None
@@ -454,6 +479,10 @@ def build_review_prompt(session: dict[str, Any], latest_user_message: str, pendi
             history_lines.append(f"{role}: {text}")
     history_block = "\n".join(history_lines) if history_lines else "No prior conversation."
     prior_plan = pending_plan.strip() if pending_plan else "None."
+    error_todos = session.get("error_todo_items", []) or []
+    error_block = "\n".join(
+        f"- {item.get('summary')} ({item.get('created_at')})" for item in error_todos[-5:]
+    ) if error_todos else "None."
 
     return f"""You are the Fields Implementor review gate running locally on the orchestrator VM.
 
@@ -465,6 +494,7 @@ Your job:
 2. Validate, invalidate, defer, or mark items as needing founder input.
 3. Produce a proposed implementation plan for the founder to review in Telegram.
 4. Do not implement anything yet.
+5. If you encounter any error, missing dependency, missing evidence, or blocked step during review, add it as an explicit TODO item in Proposed Plan.
 
 Required review inputs:
 - Latest CEO run artifacts: {latest_ceo_run_dir()}
@@ -473,8 +503,17 @@ Required review inputs:
 - Repo root: {ROOT}
 - AGENTS.md workflow rules in this repository
 
+Evidence policy:
+- Use the synced CEO artifacts and local files as the default source of truth for this review.
+- Do not query live MongoDB, Cosmos, or the `fields-ceo-briefing` path unless the founder explicitly asks or the local artifacts are genuinely insufficient.
+- If live DB access fails but the local CEO artifacts are present, treat that as a non-blocking fallback, not a review error.
+- Do not mention transient DB/DNS failures in the final review unless they materially block the founder's request.
+
 Prior pending plan:
 {prior_plan}
+
+Open implementor error TODOs:
+{error_block}
 
 Conversation history:
 {history_block}
@@ -507,6 +546,10 @@ def build_execute_prompt(session: dict[str, Any], founder_message: str, pending_
         if text:
             history_lines.append(f"{role}: {text}")
     history_block = "\n".join(history_lines) if history_lines else "No prior conversation."
+    error_todos = session.get("error_todo_items", []) or []
+    error_block = "\n".join(
+        f"- {item.get('summary')} ({item.get('created_at')})" for item in error_todos[-5:]
+    ) if error_todos else "None."
 
     return f"""You are the Fields Implementor running locally on the orchestrator VM.
 
@@ -526,14 +569,23 @@ Required inputs:
 - Repo root: {ROOT}
 - AGENTS.md workflow rules in this repository
 
+Evidence policy:
+- Use the synced CEO artifacts and local repository state as the default source of truth.
+- Do not query live MongoDB, Cosmos, or the `fields-ceo-briefing` path unless the approved work explicitly requires it.
+- If live DB access fails but the approved implementation can proceed from local repo/artifact evidence, continue without surfacing that as a primary blocker.
+
 Conversation history:
 {history_block}
+
+Open implementor error TODOs:
+{error_block}
 
 Execution requirements:
 - Validate CEO suggestions against the live repo before editing.
 - Implement only what is approved.
 - Follow all local workflow rules, including fix-history logging and GitHub backup via gh api if files change.
 - In the final response, summarize what was implemented, what was rejected, verification, and any remaining blockers.
+- If you hit any execution error or blocked step, convert it into an explicit TODO item in your final response instead of burying it in narrative.
 """
 
 
@@ -587,6 +639,7 @@ def format_status(sm, session: dict[str, Any]) -> str:
         f"Session: {session['_id']}\n"
         f"Messages in session: {session.get('message_count', 0)}\n"
         f"Pending plan: {pending_plan_summary(pending['text']) if pending else 'none'}\n"
+        f"Error TODOs: {error_todo_summary(session)}\n"
         f"Last poll: {state.get('last_poll_at', 'never')}\n"
         f"Last run: {session.get('last_run_at', 'never')}"
     )
@@ -680,6 +733,7 @@ def handle_text_message(sm, update: dict[str, Any], message: dict[str, Any], tex
             except Exception as exc:
                 error_text = "The implementation review failed before a reply came back.\n" f"Error: {str(exc)[-1200:]}"
                 log.exception("Builder review failed for session %s", session["_id"])
+                append_error_todo(sm, session["_id"], f"Review failed: {str(exc)[:300]}")
                 append_message(sm, session["_id"], "system", error_text)
                 sm[SESSION_COLL].update_one(
                     {"_id": session["_id"]},
@@ -729,6 +783,7 @@ def handle_text_message(sm, update: dict[str, Any], message: dict[str, Any], tex
             except Exception as exc:
                 error_text = "The plan revision failed before a reply came back.\n" f"Error: {str(exc)[-1200:]}"
                 log.exception("Builder revise failed for session %s", session["_id"])
+                append_error_todo(sm, session["_id"], f"Plan revision failed: {str(exc)[:300]}")
                 append_message(sm, session["_id"], "system", error_text)
                 sm[SESSION_COLL].update_one(
                     {"_id": session["_id"]},
@@ -770,6 +825,7 @@ def handle_text_message(sm, update: dict[str, Any], message: dict[str, Any], tex
             except Exception as exc:
                 error_text = "The approved implementation run failed before a reply came back.\n" f"Error: {str(exc)[-1200:]}"
                 log.exception("Builder execute failed for session %s", session["_id"])
+                append_error_todo(sm, session["_id"], f"Approved implementation failed: {str(exc)[:300]}")
                 append_message(sm, session["_id"], "system", error_text)
                 sm[SESSION_COLL].update_one(
                     {"_id": session["_id"]},
@@ -802,6 +858,7 @@ def handle_text_message(sm, update: dict[str, Any], message: dict[str, Any], tex
             f"Error: {str(exc)[-1200:]}"
         )
         log.exception("Builder reply failed for session %s", session["_id"])
+        append_error_todo(sm, session["_id"], f"Direct builder run failed: {str(exc)[:300]}")
         append_message(sm, session["_id"], "system", error_text)
         sm[SESSION_COLL].update_one(
             {"_id": session["_id"]},
