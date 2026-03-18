@@ -229,7 +229,7 @@ def fetch_scraper_health(db):
     """Get scraper health / last scrape time per suburb."""
     col = db["system_monitor"]["scraper_health"]
     try:
-        docs = list(col.find({}).limit(100))
+        docs = list(col.find({}).limit(500))
         docs.sort(key=lambda d: d.get("checked_at") or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
         # Latest per suburb
         seen = {}
