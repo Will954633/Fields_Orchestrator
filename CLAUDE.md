@@ -214,6 +214,12 @@ node scripts/site-inspector.js --url /for-sale --element ".property-card"
 # Scripted interaction flow
 node scripts/site-inspector.js --url /for-sale --actions-file /tmp/site-actions.json
 
+# Write artifacts to a dedicated run directory
+node scripts/site-inspector.js --url /for-sale --output-dir /tmp/site-inspect/for-sale-debug
+
+# Diagnostics only
+node scripts/site-inspector.js --url /for-sale --preflight-only
+
 # Output is always at /tmp/site-inspect/<slug>/
 #   screenshot.png, page-text.txt, console.log, network-errors.log, page-info.json
 #   action-log.json (when --actions-file is used)
