@@ -40,10 +40,8 @@ SEVERITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 
 MEMORY_NORMALIZATIONS = {
-    "`gpt-5.1-codex`": "`gpt-5.4-codex`",
-    "`gpt-5.3-codex`": "`gpt-5.4-codex`",
-    "gpt-5.1-codex": "gpt-5.4-codex",
-    "gpt-5.3-codex": "gpt-5.4-codex",
+    "`gpt-5.4-codex`": "`gpt-5.4`",
+    "gpt-5.4-codex": "gpt-5.4",
     "ceo-agent-launcher-remote.sh": "ceo-agent-launcher.py",
     "bash scripts/ceo-agent-launcher.py engineering  # single agent": "python3 scripts/ceo-agent-launcher.py --agent engineering  # single agent",
     "bash scripts/ceo-agent-launcher.py              # all three": "python3 scripts/ceo-agent-launcher.py              # all three",
