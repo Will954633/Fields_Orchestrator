@@ -140,6 +140,73 @@ def aest_label() -> str:
     return aest_now().strftime("%Y-%m-%d %H:%M AEST")
 
 
+def title_from_text(text: str, fallback: str = "Telegram request") -> str:
+    for line in text.splitlines():
+        stripped = line.strip().lstrip("#").strip()
+        if stripped:
+            return stripped[:100]
+    return fallback
+
+
+def slugify(value: str, fallback: str = "request") -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
+    return slug[:60] or fallback
+
+
+def latest_user_message_text(session: dict[str, Any]) -> str | None:
+    for item in reversed(session.get("history_tail", [])):
+        if item.get("role") != "user":
+            continue
+        text = (item.get("text") or "").strip()
+        if text and not text.startswith("/"):
+            return text
+    return None
+
+
+def create_founder_request_file(area: str, text: str, source: str) -> Path:
+    open_dir = FOUNDER_REQUESTS_DIR / "open"
+    open_dir.mkdir(parents=True, exist_ok=True)
+
+    now_label = aest_label()
+    date_label = aest_now().strftime("%Y-%m-%d")
+    title = title_from_text(text)
+    slug = slugify(title)
+    base_name = f"{date_label}-{area}-{slug}"
+    path = open_dir / f"{base_name}.md"
+    counter = 2
+    while path.exists():
+        path = open_dir / f"{base_name}-{counter}.md"
+        counter += 1
+
+    request_id = path.stem
+    body = (
+        f"---\n"
+        f"id: {request_id}\n"
+        f"title: {title}\n"
+        f"created_at: {now_label}\n"
+        f"owner: will\n"
+        f"area: {area}\n"
+        f"priority: medium\n"
+        f"status: open\n"
+        f"type: task\n"
+        f"source: {source}\n"
+        f"---\n\n"
+        f"## {now_label} - Will\n\n"
+        f"### Issue\n"
+        f"{text.strip()}\n\n"
+        f"### What I want investigated or changed\n"
+        f"Captured from Telegram. Add follow-up detail in this thread or Telegram if needed.\n\n"
+        f"### New standing behaviour\n"
+        f"None specified yet.\n\n"
+        f"### Constraints\n"
+        f"None specified yet.\n\n"
+        f"### Success looks like\n"
+        f"A clear response, plan, or completed next action tied to this request.\n"
+    )
+    path.write_text(body, encoding="utf-8")
+    return path
+
+
 def get_client() -> MongoClient:
     return MongoClient(COSMOS_URI, retryWrites=False, serverSelectionTimeoutMS=30000)
 
@@ -155,6 +222,38 @@ def telegram_call(method: str, payload: dict[str, Any], timeout: int = TELEGRAM_
     if not data.get("ok"):
         raise RuntimeError(f"Telegram API {method} failed: {data}")
     return data
+
+
+def workflow_reply_markup() -> dict[str, Any]:
+    return {
+        "keyboard": [
+            [{"text": "/status"}, {"text": "/reset"}],
+            [{"text": "/review"}, {"text": "/revise"}],
+            [{"text": "/approve"}, {"text": "/cancelplan"}],
+            [{"text": "/task"}],
+        ],
+        "resize_keyboard": True,
+        "is_persistent": True,
+        "input_field_placeholder": "Chat normally, or tap a workflow command",
+    }
+
+
+def register_bot_commands() -> None:
+    commands = [
+        {"command": "start", "description": "Show chat and workflow help"},
+        {"command": "help", "description": "Show chat and workflow help"},
+        {"command": "status", "description": "Show bot or job status"},
+        {"command": "reset", "description": "Start a new chat session"},
+        {"command": "task", "description": "Create a founder request from chat"},
+        {"command": "review", "description": "Create a review plan only"},
+        {"command": "revise", "description": "Revise the pending plan"},
+        {"command": "approve", "description": "Implement the pending plan"},
+        {"command": "cancelplan", "description": "Cancel the pending plan"},
+    ]
+    try:
+        telegram_call("setMyCommands", {"commands": commands}, timeout=30)
+    except Exception as exc:
+        log.warning("Failed to register builder bot commands: %s", exc)
 
 
 def chunk_text(text: str, chunk_size: int = MAX_TELEGRAM_MESSAGE) -> list[str]:
@@ -177,17 +276,18 @@ def chunk_text(text: str, chunk_size: int = MAX_TELEGRAM_MESSAGE) -> list[str]:
     return chunks
 
 
-def send_message(chat_id: int, text: str) -> None:
-    for chunk in chunk_text(text):
-        telegram_call(
-            "sendMessage",
-            {
-                "chat_id": chat_id,
-                "text": chunk,
-                "disable_web_page_preview": True,
-            },
-            timeout=30,
-        )
+def send_message(chat_id: int, text: str, reply_markup: dict[str, Any] | None = None) -> None:
+    markup = reply_markup if reply_markup is not None else workflow_reply_markup()
+    chunks = chunk_text(text)
+    for index, chunk in enumerate(chunks):
+        payload = {
+            "chat_id": chat_id,
+            "text": chunk,
+            "disable_web_page_preview": True,
+        }
+        if index == 0 and markup is not None:
+            payload["reply_markup"] = markup
+        telegram_call("sendMessage", payload, timeout=30)
 
 
 def get_bridge_state(sm) -> dict[str, Any]:
@@ -522,24 +622,6 @@ def build_job_status_text(session: dict[str, Any], job: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def is_status_check(text: str) -> bool:
-    lowered = text.strip().lower()
-    status_phrases = [
-        "status",
-        "update",
-        "how are you going",
-        "how's it going",
-        "hows it going",
-        "are you working",
-        "are you stuck",
-        "still working",
-        "progress",
-        "what's happening",
-        "whats happening",
-    ]
-    return any(phrase in lowered for phrase in status_phrases)
-
-
 def get_pending_plan(session: dict[str, Any]) -> dict[str, Any] | None:
     if not session.get("pending_plan_text"):
         return None
@@ -580,22 +662,6 @@ def clear_pending_plan(sm, session_id: str) -> None:
             }
         },
     )
-
-
-def classify_workflow_command(text: str) -> dict[str, str] | None:
-    stripped = text.strip()
-    lowered = stripped.lower()
-    if lowered.startswith("review ceo") or lowered.startswith("review founder issue") or lowered.startswith("review today"):
-        return {"action": "review", "instruction": stripped}
-    if lowered.startswith("revise plan:"):
-        return {"action": "revise", "instruction": stripped.split(":", 1)[1].strip()}
-    if lowered.startswith("revise plan "):
-        return {"action": "revise", "instruction": stripped[len("revise plan ") :].strip()}
-    if lowered in {"approve plan", "approve"} or lowered.startswith("approve plan ") or lowered.startswith("implement items"):
-        return {"action": "approve", "instruction": stripped}
-    if lowered in {"cancel plan", "cancel review", "cancel"}:
-        return {"action": "cancel", "instruction": stripped}
-    return None
 
 
 def build_prompt(session: dict[str, Any], latest_user_message: str) -> str:
@@ -987,27 +1053,144 @@ def format_status(sm, session: dict[str, Any]) -> str:
     )
 
 
+def run_workflow_action(sm, session: dict[str, Any], chat_id: int, action: str, instruction: str) -> None:
+    active_job = get_active_job(sm, session)
+    pending = get_pending_plan(session)
+
+    if action == "cancel":
+        clear_pending_plan(sm, session["_id"])
+        reply = "Cancelled the pending implementation plan. No code was changed."
+        append_message(sm, session["_id"], "assistant", reply, {"mode": "cancel"})
+        send_message(chat_id, reply)
+        return
+
+    if action == "review":
+        if active_job:
+            reply = "There is already an active job running. Ask for `/status` or wait for it to finish before starting a new review."
+            append_message(sm, session["_id"], "assistant", reply, {"mode": "review_blocked", "job_id": active_job["_id"]})
+            send_message(chat_id, reply)
+            return
+        send_message(chat_id, "Running an implementation review only. I’ll validate the recommendations and send a plan for approval before any changes.")
+        prompt = build_review_prompt(session, instruction)
+        job = create_job(sm, session=session, mode="review", founder_message=instruction, prompt=prompt)
+        launch_background_job(job["_id"])
+        return
+
+    if action == "revise":
+        if not pending:
+            reply = "There is no pending plan to revise. Start with `/review ...`."
+            append_message(sm, session["_id"], "assistant", reply, {"mode": "revise_missing"})
+            send_message(chat_id, reply)
+            return
+        if active_job:
+            reply = "There is already an active job running. Wait for it to finish before revising the plan."
+            append_message(sm, session["_id"], "assistant", reply, {"mode": "revise_blocked", "job_id": active_job["_id"]})
+            send_message(chat_id, reply)
+            return
+        send_message(chat_id, "Revising the pending implementation plan. No code changes will be made in this step.")
+        founder_message = f"Revise the pending implementation plan using this founder amendment:\n{instruction}"
+        prompt = build_review_prompt(session, founder_message, pending_plan=pending["text"])
+        job = create_job(
+            sm,
+            session=session,
+            mode="revise",
+            founder_message=founder_message,
+            prompt=prompt,
+            pending_plan=pending["text"],
+        )
+        launch_background_job(job["_id"])
+        return
+
+    if action == "approve":
+        if not pending:
+            reply = "There is no approved candidate plan waiting. Start with `/review ...`."
+            append_message(sm, session["_id"], "assistant", reply, {"mode": "approve_missing"})
+            send_message(chat_id, reply)
+            return
+        if active_job:
+            reply = "There is already an active job running. Wait for it to finish before starting another implementation run."
+            append_message(sm, session["_id"], "assistant", reply, {"mode": "approve_blocked", "job_id": active_job["_id"]})
+            send_message(chat_id, reply)
+            return
+        send_message(chat_id, "Approval received. I’m implementing only the approved scope from the pending plan and will report back here.")
+        prompt = build_execute_prompt(session, instruction or "approve plan", pending["text"])
+        job = create_job(
+            sm,
+            session=session,
+            mode="execute",
+            founder_message=instruction or "approve plan",
+            prompt=prompt,
+            pending_plan=pending["text"],
+        )
+        launch_background_job(job["_id"])
+        return
+
+    raise RuntimeError(f"Unsupported workflow action: {action}")
+
+
 def handle_command(sm, chat: dict[str, Any], user: dict[str, Any], text: str) -> bool:
-    command = text.strip().split()[0].lower()
+    stripped = text.strip()
+    command, _, remainder = stripped.partition(" ")
+    command = command.lower()
+    remainder = remainder.strip()
     session = get_or_create_active_session(sm, chat, user)
 
-    if command == "/start":
+    if command in {"/start", "/help"}:
         send_message(
             chat["id"],
             "Fields Implementer bot is ready on this VM.\n"
-            "Use `review ceo team's recommendations for today` to start a review.\n"
-            "Execution requires explicit approval after the plan comes back.\n"
-            "Commands: /status, /reset",
+            "Plain text messages stay in chat mode.\n"
+            "Workflow commands are explicit: `/review ...`, `/revise ...`, `/approve`, `/cancelplan`.\n"
+            "Create a durable founder request with `/task ...`.\n"
+            "Other commands: `/status`, `/reset`.",
         )
         return True
 
     if command == "/status":
-        send_message(chat["id"], format_status(sm, session))
+        active_job = get_active_job(sm, session)
+        send_message(chat["id"], build_job_status_text(session, active_job) if active_job else format_status(sm, session))
         return True
 
     if command == "/reset":
         new_session = reset_session(sm, chat, user)
         send_message(chat["id"], f"Started a new builder session: {new_session['_id']}")
+        return True
+
+    if command == "/task":
+        task_text = remainder or latest_user_message_text(session)
+        if not task_text:
+            send_message(chat["id"], "Provide task text after `/task ...`, or send the task in chat first and then reply with `/task`.")
+            return True
+        path = create_founder_request_file("engineering", task_text, "telegram_builder")
+        reply = (
+            f"Created founder request `{path.name}` in `ceo-founder-requests/open`.\n"
+            "It will persist for future CEO and implementor review cycles."
+        )
+        append_message(sm, session["_id"], "assistant", reply, {"mode": "task_create", "path": str(path)})
+        send_message(chat["id"], reply)
+        return True
+
+    if command == "/review":
+        instruction = remainder or latest_user_message_text(session)
+        if not instruction:
+            send_message(chat["id"], "Provide review scope after `/review ...`, or send the issue in chat first and then run `/review`.")
+            return True
+        run_workflow_action(sm, session, chat["id"], "review", instruction)
+        return True
+
+    if command == "/revise":
+        if not remainder:
+            send_message(chat["id"], "Provide the amendment after `/revise ...`.")
+            return True
+        run_workflow_action(sm, session, chat["id"], "revise", remainder)
+        return True
+
+    if command in {"/approve", "/implement"}:
+        run_workflow_action(sm, session, chat["id"], "approve", remainder or "approve plan")
+        return True
+
+    if command in {"/cancelplan", "/cancel"}:
+        run_workflow_action(sm, session, chat["id"], "cancel", "cancel plan")
         return True
 
     return False
@@ -1038,98 +1221,10 @@ def handle_text_message(sm, update: dict[str, Any], message: dict[str, Any], tex
     )
     active_job = get_active_job(sm, session)
 
-    if is_status_check(text):
-        reply = build_job_status_text(session, active_job) if active_job else format_status(sm, session)
-        append_message(
-            sm,
-            session["_id"],
-            "assistant",
-            reply,
-            {"mode": "status", "job_id": active_job["_id"] if active_job else None},
-        )
-        send_message(chat_id, reply)
-        return
-
-    workflow = classify_workflow_command(text)
-    if workflow:
-        action = workflow["action"]
-        pending = get_pending_plan(session)
-
-        if action == "cancel":
-            clear_pending_plan(sm, session["_id"])
-            reply = "Cancelled the pending implementation plan. No code was changed."
-            append_message(sm, session["_id"], "assistant", reply, {"mode": "cancel"})
-            send_message(chat_id, reply)
-            return
-
-        if action == "review":
-            if active_job:
-                reply = "There is already an active job running. Ask for `status` or wait for it to finish before starting a new review."
-                append_message(sm, session["_id"], "assistant", reply, {"mode": "review_blocked", "job_id": active_job["_id"]})
-                send_message(chat_id, reply)
-                return
-            send_message(chat_id, "Running an implementation review only. I’ll validate the CEO team’s recommendations and send a plan for approval before any changes.")
-            mode = "review"
-            prompt = build_review_prompt(session, workflow["instruction"])
-            job = create_job(sm, session=session, mode=mode, founder_message=workflow["instruction"], prompt=prompt)
-            launch_background_job(job["_id"])
-            return
-
-        if action == "revise":
-            if not pending:
-                reply = "There is no pending plan to revise. Start with `review ceo team's recommendations for today`."
-                append_message(sm, session["_id"], "assistant", reply, {"mode": "revise_missing"})
-                send_message(chat_id, reply)
-                return
-            if active_job:
-                reply = "There is already an active job running. Wait for it to finish before revising the plan."
-                append_message(sm, session["_id"], "assistant", reply, {"mode": "revise_blocked", "job_id": active_job["_id"]})
-                send_message(chat_id, reply)
-                return
-            send_message(chat_id, "Revising the pending implementation plan. No code changes will be made in this step.")
-            mode = "revise"
-            founder_message = f"Revise the pending implementation plan using this founder amendment:\n{workflow['instruction']}"
-            prompt = build_review_prompt(session, founder_message, pending_plan=pending["text"])
-            job = create_job(
-                sm,
-                session=session,
-                mode=mode,
-                founder_message=founder_message,
-                prompt=prompt,
-                pending_plan=pending["text"],
-            )
-            launch_background_job(job["_id"])
-            return
-
-        if action == "approve":
-            if not pending:
-                reply = "There is no approved candidate plan waiting. Start with `review ceo team's recommendations for today`."
-                append_message(sm, session["_id"], "assistant", reply, {"mode": "approve_missing"})
-                send_message(chat_id, reply)
-                return
-            if active_job:
-                reply = "There is already an active job running. Wait for it to finish before starting another implementation run."
-                append_message(sm, session["_id"], "assistant", reply, {"mode": "approve_blocked", "job_id": active_job["_id"]})
-                send_message(chat_id, reply)
-                return
-            send_message(chat_id, "Approval received. I’m implementing only the approved scope from the pending plan and will report back here.")
-            mode = "execute"
-            prompt = build_execute_prompt(session, workflow["instruction"], pending["text"])
-            job = create_job(
-                sm,
-                session=session,
-                mode=mode,
-                founder_message=workflow["instruction"],
-                prompt=prompt,
-                pending_plan=pending["text"],
-            )
-            launch_background_job(job["_id"])
-            return
-
     if active_job:
         reply = (
             "There is already an active job running for this chat. "
-            "Ask for `status` or wait for the current run to finish before sending a new request."
+            "Ask for `/status` or wait for the current run to finish before sending a new request."
         )
         append_message(sm, session["_id"], "assistant", reply, {"mode": "busy", "job_id": active_job["_id"]})
         send_message(chat_id, reply)
@@ -1209,6 +1304,7 @@ def main() -> None:
     log.info("Allowed chat IDs: %s", ",".join(str(v) for v in sorted(ALLOWED_CHAT_IDS)))
     log.info("Model: %s", BUILDER_MODEL)
     log.info("Role: %s", BUILDER_ROLE)
+    register_bot_commands()
 
     client = get_client()
     sm = client["system_monitor"]
