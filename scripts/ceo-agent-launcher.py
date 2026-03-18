@@ -26,7 +26,7 @@ from ceo_agent_lib import get_client, load_env_file, now_aest, slugify
 
 REMOTE_HOST = "fields-orchestrator-vm@35.201.6.222"
 REMOTE_DIR = "/home/fields-orchestrator-vm/ceo-agents"
-CODEX_MODEL = "gpt-5.4-codex"
+CODEX_MODEL = "gpt-5.4"
 TEAM_PLAN_PATH = Path(__file__).resolve().parent.parent / "config" / "codex_team_plan.yaml"
 LOCAL_RUNS_DIR = Path(__file__).resolve().parent.parent / "artifacts" / "ceo-runs"
 FOUNDER_REQUESTS_DIR = Path(__file__).resolve().parent.parent / "ceo-founder-requests"
