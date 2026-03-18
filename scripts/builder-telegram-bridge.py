@@ -31,7 +31,6 @@ import re
 import shlex
 import subprocess
 import sys
-import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -52,8 +51,11 @@ STATE_ID = "builder"
 SESSION_COLL = "builder_chat_sessions"
 MESSAGE_COLL = "builder_chat_messages"
 STATE_COLL = "builder_chat_bridge_state"
+JOB_COLL = "builder_chat_jobs"
 MAX_TELEGRAM_MESSAGE = 4000
 TELEGRAM_TIMEOUT_SECONDS = 35
+JOB_HEARTBEAT_SECONDS = 15
+JOB_LOG_TAIL_CHARS = 1600
 
 
 def load_env_file(path: Path) -> None:
@@ -144,13 +146,6 @@ def telegram_call(method: str, payload: dict[str, Any], timeout: int = TELEGRAM_
     return data
 
 
-def send_chat_action(chat_id: int, action: str = "typing") -> None:
-    try:
-        telegram_call("sendChatAction", {"chat_id": chat_id, "action": action}, timeout=15)
-    except Exception as exc:
-        log.warning("Failed to send chat action to %s: %s", chat_id, exc)
-
-
 def chunk_text(text: str, chunk_size: int = MAX_TELEGRAM_MESSAGE) -> list[str]:
     if len(text) <= chunk_size:
         return [text]
@@ -225,6 +220,7 @@ def create_session(sm, chat: dict[str, Any], user: dict[str, Any]) -> dict[str, 
         "message_count": 0,
         "history_tail": [],
         "error_todo_items": [],
+        "active_job_id": None,
         "created_at": now,
         "updated_at": now,
         "last_message_at": None,
@@ -314,6 +310,54 @@ def create_implementation_run_dir(mode: str) -> tuple[str, Path]:
     return run_id, run_dir
 
 
+def create_job(
+    sm,
+    *,
+    session: dict[str, Any],
+    mode: str,
+    founder_message: str,
+    prompt: str,
+    pending_plan: str | None = None,
+) -> dict[str, Any]:
+    run_id, run_dir = create_implementation_run_dir(mode)
+    now = iso_now()
+    job_id = f"{run_id}_{mode}"
+    doc = {
+        "_id": job_id,
+        "session_id": session["_id"],
+        "telegram_chat_id": session["telegram_chat_id"],
+        "mode": mode,
+        "status": "queued",
+        "founder_message": founder_message,
+        "prompt": prompt,
+        "pending_plan": pending_plan,
+        "run_id": run_id,
+        "run_dir": str(run_dir),
+        "output_name": "review.md" if mode in {"review", "revise"} else "execution.md",
+        "created_at": now,
+        "updated_at": now,
+        "started_at": None,
+        "finished_at": None,
+        "last_heartbeat_at": None,
+        "pid": None,
+        "last_log_tail": "",
+        "progress_message": "Queued for execution.",
+        "final_reply": None,
+        "error_text": None,
+    }
+    sm[JOB_COLL].insert_one(doc)
+    sm[SESSION_COLL].update_one(
+        {"_id": session["_id"]},
+        {
+            "$set": {
+                "active_job_id": job_id,
+                "updated_at": now,
+            }
+        },
+    )
+    return doc
+
+
 def write_implementation_artifact(
     run_id: str,
     run_dir: Path,
@@ -341,6 +385,37 @@ def write_implementation_artifact(
     latest_dir = IMPLEMENTATION_RUNS_DIR
     latest_dir.mkdir(parents=True, exist_ok=True)
     (latest_dir / "LATEST_RUN.txt").write_text(str(run_dir) + "\n", encoding="utf-8")
+
+
+def get_active_job(sm, session: dict[str, Any]) -> dict[str, Any] | None:
+    job_id = session.get("active_job_id")
+    if not job_id:
+        return None
+    job = sm[JOB_COLL].find_one({"_id": job_id})
+    if not job:
+        return None
+    if job.get("status") in {"completed", "failed", "cancelled"}:
+        return None
+    return job
+
+
+def update_job(sm, job_id: str, updates: dict[str, Any]) -> dict[str, Any]:
+    updates["updated_at"] = iso_now()
+    updated = sm[JOB_COLL].find_one_and_update(
+        {"_id": job_id},
+        {"$set": updates},
+        return_document=ReturnDocument.AFTER,
+    )
+    if updated is None:
+        raise RuntimeError(f"Job not found: {job_id}")
+    return updated
+
+
+def clear_active_job(sm, session_id: str, job_id: str) -> None:
+    sm[SESSION_COLL].update_one(
+        {"_id": session_id, "active_job_id": job_id},
+        {"$set": {"active_job_id": None, "updated_at": iso_now()}},
+    )
 
 
 def pending_plan_summary(plan_text: str | None) -> str:
@@ -375,6 +450,83 @@ def error_todo_summary(session: dict[str, Any]) -> str:
         return "none"
     latest = items[-1]
     return f"{len(items)} item(s), latest: {str(latest.get('summary', ''))[:120]}"
+
+
+def read_text_tail(path: Path, max_chars: int = JOB_LOG_TAIL_CHARS) -> str:
+    if not path.exists():
+        return ""
+    return path.read_text(encoding="utf-8", errors="replace")[-max_chars:].strip()
+
+
+def elapsed_label(started_at: str | None) -> str:
+    if not started_at:
+        return "not started"
+    try:
+        started = datetime.fromisoformat(started_at)
+    except ValueError:
+        return "unknown"
+    elapsed = max(int((utc_now() - started).total_seconds()), 0)
+    minutes, seconds = divmod(elapsed, 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours}h {minutes}m"
+    if minutes:
+        return f"{minutes}m {seconds}s"
+    return f"{seconds}s"
+
+
+def infer_progress(job: dict[str, Any], log_tail: str) -> str:
+    mode_label = {
+        "review": "Running the implementation review",
+        "revise": "Revising the pending plan",
+        "execute": "Implementing the approved scope",
+        "chat": "Working on the request",
+    }.get(job.get("mode"), "Working on the request")
+    if log_tail:
+        lines = [line.strip() for line in log_tail.splitlines() if line.strip()]
+        if lines:
+            return f"{mode_label}. Latest activity: {lines[-1][:220]}"
+    return f"{mode_label}. No detailed log output yet."
+
+
+def build_job_status_text(session: dict[str, Any], job: dict[str, Any]) -> str:
+    lines = [
+        f"Active job: {job.get('mode', 'unknown')}",
+        f"Status: {job.get('status', 'unknown')}",
+        f"Started: {job.get('started_at') or 'queued'}",
+        f"Elapsed: {elapsed_label(job.get('started_at'))}",
+        f"Progress: {job.get('progress_message') or 'No progress message yet.'}",
+    ]
+    last_heartbeat = job.get("last_heartbeat_at")
+    if last_heartbeat:
+        lines.append(f"Last heartbeat: {last_heartbeat}")
+    pending = get_pending_plan(session)
+    if pending:
+        lines.append(f"Pending plan: {pending_plan_summary(pending['text'])}")
+    log_tail = (job.get("last_log_tail") or "").strip()
+    if log_tail:
+        lines.append("")
+        lines.append("Recent log tail:")
+        lines.append(log_tail[-900:])
+    return "\n".join(lines)
+
+
+def is_status_check(text: str) -> bool:
+    lowered = text.strip().lower()
+    status_phrases = [
+        "status",
+        "update",
+        "how are you going",
+        "how's it going",
+        "hows it going",
+        "are you working",
+        "are you stuck",
+        "still working",
+        "progress",
+        "what's happening",
+        "whats happening",
+    ]
+    return any(phrase in lowered for phrase in status_phrases)
 
 
 def get_pending_plan(session: dict[str, Any]) -> dict[str, Any] | None:
@@ -589,13 +741,40 @@ Execution requirements:
 """
 
 
-def run_local_builder_reply(prompt: str) -> str:
-    with tempfile.TemporaryDirectory(prefix="builder-telegram-") as tmp_dir:
-        prompt_path = Path(tmp_dir) / "prompt.txt"
-        output_path = Path(tmp_dir) / "output.txt"
-        log_path = Path(tmp_dir) / "codex.log"
+def launch_background_job(job_id: str) -> None:
+    subprocess.Popen(
+        [sys.executable, str(Path(__file__).resolve()), "--run-job", job_id],
+        cwd=ROOT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        stdin=subprocess.DEVNULL,
+        start_new_session=True,
+        env={**os.environ, "PATH": os.environ.get("PATH", "")},
+    )
 
-        prompt_path.write_text(prompt, encoding="utf-8")
+
+def process_job(job_id: str) -> None:
+    client = get_client()
+    sm = client["system_monitor"]
+    try:
+        job = sm[JOB_COLL].find_one({"_id": job_id})
+        if not job:
+            raise RuntimeError(f"Job not found: {job_id}")
+        if job.get("status") not in {"queued", "running"}:
+            return
+
+        session = sm[SESSION_COLL].find_one({"_id": job["session_id"]})
+        if not session:
+            raise RuntimeError(f"Session not found for job {job_id}")
+
+        run_dir = Path(job["run_dir"])
+        run_dir.mkdir(parents=True, exist_ok=True)
+        prompt_path = run_dir / "prompt.txt"
+        output_path = run_dir / "output.txt"
+        log_path = run_dir / "codex.log"
+        prompt_path.write_text(job["prompt"], encoding="utf-8")
+        (run_dir / "request.txt").write_text(job["founder_message"] + "\n", encoding="utf-8")
+
         cmd = [
             "bash",
             "-lc",
@@ -607,37 +786,189 @@ def run_local_builder_reply(prompt: str) -> str:
                 f"> {shlex.quote(str(log_path))} 2>&1"
             ),
         ]
-        result = subprocess.run(
+        proc = subprocess.Popen(
             cmd,
             cwd=ROOT,
-            capture_output=True,
             text=True,
-            timeout=RUN_TIMEOUT_SECONDS,
             env={**os.environ, "PATH": os.environ.get("PATH", "")},
         )
+        update_job(
+            sm,
+            job_id,
+            {
+                "status": "running",
+                "pid": proc.pid,
+                "started_at": iso_now(),
+                "last_heartbeat_at": iso_now(),
+                "progress_message": "Job started.",
+            },
+        )
 
-        if result.returncode != 0:
-            log_tail = ""
-            if log_path.exists():
-                log_tail = log_path.read_text(encoding="utf-8", errors="replace")[-2000:]
-            detail = (log_tail or result.stderr or result.stdout or "Local Codex run failed").strip()
-            raise RuntimeError(detail)
+        start_ts = time.time()
+        last_heartbeat_sent = start_ts
+        while True:
+            return_code = proc.poll()
+            now_ts = time.time()
+            if now_ts - start_ts > RUN_TIMEOUT_SECONDS:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait(timeout=5)
+                log_tail = read_text_tail(log_path)
+                error_text = (
+                    f"The {job['mode']} run timed out after {RUN_TIMEOUT_SECONDS} seconds before a reply came back.\n"
+                    f"Error: {(log_tail or 'Timed out without detailed log output.')[-1200:]}"
+                )
+                append_error_todo(sm, session["_id"], f"{job['mode']} timed out after {RUN_TIMEOUT_SECONDS}s")
+                append_message(sm, session["_id"], "system", error_text)
+                sm[SESSION_COLL].update_one(
+                    {"_id": session["_id"]},
+                    {"$set": {"last_run_status": "failed", "last_run_at": iso_now()}},
+                )
+                update_job(
+                    sm,
+                    job_id,
+                    {
+                        "status": "failed",
+                        "finished_at": iso_now(),
+                        "last_heartbeat_at": iso_now(),
+                        "last_log_tail": log_tail,
+                        "progress_message": "Job timed out.",
+                        "error_text": error_text,
+                    },
+                )
+                clear_active_job(sm, session["_id"], job_id)
+                send_message(job["telegram_chat_id"], error_text)
+                return
+            if now_ts - last_heartbeat_sent >= JOB_HEARTBEAT_SECONDS:
+                log_tail = read_text_tail(log_path)
+                update_job(
+                    sm,
+                    job_id,
+                    {
+                        "last_heartbeat_at": iso_now(),
+                        "last_log_tail": log_tail,
+                        "progress_message": infer_progress(job, log_tail),
+                    },
+                )
+                last_heartbeat_sent = now_ts
+            if return_code is not None:
+                break
+            time.sleep(1)
+
+        log_tail = read_text_tail(log_path)
+        if proc.returncode != 0:
+            detail = (log_tail or "Local Codex run failed").strip()
+            error_text = f"The {job['mode']} run failed before a reply came back.\nError: {detail[-1200:]}"
+            append_error_todo(sm, session["_id"], f"{job['mode']} failed: {detail[:300]}")
+            append_message(sm, session["_id"], "system", error_text)
+            sm[SESSION_COLL].update_one(
+                {"_id": session["_id"]},
+                {"$set": {"last_run_status": "failed", "last_run_at": iso_now()}},
+            )
+            update_job(
+                sm,
+                job_id,
+                {
+                    "status": "failed",
+                    "finished_at": iso_now(),
+                    "last_heartbeat_at": iso_now(),
+                    "last_log_tail": log_tail,
+                    "progress_message": "Job failed.",
+                    "error_text": error_text,
+                },
+            )
+            clear_active_job(sm, session["_id"], job_id)
+            send_message(job["telegram_chat_id"], error_text)
+            return
 
         reply = output_path.read_text(encoding="utf-8", errors="replace").strip() if output_path.exists() else ""
         if not reply:
-            raise RuntimeError("Local Codex returned an empty response")
-        return reply
+            error_text = f"The {job['mode']} run finished without producing a reply."
+            append_error_todo(sm, session["_id"], error_text[:300])
+            append_message(sm, session["_id"], "system", error_text)
+            sm[SESSION_COLL].update_one(
+                {"_id": session["_id"]},
+                {"$set": {"last_run_status": "failed", "last_run_at": iso_now()}},
+            )
+            update_job(
+                sm,
+                job_id,
+                {
+                    "status": "failed",
+                    "finished_at": iso_now(),
+                    "last_heartbeat_at": iso_now(),
+                    "last_log_tail": log_tail,
+                    "progress_message": "Job finished without output.",
+                    "error_text": error_text,
+                },
+            )
+            clear_active_job(sm, session["_id"], job_id)
+            send_message(job["telegram_chat_id"], error_text)
+            return
+
+        write_implementation_artifact(
+            job["run_id"],
+            run_dir,
+            job["mode"],
+            session["_id"],
+            job["founder_message"],
+            job["prompt"],
+            reply,
+            pending_plan=job.get("pending_plan"),
+        )
+
+        if job["mode"] in {"review", "revise"}:
+            set_pending_plan(
+                sm,
+                session["_id"],
+                plan_text=reply,
+                artifact_dir=run_dir,
+                source_message=job["founder_message"],
+                run_id=job["run_id"],
+            )
+        elif job["mode"] == "execute":
+            clear_pending_plan(sm, session["_id"])
+
+        append_message(sm, session["_id"], "assistant", reply, {"mode": job["mode"], "artifact_dir": str(run_dir)})
+        sm[SESSION_COLL].update_one(
+            {"_id": session["_id"]},
+            {"$set": {"last_run_status": "success", "last_run_at": iso_now()}},
+        )
+        update_job(
+            sm,
+            job_id,
+            {
+                "status": "completed",
+                "finished_at": iso_now(),
+                "last_heartbeat_at": iso_now(),
+                "last_log_tail": log_tail,
+                "progress_message": "Job completed.",
+                "final_reply": reply,
+            },
+        )
+        clear_active_job(sm, session["_id"], job_id)
+        send_message(job["telegram_chat_id"], reply)
+    finally:
+        client.close()
 
 
 def format_status(sm, session: dict[str, Any]) -> str:
     state = get_bridge_state(sm)
     pending = get_pending_plan(session)
+    active_job = get_active_job(sm, session)
+    active_job_summary = "none"
+    if active_job:
+        active_job_summary = f"{active_job.get('mode')} ({active_job.get('status')}, {elapsed_label(active_job.get('started_at'))})"
     return (
         f"Fields Implementer bot is live.\n"
         f"Role: {BUILDER_ROLE}\n"
         f"Model: {BUILDER_MODEL}\n"
         f"Session: {session['_id']}\n"
         f"Messages in session: {session.get('message_count', 0)}\n"
+        f"Active job: {active_job_summary}\n"
         f"Pending plan: {pending_plan_summary(pending['text']) if pending else 'none'}\n"
         f"Error TODOs: {error_todo_summary(session)}\n"
         f"Last poll: {state.get('last_poll_at', 'never')}\n"
@@ -694,6 +1025,19 @@ def handle_text_message(sm, update: dict[str, Any], message: dict[str, Any], tex
             "telegram_message_id": message.get("message_id"),
         },
     )
+    active_job = get_active_job(sm, session)
+
+    if is_status_check(text):
+        reply = build_job_status_text(session, active_job) if active_job else format_status(sm, session)
+        append_message(
+            sm,
+            session["_id"],
+            "assistant",
+            reply,
+            {"mode": "status", "job_id": active_job["_id"] if active_job else None},
+        )
+        send_message(chat_id, reply)
+        return
 
     workflow = classify_workflow_command(text)
     if workflow:
@@ -708,38 +1052,16 @@ def handle_text_message(sm, update: dict[str, Any], message: dict[str, Any], tex
             return
 
         if action == "review":
+            if active_job:
+                reply = "There is already an active job running. Ask for `status` or wait for it to finish before starting a new review."
+                append_message(sm, session["_id"], "assistant", reply, {"mode": "review_blocked", "job_id": active_job["_id"]})
+                send_message(chat_id, reply)
+                return
             send_message(chat_id, "Running an implementation review only. I’ll validate the CEO team’s recommendations and send a plan for approval before any changes.")
-            send_chat_action(chat_id)
             mode = "review"
             prompt = build_review_prompt(session, workflow["instruction"])
-            try:
-                reply = run_local_builder_reply(prompt)
-                run_id, run_dir = create_implementation_run_dir(mode)
-                write_implementation_artifact(run_id, run_dir, mode, session["_id"], workflow["instruction"], prompt, reply)
-                set_pending_plan(
-                    sm,
-                    session["_id"],
-                    plan_text=reply,
-                    artifact_dir=run_dir,
-                    source_message=workflow["instruction"],
-                    run_id=run_id,
-                )
-                append_message(sm, session["_id"], "assistant", reply, {"mode": mode, "artifact_dir": str(run_dir)})
-                sm[SESSION_COLL].update_one(
-                    {"_id": session["_id"]},
-                    {"$set": {"last_run_status": "success", "last_run_at": iso_now()}},
-                )
-                send_message(chat_id, reply)
-            except Exception as exc:
-                error_text = "The implementation review failed before a reply came back.\n" f"Error: {str(exc)[-1200:]}"
-                log.exception("Builder review failed for session %s", session["_id"])
-                append_error_todo(sm, session["_id"], f"Review failed: {str(exc)[:300]}")
-                append_message(sm, session["_id"], "system", error_text)
-                sm[SESSION_COLL].update_one(
-                    {"_id": session["_id"]},
-                    {"$set": {"last_run_status": "failed", "last_run_at": iso_now()}},
-                )
-                send_message(chat_id, error_text)
+            job = create_job(sm, session=session, mode=mode, founder_message=workflow["instruction"], prompt=prompt)
+            launch_background_job(job["_id"])
             return
 
         if action == "revise":
@@ -748,48 +1070,24 @@ def handle_text_message(sm, update: dict[str, Any], message: dict[str, Any], tex
                 append_message(sm, session["_id"], "assistant", reply, {"mode": "revise_missing"})
                 send_message(chat_id, reply)
                 return
+            if active_job:
+                reply = "There is already an active job running. Wait for it to finish before revising the plan."
+                append_message(sm, session["_id"], "assistant", reply, {"mode": "revise_blocked", "job_id": active_job["_id"]})
+                send_message(chat_id, reply)
+                return
             send_message(chat_id, "Revising the pending implementation plan. No code changes will be made in this step.")
-            send_chat_action(chat_id)
             mode = "revise"
             founder_message = f"Revise the pending implementation plan using this founder amendment:\n{workflow['instruction']}"
             prompt = build_review_prompt(session, founder_message, pending_plan=pending["text"])
-            try:
-                reply = run_local_builder_reply(prompt)
-                run_id, run_dir = create_implementation_run_dir(mode)
-                write_implementation_artifact(
-                    run_id,
-                    run_dir,
-                    mode,
-                    session["_id"],
-                    founder_message,
-                    prompt,
-                    reply,
-                    pending_plan=pending["text"],
-                )
-                set_pending_plan(
-                    sm,
-                    session["_id"],
-                    plan_text=reply,
-                    artifact_dir=run_dir,
-                    source_message=founder_message,
-                    run_id=run_id,
-                )
-                append_message(sm, session["_id"], "assistant", reply, {"mode": mode, "artifact_dir": str(run_dir)})
-                sm[SESSION_COLL].update_one(
-                    {"_id": session["_id"]},
-                    {"$set": {"last_run_status": "success", "last_run_at": iso_now()}},
-                )
-                send_message(chat_id, reply)
-            except Exception as exc:
-                error_text = "The plan revision failed before a reply came back.\n" f"Error: {str(exc)[-1200:]}"
-                log.exception("Builder revise failed for session %s", session["_id"])
-                append_error_todo(sm, session["_id"], f"Plan revision failed: {str(exc)[:300]}")
-                append_message(sm, session["_id"], "system", error_text)
-                sm[SESSION_COLL].update_one(
-                    {"_id": session["_id"]},
-                    {"$set": {"last_run_status": "failed", "last_run_at": iso_now()}},
-                )
-                send_message(chat_id, error_text)
+            job = create_job(
+                sm,
+                session=session,
+                mode=mode,
+                founder_message=founder_message,
+                prompt=prompt,
+                pending_plan=pending["text"],
+            )
+            launch_background_job(job["_id"])
             return
 
         if action == "approve":
@@ -798,73 +1096,38 @@ def handle_text_message(sm, update: dict[str, Any], message: dict[str, Any], tex
                 append_message(sm, session["_id"], "assistant", reply, {"mode": "approve_missing"})
                 send_message(chat_id, reply)
                 return
+            if active_job:
+                reply = "There is already an active job running. Wait for it to finish before starting another implementation run."
+                append_message(sm, session["_id"], "assistant", reply, {"mode": "approve_blocked", "job_id": active_job["_id"]})
+                send_message(chat_id, reply)
+                return
             send_message(chat_id, "Approval received. I’m implementing only the approved scope from the pending plan and will report back here.")
-            send_chat_action(chat_id)
             mode = "execute"
             prompt = build_execute_prompt(session, workflow["instruction"], pending["text"])
-            try:
-                reply = run_local_builder_reply(prompt)
-                run_id, run_dir = create_implementation_run_dir(mode)
-                write_implementation_artifact(
-                    run_id,
-                    run_dir,
-                    mode,
-                    session["_id"],
-                    workflow["instruction"],
-                    prompt,
-                    reply,
-                    pending_plan=pending["text"],
-                )
-                clear_pending_plan(sm, session["_id"])
-                append_message(sm, session["_id"], "assistant", reply, {"mode": mode, "artifact_dir": str(run_dir)})
-                sm[SESSION_COLL].update_one(
-                    {"_id": session["_id"]},
-                    {"$set": {"last_run_status": "success", "last_run_at": iso_now()}},
-                )
-                send_message(chat_id, reply)
-            except Exception as exc:
-                error_text = "The approved implementation run failed before a reply came back.\n" f"Error: {str(exc)[-1200:]}"
-                log.exception("Builder execute failed for session %s", session["_id"])
-                append_error_todo(sm, session["_id"], f"Approved implementation failed: {str(exc)[:300]}")
-                append_message(sm, session["_id"], "system", error_text)
-                sm[SESSION_COLL].update_one(
-                    {"_id": session["_id"]},
-                    {"$set": {"last_run_status": "failed", "last_run_at": iso_now()}},
-                )
-                send_message(chat_id, error_text)
+            job = create_job(
+                sm,
+                session=session,
+                mode=mode,
+                founder_message=workflow["instruction"],
+                prompt=prompt,
+                pending_plan=pending["text"],
+            )
+            launch_background_job(job["_id"])
             return
 
-    send_message(chat_id, "Working on it here on the VM. I’ll send the result back in this chat.")
-    send_chat_action(chat_id)
-
-    try:
-        prompt = build_prompt(session, text)
-        reply = run_local_builder_reply(prompt)
-        append_message(
-            sm,
-            session["_id"],
-            "assistant",
-            reply,
-            {"model": BUILDER_MODEL, "source": "local_codex_vm"},
+    if active_job:
+        reply = (
+            "There is already an active job running for this chat. "
+            "Ask for `status` or wait for the current run to finish before sending a new request."
         )
-        sm[SESSION_COLL].update_one(
-            {"_id": session["_id"]},
-            {"$set": {"last_run_status": "success", "last_run_at": iso_now()}},
-        )
+        append_message(sm, session["_id"], "assistant", reply, {"mode": "busy", "job_id": active_job["_id"]})
         send_message(chat_id, reply)
-    except Exception as exc:
-        error_text = (
-            "The local builder run failed before a reply came back.\n"
-            f"Error: {str(exc)[-1200:]}"
-        )
-        log.exception("Builder reply failed for session %s", session["_id"])
-        append_error_todo(sm, session["_id"], f"Direct builder run failed: {str(exc)[:300]}")
-        append_message(sm, session["_id"], "system", error_text)
-        sm[SESSION_COLL].update_one(
-            {"_id": session["_id"]},
-            {"$set": {"last_run_status": "failed", "last_run_at": iso_now()}},
-        )
-        send_message(chat_id, error_text)
+        return
+
+    send_message(chat_id, "Working on it here on the VM. I’ll send the result back in this chat.")
+    prompt = build_prompt(session, text)
+    job = create_job(sm, session=session, mode="chat", founder_message=text, prompt=prompt)
+    launch_background_job(job["_id"])
 
 
 def extract_message_text(update: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
@@ -918,6 +1181,7 @@ def poll_once(sm) -> int:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Telegram bridge for the local builder Codex bot")
     parser.add_argument("--once", action="store_true", help="Poll Telegram once, then exit")
+    parser.add_argument("--run-job", help="Run a single queued builder job by id, then exit")
     args = parser.parse_args()
 
     missing = []
@@ -938,6 +1202,9 @@ def main() -> None:
     client = get_client()
     sm = client["system_monitor"]
     try:
+        if args.run_job:
+            process_job(args.run_job)
+            return
         while True:
             try:
                 processed = poll_once(sm)
