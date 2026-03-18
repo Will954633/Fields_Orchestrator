@@ -450,6 +450,64 @@ def fetch_timeline(sm, days: int) -> dict[str, Any]:
     return {"days": days, "pipeline_source": run_source, "timeline": to_jsonable(timeline)}
 
 
+def fetch_cost_summary(sm, days: int) -> dict[str, Any]:
+    """Fetch cost tracking data for agent analysis."""
+    cutoff = (now_aest() - timedelta(days=days)).strftime("%Y-%m-%d")
+    rows = list(retry_cosmos_read(
+        lambda: sm["cost_tracking"].find({"date": {"$gte": cutoff}}, {"_id": 0})
+    ))
+    rows.sort(key=lambda r: r.get("date", ""))
+
+    if not rows:
+        return {"generated_at": now_aest().isoformat(), "days": days, "data": [], "note": "no cost data — run cost-collector.py first"}
+
+    total = sum(r.get("total_daily_aud", 0) for r in rows)
+    cat_totals: dict[str, float] = {}
+    platform_totals: dict[str, float] = {}
+    for row in rows:
+        for cat, val in row.get("by_category", {}).items():
+            cat_totals[cat] = cat_totals.get(cat, 0) + val
+        for plat, pdata in row.get("platforms", {}).items():
+            spend = pdata.get("spend_aud", 0)
+            platform_totals[plat] = platform_totals.get(plat, 0) + spend
+
+    daily_avg = total / len(rows) if rows else 0
+    # Trend: last 7 days vs prior 7 days
+    recent = [r for r in rows if r["date"] >= (now_aest() - timedelta(days=7)).strftime("%Y-%m-%d")]
+    prior = [r for r in rows if r["date"] < (now_aest() - timedelta(days=7)).strftime("%Y-%m-%d")]
+    recent_avg = sum(r.get("total_daily_aud", 0) for r in recent) / max(len(recent), 1)
+    prior_avg = sum(r.get("total_daily_aud", 0) for r in prior) / max(len(prior), 1)
+    trend_pct = round((recent_avg - prior_avg) / max(prior_avg, 0.01) * 100, 1) if prior_avg > 0 else 0
+
+    # Flag cost anomalies (days where spend > 2x average)
+    anomalies = [
+        {"date": r["date"], "total": r.get("total_daily_aud", 0), "ratio": round(r.get("total_daily_aud", 0) / max(daily_avg, 0.01), 1)}
+        for r in rows if r.get("total_daily_aud", 0) > daily_avg * 2
+    ]
+
+    return {
+        "generated_at": now_aest().isoformat(),
+        "days": days,
+        "days_with_data": len(rows),
+        "summary": {
+            "total_aud": round(total, 2),
+            "daily_average_aud": round(daily_avg, 2),
+            "projected_monthly_aud": round(daily_avg * 30, 2),
+            "trend_7d_vs_prior_pct": trend_pct,
+        },
+        "by_category": {k: round(v, 2) for k, v in sorted(cat_totals.items(), key=lambda x: -x[1])},
+        "by_platform": {k: round(v, 2) for k, v in sorted(platform_totals.items(), key=lambda x: -x[1])},
+        "anomalies": anomalies,
+        "daily": to_jsonable([{
+            "date": r["date"],
+            "total": r.get("total_daily_aud", 0),
+            "advertising": r.get("by_category", {}).get("advertising", 0),
+            "ai_compute": r.get("by_category", {}).get("ai_compute", 0),
+            "infrastructure": r.get("by_category", {}).get("infrastructure", 0),
+        } for r in rows]),
+    }
+
+
 def fetch_collection_counts(sm) -> dict[str, Any]:
     keys = [
         "ceo_proposals",
@@ -519,6 +577,9 @@ def main() -> None:
     timeline_p = sub.add_parser("timeline")
     timeline_p.add_argument("--days", type=int, default=14)
 
+    cost_p = sub.add_parser("cost-summary")
+    cost_p.add_argument("--days", type=int, default=30)
+
     args = parser.parse_args()
 
     if args.command == "founder-truths":
@@ -547,6 +608,8 @@ def main() -> None:
             payload = fetch_proposal_outcomes(sm, args.days, args.limit)
         elif args.command == "timeline":
             payload = fetch_timeline(sm, args.days)
+        elif args.command == "cost-summary":
+            payload = fetch_cost_summary(sm, args.days)
         else:
             raise RuntimeError(f"Unsupported command: {args.command}")
         print(dumps_json(payload))
