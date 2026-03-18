@@ -260,9 +260,63 @@ def export_founder_truths() -> None:
     gh_api_put("memory/founder_truths.json", dumps_json(truths), "update: founder truths")
 
 
+def _cleanup_stale_process_runs() -> None:
+    """Mark process_runs stuck in 'running' for >4 hours as failed_stale.
+
+    Without this, zombie records accumulate from interrupted pipeline runs and
+    cause the CEO agents to report phantom duplicate steps indefinitely.
+    """
+    from ceo_agent_lib import get_client
+
+    MAX_RUNNING_HOURS = 4
+    try:
+        client = get_client()
+        sm = client["system_monitor"]
+        cutoff = datetime.now() - timedelta(hours=MAX_RUNNING_HOURS)
+
+        # Find all records stuck in "running"
+        stale = list(sm["process_runs"].find({"status": "running"}).limit(200))
+
+        cleaned = 0
+        for rec in stale:
+            started = rec.get("started_at")
+            # If no started_at, or started more than MAX_RUNNING_HOURS ago → stale
+            is_stale = started is None
+            if started and isinstance(started, datetime) and started < cutoff:
+                is_stale = True
+            elif started and isinstance(started, str):
+                try:
+                    if datetime.fromisoformat(started.replace("Z", "+00:00")).replace(tzinfo=None) < cutoff:
+                        is_stale = True
+                except Exception:
+                    is_stale = True
+
+            if is_stale:
+                sm["process_runs"].update_one(
+                    {"_id": rec["_id"]},
+                    {"$set": {
+                        "status": "failed_stale",
+                        "cleaned_at": datetime.now().isoformat(),
+                        "clean_reason": f"Stuck in running for >{MAX_RUNNING_HOURS}h. Auto-cleaned by CEO pre-flight.",
+                    }},
+                )
+                cleaned += 1
+
+        client.close()
+        if cleaned:
+            print(f"  stale-run cleanup: marked {cleaned} zombie running records as failed_stale")
+        else:
+            print(f"  stale-run cleanup: no zombie records found")
+    except Exception as exc:
+        print(f"  stale-run cleanup: FAILED ({exc})")
+
+
 def refresh_live_data_sources() -> None:
-    """Run data collectors before export so CEO agents get fresh data, not stale snapshots."""
+    """Run data collectors and cleanup before export so CEO agents get fresh, accurate data."""
     print("\n🔄 Refreshing live data sources before export...")
+
+    # Step 0: Clean up stale process_runs records first — prevents phantom duplicate steps
+    _cleanup_stale_process_runs()
 
     collectors = [
         {
