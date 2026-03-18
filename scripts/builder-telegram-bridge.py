@@ -24,8 +24,10 @@ Optional env vars:
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -42,6 +44,9 @@ from pymongo import MongoClient, ReturnDocument
 
 ROOT = Path("/home/fields/Fields_Orchestrator")
 ENV_PATH = ROOT / ".env"
+IMPLEMENTATION_RUNS_DIR = ROOT / "artifacts" / "implementation-runs"
+LATEST_CEO_RUN_PATH = ROOT / "artifacts" / "ceo-runs" / "LATEST_RUN.txt"
+FOUNDER_REQUESTS_DIR = ROOT / "ceo-founder-requests"
 AEST = ZoneInfo("Australia/Brisbane")
 STATE_ID = "builder"
 SESSION_COLL = "builder_chat_sessions"
@@ -116,6 +121,10 @@ def aest_now() -> datetime:
 
 def iso_now() -> str:
     return utc_now().isoformat()
+
+
+def aest_label() -> str:
+    return aest_now().strftime("%Y-%m-%d %H:%M AEST")
 
 
 def get_client() -> MongoClient:
@@ -289,6 +298,118 @@ def append_message(
     return updated
 
 
+def latest_ceo_run_dir() -> str:
+    if LATEST_CEO_RUN_PATH.exists():
+        raw = LATEST_CEO_RUN_PATH.read_text(encoding="utf-8", errors="replace").strip()
+        if raw:
+            return raw
+    return str(ROOT / "artifacts" / "ceo-runs")
+
+
+def create_implementation_run_dir(mode: str) -> tuple[str, Path]:
+    run_id = f"{aest_now().strftime('%Y-%m-%d_%H%M%S')}_{mode}"
+    run_dir = IMPLEMENTATION_RUNS_DIR / aest_now().strftime("%Y-%m-%d") / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+    return run_id, run_dir
+
+
+def write_implementation_artifact(
+    run_id: str,
+    run_dir: Path,
+    mode: str,
+    session_id: str,
+    founder_message: str,
+    prompt: str,
+    reply: str,
+    pending_plan: str | None = None,
+) -> None:
+    (run_dir / "request.txt").write_text(founder_message + "\n", encoding="utf-8")
+    (run_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
+    output_name = "review.md" if mode in {"review", "revise"} else "execution.md"
+    (run_dir / output_name).write_text(reply + "\n", encoding="utf-8")
+    metadata = {
+        "run_id": run_id,
+        "mode": mode,
+        "session_id": session_id,
+        "created_at": iso_now(),
+        "founder_message": founder_message,
+        "pending_plan_present": bool(pending_plan),
+        "latest_ceo_run_dir": latest_ceo_run_dir(),
+    }
+    (run_dir / "metadata.json").write_text(json.dumps(metadata, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
+    latest_dir = IMPLEMENTATION_RUNS_DIR
+    latest_dir.mkdir(parents=True, exist_ok=True)
+    (latest_dir / "LATEST_RUN.txt").write_text(str(run_dir) + "\n", encoding="utf-8")
+
+
+def pending_plan_summary(plan_text: str | None) -> str:
+    if not plan_text:
+        return "none"
+    for line in plan_text.splitlines():
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#"):
+            return stripped[:160]
+    return "pending review ready"
+
+
+def get_pending_plan(session: dict[str, Any]) -> dict[str, Any] | None:
+    if not session.get("pending_plan_text"):
+        return None
+    return {
+        "text": session.get("pending_plan_text"),
+        "artifact_dir": session.get("pending_plan_artifact_dir"),
+        "created_at": session.get("pending_plan_created_at"),
+        "source_message": session.get("pending_plan_source_message"),
+        "run_id": session.get("pending_plan_run_id"),
+    }
+
+
+def set_pending_plan(sm, session_id: str, *, plan_text: str, artifact_dir: Path, source_message: str, run_id: str) -> None:
+    sm[SESSION_COLL].update_one(
+        {"_id": session_id},
+        {
+            "$set": {
+                "pending_plan_text": plan_text,
+                "pending_plan_artifact_dir": str(artifact_dir),
+                "pending_plan_created_at": iso_now(),
+                "pending_plan_source_message": source_message,
+                "pending_plan_run_id": run_id,
+            }
+        },
+    )
+
+
+def clear_pending_plan(sm, session_id: str) -> None:
+    sm[SESSION_COLL].update_one(
+        {"_id": session_id},
+        {
+            "$unset": {
+                "pending_plan_text": "",
+                "pending_plan_artifact_dir": "",
+                "pending_plan_created_at": "",
+                "pending_plan_source_message": "",
+                "pending_plan_run_id": "",
+            }
+        },
+    )
+
+
+def classify_workflow_command(text: str) -> dict[str, str] | None:
+    stripped = text.strip()
+    lowered = stripped.lower()
+    if lowered.startswith("review ceo") or lowered.startswith("review founder issue") or lowered.startswith("review today"):
+        return {"action": "review", "instruction": stripped}
+    if lowered.startswith("revise plan:"):
+        return {"action": "revise", "instruction": stripped.split(":", 1)[1].strip()}
+    if lowered.startswith("revise plan "):
+        return {"action": "revise", "instruction": stripped[len("revise plan ") :].strip()}
+    if lowered in {"approve plan", "approve"} or lowered.startswith("approve plan ") or lowered.startswith("implement items"):
+        return {"action": "approve", "instruction": stripped}
+    if lowered in {"cancel plan", "cancel review", "cancel"}:
+        return {"action": "cancel", "instruction": stripped}
+    return None
+
+
 def build_prompt(session: dict[str, Any], latest_user_message: str) -> str:
     history_lines = []
     for item in session.get("history_tail", [])[-HISTORY_LIMIT:]:
@@ -321,6 +442,98 @@ Conversation history:
 
 Latest founder message:
 {latest_user_message}
+"""
+
+
+def build_review_prompt(session: dict[str, Any], latest_user_message: str, pending_plan: str | None = None) -> str:
+    history_lines = []
+    for item in session.get("history_tail", [])[-HISTORY_LIMIT:]:
+        role = item.get("role", "unknown").upper()
+        text = (item.get("text") or "").strip()
+        if text:
+            history_lines.append(f"{role}: {text}")
+    history_block = "\n".join(history_lines) if history_lines else "No prior conversation."
+    prior_plan = pending_plan.strip() if pending_plan else "None."
+
+    return f"""You are the Fields Implementor review gate running locally on the orchestrator VM.
+
+Mode: review only
+Hard rule: do not change code, files, services, ads, cron, databases, or infrastructure in this mode.
+
+Your job:
+1. Review the latest CEO team recommendations and founder request threads.
+2. Validate, invalidate, defer, or mark items as needing founder input.
+3. Produce a proposed implementation plan for the founder to review in Telegram.
+4. Do not implement anything yet.
+
+Required review inputs:
+- Latest CEO run artifacts: {latest_ceo_run_dir()}
+- Founder requests: {FOUNDER_REQUESTS_DIR / 'open'}
+- CEO replies: {FOUNDER_REQUESTS_DIR / 'responses'}
+- Repo root: {ROOT}
+- AGENTS.md workflow rules in this repository
+
+Prior pending plan:
+{prior_plan}
+
+Conversation history:
+{history_block}
+
+Founder request:
+{latest_user_message}
+
+Return plain text with exactly these sections:
+Implementation Review
+Validated
+Invalidated
+Deferred
+Needs Founder Input
+Proposed Plan
+Approval Options
+
+In Approval Options, tell the founder to reply with one of:
+- approve plan
+- implement items ...
+- revise plan: ...
+- cancel plan
+"""
+
+
+def build_execute_prompt(session: dict[str, Any], founder_message: str, pending_plan: str) -> str:
+    history_lines = []
+    for item in session.get("history_tail", [])[-HISTORY_LIMIT:]:
+        role = item.get("role", "unknown").upper()
+        text = (item.get("text") or "").strip()
+        if text:
+            history_lines.append(f"{role}: {text}")
+    history_block = "\n".join(history_lines) if history_lines else "No prior conversation."
+
+    return f"""You are the Fields Implementor running locally on the orchestrator VM.
+
+Mode: approved implementation
+Hard rule: implement only the approved scope below. Do not expand scope without explicit founder approval.
+
+Approved review plan:
+{pending_plan}
+
+Founder approval message:
+{founder_message}
+
+Required inputs:
+- Latest CEO run artifacts: {latest_ceo_run_dir()}
+- Founder requests: {FOUNDER_REQUESTS_DIR / 'open'}
+- CEO replies: {FOUNDER_REQUESTS_DIR / 'responses'}
+- Repo root: {ROOT}
+- AGENTS.md workflow rules in this repository
+
+Conversation history:
+{history_block}
+
+Execution requirements:
+- Validate CEO suggestions against the live repo before editing.
+- Implement only what is approved.
+- Follow all local workflow rules, including fix-history logging and GitHub backup via gh api if files change.
+- In the final response, summarize what was implemented, what was rejected, verification, and any remaining blockers.
 """
 
 
@@ -366,12 +579,14 @@ def run_local_builder_reply(prompt: str) -> str:
 
 def format_status(sm, session: dict[str, Any]) -> str:
     state = get_bridge_state(sm)
+    pending = get_pending_plan(session)
     return (
         f"Fields Implementer bot is live.\n"
         f"Role: {BUILDER_ROLE}\n"
         f"Model: {BUILDER_MODEL}\n"
         f"Session: {session['_id']}\n"
         f"Messages in session: {session.get('message_count', 0)}\n"
+        f"Pending plan: {pending_plan_summary(pending['text']) if pending else 'none'}\n"
         f"Last poll: {state.get('last_poll_at', 'never')}\n"
         f"Last run: {session.get('last_run_at', 'never')}"
     )
@@ -385,7 +600,8 @@ def handle_command(sm, chat: dict[str, Any], user: dict[str, Any], text: str) ->
         send_message(
             chat["id"],
             "Fields Implementer bot is ready on this VM.\n"
-            "Send a normal message to ask questions or request code/ops work.\n"
+            "Use `review ceo team's recommendations for today` to start a review.\n"
+            "Execution requires explicit approval after the plan comes back.\n"
             "Commands: /status, /reset",
         )
         return True
@@ -425,6 +641,142 @@ def handle_text_message(sm, update: dict[str, Any], message: dict[str, Any], tex
             "telegram_message_id": message.get("message_id"),
         },
     )
+
+    workflow = classify_workflow_command(text)
+    if workflow:
+        action = workflow["action"]
+        pending = get_pending_plan(session)
+
+        if action == "cancel":
+            clear_pending_plan(sm, session["_id"])
+            reply = "Cancelled the pending implementation plan. No code was changed."
+            append_message(sm, session["_id"], "assistant", reply, {"mode": "cancel"})
+            send_message(chat_id, reply)
+            return
+
+        if action == "review":
+            send_message(chat_id, "Running an implementation review only. I’ll validate the CEO team’s recommendations and send a plan for approval before any changes.")
+            send_chat_action(chat_id)
+            mode = "review"
+            prompt = build_review_prompt(session, workflow["instruction"])
+            try:
+                reply = run_local_builder_reply(prompt)
+                run_id, run_dir = create_implementation_run_dir(mode)
+                write_implementation_artifact(run_id, run_dir, mode, session["_id"], workflow["instruction"], prompt, reply)
+                set_pending_plan(
+                    sm,
+                    session["_id"],
+                    plan_text=reply,
+                    artifact_dir=run_dir,
+                    source_message=workflow["instruction"],
+                    run_id=run_id,
+                )
+                append_message(sm, session["_id"], "assistant", reply, {"mode": mode, "artifact_dir": str(run_dir)})
+                sm[SESSION_COLL].update_one(
+                    {"_id": session["_id"]},
+                    {"$set": {"last_run_status": "success", "last_run_at": iso_now()}},
+                )
+                send_message(chat_id, reply)
+            except Exception as exc:
+                error_text = "The implementation review failed before a reply came back.\n" f"Error: {str(exc)[-1200:]}"
+                log.exception("Builder review failed for session %s", session["_id"])
+                append_message(sm, session["_id"], "system", error_text)
+                sm[SESSION_COLL].update_one(
+                    {"_id": session["_id"]},
+                    {"$set": {"last_run_status": "failed", "last_run_at": iso_now()}},
+                )
+                send_message(chat_id, error_text)
+            return
+
+        if action == "revise":
+            if not pending:
+                reply = "There is no pending plan to revise. Start with `review ceo team's recommendations for today`."
+                append_message(sm, session["_id"], "assistant", reply, {"mode": "revise_missing"})
+                send_message(chat_id, reply)
+                return
+            send_message(chat_id, "Revising the pending implementation plan. No code changes will be made in this step.")
+            send_chat_action(chat_id)
+            mode = "revise"
+            founder_message = f"Revise the pending implementation plan using this founder amendment:\n{workflow['instruction']}"
+            prompt = build_review_prompt(session, founder_message, pending_plan=pending["text"])
+            try:
+                reply = run_local_builder_reply(prompt)
+                run_id, run_dir = create_implementation_run_dir(mode)
+                write_implementation_artifact(
+                    run_id,
+                    run_dir,
+                    mode,
+                    session["_id"],
+                    founder_message,
+                    prompt,
+                    reply,
+                    pending_plan=pending["text"],
+                )
+                set_pending_plan(
+                    sm,
+                    session["_id"],
+                    plan_text=reply,
+                    artifact_dir=run_dir,
+                    source_message=founder_message,
+                    run_id=run_id,
+                )
+                append_message(sm, session["_id"], "assistant", reply, {"mode": mode, "artifact_dir": str(run_dir)})
+                sm[SESSION_COLL].update_one(
+                    {"_id": session["_id"]},
+                    {"$set": {"last_run_status": "success", "last_run_at": iso_now()}},
+                )
+                send_message(chat_id, reply)
+            except Exception as exc:
+                error_text = "The plan revision failed before a reply came back.\n" f"Error: {str(exc)[-1200:]}"
+                log.exception("Builder revise failed for session %s", session["_id"])
+                append_message(sm, session["_id"], "system", error_text)
+                sm[SESSION_COLL].update_one(
+                    {"_id": session["_id"]},
+                    {"$set": {"last_run_status": "failed", "last_run_at": iso_now()}},
+                )
+                send_message(chat_id, error_text)
+            return
+
+        if action == "approve":
+            if not pending:
+                reply = "There is no approved candidate plan waiting. Start with `review ceo team's recommendations for today`."
+                append_message(sm, session["_id"], "assistant", reply, {"mode": "approve_missing"})
+                send_message(chat_id, reply)
+                return
+            send_message(chat_id, "Approval received. I’m implementing only the approved scope from the pending plan and will report back here.")
+            send_chat_action(chat_id)
+            mode = "execute"
+            prompt = build_execute_prompt(session, workflow["instruction"], pending["text"])
+            try:
+                reply = run_local_builder_reply(prompt)
+                run_id, run_dir = create_implementation_run_dir(mode)
+                write_implementation_artifact(
+                    run_id,
+                    run_dir,
+                    mode,
+                    session["_id"],
+                    workflow["instruction"],
+                    prompt,
+                    reply,
+                    pending_plan=pending["text"],
+                )
+                clear_pending_plan(sm, session["_id"])
+                append_message(sm, session["_id"], "assistant", reply, {"mode": mode, "artifact_dir": str(run_dir)})
+                sm[SESSION_COLL].update_one(
+                    {"_id": session["_id"]},
+                    {"$set": {"last_run_status": "success", "last_run_at": iso_now()}},
+                )
+                send_message(chat_id, reply)
+            except Exception as exc:
+                error_text = "The approved implementation run failed before a reply came back.\n" f"Error: {str(exc)[-1200:]}"
+                log.exception("Builder execute failed for session %s", session["_id"])
+                append_message(sm, session["_id"], "system", error_text)
+                sm[SESSION_COLL].update_one(
+                    {"_id": session["_id"]},
+                    {"$set": {"last_run_status": "failed", "last_run_at": iso_now()}},
+                )
+                send_message(chat_id, error_text)
+            return
 
     send_message(chat_id, "Working on it here on the VM. I’ll send the result back in this chat.")
     send_chat_action(chat_id)
