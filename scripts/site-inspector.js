@@ -41,6 +41,7 @@ function parseArgs() {
     wait: 2000,
     screenshot: true,
     fullPage: true,
+    actionsFile: null,
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -81,6 +82,7 @@ Options:
   --tablet                Use tablet viewport (768x1024)
   --element <selector>    Screenshot a specific CSS element
   --wait <ms>             Extra wait after load (default: 2000)
+  --actions-file <path>   JSON file with scripted interactions to run after load
   --no-screenshot         Skip screenshot, capture text + console only
   --no-full-page          Viewport-only screenshot (not full scrollable page)
   --help                  Show this help
@@ -92,8 +94,12 @@ Output goes to /tmp/site-inspect/<slug>/
   network-errors.log      Failed requests (4xx, 5xx, blocked)
   page-text.txt           All visible text on the page
   page-info.json          Page metadata (title, URL, viewport, timing)
+  action-log.json         Steps executed from --actions-file
 `);
         process.exit(0);
+      case '--actions-file':
+        opts.actionsFile = args[++i];
+        break;
     }
   }
 
@@ -111,6 +117,152 @@ function urlToSlug(url) {
   return slug.substring(0, 80);
 }
 
+function sanitizeArtifactName(name) {
+  return String(name || 'snapshot')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .substring(0, 60) || 'snapshot';
+}
+
+function loadActions(actionsFile) {
+  if (!actionsFile) return [];
+  const raw = fs.readFileSync(actionsFile, 'utf8');
+  const actions = JSON.parse(raw);
+  if (!Array.isArray(actions)) {
+    throw new Error('--actions-file must contain a JSON array of action objects');
+  }
+  return actions;
+}
+
+async function writePageText(page, filepath) {
+  const pageText = await page.evaluate(() => {
+    const walk = node => {
+      const lines = [];
+      if (node.nodeType === Node.TEXT_NODE) {
+        const text = node.textContent.trim();
+        if (text) lines.push(text);
+      }
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        const tag = node.tagName.toLowerCase();
+        const style = window.getComputedStyle(node);
+        if (style.display === 'none' || style.visibility === 'hidden') return lines;
+        if (tag === 'script' || tag === 'style' || tag === 'noscript') return lines;
+
+        if (['h1','h2','h3','h4','h5','h6'].includes(tag)) {
+          lines.push(`\n${'#'.repeat(parseInt(tag[1], 10))} ${node.textContent.trim()}`);
+          return lines;
+        }
+        if (tag === 'img') {
+          const alt = node.getAttribute('alt') || '';
+          const src = node.getAttribute('src') || '';
+          lines.push(`[IMAGE: ${alt || src.split('/').pop()}]`);
+          return lines;
+        }
+        if (tag === 'a') {
+          const href = node.getAttribute('href') || '';
+          const text = node.textContent.trim();
+          if (text) lines.push(`[${text}](${href})`);
+          return lines;
+        }
+
+        for (const child of node.childNodes) {
+          lines.push(...walk(child));
+        }
+
+        if (['p','div','li','tr','section','article','header','footer','main'].includes(tag)) {
+          lines.push('');
+        }
+      }
+      return lines;
+    };
+    return walk(document.body).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  });
+
+  fs.writeFileSync(filepath, pageText);
+}
+
+async function captureArtifacts(page, outDir, opts, suffix, label = '') {
+  const nameSuffix = label ? `-${sanitizeArtifactName(label)}` : '';
+
+  if (opts.screenshot) {
+    const screenshotPath = path.join(outDir, `screenshot${nameSuffix}${suffix}.png`);
+    if (opts.element) {
+      const el = await page.$(opts.element);
+      if (el) {
+        await el.screenshot({ path: screenshotPath });
+      } else {
+        throw new Error(`Element not found for screenshot selector: ${opts.element}`);
+      }
+    } else {
+      await page.screenshot({ path: screenshotPath, fullPage: opts.fullPage });
+    }
+  }
+
+  await writePageText(page, path.join(outDir, `page-text${nameSuffix}${suffix}.txt`));
+}
+
+async function runAction(page, action) {
+  const type = action.type;
+  switch (type) {
+    case 'click':
+      await page.waitForSelector(action.selector, { timeout: action.timeout || 10000 });
+      await page.click(action.selector);
+      break;
+    case 'type':
+      await page.waitForSelector(action.selector, { timeout: action.timeout || 10000 });
+      if (action.clear !== false) {
+        await page.$eval(action.selector, el => {
+          el.value = '';
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+      }
+      await page.type(action.selector, action.text || '', { delay: action.delay || 20 });
+      break;
+    case 'select':
+      await page.waitForSelector(action.selector, { timeout: action.timeout || 10000 });
+      await page.select(action.selector, action.value);
+      break;
+    case 'hover':
+      await page.waitForSelector(action.selector, { timeout: action.timeout || 10000 });
+      await page.hover(action.selector);
+      break;
+    case 'press':
+      await page.keyboard.press(action.key);
+      break;
+    case 'wait':
+      await new Promise(resolve => setTimeout(resolve, action.ms || 1000));
+      break;
+    case 'waitForSelector':
+      await page.waitForSelector(action.selector, {
+        timeout: action.timeout || 10000,
+        visible: action.visible !== false,
+      });
+      break;
+    case 'scroll':
+      if (action.selector) {
+        await page.waitForSelector(action.selector, { timeout: action.timeout || 10000 });
+        await page.$eval(action.selector, el => {
+          el.scrollIntoView({ behavior: 'instant', block: 'center' });
+        });
+      } else if (action.position === 'bottom') {
+        await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+      } else {
+        await page.evaluate(({ x, y }) => window.scrollBy(x || 0, y || 0), {
+          x: action.x || 0,
+          y: action.y || 800,
+        });
+      }
+      break;
+    case 'snapshot':
+      break;
+    default:
+      throw new Error(`Unsupported action type: ${type}`);
+  }
+}
+
 async function inspectPage(browser, url, opts) {
   const slug = urlToSlug(url);
   const outDir = path.join(OUTPUT_DIR, slug);
@@ -119,6 +271,7 @@ async function inspectPage(browser, url, opts) {
   const suffix = opts.viewport !== 'desktop' ? `-${opts.viewport}` : '';
   const consoleLogs = [];
   const networkErrors = [];
+  const actionLog = [];
 
   const page = await browser.newPage();
   const viewport = VIEWPORTS[opts.viewport];
@@ -176,74 +329,42 @@ async function inspectPage(browser, url, opts) {
 
   const loadTime = Date.now() - startTime;
 
-  // Get page title
-  const title = await page.title();
-
-  // Full-page screenshot
-  if (opts.screenshot) {
-    const screenshotPath = path.join(outDir, `screenshot${suffix}.png`);
-    if (opts.element) {
-      const el = await page.$(opts.element);
-      if (el) {
-        await el.screenshot({ path: screenshotPath });
-      } else {
-        consoleLogs.push(`[INSPECTOR] Element not found: ${opts.element}`);
-        await page.screenshot({ path: screenshotPath, fullPage: opts.fullPage });
-      }
-    } else {
-      await page.screenshot({ path: screenshotPath, fullPage: opts.fullPage });
-    }
+  if (opts.actions.length > 0) {
+    await captureArtifacts(page, outDir, opts, suffix, 'initial');
   }
 
-  // Extract all visible text
-  const pageText = await page.evaluate(() => {
-    const walk = (node, depth = 0) => {
-      const lines = [];
-      if (node.nodeType === Node.TEXT_NODE) {
-        const text = node.textContent.trim();
-        if (text) lines.push(text);
-      }
-      if (node.nodeType === Node.ELEMENT_NODE) {
-        const tag = node.tagName.toLowerCase();
-        const style = window.getComputedStyle(node);
-        // Skip hidden elements
-        if (style.display === 'none' || style.visibility === 'hidden') return lines;
-        // Skip script/style
-        if (tag === 'script' || tag === 'style' || tag === 'noscript') return lines;
-
-        // Add semantic markers
-        if (['h1','h2','h3','h4','h5','h6'].includes(tag)) {
-          lines.push(`\n${'#'.repeat(parseInt(tag[1]))} ${node.textContent.trim()}`);
-          return lines;
-        }
-        if (tag === 'img') {
-          const alt = node.getAttribute('alt') || '';
-          const src = node.getAttribute('src') || '';
-          lines.push(`[IMAGE: ${alt || src.split('/').pop()}]`);
-          return lines;
-        }
-        if (tag === 'a') {
-          const href = node.getAttribute('href') || '';
-          const text = node.textContent.trim();
-          if (text) lines.push(`[${text}](${href})`);
-          return lines;
-        }
-
-        for (const child of node.childNodes) {
-          lines.push(...walk(child, depth + 1));
-        }
-
-        if (['p','div','li','tr','section','article','header','footer','main'].includes(tag)) {
-          lines.push('');
-        }
-      }
-      return lines;
+  for (const action of opts.actions) {
+    const startedAt = new Date().toISOString();
+    const entry = {
+      type: action.type,
+      selector: action.selector || null,
+      name: action.name || null,
+      startedAt,
     };
-    return walk(document.body).join('\n').replace(/\n{3,}/g, '\n\n').trim();
-  });
+    try {
+      await runAction(page, action);
+      if (action.postWaitMs) {
+        await new Promise(resolve => setTimeout(resolve, action.postWaitMs));
+      }
+      if (action.type === 'snapshot') {
+        await captureArtifacts(page, outDir, opts, suffix, action.name || 'snapshot');
+      }
+      entry.status = 'success';
+      entry.finishedAt = new Date().toISOString();
+    } catch (err) {
+      entry.status = 'failed';
+      entry.finishedAt = new Date().toISOString();
+      entry.error = err.message;
+      actionLog.push(entry);
+      throw err;
+    }
+    actionLog.push(entry);
+  }
 
-  // Write outputs
-  fs.writeFileSync(path.join(outDir, `page-text${suffix}.txt`), pageText);
+  await captureArtifacts(page, outDir, opts, suffix);
+
+  // Get page title
+  const title = await page.title();
 
   if (consoleLogs.length > 0) {
     fs.writeFileSync(path.join(outDir, `console${suffix}.log`), consoleLogs.join('\n'));
@@ -254,6 +375,10 @@ async function inspectPage(browser, url, opts) {
       path.join(outDir, `network-errors${suffix}.log`),
       networkErrors.map(e => JSON.stringify(e)).join('\n')
     );
+  }
+
+  if (actionLog.length > 0) {
+    fs.writeFileSync(path.join(outDir, `action-log${suffix}.json`), JSON.stringify(actionLog, null, 2));
   }
 
   const pageInfo = {
@@ -276,6 +401,7 @@ async function inspectPage(browser, url, opts) {
 
 async function main() {
   const opts = parseArgs();
+  opts.actions = loadActions(opts.actionsFile);
 
   // Clean previous runs
   if (fs.existsSync(OUTPUT_DIR)) {
