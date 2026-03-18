@@ -254,7 +254,7 @@ def fetch_listing_counts(client):
         db = client["Gold_Coast"]
         for suburb in SUBURBS:
             try:
-                count = db[suburb].count_documents({})
+                count = db[suburb].count_documents({"listing_status": "for_sale"})
                 display = suburb.replace("_", " ").title()
                 counts[display] = count
             except Exception:
@@ -268,7 +268,7 @@ def fetch_listing_counts(client):
     try:
         db_fc = client["Gold_Coast"]
         enriched = sum(
-            db_fc[s].count_documents({"valuation_data": {"$exists": True}})
+            db_fc[s].count_documents({"listing_status": "for_sale", "valuation_data": {"$exists": True}})
             for s in ["robina", "burleigh_waters", "varsity_lakes"]
         )
         counts["_enriched"] = enriched
@@ -423,7 +423,8 @@ def render_ops_status(orch, api, coverage, repairs, articles, listing_counts, er
             icon = "✅" if healthy else "❌"
             status_code = ep.get("status_code", "?")
             resp_ms = ep.get("response_ms")
-            resp_str = f"{resp_ms:.0f}ms" if resp_ms else "—"
+            issue = ep.get("contract_issue") or ep.get("validation_error")
+            resp_str = issue or (f"{resp_ms:.0f}ms" if resp_ms else "—")
             checked = age_str(ep.get("checked_at"))
             lines.append(f"| `{endpoint}` | {icon} {status_code} | {resp_str} | {checked} |")
     else:
