@@ -1,7 +1,7 @@
 # AGENTS.md — Fields Estate Orchestrator VM
 
 You are a coding agent operating on the Fields Estate orchestrator VM (Google Cloud, australia-southeast1-b).
-Working directory: `/home/fields/Fields_Orchestratorg
+Working directory: `/home/fields/Fields_Orchestrator`
 Current date context: check `/home/fields/Fields_Orchestrator/OPS_STATUS.md` for live system state.
 
 ---
@@ -194,12 +194,130 @@ cat /home/fields/Fields_Orchestrator/SCHEMA_SNAPSHOT.md
 _Run `python3 scripts/sync-memory-to-codex.py` to refresh this section from Claude's memory._
 
 <!-- MEMORY_SECTION_START -->
-_Last synced: 2026-03-17 00:32 AEST_
+_Last synced: 2026-03-18 01:30 AEST_
 
 
-### CEO Agent Proposals
+### Founder Truths
 
-_No pending proposals._
+- **Tagline:** Smarter with data
+- **Mission:** Help buyers and sellers make informed real estate decisions through original analysis, local expertise, and transparent methodology.
+- **Primary database:** `Gold_Coast`
+- No production DB writes from the remote CEO VM.
+- No direct deploys from the remote CEO VM.
+- No direct ad changes from the remote CEO VM.
+- Chief of Staff must synthesize only after successful specialist runs or explicitly degraded inputs.
+- Blank telemetry exports are a blocking context failure, not an acceptable warning.
+- All proposal findings should state confidence, evidence freshness, blocked_by, and data_gaps.
+- Tuesday CEO reviews must explicitly check both the latest daily orchestrator run and the most recent weekly all-suburbs orchestrator run.
+- Every CEO growth review must check both Facebook Ads and Google Ads and alert the founder to anything material.
+
+
+### CEO Agent Proposals — Action Required
+
+> These are findings and proposals from the management agent team. Pending items need implementation.
+
+
+#### PRODUCT Agent — 2026-03-17 [⚠️ PENDING]
+
+Tonight's 21:54 AEST ops snapshot still shows the valuation pipeline stalled (Step 106/15 failures), only 180 of 50,422 active listings enriched (0.36%), three core suburbs with zero coverage despite dozens of live properties, and the buyer experience degraded by a 404 sold-comps API plus missing website telemetry—Fields cannot currently prove its data advantage to a Robina/Burleigh/VL buyer.
+
+**Findings:**
+
+- `[HIGH]` **Merrimac/Mudgeeraba/Reedy Creek missing from the product** — OPS coverage shows these three suburbs at 0 listings (status unknown, last updated 'never') and scraper health hasn't run since 2026-03-06, yet active_listings.json lists 12, 23, and 20 live propertie
+- `[HIGH]` **Sold comps API 404 removes proof from valuation guides** — Website API health shows /api/v1/properties/recently-sold returning 404 (checked 24 minutes before the snapshot) while its health endpoint is green, meaning the property pages and valuation flows cann
+- `[MEDIUM]` **Website telemetry + active experiment exports are empty** — context/metrics/website_metrics_7d.json and context/experiments/active_experiments.json are 0-byte files even though the /for-sale and /discover experiments launched on 2026-03-16, so the product team
+- `[CRITICAL]` **Valuation enrichment blocked by repeated Step 106/15 failures** — OPS (2026-03-17 21:54 AEST) shows Step 106 (Ollama floor plan analysis) failing 1h ago and Step 15 (Calculate Property Insights) failing twice in the last day, and the watchdog log recorded Step 108 o
+
+**Proposed fixes:**
+
+- `[HIGH]` **RU-aware valuation queue and Step 15 guardrails** — 
+- `[HIGH]` **Emergency rescrape for Merrimac/Mudgeeraba/Reedy Creek** — 
+- `[MEDIUM]` **Rebuild sold-comps API + timeline module** — 
+- `[MEDIUM]` **Suburb data reliability badges** — 
+
+> To mark implemented: update `status` to `'completed'` in `system_monitor.ceo_proposals` where `agent='{p.get('agent')}'` and `date='{date}'`
+
+
+#### GROWTH Agent — 2026-03-17 [⚠️ PENDING]
+
+Paid Search is still feeding verification bots, our exported KPI files are empty, the recently-sold API is failing, and we have an unused scarcity story (only 121 listings across Robina, Burleigh Waters, and Varsity Lakes), so we need to pause spend, repair measurement, and push data-led content before scaling acquisition.
+
+**Findings:**
+
+- `[HIGH]` **No KPI data captured in the context snapshot** — The current bundle shows ad_performance_7d.json, website_metrics_7d.json, and recent_website_changes.json as 0-byte files (all stamped 12:05 AEST on 17 Mar), leaving us without spend, CTR, CVR, or cha
+- `[HIGH]` **Recently-sold API is down** — /api/v1/recently-sold has been returning 404s while 13 of 14 endpoints are green, so any page or CTA that leans on sold comps is broken right now.
+- `[MEDIUM]` **Target-suburb inventory sits at just 121 listings** — Active listings count shows Robina 46, Burleigh Waters 40, and Varsity Lakes 35 homes on market (121 total), giving us a scarcity narrative that matches the 'Smarter with data' promise but isn’t being
+- `[CRITICAL]` **Google Ads clicks are still 100% bots** — The 2026-03-17 fix log shows 77 Google Ads clicks ($78.39) produced 111 sessions from just 11 AWS IPs and even logged 32 fake "conversions" from a page-view tag, so no humans reached the form despite 
+
+**Proposed fixes:**
+
+- `[HIGH]` **Bot-proof Google Search before reactivation** — 
+- `[MEDIUM]` **Daily metrics health-check run** — 
+- `[MEDIUM]` **Weekly Gold Coast Inventory Pulse** — 
+
+> To mark implemented: update `status` to `'completed'` in `system_monitor.ceo_proposals` where `agent='{p.get('agent')}'` and `date='{date}'`
+
+
+#### ENGINEERING Agent — 2026-03-17 [⚠️ PENDING]
+
+Floor-plan enrichment (step 106) is still silently skipping work after Cosmos DB throttling, step 15 keeps tripping the watchdog because any single 429 marks the run as failed, and the public /api/v1/properties/recently-sold route continues to 404 even while its health check is green, leaving us blind on both enrichment coverage and sold-proof APIs.
+
+**Findings:**
+
+- `[HIGH]` **Step 106 exits 'successfully' after Cosmos throttling** — OPS shows every nightly run executing step 106 three times with a long failure sandwiched between two 7-second 'successes,' and it remains on the last-24h failure list (context/OPS_STATUS.md:16-38). T
+- `[HIGH]` **Step 15 fails on single 429 despite completing work** — Step 15 shows two failures per run around a brief success and accounts for two of the three failures logged in the past day (context/OPS_STATUS.md:27-38). The 15 Mar watchdog traces show calculate_pro
+- `[HIGH]` **/api/v1/properties/recently-sold still 404s while health is green** — OPS API health shows the data route returning 404 (checked 24 minutes ago) even while /api/v1/recently-sold/health returns 200 (context/OPS_STATUS.md:81-96). This regression breaks every sold property
+
+**Proposed fixes:**
+
+- `[HIGH]` **Harden floor-plan analyzer against Cosmos 429s** — 
+- `[HIGH]` **Make Property Insights tolerant to transient 429s** — 
+- `[HIGH]` **Restore sold API and add contract probes** — 
+
+> To mark implemented: update `status` to `'completed'` in `system_monitor.ceo_proposals` where `agent='{p.get('agent')}'` and `date='{date}'`
+
+
+#### CHIEF_OF_STAFF Agent — 2026-03-17 [⚠️ PENDING]
+
+Cosmos-throttled enrichment, empty KPI exports, and a 404 sold-comps API are the shared blockers, so founder time today has to prioritise getting reliable data back before adding any new UX or paid growth bets.
+
+**Findings:**
+
+- `[HIGH]` **Coverage gap across three core suburbs** — Product reports Merrimac, Mudgeeraba, and Reedy Creek stuck at zero listings with last updates recorded as 'never' despite dozens of active homes in the listings snapshot.
+- `[HIGH]` **Telemetry exports are empty** — Growth shows ad_performance_7d.json, website_metrics_7d.json, and recent_website_changes.json as zero-byte files, so no one can validate ads, experiments, or ops SLAs.
+- `[HIGH]` **Sold-comps API returns 404 while health is green** — All three agents cite /api/v1/properties/recently-sold failing even as /api/v1/recently-sold/health reports 200, breaking buyer proof modules without any alerting.
+- `[HIGH]` **Google Ads traffic is still bot-only** — Growth notes $78.39 of spend on 2026-03-17 produced 111 AWS sessions and fake conversions even after prior fixes.
+- `[CRITICAL]` **Cosmos throttling keeps Steps 106/15 failing** — Engineering and product both highlight repeating ❌ statuses for floor-plan analysis and property insights plus watchdog entries where 0/121 properties receive valuation_data.
+
+**Proposed fixes:**
+
+- `[HIGH]` **RU-aware enrichment restart** — 
+- `[HIGH]` **Telemetry export hardening** — 
+- `[HIGH]` **Sold API + contract probe fix** — 
+- `[MEDIUM]` **Bot-proof Google Ads relaunch** — 
+
+> To mark implemented: update `status` to `'completed'` in `system_monitor.ceo_proposals` where `agent='{p.get('agent')}'` and `date='{date}'`
+
+
+#### ENGINEERING Agent — 2026-03-16 [⚠️ PENDING]
+
+Floor-plan enrichment is still falling over under Cosmos DB throttling, Calculate Property Insights reports failure on every transient write error, the public recently-sold API endpoint is 404ing while its health check passes, and scraper health telemetry has been stale since the curl_cffi migration — these gaps are burning pipeline time, hiding missing data, and breaking consumer endpoints.
+
+**Findings:**
+
+- `[HIGH]` **Floor plan analysis silently skips work when Cosmos throttles** — Step 106 has triggered at least two watchdog escalations today and five failures in the last 24h; the auto-repair summary shows get_floor_plan_stats() and get_properties_needing_floor_plan_analysis() 
+- `[HIGH]` **Calculate Property Insights marks the whole step failed on any single error** — Process 15 calls monitor.finish(status='success' if total_errors == 0 else 'failed') at line ~609, so even one Cosmos write error makes the watchdog think the step failed despite the script completing
+- `[MEDIUM]` **`/api/v1/properties/recently-sold` has regressed to 404** — The ops probe now records 404s for /api/v1/properties/recently-sold even though /api/v1/recently-sold/health still returns 200, which means the primary listing endpoint disappeared (likely after the S
+- `[MEDIUM]` **Scraper health dashboard has been frozen since curl_cffi migration** — Even though step 101 succeeded at 638s tonight, the Scraper Health table still shows the last run for every suburb on 2026-03-06–03-04, so the ops dashboard can no longer tell if scrapes are actually 
+
+**Proposed fixes:**
+
+- `[HIGH]` **Add RU-aware retry layer to floor-plan analysis** — 
+- `[MEDIUM]` **Harden Calculate Property Insights error handling** — 
+- `[MEDIUM]` **Restore `/api/v1/properties/recently-sold` contract** — 
+- `[MEDIUM]` **Emit scraper heartbeat metrics from curl_cffi** — 
+
+> To mark implemented: update `status` to `'completed'` in `system_monitor.ceo_proposals` where `agent='{p.get('agent')}'` and `date='{date}'`
 
 
 ### User Feedback & Corrections
@@ -289,7 +407,7 @@ All data in `system_monitor` database in Cosmos DB:
 - **Cost per session** — lower is better. Calculated from `ad_attribution.sessions` / `ad_profiles.lifetime.spend_aud`
 - **Engagement rate** — % of sessions that are "engaged" or "deep" (not bounce/light)
 - **Average session duration** — how long people stay
-- **Propertyes viewed** — did they actually look at property pages?
+- **Properties viewed** — did they actually look at property pages?
 
 ### Tier 2 metrics (diagnostic)
 - **CTR** — click-through rate (are people interested?)
@@ -506,7 +624,7 @@ Three AI agents (Engineering, Growth, Product) collectively act as strategic adv
 - **Context:** `Will954633/fields-ceo-context` — daily snapshot from orchestrator VM
 - **Sandbox:** `Will954633/fields-ceo-sandbox` — proposals + PoC code
 - **Proposals:** `system_monitor.ceo_proposals` MongoDB collection
-- **Model:** `gpt-5.4-codex` via Codex CLI (authenticated via `codex login --with-api-key`)
+- **Model:** `gpt-5.4` via Codex CLI (authenticated via `codex login --with-api-key`)
 
 ## Daily Flow (cron on orchestrator VM)
 1. **02:03 AEST** — `ceo-context-export.py` exports data bundle to `fields-ceo-context` repo
@@ -531,7 +649,7 @@ python3 scripts/ceo-agent-launcher.py --agent engineering  # single agent
 python3 scripts/ceo-agent-launcher.py              # all three
 
 # Directly on property-scraper:
-cd ~/ceo-agents/sandbox && codex exec -m gpt-5.4-codex --full-auto "$(bash ~/ceo-agents/ceo-agent-prompts.sh engineering 2026-03-16)"
+cd ~/ceo-agents/sandbox && codex exec -m gpt-5.4 --full-auto "$(bash ~/ceo-agents/ceo-agent-prompts.sh engineering 2026-03-16)"
 ```
 
 ## Cost
