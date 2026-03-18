@@ -48,12 +48,15 @@ from pymongo import MongoClient, ReturnDocument
 ROOT = Path("/home/fields/Fields_Orchestrator")
 ENV_PATH = ROOT / ".env"
 FOUNDER_REQUESTS_DIR = ROOT / "ceo-founder-requests"
+LOCAL_BROWSER_INSPECTOR = ROOT / "scripts/site-inspector.js"
 AEST = ZoneInfo("Australia/Brisbane")
 STATE_ID = "telegram"
 SESSION_COLL = "ceo_chat_sessions"
 MESSAGE_COLL = "ceo_chat_messages"
 STATE_COLL = "ceo_chat_bridge_state"
+JOB_COLL = "ceo_chat_jobs"
 MAX_TELEGRAM_MESSAGE = 4000
+JOB_HEARTBEAT_SECONDS = 15
 MODEL_ALIASES = {
     "gpt-5.4-codex": "gpt-5.4",
 }
@@ -360,6 +363,7 @@ def create_session(sm, chat: dict[str, Any], user: dict[str, Any]) -> dict[str, 
         "last_message_at": None,
         "last_remote_status": None,
         "last_remote_run_at": None,
+        "active_job_id": None,
     }
     sm[SESSION_COLL].insert_one(doc)
     return doc
@@ -433,6 +437,100 @@ def append_message(
     return updated
 
 
+def get_active_job(sm, session: dict[str, Any]) -> dict[str, Any] | None:
+    job_id = session.get("active_job_id")
+    if not job_id:
+        return None
+    job = sm[JOB_COLL].find_one({"_id": job_id})
+    if not job:
+        return None
+    if job.get("status") in {"completed", "failed", "cancelled"}:
+        return None
+    return job
+
+
+def create_job(sm, session: dict[str, Any], founder_message: str) -> dict[str, Any]:
+    now = iso_now()
+    job_id = f"{session['_id']}_{aest_now().strftime('%H%M%S')}"
+    doc = {
+        "_id": job_id,
+        "session_id": session["_id"],
+        "telegram_chat_id": session["telegram_chat_id"],
+        "status": "queued",
+        "founder_message": founder_message,
+        "created_at": now,
+        "updated_at": now,
+        "started_at": None,
+        "finished_at": None,
+        "last_heartbeat_at": None,
+        "progress_message": "Queued for CEO response.",
+        "error_text": None,
+    }
+    sm[JOB_COLL].insert_one(doc)
+    sm[SESSION_COLL].update_one(
+        {"_id": session["_id"]},
+        {"$set": {"active_job_id": job_id, "updated_at": now}},
+    )
+    return doc
+
+
+def update_job(sm, job_id: str, updates: dict[str, Any]) -> dict[str, Any]:
+    updates["updated_at"] = iso_now()
+    updated = sm[JOB_COLL].find_one_and_update(
+        {"_id": job_id},
+        {"$set": updates},
+        return_document=ReturnDocument.AFTER,
+    )
+    if updated is None:
+        raise RuntimeError(f"Job not found: {job_id}")
+    return updated
+
+
+def clear_active_job(sm, session_id: str, job_id: str) -> None:
+    sm[SESSION_COLL].update_one(
+        {"_id": session_id, "active_job_id": job_id},
+        {"$set": {"active_job_id": None, "updated_at": iso_now()}},
+    )
+
+
+def elapsed_label(started_at: str | None) -> str:
+    if not started_at:
+        return "not started"
+    try:
+        started = datetime.fromisoformat(started_at)
+    except ValueError:
+        return "unknown"
+    elapsed = max(int((utc_now() - started).total_seconds()), 0)
+    minutes, seconds = divmod(elapsed, 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours}h {minutes}m"
+    if minutes:
+        return f"{minutes}m {seconds}s"
+    return f"{seconds}s"
+
+
+def build_job_status_text(job: dict[str, Any]) -> str:
+    return (
+        f"CEO team job status: {job.get('status', 'unknown')}\n"
+        f"Started: {job.get('started_at') or 'queued'}\n"
+        f"Elapsed: {elapsed_label(job.get('started_at'))}\n"
+        f"Progress: {job.get('progress_message') or 'Waiting for status.'}"
+    )
+
+
+def launch_background_job(job_id: str) -> None:
+    subprocess.Popen(
+        [sys.executable, str(Path(__file__).resolve()), "--run-job", job_id],
+        cwd=ROOT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        stdin=subprocess.DEVNULL,
+        start_new_session=True,
+        env={**os.environ, "PATH": os.environ.get("PATH", "")},
+    )
+
+
 def should_refresh_context(last_sync_at: str | None, force: bool) -> bool:
     if force or not last_sync_at:
         return True
@@ -463,6 +561,36 @@ def ssh_run(command: str, timeout: int) -> subprocess.CompletedProcess[str]:
         timeout=timeout,
         env={**os.environ, "PATH": os.environ.get("PATH", "")},
     )
+
+
+def sync_remote_browser_inspector() -> tuple[bool, str]:
+    if not LOCAL_BROWSER_INSPECTOR.exists():
+        return False, f"Local browser inspector missing: {LOCAL_BROWSER_INSPECTOR}"
+
+    remote_script = f"{REMOTE_BROWSER_DIR}/scripts/site-inspector.js"
+    mkdir_result = ssh_run(f"mkdir -p {shlex.quote(REMOTE_BROWSER_DIR)}/scripts", timeout=30)
+    if mkdir_result.returncode != 0:
+        detail = (mkdir_result.stderr or mkdir_result.stdout or "Remote browser-tools mkdir failed")[-1200:]
+        return False, detail
+
+    upload_result = subprocess.run(
+        ["ssh", "-o", "BatchMode=yes", "-o", "ServerAliveInterval=30", REMOTE_HOST, f"cat > {shlex.quote(remote_script)}"],
+        input=LOCAL_BROWSER_INSPECTOR.read_text(encoding="utf-8"),
+        capture_output=True,
+        text=True,
+        timeout=60,
+        env={**os.environ, "PATH": os.environ.get("PATH", "")},
+    )
+    if upload_result.returncode != 0:
+        detail = (upload_result.stderr or upload_result.stdout or "Remote browser inspector upload failed")[-1200:]
+        return False, detail
+
+    chmod_result = ssh_run(f"chmod 755 {shlex.quote(remote_script)}", timeout=30)
+    if chmod_result.returncode != 0:
+        detail = (chmod_result.stderr or chmod_result.stdout or "Remote browser inspector chmod failed")[-1200:]
+        return False, detail
+
+    return True, remote_script
 
 
 def maybe_refresh_context(sm, force: bool = False) -> tuple[bool, str]:
@@ -537,6 +665,11 @@ Latest founder message:
 """
 
 
+def is_simple_greeting(text: str) -> bool:
+    normalized = re.sub(r"[^a-z]+", "", text.lower())
+    return normalized in {"hi", "hello", "hey", "helli", "hiya", "yo"}
+
+
 def message_needs_browser_artifacts(text: str) -> bool:
     lowered = text.lower()
     return any(term in lowered for term in BROWSER_TRIGGER_TERMS)
@@ -562,6 +695,13 @@ def browser_urls_for_message(text: str) -> list[str]:
 def prepare_remote_browser_artifacts(latest_user_message: str) -> dict[str, Any] | None:
     if not message_needs_browser_artifacts(latest_user_message):
         return None
+
+    synced, sync_detail = sync_remote_browser_inspector()
+    if not synced:
+        return {
+            "status": "sync_failed",
+            "detail": sync_detail,
+        }
 
     run_token = uuid.uuid4().hex[:10]
     urls = browser_urls_for_message(latest_user_message)
@@ -683,13 +823,18 @@ def format_status(sm, session: dict[str, Any]) -> str:
     state = get_bridge_state(sm)
     last_sync = state.get("last_context_sync_at") or "never"
     last_remote = session.get("last_remote_run_at") or "never"
-    return (
+    lines = [
         f"CEO Telegram bridge is live.\n"
         f"Session: {session['_id']}\n"
         f"Messages in session: {session.get('message_count', 0)}\n"
         f"Last context sync: {last_sync}\n"
         f"Last CEO run: {last_remote}"
-    )
+    ]
+    active_job = get_active_job(sm, session)
+    if active_job:
+        lines.append("")
+        lines.append(build_job_status_text(active_job))
+    return "\n".join(lines)
 
 
 def handle_command(sm, chat: dict[str, Any], user: dict[str, Any], text: str) -> bool:
@@ -754,6 +899,14 @@ def handle_text_message(sm, update: dict[str, Any], message: dict[str, Any], tex
             return
 
     session = get_or_create_active_session(sm, chat, user)
+    active_job = get_active_job(sm, session)
+    if active_job:
+        send_message(
+            chat_id,
+            build_job_status_text(active_job) + "\n\nThe CEO team is still working on the previous message. Send `/status` to check again.",
+        )
+        return
+
     session = append_message(
         sm,
         session["_id"],
@@ -765,32 +918,107 @@ def handle_text_message(sm, update: dict[str, Any], message: dict[str, Any], tex
         },
     )
 
-    send_message(chat_id, "Routing this to the CEO team. I’ll send the reply back here.")
-    send_chat_action(chat_id)
+    if is_simple_greeting(text):
+        reply = (
+            "CEO Telegram bridge is live. Send your question for the management team and I’ll route it through.\n"
+            "Use `/status` if you want the current bridge state."
+        )
+        append_message(
+            sm,
+            session["_id"],
+            "assistant",
+            reply,
+            {"mode": "local_greeting"},
+        )
+        send_message(chat_id, reply)
+        return
 
-    ok, detail = maybe_refresh_context(sm, force=False)
-    context_warning = None
-    if not ok:
-        state = get_bridge_state(sm)
-        last_sync = state.get("last_context_sync_at")
-        if last_sync:
-            context_warning = (
-                f"Latest context refresh failed, so use the last synced CEO context from {last_sync}. "
-                f"Refresh error: {detail[-400:]}"
-            )
-            append_message(sm, session["_id"], "system", context_warning)
-            send_message(
-                chat_id,
-                "Context refresh failed, but I’m using the last synced CEO context and continuing.",
-            )
-        else:
-            error_text = "Context refresh failed and no prior CEO context is available, so I did not send this to the CEO team.\n" + detail[-800:]
-            append_message(sm, session["_id"], "system", error_text)
-            send_message(chat_id, error_text)
+    job = create_job(sm, session, text)
+    sm[SESSION_COLL].update_one(
+        {"_id": session["_id"]},
+        {"$set": {"last_remote_status": "queued", "updated_at": iso_now()}},
+    )
+    send_message(chat_id, "Routing this to the CEO team now. I’ll reply here when the run finishes. Send `/status` any time for progress.")
+    send_chat_action(chat_id)
+    log.info("Queued CEO Telegram job %s for session %s", job["_id"], session["_id"])
+    launch_background_job(job["_id"])
+
+
+def process_job(job_id: str) -> None:
+    client = get_client()
+    sm = client["system_monitor"]
+    try:
+        job = sm[JOB_COLL].find_one({"_id": job_id})
+        if not job:
+            raise RuntimeError(f"Job not found: {job_id}")
+        if job.get("status") not in {"queued", "running"}:
             return
 
-    try:
-        browser_context = prepare_remote_browser_artifacts(text)
+        session = sm[SESSION_COLL].find_one({"_id": job["session_id"]})
+        if not session:
+            raise RuntimeError(f"Session not found for job {job_id}")
+
+        founder_message = job["founder_message"]
+        update_job(
+            sm,
+            job_id,
+            {
+                "status": "running",
+                "started_at": iso_now(),
+                "last_heartbeat_at": iso_now(),
+                "progress_message": "Refreshing CEO context.",
+            },
+        )
+
+        ok, detail = maybe_refresh_context(sm, force=False)
+        context_warning = None
+        if not ok:
+            state = get_bridge_state(sm)
+            last_sync = state.get("last_context_sync_at")
+            if last_sync:
+                context_warning = (
+                    f"Latest context refresh failed, so use the last synced CEO context from {last_sync}. "
+                    f"Refresh error: {detail[-400:]}"
+                )
+                append_message(sm, session["_id"], "system", context_warning)
+                send_message(
+                    job["telegram_chat_id"],
+                    "Context refresh failed, but I’m using the last synced CEO context and continuing.",
+                )
+            else:
+                error_text = (
+                    "Context refresh failed and no prior CEO context is available, "
+                    "so I did not send this to the CEO team.\n" + detail[-800:]
+                )
+                append_message(sm, session["_id"], "system", error_text)
+                sm[SESSION_COLL].update_one(
+                    {"_id": session["_id"]},
+                    {"$set": {"last_remote_status": "failed", "last_remote_run_at": iso_now()}},
+                )
+                update_job(
+                    sm,
+                    job_id,
+                    {
+                        "status": "failed",
+                        "finished_at": iso_now(),
+                        "last_heartbeat_at": iso_now(),
+                        "progress_message": "Context refresh failed.",
+                        "error_text": error_text,
+                    },
+                )
+                clear_active_job(sm, session["_id"], job_id)
+                send_message(job["telegram_chat_id"], error_text)
+                return
+
+        update_job(
+            sm,
+            job_id,
+            {
+                "last_heartbeat_at": iso_now(),
+                "progress_message": "Preparing CEO evidence bundle.",
+            },
+        )
+        browser_context = prepare_remote_browser_artifacts(founder_message)
         browser_note = None
         if browser_context:
             if browser_context.get("status") == "ok":
@@ -806,9 +1034,18 @@ def handle_text_message(sm, update: dict[str, Any], message: dict[str, Any], tex
 
         prompt = build_prompt(
             session,
-            text,
+            founder_message,
             context_warning=context_warning,
             browser_context_note=browser_note,
+        )
+
+        update_job(
+            sm,
+            job_id,
+            {
+                "last_heartbeat_at": iso_now(),
+                "progress_message": "Waiting for the remote CEO team reply.",
+            },
         )
         reply = run_remote_ceo_reply(prompt, browser_context=browser_context)
         append_message(
@@ -822,19 +1059,54 @@ def handle_text_message(sm, update: dict[str, Any], message: dict[str, Any], tex
             {"_id": session["_id"]},
             {"$set": {"last_remote_status": "success", "last_remote_run_at": iso_now()}},
         )
-        send_message(chat_id, reply)
+        update_job(
+            sm,
+            job_id,
+            {
+                "status": "completed",
+                "finished_at": iso_now(),
+                "last_heartbeat_at": iso_now(),
+                "progress_message": "CEO reply sent.",
+                "error_text": None,
+            },
+        )
+        clear_active_job(sm, session["_id"], job_id)
+        send_message(job["telegram_chat_id"], reply)
     except Exception as exc:
         error_text = (
             "The CEO team run failed before a reply came back.\n"
             f"Error: {str(exc)[-1200:]}"
         )
-        log.exception("CEO team reply failed for session %s", session["_id"])
-        append_message(sm, session["_id"], "system", error_text)
-        sm[SESSION_COLL].update_one(
-            {"_id": session["_id"]},
-            {"$set": {"last_remote_status": "failed", "last_remote_run_at": iso_now()}},
-        )
-        send_message(chat_id, error_text)
+        log.exception("CEO team reply failed for job %s", job_id)
+        try:
+            job = sm[JOB_COLL].find_one({"_id": job_id})
+            session_id = job["session_id"] if job else None
+            chat_id = job["telegram_chat_id"] if job else None
+            if session_id:
+                append_message(sm, session_id, "system", error_text)
+                sm[SESSION_COLL].update_one(
+                    {"_id": session_id},
+                    {"$set": {"last_remote_status": "failed", "last_remote_run_at": iso_now()}},
+                )
+                clear_active_job(sm, session_id, job_id)
+            if job:
+                update_job(
+                    sm,
+                    job_id,
+                    {
+                        "status": "failed",
+                        "finished_at": iso_now(),
+                        "last_heartbeat_at": iso_now(),
+                        "progress_message": "CEO run failed.",
+                        "error_text": error_text,
+                    },
+                )
+            if chat_id:
+                send_message(chat_id, error_text)
+        except Exception:
+            log.exception("Failed to record CEO Telegram job failure for %s", job_id)
+    finally:
+        client.close()
 
 
 def extract_message_text(update: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
@@ -897,6 +1169,7 @@ def poll_once(sm) -> int:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Telegram bridge for the CEO Codex team")
     parser.add_argument("--once", action="store_true", help="Poll Telegram once, then exit")
+    parser.add_argument("--run-job", help="Run a queued CEO Telegram job by id")
     args = parser.parse_args()
 
     missing = []
@@ -913,6 +1186,11 @@ def main() -> None:
     log.info("Allowed chat IDs: %s", ",".join(str(v) for v in sorted(ALLOWED_CHAT_IDS)))
     log.info("Remote host: %s", REMOTE_HOST)
     log.info("Model: %s", CEO_MODEL)
+
+    if args.run_job:
+        process_job(args.run_job)
+        return
+
     register_bot_commands()
 
     client = get_client()
