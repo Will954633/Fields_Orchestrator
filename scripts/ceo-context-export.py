@@ -216,6 +216,34 @@ def is_valid_required_export(repo_path: str, payload: Any) -> bool:
     return not is_empty_payload(payload)
 
 
+def validate_ad_to_session_coherence(metrics: dict) -> None:
+    """Warn when paid ad clicks exist but website metrics show zero paid sessions."""
+    ad_payload = metrics.get("metrics/ad_performance_7d.json") or {}
+    web_payload = metrics.get("metrics/website_metrics_7d.json") or {}
+
+    # Sum paid clicks across platforms
+    ad_clicks = 0
+    for platform in ("facebook", "google"):
+        platform_data = ad_payload.get(platform)
+        if isinstance(platform_data, dict):
+            ad_clicks += platform_data.get("clicks", 0)
+        elif isinstance(platform_data, list):
+            ad_clicks += sum(row.get("clicks", 0) for row in platform_data if isinstance(row, dict))
+
+    # Sum paid sessions from website metrics
+    paid_sessions = 0
+    rows = web_payload.get("rows") if isinstance(web_payload, dict) else web_payload
+    if isinstance(rows, list):
+        for row in rows:
+            sources = row.get("sources", {}) if isinstance(row, dict) else {}
+            paid_sessions += sources.get("facebook", 0) + sources.get("google", 0)
+
+    if ad_clicks > 10 and paid_sessions == 0:
+        warning = f"⚠️  COHERENCE WARNING: {ad_clicks} paid ad clicks in 7d but 0 paid website sessions — attribution may be broken"
+        print(f"  {warning}")
+        EXPORT_ERRORS.append(warning)
+
+
 def export_text_file(local_path: Path, repo_path: str, message: str) -> None:
     gh_api_put(repo_path, read_file(local_path), message)
 
@@ -395,6 +423,9 @@ def export_metrics_and_memory() -> None:
     metrics["experiments/active_experiments.json"] = structured.get("active_experiments", [])
     metrics["metrics/recent_website_changes.json"] = structured.get("recent_website_changes", {})
     metrics["metrics/recent_proposals.json"] = structured.get("recent_proposals", [])
+
+    # Cross-metric coherence check before uploading
+    validate_ad_to_session_coherence(metrics)
 
     for repo_path, payload in metrics.items():
         reason = REQUIRED_JSON_EXPORTS.get(repo_path)
