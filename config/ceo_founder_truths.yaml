@@ -69,6 +69,51 @@ experimentation:
     discover_mode_v1_sessions: 300
   review_rule: "Do not call an experiment before the minimum sample or when telemetry is degraded."
 
+backup_scraper:
+  purpose: "Redundant scraper on property-scraper VM — hedges against Domain.com.au bot detection blocking the primary curl_cffi scraper."
+  vm: "property-scraper (35.201.6.222 external, 10.152.0.3 internal VPC)"
+  ssh_user: "fields-orchestrator-vm"
+  code_path: "/home/projects/scraper/"
+  entry_point: "url_tracking_run.py → ContinuousMonitor (continuous_monitor.py)"
+  method: "SearXNG meta-search → agency website scraping → GPT verification — does NOT hit Domain.com.au directly"
+  suburbs_covered:
+    - "robina"
+    - "burleigh_waters"
+    - "varsity_lakes"
+  key_scripts:
+    - "url_tracking_run.py — entry point, runs forever"
+    - "continuous_monitor.py — main orchestration loop"
+    - "hybrid_extraction_poc.py — extraction from agency websites"
+    - "robust_extractor.py — fallback extraction"
+    - "url_tracker.py — URL dedup and tracking"
+    - "direct_agency_scraper.py — direct agency website scraper"
+    - "gpt_verifier.py — GPT-4 listing verification"
+    - "selfhosted_searxng_search.py — SearXNG search interface"
+  status_check: "ssh fields-orchestrator-vm@35.201.6.222 'sudo bash /home/projects/scraper/status.sh'"
+  log_check: "ssh fields-orchestrator-vm@35.201.6.222 'sudo tail -50 /home/projects/scraper/scraper.log'"
+  operational_risk: "If Domain.com.au blocks our primary scraper, this backup must be ready to take over as the data source."
+  review_cadence: "Engineering agent should check backup scraper health weekly and flag if it is down or producing zero new URLs."
+
+cost_awareness:
+  stage: "Pre-revenue — every dollar matters"
+  monthly_budget_ceiling_aud: 3000
+  cost_data_source: "metrics/cost_summary_30d.json"
+  platforms:
+    facebook_ads: "Variable — main advertising spend"
+    google_ads: "Variable — search campaigns"
+    google_cloud: "~$76/month fixed (2x e2-medium VMs)"
+    azure_cosmos_db: "~$15/month (serverless)"
+    azure_blob_storage: "~$8/month (property images)"
+    netlify: "~$29/month (Pro plan)"
+    openai_api: "~$25/month (GPT-4 Vision enrichment)"
+    codex_agents: "Variable — ~$0.20-0.50/agent/run"
+  review_rules:
+    - "Growth agent must review cost trends in every daily run"
+    - "Flag any day where total spend exceeds 2x the 7-day average"
+    - "Track cost-per-session for all ad platforms"
+    - "Propose budget reallocation when ROI diverges between platforms"
+    - "Engineering should flag Cosmos RU spikes or excessive Netlify builds"
+
 telemetry_slas:
   context_export_max_age_hours: 12
   scraper_freshness_max_age_hours: 12
