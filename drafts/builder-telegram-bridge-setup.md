@@ -93,6 +93,13 @@ cancel plan
 
 This clears the pending plan. No code changes are made.
 
+## Runtime Behavior
+
+- Builder jobs now run asynchronously in the background instead of blocking the Telegram poll loop.
+- While a review, revise, execute, or direct builder run is active, the bridge continues responding to Telegram messages.
+- Founder check-ins like `status`, `update`, `how are you going`, or `are you stuck` return the live job state from MongoDB, including elapsed time, the latest heartbeat, and the recent Codex log tail.
+- Only one active builder job is allowed per chat session. New work requests are rejected until the active job finishes.
+
 ## Artifacts
 
 Implementation review and execution runs are written under:
@@ -118,6 +125,7 @@ All in `system_monitor`:
 - `builder_chat_sessions`
 - `builder_chat_messages`
 - `builder_chat_bridge_state`
+- `builder_chat_jobs`
 
 ## Deploy on the VM
 
@@ -132,4 +140,5 @@ sudo systemctl status fields-builder-telegram
 
 - The bot accepts text messages only.
 - Unauthorized chat IDs are ignored.
-- Each inbound Telegram message triggers a fresh local `codex exec` run with recent conversation history included in the prompt.
+- Each builder run is started as a tracked background job with recent conversation history included in the prompt.
+- `/status` and plain-English status check-ins read the active job state instead of waiting for the job to finish.
