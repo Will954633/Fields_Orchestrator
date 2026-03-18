@@ -367,7 +367,7 @@ def maybe_refresh_context(sm, force: bool = False) -> tuple[bool, str]:
     return True, "Context refreshed."
 
 
-def build_prompt(session: dict[str, Any], latest_user_message: str) -> str:
+def build_prompt(session: dict[str, Any], latest_user_message: str, context_warning: str | None = None) -> str:
     history_lines = []
     for item in session.get("history_tail", [])[-HISTORY_LIMIT:]:
         role = item.get("role", "unknown").upper()
@@ -377,6 +377,7 @@ def build_prompt(session: dict[str, Any], latest_user_message: str) -> str:
 
     history_block = "\n".join(history_lines) if history_lines else "No prior conversation."
     now_aest = aest_now().strftime("%Y-%m-%d %H:%M AEST")
+    context_warning_block = f"\nContext sync note:\n{context_warning}\n" if context_warning else ""
 
     return f"""You are the Fields Estate CEO team responding to the founder inside Telegram.
 
@@ -397,6 +398,7 @@ Response style:
 
 Current time: {now_aest}
 Telegram session: {session["_id"]}
+{context_warning_block}
 
 Conversation history:
 {history_block}
@@ -520,14 +522,28 @@ def handle_text_message(sm, update: dict[str, Any], message: dict[str, Any], tex
     send_chat_action(chat_id)
 
     ok, detail = maybe_refresh_context(sm, force=False)
+    context_warning = None
     if not ok:
-        error_text = "Context refresh failed, so I did not send this to the CEO team.\n" + detail[-800:]
-        append_message(sm, session["_id"], "system", error_text)
-        send_message(chat_id, error_text)
-        return
+        state = get_bridge_state(sm)
+        last_sync = state.get("last_context_sync_at")
+        if last_sync:
+            context_warning = (
+                f"Latest context refresh failed, so use the last synced CEO context from {last_sync}. "
+                f"Refresh error: {detail[-400:]}"
+            )
+            append_message(sm, session["_id"], "system", context_warning)
+            send_message(
+                chat_id,
+                "Context refresh failed, but I’m using the last synced CEO context and continuing.",
+            )
+        else:
+            error_text = "Context refresh failed and no prior CEO context is available, so I did not send this to the CEO team.\n" + detail[-800:]
+            append_message(sm, session["_id"], "system", error_text)
+            send_message(chat_id, error_text)
+            return
 
     try:
-        prompt = build_prompt(session, text)
+        prompt = build_prompt(session, text, context_warning=context_warning)
         reply = run_remote_ceo_reply(prompt)
         append_message(
             sm,
@@ -583,25 +599,31 @@ def poll_once(sm) -> int:
             continue
 
         message, text = extract_message_text(update)
-        if not message:
-            update_bridge_state(sm, {"last_update_id": update_id})
-            continue
+        chat_id = message.get("chat", {}).get("id") if message else None
+        try:
+            if not message:
+                continue
 
-        chat_id = message.get("chat", {}).get("id")
-        if chat_id not in ALLOWED_CHAT_IDS:
-            log.warning("Skipping unauthorized update_id=%s chat_id=%s", update_id, chat_id)
-            update_bridge_state(sm, {"last_update_id": update_id})
-            continue
+            if chat_id not in ALLOWED_CHAT_IDS:
+                log.warning("Skipping unauthorized update_id=%s chat_id=%s", update_id, chat_id)
+                continue
 
-        if not text:
-            send_message(chat_id, "Text messages only for now.")
-            update_bridge_state(sm, {"last_update_id": update_id})
+            if not text:
+                send_message(chat_id, "Text messages only for now.")
+                processed += 1
+                continue
+
+            handle_text_message(sm, update, message, text.strip())
             processed += 1
-            continue
-
-        handle_text_message(sm, update, message, text.strip())
-        update_bridge_state(sm, {"last_update_id": update_id})
-        processed += 1
+        except Exception:
+            log.exception("Failed processing update_id=%s chat_id=%s", update_id, chat_id)
+            if chat_id in ALLOWED_CHAT_IDS:
+                try:
+                    send_message(chat_id, "The CEO Telegram bridge hit an internal error before replying.")
+                except Exception:
+                    log.exception("Failed to send fallback error for update_id=%s", update_id)
+        finally:
+            update_bridge_state(sm, {"last_update_id": update_id})
 
     return processed
 
