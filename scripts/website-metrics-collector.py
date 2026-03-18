@@ -34,26 +34,19 @@ COSMOS_URI = os.environ["COSMOS_CONNECTION_STRING"]
 RETENTION_DAYS = 90
 MAX_REASONABLE_DURATION_SECONDS = 60 * 60
 
-# Bot IP prefixes to exclude (mirrors visitor-track.mjs and system-monitor.mjs)
-BOT_IP_PREFIXES = [
-    "3.2", "3.6", "13.2", "18.", "34.", "35.8", "35.9",
-    "44.2", "52.5", "52.6", "54.2", "54.6",
-    "173.252.", "31.13.", "66.220.", "69.63.", "69.171.",
-    "157.240.", "129.134.", "185.89.", "204.15.20.",
-]
-
 # Owner/team IPs to exclude
 EXCLUDED_IPS = {"72.14.201.170", "220.233.219.90", "35.189.1.73"}
 
+# Bot user-agent patterns (IP-based filtering removed — it was killing Facebook
+# in-app browser traffic which routes through AWS/GCP infrastructure)
+BOT_UA_REGEX = "bot|crawler|spider|HeadlessChrome|Puppeteer|Selenium|curl|wget|python-requests|Googlebot|facebookexternalhit|Facebot|GPTBot|ClaudeBot"
+
 
 def build_bot_filter():
-    """Build a MongoDB filter that excludes bot IPs and owner IPs."""
-    regex = "^(" + "|".join(p.replace(".", "\\.") for p in BOT_IP_PREFIXES) + ")"
+    """Build a MongoDB filter that excludes bots (by UA) and owner IPs."""
     return {
-        "ip_raw": {
-            "$not": {"$regex": regex},
-            "$nin": list(EXCLUDED_IPS),
-        }
+        "ip_raw": {"$nin": list(EXCLUDED_IPS)},
+        "user_agent": {"$not": {"$regex": BOT_UA_REGEX, "$options": "i"}},
     }
 
 
