@@ -29,7 +29,13 @@ BUILDER_TELEGRAM_ROLE=builder
 BUILDER_TELEGRAM_POLL_SECONDS=2
 BUILDER_TELEGRAM_TIMEOUT_SECONDS=1800
 BUILDER_TELEGRAM_HISTORY_LIMIT=12
+BUILDER_TELEGRAM_CODEX_UNSANDBOXED=1
 ```
+
+`BUILDER_TELEGRAM_CODEX_UNSANDBOXED=1` switches Telegram builder runs from `codex exec --full-auto`
+to `codex exec --dangerously-bypass-approvals-and-sandbox`. Use it on this VM when the implementor
+needs live DNS/network access or headless Chrome permissions that are blocked by the default Codex
+sandbox. Leave it unset or `0` to keep the safer sandboxed launch mode.
 
 ## Commands in Telegram
 
