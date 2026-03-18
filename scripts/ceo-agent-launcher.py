@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -944,6 +945,21 @@ def main() -> None:
         return
 
     try:
+        # Always run a fresh context export before launching agents
+        print("Running fresh context export...")
+        export_result = subprocess.run(
+            ["/home/fields/venv/bin/python3", "scripts/ceo-context-export.py"],
+            capture_output=True, text=True, timeout=600,
+            cwd=str(Path(__file__).resolve().parent.parent),
+            env={**os.environ},
+        )
+        if export_result.returncode == 0:
+            print("Context export completed successfully.")
+        else:
+            log(f"Context export failed (exit {export_result.returncode}), proceeding with existing context")
+            if export_result.stderr:
+                log(f"  stderr: {export_result.stderr.strip()[:300]}")
+
         update_remote_repos()
         deploy_prompts()
         manifest = read_remote_context_manifest()
