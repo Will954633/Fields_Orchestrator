@@ -12,6 +12,7 @@ import os
 import sys
 import time
 import argparse
+import json
 import urllib.request
 import urllib.error
 import ssl
@@ -49,6 +50,14 @@ ENDPOINTS = [
     {"path": "/api/market-insights?suburb=robina", "expect_key": None},
 ]
 
+CONTRACT_PAIRS = [
+    {
+        "name": "recently_sold_public_contract",
+        "health_path": "/api/v1/recently-sold/health",
+        "data_path": "/api/v1/properties/recently-sold",
+    },
+]
+
 # Generous timeout — some Cosmos queries are slow on cold start
 REQUEST_TIMEOUT = 15
 
@@ -69,6 +78,20 @@ def check_endpoint(endpoint_info):
 
             # Healthy = 2xx status and non-empty body
             healthy = 200 <= status_code < 300 and len(body) > 2
+            validation_error = None
+
+            expect_key = endpoint_info.get("expect_key")
+            if healthy and expect_key:
+                try:
+                    payload = json.loads(body)
+                except json.JSONDecodeError as exc:
+                    healthy = False
+                    validation_error = f"invalid json: {exc}"
+                else:
+                    value = payload.get(expect_key)
+                    if not value:
+                        healthy = False
+                        validation_error = f"missing_or_empty_key:{expect_key}"
 
             return {
                 "endpoint": path,
@@ -77,6 +100,8 @@ def check_endpoint(endpoint_info):
                 "healthy": healthy,
                 "checked_at": datetime.now(timezone.utc),
                 "body_length": len(body),
+                "expected_key": expect_key,
+                "validation_error": validation_error,
             }
     except urllib.error.HTTPError as e:
         elapsed_ms = int((time.monotonic() - start) * 1000)
@@ -87,6 +112,7 @@ def check_endpoint(endpoint_info):
             "healthy": False,
             "checked_at": datetime.now(timezone.utc),
             "error": str(e),
+            "expected_key": endpoint_info.get("expect_key"),
         }
     except Exception as e:
         elapsed_ms = int((time.monotonic() - start) * 1000)
@@ -97,7 +123,30 @@ def check_endpoint(endpoint_info):
             "healthy": False,
             "checked_at": datetime.now(timezone.utc),
             "error": str(e),
+            "expected_key": endpoint_info.get("expect_key"),
         }
+
+
+def apply_contract_checks(results):
+    """Mark paired health/data routes as mismatched when they diverge."""
+    by_endpoint = {row["endpoint"]: row for row in results}
+    for pair in CONTRACT_PAIRS:
+        health = by_endpoint.get(pair["health_path"])
+        data = by_endpoint.get(pair["data_path"])
+        if not health or not data:
+            continue
+
+        mismatch = bool(health.get("healthy")) != bool(data.get("healthy"))
+        issue = None
+        if mismatch:
+            issue = f"contract_mismatch:{pair['health_path']} vs {pair['data_path']}"
+
+        for row, peer in ((health, data), (data, health)):
+            row["contract_name"] = pair["name"]
+            row["paired_endpoint"] = peer["endpoint"]
+            row["contract_ok"] = not mismatch
+            # Always set contract_issue (None clears stale mismatch flags)
+            row["contract_issue"] = issue
 
 
 def main():
@@ -119,6 +168,13 @@ def main():
         print(f"  [{status}] {ep['path']} — {code} in {ms}ms")
         results.append(result)
 
+    apply_contract_checks(results)
+
+    for result in results:
+        issue = result.get("contract_issue") or result.get("validation_error")
+        if issue:
+            print(f"    ↳ {result['endpoint']}: {issue}")
+
     healthy = sum(1 for r in results if r["healthy"])
     total = len(results)
     print(f"\nSummary: {healthy}/{total} healthy")
@@ -131,13 +187,24 @@ def main():
     client = MongoClient(conn_str)
     col = client["system_monitor"]["api_health_checks"]
 
-    # Upsert by endpoint so we don't accumulate stale records forever
+    # Replace per-endpoint: delete old docs for this endpoint, then insert fresh
+    # This avoids Cosmos DB RU throttle on bulk delete of accumulated duplicates
+    import time as _time
     for r in results:
-        col.update_one(
-            {"endpoint": r["endpoint"]},
-            {"$set": r},
-            upsert=True,
-        )
+        ep = r["endpoint"]
+        try:
+            # Delete in small batches to stay within Cosmos RU limits
+            while col.delete_one({"endpoint": ep}).deleted_count > 0:
+                pass  # Keep deleting until no more docs for this endpoint
+        except Exception:
+            _time.sleep(0.5)
+            try:
+                while col.delete_one({"endpoint": ep}).deleted_count > 0:
+                    pass
+            except Exception:
+                pass
+        col.insert_one(r)
+        _time.sleep(0.1)  # Spread RU consumption
 
     client.close()
     print(f"Wrote {len(results)} health check results to system_monitor.api_health_checks")
