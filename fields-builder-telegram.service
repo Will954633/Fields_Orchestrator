@@ -9,6 +9,7 @@ User=projects
 Group=projects
 WorkingDirectory=/home/fields/Fields_Orchestrator
 EnvironmentFile=/home/fields/Fields_Orchestrator/.env
+Environment=BUILDER_TELEGRAM_CODEX_UNSANDBOXED=1
 ExecStart=/home/fields/venv/bin/python3 /home/fields/Fields_Orchestrator/scripts/builder-telegram-bridge.py
 Restart=always
 RestartSec=10
