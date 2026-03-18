@@ -102,7 +102,7 @@ def parse_chat_ids(raw: str) -> set[int]:
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
 ALLOWED_CHAT_IDS = parse_chat_ids(os.environ["TELEGRAM_ALLOWED_CHAT_IDS"]) if os.environ.get("TELEGRAM_ALLOWED_CHAT_IDS") else set()
 COSMOS_URI = os.environ.get("COSMOS_CONNECTION_STRING", "").strip()
-CEO_MODEL = os.environ.get("CEO_TELEGRAM_MODEL", "gpt-5.1-codex").strip() or "gpt-5.1-codex"
+CEO_MODEL = os.environ.get("CEO_TELEGRAM_MODEL", "gpt-5.4-codex").strip() or "gpt-5.4-codex"
 REMOTE_HOST = os.environ.get("CEO_TELEGRAM_REMOTE_HOST", "fields-orchestrator-vm@35.201.6.222").strip()
 REMOTE_CONTEXT_DIR = os.environ.get(
     "CEO_TELEGRAM_REMOTE_CONTEXT_DIR",
