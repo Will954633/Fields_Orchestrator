@@ -57,6 +57,8 @@ STATE_COLL = "ceo_chat_bridge_state"
 JOB_COLL = "ceo_chat_jobs"
 MAX_TELEGRAM_MESSAGE = 4000
 JOB_HEARTBEAT_SECONDS = 15
+JOB_TYPE_ADVISORY = "advisory_reply"
+JOB_TYPE_BATCH = "batch_ceo_run"
 MODEL_ALIASES = {
     "gpt-5.4-codex": "gpt-5.4",
 }
@@ -134,6 +136,7 @@ REMOTE_TIMEOUT_SECONDS = parse_int_env("CEO_TELEGRAM_REMOTE_TIMEOUT_SECONDS", 12
 HISTORY_LIMIT = parse_int_env("CEO_TELEGRAM_HISTORY_LIMIT", 12)
 TELEGRAM_TIMEOUT_SECONDS = 35
 REMOTE_BROWSER_TIMEOUT_SECONDS = parse_int_env("CEO_TELEGRAM_REMOTE_BROWSER_TIMEOUT_SECONDS", 180)
+CEO_BATCH_TIMEOUT_SECONDS = parse_int_env("CEO_TELEGRAM_BATCH_TIMEOUT_SECONDS", 3600)
 BROWSER_TRIGGER_TERMS = (
     "website", "site", "browser", "landing page", "landing pages", "ui", "ux", "screenshot",
     "console", "scroll", "for-sale", "for sale", "discover", "analyse", "analyze",
@@ -255,7 +258,8 @@ def workflow_reply_markup() -> dict[str, Any]:
     return {
         "keyboard": [
             [{"text": "/status"}, {"text": "/sync"}],
-            [{"text": "/task"}, {"text": "/reset"}],
+            [{"text": "/task"}, {"text": "/run_ceo"}],
+            [{"text": "/reset"}],
         ],
         "resize_keyboard": True,
         "is_persistent": True,
@@ -270,6 +274,7 @@ def register_bot_commands() -> None:
         {"command": "status", "description": "Show bridge status"},
         {"command": "sync", "description": "Refresh CEO context now"},
         {"command": "task", "description": "Create a durable founder request"},
+        {"command": "run_ceo", "description": "Run a fresh CEO batch review"},
         {"command": "reset", "description": "Start a new CEO chat session"},
     ]
     try:
@@ -449,13 +454,23 @@ def get_active_job(sm, session: dict[str, Any]) -> dict[str, Any] | None:
     return job
 
 
-def create_job(sm, session: dict[str, Any], founder_message: str) -> dict[str, Any]:
+def create_job(
+    sm,
+    session: dict[str, Any],
+    founder_message: str,
+    *,
+    job_type: str = JOB_TYPE_ADVISORY,
+    progress_message: str | None = None,
+) -> dict[str, Any]:
     now = iso_now()
     job_id = f"{session['_id']}_{aest_now().strftime('%H%M%S')}"
+    if progress_message is None:
+        progress_message = "Queued for CEO response." if job_type == JOB_TYPE_ADVISORY else "Queued for full CEO batch run."
     doc = {
         "_id": job_id,
         "session_id": session["_id"],
         "telegram_chat_id": session["telegram_chat_id"],
+        "job_type": job_type,
         "status": "queued",
         "founder_message": founder_message,
         "created_at": now,
@@ -463,7 +478,7 @@ def create_job(sm, session: dict[str, Any], founder_message: str) -> dict[str, A
         "started_at": None,
         "finished_at": None,
         "last_heartbeat_at": None,
-        "progress_message": "Queued for CEO response.",
+        "progress_message": progress_message,
         "error_text": None,
     }
     sm[JOB_COLL].insert_one(doc)
@@ -511,8 +526,9 @@ def elapsed_label(started_at: str | None) -> str:
 
 
 def build_job_status_text(job: dict[str, Any]) -> str:
+    label = "CEO batch run" if job.get("job_type") == JOB_TYPE_BATCH else "CEO team job"
     return (
-        f"CEO team job status: {job.get('status', 'unknown')}\n"
+        f"{label} status: {job.get('status', 'unknown')}\n"
         f"Started: {job.get('started_at') or 'queued'}\n"
         f"Elapsed: {elapsed_label(job.get('started_at'))}\n"
         f"Progress: {job.get('progress_message') or 'Waiting for status.'}"
@@ -837,6 +853,152 @@ def format_status(sm, session: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def parse_launcher_run_dir(output: str) -> Path | None:
+    match = re.search(r"Local artifacts:\s*(.+)", output)
+    if match:
+        return Path(match.group(1).strip())
+    latest_path = ROOT / "artifacts" / "ceo-runs" / "LATEST_RUN.txt"
+    if latest_path.exists():
+        candidate = latest_path.read_text(encoding="utf-8").strip()
+        if candidate:
+            return Path(candidate)
+    return None
+
+
+def extract_questions_for_run(markdown_text: str, run_id: str) -> list[str]:
+    questions: list[str] = []
+    for chunk in re.split(r"(?m)^## ", markdown_text):
+        if run_id not in chunk:
+            continue
+        block = f"## {chunk}" if not chunk.startswith("## ") else chunk
+        match = re.search(r"(?ms)^### Questions for Will\s*\n(.*?)(?=^### |\Z)", block)
+        if not match:
+            continue
+        for line in match.group(1).splitlines():
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if stripped.startswith("- "):
+                questions.append(stripped[2:].strip())
+            elif not stripped.startswith("#"):
+                questions.append(stripped)
+    return questions
+
+
+def collect_batch_run_questions(run_id: str) -> list[tuple[str, list[str]]]:
+    responses_dir = FOUNDER_REQUESTS_DIR / "responses"
+    if not responses_dir.exists():
+        return []
+
+    findings: list[tuple[str, list[str]]] = []
+    for path in sorted(responses_dir.glob("*.md")):
+        text = path.read_text(encoding="utf-8")
+        if run_id not in text:
+            continue
+        questions = extract_questions_for_run(text, run_id)
+        if questions:
+            findings.append((path.name, questions))
+    return findings
+
+
+def read_batch_run_summary(run_dir: Path) -> tuple[str, str]:
+    run_id = run_dir.name
+    run_json_path = run_dir / "run.json"
+    run_status = "unknown"
+    if run_json_path.exists():
+        try:
+            payload = json.loads(run_json_path.read_text(encoding="utf-8"))
+            run_status = str(payload.get("run_status") or run_status)
+            run_id = str(payload.get("run_id") or run_id)
+        except json.JSONDecodeError:
+            pass
+
+    summary_path = run_dir / "summary.md"
+    summary_line = "Summary file not found."
+    if summary_path.exists():
+        for line in summary_path.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if stripped.startswith("**Summary:** "):
+                summary_line = stripped.replace("**Summary:** ", "", 1)
+                break
+    return run_id, f"Run status: `{run_status}`\nArtifacts: `{run_dir}`\nSummary: {summary_line}"
+
+
+def process_batch_run_job(sm, session: dict[str, Any], job: dict[str, Any]) -> None:
+    update_job(
+        sm,
+        job["_id"],
+        {
+            "last_heartbeat_at": iso_now(),
+            "progress_message": "Refreshing CEO context for a full batch run.",
+        },
+    )
+    ok, detail = maybe_refresh_context(sm, force=True)
+    if not ok:
+        raise RuntimeError(f"CEO context refresh failed before batch run.\n{detail[-1200:]}")
+
+    update_job(
+        sm,
+        job["_id"],
+        {
+            "last_heartbeat_at": iso_now(),
+            "progress_message": "Running the CEO batch launcher.",
+        },
+    )
+    result = run_local_command([sys.executable, str(ROOT / "scripts/ceo-agent-launcher.py")], timeout=CEO_BATCH_TIMEOUT_SECONDS)
+    combined_output = "\n".join(part for part in [result.stdout, result.stderr] if part)
+    if result.returncode != 0:
+        raise RuntimeError((combined_output or "CEO batch launcher failed")[-2000:])
+
+    run_dir = parse_launcher_run_dir(combined_output)
+    if run_dir is None or not run_dir.exists():
+        raise RuntimeError("CEO batch launcher completed but no local artifact directory could be resolved.")
+
+    run_id, summary_text = read_batch_run_summary(run_dir)
+    questions = collect_batch_run_questions(run_id)
+
+    reply_lines = [
+        "CEO batch run finished.",
+        f"Run: `{run_id}`",
+        summary_text,
+    ]
+    reply = "\n".join(reply_lines)
+    append_message(
+        sm,
+        session["_id"],
+        "assistant",
+        reply,
+        {"job_type": JOB_TYPE_BATCH, "run_id": run_id, "artifact_dir": str(run_dir)},
+    )
+    sm[SESSION_COLL].update_one(
+        {"_id": session["_id"]},
+        {"$set": {"last_remote_status": "success", "last_remote_run_at": iso_now()}},
+    )
+    update_job(
+        sm,
+        job["_id"],
+        {
+            "status": "completed",
+            "finished_at": iso_now(),
+            "last_heartbeat_at": iso_now(),
+            "progress_message": "CEO batch run finished.",
+            "error_text": None,
+        },
+    )
+    clear_active_job(sm, session["_id"], job["_id"])
+    send_message(job["telegram_chat_id"], reply)
+
+    if questions:
+        blocks = ["Clarification needed from you:"]
+        for filename, prompts in questions:
+            blocks.append(f"\n{filename}")
+            for prompt in prompts:
+                blocks.append(f"- {prompt}")
+        send_message(job["telegram_chat_id"], "\n".join(blocks))
+    else:
+        send_message(job["telegram_chat_id"], "No clarification questions were generated in this CEO run.")
+
+
 def handle_command(sm, chat: dict[str, Any], user: dict[str, Any], text: str) -> bool:
     stripped = text.strip()
     command, _, remainder = stripped.partition(" ")
@@ -849,7 +1011,7 @@ def handle_command(sm, chat: dict[str, Any], user: dict[str, Any], text: str) ->
             chat["id"],
             "CEO Telegram bridge is ready. Plain text messages stay in advisory chat mode.\n"
             "Create a durable founder request with `/task ...`.\n"
-            "Commands: `/status`, `/reset`, `/sync`.",
+            "Commands: `/status`, `/sync`, `/task`, `/run_ceo`, `/reset`.",
         )
         return True
 
@@ -880,6 +1042,31 @@ def handle_command(sm, chat: dict[str, Any], user: dict[str, Any], text: str) ->
         )
         append_message(sm, session["_id"], "assistant", reply, {"mode": "task_create", "path": str(path)})
         send_message(chat["id"], reply)
+        return True
+
+    if command == "/run_ceo":
+        active_job = get_active_job(sm, session)
+        if active_job:
+            send_message(
+                chat["id"],
+                build_job_status_text(active_job) + "\n\nWait for the current job to finish before starting a fresh CEO batch run.",
+            )
+            return True
+        new_session = reset_session(sm, chat, user)
+        kickoff = "Run a fresh CEO batch review across all operational data and founder request threads."
+        append_message(sm, new_session["_id"], "system", kickoff, {"mode": "batch_run_trigger"})
+        job = create_job(sm, new_session, kickoff, job_type=JOB_TYPE_BATCH)
+        sm[SESSION_COLL].update_one(
+            {"_id": new_session["_id"]},
+            {"$set": {"last_remote_status": "queued", "updated_at": iso_now()}},
+        )
+        send_message(
+            chat["id"],
+            f"Started a new CEO session: {new_session['_id']}\nRunning a full CEO batch review now. I’ll send the artifact path and any clarification questions here.",
+        )
+        send_chat_action(chat["id"])
+        log.info("Queued CEO batch Telegram job %s for session %s", job["_id"], new_session["_id"])
+        launch_background_job(job["_id"])
         return True
 
     return False
@@ -933,7 +1120,7 @@ def handle_text_message(sm, update: dict[str, Any], message: dict[str, Any], tex
         send_message(chat_id, reply)
         return
 
-    job = create_job(sm, session, text)
+    job = create_job(sm, session, text, job_type=JOB_TYPE_ADVISORY)
     sm[SESSION_COLL].update_one(
         {"_id": session["_id"]},
         {"$set": {"last_remote_status": "queued", "updated_at": iso_now()}},
@@ -966,9 +1153,13 @@ def process_job(job_id: str) -> None:
                 "status": "running",
                 "started_at": iso_now(),
                 "last_heartbeat_at": iso_now(),
-                "progress_message": "Refreshing CEO context.",
+                "progress_message": "Refreshing CEO context." if job.get("job_type") != JOB_TYPE_BATCH else "Starting CEO batch run.",
             },
         )
+
+        if job.get("job_type") == JOB_TYPE_BATCH:
+            process_batch_run_job(sm, session, job)
+            return
 
         ok, detail = maybe_refresh_context(sm, force=False)
         context_warning = None
