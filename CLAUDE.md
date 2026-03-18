@@ -211,8 +211,12 @@ node scripts/site-inspector.js --url /for-sale,/market,/property/SOME_ID
 # Specific element
 node scripts/site-inspector.js --url /for-sale --element ".property-card"
 
+# Scripted interaction flow
+node scripts/site-inspector.js --url /for-sale --actions-file /tmp/site-actions.json
+
 # Output is always at /tmp/site-inspect/<slug>/
 #   screenshot.png, page-text.txt, console.log, network-errors.log, page-info.json
+#   action-log.json (when --actions-file is used)
 ```
 
 ---
