@@ -51,11 +51,11 @@ def main():
     for suburb in TARGET_SUBURBS:
         try:
             col = data_db[suburb]
-            total = col.count_documents({})
+            total = col.count_documents({"listing_status": "for_sale"})
 
-            # Find the most recently updated document as proxy for last scrape time
+            # Find the most recently updated for-sale document as proxy for last scrape time
             # Fetch a sample and sort in Python to avoid Cosmos index requirement
-            sample = list(col.find({}, {"last_updated": 1}).limit(200))
+            sample = list(col.find({"listing_status": "for_sale"}, {"last_updated": 1}).limit(200))
             sample.sort(key=lambda d: d.get("last_updated") or "", reverse=True)
             last_scraped_at = sample[0].get("last_updated") if sample else None
 
@@ -70,8 +70,11 @@ def main():
             # Compute status based on how recently data was scraped
             # Pipeline runs nightly so anything under 26h is healthy
             if last_scraped_at:
-                last_dt = last_scraped_at if hasattr(last_scraped_at, 'tzinfo') else None
-                if last_dt and last_dt.tzinfo:
+                last_dt = last_scraped_at
+                # Handle timezone-naive datetimes from Cosmos DB (treat as UTC)
+                if last_dt and not getattr(last_dt, 'tzinfo', None):
+                    last_dt = last_dt.replace(tzinfo=timezone.utc)
+                if last_dt:
                     age_hours = (checked_at - last_dt).total_seconds() / 3600
                 else:
                     age_hours = None
