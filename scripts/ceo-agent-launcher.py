@@ -31,6 +31,7 @@ REMOTE_DIR = "/home/fields-orchestrator-vm/ceo-agents"
 CODEX_MODEL = "gpt-5.4"
 TEAM_PLAN_PATH = Path(__file__).resolve().parent.parent / "config" / "codex_team_plan.yaml"
 LOCAL_RUNS_DIR = Path(__file__).resolve().parent.parent / "artifacts" / "ceo-runs"
+LOCAL_PROPOSALS_DIR = Path(__file__).resolve().parent.parent / "proposals"
 FOUNDER_REQUESTS_DIR = Path(__file__).resolve().parent.parent / "ceo-founder-requests"
 AGENT_MEMORY_DIR = Path(__file__).resolve().parent.parent / "ceo-agent-memory"
 DATE_STR = now_aest().strftime("%Y-%m-%d")
@@ -871,6 +872,17 @@ def write_local_run_artifacts(
     latest_dir.mkdir(parents=True, exist_ok=True)
     (latest_dir / "LATEST_RUN.txt").write_text(f"{run_dir}\n", encoding="utf-8")
     (latest_dir / "LATEST_SUMMARY.md").write_text(summary_path.read_text(encoding="utf-8"), encoding="utf-8")
+
+    # Mirror proposals to a stable root-level proposals/ directory so the
+    # chief-of-staff agent (and the founder) can find them without digging
+    # through timestamped run artifact directories.
+    LOCAL_PROPOSALS_DIR.mkdir(parents=True, exist_ok=True)
+    for proposal in proposals:
+        agent = proposal.get("agent", "unknown")
+        filename = f"{DATE_STR}_{agent}.json"
+        (LOCAL_PROPOSALS_DIR / filename).write_text(json.dumps(proposal, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
+    (LOCAL_PROPOSALS_DIR / "LATEST_RUN.txt").write_text(f"{run_id}\n", encoding="utf-8")
+
     return run_dir
 
 
