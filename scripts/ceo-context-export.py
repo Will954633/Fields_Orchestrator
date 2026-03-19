@@ -39,7 +39,7 @@ EXPORT_ERRORS: list[str] = []
 REQUIRED_JSON_EXPORTS = {
     "metrics/orchestrator_health.json": "Tuesday CEO reviews must verify daily and weekly orchestrator health.",
     "metrics/ad_performance_7d.json": "Ad telemetry is required for growth analysis.",
-    # metrics/website_metrics_7d.json REMOVED 2026-03-19: website analytics moved to PostHog
+    "metrics/website_metrics_7d.json": "Website telemetry from PostHog — visitor sessions, sources, experiments.",
     "metrics/data_coverage.json": "Coverage telemetry is required for product and data-trust analysis.",
     "metrics/active_listings.json": "Listing counts are required for product and growth context.",
     "metrics/recent_pipeline_runs.json": "Pipeline run history is required for engineering analysis.",
@@ -48,7 +48,7 @@ REQUIRED_JSON_EXPORTS = {
 REQUIRED_EXPORT_VALIDATORS = {
     "metrics/orchestrator_health.json": lambda payload: bool(payload.get("daily") and payload.get("weekly")),
     "metrics/ad_performance_7d.json": lambda payload: bool(payload.get("facebook") or payload.get("google")),
-    # metrics/website_metrics_7d.json REMOVED 2026-03-19: website analytics moved to PostHog
+    "metrics/website_metrics_7d.json": lambda payload: bool(payload.get("source") == "posthog"),
     "metrics/data_coverage.json": lambda payload: bool(payload),
     "metrics/active_listings.json": lambda payload: bool(payload.get("counts")),
     "metrics/recent_pipeline_runs.json": lambda payload: bool(payload.get("runs")),
@@ -509,7 +509,7 @@ def export_metrics_and_memory() -> None:
         "metrics/active_listings.json": query_json(["/home/fields/venv/bin/python3", "scripts/ceo-query-broker.py", "active-listings"]),
         "metrics/recent_pipeline_runs.json": query_json(["/home/fields/venv/bin/python3", "scripts/ceo-query-broker.py", "pipeline-runs", "--days", "7", "--limit", "20"]),
         "metrics/ad_performance_7d.json": query_json(["/home/fields/venv/bin/python3", "scripts/ceo-query-broker.py", "ad-metrics", "--days", "7", "--limit", "50"]),
-        "metrics/website_metrics_7d.json": {"status": "deprecated", "note": "Website analytics migrated to PostHog on 2026-03-19. Visit posthog.com for live visitor data, source attribution, and A/B experiment results."},
+        "metrics/website_metrics_7d.json": query_json(["/home/fields/venv/bin/python3", "scripts/ceo-query-broker.py", "website-metrics", "--days", "7"]),
         "metrics/data_coverage.json": query_json(["/home/fields/venv/bin/python3", "-c", _coverage_query_script()]),
         "metrics/ops_summary.json": query_json(["/home/fields/venv/bin/python3", "scripts/ceo-query-broker.py", "ops-summary"]),
         "metrics/cost_summary_30d.json": query_json(["/home/fields/venv/bin/python3", "scripts/ceo-query-broker.py", "cost-summary", "--days", "30"]),
