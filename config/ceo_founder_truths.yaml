@@ -118,3 +118,39 @@ telemetry_slas:
   context_export_max_age_hours: 12
   scraper_freshness_max_age_hours: 12
   blank_export_policy: "abort_agent_run"
+
+known_resolved_issues:
+  updated_at: "2026-03-19"
+  note: "Do NOT re-flag these. Verify fixes are holding instead."
+  items:
+    - id: "step_106_zombies"
+      resolved: "2026-03-19"
+      description: "64 orphaned process_runs records with status 'running' caused OPS to show 4 concurrent step 106 runs. Fixed by auto-cleanup in CEO pre-flight export and failed_stale filtering in OPS refresh and broker queries."
+    - id: "recently_sold_route"
+      resolved: "2026-03-18"
+      description: "/api/v1/properties/recently-sold returns 200 with real data. Route paths were added to recently-sold.mjs and properties-for-sale.mjs wildcard was narrowed. Stale contract_issue flag in api_health_checks was also cleared."
+    - id: "ops_counts_inflated"
+      resolved: "2026-03-18"
+      description: "OPS was counting all records instead of listing_status='for_sale'. Fixed in refresh-ops-context.py. OPS now shows correct counts (e.g. Robina 45, not 11,896)."
+    - id: "facebook_attribution"
+      resolved: "2026-03-18"
+      description: "Facebook sessions were classified as 'direct' due to self-referral entry_referrer and missing utm_id check. Fixed in website-metrics-collector.py."
+    - id: "google_ads_attribution"
+      resolved: "2026-03-18"
+      description: "Google Ads clicks invisible because tracker only checked gclid, not gad_source/gbraid. Fixed in tracker.js and website-metrics-collector.py. Note: Google Ads campaigns are currently PAUSED, so 0 Google sessions is expected."
+    - id: "experiment_variant_race"
+      resolved: "2026-03-18"
+      description: "$setOnInsert race condition in visitor-track.mjs caused active_variants to always be null. Fixed by removing active_variants from $setOnInsert. Only affects NEW sessions — old sessions will not retroactively get variant data."
+
+data_context_notes:
+  effective_date: "2026-03-19"
+  note: "Check these BEFORE flagging any telemetry anomaly as a current bug."
+  items:
+    - key: "google_ads_paused"
+      detail: "All Google Ads campaigns are paused by Will. 0 Google sessions in the 7-day window is expected, not a tracking failure."
+    - key: "facebook_attribution_history"
+      detail: "Facebook attribution was fixed on 2026-03-18. Days before Mar 18 show incorrect or zero Facebook session counts. The 7-day window will contain pre-fix data until Mar 25. Weight analysis toward Mar 19+ data only."
+    - key: "experiment_variant_backfill"
+      detail: "Experiment variant fix deployed 2026-03-18. Sessions before that date have null variant data. Do not treat missing variants on pre-Mar-18 sessions as a current problem. Both experiments are now marked early_blocked."
+    - key: "metrics_window_caveat"
+      detail: "The 7-day metrics window includes pre-fix data from before Mar 18. Treat pre-fix days as unreliable for source attribution, variant analysis, and session counts."
