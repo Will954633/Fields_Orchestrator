@@ -377,9 +377,9 @@ processes:
 
 # Execution order (processes will run in this order based on schedule)
 # Note: Schedule manager determines which processes run based on day of week
-# - Monday-Saturday: 101, 103, 111, 112, 105, 106, 6, 11, 12, 13, 14, 16, 15, 17, 18, 109, 107 (Robina, Varsity Lakes, Burleigh Waters only + coverage check + audit)
-# - Sunday: 102, 104, 101, 103, 111, 112, 105, 106, 6, 11, 12, 13, 14, 16, 15, 17, 18, 109, 107 (all suburbs + target market + coverage check + audit)
-execution_order: [101, 102, 103, 104, 111, 113, 110, 112, 105, 106, 108, 6, 11, 12, 13, 14, 16, 15, 17, 19, 18, 109, 107]
+# - Monday-Saturday: 101, 103, 111, 113, 114, 112, 105, 106, 6, 11, 12, 13, 14, 16, 15, 17, 18, 109, 107 (Robina, Varsity Lakes, Burleigh Waters only + coverage check + audit)
+# - Sunday: 102, 104, 101, 103, 111, 113, 114, 112, 105, 106, 6, 11, 12, 13, 14, 16, 15, 17, 18, 109, 107 (all suburbs + target market + coverage check + audit)
+execution_order: [101, 102, 103, 104, 111, 113, 114, 110, 112, 105, 106, 108, 6, 11, 12, 13, 14, 16, 15, 17, 19, 18, 109, 107]
 
 # Phase descriptions for UI display
 phases:
@@ -396,7 +396,7 @@ phases:
   monitoring_target:
     name: "Sold Monitoring (Target Market)"
     description: "Monitor target market (Robina, Varsity Lakes, Burleigh Waters) for sold properties"
-    steps: [103, 111, 113]
+    steps: [103, 111, 113, 114]
     
   monitoring_other:
     name: "Sold Monitoring (All Suburbs)"
