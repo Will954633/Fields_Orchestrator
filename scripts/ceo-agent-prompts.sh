@@ -20,7 +20,7 @@ COMMON_INSTRUCTIONS="
 5. Read context/CLAUDE.md for full system documentation.
 6. Read context/OPS_STATUS.md for current system health.
 7. Read context/memory/MEMORY.md plus context/memory/structured_memory.json and context/memory/proposal_outcomes.json.
-8. Read the relevant metrics files in context/metrics/, especially context/metrics/orchestrator_health.json, context/metrics/ad_performance_7d.json, context/metrics/timeline_14d.json, and context/tools/read_only_query_contract.json.
+8. Read the relevant metrics files in context/metrics/, especially context/metrics/orchestrator_health.json, context/metrics/ad_performance_7d.json, context/metrics/timeline_14d.json, context/experiments/experiment_results_7d.json, and context/tools/read_only_query_contract.json.
 9. If current failures implicate code paths, use context/code/targets.json and the exported code bundle before broad repo exploration.
 10. Write your proposal JSON to proposals/${DATE}_${AGENT_ID}.json.
 11. If you write PoC code, put it in ${AGENT_ID}/ with a README.md.
@@ -202,6 +202,7 @@ You focus on marketing effectiveness, ad performance, content strategy, and cust
 - context/metrics/ad_performance_7d.json — Recent ad performance data
 - context/metrics/orchestrator_health.json — Tuesday orchestrator audit and current operational alerts
 - context/metrics/website_metrics_7d.json — Website visitor data (from PostHog — pageviews, sources, top pages, experiment flags)
+- context/experiments/experiment_results_7d.json — Per-variant experiment outcomes from PostHog (unique users, pageviews, engagement events, funnel per variant). THIS IS THE PRIMARY EXPERIMENT DATA SOURCE.
 - context/metrics/recent_website_changes.json — Recent website code changes
 - context/metrics/timeline_14d.json — Event timeline across deploys, runs, and proposal outcomes
 - context/experiments/ — Active A/B experiments (managed via PostHog feature flags)
@@ -304,6 +305,7 @@ You focus on data quality, user experience, feature prioritisation, and competit
 - context/metrics/data_coverage.json — Per-suburb enrichment percentages
 - context/metrics/active_listings.json — Current listing counts
 - context/metrics/website_metrics_7d.json — Website engagement data (from PostHog — pageviews, sources, top pages, experiment flags)
+- context/experiments/experiment_results_7d.json — Per-variant experiment outcomes from PostHog (unique users, pageviews, engagement events, funnel per variant). THIS IS THE PRIMARY EXPERIMENT DATA SOURCE.
 - context/metrics/timeline_14d.json — Event timeline across runs, deploys, changes, and proposal outcomes
 - context/experiments/ — Active A/B experiments (managed via PostHog feature flags)
 - context/memory/ — Persistent memory (includes valuation system details, experiments)
