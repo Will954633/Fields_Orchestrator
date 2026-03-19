@@ -302,10 +302,73 @@ def fetch_pipeline_runs(sm, days: int, limit: int) -> dict[str, Any]:
 
 
 def fetch_website_metrics(sm, days: int) -> dict[str, Any]:
-    cutoff = (now_aest() - timedelta(days=days)).strftime("%Y-%m-%d")
-    rows = list(sm["website_daily_metrics"].find({"date": {"$gte": cutoff}}, {"_id": 0}))
-    rows = sort_rows(rows, "date")
-    return {"days": days, "rows": to_jsonable(rows)}
+    """Fetch website analytics from PostHog API (replaced MongoDB CRM tracker 2026-03-19)."""
+    import os, json
+    from urllib.request import Request, urlopen
+
+    api_key = os.environ.get("POSTHOG_PERSONAL_API_KEY", "")
+    project_id = os.environ.get("POSTHOG_PROJECT_ID", "348370")
+    if not api_key:
+        return {"source": "posthog", "error": "POSTHOG_PERSONAL_API_KEY not set", "days": days}
+
+    base = f"https://us.i.posthog.com/api/projects/{project_id}"
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    cutoff = (now_aest() - timedelta(days=days)).isoformat()
+
+    result: dict[str, Any] = {"source": "posthog", "days": days}
+
+    try:
+        # Aggregate events by day using PostHog's query API
+        query_payload = json.dumps({"query": {
+            "kind": "EventsQuery",
+            "select": ["event", "properties.$current_url", "properties.$referring_domain", "properties.utm_source", "timestamp"],
+            "after": cutoff,
+            "limit": 1000,
+            "event": "$pageview",
+        }}).encode()
+        req = Request(f"{base}/query/", data=query_payload, headers=headers, method="POST")
+        with urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read())
+
+        rows = data.get("results", [])
+        columns = data.get("columns", [])
+
+        # Aggregate by day
+        daily: dict[str, dict] = {}
+        sources: dict[str, int] = {}
+        pages: dict[str, int] = {}
+        for row in rows:
+            ts = row[4][:10] if len(row) > 4 and row[4] else "unknown"
+            url = row[1] or ""
+            ref = row[2] or "direct"
+            utm = row[3] or ""
+
+            day = daily.setdefault(ts, {"date": ts, "pageviews": 0})
+            day["pageviews"] += 1
+
+            source = utm if utm else ("facebook" if "facebook" in ref or "fb" in ref else "google" if "google" in ref else ref if ref else "direct")
+            sources[source] = sources.get(source, 0) + 1
+
+            path = url.split("fieldsestate.com.au")[-1].split("?")[0] if "fieldsestate.com.au" in url else url
+            pages[path] = pages.get(path, 0) + 1
+
+        result["daily"] = sorted(daily.values(), key=lambda d: d["date"])
+        result["total_pageviews"] = sum(d["pageviews"] for d in daily.values())
+        result["sources"] = dict(sorted(sources.items(), key=lambda x: -x[1])[:10])
+        result["top_pages"] = dict(sorted(pages.items(), key=lambda x: -x[1])[:15])
+
+        # Get feature flag info for experiments
+        req2 = Request(f"{base}/feature_flags/", headers=headers)
+        with urlopen(req2, timeout=15) as resp2:
+            flags_data = json.loads(resp2.read())
+        flags = [{"key": f["key"], "active": f["active"], "variants": list((f.get("filters", {}).get("multivariate", {}) or {}).get("variants", []))}
+                 for f in flags_data.get("results", []) if f.get("key") in ("for_sale_page_v1", "discover_mode_v1")]
+        result["experiments"] = flags
+
+    except Exception as exc:
+        result["error"] = str(exc)
+
+    return result
 
 
 def fetch_ad_metrics(sm, days: int, limit: int) -> dict[str, Any]:
