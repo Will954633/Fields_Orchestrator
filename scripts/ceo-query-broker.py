@@ -579,7 +579,7 @@ def fetch_collection_counts(sm) -> dict[str, Any]:
         "ceo_tasks",
         "ceo_memory",
         "ceo_proposal_outcomes",
-        "website_daily_metrics",
+        # website_daily_metrics DEPRECATED 2026-03-19: replaced by PostHog
         "website_change_log",
         "website_deploy_events",
         "ad_daily_metrics",
