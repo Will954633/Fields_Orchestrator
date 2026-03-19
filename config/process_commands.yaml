@@ -377,7 +377,7 @@ processes:
     name: "Facebook Ads Metrics Collector"
     description: "Fetches latest Facebook/Meta ad performance data — statuses, spend, impressions, CTR, demographics"
     phase: "ad_metrics"
-    command: "source /home/fields/venv/bin/activate && set -a && source /home/fields/Fields_Orchestrator/.env && set +a && python3 scripts/fb-metrics-collector.py --quick"
+    command: "bash -c 'source /home/fields/venv/bin/activate && set -a && source /home/fields/Fields_Orchestrator/.env && set +a && python3 scripts/fb-metrics-collector.py --quick'"
     working_dir: "/home/fields/Fields_Orchestrator"
     mongodb_activity: "light_write"
     requires_browser: false
@@ -389,7 +389,7 @@ processes:
     name: "Google Ads Metrics Collector"
     description: "Fetches latest Google Ads campaign performance data — statuses, spend, clicks, conversions"
     phase: "ad_metrics"
-    command: "source /home/fields/venv/bin/activate && set -a && source /home/fields/Fields_Orchestrator/.env && set +a && python3 scripts/google-ads-metrics-collector.py --quick"
+    command: "bash -c 'source /home/fields/venv/bin/activate && set -a && source /home/fields/Fields_Orchestrator/.env && set +a && python3 scripts/google-ads-metrics-collector.py --quick'"
     working_dir: "/home/fields/Fields_Orchestrator"
     mongodb_activity: "light_write"
     requires_browser: false
@@ -401,7 +401,7 @@ processes:
     name: "Marketing Stage Tracker"
     description: "Recomputes marketing funnel stage, health indicators, and audience progress from latest ad data"
     phase: "ad_metrics"
-    command: "source /home/fields/venv/bin/activate && set -a && source /home/fields/Fields_Orchestrator/.env && set +a && python3 scripts/marketing-stage-tracker.py"
+    command: "bash -c 'source /home/fields/venv/bin/activate && set -a && source /home/fields/Fields_Orchestrator/.env && set +a && python3 scripts/marketing-stage-tracker.py'"
     working_dir: "/home/fields/Fields_Orchestrator"
     mongodb_activity: "light_write"
     requires_browser: false
