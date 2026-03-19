@@ -29,6 +29,7 @@ ORCHESTRATOR_DIR = Path("/home/fields/Fields_Orchestrator")
 MEMORY_DIR = Path("/home/projects/.claude/projects/-home-fields-Fields-Orchestrator/memory")
 WEBSITE_DIR = Path("/home/fields/Feilds_Website/01_Website")
 FOUNDER_REQUESTS_DIR = ORCHESTRATOR_DIR / "ceo-founder-requests"
+AGENT_MEMORY_DIR = ORCHESTRATOR_DIR / "ceo-agent-memory"
 DRY_RUN = "--dry-run" in sys.argv
 
 SHA_CACHE: dict[str, str] = {}
@@ -38,7 +39,7 @@ EXPORT_ERRORS: list[str] = []
 REQUIRED_JSON_EXPORTS = {
     "metrics/orchestrator_health.json": "Tuesday CEO reviews must verify daily and weekly orchestrator health.",
     "metrics/ad_performance_7d.json": "Ad telemetry is required for growth analysis.",
-    "metrics/website_metrics_7d.json": "Website telemetry is required for experiment and funnel analysis.",
+    # metrics/website_metrics_7d.json REMOVED 2026-03-19: website analytics moved to PostHog
     "metrics/data_coverage.json": "Coverage telemetry is required for product and data-trust analysis.",
     "metrics/active_listings.json": "Listing counts are required for product and growth context.",
     "metrics/recent_pipeline_runs.json": "Pipeline run history is required for engineering analysis.",
@@ -47,7 +48,7 @@ REQUIRED_JSON_EXPORTS = {
 REQUIRED_EXPORT_VALIDATORS = {
     "metrics/orchestrator_health.json": lambda payload: bool(payload.get("daily") and payload.get("weekly")),
     "metrics/ad_performance_7d.json": lambda payload: bool(payload.get("facebook") or payload.get("google")),
-    "metrics/website_metrics_7d.json": lambda payload: bool(payload.get("rows")),
+    # metrics/website_metrics_7d.json REMOVED 2026-03-19: website analytics moved to PostHog
     "metrics/data_coverage.json": lambda payload: bool(payload),
     "metrics/active_listings.json": lambda payload: bool(payload.get("counts")),
     "metrics/recent_pipeline_runs.json": lambda payload: bool(payload.get("runs")),
@@ -254,6 +255,21 @@ def export_memory() -> None:
         gh_api_put(f"memory/{path.name}", read_file(path), f"update: memory/{path.name}")
 
 
+def export_agent_memory() -> None:
+    """Export per-agent persistent memory files (Recommendation 2: OpenClaw pattern)."""
+    print("\n🧠 Exporting agent memory files...")
+    if not AGENT_MEMORY_DIR.exists():
+        print("  [no agent memory directory]")
+        return
+    for agent_dir in sorted(AGENT_MEMORY_DIR.iterdir()):
+        if not agent_dir.is_dir():
+            continue
+        agent_id = agent_dir.name
+        for path in sorted(agent_dir.glob("*.md")):
+            repo_path = f"agent-memory/{agent_id}/{path.name}"
+            gh_api_put(repo_path, read_file(path), f"update: agent memory {agent_id}/{path.name}")
+
+
 def export_founder_truths() -> None:
     print("\n🧭 Exporting founder truths...")
     truths = load_founder_truths()
@@ -319,11 +335,7 @@ def refresh_live_data_sources() -> None:
     _cleanup_stale_process_runs()
 
     collectors = [
-        {
-            "name": "website-metrics-collector (backfill today)",
-            "cmd": ["/home/fields/venv/bin/python3", "scripts/website-metrics-collector.py", "--backfill", "1"],
-            "timeout": 180,
-        },
+        # website-metrics-collector REMOVED 2026-03-19: replaced by PostHog
         {
             "name": "api-health-check",
             "cmd": ["/home/fields/venv/bin/python3", "scripts/api-health-check.py"],
@@ -497,7 +509,7 @@ def export_metrics_and_memory() -> None:
         "metrics/active_listings.json": query_json(["/home/fields/venv/bin/python3", "scripts/ceo-query-broker.py", "active-listings"]),
         "metrics/recent_pipeline_runs.json": query_json(["/home/fields/venv/bin/python3", "scripts/ceo-query-broker.py", "pipeline-runs", "--days", "7", "--limit", "20"]),
         "metrics/ad_performance_7d.json": query_json(["/home/fields/venv/bin/python3", "scripts/ceo-query-broker.py", "ad-metrics", "--days", "7", "--limit", "50"]),
-        "metrics/website_metrics_7d.json": query_json(["/home/fields/venv/bin/python3", "scripts/ceo-query-broker.py", "website-metrics", "--days", "7"]),
+        "metrics/website_metrics_7d.json": {"status": "deprecated", "note": "Website analytics migrated to PostHog on 2026-03-19. Visit posthog.com for live visitor data, source attribution, and A/B experiment results."},
         "metrics/data_coverage.json": query_json(["/home/fields/venv/bin/python3", "-c", _coverage_query_script()]),
         "metrics/ops_summary.json": query_json(["/home/fields/venv/bin/python3", "scripts/ceo-query-broker.py", "ops-summary"]),
         "metrics/cost_summary_30d.json": query_json(["/home/fields/venv/bin/python3", "scripts/ceo-query-broker.py", "cost-summary", "--days", "30"]),
@@ -759,6 +771,7 @@ def main() -> None:
     refresh_live_data_sources()
     export_claude_md()
     export_memory()
+    export_agent_memory()
     export_founder_truths()
     export_founder_requests()
     export_ops_status()
