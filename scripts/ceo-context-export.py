@@ -43,6 +43,7 @@ REQUIRED_JSON_EXPORTS = {
     "metrics/data_coverage.json": "Coverage telemetry is required for product and data-trust analysis.",
     "metrics/active_listings.json": "Listing counts are required for product and growth context.",
     "metrics/recent_pipeline_runs.json": "Pipeline run history is required for engineering analysis.",
+    "experiments/experiment_results_7d.json": "Per-variant experiment outcomes from PostHog — required for product and growth analysis.",
 }
 
 REQUIRED_EXPORT_VALIDATORS = {
@@ -52,6 +53,7 @@ REQUIRED_EXPORT_VALIDATORS = {
     "metrics/data_coverage.json": lambda payload: bool(payload),
     "metrics/active_listings.json": lambda payload: bool(payload.get("counts")),
     "metrics/recent_pipeline_runs.json": lambda payload: bool(payload.get("runs")),
+    "experiments/experiment_results_7d.json": lambda payload: bool(payload.get("source") == "posthog" and payload.get("experiments")),
 }
 
 CODE_TARGETS = [
@@ -520,6 +522,7 @@ def export_metrics_and_memory() -> None:
     structured = query_json(["/home/fields/venv/bin/python3", "-c", _structured_memory_script()])
     metrics["memory/structured_memory.json"] = structured
     metrics["experiments/active_experiments.json"] = structured.get("active_experiments", [])
+    metrics["experiments/experiment_results_7d.json"] = query_json(["/home/fields/venv/bin/python3", "scripts/ceo-query-broker.py", "experiment-results", "--days", "7"])
     metrics["metrics/recent_website_changes.json"] = structured.get("recent_website_changes", {})
     metrics["metrics/recent_proposals.json"] = structured.get("recent_proposals", [])
 
