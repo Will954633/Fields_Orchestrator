@@ -473,6 +473,8 @@ set -e
 rm -rf {agent_workdir}
 mkdir -p {agent_workdir}/proposals {agent_workdir}/{agent_id} {agent_workdir}/agent-memory/{agent_id}
 cp -r {REMOTE_DIR}/context {agent_workdir}/context
+# Pre-populate with existing specialist proposals so chief_of_staff can read them
+cp -f {REMOTE_DIR}/sandbox/proposals/{DATE_STR}_*.json {agent_workdir}/proposals/ 2>/dev/null || true
 cd {agent_workdir}
 bash {REMOTE_DIR}/ceo-agent-prompts.sh {agent_id} {DATE_STR} > /tmp/ceo_prompt_{agent_id}.txt
 set +e
