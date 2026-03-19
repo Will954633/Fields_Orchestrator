@@ -296,7 +296,12 @@ def fetch_orchestrator_health(sm) -> dict[str, Any]:
 def fetch_pipeline_runs(sm, days: int, limit: int) -> dict[str, Any]:
     cutoff = now_aest() - timedelta(days=days)
     run_coll, run_source = get_pipeline_collection(sm)
-    rows = list(run_coll.find({"started_at": {"$gte": cutoff}}, {"_id": 0}).sort("started_at", -1).limit(limit * 5))
+    # Do NOT use MongoDB-level .sort() — CosmosDB returns truncated results
+    # without a dedicated index. Fetch all matching docs and sort in-memory.
+    rows = list(run_coll.find(
+        {"started_at": {"$gte": cutoff}, "status": {"$nin": ["failed_stale"]}},
+        {"_id": 0},
+    ).limit(500))
     rows = sort_rows(rows, "started_at")
     return {"days": days, "limit": limit, "pipeline_source": run_source, "runs": to_jsonable(rows[:limit])}
 
@@ -627,7 +632,7 @@ def fetch_timeline(sm, days: int) -> dict[str, Any]:
     cutoff_date = (now_aest() - timedelta(days=days)).strftime("%Y-%m-%d")
     run_coll, run_source = get_pipeline_collection(sm)
     timeline = {
-        "pipeline_runs": list(run_coll.find({"started_at": {"$gte": now_aest() - timedelta(days=days)}}, {"_id": 0}).limit(50)),
+        "pipeline_runs": list(run_coll.find({"started_at": {"$gte": now_aest() - timedelta(days=days)}, "status": {"$nin": ["failed_stale"]}}, {"_id": 0}).limit(500)),
         "website_deploys": list(sm["website_deploy_events"].find({"timestamp": {"$gte": cutoff_iso}}, {"_id": 0}).limit(50)),
         "website_changes": list(sm["website_change_log"].find({"created_at": {"$gte": cutoff_iso}}, {"_id": 0}).limit(50)),
         "proposal_outcomes": list(sm["ceo_proposal_outcomes"].find({"date": {"$gte": cutoff_date}}, {"_id": 0}).limit(50)),
