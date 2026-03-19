@@ -207,7 +207,7 @@ def fetch_orchestrator_health(sm) -> dict[str, Any]:
     cutoff = current - timedelta(days=14)
     process_rows = list(
         sm["process_runs"].find(
-            {"system": "orchestrator", "started_at": {"$gte": cutoff}},
+            {"system": "orchestrator", "started_at": {"$gte": cutoff}, "status": {"$nin": ["failed_stale"]}},
             {"_id": 0},
         ).limit(500)
     )
