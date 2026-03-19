@@ -203,7 +203,11 @@ def parse_aggregate_row(row):
         "landing_page_views": int(get_action_value(actions, "landing_page_view")),
         "view_content": int(get_action_value(actions, "view_content")),
         "post_engagement": int(get_action_value(actions, "post_engagement")),
+        "post_reaction": int(get_action_value(actions, "post_reaction")),
         "page_engagement": int(get_action_value(actions, "page_engagement")),
+        "like": int(get_action_value(actions, "like")),
+        "comment": int(get_action_value(actions, "comment")),
+        "post_save": int(get_action_value(actions, "onsite_conversion.post_save")),
         "video_views": int(get_action_value(actions, "video_view")),
         "cost_per_link_click": (
             round(spend / link_clicks, 4) if link_clicks > 0 else None
@@ -261,7 +265,11 @@ def parse_daily_row(row):
         "landing_page_views": int(get_action_value(actions, "landing_page_view")),
         "view_content": int(get_action_value(actions, "view_content")),
         "post_engagement": int(get_action_value(actions, "post_engagement")),
+        "post_reaction": int(get_action_value(actions, "post_reaction")),
         "page_engagement": int(get_action_value(actions, "page_engagement")),
+        "like": int(get_action_value(actions, "like")),
+        "comment": int(get_action_value(actions, "comment")),
+        "post_save": int(get_action_value(actions, "onsite_conversion.post_save")),
         "video_views": int(get_action_value(actions, "video_view")),
         "cost_per_view_content": (
             round(float(get_action_value(cost_per, "view_content")), 4)
