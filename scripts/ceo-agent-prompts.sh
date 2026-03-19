@@ -20,6 +20,8 @@ COMMON_INSTRUCTIONS="
 11. Prefer 3 strong findings over broad exploration. Inspect only the minimum code/files needed to support your conclusions.
 12. Every finding and proposal must include confidence, evidence_freshness, blocked_by, and data_gaps.
 13. Your primary deliverable is the JSON file. Produce it even if some context is incomplete.
+14. BEFORE flagging any issue, check ceo_founder_truths.yaml known_resolved_issues. If an issue matches a resolved item, do NOT re-flag it — instead verify the fix is holding and note it as resolved.
+15. BEFORE flagging any telemetry anomaly (zero sessions, missing data, contradictory counts), check ceo_founder_truths.yaml data_context_notes. Pre-fix data in the metrics window is expected and should not be treated as a current bug.
 
 Today's date: ${DATE}
 Begin your analysis now.
