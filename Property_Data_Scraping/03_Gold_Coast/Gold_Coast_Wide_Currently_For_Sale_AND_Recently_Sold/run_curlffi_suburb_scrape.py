@@ -121,6 +121,65 @@ def get_mongodb_connection():
     return _mongo_client, _mongo_db
 
 
+# ── Canonical suburb whitelist ─────────────────────────────────────────────────
+# Prevents malformed single-word suffixes (e.g. "Heads", "Lakes", "Valley")
+# from creating non-canonical collections.  Keyed by lowercase suffix token.
+SUFFIX_TO_CANONICAL = {
+    'heads': 'Burleigh Heads',
+    'lakes': 'Varsity Lakes',
+    'vale': 'Willow Vale',
+    'valley': 'Tallebudgera Valley',
+    'well': 'Jacobs Well',
+    'waters': 'Burleigh Waters',
+    'beach': 'Mermaid Beach',
+    'pines': 'Pacific Pines',
+    'hills': 'Ormeau Hills',
+    'island': 'Hope Island',
+    'point': 'Paradise Point',
+    'bay': 'Runaway Bay',
+}
+
+# Full list of known Gold Coast suburbs (lowercase) for validation
+CANONICAL_SUBURBS = {
+    'advancetown', 'alberton', 'arundel', 'ashmore', 'austinville',
+    'beechmont', 'benowa', 'biggera waters', 'bilinga', 'bonogin',
+    'broadbeach', 'broadbeach waters', 'bundall', 'burleigh heads',
+    'burleigh waters', 'carrara', 'cedar creek', 'chevron island',
+    'clear island waters', 'coolangatta', 'coombabah', 'coomera',
+    'currumbin', 'currumbin valley', 'currumbin waters', 'elanora',
+    'gaven', 'gilberton', 'gilston', 'guanaba', 'helensvale',
+    'highland park', 'hollywell', 'hope island', 'jacobs well',
+    'kingsholme', 'labrador', 'lower beechmont', 'luscombe',
+    'main beach', 'maudsland', 'mermaid beach', 'mermaid waters',
+    'merrimac', 'miami', 'molendinar', 'mount nathan', 'mudgeeraba',
+    'natural bridge', 'nerang', 'neranwood', 'norwell',
+    'numinbah valley', 'ormeau', 'ormeau hills', 'oxenford',
+    'pacific pines', 'palm beach', 'paradise point', 'parkwood',
+    'pimpama', 'reedy creek', 'robina', 'runaway bay',
+    'south stradbroke', 'southern moreton bay islands', 'southport',
+    'springbrook', 'stapylton', 'steiglitz', 'surfers paradise',
+    'tallai', 'tallebudgera', 'tallebudgera valley', 'tugun',
+    'upper coomera', 'varsity lakes', 'willow vale', 'wongawallan',
+    'woongoolba', 'worongary', 'yatala',
+}
+
+
+def validate_suburb(suburb: str) -> Optional[str]:
+    """Validate and correct a suburb name against the canonical whitelist.
+    Returns the canonical suburb name (title-cased) or None if unrecognised.
+    """
+    if not suburb:
+        return None
+    lower = suburb.strip().lower()
+    # Direct match against canonical set
+    if lower in CANONICAL_SUBURBS:
+        return suburb.strip().title()
+    # Check if it's a known suffix truncation
+    if lower in SUFFIX_TO_CANONICAL:
+        return SUFFIX_TO_CANONICAL[lower]
+    return None
+
+
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 def extract_suburb_from_address(address: str) -> Optional[str]:
@@ -131,7 +190,10 @@ def extract_suburb_from_address(address: str) -> Optional[str]:
         return None
     match = re.search(r',\s*([^,]+),\s*(QLD|NSW|VIC|SA|WA|TAS|NT|ACT)', address, re.IGNORECASE)
     if match:
-        return match.group(1).strip()
+        raw = match.group(1).strip()
+        # Validate against canonical list; if invalid, return None to trigger fallback
+        validated = validate_suburb(raw)
+        return validated if validated else raw
     return None
 
 
@@ -184,6 +246,17 @@ class CurlCffiSuburbScraper:
         'watch_article_generated',
         'watch_article_path',
         'watch_article_generated_at',
+    }
+
+    # Image fields preserved when an active listing is re-scraped (blob URLs)
+    IMAGE_FIELDS = {
+        'property_images',
+        'floor_plans',
+        'property_images_original',
+        'floor_plans_original',
+        'images_uploaded_to_blob',
+        'images_blob_uploaded_at',
+        'image_history',
     }
 
     def __init__(self, suburb_name: str, postcode: str):
@@ -294,22 +367,41 @@ class CurlCffiSuburbScraper:
     # ── Phase 2: Detail scraping ───────────────────────────────────────────
 
     def _extract_address_from_url(self, url: str) -> str:
+        """Extract address from Domain URL slug, handling multi-word suburbs."""
         path = url.replace('https://www.domain.com.au/', '').replace('http://www.domain.com.au/', '')
         path = re.sub(r'-\d{7,10}$', '', path)
         parts = path.split('-')
-        suburb_idx = -1
+        state_idx = -1
         for i, part in enumerate(parts):
             if part in ('qld', 'nsw', 'vic', 'sa', 'wa', 'tas', 'nt', 'act'):
-                suburb_idx = i - 1
+                state_idx = i
                 break
-        if suburb_idx > 0:
-            street_parts = parts[:suburb_idx]
-            street_address = ' '.join(street_parts).title()
-            suburb = parts[suburb_idx].title()
-            state = parts[suburb_idx + 1].upper() if suburb_idx + 1 < len(parts) else ''
-            postcode_val = parts[suburb_idx + 2] if suburb_idx + 2 < len(parts) else ''
-            return f"{street_address}, {suburb}, {state} {postcode_val}"
-        return ' '.join(parts).title()
+        if state_idx < 1:
+            return ' '.join(parts).title()
+
+        state = parts[state_idx].upper()
+        postcode_val = parts[state_idx + 1] if state_idx + 1 < len(parts) else ''
+
+        # Try matching multi-word suburbs by checking 3-word, 2-word, then 1-word
+        # candidates against the canonical set
+        pre_state = parts[:state_idx]  # everything before QLD
+        suburb = None
+        suburb_words = 0
+        for length in (3, 2, 1):
+            if len(pre_state) >= length:
+                candidate = ' '.join(pre_state[-length:]).lower()
+                if candidate in CANONICAL_SUBURBS:
+                    suburb = ' '.join(pre_state[-length:]).title()
+                    suburb_words = length
+                    break
+        if not suburb:
+            # Fallback: last word before state (original behaviour)
+            suburb = pre_state[-1].title() if pre_state else ''
+            suburb_words = 1
+
+        street_parts = pre_state[:-suburb_words] if suburb_words <= len(pre_state) else []
+        street_address = ' '.join(street_parts).title()
+        return f"{street_address}, {suburb}, {state} {postcode_val}"
 
     def _extract_first_listed_date(self, html: str) -> Dict:
         result = {
@@ -452,10 +544,16 @@ class CurlCffiSuburbScraper:
         property_data['extraction_date'] = datetime.now().isoformat()
         property_data['source'] = 'curlffi_suburb_scraper'
 
-        # ── Suburb routing ──
+        # ── Suburb routing (with canonical validation) ──
         actual_suburb = extract_suburb_from_address(property_data.get('address', ''))
         if actual_suburb:
-            property_data['suburb'] = actual_suburb
+            validated = validate_suburb(actual_suburb)
+            if validated:
+                property_data['suburb'] = validated
+            else:
+                # Unrecognised suburb from address — fall back to scrape target
+                self.log(f"  ⚠ Unrecognised suburb '{actual_suburb}' — using '{self.suburb_name}'")
+                property_data['suburb'] = self.suburb_name
         else:
             property_data['suburb'] = self.suburb_name
 
@@ -525,8 +623,32 @@ class CurlCffiSuburbScraper:
                 return True
 
             if existing_doc:
-                update_data = {k: v for k, v in property_data.items() if k not in self.PIPELINE_FIELDS}
+                was_already_for_sale = existing_doc.get('listing_status') == 'for_sale'
+                has_blob_images = (
+                    was_already_for_sale
+                    and existing_doc.get('property_images')
+                    and isinstance(existing_doc['property_images'][0], str)
+                    and 'blob.core.windows.net' in existing_doc['property_images'][0]
+                )
+
+                # Determine which fields to skip
+                skip_fields = set(self.PIPELINE_FIELDS)
+                if has_blob_images:
+                    # Active listing with blob images — preserve them
+                    skip_fields |= self.IMAGE_FIELDS
+                update_data = {k: v for k, v in property_data.items() if k not in skip_fields}
                 update_data['listing_status'] = 'for_sale'
+
+                # Always store the latest scraped image URLs for reference
+                update_data['scraped_property_images'] = property_data.get('property_images', [])
+                update_data['scraped_floor_plans'] = property_data.get('floor_plans', [])
+
+                if not was_already_for_sale:
+                    # New listing on an existing property — fresh photos taken
+                    # Reset blob flag so step 110 re-downloads into a dated folder
+                    update_data['images_uploaded_to_blob'] = False
+                    self.log(f"  ↻ New listing detected — will re-download images to blob")
+
                 _mongo_op_with_retry(
                     lambda: target_collection.update_one(
                         {'_id': existing_doc['_id']},
