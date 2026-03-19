@@ -179,8 +179,10 @@ def fetch_orchestrator_status(db):
 def fetch_api_health(db):
     """Get latest health check per endpoint."""
     col = db["system_monitor"]["api_health_checks"]
-    # Fetch recent, sort in Python (Cosmos index limitation)
-    docs = list(col.find({}).limit(200))
+    # Only fetch checks from the last 24h (prevents stale legacy records from dominating)
+    # Use naive datetime since Cosmos stores naive datetimes
+    recent_cutoff = datetime.utcnow() - timedelta(hours=24)
+    docs = list(col.find({"checked_at": {"$gte": recent_cutoff}}).limit(200))
     docs.sort(key=lambda d: d.get("checked_at") or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
     # Latest per endpoint
     seen = {}
@@ -190,6 +192,15 @@ def fetch_api_health(db):
             seen[ep] = doc
     results = list(seen.values())
     results.sort(key=lambda d: d.get("endpoint", ""))
+
+    # Freshness gate: mark any check older than 12h as stale
+    stale_cutoff = datetime.utcnow() - timedelta(hours=12)
+    for r in results:
+        checked = r.get("checked_at")
+        if isinstance(checked, datetime) and checked.replace(tzinfo=None) < stale_cutoff:
+            r["healthy"] = False
+            r["stale"] = True
+
     healthy = sum(1 for r in results if r.get("healthy"))
     unhealthy = sum(1 for r in results if not r.get("healthy"))
     return {"endpoints": results, "healthy": healthy, "unhealthy": unhealthy}
@@ -388,6 +399,7 @@ def render_ops_status(orch, api, coverage, repairs, articles, listing_counts, er
 
     # ── 4. Data Coverage ─────────────────────────────────────────────────────
     h(2, "4. Data Coverage by Suburb")
+    lines.append("*Measures **completeness** — whether our DB listing count matches the live Domain.com.au count. 'Critical' means Domain shows more listings than we have scraped.*\n")
     if coverage:
         lines.append("| Suburb | Status | Listings | Last Updated | Checked |")
         lines.append("|--------|--------|----------|--------------|---------|")
@@ -406,6 +418,7 @@ def render_ops_status(orch, api, coverage, repairs, articles, listing_counts, er
 
     # ── 5. Scraper Health ────────────────────────────────────────────────────
     h(2, "5. Scraper Health")
+    lines.append("*Measures **freshness** — when each suburb was last scraped. A suburb can be 'healthy' (recently scraped) but still 'critical' in Data Coverage if some listings were missed.*\n")
     if scraper:
         lines.append("| Suburb | Last Scrape | Staleness | Status |")
         lines.append("|--------|-------------|-----------|--------|")
@@ -434,8 +447,9 @@ def render_ops_status(orch, api, coverage, repairs, articles, listing_counts, er
         for ep in api["endpoints"][:20]:
             endpoint = ep.get("endpoint", "?")
             healthy = ep.get("healthy", False)
-            icon = "✅" if healthy else "❌"
-            status_code = ep.get("status_code", "?")
+            is_stale = ep.get("stale", False)
+            icon = "⚠️" if is_stale else ("✅" if healthy else "❌")
+            status_code = "stale" if is_stale else ep.get("status_code", "?")
             resp_ms = ep.get("response_ms")
             issue = ep.get("contract_issue") or ep.get("validation_error")
             resp_str = issue or (f"{resp_ms:.0f}ms" if resp_ms else "—")
