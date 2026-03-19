@@ -11,6 +11,7 @@ Key protections:
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import json
 import os
 import re
@@ -31,6 +32,7 @@ CODEX_MODEL = "gpt-5.4"
 TEAM_PLAN_PATH = Path(__file__).resolve().parent.parent / "config" / "codex_team_plan.yaml"
 LOCAL_RUNS_DIR = Path(__file__).resolve().parent.parent / "artifacts" / "ceo-runs"
 FOUNDER_REQUESTS_DIR = Path(__file__).resolve().parent.parent / "ceo-founder-requests"
+AGENT_MEMORY_DIR = Path(__file__).resolve().parent.parent / "ceo-agent-memory"
 DATE_STR = now_aest().strftime("%Y-%m-%d")
 
 PROPOSAL_DEFAULTS = {
@@ -312,6 +314,12 @@ def build_request_response_section(
 
 
 def sync_founder_request_responses(run_id: str, proposals: list[dict[str, Any]]) -> list[Path]:
+    """Write CEO team responses as conversation threads.
+
+    Recommendation 3 (OpenClaw pattern): Bidirectional founder request threads.
+    Responses are appended directly to the original request file AND to the
+    legacy responses/ directory for backwards compatibility.
+    """
     responses_dir = FOUNDER_REQUESTS_DIR / "responses"
     responses_dir.mkdir(parents=True, exist_ok=True)
     updated_paths: list[Path] = []
@@ -320,13 +328,22 @@ def sync_founder_request_responses(run_id: str, proposals: list[dict[str, Any]])
         section = build_request_response_section(run_id, request, proposals, requests)
         if not section:
             continue
+
+        # Legacy: write to responses/ directory (backwards compat)
         response_path = responses_dir / request["filename"]
-        existing = response_path.read_text(encoding="utf-8") if response_path.exists() else ""
-        if run_id in existing:
-            continue
-        prefix = "" if not existing.strip() else "\n"
-        response_path.write_text(existing + prefix + section, encoding="utf-8")
-        updated_paths.append(response_path)
+        existing_response = response_path.read_text(encoding="utf-8") if response_path.exists() else ""
+        if run_id not in existing_response:
+            prefix = "" if not existing_response.strip() else "\n"
+            response_path.write_text(existing_response + prefix + section, encoding="utf-8")
+
+        # Bidirectional: append to the original request file as a conversation
+        request_path: Path = request["path"]
+        existing_request = request_path.read_text(encoding="utf-8") if request_path.exists() else ""
+        if run_id not in existing_request:
+            # Add a separator if there isn't one already
+            separator = "\n\n---\n\n" if not existing_request.rstrip().endswith("---") else "\n\n"
+            request_path.write_text(existing_request.rstrip() + separator + section, encoding="utf-8")
+            updated_paths.append(request_path)
     return updated_paths
 
 
@@ -448,24 +465,33 @@ def run_agent(agent_id: str) -> dict[str, Any]:
     print(f"Focus:   {agent['focus']}")
     print(f"{'=' * 60}")
 
+    # Each agent gets its own working directory to avoid parallel cp -r races
+    # on the shared "context" dir in sandbox.
+    agent_workdir = f"/tmp/ceo_workdir_{agent_id}"
     remote_cmd = f"""
 set -e
-cd {REMOTE_DIR}/sandbox
-mkdir -p proposals {agent_id}
-rm -rf context
-cp -r {REMOTE_DIR}/context context
+rm -rf {agent_workdir}
+mkdir -p {agent_workdir}/proposals {agent_workdir}/{agent_id} {agent_workdir}/agent-memory/{agent_id}
+cp -r {REMOTE_DIR}/context {agent_workdir}/context
+cd {agent_workdir}
 bash {REMOTE_DIR}/ceo-agent-prompts.sh {agent_id} {DATE_STR} > /tmp/ceo_prompt_{agent_id}.txt
 set +e
 timeout 900s codex exec -m {CODEX_MODEL} --full-auto --skip-git-repo-check -o /tmp/ceo_output_{agent_id}.txt "$(cat /tmp/ceo_prompt_{agent_id}.txt)" >/tmp/ceo_stdout_{agent_id}.log 2>&1
 rc=$?
 set -e
+# Copy outputs back to the persistent sandbox
+mkdir -p {REMOTE_DIR}/sandbox/proposals {REMOTE_DIR}/sandbox/{agent_id} {REMOTE_DIR}/sandbox/agent-memory/{agent_id}
+cp -f {agent_workdir}/proposals/{DATE_STR}_{agent_id}.json {REMOTE_DIR}/sandbox/proposals/ 2>/dev/null || true
+cp -rf {agent_workdir}/agent-memory/{agent_id}/. {REMOTE_DIR}/sandbox/agent-memory/{agent_id}/ 2>/dev/null || true
+cp -rf {agent_workdir}/{agent_id}/. {REMOTE_DIR}/sandbox/{agent_id}/ 2>/dev/null || true
 echo "__AGENT_RC__:$rc"
-if [ -f proposals/{DATE_STR}_{agent_id}.json ]; then
-  stat -c "__PROPOSAL__:%n|%Y|%s" proposals/{DATE_STR}_{agent_id}.json
+if [ -f {REMOTE_DIR}/sandbox/proposals/{DATE_STR}_{agent_id}.json ]; then
+  stat -c "__PROPOSAL__:%n|%Y|%s" {REMOTE_DIR}/sandbox/proposals/{DATE_STR}_{agent_id}.json
 else
   echo "__PROPOSAL__:missing"
 fi
 tail -n 40 /tmp/ceo_stdout_{agent_id}.log 2>/dev/null || true
+rm -rf {agent_workdir}
 """
     result = ssh_run(remote_cmd, timeout=1200)
     stdout_lines = (result.stdout or "").splitlines()
@@ -499,13 +525,45 @@ tail -n 40 /tmp/ceo_stdout_{agent_id}.log 2>/dev/null || true
     }
 
 
+def fetch_agent_memory_updates(agent_ids: list[str]) -> int:
+    """Fetch memory files written by agents during their run and save locally.
+
+    Agents write to agent-memory/<agent_id>/MEMORY.md and daily log files.
+    We pull these back so they persist across runs (Recommendation 2).
+    """
+    updated = 0
+    for agent_id in agent_ids:
+        remote_mem_dir = f"{REMOTE_DIR}/sandbox/agent-memory/{agent_id}"
+        result = ssh_run(f"ls {remote_mem_dir}/*.md 2>/dev/null", timeout=15)
+        if result.returncode != 0 or not result.stdout.strip():
+            continue
+        local_dir = AGENT_MEMORY_DIR / agent_id
+        local_dir.mkdir(parents=True, exist_ok=True)
+        for remote_path in result.stdout.strip().splitlines():
+            remote_path = remote_path.strip()
+            if not remote_path:
+                continue
+            filename = Path(remote_path).name
+            fetched = ssh_run(f"cat {remote_path}", timeout=15)
+            if fetched.returncode != 0 or not fetched.stdout.strip():
+                continue
+            local_path = local_dir / filename
+            # Only update if content differs from local
+            existing = local_path.read_text(encoding="utf-8") if local_path.exists() else ""
+            if fetched.stdout.strip() != existing.strip():
+                local_path.write_text(fetched.stdout, encoding="utf-8")
+                updated += 1
+                log(f"  Updated agent memory: {agent_id}/{filename}")
+    return updated
+
+
 def push_to_github() -> None:
     log("Pushing to GitHub sandbox repo...")
     result = ssh_run(
         f"""
 GH_CONFIG_DIR=~/.config/gh gh auth setup-git >/dev/null 2>&1 || true
 cd {REMOTE_DIR}/sandbox
-rm -rf context
+rm -rf context context_*
 if git status --porcelain | grep -q .; then
     git add -A
     git commit -m "CEO agents run {DATE_STR}"
@@ -558,10 +616,62 @@ def fetch_available_remote_proposals() -> tuple[list[dict[str, Any]], list[dict[
     return proposals, invalid
 
 
+def validate_proposal(proposal: dict[str, Any]) -> tuple[bool, list[str]]:
+    """Recommendation 4: Quality gates for proposal output."""
+    issues: list[str] = []
+    agent = proposal.get("agent", "unknown")
+
+    if not proposal.get("findings"):
+        issues.append(f"{agent}: No findings produced")
+    if not proposal.get("proposals"):
+        issues.append(f"{agent}: No proposals produced")
+    if not proposal.get("summary"):
+        issues.append(f"{agent}: No summary produced")
+
+    for finding in proposal.get("findings", []):
+        if not finding.get("evidence_freshness"):
+            issues.append(f"{agent}: Finding '{finding.get('title', '?')}' missing evidence_freshness")
+        if finding.get("detail") and finding.get("detail") == finding.get("recommendation"):
+            issues.append(f"{agent}: Finding '{finding.get('title', '?')}' has identical detail and recommendation")
+
+    return len(issues) == 0, issues
+
+
+def compute_staleness(proposal: dict[str, Any], previous_proposals: list[dict[str, Any]]) -> dict[str, Any]:
+    """Recommendation 4: Detect recycled/stale proposals by comparing finding titles."""
+    agent = proposal.get("agent", "unknown")
+    current_titles = {f.get("title", "").strip().lower() for f in proposal.get("findings", []) if f.get("title")}
+    if not current_titles:
+        return {"agent": agent, "staleness_score": 0.0, "novel_count": 0, "recycled_count": 0, "is_stale": False}
+
+    previous_titles: set[str] = set()
+    for prev in previous_proposals:
+        if prev.get("agent") == agent:
+            for f in prev.get("findings", []):
+                title = f.get("title", "").strip().lower()
+                if title:
+                    previous_titles.add(title)
+
+    recycled = current_titles & previous_titles
+    novel = current_titles - previous_titles
+    staleness_score = len(recycled) / len(current_titles) if current_titles else 0.0
+
+    return {
+        "agent": agent,
+        "staleness_score": round(staleness_score, 2),
+        "novel_count": len(novel),
+        "recycled_count": len(recycled),
+        "novel_titles": sorted(novel),
+        "recycled_titles": sorted(recycled),
+        "is_stale": staleness_score > 0.8 and len(current_titles) >= 3,
+    }
+
+
 def normalize_proposal(proposal: dict[str, Any], run_id: str) -> dict[str, Any]:
     proposal.setdefault("status", "pending_review")
     proposal.setdefault("reviewed_by", None)
     proposal.setdefault("review_notes", None)
+    proposal.setdefault("handoffs", [])
     proposal["run_id"] = run_id
     proposal["updated_at"] = now_aest().isoformat()
     for finding in proposal.get("findings", []):
@@ -868,8 +978,32 @@ def upsert_memory(sm, proposal: dict[str, Any]) -> None:
 def store_proposals(sm, run_id: str, proposals: list[dict[str, Any]]) -> list[str]:
     stored_agents: list[str] = []
     coll = sm["ceo_proposals"]
+
+    # Recommendation 4: Fetch recent proposals for staleness comparison
+    from datetime import timedelta as _td
+    recent_cutoff = (now_aest() - _td(days=3)).strftime("%Y-%m-%d")
+    previous_proposals = list(
+        coll.find({"date": {"$gte": recent_cutoff}}, {"_id": 0, "agent": 1, "findings": 1}).limit(30)
+    )
+
     for raw in proposals:
         proposal = normalize_proposal(raw, run_id)
+
+        # Quality gate
+        valid, issues = validate_proposal(proposal)
+        if issues:
+            log(f"  ⚠ Quality issues for {proposal['agent']}: {'; '.join(issues)}")
+        proposal["quality_valid"] = valid
+        proposal["quality_issues"] = issues
+
+        # Staleness detection
+        staleness = compute_staleness(proposal, previous_proposals)
+        proposal["staleness"] = staleness
+        if staleness["is_stale"]:
+            log(f"  ⚠ STALE: {proposal['agent']} — {staleness['staleness_score']:.0%} recycled findings ({staleness['recycled_count']}/{staleness['recycled_count'] + staleness['novel_count']})")
+        elif staleness["novel_count"] > 0:
+            log(f"  ✓ {proposal['agent']}: {staleness['novel_count']} novel finding(s)")
+
         coll.update_one(
             {"agent": proposal["agent"], "date": proposal["date"]},
             {"$set": proposal, "$setOnInsert": {"created_at": now_aest().isoformat()}},
@@ -969,11 +1103,30 @@ def main() -> None:
         client = get_client()
         sm = client["system_monitor"]
         run_id = start_run(sm, agents_requested, manifest)
+
+        # Recommendation 1: Run specialists in parallel (OpenClaw pattern)
         specialist_results = {}
-        for agent_id in specialists:
-            result = run_agent(agent_id)
-            specialist_results[agent_id] = result
-            update_run(sm, run_id, agent_results={**specialist_results})
+        if len(specialists) > 1:
+            log(f"Running {len(specialists)} specialists in parallel...")
+            with concurrent.futures.ThreadPoolExecutor(max_workers=len(specialists)) as pool:
+                futures = {pool.submit(run_agent, aid): aid for aid in specialists}
+                for future in concurrent.futures.as_completed(futures):
+                    aid = futures[future]
+                    try:
+                        specialist_results[aid] = future.result()
+                    except Exception as exc:
+                        log(f"Agent {aid} raised exception: {exc}")
+                        specialist_results[aid] = {
+                            "agent": aid, "success": False, "exit_code": -1,
+                            "proposal": {"present": False},
+                            "stdout_tail": [str(exc)], "stderr_excerpt": str(exc),
+                        }
+                    update_run(sm, run_id, agent_results={**specialist_results})
+        else:
+            for agent_id in specialists:
+                result = run_agent(agent_id)
+                specialist_results[agent_id] = result
+                update_run(sm, run_id, agent_results={**specialist_results})
 
         specialist_failures = [aid for aid, result in specialist_results.items() if not result.get("success")]
         chief_results = {}
@@ -989,6 +1142,12 @@ def main() -> None:
 
         push_to_github()
         proposals = fetch_remote_proposals(successful_agents)
+
+        # Recommendation 2: Fetch back agent memory updates
+        mem_updated = fetch_agent_memory_updates(successful_agents)
+        if mem_updated:
+            log(f"Fetched {mem_updated} agent memory updates")
+
         stored_agents = store_proposals(sm, run_id, proposals)
         response_paths = sync_founder_request_responses(run_id, proposals)
 
