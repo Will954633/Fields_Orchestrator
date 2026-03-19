@@ -6,22 +6,61 @@ AGENT_ID="$1"
 DATE="$2"
 
 COMMON_INSTRUCTIONS="
+## Time Budget (15 minutes total)
+- 2 min: Read manifest, your memory, founder requests
+- 3 min: Read metrics and OPS status
+- 7 min: Analysis and proposal drafting
+- 3 min: Self-review, memory update, JSON write
+
 ## Getting Started
 1. First, read context/CONTEXT_MANIFEST.json. If it says degraded, explicitly say which inputs are degraded and how that limits confidence.
-2. Read context/config/ceo_founder_truths.yaml for canonical founder constraints and company truths.
-3. Read context/founder-requests/index.json and any relevant files under context/founder-requests/open/ plus matching files in context/founder-requests/responses/. These are active founder concerns, instructions, and unresolved threads that must persist across runs until resolved.
-4. Read context/CLAUDE.md for full system documentation.
-5. Read context/OPS_STATUS.md for current system health.
-6. Read context/memory/MEMORY.md plus context/memory/structured_memory.json and context/memory/proposal_outcomes.json.
-7. Read the relevant metrics files in context/metrics/, especially context/metrics/orchestrator_health.json, context/metrics/ad_performance_7d.json, context/metrics/timeline_14d.json, and context/tools/read_only_query_contract.json.
-8. If current failures implicate code paths, use context/code/targets.json and the exported code bundle before broad repo exploration.
-9. Write your proposal JSON to proposals/${DATE}_${AGENT_ID}.json.
-10. If you write PoC code, put it in ${AGENT_ID}/ with a README.md.
-11. Prefer 3 strong findings over broad exploration. Inspect only the minimum code/files needed to support your conclusions.
-12. Every finding and proposal must include confidence, evidence_freshness, blocked_by, and data_gaps.
-13. Your primary deliverable is the JSON file. Produce it even if some context is incomplete.
-14. BEFORE flagging any issue, check ceo_founder_truths.yaml known_resolved_issues. If an issue matches a resolved item, do NOT re-flag it — instead verify the fix is holding and note it as resolved.
-15. BEFORE flagging any telemetry anomaly (zero sessions, missing data, contradictory counts), check ceo_founder_truths.yaml data_context_notes. Pre-fix data in the metrics window is expected and should not be treated as a current bug.
+2. Read your persistent memory at context/agent-memory/${AGENT_ID}/MEMORY.md — this contains your own durable learnings from previous runs. Do NOT re-flag issues you have already noted unless the underlying data has changed.
+3. Read context/config/ceo_founder_truths.yaml for canonical founder constraints and company truths.
+4. Read context/founder-requests/index.json and any relevant files under context/founder-requests/open/ plus matching files in context/founder-requests/responses/. These are active founder concerns, instructions, and unresolved threads that must persist across runs until resolved.
+5. Read context/CLAUDE.md for full system documentation.
+6. Read context/OPS_STATUS.md for current system health.
+7. Read context/memory/MEMORY.md plus context/memory/structured_memory.json and context/memory/proposal_outcomes.json.
+8. Read the relevant metrics files in context/metrics/, especially context/metrics/orchestrator_health.json, context/metrics/ad_performance_7d.json, context/metrics/timeline_14d.json, and context/tools/read_only_query_contract.json.
+9. If current failures implicate code paths, use context/code/targets.json and the exported code bundle before broad repo exploration.
+10. Write your proposal JSON to proposals/${DATE}_${AGENT_ID}.json.
+11. If you write PoC code, put it in ${AGENT_ID}/ with a README.md.
+12. Prefer 3 strong findings over broad exploration. Inspect only the minimum code/files needed to support your conclusions.
+13. Every finding and proposal must include confidence, evidence_freshness, blocked_by, and data_gaps.
+14. Your primary deliverable is the JSON file. Produce it even if some context is incomplete.
+15. BEFORE flagging any issue, check ceo_founder_truths.yaml known_resolved_issues. If an issue matches a resolved item, do NOT re-flag it — instead verify the fix is holding and note it as resolved.
+16. BEFORE flagging any telemetry anomaly (zero sessions, missing data, contradictory counts), check ceo_founder_truths.yaml data_context_notes. Pre-fix data in the metrics window is expected and should not be treated as a current bug.
+
+## Memory Protocol
+After completing your analysis, update your persistent memory:
+1. Write durable learnings to agent-memory/${AGENT_ID}/MEMORY.md — things that will matter in 7+ days.
+2. Append today's notes to agent-memory/${AGENT_ID}/${DATE}.md — observations specific to today.
+3. If a finding is the same as yesterday, do NOT re-flag it. Instead, note in your memory that it persists and reference it briefly in your proposal.
+4. Format for memory entries:
+   ## <Topic>
+   <What you learned>
+   **Why it matters:** <context>
+   **When to recall:** <trigger condition>
+
+## Quality Gate — Self-Review Before Submitting
+Before writing your final JSON, verify:
+- At least ONE finding is NEW (not in your MEMORY.md or the last 3 days of proposals)
+- Every finding cites a specific metric, file, or data point (not \"the data shows...\")
+- Your recommendations differ from yesterday's if the underlying data hasn't changed
+- If nothing new has happened, explicitly state \"No new issues today\" rather than recycling old findings
+
+## Cross-Agent Handoffs
+If your analysis reveals an issue that falls primarily under another agent's domain, add a 'handoffs' array to your proposal JSON:
+{
+    \"handoffs\": [
+        {
+            \"to\": \"product|engineering|growth|data_quality\",
+            \"type\": \"Short category\",
+            \"title\": \"What the other agent should look at\",
+            \"context\": \"Why this matters from your perspective\",
+            \"urgency\": \"today|this_week|later\"
+        }
+    ]
+}
 
 Today's date: ${DATE}
 Begin your analysis now.
@@ -162,10 +201,10 @@ You focus on marketing effectiveness, ad performance, content strategy, and cust
 - context/founder-requests/responses/ — Prior CEO-team replies and open questions
 - context/metrics/ad_performance_7d.json — Recent ad performance data
 - context/metrics/orchestrator_health.json — Tuesday orchestrator audit and current operational alerts
-- context/metrics/website_metrics_7d.json — Website visitor data
-- context/metrics/recent_website_changes.json — Recent website changes
+- context/metrics/website_metrics_7d.json — Website visitor data (from PostHog — pageviews, sources, top pages, experiment flags)
+- context/metrics/recent_website_changes.json — Recent website code changes
 - context/metrics/timeline_14d.json — Event timeline across deploys, runs, and proposal outcomes
-- context/experiments/ — Active A/B experiment data
+- context/experiments/ — Active A/B experiments (managed via PostHog feature flags)
 - context/memory/ — Persistent memory (includes ad strategy, experiments, branding)
 - context/memory/proposal_outcomes.json — Previous accepted/rejected/measured proposals
 - context/metrics/cost_summary_30d.json — Platform cost breakdown (ads, infra, AI compute)
@@ -264,9 +303,9 @@ You focus on data quality, user experience, feature prioritisation, and competit
 - context/SCHEMA_SNAPSHOT.md — Database schema (shows what data we have)
 - context/metrics/data_coverage.json — Per-suburb enrichment percentages
 - context/metrics/active_listings.json — Current listing counts
-- context/metrics/website_metrics_7d.json — Website engagement data
+- context/metrics/website_metrics_7d.json — Website engagement data (from PostHog — pageviews, sources, top pages, experiment flags)
 - context/metrics/timeline_14d.json — Event timeline across runs, deploys, changes, and proposal outcomes
-- context/experiments/ — Active A/B experiments
+- context/experiments/ — Active A/B experiments (managed via PostHog feature flags)
 - context/memory/ — Persistent memory (includes valuation system details, experiments)
 - context/memory/structured_memory.json — Structured recurring issues, outcomes, and trusted facts
 - context/OPS_STATUS.md — Current system health
@@ -504,6 +543,15 @@ Create proposals/${DATE}_chief_of_staff.json:
         }
     ]
 }
+
+## Cross-Agent Handoffs
+Check each specialist proposal for a "handoffs" array. If present, include these in your synthesis:
+- Note which agent raised the handoff and which agent it targets
+- If the target agent also addressed the issue, mark it as "acknowledged"
+- If the target agent missed it, flag it as an unacknowledged handoff needing attention
+
+## Agent Staleness
+If you notice that a specialist proposal contains mostly the same findings as the previous day with no new data or progress, note this in your brief. Stale proposals should not drive today's priorities.
 
 ## Rules
 - Do not flood the founder with everything. Compress aggressively.
