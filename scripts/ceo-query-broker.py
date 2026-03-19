@@ -371,6 +371,134 @@ def fetch_website_metrics(sm, days: int) -> dict[str, Any]:
     return result
 
 
+def fetch_experiment_results(days: int) -> dict[str, Any]:
+    """Fetch per-variant experiment data from PostHog for CEO agents."""
+    import os, json
+    from urllib.request import Request, urlopen
+    from collections import defaultdict
+
+    api_key = os.environ.get("POSTHOG_PERSONAL_API_KEY", "")
+    project_id = os.environ.get("POSTHOG_PROJECT_ID", "348370")
+    if not api_key:
+        return {"source": "posthog", "error": "POSTHOG_PERSONAL_API_KEY not set", "days": days}
+
+    base = f"https://us.i.posthog.com/api/projects/{project_id}"
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    cutoff = (now_aest() - timedelta(days=days)).isoformat()
+    result: dict[str, Any] = {"source": "posthog", "days": days, "experiments": {}}
+
+    EXPERIMENT_FLAGS = ["for_sale_page_v1", "discover_mode_v1", "for_sale_signup_gate"]
+
+    try:
+        # 1. Feature flag calls — variant assignment counts
+        query = json.dumps({"query": {
+            "kind": "EventsQuery",
+            "select": [
+                "properties.$feature_flag",
+                "properties.$feature_flag_response",
+                "distinct_id",
+                "timestamp",
+            ],
+            "after": cutoff,
+            "limit": 2000,
+            "event": "$feature_flag_called",
+        }}).encode()
+        req = Request(f"{base}/query/", data=query, headers=headers, method="POST")
+        with urlopen(req, timeout=30) as resp:
+            flag_data = json.loads(resp.read())
+
+        # Build user→variant mapping per flag
+        user_variants: dict[str, dict[str, str]] = defaultdict(dict)  # {distinct_id: {flag: variant}}
+        variant_users: dict[str, dict[str, set]] = defaultdict(lambda: defaultdict(set))  # {flag: {variant: {users}}}
+        for row in flag_data.get("results", []):
+            flag, variant, uid = row[0], row[1], row[2]
+            if flag and variant and uid:
+                user_variants[uid][flag] = variant
+                variant_users[flag][variant].add(uid)
+
+        # 2. Pageviews — attribute to variants via distinct_id
+        query = json.dumps({"query": {
+            "kind": "EventsQuery",
+            "select": ["properties.$current_url", "distinct_id", "timestamp"],
+            "after": cutoff,
+            "limit": 2000,
+            "event": "$pageview",
+        }}).encode()
+        req = Request(f"{base}/query/", data=query, headers=headers, method="POST")
+        with urlopen(req, timeout=30) as resp:
+            pv_data = json.loads(resp.read())
+
+        # 3. Custom events — attribute to variants
+        custom_events: list[tuple] = []
+        for evt in ["property_view", "tab_switch", "signup_gate_shown", "signup_gate_complete"]:
+            query = json.dumps({"query": {
+                "kind": "EventsQuery",
+                "select": ["event", "distinct_id", "timestamp"],
+                "after": cutoff,
+                "limit": 500,
+                "event": evt,
+            }}).encode()
+            req = Request(f"{base}/query/", data=query, headers=headers, method="POST")
+            with urlopen(req, timeout=30) as resp:
+                evt_data = json.loads(resp.read())
+            for row in evt_data.get("results", []):
+                custom_events.append((row[0], row[1], row[2]))
+
+        # 4. Build per-experiment summary
+        for flag in EXPERIMENT_FLAGS:
+            if flag not in variant_users:
+                continue
+            exp: dict[str, Any] = {"flag": flag, "variants": {}}
+
+            for variant, users in variant_users[flag].items():
+                v_data: dict[str, Any] = {
+                    "unique_users": len(users),
+                    "pageviews": 0,
+                    "page_breakdown": defaultdict(int),
+                    "events": defaultdict(int),
+                }
+
+                # Count pageviews for users in this variant
+                for row in pv_data.get("results", []):
+                    url, uid = row[0] or "", row[1]
+                    if uid in users:
+                        v_data["pageviews"] += 1
+                        path = url.split("fieldsestate.com.au")[-1].split("?")[0] if "fieldsestate.com.au" in url else url
+                        v_data["page_breakdown"][path] += 1
+
+                # Count custom events for users in this variant
+                for evt_name, uid, _ts in custom_events:
+                    if uid in users:
+                        v_data["events"][evt_name] += 1
+
+                v_data["page_breakdown"] = dict(sorted(v_data["page_breakdown"].items(), key=lambda x: -x[1])[:10])
+                v_data["events"] = dict(v_data["events"])
+                v_data["pages_per_user"] = round(v_data["pageviews"] / max(len(users), 1), 1)
+                exp["variants"][variant] = v_data
+
+            exp["total_users"] = sum(len(u) for u in variant_users[flag].values())
+            result["experiments"][flag] = exp
+
+        # 5. Overall funnel summary
+        all_uids_with_pv = {row[1] for row in pv_data.get("results", [])}
+        all_uids_with_events = {uid for _, uid, _ in custom_events}
+        event_counts = defaultdict(int)
+        for evt_name, _, _ in custom_events:
+            event_counts[evt_name] += 1
+
+        result["funnel_summary"] = {
+            "total_visitors": len(all_uids_with_pv),
+            "visitors_with_engagement": len(all_uids_with_pv & all_uids_with_events),
+            "engagement_rate": round(len(all_uids_with_pv & all_uids_with_events) / max(len(all_uids_with_pv), 1) * 100, 1),
+            "event_totals": dict(event_counts),
+        }
+
+    except Exception as exc:
+        result["error"] = str(exc)
+
+    return result
+
+
 def fetch_ad_metrics(sm, days: int, limit: int) -> dict[str, Any]:
     cutoff = (now_aest() - timedelta(days=days)).strftime("%Y-%m-%d")
     fb = list(sm["ad_daily_metrics"].find({"date": {"$gte": cutoff}}, {"_id": 0}).limit(limit * 4))
@@ -629,6 +757,9 @@ def main() -> None:
     web_p = sub.add_parser("website-metrics")
     web_p.add_argument("--days", type=int, default=7)
 
+    exp_p = sub.add_parser("experiment-results")
+    exp_p.add_argument("--days", type=int, default=7)
+
     ad_p = sub.add_parser("ad-metrics")
     ad_p.add_argument("--days", type=int, default=7)
     ad_p.add_argument("--limit", type=int, default=50)
@@ -665,6 +796,8 @@ def main() -> None:
             payload = fetch_pipeline_runs(sm, args.days, args.limit)
         elif args.command == "website-metrics":
             payload = fetch_website_metrics(sm, args.days)
+        elif args.command == "experiment-results":
+            payload = fetch_experiment_results(args.days)
         elif args.command == "ad-metrics":
             payload = fetch_ad_metrics(sm, args.days, args.limit)
         elif args.command == "proposal-outcomes":
