@@ -82,7 +82,7 @@ team:
 
   data_quality:
     layer: core
-    status: planned_next
+    status: active
     cadence: daily
     output_file: proposals/YYYY-MM-DD_data_quality.json
     mandate:
