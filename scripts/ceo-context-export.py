@@ -50,7 +50,7 @@ REQUIRED_EXPORT_VALIDATORS = {
     "metrics/orchestrator_health.json": lambda payload: bool(payload.get("daily") and payload.get("weekly")),
     "metrics/ad_performance_7d.json": lambda payload: bool(payload.get("facebook") or payload.get("google")),
     "metrics/website_metrics_7d.json": lambda payload: bool(payload.get("source") == "posthog"),
-    "metrics/data_coverage.json": lambda payload: bool(payload),
+    "metrics/data_coverage.json": lambda payload: bool(payload.get("enrichment")),
     "metrics/active_listings.json": lambda payload: bool(payload.get("counts")),
     "metrics/recent_pipeline_runs.json": lambda payload: bool(payload.get("runs")),
     "experiments/experiment_results_7d.json": lambda payload: bool(payload.get("source") == "posthog" and payload.get("experiments")),
@@ -553,7 +553,7 @@ from ceo_agent_lib import get_client, retry_cosmos_read, to_jsonable
 client = get_client()
 db_gc = client['Gold_Coast']
 skip = {'suburb_median_prices', 'suburb_statistics', 'change_detection_snapshots'}
-coverage = {}
+enrichment = {}
 for coll in sorted(retry_cosmos_read(lambda: db_gc.list_collection_names())):
     if coll.startswith('system') or coll in skip:
         continue
@@ -561,13 +561,36 @@ for coll in sorted(retry_cosmos_read(lambda: db_gc.list_collection_names())):
     if total == 0:
         continue
     enriched = retry_cosmos_read(lambda coll_name=coll: db_gc[coll_name].count_documents({'listing_status': 'for_sale', 'valuation_data': {'$exists': True}}))
-    coverage[coll] = {
+    enrichment[coll] = {
         'active': total,
         'enriched': enriched,
-        'pct': round(enriched / total * 100, 1) if total else 0,
+        'enrichment_pct': round(enriched / total * 100, 1) if total else 0,
     }
     time.sleep(0.12)
-print(json.dumps(to_jsonable(coverage)))
+
+# Also fetch scrape coverage from system_monitor.data_integrity (step 109 output)
+db_sm = client['system_monitor']
+scrape_coverage = {}
+try:
+    for doc in retry_cosmos_read(lambda: list(db_sm['data_integrity'].find({'check_type': 'data_coverage'}))):
+        suburb = doc.get('suburb')
+        if not suburb:
+            continue
+        scrape_coverage[suburb] = {
+            'status': doc.get('status', 'unknown'),
+            'db_count': doc.get('total_listings'),
+            'checked_at': str(doc.get('checked_at', '')),
+        }
+except Exception:
+    pass
+
+result = {
+    'metric_type': 'enrichment_and_scrape_coverage',
+    'note': 'enrichment = listings with valuation_data; scrape_coverage = DB count vs live Domain.com.au (from step 109)',
+    'enrichment': enrichment,
+    'scrape_coverage': scrape_coverage,
+}
+print(json.dumps(to_jsonable(result)))
 client.close()
 """
 
@@ -577,14 +600,87 @@ def _structured_memory_script() -> str:
 import json
 import sys
 sys.path.insert(0, '/home/fields/Fields_Orchestrator/scripts')
-from ceo_agent_lib import get_client, now_aest, to_jsonable
+from ceo_agent_lib import get_client, now_aest, to_jsonable, load_founder_truths
 
 client = get_client()
 sm = client['system_monitor']
 cutoff_14 = (now_aest().strftime('%Y-%m-%d'))
 
+# Load known resolved issues so we can tag stale proposals
+founder_truths = load_founder_truths()
+resolved_items = founder_truths.get('known_resolved_issues', {}).get('items', [])
+resolved_ids = {item['id'] for item in resolved_items}
+resolved_keywords = {}
+for item in resolved_items:
+    # Build keyword-to-id map from descriptions for fuzzy matching
+    desc_lower = item.get('description', '').lower()
+    resolved_keywords[item['id']] = {
+        'resolved': item.get('resolved', ''),
+        'description': item.get('description', ''),
+        'keywords': set(desc_lower.split()),
+    }
+
+def _matches_resolved(text):
+    # Check if text references a known resolved issue. Returns list of matched IDs.
+    if not text:
+        return []
+    text_lower = text.lower()
+    matches = []
+    # Direct ID match
+    for rid in resolved_ids:
+        if rid.replace('_', ' ') in text_lower or rid in text_lower:
+            matches.append(rid)
+    # Key phrase matching
+    phrase_map = {
+        'recently_sold_route': ['recently-sold', 'recently sold route', 'sold route', 'sold-route'],
+        'ops_counts_inflated': ['ops counts', 'inflated counts', 'listing_status filter'],
+        'step_106_zombies': ['step 106 zombie', 'orphaned process_runs', 'concurrent step 106'],
+        'facebook_attribution': ['facebook attribution', 'fb attribution', 'self-referral'],
+        'google_ads_attribution': ['google ads attribution', 'gclid', 'gad_source'],
+        'experiment_variant_race': ['variant race', 'active_variants null', '$setOnInsert race'],
+    }
+    for rid, phrases in phrase_map.items():
+        if rid in matches:
+            continue
+        for phrase in phrases:
+            if phrase in text_lower:
+                matches.append(rid)
+                break
+    return matches
+
+def tag_stale_proposals(proposals):
+    # Annotate proposals whose findings reference known resolved issues.
+    for prop in proposals:
+        stale_refs = []
+        # Check findings
+        for finding in prop.get('findings', []):
+            title = finding.get('title', '')
+            detail = finding.get('detail', '')
+            rec = finding.get('recommendation', '')
+            matched = _matches_resolved(f'{title} {detail} {rec}')
+            if matched:
+                finding['_resolved_upstream'] = matched
+                finding['_staleness_note'] = f'References resolved issue(s): {", ".join(matched)}. Verify fix is holding rather than re-flagging.'
+                stale_refs.extend(matched)
+        # Check proposals list
+        for p in prop.get('proposals', []):
+            problem = p.get('problem', '')
+            proposal_text = p.get('proposal', '')
+            title = p.get('title', '')
+            matched = _matches_resolved(f'{title} {problem} {proposal_text}')
+            if matched:
+                p['_resolved_upstream'] = matched
+                p['_staleness_note'] = f'References resolved issue(s): {", ".join(matched)}. Verify fix is holding rather than re-flagging.'
+                stale_refs.extend(matched)
+        if stale_refs:
+            prop['_has_stale_references'] = True
+            prop['_stale_issue_ids'] = list(set(stale_refs))
+    return proposals
+
 recent_proposals = list(sm['ceo_proposals'].find({'agent': {'$ne': 'system'}}, {'_id': 0}).limit(50))
 recent_proposals.sort(key=lambda row: (row.get('date', ''), str(row.get('updated_at', ''))), reverse=True)
+recent_proposals = tag_stale_proposals(recent_proposals[:20])
+
 recent_outcomes = list(sm['ceo_proposal_outcomes'].find({}, {'_id': 0}).limit(100))
 recent_outcomes.sort(key=lambda row: (row.get('date', ''), str(row.get('updated_at', ''))), reverse=True)
 recent_changes = {
@@ -613,9 +709,15 @@ for row in memory_rows:
         'latest_source': row.get('source'),
     }
 
+# Include resolved issues list so agents know what NOT to re-flag
+known_resolved = [{'id': item['id'], 'resolved': item.get('resolved', ''), 'description': item.get('description', '')} for item in resolved_items]
+data_context = founder_truths.get('data_context_notes', {}).get('items', [])
+
 payload = {
     'generated_at': now_aest().isoformat(),
-    'recent_proposals': to_jsonable(recent_proposals[:20]),
+    'known_resolved_issues': known_resolved,
+    'data_context_notes': data_context,
+    'recent_proposals': to_jsonable(recent_proposals),
     'recent_outcomes': to_jsonable(recent_outcomes[:50]),
     'recent_website_changes': to_jsonable(recent_changes),
     'active_experiments': to_jsonable(active_experiments),
