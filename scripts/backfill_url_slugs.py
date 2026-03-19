@@ -58,9 +58,9 @@ def main():
 
     for suburb in TARGET_SUBURBS:
         coll = db[suburb]
-        # Only find docs with an address but no url_slug
+        # Only find docs with an address but no url_slug (missing or null)
         cursor = coll.find(
-            {"address": {"$exists": True, "$ne": ""}, "url_slug": {"$exists": False}},
+            {"address": {"$exists": True, "$ne": ""}, "$or": [{"url_slug": {"$exists": False}}, {"url_slug": None}]},
             {"address": 1, "full_address": 1, "suburb": 1}
         )
         for doc in cursor:
