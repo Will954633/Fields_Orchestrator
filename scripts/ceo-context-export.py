@@ -590,7 +590,9 @@ recent_changes = {
 }
 recent_changes['deploys'].sort(key=lambda row: row.get('timestamp', ''), reverse=True)
 recent_changes['changes'].sort(key=lambda row: row.get('created_at', ''), reverse=True)
-active_experiments = list(sm['website_experiments'].find({'status': 'active'}, {'_id': 0}))
+# Experiments now managed by PostHog feature flags (migrated 2026-03-19)
+# PostHog experiment data is in metrics/website_metrics_7d.json instead
+active_experiments = [{"note": "A/B experiments managed via PostHog feature flags since 2026-03-19. See metrics/website_metrics_7d.json for flag configs."}]
 
 memory_rows = list(sm['ceo_memory'].find({}, {'_id': 0}).limit(400))
 memory_rows.sort(key=lambda row: str(row.get('last_seen', '')), reverse=True)
