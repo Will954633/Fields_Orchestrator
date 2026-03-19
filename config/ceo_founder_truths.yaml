@@ -64,10 +64,16 @@ ads:
     - "Only suggest a new ad test when there is a clear high-upside opportunity that has not already been run."
 
 experimentation:
-  minimum_samples:
-    for_sale_page_v1_sessions: 800
-    discover_mode_v1_sessions: 300
-  review_rule: "Do not call an experiment before the minimum sample or when telemetry is degraded."
+  platform: "PostHog (posthog.com) — migrated 2026-03-19"
+  note: "All A/B experiments now use PostHog feature flags and PostHog's built-in experiment analysis. The old CRM-based variant tracking (visitorTracker.ts, CRM_All_Data.sessions) is deprecated."
+  active_flags:
+    - key: "for_sale_page_v1"
+      variants: ["control", "test_a", "test_b", "test_c"]
+      minimum_sessions: 800
+    - key: "discover_mode_v1"
+      variants: ["scroll", "swipe"]
+      minimum_sessions: 300
+  review_rule: "Do not call an experiment before the minimum sample. Check PostHog experiment results, not MongoDB."
 
 backup_scraper:
   purpose: "Redundant scraper on property-scraper VM — hedges against Domain.com.au bot detection blocking the primary curl_cffi scraper."
@@ -147,10 +153,8 @@ data_context_notes:
   note: "Check these BEFORE flagging any telemetry anomaly as a current bug."
   items:
     - key: "google_ads_paused"
-      detail: "All Google Ads campaigns are paused by Will. 0 Google sessions in the 7-day window is expected, not a tracking failure."
-    - key: "facebook_attribution_history"
-      detail: "Facebook attribution was fixed on 2026-03-18. Days before Mar 18 show incorrect or zero Facebook session counts. The 7-day window will contain pre-fix data until Mar 25. Weight analysis toward Mar 19+ data only."
-    - key: "experiment_variant_backfill"
-      detail: "Experiment variant fix deployed 2026-03-18. Sessions before that date have null variant data. Do not treat missing variants on pre-Mar-18 sessions as a current problem. Both experiments are now marked early_blocked."
-    - key: "metrics_window_caveat"
-      detail: "The 7-day metrics window includes pre-fix data from before Mar 18. Treat pre-fix days as unreliable for source attribution, variant analysis, and session counts."
+      detail: "All Google Ads campaigns are paused by Will. 0 Google sessions is expected, not a tracking failure."
+    - key: "posthog_migration"
+      detail: "Website analytics migrated from custom CRM tracker to PostHog on 2026-03-19. All data in CRM_All_Data.sessions, website_daily_metrics, and ad_attribution collections is HISTORICAL ONLY — no new data is being written. For current website analytics, use PostHog dashboard (posthog.com). The website_metrics_7d.json export is no longer populated."
+    - key: "deprecated_tracking_crons"
+      detail: "website-metrics-collector.py and fb-attribution-builder.py crons were disabled on 2026-03-19. PostHog handles visitor tracking, source attribution, and experiment variant assignment natively."
