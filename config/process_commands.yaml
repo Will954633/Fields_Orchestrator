@@ -331,9 +331,9 @@ processes:
 
   - id: 109
     name: "Coverage Check (Domain vs DB)"
-    description: "For each target market suburb, fetches the current for-sale property count from Domain.com.au and compares to the count in Gold_Coast. Logs ERROR lines to logs/coverage_check.log when counts differ. Only checks target market suburbs (Robina, Varsity Lakes, Burleigh Waters) since those are the only ones scraped nightly."
+    description: "For each target market suburb, fetches the current for-sale property count from Domain.com.au and compares to the count in Gold_Coast. Logs ERROR lines to logs/coverage_check.log when counts differ. Checks all 8 target market suburbs."
     phase: "data_quality"
-    command: "python3 scripts/coverage_check.py --suburbs \"Robina:4226,Varsity Lakes:4227,Burleigh Waters:4220\" --no-fail"
+    command: "python3 scripts/coverage_check.py --suburbs \"Robina:4226,Varsity Lakes:4227,Burleigh Waters:4220,Merrimac:4226,Mudgeeraba:4213,Reedy Creek:4227,Worongary:4213,Carrara:4211\" --no-fail"
     working_dir: "/home/fields/Fields_Orchestrator"
     mongodb_activity: "light_read"
     requires_browser: false  # Migrated from Selenium to curl_cffi (2026-03-11)
@@ -370,6 +370,46 @@ processes:
     depends_on: [101, 102, 103, 104, 112]  # Run after data quality validator
 
   # ============================================================================
+  # AD METRICS COLLECTION (on-demand via dashboard refresh)
+  # ============================================================================
+
+  - id: 201
+    name: "Facebook Ads Metrics Collector"
+    description: "Fetches latest Facebook/Meta ad performance data — statuses, spend, impressions, CTR, demographics"
+    phase: "ad_metrics"
+    command: "source /home/fields/venv/bin/activate && set -a && source /home/fields/Fields_Orchestrator/.env && set +a && python3 scripts/fb-metrics-collector.py --quick"
+    working_dir: "/home/fields/Fields_Orchestrator"
+    mongodb_activity: "light_write"
+    requires_browser: false
+    estimated_duration_minutes: 3
+    cooldown_seconds: 30
+    depends_on: []
+
+  - id: 202
+    name: "Google Ads Metrics Collector"
+    description: "Fetches latest Google Ads campaign performance data — statuses, spend, clicks, conversions"
+    phase: "ad_metrics"
+    command: "source /home/fields/venv/bin/activate && set -a && source /home/fields/Fields_Orchestrator/.env && set +a && python3 scripts/google-ads-metrics-collector.py --quick"
+    working_dir: "/home/fields/Fields_Orchestrator"
+    mongodb_activity: "light_write"
+    requires_browser: false
+    estimated_duration_minutes: 3
+    cooldown_seconds: 30
+    depends_on: []
+
+  - id: 203
+    name: "Marketing Stage Tracker"
+    description: "Recomputes marketing funnel stage, health indicators, and audience progress from latest ad data"
+    phase: "ad_metrics"
+    command: "source /home/fields/venv/bin/activate && set -a && source /home/fields/Fields_Orchestrator/.env && set +a && python3 scripts/marketing-stage-tracker.py"
+    working_dir: "/home/fields/Fields_Orchestrator"
+    mongodb_activity: "light_write"
+    requires_browser: false
+    estimated_duration_minutes: 2
+    cooldown_seconds: 30
+    depends_on: [201]
+
+  # ============================================================================
   # PHASE 7: BACKUP (handled separately by backup_coordinator)
   # ============================================================================
   # Note: Backup is not listed here as it's handled by the backup_coordinator module
@@ -377,7 +417,7 @@ processes:
 
 # Execution order (processes will run in this order based on schedule)
 # Note: Schedule manager determines which processes run based on day of week
-# - Monday-Saturday: 101, 103, 111, 113, 114, 112, 105, 106, 6, 11, 12, 13, 14, 16, 15, 17, 18, 109, 107 (Robina, Varsity Lakes, Burleigh Waters only + coverage check + audit)
+# - Monday-Saturday: 101, 103, 111, 113, 114, 112, 105, 106, 6, 11, 12, 13, 14, 16, 15, 17, 18, 109, 107 (all 8 target market suburbs + coverage check + audit)
 # - Sunday: 102, 104, 101, 103, 111, 113, 114, 112, 105, 106, 6, 11, 12, 13, 14, 16, 15, 17, 18, 109, 107 (all suburbs + target market + coverage check + audit)
 execution_order: [101, 102, 103, 104, 111, 113, 114, 110, 112, 105, 106, 108, 6, 11, 12, 13, 14, 16, 15, 17, 19, 18, 109, 107]
 
