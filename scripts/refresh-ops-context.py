@@ -113,6 +113,8 @@ def status_icon(status):
         return "⏳"
     if s in ("warn", "amber", "warning"):
         return "⚠️"
+    if s in ("stale",):
+        return "🕐"
     if s in ("skipped", "unknown", "pending"):
         return "⬜"
     return "•"
@@ -219,6 +221,14 @@ def fetch_data_coverage(db):
         d for d in latest.values()
         if d.get("check_type") == "data_coverage" and d.get("suburb")
     ]
+    # Freshness gate: mark any coverage check older than 12h as stale
+    stale_cutoff = datetime.utcnow() - timedelta(hours=12)
+    for doc in suburb_docs:
+        checked = doc.get("checked_at")
+        if checked is None:
+            doc["status"] = "stale"
+        elif isinstance(checked, datetime) and checked.replace(tzinfo=None) < stale_cutoff:
+            doc["status"] = "stale"
     suburb_docs.sort(key=lambda d: d.get("suburb", ""))
     return suburb_docs
 
@@ -257,14 +267,15 @@ def fetch_scraper_health(db):
         return []
 
 def fetch_listing_counts(client):
-    """Count active listings per suburb from Gold_Coast_Currently_For_Sale."""
-    # Collections use lowercase names (e.g. "robina" not "Robina")
+    """Count active listings and enrichment per suburb from Gold_Coast."""
     SUBURBS = [
         "robina", "burleigh_waters", "varsity_lakes",
         "burleigh_heads", "mudgeeraba", "reedy_creek",
         "merrimac", "worongary",
     ]
+    TARGET_SUBURBS = ["robina", "burleigh_waters", "varsity_lakes"]
     counts = {}
+    enrichment = {}  # per-suburb enrichment counts (target suburbs only)
     try:
         db = client["Gold_Coast"]
         for suburb in SUBURBS:
@@ -272,23 +283,19 @@ def fetch_listing_counts(client):
                 count = db[suburb].count_documents({"listing_status": "for_sale"})
                 display = suburb.replace("_", " ").title()
                 counts[display] = count
+                # Track enrichment for target suburbs
+                if suburb in TARGET_SUBURBS:
+                    enriched = db[suburb].count_documents({"listing_status": "for_sale", "valuation_data": {"$exists": True}})
+                    enrichment[display] = {"active": count, "enriched": enriched}
             except Exception:
                 display = suburb.replace("_", " ").title()
                 counts[display] = "?"
     except Exception:
         pass
 
-    # Enriched property count — data lives in suburb collections since migration
-    # A property is "enriched" if it has a valuation_data field written by step 6
-    try:
-        db_fc = client["Gold_Coast"]
-        enriched = sum(
-            db_fc[s].count_documents({"listing_status": "for_sale", "valuation_data": {"$exists": True}})
-            for s in ["robina", "burleigh_waters", "varsity_lakes"]
-        )
-        counts["_enriched"] = enriched
-    except Exception:
-        counts["_enriched"] = "?"
+    # Total enriched across target suburbs
+    counts["_enriched"] = sum(e["enriched"] for e in enrichment.values() if isinstance(e, dict))
+    counts["_enrichment"] = enrichment
 
     return counts
 
@@ -388,19 +395,28 @@ def render_ops_status(orch, api, coverage, repairs, articles, listing_counts, er
     h(2, "3. Active Listings Database")
 
     enriched = listing_counts.pop("_enriched", "?")
+    enrichment = listing_counts.pop("_enrichment", {})
     total_listings = sum(v for v in listing_counts.values() if isinstance(v, int))
     lines.append(f"**Total active listings (Gold_Coast):** {total_listings}")
     lines.append(f"**Enriched properties (with valuation_data, target suburbs):** {enriched}")
     sep()
-    lines.append("| Suburb | Active Listings |")
-    lines.append("|--------|----------------|")
+    lines.append("| Suburb | Active Listings | Enriched | Enrichment % |")
+    lines.append("|--------|----------------|----------|--------------|")
     for suburb, count in sorted(listing_counts.items()):
-        lines.append(f"| {suburb} | {count} |")
+        enr = enrichment.get(suburb)
+        if enr:
+            pct = round(enr["enriched"] / enr["active"] * 100, 1) if enr["active"] else 0
+            lines.append(f"| {suburb} | {count} | {enr['enriched']}/{enr['active']} | {pct}% |")
+        else:
+            lines.append(f"| {suburb} | {count} | — | — |")
 
     # ── 4. Data Coverage ─────────────────────────────────────────────────────
-    h(2, "4. Data Coverage by Suburb")
-    lines.append("*Measures **completeness** — whether our DB listing count matches the live Domain.com.au count. 'Critical' means Domain shows more listings than we have scraped.*\n")
+    h(2, "4. Scrape Coverage by Suburb")
+    lines.append("*Measures **scrape completeness** — whether our DB listing count matches the live Domain.com.au count (checked by step 109). 'Critical' means Domain shows more listings than we have scraped. This is different from enrichment % above — a suburb can be fully scraped but not fully enriched, or vice versa.*\n")
     if coverage:
+        stale_count = sum(1 for d in coverage if d.get("status") == "stale")
+        if stale_count > 0:
+            lines.append(f"🕐 **STALE DATA — {stale_count}/{len(coverage)} suburbs have coverage data older than 12 hours. Process 109 may not have run recently.**\n")
         lines.append("| Suburb | Status | Listings | Last Updated | Checked |")
         lines.append("|--------|--------|----------|--------------|---------|")
         for doc in coverage:
