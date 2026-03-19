@@ -296,7 +296,7 @@ def fetch_orchestrator_health(sm) -> dict[str, Any]:
 def fetch_pipeline_runs(sm, days: int, limit: int) -> dict[str, Any]:
     cutoff = now_aest() - timedelta(days=days)
     run_coll, run_source = get_pipeline_collection(sm)
-    rows = list(run_coll.find({"started_at": {"$gte": cutoff}}, {"_id": 0}).limit(limit * 5))
+    rows = list(run_coll.find({"started_at": {"$gte": cutoff}}, {"_id": 0}).sort("started_at", -1).limit(limit * 5))
     rows = sort_rows(rows, "started_at")
     return {"days": days, "limit": limit, "pipeline_source": run_source, "runs": to_jsonable(rows[:limit])}
 
