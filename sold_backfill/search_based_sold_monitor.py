@@ -405,8 +405,38 @@ class SearchBasedSoldMonitor:
                     "sold_detection_date": now,
                     "last_updated": now,
                 }
-                # Preserve listing price
-                update_fields["listing_price"] = doc.get("price")
+                # Preserve listing price and compute vendor discount
+                listing_price_text = doc.get("price")
+                update_fields["listing_price"] = listing_price_text
+                sale_price_text = sold_rec.get("sale_price")
+                if listing_price_text and sale_price_text:
+                    try:
+                        sys.path.insert(0, '/home/fields/Fields_Orchestrator/scripts')
+                        from track_price_changes import parse_price_numeric
+                        lp = parse_price_numeric(listing_price_text)
+                        sp = parse_price_numeric(sale_price_text)
+                        if lp and sp and lp > 0:
+                            update_fields["vendor_discount_pct"] = round(
+                                (sp - lp) / lp * 100, 2
+                            )
+                            print(f"      Vendor discount: {update_fields['vendor_discount_pct']:+.1f}% "
+                                  f"(asked {listing_price_text}, sold {sale_price_text})")
+                    except Exception:
+                        pass
+
+                # Append final "sold" entry to price_history if it exists
+                price_history = doc.get("price_history", [])
+                if price_history and sale_price_text:
+                    try:
+                        price_history.append({
+                            "price_text": sale_price_text,
+                            "price_numeric": parse_price_numeric(sale_price_text) if 'parse_price_numeric' in dir() else None,
+                            "recorded_at": now,
+                            "event": "sold"
+                        })
+                        update_fields["price_history"] = price_history
+                    except Exception:
+                        pass
 
                 # Compute Domain valuation margin of error
                 domain_val = (doc.get("domain_valuation_at_listing")
