@@ -126,7 +126,23 @@ processes:
     depends_on: [104, 113]
 
   # ============================================================================
-  # PHASE 2.5: IMAGE ARCHIVAL (Domain CDN -> Azure Blob Storage)
+  # PHASE 2.5: PRICE CHANGE TRACKING (Asking price snapshots + reductions)
+  # ============================================================================
+
+  - id: 115
+    name: "Track Price Changes (Target Market)"
+    description: "Records asking price history for all active listings. Detects price reductions and increases between runs. Seeds initial prices for new listings so vendor discount can be calculated when properties sell."
+    phase: "monitoring_target"
+    command: "python3 scripts/track_price_changes.py --no-fail"
+    working_dir: "/home/fields/Fields_Orchestrator"
+    mongodb_activity: "moderate_write"
+    requires_browser: false
+    estimated_duration_minutes: 3
+    cooldown_seconds: 10
+    depends_on: [101]  # Run after scraping so prices are fresh
+
+  # ============================================================================
+  # PHASE 2.6: IMAGE ARCHIVAL (Domain CDN -> Azure Blob Storage)
   # ============================================================================
 
   - id: 110
@@ -419,7 +435,7 @@ processes:
 # Note: Schedule manager determines which processes run based on day of week
 # - Monday-Saturday: 101, 103, 111, 113, 114, 112, 105, 106, 6, 11, 12, 13, 14, 16, 15, 17, 18, 109, 107 (all 8 target market suburbs + coverage check + audit)
 # - Sunday: 102, 104, 101, 103, 111, 113, 114, 112, 105, 106, 6, 11, 12, 13, 14, 16, 15, 17, 18, 109, 107 (all suburbs + target market + coverage check + audit)
-execution_order: [101, 102, 103, 104, 111, 113, 114, 110, 112, 105, 106, 108, 6, 11, 12, 13, 14, 16, 15, 17, 19, 18, 109, 107]
+execution_order: [101, 102, 103, 104, 111, 113, 114, 115, 110, 112, 105, 106, 108, 6, 11, 12, 13, 14, 16, 15, 17, 19, 18, 109, 107]
 
 # Phase descriptions for UI display
 phases:
@@ -436,7 +452,7 @@ phases:
   monitoring_target:
     name: "Sold Monitoring (Target Market)"
     description: "Monitor target market (Robina, Varsity Lakes, Burleigh Waters) for sold properties"
-    steps: [103, 111, 113, 114]
+    steps: [103, 111, 113, 114, 115]
     
   monitoring_other:
     name: "Sold Monitoring (All Suburbs)"
