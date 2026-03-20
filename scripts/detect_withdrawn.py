@@ -166,15 +166,36 @@ def run_withdrawn_detection(suburbs, dry_run=False):
                     totals["withdrawn"] += 1
                     print(f"  WITHDRAWN: {address}")
                     if not dry_run:
+                        # Fetch full doc to capture asking price before status change
+                        full_doc = retry_db(lambda: collection.find_one({"_id": prop["_id"]}))
+                        listing_price = full_doc.get("price") if full_doc else None
+                        price_history = full_doc.get("price_history", []) if full_doc else []
+
+                        update_fields = {
+                            "listing_status": "withdrawn",
+                            "withdrawn_date": today_aest,
+                            "withdrawn_detected_at": now_iso,
+                            "detection_method": "listing_url_redirect_check",
+                            "last_updated": now_iso,
+                            "listing_price": listing_price,
+                        }
+
+                        # Append final "withdrawn" entry to price_history
+                        if listing_price:
+                            sys.path.insert(0, '/home/fields/Fields_Orchestrator/scripts')
+                            from track_price_changes import parse_price_numeric
+                            price_history.append({
+                                "price_text": listing_price,
+                                "price_numeric": parse_price_numeric(listing_price),
+                                "recorded_at": now_iso,
+                                "run_id": today_aest,
+                                "event": "withdrawn"
+                            })
+                            update_fields["price_history"] = price_history
+
                         retry_db(lambda: collection.update_one(
                             {"_id": prop["_id"]},
-                            {"$set": {
-                                "listing_status": "withdrawn",
-                                "withdrawn_date": today_aest,
-                                "withdrawn_detected_at": now_iso,
-                                "detection_method": "listing_url_redirect_check",
-                                "last_updated": now_iso,
-                            }}
+                            {"$set": update_fields}
                         ))
                 elif status == "active":
                     totals["active"] += 1
