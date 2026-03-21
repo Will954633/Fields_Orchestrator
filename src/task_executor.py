@@ -806,8 +806,25 @@ class TaskExecutor:
                     self.logger.info(f"{'='*60}\n")
                     continue
                 
+                # Check depends_on: skip if any dependency failed this run
+                if process.depends_on:
+                    failed_dep = None
+                    for dep_id in process.depends_on:
+                        dep_result = next((r for r in self.results if r.step_id == dep_id), None)
+                        # If dependency ran this run and failed, block this step
+                        if dep_result is not None and not dep_result.success:
+                            failed_dep = dep_id
+                            break
+                    if failed_dep is not None:
+                        dep_name = next((p.name for p in self.processes if p.id == failed_dep), str(failed_dep))
+                        self.logger.warning(f"\n{'='*60}")
+                        self.logger.warning(f"STEP {i+1}/{len(self.processes)}: {process.name} - SKIPPED (dependency {dep_name} [step {failed_dep}] failed this run)")
+                        self.logger.warning(f"{'='*60}\n")
+                        steps_failed += 1
+                        continue
+
                 self.current_step = process.id
-                
+
                 # Take snapshot before Phase 2 begins (for_sale or for_sale_target)
                 if process.phase in ("for_sale", "for_sale_target", "for_sale_other") and not phase2_started:
                     # Daily snapshot + candidate generation (used by downstream scripts once they accept filters)
