@@ -124,7 +124,7 @@ SUBURB_DISPLAY = {
 }
 
 
-def fetch_abs_data(dataflow: str, key: str, start_period: str = "2023-Q1") -> dict:
+def fetch_abs_data(dataflow: str, key: str, start_period: str = "2022-Q1") -> dict:
     """Fetch data from ABS SDMX JSON API (v2 format)."""
     url = f"{ABS_BASE}/{dataflow}/{key}"
     params = {"startPeriod": start_period, "format": "jsondata"}
@@ -242,6 +242,29 @@ def get_latest_quarter_from_monthly(timeseries: list[dict]) -> tuple[float, floa
     return None, None, ""
 
 
+def aggregate_monthly_to_quarterly(timeseries: list[dict]) -> list[dict]:
+    """Convert monthly timeseries to quarterly totals for chart display."""
+    quarters = {}
+    for entry in timeseries:
+        period = entry["period"]
+        try:
+            dt = datetime.strptime(period, "%Y-%m")
+            q = (dt.month - 1) // 3 + 1
+            q_key = f"{dt.year}-Q{q}"
+        except ValueError:
+            continue
+        if q_key not in quarters:
+            quarters[q_key] = []
+        quarters[q_key].append(entry["value"])
+
+    # Only include complete quarters (3 months)
+    result = []
+    for q_key in sorted(quarters.keys()):
+        if len(quarters[q_key]) == 3:
+            result.append({"period": q_key, "value": round(sum(quarters[q_key]), 1)})
+    return result
+
+
 def build_market_signals(dry_run: bool = False):
     """Fetch all ABS data and build market signals documents."""
 
@@ -272,6 +295,12 @@ def build_market_signals(dry_run: bool = False):
             trend = determine_trend(current_val, prev_val)
             signal = determine_signal(trend, ind_key, current_val)
 
+            # For monthly data, aggregate timeseries to quarterly for charts
+            if ind_cfg["frequency"] == "monthly":
+                chart_ts = aggregate_monthly_to_quarterly(timeseries)
+            else:
+                chart_ts = timeseries
+
             indicator_data[ind_key] = {
                 "currentValue": format_value(current_val, ind_cfg["format_fn"]) if current_val else "N/A",
                 "previousValue": format_value(prev_val, ind_cfg["format_fn"]) if prev_val else "N/A",
@@ -281,7 +310,7 @@ def build_market_signals(dry_run: bool = False):
                 "signal": signal,
                 "latestPeriod": latest_period,
                 "latestPeriodLabel": quarter_label(latest_period),
-                "timeseries": timeseries[-8:],  # Keep last 8 periods for sparkline
+                "timeseries": chart_ts[-12:],  # Keep last 12 quarters for trend chart
             }
 
             print(f"    Latest: {latest_period} = {format_value(current_val, ind_cfg['format_fn']) if current_val else 'N/A'}")
