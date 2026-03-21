@@ -295,10 +295,9 @@ def fetch_listing_counts(client):
                     continue  # skip suburbs with no active listings
                 display = suburb.replace("_", " ").title()
                 counts[display] = count
-                # Track enrichment for target suburbs
-                if suburb in TARGET_SUBURBS:
-                    enriched = db[suburb].count_documents({"listing_status": "for_sale", "valuation_data": {"$exists": True}})
-                    enrichment[display] = {"active": count, "enriched": enriched}
+                # Track enrichment for all suburbs (highlight target suburbs)
+                enriched_count = db[suburb].count_documents({"listing_status": "for_sale", "valuation_data": {"$exists": True}})
+                enrichment[display] = {"active": count, "enriched": enriched_count, "target": suburb in TARGET_SUBURBS}
             except Exception:
                 display = suburb.replace("_", " ").title()
                 counts[display] = "?"
@@ -411,8 +410,13 @@ def render_ops_status(orch, api, coverage, repairs, articles, listing_counts, er
     enrichment = listing_counts.pop("_enrichment", {})
     suburb_count = listing_counts.pop("_suburb_count", "?")
     total_listings = sum(v for v in listing_counts.values() if isinstance(v, int))
+    total_enriched = sum(e["enriched"] for e in enrichment.values() if isinstance(e, dict))
+    target_enriched = sum(e["enriched"] for e in enrichment.values() if isinstance(e, dict) and e.get("target"))
+    target_active = sum(e["active"] for e in enrichment.values() if isinstance(e, dict) and e.get("target"))
+    enrichment_pct = round(total_enriched / total_listings * 100, 1) if total_listings else 0
     lines.append(f"**Total active listings (Gold_Coast, {suburb_count} suburbs):** {total_listings}")
-    lines.append(f"**Enriched properties (with valuation_data, target suburbs):** {enriched}")
+    lines.append(f"**Enriched properties (with valuation_data, all suburbs):** {total_enriched}/{total_listings} ({enrichment_pct}%)")
+    lines.append(f"**Target suburb enrichment (Robina, Burleigh Waters, Varsity Lakes):** {target_enriched}/{target_active}")
     sep()
     lines.append("| Suburb | Active Listings | Enriched | Enrichment % |")
     lines.append("|--------|----------------|----------|--------------|")
@@ -420,7 +424,8 @@ def render_ops_status(orch, api, coverage, repairs, articles, listing_counts, er
         enr = enrichment.get(suburb)
         if enr:
             pct = round(enr["enriched"] / enr["active"] * 100, 1) if enr["active"] else 0
-            lines.append(f"| {suburb} | {count} | {enr['enriched']}/{enr['active']} | {pct}% |")
+            marker = " ⭐" if enr.get("target") else ""
+            lines.append(f"| {suburb}{marker} | {count} | {enr['enriched']}/{enr['active']} | {pct}% |")
         else:
             lines.append(f"| {suburb} | {count} | — | — |")
 
