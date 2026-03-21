@@ -43,16 +43,23 @@ def cosmos_retry(func, *args, retries=5, **kwargs):
 
 
 def safe_find(coll, query, proj, batch_size=20):
-    """Find with Cosmos retry."""
+    """Find with Cosmos retry. Handles 429 mid-cursor by retrying with skip."""
     results = []
-    for attempt in range(5):
+    for attempt in range(8):
         try:
-            for doc in coll.find(query, proj).batch_size(batch_size):
+            cursor = coll.find(query, proj).batch_size(batch_size).skip(len(results))
+            for doc in cursor:
                 results.append(doc)
             return results
         except OperationFailure as e:
-            if '16500' in str(e) and attempt < 4:
-                time.sleep(5 * (attempt + 1))
+            if '16500' in str(e) and attempt < 7:
+                retry_ms = 5000
+                match = __import__('re').search(r'RetryAfterMs=(\d+)', str(e))
+                if match:
+                    retry_ms = int(match.group(1))
+                wait = max(retry_ms / 1000.0, 2 * (attempt + 1))
+                print(f"    Cosmos 429 after {len(results)} docs, waiting {wait:.1f}s (attempt {attempt+1}/8)")
+                time.sleep(wait)
             else:
                 raise
     return results
@@ -168,7 +175,7 @@ def run_validator(db, monitor_db, suburbs, auto_fix=False):
 
     for coll_name in collections:
         print(f"  Scanning {coll_name}...")
-        time.sleep(1)  # be gentle on RUs
+        time.sleep(2)  # be gentle on RUs — Cosmos Serverless has ~5000 RU/s burst
 
         coll = db[coll_name]
         proj = {
