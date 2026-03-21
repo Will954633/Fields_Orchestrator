@@ -237,6 +237,7 @@ def fetch_orchestrator_health(sm) -> dict[str, Any]:
     weekly_summary = summarize_step_group(latest_weekly_rows, expected_ids={102, 104})
     weekly_summary["date"] = latest_weekly_date
     weekly_summary["expected_last_run_date"] = last_expected_weekly_date()
+    weekly_summary["freshness"] = "current" if latest_weekly_date == last_expected_weekly_date() else "stale"
 
     tuesday_check_required = current.strftime("%A") == "Tuesday"
     tuesday_check_passed = (
@@ -744,6 +745,128 @@ def fetch_active_listings() -> dict[str, Any]:
         client.close()
 
 
+def fetch_search_console(days: int) -> dict[str, Any]:
+    """Fetch Google Search Console performance data via the API."""
+    import os
+
+    try:
+        from google.oauth2.credentials import Credentials
+        from googleapiclient.discovery import build
+    except ImportError:
+        return {"source": "google_search_console", "error": "google-api-python-client not installed", "queries": [], "pages": []}
+
+    client_id = os.environ.get("GOOGLE_ADS_CLIENT_ID")
+    client_secret = os.environ.get("GOOGLE_ADS_CLIENT_SECRET")
+    refresh_token = os.environ.get("GOOGLE_INDEXING_REFRESH_TOKEN")
+
+    if not all([client_id, client_secret, refresh_token]):
+        return {"source": "google_search_console", "error": "missing credentials (GOOGLE_INDEXING_REFRESH_TOKEN)", "queries": [], "pages": []}
+
+    try:
+        creds = Credentials(
+            token=None,
+            refresh_token=refresh_token,
+            client_id=client_id,
+            client_secret=client_secret,
+            token_uri="https://oauth2.googleapis.com/token",
+            scopes=["https://www.googleapis.com/auth/webmasters.readonly"],
+        )
+        service = build("searchconsole", "v1", credentials=creds)
+
+        # GSC has 2-3 day data lag
+        end_date = (datetime.now() - timedelta(days=2)).strftime("%Y-%m-%d")
+        start_date = (datetime.now() - timedelta(days=2 + days)).strftime("%Y-%m-%d")
+
+        # 1. Top queries
+        query_resp = service.searchanalytics().query(
+            siteUrl="https://fieldsestate.com.au",
+            body={
+                "startDate": start_date,
+                "endDate": end_date,
+                "dimensions": ["query"],
+                "rowLimit": 100,
+            },
+        ).execute()
+
+        queries = []
+        for row in query_resp.get("rows", []):
+            queries.append({
+                "query": row["keys"][0],
+                "impressions": int(row.get("impressions", 0)),
+                "clicks": int(row.get("clicks", 0)),
+                "ctr": round(row.get("ctr", 0), 4),
+                "position": round(row.get("position", 0), 1),
+            })
+        queries.sort(key=lambda r: -r["impressions"])
+
+        # 2. Top pages
+        page_resp = service.searchanalytics().query(
+            siteUrl="https://fieldsestate.com.au",
+            body={
+                "startDate": start_date,
+                "endDate": end_date,
+                "dimensions": ["page"],
+                "rowLimit": 50,
+            },
+        ).execute()
+
+        pages = []
+        for row in page_resp.get("rows", []):
+            url = row["keys"][0].replace("https://fieldsestate.com.au", "")
+            pages.append({
+                "page": url or "/",
+                "impressions": int(row.get("impressions", 0)),
+                "clicks": int(row.get("clicks", 0)),
+                "ctr": round(row.get("ctr", 0), 4),
+                "position": round(row.get("position", 0), 1),
+            })
+        pages.sort(key=lambda r: -r["impressions"])
+
+        # 3. Daily totals
+        daily_resp = service.searchanalytics().query(
+            siteUrl="https://fieldsestate.com.au",
+            body={
+                "startDate": start_date,
+                "endDate": end_date,
+                "dimensions": ["date"],
+                "rowLimit": 30,
+            },
+        ).execute()
+
+        daily = []
+        for row in daily_resp.get("rows", []):
+            daily.append({
+                "date": row["keys"][0],
+                "impressions": int(row.get("impressions", 0)),
+                "clicks": int(row.get("clicks", 0)),
+                "ctr": round(row.get("ctr", 0), 4),
+                "position": round(row.get("position", 0), 1),
+            })
+        daily.sort(key=lambda r: r["date"])
+
+        total_impressions = sum(r["impressions"] for r in daily)
+        total_clicks = sum(r["clicks"] for r in daily)
+
+        return {
+            "source": "google_search_console",
+            "site": "https://fieldsestate.com.au",
+            "period": {"start": start_date, "end": end_date, "days": days},
+            "totals": {
+                "impressions": total_impressions,
+                "clicks": total_clicks,
+                "avg_ctr": round(total_clicks / total_impressions, 4) if total_impressions else 0,
+            },
+            "daily": daily,
+            "top_queries": queries[:50],
+            "top_pages": pages[:25],
+            "generated_at": now_aest().isoformat(),
+        }
+
+    except Exception as exc:
+        error = str(exc)[:300]
+        return {"source": "google_search_console", "error": error, "queries": [], "pages": []}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Read-only query broker for CEO tools")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -779,6 +902,9 @@ def main() -> None:
     cost_p = sub.add_parser("cost-summary")
     cost_p.add_argument("--days", type=int, default=30)
 
+    gsc_p = sub.add_parser("search-console")
+    gsc_p.add_argument("--days", type=int, default=7)
+
     args = parser.parse_args()
 
     if args.command == "founder-truths":
@@ -786,6 +912,9 @@ def main() -> None:
         return
     if args.command == "active-listings":
         print(dumps_json(fetch_active_listings()))
+        return
+    if args.command == "search-console":
+        print(dumps_json(fetch_search_console(args.days)))
         return
 
     client = get_client()
