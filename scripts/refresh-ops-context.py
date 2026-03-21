@@ -267,20 +267,32 @@ def fetch_scraper_health(db):
         return []
 
 def fetch_listing_counts(client):
-    """Count active listings and enrichment per suburb from Gold_Coast."""
-    SUBURBS = [
-        "robina", "burleigh_waters", "varsity_lakes",
-        "burleigh_heads", "mudgeeraba", "reedy_creek",
-        "merrimac", "worongary",
-    ]
-    TARGET_SUBURBS = ["robina", "burleigh_waters", "varsity_lakes"]
+    """Count active listings and enrichment per suburb from Gold_Coast.
+
+    Dynamically discovers all suburb collections (excludes known non-suburb
+    collections like suburb_median_prices, suburb_statistics, etc.).
+    """
+    # Non-suburb collections to skip
+    SKIP_COLLECTIONS = {
+        "suburb_median_prices", "suburb_statistics", "change_detection_snapshots",
+        "address_search_index", "precomputed_indexed_prices",
+        "system.indexes", "system_monitor",
+    }
+    TARGET_SUBURBS = {"robina", "burleigh_waters", "varsity_lakes"}
     counts = {}
-    enrichment = {}  # per-suburb enrichment counts (target suburbs only)
+    enrichment = {}
     try:
         db = client["Gold_Coast"]
-        for suburb in SUBURBS:
+        all_collections = db.list_collection_names()
+        suburb_collections = sorted(
+            c for c in all_collections
+            if c not in SKIP_COLLECTIONS and not c.startswith("system.")
+        )
+        for suburb in suburb_collections:
             try:
                 count = db[suburb].count_documents({"listing_status": "for_sale"})
+                if count == 0:
+                    continue  # skip suburbs with no active listings
                 display = suburb.replace("_", " ").title()
                 counts[display] = count
                 # Track enrichment for target suburbs
@@ -296,6 +308,7 @@ def fetch_listing_counts(client):
     # Total enriched across target suburbs
     counts["_enriched"] = sum(e["enriched"] for e in enrichment.values() if isinstance(e, dict))
     counts["_enrichment"] = enrichment
+    counts["_suburb_count"] = len([v for v in counts.values() if isinstance(v, int)])
 
     return counts
 
@@ -396,8 +409,9 @@ def render_ops_status(orch, api, coverage, repairs, articles, listing_counts, er
 
     enriched = listing_counts.pop("_enriched", "?")
     enrichment = listing_counts.pop("_enrichment", {})
+    suburb_count = listing_counts.pop("_suburb_count", "?")
     total_listings = sum(v for v in listing_counts.values() if isinstance(v, int))
-    lines.append(f"**Total active listings (Gold_Coast):** {total_listings}")
+    lines.append(f"**Total active listings (Gold_Coast, {suburb_count} suburbs):** {total_listings}")
     lines.append(f"**Enriched properties (with valuation_data, target suburbs):** {enriched}")
     sep()
     lines.append("| Suburb | Active Listings | Enriched | Enrichment % |")
