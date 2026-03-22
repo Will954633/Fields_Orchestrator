@@ -1080,6 +1080,38 @@ def collect_reddit():
         doc["intent"] = classify_intent(text)
         doc["sentiment"] = _classify_sentiment(text)
 
+    # Enrich with engagement data from PullPush API
+    # (Reddit JSON API is blocked from cloud VMs, PullPush mirrors the data with scores)
+    post_ids = [doc["_id"].replace("reddit_", "") for doc in results]
+    if post_ids:
+        enriched = 0
+        # PullPush supports comma-separated IDs
+        for i in range(0, len(post_ids), 50):
+            batch = post_ids[i:i+50]
+            try:
+                resp = requests.get(
+                    "https://api.pullpush.io/reddit/search/submission/",
+                    params={"ids": ",".join(batch), "size": 50},
+                    headers={"User-Agent": REDDIT_UA},
+                    timeout=20,
+                )
+                if resp.status_code == 200:
+                    pp_posts = {p["id"]: p for p in resp.json().get("data", [])}
+                    for doc in results:
+                        pid = doc["_id"].replace("reddit_", "")
+                        if pid in pp_posts:
+                            pp = pp_posts[pid]
+                            doc["score"] = pp.get("score", 0)
+                            doc["num_comments"] = pp.get("num_comments", 0)
+                            doc["upvote_ratio"] = pp.get("upvote_ratio", 0)
+                            enriched += 1
+                time.sleep(1)
+            except Exception as e:
+                errors.append(f"pullpush enrichment: {str(e)[:80]}")
+
+        if enriched:
+            log.info(f"Enriched {enriched}/{len(results)} Reddit posts with PullPush scores")
+
     return results, errors
 
 
@@ -1508,22 +1540,302 @@ def print_report(sm_db, days=30):
 
 
 # ---------------------------------------------------------------------------
+# YouTube Deep: cross-pollinate all sources into YouTube autocomplete
+# ---------------------------------------------------------------------------
+def gather_all_known_queries(sm_db):
+    """Collect every unique query string from all MongoDB collections."""
+    all_queries = set()
+
+    # Google autocomplete suggestions
+    for doc in sm_db["search_suggestions"].find({}, {"suggestions": 1}):
+        for s in doc.get("suggestions", []):
+            all_queries.add(s.lower().strip())
+
+    # PAA questions
+    for doc in sm_db["search_paa_questions"].find({}, {"question": 1}):
+        q = doc.get("question", "").lower().strip()
+        if q:
+            all_queries.add(q)
+
+    # Reddit titles (short enough to be useful seeds)
+    for doc in sm_db["search_reddit_posts"].find({}, {"title": 1}):
+        t = doc.get("title", "").lower().strip()
+        if t and 10 < len(t) <= 100:
+            all_queries.add(t)
+
+    # Google Ads search terms
+    for doc in sm_db["search_ad_queries"].find({}, {"search_term": 1}):
+        q = doc.get("search_term", "").lower().strip()
+        if q:
+            all_queries.add(q)
+
+    # GSC queries
+    for doc in sm_db["search_console_queries"].find({}, {"query": 1}):
+        q = doc.get("query", "").lower().strip()
+        if q:
+            all_queries.add(q)
+
+    # YouTube suggestions already collected (feed them back to discover deeper chains)
+    for doc in sm_db["search_youtube_suggestions"].find({}, {"suggestions": 1}):
+        for s in doc.get("suggestions", []):
+            all_queries.add(s.lower().strip())
+
+    # Filter: 3-100 chars, skip obvious non-property junk
+    viable = [q for q in all_queries if 3 <= len(q) <= 100]
+    return viable
+
+
+def youtube_deep_scan(sm_db, limit=0, dry_run=False):
+    """Feed every known query from all sources into YouTube autocomplete.
+
+    Skips queries already tested (existing docs in search_youtube_suggestions).
+    This discovers YouTube-specific search behaviour that our seed queries miss.
+    """
+    print("YouTube Deep Scan — cross-pollinating all sources into YouTube")
+    print("Gathering all known queries from MongoDB...")
+
+    all_queries = gather_all_known_queries(sm_db)
+    print(f"  Total viable queries: {len(all_queries)}")
+
+    # Find which queries we've already tested
+    existing_seeds = set()
+    for doc in sm_db["search_youtube_suggestions"].find({}, {"seed_query": 1}):
+        existing_seeds.add(doc.get("seed_query", "").lower().strip())
+    print(f"  Already tested on YouTube: {len(existing_seeds)}")
+
+    new_seeds = [q for q in all_queries if q not in existing_seeds]
+    # Sort by length (shorter queries tend to yield more suggestions)
+    new_seeds.sort(key=len)
+
+    if limit > 0:
+        new_seeds = new_seeds[:limit]
+
+    print(f"  New seeds to test: {len(new_seeds)}")
+
+    if not new_seeds:
+        print("  Nothing new to test!")
+        return [], []
+
+    # Estimate time
+    est_minutes = len(new_seeds) * 0.55 / 60  # ~0.55s per query (0.5s delay + overhead)
+    print(f"  Estimated time: {est_minutes:.0f} minutes")
+
+    # Convert to the (query, intent, suburb) tuple format collect_youtube expects
+    seed_tuples = []
+    for q in new_seeds:
+        intent = classify_intent(q)
+        # Try to detect suburb from query text
+        suburb_key = None
+        for sk, info in SUBURBS.items():
+            if info["display"].lower() in q:
+                suburb_key = sk
+                break
+        seed_tuples.append((q, intent, suburb_key))
+
+    # Run collection
+    results, errors = collect_youtube(seed_tuples)
+
+    total_suggestions = sum(d.get("suggestion_count", 0) for d in results)
+    results_with_data = [r for r in results if r.get("suggestion_count", 0) > 0]
+    print(f"\n  Results: {len(results)} queries tested")
+    print(f"  Queries that returned suggestions: {len(results_with_data)}")
+    print(f"  Total new suggestions: {total_suggestions}")
+
+    # Find YouTube-only suggestions (not in existing Google autocomplete)
+    google_suggestions = set()
+    for doc in sm_db["search_suggestions"].find({}, {"suggestions": 1}):
+        for s in doc.get("suggestions", []):
+            google_suggestions.add(s.lower().strip())
+
+    yt_only = set()
+    for doc in results:
+        for s in doc.get("suggestions", []):
+            s_lower = s.lower().strip()
+            if s_lower not in google_suggestions:
+                yt_only.add(s_lower)
+
+    print(f"  YouTube-ONLY suggestions (not in Google): {len(yt_only)}")
+
+    if yt_only:
+        # Rank by how many different seeds surfaced them
+        yt_freq = {}
+        for doc in results:
+            for s in doc.get("suggestions", []):
+                s_lower = s.lower().strip()
+                if s_lower in yt_only:
+                    yt_freq[s_lower] = yt_freq.get(s_lower, 0) + 1
+
+        print(f"\n  Top 30 YouTube-ONLY discoveries:")
+        for q, freq in sorted(yt_freq.items(), key=lambda x: -x[1])[:30]:
+            intent = classify_intent(q)
+            print(f"    {freq:>2}x  [{intent:<8}]  {q}")
+
+    if not dry_run and results:
+        print(f"\n  Saving {len(results)} docs to search_youtube_suggestions...")
+        ops = [UpdateOne({"_id": d["_id"]}, {"$set": d}, upsert=True) for d in results]
+        batched_bulk_write(sm_db["search_youtube_suggestions"], ops, label="search_youtube_suggestions (deep)")
+
+    return results, errors
+
+
+def _is_property_relevant(title, content=""):
+    """Quick keyword check for property relevance."""
+    text = (title + " " + content).lower()
+    kw = ["property", "house", "real estate", "mortgage", "sell", "buy",
+          "auction", "agent", "valuation", "settlement", "stamp duty",
+          "gold coast", "robina", "burleigh", "varsity", "investment property",
+          "rent", "tenant", "strata", "conveyancer", "cgt", "capital gains",
+          "home loan", "interest rate", "downsizing", "upgrading"]
+    return any(k in text for k in kw)
+
+
+# ---------------------------------------------------------------------------
+# Reddit Score Backfill via PullPush
+# ---------------------------------------------------------------------------
+def _backfill_reddit_scores(sm_db):
+    """Fetch top-scoring Reddit posts from PullPush API (historical archive).
+
+    PullPush has data up to ~mid-2025. Reddit's JSON API is blocked from cloud VMs,
+    so PullPush is our only source for engagement scores (upvotes, comments, ratio).
+    We fetch the highest-engagement posts for our target search terms and subreddits,
+    which reveals what property topics resonate most on social media.
+    """
+    print("Fetching top Reddit posts via PullPush API...")
+    print("(PullPush archives data up to ~mid-2025 — engagement scores are historical)\n")
+
+    results = []
+    seen_ids = set()
+
+    # Fetch top posts by score from each subreddit
+    for sub in REDDIT_SUBREDDITS:
+        print(f"  r/{sub} — top posts by score...")
+        try:
+            resp = requests.get(
+                "https://api.pullpush.io/reddit/search/submission/",
+                params={"subreddit": sub, "sort_type": "score", "sort": "desc", "size": 100},
+                headers={"User-Agent": REDDIT_UA},
+                timeout=20,
+            )
+            if resp.status_code == 200:
+                for pp in resp.json().get("data", []):
+                    if pp["id"] not in seen_ids and _is_property_relevant(pp.get("title", ""), pp.get("selftext", "")):
+                        seen_ids.add(pp["id"])
+                        results.append(pp)
+                print(f"    {len(resp.json().get('data', []))} fetched, {len([r for r in results if r.get('subreddit') == sub])} property-relevant")
+            time.sleep(1)
+        except Exception as e:
+            print(f"    Error: {str(e)[:80]}")
+
+    # Search for specific property terms across all subreddits
+    search_terms = [
+        "sell house", "buy property", "real estate agent",
+        "property market", "house prices", "gold coast property",
+        "auction", "mortgage", "stamp duty", "valuation",
+        "investment property", "capital gains", "first home buyer",
+    ]
+    for term in search_terms:
+        for sub in REDDIT_SUBREDDITS:
+            try:
+                resp = requests.get(
+                    "https://api.pullpush.io/reddit/search/submission/",
+                    params={"subreddit": sub, "q": term, "sort_type": "score", "sort": "desc", "size": 25},
+                    headers={"User-Agent": REDDIT_UA},
+                    timeout=20,
+                )
+                if resp.status_code == 200:
+                    for pp in resp.json().get("data", []):
+                        if pp["id"] not in seen_ids:
+                            seen_ids.add(pp["id"])
+                            results.append(pp)
+                time.sleep(0.5)
+            except Exception:
+                pass
+        print(f"  '{term}' — {len(results)} total posts so far")
+
+    print(f"\nTotal unique posts collected: {len(results)}")
+
+    # Upsert to MongoDB
+    date_str = datetime.now(AEST).strftime("%Y-%m-%d")
+    saved = 0
+    for pp in results:
+        text = pp.get("title", "") + " " + pp.get("selftext", "")
+        doc = {
+            "_id": f"reddit_{pp['id']}",
+            "source": "reddit",
+            "subreddit": pp.get("subreddit", ""),
+            "title": pp.get("title", ""),
+            "selftext": (pp.get("selftext", "") or "")[:500],
+            "author": pp.get("author", ""),
+            "score": pp.get("score", 0),
+            "num_comments": pp.get("num_comments", 0),
+            "upvote_ratio": pp.get("upvote_ratio", 0),
+            "permalink": pp.get("permalink", ""),
+            "created_utc": datetime.utcfromtimestamp(int(pp.get("created_utc", 0))).isoformat() + "+00:00" if pp.get("created_utc") else "",
+            "search_term": "pullpush_top",
+            "date": date_str,
+            "collected_at": datetime.now(timezone.utc).isoformat(),
+            "intent": classify_intent(text),
+            "sentiment": _classify_sentiment(text),
+        }
+        try:
+            sm_db["search_reddit_posts"].update_one(
+                {"_id": doc["_id"]}, {"$set": doc}, upsert=True
+            )
+            saved += 1
+        except Exception:
+            time.sleep(0.5)
+            try:
+                sm_db["search_reddit_posts"].update_one(
+                    {"_id": doc["_id"]}, {"$set": doc}, upsert=True
+                )
+                saved += 1
+            except Exception:
+                pass
+
+    print(f"Saved {saved} posts to search_reddit_posts")
+
+    # Show top 20 by engagement
+    all_posts = sorted(results, key=lambda p: p.get("score", 0), reverse=True)
+    print(f"\nTop 20 posts by engagement:")
+    for p in all_posts[:20]:
+        print(f"  score={p.get('score',0):>4}  comments={p.get('num_comments',0):>3}  "
+              f"ratio={p.get('upvote_ratio',0):.0%}  r/{p.get('subreddit','?')}: "
+              f"{p.get('title','')[:55]}")
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 def main():
     parser = argparse.ArgumentParser(description="Search Intent Data Collector")
     parser.add_argument("--source", choices=["all", "auto", "youtube", "trends", "ads", "gsc", "paa", "reddit"],
                         default="all", help="Which source(s) to collect from")
+    parser.add_argument("--youtube-deep", action="store_true",
+                        help="Cross-pollinate: feed ALL queries from every source into YouTube autocomplete")
+    parser.add_argument("--youtube-deep-limit", type=int, default=0,
+                        help="Max queries to test in --youtube-deep (0 = all)")
     parser.add_argument("--report", action="store_true", help="Print summary report instead of collecting")
     parser.add_argument("--days", type=int, default=30, help="Days to include in report (default: 30)")
     parser.add_argument("--dry-run", action="store_true", help="Collect but don't save to MongoDB")
+    parser.add_argument("--backfill-reddit", action="store_true",
+                        help="Backfill engagement scores for existing Reddit posts via PullPush API")
     args = parser.parse_args()
 
     client = MongoClient(COSMOS_URI)
     sm_db = client["system_monitor"]
 
+    if args.backfill_reddit:
+        _backfill_reddit_scores(sm_db)
+        client.close()
+        return
+
     if args.report:
         print_report(sm_db, days=args.days)
+        client.close()
+        return
+
+    if args.youtube_deep:
+        youtube_deep_scan(sm_db, limit=args.youtube_deep_limit, dry_run=args.dry_run)
         client.close()
         return
 
