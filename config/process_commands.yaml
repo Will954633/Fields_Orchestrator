@@ -290,7 +290,7 @@ processes:
     mongodb_activity: "moderate_write"
     requires_browser: false
     estimated_duration_minutes: 15  # Depends on number of new properties
-    cooldown_seconds: 20
+    cooldown_seconds: 60  # Increased from 20s — let Cosmos RUs recover between enrichment steps
     depends_on: [11, 12]  # Depends on Parse Room Dimensions and Enrich Property Timeline
     
   - id: 15
@@ -314,7 +314,7 @@ processes:
     mongodb_activity: "moderate_write"
     requires_browser: false
     estimated_duration_minutes: 30  # 82 suburbs with rate limiting (500ms delays)
-    cooldown_seconds: 20
+    cooldown_seconds: 60  # Increased from 20s — let Cosmos RUs recover before valuation precompute
     depends_on: [13]  # Depends on Generate Suburb Median Prices
     
   - id: 18
@@ -326,7 +326,7 @@ processes:
     mongodb_activity: "heavy_write"
     requires_browser: false
     estimated_duration_minutes: 45  # 154 properties × ~1.2 seconds each
-    cooldown_seconds: 20
+    cooldown_seconds: 120  # Increased from 20s — this step causes most 429s; let RUs recover
     depends_on: [6, 15]  # Depends on Property Valuation Model and Calculate Property Insights
 
   - id: 19
@@ -361,7 +361,7 @@ processes:
   # PHASE 7: DATA QUALITY AUDIT
   # ============================================================================
 
-  - id: 112
+  - id: 116
     name: "Data Quality Validator"
     description: "Scans property data for implausible values (e.g. scraper grabbing room dimensions as land size). Auto-corrects using cadastral data and logs errors to system_monitor.data_quality_errors"
     phase: "data_quality"
@@ -383,7 +383,7 @@ processes:
     requires_browser: false
     estimated_duration_minutes: 5  # Quick audit scan
     cooldown_seconds: 60  # 1 minute before backup
-    depends_on: [101, 102, 103, 104, 112]  # Run after data quality validator
+    depends_on: [101, 102, 103, 104, 116]  # Run after data quality validator
 
   # ============================================================================
   # AD METRICS COLLECTION (on-demand via dashboard refresh)
@@ -433,9 +433,9 @@ processes:
 
 # Execution order (processes will run in this order based on schedule)
 # Note: Schedule manager determines which processes run based on day of week
-# - Monday-Saturday: 101, 103, 111, 113, 114, 112, 105, 106, 6, 11, 12, 13, 14, 16, 15, 17, 18, 109, 107 (all 8 target market suburbs + coverage check + audit)
-# - Sunday: 102, 104, 101, 103, 111, 113, 114, 112, 105, 106, 6, 11, 12, 13, 14, 16, 15, 17, 18, 109, 107 (all suburbs + target market + coverage check + audit)
-execution_order: [101, 102, 103, 104, 111, 113, 114, 115, 110, 112, 105, 106, 108, 6, 11, 12, 13, 14, 16, 15, 17, 19, 18, 109, 107]
+# - Monday-Saturday: 101, 103, 111, 113, 114, 115, 116, 112, 105, 106, 108, 6, 11, 12, 13, 14, 16, 15, 17, 19, 18, 109, 107
+# - Sunday: 102, 104, 101, 103, 111, 113, 114, 115, 116, 112, 105, 106, 108, 6, 11, 12, 13, 14, 16, 15, 17, 19, 18, 109, 107
+execution_order: [101, 102, 103, 104, 111, 113, 114, 115, 110, 116, 112, 105, 106, 108, 6, 11, 12, 13, 14, 16, 15, 17, 19, 18, 109, 107]
 
 # Phase descriptions for UI display
 phases:
@@ -487,7 +487,7 @@ phases:
   data_quality:
     name: "Data Quality Audit"
     description: "Validate database integrity, detect misplaced properties, and check scraping coverage against Domain"
-    steps: [109, 107]
+    steps: [116, 109, 107]
 
   backup:
     name: "Daily Backup"
