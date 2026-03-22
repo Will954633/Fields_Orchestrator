@@ -12,11 +12,13 @@ Sources:
   4. Google Search Console API (requires site verification)
   5. Google People Also Ask (PAA) — SERP scraping for question chains
   6. Reddit/Forum Monitor — r/AusProperty, r/AusFinance, r/GoldCoast
+  7. YouTube Autocomplete Suggestions (free, no auth)
 
 Seed queries: ~310 (214 core + ~96 from Halo Strategy topic clusters)
 
 Collections written (all in system_monitor):
   - search_suggestions      : autocomplete results per seed query per day
+  - search_youtube_suggestions : YouTube autocomplete results per seed query per day
   - search_trends           : relative volume + related/rising queries per keyword
   - search_ad_queries       : actual search queries triggering our Google Ads
   - search_console_queries  : queries where our site appeared in Google SERPs
@@ -25,16 +27,17 @@ Collections written (all in system_monitor):
   - search_intent_summary   : cross-source aggregation per run
 
 Usage:
-    python3 scripts/search-intent-collector.py                  # Full collection (all 6)
-    python3 scripts/search-intent-collector.py --source auto    # Autocomplete only
-    python3 scripts/search-intent-collector.py --source trends  # Trends only
-    python3 scripts/search-intent-collector.py --source ads     # Google Ads search terms only
-    python3 scripts/search-intent-collector.py --source gsc     # Google Search Console only
-    python3 scripts/search-intent-collector.py --source paa     # People Also Ask only
-    python3 scripts/search-intent-collector.py --source reddit  # Reddit monitor only
-    python3 scripts/search-intent-collector.py --report         # Show 30-day summary
+    python3 scripts/search-intent-collector.py                   # Full collection (all 7)
+    python3 scripts/search-intent-collector.py --source auto     # Autocomplete only
+    python3 scripts/search-intent-collector.py --source youtube  # YouTube autocomplete only
+    python3 scripts/search-intent-collector.py --source trends   # Trends only
+    python3 scripts/search-intent-collector.py --source ads      # Google Ads search terms only
+    python3 scripts/search-intent-collector.py --source gsc      # Google Search Console only
+    python3 scripts/search-intent-collector.py --source paa      # People Also Ask only
+    python3 scripts/search-intent-collector.py --source reddit   # Reddit monitor only
+    python3 scripts/search-intent-collector.py --report          # Show 30-day summary
     python3 scripts/search-intent-collector.py --report --days 7
-    python3 scripts/search-intent-collector.py --dry-run        # Collect but don't save
+    python3 scripts/search-intent-collector.py --dry-run         # Collect but don't save
 
 Schedule: Every 3 days at 02:00 AEST via cron.
 Retention: 180 days.
@@ -423,6 +426,78 @@ def collect_autocomplete(seed_queries):
 
         except Exception as e:
             errors.append(f"autocomplete: {query} — {str(e)[:100]}")
+            time.sleep(1)
+
+    return results, errors
+
+
+# ---------------------------------------------------------------------------
+# Source 7: YouTube Autocomplete
+# ---------------------------------------------------------------------------
+def collect_youtube(seed_queries):
+    """Fetch YouTube autocomplete suggestions for each seed query.
+
+    YouTube search intent differs from Google — users search for visual,
+    experiential content (suburb tours, market commentary, walkthroughs)
+    rather than quick factual lookups.
+    """
+    results = []
+    errors = []
+    date_str = datetime.now(AEST).strftime("%Y-%m-%d")
+    ua_idx = 0
+
+    for i, (query, intent, suburb_key) in enumerate(seed_queries):
+        try:
+            ua = USER_AGENTS[ua_idx % len(USER_AGENTS)]
+            ua_idx += 1
+            resp = requests.get(
+                "https://suggestqueries-clients6.youtube.com/complete/search",
+                params={"client": "youtube", "q": query, "ds": "yt", "gl": "au", "hl": "en"},
+                headers={"User-Agent": ua},
+                timeout=10,
+            )
+
+            if resp.status_code == 429:
+                errors.append(f"youtube: rate limited at query {i} ({query})")
+                time.sleep(5)
+                continue
+
+            resp.raise_for_status()
+
+            # YouTube returns JSONP — extract JSON from callback wrapper
+            text = resp.text
+            # Format: window.google.ac.h( [...] )
+            # Find the first '[' and last ']'
+            start = text.find("[")
+            end = text.rfind("]") + 1
+            if start >= 0 and end > start:
+                data = json.loads(text[start:end])
+                # data[1] contains suggestion arrays: [[suggestion, 0, [512,433]], ...]
+                suggestions = []
+                if len(data) > 1 and isinstance(data[1], list):
+                    for item in data[1]:
+                        if isinstance(item, list) and len(item) > 0:
+                            suggestions.append(item[0])
+            else:
+                suggestions = []
+
+            results.append({
+                "_id": f"yt_{slug(query)}_{date_str}",
+                "source": "youtube_autocomplete",
+                "seed_query": query,
+                "intent": intent,
+                "suburb": suburb_key,
+                "suggestions": suggestions,
+                "suggestion_count": len(suggestions),
+                "date": date_str,
+                "collected_at": datetime.now(timezone.utc).isoformat(),
+            })
+
+            # Rate limit: 0.5s between requests
+            time.sleep(0.5)
+
+        except Exception as e:
+            errors.append(f"youtube: {query} — {str(e)[:100]}")
             time.sleep(1)
 
     return results, errors
@@ -1087,7 +1162,7 @@ def detect_new_queries(sm_db, current_suggestions, lookback_days=30):
 # ---------------------------------------------------------------------------
 # Summary builder
 # ---------------------------------------------------------------------------
-def build_summary(auto_results, trends_results, ads_results, gsc_results,
+def build_summary(auto_results, youtube_results, trends_results, ads_results, gsc_results,
                    paa_results, reddit_results, new_queries, errors):
     """Build a cross-source summary document."""
     date_str = datetime.now(AEST).strftime("%Y-%m-%d")
@@ -1095,6 +1170,9 @@ def build_summary(auto_results, trends_results, ads_results, gsc_results,
     # Collect all unique query strings across all sources
     all_queries = set()
     for doc in auto_results:
+        for s in doc.get("suggestions", []):
+            all_queries.add(s.lower().strip())
+    for doc in youtube_results:
         for s in doc.get("suggestions", []):
             all_queries.add(s.lower().strip())
     for doc in ads_results:
@@ -1130,6 +1208,7 @@ def build_summary(auto_results, trends_results, ads_results, gsc_results,
         "date": date_str,
         "total_unique_queries": len(all_queries),
         "total_autocomplete_docs": len(auto_results),
+        "total_youtube_docs": len(youtube_results),
         "total_trends_keywords": len(trends_results),
         "total_ad_queries": len(ads_results),
         "total_gsc_queries": len(gsc_results),
@@ -1182,8 +1261,9 @@ def batched_bulk_write(collection, ops, batch_size=10, delay=0.5, label=""):
 
 def ensure_indexes(sm_db):
     """Create indexes on search collections (idempotent)."""
-    for coll_name in ["search_suggestions", "search_trends", "search_ad_queries",
-                       "search_console_queries", "search_paa_questions", "search_reddit_posts"]:
+    for coll_name in ["search_suggestions", "search_youtube_suggestions", "search_trends",
+                       "search_ad_queries", "search_console_queries", "search_paa_questions",
+                       "search_reddit_posts"]:
         coll = sm_db[coll_name]
         coll.create_index("date")
     sm_db["search_intent_summary"].create_index("date")
@@ -1193,8 +1273,8 @@ def prune_old_data(sm_db, retention_days=180):
     """Delete docs older than retention period."""
     cutoff = (datetime.now(AEST) - timedelta(days=retention_days)).strftime("%Y-%m-%d")
     total = 0
-    for coll_name in ["search_suggestions", "search_trends", "search_ad_queries",
-                       "search_console_queries", "search_paa_questions",
+    for coll_name in ["search_suggestions", "search_youtube_suggestions", "search_trends",
+                       "search_ad_queries", "search_console_queries", "search_paa_questions",
                        "search_reddit_posts", "search_intent_summary"]:
         result = sm_db[coll_name].delete_many({"date": {"$lt": cutoff}})
         total += result.deleted_count
@@ -1319,6 +1399,29 @@ def print_report(sm_db, days=30):
             intent = classify_intent(q)
             print(f"  {freq:>2}x  [{intent:<8}]  {q}")
 
+    # YouTube suggestions
+    yt_docs = list(sm_db["search_youtube_suggestions"].find({"date": {"$gte": cutoff}}))
+    yt_freq = {}
+    for doc in yt_docs:
+        for s in doc.get("suggestions", []):
+            s_lower = s.lower().strip()
+            yt_freq[s_lower] = yt_freq.get(s_lower, 0) + 1
+
+    if yt_freq:
+        print(f"\nTop 20 YouTube Suggestions (by frequency across seeds):")
+        top_20_yt = sorted(yt_freq.items(), key=lambda x: -x[1])[:20]
+        for q, freq in top_20_yt:
+            intent = classify_intent(q)
+            print(f"  {freq:>2}x  [{intent:<8}]  {q}")
+
+        # Show YouTube-only queries (not in Google autocomplete)
+        yt_only = set(yt_freq.keys()) - set(suggestion_freq.keys())
+        if yt_only:
+            yt_only_ranked = sorted(yt_only, key=lambda q: -yt_freq[q])[:15]
+            print(f"\n  YouTube-ONLY queries (not in Google Autocomplete): {len(yt_only)} unique")
+            for q in yt_only_ranked:
+                print(f"    {yt_freq[q]:>2}x  {q}")
+
     # Google Ads search terms (if any) — sort in Python (Cosmos can't sort on unindexed fields)
     ad_docs = sorted(
         sm_db["search_ad_queries"].find({"date": {"$gte": cutoff}}),
@@ -1395,6 +1498,7 @@ def print_report(sm_db, days=30):
     print(f"\nData Sources:")
     print(f"  Autocomplete:    {sm_db['search_suggestions'].count_documents({'date': {'$gte': cutoff}})} docs")
     print(f"  Google Trends:   {sm_db['search_trends'].count_documents({'date': {'$gte': cutoff}})} docs")
+    print(f"  YouTube:         {sm_db['search_youtube_suggestions'].count_documents({'date': {'$gte': cutoff}})} docs")
     print(f"  Google Ads:      {sm_db['search_ad_queries'].count_documents({'date': {'$gte': cutoff}})} docs")
     print(f"  Search Console:  {sm_db['search_console_queries'].count_documents({'date': {'$gte': cutoff}})} docs")
     print(f"  PAA Questions:   {sm_db['search_paa_questions'].count_documents({'date': {'$gte': cutoff}})} docs")
@@ -1408,7 +1512,7 @@ def print_report(sm_db, days=30):
 # ---------------------------------------------------------------------------
 def main():
     parser = argparse.ArgumentParser(description="Search Intent Data Collector")
-    parser.add_argument("--source", choices=["all", "auto", "trends", "ads", "gsc", "paa", "reddit"],
+    parser.add_argument("--source", choices=["all", "auto", "youtube", "trends", "ads", "gsc", "paa", "reddit"],
                         default="all", help="Which source(s) to collect from")
     parser.add_argument("--report", action="store_true", help="Print summary report instead of collecting")
     parser.add_argument("--days", type=int, default=30, help="Days to include in report (default: 30)")
@@ -1433,6 +1537,7 @@ def main():
 
     all_errors = []
     auto_results = []
+    youtube_results = []
     trends_results = []
     ads_results = []
     gsc_results = []
@@ -1441,14 +1546,21 @@ def main():
 
     # Collect from each source
     if args.source in ("all", "auto"):
-        print("\n[1/6] Google Autocomplete...")
+        print("\n[1/7] Google Autocomplete...")
         auto_results, errs = collect_autocomplete(seed_queries)
         all_errors.extend(errs)
         total_suggestions = sum(d.get("suggestion_count", 0) for d in auto_results)
         print(f"  Collected {len(auto_results)} seed results with {total_suggestions} total suggestions")
 
+    if args.source in ("all", "youtube"):
+        print("\n[2/7] YouTube Autocomplete...")
+        youtube_results, errs = collect_youtube(seed_queries)
+        all_errors.extend(errs)
+        total_yt = sum(d.get("suggestion_count", 0) for d in youtube_results)
+        print(f"  Collected {len(youtube_results)} seed results with {total_yt} total suggestions")
+
     if args.source in ("all", "trends"):
-        print("\n[2/6] Google Trends...")
+        print("\n[3/7] Google Trends...")
         # Use high-volume keywords that Trends actually has data for
         # (suburb-specific queries like "robina property for sale" return zeros)
         TRENDS_KEYWORDS = [
@@ -1478,39 +1590,40 @@ def main():
         print(f"  Collected {len(trends_results)} trend docs")
 
     if args.source in ("all", "ads"):
-        print("\n[3/6] Google Ads Search Terms...")
+        print("\n[4/7] Google Ads Search Terms...")
         ads_results, errs = collect_ads_search_terms()
         all_errors.extend(errs)
 
     if args.source in ("all", "gsc"):
-        print("\n[4/6] Google Search Console...")
+        print("\n[5/7] Google Search Console...")
         gsc_results, errs = collect_search_console()
         all_errors.extend(errs)
 
     if args.source in ("all", "paa"):
-        print("\n[5/6] Google People Also Ask...")
+        print("\n[6/7] Google People Also Ask...")
         paa_results, errs = collect_paa()
         all_errors.extend(errs)
         print(f"  Collected {len(paa_results)} PAA questions")
 
     if args.source in ("all", "reddit"):
-        print("\n[6/6] Reddit Monitor...")
+        print("\n[7/7] Reddit Monitor...")
         reddit_results, errs = collect_reddit()
         all_errors.extend(errs)
         print(f"  Collected {len(reddit_results)} Reddit posts")
 
-    # Detect new queries
-    new_queries = detect_new_queries(sm_db, auto_results) if auto_results else []
+    # Detect new queries (include YouTube suggestions alongside Google)
+    new_queries = detect_new_queries(sm_db, auto_results + youtube_results) if (auto_results or youtube_results) else []
 
     # Build summary
-    summary = build_summary(auto_results, trends_results, ads_results, gsc_results,
+    summary = build_summary(auto_results, youtube_results, trends_results, ads_results, gsc_results,
                             paa_results, reddit_results, new_queries, all_errors)
 
     if args.dry_run:
         print(f"\n--- DRY RUN (not saving) ---")
-        print(f"Would save: {len(auto_results)} autocomplete, {len(trends_results)} trends, "
-              f"{len(ads_results)} ad queries, {len(gsc_results)} gsc queries, "
-              f"{len(paa_results)} PAA questions, {len(reddit_results)} Reddit posts")
+        print(f"Would save: {len(auto_results)} autocomplete, {len(youtube_results)} youtube, "
+              f"{len(trends_results)} trends, {len(ads_results)} ad queries, "
+              f"{len(gsc_results)} gsc queries, {len(paa_results)} PAA questions, "
+              f"{len(reddit_results)} Reddit posts")
         print(f"New queries: {len(new_queries)}")
         if new_queries:
             for q in new_queries[:10]:
@@ -1538,6 +1651,10 @@ def main():
     if auto_results:
         ops = [UpdateOne({"_id": d["_id"]}, {"$set": d}, upsert=True) for d in auto_results]
         batched_bulk_write(sm_db["search_suggestions"], ops, label="search_suggestions")
+
+    if youtube_results:
+        ops = [UpdateOne({"_id": d["_id"]}, {"$set": d}, upsert=True) for d in youtube_results]
+        batched_bulk_write(sm_db["search_youtube_suggestions"], ops, label="search_youtube_suggestions")
 
     if trends_results:
         ops = [UpdateOne({"_id": d["_id"]}, {"$set": d}, upsert=True) for d in trends_results]
