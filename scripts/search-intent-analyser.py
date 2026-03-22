@@ -76,6 +76,20 @@ def load_all_data(sm_db, cutoff):
             })
     data["suggestions"] = suggestions
 
+    # YouTube autocomplete: same structure, tagged as "youtube" source
+    yt_suggestions = []
+    for doc in sm_db["search_youtube_suggestions"].find({"date": {"$gte": cutoff}}):
+        for s in doc.get("suggestions", []):
+            yt_suggestions.append({
+                "text": s.lower().strip(),
+                "seed": doc.get("seed_query", ""),
+                "intent": doc.get("intent", ""),
+                "suburb": doc.get("suburb", ""),
+                "date": doc.get("date", ""),
+                "source": "youtube",
+            })
+    data["youtube"] = yt_suggestions
+
     # PAA questions
     paa = []
     for doc in sm_db["search_paa_questions"].find({"date": {"$gte": cutoff}}):
@@ -191,6 +205,12 @@ def analyse_frequency(data):
         freq[text] += 1
         seed_spread[text].add(s["seed"])
 
+    # YouTube suggestions
+    for s in data["youtube"]:
+        text = s["text"]
+        freq[text] += 1
+        seed_spread[text].add(f"yt:{s['seed']}")
+
     # Also count PAA and Reddit contributions
     for q in data["paa"]:
         freq[q["text"]] += 1
@@ -215,6 +235,8 @@ def analyse_clusters(data):
     """Discover topic clusters from 2-gram and 3-gram phrase frequency."""
     all_texts = set()
     for s in data["suggestions"]:
+        all_texts.add(s["text"])
+    for s in data["youtube"]:
         all_texts.add(s["text"])
     for q in data["paa"]:
         all_texts.add(q["text"])
@@ -414,6 +436,12 @@ def analyse_questions(data):
             questions[text] += 1
             sources[text].add("autocomplete")
 
+    for s in data["youtube"]:
+        text = s["text"]
+        if text.startswith(("how", "why", "what", "can", "should", "do ", "is ", "when", "where")):
+            questions[text] += 1
+            sources[text].add("youtube")
+
     for q in data["paa"]:
         text = q["text"]
         questions[text] += 1
@@ -436,7 +464,7 @@ def analyse_questions(data):
             "sources": sorted(sources[text]),
         })
 
-    return ranked[:150]
+    return ranked
 
 
 # ---------------------------------------------------------------------------
@@ -444,19 +472,21 @@ def analyse_questions(data):
 # ---------------------------------------------------------------------------
 def analyse_velocity(sm_db, current_cutoff, previous_cutoff):
     """Compare current period to previous period to find emerging signals."""
-    # Current period suggestions
+    # Current period suggestions (Google + YouTube)
     current = set()
-    for doc in sm_db["search_suggestions"].find({"date": {"$gte": current_cutoff}}):
-        for s in doc.get("suggestions", []):
-            current.add(s.lower().strip())
+    for coll in ["search_suggestions", "search_youtube_suggestions"]:
+        for doc in sm_db[coll].find({"date": {"$gte": current_cutoff}}):
+            for s in doc.get("suggestions", []):
+                current.add(s.lower().strip())
     for doc in sm_db["search_paa_questions"].find({"date": {"$gte": current_cutoff}}):
         current.add(doc.get("question", "").lower().strip())
 
     # Previous period
     previous = set()
-    for doc in sm_db["search_suggestions"].find({"date": {"$gte": previous_cutoff, "$lt": current_cutoff}}):
-        for s in doc.get("suggestions", []):
-            previous.add(s.lower().strip())
+    for coll in ["search_suggestions", "search_youtube_suggestions"]:
+        for doc in sm_db[coll].find({"date": {"$gte": previous_cutoff, "$lt": current_cutoff}}):
+            for s in doc.get("suggestions", []):
+                previous.add(s.lower().strip())
     for doc in sm_db["search_paa_questions"].find({"date": {"$gte": previous_cutoff, "$lt": current_cutoff}}):
         previous.add(doc.get("question", "").lower().strip())
 
@@ -464,13 +494,15 @@ def analyse_velocity(sm_db, current_cutoff, previous_cutoff):
 
     # Frequency comparison for growing queries
     curr_freq = Counter()
-    for doc in sm_db["search_suggestions"].find({"date": {"$gte": current_cutoff}}):
-        for s in doc.get("suggestions", []):
-            curr_freq[s.lower().strip()] += 1
+    for coll in ["search_suggestions", "search_youtube_suggestions"]:
+        for doc in sm_db[coll].find({"date": {"$gte": current_cutoff}}):
+            for s in doc.get("suggestions", []):
+                curr_freq[s.lower().strip()] += 1
     prev_freq = Counter()
-    for doc in sm_db["search_suggestions"].find({"date": {"$gte": previous_cutoff, "$lt": current_cutoff}}):
-        for s in doc.get("suggestions", []):
-            prev_freq[s.lower().strip()] += 1
+    for coll in ["search_suggestions", "search_youtube_suggestions"]:
+        for doc in sm_db[coll].find({"date": {"$gte": previous_cutoff, "$lt": current_cutoff}}):
+            for s in doc.get("suggestions", []):
+                prev_freq[s.lower().strip()] += 1
 
     growing = []
     for q, curr_count in curr_freq.items():
@@ -659,11 +691,18 @@ def score_importance(data, frequency, questions, fears, trends_analysis):
         q["sources"].add("autocomplete")
         q["frequency"] += 1
 
-    # PAA
+    # YouTube
+    for s in data["youtube"]:
+        q = query_signals[s["text"]]
+        q["sources"].add("youtube")
+        q["frequency"] += 1
+
+    # PAA — all PAA entries are questions by definition
     for p in data["paa"]:
         q = query_signals[p["text"]]
         q["sources"].add("paa")
         q["frequency"] += 1
+        q["is_question"] = True
 
     # Reddit
     for r in data["reddit"]:
@@ -810,6 +849,7 @@ def score_importance(data, frequency, questions, fears, trends_analysis):
         "top_queries": scored[:100],
         "top_fears": [s for s in scored if s["is_fear"]][:30],
         "top_questions": [s for s in scored if s["is_question"]][:30],
+        "all_scored_questions": [s for s in scored if s["is_question"]],
     }
 
 
@@ -1005,6 +1045,7 @@ def main():
     data = load_all_data(sm_db, current_cutoff)
     source_counts = {
         "autocomplete": len(data["suggestions"]),
+        "youtube": len(data["youtube"]),
         "paa": len(data["paa"]),
         "reddit": len(data["reddit"]),
         "google_ads": len(data["ads"]),
@@ -1087,17 +1128,62 @@ def main():
         return
 
     print("Saving to MongoDB...")
-    sm_db["search_intent_analysis"].update_one(
-        {"_id": analysis["_id"]}, {"$set": analysis}, upsert=True
-    )
+
+    # Extract all_scored_questions into a separate document to stay under Cosmos 2MB limit
+    all_scored_q = analysis.get("importance", {}).pop("all_scored_questions", [])
+
+    for attempt in range(5):
+        try:
+            sm_db["search_intent_analysis"].update_one(
+                {"_id": analysis["_id"]}, {"$set": analysis}, upsert=True
+            )
+            break
+        except Exception as e:
+            if "16500" in str(e) or "429" in str(e):
+                import re
+                wait = 0.5 * (attempt + 1)
+                m = re.search(r"RetryAfterMs=(\d+)", str(e))
+                if m:
+                    wait = max(wait, int(m.group(1)) / 1000)
+                print(f"  Rate limited, waiting {wait:.1f}s...")
+                time.sleep(wait)
+            else:
+                raise
+
     sm_db["search_intent_analysis"].create_index("date")
     print("  Saved to search_intent_analysis")
+
+    # Save scored questions as a separate document
+    if all_scored_q:
+        scored_doc = {
+            "_id": f"scored_questions_{date_str}",
+            "date": date_str,
+            "questions": all_scored_q,
+            "total": len(all_scored_q),
+        }
+        for attempt in range(5):
+            try:
+                sm_db["search_scored_questions"].update_one(
+                    {"_id": scored_doc["_id"]}, {"$set": scored_doc}, upsert=True
+                )
+                break
+            except Exception as e:
+                if "16500" in str(e) or "429" in str(e):
+                    wait = 0.5 * (attempt + 1)
+                    time.sleep(wait)
+                else:
+                    raise
+        sm_db["search_scored_questions"].create_index("date")
+        print(f"  Saved {len(all_scored_q)} scored questions to search_scored_questions")
 
     # Prune
     prune_cutoff = (now - timedelta(days=90)).strftime("%Y-%m-%d")
     pruned = sm_db["search_intent_analysis"].delete_many({"date": {"$lt": prune_cutoff}})
     if pruned.deleted_count:
         print(f"  Pruned {pruned.deleted_count} old analyses")
+    pruned2 = sm_db["search_scored_questions"].delete_many({"date": {"$lt": prune_cutoff}})
+    if pruned2.deleted_count:
+        print(f"  Pruned {pruned2.deleted_count} old scored questions")
 
     print("\nDone.")
     client.close()
