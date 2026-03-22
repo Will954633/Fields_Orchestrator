@@ -635,9 +635,9 @@ class EnhancedProductionValuationSystem:
             street_address = prop.get("street_address") or address
             suburb = prop.get("suburb")
 
-            # Throttle DB lookups to avoid Cosmos DB 429 rate limits
+            # Throttle DB lookups to avoid Cosmos DB 429 rate limits (serverless 5000 RU/s ceiling)
             if idx > 0:
-                time.sleep(0.3)
+                time.sleep(0.6)
 
             gc_doc = self.lookup_gold_coast_document_for_sale(prop)
             if gc_doc:
@@ -875,6 +875,10 @@ class EnhancedProductionValuationSystem:
             else:
                 logger.error("  ✗ Failed to store valuation")
                 self.stats['properties_failed'] += 1
+
+            # Throttle between properties to stay under Cosmos DB 5000 RU/s ceiling
+            if idx < len(properties):
+                time.sleep(0.5)
     
     def print_summary(self):
         """Print execution summary"""
