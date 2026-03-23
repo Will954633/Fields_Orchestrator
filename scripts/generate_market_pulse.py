@@ -328,7 +328,12 @@ IMPORTANT CONTEXT — Our proprietary analysis of 27 economic datasets across 8 
 - CREDIT/LENDING GROWTH lags prices by 3.5 months (r=0.948) — it confirms what already happened
 - The most crash-sensitive suburb is Burleigh Waters (highest economic correlation); Worongary is most insulated
 
-Your crash risk assessment should primarily reference these leading indicators (wages, household spending) rather than backward-looking metrics. If wages are rising and household spending is up, a crash is unlikely regardless of what interest rates are doing. If wages are plateauing or falling, that IS a genuine warning sign.
+ACADEMIC VALIDATION — Peer-reviewed research (Abelson et al. 2005, The Economic Record) on 33 years of Australian national data confirms:
+- Real disposable income has a LONG-RUN ELASTICITY of 1.71 — a 1% income rise produces a 1.71% house price rise (amplification effect)
+- Australian house prices are ASYMMETRIC: when rising, the market adjusts to equilibrium in ~4 quarters. When FALLING, it takes ~6 quarters (50% slower). This means sharp crashes are structurally unlikely — prices stagnate rather than collapse.
+- Housing SUPPLY per capita has the largest single coefficient (-3.6 elasticity). Rising supply is the biggest structural risk factor.
+
+Your crash risk assessment should primarily reference these leading indicators (wages, household spending) rather than backward-looking metrics. If wages are rising and household spending is up, a crash is unlikely regardless of what interest rates are doing. If wages are plateauing or falling, that IS a genuine warning sign. Also mention the asymmetric adjustment finding — Australian house prices historically fall slowly (6 quarters to adjust), making sudden crashes structurally unlikely.
 
 Here is the current market data for {suburb}:
 {data}
@@ -391,14 +396,20 @@ Return as JSON:
 
     "direction": """You are writing for someone who wants to know which way the {suburb} property market is heading — they're timing a major buy or sell decision.
 
+IMPORTANT CONTEXT — Research shows:
+- Queensland wage growth LEADS house prices by 3-4 months (r=0.940). Current wage trend is the best predictor of where prices are heading.
+- Income has an AMPLIFICATION effect on house prices: peer-reviewed research (Abelson et al. 2005) found a 1% rise in real income produces a 1.71% rise in house prices. Even moderate wage growth drives outsized price gains.
+- Household spending is the strongest real-time indicator (r=0.914).
+- Interest rates LAG by 12 months — don't reference rate expectations as a leading signal.
+
 Here is the current market data for {suburb}:
 {data}
 
 Write a 3-4 sentence summary that:
 1. Opens with "Which way is the {suburb} property market moving?"
 2. References QoQ and YoY growth momentum and whether it's accelerating or decelerating
-3. Cites market signals (leading indicators: wage growth, lending, consumer spending)
-4. Gives a forward-looking sentence about what the data suggests for the next 6-12 months
+3. Cites the LEADING indicators (wage growth trend, household spending) — these predict direction, not interest rates
+4. Gives a forward-looking sentence grounded in the leading indicator data, noting that income changes amplify into larger price movements (1.71x elasticity)
 
 Verdict: "strongly_rising", "rising", "plateauing", "softening", "declining"
 
