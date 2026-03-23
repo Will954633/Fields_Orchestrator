@@ -104,6 +104,76 @@ INDICATORS = {
             "carrara": {"UP": "Finance accessibility supports entry-level buyers", "DOWN": "Tightening credit may limit entry-level access", "STABLE": "Stable finance accessibility"},
         },
     },
+    "dwelling_completions": {
+        "displayName": "Dwelling Supply (QLD)",
+        "dataflow": "BUILDING_ACTIVITY",
+        # M7=Dwelling units completed, 3=QLD, CUR=Current, 1=New, 9=Total Sectors, 100=Total Residential, 10=Original, Q=Quarterly
+        "key": "M7.3.CUR.1.9.100.10.Q",
+        "frequency": "quarterly",
+        "unit": "units",
+        "format_fn": "thousands",
+        "description_templates": {
+            "UP": "Rising dwelling completions increase housing supply — a headwind for price growth",
+            "DOWN": "Falling completions tighten supply — supports price growth",
+            "STABLE": "Steady supply pipeline maintaining current market balance",
+        },
+        "suburb_descriptions": {
+            "robina": {"UP": "Increased supply in established areas may moderate price growth", "DOWN": "Supply constraints support Robina's price premium", "STABLE": "Balanced supply conditions"},
+            "burleigh_waters": {"UP": "New completions may ease supply tightness in premium coastal market", "DOWN": "Tight supply supports Burleigh Waters' premium pricing", "STABLE": "Steady supply in premium market"},
+            "varsity_lakes": {"UP": "Rising completions add stock to growth corridor", "DOWN": "Supply constraints support prices in growth suburb", "STABLE": "Balanced supply pipeline"},
+            "worongary": {"UP": "Increased supply in hinterland may moderate growth", "DOWN": "Limited new supply supports hinterland values", "STABLE": "Steady supply conditions"},
+            "mudgeeraba": {"UP": "Rising completions may add competition", "DOWN": "Limited new supply supports existing property values", "STABLE": "Steady supply pipeline"},
+            "reedy_creek": {"UP": "New development activity in hinterland", "DOWN": "Limited new construction supports values", "STABLE": "Minimal new supply"},
+            "merrimac": {"UP": "Increased supply in family market", "DOWN": "Limited new supply supports values", "STABLE": "Steady conditions"},
+            "carrara": {"UP": "Rising completions add affordable stock", "DOWN": "Supply constraints support entry-level market", "STABLE": "Balanced supply"},
+        },
+    },
+    "cpi_inflation": {
+        "displayName": "Inflation (QLD CPI)",
+        "dataflow": "CPI",
+        # 1=Index Number, 10001=All Groups, 10=Original, 3=QLD, Q=Quarterly
+        "key": "1.10001.10.3.Q",
+        "frequency": "quarterly",
+        "unit": "index",
+        "format_fn": "cpi_yoy",
+        "description_templates": {
+            "UP": "Rising inflation increases housing demand as an inflation hedge",
+            "DOWN": "Falling inflation reduces housing's inflation-hedge appeal but may signal rate cuts ahead",
+            "STABLE": "Stable inflation environment — neutral for housing demand",
+        },
+        "suburb_descriptions": {
+            "robina": {"UP": "Higher inflation supports property as inflation hedge", "DOWN": "Moderating inflation reduces hedge demand but may enable rate cuts", "STABLE": "Neutral inflation environment"},
+            "burleigh_waters": {"UP": "Inflation drives capital into premium property", "DOWN": "Lower inflation may reduce safe-haven demand for premium property", "STABLE": "Stable inflation conditions"},
+            "varsity_lakes": {"UP": "Inflation supports real asset demand", "DOWN": "Moderating inflation may signal rate relief for buyers", "STABLE": "Neutral inflation conditions"},
+            "worongary": {"UP": "Inflation supports acreage as a store of value", "DOWN": "Lower inflation may reduce tangible asset demand", "STABLE": "Neutral conditions"},
+            "mudgeeraba": {"UP": "Inflation supports property values", "DOWN": "Moderating inflation neutral for family market", "STABLE": "Stable conditions"},
+            "reedy_creek": {"UP": "Inflation supports hinterland property values", "DOWN": "Lower inflation neutral for hinterland", "STABLE": "Stable conditions"},
+            "merrimac": {"UP": "Inflation supports property as hedge", "DOWN": "Moderating inflation may enable rate cuts", "STABLE": "Stable conditions"},
+            "carrara": {"UP": "Inflation supports entry-level property demand", "DOWN": "Lower inflation may ease affordability pressure", "STABLE": "Stable conditions"},
+        },
+    },
+}
+
+# ASX All Ordinaries config (fetched from Yahoo Finance, not ABS)
+ASX_CONFIG = {
+    "displayName": "ASX All Ordinaries",
+    "unit": "points",
+    "format_fn": "thousands",
+    "description_templates": {
+        "UP": "Rising equity markets may draw capital away from property (substitution effect)",
+        "DOWN": "Falling equity markets drive capital flight into property — historically bullish for house prices",
+        "STABLE": "Steady equity markets — neutral capital allocation effect",
+    },
+    "suburb_descriptions": {
+        "robina": {"UP": "Strong equity markets may compete for investment capital", "DOWN": "Equity market weakness may redirect capital to property", "STABLE": "Neutral capital allocation"},
+        "burleigh_waters": {"UP": "Premium property competes with equity returns", "DOWN": "Capital flight from equities supports premium property — Burleigh is most economically sensitive", "STABLE": "Balanced investment conditions"},
+        "varsity_lakes": {"UP": "Equity returns may attract capital from property", "DOWN": "Equity weakness supports property investment", "STABLE": "Neutral conditions"},
+        "worongary": {"UP": "Equity performance draws some capital from lifestyle property", "DOWN": "Equity weakness supports tangible asset demand", "STABLE": "Neutral conditions"},
+        "mudgeeraba": {"UP": "Alternative investments compete for capital", "DOWN": "Property benefits from equity market weakness", "STABLE": "Neutral conditions"},
+        "reedy_creek": {"UP": "Alternative investments compete for capital", "DOWN": "Property benefits from equity market weakness", "STABLE": "Neutral conditions"},
+        "merrimac": {"UP": "Equity returns compete for investment capital", "DOWN": "Property benefits from equity weakness", "STABLE": "Neutral conditions"},
+        "carrara": {"UP": "Alternative investments compete for capital", "DOWN": "Property benefits from equity weakness", "STABLE": "Neutral conditions"},
+    },
 }
 
 SUBURBS = [
@@ -151,6 +221,42 @@ def parse_abs_timeseries(raw: dict) -> list[dict]:
     return results
 
 
+def fetch_asx_data() -> list[dict]:
+    """Fetch ASX All Ordinaries quarterly data from Yahoo Finance."""
+    import urllib.request
+    url = "https://query1.finance.yahoo.com/v8/finance/chart/%5EAORD?interval=3mo&range=5y"
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        data = json.loads(resp.read())
+    result = data.get("chart", {}).get("result", [{}])[0]
+    timestamps = result.get("timestamp", [])
+    closes = result.get("indicators", {}).get("quote", [{}])[0].get("close", [])
+    timeseries = []
+    for ts, close in zip(timestamps, closes):
+        if close is None:
+            continue
+        dt = datetime.fromtimestamp(ts, tz=timezone.utc)
+        q = (dt.month - 1) // 3 + 1
+        timeseries.append({"period": f"{dt.year}-Q{q}", "value": round(close, 0)})
+    timeseries.sort(key=lambda x: x["period"])
+    return timeseries
+
+
+def compute_cpi_yoy(timeseries: list[dict]) -> list[dict]:
+    """Convert CPI index values to YoY % change."""
+    yoy = []
+    for i, entry in enumerate(timeseries):
+        # Find same quarter one year ago
+        target_period = entry["period"].replace(
+            entry["period"][:4], str(int(entry["period"][:4]) - 1)
+        )
+        prev = next((e for e in timeseries if e["period"] == target_period), None)
+        if prev and prev["value"]:
+            change = ((entry["value"] - prev["value"]) / prev["value"]) * 100
+            yoy.append({"period": entry["period"], "value": round(change, 1)})
+    return yoy
+
+
 def format_value(value: float, format_fn: str) -> str:
     """Format a numeric value for display."""
     if format_fn == "percent":
@@ -158,6 +264,10 @@ def format_value(value: float, format_fn: str) -> str:
     elif format_fn == "dollars_billions":
         billions = value / 1000.0
         return f"${billions:.1f}B"
+    elif format_fn == "thousands":
+        return f"{value:,.0f}"
+    elif format_fn == "cpi_yoy":
+        return f"{value:.1f}%"
     return str(value)
 
 
@@ -179,6 +289,9 @@ def determine_signal(trend: str, indicator: str, current_raw: float) -> str:
     Wage growth: >3% is bullish regardless of trend direction (still positive growth).
     Lending: absolute level matters more than direction.
     Retail: direction matters most.
+    Dwelling completions: UP = more supply = BEARISH for prices (inverse).
+    CPI inflation: nuanced — high inflation drives housing demand as hedge.
+    ASX: inverse — DOWN is BULLISH for property (substitution effect).
     """
     if indicator == "wage_price_index":
         # Wage growth above 3% is still supportive even if decelerating
@@ -187,6 +300,32 @@ def determine_signal(trend: str, indicator: str, current_raw: float) -> str:
         elif current_raw is not None and current_raw < 2.0:
             return "BEARISH"
         return "NEUTRAL" if trend == "DOWN" else "BULLISH"
+
+    if indicator == "dwelling_completions":
+        # Inverse: more supply = bearish for prices
+        if trend == "UP":
+            return "BEARISH"
+        elif trend == "DOWN":
+            return "BULLISH"
+        return "NEUTRAL"
+
+    if indicator == "cpi_inflation":
+        # Moderate inflation (2-4%) is neutral. High (>4%) drives housing hedge demand.
+        # Low (<2%) reduces housing demand but may signal rate cuts.
+        if current_raw is not None:
+            if current_raw > 4.0:
+                return "BULLISH"  # high inflation = housing hedge demand
+            elif current_raw < 2.0:
+                return "NEUTRAL"  # low inflation, but rate cuts possible
+        return "NEUTRAL" if trend == "DOWN" else "NEUTRAL"
+
+    if indicator == "asx_all_ords":
+        # Inverse: equity weakness = capital flight to property
+        if trend == "DOWN":
+            return "BULLISH"
+        elif trend == "UP":
+            return "NEUTRAL"  # not bearish — just less tailwind
+        return "NEUTRAL"
 
     # For lending and retail: direction-based
     if trend == "UP":
@@ -274,8 +413,12 @@ def build_market_signals(dry_run: bool = False):
     for ind_key, ind_cfg in INDICATORS.items():
         try:
             print(f"  Fetching {ind_cfg['displayName']}...")
-            raw = fetch_abs_data(ind_cfg["dataflow"], ind_cfg["key"])
+            raw = fetch_abs_data(ind_cfg["dataflow"], ind_cfg["key"], start_period="2020-Q1")
             timeseries = parse_abs_timeseries(raw)
+
+            # CPI: convert index values to YoY % change
+            if ind_key == "cpi_inflation":
+                timeseries = compute_cpi_yoy(timeseries)
 
             if ind_cfg["frequency"] == "monthly":
                 current_val, prev_val, latest_period = get_latest_quarter_from_monthly(timeseries)
@@ -331,6 +474,43 @@ def build_market_signals(dry_run: bool = False):
                 "timeseries": [],
             }
 
+    # --- Fetch ASX All Ordinaries (from Yahoo Finance, not ABS) ---
+    try:
+        print(f"  Fetching ASX All Ordinaries...")
+        asx_ts = fetch_asx_data()
+        if len(asx_ts) >= 2:
+            current_val = asx_ts[-1]["value"]
+            prev_val = asx_ts[-2]["value"]
+            latest_period = asx_ts[-1]["period"]
+        else:
+            current_val, prev_val, latest_period = None, None, ""
+
+        trend = determine_trend(current_val, prev_val)
+        signal = determine_signal(trend, "asx_all_ords", current_val)
+
+        indicator_data["asx_all_ords"] = {
+            "currentValue": format_value(current_val, "thousands") if current_val else "N/A",
+            "previousValue": format_value(prev_val, "thousands") if prev_val else "N/A",
+            "currentRaw": current_val,
+            "previousRaw": prev_val,
+            "trend": trend,
+            "signal": signal,
+            "latestPeriod": latest_period,
+            "latestPeriodLabel": quarter_label(latest_period),
+            "timeseries": asx_ts[-12:],
+        }
+        print(f"    Latest: {latest_period} = {format_value(current_val, 'thousands') if current_val else 'N/A'}")
+        print(f"    Trend: {trend} -> {signal}")
+    except Exception as e:
+        print(f"    ERROR fetching ASX: {e}", file=sys.stderr)
+        indicator_data["asx_all_ords"] = {
+            "currentValue": "N/A", "previousValue": "N/A",
+            "currentRaw": None, "previousRaw": None,
+            "trend": "STABLE", "signal": "NEUTRAL",
+            "latestPeriod": "", "latestPeriodLabel": "",
+            "timeseries": [],
+        }
+
     # Determine the latest quarter across all indicators
     all_periods = [d["latestPeriod"] for d in indicator_data.values() if d["latestPeriod"]]
     latest_quarter = max(all_periods) if all_periods else "Unknown"
@@ -340,10 +520,16 @@ def build_market_signals(dry_run: bool = False):
     now = datetime.now(timezone.utc)
     suburb_docs = {}
 
+    # Merge all indicator configs (ABS + ASX) for suburb doc generation
+    all_configs = dict(INDICATORS)
+    all_configs["asx_all_ords"] = ASX_CONFIG
+
     for suburb in SUBURBS:
         signals = []
-        for ind_key, ind_cfg in INDICATORS.items():
-            data = indicator_data[ind_key]
+        for ind_key, ind_cfg in all_configs.items():
+            data = indicator_data.get(ind_key)
+            if not data:
+                continue
             trend = data["trend"]
 
             # Get suburb-specific description
