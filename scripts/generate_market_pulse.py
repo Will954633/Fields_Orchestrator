@@ -45,7 +45,7 @@ CATEGORIES = [
     {
         "id": "crash-risk",
         "title": "Crash Risk",
-        "charts": ["ten_year_journey", "forecast", "capital_gain", "market_signals", "vendor_discount", "yoy_growth"],
+        "charts": ["market_signals", "yoy_growth", "vendor_discount", "absorption_rate", "capital_gain"],
     },
     {
         "id": "overview",
@@ -321,14 +321,24 @@ Return as JSON:
     "crash-risk": """You are writing for someone worried the Gold Coast property market might crash.
 They may be an anxious homeowner or a hesitant buyer. They need honest, data-backed reassurance — not dismissal of their fears. If warning signs exist, say so.
 
+IMPORTANT CONTEXT — Our proprietary analysis of 27 economic datasets across 8 Gold Coast suburbs (2015-2025) found that:
+- The #1 real-time indicator of market strength is Queensland HOUSEHOLD SPENDING (r=0.914 correlation with house prices)
+- The best LEADING indicator is the WAGE PRICE INDEX for QLD — it leads house prices by 3-4 months (r=0.940)
+- INTEREST RATES LAG prices by 12 months (r=0.791) — the RBA is reactive, not predictive
+- CREDIT/LENDING GROWTH lags prices by 3.5 months (r=0.948) — it confirms what already happened
+- The most crash-sensitive suburb is Burleigh Waters (highest economic correlation); Worongary is most insulated
+
+Your crash risk assessment should primarily reference these leading indicators (wages, household spending) rather than backward-looking metrics. If wages are rising and household spending is up, a crash is unlikely regardless of what interest rates are doing. If wages are plateauing or falling, that IS a genuine warning sign.
+
 Here is the current market data for {suburb}:
 {data}
 
 Write a 3-4 sentence summary that:
 1. Opens with "Is the Gold Coast property market going to crash?"
-2. Acknowledges the concern, then answers with evidence from the 10-year price history and current signals
-3. References the market signals (bullish/neutral/bearish) and growth trend
-4. If bearish signals exist, name them honestly. If bullish, explain why with data.
+2. Acknowledges the concern honestly, then assesses crash risk based on the LEADING indicators (wage growth trend, household spending, lending)
+3. References the current market signals data and what they mean for crash probability
+4. If bearish signals exist, name them honestly. If bullish, explain which leading indicators support continued strength
+5. DO NOT reference "10-year resilience" or "long-term price history" — focus on forward-looking indicators
 
 Verdict: "very_low_risk", "low_risk", "moderate_risk", "elevated_risk", "high_risk"
 
