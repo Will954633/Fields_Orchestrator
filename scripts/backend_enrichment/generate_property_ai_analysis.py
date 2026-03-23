@@ -199,25 +199,56 @@ def build_property_summary(prop: Dict) -> str:
         for ph in price_hist:
             lines.append(f"  - {ph.get('date') or ph.get('recorded_at', '?')}: {ph.get('price_text') or ph.get('price', '?')}")
 
-    # Photo analysis summary
+    # Photo analysis summary (GPT-4 Vision — property_valuation_data)
     pva = prop.get("property_valuation_data", {})
     if pva:
-        lines.append(f"\nPhoto analysis (GPT-4 Vision):")
-        lines.append(f"  Overall condition: {pva.get('overall_condition', '?')}/10, Style: {pva.get('style', '?')}")
-        lines.append(f"  Renovation status: {pva.get('renovation_status', '?')}, Age: {pva.get('renovation_age', '?')}")
-        lines.append(f"  Prestige tier: {pva.get('prestige_tier', '?')}, Market appeal: {pva.get('market_appeal', '?')}/10")
-        # Key rooms
-        for room_key in ["kitchen", "living_room", "master_bedroom", "outdoor_area"]:
+        po = pva.get("property_overview", {})
+        reno = pva.get("renovation", {})
+        meta = pva.get("property_metadata", {})
+        cond_sum = pva.get("condition_summary", {})
+
+        lines.append(f"\nPhoto analysis (GPT-4 Vision) — CRITICAL DATA:")
+        lines.append(f"  Overall condition: {po.get('overall_condition', '?')} ({po.get('overall_condition_score', '?')}/10)")
+        lines.append(f"  Architectural style: {po.get('architectural_style', '?')}")
+        lines.append(f"  Stories: {po.get('number_of_stories', '?')}")
+
+        # Renovation — key indicator of new build
+        if reno:
+            lines.append(f"  Renovation status: {reno.get('status', reno.get('renovation_status', '?'))}")
+            lines.append(f"  Renovation age: {reno.get('estimated_age', reno.get('renovation_age', '?'))}")
+            lines.append(f"  Scope: {reno.get('scope', '?')}")
+
+        lines.append(f"  Prestige tier: {meta.get('prestige_tier', '?')}")
+        lines.append(f"  Market appeal: {meta.get('market_appeal', meta.get('market_appeal_score', '?'))}/10")
+
+        # Overall score summary
+        if cond_sum:
+            lines.append(f"  Overall score: {cond_sum.get('overall_score', '?')}/10")
+
+        # Key rooms with actual sub-structure
+        for room_key in ["kitchen", "bathrooms", "bedrooms", "living_areas", "outdoor", "exterior"]:
             room = pva.get(room_key, {})
-            if room:
-                cond = room.get("condition", "?")
-                qual = room.get("quality", "?")
-                feat = room.get("notable_features", [])
-                feat_str = f" — {', '.join(feat)}" if feat else ""
-                lines.append(f"  {room_key}: condition {cond}/10, quality {qual}/10{feat_str}")
-        unique = pva.get("unique_selling_features", [])
+            if room and isinstance(room, dict):
+                # Try common score fields
+                cond = room.get("condition_score", room.get("condition", "?"))
+                qual = room.get("quality_score", room.get("quality", "?"))
+                visible = room.get("visible", True)
+                # Build feature list from notable fields
+                notable = []
+                for k, v in room.items():
+                    if isinstance(v, str) and v not in ("true", "false", "?", "") and k not in ("visible", "room_type"):
+                        if any(word in k for word in ["material", "type", "style", "bench", "pool", "view"]):
+                            notable.append(f"{k}: {v}")
+                feat_str = f" — {', '.join(notable[:4])}" if notable else ""
+                if cond != "?" or qual != "?":
+                    lines.append(f"  {room_key}: condition {cond}/10, quality {qual}/10{feat_str}")
+                elif notable:
+                    lines.append(f"  {room_key}: {', '.join(notable[:4])}")
+
+        # Unique selling features
+        unique = meta.get("unique_selling_features", [])
         if unique:
-            lines.append(f"  Unique features: {', '.join(unique)}")
+            lines.append(f"  Unique features: {', '.join(unique) if isinstance(unique, list) else unique}")
 
     # Domain valuation
     dv = extract_domain_valuation(prop)
@@ -252,123 +283,186 @@ def build_property_summary(prop: Dict) -> str:
     return "\n".join(lines)
 
 
-def build_prompt(
-    property_summary: str,
-    suburb_medians: List[Dict],
-    competing_listings: List[Dict],
-    recent_sales: List[Dict],
-    suburb_name: str,
-) -> str:
-    """Build the full prompt for Claude."""
+def format_medians(suburb_medians: List[Dict]) -> str:
+    if not suburb_medians:
+        return "  No recent data available"
+    return "\n".join(f"  {d['date']}: ${d['median']:,} ({d['count']} sales)" for d in suburb_medians)
 
-    # Format medians
-    median_str = "\n".join(
-        f"  {d['date']}: ${d['median']:,} ({d['count']} sales)"
-        for d in suburb_medians
-    ) if suburb_medians else "  No recent data available"
 
-    # Format competing listings
-    comp_lines = []
+def format_competing(competing_listings: List[Dict]) -> str:
+    lines = []
     for c in competing_listings[:25]:
         price = c.get("price_display", "Price TBA")
         beds = c.get("bedrooms", "?")
         baths = c.get("bathrooms", "?")
         lot = f", {c.get('lot_size_sqm')}sqm" if c.get("lot_size_sqm") else ""
-        comp_lines.append(f"  - {c.get('address', '?')}: {price} ({beds}bed/{baths}bath{lot})")
-    competing_str = "\n".join(comp_lines) if comp_lines else "  None available"
+        lines.append(f"  - {c.get('address', '?')}: {price} ({beds}bed/{baths}bath{lot})")
+    return "\n".join(lines) if lines else "  None available"
 
-    # Format recent sales
-    sold_lines = []
+
+def format_sales(recent_sales: List[Dict]) -> str:
+    lines = []
     for s in recent_sales[:15]:
         price = f"${s['sold_price']:,}" if s.get("sold_price") else "?"
         date = s.get("sold_date", "?")
         beds = s.get("bedrooms", "?")
         lot = f", {s.get('lot_size_sqm')}sqm" if s.get("lot_size_sqm") else ""
-        sold_lines.append(f"  - {s.get('address', '?')}: {price} on {date} ({beds}bed{lot})")
-    sold_str = "\n".join(sold_lines) if sold_lines else "  No recent sales data"
+        lines.append(f"  - {s.get('address', '?')}: {price} on {date} ({beds}bed{lot})")
+    return "\n".join(lines) if lines else "  No recent sales data"
 
-    suburb_display = suburb_name.replace("_", " ").title()
 
-    return f"""You are a property data analyst for Fields Estate, a property intelligence platform on the Gold Coast, Australia. Your job is to write sharp, data-led editorial copy that helps buyers make informed decisions.
+# ---------------------------------------------------------------------------
+# Multi-agent pipeline: 3 specialist agents + 1 editor
+# ---------------------------------------------------------------------------
+
+VOICE_RULES = """RULES: No superlatives (never "stunning", "nestled", "boasting", "rare opportunity", "robust market"). Dollar figures like $1,250,000 not "$1.25m". Suburbs always capitalised. Be specific — use exact numbers. Be direct — no filler."""
+
+def build_price_agent_prompt(prop_summary: str, medians: str, competing: str, sales: str, suburb: str) -> str:
+    return f"""You are the PRICE ANALYST for Fields Estate. Your sole job is to find the price story for this property.
 
 PROPERTY DATA:
-{property_summary}
+{prop_summary}
 
-SUBURB MEDIAN HOUSE PRICES ({suburb_display}, quarterly):
-{median_str}
+SUBURB MEDIAN HOUSE PRICES ({suburb}, quarterly):
+{medians}
 
-COMPETING LISTINGS CURRENTLY FOR SALE IN {suburb_display.upper()}:
-{competing_str}
+COMPETING LISTINGS IN {suburb.upper()}:
+{competing}
 
-RECENT SALES IN {suburb_display.upper()}:
-{sold_str}
+RECENT SALES IN {suburb.upper()}:
+{sales}
+
+TASK: Analyse the price data and write a briefing (150-250 words) covering:
+
+1. TRANSACTION HISTORY: If the property has sold before, this is the most important data. What was paid? When? By whom (e.g. Public Trustee = deceased estate / forced sale)? What does the gap between then and now tell us?
+2. ASKING PRICE vs SUBURB MEDIAN: How does the asking price compare to the current suburb median? Express as a ratio (e.g. 2.1x median).
+3. ASKING PRICE vs COMPARABLE SALES: Are there recent sales that validate or challenge this price point?
+4. PRICE SIGNAL: Is this "offers over" (i.e. a floor), auction (no ceiling), or fixed? What does that mean for the buyer?
+
+Your briefing should identify the single most compelling price tension — the one number or comparison that would make a buyer stop and think.
+
+{VOICE_RULES}
+
+Write your briefing as plain text (not JSON). Start with your recommended angle in bold: **ANGLE: ...**"""
+
+
+def build_property_agent_prompt(prop_summary: str) -> str:
+    return f"""You are the PROPERTY ANALYST for Fields Estate. Your sole job is to assess what the buyer physically gets.
+
+FULL PROPERTY DATA:
+{prop_summary}
+
+TASK: Analyse the physical property and write a briefing (150-250 words) covering:
+
+1. BUILD QUALITY: What does the photo analysis tell us? Overall condition score, kitchen quality, bathroom quality, exterior condition. If the data says 9/10 across the board, that means a near-new or recently rebuilt home — SAY THAT EXPLICITLY. If renovation_status says "new build" or "0-5 years", the house has been knocked down and rebuilt.
+2. LAYOUT & SIZE: Floor area, lot size, room dimensions, number of levels. How does this compare? Is it generously sized or compact?
+3. UNIQUE FEATURES: Pool, lake views, waterfront, alfresco — what sets this property apart physically?
+4. CONDITION vs PRICE: Does the physical quality justify what's being asked? A 9/10 condition new build is a very different proposition from a dated 1970s original.
+
+CRITICAL: If property_valuation_data shows overall_condition_score of 8+ and renovation_status mentions "new" or "0-5 years", the property is a RECENT BUILD or COMPLETE RENOVATION. This is a KEY finding — it explains price premiums. Do not say "condition data unavailable" if scores are present.
+
+Your briefing should identify the single most important physical characteristic that a buyer needs to understand.
+
+{VOICE_RULES}
+
+Write your briefing as plain text (not JSON). Start with your recommended angle in bold: **ANGLE: ...**"""
+
+
+def build_market_agent_prompt(prop_summary: str, medians: str, competing: str, sales: str, suburb: str) -> str:
+    return f"""You are the MARKET ANALYST for Fields Estate. Your sole job is to assess where this property sits in the current market.
+
+PROPERTY DATA:
+{prop_summary}
+
+SUBURB MEDIAN HOUSE PRICES ({suburb}, quarterly):
+{medians}
+
+COMPETING LISTINGS IN {suburb.upper()}:
+{competing}
+
+RECENT SALES IN {suburb.upper()}:
+{sales}
+
+TASK: Analyse the market context and write a briefing (150-250 words) covering:
+
+1. DAYS ON MARKET: How long has this been listed? What does that signal? (Fresh = untested, 30+ = potential issues, 60+ = stale)
+2. SUPPLY: How many competing listings exist? Is this a crowded or thin market?
+3. SUBURB TREND: Are medians rising, flat, or falling over the last 4-8 quarters? What direction is the market moving?
+4. POSITIONING: Where does this property sit relative to the rest of the market? Top 10%? Middle of pack? Outlier?
+5. BUYER IMPLICATIONS: Given all of the above, what leverage does a buyer have? Is this a seller's market or a buyer's market for this suburb right now?
+
+Your briefing should identify the single most important market signal for a buyer considering this property.
+
+{VOICE_RULES}
+
+Write your briefing as plain text (not JSON). Start with your recommended angle in bold: **ANGLE: ...**"""
+
+
+def build_editor_prompt(price_brief: str, property_brief: str, market_brief: str, address: str, suburb: str) -> str:
+    return f"""You are the EDITORIAL DIRECTOR for Fields Estate. Three specialist analysts have each written a briefing on {address}. Your job is to synthesise their findings into a single, compelling editorial using the Minto Pyramid Principle.
+
+PRICE ANALYST BRIEFING:
+{price_brief}
+
+PROPERTY ANALYST BRIEFING:
+{property_brief}
+
+MARKET ANALYST BRIEFING:
+{market_brief}
 
 ---
 
-TASK: Write editorial analysis for this property page. You must output EXACTLY this JSON structure — no markdown, no code fences, just raw JSON:
+STRUCTURE (Minto Pyramid):
+- HEADLINE = The governing thought. The single most important thing a buyer needs to know. Contains the answer, not the question.
+- SUB-HEADLINE = Situation + Complication. What the reader already knows (situation) meets what's changed or what's surprising (complication). This frames the question the insights will answer.
+- INSIGHTS = The supporting arguments. Each one is independent and self-contained. Together they prove the headline. Order by impact — strongest first.
+- VERDICT = So what. The implication. What happens next.
+
+OUTPUT: You must output EXACTLY this JSON structure — no markdown, no code fences, just raw JSON:
 
 {{
-  "headline": "...",
-  "sub_headline": "...",
+  "headline": "max 80 chars — the governing thought, must contain a specific number",
+  "sub_headline": "max 120 chars — situation + complication that frames the buyer's key question",
   "insights": [
     {{
-      "lead": "Bold opening statement with a key number",
-      "detail": "1-2 sentences expanding on the lead with supporting data"
-    }},
-    {{
-      "lead": "Second bold insight",
-      "detail": "Supporting detail"
-    }},
-    {{
-      "lead": "Third bold insight",
-      "detail": "Supporting detail"
+      "lead": "8-15 words, bold, contains a data point — scannable on its own",
+      "detail": "1-2 sentences (25-50 words) supporting the lead. Connect data to buyer implication."
     }}
   ],
-  "verdict": "One punchy closing sentence — the forward-looking takeaway",
-  "meta_title": "...",
-  "meta_description": "..."
+  "verdict": "max 25 words — forward-looking signal, not a prediction",
+  "meta_title": "max 60 chars — data hook | Fields Estate",
+  "meta_description": "max 155 chars — the tension + reason to click"
 }}
 
 REQUIREMENTS:
+- Exactly 3-4 insights
+- Each insight lead MUST contain a specific number (dollar amount, percentage, sqm, score, date, count)
+- The insights should cover: (1) the price story, (2) the physical property, (3) the market context. A 4th insight can cover risk/opportunity.
+- If the property is a new build or complete renovation (condition 9/10, 0-5 years old), that MUST appear in insight 2 — it explains the price premium
+- If the property was purchased from the Public Trustee, that signals a deceased estate or forced sale — this context matters for the price story
+- DO NOT say data is "unavailable" if the briefings contain it. The analysts have already extracted the data — use their findings.
 
-1. **headline** — A single H1 sentence (max 80 chars) that hooks with a specific data point. Lead with a number, a price gap, a percentile, a time comparison, or a market tension. The BEST headlines reveal a tension: a gap between what something sold for and what it's listed at now, or between the asking price and the suburb median, or between the automated valuation and the listing price. The reader should think "I need to read this." Make it punchy — provoke a question in the reader's mind.
-
-2. **sub_headline** — One H2 sentence (max 120 chars) that contextualises the headline within the suburb market. It should frame the buyer's key question.
-
-3. **insights** — An array of exactly 3-4 insight objects. Each has:
-   - **lead**: A bold, punchy statement (8-15 words) that makes the reader's eye stop. Must contain a specific number or data point. Think of it as a sub-heading that tells the story on its own.
-   - **detail**: 1-2 sentences (25-50 words) that support the lead with additional data, context, or implication. Connect the data point to what it means for the buyer.
-
-   The insights should flow as a narrative:
-   - Insight 1: THE PRICE STORY — What is being asked vs what was paid, or vs suburb median. If the property has prior transaction history, this is CRITICAL. The gap between purchase price and asking price IS the story.
-   - Insight 2: WHAT YOU GET — The physical property (sqm, condition, build quality, layout) and how it compares to the suburb.
-   - Insight 3: THE MARKET CONTEXT — Supply/demand signal, competing listings, where this sits relative to current market.
-   - Insight 4 (optional): THE RISK/OPPORTUNITY — What's unknown, what the buyer can't yet confirm.
-
-4. **verdict** — One sentence (max 25 words). A forward-looking observation about days on market, pricing tension, or what to watch. Not a prediction — a signal.
-
-5. **meta_title** — SEO title tag (max 60 chars) that uses a data hook. Format: "[Data hook] | Fields Estate"
-
-6. **meta_description** — SEO description (max 155 chars) with the property's key data tension and a reason to click.
-
-VOICE: Direct, analytical, no fluff. You are the analyst who did the homework. The reader should trust you because you show your numbers, not because you used superlatives. Never use "stunning", "nestled", "boasting", "rare opportunity", or "robust market". Use dollar figures like $1,250,000 not "$1.25m". Suburbs always capitalised."""
+{VOICE_RULES}"""
 
 
 # ---------------------------------------------------------------------------
 # Claude API call
 # ---------------------------------------------------------------------------
 
-def call_claude(prompt: str, api_key: str) -> Dict:
-    """Call Claude Sonnet and parse the JSON response."""
+def call_claude(prompt: str, api_key: str, max_tokens: int = 1500, parse_json: bool = True) -> Any:
+    """Call Claude Sonnet. Returns parsed JSON if parse_json=True, else raw text."""
     client = anthropic.Anthropic(api_key=api_key)
 
     message = client.messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=1500,
+        max_tokens=max_tokens,
         messages=[{"role": "user", "content": prompt}],
     )
 
     raw = message.content[0].text.strip()
+
+    if not parse_json:
+        return raw
 
     # Strip markdown code fences if present
     if raw.startswith("```"):
@@ -391,6 +485,67 @@ def call_claude(prompt: str, api_key: str) -> Dict:
         raise ValueError(f"Claude response missing keys: {missing}")
     if not isinstance(result.get("insights"), list) or len(result["insights"]) < 3:
         raise ValueError(f"insights must be an array of 3-4 items, got: {type(result.get('insights'))}")
+
+    return result
+
+
+def run_multi_agent_pipeline(
+    prop_summary: str,
+    suburb_medians: List[Dict],
+    competing_listings: List[Dict],
+    recent_sales: List[Dict],
+    suburb_name: str,
+    address: str,
+    api_key: str,
+) -> Dict:
+    """Run 3 specialist agents in sequence, then an editor agent to synthesise."""
+    suburb_display = suburb_name.replace("_", " ").title()
+    medians_str = format_medians(suburb_medians)
+    competing_str = format_competing(competing_listings)
+    sales_str = format_sales(recent_sales)
+
+    # Agent 1: Price Analyst
+    print("  [Agent 1/3] Price Analyst...")
+    t0 = time.time()
+    price_brief = call_claude(
+        build_price_agent_prompt(prop_summary, medians_str, competing_str, sales_str, suburb_display),
+        api_key, max_tokens=600, parse_json=False,
+    )
+    print(f"    Done ({time.time()-t0:.1f}s, {len(price_brief)} chars)")
+
+    # Agent 2: Property Analyst
+    print("  [Agent 2/3] Property Analyst...")
+    t0 = time.time()
+    property_brief = call_claude(
+        build_property_agent_prompt(prop_summary),
+        api_key, max_tokens=600, parse_json=False,
+    )
+    print(f"    Done ({time.time()-t0:.1f}s, {len(property_brief)} chars)")
+
+    # Agent 3: Market Analyst
+    print("  [Agent 3/3] Market Analyst...")
+    t0 = time.time()
+    market_brief = call_claude(
+        build_market_agent_prompt(prop_summary, medians_str, competing_str, sales_str, suburb_display),
+        api_key, max_tokens=600, parse_json=False,
+    )
+    print(f"    Done ({time.time()-t0:.1f}s, {len(market_brief)} chars)")
+
+    # Editor: Synthesise into Minto Pyramid
+    print("  [Editor] Synthesising...")
+    t0 = time.time()
+    result = call_claude(
+        build_editor_prompt(price_brief, property_brief, market_brief, address, suburb_display),
+        api_key, max_tokens=1500, parse_json=True,
+    )
+    print(f"    Done ({time.time()-t0:.1f}s)")
+
+    # Attach the agent briefings for debugging
+    result["_agent_briefings"] = {
+        "price": price_brief,
+        "property": property_brief,
+        "market": market_brief,
+    }
 
     return result
 
@@ -452,15 +607,14 @@ def process_property(db, suburb: str, prop: Dict, api_key: str, force: bool = Fa
     else:
         print("  No domain valuation available")
 
-    # Build prompt
-    prompt = build_prompt(summary, medians, competing, sales, suburb)
-
-    # Call Claude
-    print(f"\nCalling Claude Sonnet (claude-sonnet-4-6)...")
+    # Run multi-agent pipeline (3 specialists + editor)
+    print(f"\nRunning multi-agent pipeline (claude-sonnet-4-6)...")
     t0 = time.time()
-    analysis = call_claude(prompt, api_key)
+    analysis = run_multi_agent_pipeline(
+        summary, medians, competing, sales, suburb, address, api_key,
+    )
     elapsed = time.time() - t0
-    print(f"Response received in {elapsed:.1f}s")
+    print(f"Pipeline complete in {elapsed:.1f}s (4 API calls)")
 
     # Print results
     print(f"\n--- GENERATED ANALYSIS ---")
@@ -539,8 +693,13 @@ def main():
             medians = get_suburb_medians(db, suburb)
             competing = get_competing_listings(db, suburb, exclude_id=prop["_id"])
             sales = get_recent_sales(db, suburb)
-            prompt = build_prompt(summary, medians, competing, sales, suburb)
-            print(f"\n--- PROMPT ({len(prompt)} chars) ---\n{prompt}")
+            suburb_display = suburb.replace("_", " ").title()
+            medians_str = format_medians(medians)
+            competing_str = format_competing(competing)
+            sales_str = format_sales(sales)
+            print(f"\n--- PRICE AGENT PROMPT ---\n{build_price_agent_prompt(summary, medians_str, competing_str, sales_str, suburb_display)[:800]}...")
+            print(f"\n--- PROPERTY AGENT PROMPT ---\n{build_property_agent_prompt(summary)[:800]}...")
+            print(f"\n--- MARKET AGENT PROMPT ---\n{build_market_agent_prompt(summary, medians_str, competing_str, sales_str, suburb_display)[:800]}...")
             return
 
         process_property(db, suburb, prop, api_key, force=args.force)
