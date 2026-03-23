@@ -42,23 +42,35 @@ def cosmos_retry(func, *args, retries=5, **kwargs):
                 raise
 
 
-def safe_find(coll, query, proj, batch_size=20):
-    """Find with Cosmos retry. Handles 429 mid-cursor by retrying with skip."""
+def safe_find(coll, query, proj, batch_size=10):
+    """Find with Cosmos retry. Uses _id cursor to resume without costly skip()."""
+    import re as _re
+    from bson import ObjectId
     results = []
-    for attempt in range(8):
+    last_id = None
+    max_retries = 10
+    for attempt in range(max_retries):
         try:
-            cursor = coll.find(query, proj).batch_size(batch_size).skip(len(results))
+            # Resume from last seen _id to avoid expensive skip() on Cosmos
+            q = dict(query)
+            if last_id is not None:
+                q['_id'] = {'$gt': last_id}
+            cursor = coll.find(q, proj).sort('_id', 1).batch_size(batch_size)
             for doc in cursor:
                 results.append(doc)
+                last_id = doc['_id']
+                # Brief pause every batch_size docs to spread RU load
+                if len(results) % batch_size == 0:
+                    time.sleep(0.3)
             return results
         except OperationFailure as e:
-            if '16500' in str(e) and attempt < 7:
+            if '16500' in str(e) and attempt < max_retries - 1:
                 retry_ms = 5000
-                match = __import__('re').search(r'RetryAfterMs=(\d+)', str(e))
-                if match:
-                    retry_ms = int(match.group(1))
-                wait = max(retry_ms / 1000.0, 2 * (attempt + 1))
-                print(f"    Cosmos 429 after {len(results)} docs, waiting {wait:.1f}s (attempt {attempt+1}/8)")
+                m = _re.search(r'RetryAfterMs=(\d+)', str(e))
+                if m:
+                    retry_ms = int(m.group(1))
+                wait = max(retry_ms / 1000.0, 3 * (attempt + 1))
+                print(f"    Cosmos 429 after {len(results)} docs, waiting {wait:.1f}s (attempt {attempt+1}/{max_retries})")
                 time.sleep(wait)
             else:
                 raise
@@ -175,7 +187,7 @@ def run_validator(db, monitor_db, suburbs, auto_fix=False):
 
     for coll_name in collections:
         print(f"  Scanning {coll_name}...")
-        time.sleep(2)  # be gentle on RUs — Cosmos Serverless has ~5000 RU/s burst
+        time.sleep(5)  # 5s cooldown between suburbs — Cosmos Serverless ~5000 RU/s burst
 
         coll = db[coll_name]
         proj = {
