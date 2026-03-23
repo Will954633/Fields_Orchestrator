@@ -399,7 +399,7 @@ Write your briefing as plain text (not JSON). Start with your recommended angle 
 
 
 def build_editor_prompt(price_brief: str, property_brief: str, market_brief: str, address: str, suburb: str) -> str:
-    return f"""You are the EDITORIAL DIRECTOR for Fields Estate. Three specialist analysts have each written a briefing on {address}. Your job is to synthesise their findings into a single, compelling editorial using the Minto Pyramid Principle.
+    return f"""You are the EDITORIAL DIRECTOR for Fields Estate. Three specialist analysts have each written a briefing on {address}. Your job is to synthesise their findings into a compelling editorial that HOOKS the reader and then delivers the evidence.
 
 PRICE ANALYST BRIEFING:
 {price_brief}
@@ -412,21 +412,37 @@ MARKET ANALYST BRIEFING:
 
 ---
 
-STRUCTURE (Minto Pyramid):
-- HEADLINE = The governing thought. The single most important thing a buyer needs to know. Contains the answer, not the question.
-- SUB-HEADLINE = Situation + Complication. What the reader already knows (situation) meets what's changed or what's surprising (complication). This frames the question the insights will answer.
-- INSIGHTS = The supporting arguments. Each one is independent and self-contained. Together they prove the headline. Order by impact — strongest first.
-- VERDICT = So what. The implication. What happens next.
+STRUCTURE:
+1. HEADLINE — The hook. This is the most important line. It must make someone scrolling Google results STOP and click. The best headlines tell a STORY in under 80 characters: two data points separated by time, a price journey, a contradiction, or a question the reader can't ignore.
 
-OUTPUT: You must output EXACTLY this JSON structure — no markdown, no code fences, just raw JSON:
+   GREAT HEADLINES (study these patterns):
+   - "$845,000 in 2015. Now asking $3,495,000. What changed?"  ← price journey + question
+   - "Sold for $650,000 five years ago. Rebuilt. Now $2.1M."   ← transformation story
+   - "3 beds on 400sqm asking more than the 5-bed next door"   ← contradiction
+   - "$200,000 above every comparable sale in the suburb"       ← outlier tension
+
+   BAD HEADLINES (never do this):
+   - "9/10 finish and lake views justify premium, but $3,495,000 is 1.94x the suburb median" ← too long, reads like a summary, answers itself
+   - "Premium property in sought-after location" ← generic, no data
+   - "Well-priced 4-bedroom home in Burleigh Waters" ← boring, no hook
+
+   The headline should provoke a QUESTION in the reader's mind. Make them need to scroll down.
+
+2. SUB-HEADLINE — One sentence (max 120 chars). Sets up the tension the insights will resolve. Frame the buyer's dilemma: "The rebuild explains the premium, but no comparable sale above $2M exists to confirm it."
+
+3. INSIGHTS — 3-4 structured arguments (Minto Pyramid supporting points). Each is independent, scannable, data-rich. Together they answer the question the headline provoked.
+
+4. VERDICT — One punchy closing sentence (max 25 words). A forward-looking signal.
+
+OUTPUT: You must output EXACTLY this JSON structure — no markdown, no code fences, no ** bold markers, just raw JSON:
 
 {{
-  "headline": "max 80 chars — the governing thought, must contain a specific number",
-  "sub_headline": "max 120 chars — situation + complication that frames the buyer's key question",
+  "headline": "max 80 chars — a STORY or PROVOCATION, not a summary",
+  "sub_headline": "max 120 chars — the buyer's dilemma in one sentence",
   "insights": [
     {{
-      "lead": "8-15 words, bold, contains a data point — scannable on its own",
-      "detail": "1-2 sentences (25-50 words) supporting the lead. Connect data to buyer implication."
+      "lead": "8-15 words, contains a data point, scannable on its own — NO ** markers",
+      "detail": "1-2 sentences (25-50 words) supporting the lead. NO ** markers."
     }}
   ],
   "verdict": "max 25 words — forward-looking signal, not a prediction",
@@ -435,12 +451,12 @@ OUTPUT: You must output EXACTLY this JSON structure — no markdown, no code fen
 }}
 
 REQUIREMENTS:
-- Exactly 3-4 insights
+- Exactly 3-4 insights. Do NOT wrap text in ** bold markers — the frontend handles formatting.
 - Each insight lead MUST contain a specific number (dollar amount, percentage, sqm, score, date, count)
-- The insights should cover: (1) the price story, (2) the physical property, (3) the market context. A 4th insight can cover risk/opportunity.
-- If the property is a new build or complete renovation (condition 9/10, 0-5 years old), that MUST appear in insight 2 — it explains the price premium
-- If the property was purchased from the Public Trustee, that signals a deceased estate or forced sale — this context matters for the price story
-- DO NOT say data is "unavailable" if the briefings contain it. The analysts have already extracted the data — use their findings.
+- Insights should cover: (1) the price story, (2) the physical property, (3) the market context. A 4th can cover risk/opportunity.
+- If the property is a new build or renovation (condition 8+/10, 0-5 years old), that MUST appear — it explains the price premium
+- If purchased from the Public Trustee, that signals a deceased estate or forced sale — include this context
+- DO NOT say data is "unavailable" if the briefings contain it — the analysts already extracted it.
 
 {VOICE_RULES}"""
 
