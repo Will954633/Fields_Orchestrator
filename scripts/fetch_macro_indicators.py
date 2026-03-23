@@ -116,6 +116,30 @@ def fetch_rba_cash_rate() -> list[dict]:
     # Filter to 2015+
     result = [r for r in result if r["period"] >= "2015-Q1"]
 
+    # Cross-check: scrape the RBA cash rate page for the authoritative current rate
+    # The F1 CSV can lag by days after a rate decision
+    try:
+        print("    Cross-checking against RBA cash rate page...")
+        page = requests.get("https://www.rba.gov.au/statistics/cash-rate/", timeout=15)
+        import re
+        # The RBA page lists rate decisions in order — first rate after "0.25" change entries
+        # is the current rate. Extract all X.XX numbers, skip 2.30 (time) and 0.25/0.00 (changes)
+        all_rates = re.findall(r'(\d\.\d{2})', page.text)
+        # Filter to plausible cash rates (1.00-15.00) excluding common non-rates
+        plausible = [float(r) for r in all_rates if 1.0 <= float(r) <= 15.0 and float(r) not in (2.30,)]
+        # The current rate is the first plausible rate that isn't a change amount (0.25, 0.50)
+        candidates = [r for r in plausible if r not in (0.25, 0.50, 0.75, 1.00)]
+        live_rate = candidates[0] if candidates else None
+        if live_rate is not None:
+            csv_rate = result[-1]['rate'] if result else None
+            if csv_rate is not None and abs(live_rate - csv_rate) > 0.01:
+                print(f"    ⚠️  CSV says {csv_rate}% but RBA page says {live_rate}% — using RBA page")
+                result[-1]['rate'] = live_rate
+            else:
+                print(f"    ✅ Confirmed: {live_rate}%")
+    except Exception as e:
+        print(f"    Cross-check failed (non-fatal): {e}")
+
     if result:
         print(f"    {len(result)} quarters, latest: {result[-1]['period']} = {result[-1]['rate']}%")
     return result
