@@ -21,7 +21,7 @@ import io
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 
 import requests
@@ -36,14 +36,14 @@ def fetch_csv(url: str) -> str:
     return resp.text
 
 
-def fetch_brent_crude() -> list[dict]:
-    """Fetch Brent crude oil quarterly averages from FRED."""
+def fetch_brent_crude() -> tuple[list[dict], list[dict]]:
+    """Fetch Brent crude oil from FRED — daily + quarterly aggregates."""
     print("  Fetching Brent crude oil (FRED)...")
     csv_text = fetch_csv(
         "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DCOILBRENTEU&cosd=2015-01-01"
     )
 
-    # Parse daily data and aggregate to quarterly
+    daily = []
     quarters = defaultdict(list)
     reader = csv.DictReader(io.StringIO(csv_text))
     for row in reader:
@@ -52,17 +52,19 @@ def fetch_brent_crude() -> list[dict]:
         if not date_str or not value_str or value_str == ".":
             continue
         try:
+            price = float(value_str)
             dt = datetime.strptime(date_str, "%Y-%m-%d")
             q = (dt.month - 1) // 3 + 1
             q_key = f"{dt.year}-Q{q}"
-            quarters[q_key].append(float(value_str))
+            quarters[q_key].append(price)
+            daily.append({"date": date_str, "price_usd": price})
         except (ValueError, KeyError):
             continue
 
-    result = []
+    quarterly = []
     for q_key in sorted(quarters.keys()):
         values = quarters[q_key]
-        result.append({
+        quarterly.append({
             "period": q_key,
             "avg_price_usd": round(sum(values) / len(values), 2),
             "max_price_usd": round(max(values), 2),
@@ -70,8 +72,13 @@ def fetch_brent_crude() -> list[dict]:
             "data_points": len(values),
         })
 
-    print(f"    {len(result)} quarters, latest: {result[-1]['period']} = ${result[-1]['avg_price_usd']}")
-    return result
+    # Keep last 2 years of daily data (enough for the chart without bloating the doc)
+    two_years_ago = (datetime.now() - timedelta(days=730)).strftime("%Y-%m-%d")
+    daily_recent = [d for d in daily if d["date"] >= two_years_ago]
+
+    print(f"    {len(quarterly)} quarters, {len(daily_recent)} daily points")
+    print(f"    Latest: {daily_recent[-1]['date']} = ${daily_recent[-1]['price_usd']}")
+    return quarterly, daily_recent
 
 
 def fetch_rba_cash_rate() -> list[dict]:
@@ -292,7 +299,7 @@ def main():
 
     print("Fetching macro indicators...\n")
 
-    oil = fetch_brent_crude()
+    oil_quarterly, oil_daily = fetch_brent_crude()
     cash_rate = fetch_rba_cash_rate()
     mortgage_rate = fetch_rba_mortgage_rates()
     national_prices = fetch_national_house_prices()
@@ -301,7 +308,8 @@ def main():
     doc = {
         "_id": "macro_indicators",
         "updated_at": datetime.now(timezone.utc),
-        "brent_crude_quarterly": oil,
+        "brent_crude_quarterly": oil_quarterly,
+        "brent_crude_daily": oil_daily,
         "rba_cash_rate_quarterly": cash_rate,
         "rba_mortgage_rate_quarterly": mortgage_rate,
         "national_house_price_index": national_prices,
@@ -310,7 +318,7 @@ def main():
 
     if args.dry_run:
         print("\n=== DRY RUN ===")
-        print(f"Oil: {len(oil)} quarters")
+        print(f"Oil: {len(oil_quarterly)} quarters, {len(oil_daily)} daily")
         print(f"Cash rate: {len(cash_rate)} quarters")
         print(f"Mortgage rate: {len(mortgage_rate)} quarters")
         print(f"National prices: {len(national_prices)} quarters")
