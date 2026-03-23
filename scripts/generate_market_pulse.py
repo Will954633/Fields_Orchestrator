@@ -573,6 +573,20 @@ def main():
 
         for cat in categories:
             cat_id = cat["id"]
+
+            # Skip if a manual update exists for this month (unless --force)
+            if not args.force and not args.dry_run:
+                month_start = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+                existing = pulse_coll.find_one({
+                    "suburb": suburb,
+                    "category": cat_id,
+                    "source": "manual",
+                    "generated_at": {"$gte": month_start},
+                })
+                if existing:
+                    print(f"\n  Skipping: {cat['title']} ({cat_id}) — manual update exists this month")
+                    continue
+
             print(f"\n  Generating: {cat['title']} ({cat_id})...")
 
             result = generate_summary(claude_client, cat_id, display, data, dry_run=args.dry_run)
@@ -589,6 +603,7 @@ def main():
                 "summary": result["summary"],
                 "verdict": result["verdict"],
                 "key_signals": result["key_signals"],
+                "source": "auto",
                 "data_snapshot": data,
                 "generated_at": datetime.now(),
                 "model": result["model"],
