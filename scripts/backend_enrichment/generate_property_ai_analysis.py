@@ -310,7 +310,21 @@ TASK: Write editorial analysis for this property page. You must output EXACTLY t
 {{
   "headline": "...",
   "sub_headline": "...",
-  "analysis": "...",
+  "insights": [
+    {{
+      "lead": "Bold opening statement with a key number",
+      "detail": "1-2 sentences expanding on the lead with supporting data"
+    }},
+    {{
+      "lead": "Second bold insight",
+      "detail": "Supporting detail"
+    }},
+    {{
+      "lead": "Third bold insight",
+      "detail": "Supporting detail"
+    }}
+  ],
+  "verdict": "One punchy closing sentence — the forward-looking takeaway",
   "meta_title": "...",
   "meta_description": "..."
 }}
@@ -321,13 +335,23 @@ REQUIREMENTS:
 
 2. **sub_headline** — One H2 sentence (max 120 chars) that contextualises the headline within the suburb market. It should frame the buyer's key question.
 
-3. **analysis** — One paragraph (100-160 words). Must include at least 3 specific data points from the property data (prices, dates, sqm, percentiles, condition scores). If the property has prior transaction history showing previous sale prices, this is CRITICAL data — the gap between what was paid and what's being asked now tells the buyer what premium they're being asked to pay, and whether that premium reflects genuine improvements (renovation, rebuild) or market inflation. Frame the buyer's decision clearly — what are they paying for, what's the risk, what's the opportunity. End with a forward-looking observation (days on market, supply, or demand signal). Never make a definitive price prediction. Never use words like "stunning", "nestled", "boasting", "rare opportunity", or "robust market". Use dollar figures like $1,250,000 not "$1.25m". Suburbs always capitalised.
+3. **insights** — An array of exactly 3-4 insight objects. Each has:
+   - **lead**: A bold, punchy statement (8-15 words) that makes the reader's eye stop. Must contain a specific number or data point. Think of it as a sub-heading that tells the story on its own.
+   - **detail**: 1-2 sentences (25-50 words) that support the lead with additional data, context, or implication. Connect the data point to what it means for the buyer.
 
-4. **meta_title** — SEO title tag (max 60 chars) that uses a data hook. Format: "[Data hook] | Fields Estate"
+   The insights should flow as a narrative:
+   - Insight 1: THE PRICE STORY — What is being asked vs what was paid, or vs suburb median. If the property has prior transaction history, this is CRITICAL. The gap between purchase price and asking price IS the story.
+   - Insight 2: WHAT YOU GET — The physical property (sqm, condition, build quality, layout) and how it compares to the suburb.
+   - Insight 3: THE MARKET CONTEXT — Supply/demand signal, competing listings, where this sits relative to current market.
+   - Insight 4 (optional): THE RISK/OPPORTUNITY — What's unknown, what the buyer can't yet confirm.
 
-5. **meta_description** — SEO description (max 155 chars) with the property's key data tension and a reason to click.
+4. **verdict** — One sentence (max 25 words). A forward-looking observation about days on market, pricing tension, or what to watch. Not a prediction — a signal.
 
-VOICE: Direct, analytical, no fluff. You are the analyst who did the homework. The reader should trust you because you show your numbers, not because you used superlatives."""
+5. **meta_title** — SEO title tag (max 60 chars) that uses a data hook. Format: "[Data hook] | Fields Estate"
+
+6. **meta_description** — SEO description (max 155 chars) with the property's key data tension and a reason to click.
+
+VOICE: Direct, analytical, no fluff. You are the analyst who did the homework. The reader should trust you because you show your numbers, not because you used superlatives. Never use "stunning", "nestled", "boasting", "rare opportunity", or "robust market". Use dollar figures like $1,250,000 not "$1.25m". Suburbs always capitalised."""
 
 
 # ---------------------------------------------------------------------------
@@ -340,7 +364,7 @@ def call_claude(prompt: str, api_key: str) -> Dict:
 
     message = client.messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=1024,
+        max_tokens=1500,
         messages=[{"role": "user", "content": prompt}],
     )
 
@@ -361,10 +385,12 @@ def call_claude(prompt: str, api_key: str) -> Dict:
         raise
 
     # Validate required keys
-    required = {"headline", "sub_headline", "analysis", "meta_title", "meta_description"}
+    required = {"headline", "sub_headline", "insights", "verdict", "meta_title", "meta_description"}
     missing = required - set(result.keys())
     if missing:
         raise ValueError(f"Claude response missing keys: {missing}")
+    if not isinstance(result.get("insights"), list) or len(result["insights"]) < 3:
+        raise ValueError(f"insights must be an array of 3-4 items, got: {type(result.get('insights'))}")
 
     return result
 
@@ -440,7 +466,10 @@ def process_property(db, suburb: str, prop: Dict, api_key: str, force: bool = Fa
     print(f"\n--- GENERATED ANALYSIS ---")
     print(f"Headline:    {analysis['headline']}")
     print(f"Sub-head:    {analysis['sub_headline']}")
-    print(f"Analysis:    {analysis['analysis'][:200]}...")
+    for i, ins in enumerate(analysis.get('insights', []), 1):
+        print(f"Insight {i}:   {ins['lead']}")
+        print(f"  Detail:    {ins['detail'][:120]}...")
+    print(f"Verdict:     {analysis.get('verdict', '?')}")
     print(f"Meta title:  {analysis['meta_title']}")
     print(f"Meta desc:   {analysis['meta_description']}")
 
