@@ -315,10 +315,40 @@ def format_sales(recent_sales: List[Dict]) -> str:
 # Multi-agent pipeline: 3 specialist agents + 1 editor
 # ---------------------------------------------------------------------------
 
-VOICE_RULES = """RULES: No superlatives (never "stunning", "nestled", "boasting", "rare opportunity", "robust market"). Dollar figures like $1,250,000 not "$1.25m". Suburbs always capitalised. Be specific — use exact numbers. Be direct — no filler."""
+# Load the editorial prompt guide — shared context for all agents
+_EDITORIAL_PROMPT_PATH = REPO_ROOT / "config" / "property_editorial_prompt.md"
+EDITORIAL_GUIDE = ""
+if _EDITORIAL_PROMPT_PATH.exists():
+    EDITORIAL_GUIDE = _EDITORIAL_PROMPT_PATH.read_text()
+
+SHARED_MISSION = """
+THE MISSION: You are part of a team building the most compelling property editorial on the internet. Your output feeds into a final editorial that appears on property pages alongside Google search results from Domain, realestate.com.au, and every other property portal. Every one of those platforms says "4 bedroom house for sale." We say something they've never seen — a data-driven story that HOOKS the reader and forces them to scroll.
+
+Your job is NOT to report data. Your job is to FIND THE STORY in the data. You are a journalist, not an analyst. Look for:
+- TENSIONS: Two facts that shouldn't coexist (e.g. 9/10 condition but 195 days on market)
+- JOURNEYS: Price trajectories over time ($52,000 → $2,300,000 across 6 owners)
+- CONTRADICTIONS: The listing says one thing, the data says another
+- HUMAN STORIES: Public Trustee = deceased estate. GFC loss = forced sale. 4 days to auction = agent confidence or seller desperation.
+- FEAR TRIGGERS: Overpaying, missing out, hidden information the buyer doesn't have
+
+The headline we're building toward will look like this:
+- "The seller paid $845,000. You'd pay $3,495,000. What's in between?"
+- "$52,000 in 1991. Six owners later. Now offers above $2,300,000."
+- "1 bathroom. 803 square metres. This isn't a home — it's a decision."
+- "195 days. $2,395,000. The market has spoken — is anyone listening?"
+
+Your briefing must hand the Editor Agent the raw material to write a headline THAT GOOD.
+
+VOICE: No superlatives (never "stunning", "nestled", "boasting", "rare opportunity"). Dollar figures like $1,250,000 not "$1.25m". Suburbs capitalised. Be specific — use exact numbers. Be direct — every sentence must earn its place.
+"""
+
 
 def build_price_agent_prompt(prop_summary: str, medians: str, competing: str, sales: str, suburb: str) -> str:
-    return f"""You are the PRICE ANALYST for Fields Estate. Your sole job is to find the price story for this property.
+    return f"""You are the PRICE STORY HUNTER for Fields Estate.
+
+{SHARED_MISSION}
+
+YOUR DOMAIN: Price data — transaction history, asking price, suburb medians, comparable sales, listing method.
 
 PROPERTY DATA:
 {prop_summary}
@@ -332,44 +362,80 @@ COMPETING LISTINGS IN {suburb.upper()}:
 RECENT SALES IN {suburb.upper()}:
 {sales}
 
-TASK: Analyse the price data and write a briefing (150-250 words) covering:
+---
 
-1. TRANSACTION HISTORY: If the property has sold before, this is the most important data. What was paid? When? By whom (e.g. Public Trustee = deceased estate / forced sale)? What does the gap between then and now tell us?
-2. ASKING PRICE vs SUBURB MEDIAN: How does the asking price compare to the current suburb median? Express as a ratio (e.g. 2.1x median).
-3. ASKING PRICE vs COMPARABLE SALES: Are there recent sales that validate or challenge this price point?
-4. PRICE SIGNAL: Is this "offers over" (i.e. a floor), auction (no ceiling), or fixed? What does that mean for the buyer?
+HUNT FOR THESE STORIES:
 
-Your briefing should identify the single most compelling price tension — the one number or comparison that would make a buyer stop and think.
+1. THE PRICE JOURNEY: Every property has a price history. The gap between past sales and the current ask is where the story lives.
+   - Who sold it last? When? For how much?
+   - If sold by Public Trustee, Official Receiver, or Mortgagee — that's a forced sale, below market, and the current owner got a bargain. SAY THIS.
+   - Calculate the growth: total %, CAGR, dollar gap.
+   - Example of what to find: "Bought from the Public Trustee for $845,000 in 2015. Now asking $3,495,000. That's a $2,650,000 gap — and the question is whether a rebuild justifies it."
 
-{VOICE_RULES}
+2. THE PRICE vs MARKET: Where does this ask sit relative to the suburb?
+   - Express as a ratio: "1.94x the suburb median" or "18% below median"
+   - Is this the most expensive listing in the suburb? The cheapest? An outlier?
+   - Are there ANY comparable sales at this price point? If not, say: "No comparable sale exists above $X to anchor this price."
 
-Write your briefing as plain text (not JSON). Start with your recommended angle in bold: **ANGLE: ...**"""
+3. THE PRICE SIGNAL: "Offers over" = floor price (buyer pays more). "Auction" = no ceiling (could go anywhere). "Contact agent" = hidden price (the seller is fishing). Each tells a different story about seller confidence.
+
+4. THE HEADLINE SEED: Based on everything above, what is the single most provocative price fact? Write it as a draft headline.
+
+WRITE your briefing as 150-250 words of plain text. Start with:
+**HEADLINE SEED:** [Your best shot at the opening hook based on price data alone]
+**ANGLE:** [The single price tension that matters most]
+
+Then give the full price briefing."""
 
 
 def build_property_agent_prompt(prop_summary: str) -> str:
-    return f"""You are the PROPERTY ANALYST for Fields Estate. Your sole job is to assess what the buyer physically gets.
+    return f"""You are the PROPERTY STORY HUNTER for Fields Estate.
+
+{SHARED_MISSION}
+
+YOUR DOMAIN: The physical property — condition scores, build quality, floor plan, layout, features, renovation status, prestige tier.
 
 FULL PROPERTY DATA:
 {prop_summary}
 
-TASK: Analyse the physical property and write a briefing (150-250 words) covering:
+---
 
-1. BUILD QUALITY: What does the photo analysis tell us? Overall condition score, kitchen quality, bathroom quality, exterior condition. If the data says 9/10 across the board, that means a near-new or recently rebuilt home — SAY THAT EXPLICITLY. If renovation_status says "new build" or "0-5 years", the house has been knocked down and rebuilt.
-2. LAYOUT & SIZE: Floor area, lot size, room dimensions, number of levels. How does this compare? Is it generously sized or compact?
-3. UNIQUE FEATURES: Pool, lake views, waterfront, alfresco — what sets this property apart physically?
-4. CONDITION vs PRICE: Does the physical quality justify what's being asked? A 9/10 condition new build is a very different proposition from a dated 1970s original.
+HUNT FOR THESE STORIES:
 
-CRITICAL: If property_valuation_data shows overall_condition_score of 8+ and renovation_status mentions "new" or "0-5 years", the property is a RECENT BUILD or COMPLETE RENOVATION. This is a KEY finding — it explains price premiums. Do not say "condition data unavailable" if scores are present.
+1. THE BUILD STORY: Is this a new build, a renovation, or an original?
+   - If overall_condition_score is 8-10 AND renovation data mentions "new", "0-5 years", "comprehensive", or "complete" → this is a KNOCK-DOWN REBUILD or MAJOR RENOVATION. This is the single most important finding — it explains the price premium. State it explicitly: "This is a ground-up rebuild, scored 9/10 across every room."
+   - If condition is 6-7, it's dated but liveable.
+   - If condition is 5 or below, it's a renovation project or a land-value play.
+   - The condition score IS the story for the property domain. A 9/10 new build justifies a premium. A 7/10 original does not.
 
-Your briefing should identify the single most important physical characteristic that a buyer needs to understand.
+2. THE PHYSICAL PROPOSITION: What do you actually get for the money?
+   - Floor area vs lot size — is the home built out or is there wasted land?
+   - Room dimensions — are the bedrooms generous or token?
+   - Key rooms: kitchen (stone benchtops? island bench? new appliances?), bathrooms (frameless showers? floating vanities?), outdoor (pool? deck? alfresco? views?)
+   - Where does this sit vs the suburb? 94th percentile floor area? Below-median bedrooms?
 
-{VOICE_RULES}
+3. THE CONTRADICTION: Does the physical property match the price?
+   - A 9/10 prestige build asking 2x the suburb median? The build explains it.
+   - A 7/10 standard home asking above median? Red flag — the buyer is overpaying for condition.
+   - 1 bathroom on 803 sqm? The house is worthless, the land is everything.
 
-Write your briefing as plain text (not JSON). Start with your recommended angle in bold: **ANGLE: ...**"""
+4. THE HEADLINE SEED: What is the single most provocative physical fact about this property?
+
+WRITE your briefing as 150-250 words of plain text. Start with:
+**HEADLINE SEED:** [Your best shot at the hook based on the physical property alone]
+**ANGLE:** [The single physical story that matters most]
+
+Then give the full property briefing.
+
+CRITICAL: If photo analysis data exists (condition scores, prestige tier, renovation status), you MUST use it. Never say "data unavailable" when scores are present in the data above."""
 
 
 def build_market_agent_prompt(prop_summary: str, medians: str, competing: str, sales: str, suburb: str) -> str:
-    return f"""You are the MARKET ANALYST for Fields Estate. Your sole job is to assess where this property sits in the current market.
+    return f"""You are the MARKET STORY HUNTER for Fields Estate.
+
+{SHARED_MISSION}
+
+YOUR DOMAIN: Market position — days on market, supply, suburb trends, competitive landscape, buyer leverage.
 
 PROPERTY DATA:
 {prop_summary}
@@ -383,34 +449,76 @@ COMPETING LISTINGS IN {suburb.upper()}:
 RECENT SALES IN {suburb.upper()}:
 {sales}
 
-TASK: Analyse the market context and write a briefing (150-250 words) covering:
+---
 
-1. DAYS ON MARKET: How long has this been listed? What does that signal? (Fresh = untested, 30+ = potential issues, 60+ = stale)
-2. SUPPLY: How many competing listings exist? Is this a crowded or thin market?
-3. SUBURB TREND: Are medians rising, flat, or falling over the last 4-8 quarters? What direction is the market moving?
-4. POSITIONING: Where does this property sit relative to the rest of the market? Top 10%? Middle of pack? Outlier?
-5. BUYER IMPLICATIONS: Given all of the above, what leverage does a buyer have? Is this a seller's market or a buyer's market for this suburb right now?
+HUNT FOR THESE STORIES:
 
-Your briefing should identify the single most important market signal for a buyer considering this property.
+1. THE TIME SIGNAL: Days on market is the market's verdict on the price.
+   - 0-7 days: UNTESTED. The price is a theory. "4 days on market means nobody has said no yet — but nobody has said yes either."
+   - 8-30 days: EARLY. Market is still responding.
+   - 31-60 days: RESISTANCE. The price has been seen by every active buyer. If nobody bit, the market is pushing back.
+   - 60-120 days: STALE. The seller's leverage is gone. The buyer holds the cards.
+   - 120+ days: FAILED PRICE. "195 days means the market has answered — and the answer is 'not at that price.'"
+   - Going to AUCTION after very few days? That signals agent confidence or pre-market heat.
 
-{VOICE_RULES}
+2. THE SUPPLY STORY: How many competing listings exist in the suburb?
+   - Are they all hiding their prices (Price TBA)? That means an opaque market — harder for buyers to anchor.
+   - Is this the only listing at this price tier? Or is there competition?
+   - What's the price transparency level? If nobody shows a price, the buyer is flying blind.
 
-Write your briefing as plain text (not JSON). Start with your recommended angle in bold: **ANGLE: ...**"""
+3. THE TREND: Are suburb medians rising, flat, wobbling, or falling?
+   - A suburb that went from $1,278,500 to $1,800,000 in 18 months is running hot — but check the sample size. If the latest median rests on 23 sales, it's thin data.
+   - A wobble (e.g. dip in Q3 then recovery in Q4) suggests volatility, not a crash.
+
+4. THE BUYER'S LEVERAGE: Given time on market, supply, and trend — who has the power?
+   - Fresh listing in a rising market = seller holds cards.
+   - Stale listing in a flat market = buyer holds cards.
+
+5. THE HEADLINE SEED: What is the single most provocative market fact?
+
+WRITE your briefing as 150-250 words of plain text. Start with:
+**HEADLINE SEED:** [Your best shot at the hook based on market data alone]
+**ANGLE:** [The single market signal that matters most]
+
+Then give the full market briefing."""
 
 
 def build_editor_prompt(price_brief: str, property_brief: str, market_brief: str, address: str, suburb: str) -> str:
-    return f"""You are the EDITORIAL DIRECTOR for Fields Estate. Three specialist analysts have each written a briefing on {address}. Your job is to synthesise their findings into a compelling editorial that HOOKS the reader and then delivers the evidence.
+    # Include the editorial guide (truncated to key sections to save tokens)
+    guide_excerpt = ""
+    if EDITORIAL_GUIDE:
+        # Extract Parts 2, 3, 6, 7, 8 (the most important for the editor)
+        sections_to_keep = []
+        current_section = ""
+        keep = False
+        for line in EDITORIAL_GUIDE.split("\n"):
+            if line.startswith("## PART "):
+                if any(p in line for p in ["PART 2:", "PART 3:", "PART 6:", "PART 7:", "PART 8:"]):
+                    keep = True
+                else:
+                    keep = False
+            if keep:
+                sections_to_keep.append(line)
+        guide_excerpt = "\n".join(sections_to_keep)
 
-PRICE ANALYST BRIEFING:
+    return f"""You are the EDITORIAL DIRECTOR for Fields Estate. Three story hunters have each written a briefing on {address}. Each briefing includes a HEADLINE SEED — their best shot at the hook. Your job is to pick the strongest story, sharpen it, and structure the final editorial.
+
+PRICE STORY HUNTER BRIEFING:
 {price_brief}
 
-PROPERTY ANALYST BRIEFING:
+PROPERTY STORY HUNTER BRIEFING:
 {property_brief}
 
-MARKET ANALYST BRIEFING:
+MARKET STORY HUNTER BRIEFING:
 {market_brief}
 
 ---
+
+STEP 1: Review the three HEADLINE SEEDS above. Pick the strongest one — the one that opens the biggest curiosity gap, tells the most compelling story in the fewest words, and would make someone scrolling Google results STOP. You may combine elements from multiple seeds or sharpen the best one.
+
+STEP 2: Structure the final editorial using the framework below.
+
+{f"EDITORIAL STYLE GUIDE (study the examples carefully):{chr(10)}{guide_excerpt[:6000]}" if guide_excerpt else ""}
 
 STRUCTURE:
 1. HEADLINE — The hook. This is the most important line. It must make someone scrolling Google results STOP and click. The best headlines tell a STORY in under 80 characters: two data points separated by time, a price journey, a contradiction, or a question the reader can't ignore.
@@ -458,7 +566,7 @@ REQUIREMENTS:
 - If purchased from the Public Trustee, that signals a deceased estate or forced sale — include this context
 - DO NOT say data is "unavailable" if the briefings contain it — the analysts already extracted it.
 
-{VOICE_RULES}"""
+VOICE: No superlatives. Dollar figures like $1,250,000 not "$1.25m". Suburbs capitalised. Be specific. Be direct. Every sentence must earn its place."""
 
 
 # ---------------------------------------------------------------------------
