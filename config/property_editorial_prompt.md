@@ -328,6 +328,35 @@ The verdict is the closing line. It should be memorable — something a buyer re
 
 ---
 
+## PART 7B: CONFIDENCE TIERS — WHAT TO TRUST
+
+Not all data is equally reliable. Structure your analysis around HIGH-CONFIDENCE data and use low-confidence data only as supporting colour.
+
+**HIGH CONFIDENCE (build the story around these):**
+- Bedrooms, bathrooms, car spaces (from listing data — verified)
+- Lot size in sqm (from cadastral/survey data)
+- Floor area (from floor plan analysis)
+- Transaction history — dates and prices (from land title records)
+- Days on market (from scraper)
+- Listing method (auction, offers over, contact agent)
+- Suburb median prices and sample sizes (from aggregated sales)
+- Fields valuation and confidence range (from comparable sales model)
+
+**MEDIUM CONFIDENCE (use but don't anchor the headline on):**
+- Overall condition score (GPT Vision — reliable at broad level: 6 vs 8 vs 9)
+- Prestige tier (reliable: standard vs elevated vs prestige)
+- Pool present/absent, alfresco present/absent (reliable binary)
+- Renovation level (cosmetically updated vs fully renovated vs original — reliable at category level)
+
+**LOW CONFIDENCE (mention as supporting detail only, never as headline angle):**
+- Specific material identification (laminate vs stone benchtops, tile vs timber floors) — Vision models can misidentify materials from photos
+- Specific fixture quality (standard vs premium) — subjective and photo-dependent
+- Individual room scores — useful for comparison across rooms but not precise enough to anchor claims
+
+**RULE: Never make the central premise of the article about a specific visual detail (like benchtop material) that could be wrong. Use numerical data, transaction history, and market positioning for the hook. Use visual analysis for supporting colour.**
+
+---
+
 ## PART 8: WHAT NEVER TO DO
 
 1. **Never write a headline that answers itself.** If the reader has no reason to scroll, you failed.
