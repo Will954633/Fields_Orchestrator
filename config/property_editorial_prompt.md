@@ -100,6 +100,29 @@ Lead with a single number so surprising it forces a double-take.
 - "1 bathroom. 803 square metres. This isn't a home — it's a decision."
 - "195 days. $2,395,000. The market has spoken — is anyone listening?"
 
+### Formula 6: The Hidden Flaw / Insider Knowledge
+Reveal something the listing doesn't tell you — a gap between presentation and reality.
+
+**Pattern:** `[What it looks like] — [what the data actually shows]`
+
+**Examples:**
+- "Rebuilt in 2011. Laminate kitchen. Auction 2026. What does $1.8M buy here now?"
+- "8/10 condition — but the kitchen and bathrooms haven't been touched since the build."
+- "Going to auction with no guide. Our valuation: $2,171,312. The finishes say otherwise."
+- "The photos say contemporary. The benchtops say laminate. The price says $2M+."
+
+This formula works when the CONTRADICTION between what the listing presents and what the data reveals IS the story. The buyer's fear is paying premium price for mid-range finishes.
+
+### Formula 7: The Buyer's Fear
+Lead directly with what the buyer is afraid of — overpaying, bidding blind, missing something.
+
+**Pattern:** `[Scary scenario]. [What we know that they don't].`
+
+**Examples:**
+- "You're about to bid at auction with no guide. Here's the one number that isn't hidden."
+- "Every listing in Burleigh Waters is hiding its price. We're not hiding ours: $2,171,312."
+- "The agent says 'expressions of interest.' Our data says $1,845,615 to $2,497,009."
+
 ---
 
 ## PART 4: THE SUB-HEADLINE — SITUATION + COMPLICATION
@@ -284,6 +307,27 @@ The verdict is the closing line. It should be memorable — something a buyer re
 
 ---
 
+### Example 6: 157 Christine Avenue, Burleigh Waters
+**Context:** 4 bed/2 bath, 647 sqm. Going to AUCTION after 4 days — no price guide. Rebuilt in 2011 (per agent description). 8/10 condition. BUT: kitchen has LAMINATE benchtops (not stone), no island bench, bathrooms have STANDARD fixtures. Kitchen and bathrooms NOT renovated since the 2011 build. Pool. Fields valuation: $2,171,312. Last sold $565,000 in 2007 (before rebuild). Suburb median: $1,800,000.
+
+**The story:** The structure is solid (rebuilt 2011, 8/10) but the finishes are 15 years old and mid-range. In a suburb where the median buyer is spending $1.8M, this home has laminate benchtops — not stone. The auction format with no guide means the buyer is bidding blind on a property that may need $100K-$150K in kitchen and bathroom upgrades to match the suburb's prestige standard. Our valuation gives the buyer a number nobody else will.
+
+**Headline:** Rebuilt in 2011. Laminate kitchen. Going to auction with no guide.
+**Sub-headline:** Our data values it at $2,171,312 — but the kitchen and bathrooms haven't been touched since the build, and no one will name a price.
+
+- **01** $565,000 in 2007, then a full rebuild in 2011 — now heading to auction 15 years later
+  The seller bought before the rebuild and has held through the entire post-GFC recovery. At auction with no guide, the exit strategy is aggressive — signalling either strong pre-market interest or a seller who knows the land value carries the price.
+
+- **02** 8/10 condition overall — but laminate benchtops and standard fixtures tell a different story
+  The 2011 rebuild delivers solid bones: contemporary render, good layout across 4 beds on 647 sqm. But the kitchen uses laminate (not stone), has no island bench, and the bathrooms retain standard fixtures. In a suburb where the median is $1,800,000, buyers at this level expect prestige finishes. Budget $100,000-$150,000 for kitchen and bathroom upgrades.
+
+- **03** Fields valuation: $2,171,312 — the only disclosed number in this transaction
+  The agent won't name a price. Neither will any of the 25 competing Burleigh Waters listings. Our comparable-sales model places the property at $2,171,312 with a range of $1,845,615 to $2,497,009. That's the number to take to auction.
+
+**Verdict:** The structure is 2011. The finishes are 2011. The price will be 2026 — and that gap is the buyer's to negotiate.
+
+---
+
 ## PART 8: WHAT NEVER TO DO
 
 1. **Never write a headline that answers itself.** If the reader has no reason to scroll, you failed.
@@ -294,6 +338,10 @@ The verdict is the closing line. It should be memorable — something a buyer re
 6. **Never use these words:** stunning, nestled, boasting, rare opportunity, robust market, sought-after, prestigious (use "prestige tier" from the data instead).
 7. **Never make price predictions.** We show signals, not forecasts. "The data suggests" not "this will sell for."
 8. **Never be boring.** Boring is the only unforgivable sin. Be provocative, be specific, be surprising — but never be boring.
+9. **Never just list prices chronologically.** "$91,000 in 1998. $565,000 in 2007. The next number is yours to set." is NOT a hook — it's a spreadsheet row with a greeting card ending. The price history is raw material for a story, not the story itself. Find what HAPPENED between those prices (rebuild, renovation, forced sale, market crash) — that's where the hook lives.
+10. **Never use generic closing lines that apply to any property.** "The next number is yours to set" could appear on literally any listing page. If your headline or verdict could be swapped onto a different property without changing a word, it's too generic. Be specific to THIS property.
+11. **Never ignore the CONTRADICTION.** If the condition score is 8/10 but the kitchen is laminate, THAT'S the story — not the price history. If the property has been listed 195 days but the prestige tier is "elevated," THAT'S the story. The most interesting angle is usually where two data points disagree.
+12. **TEST YOUR HEADLINE:** Before finalising, ask: "Would a buyer who reads ONLY this headline think 'shit, what's that about? I need to read more'?" If no — rewrite it.
 
 ---
 
