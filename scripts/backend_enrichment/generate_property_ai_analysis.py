@@ -280,6 +280,101 @@ def build_property_summary(prop: Dict) -> str:
                 dist = poi.get("distance_m", "?")
                 lines.append(f"  {cat}: {poi['name']} ({dist}m)")
 
+    # Zoning data (from Gold Coast City Council)
+    zoning = prop.get("zoning_data", {})
+    if zoning:
+        lines.append("\nZoning & planning data (Gold Coast City Council):")
+        lines.append(f"  Zone: {zoning.get('zone', '?')}")
+        if zoning.get("zone_detail"):
+            lines.append(f"  Zone detail: {zoning['zone_detail']}")
+        if zoning.get("cadastral_area_sqm"):
+            lines.append(f"  Cadastral area: {zoning['cadastral_area_sqm']} sqm")
+        if zoning.get("min_lot_size_sqm"):
+            lines.append(f"  Minimum lot size: {zoning['min_lot_size_sqm']} sqm")
+        if zoning.get("max_building_height_m"):
+            lines.append(f"  Max building height: {zoning['max_building_height_m']}m")
+        if zoning.get("max_storeys"):
+            lines.append(f"  Max storeys: {zoning['max_storeys']}")
+        if zoning.get("residential_density"):
+            lines.append(f"  Residential density: {zoning['residential_density']}")
+        if zoning.get("subdivision_possible") is not None:
+            lines.append(f"  Subdivision possible: {zoning['subdivision_possible']} ({zoning.get('subdivision_potential_lots', '?')} lots)")
+        # Flood
+        if zoning.get("flood_overlay"):
+            lines.append(f"  FLOOD OVERLAY: Yes")
+            lines.append(f"  Flood depth classification: {zoning.get('flood_depth_description', '?')}")
+            lines.append(f"  Ground vs flood level: {zoning.get('flood_freeboard_m', '?')}m ({zoning.get('flood_risk_note', '?')})")
+            if zoning.get("flood_floor_clearance_m") is not None:
+                lines.append(f"  Floor clearance above flood: {zoning['flood_floor_clearance_m']}m")
+            lines.append(f"  Historical flood insurance events: {zoning.get('flood_historical_events', '?')}")
+        else:
+            lines.append(f"  Flood overlay: No")
+        if zoning.get("heritage_listed"):
+            lines.append(f"  HERITAGE LISTED: Yes")
+
+    # Satellite analysis (aerial image assessment)
+    sat = prop.get("satellite_analysis", {})
+    if sat:
+        cats = sat.get("categories", {})
+        narr = sat.get("narrative", {})
+
+        lines.append("\nSatellite / aerial image analysis — IMPORTANT CONTEXT:")
+
+        # Adjacency — what's next to the property
+        adj = cats.get("adjacency", {})
+        if adj:
+            if adj.get("backs_onto"):
+                lines.append(f"  Backs onto: {adj['backs_onto']}")
+            if adj.get("frontage"):
+                lines.append(f"  Frontage: {adj['frontage']}")
+            if adj.get("elevation_position"):
+                lines.append(f"  Elevation: {adj['elevation_position']}")
+
+        # Detractants — negative factors
+        det = cats.get("detractants", {})
+        if det:
+            detractants = []
+            for k, v in det.items():
+                if v and str(v).lower() not in ("none", "no", "false", "low", "nil", "n/a"):
+                    detractants.append(f"{k.replace('_', ' ')}: {v}")
+            if detractants:
+                lines.append(f"  DETRACTANTS: {'; '.join(detractants)}")
+
+        # Amenity premiums — positive factors
+        amen = cats.get("amenity_premiums", {})
+        if amen:
+            premiums = []
+            for k, v in amen.items():
+                if v and str(v).lower() not in ("none", "no", "false", "low", "nil", "n/a"):
+                    premiums.append(f"{k.replace('_', ' ')}: {v}")
+            if premiums:
+                lines.append(f"  Amenity premiums: {'; '.join(premiums)}")
+
+        # Lot characteristics
+        lot_chars = cats.get("lot_characteristics", {})
+        if lot_chars:
+            for k, v in lot_chars.items():
+                if v and str(v).lower() not in ("none", "n/a"):
+                    lines.append(f"  {k.replace('_', ' ').title()}: {v}")
+
+        # Neighbourhood
+        hood = cats.get("neighbourhood", {})
+        if hood:
+            for k, v in hood.items():
+                if v and str(v).lower() not in ("none", "n/a"):
+                    lines.append(f"  {k.replace('_', ' ').title()}: {v}")
+
+        # Key narrative summaries
+        if narr:
+            for key in ["surrounding_land_use", "road_proximity", "flood_drainage_risk",
+                        "construction_activity", "overall_setting"]:
+                val = narr.get(key)
+                if val:
+                    lines.append(f"  {key.replace('_', ' ').title()}: {val}")
+            highlights = narr.get("buyer_highlights", [])
+            if highlights:
+                lines.append(f"  Buyer highlights: {'; '.join(highlights)}")
+
     return "\n".join(lines)
 
 
