@@ -52,7 +52,19 @@ SERVICES = {
     "min_lot_size": f"{ARCGIS_BASE}/Minimum_lot_size/FeatureServer/0/query",
     "residential_density": f"{ARCGIS_BASE}/Residential_density/FeatureServer/0/query",
     "flood_assessment": f"{ARCGIS_BASE}/Flood_assessment_required_v6/FeatureServer/0/query",
+    "flood_level": f"{ARCGIS_BASE}/Designated_Flood_Level_for_Residential_Buildings/FeatureServer/0/query",
+    "flood_depth": f"{ARCGIS_BASE}/Flood_Depth_City_Plan_Version_6_update1/FeatureServer/1/query",
+    "flood_insurance": f"{ARCGIS_BASE}/Insurance_Flood_Event/FeatureServer/0/query",
     "heritage": f"{ARCGIS_BASE}/Heritage_Listed_Area/FeatureServer/0/query",
+}
+
+FLOOD_DEPTH_LEGEND = {
+    1: "<30cm",
+    2: "30cm to 60cm",
+    3: "60cm to 1.2m",
+    4: "1.2m to 1.5m",
+    5: "1.5m to 2.0m",
+    6: ">2.0m",
 }
 
 TIMEOUT = 15  # seconds per request
@@ -232,6 +244,41 @@ def enrich_property_zoning(prop: Dict) -> Optional[Dict]:
         result["flood_description"] = flood_results[0].get("OVL2_DESC")
     else:
         result["flood_overlay"] = False
+
+    # 6b. Designated flood level (by LOT_PLAN)
+    time.sleep(0.3)
+    flood_level = query_by_point(SERVICES["flood_level"], lat, lng,
+        "LOTPLAN,HOUSE_ADDRESS,GROUNDCENTRE,SURVEYFLOOR,FLOODLVLDES")
+    if flood_level:
+        fl = flood_level[0]
+        ground = fl.get("GROUNDCENTRE")
+        designated = fl.get("FLOODLVLDES")
+        floor_level = fl.get("SURVEYFLOOR")
+        result["flood_designated_level_m"] = round(designated, 2) if designated else None
+        result["flood_ground_level_m"] = round(ground, 2) if ground else None
+        result["flood_floor_level_m"] = round(floor_level, 2) if floor_level else None
+        if ground and designated:
+            freeboard = round(ground - designated, 2)
+            result["flood_freeboard_m"] = freeboard
+            if freeboard < 0:
+                result["flood_risk_note"] = f"Ground level is {abs(freeboard)}m BELOW designated flood level"
+            else:
+                result["flood_risk_note"] = f"Ground level is {freeboard}m above designated flood level"
+        if floor_level and designated:
+            result["flood_floor_clearance_m"] = round(floor_level - designated, 2)
+
+    # 6c. Flood depth classification
+    time.sleep(0.3)
+    flood_depth = query_by_point(SERVICES["flood_depth"], lat, lng, "gridcode")
+    if flood_depth:
+        gridcode = flood_depth[0].get("gridcode")
+        result["flood_depth_code"] = gridcode
+        result["flood_depth_description"] = FLOOD_DEPTH_LEGEND.get(gridcode, f"Unknown ({gridcode})")
+
+    # 6d. Historical flood events (insurance)
+    time.sleep(0.3)
+    flood_events = query_by_point(SERVICES["flood_insurance"], lat, lng)
+    result["flood_historical_events"] = len(flood_events)
 
     # 7. Heritage (spatial)
     time.sleep(0.3)
