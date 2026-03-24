@@ -321,25 +321,46 @@ EDITORIAL_GUIDE = ""
 if _EDITORIAL_PROMPT_PATH.exists():
     EDITORIAL_GUIDE = _EDITORIAL_PROMPT_PATH.read_text()
 
-SHARED_MISSION = """
+# Load the Sabri Suby copywriting masterclass — voice and hook training for all agents
+_SABRI_PATH = REPO_ROOT / "05_Sabri_Subri" / "Sabri_Subri_Copy-writing_Masterclass.md"
+SABRI_GUIDE = ""
+if _SABRI_PATH.exists():
+    SABRI_GUIDE = _SABRI_PATH.read_text()
+
+SHARED_MISSION = f"""
 THE MISSION: You are part of a team building the most compelling property editorial on the internet. Your output feeds into a final editorial that appears on property pages alongside Google search results from Domain, realestate.com.au, and every other property portal. Every one of those platforms says "4 bedroom house for sale." We say something they've never seen — a data-driven story that HOOKS the reader and forces them to scroll.
 
-Your job is NOT to report data. Your job is to FIND THE STORY in the data. You are a journalist, not an analyst. Look for:
-- TENSIONS: Two facts that shouldn't coexist (e.g. 9/10 condition but 195 days on market)
-- JOURNEYS: Price trajectories over time ($52,000 → $2,300,000 across 6 owners)
-- CONTRADICTIONS: The listing says one thing, the data says another
-- HUMAN STORIES: Public Trustee = deceased estate. GFC loss = forced sale. 4 days to auction = agent confidence or seller desperation.
+Your job is NOT to report data. Your job is to FIND THE STORY in the data. You are a journalist and a copywriter, not an analyst. Look for:
+- TENSIONS: Two facts that shouldn't coexist (e.g. fully renovated but below suburb median, or 9/10 condition but 195 days on market)
+- CONTRADICTIONS: The listing says one thing, the data says another. "Must sell" + below median = something's off.
+- HUMAN STORIES: Public Trustee = deceased estate. GFC loss = forced sale. "Committed elsewhere" = deadline pressure.
 - FEAR TRIGGERS: Overpaying, missing out, hidden information the buyer doesn't have
+- COMPARABLE EVIDENCE: The closest sales, adjusted for differences — this is our unique weapon. No other search result has this.
 
-The headline we're building toward will look like this:
-- "The seller paid $845,000. You'd pay $3,495,000. What's in between?"
-- "$52,000 in 1991. Six owners later. Now offers above $2,300,000."
-- "1 bathroom. 803 square metres. This isn't a home — it's a decision."
-- "195 days. $2,395,000. The market has spoken — is anyone listening?"
+The headline we're building toward will use Sabri Suby's copywriting principles (see below). It must:
+1. SELL THE CLICK, not describe the property. The headline's only job is to make someone HAVE to read more.
+2. Lead with FEAR or CURIOSITY — not information. "Something is wrong with this listing" beats "$1,699,000 for a 4-bed house."
+3. Be CONVERSATIONAL — like a smart friend pulling you aside. Not corporate, not analytical.
+4. Create a CURIOSITY GAP — open a loop the reader can only close by scrolling down.
 
-Your briefing must hand the Editor Agent the raw material to write a headline THAT GOOD.
+GREAT HEADLINE PATTERNS:
+- "Something is wrong with this listing. And it might be the opportunity of the year."
+- "Attention Burleigh Waters buyers: A fully renovated home just listed below the suburb median. Here's what the agent isn't explaining."
+- "Two owners lost money at this address. The third just dropped the price. Are you buyer number four?"
+- "You're about to bid at auction with no price guide. We analysed 8 comparable sales so you don't have to guess."
+- "PRICE DROP to $1,280,000. Is this your entry point or will it fall further?"
 
-VOICE: No superlatives (never "stunning", "nestled", "boasting", "rare opportunity"). Dollar figures like $1,250,000 not "$1.25m". Suburbs capitalised. Be specific — use exact numbers. Be direct — every sentence must earn its place.
+BAD HEADLINES (never do these):
+- "$91,000 in 1998. $239,000 in 1999. $565,000 in 2007." — just a spreadsheet row, no hook
+- "9/10 finish and lake views justify premium" — answers itself, no reason to click
+- Anything that could apply to any property — if you can swap the address and it still works, it's too generic
+
+VOICE: No superlatives (never "stunning", "nestled", "boasting", "rare opportunity"). Dollar figures like $1,250,000 not "$1.25m". Suburbs capitalised. Be specific. Be conversational. Every sentence must earn its place.
+
+--- SABRI SUBY COPYWRITING GUIDE ---
+Study and internalise these principles. They are your creative foundation:
+
+{SABRI_GUIDE[:8000] if SABRI_GUIDE else "(Sabri guide not found)"}
 """
 
 
@@ -520,6 +541,8 @@ STEP 2: Structure the final editorial using the framework below.
 
 {f"EDITORIAL STYLE GUIDE (study the examples carefully):{chr(10)}{guide_excerpt[:6000]}" if guide_excerpt else ""}
 
+{f"SABRI SUBY COPYWRITING PRINCIPLES (your creative voice):{chr(10)}{SABRI_GUIDE[:6000]}" if SABRI_GUIDE else ""}
+
 STRUCTURE:
 1. HEADLINE — The hook. This is the most important line. It must make someone scrolling Google results STOP and click. The best headlines tell a STORY in under 80 characters: two data points separated by time, a price journey, a contradiction, or a question the reader can't ignore.
 
@@ -666,6 +689,245 @@ def run_multi_agent_pipeline(
     )
     print(f"    Done ({time.time()-t0:.1f}s)")
 
+    # -----------------------------------------------------------------------
+    # DRAFT 1 COMPLETE — now reflect, backfill data gaps, and write Draft 2
+    # -----------------------------------------------------------------------
+
+    draft1 = json.loads(json.dumps(result, default=str))  # snapshot
+    print(f"\n  --- DRAFT 1 HEADLINE: \"{result.get('headline', '')}\"")
+
+    # Step 5: REFLECTION AGENT — deep critique of everything
+    print("  [Step 5] Reflection Agent — critiquing all content...")
+    t0 = time.time()
+    reflection_prompt = f"""You are the SENIOR EDITOR and QUALITY CONTROLLER for Fields Estate. A team of agents just produced Draft 1 of a property editorial. Your job is to critique EVERYTHING — headline, sub-headline, every insight, the verdict, AND the underlying data — then produce a detailed brief for improvement.
+
+DRAFT 1 OUTPUT:
+Headline: "{result.get('headline', '')}"
+Sub-headline: "{result.get('sub_headline', '')}"
+Insights:
+{json.dumps(result.get('insights', []), indent=2)}
+Verdict: "{result.get('verdict', '')}"
+
+RAW DATA THE AGENTS WORKED FROM:
+Property summary: {prop_summary[:1500]}
+
+Agent briefings:
+PRICE: {price_brief[:600]}
+PROPERTY: {property_brief[:600]}
+MARKET: {market_brief[:600]}
+
+---
+
+CRITIQUE each element. Be brutal. You are the last line of defence before a human reviews this.
+
+1. HEADLINE CRITIQUE (Sabri Suby tests):
+   - CURIOSITY GAP: Does it open a loop? Or does it answer itself / list facts?
+   - CONVERSATIONAL: Would a friend say this? Or is it a spreadsheet?
+   - FEAR/INTRIGUE: Does it trigger the buyer's deepest anxiety?
+   - PATTERN INTERRUPT: Would it stop a Google scroll?
+   - If the headline is a chronological price list ($X in year, $Y in year, now $Z) — AUTOMATIC FAIL.
+
+2. SUB-HEADLINE CRITIQUE:
+   - Is it one sentence? (Max 120 chars ideally, never more than 2 sentences)
+   - Does it frame the buyer's dilemma?
+
+3. INSIGHTS CRITIQUE:
+   - Does each lead contain a specific number and stand alone as scannable?
+   - Does each detail connect to a BUYER IMPLICATION?
+   - Are there DATA CONTRADICTIONS? (e.g. lot size in data vs agent description)
+   - Are there MISSED ANGLES the agents had data for but didn't use?
+   - Is any insight built on LOW-CONFIDENCE data? (e.g. specific material identification from photos)
+
+4. VERDICT CRITIQUE:
+   - Is it memorable? Would someone repeat it at dinner?
+   - Is it under 25 words?
+
+5. DATA GAP ANALYSIS:
+   - What data is MISSING that would make this editorial stronger?
+   - Did the agents contradict each other? (e.g. lot size discrepancy)
+   - What did the AGENT DESCRIPTION say that our data agents missed?
+   - Are there comparable sales that should be referenced but aren't?
+   - Is there a stronger angle hiding in the data that Draft 1 didn't find?
+
+OUTPUT as PLAIN TEXT using this exact format (not JSON):
+
+HEADLINE SCORE: X/5
+HEADLINE FAILURES: [bullet list]
+CONTENT ISSUES: [bullet list]
+DATA CONTRADICTIONS: [bullet list]
+MISSED ANGLES: [bullet list]
+DATA GAPS TO FILL: [bullet list]
+SUGGESTED HEADLINE: [your best headline]
+SUGGESTED SUB-HEADLINE: [one sentence, max 120 chars]
+SUGGESTED VERDICT: [max 25 words]
+OVERALL: [one paragraph assessment]
+
+Be concise. Max 400 words total."""
+
+    try:
+        reflection_text = call_claude(
+            reflection_prompt, api_key, max_tokens=1000, parse_json=False, model="claude-opus-4-6",
+        )
+        print(f"    Done ({time.time()-t0:.1f}s)")
+
+        # Parse key fields from plain text
+        reflection = {"raw": reflection_text}
+        for line in reflection_text.split("\n"):
+            line = line.strip()
+            if line.startswith("HEADLINE SCORE:"):
+                reflection["headline_score"] = line.split(":", 1)[1].strip()
+            elif line.startswith("SUGGESTED HEADLINE:"):
+                reflection["suggested_headline"] = line.split(":", 1)[1].strip()
+            elif line.startswith("SUGGESTED SUB-HEADLINE:"):
+                reflection["suggested_sub_headline"] = line.split(":", 1)[1].strip()
+            elif line.startswith("SUGGESTED VERDICT:"):
+                reflection["suggested_verdict"] = line.split(":", 1)[1].strip()
+
+        # Extract bullet lists
+        has_gaps = "DATA GAPS TO FILL:" in reflection_text
+        reflection["has_data_gaps"] = has_gaps
+
+        print(f"    Headline score: {reflection.get('headline_score', '?')}")
+        print(f"    Suggested: \"{reflection.get('suggested_headline', '?')}\"")
+
+        # Print the key sections
+        for section in ["HEADLINE FAILURES", "DATA CONTRADICTIONS", "MISSED ANGLES", "DATA GAPS"]:
+            if section + ":" in reflection_text:
+                idx = reflection_text.index(section + ":")
+                chunk = reflection_text[idx:idx+300].split("\n")
+                for line in chunk[1:5]:
+                    if line.strip().startswith("-") or line.strip().startswith("*"):
+                        print(f"      [{section[:8]}] {line.strip()[:100]}")
+
+    except Exception as e:
+        print(f"    [WARN] Reflection failed: {e}")
+        reflection = None
+
+    # Step 6: DATA BACKFILL — address gaps the Reflection Agent identified
+    backfill_data = ""
+    if reflection and reflection.get("has_data_gaps"):
+        print("  [Step 6] Data Backfill Agent — filling gaps...")
+        t0 = time.time()
+        # Extract gap/contradiction bullets from raw text
+        def _extract_section(text, header):
+            if header not in text:
+                return ""
+            start = text.index(header) + len(header)
+            lines = []
+            for line in text[start:start+500].split("\n"):
+                line = line.strip()
+                if line.startswith("-") or line.startswith("*"):
+                    lines.append(line)
+                elif lines and not line:
+                    break
+                elif lines and not line.startswith("-") and not line.startswith("*"):
+                    break
+            return "\n".join(lines)
+
+        gaps_list = _extract_section(reflection.get("raw", ""), "DATA GAPS TO FILL:")
+        contradictions_list = _extract_section(reflection.get("raw", ""), "DATA CONTRADICTIONS:")
+        missed_list = _extract_section(reflection.get("raw", ""), "MISSED ANGLES:")
+
+        backfill_prompt = f"""You are a DATA VERIFICATION agent for Fields Estate. The Reflection Agent identified gaps, contradictions, and missed angles in Draft 1 of a property editorial. Your job is to go back to the raw data and extract what was missed.
+
+PROPERTY DATA (full):
+{prop_summary}
+
+AGENT DESCRIPTION (from the listing — may contain facts not in our structured data):
+{prop_summary[prop_summary.find('Agent description:'):] if 'Agent description:' in prop_summary.lower() else 'Not available in summary — check features and description fields.'}
+
+DATA GAPS TO FILL:
+{gaps_list}
+
+DATA CONTRADICTIONS TO RESOLVE:
+{contradictions_list if contradictions_list else '  None identified'}
+
+MISSED ANGLES TO INVESTIGATE:
+{missed_list if missed_list else '  None identified'}
+
+TASK: For each gap, contradiction, and missed angle — search the property data above and write a brief (2-3 sentences) with what you found. If the data doesn't contain the answer, say "NOT FOUND IN DATA — would require [source]."
+
+Also: Re-read the agent description carefully. Extract any facts that the original agents missed (renovation year, specific features, seller motivation, neighbourhood details).
+
+Write your findings as plain text. Be specific. Every claim must reference the data field it came from."""
+
+        backfill_data = call_claude(
+            backfill_prompt, api_key, max_tokens=600, parse_json=False, model="claude-opus-4-6",
+        )
+        print(f"    Done ({time.time()-t0:.1f}s, {len(backfill_data)} chars)")
+    else:
+        print("  [Step 6] Skipped — no data gaps identified")
+
+    # Step 7: EDITOR DRAFT 2 — rewrite with reflection feedback + backfill data
+    print("  [Step 7] Editor Draft 2 — rewriting with feedback...")
+    t0 = time.time()
+
+    draft2_prompt = f"""You are the EDITORIAL DIRECTOR for Fields Estate, writing DRAFT 2 of the property editorial for {address}.
+
+DRAFT 1 (your first attempt):
+{json.dumps(draft1, indent=2, default=str)}
+
+REFLECTION AGENT FEEDBACK:
+{reflection.get('raw', 'No reflection available — improve based on your own assessment.') if reflection else "No reflection available — improve based on your own assessment."}
+
+ADDITIONAL DATA FROM BACKFILL:
+{backfill_data if backfill_data else "No additional data."}
+
+---
+
+INSTRUCTIONS FOR DRAFT 2:
+
+1. FIX every issue the Reflection Agent identified. If it found data contradictions, resolve them. If it found missed angles, use them.
+
+2. USE the Reflection Agent's suggested headline as your starting point — but you may improve it further. The headline MUST pass all 5 Sabri Suby tests: curiosity gap, conversational, fear/intrigue, pattern interrupt, specificity.
+
+3. The sub-headline must be ONE sentence, max 120 characters. Frame the buyer's dilemma.
+
+4. Each insight lead must be scannable on its own — 8-15 words with a specific number. Each detail must connect the data to a buyer implication.
+
+5. The verdict must be under 25 words and memorable.
+
+6. Do NOT build any argument on data the Reflection Agent flagged as contradictory or unreliable.
+
+7. Reference comparable sales where available — "8 comparables say $X to $Y" is more credible than "our valuation says $Z."
+
+OUTPUT the same JSON structure as Draft 1 — no markdown, no code fences:
+{{
+  "headline": "...",
+  "sub_headline": "...",
+  "insights": [{{"lead": "...", "detail": "..."}}, ...],
+  "verdict": "...",
+  "meta_title": "...",
+  "meta_description": "..."
+}}
+
+{f"SABRI SUBY PRINCIPLES:{chr(10)}{SABRI_GUIDE[:4000]}" if SABRI_GUIDE else ""}"""
+
+    try:
+        draft2 = call_claude(
+            draft2_prompt, api_key, max_tokens=1500, parse_json=True, model="claude-opus-4-6",
+        )
+        print(f"    Done ({time.time()-t0:.1f}s)")
+        print(f"\n  --- DRAFT 2 HEADLINE: \"{draft2.get('headline', '')}\"")
+
+        # Use Draft 2 as the final result
+        result["_draft1"] = {
+            "headline": draft1.get("headline"),
+            "sub_headline": draft1.get("sub_headline"),
+            "verdict": draft1.get("verdict"),
+        }
+        result["_reflection"] = reflection
+        result["_backfill_data"] = backfill_data if backfill_data else None
+        result["headline"] = draft2["headline"]
+        result["sub_headline"] = draft2["sub_headline"]
+        result["insights"] = draft2["insights"]
+        result["verdict"] = draft2["verdict"]
+        result["meta_title"] = draft2.get("meta_title", result.get("meta_title", ""))
+        result["meta_description"] = draft2.get("meta_description", result.get("meta_description", ""))
+
+    except Exception as e:
+        print(f"    [WARN] Draft 2 failed: {e} — keeping Draft 1")
+
     # Attach the agent briefings for debugging
     result["_agent_briefings"] = {
         "price": price_brief,
@@ -786,9 +1048,11 @@ def main():
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--slug", help="Property URL slug (e.g. 58-jabiru-avenue-burleigh-waters)")
     group.add_argument("--address", help="Address substring to match")
-    group.add_argument("--backfill", action="store_true", help="Process all properties missing ai_analysis")
+    group.add_argument("--new-listings", action="store_true", help="Process new listings (<=7 days) missing ai_analysis")
+    group.add_argument("--backfill", action="store_true", help="Process ALL properties missing ai_analysis")
+    parser.add_argument("--days", type=int, default=7, help="Days threshold for --new-listings (default 7)")
     parser.add_argument("--force", action="store_true", help="Regenerate even if analysis exists")
-    parser.add_argument("--suburb", help="Restrict to one suburb (for --backfill)")
+    parser.add_argument("--suburb", help="Restrict to one suburb")
     parser.add_argument("--dry-run", action="store_true", help="Show prompt but don't call Claude")
     args = parser.parse_args()
 
@@ -839,6 +1103,28 @@ def main():
         suburb, prop = result
         print(f"Found in {suburb}: {prop.get('address')}")
         process_property(db, suburb, prop, api_key, force=args.force)
+
+    elif args.new_listings:
+        suburbs = [args.suburb] if args.suburb else TARGET_SUBURBS
+        total = 0
+        for suburb in suburbs:
+            query = {
+                "listing_status": "for_sale",
+                "days_on_domain": {"$lte": args.days},
+            }
+            if not args.force:
+                query["ai_analysis"] = {"$exists": False}
+            props = cosmos_retry(lambda s=suburb: list(db[s].find(query)), f"new_{suburb}")
+            if props:
+                print(f"\n{suburb}: {len(props)} new listings (≤{args.days}d)")
+            for prop in props:
+                try:
+                    process_property(db, suburb, prop, api_key, force=args.force)
+                    total += 1
+                    sleep_with_jitter(0.5)
+                except Exception as e:
+                    print(f"[ERROR] Failed on {prop.get('address', '?')}: {e}")
+        print(f"\nDone. Processed {total} new listings.")
 
     elif args.backfill:
         suburbs = [args.suburb] if args.suburb else TARGET_SUBURBS
