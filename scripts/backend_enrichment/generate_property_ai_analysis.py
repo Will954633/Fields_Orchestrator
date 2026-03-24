@@ -573,12 +573,12 @@ VOICE: No superlatives. Dollar figures like $1,250,000 not "$1.25m". Suburbs cap
 # Claude API call
 # ---------------------------------------------------------------------------
 
-def call_claude(prompt: str, api_key: str, max_tokens: int = 1500, parse_json: bool = True) -> Any:
-    """Call Claude Sonnet. Returns parsed JSON if parse_json=True, else raw text."""
+def call_claude(prompt: str, api_key: str, max_tokens: int = 1500, parse_json: bool = True, model: str = "claude-sonnet-4-6") -> Any:
+    """Call Claude. Returns parsed JSON if parse_json=True, else raw text."""
     client = anthropic.Anthropic(api_key=api_key)
 
     message = client.messages.create(
-        model="claude-sonnet-4-6",
+        model=model,
         max_tokens=max_tokens,
         messages=[{"role": "user", "content": prompt}],
     )
@@ -655,12 +655,12 @@ def run_multi_agent_pipeline(
     )
     print(f"    Done ({time.time()-t0:.1f}s, {len(market_brief)} chars)")
 
-    # Editor: Synthesise into Minto Pyramid
-    print("  [Editor] Synthesising...")
+    # Editor: Synthesise into Minto Pyramid (Opus for editorial quality)
+    print("  [Editor] Synthesising (claude-opus-4-6)...")
     t0 = time.time()
     result = call_claude(
         build_editor_prompt(price_brief, property_brief, market_brief, address, suburb_display),
-        api_key, max_tokens=1500, parse_json=True,
+        api_key, max_tokens=1500, parse_json=True, model="claude-opus-4-6",
     )
     print(f"    Done ({time.time()-t0:.1f}s)")
 
@@ -681,7 +681,8 @@ def run_multi_agent_pipeline(
 def store_analysis(db, suburb: str, property_id, analysis: Dict) -> None:
     """Write ai_analysis field to the property document."""
     analysis["generated_at"] = datetime.now(timezone.utc).isoformat()
-    analysis["model"] = "claude-sonnet-4-6"
+    analysis["model"] = "claude-opus-4-6"
+    analysis["status"] = analysis.get("status", "draft")  # draft until human review
 
     cosmos_retry(lambda: db[suburb].update_one(
         {"_id": property_id},
