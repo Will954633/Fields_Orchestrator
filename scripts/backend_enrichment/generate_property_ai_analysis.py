@@ -628,30 +628,32 @@ def run_multi_agent_pipeline(
     competing_str = format_competing(competing_listings)
     sales_str = format_sales(recent_sales)
 
+    AGENT_MODEL = "claude-opus-4-6"
+
     # Agent 1: Price Analyst
-    print("  [Agent 1/3] Price Analyst...")
+    print(f"  [Agent 1/3] Price Analyst ({AGENT_MODEL})...")
     t0 = time.time()
     price_brief = call_claude(
         build_price_agent_prompt(prop_summary, medians_str, competing_str, sales_str, suburb_display),
-        api_key, max_tokens=600, parse_json=False,
+        api_key, max_tokens=600, parse_json=False, model=AGENT_MODEL,
     )
     print(f"    Done ({time.time()-t0:.1f}s, {len(price_brief)} chars)")
 
     # Agent 2: Property Analyst
-    print("  [Agent 2/3] Property Analyst...")
+    print(f"  [Agent 2/3] Property Analyst ({AGENT_MODEL})...")
     t0 = time.time()
     property_brief = call_claude(
         build_property_agent_prompt(prop_summary),
-        api_key, max_tokens=600, parse_json=False,
+        api_key, max_tokens=600, parse_json=False, model=AGENT_MODEL,
     )
     print(f"    Done ({time.time()-t0:.1f}s, {len(property_brief)} chars)")
 
     # Agent 3: Market Analyst
-    print("  [Agent 3/3] Market Analyst...")
+    print(f"  [Agent 3/3] Market Analyst ({AGENT_MODEL})...")
     t0 = time.time()
     market_brief = call_claude(
         build_market_agent_prompt(prop_summary, medians_str, competing_str, sales_str, suburb_display),
-        api_key, max_tokens=600, parse_json=False,
+        api_key, max_tokens=600, parse_json=False, model=AGENT_MODEL,
     )
     print(f"    Done ({time.time()-t0:.1f}s, {len(market_brief)} chars)")
 
