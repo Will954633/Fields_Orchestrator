@@ -78,6 +78,7 @@ from .daily_incremental import write_for_sale_snapshot, compute_candidate_sets
 from .field_change_tracker import FieldChangeTracker
 from .property_change_detector import PropertyChangeDetector
 from .schedule_manager import ScheduleManager
+from .config_utils import resolve_env_vars, load_settings, get_mongo_uri, get_target_suburb_slugs
 try:
     from shared.monitor_client import MonitorClient as _MonitorClient
     _MONITOR_AVAILABLE = True
@@ -698,41 +699,22 @@ class TaskExecutor:
         # Log MongoDB status
         self.mongodb_monitor.log_status()
 
-        # Load MongoDB URI from settings (needed for all MongoDB components)
+        # Load MongoDB URI and target suburbs from settings (via config_utils)
         settings_path = base_dir / "config" / "settings.yaml"
-        mongo_uri = "mongodb://127.0.0.1:27017/"
-        mongo_db = "property_data"
         try:
-            if settings_path.exists():
-                with open(settings_path, "r") as f:
-                    settings = yaml.safe_load(f) or {}
-                mongo_uri_raw = settings.get("mongodb", {}).get("uri", mongo_uri)
-                mongo_db = settings.get("mongodb", {}).get("database", mongo_db)
-
-                # Resolve environment variables in URI (e.g. "${COSMOS_CONNECTION_STRING}")
-                # YAML doesn't do shell variable expansion, so we need to do it in Python
-                def _resolve_env_vars(value: str) -> str:
-                    if not isinstance(value, str):
-                        return value
-                    def replace_var(match):
-                        var_name = match.group(1) or match.group(2)
-                        env_value = os.environ.get(var_name, '')
-                        if not env_value:
-                            self.logger.warning(f"Environment variable '{var_name}' is not set")
-                        return env_value
-                    return re.sub(r'\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)', replace_var, value)
-
-                mongo_uri = _resolve_env_vars(mongo_uri_raw)
-                self.logger.info(f"MongoDB URI resolved (starts with: {mongo_uri[:30]}...)")
+            settings = load_settings(base_dir)
+            mongo_uri = settings.get("mongodb", {}).get("uri", "mongodb://127.0.0.1:27017/")
+            mongo_db = settings.get("mongodb", {}).get("database", "property_data")
+            self.logger.info(f"MongoDB URI resolved (starts with: {mongo_uri[:30]}...)")
         except Exception as e:
             self.logger.warning(f"Failed to load settings: {e}")
+            mongo_uri = get_mongo_uri(base_dir)
+            mongo_db = "property_data"
 
         # Load target suburbs for unknown status detection and daily incremental
         _target_suburbs_slugs: List[str] = []
         try:
-            _settings_for_suburbs = yaml.safe_load(open(settings_path)) or {} if settings_path.exists() else {}
-            _suburbs_raw = _settings_for_suburbs.get("target_market", {}).get("suburbs", [])
-            _target_suburbs_slugs = [s.split(":")[0].strip().lower().replace(" ", "_") for s in _suburbs_raw]
+            _target_suburbs_slugs = get_target_suburb_slugs(base_dir)
         except Exception as e:
             self.logger.warning(f"Failed to load target suburbs for unknown status detection: {e}")
 
