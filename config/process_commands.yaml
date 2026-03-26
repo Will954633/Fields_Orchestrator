@@ -342,6 +342,38 @@ processes:
     depends_on: [101]  # Needs up-to-date for-sale scrape data
 
   # ============================================================================
+  # PHASE 5.5: AI PROPERTY EDITORIAL (Claude Opus — new listings only)
+  # ============================================================================
+
+  - id: 120
+    name: "AI Property Editorial (New Listings)"
+    description: "Generates editorial content for new listings (<=7 days) missing ai_analysis. Uses multi-agent pipeline: 3 specialist analysts + editor + reflection + fact-check. Creates drafts for review in ops dashboard."
+    phase: "backend_enrichment"
+    command: "bash -c 'source /home/fields/venv/bin/activate && set -a && source /home/fields/Fields_Orchestrator/.env && set +a && python3 scripts/backend_enrichment/generate_property_ai_analysis.py --new-listings --days 7'"
+    working_dir: "/home/fields/Fields_Orchestrator"
+    mongodb_activity: "moderate_write"
+    requires_browser: false
+    estimated_duration_minutes: 60  # ~5 min per new listing × up to 10 new listings
+    cooldown_seconds: 60
+    depends_on: [18, 117]  # Needs valuation precompute + satellite analysis
+
+  # ============================================================================
+  # PHASE 3.5: SATELLITE IMAGE ANALYSIS (Google Maps Static + GPT-5.4 Vision)
+  # ============================================================================
+
+  - id: 117
+    name: "Satellite Image Analysis (GPT-5.4 Vision)"
+    description: "Fetches Google Maps satellite imagery for each target-market property and sends to GPT-5.4 for buyer-perspective surroundings analysis. Writes satellite_analysis field with land use, road proximity, green cover, flood risk, neighbour density, and buyer highlights."
+    phase: "enrichment_target"
+    command: "bash -c 'source /home/fields/venv/bin/activate && set -a && source /home/fields/Fields_Orchestrator/.env && set +a && python3 scripts/step117_satellite_analysis.py'"
+    working_dir: "/home/fields/Fields_Orchestrator"
+    mongodb_activity: "moderate_write"
+    requires_browser: false
+    estimated_duration_minutes: 30  # ~100 properties × ~3s maps + ~10s GPT each
+    cooldown_seconds: 60
+    depends_on: [101]  # Needs geocoded coordinates from scrape
+
+  # ============================================================================
   # PHASE 6: COVERAGE CHECK (Domain vs DB count comparison)
   # ============================================================================
 
@@ -435,7 +467,7 @@ processes:
 # Note: Schedule manager determines which processes run based on day of week
 # - Monday-Saturday: 101, 103, 111, 113, 114, 115, 116, 112, 105, 106, 108, 6, 11, 12, 13, 14, 16, 15, 17, 19, 18, 109, 107
 # - Sunday: 102, 104, 101, 103, 111, 113, 114, 115, 116, 112, 105, 106, 108, 6, 11, 12, 13, 14, 16, 15, 17, 19, 18, 109, 107
-execution_order: [101, 102, 103, 104, 111, 113, 114, 115, 110, 116, 112, 105, 106, 108, 6, 11, 12, 13, 14, 16, 15, 17, 19, 18, 109, 107]
+execution_order: [101, 102, 103, 104, 111, 113, 114, 115, 110, 116, 112, 105, 106, 108, 117, 6, 11, 12, 13, 14, 16, 15, 17, 19, 18, 109, 107]
 
 # Phase descriptions for UI display
 phases:
@@ -467,7 +499,7 @@ phases:
   enrichment_target:
     name: "Visual Analysis (Target Market)"
     description: "Analyze photos and floor plans with OpenAI GPT Vision for Robina, Varsity Lakes, Burleigh Waters"
-    steps: [105, 106, 108]
+    steps: [105, 106, 108, 117]
     
   valuation:
     name: "Property Valuation"
