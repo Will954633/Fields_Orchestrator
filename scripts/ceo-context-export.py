@@ -75,6 +75,7 @@ READ_ONLY_TOOL_CONTRACT = {
         "pipeline-runs --days N --limit N",
         "website-metrics --days N",
         "ad-metrics --days N --limit N",
+        "search-console --days N",
         "proposal-outcomes --days N --limit N",
         "timeline --days N",
     ],
@@ -84,6 +85,25 @@ READ_ONLY_TOOL_CONTRACT = {
         "Results should be cited back to exported evidence files where possible.",
     ],
 }
+
+
+_CREDENTIAL_PATTERNS = [
+    # Azure Cosmos / MongoDB connection strings
+    re.compile(r'mongodb(\+srv)?://[^\s"\']+'),
+    re.compile(r'AccountEndpoint=https?://[^\s"\']+'),
+    # Generic connection-string-style secrets (key=value with base64-ish values)
+    re.compile(r'AccountKey=[A-Za-z0-9+/=]{20,}'),
+    # Bare base64 keys that look like Azure primary/secondary keys (44+ chars)
+    re.compile(r'(?<=["\'])([A-Za-z0-9+/]{40,}={0,2})(?=["\'])'),
+]
+
+
+def scrub_credentials(content: str) -> str:
+    """Remove connection strings and credential-like values from source code before export."""
+    scrubbed = content
+    for pattern in _CREDENTIAL_PATTERNS:
+        scrubbed = pattern.sub("[CREDENTIAL_SCRUBBED]", scrubbed)
+    return scrubbed
 
 
 def now_label() -> str:
@@ -523,6 +543,11 @@ def export_metrics_and_memory() -> None:
     metrics["memory/structured_memory.json"] = structured
     metrics["experiments/active_experiments.json"] = structured.get("active_experiments", [])
     metrics["experiments/experiment_results_7d.json"] = query_json(["/home/fields/venv/bin/python3", "scripts/ceo-query-broker.py", "experiment-results", "--days", "7"])
+    try:
+        metrics["metrics/search_console_7d.json"] = query_json(["/home/fields/venv/bin/python3", "scripts/ceo-query-broker.py", "search-console", "--days", "7"])
+    except Exception as exc:
+        print(f"  ⚠ Search Console export failed (non-critical): {exc}")
+        metrics["metrics/search_console_7d.json"] = {"source": "google_search_console", "error": str(exc)[:200], "queries": [], "pages": []}
     metrics["metrics/recent_website_changes.json"] = structured.get("recent_website_changes", {})
     metrics["metrics/recent_proposals.json"] = structured.get("recent_proposals", [])
 
@@ -796,11 +821,12 @@ def export_backup_scraper() -> None:
     url_summary = ssh_cmd(f"sudo find {BACKUP_SCRAPER_DIR}/discovered_urls -name '*.json' -exec wc -l {{}} + 2>/dev/null | tail -10")
     gh_api_put("backup-scraper/discovered_urls_summary.txt", url_summary, "update: backup scraper URL discovery summary")
 
-    # 4. Export key code files
+    # 4. Export key code files (credentials scrubbed)
     for script in BACKUP_SCRAPER_SCRIPTS:
         content = ssh_cmd(f"sudo cat {BACKUP_SCRAPER_DIR}/{script}", timeout=15)
         if content and not content.startswith("[SSH"):
-            gh_api_put(f"backup-scraper/code/{script}", content, f"update: backup scraper {script}")
+            safe_content = scrub_credentials(content)
+            gh_api_put(f"backup-scraper/code/{script}", safe_content, f"update: backup scraper {script}")
 
     # 5. CLAUDE.md from the scraper project (if exists)
     claude_md = ssh_cmd(f"sudo cat {BACKUP_SCRAPER_DIR}/CLAUDE.md 2>/dev/null")
