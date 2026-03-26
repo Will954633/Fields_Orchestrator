@@ -943,6 +943,15 @@ DATA CONFIDENCE RULES (CRITICAL — violations cause fact-check failures):
 - NEVER round or modify transaction prices. Use exact figures from the data.
 - ALWAYS cite the specific data field you're drawing from when making factual claims.
 
+CRITICAL — ROOMS WITH "visible": false AND null SCORES:
+When a room (bathrooms, bedrooms, living areas) has "visible": false and ALL scores are null, it means our photo analysis system NEVER SAW that room. In this case:
+- Do NOT call the room "unrenovated", "untouched", "dated", "original", or any other condition claim
+- Do NOT use "bathrooms_renovated": false as proof of condition — that field is INFERRED from the absence of visible evidence, not from an actual assessment of the bathrooms
+- The CORRECT framing is: "condition data not available for [room] — inspect in person" or "not photographed — no condition score on record"
+- You MAY note that the room was not visible and recommend inspection, but you MUST NOT characterise its condition
+- This applies to ALL renovation fields for rooms that were not photographed: bathrooms_renovated, flooring_updated, etc. If the room wasn't seen, the boolean is unreliable
+- AUTOMATIC FACT-CHECK FAILURE: Any claim about the condition or renovation status of a room with visible: false and null scores will be marked ❌ FAILED
+
 PRE-CALCULATED DATA RULE: If the property summary contains a "PRE-CALCULATED GROWTH" section with total growth %, CAGR, and years held — use THOSE EXACT NUMBERS. Do NOT recalculate from transaction prices. Your mental arithmetic will be wrong. The pre-calculated figures are computed by code and verified. Use them verbatim.
 
 NOTE: You do NOT write headlines. A separate specialist handles that. Focus on substance, evidence, and value framing.
@@ -1244,7 +1253,23 @@ def build_editor_prompt(price_brief: str, property_brief: str, market_brief: str
 
 NOTE: You do NOT write the headline, sub_headline, meta_title, or meta_description. A separate Sabri Suby specialist handles those. Focus on the BODY content only.
 
-CRITICAL RULE — MISSING DATA: If a room (e.g. bathrooms, bedrooms) has null scores or "visible": false in the property data, it means OUR analysis system did not capture it — NOT that the seller deliberately excluded it. Do NOT draw conclusions from missing data. Do NOT claim rooms are "unrenovated", "untouched", "poor", or "deliberately not shown" based on null/missing scores. Simply omit those rooms from your analysis or note "condition data not available". Only write about what the data actually shows.
+CRITICAL RULE — MISSING DATA (READ CAREFULLY — THIS IS THE #1 RECURRING ERROR):
+If a room (e.g. bathrooms, bedrooms) has "visible": false and null scores in the property_valuation_data, it means OUR PHOTO ANALYSIS SYSTEM DID NOT SEE THAT ROOM. It was not photographed or not identifiable in photos. This tells you NOTHING about its actual condition.
+
+SPECIFICALLY: "bathrooms_renovated": false in the renovation section DOES NOT MEAN the bathrooms are unrenovated. It means our system did not detect bathroom renovation evidence in photos — BECAUSE IT NEVER SAW THE BATHROOMS. The boolean is inferred from absence, not observation.
+
+YOU MUST NOT:
+- Call rooms "unrenovated", "untouched", "dated", "original", or "not upgraded" when visible: false
+- Use "bathrooms_renovated: false" as evidence of condition
+- Say "unrenovated bathrooms" in the headline, verdict, insights, or trade-offs
+- Frame missing data as a negative ("the bathrooms haven't been done")
+
+YOU MUST:
+- Say "condition data not available" or "not photographed — no condition score on record"
+- Recommend in-person inspection for rooms without data
+- Frame as a known unknown: "The bathrooms were not photographed and have no condition scores — budget accordingly or inspect carefully"
+
+If the agent briefings below claim bathrooms are "unrenovated" based on this data, OVERRIDE THEM. The briefings are wrong on this point.
 
 PRICE & VALUE ANALYST BRIEFING:
 {price_brief}
@@ -1979,6 +2004,9 @@ VALUATION LANGUAGE RULE — DO NOT FAIL approximate valuation claims:
 - If the draft says "our valuation is exactly $2,396,327" — THAT should be failed, because exact single-figure valuations imply false precision.
 - The correct standard: valuation claims should be directional (above/below/within range) or use ranges. Approximate language like "roughly", "around", "in the lower half" is CORRECT, not an error.
 
+INVISIBLE ROOM RULE (AUTOMATIC FAIL):
+If the draft claims a room is "unrenovated", "untouched", "dated", "not upgraded", or describes its condition — but that room has "visible": false and null condition scores in property_valuation_data — mark it ❌ FAILED. The field "bathrooms_renovated": false is UNRELIABLE when bathrooms were not photographed. The correct claim is "condition data not available" or "not photographed".
+
 Be exhaustive on factual claims. Be lenient on valuation approximations."""
 
         factcheck_text = call_claude(
@@ -2447,6 +2475,36 @@ def process_property(db, suburb: str, prop: Dict, api_key: str, force: bool = Fa
     # Strip satellite image URL (large, not needed for text analysis) but keep categories/narrative
     if 'satellite_analysis' in _prop_clean and isinstance(_prop_clean['satellite_analysis'], dict):
         _prop_clean['satellite_analysis'] = {k: v for k, v in _prop_clean['satellite_analysis'].items() if k != 'satellite_image_url'}
+
+    # Annotate renovation booleans that are unreliable due to invisible rooms
+    # If bathrooms have visible:false + null scores, bathrooms_renovated is UNRELIABLE
+    pvd = _prop_clean.get('property_valuation_data', {})
+    renovation = pvd.get('renovation', {})
+    bathrooms_data = pvd.get('bathrooms', [])
+    if renovation and bathrooms_data:
+        all_invisible = all(
+            b.get('visible') is False and b.get('condition_score') is None
+            for b in bathrooms_data if isinstance(b, dict)
+        )
+        if all_invisible and isinstance(renovation, dict):
+            renovation['_WARNING_bathrooms_renovated'] = (
+                "UNRELIABLE — bathrooms were NOT photographed (visible: false, all scores null). "
+                "This boolean is inferred from absence of evidence, NOT from observing the bathrooms. "
+                "Do NOT use this field to claim bathrooms are 'unrenovated'. Say 'condition unknown — not photographed'."
+            )
+    # Same check for bedrooms
+    bedrooms_data = pvd.get('bedrooms', [])
+    if renovation and bedrooms_data:
+        all_invisible = all(
+            b.get('visible') is False and b.get('condition_score') is None
+            for b in bedrooms_data if isinstance(b, dict)
+        )
+        if all_invisible and isinstance(renovation, dict):
+            renovation['_WARNING_bedrooms'] = (
+                "UNRELIABLE — bedrooms were NOT photographed. Do NOT claim condition. "
+                "Say 'condition data not available'."
+            )
+
     summary = _json.dumps(_prop_clean, indent=2, default=str)
     print(f"  Property document: {len(summary):,} chars (~{len(summary)//4:,} tokens)")
 
