@@ -457,10 +457,21 @@ def build_property_summary(prop: Dict) -> str:
                     except ValueError:
                         asking = None
 
-            # Also get valuation
-            val = prop.get("valuation_data", {}).get("confidence", {}).get("reconciled_valuation")
+            # Also get valuation (range + midpoint for internal calculations)
+            val_confidence = prop.get("valuation_data", {}).get("confidence", {})
+            val = val_confidence.get("reconciled_valuation")
+            val_range = val_confidence.get("range", {})
+            val_range_low = val_range.get("low")
+            val_range_high = val_range.get("high")
 
-            reference_price = val or asking  # prefer valuation, fall back to asking
+            # Add the range to the property summary for the LLM
+            if val_range_low and val_range_high:
+                lines.append(f"\nFIELDS VALUATION RANGE (always quote as a range, NEVER as a single figure):")
+                lines.append(f"  Range: ${val_range_low:,.0f} to ${val_range_high:,.0f}")
+                lines.append(f"  Based on {val_confidence.get('n_verified', 0)} verified comparable sales")
+                lines.append(f"  RULE: Present this as '$X to $Y based on N comparable sales'. Never quote the midpoint.")
+
+            reference_price = val or asking  # prefer valuation midpoint for internal growth calc
             buy_price = last_sale["price"]
             buy_date = last_sale["date"]
 
@@ -472,7 +483,7 @@ def build_property_summary(prop: Dict) -> str:
                     if years > 0.5 and buy_price > 0:
                         total_growth_pct = ((reference_price - buy_price) / buy_price) * 100
                         cagr = (math.pow(reference_price / buy_price, 1 / years) - 1) * 100
-                        ref_label = "valuation" if val else "asking price"
+                        ref_label = "valuation midpoint (internal — do NOT quote this exact figure to users)" if val else "asking price"
                         lines.append(f"\nPRE-CALCULATED GROWTH (use these exact figures, do NOT recalculate):")
                         lines.append(f"  Last purchased: ${buy_price:,.0f} on {buy_date}")
                         lines.append(f"  Current {ref_label}: ${reference_price:,.0f}")
@@ -984,7 +995,7 @@ BUILD THE PRICE NARRATIVE:
    - "It's overpriced" → here's the comparable evidence that supports/challenges the ask
    - "It's a bargain" → here's what you're giving up for the lower price
 
-CRITICAL: Always present the valuation as a RANGE (e.g. "$2,160,000 to $3,365,000 based on 2 adjusted comparables") — NEVER as a single figure. Price is discovered, not set.
+CRITICAL — NON-NEGOTIABLE RULE: Fields NEVER quotes a single valuation figure. ALWAYS present the valuation as a RANGE (e.g. "$2,120,000 to $2,700,000 based on 2 adjusted comparables"). NEVER write "Fields values this at $X" or "Our estimate is $X". A single number implies false precision — the final price depends on buyer competition, seller expectations, and negotiation dynamics. The range IS the valuation. Every sale is different. Our comparable-sales model establishes a defensible range, not an exact answer.
 
 WRITE your briefing as 200-300 words of plain text. Start with:
 **PRICE NARRATIVE:** [The price story in 2-3 sentences — using a valuation RANGE, not a single figure]
