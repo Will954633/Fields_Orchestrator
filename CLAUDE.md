@@ -1,597 +1,438 @@
 # CLAUDE.md — Fields Estate VM Agent
 
-This file gives the Claude Code agent running on this VM full context about all systems.
 Working directory: `/home/fields/Fields_Orchestrator`
 
 ---
 
-## ⚡ MANDATORY: FIX HISTORY LOGGING
+## Mandatory Rules
 
-**Every time you fix a bug, repair a script, or change any code — you MUST write a log entry. Do this automatically, without being asked.**
+These rules apply to EVERY session. They are not optional.
 
-Log location: `/home/fields/Fields_Orchestrator/logs/fix-history/YYYY-MM-DD.md` (one file per day, AEST date).
+### 1. Fix History Logging
 
-**Format — append to the file (create it if it doesn't exist):**
-```markdown
-## [PROBLEM-ID] Short description — HH:MM AEST
+After every bug fix, script repair, or code change — write a log entry.
 
-**Symptom:** What was broken / what the user saw.
-**Root cause:** Why it was broken.
-**Fix:** What you changed and why.
-**Files:** List of files modified.
-**Recurrence:** First occurrence / Nth occurrence (check audit command below).
-```
+- **Location:** `logs/fix-history/YYYY-MM-DD.md` (AEST date)
+- **Format:**
+  ```
+  ## [PROBLEM-ID] Short description — HH:MM AEST
+  **Symptom:** What was broken.
+  **Root cause:** Why it was broken.
+  **Fix:** What you changed and why.
+  **Files:** List of files modified.
+  **Recurrence:** First / Nth (check: grep -h "^## \[" logs/fix-history/*.md | sed 's/ — .*//' | sort | uniq -d)
+  ```
+- At session start, read the last 2-3 fix-history files to spot recurring issues.
 
-**Audit for recurring problems:**
-```bash
-grep -h "^## \[" logs/fix-history/*.md | sed 's/ — .*//' | sort | uniq -d
-```
+### 2. Push All Code to GitHub
 
-**When to write:** After every fix, before ending the session. Also at session start, read the last 2–3 fix-history files to spot recurring issues.
+GitHub is disaster recovery. No change is complete until pushed. Code that only exists on the VM is not safe.
 
----
+- **Orchestrator files** → `Will954633/Fields_Orchestrator`
+- **Website files** → `Will954633/Website_Version_Feb_2026`
+- **Automation files** → `Will954633/fields-automation`
+- **Never push:** `.env`, credentials, `node_modules/`, `__pycache__/`, logs, `config/settings.yaml` (contains Cosmos URI)
+- **git push hangs on this VM** — always use `gh api`:
+  ```bash
+  # Update existing file:
+  SHA=$(gh api 'repos/OWNER/REPO/contents/PATH' --jq '.sha')
+  CONTENT=$(base64 -w0 < /local/path/to/file)
+  gh api 'repos/OWNER/REPO/contents/PATH' \
+    --method PUT --field message="description" --field content="$CONTENT" --field sha="$SHA"
 
-## ⚡ MANDATORY: AD DECISION LOGGING
+  # New file (no sha):
+  CONTENT=$(base64 -w0 < /local/path/to/file)
+  gh api 'repos/OWNER/REPO/contents/PATH' \
+    --method PUT --field message="add: description" --field content="$CONTENT"
+  ```
+- For large files (>100KB), use Python to build JSON payload + `--input`:
+  ```bash
+  python3 -c "import json,base64; ..." > /tmp/payload.json
+  gh api 'repos/OWNER/REPO/contents/PATH' --method PUT --input /tmp/payload.json
+  ```
 
-**Every time you create, modify, pause, enable, or delete a Facebook or Google Ads campaign, ad set, or ad — you MUST write a decision log entry to MongoDB. Do this automatically, without being asked.**
+### 3. Ad Decision Logging
 
-**Collection:** `system_monitor.ad_decisions`
-
-**Format — insert one document per decision:**
+Every Facebook or Google Ads campaign create/modify/pause/enable/delete → write to `system_monitor.ad_decisions`:
 ```python
-{
-    "date": "YYYY-MM-DD",
-    "type": "new_campaign|pause|enable|budget_change|copy_test|audit|creative_change",
-    "title": "Short description of what changed",
-    "hypothesis": "Why we expect this to work / what we're testing",
-    "findings": ["Bullet point data that informed this decision"],
-    "data_snapshot": {
-        # Relevant metrics, campaign IDs, budget figures, keyword data
-    },
-    "tags": ["google_ads", "facebook_ads", "campaign_name", etc.],
-    "reasoning": "Why this decision was made — connects to strategy",
-    "created_at": "ISO timestamp"
-}
+{"date": "YYYY-MM-DD", "type": "new_campaign|pause|enable|budget_change|...",
+ "title": "Short description", "hypothesis": "Why we expect this to work",
+ "findings": ["Data points"], "data_snapshot": {}, "tags": ["google_ads"],
+ "reasoning": "Decision rationale", "created_at": "ISO timestamp"}
 ```
 
-**When to write:**
-- Creating a new campaign (Google or Facebook)
-- Enabling or pausing a campaign
-- Changing budget, keywords, ad copy, or targeting
-- A/B test setup or conclusion
-- Any audit or performance review that leads to action
+### 4. Website Change Logging & Visual Verification
 
-**What this enables:** Complete institutional memory of every advertising decision, so we can trace what worked, what didn't, and why we made each choice. The `ad-review-dump.py` and `ad-experiment-log.py` scripts read this data.
+After pushing any website file:
+1. Log deploy: `python3 scripts/website-deploy-tracker.py log --commit SHA --files "..." --message "..."`
+2. If testable: `python3 scripts/website-change-log.py log --title "..." --type TYPE --hypothesis "..." --files "..." --pages "/..." --commit SHA`
+3. Screenshot affected pages: `node scripts/site-inspector.js --url /AFFECTED_PAGE`
+4. Read the screenshot PNG to verify rendering (multimodal vision)
+5. Check console.log for JS errors, network-errors.log for failed API calls
 
-**Related scripts:**
-- `scripts/google-ads-metrics-collector.py` — Collects Google Ads metrics daily (cron: 12:15 + 23:10 AEST)
-- `scripts/fb-metrics-collector.py` — Collects Facebook Ads metrics daily (cron: 12:00 + 23:00 AEST)
-- `scripts/ad-experiment-log.py` — Log and track A/B experiments
-- `scripts/ad-review-dump.py` — Interactive ad performance review
-- `scripts/google_ads_manager.py` — Create/manage Google Ads campaigns
+### 5. Editorial Content Rules
 
-**Monitoring collections:**
-| Collection | Platform | Purpose |
-|---|---|---|
-| `ad_decisions` | Both | Audit log of all advertising decisions |
-| `ad_daily_metrics` | Facebook | Per-ad daily performance |
-| `ad_profiles` | Facebook | Per-ad creative, targeting, aggregates |
-| `ad_demographics` | Facebook | Age × gender breakdowns |
-| `ad_placements` | Facebook | Platform × position performance |
-| `ad_attribution` | Facebook | Website session attribution |
-| `ad_experiments` | Facebook | A/B test tracking |
-| `google_ads_daily_metrics` | Google | Per-campaign daily performance |
-| `google_ads_profiles` | Google | Per-campaign config + aggregates |
-| `google_ads_keywords` | Google | Keyword performance per 7d window |
-| `google_ads` | Google | Latest snapshot |
+All public-facing content (articles, Facebook posts, chart narratives, market summaries):
+- **No advice:** NEVER tell readers what to do. No "you should sell", "consider buying", "now is a good time". Data only — reader draws conclusions. Liability risk.
+- **No predictions:** Report indicators, use conditional language ("if X, data suggests Y"), never "prices will fall".
+- **No single valuation in headlines:** Use comparable ranges, not single figures. Single figures OK inside Valuation Guide tab.
+- **Value framing:** Every property trade-off is value, not a flaw. A seller should read our content and think we'd position their property honestly.
+- **Factual accuracy:** Always cite data source + limitations. Exact transaction prices (never rounded). Verify "all/none/every" claims.
+- **No valuation references in Facebook posts** — user not confident in accuracy for public-facing posts yet.
+- **Forbidden words:** "stunning", "nestled", "boasting", "rare opportunity", "robust market"
+- **Number format:** `$1,250,000` not "$1.25m", suburbs always capitalised
 
 ---
 
-## ⚡ MANDATORY: PUSH ALL CODE CHANGES TO GITHUB
+## The Business
 
-**GitHub is our backup and source of truth. Every time you create, modify, or fix a file — you MUST push it to the appropriate GitHub repo. Do this automatically, without being asked. Code that only exists on the VM is not safe.**
+**Fields Real Estate** — property intelligence platform, Gold Coast, Queensland.
+Founded by **Will Simpson** (`will@fieldsestate.com.au`), sole operator.
 
-### Rules
-1. **No change is complete until it's in GitHub.** Editing a file locally is only half the job — always push it.
-2. **Website files** (`Feilds_Website/01_Website/`) → push to `Will954633/Website_Version_Feb_2026` (see Section 4 for path mapping).
-3. **Orchestrator files** (`Fields_Orchestrator/`) → push to the `Fields_Orchestrator` repo (this repo).
-4. **Automation/article files** → push to `Will954633/fields-automation`.
-5. **Scraper and valuation files** → push to their respective repos if they exist, or to `Fields_Orchestrator` as a fallback.
-6. **New files count too** — if you create a new script, config, or utility, it must be pushed. Don't assume it will be backed up later.
-7. **Exclude from push:** `.env` files, credentials, `node_modules/`, `__pycache__/`, log files, and any file containing secrets.
+**Mission:** Help buyers and sellers make informed decisions through original analysis, local expertise, transparent methodology.
 
-### How to push (git push hangs on this VM — always use `gh api`):
-```bash
-# Update existing file:
-SHA=$(gh api 'repos/OWNER/REPO/contents/PATH' --jq '.sha')
-CONTENT=$(base64 -w0 < /local/path/to/file)
-gh api 'repos/OWNER/REPO/contents/PATH' \
-  --method PUT --field message="description of change" --field content="$CONTENT" --field sha="$SHA"
+**Tagline:** "Smarter with data"
 
-# New file (no sha needed):
-CONTENT=$(base64 -w0 < /local/path/to/file)
-gh api 'repos/OWNER/REPO/contents/PATH' \
-  --method PUT --field message="add: description" --field content="$CONTENT"
-```
+**Business model:** Buyer-first, seller-funded. Build buyer audience with free data/valuations/intelligence. Revenue from sellers (pre-sale reports) and agents (leads, tools). Decision filter: does this help buyers? If yes, it eventually serves sellers too.
 
-### Why this matters
-This VM is a single point of failure. If it goes down, we lose everything that isn't in GitHub. Treat GitHub as the disaster recovery backup for all code on this machine.
+**Stage:** Pre-revenue. Building data infrastructure, content, and website. No customers yet.
+
+**Target suburbs** (southern Gold Coast, 20-30 min from Surfers Paradise):
+- **Robina** (4226) — master-planned, strong unit + house market
+- **Varsity Lakes** (4227) — lake-fronting, younger demographic, growth
+- **Burleigh Waters** (4220) — premium family suburb, high demand, limited supply
 
 ---
 
-## ⚡ MANDATORY: WEBSITE CHANGE LOGGING
+## Who You Are
 
-**Every time you push a website file to GitHub, you MUST log the deployment and (if applicable) the change. Do this automatically, without being asked.**
+Operations agent on `fields-orchestrator-vm` (GCP, australia-southeast1-b, e2-medium, IP: 35.189.1.73). Full bash access — read/edit files, run scripts, query databases, deploy via GitHub.
 
-### After every website file push:
-```bash
-# 1. Log the deploy event (always)
-python3 scripts/website-deploy-tracker.py log \
-    --commit <COMMIT_SHA> \
-    --files "path/to/file1.tsx,path/to/file2.css" \
-    --message "Short description of change"
-
-# 2. If the change has a hypothesis or is testable (not just a bug fix):
-python3 scripts/website-change-log.py log \
-    --title "Short description" \
-    --type layout_change \
-    --hypothesis "Expected impact on visitor behavior" \
-    --files "file1.tsx,file2.css" \
-    --pages "/for-sale,/property" \
-    --commit <COMMIT_SHA> \
-    --tags "cta,conversion"
-
-# 3. If there's an active A/B experiment on affected pages:
-python3 scripts/website-experiment-log.py snapshot --experiment <ID>
-```
-
-### Change types: `layout_change`, `copy_change`, `new_page`, `bug_fix`, `performance`, `style_change`, `feature`, `config`
-
-### Review cadence:
-```bash
-# Check for changes needing review (7+ days old, no impact assessment):
-python3 scripts/website-change-log.py pending
-
-# Review a change (captures post-change metrics + compares to baseline):
-python3 scripts/website-change-log.py review --change <ID>
-
-# Full website performance dump:
-python3 scripts/website-review-dump.py
-```
-
-### Why this matters
-Without logging changes, we can't link visitor behavior shifts to specific code changes. This is how we build institutional knowledge about what works and what doesn't on the website.
+Accessed via Claude Code terminal at `https://vm.fieldsestate.com.au`, embedded in ops dashboard at `https://fieldsestate.com.au/ops`.
 
 ---
 
-## ⚡ MANDATORY: VISUAL VERIFICATION OF WEBSITE CHANGES
+## Live Ops Status
 
-**After ANY change to website files (`Feilds_Website/01_Website/`, `netlify/functions/`, `src/`, `public/`), you MUST visually verify the affected page(s) before considering the task done. Do this automatically, without being asked.**
-
-### How
+**Read `OPS_STATUS.md` at the start of every session** — auto-generated every 15 min:
 ```bash
-# Inspect the affected page (wait for Netlify deploy to finish first)
-node /home/fields/Fields_Orchestrator/scripts/site-inspector.js --url /AFFECTED_PAGE
-
-# Then read the screenshot to verify rendering:
-#   Read /tmp/site-inspect/<page-slug>/screenshot.png
-# And check for console errors:
-#   Read /tmp/site-inspect/<page-slug>/console.log
-```
-
-### When to inspect
-| Trigger | What to inspect |
-|---------|----------------|
-| Changed a Netlify function | The page(s) that call that API |
-| Changed a React component | The page(s) that render that component |
-| Changed CSS/styles | Affected page in **both** desktop and `--mobile` viewports |
-| Debugging a visual/rendering bug | Screenshot **before** and **after** your fix |
-| User says "it looks wrong" or "broken layout" | Screenshot the page they're referring to |
-| Deploying any frontend change | All affected pages |
-
-### What to check in the screenshot
-- Page renders without blank/white sections
-- Text is readable, not overlapping
-- Images and charts load (not placeholder boxes)
-- Layout matches expected design (no broken grids)
-- Console log has no JavaScript errors
-- Network errors log is empty (no failed API calls)
-
-### Quick reference
-```bash
-# Single page
-node scripts/site-inspector.js --url /for-sale
-
-# Mobile viewport
-node scripts/site-inspector.js --url /for-sale --mobile
-
-# Multiple pages
-node scripts/site-inspector.js --url /for-sale,/market,/property/SOME_ID
-
-# Specific element
-node scripts/site-inspector.js --url /for-sale --element ".property-card"
-
-# Scripted interaction flow
-node scripts/site-inspector.js --url /for-sale --actions-file /tmp/site-actions.json
-
-# Write artifacts to a dedicated run directory
-node scripts/site-inspector.js --url /for-sale --output-dir /tmp/site-inspect/for-sale-debug
-
-# Diagnostics only
-node scripts/site-inspector.js --url /for-sale --preflight-only
-
-# Output is always at /tmp/site-inspect/<slug>/
-#   screenshot.png, page-text.txt, console.log, network-errors.log, page-info.json
-#   action-log.json (when --actions-file is used)
+cat OPS_STATUS.md
+# Or refresh first:
+python3 scripts/refresh-ops-context.py && cat OPS_STATUS.md
 ```
 
 ---
 
-## ⚡ LIVE OPS STATUS — READ THIS FIRST
-
-> **`OPS_STATUS.md`** in this directory is auto-generated every 15 minutes and contains a live snapshot of all systems — exactly what you see at https://fieldsestate.com.au/ops. **Read it at the start of every session** to get current pipeline status, errors, data coverage, and API health.
-
-```bash
-cat /home/fields/Fields_Orchestrator/OPS_STATUS.md
-# Or refresh it first:
-python3 /home/fields/Fields_Orchestrator/scripts/refresh-ops-context.py && cat /home/fields/Fields_Orchestrator/OPS_STATUS.md
-```
-
-The file includes:
-- Orchestrator pipeline: last run date, step-by-step status (✅/❌/⏳), failed steps
-- Active listing counts per suburb (Robina, Burleigh Waters, Varsity Lakes, etc.)
-- Website API health (all endpoints, response times, last checked)
-- Data coverage status per suburb
-- Scraper health (last scrape time per suburb)
-- Article pipeline (last Ghost publish, last Netlify build)
-- Repair queue (any pending repair requests)
-- Recent errors (last 24h)
-
-## 1. THE BUSINESS
-
-**Fields Real Estate** is a property intelligence platform founded by **Will Simpson**, based on the Gold Coast, Queensland, Australia.
-
-**Mission:** "We help buyers and sellers make informed real estate decisions through original analysis, local expertise, and transparent methodology."
-
-**What we do:** We build and publish high-quality property data — valuations, market analysis, suburb intelligence, sales breakdowns — and distribute it via Facebook, YouTube, and Google advertising to attract buyers and sellers in our target market.
-
-**Stage:** Early. We have not yet acquired our first customer. The focus right now is building the data infrastructure, content pipeline, and website to the point where the product speaks for itself. Every system we build is aimed at making the data more accurate, more useful, and more accessible than anything else available to buyers and sellers in our suburbs.
-
-**Target market suburbs:**
-- **Robina** — established master-planned community, strong unit and house market
-- **Burleigh Waters** — premium family suburb, high demand, limited supply
-- **Varsity Lakes** — lake-fronting properties, younger demographic, growth suburb
-
-All three suburbs are in the southern Gold Coast corridor, approximately 20–30 minutes from the Gold Coast CBD (Surfers Paradise) and 50 minutes from Brisbane via the M1.
-
-**Who you're working for:** Will Simpson (`will@fieldsestate.com.au`). He is the sole operator — developer, analyst, and founder. When making decisions about what to build or fix, think about what moves the needle for a solo operator trying to impress buyers and sellers with data quality and transparency.
-
----
-
-## 2. WHO YOU ARE
-
-You are the Fields Estate operations agent running on `fields-orchestrator-vm` (Google Cloud, australia-southeast1-b, e2-medium, IP: 35.189.1.73). You have full bash access to this VM and can read/edit files, run scripts, query the database, and deploy code to production via GitHub.
-
-You are accessed via the Claude Code terminal at `https://vm.fieldsestate.com.au`, embedded in the ops dashboard at `https://fieldsestate.com.au/ops`.
-
----
-
-## 2. FILESYSTEM LAYOUT ON THIS VM
+## Filesystem Layout
 
 ```
 /home/fields/
-├── Fields_Orchestrator/        ← YOU ARE HERE (working dir)
-│   ├── src/                    ← Orchestrator Python source
-│   ├── config/
-│   │   ├── settings.yaml       ← MongoDB URI, schedule, feature flags
-│   │   └── process_commands.yaml ← All pipeline process definitions
-│   ├── logs/                   ← orchestrator.log, claude-agent.log
-│   ├── logs/runs/              ← Per-run structured logs (stdout/stderr per step)
-│   ├── scripts/                ← Utility bash scripts
-│   ├── claude-agent.py         ← Headless repair agent (polls MongoDB)
-│   ├── repair-agent.py         ← Enrichment repair agent
-│   ├── trigger-poller.py       ← Manual trigger executor
-│   └── claude-terminal/        ← THIS TERMINAL SERVER
-│       └── server.js           ← xterm.js + node-pty WebSocket bridge
-├── Feilds_Website/             ← Full website codebase (mirrors GitHub)
-│   ├── 01_Website → see Section 4
-│   ├── 03_For_Sale_Coverage/   ← Property insights scripts
-│   ├── 07_Valuation_Comps/     ← Valuation model scripts
-│   ├── 08_Market_Narrative_Engine/ ← Market narrative precompute
-│   └── 10_Floor_Plans/         ← Floor plan processing
-├── Property_Data_Scraping/     ← Selenium scrapers
-│   └── 03_Gold_Coast/Gold_Coast_Wide_Currently_For_Sale_AND_Recently_Sold/
-│       └── run_complete_suburb_scrape.py  ← Main scraper
-└── Property_Valuation/
-    └── 04_Production_Valuation/ ← ML valuation model
+├── Fields_Orchestrator/         ← YOU ARE HERE
+│   ├── src/                     ← Orchestrator Python (21 modules, ~6600 lines)
+│   ├── shared/                  ← Shared Python libs (db.py, env.py, monitor_client.py)
+│   ├── config/settings.yaml     ← MongoDB URI, schedule, target suburbs
+│   ├── config/process_commands.yaml ← All 30 pipeline process definitions
+│   ├── scripts/                 ← 80+ utility scripts (enrichment, metrics, ads, articles)
+│   ├── logs/                    ← orchestrator.log, fix-history/
+│   ├── logs/runs/               ← Per-run structured logs
+│   ├── watchdog.py              ← Self-healing watchdog
+│   ├── trigger-poller.py        ← Manual trigger executor
+│   └── repair-agent.py          ← Enrichment repair agent
+├── Feilds_Website/01_Website/   ← Website codebase (React 19 + Vite + Netlify)
+│   ├── src/                     ← React components, pages, utils
+│   ├── netlify/functions/       ← 30 serverless API functions (~13K lines)
+│   └── netlify/functions/monitor/ ← Extracted ops dashboard handlers
+├── Property_Data_Scraping/      ← curl_cffi scrapers (Chrome-free since 2026-03-13)
+└── Property_Valuation/          ← Comparable-sales valuation model
 ```
 
 ---
 
-## 3. ORCHESTRATOR PIPELINE
+## Database
+
+**Azure Cosmos DB (MongoDB API)** — Serverless tier (~5000 RU/s burst limit).
+
+Connection: `COSMOS_CONNECTION_STRING` env var (in `.env` files, `config/settings.yaml`).
+
+```python
+# Python
+from shared.db import get_client, get_db, get_gold_coast_db
+client = get_client()
+db = get_gold_coast_db()
+
+# Or via mongo_client_factory (older pattern)
+from src.mongo_client_factory import get_mongo_client, get_database, cosmos_retry
+```
+
+### Key Databases
+
+| Database | Purpose |
+|----------|---------|
+| `Gold_Coast` | **Unified database** — all property data. Collections are `lowercase_with_underscores` (e.g. `robina`, `burleigh_waters`). Contains ~40K cadastral records + ~270 active listings + ~2K sold records. |
+| `property_data` | Enriched data (`properties_for_sale` collection with valuation_data) |
+| `system_monitor` | Ops monitoring, ad metrics, article storage, proposals, triggers |
+
+### Critical Query Rules
+
+- **Active listings:** ALWAYS filter `{"listing_status": "for_sale"}` — without this, queries hit ALL ~40K cadastral records
+- **Sold properties:** Filter `{"listing_status": "sold"}`
+- **Enriched:** Property has a `valuation_data` field (written by step 6)
+- **Cosmos DB 16500:** Use `cosmos_retry()` wrapper for any write-heavy operations (RU exhaustion)
+
+### Deprecated (read-only, do NOT write)
+- `Gold_Coast_Currently_For_Sale` — consolidated into `Gold_Coast` on 2026-03-05
+- `Gold_Coast_Recently_Sold` — consolidated into `Gold_Coast` on 2026-03-05
+
+---
+
+## Orchestrator Pipeline
+
+**Schedule:** 20:30 AEST nightly. Target market daily, other suburbs Sunday only.
 
 ### Services
 ```bash
 sudo systemctl status fields-orchestrator     # Main pipeline daemon
 sudo systemctl status fields-trigger-poller   # Manual trigger executor
-sudo systemctl status fields-claude-agent     # Headless repair agent
-sudo systemctl status fields-terminal         # THIS terminal (xterm.js server)
-sudo systemctl status ollama                  # LLaVA vision model
+sudo systemctl status fields-watchdog         # Self-healing watchdog
+sudo systemctl status fields-valuation-api    # On-demand valuation service
+sudo systemctl status fields-valuation-poller # Valuation request poller
+sudo systemctl status fields-ceo-telegram     # CEO Telegram bridge
+sudo systemctl status fields-builder-telegram # Builder Telegram bridge
 ```
+
+### Pipeline Phases (30 processes)
+
+| Phase | Steps | What |
+|-------|-------|------|
+| 1: Scraping | 101, 102* | curl_cffi scrape Domain.com.au → `Gold_Coast` |
+| 2: Sold | 103, 104*, 111, 113-115 | Sold detection, withdrawn, price tracking |
+| 2.5: Images | 110*, 112, 116 | Blob storage, property type classification, data quality |
+| 3: Visual | 105, 106, 108, 117 | GPT-4 photo/floor plan/satellite analysis |
+| 4: Valuation | 6 | Comparable-sales ML valuation model |
+| 5: Enrichment | 11-19 | Room dims, timelines, insights, narrative, reports |
+| 6: Coverage | 109 | Coverage check vs live Domain count |
+| 7: Audit | 107 | Database audit (misplaced properties) |
+
+*Sunday only
 
 ### Logs
 ```bash
-tail -f /home/fields/Fields_Orchestrator/logs/orchestrator.log
-tail -f /home/fields/Fields_Orchestrator/logs/claude-agent.log
-bash /home/fields/Fields_Orchestrator/scripts/check_last_run.sh
-# Per-step detail:
-ls /home/fields/Fields_Orchestrator/logs/runs/ | tail -5
-cat /home/fields/Fields_Orchestrator/logs/runs/<run-dir>/run_summary.json
+tail -f logs/orchestrator.log
+bash scripts/check_last_run.sh
+cat logs/runs/<latest>/run_summary.json
 ```
-
-### Pipeline Process Order
-```
-101 → 102* → 103 → 104* → 110 → 105 → 106 → 108 → 6 → 11 → 12 → 13 → 14 → 16 → 15 → 17 → 19 → 18 → 109 → 107
-```
-(*Sunday only)
-
-| Phase | Processes | What it does |
-|-------|-----------|--------------|
-| 1 | 101, 102 | Selenium scrape Domain.com.au → `Gold_Coast_Currently_For_Sale` |
-| 2 | 103, 104 | Sold monitoring → move records to `Gold_Coast_Recently_Sold` |
-| 2.5 | 110 | Download property images → Azure Blob Storage |
-| 3 | 105, 106, 108 | GPT-4 Vision photo + floor plan analysis |
-| 4 | 6 | ML valuation model |
-| 5 | 11–19 | Backend enrichment (room dims, suburb medians, insights, market narrative) |
-| 6 | 109 | Coverage check vs live Domain count |
-| 7 | 107 | Database audit (misplaced properties) |
 
 ### Manual Trigger
 ```bash
-python3 /home/fields/Fields_Orchestrator/src/orchestrator_daemon.py --run-now
+python3 src/orchestrator_daemon.py --run-now
 ```
-
-### Key Config Files
-- `/home/fields/Fields_Orchestrator/config/settings.yaml` — schedule (20:30 AEST), MongoDB URI, target suburbs
-- `/home/fields/Fields_Orchestrator/config/process_commands.yaml` — all process definitions
 
 ---
 
-## 4. WEBSITE CODEBASE
+## Website
 
-**GitHub Repo:** `Will954633/Website_Version_Feb_2026`
-**Live site:** `https://fieldsestate.com.au`
-**Netlify site ID:** `43e4ad42-a75a-4dc7-be22-67fcda0ec98b`
+**Live:** `https://fieldsestate.com.au`
+**Repo:** `Will954633/Website_Version_Feb_2026`
+**Stack:** React 19 + TypeScript + Vite + React Router 7, Netlify Functions (Node.js), CSS Modules
+**Deploy:** Push to GitHub → Netlify auto-deploys. Never use `netlify deploy --prod`.
 
-### CRITICAL: Deployment Workflow
-**ALL changes → GitHub first → Netlify auto-deploys. Never use `netlify deploy --prod` directly.**
+### Navigation (as of 2026-03-27)
+News | Market Intelligence | Properties | Analyse Your Home | Why Fields? | Subscribe
 
-```bash
-# Push a file to GitHub (git push/fetch HANGS on this VM — always use gh api):
-SHA=$(gh api 'repos/Will954633/Website_Version_Feb_2026/contents/PATH' --jq '.sha')
-CONTENT=$(base64 -w0 < /home/fields/Feilds_Website/01_Website/LOCAL_PATH)
-gh api 'repos/Will954633/Website_Version_Feb_2026/contents/PATH' \
-  --method PUT --field message="msg" --field content="$CONTENT" --field sha="$SHA" --jq '.commit.sha'
+### Key Routes
 
-# New file (no sha needed):
-CONTENT=$(base64 -w0 < /home/fields/Feilds_Website/01_Website/LOCAL_PATH)
-gh api 'repos/Will954633/Website_Version_Feb_2026/contents/PATH' \
-  --method PUT --field message="msg" --field content="$CONTENT" --jq '.commit.sha'
+| Route | Page | Purpose |
+|-------|------|---------|
+| `/` | MarketIntelligencePage | Newspaper-style articles by suburb (nav: "News") |
+| `/market-metrics/:suburb` | MarketMetricsPage | Data charts by category (nav: "Market Intelligence") |
+| `/for-sale` | ForSalePage | Active property listings |
+| `/property/:id` | PropertyPage | Property detail + editorial + valuation |
+| `/analyse-your-home` | AnalyseYourHomePage | Conversion landing page |
+| `/market-intelligence/:suburb` | MarketIntelligencePage | Same as homepage, explicit suburb |
+| `/articles/:slug` | ArticlePage | Self-hosted articles |
+| `/discover` | DiscoverPage | Swipe/scroll property feed |
+| `/ops` | OpsPage | System monitor dashboard |
 
-# Force Netlify rebuild if needed:
-curl -s -X POST https://api.netlify.com/build_hooks/699faf0aa7c588800d79f95d
-```
+### GitHub Path Mapping
+Website files sit at **repo root**, not under `01_Website/`:
+- Local `01_Website/src/...` → GitHub `src/...`
+- Local `01_Website/netlify/functions/...` → GitHub `netlify/functions/...`
 
-### GitHub Repo Path Mapping
-Website files sit at the **repo root**, not under `01_Website/`:
-- `01_Website/netlify.toml` → `netlify.toml`
-- `01_Website/src/...` → `src/...`
-- `01_Website/netlify/functions/...` → `netlify/functions/...`
-- `01_Website/public/...` → `public/...`
-- `01_Website/scripts/...` → `scripts/...`
-
-### Tech Stack
-- React 19 + TypeScript + Vite + React Router 7
-- Netlify Functions (Node.js serverless) for all APIs
-- Azure Cosmos DB (MongoDB API) for data
-- CSS Modules for styling
-
-### Key Pages
-| Page | Route | Purpose |
-|------|-------|---------|
-| ForSalePage | `/for-sale` | Active property listings |
-| PropertyPage | `/property/:id` | Property detail + report |
-| ValuePage | `/value/:id` | Valuation + NPUI scatter plot |
-| MarketIntelligencePage | `/market` | Market charts + narrative |
-| OpsPage | `/ops` | System monitor dashboard |
-| ArticlePage | `/articles/:slug` | Ghost CMS articles |
+### Shared Utilities (created 2026-03-27)
+- `netlify/functions/db.mjs` — Cosmos connection pooling, retry, CORS, response helpers, auth
+- `netlify/functions/shared-utils.mjs` — parsePriceString, haversineKm, isWaterfront, suburb normalization
+- `netlify/functions/monitor/db-validation.mjs` — extracted from system-monitor.mjs
+- `src/utils/suburbNormalize.ts` — canonical frontend suburb normalization
 
 ### Key Netlify Functions
-All in `netlify/functions/`, served at `/api/v1/` or `/api/monitor/`:
-- `properties-for-sale.mjs` — Active listings + enrichment cross-reference
-- `property.mjs` — Individual property data
-- `valuation.mjs` — Valuation + NPUI data (pre-computed from `valuation_data` field)
-- `market-narrative.mjs` — Market charts + narrative text
-- `system-monitor.mjs` — All ops dashboard APIs
-- `address-search.mjs` — Property address autocomplete
-
-### Database Architecture
-- `Gold_Coast_Currently_For_Sale` — Active listings per suburb. **Collections are lowercase_with_underscores** (e.g. `robina`, `burleigh_waters`, `varsity_lakes`). Use `db.list_collection_names()` to see all.
-- `property_data.properties_for_sale` — Enriched data (154 properties with analysis)
-- `system_monitor` — Ops monitoring collections
+- `properties-for-sale.mjs` — Active listings API
+- `property.mjs` — Single property detail
+- `valuation.mjs` — Valuation + NPUI scatter data
+- `market-narrative.mjs` — Market charts + narrative
+- `market-insights.mjs` — Data Insights Strip metrics
+- `system-monitor.mjs` — All ops dashboard APIs (auth required: Bearer OPS_AUTH_TOKEN)
 
 ---
 
-## 5. OPS DASHBOARD (`https://fieldsestate.com.au/ops`)
+## Valuation System
 
-All panels are served by `netlify/functions/system-monitor.mjs`:
+The figure shown on property pages is the **`reconciled_valuation`** — a weighted average of adjusted comparable sale prices (NOT the CatBoost ML model).
 
-| Panel | API Endpoint | What it shows |
-|-------|-------------|---------------|
-| DB Validation | `GET /api/monitor/db-validation` | Live DB probes per pipeline step |
-| Orchestrator | `GET /api/monitor/orchestrator` | Last 10 runs, per-step status |
-| Web APIs | `GET /api/monitor/api-health` | Endpoint health + response times |
-| Data Coverage | `GET /api/monitor/data-integrity` | Per-suburb enrichment % |
-| Scraper Health | `GET /api/monitor/scraper-health` | Last scrape age per suburb |
-| Audit Log | `GET /api/monitor/audit-log` | 14-day listing count history |
-| Manual Triggers | `POST /api/monitor/trigger` | Enqueue pipeline process to VM |
-| Repair Queue | `GET/POST /api/monitor/repair-queue` | Claude repair agent queue |
-| Frontend Errors | `GET /api/monitor/website-errors` | Last 24h client errors |
-| Article Pipeline | `GET /api/monitor/article-pipeline` | Ghost + Netlify build history |
-| Article Workflows | `GET /api/monitor/article-workflows` | GitHub Actions (fields-automation) |
-
-Auth: All endpoints require `Authorization: Bearer <OPS_AUTH_TOKEN>`.
-
-### THIS TERMINAL SERVER
-- Service: `fields-terminal` (systemd)
-- Code: `/home/fields/claude-terminal/server.js`
-- Stack: Node.js + node-pty + xterm.js (browser) + WebSocket
-- nginx proxies `https://vm.fieldsestate.com.au` → `https://127.0.0.1:7681`
-- SSL cert: Let's Encrypt at `/etc/letsencrypt/live/vm.fieldsestate.com.au/`
-- Self-signed fallback: `/etc/ttyd-ssl/` (used by node server directly)
+- **Script:** `/home/fields/Feilds_Website/07_Valuation_Comps/precompute_valuations.py`
+- **Method:** Select 3-8 high-quality comparable sales → adjust each for floor area, condition, location → weighted mean
+- **Weights:** adjustment quality, accuracy, proximity, verification, recency, data quality
+- **Confidence:** 90% CI via `1.645 * weighted_std_dev`, level = High/Medium/Low/Very Low
+- **Stored:** `valuation_data.confidence` field on each property document
+- **Display:** `ConfidenceDisplay` component in `HowToValuePage`
+- The CatBoost `iteration_08_valuation` is a separate, inferior model — do not confuse them
+- **Backtest script:** `scripts/valuation_backtest.py`
 
 ---
 
-## 6. ARTICLE GENERATION SYSTEM
+## Article System (Self-Hosted)
 
-**GitHub Repo:** `Will954633/fields-automation`
-**Ghost CMS:** `https://fields-articles.ghost.io`
-**Ghost webhook → Netlify build hook:** `https://api.netlify.com/build_hooks/699e5501757e99ddd5c4b99e`
+Ghost CMS is **deprecated** (subscription expired). Articles are self-hosted in MongoDB.
 
-### Pipelines (all in `fields-automation/pipeline/`)
-| Script | Schedule | Output |
-|--------|----------|--------|
-| `run_how_it_sold.py` | Event-triggered | Articles about recent sales |
-| `run_watch_this_sale.py` | Weekly Mon 7am AEST | Weekly listing spotlights |
-| `run_light_rail.py` | Monthly (25-day guard) | Light Rail Stage 3 article |
-| `run_is_now_good_time.py` | Quarterly (80-day guard) | 5 suburb buy-now articles + charts |
-| `run_update_pass.py` | Monthly | Updates 12 major project articles |
-| `run_annual_refresh.py` | 1 February | Updates 5 evergreen articles |
-
-All triggered via GitHub Actions workflows in `Will954633/fields-automation/.github/workflows/`.
-
-### Publishing
-```bash
-# Push generated articles to Ghost (run from fields-automation checkout):
-python3 scripts/push_to_ghost.py              # all unpushed
-python3 scripts/push_to_ghost.py --pipeline watch_this_sale
-```
-
-### Tag → Slot Mapping (website front page)
-- `state-of-market` → priority 1 (lead story)
-- `market-insight` → priority 2
-- `watch-this-sale` → priority 3
-- `how-it-sold` → priority 4
-
-### Editorial Voice
-- Tagline: "Know your ground"
-- No: "stunning", "nestled", "boasting", "rare opportunity", "robust market"
-- Numbers: `$1,250,000` not "$1.25m", suburbs always capitalised
+- **Storage:** `system_monitor.content_articles`
+- **Management:** Ops dashboard → Article Manager tab
+- **API:** CRUD in `system-monitor.mjs` (content-articles, content-article-create, etc.)
+- **Build-time fetch:** `fetch-articles.js` → `articles.json`
+- **Push:** `python3 scripts/push-ghost-draft.py --title "Title" --md-file article.md [--publish]`
+- **Delete:** `python3 scripts/delete-ghost-article.py <id> [--list | --search "keyword"]`
+- **Auto-generated:** `Will954633/fields-automation` repo, 12 GitHub Actions workflows
+- **Deploy hook:** `https://api.netlify.com/build_hooks/699faf0aa7c588800d79f95d`
 
 ---
 
-## 7. DATABASE
+## AI Property Editorial System
 
-**Azure Cosmos DB (MongoDB API)**
-Connection string in: `/home/fields/Fields_Orchestrator/config/settings.yaml` and all `.env` files.
+Multi-agent pipeline generating editorial content for property pages.
 
-```python
-# Connect from Python
-from pymongo import MongoClient
-import yaml
-with open("/home/fields/Fields_Orchestrator/config/settings.yaml") as f:
-    cfg = yaml.safe_load(f)
-client = MongoClient(cfg["mongodb"]["uri"])
-```
-
-```bash
-# Quick query from bash
-node -e "
-const {MongoClient} = require('mongodb');
-require('dotenv').config({path:'/home/fields/Feilds_Website/01_Website/.env'});
-const c = new MongoClient(process.env.COSMOS_CONNECTION_STRING);
-c.connect().then(async () => {
-  const db = c.db('Gold_Coast_Currently_For_Sale');
-  console.log(await db.listCollections().toArray());
-  c.close();
-});
-"
-```
-
-### Key Databases
-| Database | Purpose |
-|----------|---------|
-| `Gold_Coast_Currently_For_Sale` | Active listings — collections are **lowercase_with_underscores**: `robina`, `burleigh_waters`, `varsity_lakes`, `burleigh_heads`, `mudgeeraba`, `reedy_creek`, `merrimac`, `worongary`, `carrara` (plus `suburb_median_prices`, `suburb_statistics`, `change_detection_snapshots`) |
-| `Gold_Coast_Recently_Sold` | Sold properties (per-suburb collections) |
-| `Gold_Coast` | Master data |
-| `property_data` | Enriched data (`properties_for_sale` collection) |
-| `system_monitor` | Ops monitoring data |
+- **Script:** `scripts/backend_enrichment/generate_property_ai_analysis.py`
+- **Model:** Claude Opus 4.6 for all agents
+- **Pipeline:** Price/Property/Market agents → Editor → Reflection → Fact-Check → Draft 2 → Verify (max 3 retries)
+- **Output:** `ai_analysis` field on property document, status: draft/published/failed_factcheck
+- **Review:** Ops dashboard → Editorial Review tab
+- **Run:** `--address "X"` (single), `--new-listings` (last 7d), `--force`
+- **Config:** `config/property_editorial_prompt.md`, `config/flood_context_burleigh_waters.md`
 
 ---
 
-## 8. ENVIRONMENT & CREDENTIALS
+## Facebook & Google Ads
 
-All credentials are in `.env` files on this VM — never hardcode them in code.
-- `/home/fields/Fields_Orchestrator/.env` — COSMOS_CONNECTION_STRING, OPENAI_API_KEY, etc.
-- `/home/fields/Feilds_Website/01_Website/.env` — Website-specific env vars
-- `/home/fields/Feilds_Website/07_Valuation_Comps/.env` — Valuation service env
-- `ANTHROPIC_API_KEY` — set in `/etc/environment` and `~/.bashrc`
+### Facebook
+- **Ad Account:** `act_1463563608441065`, **Page:** `889412530933297`
+- **Token:** `.env` as `FACEBOOK_ADS_TOKEN` (expires ~60 days)
+- **Pixels:** `1491613936314260` (Fields, primary) + `137811233253065` (Content, passive)
+- **Metrics:** `fb-metrics-collector.py` (2x/day at 12:00 + 23:00 AEST)
+- **Ad experimentation:** MUST follow `fb_ads_experimentation_playbook.md` (memory file)
+- **Established learnings (do not re-test):** Sell-focused content dead, lifestyle photos dead, OFFSITE_CONVERSIONS is the #1 lever, broad targeting beats custom audiences
 
-GitHub CLI (`gh`) is authenticated and ready. Use `gh api` for all GitHub operations (not `git push` — it hangs).
+### Google
+- **MCC:** 127-641-8198, **Ad Account:** 997-572-4211
+- **Developer Token:** `.env` as `GOOGLE_ADS_DEVELOPER_TOKEN` (Basic Access)
+- **Manager:** `scripts/google_ads_manager.py` (create, list, pause, enable, report, keywords)
+- **Safety caps:** $50/day per campaign, $500/month total, all campaigns start PAUSED
+- **Metrics:** `google-ads-metrics-collector.py` (2x/day at 12:15 + 23:10 AEST)
+
+### Organic Facebook
+- **2x/day posting:** 06:30 + 17:00 AEST via `fb-content-scheduler.py`
+- **Templates:** `fb-page-post.py` — 14 templates
+- **Photos:** `fb-photo-manager.py` — Sunday sync from `Will954633/fields-local-photography`
 
 ---
 
-## 9. COMMON TASKS
+## Analytics
 
-### Fix a failing pipeline step
-```bash
-# 1. Check what failed
-bash scripts/check_last_run.sh
-# 2. Look at the step's detailed logs
-cat logs/runs/<latest-run>/01_step_<id>_*/stderr.log
-# 3. Fix the script, test it
-python3 /path/to/script.py --test
-# 4. If it's a website file, push to GitHub (see Section 4)
-```
+**PostHog** (migrated 2026-03-19, replaced custom CRM tracker):
+- Init: `src/utils/posthog.ts`, pageviews via `posthog.capture("$pageview")`
+- Feature flags: `for_sale_page_v1`, `discover_mode_v1`
+- Also kept: GA4, Facebook Pixel, Meta Conversions API, Google Ads tags, Contentsquare
 
-### Deploy a website fix
-```bash
-# Edit the file locally
-vim /home/fields/Feilds_Website/01_Website/netlify/functions/some-function.mjs
-# Push to GitHub
-SHA=$(gh api 'repos/Will954633/Website_Version_Feb_2026/contents/netlify/functions/some-function.mjs' --jq '.sha')
-CONTENT=$(base64 -w0 < /home/fields/Feilds_Website/01_Website/netlify/functions/some-function.mjs)
-gh api 'repos/Will954633/Website_Version_Feb_2026/contents/netlify/functions/some-function.mjs' \
-  --method PUT --field message="fix: description" --field content="$CONTENT" --field sha="$SHA"
-# Netlify auto-deploys — check: https://app.netlify.com/sites/lambent-tapioca-86ef75/deploys
-```
+---
 
-### Restart this terminal server
-```bash
-sudo systemctl restart fields-terminal
-sudo journalctl -u fields-terminal -n 20
-```
+## CEO Agent System
 
-### Check what's running
+Three AI agents (Engineering, Growth, Product) analyse data daily and produce proposals.
+
+- **Compute:** Codex CLI on property-scraper VM (35.201.6.222)
+- **Cron:** 00:03 context export, 00:33 agent launcher
+- **Proposals:** `system_monitor.ceo_proposals` + `Will954633/fields-ceo-sandbox`
+- **Manual:** `bash scripts/ceo-agent-launcher-remote.sh [engineering|growth|product]`
+
+---
+
+## Market Pulse (Monthly)
+
+Monthly market metrics summaries written collaboratively (Will + Claude in VS Code).
+
+- **Reminder:** 1st @ 08:00 AEST via Telegram (@WillFieldsBot)
+- **Fallback:** Auto-generated on 3rd @ 06:00 AEST if manual not done
+- **Data:** `python3 scripts/manual_market_pulse.py --show-data`
+- **Storage:** `system_monitor.market_pulse` (source: "manual" vs "auto")
+
+---
+
+## Monthly Maintenance Checks
+
+### Crash-Risk Chart Data (1st of month)
+- Sales volume chart merges 3 sources with property-type filter risk
+- After monthly recompute, verify filters are working (March 2026: phantom surge from unfiltered source)
+- `CrashRiskSection.tsx` has **hardcoded data claims** — update manually when chart data changes
+
+### Market Pulse Summaries (1st-3rd of month)
+- Collaborative write with Will, or auto-fallback on 3rd
+
+---
+
+## Environment & Credentials
+
+All credentials in `.env` files — never hardcode.
+- `/home/fields/Fields_Orchestrator/.env` — COSMOS_CONNECTION_STRING, OPENAI_API_KEY, FB/Google tokens
+- `/home/fields/Feilds_Website/01_Website/.env` — Website env vars
+- `ANTHROPIC_API_KEY` in `/etc/environment` and `~/.bashrc`
+- `GH_CONFIG_DIR=/home/projects/.config/gh` — GitHub CLI auth (fine-grained PAT for `Will954633`)
+
 ```bash
-sudo systemctl list-units --state=active | grep fields
-ps aux | grep -E "orchestrator|claude|poller|ollama" | grep -v grep
+# Activate venv for Python scripts
+source /home/fields/venv/bin/activate
+# Load env vars
+set -a && source /home/fields/Fields_Orchestrator/.env && set +a
 ```
 
 ---
 
 ## Database Schema Reference
 
-**IMPORTANT:** Before writing any MongoDB query, always read the schema snapshot:
-
+Before writing MongoDB queries, read:
+```bash
+cat /home/fields/Fields_Orchestrator/SCHEMA_SNAPSHOT.md
 ```
-read /home/fields/Fields_Orchestrator/SCHEMA_SNAPSHOT.md
+Auto-generated daily — contains every collection, field name, type, and example document.
+
+---
+
+## Common Tasks
+
+### Fix a failing pipeline step
+```bash
+bash scripts/check_last_run.sh
+cat logs/runs/<latest>/01_step_<id>_*/stderr.log
+# Fix, test, push to GitHub
 ```
 
-This file is auto-generated daily and contains every collection name, field name, field type, and an example document from all active databases. Using it prevents field name errors, wrong collection queries, and missing data assumptions.
+### Deploy a website fix
+```bash
+# Edit locally, push to GitHub (Netlify auto-deploys)
+SHA=$(gh api 'repos/Will954633/Website_Version_Feb_2026/contents/PATH' --jq '.sha')
+CONTENT=$(base64 -w0 < /home/fields/Feilds_Website/01_Website/LOCAL_PATH)
+gh api 'repos/Will954633/Website_Version_Feb_2026/contents/PATH' \
+  --method PUT --field message="fix: description" --field content="$CONTENT" --field sha="$SHA"
+# Then log deploy + visually verify (mandatory)
+```
 
-Key facts:
-- Connection string is in env var `COSMOS_CONNECTION_STRING`
-- Python driver: `pymongo` (available in `/home/fields/venv`)
-- Always `source /home/fields/Fields_Orchestrator/.env` before running Python DB scripts
-- Always activate venv: `source /home/fields/venv/bin/activate`
+### Check what's running
+```bash
+sudo systemctl list-units --state=active | grep fields
+ps aux | grep -E "orchestrator|watchdog|poller|ollama" | grep -v grep
+```
