@@ -178,6 +178,14 @@ def fetch_orchestrator_status(db):
         "running": running,
     }
 
+FOUNDER_HEALTH_CONTRACTS = [
+    "/api/v1/properties/for-sale",
+    "/api/v1/properties/recently-sold",
+    "/api/v1/address-search",
+    "/api/v1/analyse-property",
+]
+
+
 def fetch_api_health(db):
     """Get latest health check per endpoint."""
     col = db["system_monitor"]["api_health_checks"]
@@ -203,9 +211,43 @@ def fetch_api_health(db):
             r["healthy"] = False
             r["stale"] = True
 
+    # Separate founder-contract endpoints from internal/other endpoints
+    contract_eps = []
+    other_eps = []
+    seen_contracts = set()
+    for r in results:
+        ep = r.get("endpoint", "")
+        # Match if the endpoint starts with any founder contract path
+        matched = False
+        for contract in FOUNDER_HEALTH_CONTRACTS:
+            if ep.startswith(contract):
+                contract_eps.append(r)
+                seen_contracts.add(contract)
+                matched = True
+                break
+        if not matched:
+            other_eps.append(r)
+
+    # Mark missing founder contracts as stale/unknown
+    for contract in FOUNDER_HEALTH_CONTRACTS:
+        if contract not in seen_contracts:
+            contract_eps.append({
+                "endpoint": contract,
+                "healthy": False,
+                "stale": True,
+                "status_code": "no_data",
+                "checked_at": None,
+            })
+
     healthy = sum(1 for r in results if r.get("healthy"))
     unhealthy = sum(1 for r in results if not r.get("healthy"))
-    return {"endpoints": results, "healthy": healthy, "unhealthy": unhealthy}
+    return {
+        "endpoints": results,
+        "contract_endpoints": contract_eps,
+        "other_endpoints": other_eps,
+        "healthy": healthy,
+        "unhealthy": unhealthy,
+    }
 
 def fetch_data_coverage(db):
     """Get suburb-level data coverage."""
@@ -311,6 +353,18 @@ def fetch_listing_counts(client):
 
     return counts
 
+def fetch_website_deploys(db):
+    """Get recent website deploy events from the deploy tracker."""
+    col = db["system_monitor"]["website_deploy_events"]
+    try:
+        docs = list(col.find().limit(20))
+        # Sort in Python since Cosmos may lack the index
+        docs.sort(key=lambda d: d.get("timestamp", ""), reverse=True)
+        return docs[:10]
+    except Exception:
+        return []
+
+
 def fetch_errors(db):
     """Get recent errors (last 24h)."""
     col = db["system_monitor"]["process_runs"]
@@ -325,7 +379,7 @@ def fetch_errors(db):
 
 # ── Markdown renderer ────────────────────────────────────────────────────────
 
-def render_ops_status(orch, api, coverage, repairs, articles, listing_counts, errors, scraper):
+def render_ops_status(orch, api, coverage, repairs, articles, listing_counts, errors, scraper, deploys=None):
     now = now_aest()
     lines = []
 
@@ -476,10 +530,16 @@ def render_ops_status(orch, api, coverage, repairs, articles, listing_counts, er
     overall_icon = "✅" if unhealthy_count == 0 else "❌"
     lines.append(f"**Summary:** {overall_icon} {healthy_count}/{total_count} endpoints healthy")
 
-    if api["endpoints"]:
-        lines.append("\n| Endpoint | Status | Response | Last Checked |")
-        lines.append("|----------|--------|----------|--------------|")
-        for ep in api["endpoints"][:20]:
+    # Founder-contract endpoints (buyer-facing — these are the ones that matter)
+    contract_eps = api.get("contract_endpoints", [])
+    if contract_eps:
+        contract_healthy = sum(1 for e in contract_eps if e.get("healthy"))
+        contract_total = len(contract_eps)
+        contract_icon = "✅" if contract_healthy == contract_total else "❌"
+        lines.append(f"\n**Buyer-facing contract:** {contract_icon} {contract_healthy}/{contract_total} healthy")
+        lines.append("\n| Buyer-Facing Endpoint | Status | Response | Last Checked |")
+        lines.append("|----------------------|--------|----------|--------------|")
+        for ep in contract_eps:
             endpoint = ep.get("endpoint", "?")
             healthy = ep.get("healthy", False)
             is_stale = ep.get("stale", False)
@@ -490,11 +550,49 @@ def render_ops_status(orch, api, coverage, repairs, articles, listing_counts, er
             resp_str = issue or (f"{resp_ms:.0f}ms" if resp_ms else "—")
             checked = age_str(ep.get("checked_at"))
             lines.append(f"| `{endpoint}` | {icon} {status_code} | {resp_str} | {checked} |")
-    else:
+
+    # Other/internal endpoints
+    other_eps = api.get("other_endpoints", [])
+    if other_eps:
+        lines.append(f"\n**Other endpoints ({len(other_eps)}):**")
+        lines.append("\n| Endpoint | Status | Response | Last Checked |")
+        lines.append("|----------|--------|----------|--------------|")
+        for ep in other_eps[:15]:
+            endpoint = ep.get("endpoint", "?")
+            healthy = ep.get("healthy", False)
+            is_stale = ep.get("stale", False)
+            icon = "⚠️" if is_stale else ("✅" if healthy else "❌")
+            status_code = "stale" if is_stale else ep.get("status_code", "?")
+            resp_ms = ep.get("response_ms")
+            issue = ep.get("contract_issue") or ep.get("validation_error")
+            resp_str = issue or (f"{resp_ms:.0f}ms" if resp_ms else "—")
+            checked = age_str(ep.get("checked_at"))
+            lines.append(f"| `{endpoint}` | {icon} {status_code} | {resp_str} | {checked} |")
+
+    if not api["endpoints"]:
         lines.append("ℹ️ No API health check data yet.")
 
-    # ── 7. Article Pipeline ──────────────────────────────────────────────────
-    h(2, "7. Article Pipeline (Ghost → Netlify)")
+    # ── 7. Article Pipeline + Website Deploys ────────────────────────────────
+    h(2, "7. Article Pipeline & Website Deploys")
+
+    # Website deploy events (from deploy tracker — authoritative source)
+    if deploys:
+        last_deploy = deploys[0]
+        deploy_ts = last_deploy.get("timestamp")
+        lines.append(f"**Last website deploy:** ✅ {last_deploy.get('message', 'unknown')[:80]} ({age_str(deploy_ts)})")
+        lines.append(f"  Commit: `{last_deploy.get('commit_sha', '?')[:12]}`")
+        lines.append(f"\n**Recent deploys (last 5):**")
+        for d in deploys[:5]:
+            msg = (d.get("message") or "no message")[:60]
+            ts = age_str(d.get("timestamp"))
+            sha = (d.get("commit_sha") or "?")[:8]
+            files = d.get("files_changed", [])
+            file_count = len(files) if isinstance(files, list) else "?"
+            lines.append(f"  - `{sha}` {msg} — {ts} ({file_count} files)")
+    else:
+        lines.append("ℹ️ No website deploy events recorded.")
+
+    sep()
     pubs = articles["publishes"]
     builds = articles["builds"]
 
@@ -507,12 +605,14 @@ def render_ops_status(orch, api, coverage, repairs, articles, listing_counts, er
             ts = age_str(p.get("published_at") or p.get("timestamp"))
             lines.append(f"  - {title} — {ts}")
     else:
-        lines.append("ℹ️ No Ghost publish events recorded yet.")
+        lines.append("ℹ️ No article publish events recorded yet.")
 
     if builds:
         last_build = builds[0]
         build_icon = status_icon(last_build.get("status"))
-        lines.append(f"\n**Last Netlify build:** {build_icon} {last_build.get('status', '?')} ({age_str(last_build.get('timestamp'))})")
+        lines.append(f"\n**Last Netlify build (article_events):** {build_icon} {last_build.get('status', '?')} ({age_str(last_build.get('timestamp'))})")
+        if deploys:
+            lines.append("  *(Note: website_deploy_events above is the authoritative deploy source)*")
     sep()
 
     # ── 8. Repair Queue ──────────────────────────────────────────────────────
@@ -578,6 +678,9 @@ def main():
         print("  Fetching recent errors...")
         errors = fetch_errors(client)
 
+        print("  Fetching website deploys...")
+        deploys = fetch_website_deploys(client)
+
         print("  Rendering OPS_STATUS.md...")
         content = render_ops_status(
             orch=orch,
@@ -588,6 +691,7 @@ def main():
             listing_counts=listing_counts,
             errors=errors,
             scraper=scraper,
+            deploys=deploys,
         )
 
         output_path.write_text(content, encoding="utf-8")
