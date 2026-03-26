@@ -1334,22 +1334,94 @@ NEXT STEPS — 3-4 actionable steps. These should feel like the NATURAL next ste
 
 8. CTA: MARKET (SELL) — For buyers who are selling to buy. Reference supply data (active listings count) and buyer volume.
 
-OUTPUT: JSON — no markdown, no code fences, no ** bold markers.
+OUTPUT: JSON — no markdown, no code fences.
+
 NOTE: Do NOT include headline, sub_headline, meta_title, or meta_description — those are handled by the Sabri Suby specialist.
+
+CRITICAL — STRUCTURED INSIGHT FORMAT (v2):
+Each insight must be a structured object with separate arrays for key_points and what_this_means.
+Do NOT write a single "detail" paragraph — the frontend renders key_points as individual bullet items
+and what_this_means as a separate callout. Keep each key_point to 1-2 sentences max.
+Use **bold** markers on key terms within key_points (e.g. "**Stone benchtops** and modern cabinetry").
+
+For the Price Analysis insight (insight 3), include a "comparables" array with structured comparable data.
+For other insights, set comparables to null.
 
 {{
   "insights": [
     {{
-      "lead": "Bold opening line — conversational, contains a data point",
-      "detail": "2-4 sentences. Connects data to buyer implication. Specific numbers."
+      "h2": "Bold opening line — 8-15 words with a specific number, conversational",
+      "key_points": [
+        "One fact per bullet — max 2 sentences",
+        "Another fact with a **bolded key term**",
+        "A third fact with specific numbers: 592m, $2,495,000, 8/10"
+      ],
+      "key_points_label": "Key points",
+      "what_this_means": [
+        "What this means for the buyer — written in second person",
+        "A conditional framing if relevant: If you need X, this isn't it"
+      ],
+      "comparables": null
+    }},
+    {{
+      "h2": "...",
+      "key_points": ["..."],
+      "key_points_label": "Key points",
+      "what_this_means": ["..."],
+      "comparables": null
+    }},
+    {{
+      "h2": "Price analysis lead with comparable range and asking price position",
+      "key_points": [
+        "Asking price positioning within the range",
+        "What the discount reflects (real differences, not flaws)"
+      ],
+      "key_points_label": "Comparable sales",
+      "what_this_means": [
+        "What this price position means for the buyer"
+      ],
+      "comparables": [
+        {{
+          "address": "4 Curlew Crescent",
+          "distance": "560m away",
+          "sold_price": 3500000,
+          "adjusted_price": 3413000,
+          "summary": "Fully renovated benchmark — same bedrooms, ducted, rendered, 9/10 condition",
+          "delta_label": "$918,000 below this benchmark"
+        }}
+      ]
+    }},
+    {{
+      "h2": "...",
+      "key_points": ["..."],
+      "key_points_label": "Key points",
+      "what_this_means": ["..."],
+      "comparables": null
     }}
   ],
-  "verdict": "The bottom line — short enough to repeat at dinner or a BBQ. One or two sentences.",
+  "verdict": "The bottom line — ≤25 words, short enough to repeat at dinner or a BBQ.",
+  "quick_take": {{
+    "strengths": [
+      "First sentence of insight 1 h2 — the lifestyle hook with a specific number",
+      "First sentence of insight 2 h2 — the condition proof with scores"
+    ],
+    "trade_off": "First sentence of insight 4 h2 — the key trade-offs that define the price"
+  }},
+  "best_for": [
+    "2-4 word buyer persona specific to THIS property",
+    "Another buyer persona",
+    "A third buyer persona"
+  ],
+  "not_ideal_for": [
+    "2-4 word buyer persona who should NOT buy this",
+    "Another mismatch persona",
+    "A third mismatch persona"
+  ],
   "next_steps": [
-    "Actionable step 1 with specific numbers",
-    "Actionable step 2",
-    "Actionable step 3",
-    "Actionable step 4"
+    "Actionable step 1 with specific numbers (comp range reference)",
+    "Actionable step 2 (what to confirm with agent)",
+    "Actionable step 3 (inspection focus areas)",
+    "Actionable step 4 (point to Valuation Guide)"
   ],
   "cta_valuation": {{
     "hook": "1-2 sentences making the buyer NEED to see the valuation walkthrough. Reference comp count.",
@@ -1373,35 +1445,61 @@ NOTE: Do NOT include headline, sub_headline, meta_title, or meta_description —
   }},
   "faqs": [
     {{
-      "question": "What is [full address] worth?",
+      "question": "What is [full address] worth in [year]?",
       "answer": "Based on X verified comparables... range $Y to $Z. Point to Valuation Guide."
     }},
     {{
-      "question": "Does [suburb] flood?",
-      "answer": "#1 SEARCH QUERY. Council flood event mapping shows no recorded events at this address. The flood overlay is a council planning designation based on a modelled 1-in-100-year scenario — it is not a record of past flooding. Primary flood risk type in Burleigh Waters is flash flooding from stormwater overland flow, not riverine flooding. Then property-specific: overlay yes/no, ground level vs DFL, depth classification. ALWAYS cite source: Gold Coast City Council flood mapping data. ALWAYS recommend: FloodWise Property Report and speaking to insurer for complete picture. NEVER claim zero events across the entire suburb — council mapping data is not a complete insurance claims history."
+      "question": "Is [full address] overpriced or fairly priced?",
+      "answer": "Position in comparable range, what the gap reflects."
     }},
     {{
-      "question": "Is [full address] in a flood zone?",
-      "answer": "Council overlay data. If yes: ground vs DFL, depth, zero events. If no: state clearly. Source: GCCC."
+      "question": "What comparable sales support the asking price?",
+      "answer": "Name top 2-3 comps with sold + adjusted prices."
     }},
     {{
-      "question": "How long has [full address] been on the market?",
-      "answer": "[Address] was first listed on [DATE]. Context about what this means."
+      "question": "How does this property compare to others in [suburb]?",
+      "answer": "Percentile data, condition scores vs market."
     }},
     {{
-      "question": "What is the [suburb] median house price in [year]?",
-      "answer": "$X in QN YYYY based on N sales. Year-on-year trend."
+      "question": "Is [suburb] a good suburb to buy in right now?",
+      "answer": "Median trend, supply/demand context."
     }},
     {{
-      "question": "What comparable sales support the valuation of [full address]?",
-      "answer": "Top 3 comps with sold + adjusted prices. Point to Valuation Guide."
+      "question": "What is happening in the [suburb] property market in [year]?",
+      "answer": "Median, sample size, active supply count."
     }},
     {{
-      "question": "Has [full address] been renovated?",
-      "answer": "Condition scores, renovation classification, last purchase price."
+      "question": "How was this property valued?",
+      "answer": "Methodology summary — comparable sales adjusted for differences."
+    }},
+    {{
+      "question": "How much is my house worth in [suburb]?",
+      "answer": "CTA to /analyse-your-home with suburb context."
+    }},
+    {{
+      "question": "Is Fields Estate the listing agent for this property?",
+      "answer": "No — we provide independent analysis. Contact [agent] at [agency]."
     }}
   ]
 }}
+
+QUICK_TAKE RULES:
+- strengths: exactly 2 items, each ≤1 sentence, each opens with a specific number or measurement
+- trade_off: exactly 1 string, ≤1 sentence, names 2-3 things a buyer trades off at this price
+- These are the 3-SECOND SCAN LAYER — a buyer who reads nothing else gets the picture
+
+BEST_FOR / NOT_IDEAL_FOR RULES:
+- Exactly 3 items each
+- Each item is 2-4 words (a buyer persona label, NOT a sentence)
+- Must be specific to THIS property — "Owner-occupiers" is fine, "People who like houses" is not
+- Examples: "Owner-occupiers", "Families upsizing locally", "Long-term holders", "Bargain hunters", "Turnkey-only buyers", "Short-term investors", "Downsizers", "First-home buyers"
+
+KEY_POINTS FORMATTING:
+- Each bullet is one self-contained fact, max 2 sentences
+- Use **bold** on the key term: "**Stone benchtops** and modern cabinetry in the kitchen"
+- Numbers formatted as $1,250,000 (not $1.25m), measurements use × (not x)
+- Maximum 7 key_points per insight
+- For comparables insight: include comparables array AND additional key_points for non-comp observations
 
 SUBURB SLUG MAPPING: Robina = "Robina", Varsity Lakes = "Varsity_Lakes", Burleigh Waters = "Burleigh_Waters"
 
@@ -1534,6 +1632,11 @@ def call_claude(prompt: str, api_key: str, max_tokens: int = 1500, parse_json: b
         raise ValueError(f"Claude response missing keys: {missing}")
     if "insights" in required and (not isinstance(result.get("insights"), list) or len(result["insights"]) < 3):
         raise ValueError(f"insights must be an array of 3-4 items, got: {type(result.get('insights'))}")
+    # Validate v2 insight structure (h2 + key_points) if present
+    if "insights" in required and result.get("insights"):
+        first = result["insights"][0]
+        if "h2" not in first and "lead" not in first:
+            raise ValueError("Each insight must have either 'h2' (v2) or 'lead' (v1) field")
 
     return result
 
@@ -1996,10 +2099,18 @@ INSTRUCTIONS FOR DRAFT 2:
 
 SUBURB SLUG: {suburb_display.replace(' ', '_')}
 
-OUTPUT BODY JSON only — no headline, no meta, no markdown, no code fences:
+OUTPUT BODY JSON — use v2 structured insight format (no headline, no meta, no markdown, no code fences):
 {{
-  "insights": [{{"lead": "...", "detail": "..."}}, ...],
+  "insights": [
+    {{"h2": "...", "key_points": ["...", "..."], "key_points_label": "Key points", "what_this_means": ["..."], "comparables": null}},
+    {{"h2": "...", "key_points": ["...", "..."], "key_points_label": "Key points", "what_this_means": ["..."], "comparables": null}},
+    {{"h2": "...", "key_points": ["...", "..."], "key_points_label": "Comparable sales", "what_this_means": ["..."], "comparables": [{{"address":"...","distance":"...","sold_price":0,"adjusted_price":0,"summary":"...","delta_label":"..."}}]}},
+    {{"h2": "...", "key_points": ["...", "..."], "key_points_label": "Key points", "what_this_means": ["..."], "comparables": null}}
+  ],
   "verdict": "... uses listing DATE not day count ...",
+  "quick_take": {{"strengths": ["...", "..."], "trade_off": "..."}},
+  "best_for": ["...", "...", "..."],
+  "not_ideal_for": ["...", "...", "..."],
   "next_steps": ["...", "...", "...", "..."],
   "cta_valuation": {{"hook": "...", "label": "Walk through the valuation step by step", "tab": "valuation"}},
   "cta_market_buy": {{"hook": "...", "label": "Read the {suburb_display} buyer's market briefing", "url": "/market-metrics/{suburb_display.replace(' ', '_')}#buy"}},
@@ -2086,14 +2197,22 @@ RULES:
 - Use listing DATE not day counts in verdict, next_steps, CTA hooks, FAQ answers
 - Keep the same JSON structure but do NOT include headline, sub_headline, meta_title, meta_description
 
-OUTPUT BODY JSON (no markdown, no code fences):
+OUTPUT BODY JSON — use v2 structured format (no markdown, no code fences):
 {{
-  "insights": [{{"lead": "...", "detail": "..."}}, {{"lead": "...", "detail": "..."}}, {{"lead": "...", "detail": "..."}}, {{"lead": "...", "detail": "..."}}],
+  "insights": [
+    {{"h2": "...", "key_points": ["...", "..."], "key_points_label": "Key points", "what_this_means": ["..."], "comparables": null}},
+    {{"h2": "...", "key_points": ["...", "..."], "key_points_label": "Key points", "what_this_means": ["..."], "comparables": null}},
+    {{"h2": "...", "key_points": ["...", "..."], "key_points_label": "Comparable sales", "what_this_means": ["..."], "comparables": [{{"address": "...", "distance": "...", "sold_price": 0, "adjusted_price": 0, "summary": "...", "delta_label": "..."}}]}},
+    {{"h2": "...", "key_points": ["...", "..."], "key_points_label": "Key points", "what_this_means": ["..."], "comparables": null}}
+  ],
   "verdict": "...",
+  "quick_take": {{"strengths": ["...", "..."], "trade_off": "..."}},
+  "best_for": ["...", "...", "..."],
+  "not_ideal_for": ["...", "...", "..."],
   "next_steps": ["...", "...", "...", "..."],
   "cta_valuation": {{"hook": "...", "label": "Walk through the valuation step by step", "tab": "valuation"}},
-  "cta_market_buy": {{"hook": "...", "label": "Read the market briefing", "url": "/market-metrics/{suburb_display.replace(' ', '_')}#buy"}},
-  "cta_market_sell": {{"hook": "...", "label": "Read the seller briefing", "url": "/market-metrics/{suburb_display.replace(' ', '_')}#sell"}},
+  "cta_market_buy": {{"hook": "...", "label": "Read the {suburb_display} market briefing", "url": "/market-metrics/{suburb_display.replace(' ', '_')}#buy"}},
+  "cta_market_sell": {{"hook": "...", "label": "Read the {suburb_display} seller briefing", "url": "/market-metrics/{suburb_display.replace(' ', '_')}#sell"}},
   "flood_section": {{"title": "...", "body": "...", "source": "Gold Coast City Council ArcGIS flood mapping"}},
   "faqs": [{{"question": "...", "answer": "..."}}, ...]
 }}"""
@@ -2222,8 +2341,16 @@ def _fix_year_hallucinations(analysis: Dict, prop: Dict) -> Dict:
         faq["question"] = fix_text(faq.get("question", ""))
         faq["answer"] = fix_text(faq.get("answer", ""))
     for insight in analysis.get("insights", []):
-        insight["lead"] = fix_text(insight.get("lead", ""))
-        insight["detail"] = fix_text(insight.get("detail", ""))
+        # v2 format (h2 + key_points + what_this_means)
+        if "h2" in insight:
+            insight["h2"] = fix_text(insight.get("h2", ""))
+            insight["key_points"] = [fix_text(kp) for kp in insight.get("key_points", [])]
+            insight["what_this_means"] = [fix_text(m) for m in insight.get("what_this_means", [])]
+        # v1 format (lead + detail) — backward compat
+        if "lead" in insight:
+            insight["lead"] = fix_text(insight.get("lead", ""))
+        if "detail" in insight:
+            insight["detail"] = fix_text(insight.get("detail", ""))
 
     return analysis
 
@@ -2361,8 +2488,10 @@ def process_property(db, suburb: str, prop: Dict, api_key: str, force: bool = Fa
     print(f"Headline:    {analysis['headline']}")
     print(f"Sub-head:    {analysis['sub_headline']}")
     for i, ins in enumerate(analysis.get('insights', []), 1):
-        print(f"Insight {i}:   {ins['lead']}")
-        print(f"  Detail:    {ins['detail'][:120]}...")
+        h2 = ins.get('h2') or ins.get('lead', '?')
+        print(f"Insight {i}:   {h2}")
+        detail_preview = ins.get('detail', '') or ' | '.join(ins.get('key_points', [])[:2])
+        print(f"  Detail:    {detail_preview[:120]}...")
     print(f"Verdict:     {analysis.get('verdict', '?')}")
     print(f"Meta title:  {analysis['meta_title']}")
     print(f"Meta desc:   {analysis['meta_description']}")
