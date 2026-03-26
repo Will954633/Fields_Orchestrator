@@ -40,7 +40,7 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import anthropic
 from pymongo import MongoClient
@@ -66,6 +66,39 @@ from shared.monitor_client import MonitorClient
 from shared.ru_guard import cosmos_retry, sleep_with_jitter
 
 TARGET_SUBURBS = ["robina", "varsity_lakes", "burleigh_waters"]
+
+# ---------------------------------------------------------------------------
+# Configuration — all tuneable parameters in one place
+# ---------------------------------------------------------------------------
+PIPELINE_CONFIG = {
+    "models": {
+        "gather_default": "claude-opus-4-6",
+        "gather_openai": "gpt-5.4",
+        "gather_gemini": "gemini-3.1-pro-preview",
+        "editor": "claude-opus-4-6",
+        "reflection": "claude-opus-4-6",
+        "fact_check": "claude-opus-4-6",
+        "sabri": "claude-opus-4-6",
+        "draft2": "claude-opus-4-6",
+        "backfill": "claude-opus-4-6",
+        "satellite_verify": "claude-opus-4-6",
+    },
+    "token_limits": {
+        "gather": 600,
+        "gather_gemini": 2000,
+        "editor": 6000,
+        "reflection": 1000,
+        "fact_check": 1500,
+        "backfill": 600,
+        "sabri": 800,
+        "draft2": 6000,
+        "verify": 800,
+    },
+    "retry": {
+        "max_draft2_attempts": 3,
+        "fact_check_accept_threshold": 1,  # <= this many failures = accept draft
+    },
+}
 
 # ---------------------------------------------------------------------------
 # Data pipeline helpers — each gathers one slice of context for the prompt
@@ -265,8 +298,8 @@ OUTPUT as JSON only — no markdown, no code fences:
     client = anthropic.Anthropic(api_key=api_key)
     try:
         response = client.messages.create(
-            model="claude-opus-4-6",
-            max_tokens=1500,
+            model=PIPELINE_CONFIG["models"]["satellite_verify"],
+            max_tokens=PIPELINE_CONFIG["token_limits"]["fact_check"],
             messages=[{
                 "role": "user",
                 "content": [
@@ -892,12 +925,6 @@ _EDITORIAL_PROMPT_PATH = REPO_ROOT / "config" / "property_editorial_prompt.md"
 EDITORIAL_GUIDE = ""
 if _EDITORIAL_PROMPT_PATH.exists():
     EDITORIAL_GUIDE = _EDITORIAL_PROMPT_PATH.read_text()
-
-# Load the Sabri Suby copywriting masterclass — voice and hook training for all agents
-_SABRI_PATH = REPO_ROOT / "05_Sabri_Subri" / "Sabri_Subri_Copy-writing_Masterclass.md"
-SABRI_GUIDE = ""
-if _SABRI_PATH.exists():
-    SABRI_GUIDE = _SABRI_PATH.read_text()
 
 # Load flood context for Burleigh Waters — expert-level background for agents
 _FLOOD_CONTEXT_PATH = REPO_ROOT / "config" / "flood_context_burleigh_waters.md"
@@ -1666,56 +1693,77 @@ def call_claude(prompt: str, api_key: str, max_tokens: int = 1500, parse_json: b
     return result
 
 
-def run_multi_agent_pipeline(
+# ---------------------------------------------------------------------------
+# Pipeline sub-functions — extracted from run_multi_agent_pipeline()
+# ---------------------------------------------------------------------------
+
+def _build_gather_config(
+    use_gemini_gather: bool,
+    gemini_api_key: Optional[str],
+    use_openai_gather: bool,
+    openai_api_key: Optional[str],
+    use_hybrid_gather: bool,
+    api_key: str,
+) -> Dict[str, Any]:
+    """Build the gather mode configuration: model, label, call functions, token limits."""
+    agent_model = PIPELINE_CONFIG["models"]["gather_default"]
+    gather_tokens = PIPELINE_CONFIG["token_limits"]["gather"]
+
+    if use_gemini_gather and gemini_api_key:
+        gather_model = PIPELINE_CONFIG["models"]["gather_gemini"]
+        gather_label = f"Gemini ({gather_model})"
+        gather_tokens = PIPELINE_CONFIG["token_limits"]["gather_gemini"]
+        def gather_call(prompt, max_tokens=gather_tokens):
+            return call_gemini(prompt, gemini_api_key, max_tokens=max_tokens, parse_json=False, model=gather_model)
+    elif use_openai_gather and openai_api_key:
+        gather_model = PIPELINE_CONFIG["models"]["gather_openai"]
+        gather_label = f"OpenAI ({gather_model})"
+        def gather_call(prompt, max_tokens=gather_tokens):
+            return call_openai(prompt, openai_api_key, max_tokens=max_tokens, parse_json=False, model=gather_model)
+    else:
+        gather_label = f"Claude ({agent_model})"
+        def gather_call(prompt, max_tokens=gather_tokens):
+            return call_claude(prompt, api_key, max_tokens=max_tokens, parse_json=False, model=agent_model)
+
+    def hybrid_openai_call(prompt, max_tokens=gather_tokens):
+        return call_openai(prompt, openai_api_key, max_tokens=max_tokens, parse_json=False, model=PIPELINE_CONFIG["models"]["gather_openai"])
+
+    return {
+        "agent_model": agent_model,
+        "gather_label": gather_label,
+        "gather_call": gather_call,
+        "gather_tokens": gather_tokens,
+        "hybrid_openai_call": hybrid_openai_call,
+        "use_hybrid_gather": use_hybrid_gather,
+    }
+
+
+def _run_gathering_agents(
     prop_summary: str,
-    suburb_medians: List[Dict],
-    competing_listings: List[Dict],
-    recent_sales: List[Dict],
-    suburb_name: str,
+    medians_str: str,
+    competing_str: str,
+    sales_str: str,
+    suburb_display: str,
     address: str,
     api_key: str,
-    use_gemini_gather: bool = False,
-    gemini_api_key: str = None,
-    use_openai_gather: bool = False,
-    openai_api_key: str = None,
-    use_hybrid_gather: bool = False,
-) -> Dict:
-    """Run 3 specialist agents in sequence, then an editor agent to synthesise."""
-    suburb_display = suburb_name.replace("_", " ").title()
-    medians_str = format_medians(suburb_medians)
-    competing_str = format_competing(competing_listings)
-    sales_str = format_sales(recent_sales)
+    gather_cfg: Dict[str, Any],
+) -> Dict[str, str]:
+    """Run the 3 specialist gathering agents (Price, Property, Market).
 
-    AGENT_MODEL = "claude-opus-4-6"
-
-    # Data-gathering agents: Gemini, OpenAI, Hybrid, or Claude depending on flag
-    if use_gemini_gather and gemini_api_key:
-        GATHER_MODEL = "gemini-3.1-pro-preview"
-        gather_label = f"Gemini ({GATHER_MODEL})"
-        def gather_call(prompt, max_tokens=800):
-            return call_gemini(prompt, gemini_api_key, max_tokens=max_tokens, parse_json=False, model=GATHER_MODEL)
-    elif use_openai_gather and openai_api_key:
-        GATHER_MODEL = "gpt-5.4"
-        gather_label = f"OpenAI ({GATHER_MODEL})"
-        def gather_call(prompt, max_tokens=800):
-            return call_openai(prompt, openai_api_key, max_tokens=max_tokens, parse_json=False, model=GATHER_MODEL)
-    else:
-        gather_label = f"Claude ({AGENT_MODEL})"
-        def gather_call(prompt, max_tokens=800):
-            return call_claude(prompt, api_key, max_tokens=max_tokens, parse_json=False, model=AGENT_MODEL)
-
-    # Hybrid mode uses GPT-5.4 for Price+Market, Claude for Property
-    def hybrid_openai_call(prompt, max_tokens=800):
-        return call_openai(prompt, openai_api_key, max_tokens=max_tokens, parse_json=False, model="gpt-5.4")
-
-    # Token limits — Gemini needs more room than Claude/OpenAI for the same quality
-    gather_tokens = 2000 if use_gemini_gather else 600
+    Returns {"price": brief, "property": brief, "market": brief}.
+    """
+    gather_call = gather_cfg["gather_call"]
+    gather_tokens = gather_cfg["gather_tokens"]
+    gather_label = gather_cfg["gather_label"]
+    agent_model = gather_cfg["agent_model"]
+    use_hybrid = gather_cfg["use_hybrid_gather"]
+    hybrid_openai_call = gather_cfg["hybrid_openai_call"]
 
     # Agent 1: Price & Value Analyst
-    agent1_label = "OpenAI (gpt-5.4)" if use_hybrid_gather else gather_label
+    agent1_label = f"OpenAI ({PIPELINE_CONFIG['models']['gather_openai']})" if use_hybrid else gather_label
     print(f"  [Agent 1/4] Price & Value Analyst ({agent1_label})...")
     t0 = time.time()
-    if use_hybrid_gather:
+    if use_hybrid:
         price_brief = hybrid_openai_call(
             build_price_agent_prompt(prop_summary, medians_str, competing_str, sales_str, suburb_display),
             max_tokens=gather_tokens,
@@ -1728,13 +1776,13 @@ def run_multi_agent_pipeline(
     print(f"    Done ({time.time()-t0:.1f}s, {len(price_brief)} chars)")
 
     # Agent 2: Property & Trade-offs Analyst — ALWAYS Claude in hybrid mode (selling principles + lifestyle framing)
-    agent2_label = f"Claude ({AGENT_MODEL})" if use_hybrid_gather else gather_label
+    agent2_label = f"Claude ({agent_model})" if use_hybrid else gather_label
     print(f"  [Agent 2/4] Property & Trade-offs Analyst ({agent2_label})...")
     t0 = time.time()
-    if use_hybrid_gather:
+    if use_hybrid:
         property_brief = call_claude(
             build_property_agent_prompt(prop_summary, competing_str, sales_str, suburb_display),
-            api_key, max_tokens=800, parse_json=False, model=AGENT_MODEL,
+            api_key, max_tokens=PIPELINE_CONFIG["token_limits"]["sabri"], parse_json=False, model=agent_model,
         )
     else:
         property_brief = gather_call(
@@ -1744,10 +1792,10 @@ def run_multi_agent_pipeline(
     print(f"    Done ({time.time()-t0:.1f}s, {len(property_brief)} chars)")
 
     # Agent 3: Market Position Analyst
-    agent3_label = "OpenAI (gpt-5.4)" if use_hybrid_gather else gather_label
+    agent3_label = f"OpenAI ({PIPELINE_CONFIG['models']['gather_openai']})" if use_hybrid else gather_label
     print(f"  [Agent 3/4] Market Position Analyst ({agent3_label})...")
     t0 = time.time()
-    if use_hybrid_gather:
+    if use_hybrid:
         market_brief = hybrid_openai_call(
             build_market_agent_prompt(prop_summary, medians_str, competing_str, sales_str, suburb_display),
             max_tokens=gather_tokens,
@@ -1759,44 +1807,77 @@ def run_multi_agent_pipeline(
         )
     print(f"    Done ({time.time()-t0:.1f}s, {len(market_brief)} chars)")
 
-    # Editor: Synthesise body content (no headline/meta — those come from Sabri agent)
-    print("  [Editor] Synthesising body (claude-opus-4-6)...")
+    return {"price": price_brief, "property": property_brief, "market": market_brief}
+
+
+def _run_editor(
+    agent_briefings: Dict[str, str],
+    address: str,
+    suburb_display: str,
+    prop_summary: str,
+    api_key: str,
+) -> Dict:
+    """Run the editor agent to synthesise body content from agent briefings.
+
+    Returns the editor JSON result (insights, verdict, etc.).
+    """
+    print(f"  [Editor] Synthesising body ({PIPELINE_CONFIG['models']['editor']})...")
     t0 = time.time()
     result = call_claude(
-        build_editor_prompt(price_brief, property_brief, market_brief, address, suburb_display,
-                           has_flood_overlay="flood_overlay: True" in prop_summary or "Flood overlay: yes" in prop_summary.lower()),
-        api_key, max_tokens=6000, parse_json=True, model="claude-opus-4-6",
+        build_editor_prompt(
+            agent_briefings["price"], agent_briefings["property"], agent_briefings["market"],
+            address, suburb_display,
+            has_flood_overlay="flood_overlay: True" in prop_summary or "Flood overlay: yes" in prop_summary.lower(),
+        ),
+        api_key,
+        max_tokens=PIPELINE_CONFIG["token_limits"]["editor"],
+        parse_json=True,
+        model=PIPELINE_CONFIG["models"]["editor"],
         required_keys={"insights", "verdict"},
     )
     print(f"    Done ({time.time()-t0:.1f}s)")
+    return result
 
-    # Agent 4: Sabri Suby Headline Specialist
-    print(f"  [Agent 4/4] Sabri Suby Headline Specialist ({AGENT_MODEL})...")
+
+def _run_sabri(
+    result: Dict,
+    sanitized_summary: str,
+    address: str,
+    suburb_display: str,
+    api_key: str,
+) -> Dict:
+    """Run the Sabri Suby headline specialist agent.
+
+    Returns dict with headline, sub_headline, meta_title, meta_description, suggested_h2s.
+    """
+    sabri_model = PIPELINE_CONFIG["models"]["sabri"]
+    print(f"  [Agent 4/4] Sabri Suby Headline Specialist ({sabri_model})...")
     t0 = time.time()
-    sanitized_summary = strip_flood_from_summary(prop_summary)
     sabri_result = call_claude(
         build_sabri_agent_prompt(result, sanitized_summary, address, suburb_display),
-        api_key, max_tokens=800, parse_json=True, model=AGENT_MODEL,
+        api_key,
+        max_tokens=PIPELINE_CONFIG["token_limits"]["sabri"],
+        parse_json=True,
+        model=sabri_model,
         required_keys={"headline", "sub_headline", "meta_title", "meta_description"},
     )
-    # Merge headline/meta into result
-    result["headline"] = sabri_result["headline"]
-    result["sub_headline"] = sabri_result["sub_headline"]
-    result["meta_title"] = sabri_result["meta_title"]
-    result["meta_description"] = sabri_result["meta_description"]
-    result["_sabri_suggested_h2s"] = sabri_result.get("suggested_h2s", [])
     print(f"    Done ({time.time()-t0:.1f}s)")
+    return sabri_result
 
-    # -----------------------------------------------------------------------
-    # DRAFT 1 COMPLETE — now reflect, backfill data gaps, and write Draft 2
-    # -----------------------------------------------------------------------
 
-    draft1 = json.loads(json.dumps(result, default=str))  # snapshot
-    print(f"\n  --- DRAFT 1 HEADLINE: \"{result.get('headline', '')}\"")
+def _run_reflection(
+    result: Dict,
+    prop_summary: str,
+    agent_briefings: Dict[str, str],
+    api_key: str,
+) -> Optional[Dict]:
+    """Run the reflection agent to critique Draft 1.
 
-    # Step 5: REFLECTION AGENT — deep critique of everything
+    Returns reflection dict with content_score, has_data_gaps, raw, etc., or None on failure.
+    """
     print("  [Step 5] Reflection Agent — critiquing all content...")
     t0 = time.time()
+
     reflection_prompt = f"""You are the SENIOR EDITOR and QUALITY CONTROLLER for Fields Estate. A team of agents just produced Draft 1 of a property editorial. Your job is to critique the BODY CONTENT (insights, verdict) and the underlying data — then produce a brief for improvement.
 
 NOTE: Headlines and meta are handled by a separate Sabri Suby specialist. Do NOT suggest headlines. Focus on content quality only.
@@ -1812,9 +1893,9 @@ RAW DATA THE AGENTS WORKED FROM:
 Property summary: {prop_summary[:1500]}
 
 Agent briefings:
-PRICE: {price_brief[:600]}
-PROPERTY: {property_brief[:600]}
-MARKET: {market_brief[:600]}
+PRICE: {agent_briefings['price'][:600]}
+PROPERTY: {agent_briefings['property'][:600]}
+MARKET: {agent_briefings['market'][:600]}
 
 ---
 
@@ -1866,7 +1947,10 @@ Do NOT suggest headlines. Do NOT reference flood in suggested content. Max 400 w
 
     try:
         reflection_text = call_claude(
-            reflection_prompt, api_key, max_tokens=1000, parse_json=False, model="claude-opus-4-6",
+            reflection_prompt, api_key,
+            max_tokens=PIPELINE_CONFIG["token_limits"]["reflection"],
+            parse_json=False,
+            model=PIPELINE_CONFIG["models"]["reflection"],
         )
         print(f"    Done ({time.time()-t0:.1f}s)")
 
@@ -1897,36 +1981,50 @@ Do NOT suggest headlines. Do NOT reference flood in suggested content. Max 400 w
                     if line.strip().startswith("-") or line.strip().startswith("*"):
                         print(f"      [{section[:8]}] {line.strip()[:100]}")
 
+        return reflection
+
     except Exception as e:
         print(f"    [WARN] Reflection failed: {e}")
-        reflection = None
+        return None
 
-    # Step 6: DATA BACKFILL — address gaps the Reflection Agent identified
-    backfill_data = ""
-    if reflection and reflection.get("has_data_gaps"):
-        print("  [Step 6] Data Backfill Agent — filling gaps...")
-        t0 = time.time()
-        # Extract gap/contradiction bullets from raw text
-        def _extract_section(text, header):
-            if header not in text:
-                return ""
-            start = text.index(header) + len(header)
-            lines = []
-            for line in text[start:start+500].split("\n"):
-                line = line.strip()
-                if line.startswith("-") or line.startswith("*"):
-                    lines.append(line)
-                elif lines and not line:
-                    break
-                elif lines and not line.startswith("-") and not line.startswith("*"):
-                    break
-            return "\n".join(lines)
 
-        gaps_list = _extract_section(reflection.get("raw", ""), "DATA GAPS TO FILL:")
-        contradictions_list = _extract_section(reflection.get("raw", ""), "DATA CONTRADICTIONS:")
-        missed_list = _extract_section(reflection.get("raw", ""), "MISSED ANGLES:")
+def _run_backfill(
+    reflection: Optional[Dict],
+    prop_summary: str,
+    api_key: str,
+) -> str:
+    """Run the data backfill agent to fill gaps identified by reflection.
 
-        backfill_prompt = f"""You are a DATA VERIFICATION agent for Fields Estate. The Reflection Agent identified gaps, contradictions, and missed angles in Draft 1 of a property editorial. Your job is to go back to the raw data and extract what was missed.
+    Returns backfill data text, or empty string if skipped.
+    """
+    if not reflection or not reflection.get("has_data_gaps"):
+        print("  [Step 6] Skipped — no data gaps identified")
+        return ""
+
+    print("  [Step 6] Data Backfill Agent — filling gaps...")
+    t0 = time.time()
+
+    # Extract gap/contradiction bullets from raw text
+    def _extract_section(text, header):
+        if header not in text:
+            return ""
+        start = text.index(header) + len(header)
+        lines = []
+        for line in text[start:start+500].split("\n"):
+            line = line.strip()
+            if line.startswith("-") or line.startswith("*"):
+                lines.append(line)
+            elif lines and not line:
+                break
+            elif lines and not line.startswith("-") and not line.startswith("*"):
+                break
+        return "\n".join(lines)
+
+    gaps_list = _extract_section(reflection.get("raw", ""), "DATA GAPS TO FILL:")
+    contradictions_list = _extract_section(reflection.get("raw", ""), "DATA CONTRADICTIONS:")
+    missed_list = _extract_section(reflection.get("raw", ""), "MISSED ANGLES:")
+
+    backfill_prompt = f"""You are a DATA VERIFICATION agent for Fields Estate. The Reflection Agent identified gaps, contradictions, and missed angles in Draft 1 of a property editorial. Your job is to go back to the raw data and extract what was missed.
 
 PROPERTY DATA (full):
 {prop_summary}
@@ -1949,26 +2047,42 @@ Also: Re-read the agent description carefully. Extract any facts that the origin
 
 Write your findings as plain text. Be specific. Every claim must reference the data field it came from."""
 
-        backfill_data = call_claude(
-            backfill_prompt, api_key, max_tokens=600, parse_json=False, model="claude-opus-4-6",
-        )
-        print(f"    Done ({time.time()-t0:.1f}s, {len(backfill_data)} chars)")
-    else:
-        print("  [Step 6] Skipped — no data gaps identified")
+    backfill_data = call_claude(
+        backfill_prompt, api_key,
+        max_tokens=PIPELINE_CONFIG["token_limits"]["backfill"],
+        parse_json=False,
+        model=PIPELINE_CONFIG["models"]["backfill"],
+    )
+    print(f"    Done ({time.time()-t0:.1f}s, {len(backfill_data)} chars)")
+    return backfill_data
 
-    # Step 6.5: FACT-CHECK AGENT — verify every factual claim against raw data
+
+def _run_fact_check(
+    draft: Dict,
+    prop_summary: str,
+    competing_str: str,
+    medians_str: str,
+    sales_str: str,
+    api_key: str,
+) -> Tuple[str, int]:
+    """Run the fact-check agent on a draft.
+
+    Returns (factcheck_text, failure_count).
+    """
     print("  [Step 6.5] Fact-Check Agent — verifying all claims...")
     t0 = time.time()
     factcheck_text = ""
+    failed = 0
+
     try:
         factcheck_prompt = f"""You are a FACT-CHECKER for Fields Estate. Your ONLY job is to verify every factual claim in Draft 1 against the raw source data below. You are not a writer — you are an auditor.
 
 DRAFT 1:
-Headline: "{draft1.get('headline', '')}"
-Sub-headline: "{draft1.get('sub_headline', '')}"
+Headline: "{draft.get('headline', '')}"
+Sub-headline: "{draft.get('sub_headline', '')}"
 Insights:
-{json.dumps(draft1.get('insights', []), indent=2)}
-Verdict: "{draft1.get('verdict', '')}"
+{json.dumps(draft.get('insights', []), indent=2)}
+Verdict: "{draft.get('verdict', '')}"
 
 RAW SOURCE DATA (COMPLETE — every field the agents had access to):
 {prop_summary}
@@ -2010,7 +2124,10 @@ If the draft claims a room is "unrenovated", "untouched", "dated", "not upgraded
 Be exhaustive on factual claims. Be lenient on valuation approximations."""
 
         factcheck_text = call_claude(
-            factcheck_prompt, api_key, max_tokens=1500, parse_json=False, model="claude-opus-4-6",
+            factcheck_prompt, api_key,
+            max_tokens=PIPELINE_CONFIG["token_limits"]["fact_check"],
+            parse_json=False,
+            model=PIPELINE_CONFIG["models"]["fact_check"],
         )
         print(f"    Done ({time.time()-t0:.1f}s)")
 
@@ -2025,51 +2142,32 @@ Be exhaustive on factual claims. Be lenient on valuation approximations."""
             if "FAILED" in line:
                 print(f"    {line.strip()[:120]}")
 
-        # Check if headline or core angle is invalidated
-        headline_failed = False
-        for line in factcheck_text.split("\n"):
-            if "FAILED" in line:
-                # Check if the failed claim appears in headline, sub-headline, or verdict
-                claim_text = line.lower()
-                headline_lower = draft1.get("headline", "").lower()
-                sub_lower = draft1.get("sub_headline", "").lower()
-                if any(word in claim_text for word in headline_lower.split() if len(word) > 4):
-                    headline_failed = True
-                    break
-
-        if headline_failed:
-            print(f"    ⚠️  HEADLINE ANGLE INVALIDATED — Draft 2 must find a new angle, not patch.")
-
     except Exception as e:
         print(f"    [WARN] Fact-check failed: {e}")
-        headline_failed = False
 
-    # Early accept: if Draft 1 has 0-1 fact-check failures and no headline invalidation, skip the expensive Draft 2 loop
-    if not headline_failed and failed <= 1:
-        print(f"  [Step 7] SKIPPED — Draft 1 has {failed} failure(s), accepting as final")
-        final_draft = None  # signals to use result as-is (no Draft 2 override)
+    return factcheck_text, failed
 
-        # Attach metadata
-        result["_draft1"] = {
-            "headline": draft1.get("headline"),
-            "sub_headline": draft1.get("sub_headline"),
-            "verdict": draft1.get("verdict"),
-        }
-        result["_reflection"] = reflection
-        result["_backfill_data"] = backfill_data if backfill_data else None
-        result["_factcheck_failures"] = failed
-        result["_accepted_draft"] = 1
 
-        # Attach the agent briefings for debugging
-        result["_agent_briefings"] = {
-            "price": price_brief,
-            "property": property_brief,
-            "market": market_brief,
-        }
+def _run_draft2_loop(
+    draft1: Dict,
+    factcheck_text: str,
+    reflection: Optional[Dict],
+    backfill_data: str,
+    prop_summary: str,
+    competing_str: str,
+    medians_str: str,
+    suburb_display: str,
+    address: str,
+    api_key: str,
+    headline_failed: bool,
+    failed: int,
+) -> Optional[Dict]:
+    """Run the Draft 2 rewrite loop with fact-check verification.
 
-        return result
+    Returns final_draft dict, or None if all attempts fail.
+    """
+    MAX_RETRIES = PIPELINE_CONFIG["retry"]["max_draft2_attempts"]
 
-    # Step 7: EDITOR DRAFT 2 — rewrite with reflection feedback + backfill data
     angle_instruction = ""
     if headline_failed:
         angle_instruction = """
@@ -2147,13 +2245,15 @@ OUTPUT BODY JSON — use v2 structured insight format (no headline, no meta, no 
   "faqs": [{{"question": "...", "answer": "..."}}, ...]
 }}"""
 
-    MAX_RETRIES = 3
     final_draft = None
 
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             current_draft = call_claude(
-                draft2_prompt, api_key, max_tokens=6000, parse_json=True, model="claude-opus-4-6",
+                draft2_prompt, api_key,
+                max_tokens=PIPELINE_CONFIG["token_limits"]["draft2"],
+                parse_json=True,
+                model=PIPELINE_CONFIG["models"]["draft2"],
                 required_keys={"insights", "verdict"},
             )
             print(f"    Done ({time.time()-t0:.1f}s)")
@@ -2189,7 +2289,10 @@ Output ONLY failed claims as:
 If ALL claims are verified, output: ✅ ALL CLAIMS VERIFIED"""
 
                 verify_text = call_claude(
-                    verify_prompt, api_key, max_tokens=800, parse_json=False, model="claude-opus-4-6",
+                    verify_prompt, api_key,
+                    max_tokens=PIPELINE_CONFIG["token_limits"]["verify"],
+                    parse_json=False,
+                    model=PIPELINE_CONFIG["models"]["fact_check"],
                 )
                 verify_failures = verify_text.count("❌ FAILED")
                 print(f"    {time.time()-t0:.1f}s — {verify_failures} failures found")
@@ -2199,7 +2302,7 @@ If ALL claims are verified, output: ✅ ALL CLAIMS VERIFIED"""
                         if "FAILED" in line:
                             print(f"    {line.strip()[:120]}")
 
-                    if verify_failures <= 1:
+                    if verify_failures <= PIPELINE_CONFIG["retry"]["fact_check_accept_threshold"]:
                         # Minor issues — accept with note
                         print(f"    Minor issues — accepting Draft {attempt + 1} with {verify_failures} flag(s)")
                         final_draft = current_draft
@@ -2262,8 +2365,113 @@ OUTPUT BODY JSON — use v2 structured format (no markdown, no code fences):
                 print(f"    All {MAX_RETRIES} attempts failed — keeping Draft 1")
             continue
 
-    # Track whether fact-checking passed — used to set status
-    # If we never got a final_draft (all retries failed), it means Draft 1 is being used and it had failures
+    return final_draft
+
+
+# ---------------------------------------------------------------------------
+# Orchestrator: run_multi_agent_pipeline()
+# ---------------------------------------------------------------------------
+
+def run_multi_agent_pipeline(
+    prop_summary: str,
+    suburb_medians: List[Dict],
+    competing_listings: List[Dict],
+    recent_sales: List[Dict],
+    suburb_name: str,
+    address: str,
+    api_key: str,
+    use_gemini_gather: bool = False,
+    gemini_api_key: str = None,
+    use_openai_gather: bool = False,
+    openai_api_key: str = None,
+    use_hybrid_gather: bool = False,
+) -> Dict:
+    """Run 3 specialist agents in sequence, then an editor agent to synthesise."""
+    suburb_display = suburb_name.replace("_", " ").title()
+    medians_str = format_medians(suburb_medians)
+    competing_str = format_competing(competing_listings)
+    sales_str = format_sales(recent_sales)
+
+    # Build gather mode configuration
+    gather_cfg = _build_gather_config(
+        use_gemini_gather, gemini_api_key,
+        use_openai_gather, openai_api_key,
+        use_hybrid_gather, api_key,
+    )
+
+    # Step 1-3: Gathering agents
+    agent_briefings = _run_gathering_agents(
+        prop_summary, medians_str, competing_str, sales_str,
+        suburb_display, address, api_key, gather_cfg,
+    )
+
+    # Step 4: Editor synthesises body content
+    result = _run_editor(agent_briefings, address, suburb_display, prop_summary, api_key)
+
+    # Step 4b: Sabri Suby headline specialist
+    sanitized_summary = strip_flood_from_summary(prop_summary)
+    sabri_result = _run_sabri(result, sanitized_summary, address, suburb_display, api_key)
+    result["headline"] = sabri_result["headline"]
+    result["sub_headline"] = sabri_result["sub_headline"]
+    result["meta_title"] = sabri_result["meta_title"]
+    result["meta_description"] = sabri_result["meta_description"]
+    result["_sabri_suggested_h2s"] = sabri_result.get("suggested_h2s", [])
+
+    # -----------------------------------------------------------------------
+    # DRAFT 1 COMPLETE — now reflect, backfill data gaps, and write Draft 2
+    # -----------------------------------------------------------------------
+
+    draft1 = json.loads(json.dumps(result, default=str))  # snapshot
+    print(f"\n  --- DRAFT 1 HEADLINE: \"{result.get('headline', '')}\"")
+
+    # Step 5: Reflection
+    reflection = _run_reflection(result, prop_summary, agent_briefings, api_key)
+
+    # Step 6: Backfill
+    backfill_data = _run_backfill(reflection, prop_summary, api_key)
+
+    # Step 6.5: Fact-check
+    factcheck_text, failed = _run_fact_check(
+        draft1, prop_summary, competing_str, medians_str, sales_str, api_key,
+    )
+
+    # Check if headline angle is invalidated by fact-check
+    headline_failed = False
+    for line in factcheck_text.split("\n"):
+        if "FAILED" in line:
+            claim_text = line.lower()
+            headline_lower = draft1.get("headline", "").lower()
+            if any(word in claim_text for word in headline_lower.split() if len(word) > 4):
+                headline_failed = True
+                break
+
+    if headline_failed:
+        print(f"    ⚠️  HEADLINE ANGLE INVALIDATED — Draft 2 must find a new angle, not patch.")
+
+    # Early accept: if Draft 1 has few fact-check failures and no headline invalidation, skip Draft 2
+    accept_threshold = PIPELINE_CONFIG["retry"]["fact_check_accept_threshold"]
+    if not headline_failed and failed <= accept_threshold:
+        print(f"  [Step 7] SKIPPED — Draft 1 has {failed} failure(s), accepting as final")
+        result["_draft1"] = {
+            "headline": draft1.get("headline"),
+            "sub_headline": draft1.get("sub_headline"),
+            "verdict": draft1.get("verdict"),
+        }
+        result["_reflection"] = reflection
+        result["_backfill_data"] = backfill_data if backfill_data else None
+        result["_factcheck_failures"] = failed
+        result["_accepted_draft"] = 1
+        result["_agent_briefings"] = agent_briefings
+        return result
+
+    # Step 7: Draft 2 loop
+    final_draft = _run_draft2_loop(
+        draft1, factcheck_text, reflection, backfill_data,
+        prop_summary, competing_str, medians_str,
+        suburb_display, address, api_key, headline_failed, failed,
+    )
+
+    # Track whether fact-checking passed
     if not final_draft:
         result["_factcheck_status"] = "failed"
         print("  ⚠️  All drafts failed fact-check — marking as failed_factcheck")
@@ -2277,7 +2485,7 @@ OUTPUT BODY JSON — use v2 structured format (no markdown, no code fences):
         }
         result["_reflection"] = reflection
         result["_backfill_data"] = backfill_data if backfill_data else None
-        # Merge body content from final draft (no headline/meta — those come from Sabri re-run)
+        # Merge body content from final draft
         result["insights"] = final_draft["insights"]
         result["verdict"] = final_draft["verdict"]
         if final_draft.get("next_steps"):
@@ -2293,15 +2501,11 @@ OUTPUT BODY JSON — use v2 structured format (no markdown, no code fences):
         if final_draft.get("flood_section"):
             result["flood_section"] = final_draft["flood_section"]
 
-        # Re-run Sabri agent on the final body to get headline/meta that match the fact-checked content
+        # Re-run Sabri agent on the final body
         print("  [Sabri Re-run] Generating headline for final body...")
         t0 = time.time()
         try:
-            sabri_final = call_claude(
-                build_sabri_agent_prompt(result, sanitized_summary, address, suburb_display),
-                api_key, max_tokens=800, parse_json=True, model=AGENT_MODEL,
-                required_keys={"headline", "sub_headline", "meta_title", "meta_description"},
-            )
+            sabri_final = _run_sabri(result, sanitized_summary, address, suburb_display, api_key)
             result["headline"] = sabri_final["headline"]
             result["sub_headline"] = sabri_final["sub_headline"]
             result["meta_title"] = sabri_final["meta_title"]
@@ -2312,11 +2516,7 @@ OUTPUT BODY JSON — use v2 structured format (no markdown, no code fences):
             print(f"    [WARN] Sabri re-run failed: {e} — keeping Draft 1 headline")
 
     # Attach the agent briefings for debugging
-    result["_agent_briefings"] = {
-        "price": price_brief,
-        "property": property_brief,
-        "market": market_brief,
-    }
+    result["_agent_briefings"] = agent_briefings
 
     return result
 
@@ -2386,7 +2586,7 @@ def _fix_year_hallucinations(analysis: Dict, prop: Dict) -> Dict:
 def store_analysis(db, suburb: str, property_id, analysis: Dict) -> None:
     """Write ai_analysis field to the property document."""
     analysis["generated_at"] = datetime.now(timezone.utc).isoformat()
-    analysis["model"] = "claude-opus-4-6"
+    analysis["model"] = PIPELINE_CONFIG["models"]["editor"]
     # If fact-check failed after all retries, mark as failed — don't show in review queue
     if analysis.get("_factcheck_status") == "failed":
         analysis["status"] = "failed_factcheck"
@@ -2557,8 +2757,6 @@ def process_property(db, suburb: str, prop: Dict, api_key: str, force: bool = Fa
     # Post-process: fix year hallucinations before storing
     analysis = _fix_year_hallucinations(analysis, prop)
 
-
-
     # Store
     store_analysis(db, suburb, prop_id, analysis)
 
@@ -2625,7 +2823,7 @@ def main():
         if not GEMINI_AVAILABLE:
             print("[ERROR] --gemini-gather requires google-generativeai package")
             sys.exit(1)
-        print(f"[INFO] Gemini mode: data-gathering agents will use gemini-3.1-pro-preview")
+        print(f"[INFO] Gemini mode: data-gathering agents will use {PIPELINE_CONFIG['models']['gather_gemini']}")
     if use_openai or use_hybrid:
         openai_api_key = os.environ.get("OPENAI_API_KEY")
         if not openai_api_key:
@@ -2635,9 +2833,9 @@ def main():
             print("[ERROR] --openai-gather/--hybrid-gather requires openai package")
             sys.exit(1)
         if use_hybrid:
-            print(f"[INFO] Hybrid mode: GPT-5.4 for Price+Market, Claude Opus for Property agent")
+            print(f"[INFO] Hybrid mode: {PIPELINE_CONFIG['models']['gather_openai']} for Price+Market, {PIPELINE_CONFIG['models']['gather_default']} for Property agent")
         else:
-            print(f"[INFO] OpenAI mode: data-gathering agents will use gpt-5.4")
+            print(f"[INFO] OpenAI mode: data-gathering agents will use {PIPELINE_CONFIG['models']['gather_openai']}")
 
     # DB connection
     conn_str = os.environ.get("COSMOS_CONNECTION_STRING")
