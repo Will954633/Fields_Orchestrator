@@ -91,7 +91,7 @@ PIPELINE_CONFIG = {
         "fact_check": 1500,
         "backfill": 600,
         "sabri": 800,
-        "draft2": 6000,
+        "draft2": 8000,
         "verify": 800,
     },
     "retry": {
@@ -1470,8 +1470,21 @@ STRUCTURE — INSIGHTS MUST FOLLOW THIS ORDER:
 INSIGHT 1 — WHO + OUTCOME (Principles #11, #2, #5):
 Name the ideal buyer. Paint the life they'd live. Make them self-select: "that's me."
 BUT — even in this section, connect lifestyle to VALUE. Why is this lifestyle available at this price?
+
+THE LIFESTYLE HOOK COMES FIRST. Every insight has a `lifestyle_hook` field that sits ABOVE the key points. This is the emotional opener — 1-3 sentences that make the reader WANT the property before they see any data. It paints a specific moment: a Saturday morning, the school run, an evening on the deck. Then it connects that life to the price.
+
+Example lifestyle_hook for Insight 1: "Saturday morning here looks like this: coffee run on foot, swim in the pool, kids at the park across the road, beach by mid-morning. That's the outcome you're buying — and the reason this home is priced above the suburb's $1,800,000 typical price."
+
+Example lifestyle_hook for Insight 2 (Condition): "You walk in and the hard work is done. Stone benchtops, new flooring, renovated bathrooms. The previous owner spent $40,000–$65,000 on the rooms that matter most — and that spend is already in the price, not on your to-do list."
+
+Example lifestyle_hook for Insight 3 (Price): "Two homes within a kilometre sold recently. One for $3.5M, one for $1.6M. After adjusting for size, condition, and features, they point to a range of $2.16M–$3.37M for this property. The asking price picks the lower half."
+
+Example lifestyle_hook for Insight 4 (Trade-offs): "Every dollar you're NOT paying has a name. Weatherboard instead of render: $60,000. No enclosed garage: $45,000. Average floor area instead of generous: $67,000. Add them up and you see exactly why this isn't a $2.6M home."
+
+The lifestyle_hook is NOT a feature description. It's the FEELING of living here connected to the FINANCIAL reality. If it reads like an agent listing, rewrite it.
+
 Example H2: "Park behind the fence, renovated kitchen, cul-de-sac — and possibly one of Robina's most affordable houses. Here's what the trade-off looks like."
-Example key_points: Paint the lifestyle with specifics, but anchor every feature to what it means for the price or the decision. "The park behind the fence means no rear neighbour — but it also means the block is only 460 sqm, which is why you're not paying $1.5M."
+Example key_points: Anchor every feature to what it means for the price or the decision. "The park behind the fence means no rear neighbour — but it also means the block is only 460 sqm, which is why you're not paying $1.5M."
 
 INSIGHT 2 — CONDITION vs PRICE (Principles #1, #5 — what the renovation saves you):
 Frame the renovation as money the buyer DOESN'T have to spend. Price the gap between what's done and what's not.
@@ -1549,6 +1562,7 @@ KEY POINT WRITING RULES:
   "insights": [
     {{
       "h2": "A trade-off or tension the buyer needs resolved — with a specific number",
+      "lifestyle_hook": "1-3 sentences that make the reader WANT this property. Paint the life: Saturday morning, the commute, the evening routine. This sits ABOVE the key points and is the first thing the reader sees after the H2. It must connect the lifestyle to the PRICE — why this life costs what it costs.",
       "key_points": [
         "One fact per bullet — max 2 sentences",
         "Another fact with a **bolded key term**",
