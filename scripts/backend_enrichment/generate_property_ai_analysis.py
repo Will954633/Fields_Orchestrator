@@ -992,7 +992,7 @@ DATA CONFIDENCE RULES (CRITICAL — violations cause fact-check failures):
 - PHOTO ANALYSIS IS REAL DATA. If photo analysis shows stone benchtops (benchtop_material: "stone"), modern cabinets (cabinet_style: "modern"), condition 9/10, pool in excellent condition — these are FACTS from our AI photo analysis. Use them confidently: "stone benchtops, modern cabinetry, 9/10 condition" — not "the renovation is undisclosed."
 - What photo analysis CAN tell you: materials (stone/laminate/timber), condition scores, pool presence and condition, renovation level (fully_renovated, cosmetically_updated, etc.), cladding type, landscaping quality. USE THESE.
 - What photo analysis CANNOT tell you: the exact YEAR of renovation, the COST of renovation, WHO did the work, whether council permits were obtained. For these, say "the renovation year and spend are not disclosed in the listing data."
-- If a LISTING field shows "?" (like car_spaces), check photo analysis for the answer (garage_type). If photo analysis says "none", that's our assessment — state it as: "our photo analysis identifies no enclosed garage."
+- If a LISTING field shows "?" (like car_spaces), check the listing data and agent description for the answer. If the listing states a number of car spaces, use that. Do NOT contradict the listing based on photo analysis — our photos may not have captured the garage.
 - NEVER round or modify transaction prices. Use exact figures from the data.
 - ALWAYS cite the specific data field you're drawing from when making factual claims.
 
@@ -1004,6 +1004,14 @@ When a room (bathrooms, bedrooms, living areas) has "visible": false and ALL sco
 - You MAY note that the room was not visible and recommend inspection, but you MUST NOT characterise its condition
 - This applies to ALL renovation fields for rooms that were not photographed: bathrooms_renovated, flooring_updated, etc. If the room wasn't seen, the boolean is unreliable
 - AUTOMATIC FACT-CHECK FAILURE: Any claim about the condition or renovation status of a room with visible: false and null scores will be marked ❌ FAILED
+
+UNIVERSAL RULE — ABSENCE OF EVIDENCE IS NOT EVIDENCE OF ABSENCE:
+This rule applies to EVERYTHING, not just bathrooms:
+- If our photo analysis says garage_type: "none" — that means we didn't photograph a garage. It does NOT mean there is no garage. The listing or agent description is the authority on what exists.
+- If our photo analysis didn't capture a feature, DO NOT state the feature is missing. Just don't mention it.
+- NEVER write "no confirmed X", "no X detected", "no X identified in photos", "our analysis found no X". These all imply the feature doesn't exist when we simply didn't photograph it.
+- If the LISTING says 2 car spaces but our photos say garage_type: none — trust the listing. The agent has been to the property. Our camera might have missed the garage.
+- When in doubt, OMIT. Silence is better than a false negative. The reader can discover the garage at inspection. They cannot un-read a claim that it doesn't exist.
 
 PRE-CALCULATED DATA RULE: If the property summary contains a "PRE-CALCULATED GROWTH" section with total growth %, CAGR, and years held — use THOSE EXACT NUMBERS. Do NOT recalculate from transaction prices. Your mental arithmetic will be wrong. The pre-calculated figures are computed by code and verified. Use them verbatim.
 
@@ -1124,7 +1132,7 @@ CRITICAL DATA RULES:
 - PHOTO ANALYSIS IS EVIDENCE. If it shows stone benchtops, 9/10 condition, fully_renovated — state it as fact: "stone benchtops, modern cabinetry, scored 9/10." The photos are publicly visible — this is not a guess.
 - What you CAN claim from photos: materials, condition scores, renovation level, pool condition, cladding type. These are real observations.
 - What you CANNOT claim: the specific year of renovation, the cost, or whether permits were obtained. Say "the renovation year and cost are not disclosed" — NOT "the renovation is undisclosed" (the renovation itself is clearly visible).
-- If car_spaces is "?" but garage_type is "none" in photo analysis, state: "no enclosed garage identified in photo analysis."
+- If car_spaces is "?" and garage_type is "none" in photo analysis, DO NOT claim there is no garage. Our photos simply may not have captured it. Use the listing data or agent description for parking info. If no info exists at all, omit parking from your analysis entirely.
 - Use room dimensions from competing listings and sold properties to price feature gaps.
 - Every claim must be traceable to a specific field in the data."""
 
