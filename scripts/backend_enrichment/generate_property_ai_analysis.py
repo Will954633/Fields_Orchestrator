@@ -1309,7 +1309,7 @@ VERDICT: "{verdict}"
 
 For meta_title: Pick the single most click-worthy tension from the lines above and compress it to ≤60 chars. Or write something better. The bar is the best H2 above — not a generic summary.
 
-For meta_description: Pick the most surprising or tension-creating line from above and adapt it to ≤155 chars. Or combine two. The bar is: would this make someone click Fields INSTEAD of Domain?
+For meta_description: Use your sub_headline. The sub_headline is already the strongest hook — just copy it exactly as meta_description. Do NOT write a separate, weaker version.
 
 FULL INSIGHTS (for context):
 {insights_text}
