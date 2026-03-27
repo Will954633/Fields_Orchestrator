@@ -1097,10 +1097,11 @@ BUILD THE PROPERTY NARRATIVE:
 1. THE BUILD STORY: Condition score, renovation status, build quality. A 9/10 rebuild justifies a premium. A 7/10 original does not. State it clearly.
 
 2. VALUE EQUATIONS FOR EVERY TRADE-OFF:
-   For EVERY attribute that is at or below the suburb median, frame it as a value equation:
-   - Name the attribute and its value (e.g. "Master bedroom: 14.8 sqm, 51st percentile")
+   For EVERY attribute that is at or below the suburb average, frame it as a value equation in PLAIN LANGUAGE:
+   - Name the attribute and how it compares: "The master bedroom is 14.8 sqm — smaller than most homes in the suburb"
+   - NEVER use percentiles (30th percentile, 81st percentile). Say "smaller than most", "bigger than average", "one of the largest", "about typical"
    - Show what the ALTERNATIVE costs by citing competing listings or recent sales with better specs
-   - Example: "The master at 14.8 sqm is adequate but not generous. 7 Seahawk Crescent sold for $1,850,000 with a 16.3 sqm master on a similar 639 sqm lot. The extra room comes at a price — and without the pool."
+   - Example: "The master at 14.8 sqm is on the small side. 7 Seahawk Crescent sold for $1,850,000 with a 16.3 sqm master on a similar lot. That extra space costs roughly $50,000 more — and you lose the pool."
    - ALWAYS follow the trade-off with what the buyer GETS in exchange (location, pool, renovation, outdoor space)
 
 3. OUTCOME FRAMING: What is the buyer actually buying?
@@ -1165,10 +1166,11 @@ BUILD THE MARKET NARRATIVE:
    - If this property has a rare spec combination (only 1 of 3 with 5+ beds), state it with data.
    - NEVER manufacture urgency. If there's no genuine scarcity, don't pretend there is.
 
-3. SUBURB TREND — SPECIFIC NUMBERS:
-   - Median trajectory with exact quarterly figures and sample sizes
+3. SUBURB TREND — SPECIFIC NUMBERS IN PLAIN LANGUAGE:
+   - Use "typical price" not "median" — say "The typical Robina house sold for $1,379,000 last quarter"
    - Year-on-year change with the actual percentage
-   - If sample size is small (< 25 sales), flag it: "the latest median rests on N sales"
+   - If sample size is small (< 25 sales), flag it: "that number is based on only N sales, so take it with a grain of salt"
+   - NEVER use "absorption rate", "percentile", "coefficient of variation" or any statistical jargon
 
 4. CONFIDENCE THROUGH SPECIFICITY (Principle #1):
    - Every market claim must have a number attached. "The market is strong" → banned. "Median rose 12% YoY on 34 sales" → good.
@@ -1245,11 +1247,35 @@ CRITICAL — WHAT NEVER TO DO:
 - NEVER use Fields-internal language or industry jargon. Your audience is a member of the general public scrolling Google results who has NEVER heard of Fields Estate and knows nothing about our processes. Terms like "automated valuation ceiling", "comparable range", "reconciled valuation", "adjustment model", "confidence level", "SHAP adjustments" are meaningless to them. Use plain language a buyer would understand: "asking price", "what similar homes sold for", "what the data shows".
 - NEVER reference Fields-specific tools, models, or methodology in the headline/sub-headline/verdict. The BODY can explain methodology. The headline must speak to a cold audience.
 
-GOOD HEADLINE PATTERNS (pass both tests):
-- "Fully renovated, park-backed, pool — here's what the data says about 25 Dotterel Drive." (confidence + specificity)
-- "The renovation is 9/10. The location is 1.5 km from the beach. We ran the comparables." (evidence-led)
-- "What $2,345,000 buys in Burleigh Waters right now — and why this one stands out." (price as story)
-- "A finished home on 641 sqm with nothing left to do. The data behind the asking price." (outcome + evidence)
+THE HEADLINE MUST CREATE A TENSION THE READER NEEDS TO RESOLVE BY CLICKING.
+
+Every great property headline contains a CONTRADICTION, QUESTION, or PRICE TENSION. The reader sees it and thinks "wait, how is that possible?" or "I need to know more." Generic descriptions of the property ("Renovated 4-bed with pool") are what Domain already shows — there's zero reason to click Fields instead.
+
+HEADLINE FORMULA — PICK THE ONE THAT FITS:
+
+1. PRICE TENSION: Surface the gap between what you'd expect and what it costs.
+   "Comparable sales say low $1M. The guide might say $1.4M. Here's what explains the gap."
+   "Bought for $770K. Rebuilt from scratch. Now asking $2.975M — here's every dollar in between."
+
+2. CURIOSITY CONTRADICTION: Two facts that seem like they shouldn't coexist.
+   "7/10 kitchen, park frontage, cul-de-sac — and still one of Robina's most affordable houses. Why?"
+   "9/10 finish, pool, 1 km to the beach — and it's been on the market for 47 days. Here's the data."
+
+3. BUYER'S REAL QUESTION: Ask what the buyer is actually thinking.
+   "What does 'Contact Agent' actually mean when the comps say $1M?"
+   "Is this the cheapest way into Burleigh Waters — or is something missing?"
+
+4. TRADE-OFF HOOK: Name what you get AND what you give up. Let the reader decide.
+   "Park behind the fence, renovated kitchen — but 142 sqm. What are you giving up for the price?"
+   "The biggest patio in the suburb. The smallest floor plan. We priced the trade-off."
+
+NEVER WRITE THESE (they are invisible in Google results):
+- "[Features] — here's what the data says" (filler ending)
+- "[Features] — we ran the comparables" (who cares?)
+- "[Features] — must read insights you need to know" (empty)
+- Any headline that is just a list of specs with a generic hook appended
+
+QUALITY CHECK: Read your headline out loud. If it sounds like it could be a Domain listing description, throw it out. A Fields headline makes the reader STOP SCROLLING because something doesn't add up and they need to find out why.
 
 You are NOT allowed to change the editorial body. You write ONLY:
 1. headline (max 80 chars)
@@ -1272,7 +1298,21 @@ VERDICT: "{verdict}"
 TECHNICAL RULES:
 - meta_title and meta_description must use listing DATE (e.g. "Listed since 10 February 2026") not day counts
 - The headline must be SPECIFIC to this property — if you could swap the address and it still works, rewrite it
-- sub_headline frames the buyer's opportunity, not the buyer's dilemma
+
+SUB-HEADLINE RULES:
+The sub-headline is the second line the buyer reads. If the headline creates tension, the sub-headline ESCALATES it — it does NOT resolve it (that's what the article is for).
+
+BAD sub-headlines (flat summaries, no reason to read further):
+- "3-bed on 460 sqm backing onto Fern Tree Park, partially renovated with 9/10 layout efficiency."
+- "A cosmetically updated four-bed on a quiet crescent. Listed since 20 March 2026."
+These are listing descriptions. The buyer already has these from Domain.
+
+GOOD sub-headlines (escalate the tension, make the reader need the article):
+- "The comps say low $1M. The renovated kitchen says more. We broke down every adjustment."
+- "Every comparable that sold nearby was bigger, had more bedrooms, and cost more. So what's this one actually worth?"
+- "The park behind the fence is priceless. The 142 sqm floor plan is not. We did the maths on both."
+
+The sub-headline should make the reader think "I need to read this article to find out."
 
 OUTPUT as JSON only — no markdown, no code fences:
 {{
@@ -1390,24 +1430,24 @@ STRUCTURE — INSIGHTS MUST FOLLOW THIS ORDER:
 
 INSIGHT 1 — WHO + OUTCOME (Principles #11, #2, #5):
 Name the ideal buyer. Paint the life they'd live. Make them self-select: "that's me."
-If the property is walking distance to a beach, park, school — THIS is where it goes.
-Example lead: "This is a home for someone who's done renovating — pool, park, 19 minutes to Burleigh Beach, everything finished."
-Example detail: "The covered patio seats a dozen people. The park behind the fence means no rear neighbour. Nobby Beach is 1.5 km — an easy walk. Burleigh Heads Beach, one of the most iconic urban beaches in Australia, is the same distance. Single level, no stairs, no weekends spent on tradies. This is the home where your life starts working the way you imagined when you moved to the Gold Coast."
+BUT — even in this section, connect lifestyle to VALUE. Why is this lifestyle available at this price?
+Example H2: "Park behind the fence, renovated kitchen, cul-de-sac — and possibly one of Robina's most affordable houses. Here's what the trade-off looks like."
+Example key_points: Paint the lifestyle with specifics, but anchor every feature to what it means for the price or the decision. "The park behind the fence means no rear neighbour — but it also means the block is only 460 sqm, which is why you're not paying $1.5M."
 
-INSIGHT 2 — THE PHYSICAL PROOF (Principles #1, #5 expanded — Perception Drives Value):
-Now back up the emotional promise with physical evidence. Renovation quality, condition scores, specific features.
-Example lead: "The renovation is 9/10 across every room — and the seller spent the money so you don't have to."
-Example detail: "Stone benchtops, modern cabinetry, renovated bathrooms, updated flooring throughout. Purchased for $880,000 in September 2016 and fully renovated since — at 172.3% total growth, the renovation is doing most of the heavy lifting. Each renovation quality point is worth approximately $25,000 in this market. You are not buying a project. You are buying the result."
+INSIGHT 2 — CONDITION vs PRICE (Principles #1, #5 — what the renovation saves you):
+Frame the renovation as money the buyer DOESN'T have to spend. Price the gap between what's done and what's not.
+Example H2: "7/10 kitchen, 8/10 bathroom — the renovation is partial, and the $80,000 gap to 'fully done' is the reason this isn't priced at $1.3M."
+Example key_points: NEVER just list features. For every feature, say what it would COST if it wasn't done, or what it's WORTH compared to alternatives. "The kitchen renovation runs $25,000–$40,000 — that's money you're not spending. But the flooring hasn't been touched, and that's another $8,000–$15,000 if it bothers you."
 
-INSIGHT 3 — THE PRICE STORY (Principles #7, #11 — they now WANT the justification):
-Now the reader is emotionally engaged and has seen the quality. Give them the financial framework.
-Example lead: "Comparable sales adjust to $2,160,000–$3,365,000 for this spec — and the asking price sits in the lower half."
-Example detail: "4 Curlew Crescent sold for $3,500,000 with 187 sqm on 607 sqm — adjusting for the floor area gap and cladding difference, that sale points to $3,365,000 for this property's spec. 17 Beaconsfield Drive sold for $1,600,000 as a 3-bed on 420 sqm — adjusted up for the extra bedroom, land, and beach proximity, that points to $2,160,000. The asking price of $2,345,000 sits in the lower half of that range. The market will decide — but the data says you're not overpaying."
+INSIGHT 3 — THE PRICE STORY (Principles #7, #11 — comparable evidence):
+Now give the financial framework. What did similar homes sell for? Where does this one sit?
+Example H2: "Every comp that sold was bigger, had more bedrooms, and cost more. After adjustments, they point to $960K–$1.2M for this spec."
+Example key_points: Name the comps, cite the sold prices, explain the key adjustments in plain language. "22 Camberwell Circuit sold for $1,345,000 — but that was a 4-bed on 800 sqm with 213 sqm of floor area. After adjusting down for the extra bedroom, bigger lot, and more floor space, that sale points to about $1M for a home like this one."
 
-INSIGHT 4 — THE TRADE-OFFS (Principles #3, #4 — trust through honesty, LAST before flood):
-Now — and only now — address the weaknesses. The reader already wants the property. Trust is built by showing them what they need to know.
-Example lead: "173 sqm of floor area is median for the suburb — and that's the trade-off that makes this price possible."
-Example detail: "At the 51st percentile, this is not a large home. 36 Kingfisher Crescent offers 314 sqm for $2,495,000 — 141 sqm more for roughly $150,000 more in asking price. But Kingfisher isn't renovated to 9/10. Using the $3,000/sqm adjustment rate, the floor area gap prices at $423,000. Factor in the renovation spend you'd face there and the headline difference narrows. The smaller footprint is the cost of buying finished. Whether that works depends on how many square metres your life actually needs."
+INSIGHT 4 — THE TRADE-OFFS THAT MAKE THE PRICE (Principles #3, #4):
+This is the section that explains WHY the property is priced where it is. Every "weakness" is framed as the reason the buyer gets the price they're getting.
+Example H2: "142 sqm, 3 bedrooms, no pool — that's roughly $200,000 in adjustments that keep this under $1.2M. Here's the maths."
+Example key_points: Price every trade-off. "No pool — homes with a pool in Robina sell for about $50,000–$80,000 more. Three bedrooms instead of four — that's another $60,000–$90,000 based on comparable sales. Smaller than average floor plan — at $3,000 per sqm, the 30 sqm gap to the suburb average costs roughly $90,000. Add it up and you see exactly why this home is priced where it is — and what you'd need to spend to close each gap."
 
 FLOOD — always last insight or dedicated section. Never before Insight 4.
 
@@ -1430,6 +1470,25 @@ OUTPUT: JSON — no markdown, no code fences.
 
 NOTE: Do NOT include headline, sub_headline, meta_title, or meta_description — those are handled by the Sabri Suby specialist.
 
+CRITICAL — THE BACKBONE OF EVERY INSIGHT IS TRADE-OFFS TO PRICE:
+
+This is the most important instruction in the entire prompt. Every section of the editorial exists to help the buyer understand ONE thing: what am I getting for the price, and what am I giving up?
+
+A FEATURE DUMP looks like: "The covered timber deck measures 7.5 × 2.8 metres with translucent roofing, pendant lighting, and direct access from the dining area via timber-framed glass doors."
+Nobody cares. That's an agent listing. The buyer can see the photos.
+
+A TRADE-OFF-TO-PRICE INSIGHT looks like: "The deck is 21 sqm — good for a family dinner, tight for a party of 20. Most homes at this price in Robina have a pool and a bigger outdoor area. This one trades pool and patio size for a renovated interior and park frontage."
+
+See the difference? The second version tells the buyer what the feature MEANS in the context of what they're paying and what the alternatives look like.
+
+EVERY KEY POINT MUST ANSWER ONE OF THESE:
+- "What does this feature save you compared to alternatives?" (value)
+- "What are you giving up by buying this instead of X?" (trade-off)
+- "What would it cost to add this / fix this?" (upgrade cost)
+- "How does this compare to what else is available at this price?" (positioning)
+
+If a key point is just a description of a feature with dimensions, it fails. Rewrite it as a trade-off.
+
 CRITICAL — STRUCTURED INSIGHT FORMAT (v2):
 Each insight must be a structured object with separate arrays for key_points and what_this_means.
 Do NOT write a single "detail" paragraph — the frontend renders key_points as individual bullet items
@@ -1439,10 +1498,18 @@ Use **bold** markers on key terms within key_points (e.g. "**Stone benchtops** a
 For the Price Analysis insight (insight 3), include a "comparables" array with structured comparable data.
 For other insights, set comparables to null.
 
+KEY POINT WRITING RULES:
+- BAD: "The kitchen features stone benchtops, shaker cabinetry, and a breakfast bar." (feature dump)
+- GOOD: "The kitchen scores 7/10 — stone-look benchtops and shaker cabinetry. That's above average for the suburb, and it's already done. A kitchen renovation runs $25,000–$40,000, so this is money you're NOT spending."
+- BAD: "The living room measures 6.2 × 4.3 metres with raked ceilings and exposed beams." (so what?)
+- GOOD: "The living room is the biggest single space in the house at 27 sqm — raked ceilings make it feel even larger. For a 142 sqm home, the builder put the space where it counts."
+- BAD: "Split-system air conditioning is installed across multiple rooms." (listing copy)
+- GOOD: "Split-system AC, not ducted. A ducted retrofit would run $15,000–$25,000. At this price point, most competing homes have it. Factor that in or live with split systems."
+
 {{
   "insights": [
     {{
-      "h2": "Bold opening line — 8-15 words with a specific number, conversational",
+      "h2": "A trade-off or tension the buyer needs resolved — with a specific number",
       "key_points": [
         "One fact per bullet — max 2 sentences",
         "Another fact with a **bolded key term**",
