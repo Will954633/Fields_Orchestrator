@@ -2801,6 +2801,34 @@ def process_property(db, suburb: str, prop: Dict, api_key: str, force: bool = Fa
     print(f"Processing: {address}")
     print(f"{'='*60}")
 
+    # Pre-step 0: Data readiness gate — check floor plan analysis
+    has_floor_plans = bool(prop.get("floor_plans") or prop.get("scraped_floor_plans"))
+    has_floor_plan_data = bool(
+        prop.get("floor_plan_analysis")
+        or prop.get("house_plan", {}).get("floor_area_sqm")
+        or prop.get("enriched_data", {}).get("floor_area_sqm")
+        or prop.get("floor_area")
+    )
+    missing_alerts = []
+    if has_floor_plans and not has_floor_plan_data:
+        missing_alerts.append("Floor plans exist but floor plan analysis has not been processed — run step 106 first")
+    if not prop.get("image_analysis") and not prop.get("photo_analysis"):
+        missing_alerts.append("Photo analysis has not been processed — run step 105 first")
+
+    if missing_alerts and not force:
+        alert_data = {
+            "status": "needs_review",
+            "alerts": missing_alerts,
+            "alert_created_at": datetime.now(timezone.utc).isoformat(),
+            "headline": f"[ALERT] {address} — missing prerequisite data",
+        }
+        cosmos_retry(lambda: db[suburb].update_one(
+            {"_id": prop_id},
+            {"$set": {"ai_analysis": alert_data}},
+        ), "alert_missing_data")
+        print(f"[ALERT] {address} — skipped, missing data: {'; '.join(missing_alerts)}")
+        return alert_data
+
     # Pre-step: Ensure zoning + flood + ICA data exists before generating content
     if not prop.get("zoning_data") or not prop["zoning_data"].get("ica_flood_zones"):
         print("[0/5] Enriching zoning + flood + ICA data...")
