@@ -2771,11 +2771,8 @@ def store_analysis(db, suburb: str, property_id, analysis: Dict) -> None:
     """Write ai_analysis field to the property document."""
     analysis["generated_at"] = datetime.now(timezone.utc).isoformat()
     analysis["model"] = PIPELINE_CONFIG["models"]["editor"]
-    # If fact-check failed after all retries, mark as failed — don't show in review queue
-    if analysis.get("_factcheck_status") == "failed":
-        analysis["status"] = "failed_factcheck"
-    else:
-        analysis["status"] = analysis.get("status", "draft")  # draft until human review
+    # Draft 1 content is always usable — even if Draft 2 rewrite failed, show in ops review
+    analysis["status"] = analysis.get("status", "draft")
 
     cosmos_retry(lambda: db[suburb].update_one(
         {"_id": property_id},
@@ -2828,6 +2825,42 @@ def process_property(db, suburb: str, prop: Dict, api_key: str, force: bool = Fa
         ), "alert_missing_data")
         print(f"[ALERT] {address} — skipped, missing data: {'; '.join(missing_alerts)}")
         return alert_data
+
+    # Pre-step: Ensure valuation data exists — agents must not make price claims without it
+    vd = prop.get("valuation_data", {})
+    has_valuation = bool(vd.get("confidence", {}).get("reconciled_valuation") or vd.get("reconciled_valuation"))
+    if not has_valuation:
+        print("[0.1/5] No valuation data — attempting precompute...")
+        try:
+            import subprocess
+            val_script = Path("/home/fields/Feilds_Website/07_Valuation_Comps/precompute_valuations.py")
+            if val_script.exists():
+                result = subprocess.run(
+                    ["python3", str(val_script)],
+                    cwd=str(val_script.parent),
+                    capture_output=True, text=True, timeout=600,
+                    env={**os.environ, "PYTHONUNBUFFERED": "1"},
+                )
+                # Reload property to pick up new valuation
+                prop_refreshed = cosmos_retry(lambda: db[suburb].find_one({"_id": prop_id}), "reload_prop")
+                if prop_refreshed:
+                    new_vd = prop_refreshed.get("valuation_data", {})
+                    new_reconciled = new_vd.get("confidence", {}).get("reconciled_valuation") or new_vd.get("reconciled_valuation")
+                    if new_reconciled:
+                        prop["valuation_data"] = new_vd
+                        print(f"  Valuation computed: ${new_reconciled:,.0f}")
+                    else:
+                        print(f"  [WARN] Valuation precompute ran but no valuation produced for this property (may be excluded by model)")
+                        missing_alerts.append("Valuation model could not produce a valuation for this property — price claims in editorial will be based on agent estimates only")
+            else:
+                print(f"  [WARN] Valuation script not found at {val_script}")
+        except subprocess.TimeoutExpired:
+            print("  [WARN] Valuation precompute timed out after 600s")
+        except Exception as e:
+            print(f"  [WARN] Valuation precompute failed: {e}")
+    else:
+        reconciled = vd.get("confidence", {}).get("reconciled_valuation") or vd.get("reconciled_valuation")
+        print(f"[0.1/5] Valuation exists: ${reconciled:,.0f}")
 
     # Pre-step: Ensure zoning + flood + ICA data exists before generating content
     if not prop.get("zoning_data") or not prop["zoning_data"].get("ica_flood_zones"):
