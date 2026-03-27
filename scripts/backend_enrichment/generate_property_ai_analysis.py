@@ -1309,7 +1309,7 @@ VERDICT: "{verdict}"
 
 For meta_title: Pick the single most click-worthy tension from the lines above and compress it to ≤60 chars. Or write something better. The bar is the best H2 above — not a generic summary.
 
-For meta_description: Use your sub_headline. The sub_headline is already the strongest hook — just copy it exactly as meta_description. Do NOT write a separate, weaker version.
+NOTE: You do NOT need to write meta_description — it is automatically set to your sub_headline by the system. Focus your effort on headline, sub_headline, and meta_title.
 
 FULL INSIGHTS (for context):
 {insights_text}
@@ -2598,7 +2598,7 @@ def run_multi_agent_pipeline(
     result["headline"] = sabri_result["headline"]
     result["sub_headline"] = sabri_result["sub_headline"]
     result["meta_title"] = sabri_result["meta_title"]
-    result["meta_description"] = sabri_result["meta_description"]
+    result["meta_description"] = sabri_result["sub_headline"]  # hardcoded: sub_headline IS the meta description
     result["_sabri_suggested_h2s"] = sabri_result.get("suggested_h2s", [])
 
     # -----------------------------------------------------------------------
@@ -2693,7 +2693,7 @@ def run_multi_agent_pipeline(
             result["headline"] = sabri_final["headline"]
             result["sub_headline"] = sabri_final["sub_headline"]
             result["meta_title"] = sabri_final["meta_title"]
-            result["meta_description"] = sabri_final["meta_description"]
+            result["meta_description"] = sabri_final["sub_headline"]  # hardcoded: sub_headline IS the meta description
             result["_sabri_suggested_h2s"] = sabri_final.get("suggested_h2s", [])
             print(f"    Done ({time.time()-t0:.1f}s) — \"{sabri_final['headline']}\"")
         except Exception as e:
