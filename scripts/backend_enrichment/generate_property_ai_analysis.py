@@ -1293,10 +1293,26 @@ You are NOT allowed to change the editorial body. You write ONLY:
 5. suggested_h2s — one suggested H2 lead line per insight
 
 --- THE EDITORIAL BODY (your headline must hook readers INTO this content) ---
-INSIGHTS:
-{insights_text}
+
+=== BEST LINES FROM THE EDITORIAL (use these as raw material for meta_title and meta_description) ===
+These are the strongest lines the editor produced. Your meta_title and meta_description should be EQUAL TO OR BETTER than the best of these. If you can't beat them, pick the most compelling one and compress it to fit.
+
+SECTION H2s:
+{chr(10).join(f'  {["The Property", "Condition & Value", "Price Analysis", "Market Position"][i] if i < 4 else "Section"}: "{ins.get("h2", ins.get("lead", ""))}"' for i, ins in enumerate(editor_body.get("insights", [])))}
+
+LIFESTYLE HOOKS:
+{chr(10).join(f'  {["The Property", "Condition & Value", "Price Analysis", "Market Position"][i] if i < 4 else "Section"}: "{ins.get("lifestyle_hook", "(none)")}"' for i, ins in enumerate(editor_body.get("insights", [])) if ins.get("lifestyle_hook"))}
 
 VERDICT: "{verdict}"
+
+=== END BEST LINES ===
+
+For meta_title: Pick the single most click-worthy tension from the lines above and compress it to ≤60 chars. Or write something better. The bar is the best H2 above — not a generic summary.
+
+For meta_description: Pick the most surprising or tension-creating line from above and adapt it to ≤155 chars. Or combine two. The bar is: would this make someone click Fields INSTEAD of Domain?
+
+FULL INSIGHTS (for context):
+{insights_text}
 
 --- PROPERTY DATA (context only) ---
 {prop_summary_sanitized[:3000]}
