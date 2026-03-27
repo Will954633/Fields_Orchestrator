@@ -1296,30 +1296,69 @@ VERDICT: "{verdict}"
 ---
 
 TECHNICAL RULES:
-- meta_title and meta_description must use listing DATE (e.g. "Listed since 10 February 2026") not day counts
 - The headline must be SPECIFIC to this property — if you could swap the address and it still works, rewrite it
 
 SUB-HEADLINE RULES:
 The sub-headline is the second line the buyer reads. If the headline creates tension, the sub-headline ESCALATES it — it does NOT resolve it (that's what the article is for).
 
-BAD sub-headlines (flat summaries, no reason to read further):
-- "3-bed on 460 sqm backing onto Fern Tree Park, partially renovated with 9/10 layout efficiency."
+BAD sub-headlines (flat summaries):
+- "3-bed on 460 sqm backing onto Fern Tree Park, partially renovated."
 - "A cosmetically updated four-bed on a quiet crescent. Listed since 20 March 2026."
-These are listing descriptions. The buyer already has these from Domain.
 
-GOOD sub-headlines (escalate the tension, make the reader need the article):
+GOOD sub-headlines (escalate tension):
 - "The comps say low $1M. The renovated kitchen says more. We broke down every adjustment."
 - "Every comparable that sold nearby was bigger, had more bedrooms, and cost more. So what's this one actually worth?"
-- "The park behind the fence is priceless. The 142 sqm floor plan is not. We did the maths on both."
 
-The sub-headline should make the reader think "I need to read this article to find out."
+=== GOOGLE SEARCH RESULT INSTRUCTIONS (MOST IMPORTANT PART OF YOUR JOB) ===
+
+The meta_title and meta_description are what appear in Google search results. This is the ONLY chance to get a click. Here's the competitive reality:
+
+When someone searches "25 Dotterel Drive Burleigh Waters" they see:
+  1. Domain.com.au — "25 Dotterel Drive, Burleigh Waters QLD 4220 | Property Details"
+  2. realestate.com.au — "25 Dotterel Drive, Burleigh Waters, QLD 4220 | realestate.com.au"
+  3. US — "25 Dotterel Dr — [YOUR META TITLE] | Fields Estate"
+
+The buyer is NOT looking for us. They want Domain or REA. Our meta title must DISRUPT their scroll — make them think "wait, what's that?" and click us INSTEAD of the trusted brand.
+
+META TITLE RULES (max 60 chars):
+- Must contain the TENSION from the headline, compressed
+- Must feel like it answers a question Domain CAN'T answer
+- NEVER just be the address + "| Fields Estate" — that's invisible
+- NEVER use "Review" or "Property Details" — that's what Domain says
+
+BAD meta titles:
+- "25 Dotterel Dr Burleigh Waters Review | Fields" (invisible, generic)
+- "25 Dotterel Dr, Burleigh Waters | Fields Estate" (copy of Domain)
+- "Property Analysis — 25 Dotterel Drive | Fields" (nobody cares)
+
+GOOD meta titles (disrupt the scroll):
+- "25 Dotterel Dr — $255K Below Top Comp. Why? | Fields" (price tension)
+- "25 Dotterel Dr — We Priced Every Trade-Off | Fields" (curiosity)
+- "Is 25 Dotterel Dr Worth $2.345M? The Data Says... | Fields" (question)
+- "25 Dotterel Dr — 9/10 Finish But 3 Catches | Fields" (contradiction)
+
+META DESCRIPTION RULES (max 155 chars):
+- Opens with the most surprising or tension-creating fact
+- Includes a specific number ($, sqm, score) in the first 60 chars
+- Ends with an implicit reason to click: "We broke it down" / "Here's every adjustment"
+- MUST feel like it promises information Domain doesn't have
+
+BAD meta descriptions:
+- "View property details, photos, and floor plans for 25 Dotterel Drive." (Domain says this)
+- "Listed since 26 March 2026. Renovated 3-bed backing park." (flat summary)
+
+GOOD meta descriptions:
+- "9/10 finish, pool, 80m to park — but weatherboard, 173 sqm, no garage. We priced each trade-off. Here's what it's actually worth."
+- "Comps say $960K–$1.2M. The asking price says $1.4M. We show exactly where the gap comes from — and whether the renovation justifies it."
+
+The meta_description is your 155-character sales pitch. If it sounds like a listing description, the buyer clicks Domain instead. If it sounds like insider knowledge they can't get anywhere else, they click Fields.
 
 OUTPUT as JSON only — no markdown, no code fences:
 {{
-  "headline": "max 80 chars — specific, confident, passes both seller and click tests",
-  "sub_headline": "max 150 chars — the opportunity framed in one sentence, uses listing DATE",
-  "meta_title": "max 60 chars — SEO title | Fields Estate",
-  "meta_description": "max 155 chars — what the reader will learn, uses listing DATE",
+  "headline": "max 80 chars — tension/curiosity hook that makes the buyer need to click",
+  "sub_headline": "max 150 chars — escalates the headline tension, does NOT resolve it",
+  "meta_title": "max 60 chars — disrupts Google scroll, contains price tension or contradiction",
+  "meta_description": "max 155 chars — promises insider knowledge Domain can't offer, opens with surprising number",
   "suggested_h2s": ["H2 for insight 1", "H2 for insight 2", "H2 for insight 3"]
 }}"""
 
