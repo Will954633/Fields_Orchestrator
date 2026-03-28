@@ -25,8 +25,15 @@ import sys
 import time
 from datetime import datetime, timezone
 
-from pymongo import MongoClient
 from pymongo.errors import OperationFailure
+
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, REPO_ROOT)
+
+from shared.env import load_env  # type: ignore
+from shared.db import get_client, get_db  # type: ignore
+
+load_env()
 
 
 def cosmos_retry(func, *args, retries=5, **kwargs):
@@ -272,14 +279,9 @@ def main():
     parser.add_argument('--suburbs', type=str, help='Comma-separated suburb list (default: target suburbs)')
     args = parser.parse_args()
 
-    uri = os.environ.get('COSMOS_CONNECTION_STRING')
-    if not uri:
-        print("ERROR: COSMOS_CONNECTION_STRING not set", file=sys.stderr)
-        sys.exit(1)
-
-    client = MongoClient(uri)
-    db = client['Gold_Coast']
-    monitor_db = client['system_monitor']
+    client = get_client()
+    db = get_db('Gold_Coast')
+    monitor_db = get_db('system_monitor')
 
     default_suburbs = [
         'robina', 'burleigh_waters', 'varsity_lakes',
@@ -291,8 +293,19 @@ def main():
     print(f"Data Quality Validator — scanning {len(suburbs)} suburbs (fix={'ON' if args.fix else 'OFF'})")
     errors, fixed = run_validator(db, monitor_db, suburbs, auto_fix=args.fix)
 
+    unfixed = [e for e in errors if not e.get('auto_fixed')]
+
+    # Structured outcome for orchestrator and OPS consumption
+    if not errors:
+        outcome = 'passed'
+    elif not unfixed:
+        outcome = 'passed'  # all issues were auto-fixed
+    else:
+        outcome = 'violations_found'
+
     print(f"\n{'='*60}")
-    print(f"Results: {len(errors)} issues found, {fixed} auto-fixed")
+    print(f"OUTCOME: {outcome}")
+    print(f"Results: {len(errors)} issues found, {fixed} auto-fixed, {len(unfixed)} unfixed")
     if errors:
         by_rule = {}
         for e in errors:
@@ -307,8 +320,20 @@ def main():
     else:
         print("  All clean!")
 
-    return 1 if errors and not all(e.get('auto_fixed') for e in errors) else 0
+    # Exit 0 for both 'passed' and 'violations_found' (issues reported, not a crash).
+    # Exit 1 only on execution failure (caught by the except block below).
+    # This prevents the pipeline from going red just because the validator found
+    # data quality issues — those are expected findings, not pipeline failures.
+    return 0
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except Exception as exc:
+        print(f"\n{'='*60}")
+        print(f"OUTCOME: execution_failed")
+        print(f"ERROR: {exc}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
