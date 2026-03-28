@@ -2988,19 +2988,16 @@ def process_property(db, suburb: str, prop: Dict, api_key: str, force: bool = Fa
     # Store
     store_analysis(db, suburb, prop_id, analysis)
 
-    # Post-store: flag needs_review if any alerts accumulated during pre-steps
-    # (valuation missing, floor plans unprocessed, etc.)
+    # Post-store: attach alerts if any data gaps found, but keep status as draft
+    # so it appears in the default ops dashboard view
     if missing_alerts:
         existing_alerts = analysis.get("_alerts", [])
         all_alerts = existing_alerts + missing_alerts
         cosmos_retry(lambda: db[suburb].update_one(
             {"_id": prop_id},
-            {"$set": {
-                "ai_analysis.status": "needs_review",
-                "ai_analysis.alerts": all_alerts,
-            }}
+            {"$set": {"ai_analysis.alerts": all_alerts}}
         ), "flag_missing_val")
-        print(f"  Flagged as needs_review — {len(all_alerts)} alert(s): {'; '.join(all_alerts)}")
+        print(f"  ⚠️  {len(all_alerts)} alert(s) attached: {'; '.join(all_alerts)}")
 
     return analysis
 
