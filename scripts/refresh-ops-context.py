@@ -190,9 +190,9 @@ def fetch_api_health(db):
     """Get latest health check per endpoint."""
     col = db["system_monitor"]["api_health_checks"]
     # Only fetch checks from the last 24h (prevents stale legacy records from dominating)
-    # Use naive datetime since Cosmos stores naive datetimes
+    # api-health-check.py stores naive UTC datetimes, so use naive cutoff to match
     recent_cutoff = datetime.utcnow() - timedelta(hours=24)
-    docs = list(col.find({"checked_at": {"$gte": recent_cutoff}}).limit(200))
+    docs = list(col.find({"checked_at": {"$gte": recent_cutoff}}).sort("checked_at", -1).limit(500))
     docs.sort(key=lambda d: d.get("checked_at") or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
     # Latest per endpoint
     seen = {}
@@ -204,12 +204,15 @@ def fetch_api_health(db):
     results.sort(key=lambda d: d.get("endpoint", ""))
 
     # Freshness gate: mark any check older than 12h as stale
-    stale_cutoff = datetime.utcnow() - timedelta(hours=12)
+    stale_cutoff_utc = datetime.now(timezone.utc) - timedelta(hours=12)
     for r in results:
         checked = r.get("checked_at")
-        if isinstance(checked, datetime) and checked.replace(tzinfo=None) < stale_cutoff:
-            r["healthy"] = False
-            r["stale"] = True
+        if isinstance(checked, datetime):
+            # Normalize to aware datetime for comparison
+            checked_aware = checked if checked.tzinfo else checked.replace(tzinfo=timezone.utc)
+            if checked_aware < stale_cutoff_utc:
+                r["healthy"] = False
+                r["stale"] = True
 
     # Separate founder-contract endpoints from internal/other endpoints
     contract_eps = []
