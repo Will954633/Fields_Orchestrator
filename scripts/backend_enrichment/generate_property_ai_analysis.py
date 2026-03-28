@@ -1008,12 +1008,17 @@ When a room (bathrooms, bedrooms, living areas) has "visible": false and ALL sco
 - AUTOMATIC FACT-CHECK FAILURE: Any claim about the condition or renovation status of a room with visible: false and null scores will be marked ❌ FAILED
 
 UNIVERSAL RULE — ABSENCE OF EVIDENCE IS NOT EVIDENCE OF ABSENCE:
-This rule applies to EVERYTHING, not just bathrooms:
-- If our photo analysis says garage_type: "none" — that means we didn't photograph a garage. It does NOT mean there is no garage. The listing or agent description is the authority on what exists.
-- If our photo analysis didn't capture a feature, DO NOT state the feature is missing. Just don't mention it.
-- NEVER write "no confirmed X", "no X detected", "no X identified in photos", "our analysis found no X". These all imply the feature doesn't exist when we simply didn't photograph it.
-- If the LISTING says 2 car spaces but our photos say garage_type: none — trust the listing. The agent has been to the property. Our camera might have missed the garage.
-- When in doubt, OMIT. Silence is better than a false negative. The reader can discover the garage at inspection. They cannot un-read a claim that it doesn't exist.
+This rule applies to EVERYTHING — bathrooms, garages, bedrooms, photos, features:
+
+YOU ARE READING OUR DATABASE, NOT THE COMPLETE LISTING. Our photo analysis system captures a subset of listing photos. If a room has "visible": false or null scores, it means OUR SYSTEM didn't capture it — NOT that the listing doesn't include it, NOT that the seller deliberately excluded it, and NOT that the photos don't exist.
+
+- NEVER say "bathrooms were not photographed" — you don't know that. Say nothing about bathrooms if you have no data.
+- NEVER say "no bathroom photos available" — the listing may have them, we just didn't process them.
+- NEVER say "no X detected", "no X identified in photos", "our analysis found no X", "not captured in our system". These all tell the reader something is missing when it may not be.
+- NEVER say "condition data not available" or "no condition score on record" — the reader doesn't know or care about our scoring system.
+- If you have no data on a room or feature, OMIT IT ENTIRELY. Don't mention it at all. Write about what you DO know.
+- The ONLY exception: if the listing explicitly states a number (e.g. "2 car spaces") but you have no detail, you may use the listing's claim. Do not contradict or qualify it.
+- When in doubt, OMIT. Silence is better than exposing the limitations of our data pipeline to the reader.
 
 PRE-CALCULATED DATA RULE: If the property summary contains a "PRE-CALCULATED GROWTH" section with total growth %, CAGR, and years held — use THOSE EXACT NUMBERS. Do NOT recalculate from transaction prices. Your mental arithmetic will be wrong. The pre-calculated figures are computed by code and verified. Use them verbatim.
 
@@ -1423,11 +1428,11 @@ YOU MUST NOT:
 - Frame missing data as a negative ("the bathrooms haven't been done")
 
 YOU MUST:
-- Say "condition data not available" or "not photographed — no condition score on record"
-- Recommend in-person inspection for rooms without data
-- Frame as a known unknown: "The bathrooms were not photographed and have no condition scores — budget accordingly or inspect carefully"
+- OMIT rooms you have no data for. Don't mention them at all.
+- Write about what you DO know — kitchens, living areas, bedrooms that were scored.
+- If the agent briefings below mention "bathrooms not photographed", "no bathroom data", "condition unknown", or similar — DELETE those references entirely. The reader does not need to know about gaps in our data pipeline.
 
-If the agent briefings below claim bathrooms are "unrenovated" based on this data, OVERRIDE THEM. The briefings are wrong on this point.
+If the agent briefings below claim bathrooms are "unrenovated" or "not photographed" — OVERRIDE THEM. Remove all references to rooms we have no data for.
 
 PRICE & VALUE ANALYST BRIEFING:
 {price_brief}
@@ -2305,7 +2310,16 @@ VALUATION LANGUAGE RULE — DO NOT FAIL approximate valuation claims:
 - The correct standard: valuation claims should be directional (above/below/within range) or use ranges. Approximate language like "roughly", "around", "in the lower half" is CORRECT, not an error.
 
 INVISIBLE ROOM RULE (AUTOMATIC FAIL):
-If the draft claims a room is "unrenovated", "untouched", "dated", "not upgraded", or describes its condition — but that room has "visible": false and null condition scores in property_valuation_data — mark it ❌ FAILED. The field "bathrooms_renovated": false is UNRELIABLE when bathrooms were not photographed. The correct claim is "condition data not available" or "not photographed".
+If the draft claims a room is "unrenovated", "untouched", "dated", "not upgraded", or describes its condition — but that room has "visible": false and null condition scores in property_valuation_data — mark it ❌ FAILED.
+
+DATA PIPELINE EXPOSURE RULE (AUTOMATIC FAIL):
+If the draft says ANY of the following, mark it ❌ FAILED:
+- "bathrooms were not photographed" or "not captured in our analysis" or "no photos available"
+- "condition data not available" or "no condition score on record"
+- "our photo analysis system" or "our system didn't capture"
+- "budget accordingly or inspect carefully" (when referring to rooms with no data)
+- Any reference to gaps, limitations, or missing data in Fields' analysis pipeline
+The reader should NEVER know which rooms our system did or didn't process. If data is missing, the room should be OMITTED from the draft entirely — not flagged as missing.
 
 ROUNDING TOLERANCE — DO NOT FAIL reasonable rounding:
 - If the draft says "25.4 sqm" and the data says 25.38 sqm — that is VERIFIED, not failed. Rounding to 1 decimal place is acceptable.
