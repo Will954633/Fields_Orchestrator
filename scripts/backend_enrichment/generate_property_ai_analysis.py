@@ -2826,41 +2826,24 @@ def process_property(db, suburb: str, prop: Dict, api_key: str, force: bool = Fa
         print(f"[ALERT] {address} — skipped, missing data: {'; '.join(missing_alerts)}")
         return alert_data
 
-    # Pre-step: Ensure valuation data exists — agents must not make price claims without it
+    # Pre-step 3: Check valuation data availability
+    # Instead of running the full precompute (which processes ALL ~341 properties),
+    # just check and flag — the editorial can proceed but will be marked needs_review
     vd = prop.get("valuation_data", {})
-    has_valuation = bool(vd.get("confidence", {}).get("reconciled_valuation") or vd.get("reconciled_valuation"))
-    if not has_valuation:
-        print("[0.1/5] No valuation data — attempting precompute...")
-        try:
-            import subprocess
-            val_script = Path("/home/fields/Feilds_Website/07_Valuation_Comps/precompute_valuations.py")
-            if val_script.exists():
-                result = subprocess.run(
-                    ["python3", str(val_script)],
-                    cwd=str(val_script.parent),
-                    capture_output=True, text=True, timeout=600,
-                    env={**os.environ, "PYTHONUNBUFFERED": "1"},
-                )
-                # Reload property to pick up new valuation
-                prop_refreshed = cosmos_retry(lambda: db[suburb].find_one({"_id": prop_id}), "reload_prop")
-                if prop_refreshed:
-                    new_vd = prop_refreshed.get("valuation_data", {})
-                    new_reconciled = new_vd.get("confidence", {}).get("reconciled_valuation") or new_vd.get("reconciled_valuation")
-                    if new_reconciled:
-                        prop["valuation_data"] = new_vd
-                        print(f"  Valuation computed: ${new_reconciled:,.0f}")
-                    else:
-                        print(f"  [WARN] Valuation precompute ran but no valuation produced for this property (may be excluded by model)")
-                        missing_alerts.append("Valuation model could not produce a valuation for this property — price claims in editorial will be based on agent estimates only")
-            else:
-                print(f"  [WARN] Valuation script not found at {val_script}")
-        except subprocess.TimeoutExpired:
-            print("  [WARN] Valuation precompute timed out after 600s")
-        except Exception as e:
-            print(f"  [WARN] Valuation precompute failed: {e}")
+    valuation_available = bool(
+        vd.get("comparables")
+        or vd.get("confidence", {}).get("reconciled_valuation")
+        or vd.get("reconciled_valuation")
+    )
+    if not valuation_available:
+        print("[0.1/5] No valuation data — editorial will proceed but flag for review")
+        missing_alerts.append("Valuation data missing — run valuation precompute (step 6) before publishing")
     else:
         reconciled = vd.get("confidence", {}).get("reconciled_valuation") or vd.get("reconciled_valuation")
-        print(f"[0.1/5] Valuation exists: ${reconciled:,.0f}")
+        if reconciled:
+            print(f"[0.1/5] Valuation exists: ${reconciled:,.0f}")
+        else:
+            print(f"[0.1/5] Valuation has comparables but no reconciled value")
 
     # Pre-step: Ensure zoning + flood + ICA data exists before generating content
     if not prop.get("zoning_data") or not prop["zoning_data"].get("ica_flood_zones"):
@@ -3004,6 +2987,20 @@ def process_property(db, suburb: str, prop: Dict, api_key: str, force: bool = Fa
 
     # Store
     store_analysis(db, suburb, prop_id, analysis)
+
+    # Post-store: flag needs_review if any alerts accumulated during pre-steps
+    # (valuation missing, floor plans unprocessed, etc.)
+    if missing_alerts:
+        existing_alerts = analysis.get("_alerts", [])
+        all_alerts = existing_alerts + missing_alerts
+        cosmos_retry(lambda: db[suburb].update_one(
+            {"_id": prop_id},
+            {"$set": {
+                "ai_analysis.status": "needs_review",
+                "ai_analysis.alerts": all_alerts,
+            }}
+        ), "flag_missing_val")
+        print(f"  Flagged as needs_review — {len(all_alerts)} alert(s): {'; '.join(all_alerts)}")
 
     return analysis
 
