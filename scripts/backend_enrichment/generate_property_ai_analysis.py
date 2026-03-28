@@ -1290,6 +1290,11 @@ NEVER WRITE THESE (they are invisible in Google results):
 - "[Features] — must read insights you need to know" (empty)
 - Any headline that is just a list of specs with a generic hook appended
 
+PRICE ACCURACY IN HEADLINES:
+- If the listing price is "Offers Over $X" or "Offers Above $X" — NEVER write "$X" as if it's the price. Write "asking above $879K" or "guide from $879K" or "offers over $879K". The qualifier matters — dropping it implies the buyer can purchase at that price.
+- If the listing is "Auction" — say "heading to auction" or "auction, no guide". NEVER invent a price.
+- If "Contact Agent" or "Price on Request" — say "no published price" or "price withheld". NEVER guess.
+
 QUALITY CHECK: Read your headline out loud. If it sounds like it could be a Domain listing description, throw it out. A Fields headline makes the reader STOP SCROLLING because something doesn't add up and they need to find out why.
 
 You are NOT allowed to change the editorial body. You write ONLY:
@@ -2331,6 +2336,9 @@ CLAIMS ABOUT COMPETING PROPERTIES — DO NOT CLAIM WHAT OTHERS LACK:
 - The draft MUST NOT state what competing properties DON'T have (e.g. "none of them have a pool house") unless that data is explicitly available in the competing listings data provided.
 - We only have basic listing data for competitors (beds, baths, price, lot size, floor area). We do NOT have their full feature lists.
 - Claims like "the only property with X" or "none of the competitors offer Y" are UNVERIFIABLE and should be marked ❌ FAILED unless the specific feature is present in the competing listings projection.
+
+PRICE QUALIFIER RULE (AUTOMATIC FAIL):
+- If the listing price contains "Offers Over", "Offers Above", "Expression of Interest", or similar qualifier — and the draft presents the number WITHOUT the qualifier (e.g. "$879K" instead of "offers above $879K") — mark it ❌ FAILED. Dropping the qualifier misleads the reader about what the property costs.
 
 FIELD NAME REFERENCES — DO NOT CITE INTERNAL FIELD NAMES:
 - The draft should NEVER reference raw database field names like "ac_ducted", "solar_visible", "floor_area_sqm", "property_valuation_data", etc.
