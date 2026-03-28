@@ -3165,6 +3165,7 @@ def main():
             query = {
                 "listing_status": "for_sale",
                 "days_on_domain": {"$lte": args.days},
+                "building_type": "House",
             }
             if not args.force:
                 query["ai_analysis"] = {"$exists": False}
@@ -3184,7 +3185,7 @@ def main():
         suburbs = [args.suburb] if args.suburb else TARGET_SUBURBS
         total = 0
         for suburb in suburbs:
-            query = {"listing_status": "for_sale"}
+            query = {"listing_status": "for_sale", "building_type": "House"}
             if not args.force:
                 query["ai_analysis"] = {"$exists": False}
             props = cosmos_retry(lambda s=suburb: list(db[s].find(query)), f"backfill_{suburb}")
