@@ -2337,6 +2337,14 @@ CLAIMS ABOUT COMPETING PROPERTIES — DO NOT CLAIM WHAT OTHERS LACK:
 - We only have basic listing data for competitors (beds, baths, price, lot size, floor area). We do NOT have their full feature lists.
 - Claims like "the only property with X" or "none of the competitors offer Y" are UNVERIFIABLE and should be marked ❌ FAILED unless the specific feature is present in the competing listings projection.
 
+INTERNAL PROCESS LEAK RULE (AUTOMATIC FAIL):
+If the draft contains ANY reference to internal processes, mark it ❌ FAILED:
+- "Draft 1", "our previous analysis", "we initially suggested", "we flagged", "that was wrong"
+- "our photo analysis system", "our scoring system", "our data pipeline"
+- "the fact-check found", "the reflection agent", "upon review"
+- Any language that narrates a correction process rather than presenting clean content
+The reader should never know that multiple drafts or internal review steps exist.
+
 PRICE QUALIFIER RULE (AUTOMATIC FAIL):
 - If the listing price contains "Offers Over", "Offers Above", "Expression of Interest", or similar qualifier — and the draft presents the number WITHOUT the qualifier (e.g. "$879K" instead of "offers above $879K") — mark it ❌ FAILED. Dropping the qualifier misleads the reader about what the property costs.
 
@@ -2426,10 +2434,16 @@ RAW PROPERTY DATA (use this to verify claims and write the flood_section — do 
 
 INSTRUCTIONS FOR DRAFT 2:
 
-0. CRITICAL: Fix every ❌ FAILED fact. If a claim was marked FAILED, correct it with actual data or REMOVE IT. Do not replace a failed claim with a new unverified claim — that just creates a new failure.
+MOST IMPORTANT RULE: Draft 2 must read as FRESH, STANDALONE content written for a buyer who has NEVER seen Draft 1.
+- NEVER reference "Draft 1", "our previous analysis", "we initially suggested", "we flagged", "that was wrong", corrections, or any internal review process.
+- NEVER narrate what changed between drafts. The reader doesn't know drafts exist.
+- NEVER mention the fact-check, reflection, or any Fields internal process.
+- Write as if this is the ONLY version that has ever existed.
+
+0. Fix every ❌ FAILED fact by writing correct content from scratch — NOT by narrating the correction.
 {angle_instruction}
 
-1. FIX issues the Reflection Agent identified. Resolve data contradictions. Use missed angles ONLY if you can cite the specific data field.
+1. FIX issues the Reflection Agent identified — but do so SILENTLY. Just write the correct version. Don't explain what was wrong before.
 
 2. Insight leads must be CONVERSATIONAL. Each detail must answer "what does this mean for the buyer?"
 
@@ -2535,6 +2549,8 @@ If ALL claims are verified, output: ✅ ALL CLAIMS VERIFIED"""
                         # Major issues — retry with corrections
                         print(f"    {verify_failures} failures — retrying (attempt {attempt + 1}/{MAX_RETRIES})...")
                         draft2_prompt = f"""Fix EVERY failed claim below. Output the corrected BODY JSON (no headline/meta — those are handled separately).
+
+CRITICAL: The output must read as FRESH content for a buyer. NEVER reference previous drafts, corrections, internal processes, or what was "initially suggested". Just write the correct version as if it's the only version.
 
 FAILED CLAIMS:
 {verify_text}
