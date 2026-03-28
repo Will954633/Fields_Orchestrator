@@ -958,7 +958,9 @@ YOUR JOB as a specialist agent:
 8. NEVER quote a single valuation figure — always present as a RANGE from comparable sales. Price is discovered by the market, not set by a model.
 9. NEVER use flood data as a lead angle or headline seed — flood overlay is addressed as the final point only
 10. For supply/scarcity data, quote the LAST 12 MONTHS of sales (not 20 months). Use 6 months if it builds stronger, legitimate scarcity.
-11. WALKING DISTANCE TO SIGNIFICANT POIs: If the property is within walking distance (under 2.5 km) of a significant point of interest — especially a beach, major park, school, train station, or shopping centre — this is a KEY SELLING POINT that should be considered for inclusion in the content. Being able to walk to Burleigh Heads Beach or Nobby Beach is a lifestyle differentiator that most competing properties cannot match. State the distance, the walk time, and what it means for the buyer's daily life.
+11. NEVER claim what competing properties DON'T have. You only have basic listing data for competitors (beds, baths, price, lot size, floor area). You do NOT know their full feature list. NEVER write "none of the competitors have X" or "the only home with X" unless you can count that feature in the competing listings data. If you want to highlight a unique feature, say "this is uncommon at this price point" — not "no other listing offers this."
+12. NEVER cite internal database field names in content. Write "ducted air conditioning" not "ac_ducted: true". Write "stone benchtops" not "benchtop_material: stone". The reader has never seen our database.
+13. WALKING DISTANCE TO SIGNIFICANT POIs: If the property is within walking distance (under 2.5 km) of a significant point of interest — especially a beach, major park, school, train station, or shopping centre — this is a KEY SELLING POINT that should be considered for inclusion in the content. Being able to walk to Burleigh Heads Beach or Nobby Beach is a lifestyle differentiator that most competing properties cannot match. State the distance, the walk time, and what it means for the buyer's daily life.
 
 VOICE: No superlatives (never "stunning", "nestled", "boasting", "rare opportunity"). Dollar figures like $1,250,000 not "$1.25m". Suburbs capitalised. Be specific. Be conversational. Every sentence must earn its place.
 
@@ -2305,7 +2307,23 @@ VALUATION LANGUAGE RULE — DO NOT FAIL approximate valuation claims:
 INVISIBLE ROOM RULE (AUTOMATIC FAIL):
 If the draft claims a room is "unrenovated", "untouched", "dated", "not upgraded", or describes its condition — but that room has "visible": false and null condition scores in property_valuation_data — mark it ❌ FAILED. The field "bathrooms_renovated": false is UNRELIABLE when bathrooms were not photographed. The correct claim is "condition data not available" or "not photographed".
 
-Be exhaustive on factual claims. Be lenient on valuation approximations."""
+ROUNDING TOLERANCE — DO NOT FAIL reasonable rounding:
+- If the draft says "25.4 sqm" and the data says 25.38 sqm — that is VERIFIED, not failed. Rounding to 1 decimal place is acceptable.
+- If the draft says "$1.8M" and the actual range is $1.77M–$1.91M — that is VERIFIED. Rounding to the nearest $100K is acceptable for conversational language.
+- If the draft says "50 sqm" and the actual is 48.2 sqm — that is VERIFIED. Rounding to the nearest 5 sqm is acceptable when preceded by "roughly", "about", or "~".
+- Only FAIL rounding when the draft presents a rounded number AS IF it were exact (no qualifier) AND the rounding changes the meaning materially (e.g. "3 bedrooms" when there are 4).
+
+CLAIMS ABOUT COMPETING PROPERTIES — DO NOT CLAIM WHAT OTHERS LACK:
+- The draft MUST NOT state what competing properties DON'T have (e.g. "none of them have a pool house") unless that data is explicitly available in the competing listings data provided.
+- We only have basic listing data for competitors (beds, baths, price, lot size, floor area). We do NOT have their full feature lists.
+- Claims like "the only property with X" or "none of the competitors offer Y" are UNVERIFIABLE and should be marked ❌ FAILED unless the specific feature is present in the competing listings projection.
+
+FIELD NAME REFERENCES — DO NOT CITE INTERNAL FIELD NAMES:
+- The draft should NEVER reference raw database field names like "ac_ducted", "solar_visible", "floor_area_sqm", "property_valuation_data", etc.
+- If the draft says "ac_ducted: true" or cites any field path — that is NOT a factual claim, it's an internal reference that should not appear in public-facing content. Mark it ⚠️ UNVERIFIABLE, not ❌ FAILED.
+- The fact-check should verify the CLAIM (e.g. "ducted air conditioning is installed") against the DATA, not check whether the field name is correctly cited.
+
+Be exhaustive on factual claims. Be lenient on rounding and approximations."""
 
         factcheck_text = call_claude(
             factcheck_prompt, api_key,
