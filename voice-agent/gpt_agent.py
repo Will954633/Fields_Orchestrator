@@ -31,6 +31,7 @@ GPT54_MINI_MODEL = "gpt-5.4-mini-2026-03-17"
 
 MAX_TOOL_ROUNDS = 25  # Safety limit on agent loop iterations
 BASH_TIMEOUT = 120  # seconds per bash command
+GPT_MAX_COMPLETION_TOKENS = 4096
 
 
 # ---------------------------------------------------------------------------
@@ -477,7 +478,7 @@ async def gpt_converse(
             client.chat.completions.create,
             model=model,
             messages=messages,
-            max_tokens=4096,
+            max_completion_tokens=GPT_MAX_COMPLETION_TOKENS,
             temperature=0.7,
         )
         reply = response.choices[0].message.content or ""
@@ -520,7 +521,7 @@ async def gpt_full(
                 model=model,
                 messages=messages,
                 tools=TOOLS,
-                max_tokens=4096,
+                max_completion_tokens=GPT_MAX_COMPLETION_TOKENS,
                 temperature=0.3,
             )
         except Exception as e:
