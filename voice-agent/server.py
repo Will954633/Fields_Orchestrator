@@ -45,6 +45,9 @@ import uvicorn
 from sse import SSEBroadcaster
 from task_manager import TaskManager
 from router import route_message, opus_full, _opus_email as opus_email
+
+# Session lock — prevents concurrent SDK session access (single-user system)
+_session_lock = asyncio.Lock()
 from gpt_agent import gpt_full, gpt_converse, GPT54_MODEL, GPT54_MINI_MODEL
 
 # ---------------------------------------------------------------------------
@@ -199,6 +202,39 @@ async def _append_history_safe(role: str, content: str, timeout: float = 2.0):
         log.info(f"History append ({role}): {time.perf_counter() - started:.2f}s")
     except Exception as e:
         log.warning(f"History append skipped for {role} after {time.perf_counter() - started:.2f}s: {e}")
+
+
+# --- SDK Session ID persistence ---
+
+def _load_session_id() -> str | None:
+    """Load today's SDK session ID from MongoDB."""
+    sm = _get_db()["system_monitor"]
+    doc = sm[CONV_COLL].find_one({"_id": _get_conversation_id()})
+    return doc.get("sdk_session_id") if doc else None
+
+
+def _save_session_id(session_id: str):
+    """Save SDK session ID to today's conversation document."""
+    sm = _get_db()["system_monitor"]
+    sm[CONV_COLL].update_one(
+        {"_id": _get_conversation_id()},
+        {"$set": {"sdk_session_id": session_id, "updated_at": datetime.now(AEST).isoformat()}},
+        upsert=True,
+    )
+
+
+async def _load_session_id_safe(timeout: float = 2.0) -> str | None:
+    try:
+        return await asyncio.wait_for(asyncio.to_thread(_load_session_id), timeout=timeout)
+    except Exception:
+        return None
+
+
+async def _save_session_id_safe(session_id: str, timeout: float = 2.0):
+    try:
+        await asyncio.wait_for(asyncio.to_thread(_save_session_id, session_id), timeout=timeout)
+    except Exception as e:
+        log.warning(f"Session ID save failed: {e}")
 
 
 def _apply_voice_model_policy():
@@ -637,9 +673,12 @@ async def handle_message(user_text: str) -> dict:
 
         fast_email_task = _build_fast_email_task(user_text)
         if fast_email_task:
-            # Email requests are handled conversationally by Opus (not background tasks)
-            log.info(f"Email request detected (fast-path): routing to opus_email")
-            reply = await opus_email(user_text, history)
+            # Email requests → conversational Opus with SDK session persistence
+            log.info(f"Email request detected (fast-path): routing to opus_email (SDK)")
+            session_id = await _load_session_id_safe(timeout=1.0)
+            reply, new_sid = await opus_email(user_text, history, session_id=session_id)
+            if new_sid:
+                await _save_session_id_safe(new_sid, timeout=1.0)
             if _SWITCH_HAIKU_SIGNAL in reply:
                 reply = reply.replace(_SWITCH_HAIKU_SIGNAL, "").strip()
             await _append_history_safe("user", user_text, timeout=1.0)
@@ -738,19 +777,25 @@ async def handle_message(user_text: str) -> dict:
             await _append_history_safe("assistant", reply)
             return {"reply": reply, "task_id": task_id, "model_lock": model_lock}
 
-        # Email → opus_email (conversational with tools)
+        # Email → opus_email (conversational with tools + session persistence)
         fast_email_task = _build_fast_email_task(user_text)
         if fast_email_task:
-            log.info("Opus mode email request → opus_email")
-            reply = await opus_email(user_text, history)
+            log.info("Opus mode email request → opus_email (SDK)")
+            session_id = await _load_session_id_safe()
+            reply, new_sid = await opus_email(user_text, history, session_id=session_id)
+            if new_sid:
+                await _save_session_id_safe(new_sid)
             if _SWITCH_HAIKU_SIGNAL in reply:
                 reply = reply.replace(_SWITCH_HAIKU_SIGNAL, "").strip()
             await _append_history_safe("user", user_text)
             await _append_history_safe("assistant", reply)
             return {"reply": reply, "task_id": None, "model_lock": model_lock}
 
-        # Everything else → synchronous opus_full (conversation, questions, etc.)
-        reply = await opus_full(user_text, history)
+        # Everything else → synchronous opus_full (SDK with session persistence)
+        session_id = await _load_session_id_safe()
+        reply, new_sid = await opus_full(user_text, history, session_id=session_id)
+        if new_sid:
+            await _save_session_id_safe(new_sid)
         if _SWITCH_HAIKU_SIGNAL in reply:
             reply = reply.replace(_SWITCH_HAIKU_SIGNAL, "").strip()
             model_lock = "auto"
@@ -763,6 +808,7 @@ async def handle_message(user_text: str) -> dict:
     # (still allows task spawning — that's work, not conversation)
 
     history = await _load_history_safe()
+    session_id = await _load_session_id_safe()
 
     # --- Normal routing (auto mode or haiku mode) ---
     active_tasks = task_manager.get_active_tasks()
@@ -771,11 +817,17 @@ async def handle_message(user_text: str) -> dict:
     decision = await route_message(
         user_text, history, active_tasks, completed_unnotified,
         force_direct=(model_lock == "haiku"),
+        session_id=session_id,
     )
 
     reply = decision["reply"]
     task_id = None
     mode = decision.get("mode", "direct")
+    new_session_id = decision.get("session_id")
+
+    # Save session_id if an Opus call returned one
+    if new_session_id and new_session_id != session_id:
+        await _save_session_id_safe(new_session_id)
 
     if decision.get("spawn_task"):
         spawn = decision["spawn_task"]
