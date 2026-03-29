@@ -258,6 +258,70 @@ async def text_to_speech(text: str, voice: str = TTS_VOICE) -> bytes:
     return audio_bytes
 
 
+def _sanitize_spoken_text(text: str) -> str:
+    spoken = (text or "").strip()
+    if not spoken:
+        return ""
+    spoken = re.sub(r"`+", "", spoken)
+    spoken = re.sub(r"\*+", "", spoken)
+    spoken = re.sub(r"#+", "", spoken)
+    spoken = re.sub(r"\[(.*?)\]\((.*?)\)", r"\1", spoken)
+    spoken = re.sub(r"\s+", " ", spoken)
+    return spoken.strip()
+
+
+async def summarize_task_for_voice(task: dict) -> str:
+    """Generate a short spoken summary for a completed task using the GPT model family."""
+    from openai import OpenAI
+
+    task_model = task.get("model")
+    if task_model == "gpt54":
+        summary_model = GPT54_MODEL
+    else:
+        summary_model = GPT54_MINI_MODEL
+
+    task_text = (
+        task.get("result_full")
+        or task.get("result_summary")
+        or task.get("error_text")
+        or "The task completed, but no detailed result was available."
+    )
+    status = task.get("status", "completed")
+    title = task.get("title", "Background task")
+    fallback = _sanitize_spoken_text(task.get("result_summary") or f"{title} {status}.")
+
+    client = OpenAI(api_key=OPENAI_API_KEY)
+    system_prompt = (
+        "You are preparing a spoken completion update for Will. "
+        "Summarize the task result in 1 to 3 short sentences, under 60 words. "
+        "Use plain spoken English. Do not use markdown, bullets, code formatting, "
+        "backticks, file diffs, or say punctuation aloud. Focus on what was actually done "
+        "and any important blocker or outcome."
+    )
+    user_prompt = (
+        f"Task title: {title}\n"
+        f"Task status: {status}\n"
+        f"Task result:\n{task_text[:6000]}"
+    )
+
+    try:
+        response = await asyncio.to_thread(
+            client.chat.completions.create,
+            model=summary_model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            max_completion_tokens=120,
+            temperature=0.2,
+        )
+        spoken = _sanitize_spoken_text(response.choices[0].message.content or "")
+        return spoken or fallback or "The task completed."
+    except Exception as e:
+        log.warning(f"Task voice summary failed for {task.get('_id')}: {e}")
+        return fallback or "The task completed."
+
+
 # ---------------------------------------------------------------------------
 # Core message handler
 # ---------------------------------------------------------------------------
@@ -292,9 +356,25 @@ _DEV_TASK_PATTERNS = [
     re.compile(r"\b(code|file|script|app|server|ui|backend|frontend|feature|bug|test|tests)\b.*\b(build|write|edit|change|update|modify|implement|fix|debug|refactor|patch)\b", re.IGNORECASE),
     re.compile(r"\b(read|inspect|review)\b.*\b(code|repo|repository|project|files)\b", re.IGNORECASE),
     re.compile(r"\b(run|execute)\b.*\b(test|tests|pytest|script|build)\b", re.IGNORECASE),
+    re.compile(r"\b(create|make|mkdir|add|remove|delete|rename|move)\b.*\b(folder|directory|dir|file|files)\b", re.IGNORECASE),
+    re.compile(r"\b(folder|directory|dir|file|files)\b.*\b(create|make|mkdir|add|remove|delete|rename|move)\b", re.IGNORECASE),
     re.compile(r"\b(start|continue)\b.*\b(building|coding|developing|implementation)\b", re.IGNORECASE),
     re.compile(r"\bactual code\b", re.IGNORECASE),
     re.compile(r"\bactual dev(?:elopment)? work\b", re.IGNORECASE),
+    re.compile(r"\b(code|dev(?:elopment)?)(?:\s+work)?\b.*\b(done|now|immediately|again)\b", re.IGNORECASE),
+]
+_DEV_APPROVAL_PATTERNS = [
+    re.compile(r"^\s*proceed[.!]?\s*$", re.IGNORECASE),
+    re.compile(r"^\s*(?:sure[,.! ]*|yes[,.! ]*|okay[,.! ]*|ok[,.! ]*)*(go ahead|go ahead and do it|go ahead and start)[.!]?\s*$", re.IGNORECASE),
+    re.compile(r"^\s*(yes[,.! ]*)?(do it|start now|do that now)[.!]?\s*$", re.IGNORECASE),
+    re.compile(r"\btry again\b.*\b(code|dev(?:elopment)?)(?:\s+work)?\b.*\b(now|done)\b", re.IGNORECASE),
+]
+_DEV_CONTEXT_PATTERNS = [
+    *_DEV_TASK_PATTERNS,
+    re.compile(r"\bbackground task\b", re.IGNORECASE),
+    re.compile(r"\bcode change\b", re.IGNORECASE),
+    re.compile(r"\bdev work\b", re.IGNORECASE),
+    re.compile(r"\bworking done\b", re.IGNORECASE),
 ]
 
 
@@ -322,6 +402,36 @@ def _augment_task_prompt(base_prompt: str, history: list[dict]) -> str:
     )
 
 
+def _history_mentions_dev_work(history: list[dict], limit: int = 8) -> bool:
+    for msg in history[-limit:]:
+        content = (msg.get("content") or "").strip()
+        if not content:
+            continue
+        if any(pattern.search(content) for pattern in _DEV_CONTEXT_PATTERNS):
+            return True
+    return False
+
+
+def _build_contextual_dev_task(user_text: str, history: list[dict]) -> Optional[dict]:
+    """Treat short approvals as executable dev requests when recent context is already dev-focused."""
+    if not any(pattern.search(user_text) for pattern in _DEV_APPROVAL_PATTERNS):
+        return None
+    if not _history_mentions_dev_work(history):
+        return None
+
+    prompt = (
+        f"The user just approved or re-authorised previously discussed dev work: {user_text}\n"
+        "Infer the concrete coding task from the recent conversation context included below. "
+        "Do the actual work on the VM now: inspect the code, make the needed change, verify it, "
+        "and report what you actually changed. Do not stay in planning or chat mode."
+    )
+    return {
+        "title": "Continue approved development task",
+        "reply": "On it. I’m running the approved dev work on the VM now.",
+        "prompt": prompt,
+    }
+
+
 def _build_fast_email_task(user_text: str) -> Optional[dict]:
     """Fast-path clear email intents so GPT voice does not wait on router timeouts."""
     if not any(pattern.search(user_text) for pattern in _EMAIL_TASK_PATTERNS):
@@ -333,18 +443,22 @@ def _build_fast_email_task(user_text: str) -> Optional[dict]:
         reply = "On it. I'll check your inbox and identify the emails that need a reply."
         prompt = (
             "Review Will's email inbox using the VM email tooling and identify which emails need a reply. "
-            "Use python3 scripts/fields-email.py to inspect the inbox, recent messages, and relevant threads. "
-            "Return a concise shortlist with sender, subject, why it needs a reply, and urgency. "
-            "Do not send anything. If a draft reply would help, say so but keep all outbound actions in dry-run only."
+            "Use python3 scripts/fields-email.py to inspect the inbox, recent messages, relevant threads, "
+            "and the specialized email memory in config/email_memory.json / config/email_memory.md. "
+            "Record useful relevance decisions with memory-set-relevance when the signal is clear. "
+            "Return a concise shortlist with sender, subject, why it needs a reply, urgency, and whether it is relevant or ignorable. "
+            "If a reply is likely needed, say that a recipient-aware draft can be prepared next using recipient-profile and draft-reply. "
+            "Do not send anything. Keep all outbound actions in dry-run only."
         )
     elif "search" in lowered:
         title = "Search email"
         reply = "On it. I'll search your email now."
         prompt = (
             f"Handle this email request using python3 scripts/fields-email.py: {user_text}\n"
-            "Use the email CLI to search and inspect the relevant messages. "
-            "Summarize the useful results clearly. Do not send anything unless explicitly requested, "
-            "and use --dry-run first for any draft/send action."
+            "Use the email CLI to search and inspect the relevant messages, and check email memory when relevance is ambiguous. "
+            "Summarize the useful results clearly. If the request points toward drafting a reply, "
+            "use recipient-profile before draft-reply so the response reflects historical context and recipient style. "
+            "Do not send anything unless explicitly requested, and use --dry-run first for any draft/send action."
         )
     else:
         title = "Handle email request"
@@ -352,6 +466,9 @@ def _build_fast_email_task(user_text: str) -> Optional[dict]:
         prompt = (
             f"Handle this email request using python3 scripts/fields-email.py: {user_text}\n"
             "Read/search/review the relevant emails and complete the request as far as possible. "
+            "Use the specialized email memory in config/email_memory.json and config/email_memory.md to track relevance and recipient preferences. "
+            "When drafting or replying, always run recipient-profile first, then use draft-reply so the draft reflects historical emails, recipient-specific tone, and first-contact defaults when there is no history. "
+            "Show the draft clearly, and assume it needs to be read back to Will before any send. "
             "For replies or sends, always use --dry-run first and present the draft for approval before any live send."
         )
 
@@ -367,6 +484,11 @@ def _build_fast_dev_task(user_text: str) -> Optional[dict]:
     if any(word in lowered for word in ("run the test", "run tests", "pytest", "test suite", "build the app", "run the build")):
         title = "Run development checks"
         reply = "On it. I'll run the relevant development checks and work through the results."
+    elif any(word in lowered for word in ("folder", "directory", "mkdir", "file", "files")) and any(
+        word in lowered for word in ("create", "make", "add", "remove", "delete", "rename", "move")
+    ):
+        title = "Handle VM filesystem task"
+        reply = "On it. I'll make that filesystem change on the VM now."
     elif any(word in lowered for word in ("fix", "debug", "patch", "bug")):
         title = "Fix development issue"
         reply = "On it. I'll inspect the code, make the fix, and verify it."
@@ -433,21 +555,6 @@ async def handle_message(user_text: str) -> dict:
         history = await _load_history_safe(timeout=1.0)
         task_id = None
         gpt_model = GPT54_MINI_MODEL if model_lock == "gpt54mini" else GPT54_MODEL
-        fast_email_task = _build_fast_email_task(user_text)
-        if fast_email_task:
-            prompt = _augment_task_prompt(fast_email_task["prompt"], history)
-            task_id = task_manager.spawn_task(
-                title=fast_email_task["title"],
-                prompt=prompt,
-                user_message=user_text,
-                model=model_lock,
-            )
-            reply = fast_email_task["reply"]
-            log.info(f"GPT fast email task spawned: {task_id} — {fast_email_task['title']} (model: {model_lock})")
-            await _append_history_safe("user", user_text, timeout=1.0)
-            await _append_history_safe("assistant", reply, timeout=1.0)
-            return {"reply": reply, "task_id": task_id, "model_lock": model_lock}
-
         fast_dev_task = _build_fast_dev_task(user_text)
         if fast_dev_task:
             prompt = _augment_task_prompt(fast_dev_task["prompt"], history)
@@ -459,6 +566,36 @@ async def handle_message(user_text: str) -> dict:
             )
             reply = fast_dev_task["reply"]
             log.info(f"GPT fast dev task spawned: {task_id} — {fast_dev_task['title']} (model: {model_lock})")
+            await _append_history_safe("user", user_text, timeout=1.0)
+            await _append_history_safe("assistant", reply, timeout=1.0)
+            return {"reply": reply, "task_id": task_id, "model_lock": model_lock}
+
+        contextual_dev_task = _build_contextual_dev_task(user_text, history)
+        if contextual_dev_task:
+            prompt = _augment_task_prompt(contextual_dev_task["prompt"], history)
+            task_id = task_manager.spawn_task(
+                title=contextual_dev_task["title"],
+                prompt=prompt,
+                user_message=user_text,
+                model=model_lock,
+            )
+            reply = contextual_dev_task["reply"]
+            log.info(f"GPT contextual dev task spawned: {task_id} — {contextual_dev_task['title']} (model: {model_lock})")
+            await _append_history_safe("user", user_text, timeout=1.0)
+            await _append_history_safe("assistant", reply, timeout=1.0)
+            return {"reply": reply, "task_id": task_id, "model_lock": model_lock}
+
+        fast_email_task = _build_fast_email_task(user_text)
+        if fast_email_task:
+            prompt = _augment_task_prompt(fast_email_task["prompt"], history)
+            task_id = task_manager.spawn_task(
+                title=fast_email_task["title"],
+                prompt=prompt,
+                user_message=user_text,
+                model=model_lock,
+            )
+            reply = fast_email_task["reply"]
+            log.info(f"GPT fast email task spawned: {task_id} — {fast_email_task['title']} (model: {model_lock})")
             await _append_history_safe("user", user_text, timeout=1.0)
             await _append_history_safe("assistant", reply, timeout=1.0)
             return {"reply": reply, "task_id": task_id, "model_lock": model_lock}
@@ -746,6 +883,25 @@ async def get_task(task_id: str, authorization: Optional[str] = Header(None)):
         raise HTTPException(404, "Task not found")
     task["_id"] = str(task["_id"])
     return JSONResponse({"task": task})
+
+
+@app.get("/api/tasks/{task_id}/voice-summary")
+async def get_task_voice_summary(task_id: str, authorization: Optional[str] = Header(None)):
+    """Return a spoken task summary using the normal backend voice path."""
+    verify_token(authorization)
+    task = task_manager.get_task_detail(task_id)
+    if not task:
+        raise HTTPException(404, "Task not found")
+
+    spoken_text = await summarize_task_for_voice(task)
+    tts_audio = await text_to_speech(spoken_text)
+    audio_b64 = base64.b64encode(tts_audio).decode()
+    return JSONResponse({
+        "task_id": task_id,
+        "spoken_text": spoken_text,
+        "audio_base64": audio_b64,
+        "audio_format": "mp3",
+    })
 
 
 @app.post("/api/tasks/{task_id}/cancel")
