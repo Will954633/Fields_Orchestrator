@@ -188,11 +188,15 @@ async def route_message(
     history: list[dict],
     active_tasks: list[dict],
     completed_tasks: list[dict],
+    force_direct: bool = False,
 ) -> dict:
     """
     Route a user message. Returns:
         {{"reply": str, "mode": "direct"|"converse"|"task",
           "spawn_task": None | {{"title": str, "prompt": str}}}}
+
+    If force_direct=True (haiku lock), the router will never escalate to converse
+    but can still spawn tasks.
     """
     # Build conversation context
     context_lines = []
@@ -263,8 +267,11 @@ async def route_message(
                 spawn = None
 
             # If converse mode, do the Opus conversation call now
-            if mode == "converse":
+            # (unless force_direct is set — haiku lock keeps converse disabled)
+            if mode == "converse" and not force_direct:
                 reply = await _opus_converse(user_text, history)
+            elif mode == "converse" and force_direct:
+                mode = "direct"  # downgrade to direct
 
             log.info(f"Router: mode={mode}, reply={len(reply)} chars, spawn={'yes: ' + spawn['title'] if spawn else 'no'}")
             return {"reply": reply, "mode": mode, "spawn_task": spawn}
@@ -307,6 +314,10 @@ async def _opus_converse(user_text: str, history: list[dict]) -> str:
         f"You have full context on the business, systems, and current state. "
         f"Think carefully and provide substantive, specific advice — not generic strategy talk. "
         f"Be direct, challenge assumptions if warranted, and propose concrete next steps when relevant.\n\n"
+        f"IMPORTANT: If the user's message is simple (a greeting, a quick factual question, a thank you, "
+        f"or anything that clearly doesn't need deep reasoning), append the exact text [SWITCH_HAIKU] "
+        f"at the very end of your response. This signals the system to switch back to fast Haiku routing. "
+        f"Only do this when the conversation has clearly become simple — not during active deep discussion.\n\n"
         f"Current time: {datetime.now(AEST).strftime('%Y-%m-%d %H:%M AEST')}\n\n"
         f"{context}"
     )
