@@ -43,7 +43,7 @@ import uvicorn
 # Local modules
 from sse import SSEBroadcaster
 from task_manager import TaskManager
-from router import route_message, _opus_converse
+from router import route_message, opus_full
 
 # ---------------------------------------------------------------------------
 # Config
@@ -261,9 +261,9 @@ async def handle_message(user_text: str) -> dict:
 
     history = _load_history()
 
-    # --- Model lock: opus → always converse ---
+    # --- Model lock: opus → full Opus agent with all tools ---
     if model_lock == "opus":
-        reply = await _opus_converse(user_text, history)
+        reply = await opus_full(user_text, history)
         # Check if Opus wants to self-downgrade
         if _SWITCH_HAIKU_SIGNAL in reply:
             reply = reply.replace(_SWITCH_HAIKU_SIGNAL, "").strip()
