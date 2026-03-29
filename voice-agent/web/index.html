@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#0A0A0F">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>Fields Agent</title>
+    <title>Fields Chat Agent</title>
     <link rel="manifest" href="manifest.json">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -27,6 +27,18 @@
             padding: 16px 20px 12px;
             text-align: center;
             flex-shrink: 0;
+            position: relative;
+        }
+
+        .brand-label {
+            position: absolute;
+            top: 14px;
+            left: 20px;
+            font-size: 11px;
+            font-weight: 700;
+            color: rgba(156, 163, 175, 0.45);
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
         }
 
         .model-label {
@@ -353,12 +365,90 @@
             color: rgba(255, 255, 255, 0.72);
             text-align: center;
         }
+
+        /* Todo panel */
+        .todo-panel {
+            background: #111827;
+            border-top: 1px solid #1F2937;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+        .todo-panel.open { max-height: 250px; overflow-y: auto; }
+
+        .todo-panel-header {
+            padding: 8px 16px;
+            font-size: 12px;
+            color: #6B7280;
+            display: flex;
+            justify-content: space-between;
+            cursor: pointer;
+        }
+
+        .todo-badge {
+            background: #DC2626;
+            color: white;
+            font-size: 10px;
+            font-weight: 600;
+            padding: 1px 6px;
+            border-radius: 8px;
+            margin-left: 6px;
+        }
+        .todo-badge.warn { background: #F59E0B; }
+
+        .todo-card {
+            padding: 6px 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 13px;
+        }
+
+        .todo-priority {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .todo-priority.critical { background: #EF4444; }
+        .todo-priority.high { background: #F97316; }
+        .todo-priority.medium { background: #EAB308; }
+        .todo-priority.low { background: #6B7280; }
+
+        .todo-title { flex: 1; color: #D1D5DB; }
+        .todo-title.overdue { color: #FCA5A5; }
+        .todo-title.due-today { color: #FDE68A; }
+
+        .todo-urgency {
+            font-size: 11px;
+            color: #6B7280;
+            white-space: nowrap;
+        }
+        .todo-urgency.overdue { color: #EF4444; font-weight: 600; }
+        .todo-urgency.due-today { color: #F59E0B; font-weight: 600; }
+
+        .todo-actions {
+            display: flex;
+            gap: 4px;
+        }
+        .todo-action-btn {
+            background: none;
+            border: 1px solid #374151;
+            color: #9CA3AF;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .todo-action-btn:hover { border-color: #6B7280; color: #D1D5DB; }
+        .todo-action-btn.done-btn:hover { border-color: #22C55E; color: #22C55E; }
     </style>
 </head>
 <body>
     <div class="toast-container" id="toastContainer"></div>
 
     <div class="header">
+        <div class="brand-label">Fields Chat Agent</div>
         <div class="model-label" id="modelLabel">
             <span>
                 <span class="connection-dot checking" id="connDot"></span>
@@ -378,6 +468,15 @@
     </div>
 
     <div class="chat-area" id="chatArea"></div>
+
+    <!-- Todo panel (collapsible) -->
+    <div class="todo-panel" id="todoPanel">
+        <div class="todo-panel-header" id="todoPanelHeader">
+            <span>Todos <span id="todoBadge" style="display:none" class="todo-badge">0</span></span>
+            <span id="todoPanelToggle">&#9660;</span>
+        </div>
+        <div id="todoList"></div>
+    </div>
 
     <!-- Task panel (collapsible) -->
     <div class="task-panel" id="taskPanel">
@@ -638,6 +737,12 @@
                 addMessage(`[Task failed] ${data.error || 'Unknown error'}`, 'system');
             });
 
+            eventSource.addEventListener('todo_reminder', (e) => {
+                const data = JSON.parse(e.data);
+                showToast(`Todo: ${data.title} — ${data.urgency || 'due'}`, data.overdue_days > 0 ? 'error' : 'info');
+                loadTodos();
+            });
+
             eventSource.onerror = () => {
                 // Auto-reconnect is built into EventSource
                 console.log('SSE connection lost, reconnecting...');
@@ -729,6 +834,91 @@
             }
         }
         healthCheck();
+
+        // ==========================
+        // Todo panel
+        // ==========================
+
+        const todoPanel = document.getElementById('todoPanel');
+        const todoList = document.getElementById('todoList');
+        const todoPanelHeader = document.getElementById('todoPanelHeader');
+        const todoBadge = document.getElementById('todoBadge');
+        let todosData = [];
+
+        async function loadTodos() {
+            try {
+                const resp = await fetch(API_BASE + '/api/todos');
+                if (!resp.ok) return;
+                const data = await resp.json();
+                todosData = data.todos || [];
+                renderTodos();
+            } catch (e) {
+                console.log('Todo load failed:', e);
+            }
+        }
+
+        function renderTodos() {
+            if (todosData.length === 0) {
+                todoPanel.classList.remove('open');
+                todoBadge.style.display = 'none';
+                todoList.innerHTML = '';
+                return;
+            }
+
+            const urgent = todosData.filter(t => t.days_left !== null && t.days_left <= 0).length;
+            const dueWeek = todosData.filter(t => t.days_left !== null && t.days_left > 0 && t.days_left <= 7).length;
+
+            todoBadge.textContent = todosData.length;
+            todoBadge.style.display = 'inline';
+            todoBadge.className = 'todo-badge' + (urgent > 0 ? '' : ' warn');
+
+            todoPanel.classList.add('open');
+
+            todoList.innerHTML = todosData.map(t => {
+                const titleClass = t.days_left !== null && t.days_left < 0 ? 'overdue'
+                    : t.days_left === 0 ? 'due-today' : '';
+                const urgencyClass = t.days_left !== null && t.days_left < 0 ? 'overdue'
+                    : t.days_left === 0 ? 'due-today' : '';
+
+                return `<div class="todo-card" data-id="${t._id}">
+                    <div class="todo-priority ${t.priority}"></div>
+                    <span class="todo-title ${titleClass}">${t.title}</span>
+                    <span class="todo-urgency ${urgencyClass}">${t.urgency || ''}</span>
+                    <div class="todo-actions">
+                        <button class="todo-action-btn done-btn" onclick="todoAction('${t._id}','done')">Done</button>
+                        <button class="todo-action-btn" onclick="todoAction('${t._id}','snooze')">+3d</button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        window.todoAction = async function(todoId, action) {
+            try {
+                if (action === 'done') {
+                    await fetch(API_BASE + '/api/todos/' + todoId + '/done', { method: 'POST' });
+                    showToast('Todo completed', 'success');
+                } else if (action === 'snooze') {
+                    const formData = new FormData();
+                    formData.append('days', '3');
+                    await fetch(API_BASE + '/api/todos/' + todoId + '/snooze', { method: 'POST', body: formData });
+                    showToast('Snoozed +3 days', 'info');
+                }
+                await loadTodos();
+            } catch (e) {
+                showToast('Action failed: ' + e.message, 'error');
+            }
+        };
+
+        todoPanelHeader.addEventListener('click', () => {
+            todoPanel.classList.toggle('open');
+        });
+
+        // Load todos on startup and refresh every 5 minutes
+        loadTodos();
+        setInterval(loadTodos, 300000);
+
+        // SSE listener for todo reminders
+        // (will be connected after SSE is ready — add listener in connectSSE)
 
         // ---- Helpers ----
         function setStatus(text, cls) {
