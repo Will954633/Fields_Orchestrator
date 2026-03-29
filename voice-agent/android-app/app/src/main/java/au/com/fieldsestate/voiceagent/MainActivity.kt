@@ -34,7 +34,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var apiClient: ApiClient
     private var mediaPlayer: MediaPlayer? = null
 
-    private var currentMode = "work"
     private var isRecording = false
     private var isBusy = false
 
@@ -67,16 +66,8 @@ class MainActivity : AppCompatActivity() {
             permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
         }
 
-        // Mode toggle
-        binding.chipWork.isChecked = true
-        binding.modeChipGroup.setOnCheckedStateChangeListener { _, checkedIds ->
-            currentMode = when {
-                checkedIds.contains(binding.chipStrategy.id) -> "strategy"
-                else -> "work"
-            }
-            updateModelLabel()
-        }
-        updateModelLabel()
+        // Set model label
+        binding.modelLabel.text = "Claude Opus · Fields Agent"
 
         // Push-to-talk button
         binding.pushToTalkButton.setOnTouchListener { view, event ->
@@ -103,13 +94,6 @@ class MainActivity : AppCompatActivity() {
                     Log.w(TAG, "Health check failed: $msg")
                 }
             }
-        }
-    }
-
-    private fun updateModelLabel() {
-        binding.modelLabel.text = when (currentMode) {
-            "strategy" -> "GPT-5.4 · Strategy & Business"
-            else -> "Claude Sonnet · VM Access"
         }
     }
 
@@ -153,7 +137,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        apiClient.sendVoice(audioBytes, currentMode,
+        apiClient.sendVoice(audioBytes, "work",
             onResult = { response ->
                 runOnUiThread {
                     // Show transcript
@@ -211,7 +195,7 @@ class MainActivity : AppCompatActivity() {
 
         // Add label
         val label = TextView(this).apply {
-            this.text = if (isUser) "You" else if (currentMode == "work") "Claude" else "GPT-5.4"
+            this.text = if (isUser) "You" else "Claude"
             setTextColor(ContextCompat.getColor(context, R.color.text_secondary))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
             setPadding(dp(4), dp(8), dp(4), dp(0))
