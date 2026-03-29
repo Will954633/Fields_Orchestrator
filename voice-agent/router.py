@@ -147,6 +147,13 @@ def _load_context_summary() -> str:
     if todo_summary:
         sections.append(f"=== PENDING TODOS ===\n{todo_summary}")
 
+    # Email attention — triaged inbox items needing Will's attention
+    email_attn = Path(ORCHESTRATOR_DIR) / "EMAIL_ATTENTION.md"
+    if email_attn.exists():
+        content = email_attn.read_text().strip()
+        if "No emails requiring attention" not in content:
+            sections.append(f"=== EMAIL ATTENTION ===\n{content}")
+
     ops = Path(ORCHESTRATOR_DIR) / "OPS_STATUS.md"
     if ops.exists():
         sections.append(f"=== LIVE OPS STATUS ===\n{ops.read_text()}")
@@ -170,6 +177,13 @@ def _load_dynamic_context() -> str:
     todo_summary = _load_todo_summary()
     if todo_summary:
         sections.append(f"=== PENDING TODOS ===\n{todo_summary}")
+
+    # Email attention — triaged inbox items needing Will's attention
+    email_attn = Path(ORCHESTRATOR_DIR) / "EMAIL_ATTENTION.md"
+    if email_attn.exists():
+        content = email_attn.read_text().strip()
+        if "No emails requiring attention" not in content:
+            sections.append(f"=== EMAIL ATTENTION ===\n{content}")
 
     ops = Path(ORCHESTRATOR_DIR) / "OPS_STATUS.md"
     if ops.exists():
@@ -239,6 +253,7 @@ MODE: "direct" (you answer now, via Haiku — fast, ~2s):
 - Brief acknowledgments or clarifications
 - Reporting completed task results (summaries are below)
 - If PENDING TODOS exist in context, mention overdue/due-today items proactively when greeting or at session start
+- If EMAIL ATTENTION items exist in context, naturally mention them — e.g. "Also, you have an email from X about Y — want me to pull that up?" Don't force it, but weave it into your reply when Will greets or asks for status. If Will asked about something else, handle that first, then mention the email.
 
 MODE: "converse" (escalate to Opus for deep thinking — ~10-30s, no VM tools):
 - Strategy discussions, business planning, complex analysis
@@ -309,6 +324,7 @@ async def _sdk_query(
         env=_sdk_env(),
         permission_mode="bypassPermissions",
         max_turns=max_turns,
+        max_budget_usd=5.0,
         include_partial_messages=bool(on_stream),
     )
 
@@ -627,7 +643,7 @@ async def route_message(
             "--json-schema", ROUTER_SCHEMA,
             "--append-system-prompt", system_prompt,
             "--no-session-persistence",
-            "--max-budget-usd", "0.05",
+            "--max-budget-usd", "0.50",
             cwd=ORCHESTRATOR_DIR,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
