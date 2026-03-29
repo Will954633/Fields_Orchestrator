@@ -25,7 +25,39 @@ from claude_agent_sdk import (
     AssistantMessage,
     ResultMessage,
     TextBlock,
+    ToolUseBlock,
+    ToolResultBlock,
+    StreamEvent,
+    UserMessage,
+    PermissionResultAllow,
+    PermissionResultDeny,
+    ToolPermissionContext,
 )
+
+from typing import Callable
+
+# Global permission response channel — used for interactive approval (#2)
+# Key: permission_id, Value: asyncio.Future that resolves to True (allow) or False (deny)
+_permission_futures: dict[str, asyncio.Future] = {}
+_permission_counter = 0
+
+
+def create_permission_future(tool_name: str, tool_input: dict) -> tuple[str, asyncio.Future]:
+    """Create a future that will be resolved when the user approves/denies."""
+    global _permission_counter
+    _permission_counter += 1
+    perm_id = f"perm_{_permission_counter}"
+    loop = asyncio.get_event_loop()
+    future = loop.create_future()
+    _permission_futures[perm_id] = future
+    return perm_id, future
+
+
+def resolve_permission(perm_id: str, allow: bool):
+    """Called by the /api/permission-respond endpoint."""
+    future = _permission_futures.pop(perm_id, None)
+    if future and not future.done():
+        future.set_result(allow)
 
 log = logging.getLogger("voice-agent.router")
 
@@ -258,18 +290,26 @@ async def _sdk_query(
     tools: Optional[list] = None,
     timeout: int = CONVERSE_TIMEOUT,
     max_turns: int = 30,
+    on_stream: Optional[Callable] = None,
 ) -> tuple[str, Optional[str]]:
     """Core SDK query helper. Returns (response_text, session_id).
 
     Uses the claude_code preset which auto-loads CLAUDE.md from cwd.
     Dynamic context goes in system_append.
+
+    If on_stream is provided, it's called with (event_type, data_dict) for each
+    stream event — enabling real-time SSE updates to the web UI.
     """
+    # Use acceptEdits mode — auto-approves file edits and reads,
+    # but the agent still sees all tools. For full interactive approval,
+    # the SDK's can_use_tool requires AsyncIterable transport (future work).
     options = ClaudeAgentOptions(
         model="opus",
         cwd=ORCHESTRATOR_DIR,
         env=_sdk_env(),
         permission_mode="bypassPermissions",
         max_turns=max_turns,
+        include_partial_messages=bool(on_stream),
     )
 
     if tools is not None:
@@ -288,33 +328,95 @@ async def _sdk_query(
         async def _run():
             nonlocal response_text, new_session_id
             async for msg in query(prompt=prompt, options=options):
-                if isinstance(msg, AssistantMessage):
+
+                # Stream events — forward to SSE
+                if isinstance(msg, StreamEvent) and on_stream:
+                    event = msg.event or {}
+                    event_type = event.get("type", "")
+                    delta = event.get("delta", {})
+                    delta_type = delta.get("type", "")
+
+                    # Text being generated
+                    if delta_type == "text_delta":
+                        on_stream("agent_text", {"text": delta.get("text", "")})
+
+                    # Tool call starting
+                    elif event_type == "content_block_start":
+                        block = event.get("content_block", {})
+                        if block.get("type") == "tool_use":
+                            on_stream("agent_tool_start", {
+                                "tool": block.get("name", ""),
+                                "id": block.get("id", ""),
+                            })
+
+                # Completed tool calls (full blocks)
+                elif isinstance(msg, AssistantMessage):
                     for block in msg.content:
                         if isinstance(block, TextBlock):
                             response_text = block.text
+                        elif isinstance(block, ToolUseBlock) and on_stream:
+                            on_stream("agent_tool_call", {
+                                "tool": block.name,
+                                "input": _summarize_tool_input(block.name, block.input),
+                            })
+
+                # Tool results
+                elif isinstance(msg, UserMessage) and on_stream:
+                    for block in msg.content:
+                        if isinstance(block, ToolResultBlock):
+                            on_stream("agent_tool_result", {
+                                "tool_use_id": getattr(block, "tool_use_id", ""),
+                            })
+
                 elif isinstance(msg, ResultMessage):
                     new_session_id = msg.session_id
                     if msg.result:
                         response_text = msg.result
+                    if on_stream:
+                        on_stream("agent_done", {
+                            "turns": msg.num_turns,
+                            "session_id": msg.session_id,
+                        })
 
         await asyncio.wait_for(_run(), timeout=timeout)
 
     except asyncio.TimeoutError:
         log.error(f"SDK query timed out after {timeout}s")
+        if on_stream:
+            on_stream("agent_error", {"error": f"Timed out after {timeout}s"})
         if not response_text:
             response_text = ""
     except Exception as e:
         log.error(f"SDK query error: {e}")
+        if on_stream:
+            on_stream("agent_error", {"error": str(e)[:200]})
         if not response_text:
             response_text = ""
 
     return response_text, new_session_id
 
 
+def _summarize_tool_input(tool_name: str, input_data: dict) -> str:
+    """Produce a short human-readable summary of a tool call for the stream."""
+    if tool_name == "Bash":
+        return input_data.get("command", "")[:200]
+    elif tool_name == "Read":
+        path = input_data.get("file_path", "")
+        return path.replace("/home/fields/Fields_Orchestrator/", "")
+    elif tool_name in ("Edit", "Write"):
+        path = input_data.get("file_path", "")
+        return path.replace("/home/fields/Fields_Orchestrator/", "")
+    elif tool_name in ("Grep", "Glob"):
+        return input_data.get("pattern", "")[:100]
+    else:
+        return json.dumps(input_data)[:150]
+
+
 async def _opus_converse(
     user_text: str,
     history: list[dict],
     session_id: Optional[str] = None,
+    on_stream: Optional[Callable] = None,
 ) -> tuple[str, Optional[str]]:
     """Deep conversation with Opus (no tools — pure thinking).
     Returns (reply_text, new_session_id)."""
@@ -343,6 +445,7 @@ async def _opus_converse(
         tools=[],  # no tools for converse
         timeout=CONVERSE_TIMEOUT,
         max_turns=1,
+        on_stream=on_stream,
     )
 
     if not response:
@@ -356,6 +459,7 @@ async def _opus_email(
     user_text: str,
     history: list[dict],
     session_id: Optional[str] = None,
+    on_stream: Optional[Callable] = None,
 ) -> tuple[str, Optional[str]]:
     """Email-focused Opus conversation with full tools.
     Returns (reply_text, new_session_id)."""
@@ -405,6 +509,7 @@ async def _opus_email(
         session_id=session_id,
         timeout=OPUS_FULL_TIMEOUT,
         max_turns=30,
+        on_stream=on_stream,
     )
 
     if not response:
@@ -418,6 +523,7 @@ async def opus_full(
     user_text: str,
     history: list[dict],
     session_id: Optional[str] = None,
+    on_stream: Optional[Callable] = None,
 ) -> tuple[str, Optional[str]]:
     """Full Opus agent with all tools — same as the terminal experience.
     Returns (reply_text, new_session_id)."""
@@ -453,6 +559,9 @@ async def opus_full(
         f"  memory-show / memory-set-recipient — Email memory management\n"
         f"WORKFLOW: read → recipient-profile → draft-reply → show draft → Will approves → send live\n"
         f"IMPORTANT: NEVER send without explicit approval from Will.\n\n"
+        f"TOOLS: You have full access to all tools including TodoWrite, Task (sub-agents), "
+        f"WebSearch, WebFetch, and all file/code tools. Use them freely when they help accomplish the task. "
+        f"The restriction on TodoWrite/Agent in commit workflows does NOT apply to general conversation.\n\n"
         f"IMPORTANT: If the user's message is simple (a greeting, a quick factual question, a thank you, "
         f"or anything that clearly doesn't need deep reasoning or tools), append the exact text [SWITCH_HAIKU] "
         f"at the very end of your response.\n\n"
@@ -466,6 +575,7 @@ async def opus_full(
         session_id=session_id,
         timeout=OPUS_FULL_TIMEOUT,
         max_turns=30,
+        on_stream=on_stream,
     )
 
     if not response:
@@ -486,6 +596,7 @@ async def route_message(
     completed_tasks: list[dict],
     force_direct: bool = False,
     session_id: Optional[str] = None,
+    on_stream: Optional[Callable] = None,
 ) -> dict:
     """
     Route a user message. Returns:
@@ -560,13 +671,13 @@ async def route_message(
 
             # Email mode: synchronous Opus with email tools + session persistence
             if mode == "email" and not force_direct:
-                reply, new_session_id = await _opus_email(user_text, history, session_id)
+                reply, new_session_id = await _opus_email(user_text, history, session_id, on_stream=on_stream)
             elif mode == "email" and force_direct:
                 mode = "direct"
 
             # Converse mode: Opus thinking + session persistence
             if mode == "converse" and not force_direct:
-                reply, new_session_id = await _opus_converse(user_text, history, session_id)
+                reply, new_session_id = await _opus_converse(user_text, history, session_id, on_stream=on_stream)
             elif mode == "converse" and force_direct:
                 mode = "direct"
 
