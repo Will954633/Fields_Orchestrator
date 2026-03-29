@@ -173,6 +173,26 @@ def _append_history(role: str, content: str):
     )
 
 
+async def _load_history_safe(timeout: float = 2.0) -> list[dict]:
+    """Best-effort history load. Never let Cosmos block the live voice path."""
+    try:
+        return await asyncio.wait_for(asyncio.to_thread(_load_history), timeout=timeout)
+    except Exception as e:
+        log.warning(f"History load skipped: {e}")
+        return []
+
+
+async def _append_history_safe(role: str, content: str, timeout: float = 2.0):
+    """Best-effort history write. Do not block replies on Cosmos latency."""
+    try:
+        await asyncio.wait_for(
+            asyncio.to_thread(_append_history, role, content),
+            timeout=timeout,
+        )
+    except Exception as e:
+        log.warning(f"History append skipped for {role}: {e}")
+
+
 # ---------------------------------------------------------------------------
 # OpenAI helpers (STT / TTS)
 # ---------------------------------------------------------------------------
@@ -284,10 +304,9 @@ async def handle_message(user_text: str) -> dict:
         _append_history("assistant", reply)
         return {"reply": reply, "task_id": None, "model_lock": model_lock}
 
-    history = _load_history()
-
     # --- Model lock: GPT modes stay in direct chat path for reliability ---
     if model_lock in ("gpt54", "gpt54mini"):
+        history = await _load_history_safe(timeout=1.0)
         task_id = None
         gpt_model = GPT54_MINI_MODEL if model_lock == "gpt54mini" else GPT54_MODEL
         try:
@@ -301,24 +320,27 @@ async def handle_message(user_text: str) -> dict:
                 "That took too long to answer in-chat. "
                 "Please try again or switch to Opus for VM task execution."
             )
-        _append_history("user", user_text)
-        _append_history("assistant", reply)
+        await _append_history_safe("user", user_text, timeout=1.0)
+        await _append_history_safe("assistant", reply, timeout=1.0)
         return {"reply": reply, "task_id": task_id, "model_lock": model_lock}
 
     # --- Model lock: opus → full Opus agent with all tools ---
     if model_lock == "opus":
+        history = await _load_history_safe()
         reply = await opus_full(user_text, history)
         # Check if Opus wants to self-downgrade
         if _SWITCH_HAIKU_SIGNAL in reply:
             reply = reply.replace(_SWITCH_HAIKU_SIGNAL, "").strip()
             model_lock = "auto"
             log.info("Model lock → auto (Opus self-downgrade)")
-        _append_history("user", user_text)
-        _append_history("assistant", reply)
+        await _append_history_safe("user", user_text)
+        await _append_history_safe("assistant", reply)
         return {"reply": reply, "task_id": None, "model_lock": model_lock}
 
     # --- Model lock: haiku → always direct (no Opus converse) ---
     # (still allows task spawning — that's work, not conversation)
+
+    history = await _load_history_safe()
 
     # --- Normal routing (auto mode or haiku mode) ---
     active_tasks = task_manager.get_active_tasks()
@@ -344,8 +366,8 @@ async def handle_message(user_text: str) -> dict:
     if completed_unnotified:
         task_manager.mark_notified([t["_id"] for t in completed_unnotified])
 
-    _append_history("user", user_text)
-    _append_history("assistant", reply)
+    await _append_history_safe("user", user_text)
+    await _append_history_safe("assistant", reply)
 
     return {"reply": reply, "task_id": task_id, "model_lock": model_lock}
 
