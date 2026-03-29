@@ -99,6 +99,7 @@ _db_client = None
 # "gpt54" (GPT-5.4 full agent), "gpt54mini" (GPT-5.4-mini full agent)
 model_lock: str = "auto"
 LOCKED_GPT_SYNC_TIMEOUT = 90  # Keep browser requests comfortably under proxy timeout
+LOCKED_GPT_ROUTER_TIMEOUT = 8  # Router may hang; GPT chat must stay responsive
 
 
 def _get_db():
@@ -290,13 +291,23 @@ async def handle_message(user_text: str) -> dict:
     if model_lock in ("gpt54", "gpt54mini"):
         active_tasks = task_manager.get_active_tasks()
         completed_unnotified = task_manager.get_unnotified_completed()
-        decision = await route_message(
-            user_text, history, active_tasks, completed_unnotified,
-            force_direct=False,
-        )
+        decision = None
+        try:
+            decision = await asyncio.wait_for(
+                route_message(
+                    user_text, history, active_tasks, completed_unnotified,
+                    force_direct=False,
+                ),
+                timeout=LOCKED_GPT_ROUTER_TIMEOUT,
+            )
+        except asyncio.TimeoutError:
+            log.warning(
+                f"Locked GPT task detection timed out after {LOCKED_GPT_ROUTER_TIMEOUT}s; "
+                f"falling back to direct GPT reply (model: {model_lock})"
+            )
 
         task_id = None
-        if decision.get("spawn_task"):
+        if decision and decision.get("spawn_task"):
             spawn = decision["spawn_task"]
             task_id = task_manager.spawn_task(
                 title=spawn["title"],
