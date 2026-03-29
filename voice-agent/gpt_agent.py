@@ -502,6 +502,9 @@ async def gpt_converse(
             temperature=0.7,
         )
         reply = response.choices[0].message.content or ""
+        if not reply.strip():
+            log.warning(f"GPT converse ({model}) returned empty content")
+            return "I didn't produce a usable reply. Please say that again."
         log.info(f"GPT converse ({model}): {perf_counter() - started:.2f}s, {len(reply)} chars")
         return reply.strip()
     except Exception as e:
