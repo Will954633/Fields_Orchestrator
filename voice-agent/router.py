@@ -351,3 +351,68 @@ async def _opus_converse(user_text: str, history: list[dict]) -> str:
     except Exception as e:
         log.error(f"Opus converse error: {e}")
         return f"I hit an error: {str(e)[:200]}"
+
+
+async def opus_full(user_text: str, history: list[dict]) -> str:
+    """
+    Full Opus agent with all tools — same as the terminal experience.
+    Used when user explicitly locks to Opus mode.
+    CLI = Max subscription.
+    """
+    context_lines = []
+    for msg in history[-20:]:
+        role = msg.get("role", "user")
+        content = msg.get("content", "")[:1000]
+        context_lines.append(f"{role}: {content}")
+
+    prompt_parts = []
+    if context_lines:
+        prompt_parts.append("Conversation history:\n" + "\n".join(context_lines))
+    prompt_parts.append(f"User: {user_text}")
+    prompt_parts.append("\nThis is a voice/chat interface — be conversational but thorough. "
+                        "If the task requires running commands or editing files, do it and report results.")
+
+    full_prompt = "\n\n".join(prompt_parts)
+    context = _load_full_context()
+
+    system_prompt = (
+        f"You are the Fields Estate operations agent with full VM access, "
+        f"talking directly with Will Simpson (founder). "
+        f"You can read files, run commands, edit code, query databases — do whatever is needed. "
+        f"Be conversational but substantive.\n\n"
+        f"IMPORTANT: If the user's message is simple (a greeting, a quick factual question, a thank you, "
+        f"or anything that clearly doesn't need deep reasoning or tools), append the exact text [SWITCH_HAIKU] "
+        f"at the very end of your response. This signals the system to switch back to fast Haiku routing. "
+        f"Only do this when the conversation has clearly become simple.\n\n"
+        f"Current time: {datetime.now(AEST).strftime('%Y-%m-%d %H:%M AEST')}\n\n"
+        f"{context}"
+    )
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            CLAUDE_BIN, "-p", full_prompt,
+            "--model", "opus",
+            "--output-format", "text",
+            "--append-system-prompt", system_prompt,
+            "--dangerously-skip-permissions",
+            cwd=ORCHESTRATOR_DIR,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env={**os.environ, "ANTHROPIC_API_KEY": os.getenv("ANTHROPIC_API_KEY", "")},
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=300)
+        response = stdout.decode().strip()
+
+        if not response:
+            log.warning(f"Opus full returned empty. stderr: {stderr.decode()[:500]}")
+            return "I wasn't able to process that. Could you try again?"
+
+        log.info(f"Opus full: {len(response)} chars")
+        return response
+
+    except asyncio.TimeoutError:
+        log.error("Opus full timed out after 300s")
+        return "That's taking too long. I've timed out after five minutes."
+    except Exception as e:
+        log.error(f"Opus full error: {e}")
+        return f"I hit an error: {str(e)[:200]}"
