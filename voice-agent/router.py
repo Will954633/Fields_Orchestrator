@@ -40,12 +40,12 @@ ROUTER_SCHEMA = json.dumps({
     "properties": {
         "reply": {
             "type": "string",
-            "description": "Conversational reply to the user. For 'direct' mode, this IS the final response. For 'converse', set to 'CONVERSE' (will be replaced). For 'task', this is the acknowledgment.",
+            "description": "Conversational reply to the user. For 'direct' mode, this IS the final response. For 'converse'/'email', set to 'CONVERSE' (will be replaced). For 'task', this is the acknowledgment.",
         },
         "mode": {
             "type": "string",
-            "enum": ["direct", "converse", "task"],
-            "description": "direct = Haiku already answered. converse = needs Opus-level thinking (no tools). task = spawn background worker.",
+            "enum": ["direct", "converse", "task", "email"],
+            "description": "direct = Haiku already answered. converse = needs Opus-level thinking (no tools). email = email operations handled conversationally by Opus with tools. task = spawn background worker.",
         },
         "spawn_task": {
             "anyOf": [
@@ -171,6 +171,15 @@ MODE: "converse" (escalate to Opus for deep thinking — ~10-30s, no VM tools):
 - When the user asks to "discuss", "talk through", "think about", "help me decide"
 - Set reply to "CONVERSE" — it will be replaced by the Opus response.
 
+MODE: "email" (Opus handles email conversationally — synchronous, with tools):
+- ANY email-related request: "check my inbox", "search for emails from X", "read that email",
+  "what did Y say about Z", "draft a reply", "reply to that", "send an email to Z"
+- This mode gives Opus direct access to email tools so Will can discuss, review, edit, and approve replies inline
+- Set reply to "CONVERSE" — Opus will handle the full interaction with email tools
+- spawn_task must be null for this mode
+- Opus uses python3 scripts/fields-email.py for all email operations
+- Replies/sends always go through dry-run first, Will approves, then live send
+
 MODE: "task" (spawn background Opus worker — minutes, full VM access):
 - Code changes, bug fixes, script repairs
 - Writing drafts, reports, articles
@@ -178,13 +187,9 @@ MODE: "task" (spawn background Opus worker — minutes, full VM access):
 - Database queries, data analysis
 - Any work requiring file reads/writes on the VM
 - **Knowledge base searches** — "what do our strategy docs say about X", "find meeting notes about Y", "what books cover Z"
-- **Email operations** — "check my inbox", "search for emails from X", "read that email", "draft a reply", "send an email"
-- Set reply to a natural acknowledgment: "On it — I'll search the knowledge base for that." / "Checking your inbox now."
+- Set reply to a natural acknowledgment: "On it — I'll search the knowledge base for that."
 - Set spawn_task.prompt to detailed self-contained instructions for the worker.
 - For KB searches, tell the worker to run: python3 scripts/search-kb.py "query" [--type TYPE]
-- For email operations, tell the worker to run: python3 scripts/fields-email.py <command>
-  Available email commands: inbox, search "query", search-live "query", read <id>, thread <id>, reply <id> --body "text", send --to addr --subject "subj" --body "text", stats
-  IMPORTANT for replies/sends: always use --dry-run first and show Will the draft. Only send without --dry-run after explicit approval.
 
 When there are recently completed tasks, naturally mention them in your reply.
 
@@ -270,15 +275,21 @@ async def route_message(
             spawn = result.get("spawn_task", None)
 
             # Validate
-            if mode not in ("direct", "converse", "task"):
+            if mode not in ("direct", "converse", "task", "email"):
                 mode = "direct"
             if mode == "task" and spawn:
                 if not isinstance(spawn, dict) or "title" not in spawn or "prompt" not in spawn:
                     log.warning(f"Invalid spawn_task: {spawn}")
                     spawn = None
                     mode = "direct"
-            if mode != "task":
+            if mode not in ("task",):
                 spawn = None
+
+            # Email mode: synchronous Opus with email tools
+            if mode == "email" and not force_direct:
+                reply = await _opus_email(user_text, history)
+            elif mode == "email" and force_direct:
+                mode = "direct"  # can't do email in haiku-lock
 
             # If converse mode, do the Opus conversation call now
             # (unless force_direct is set — haiku lock keeps converse disabled)
@@ -370,6 +381,99 @@ async def _opus_converse(user_text: str, history: list[dict]) -> str:
         return f"I hit an error: {str(e)[:200]}"
 
 
+async def _opus_email(user_text: str, history: list[dict]) -> str:
+    """
+    Email-focused Opus conversation with full tools.
+    Handles inbox, read, draft, reply, send — all inline in the chat.
+    """
+    context_lines = []
+    for msg in history[-20:]:
+        role = msg.get("role", "user")
+        content = msg.get("content", "")[:1000]
+        context_lines.append(f"{role}: {content}")
+
+    prompt_parts = []
+    if context_lines:
+        prompt_parts.append("Conversation history:\n" + "\n".join(context_lines))
+    prompt_parts.append(f"User: {user_text}")
+    prompt_parts.append(
+        "\nHandle this email request conversationally. Use the email tools, "
+        "show results clearly, and if drafting a reply, present it for Will's "
+        "approval before sending."
+    )
+
+    full_prompt = "\n\n".join(prompt_parts)
+    context = _load_full_context()
+
+    # Load Will's email voice profile
+    voice_profile = ""
+    voice_path = Path(ORCHESTRATOR_DIR) / "config" / "email_voice_profile.md"
+    if voice_path.exists():
+        voice_profile = voice_path.read_text()
+
+    system_prompt = (
+        f"You are the Fields Estate operations agent handling email for Will Simpson (founder). "
+        f"You have full VM access and email tools.\n\n"
+        f"EMAIL TOOLS (all via python3 scripts/fields-email.py):\n"
+        f"  inbox [--limit N --days N]         — List unread emails from Graph API\n"
+        f"  search \"query\" [--from-addr X]      — Search local email archive (FTS5)\n"
+        f"  search-live \"query\"                 — Search via Graph API\n"
+        f"  read <message_id>                   — Read full email content\n"
+        f"  thread <message_id_or_email>        — Conversation history with contact\n"
+        f"  recipient-profile <id_or_email>     — Style analysis + memory for recipient\n"
+        f"  draft-reply <message_id> [--instructions \"text\"] — AI-drafted reply in Will's voice\n"
+        f"  reply <message_id> --body \"text\" --dry-run — Preview a reply\n"
+        f"  reply <message_id> --body \"text\"    — Send reply (LIVE — only after Will approves)\n"
+        f"  send --to addr --subject \"X\" --body \"Y\" --dry-run — Preview new email\n"
+        f"  send --to addr --subject \"X\" --body \"Y\" — Send new email (LIVE — only after approval)\n"
+        f"  memory-show                         — View email memory/preferences\n"
+        f"  memory-set-recipient --email X --style-profile Y — Update recipient preferences\n"
+        f"  stats                               — Archive statistics\n\n"
+        f"WORKFLOW FOR REPLIES:\n"
+        f"1. Read the email: fields-email.py read <id>\n"
+        f"2. Check recipient context: fields-email.py recipient-profile <id>\n"
+        f"3. Draft the reply: fields-email.py draft-reply <id> [--instructions \"...\"]\n"
+        f"4. Show the draft to Will clearly (subject, body, any cautions)\n"
+        f"5. If Will approves: fields-email.py reply <id> --body \"approved text\"\n"
+        f"   If Will wants changes: revise and show again\n"
+        f"   NEVER send without explicit approval from Will.\n\n"
+        f"WILL'S EMAIL VOICE:\n{voice_profile}\n\n"
+        f"IMPORTANT: If Will's message is simple (thanks, done, etc.), append [SWITCH_HAIKU] "
+        f"at the end to switch back to fast routing.\n\n"
+        f"Current time: {datetime.now(AEST).strftime('%Y-%m-%d %H:%M AEST')}\n\n"
+        f"{context}"
+    )
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            CLAUDE_BIN, "-p", full_prompt,
+            "--model", "opus",
+            "--output-format", "text",
+            "--append-system-prompt", system_prompt,
+            "--dangerously-skip-permissions",
+            cwd=ORCHESTRATOR_DIR,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=_cli_env(),
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=OPUS_FULL_TIMEOUT)
+        response = stdout.decode().strip()
+
+        if not response:
+            log.warning(f"Opus email returned empty. stderr: {stderr.decode()[:500]}")
+            return "I wasn't able to process that email request. Could you try again?"
+
+        log.info(f"Opus email: {len(response)} chars")
+        return response
+
+    except asyncio.TimeoutError:
+        log.error(f"Opus email timed out after {OPUS_FULL_TIMEOUT}s")
+        return "That email operation took too long. Could you try a simpler request?"
+    except Exception as e:
+        log.error(f"Opus email error: {e}")
+        return f"I hit an error with the email tools: {str(e)[:200]}"
+
+
 async def opus_full(user_text: str, history: list[dict]) -> str:
     """
     Full Opus agent with all tools — same as the terminal experience.
@@ -406,11 +510,21 @@ async def opus_full(user_text: str, history: list[dict]) -> str:
         f"Use the KB when the user asks about strategy, books, past decisions, marketing plans, meeting notes, or anything that might be in the knowledge base.\n\n"
         f"EMAIL: You can read, search, and send emails via Microsoft Graph (will@fieldsestate.com.au).\n"
         f"CLI: python3 scripts/fields-email.py <command>\n"
-        f"Commands: inbox [--limit N --days N], search \"query\", search-live \"query\", read <message_id>, "
-        f"thread <id_or_email>, reply <message_id> --body \"text\" [--dry-run], "
-        f"send --to addr --subject \"subj\" --body \"text\" [--dry-run], stats\n"
-        f"IMPORTANT: For replies and sends, ALWAYS use --dry-run first and show Will the draft. "
-        f"Only send live (without --dry-run) after Will explicitly approves.\n\n"
+        f"Commands:\n"
+        f"  inbox [--limit N --days N]         — List unread emails\n"
+        f"  search \"query\" [--from-addr X]     — Search local archive\n"
+        f"  search-live \"query\"                — Search via Graph API\n"
+        f"  read <message_id>                  — Read full email\n"
+        f"  thread <id_or_email>               — Conversation history\n"
+        f"  recipient-profile <id_or_email>    — Style analysis for recipient\n"
+        f"  draft-reply <id> [--instructions \"text\"] — AI-drafted reply in Will's voice\n"
+        f"  reply <id> --body \"text\" --dry-run — Preview reply\n"
+        f"  reply <id> --body \"text\"           — Send reply (LIVE — only after Will approves)\n"
+        f"  send --to X --subject \"Y\" --body \"Z\" --dry-run — Preview new email\n"
+        f"  send --to X --subject \"Y\" --body \"Z\" — Send (LIVE — only after approval)\n"
+        f"  memory-show / memory-set-recipient — Email memory management\n"
+        f"WORKFLOW: read → recipient-profile → draft-reply → show draft → Will approves → send live\n"
+        f"IMPORTANT: NEVER send without explicit approval from Will.\n\n"
         f"IMPORTANT: If the user's message is simple (a greeting, a quick factual question, a thank you, "
         f"or anything that clearly doesn't need deep reasoning or tools), append the exact text [SWITCH_HAIKU] "
         f"at the very end of your response. This signals the system to switch back to fast Haiku routing. "
