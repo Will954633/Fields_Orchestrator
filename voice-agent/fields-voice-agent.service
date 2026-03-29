@@ -1,0 +1,16 @@
+[Unit]
+Description=Fields Voice Agent API
+After=network.target
+
+[Service]
+Type=simple
+User=projects
+WorkingDirectory=/home/fields/Fields_Orchestrator/voice-agent
+EnvironmentFile=/home/fields/Fields_Orchestrator/.env
+Environment=PATH=/home/fields/venv/bin:/usr/bin:/bin
+ExecStart=/home/fields/venv/bin/python3 server.py
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
