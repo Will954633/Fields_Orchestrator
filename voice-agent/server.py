@@ -44,7 +44,7 @@ import uvicorn
 # Local modules
 from sse import SSEBroadcaster
 from task_manager import TaskManager
-from router import route_message, opus_full
+from router import route_message, opus_full, _opus_email as opus_email
 from gpt_agent import gpt_full, gpt_converse, GPT54_MODEL, GPT54_MINI_MODEL
 
 # ---------------------------------------------------------------------------
@@ -632,18 +632,14 @@ async def handle_message(user_text: str) -> dict:
 
         fast_email_task = _build_fast_email_task(user_text)
         if fast_email_task:
-            prompt = _augment_task_prompt(fast_email_task["prompt"], history)
-            task_id = task_manager.spawn_task(
-                title=fast_email_task["title"],
-                prompt=prompt,
-                user_message=user_text,
-                model=model_lock,
-            )
-            reply = fast_email_task["reply"]
-            log.info(f"GPT fast email task spawned: {task_id} — {fast_email_task['title']} (model: {model_lock})")
+            # Email requests are handled conversationally by Opus (not background tasks)
+            log.info(f"Email request detected (fast-path): routing to opus_email")
+            reply = await opus_email(user_text, history)
+            if _SWITCH_HAIKU_SIGNAL in reply:
+                reply = reply.replace(_SWITCH_HAIKU_SIGNAL, "").strip()
             await _append_history_safe("user", user_text, timeout=1.0)
             await _append_history_safe("assistant", reply, timeout=1.0)
-            return {"reply": reply, "task_id": task_id, "model_lock": model_lock}
+            return {"reply": reply, "task_id": None, "model_lock": model_lock}
 
         active_tasks = task_manager.get_active_tasks()
         completed_unnotified = task_manager.get_unnotified_completed()
@@ -729,6 +725,7 @@ async def handle_message(user_text: str) -> dict:
 
     reply = decision["reply"]
     task_id = None
+    mode = decision.get("mode", "direct")
 
     if decision.get("spawn_task"):
         spawn = decision["spawn_task"]
@@ -738,6 +735,11 @@ async def handle_message(user_text: str) -> dict:
             user_message=user_text,
         )
         log.info(f"Task spawned: {task_id} — {spawn['title']}")
+
+    # Check for SWITCH_HAIKU signal from email/converse modes
+    if mode in ("email", "converse") and _SWITCH_HAIKU_SIGNAL in reply:
+        reply = reply.replace(_SWITCH_HAIKU_SIGNAL, "").strip()
+        log.info(f"Model lock → auto (Opus self-downgrade from {mode})")
 
     if completed_unnotified:
         task_manager.mark_notified([t["_id"] for t in completed_unnotified])
