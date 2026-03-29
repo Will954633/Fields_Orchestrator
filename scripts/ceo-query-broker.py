@@ -95,9 +95,20 @@ def summarize_step_group(rows: list[dict[str, Any]], expected_ids: set[int] | No
 
 
 def last_expected_weekly_date() -> str:
+    """Return the date of the most recent Sunday whose 20:30 AEST run window has passed.
+
+    If today is Sunday but before the 20:30 AEST scheduled run, the expected
+    weekly date is still last Sunday — the current week's run hasn't been due yet.
+    A 2-hour grace period (until 22:30) avoids flapping if the run is slightly late.
+    """
     current = now_aest()
     days_since_sunday = (current.weekday() + 1) % 7
-    return (current - timedelta(days=days_since_sunday)).strftime("%Y-%m-%d")
+    this_sunday = current - timedelta(days=days_since_sunday)
+    # If today is Sunday and before the run window + grace, expect last week's Sunday
+    run_window_end = this_sunday.replace(hour=22, minute=30, second=0, microsecond=0)
+    if days_since_sunday == 0 and current < run_window_end:
+        this_sunday -= timedelta(days=7)
+    return this_sunday.strftime("%Y-%m-%d")
 
 
 def build_ad_alerts(
@@ -236,8 +247,22 @@ def fetch_orchestrator_health(sm) -> dict[str, Any]:
     latest_weekly_rows = sort_rows(weekly_groups.get(latest_weekly_date, []), "process_id", reverse=False)
     weekly_summary = summarize_step_group(latest_weekly_rows, expected_ids={102, 104})
     weekly_summary["date"] = latest_weekly_date
-    weekly_summary["expected_last_run_date"] = last_expected_weekly_date()
-    weekly_summary["freshness"] = "current" if latest_weekly_date == last_expected_weekly_date() else "stale"
+    expected_weekly = last_expected_weekly_date()
+    weekly_summary["expected_last_run_date"] = expected_weekly
+    # Determine if the weekly run is due later today (Sunday before run window)
+    days_since_sunday = (current.weekday() + 1) % 7
+    weekly_due_today = days_since_sunday == 0 and current.hour < 22
+    if latest_weekly_date == expected_weekly:
+        weekly_summary["freshness"] = "current"
+    elif weekly_due_today:
+        weekly_summary["freshness"] = "due_today"
+    else:
+        weekly_summary["freshness"] = "stale"
+    if days_since_sunday == 0:
+        next_run = (current.replace(hour=20, minute=30, second=0, microsecond=0))
+        if current.hour >= 22:
+            next_run += timedelta(days=7)
+        weekly_summary["next_scheduled_run"] = next_run.strftime("%Y-%m-%d %H:%M AEST")
 
     tuesday_check_required = current.strftime("%A") == "Tuesday"
     tuesday_check_passed = (
@@ -266,12 +291,20 @@ def fetch_orchestrator_health(sm) -> dict[str, Any]:
                 "detail": "No recent weekly all-suburbs steps were found for processes 102/104.",
             }
         )
-    elif latest_weekly_date != weekly_summary["expected_last_run_date"]:
+    elif weekly_summary["freshness"] == "stale":
         alerts.append(
             {
                 "severity": "high",
                 "title": "Weekly orchestrator looks stale",
                 "detail": f"Most recent weekly run is {latest_weekly_date}; expected {weekly_summary['expected_last_run_date']}.",
+            }
+        )
+    elif weekly_summary["freshness"] == "due_today":
+        alerts.append(
+            {
+                "severity": "low",
+                "title": "Weekly all-suburbs run is due tonight",
+                "detail": f"Most recent weekly run is {latest_weekly_date}; tonight's run is scheduled for 20:30 AEST.",
             }
         )
     elif weekly_summary["status"] != "ok":
