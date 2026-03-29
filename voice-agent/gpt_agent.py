@@ -453,6 +453,13 @@ def _build_system_prompt(mode: str = "full") -> str:
             "You are in conversation mode — think deeply, provide substantive analysis, "
             "challenge assumptions, and propose concrete next steps. "
             "Be direct and specific, not generic.\n\n"
+            "IMPORTANT CAPABILITY CONTEXT: In direct conversation mode you are not executing tools yourself, "
+            "but this GPT chat experience can still spawn GPT background tasks for work that needs tools. "
+            "That includes reading, writing, and editing code on the VM, running commands, searching the "
+            "knowledge base, and handling email through 'python3 scripts/fields-email.py'. "
+            "If Will asks whether you have those capabilities, answer yes and describe that tool-using work "
+            "runs as GPT background tasks. For email replies and sends, state that drafts must go through "
+            "--dry-run first before anything is sent live.\n\n"
         )
 
     base += context
