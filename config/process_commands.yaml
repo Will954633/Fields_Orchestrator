@@ -33,9 +33,9 @@ processes:
   
   - id: 101
     name: "Scrape For-Sale Properties (Target Market)"
-    description: "Scrapes 3 target suburbs (Robina, Varsity Lakes, Burleigh Waters) using curl_cffi - stores in Gold_Coast database. Chrome-free since 2026-03-13."
+    description: "Scrapes 6 target suburbs (Robina, Varsity Lakes, Burleigh Waters, Mudgeeraba, Reedy Creek, Worongary) using curl_cffi - stores in Gold_Coast database. Chrome-free since 2026-03-13."
     phase: "for_sale_target"
-    command: "python3 run_curlffi_suburb_scrape.py --suburbs 'Robina,Varsity Lakes,Burleigh Waters'"
+    command: "python3 run_curlffi_suburb_scrape.py --suburbs 'Robina,Varsity Lakes,Burleigh Waters,Mudgeeraba,Reedy Creek,Worongary'"
     working_dir: "/home/fields/Property_Data_Scraping/03_Gold_Coast/Gold_Coast_Wide_Currently_For_Sale_AND_Recently_Sold"
     mongodb_activity: "heavy_write"
     requires_browser: false  # Migrated from Selenium to curl_cffi (2026-03-13)
@@ -59,9 +59,9 @@ processes:
   
   - id: 103
     name: "Monitor Sold Properties (Target Market)"
-    description: "Search-based sold detection — loads Domain sold-listings search pages (2-3 per suburb) and cross-references listing IDs. Also detects under_contract/under_offer status. 97% fewer page loads than old per-property approach."
+    description: "Search-based sold detection for 6 target suburbs — loads Domain sold-listings search pages (2-3 per suburb) and cross-references listing IDs. Also detects under_contract/under_offer status. 97% fewer page loads than old per-property approach."
     phase: "monitoring_target"
-    command: "python3 sold_backfill/search_based_sold_monitor.py --suburbs \"Robina:4226\" \"Varsity Lakes:4227\" \"Burleigh Waters:4220\""
+    command: "python3 sold_backfill/search_based_sold_monitor.py --suburbs \"Robina:4226\" \"Varsity Lakes:4227\" \"Burleigh Waters:4220\" \"Mudgeeraba:4213\" \"Reedy Creek:4227\" \"Worongary:4213\""
     working_dir: "/home/fields/Fields_Orchestrator"
     mongodb_activity: "moderate_write"
     requires_browser: false  # Migrated from Selenium to curl_cffi (2026-03-11)
