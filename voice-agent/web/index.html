@@ -33,9 +33,23 @@
             color: #6B7280;
             font-size: 12px;
             margin-top: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
         }
 
-        /* Call timer */
+        .task-badge {
+            background: #2563EB;
+            color: white;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 10px;
+            display: none;
+        }
+        .task-badge.active { display: inline-block; }
+
         .call-timer {
             font-size: 13px;
             color: #6B7280;
@@ -95,6 +109,99 @@
             font-size: 13px;
         }
 
+        .msg-bubble.system {
+            background: #1a2744;
+            align-self: center;
+            font-size: 13px;
+            color: #60A5FA;
+            border-radius: 12px;
+            padding: 8px 14px;
+        }
+
+        /* Toast notifications */
+        .toast-container {
+            position: fixed;
+            top: 12px;
+            left: 12px;
+            right: 12px;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            pointer-events: none;
+        }
+
+        .toast {
+            background: #1F2937;
+            border: 1px solid #374151;
+            border-radius: 12px;
+            padding: 10px 14px;
+            font-size: 13px;
+            color: #F9FAFB;
+            animation: toast-in 0.3s ease-out;
+            pointer-events: auto;
+        }
+
+        .toast.success { border-color: #22C55E; }
+        .toast.error { border-color: #EF4444; }
+        .toast.info { border-color: #2563EB; }
+
+        @keyframes toast-in {
+            from { opacity: 0; transform: translateY(-12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Task panel */
+        .task-panel {
+            background: #111827;
+            border-top: 1px solid #1F2937;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+        .task-panel.open { max-height: 200px; overflow-y: auto; }
+
+        .task-panel-header {
+            padding: 8px 16px;
+            font-size: 12px;
+            color: #6B7280;
+            display: flex;
+            justify-content: space-between;
+            cursor: pointer;
+        }
+
+        .task-card {
+            padding: 8px 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 13px;
+        }
+
+        .task-status {
+            width: 18px;
+            height: 18px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .task-status .dot-spinner {
+            width: 10px; height: 10px;
+            border: 2px solid #2563EB;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        .task-status .dot-done { color: #22C55E; font-size: 16px; }
+        .task-status .dot-fail { color: #EF4444; font-size: 16px; }
+        .task-status .dot-queued { color: #F59E0B; font-size: 10px; }
+
+        .task-title { flex: 1; color: #D1D5DB; }
+        .task-elapsed { color: #6B7280; font-size: 11px; }
+
         /* Controls */
         .controls {
             padding: 12px 20px 28px;
@@ -114,7 +221,6 @@
         .status.processing { color: #F59E0B; }
         .status.speaking { color: #60A5FA; }
 
-        /* Call button — idle state (green phone) */
         .call-btn {
             width: 80px;
             height: 80px;
@@ -131,10 +237,7 @@
             touch-action: none;
         }
 
-        /* In-call state (red hangup) */
-        .call-btn.in-call {
-            background: #EF4444;
-        }
+        .call-btn.in-call { background: #EF4444; }
 
         .call-btn svg {
             width: 36px;
@@ -142,7 +245,6 @@
             fill: currentColor;
         }
 
-        /* Listening pulse */
         @keyframes listen-pulse {
             0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
             50% { box-shadow: 0 0 0 18px rgba(34, 197, 94, 0); }
@@ -153,12 +255,8 @@
             background: #22C55E;
         }
 
-        /* Processing spin ring */
-        .call-btn.processing {
-            background: #4B5563;
-        }
+        .call-btn.processing { background: #4B5563; }
 
-        /* Speaking glow */
         @keyframes speak-glow {
             0%, 100% { box-shadow: 0 0 0 0 rgba(96, 165, 250, 0.3); }
             50% { box-shadow: 0 0 0 14px rgba(96, 165, 250, 0); }
@@ -182,7 +280,6 @@
             animation: spin 0.8s linear infinite;
         }
 
-        /* Volume visualiser bar */
         .volume-bar-wrap {
             width: 120px;
             height: 4px;
@@ -212,15 +309,29 @@
     </style>
 </head>
 <body>
+    <div class="toast-container" id="toastContainer"></div>
+
     <div class="header">
         <div class="model-label" id="modelLabel">
-            <span class="connection-dot checking" id="connDot"></span>
-            Claude Opus · Fields Agent
+            <span>
+                <span class="connection-dot checking" id="connDot"></span>
+                Claude Opus · Fields Agent
+            </span>
+            <span class="task-badge" id="taskBadge">0 tasks</span>
         </div>
         <div class="call-timer" id="callTimer">00:00</div>
     </div>
 
     <div class="chat-area" id="chatArea"></div>
+
+    <!-- Task panel (collapsible) -->
+    <div class="task-panel" id="taskPanel">
+        <div class="task-panel-header" id="taskPanelHeader">
+            <span>Background Tasks</span>
+            <span id="taskPanelToggle">&#9660;</span>
+        </div>
+        <div id="taskList"></div>
+    </div>
 
     <div class="controls">
         <div class="volume-bar-wrap" id="volumeWrap">
@@ -228,7 +339,6 @@
         </div>
         <div class="status" id="status">Connecting...</div>
         <button class="call-btn" id="callBtn">
-            <!-- Phone icon -->
             <svg viewBox="0 0 24 24"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg>
         </button>
     </div>
@@ -238,19 +348,20 @@
         const API_BASE = location.origin;
 
         // ---- State ----
-        let inCall = false;          // Is the call active?
-        let phase = 'idle';          // idle | listening | processing | speaking
-        let mediaStream = null;      // Persistent mic stream for the call
+        let inCall = false;
+        let phase = 'idle';
+        let mediaStream = null;
         let mediaRecorder = null;
         let audioChunks = [];
         let audioContext = null;
         let analyserNode = null;
-        let currentAudio = null;     // Currently playing TTS audio
+        let currentAudio = null;
+        let pendingNotifications = [];  // Queue task notifications during call
 
         // VAD settings
-        const SILENCE_THRESHOLD = 0.015;  // Volume below this = silence
-        const SILENCE_DURATION = 1500;    // ms of silence before auto-send
-        const MIN_SPEECH_DURATION = 400;  // Must have at least this much speech
+        const SILENCE_THRESHOLD = 0.015;
+        const SILENCE_DURATION = 1500;
+        const MIN_SPEECH_DURATION = 400;
 
         let silenceStart = 0;
         let speechDetected = false;
@@ -261,28 +372,154 @@
         let callStartTime = 0;
         let timerInterval = null;
 
+        // Tasks
+        let activeTasks = {};
+
         // DOM
         const chatArea = document.getElementById('chatArea');
         const statusEl = document.getElementById('status');
         const callBtn = document.getElementById('callBtn');
-        const modelLabel = document.getElementById('modelLabel');
         const connDot = document.getElementById('connDot');
         const volumeWrap = document.getElementById('volumeWrap');
         const volumeBar = document.getElementById('volumeBar');
         const callTimer = document.getElementById('callTimer');
+        const toastContainer = document.getElementById('toastContainer');
+        const taskBadge = document.getElementById('taskBadge');
+        const taskPanel = document.getElementById('taskPanel');
+        const taskList = document.getElementById('taskList');
+        const taskPanelHeader = document.getElementById('taskPanelHeader');
 
         // Icons
         const PHONE_ICON = '<svg viewBox="0 0 24 24"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg>';
         const HANGUP_ICON = '<svg viewBox="0 0 24 24"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08c-.18-.17-.29-.42-.29-.7 0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.69-1.36-2.67-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/></svg>';
         const SPINNER_HTML = '<div class="spinner"></div>';
 
-        // ---- Health check ----
+        // ==========================
+        // SSE — Server-Sent Events
+        // ==========================
+
+        let eventSource = null;
+
+        function connectSSE() {
+            if (eventSource) eventSource.close();
+            eventSource = new EventSource(API_BASE + '/api/events');
+
+            eventSource.addEventListener('task_started', (e) => {
+                const data = JSON.parse(e.data);
+                activeTasks[data.task_id] = { title: data.title, status: data.status, started: Date.now() };
+                updateTaskBadge();
+                updateTaskPanel();
+                showToast(`Task started: ${data.title}`, 'info');
+            });
+
+            eventSource.addEventListener('task_progress', (e) => {
+                const data = JSON.parse(e.data);
+                if (activeTasks[data.task_id]) {
+                    activeTasks[data.task_id].status = 'running';
+                }
+                updateTaskPanel();
+            });
+
+            eventSource.addEventListener('task_completed', (e) => {
+                const data = JSON.parse(e.data);
+                delete activeTasks[data.task_id];
+                updateTaskBadge();
+                updateTaskPanel();
+
+                const msg = `Task done: ${data.title}`;
+                showToast(msg, 'success');
+                addMessage(`[Task completed] ${data.title}: ${data.summary || 'Done.'}`, 'system');
+
+                // During a voice call, queue TTS notification
+                if (inCall && phase === 'listening') {
+                    pendingNotifications.push(data.summary || data.title + ' completed.');
+                }
+            });
+
+            eventSource.addEventListener('task_failed', (e) => {
+                const data = JSON.parse(e.data);
+                delete activeTasks[data.task_id];
+                updateTaskBadge();
+                updateTaskPanel();
+                showToast(`Task failed: ${data.error || 'Unknown error'}`, 'error');
+                addMessage(`[Task failed] ${data.error || 'Unknown error'}`, 'system');
+            });
+
+            eventSource.onerror = () => {
+                // Auto-reconnect is built into EventSource
+                console.log('SSE connection lost, reconnecting...');
+            };
+        }
+
+        function updateTaskBadge() {
+            const count = Object.keys(activeTasks).length;
+            if (count > 0) {
+                taskBadge.textContent = count + (count === 1 ? ' task' : ' tasks');
+                taskBadge.classList.add('active');
+                taskPanel.classList.add('open');
+            } else {
+                taskBadge.classList.remove('active');
+                taskPanel.classList.remove('open');
+            }
+        }
+
+        function updateTaskPanel() {
+            const entries = Object.entries(activeTasks);
+            if (entries.length === 0) {
+                taskList.innerHTML = '';
+                return;
+            }
+            taskList.innerHTML = entries.map(([id, t]) => {
+                const elapsed = Math.floor((Date.now() - (t.started || Date.now())) / 1000);
+                const mins = Math.floor(elapsed / 60);
+                const secs = elapsed % 60;
+                const timeStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+                const statusIcon = t.status === 'queued'
+                    ? '<span class="dot-queued">&#9679;</span>'
+                    : '<div class="dot-spinner"></div>';
+                return `<div class="task-card">
+                    <div class="task-status">${statusIcon}</div>
+                    <span class="task-title">${t.title}</span>
+                    <span class="task-elapsed">${timeStr}</span>
+                </div>`;
+            }).join('');
+        }
+
+        // Refresh task panel elapsed times
+        setInterval(updateTaskPanel, 1000);
+
+        // Toggle task panel
+        taskPanelHeader.addEventListener('click', () => {
+            taskPanel.classList.toggle('open');
+        });
+
+        // ==========================
+        // Toast notifications
+        // ==========================
+
+        function showToast(message, type) {
+            const toast = document.createElement('div');
+            toast.className = 'toast ' + (type || 'info');
+            toast.textContent = message;
+            toastContainer.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transition = 'opacity 0.3s';
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
+        // ==========================
+        // Health check + SSE init
+        // ==========================
+
         async function healthCheck() {
             try {
                 const r = await fetch(API_BASE + '/api/health');
                 if (r.ok) {
                     connDot.className = 'connection-dot ok';
                     setStatus('Tap to start call');
+                    connectSSE();
                 } else throw 0;
             } catch {
                 connDot.className = 'connection-dot fail';
@@ -328,15 +565,17 @@
         function addMessage(text, type) {
             const group = document.createElement('div');
             group.className = 'msg-group';
-            const label = document.createElement('div');
-            label.className = 'msg-label ' + type;
-            if (type === 'user') label.textContent = 'You';
-            else if (type === 'error') label.textContent = '';
-            else label.textContent = 'Claude';
+            if (type !== 'system') {
+                const label = document.createElement('div');
+                label.className = 'msg-label ' + type;
+                if (type === 'user') label.textContent = 'You';
+                else if (type === 'error') label.textContent = '';
+                else label.textContent = 'Claude';
+                if (type !== 'error') group.appendChild(label);
+            }
             const bubble = document.createElement('div');
             bubble.className = 'msg-bubble ' + type;
             bubble.textContent = text;
-            if (type !== 'error') group.appendChild(label);
             group.appendChild(bubble);
             chatArea.appendChild(group);
             chatArea.scrollTop = chatArea.scrollHeight;
@@ -394,30 +633,23 @@
         // CALL LIFECYCLE
         // ===============================
 
-        // Tap the button: start or end the call
         callBtn.addEventListener('click', () => {
-            if (inCall) {
-                endCall();
-            } else {
-                startCall();
-            }
+            if (inCall) endCall(); else startCall();
         });
 
-        // ---- Start call ----
         async function startCall() {
             try {
                 mediaStream = await navigator.mediaDevices.getUserMedia({
                     audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true }
                 });
             } catch (err) {
-                addMessage('Microphone permission required. Tap the lock icon in your browser address bar.', 'error');
+                addMessage('Microphone permission required.', 'error');
                 return;
             }
 
             inCall = true;
             vibrate(100);
 
-            // Set up audio analyser for VAD
             audioContext = new (window.AudioContext || window.webkitAudioContext)();
             const source = audioContext.createMediaStreamSource(mediaStream);
             analyserNode = audioContext.createAnalyser();
@@ -428,7 +660,6 @@
             beginListening();
         }
 
-        // ---- End call ----
         function endCall() {
             inCall = false;
             vibrate(100);
@@ -450,7 +681,6 @@
             setPhase('idle');
         }
 
-        // ---- Listening phase: record + VAD ----
         function beginListening() {
             if (!inCall) return;
 
@@ -473,7 +703,6 @@
             startVAD();
         }
 
-        // ---- VAD: detect silence after speech ----
         function startVAD() {
             const dataArray = new Float32Array(analyserNode.fftSize);
 
@@ -482,31 +711,26 @@
 
                 analyserNode.getFloatTimeDomainData(dataArray);
 
-                // RMS volume
                 let sum = 0;
                 for (let i = 0; i < dataArray.length; i++) sum += dataArray[i] * dataArray[i];
                 const rms = Math.sqrt(sum / dataArray.length);
 
-                // Update volume bar
                 const pct = Math.min(100, (rms / 0.15) * 100);
                 volumeBar.style.width = pct + '%';
 
                 const now = Date.now();
 
                 if (rms > SILENCE_THRESHOLD) {
-                    // Speech detected
                     if (!speechDetected) {
                         speechDetected = true;
                         speechStart = now;
                     }
                     silenceStart = 0;
                 } else {
-                    // Silence
                     if (speechDetected && silenceStart === 0) {
                         silenceStart = now;
                     }
 
-                    // If we had speech and enough silence has passed, auto-send
                     if (speechDetected && silenceStart > 0) {
                         const speechDuration = silenceStart - speechStart;
                         const silenceDuration = now - silenceStart;
@@ -532,13 +756,11 @@
             mediaRecorder = null;
         }
 
-        // ---- Send audio to backend ----
         async function sendAudio() {
             if (!inCall) return;
 
             setPhase('processing');
 
-            // Stop recorder and collect audio
             await new Promise(resolve => {
                 if (!mediaRecorder || mediaRecorder.state === 'inactive') {
                     resolve();
@@ -551,7 +773,6 @@
             const audioBlob = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' });
 
             if (audioBlob.size < 500) {
-                // Too short, go back to listening
                 if (inCall) beginListening();
                 return;
             }
@@ -565,7 +786,7 @@
                     body: formData,
                 });
 
-                if (!inCall) return; // Hung up during processing
+                if (!inCall) return;
 
                 const data = await resp.json();
 
@@ -575,7 +796,6 @@
                     if (data.transcript) addMessage(data.transcript, 'user');
                     if (data.reply) addMessage(data.reply, 'agent');
 
-                    // Play TTS, then resume listening
                     if (data.audio_base64 && inCall) {
                         setPhase('speaking');
                         await playBase64Audio(data.audio_base64, data.audio_format || 'mp3');
@@ -585,11 +805,10 @@
                 if (inCall) addMessage('Connection error: ' + err.message, 'error');
             }
 
-            // Resume listening for next turn
             if (inCall) beginListening();
         }
 
-        // ---- Keyboard shortcut: Enter to toggle call ----
+        // Keyboard shortcut
         document.addEventListener('keydown', (e) => {
             if (e.code === 'Enter' && document.activeElement.tagName !== 'INPUT') {
                 e.preventDefault();
