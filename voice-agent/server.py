@@ -31,6 +31,7 @@ from typing import Optional
 from fastapi import FastAPI, HTTPException, Header, UploadFile, File, Form
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 import uvicorn
 
 # ---------------------------------------------------------------------------
@@ -374,6 +375,14 @@ async def clear_history(
     verify_token(authorization)
     conversation_history[mode] = []
     return JSONResponse({"cleared": True, "mode": mode})
+
+# ---------------------------------------------------------------------------
+# Static files — serve web app at /voice/
+# ---------------------------------------------------------------------------
+
+WEB_DIR = Path(__file__).parent / "web"
+if WEB_DIR.exists():
+    app.mount("/voice", StaticFiles(directory=str(WEB_DIR), html=True), name="web")
 
 # ---------------------------------------------------------------------------
 # Main
