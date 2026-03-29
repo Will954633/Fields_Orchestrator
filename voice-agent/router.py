@@ -72,9 +72,32 @@ ROUTER_SCHEMA = json.dumps({
 })
 
 
+def _load_todo_summary() -> str:
+    """Load pending todos for context injection."""
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["python3", "scripts/todo-manager.py", "session-check"],
+            capture_output=True, text=True, timeout=5,
+            cwd=ORCHESTRATOR_DIR,
+            env={**os.environ, "COSMOS_CONNECTION_STRING": os.environ.get("COSMOS_CONNECTION_STRING", "")},
+        )
+        output = result.stdout.strip()
+        if output and "No pending todos" not in output:
+            return output
+    except Exception as e:
+        log.warning(f"Todo session-check failed: {e}")
+    return ""
+
+
 def _load_context_summary() -> str:
     """Load compact context for the router."""
     sections = []
+
+    # Pending todos (surface overdue/due items)
+    todo_summary = _load_todo_summary()
+    if todo_summary:
+        sections.append(f"=== PENDING TODOS ===\n{todo_summary}")
 
     ops = Path(ORCHESTRATOR_DIR) / "OPS_STATUS.md"
     if ops.exists():
@@ -94,6 +117,11 @@ def _load_full_context() -> str:
     claude_md = Path(ORCHESTRATOR_DIR) / "CLAUDE.md"
     if claude_md.exists():
         sections.append(claude_md.read_text())
+
+    # Pending todos
+    todo_summary = _load_todo_summary()
+    if todo_summary:
+        sections.append(f"=== PENDING TODOS ===\n{todo_summary}")
 
     ops = Path(ORCHESTRATOR_DIR) / "OPS_STATUS.md"
     if ops.exists():
@@ -162,6 +190,7 @@ MODE: "direct" (you answer now, via Haiku — fast, ~2s):
 - Simple factual questions answerable from ops status or memory
 - Brief acknowledgments or clarifications
 - Reporting completed task results (summaries are below)
+- If PENDING TODOS exist in context, mention overdue/due-today items proactively when greeting or at session start
 
 MODE: "converse" (escalate to Opus for deep thinking — ~10-30s, no VM tools):
 - Strategy discussions, business planning, complex analysis
@@ -556,8 +585,8 @@ async def opus_full(user_text: str, history: list[dict]) -> str:
         return response
 
     except asyncio.TimeoutError:
-        log.error("Opus full timed out after 300s")
-        return "That's taking too long. I've timed out after five minutes."
+        log.error(f"Opus full timed out after {OPUS_FULL_TIMEOUT}s")
+        return "That's taking too long — I've timed out. Try asking me to do it as a background task instead."
     except Exception as e:
         log.error(f"Opus full error: {e}")
         return f"I hit an error: {str(e)[:200]}"
