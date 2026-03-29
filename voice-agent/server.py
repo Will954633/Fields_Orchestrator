@@ -464,11 +464,16 @@ def _build_contextual_dev_task(user_text: str, history: list[dict]) -> Optional[
     if not _history_mentions_dev_work(history):
         return None
 
+    recent_context = _recent_history_context(history)
     prompt = (
         f"The user just approved or re-authorised previously discussed dev work: {user_text}\n"
         "Infer the concrete coding task from the recent conversation context included below. "
         "Do the actual work on the VM now: inspect the code, make the needed change, verify it, "
-        "and report what you actually changed. Do not stay in planning or chat mode."
+        "and report what you actually changed. Do not stay in planning or chat mode.\n\n"
+        "Recent conversation context:\n"
+        f"{recent_context}\n\n"
+        "If the latest request refers to earlier discussion, use that context. "
+        "Do the concrete work on the VM rather than only describing a plan."
     )
     return {
         "title": "Continue approved development task",
@@ -696,18 +701,63 @@ async def handle_message(user_text: str) -> dict:
         await _append_history_safe("assistant", reply, timeout=1.0)
         return {"reply": reply, "task_id": task_id, "model_lock": model_lock}
 
-    # --- Model lock: opus → full Opus agent with all tools ---
+    # --- Model lock: opus → dev tasks go to background, chat stays synchronous ---
     if model_lock == "opus":
         history = await _load_history_safe()
+        task_id = None
+
+        # Dev tasks → background worker (prevents 5-min blocking + empty stdout)
+        fast_dev_task = _build_fast_dev_task(user_text)
+        if fast_dev_task:
+            prompt = _augment_task_prompt(fast_dev_task["prompt"], history)
+            task_id = task_manager.spawn_task(
+                title=fast_dev_task["title"],
+                prompt=prompt,
+                user_message=user_text,
+                model="opus",
+            )
+            reply = fast_dev_task["reply"]
+            log.info(f"Opus dev task spawned as background: {task_id} — {fast_dev_task['title']}")
+            await _append_history_safe("user", user_text)
+            await _append_history_safe("assistant", reply)
+            return {"reply": reply, "task_id": task_id, "model_lock": model_lock}
+
+        # Contextual dev approvals → background worker
+        contextual_dev_task = _build_contextual_dev_task(user_text, history)
+        if contextual_dev_task:
+            prompt = _augment_task_prompt(contextual_dev_task["prompt"], history)
+            task_id = task_manager.spawn_task(
+                title=contextual_dev_task["title"],
+                prompt=prompt,
+                user_message=user_text,
+                model="opus",
+            )
+            reply = contextual_dev_task["reply"]
+            log.info(f"Opus contextual dev task spawned: {task_id} — {contextual_dev_task['title']}")
+            await _append_history_safe("user", user_text)
+            await _append_history_safe("assistant", reply)
+            return {"reply": reply, "task_id": task_id, "model_lock": model_lock}
+
+        # Email → opus_email (conversational with tools)
+        fast_email_task = _build_fast_email_task(user_text)
+        if fast_email_task:
+            log.info("Opus mode email request → opus_email")
+            reply = await opus_email(user_text, history)
+            if _SWITCH_HAIKU_SIGNAL in reply:
+                reply = reply.replace(_SWITCH_HAIKU_SIGNAL, "").strip()
+            await _append_history_safe("user", user_text)
+            await _append_history_safe("assistant", reply)
+            return {"reply": reply, "task_id": None, "model_lock": model_lock}
+
+        # Everything else → synchronous opus_full (conversation, questions, etc.)
         reply = await opus_full(user_text, history)
-        # Check if Opus wants to self-downgrade
         if _SWITCH_HAIKU_SIGNAL in reply:
             reply = reply.replace(_SWITCH_HAIKU_SIGNAL, "").strip()
             model_lock = "auto"
             log.info("Model lock → auto (Opus self-downgrade)")
         await _append_history_safe("user", user_text)
         await _append_history_safe("assistant", reply)
-        return {"reply": reply, "task_id": None, "model_lock": model_lock}
+        return {"reply": reply, "task_id": task_id, "model_lock": model_lock}
 
     # --- Model lock: haiku → always direct (no Opus converse) ---
     # (still allows task spawning — that's work, not conversation)
@@ -967,6 +1017,120 @@ async def cancel_task(task_id: str, authorization: Optional[str] = Header(None))
     if not cancelled:
         raise HTTPException(400, "Task not found or already finished")
     return JSONResponse({"cancelled": True, "task_id": task_id})
+
+
+# ---------------------------------------------------------------------------
+# Todo endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/api/todos")
+async def list_todos(authorization: Optional[str] = Header(None)):
+    """List open todos for the UI panel."""
+    verify_token(authorization)
+    sm = _get_db()["system_monitor"]
+    todos = list(sm["user_todos"].find({"status": "open"}))
+
+    now = datetime.now(AEST)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    result = []
+    for t in todos:
+        due = t.get("due_date")
+        days_left = None
+        urgency = ""
+        if due:
+            if isinstance(due, str):
+                due = datetime.fromisoformat(due)
+            if due.tzinfo is None:
+                due = due.replace(tzinfo=AEST)
+            due_day = due.replace(hour=0, minute=0, second=0, microsecond=0)
+            days_left = (due_day - today_start).days
+            if days_left < 0:
+                urgency = f"OVERDUE by {abs(days_left)}d"
+            elif days_left == 0:
+                urgency = "DUE TODAY"
+            elif days_left == 1:
+                urgency = "due tomorrow"
+            elif days_left <= 7:
+                urgency = f"due in {days_left}d"
+            else:
+                urgency = f"due in {days_left}d"
+
+        result.append({
+            "_id": str(t["_id"]),
+            "title": t.get("title", ""),
+            "priority": t.get("priority", "medium"),
+            "due_date": due.isoformat() if due else None,
+            "days_left": days_left,
+            "urgency": urgency,
+            "tags": t.get("tags", []),
+            "notes": t.get("notes", ""),
+            "source": t.get("source", ""),
+            "created_at": t.get("created_at", ""),
+        })
+
+    # Sort: overdue first, then priority, then due date
+    def sort_key(item):
+        d = item["days_left"] if item["days_left"] is not None else 999
+        pri = {"critical": 0, "high": 1, "medium": 2, "low": 3}.get(item["priority"], 4)
+        return (0 if d < 0 else 1, pri, d)
+
+    result.sort(key=sort_key)
+    return JSONResponse({"todos": result, "count": len(result)})
+
+
+@app.post("/api/todos/{todo_id}/done")
+async def complete_todo(todo_id: str, authorization: Optional[str] = Header(None)):
+    """Mark a todo as done."""
+    verify_token(authorization)
+    sm = _get_db()["system_monitor"]
+    from bson import ObjectId
+    try:
+        result = sm["user_todos"].update_one(
+            {"_id": ObjectId(todo_id)},
+            {"$set": {"status": "done", "completed_at": datetime.now(AEST), "updated_at": datetime.now(AEST)}}
+        )
+        if result.matched_count == 0:
+            raise HTTPException(404, "Todo not found")
+        return JSONResponse({"completed": True, "todo_id": todo_id})
+    except Exception as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/api/todos/{todo_id}/snooze")
+async def snooze_todo(
+    todo_id: str,
+    days: int = Form(3),
+    authorization: Optional[str] = Header(None),
+):
+    """Snooze a todo by N days."""
+    verify_token(authorization)
+    sm = _get_db()["system_monitor"]
+    from bson import ObjectId
+    try:
+        todo = sm["user_todos"].find_one({"_id": ObjectId(todo_id)})
+        if not todo:
+            raise HTTPException(404, "Todo not found")
+
+        current_due = todo.get("due_date") or datetime.now(AEST)
+        if isinstance(current_due, str):
+            current_due = datetime.fromisoformat(current_due)
+        if current_due.tzinfo is None:
+            current_due = current_due.replace(tzinfo=AEST)
+
+        today = datetime.now(AEST).replace(hour=0, minute=0, second=0, microsecond=0)
+        base = max(current_due, today)
+        new_due = base + timedelta(days=days)
+
+        sm["user_todos"].update_one(
+            {"_id": ObjectId(todo_id)},
+            {"$set": {"due_date": new_due, "reminder_sent": False, "updated_at": datetime.now(AEST)}}
+        )
+        return JSONResponse({"snoozed": True, "todo_id": todo_id, "new_due": new_due.isoformat()})
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(400, str(e))
 
 
 # ---------------------------------------------------------------------------
