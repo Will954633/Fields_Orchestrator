@@ -81,6 +81,8 @@
             flex-direction: column;
             gap: 4px;
             scroll-behavior: smooth;
+            -webkit-user-select: text;
+            user-select: text;
         }
 
         .msg-group { display: flex; flex-direction: column; gap: 2px; }
@@ -505,14 +507,6 @@
             background: #7C3AED;
         }
 
-        .model-btn.active.gpt54 {
-            background: #10A37F;
-        }
-
-        .model-btn.active.gpt54mini {
-            background: #10A37F;
-        }
-
         .model-hint {
             margin-top: 8px;
             font-size: 12px;
@@ -606,18 +600,16 @@
         <div class="model-label" id="modelLabel">
             <span>
                 <span class="connection-dot checking" id="connDot"></span>
-                <span id="modelName">GPT-5.4-mini · Voice</span>
+                <span id="modelName">Auto · Fields Agent</span>
             </span>
             <span class="task-badge" id="taskBadge">0 tasks</span>
         </div>
         <div class="model-toggle">
-            <button class="model-btn" data-lock="auto" id="btnAuto">Auto</button>
+            <button class="model-btn active" data-lock="auto" id="btnAuto">Auto</button>
             <button class="model-btn" data-lock="haiku" id="btnHaiku">Haiku</button>
             <button class="model-btn" data-lock="opus" id="btnOpus">Opus</button>
-            <button class="model-btn" data-lock="gpt54" id="btnGpt54">GPT-5.4</button>
-            <button class="model-btn active" data-lock="gpt54mini" id="btnGpt54Mini">5.4-mini</button>
         </div>
-        <div class="model-hint" id="modelHint">GPT chat is direct. Code, email, and other work requests run as GPT background tasks.</div>
+        <div class="model-hint" id="modelHint">Haiku routes, Opus works. Voice + text input.</div>
         <div class="call-timer" id="callTimer">00:00</div>
     </div>
 
@@ -680,11 +672,13 @@
         const SILENCE_THRESHOLD = 0.015;
         const SILENCE_DURATION = 1500;
         const MIN_SPEECH_DURATION = 400;
+        const LISTEN_IDLE_TIMEOUT = 30000; // End listening if no speech for 30s
 
         let silenceStart = 0;
         let speechDetected = false;
         let speechStart = 0;
         let vadInterval = null;
+        let listenIdleTimer = null;
 
         // Call timer
         let callStartTime = 0;
@@ -714,7 +708,7 @@
         const textInput = document.getElementById('textInput');
         const textSendBtn = document.getElementById('textSendBtn');
 
-        let currentModelLock = 'gpt54mini';
+        let currentModelLock = 'auto';
         let isStreaming = false;  // Currently streaming a response
 
         function pickRecorderMimeType() {
@@ -757,20 +751,16 @@
         function setModelLock(lock) {
             currentModelLock = lock;
             document.querySelectorAll('.model-btn').forEach(b => {
-                b.classList.remove('active', 'opus', 'gpt54', 'gpt54mini');
+                b.classList.remove('active', 'opus');
                 if (b.dataset.lock === lock) {
                     b.classList.add('active');
                     if (lock === 'opus') b.classList.add('opus');
-                    if (lock === 'gpt54') b.classList.add('gpt54');
-                    if (lock === 'gpt54mini') b.classList.add('gpt54mini');
                 }
             });
             const labels = {
                 auto: 'Auto · Fields Agent',
                 haiku: 'Haiku · Fast',
-                opus: 'Opus · Deep',
-                gpt54: 'GPT-5.4 · Chat + GPT Tasks',
-                gpt54mini: 'GPT-5.4-mini · Voice + GPT Tasks',
+                opus: 'Opus · Full Agent',
             };
             modelName.textContent = labels[lock] || labels.auto;
         }
@@ -1095,6 +1085,12 @@
             phase = p;
             callBtn.className = 'call-btn in-call' + (p !== 'idle' ? ' ' + p : '');
 
+            // Audio cues for hands-free use (only during active call)
+            if (inCall) {
+                if (p === 'listening') playCue('listening');
+                else if (p === 'processing') playCue('processing');
+            }
+
             if (p === 'listening') {
                 callBtn.innerHTML = HANGUP_ICON;
                 setStatus('Listening...', 'listening');
@@ -1117,6 +1113,67 @@
 
         function vibrate(ms) {
             if (navigator.vibrate) navigator.vibrate(ms || 50);
+        }
+
+        // ---- Audio cues for hands-free use ----
+        // Short synthesised tones so the user knows state changes without looking.
+        //   listening  → rising double-beep  (high, bright — "I'm ready, speak now")
+        //   processing → single low tone     (soft — "got it, thinking")
+        //   speaking   → (no cue — the voice itself is the cue)
+        //   error      → descending two-tone  (something went wrong)
+        let _cueCtx = null;
+        function _getCueCtx() {
+            if (!_cueCtx) _cueCtx = new (window.AudioContext || window.webkitAudioContext)();
+            return _cueCtx;
+        }
+
+        function playCue(type) {
+            try {
+                const ctx = _getCueCtx();
+                if (ctx.state === 'suspended') ctx.resume();
+                const now = ctx.currentTime;
+
+                if (type === 'listening') {
+                    // Rising double-beep: 880Hz then 1100Hz, short and bright
+                    [880, 1100].forEach((freq, i) => {
+                        const osc = ctx.createOscillator();
+                        const gain = ctx.createGain();
+                        osc.type = 'sine';
+                        osc.frequency.value = freq;
+                        gain.gain.setValueAtTime(0.12, now + i * 0.1);
+                        gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.1 + 0.1);
+                        osc.connect(gain).connect(ctx.destination);
+                        osc.start(now + i * 0.1);
+                        osc.stop(now + i * 0.1 + 0.12);
+                    });
+                } else if (type === 'processing') {
+                    // Single soft low tone: 440Hz, gentle
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.value = 440;
+                    gain.gain.setValueAtTime(0.08, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+                    osc.connect(gain).connect(ctx.destination);
+                    osc.start(now);
+                    osc.stop(now + 0.25);
+                } else if (type === 'error') {
+                    // Descending two-tone: 600Hz then 400Hz
+                    [600, 400].forEach((freq, i) => {
+                        const osc = ctx.createOscillator();
+                        const gain = ctx.createGain();
+                        osc.type = 'sine';
+                        osc.frequency.value = freq;
+                        gain.gain.setValueAtTime(0.1, now + i * 0.15);
+                        gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.15 + 0.15);
+                        osc.connect(gain).connect(ctx.destination);
+                        osc.start(now + i * 0.15);
+                        osc.stop(now + i * 0.15 + 0.18);
+                    });
+                }
+            } catch (e) {
+                // Audio cues are best-effort — never break the app
+            }
         }
 
         function addMessage(text, type) {
@@ -1537,6 +1594,7 @@
             inCall = false;
             vibrate(100);
 
+            clearTimeout(listenIdleTimer);
             stopVAD();
             stopRecorder();
             stopPlayback();
@@ -1572,8 +1630,22 @@
                 if (e.data.size > 0) audioChunks.push(e.data);
             };
 
-            mediaRecorder.start(100);
+            // No timeslice — collect all data as one chunk on stop.
+            // Using timeslice (e.g. start(100)) produces fragments where
+            // only the first chunk has the WebM/EBML header, making the
+            // reassembled Blob invalid for OpenAI's STT API.
+            mediaRecorder.start();
             startVAD();
+
+            // Auto-end listening after 30s of no speech detected
+            clearTimeout(listenIdleTimer);
+            listenIdleTimer = setTimeout(() => {
+                if (inCall && phase === 'listening' && !speechDetected) {
+                    stopVAD();
+                    stopRecorder();
+                    endCall();
+                }
+            }, LISTEN_IDLE_TIMEOUT);
         }
 
         function startVAD() {
@@ -1597,6 +1669,7 @@
                     if (!speechDetected) {
                         speechDetected = true;
                         speechStart = now;
+                        clearTimeout(listenIdleTimer); // Speech started — cancel idle timeout
                     }
                     silenceStart = 0;
                 } else {
@@ -1675,6 +1748,7 @@
 
                 if (data.error) {
                     addMessage(data.error, 'error');
+                    if (inCall) playCue('error');
                 } else {
                     if (data.transcript) addMessage(data.transcript, 'user');
                     if (data.reply) addMessage(data.reply, 'agent');
