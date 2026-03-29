@@ -7,52 +7,18 @@
     android:background="#0A0A0F"
     android:padding="24dp">
 
-    <!-- Mode Toggle -->
-    <com.google.android.material.chip.ChipGroup
-        android:id="@+id/modeChipGroup"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginTop="16dp"
-        app:singleSelection="true"
-        app:selectionRequired="true">
-
-        <com.google.android.material.chip.Chip
-            android:id="@+id/chipWork"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Work Mode"
-            android:textColor="@color/chip_text_color"
-            app:chipBackgroundColor="@color/chip_bg_color"
-            app:checkedIconVisible="false"
-            style="@style/Widget.Material3.Chip.Filter" />
-
-        <com.google.android.material.chip.Chip
-            android:id="@+id/chipStrategy"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Strategy Mode"
-            android:textColor="@color/chip_text_color"
-            app:chipBackgroundColor="@color/chip_bg_color"
-            app:checkedIconVisible="false"
-            style="@style/Widget.Material3.Chip.Filter" />
-
-    </com.google.android.material.chip.ChipGroup>
-
     <!-- Model label -->
     <TextView
         android:id="@+id/modelLabel"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Claude Sonnet · VM Access"
+        android:text="Claude Opus · Fields Agent"
         android:textColor="#6B7280"
         android:textSize="13sp"
-        app:layout_constraintTop_toBottomOf="@id/modeChipGroup"
+        app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginTop="8dp" />
+        android:layout_marginTop="16dp" />
 
     <!-- Conversation scroll area -->
     <ScrollView
