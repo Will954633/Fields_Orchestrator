@@ -99,7 +99,6 @@ _db_client = None
 # "gpt54" (GPT-5.4 full agent), "gpt54mini" (GPT-5.4-mini full agent)
 model_lock: str = "auto"
 LOCKED_GPT_SYNC_TIMEOUT = 90  # Keep browser requests comfortably under proxy timeout
-LOCKED_GPT_ROUTER_TIMEOUT = 8  # Router may hang; GPT chat must stay responsive
 
 
 def _get_db():
@@ -287,53 +286,21 @@ async def handle_message(user_text: str) -> dict:
 
     history = _load_history()
 
-    # --- Model lock: GPT modes route work to background tasks, keep chat sync ---
+    # --- Model lock: GPT modes stay in direct chat path for reliability ---
     if model_lock in ("gpt54", "gpt54mini"):
-        active_tasks = task_manager.get_active_tasks()
-        completed_unnotified = task_manager.get_unnotified_completed()
-        decision = None
+        task_id = None
+        gpt_model = GPT54_MINI_MODEL if model_lock == "gpt54mini" else GPT54_MODEL
         try:
-            decision = await asyncio.wait_for(
-                route_message(
-                    user_text, history, active_tasks, completed_unnotified,
-                    force_direct=False,
-                ),
-                timeout=LOCKED_GPT_ROUTER_TIMEOUT,
+            reply = await asyncio.wait_for(
+                gpt_converse(user_text, history, model=gpt_model),
+                timeout=LOCKED_GPT_SYNC_TIMEOUT,
             )
         except asyncio.TimeoutError:
-            log.warning(
-                f"Locked GPT task detection timed out after {LOCKED_GPT_ROUTER_TIMEOUT}s; "
-                f"falling back to direct GPT reply (model: {model_lock})"
+            log.error(f"Locked GPT sync reply timed out after {LOCKED_GPT_SYNC_TIMEOUT}s (model: {model_lock})")
+            reply = (
+                "That took too long to answer in-chat. "
+                "Please try again or switch to Opus for VM task execution."
             )
-
-        task_id = None
-        if decision and decision.get("spawn_task"):
-            spawn = decision["spawn_task"]
-            task_id = task_manager.spawn_task(
-                title=spawn["title"],
-                prompt=spawn["prompt"],
-                user_message=user_text,
-                model=model_lock,
-            )
-            log.info(f"GPT task spawned: {task_id} — {spawn['title']} (model: {model_lock})")
-            reply = decision["reply"]
-        else:
-            gpt_model = GPT54_MINI_MODEL if model_lock == "gpt54mini" else GPT54_MODEL
-            try:
-                reply = await asyncio.wait_for(
-                    gpt_converse(user_text, history, model=gpt_model),
-                    timeout=LOCKED_GPT_SYNC_TIMEOUT,
-                )
-            except asyncio.TimeoutError:
-                log.error(f"Locked GPT sync reply timed out after {LOCKED_GPT_SYNC_TIMEOUT}s (model: {model_lock})")
-                reply = (
-                    "That took too long to answer in-chat. "
-                    "Ask again or phrase it as a task and I'll run it in the background."
-                )
-
-        if completed_unnotified:
-            task_manager.mark_notified([t["_id"] for t in completed_unnotified])
-
         _append_history("user", user_text)
         _append_history("assistant", reply)
         return {"reply": reply, "task_id": task_id, "model_lock": model_lock}
