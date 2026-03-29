@@ -44,7 +44,7 @@ import uvicorn
 # Local modules
 from sse import SSEBroadcaster
 from task_manager import TaskManager
-from router import route_message, opus_full, _opus_email as opus_email
+from router import route_message, opus_full, _opus_email as opus_email, resolve_permission
 
 # Session lock — prevents concurrent SDK session access (single-user system)
 _session_lock = asyncio.Lock()
@@ -189,6 +189,24 @@ async def _load_history_safe(timeout: float = 2.0) -> list[dict]:
     except Exception as e:
         log.warning(f"History load skipped after {time.perf_counter() - started:.2f}s: {e}")
         return []
+
+
+def _should_bypass_router(history: list[dict]) -> bool:
+    """Check if we should skip the Haiku router and go directly to Opus.
+
+    Returns True if the conversation appears to be in an active session with Opus
+    (last assistant reply was substantial, suggesting it came from Opus not Haiku).
+    """
+    if not history:
+        return False
+    # Look at the last 2 assistant messages
+    recent_assistant = [m for m in history[-4:] if m.get("role") == "assistant"]
+    if not recent_assistant:
+        return False
+    last_reply = recent_assistant[-1].get("content", "")
+    # Haiku replies are typically short (<150 chars). Opus replies are longer.
+    # If the last reply was substantial, we're in an active Opus session.
+    return len(last_reply) > 200
 
 
 async def _append_history_safe(role: str, content: str, timeout: float = 2.0):
@@ -810,6 +828,18 @@ async def handle_message(user_text: str) -> dict:
     history = await _load_history_safe()
     session_id = await _load_session_id_safe()
 
+    # Router bypass (#5): active SDK session → direct to Opus
+    if model_lock == "auto" and session_id and _should_bypass_router(history):
+        log.info("Router bypass: active SDK session, routing to opus_full")
+        reply, new_sid = await opus_full(user_text, history, session_id=session_id)
+        if new_sid:
+            await _save_session_id_safe(new_sid)
+        if _SWITCH_HAIKU_SIGNAL in reply:
+            reply = reply.replace(_SWITCH_HAIKU_SIGNAL, "").strip()
+        await _append_history_safe("user", user_text)
+        await _append_history_safe("assistant", reply)
+        return {"reply": reply, "task_id": None, "model_lock": model_lock}
+
     # --- Normal routing (auto mode or haiku mode) ---
     active_tasks = task_manager.get_active_tasks()
     completed_unnotified = task_manager.get_unnotified_completed()
@@ -966,6 +996,244 @@ async def chat_endpoint(
         "task_id": result.get("task_id"),
         "model_lock": result.get("model_lock", model_lock),
     })
+
+
+@app.post("/api/chat-stream")
+async def chat_stream_endpoint(
+    text: str = Form(...),
+    authorization: Optional[str] = Header(None),
+):
+    """Streaming chat endpoint — returns SSE stream with real-time agent events.
+
+    Events:
+      agent_text     — text delta (word by word)
+      agent_tool_start — tool call beginning (tool name)
+      agent_tool_call  — complete tool call (tool name + summarized input)
+      agent_tool_result — tool result received
+      agent_done     — final result
+      agent_error    — error
+      chat_reply     — final assembled reply (last event, same as /api/chat response)
+    """
+    verify_token(authorization)
+    log.info(f"Stream chat request: text='{text[:100]}'")
+
+    async def event_generator():
+        # Build an on_stream callback that yields SSE events
+        stream_queue: asyncio.Queue = asyncio.Queue(maxsize=500)
+
+        def on_stream(event_type: str, data: dict):
+            data["ts"] = time.time()
+            try:
+                stream_queue.put_nowait((event_type, data))
+            except asyncio.QueueFull:
+                pass  # drop if queue full
+
+        # Run handle_message_streaming in background, collecting events
+        result_holder = {}
+
+        async def run_agent():
+            result = await handle_message_streaming(text, on_stream)
+            result_holder.update(result)
+            # Signal done
+            stream_queue.put_nowait(("__done__", {}))
+
+        agent_task = asyncio.create_task(run_agent())
+
+        try:
+            while True:
+                try:
+                    event_type, data = await asyncio.wait_for(stream_queue.get(), timeout=30)
+                except asyncio.TimeoutError:
+                    yield "event: keepalive\ndata: {}\n\n"
+                    continue
+
+                if event_type == "__done__":
+                    # Send final assembled reply
+                    final = {
+                        "reply": result_holder.get("reply", ""),
+                        "task_id": result_holder.get("task_id"),
+                        "model_lock": result_holder.get("model_lock", model_lock),
+                    }
+                    yield f"event: chat_reply\ndata: {json.dumps(final)}\n\n"
+                    break
+                else:
+                    yield f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
+
+        except asyncio.CancelledError:
+            agent_task.cancel()
+        except Exception as e:
+            yield f"event: agent_error\ndata: {json.dumps({'error': str(e)[:200]})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+async def handle_message_streaming(user_text: str, on_stream=None) -> dict:
+    """Same as handle_message but passes on_stream to Opus functions."""
+    global model_lock
+
+    # Voice triggers — same as handle_message
+    if _GPT54MINI_TRIGGERS.search(user_text):
+        model_lock = "gpt54mini"
+        reply = "Switched to GPT-5.4-mini. Full tools available."
+        _append_history("user", user_text)
+        _append_history("assistant", reply)
+        return {"reply": reply, "task_id": None, "model_lock": model_lock}
+
+    if _GPT54_TRIGGERS.search(user_text):
+        model_lock = "gpt54"
+        reply = "Switched to GPT-5.4. Full tools available."
+        _append_history("user", user_text)
+        _append_history("assistant", reply)
+        return {"reply": reply, "task_id": None, "model_lock": model_lock}
+
+    if _OPUS_TRIGGERS.search(user_text):
+        model_lock = "opus"
+        reply = "Switched to Opus. I'm listening."
+        _append_history("user", user_text)
+        _append_history("assistant", reply)
+        return {"reply": reply, "task_id": None, "model_lock": model_lock}
+
+    if _HAIKU_TRIGGERS.search(user_text):
+        model_lock = "auto"
+        reply = "Switched back. Haiku on routing duty."
+        _append_history("user", user_text)
+        _append_history("assistant", reply)
+        return {"reply": reply, "task_id": None, "model_lock": model_lock}
+
+    # Opus-locked mode — with streaming
+    if model_lock == "opus":
+        history = await _load_history_safe()
+        task_id = None
+
+        # Dev tasks → background (no streaming for these)
+        fast_dev_task = _build_fast_dev_task(user_text)
+        if fast_dev_task:
+            prompt = _augment_task_prompt(fast_dev_task["prompt"], history)
+            task_id = task_manager.spawn_task(
+                title=fast_dev_task["title"], prompt=prompt,
+                user_message=user_text, model="opus",
+            )
+            reply = fast_dev_task["reply"]
+            await _append_history_safe("user", user_text)
+            await _append_history_safe("assistant", reply)
+            return {"reply": reply, "task_id": task_id, "model_lock": model_lock}
+
+        contextual_dev_task = _build_contextual_dev_task(user_text, history)
+        if contextual_dev_task:
+            prompt = _augment_task_prompt(contextual_dev_task["prompt"], history)
+            task_id = task_manager.spawn_task(
+                title=contextual_dev_task["title"], prompt=prompt,
+                user_message=user_text, model="opus",
+            )
+            reply = contextual_dev_task["reply"]
+            await _append_history_safe("user", user_text)
+            await _append_history_safe("assistant", reply)
+            return {"reply": reply, "task_id": task_id, "model_lock": model_lock}
+
+        # Email → opus_email with streaming
+        fast_email_task = _build_fast_email_task(user_text)
+        if fast_email_task:
+            session_id = await _load_session_id_safe()
+            reply, new_sid = await opus_email(user_text, history, session_id=session_id, on_stream=on_stream)
+            if new_sid:
+                await _save_session_id_safe(new_sid)
+            if _SWITCH_HAIKU_SIGNAL in reply:
+                reply = reply.replace(_SWITCH_HAIKU_SIGNAL, "").strip()
+            await _append_history_safe("user", user_text)
+            await _append_history_safe("assistant", reply)
+            return {"reply": reply, "task_id": None, "model_lock": model_lock}
+
+        # Everything else → opus_full with streaming
+        session_id = await _load_session_id_safe()
+        reply, new_sid = await opus_full(user_text, history, session_id=session_id, on_stream=on_stream)
+        if new_sid:
+            await _save_session_id_safe(new_sid)
+        if _SWITCH_HAIKU_SIGNAL in reply:
+            reply = reply.replace(_SWITCH_HAIKU_SIGNAL, "").strip()
+            model_lock = "auto"
+        await _append_history_safe("user", user_text)
+        await _append_history_safe("assistant", reply)
+        return {"reply": reply, "task_id": task_id, "model_lock": model_lock}
+
+    # Auto/haiku mode — streaming for Opus calls
+    history = await _load_history_safe()
+    session_id = await _load_session_id_safe()
+
+    # GPT-locked modes don't stream (they use GPT APIs separately)
+    if model_lock in ("gpt54", "gpt54mini"):
+        return await handle_message(user_text)
+
+    # Router bypass (#5): if there's an active SDK session and the last assistant
+    # message was from Opus (not Haiku), route directly to opus_full for continuity.
+    # This avoids the Haiku middleman during active coding/discussion sessions.
+    if model_lock == "auto" and session_id and _should_bypass_router(history):
+        log.info("Router bypass: active SDK session detected, routing directly to opus_full")
+        reply, new_sid = await opus_full(user_text, history, session_id=session_id, on_stream=on_stream)
+        if new_sid:
+            await _save_session_id_safe(new_sid)
+        if _SWITCH_HAIKU_SIGNAL in reply:
+            reply = reply.replace(_SWITCH_HAIKU_SIGNAL, "").strip()
+        await _append_history_safe("user", user_text)
+        await _append_history_safe("assistant", reply)
+        return {"reply": reply, "task_id": None, "model_lock": model_lock}
+
+    active_tasks = task_manager.get_active_tasks()
+    completed_unnotified = task_manager.get_unnotified_completed()
+
+    decision = await route_message(
+        user_text, history, active_tasks, completed_unnotified,
+        force_direct=(model_lock == "haiku"),
+        session_id=session_id,
+    )
+
+    reply = decision["reply"]
+    task_id = None
+    mode = decision.get("mode", "direct")
+    new_session_id = decision.get("session_id")
+
+    if new_session_id and new_session_id != session_id:
+        await _save_session_id_safe(new_session_id)
+
+    if decision.get("spawn_task"):
+        spawn = decision["spawn_task"]
+        task_id = task_manager.spawn_task(
+            title=spawn["title"], prompt=spawn["prompt"], user_message=user_text,
+        )
+
+    if mode in ("email", "converse") and _SWITCH_HAIKU_SIGNAL in reply:
+        reply = reply.replace(_SWITCH_HAIKU_SIGNAL, "").strip()
+
+    if completed_unnotified:
+        task_manager.mark_notified([t["_id"] for t in completed_unnotified])
+
+    await _append_history_safe("user", user_text)
+    await _append_history_safe("assistant", reply)
+
+    return {"reply": reply, "task_id": task_id, "model_lock": model_lock}
+
+
+# ---------------------------------------------------------------------------
+# Permission response endpoint (#2 — interactive approval)
+# ---------------------------------------------------------------------------
+
+@app.post("/api/permission-respond")
+async def permission_respond(
+    id: str = Form(...),
+    allow: str = Form(...),
+    authorization: Optional[str] = Header(None),
+):
+    """Respond to a permission request from the agent."""
+    verify_token(authorization)
+    allowed = allow.lower() in ("true", "1", "yes", "allow")
+    resolve_permission(id, allowed)
+    return JSONResponse({"ok": True, "id": id, "allowed": allowed})
 
 
 # ---------------------------------------------------------------------------
