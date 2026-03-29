@@ -457,9 +457,11 @@ def _build_system_prompt(mode: str = "full") -> str:
             "but this GPT chat experience can still spawn GPT background tasks for work that needs tools. "
             "That includes reading, writing, and editing code on the VM, running commands, searching the "
             "knowledge base, and handling email through 'python3 scripts/fields-email.py'. "
-            "If Will asks whether you have those capabilities, answer yes and describe that tool-using work "
-            "runs as GPT background tasks. For email replies and sends, state that drafts must go through "
-            "--dry-run first before anything is sent live.\n\n"
+            "If Will asks whether you have those capabilities, answer yes first, then briefly explain that "
+            "tool-using work runs as GPT background tasks. Do not answer with a misleading no just because "
+            "direct chat itself is not executing the tools. For example, if Will asks whether you have access "
+            "to his emails, say yes: you can access inbox/search/read/send via the VM email tooling, with "
+            "drafts using --dry-run first before anything is sent live.\n\n"
         )
 
     base += context
