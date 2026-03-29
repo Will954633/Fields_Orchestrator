@@ -1,15 +1,12 @@
 #!/usr/bin/env python3
 """
 Fields Voice Agent — Backend API
-Receives audio from Android app, processes through STT → LLM → TTS pipeline.
-
-Modes:
-  - "work"     → Claude Code (full VM access, memory, tools)
-  - "strategy" → GPT-5.4 (1M context frontier reasoning)
+Receives audio/text from web or Android app, processes through STT → LLM → TTS pipeline.
+Single unified agent: Claude Code (Opus) with full VM access — same as terminal.
 
 Endpoints:
   POST /api/voice       — audio in, audio + text out
-  POST /api/chat        — text in, text out (for testing)
+  POST /api/chat        — text in, text out
   GET  /api/health      — health check
   GET  /api/history     — conversation history
   DELETE /api/history   — clear conversation history
@@ -49,7 +46,6 @@ MEMORY_DIR = "/home/projects/.claude/projects/-home-fields-Fields-Orchestrator/m
 STT_MODEL = "gpt-4o-mini-transcribe"
 TTS_MODEL = "gpt-4o-mini-tts"
 TTS_VOICE = "nova"  # Clear, friendly voice
-GPT_MODEL = "gpt-5.4"
 
 AEST = timezone(timedelta(hours=10))
 
@@ -79,8 +75,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# In-memory conversation history (per mode)
-conversation_history: dict[str, list[dict]] = {"work": [], "strategy": []}
+# In-memory conversation history
+conversation_history: list[dict] = []
 MAX_HISTORY = 50
 
 # ---------------------------------------------------------------------------
@@ -179,76 +175,11 @@ def _load_context_docs() -> dict:
     return docs
 
 
-def _build_system_prompt_work() -> str:
-    """Build system prompt for Claude work mode with full VM context."""
+def _build_append_prompt() -> str:
+    """Build supplementary context prompt with memory and ops status."""
     docs = _load_context_docs()
 
-    return f"""You are the Fields Estate operations agent, responding to voice commands from Will Simpson (founder).
-You have full access to the VM at /home/fields/Fields_Orchestrator via Claude Code.
-Keep responses concise and conversational — this is a voice interface, not a text chat.
-Aim for 2-3 sentences unless asked for detail.
-
-Current time: {datetime.now(AEST).strftime('%Y-%m-%d %H:%M AEST')}
-
-=== PROJECT INSTRUCTIONS (CLAUDE.md) ===
-{docs.get('claude_md', 'Not available')}
-
-=== PERSISTENT MEMORY INDEX ===
-{docs.get('memory_md', 'Not available')}
-
-=== MEMORY FILES ===
-{docs.get('memory_files', 'Not available')}
-
-=== LIVE OPS STATUS ===
-{docs.get('ops_status', 'Not available')}"""
-
-
-def _build_system_prompt_strategy() -> str:
-    """Build system prompt for GPT-5.4 strategy mode with full business context."""
-    docs = _load_context_docs()
-
-    return f"""You are a senior business strategist and technical advisor for Fields Real Estate, speaking directly with founder Will Simpson.
-Keep responses concise and conversational — this is a voice interface. Aim for 2-3 sentences unless asked for detail. Be direct, no fluff.
-
-Current time: {datetime.now(AEST).strftime('%Y-%m-%d %H:%M AEST')}
-
-Below is the full project context — the business, systems, data, and current state. Use this to give informed, specific advice rather than generic strategy talk.
-
-=== PROJECT INSTRUCTIONS (CLAUDE.md) ===
-{docs.get('claude_md', 'Not available')}
-
-=== PERSISTENT MEMORY INDEX ===
-{docs.get('memory_md', 'Not available')}
-
-=== MEMORY FILES ===
-{docs.get('memory_files', 'Not available')}
-
-=== LIVE OPS STATUS ===
-{docs.get('ops_status', 'Not available')}"""
-
-
-async def llm_claude_work(user_text: str) -> str:
-    """Route to Claude Code with full VM access."""
-    history = conversation_history["work"]
-
-    # Build conversation context from recent history
-    context_lines = []
-    for msg in history[-10:]:  # Last 10 exchanges
-        role = msg["role"]
-        context_lines.append(f"{role}: {msg['content'][:500]}")
-
-    prompt_parts = []
-    if context_lines:
-        prompt_parts.append("Recent conversation:\n" + "\n".join(context_lines))
-    prompt_parts.append(f"User (voice): {user_text}")
-    prompt_parts.append("\nRespond concisely (this is voice output). If a task requires running commands, do it and report results.")
-
-    full_prompt = "\n\n".join(prompt_parts)
-
-    # Build supplementary system prompt with memory files
-    # (Claude Code already loads CLAUDE.md from cwd, but we add memory files explicitly)
-    docs = _load_context_docs()
-    append_prompt = f"""This is a voice interface — keep responses to 2-3 sentences unless asked for detail.
+    return f"""This is a voice/chat interface — keep responses to 2-3 sentences unless asked for detail.
 Current time: {datetime.now(AEST).strftime('%Y-%m-%d %H:%M AEST')}
 
 === PERSISTENT MEMORY ===
@@ -260,20 +191,36 @@ Current time: {datetime.now(AEST).strftime('%Y-%m-%d %H:%M AEST')}
 === LIVE OPS STATUS ===
 {docs.get('ops_status', '')}"""
 
+
+async def llm_claude(user_text: str) -> str:
+    """Route to Claude Code (Opus) with full VM access — no restrictions."""
+    # Build conversation context from recent history
+    context_lines = []
+    for msg in conversation_history[-10:]:  # Last 10 exchanges
+        role = msg["role"]
+        context_lines.append(f"{role}: {msg['content'][:500]}")
+
+    prompt_parts = []
+    if context_lines:
+        prompt_parts.append("Recent conversation:\n" + "\n".join(context_lines))
+    prompt_parts.append(f"User: {user_text}")
+    prompt_parts.append("\nRespond concisely (this is voice/chat output). If a task requires running commands, do it and report results.")
+
+    full_prompt = "\n\n".join(prompt_parts)
+    append_prompt = _build_append_prompt()
+
     try:
         result = await asyncio.create_subprocess_exec(
             CLAUDE_BIN, "-p", full_prompt,
             "--output-format", "text",
-            "--model", "sonnet",
-            "--max-budget-usd", "0.50",
-            "--allowedTools", "Bash Read Glob Grep",
+            "--model", "opus",
             "--append-system-prompt", append_prompt,
             cwd=ORCHESTRATOR_DIR,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             env={**os.environ, "ANTHROPIC_API_KEY": ANTHROPIC_API_KEY},
         )
-        stdout, stderr = await asyncio.wait_for(result.communicate(), timeout=120)
+        stdout, stderr = await asyncio.wait_for(result.communicate(), timeout=300)
         response = stdout.decode().strip()
 
         if not response:
@@ -281,58 +228,20 @@ Current time: {datetime.now(AEST).strftime('%Y-%m-%d %H:%M AEST')}
             response = "I wasn't able to process that. Could you try again?"
 
         # Store in history
-        history.append({"role": "user", "content": user_text, "ts": time.time()})
-        history.append({"role": "assistant", "content": response, "ts": time.time()})
-        if len(history) > MAX_HISTORY * 2:
-            history[:] = history[-MAX_HISTORY * 2:]
+        conversation_history.append({"role": "user", "content": user_text, "ts": time.time()})
+        conversation_history.append({"role": "assistant", "content": response, "ts": time.time()})
+        if len(conversation_history) > MAX_HISTORY * 2:
+            conversation_history[:] = conversation_history[-MAX_HISTORY * 2:]
 
         log.info(f"Claude response: {len(response)} chars")
         return response
 
     except asyncio.TimeoutError:
-        log.error("Claude timed out after 120s")
-        return "That command is taking too long. I've timed out after two minutes."
+        log.error("Claude timed out after 300s")
+        return "That's taking too long. I've timed out after five minutes."
     except Exception as e:
         log.error(f"Claude error: {e}")
-        return f"I hit an error running that command: {str(e)[:200]}"
-
-
-async def llm_gpt_strategy(user_text: str) -> str:
-    """Route to GPT-5.4 for strategy discussions."""
-    from openai import OpenAI
-    client = OpenAI(api_key=OPENAI_API_KEY)
-
-    history = conversation_history["strategy"]
-
-    messages = [{"role": "system", "content": _build_system_prompt_strategy()}]
-
-    # Add conversation history
-    for msg in history[-20:]:
-        messages.append({"role": msg["role"], "content": msg["content"]})
-
-    messages.append({"role": "user", "content": user_text})
-
-    try:
-        response = client.chat.completions.create(
-            model=GPT_MODEL,
-            messages=messages,
-            max_completion_tokens=1000,  # Keep responses concise for voice
-            temperature=0.7,
-        )
-        reply = response.choices[0].message.content.strip()
-
-        # Store in history
-        history.append({"role": "user", "content": user_text, "ts": time.time()})
-        history.append({"role": "assistant", "content": reply, "ts": time.time()})
-        if len(history) > MAX_HISTORY * 2:
-            history[:] = history[-MAX_HISTORY * 2:]
-
-        log.info(f"GPT-5.4 response: {len(reply)} chars")
-        return reply
-
-    except Exception as e:
-        log.error(f"GPT-5.4 error: {e}")
-        return f"I hit an error with the strategy model: {str(e)[:200]}"
+        return f"I hit an error: {str(e)[:200]}"
 
 # ---------------------------------------------------------------------------
 # Endpoints
@@ -343,21 +252,18 @@ async def health():
     return {
         "status": "ok",
         "time": datetime.now(AEST).isoformat(),
-        "models": {"stt": STT_MODEL, "tts": TTS_MODEL, "work": "claude-sonnet", "strategy": GPT_MODEL},
+        "model": "claude-opus",
     }
 
 
 @app.post("/api/voice")
 async def voice_endpoint(
     audio: UploadFile = File(...),
-    mode: str = Form("work"),
+    mode: str = Form("work"),  # Kept for backward compat, ignored
     authorization: Optional[str] = Header(None),
 ):
     """Main voice endpoint: audio in → audio + text out."""
     verify_token(authorization)
-
-    if mode not in ("work", "strategy"):
-        raise HTTPException(400, "Mode must be 'work' or 'strategy'")
 
     audio_bytes = await audio.read()
     if len(audio_bytes) < 100:
@@ -365,7 +271,7 @@ async def voice_endpoint(
     if len(audio_bytes) > 25 * 1024 * 1024:
         raise HTTPException(400, "Audio too large (max 25MB)")
 
-    log.info(f"Voice request: mode={mode}, audio={len(audio_bytes)} bytes")
+    log.info(f"Voice request: audio={len(audio_bytes)} bytes")
 
     # 1. Speech-to-Text
     transcript = await speech_to_text(audio_bytes, audio.filename or "audio.wav")
@@ -373,10 +279,7 @@ async def voice_endpoint(
         return JSONResponse({"error": "Could not transcribe audio", "transcript": ""})
 
     # 2. LLM
-    if mode == "work":
-        reply = await llm_claude_work(transcript)
-    else:
-        reply = await llm_gpt_strategy(transcript)
+    reply = await llm_claude(transcript)
 
     # 3. Text-to-Speech
     tts_audio = await text_to_speech(reply)
@@ -387,52 +290,39 @@ async def voice_endpoint(
         "reply": reply,
         "audio_base64": audio_b64,
         "audio_format": "mp3",
-        "mode": mode,
     })
 
 
 @app.post("/api/chat")
 async def chat_endpoint(
     text: str = Form(...),
-    mode: str = Form("work"),
+    mode: str = Form("work"),  # Kept for backward compat, ignored
     authorization: Optional[str] = Header(None),
 ):
-    """Text-only endpoint for testing without audio."""
+    """Text-only endpoint."""
     verify_token(authorization)
 
-    if mode not in ("work", "strategy"):
-        raise HTTPException(400, "Mode must be 'work' or 'strategy'")
+    log.info(f"Chat request: text='{text[:100]}'")
+    reply = await llm_claude(text)
 
-    log.info(f"Chat request: mode={mode}, text='{text[:100]}'")
-
-    if mode == "work":
-        reply = await llm_claude_work(text)
-    else:
-        reply = await llm_gpt_strategy(text)
-
-    return JSONResponse({
-        "reply": reply,
-        "mode": mode,
-    })
+    return JSONResponse({"reply": reply})
 
 
 @app.get("/api/history")
 async def get_history(
-    mode: str = "work",
     authorization: Optional[str] = Header(None),
 ):
     verify_token(authorization)
-    return JSONResponse({"history": conversation_history.get(mode, []), "mode": mode})
+    return JSONResponse({"history": conversation_history})
 
 
 @app.delete("/api/history")
 async def clear_history(
-    mode: str = "work",
     authorization: Optional[str] = Header(None),
 ):
     verify_token(authorization)
-    conversation_history[mode] = []
-    return JSONResponse({"cleared": True, "mode": mode})
+    conversation_history.clear()
+    return JSONResponse({"cleared": True})
 
 # ---------------------------------------------------------------------------
 # Static files — serve web app at /voice/
