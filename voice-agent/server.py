@@ -115,6 +115,7 @@ async def speech_to_text(audio_bytes: bytes, filename: str = "audio.wav") -> str
             result = client.audio.transcriptions.create(
                 model=STT_MODEL,
                 file=audio_file,
+                language="en",
             )
         transcript = result.text.strip()
         log.info(f"STT: '{transcript[:100]}...' ({len(audio_bytes)} bytes)")
@@ -144,19 +145,43 @@ async def text_to_speech(text: str, voice: str = TTS_VOICE) -> bytes:
 # LLM backends
 # ---------------------------------------------------------------------------
 
-def _build_system_prompt_work() -> str:
-    """Build system prompt for Claude work mode with VM context."""
-    # Load memory index
-    memory_content = ""
+def _load_context_docs() -> dict:
+    """Load shared context documents that both modes use."""
+    docs = {}
+
+    # CLAUDE.md — full project instructions
+    claude_md_path = Path(ORCHESTRATOR_DIR) / "CLAUDE.md"
+    if claude_md_path.exists():
+        docs["claude_md"] = claude_md_path.read_text()
+
+    # MEMORY.md — persistent memory index
     memory_path = Path(MEMORY_DIR) / "MEMORY.md"
     if memory_path.exists():
-        memory_content = memory_path.read_text()[:4000]
+        docs["memory_md"] = memory_path.read_text()
 
-    # Load ops status
-    ops_status = ""
+    # Load individual memory files referenced in MEMORY.md
+    memory_details = []
+    memory_dir = Path(MEMORY_DIR)
+    if memory_dir.exists():
+        for f in sorted(memory_dir.glob("*.md")):
+            if f.name == "MEMORY.md":
+                continue
+            content = f.read_text().strip()
+            if content:
+                memory_details.append(f"### {f.stem}\n{content}")
+    docs["memory_files"] = "\n\n".join(memory_details) if memory_details else ""
+
+    # OPS_STATUS.md — live system status
     ops_path = Path(ORCHESTRATOR_DIR) / "OPS_STATUS.md"
     if ops_path.exists():
-        ops_status = ops_path.read_text()[:3000]
+        docs["ops_status"] = ops_path.read_text()
+
+    return docs
+
+
+def _build_system_prompt_work() -> str:
+    """Build system prompt for Claude work mode with full VM context."""
+    docs = _load_context_docs()
 
     return f"""You are the Fields Estate operations agent, responding to voice commands from Will Simpson (founder).
 You have full access to the VM at /home/fields/Fields_Orchestrator via Claude Code.
@@ -165,24 +190,41 @@ Aim for 2-3 sentences unless asked for detail.
 
 Current time: {datetime.now(AEST).strftime('%Y-%m-%d %H:%M AEST')}
 
-Memory index:
-{memory_content}
+=== PROJECT INSTRUCTIONS (CLAUDE.md) ===
+{docs.get('claude_md', 'Not available')}
 
-Ops status:
-{ops_status}"""
+=== PERSISTENT MEMORY INDEX ===
+{docs.get('memory_md', 'Not available')}
+
+=== MEMORY FILES ===
+{docs.get('memory_files', 'Not available')}
+
+=== LIVE OPS STATUS ===
+{docs.get('ops_status', 'Not available')}"""
 
 
 def _build_system_prompt_strategy() -> str:
-    """Build system prompt for GPT-5.4 strategy mode."""
-    return f"""You are a senior business strategist and technical advisor for Fields Real Estate — a pre-revenue property intelligence platform on the Gold Coast, Australia.
+    """Build system prompt for GPT-5.4 strategy mode with full business context."""
+    docs = _load_context_docs()
 
-Founded by Will Simpson, sole operator. Business model: buyer-first, seller-funded. Building data infrastructure, content, and website. Target suburbs: Robina, Varsity Lakes, Burleigh Waters.
-
-Tagline: "Smarter with data"
-
+    return f"""You are a senior business strategist and technical advisor for Fields Real Estate, speaking directly with founder Will Simpson.
 Keep responses concise and conversational — this is a voice interface. Aim for 2-3 sentences unless asked for detail. Be direct, no fluff.
 
-Current time: {datetime.now(AEST).strftime('%Y-%m-%d %H:%M AEST')}"""
+Current time: {datetime.now(AEST).strftime('%Y-%m-%d %H:%M AEST')}
+
+Below is the full project context — the business, systems, data, and current state. Use this to give informed, specific advice rather than generic strategy talk.
+
+=== PROJECT INSTRUCTIONS (CLAUDE.md) ===
+{docs.get('claude_md', 'Not available')}
+
+=== PERSISTENT MEMORY INDEX ===
+{docs.get('memory_md', 'Not available')}
+
+=== MEMORY FILES ===
+{docs.get('memory_files', 'Not available')}
+
+=== LIVE OPS STATUS ===
+{docs.get('ops_status', 'Not available')}"""
 
 
 async def llm_claude_work(user_text: str) -> str:
@@ -203,6 +245,21 @@ async def llm_claude_work(user_text: str) -> str:
 
     full_prompt = "\n\n".join(prompt_parts)
 
+    # Build supplementary system prompt with memory files
+    # (Claude Code already loads CLAUDE.md from cwd, but we add memory files explicitly)
+    docs = _load_context_docs()
+    append_prompt = f"""This is a voice interface — keep responses to 2-3 sentences unless asked for detail.
+Current time: {datetime.now(AEST).strftime('%Y-%m-%d %H:%M AEST')}
+
+=== PERSISTENT MEMORY ===
+{docs.get('memory_md', '')}
+
+=== MEMORY FILES ===
+{docs.get('memory_files', '')}
+
+=== LIVE OPS STATUS ===
+{docs.get('ops_status', '')}"""
+
     try:
         result = await asyncio.create_subprocess_exec(
             CLAUDE_BIN, "-p", full_prompt,
@@ -210,6 +267,7 @@ async def llm_claude_work(user_text: str) -> str:
             "--model", "sonnet",
             "--max-budget-usd", "0.50",
             "--allowedTools", "Bash Read Glob Grep",
+            "--append-system-prompt", append_prompt,
             cwd=ORCHESTRATOR_DIR,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -258,7 +316,7 @@ async def llm_gpt_strategy(user_text: str) -> str:
         response = client.chat.completions.create(
             model=GPT_MODEL,
             messages=messages,
-            max_tokens=1000,  # Keep responses concise for voice
+            max_completion_tokens=1000,  # Keep responses concise for voice
             temperature=0.7,
         )
         reply = response.choices[0].message.content.strip()
