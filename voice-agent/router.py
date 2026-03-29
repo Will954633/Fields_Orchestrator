@@ -23,8 +23,16 @@ ORCHESTRATOR_DIR = "/home/fields/Fields_Orchestrator"
 MEMORY_DIR = "/home/projects/.claude/projects/-home-fields-Fields-Orchestrator/memory"
 AEST = timezone(timedelta(hours=10))
 
-ROUTER_TIMEOUT = 30  # seconds
-CONVERSE_TIMEOUT = 120  # seconds — Opus thinking time for deep conversation
+ROUTER_TIMEOUT = 300  # seconds
+CONVERSE_TIMEOUT = 300  # seconds — Opus thinking time for deep conversation
+OPUS_FULL_TIMEOUT = 1200  # seconds — Opus with full tools, real dev work
+
+
+def _cli_env() -> dict:
+    """Build env for Claude CLI subprocesses — strip ANTHROPIC_API_KEY so CLI
+    uses the Max subscription (OAuth) instead of per-token API billing."""
+    env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
+    return env
 
 # JSON schema for structured router output
 ROUTER_SCHEMA = json.dumps({
@@ -170,9 +178,13 @@ MODE: "task" (spawn background Opus worker — minutes, full VM access):
 - Database queries, data analysis
 - Any work requiring file reads/writes on the VM
 - **Knowledge base searches** — "what do our strategy docs say about X", "find meeting notes about Y", "what books cover Z"
-- Set reply to a natural acknowledgment: "On it — I'll search the knowledge base for that."
+- **Email operations** — "check my inbox", "search for emails from X", "read that email", "draft a reply", "send an email"
+- Set reply to a natural acknowledgment: "On it — I'll search the knowledge base for that." / "Checking your inbox now."
 - Set spawn_task.prompt to detailed self-contained instructions for the worker.
 - For KB searches, tell the worker to run: python3 scripts/search-kb.py "query" [--type TYPE]
+- For email operations, tell the worker to run: python3 scripts/fields-email.py <command>
+  Available email commands: inbox, search "query", search-live "query", read <id>, thread <id>, reply <id> --body "text", send --to addr --subject "subj" --body "text", stats
+  IMPORTANT for replies/sends: always use --dry-run first and show Will the draft. Only send without --dry-run after explicit approval.
 
 When there are recently completed tasks, naturally mention them in your reply.
 
@@ -229,7 +241,7 @@ async def route_message(
             cwd=ORCHESTRATOR_DIR,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            env={**os.environ, "ANTHROPIC_API_KEY": os.getenv("ANTHROPIC_API_KEY", "")},
+            env=_cli_env(),
         )
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=ROUTER_TIMEOUT)
         raw = stdout.decode().strip()
@@ -317,7 +329,7 @@ async def _opus_converse(user_text: str, history: list[dict]) -> str:
         f"Think carefully and provide substantive, specific advice — not generic strategy talk. "
         f"Be direct, challenge assumptions if warranted, and propose concrete next steps when relevant.\n\n"
         f"NOTE: You are in converse mode (no tools). If the user asks something that requires "
-        f"searching the knowledge base or running commands, tell them you'll need to switch — "
+        f"searching the knowledge base, running commands, or accessing email, tell them you'll need to switch — "
         f"suggest they say 'switch to opus' for the full agent, or that this will be picked up as a task.\n\n"
         f"IMPORTANT: If the user's message is simple (a greeting, a quick factual question, a thank you, "
         f"or anything that clearly doesn't need deep reasoning), append the exact text [SWITCH_HAIKU] "
@@ -335,11 +347,10 @@ async def _opus_converse(user_text: str, history: list[dict]) -> str:
             "--output-format", "text",
             "--append-system-prompt", system_prompt,
             "--no-session-persistence",
-            "--max-budget-usd", "1.00",
             cwd=ORCHESTRATOR_DIR,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            env={**os.environ, "ANTHROPIC_API_KEY": os.getenv("ANTHROPIC_API_KEY", "")},
+            env=_cli_env(),
         )
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=CONVERSE_TIMEOUT)
         response = stdout.decode().strip()
@@ -393,6 +404,13 @@ async def opus_full(user_text: str, history: list[dict]) -> str:
         f"Get full chunk: python3 scripts/search-kb.py --chunk CHUNK_ID --file path/to/index.json\n"
         f"List categories: python3 scripts/search-kb.py --list-categories\n"
         f"Use the KB when the user asks about strategy, books, past decisions, marketing plans, meeting notes, or anything that might be in the knowledge base.\n\n"
+        f"EMAIL: You can read, search, and send emails via Microsoft Graph (will@fieldsestate.com.au).\n"
+        f"CLI: python3 scripts/fields-email.py <command>\n"
+        f"Commands: inbox [--limit N --days N], search \"query\", search-live \"query\", read <message_id>, "
+        f"thread <id_or_email>, reply <message_id> --body \"text\" [--dry-run], "
+        f"send --to addr --subject \"subj\" --body \"text\" [--dry-run], stats\n"
+        f"IMPORTANT: For replies and sends, ALWAYS use --dry-run first and show Will the draft. "
+        f"Only send live (without --dry-run) after Will explicitly approves.\n\n"
         f"IMPORTANT: If the user's message is simple (a greeting, a quick factual question, a thank you, "
         f"or anything that clearly doesn't need deep reasoning or tools), append the exact text [SWITCH_HAIKU] "
         f"at the very end of your response. This signals the system to switch back to fast Haiku routing. "
@@ -408,13 +426,12 @@ async def opus_full(user_text: str, history: list[dict]) -> str:
             "--output-format", "text",
             "--append-system-prompt", system_prompt,
             "--dangerously-skip-permissions",
-            "--max-budget-usd", "5.00",
             cwd=ORCHESTRATOR_DIR,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            env={**os.environ, "ANTHROPIC_API_KEY": os.getenv("ANTHROPIC_API_KEY", "")},
+            env=_cli_env(),
         )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=300)
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=OPUS_FULL_TIMEOUT)
         response = stdout.decode().strip()
 
         if not response:
