@@ -465,7 +465,26 @@ async def voice_endpoint(
 
     # 1. Speech-to-Text
     stt_started = time.perf_counter()
-    transcript = await speech_to_text(audio_bytes, audio.filename or "audio.wav")
+    try:
+        transcript = await speech_to_text(audio_bytes, audio.filename or "audio.wav")
+    except Exception as e:
+        error_text = str(e)
+        log.warning(f"STT failed for voice request ({len(audio_bytes)} bytes): {error_text[:300]}")
+        if "Audio file might be corrupted or unsupported" in error_text:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error": "Audio file might be corrupted or unsupported. Please try again.",
+                    "transcript": "",
+                },
+            )
+        return JSONResponse(
+            status_code=502,
+            content={
+                "error": "Speech-to-text failed before the request could be processed.",
+                "transcript": "",
+            },
+        )
     stt_elapsed = time.perf_counter() - stt_started
     if not transcript:
         return JSONResponse({"error": "Could not transcribe audio", "transcript": ""})
