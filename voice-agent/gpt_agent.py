@@ -32,6 +32,7 @@ GPT54_MINI_MODEL = "gpt-5.4-mini-2026-03-17"
 MAX_TOOL_ROUNDS = 25  # Safety limit on agent loop iterations
 BASH_TIMEOUT = 120  # seconds per bash command
 GPT_MAX_COMPLETION_TOKENS = 4096
+GPT_CONVERSE_MAX_COMPLETION_TOKENS = 1200
 
 
 # ---------------------------------------------------------------------------
@@ -399,9 +400,26 @@ def _load_full_context() -> str:
     return "\n\n".join(sections)
 
 
+def _load_converse_context() -> str:
+    """Load a compact context block for low-latency GPT chat replies."""
+    sections = []
+
+    ops = Path(ORCHESTRATOR_DIR) / "OPS_STATUS.md"
+    if ops.exists():
+        ops_text = ops.read_text()
+        sections.append("=== LIVE OPS STATUS (TRUNCATED) ===\n" + ops_text[:6000])
+
+    memory_md = Path(MEMORY_DIR) / "MEMORY.md"
+    if memory_md.exists():
+        memory_text = memory_md.read_text()
+        sections.append("=== MEMORY INDEX (TRUNCATED) ===\n" + memory_text[:3000])
+
+    return "\n\n".join(sections)
+
+
 def _build_system_prompt(mode: str = "full") -> str:
     """Build system prompt for GPT agent."""
-    context = _load_full_context()
+    context = _load_converse_context() if mode == "converse" else _load_full_context()
     now = datetime.now(AEST).strftime("%Y-%m-%d %H:%M AEST")
 
     base = (
@@ -465,9 +483,9 @@ async def gpt_converse(
     messages = [{"role": "system", "content": system_prompt}]
 
     # Add conversation history
-    for msg in history[-20:]:
+    for msg in history[-8:]:
         role = msg.get("role", "user")
-        content = msg.get("content", "")[:1000]
+        content = msg.get("content", "")[:400]
         if role in ("user", "assistant"):
             messages.append({"role": role, "content": content})
 
@@ -478,7 +496,7 @@ async def gpt_converse(
             client.chat.completions.create,
             model=model,
             messages=messages,
-            max_completion_tokens=GPT_MAX_COMPLETION_TOKENS,
+            max_completion_tokens=GPT_CONVERSE_MAX_COMPLETION_TOKENS,
             temperature=0.7,
         )
         reply = response.choices[0].message.content or ""
