@@ -25,7 +25,7 @@ ORCHESTRATOR_DIR = "/home/fields/Fields_Orchestrator"
 MEMORY_DIR = "/home/projects/.claude/projects/-home-fields-Fields-Orchestrator/memory"
 
 MAX_CONCURRENT_WORKERS = 3
-WORKER_TIMEOUT_SECONDS = 600  # 10 minutes
+WORKER_TIMEOUT_SECONDS = 1200  # 20 minutes
 HEARTBEAT_INTERVAL_SECONDS = 15
 
 TASK_COLL = "voice_agent_tasks"
@@ -95,8 +95,10 @@ class TaskManager:
         if result.modified_count:
             log.warning(f"Marked {result.modified_count} orphaned task(s) as failed")
 
-    def spawn_task(self, title: str, prompt: str, user_message: str) -> str:
-        """Create a task and launch a background worker. Returns task_id."""
+    def spawn_task(self, title: str, prompt: str, user_message: str,
+                   model: str = "opus") -> str:
+        """Create a task and launch a background worker. Returns task_id.
+        model: 'opus' (default), 'gpt54', or 'gpt54mini'."""
         task_id = _task_id(title)
         doc = {
             "_id": task_id,
@@ -104,6 +106,7 @@ class TaskManager:
             "status": "queued",
             "prompt": prompt,
             "user_message": user_message,
+            "model": model,
             "pid": None,
             "created_at": _now_iso(),
             "started_at": None,
@@ -115,7 +118,7 @@ class TaskManager:
             "notified": False,
         }
         self._sm[TASK_COLL].insert_one(doc)
-        log.info(f"Task created: {task_id} — {title}")
+        log.info(f"Task created: {task_id} — {title} (model: {model})")
 
         self._sse.broadcast("task_started", {
             "task_id": task_id,
@@ -124,14 +127,17 @@ class TaskManager:
         })
 
         # Fire and forget — the worker coroutine manages its own lifecycle
-        asyncio.get_event_loop().create_task(self._run_worker(task_id, prompt))
+        asyncio.get_event_loop().create_task(self._run_worker(task_id, prompt, model))
         return task_id
 
-    async def _run_worker(self, task_id: str, prompt: str):
-        """Worker coroutine: acquire semaphore, run Claude, track lifecycle."""
+    async def _run_worker(self, task_id: str, prompt: str, model: str = "opus"):
+        """Worker coroutine: acquire semaphore, run worker, track lifecycle."""
         # Wait for a slot (stays queued until semaphore available)
         async with self._semaphore:
-            await self._execute(task_id, prompt)
+            if model in ("gpt54", "gpt54mini"):
+                await self._execute_gpt(task_id, prompt, model)
+            else:
+                await self._execute(task_id, prompt)
 
     async def _execute(self, task_id: str, prompt: str):
         """Execute Claude Code subprocess with heartbeat tracking."""
@@ -156,11 +162,10 @@ class TaskManager:
                 "--model", "opus",
                 "--append-system-prompt", append_prompt,
                 "--dangerously-skip-permissions",
-                "--max-budget-usd", "5.00",
                 cwd=ORCHESTRATOR_DIR,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                env={**os.environ, "ANTHROPIC_API_KEY": os.getenv("ANTHROPIC_API_KEY", "")},
+                env={k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"},
             )
         except Exception as e:
             log.error(f"Failed to launch worker for {task_id}: {e}")
@@ -237,6 +242,105 @@ class TaskManager:
             if len(response) > 300:
                 summary += "..."
             log.info(f"Worker completed: {task_id} ({len(response)} chars)")
+            self._update_task(task_id, {
+                "status": "completed",
+                "finished_at": _now_iso(),
+                "result_summary": summary,
+                "result_full": response,
+                "notified": False,
+            })
+            task = self._get_task(task_id)
+            self._sse.broadcast("task_completed", {
+                "task_id": task_id,
+                "title": task.get("title", ""),
+                "summary": summary,
+            })
+
+    async def _execute_gpt(self, task_id: str, prompt: str, model: str):
+        """Execute a GPT-based worker (no subprocess — uses OpenAI API agent loop)."""
+        from gpt_agent import gpt_worker, GPT54_MODEL, GPT54_MINI_MODEL
+
+        gpt_model = GPT54_MINI_MODEL if model == "gpt54mini" else GPT54_MODEL
+
+        self._update_task(task_id, {
+            "status": "running",
+            "started_at": _now_iso(),
+            "last_heartbeat_at": _now_iso(),
+        })
+        self._sse.broadcast("task_started", {
+            "task_id": task_id,
+            "title": self._get_task(task_id).get("title", ""),
+            "status": "running",
+        })
+        log.info(f"GPT worker started: {task_id} (model: {gpt_model})")
+
+        # Heartbeat in background
+        hb_running = True
+
+        async def heartbeat():
+            while hb_running:
+                await asyncio.sleep(HEARTBEAT_INTERVAL_SECONDS)
+                if hb_running:
+                    self._update_task(task_id, {"last_heartbeat_at": _now_iso()})
+                    self._sse.broadcast("task_progress", {
+                        "task_id": task_id,
+                        "status": "running",
+                    })
+
+        hb_task = asyncio.create_task(heartbeat())
+
+        try:
+            response = await asyncio.wait_for(
+                gpt_worker(prompt, model=gpt_model),
+                timeout=WORKER_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            log.error(f"GPT worker timed out: {task_id}")
+            self._update_task(task_id, {
+                "status": "failed",
+                "finished_at": _now_iso(),
+                "error_text": f"Timed out after {WORKER_TIMEOUT_SECONDS}s",
+            })
+            self._sse.broadcast("task_failed", {
+                "task_id": task_id,
+                "error": f"Timed out after {WORKER_TIMEOUT_SECONDS}s",
+            })
+            return
+        except Exception as e:
+            log.error(f"GPT worker error: {task_id}: {e}")
+            self._update_task(task_id, {
+                "status": "failed",
+                "finished_at": _now_iso(),
+                "error_text": str(e)[:1200],
+            })
+            self._sse.broadcast("task_failed", {
+                "task_id": task_id,
+                "error": str(e)[:200],
+            })
+            return
+        finally:
+            hb_running = False
+            hb_task.cancel()
+            try:
+                await hb_task
+            except asyncio.CancelledError:
+                pass
+
+        if not response:
+            self._update_task(task_id, {
+                "status": "failed",
+                "finished_at": _now_iso(),
+                "error_text": "Empty response from GPT",
+            })
+            self._sse.broadcast("task_failed", {
+                "task_id": task_id,
+                "error": "Empty response",
+            })
+        else:
+            summary = response[:300]
+            if len(response) > 300:
+                summary += "..."
+            log.info(f"GPT worker completed: {task_id} ({len(response)} chars)")
             self._update_task(task_id, {
                 "status": "completed",
                 "finished_at": _now_iso(),
