@@ -505,6 +505,71 @@
         // ==========================
 
         let eventSource = null;
+        let taskPollInterval = null;
+
+        function upsertTask(task) {
+            if (!task || !task._id) return;
+            if (task.status === 'queued' || task.status === 'running') {
+                const existing = activeTasks[task._id] || {};
+                activeTasks[task._id] = {
+                    title: task.title || existing.title || 'Background task',
+                    status: task.status || existing.status || 'queued',
+                    started: existing.started || Date.now(),
+                };
+            } else {
+                delete activeTasks[task._id];
+            }
+            updateTaskBadge();
+            updateTaskPanel();
+        }
+
+        async function syncTaskById(taskId, fallbackTitle) {
+            if (!taskId) return;
+            try {
+                const resp = await fetch(API_BASE + '/api/tasks/' + encodeURIComponent(taskId));
+                if (!resp.ok) throw new Error('task detail unavailable');
+                const data = await resp.json();
+                if (data.task) {
+                    upsertTask(data.task);
+                    return;
+                }
+            } catch {}
+
+            if (!activeTasks[taskId]) {
+                activeTasks[taskId] = {
+                    title: fallbackTitle || 'Background task',
+                    status: 'queued',
+                    started: Date.now(),
+                };
+                updateTaskBadge();
+                updateTaskPanel();
+                showToast(`Task started: ${fallbackTitle || 'Background task'}`, 'info');
+            }
+        }
+
+        async function pollTasks() {
+            try {
+                const resp = await fetch(API_BASE + '/api/tasks');
+                if (!resp.ok) throw new Error('task poll failed');
+                const data = await resp.json();
+                const nextActive = {};
+                for (const task of (data.tasks || [])) {
+                    if (task.status === 'queued' || task.status === 'running') {
+                        const existing = activeTasks[task._id] || {};
+                        nextActive[task._id] = {
+                            title: task.title || existing.title || 'Background task',
+                            status: task.status || existing.status || 'queued',
+                            started: existing.started || Date.now(),
+                        };
+                    }
+                }
+                activeTasks = nextActive;
+                updateTaskBadge();
+                updateTaskPanel();
+            } catch (err) {
+                console.log('Task poll failed:', err);
+            }
+        }
 
         function connectSSE() {
             if (eventSource) eventSource.close();
@@ -512,18 +577,13 @@
 
             eventSource.addEventListener('task_started', (e) => {
                 const data = JSON.parse(e.data);
-                activeTasks[data.task_id] = { title: data.title, status: data.status, started: Date.now() };
-                updateTaskBadge();
-                updateTaskPanel();
+                upsertTask({ _id: data.task_id, title: data.title, status: data.status });
                 showToast(`Task started: ${data.title}`, 'info');
             });
 
             eventSource.addEventListener('task_progress', (e) => {
                 const data = JSON.parse(e.data);
-                if (activeTasks[data.task_id]) {
-                    activeTasks[data.task_id].status = 'running';
-                }
-                updateTaskPanel();
+                upsertTask({ _id: data.task_id, title: activeTasks[data.task_id]?.title, status: 'running' });
             });
 
             eventSource.addEventListener('task_completed', (e) => {
@@ -627,6 +687,9 @@
                     connDot.className = 'connection-dot ok';
                     setStatus('Tap to start call');
                     connectSSE();
+                    pollTasks();
+                    if (taskPollInterval) clearInterval(taskPollInterval);
+                    taskPollInterval = setInterval(pollTasks, 5000);
                     // Sync model lock state
                     try {
                         const mr = await fetch(API_BASE + '/api/model');
@@ -951,6 +1014,9 @@
                     if (data.transcript) addMessage(data.transcript, 'user');
                     if (data.reply) addMessage(data.reply, 'agent');
                     updateModelFromResponse(data);
+                    if (data.task_id) {
+                        syncTaskById(data.task_id, 'Background task');
+                    }
 
                     if (data.audio_base64 && inCall) {
                         setPhase('speaking');
