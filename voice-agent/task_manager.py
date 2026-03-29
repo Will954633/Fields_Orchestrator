@@ -1,26 +1,31 @@
 """
 Task Manager for the Fields Voice Agent.
 
-Manages background Claude Code (Opus) worker subprocesses.
+Manages background Claude Code (Opus) workers via the Agent SDK.
 Up to 3 concurrent workers, tracked in MongoDB with heartbeat.
-Modelled on builder-telegram-bridge.py job lifecycle pattern.
 """
 
 import asyncio
 import json
 import os
 import re
-import signal
 import time
 import logging
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional
 
+from claude_agent_sdk import (
+    query,
+    ClaudeAgentOptions,
+    AssistantMessage,
+    ResultMessage,
+    TextBlock,
+)
+
 log = logging.getLogger("voice-agent.tasks")
 
 AEST = timezone(timedelta(hours=10))
-CLAUDE_BIN = "/usr/bin/claude"
 ORCHESTRATOR_DIR = "/home/fields/Fields_Orchestrator"
 MEMORY_DIR = "/home/projects/.claude/projects/-home-fields-Fields-Orchestrator/memory"
 
@@ -42,12 +47,9 @@ def _task_id(title: str) -> str:
 
 
 def _load_context_docs() -> str:
-    """Load project context for worker append-system-prompt."""
+    """Load dynamic context for worker system prompt.
+    NOTE: CLAUDE.md is loaded automatically by the Agent SDK via cwd."""
     sections = []
-
-    claude_md = Path(ORCHESTRATOR_DIR) / "CLAUDE.md"
-    if claude_md.exists():
-        sections.append(claude_md.read_text())
 
     memory_md = Path(MEMORY_DIR) / "MEMORY.md"
     if memory_md.exists():
@@ -79,7 +81,7 @@ class TaskManager:
         self._sm = db_client["system_monitor"]
         self._sse = sse_broadcaster
         self._semaphore = asyncio.Semaphore(MAX_CONCURRENT_WORKERS)
-        self._active_processes: dict[str, asyncio.subprocess.Process] = {}
+        self._active_tasks: dict[str, asyncio.Event] = {}  # cancel events per task
         self._cleanup_orphans()
 
     def _cleanup_orphans(self):
@@ -140,7 +142,7 @@ class TaskManager:
                 await self._execute(task_id, prompt)
 
     async def _execute(self, task_id: str, prompt: str):
-        """Execute Claude Code subprocess with heartbeat tracking."""
+        """Execute Claude Code worker via Agent SDK with heartbeat tracking."""
         context = _load_context_docs()
         worker_system = (
             f"You are a background worker agent for Fields Estate. "
@@ -151,63 +153,62 @@ class TaskManager:
             f"Search it with: python3 scripts/search-kb.py \"query\" [--type TYPE] [--max N] [--tag TAG]\n"
             f"Categories: book, strategy, marketing, code, financial, operational, meeting_notes, general, project, conversations\n"
             f"Get full chunk: python3 scripts/search-kb.py --chunk CHUNK_ID --file path/to/index.json\n"
-            f"List categories: python3 scripts/search-kb.py --list-categories"
+            f"List categories: python3 scripts/search-kb.py --list-categories\n\n"
+            f"{context}"
         )
-        append_prompt = f"{worker_system}\n\n{context}"
 
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                CLAUDE_BIN, "-p", prompt,
-                "--output-format", "text",
-                "--model", "opus",
-                "--append-system-prompt", append_prompt,
-                "--dangerously-skip-permissions",
-                cwd=ORCHESTRATOR_DIR,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env={k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"},
-            )
-        except Exception as e:
-            log.error(f"Failed to launch worker for {task_id}: {e}")
-            self._update_task(task_id, {
-                "status": "failed",
-                "finished_at": _now_iso(),
-                "error_text": f"Failed to launch: {e}",
-            })
-            self._sse.broadcast("task_failed", {
-                "task_id": task_id,
-                "error": str(e),
-            })
-            return
-
-        self._active_processes[task_id] = proc
         self._update_task(task_id, {
             "status": "running",
-            "pid": proc.pid,
             "started_at": _now_iso(),
             "last_heartbeat_at": _now_iso(),
         })
-
         self._sse.broadcast("task_started", {
             "task_id": task_id,
             "title": self._get_task(task_id).get("title", ""),
             "status": "running",
         })
+        log.info(f"Worker started (SDK): {task_id}")
 
-        log.info(f"Worker started: {task_id} (PID {proc.pid})")
+        # Background heartbeat
+        hb_running = True
+        async def heartbeat():
+            while hb_running:
+                await asyncio.sleep(HEARTBEAT_INTERVAL_SECONDS)
+                if hb_running:
+                    self._update_task(task_id, {"last_heartbeat_at": _now_iso()})
+                    self._sse.broadcast("task_progress", {
+                        "task_id": task_id,
+                        "status": "running",
+                    })
 
+        hb_task = asyncio.create_task(heartbeat())
+
+        options = ClaudeAgentOptions(
+            model="opus",
+            cwd=ORCHESTRATOR_DIR,
+            env={"ANTHROPIC_API_KEY": ""},
+            permission_mode="bypassPermissions",
+            system_prompt=worker_system,
+            max_turns=30,
+        )
+
+        response = ""
         try:
-            stdout, stderr = await asyncio.wait_for(
-                self._monitor_process(task_id, proc),
-                timeout=WORKER_TIMEOUT_SECONDS,
-            )
+            async def _run():
+                nonlocal response
+                async for msg in query(prompt=prompt, options=options):
+                    if isinstance(msg, AssistantMessage):
+                        for block in msg.content:
+                            if isinstance(block, TextBlock):
+                                response = block.text
+                    elif isinstance(msg, ResultMessage):
+                        if msg.result:
+                            response = msg.result
+
+            await asyncio.wait_for(_run(), timeout=WORKER_TIMEOUT_SECONDS)
+
         except asyncio.TimeoutError:
             log.error(f"Worker timed out: {task_id}")
-            proc.terminate()
-            try:
-                await asyncio.wait_for(proc.wait(), timeout=10)
-            except asyncio.TimeoutError:
-                proc.kill()
             self._update_task(task_id, {
                 "status": "failed",
                 "finished_at": _now_iso(),
@@ -218,24 +219,36 @@ class TaskManager:
                 "error": f"Timed out after {WORKER_TIMEOUT_SECONDS}s",
             })
             return
-        finally:
-            self._active_processes.pop(task_id, None)
-
-        response = stdout.decode().strip() if stdout else ""
-        stderr_text = stderr.decode().strip() if stderr else ""
-
-        if proc.returncode != 0 or not response:
-            error = stderr_text[:1200] if stderr_text else "Empty response"
-            log.error(f"Worker failed: {task_id} (rc={proc.returncode})")
+        except Exception as e:
+            log.error(f"Worker error: {task_id}: {e}")
             self._update_task(task_id, {
                 "status": "failed",
                 "finished_at": _now_iso(),
-                "error_text": error,
-                "result_full": response or None,
+                "error_text": str(e)[:1200],
             })
             self._sse.broadcast("task_failed", {
                 "task_id": task_id,
-                "error": error[:200],
+                "error": str(e)[:200],
+            })
+            return
+        finally:
+            hb_running = False
+            hb_task.cancel()
+            try:
+                await hb_task
+            except asyncio.CancelledError:
+                pass
+
+        if not response:
+            log.error(f"Worker returned empty: {task_id}")
+            self._update_task(task_id, {
+                "status": "failed",
+                "finished_at": _now_iso(),
+                "error_text": "Empty response from worker",
+            })
+            self._sse.broadcast("task_failed", {
+                "task_id": task_id,
+                "error": "Empty response",
             })
         else:
             summary = response[:300]
@@ -355,32 +368,6 @@ class TaskManager:
                 "summary": summary,
             })
 
-    async def _monitor_process(self, task_id: str, proc) -> tuple[bytes, bytes]:
-        """Monitor process with heartbeat updates. Returns (stdout, stderr)."""
-        # Use a heartbeat task alongside the process
-        async def heartbeat():
-            while proc.returncode is None:
-                await asyncio.sleep(HEARTBEAT_INTERVAL_SECONDS)
-                if proc.returncode is None:
-                    self._update_task(task_id, {
-                        "last_heartbeat_at": _now_iso(),
-                    })
-                    self._sse.broadcast("task_progress", {
-                        "task_id": task_id,
-                        "status": "running",
-                    })
-
-        hb_task = asyncio.create_task(heartbeat())
-        try:
-            stdout, stderr = await proc.communicate()
-            return stdout, stderr
-        finally:
-            hb_task.cancel()
-            try:
-                await hb_task
-            except asyncio.CancelledError:
-                pass
-
     def _update_task(self, task_id: str, updates: dict):
         """Update task document in MongoDB."""
         try:
@@ -440,13 +427,10 @@ class TaskManager:
         if not task or task.get("status") not in ("queued", "running"):
             return False
 
-        # Kill the process if running
-        proc = self._active_processes.get(task_id)
-        if proc and proc.returncode is None:
-            try:
-                proc.terminate()
-            except ProcessLookupError:
-                pass
+        # Signal the cancel event so the SDK query loop can break
+        cancel_event = self._active_tasks.get(task_id)
+        if cancel_event:
+            cancel_event.set()
 
         self._update_task(task_id, {
             "status": "cancelled",
