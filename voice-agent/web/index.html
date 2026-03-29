@@ -318,15 +318,16 @@
         }
 
         .model-btn {
-            padding: 5px 14px;
+            padding: 5px 10px;
             border-radius: 14px;
             border: none;
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 500;
             cursor: pointer;
             transition: all 0.2s;
             background: transparent;
             color: #6B7280;
+            white-space: nowrap;
         }
 
         .model-btn.active {
@@ -336,6 +337,14 @@
 
         .model-btn.active.opus {
             background: #7C3AED;
+        }
+
+        .model-btn.active.gpt54 {
+            background: #10A37F;
+        }
+
+        .model-btn.active.gpt54mini {
+            background: #10A37F;
         }
     </style>
 </head>
@@ -354,6 +363,8 @@
             <button class="model-btn active" data-lock="auto" id="btnAuto">Auto</button>
             <button class="model-btn" data-lock="haiku" id="btnHaiku">Haiku</button>
             <button class="model-btn" data-lock="opus" id="btnOpus">Opus</button>
+            <button class="model-btn" data-lock="gpt54" id="btnGpt54">GPT-5.4</button>
+            <button class="model-btn" data-lock="gpt54mini" id="btnGpt54Mini">5.4-mini</button>
         </div>
         <div class="call-timer" id="callTimer">00:00</div>
     </div>
@@ -450,13 +461,21 @@
         function setModelLock(lock) {
             currentModelLock = lock;
             document.querySelectorAll('.model-btn').forEach(b => {
-                b.classList.remove('active', 'opus');
+                b.classList.remove('active', 'opus', 'gpt54', 'gpt54mini');
                 if (b.dataset.lock === lock) {
                     b.classList.add('active');
                     if (lock === 'opus') b.classList.add('opus');
+                    if (lock === 'gpt54') b.classList.add('gpt54');
+                    if (lock === 'gpt54mini') b.classList.add('gpt54mini');
                 }
             });
-            const labels = { auto: 'Auto · Fields Agent', haiku: 'Haiku · Fast', opus: 'Opus · Deep' };
+            const labels = {
+                auto: 'Auto · Fields Agent',
+                haiku: 'Haiku · Fast',
+                opus: 'Opus · Deep',
+                gpt54: 'GPT-5.4 · Full',
+                gpt54mini: 'GPT-5.4-mini · Fast',
+            };
             modelName.textContent = labels[lock] || labels.auto;
         }
 
