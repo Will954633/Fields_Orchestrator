@@ -287,6 +287,39 @@ _EMAIL_TASK_PATTERNS = [
     re.compile(r"\bneed to (reply|respond)\b.*\b(email|emails)\b", re.IGNORECASE),
     re.compile(r"\b(draft|reply|respond|send)\b.*\b(email|mail)\b", re.IGNORECASE),
 ]
+_DEV_TASK_PATTERNS = [
+    re.compile(r"\b(build|write|edit|change|update|modify|implement|fix|debug|refactor|patch)\b.*\b(code|file|script|app|server|ui|backend|frontend|feature|bug|test|tests)\b", re.IGNORECASE),
+    re.compile(r"\b(code|file|script|app|server|ui|backend|frontend|feature|bug|test|tests)\b.*\b(build|write|edit|change|update|modify|implement|fix|debug|refactor|patch)\b", re.IGNORECASE),
+    re.compile(r"\b(read|inspect|review)\b.*\b(code|repo|repository|project|files)\b", re.IGNORECASE),
+    re.compile(r"\b(run|execute)\b.*\b(test|tests|pytest|script|build)\b", re.IGNORECASE),
+    re.compile(r"\b(start|continue)\b.*\b(building|coding|developing|implementation)\b", re.IGNORECASE),
+    re.compile(r"\bactual code\b", re.IGNORECASE),
+    re.compile(r"\bactual dev(?:elopment)? work\b", re.IGNORECASE),
+]
+
+
+def _recent_history_context(history: list[dict], limit: int = 6) -> str:
+    recent = []
+    for msg in history[-limit:]:
+        role = msg.get("role", "user")
+        content = (msg.get("content") or "").strip()
+        if role not in ("user", "assistant") or not content:
+            continue
+        recent.append(f"{role}: {content[:600]}")
+    return "\n".join(recent)
+
+
+def _augment_task_prompt(base_prompt: str, history: list[dict]) -> str:
+    history_context = _recent_history_context(history)
+    if not history_context:
+        return base_prompt
+    return (
+        f"{base_prompt}\n\n"
+        "Recent conversation context:\n"
+        f"{history_context}\n\n"
+        "If the latest request refers to earlier discussion, use that context. "
+        "Do the concrete work on the VM rather than only describing a plan."
+    )
 
 
 def _build_fast_email_task(user_text: str) -> Optional[dict]:
@@ -322,6 +355,34 @@ def _build_fast_email_task(user_text: str) -> Optional[dict]:
             "For replies or sends, always use --dry-run first and present the draft for approval before any live send."
         )
 
+    return {"title": title, "reply": reply, "prompt": prompt}
+
+
+def _build_fast_dev_task(user_text: str) -> Optional[dict]:
+    """Fast-path clear coding intents so GPT lock launches a worker instead of debating."""
+    if not any(pattern.search(user_text) for pattern in _DEV_TASK_PATTERNS):
+        return None
+
+    lowered = user_text.lower()
+    if any(word in lowered for word in ("run the test", "run tests", "pytest", "test suite", "build the app", "run the build")):
+        title = "Run development checks"
+        reply = "On it. I'll run the relevant development checks and work through the results."
+    elif any(word in lowered for word in ("fix", "debug", "patch", "bug")):
+        title = "Fix development issue"
+        reply = "On it. I'll inspect the code, make the fix, and verify it."
+    elif any(word in lowered for word in ("read", "inspect", "review")):
+        title = "Review codebase"
+        reply = "On it. I'll inspect the relevant code and work from there."
+    else:
+        title = "Handle development task"
+        reply = "On it. I'll start the dev work now."
+
+    prompt = (
+        f"Handle this development request on the VM: {user_text}\n"
+        "Inspect the relevant code and files, make the necessary changes or run the needed checks, "
+        "verify the result, and report what you actually did. If the request is ambiguous, use the "
+        "recent conversation context included below to infer the concrete work."
+    )
     return {"title": title, "reply": reply, "prompt": prompt}
 
 
@@ -374,14 +435,30 @@ async def handle_message(user_text: str) -> dict:
         gpt_model = GPT54_MINI_MODEL if model_lock == "gpt54mini" else GPT54_MODEL
         fast_email_task = _build_fast_email_task(user_text)
         if fast_email_task:
+            prompt = _augment_task_prompt(fast_email_task["prompt"], history)
             task_id = task_manager.spawn_task(
                 title=fast_email_task["title"],
-                prompt=fast_email_task["prompt"],
+                prompt=prompt,
                 user_message=user_text,
                 model=model_lock,
             )
             reply = fast_email_task["reply"]
             log.info(f"GPT fast email task spawned: {task_id} — {fast_email_task['title']} (model: {model_lock})")
+            await _append_history_safe("user", user_text, timeout=1.0)
+            await _append_history_safe("assistant", reply, timeout=1.0)
+            return {"reply": reply, "task_id": task_id, "model_lock": model_lock}
+
+        fast_dev_task = _build_fast_dev_task(user_text)
+        if fast_dev_task:
+            prompt = _augment_task_prompt(fast_dev_task["prompt"], history)
+            task_id = task_manager.spawn_task(
+                title=fast_dev_task["title"],
+                prompt=prompt,
+                user_message=user_text,
+                model=model_lock,
+            )
+            reply = fast_dev_task["reply"]
+            log.info(f"GPT fast dev task spawned: {task_id} — {fast_dev_task['title']} (model: {model_lock})")
             await _append_history_safe("user", user_text, timeout=1.0)
             await _append_history_safe("assistant", reply, timeout=1.0)
             return {"reply": reply, "task_id": task_id, "model_lock": model_lock}
@@ -409,9 +486,10 @@ async def handle_message(user_text: str) -> dict:
 
         if decision.get("spawn_task"):
             spawn = decision["spawn_task"]
+            prompt = _augment_task_prompt(spawn["prompt"], history)
             task_id = task_manager.spawn_task(
                 title=spawn["title"],
-                prompt=spawn["prompt"],
+                prompt=prompt,
                 user_message=user_text,
                 model=model_lock,
             )
