@@ -408,6 +408,7 @@
         let mediaStream = null;
         let mediaRecorder = null;
         let audioChunks = [];
+        let currentRecorderMimeType = '';
         let audioContext = null;
         let analyserNode = null;
         let currentAudio = null;
@@ -451,6 +452,28 @@
         const btnOpus = document.getElementById('btnOpus');
 
         let currentModelLock = 'gpt54mini';
+
+        function pickRecorderMimeType() {
+            const candidates = [
+                'audio/webm;codecs=opus',
+                'audio/webm',
+                'audio/mp4;codecs=mp4a.40.2',
+                'audio/mp4',
+                'audio/ogg;codecs=opus',
+                'audio/ogg',
+            ];
+            return candidates.find(type => MediaRecorder.isTypeSupported(type)) || '';
+        }
+
+        function extensionForMimeType(mimeType) {
+            const normalized = (mimeType || '').split(';', 1)[0].trim().toLowerCase();
+            if (normalized === 'audio/webm' || normalized === 'video/webm') return 'webm';
+            if (normalized === 'audio/mp4' || normalized === 'video/mp4' || normalized === 'audio/x-m4a') return 'mp4';
+            if (normalized === 'audio/ogg' || normalized === 'video/ogg') return 'ogg';
+            if (normalized === 'audio/mpeg' || normalized === 'audio/mp3') return 'mp3';
+            if (normalized === 'audio/wav' || normalized === 'audio/x-wav') return 'wav';
+            return 'webm';
+        }
 
         // Model toggle buttons
         document.querySelectorAll('.model-btn').forEach(btn => {
@@ -598,7 +621,10 @@
 
                 // During a voice call, queue TTS notification
                 if (inCall && phase === 'listening') {
-                    pendingNotifications.push(data.summary || data.title + ' completed.');
+                    pendingNotifications.push({
+                        taskId: data.task_id,
+                        text: data.summary || data.title + ' completed.',
+                    });
                     flushPendingNotifications();
                 }
             });
@@ -822,15 +848,37 @@
             });
         }
 
+        async function playTaskNotification(item) {
+            if (!item) return;
+            if (item.taskId) {
+                try {
+                    const resp = await fetch(API_BASE + '/api/tasks/' + encodeURIComponent(item.taskId) + '/voice-summary');
+                    if (!resp.ok) throw new Error('task voice summary unavailable');
+                    const data = await resp.json();
+                    if (data.audio_base64) {
+                        await playBase64Audio(data.audio_base64, data.audio_format || 'mp3');
+                        return;
+                    }
+                    if (data.spoken_text) {
+                        await speakNotification(data.spoken_text);
+                        return;
+                    }
+                } catch (err) {
+                    console.log('Task voice playback failed:', err);
+                }
+            }
+            await speakNotification(item.text || '');
+        }
+
         async function flushPendingNotifications() {
             if (!inCall || phase !== 'listening' || speakingNotification || currentAudio || pendingNotifications.length === 0) {
                 return;
             }
 
             speakingNotification = true;
-            const text = pendingNotifications.shift();
+            const item = pendingNotifications.shift();
             setPhase('speaking');
-            await speakNotification(text);
+            await playTaskNotification(item);
             speakingNotification = false;
 
             if (inCall) {
@@ -900,12 +948,12 @@
             audioChunks = [];
             speechDetected = false;
             silenceStart = 0;
-
-            mediaRecorder = new MediaRecorder(mediaStream, {
-                mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-                    ? 'audio/webm;codecs=opus'
-                    : 'audio/webm'
-            });
+            currentRecorderMimeType = pickRecorderMimeType();
+            const recorderOptions = currentRecorderMimeType ? { mimeType: currentRecorderMimeType } : undefined;
+            mediaRecorder = recorderOptions
+                ? new MediaRecorder(mediaStream, recorderOptions)
+                : new MediaRecorder(mediaStream);
+            currentRecorderMimeType = mediaRecorder.mimeType || currentRecorderMimeType || '';
 
             mediaRecorder.ondataavailable = (e) => {
                 if (e.data.size > 0) audioChunks.push(e.data);
@@ -982,7 +1030,10 @@
                 mediaRecorder.stop();
             });
 
-            const audioBlob = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' });
+            const blobMimeType = currentRecorderMimeType
+                || (audioChunks[0] && audioChunks[0].type)
+                || 'application/octet-stream';
+            const audioBlob = new Blob(audioChunks, { type: blobMimeType });
 
             if (audioBlob.size < 500) {
                 if (inCall) beginListening();
@@ -991,7 +1042,8 @@
 
             try {
                 const formData = new FormData();
-                formData.append('audio', audioBlob, 'recording.webm');
+                const ext = extensionForMimeType(blobMimeType);
+                formData.append('audio', audioBlob, `recording.${ext}`);
 
                 const resp = await fetch(API_BASE + '/api/voice', {
                     method: 'POST',
