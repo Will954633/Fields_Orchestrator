@@ -176,6 +176,52 @@ def latest_user_message_text(session: dict[str, Any]) -> str | None:
     return None
 
 
+def normalize_workflow_text(text: str) -> str:
+    return re.sub(r"\s+", " ", text.strip().lower())
+
+
+def detect_plaintext_workflow_action(
+    session: dict[str, Any], text: str
+) -> tuple[str, str] | None:
+    normalized = normalize_workflow_text(text)
+    if not normalized:
+        return None
+
+    if normalized == "review" or normalized.startswith("review "):
+        return "review", text.strip()
+
+    if normalized.startswith("revise plan:"):
+        return "revise", text.split(":", 1)[1].strip()
+
+    if normalized == "revise" or normalized.startswith("revise "):
+        remainder = text.strip()[len("revise") :].strip(" :")
+        return ("revise", remainder) if remainder else None
+
+    if normalized in {"cancel", "cancel plan"}:
+        return "cancel", "cancel plan"
+
+    pending = get_pending_plan(session)
+    if not pending:
+        if normalized in {"approve", "approve plan"} or normalized.startswith("implement items"):
+            return "approve", text.strip()
+        return None
+
+    approve_patterns = (
+        r"approve(?: plan)?[.!]?",
+        r"implement(?: the)?(?: approved)?(?: plan| scope| changes| fix(?:es)?)?[.!]?",
+        r"implement items?\b.*",
+        r"(?:please )?proceed(?: with)?(?: the)?(?: implementation| approved scope| approved plan| development| dev work| coding)?[.!]?",
+        r"(?:please )?go ahead(?: and)?(?: implement| proceed| start(?: development| implementation| coding)?| do it)?[.!]?",
+        r"(?:yes[, ]+)?(?:do it|start(?: development| implementation| coding)?)[.!]?",
+    )
+    deny_tokens = ("don't", "do not", "stop", "hold", "wait", "not yet", "cancel")
+    if any(token in normalized for token in deny_tokens):
+        return None
+    if any(re.fullmatch(pattern, normalized) for pattern in approve_patterns):
+        return "approve", text.strip()
+    return None
+
+
 def create_founder_request_file(area: str, text: str, source: str) -> Path:
     open_dir = FOUNDER_REQUESTS_DIR / "open"
     open_dir.mkdir(parents=True, exist_ok=True)
@@ -1177,7 +1223,8 @@ def handle_command(sm, chat: dict[str, Any], user: dict[str, Any], text: str) ->
             chat["id"],
             f"Hey, {founder_name}! Fields Implementer is live on the VM and ready to help.\n"
             "Plain text messages stay in chat mode.\n"
-            "Workflow commands are explicit: `/review ...`, `/revise ...`, `/approve`, `/cancelplan`.\n"
+            "Workflow actions also accept plain text: `review ...`, `revise plan: ...`, `approve plan`, `implement items ...`, `cancel plan`.\n"
+            "Slash commands still work too: `/review ...`, `/revise ...`, `/approve`, `/cancelplan`.\n"
             "Create a durable founder request with `/task ...`.\n"
             "Other commands: `/status`, `/reset`.",
         )
@@ -1246,6 +1293,22 @@ def handle_text_message(sm, update: dict[str, Any], message: dict[str, Any], tex
         return
 
     session = get_or_create_active_session(sm, chat, user)
+    workflow_action = detect_plaintext_workflow_action(session, text)
+    if workflow_action:
+        session = append_message(
+            sm,
+            session["_id"],
+            "user",
+            text,
+            {
+                "telegram_update_id": update.get("update_id"),
+                "telegram_message_id": message.get("message_id"),
+                "workflow_action": workflow_action[0],
+            },
+        )
+        run_workflow_action(sm, session, chat_id, workflow_action[0], workflow_action[1])
+        return
+
     founder_name = founder_display_name(session)
     session = append_message(
         sm,
