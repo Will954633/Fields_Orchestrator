@@ -412,6 +412,7 @@
         let analyserNode = null;
         let currentAudio = null;
         let pendingNotifications = [];  // Queue task notifications during call
+        let speakingNotification = false;
 
         // VAD settings
         const SILENCE_THRESHOLD = 0.015;
@@ -538,6 +539,7 @@
                 // During a voice call, queue TTS notification
                 if (inCall && phase === 'listening') {
                     pendingNotifications.push(data.summary || data.title + ' completed.');
+                    flushPendingNotifications();
                 }
             });
 
@@ -740,6 +742,42 @@
             }
         }
 
+        function speakNotification(text) {
+            return new Promise((resolve) => {
+                const synth = window.speechSynthesis;
+                if (!synth || !text) {
+                    resolve();
+                    return;
+                }
+
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.rate = 1;
+                utterance.pitch = 1;
+                utterance.onend = () => resolve();
+                utterance.onerror = () => resolve();
+                synth.speak(utterance);
+            });
+        }
+
+        async function flushPendingNotifications() {
+            if (!inCall || phase !== 'listening' || speakingNotification || currentAudio || pendingNotifications.length === 0) {
+                return;
+            }
+
+            speakingNotification = true;
+            const text = pendingNotifications.shift();
+            setPhase('speaking');
+            await speakNotification(text);
+            speakingNotification = false;
+
+            if (inCall) {
+                setPhase('listening');
+                if (pendingNotifications.length > 0) {
+                    flushPendingNotifications();
+                }
+            }
+        }
+
         // ===============================
         // CALL LIFECYCLE
         // ===============================
@@ -923,7 +961,10 @@
                 if (inCall) addMessage('Connection error: ' + err.message, 'error');
             }
 
-            if (inCall) beginListening();
+            if (inCall) {
+                beginListening();
+                flushPendingNotifications();
+            }
         }
 
         // Keyboard shortcut
