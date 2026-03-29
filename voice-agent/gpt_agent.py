@@ -17,6 +17,7 @@ import subprocess
 import re
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
+from time import perf_counter
 from typing import Optional
 
 log = logging.getLogger("voice-agent.gpt")
@@ -492,6 +493,7 @@ async def gpt_converse(
     messages.append({"role": "user", "content": user_text})
 
     try:
+        started = perf_counter()
         response = await asyncio.to_thread(
             client.chat.completions.create,
             model=model,
@@ -500,7 +502,7 @@ async def gpt_converse(
             temperature=0.7,
         )
         reply = response.choices[0].message.content or ""
-        log.info(f"GPT converse ({model}): {len(reply)} chars")
+        log.info(f"GPT converse ({model}): {perf_counter() - started:.2f}s, {len(reply)} chars")
         return reply.strip()
     except Exception as e:
         log.error(f"GPT converse error: {e}")
