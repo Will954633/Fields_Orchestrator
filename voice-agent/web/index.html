@@ -130,6 +130,160 @@
             padding: 8px 14px;
         }
 
+        /* Streaming agent bubble */
+        .msg-bubble.agent .stream-cursor {
+            display: inline-block;
+            width: 2px;
+            height: 14px;
+            background: #60A5FA;
+            animation: blink 0.8s ease-in-out infinite;
+            vertical-align: text-bottom;
+            margin-left: 2px;
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+
+        /* Tool call indicators */
+        .tool-indicator {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            font-size: 12px;
+            color: #9CA3AF;
+            background: rgba(31, 41, 55, 0.5);
+            border-radius: 8px;
+            margin: 2px 0;
+            align-self: flex-start;
+            max-width: 88%;
+            font-family: 'SF Mono', Menlo, monospace;
+        }
+        .tool-indicator .tool-icon {
+            color: #F59E0B;
+            font-size: 10px;
+        }
+        .tool-indicator .tool-name {
+            color: #60A5FA;
+            font-weight: 600;
+        }
+        .tool-indicator .tool-input {
+            color: #6B7280;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* Code blocks inside agent messages */
+        .msg-bubble.agent code {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 2px 5px;
+            border-radius: 4px;
+            font-family: 'SF Mono', Menlo, monospace;
+            font-size: 13px;
+        }
+        .msg-bubble.agent pre {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 10px 12px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 6px 0;
+            font-family: 'SF Mono', Menlo, monospace;
+            font-size: 12px;
+            line-height: 1.4;
+            white-space: pre-wrap;
+        }
+
+        /* Permission approval inline */
+        .permission-request {
+            background: #1a2744;
+            border: 1px solid #2563EB;
+            border-radius: 12px;
+            padding: 10px 14px;
+            align-self: flex-start;
+            max-width: 88%;
+            margin: 4px 0;
+        }
+        .permission-request .perm-title {
+            font-size: 13px;
+            color: #60A5FA;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .permission-request .perm-detail {
+            font-size: 12px;
+            color: #9CA3AF;
+            font-family: 'SF Mono', Menlo, monospace;
+            margin-bottom: 8px;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .permission-request .perm-actions {
+            display: flex;
+            gap: 8px;
+        }
+        .permission-request .perm-btn {
+            padding: 4px 16px;
+            border-radius: 6px;
+            border: none;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .perm-btn.approve { background: #22C55E; color: white; }
+        .perm-btn.deny { background: #EF4444; color: white; }
+
+        /* Text input bar */
+        .text-input-bar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: #111118;
+            border-top: 1px solid #1F2937;
+            flex-shrink: 0;
+        }
+        .text-input-bar input {
+            flex: 1;
+            background: #1F2937;
+            border: 1px solid #374151;
+            border-radius: 20px;
+            padding: 10px 16px;
+            color: #F9FAFB;
+            font-size: 15px;
+            outline: none;
+            font-family: inherit;
+        }
+        .text-input-bar input:focus {
+            border-color: #2563EB;
+        }
+        .text-input-bar input::placeholder {
+            color: #6B7280;
+        }
+        .text-send-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: none;
+            background: #2563EB;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .text-send-btn:disabled {
+            background: #374151;
+            cursor: not-allowed;
+        }
+        .text-send-btn svg {
+            width: 18px;
+            height: 18px;
+            fill: currentColor;
+        }
+
         /* Toast notifications */
         .toast-container {
             position: fixed;
@@ -487,6 +641,14 @@
         <div id="taskList"></div>
     </div>
 
+    <!-- Text input bar -->
+    <div class="text-input-bar" id="textInputBar">
+        <input type="text" id="textInput" placeholder="Type a message..." autocomplete="off" />
+        <button class="text-send-btn" id="textSendBtn" disabled>
+            <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+        </button>
+    </div>
+
     <div class="controls">
         <div class="volume-bar-wrap" id="volumeWrap">
             <div class="volume-bar" id="volumeBar"></div>
@@ -549,8 +711,11 @@
         const btnAuto = document.getElementById('btnAuto');
         const btnHaiku = document.getElementById('btnHaiku');
         const btnOpus = document.getElementById('btnOpus');
+        const textInput = document.getElementById('textInput');
+        const textSendBtn = document.getElementById('textSendBtn');
 
         let currentModelLock = 'gpt54mini';
+        let isStreaming = false;  // Currently streaming a response
 
         function pickRecorderMimeType() {
             const candidates = [
@@ -967,11 +1132,269 @@
             }
             const bubble = document.createElement('div');
             bubble.className = 'msg-bubble ' + type;
-            bubble.textContent = text;
+            // IDE-like rendering for agent messages
+            if (type === 'agent') {
+                bubble.innerHTML = renderMarkdown(text);
+            } else {
+                bubble.textContent = text;
+            }
             group.appendChild(bubble);
             chatArea.appendChild(group);
             chatArea.scrollTop = chatArea.scrollHeight;
+            return bubble;
         }
+
+        // ---- IDE-like markdown rendering (#3) ----
+        function renderMarkdown(text) {
+            // Escape HTML first
+            let html = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            // Code blocks (```lang\n...\n```)
+            html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (m, lang, code) => {
+                return '<pre><code>' + code.trim() + '</code></pre>';
+            });
+            // Inline code (`...`)
+            html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+            // Bold (**...**)
+            html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+            // File links — patterns like path/to/file.ext or [text](path)
+            html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<span style="color:#60A5FA;text-decoration:underline">$1</span>');
+            return html;
+        }
+
+        // ---- Streaming text input (#4) ----
+        function createStreamingBubble() {
+            const group = document.createElement('div');
+            group.className = 'msg-group';
+            const label = document.createElement('div');
+            label.className = 'msg-label agent';
+            label.textContent = 'Claude';
+            group.appendChild(label);
+            const bubble = document.createElement('div');
+            bubble.className = 'msg-bubble agent';
+            bubble.innerHTML = '<span class="stream-cursor"></span>';
+            group.appendChild(bubble);
+            chatArea.appendChild(group);
+            chatArea.scrollTop = chatArea.scrollHeight;
+            return { group, bubble, text: '' };
+        }
+
+        function addToolIndicator(toolName, toolInput) {
+            const el = document.createElement('div');
+            el.className = 'tool-indicator';
+            el.innerHTML = '<span class="tool-icon">⚡</span>'
+                + '<span class="tool-name">' + toolName + '</span> '
+                + '<span class="tool-input">' + (toolInput || '').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</span>';
+            chatArea.appendChild(el);
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+
+        async function sendTextMessage(text) {
+            if (!text.trim() || isStreaming) return;
+            isStreaming = true;
+            textInput.disabled = true;
+            textSendBtn.disabled = true;
+            statusEl.textContent = 'Thinking...';
+            statusEl.className = 'status processing';
+
+            addMessage(text, 'user');
+
+            const stream = createStreamingBubble();
+            let fullText = '';
+
+            try {
+                const formData = new FormData();
+                formData.append('text', text);
+
+                const resp = await fetch(API_BASE + '/api/chat-stream', {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                if (!resp.ok) {
+                    // Fallback to non-streaming
+                    const formData2 = new FormData();
+                    formData2.append('text', text);
+                    const fallback = await fetch(API_BASE + '/api/chat', {
+                        method: 'POST',
+                        body: formData2,
+                    });
+                    const data = await fallback.json();
+                    stream.bubble.innerHTML = renderMarkdown(data.reply || 'No response');
+                    if (data.model_lock) updateModelUI(data.model_lock);
+                    isStreaming = false;
+                    textInput.disabled = false;
+                    textSendBtn.disabled = false;
+                    statusEl.textContent = 'Ready';
+                    statusEl.className = 'status';
+                    return;
+                }
+
+                const reader = resp.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, { stream: true });
+
+                    // Parse SSE events from buffer
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || '';  // Keep incomplete last line
+
+                    let eventType = '';
+                    for (const line of lines) {
+                        if (line.startsWith('event: ')) {
+                            eventType = line.slice(7).trim();
+                        } else if (line.startsWith('data: ')) {
+                            const dataStr = line.slice(6);
+                            try {
+                                const data = JSON.parse(dataStr);
+                                handleStreamEvent(eventType, data, stream);
+                            } catch (e) { /* skip malformed */ }
+                        }
+                    }
+                }
+            } catch (err) {
+                stream.bubble.innerHTML = renderMarkdown(fullText || 'Connection error: ' + err.message);
+            } finally {
+                // Remove cursor
+                const cursor = stream.bubble.querySelector('.stream-cursor');
+                if (cursor) cursor.remove();
+                isStreaming = false;
+                textInput.disabled = false;
+                textSendBtn.disabled = false;
+                textInput.focus();
+                statusEl.textContent = 'Ready';
+                statusEl.className = 'status';
+            }
+        }
+
+        function handleStreamEvent(eventType, data, stream) {
+            switch (eventType) {
+                case 'agent_text':
+                    // Append text delta
+                    stream.text += data.text || '';
+                    const cursor = stream.bubble.querySelector('.stream-cursor');
+                    stream.bubble.innerHTML = renderMarkdown(stream.text) + (cursor ? '<span class="stream-cursor"></span>' : '');
+                    chatArea.scrollTop = chatArea.scrollHeight;
+                    statusEl.textContent = 'Writing...';
+                    statusEl.className = 'status speaking';
+                    break;
+
+                case 'agent_tool_start':
+                    addToolIndicator(data.tool, '');
+                    statusEl.textContent = (data.tool || 'Tool') + '...';
+                    statusEl.className = 'status processing';
+                    break;
+
+                case 'agent_tool_call':
+                    addToolIndicator(data.tool, data.input);
+                    break;
+
+                case 'agent_tool_result':
+                    // Tool result received — just update status
+                    statusEl.textContent = 'Thinking...';
+                    statusEl.className = 'status processing';
+                    break;
+
+                case 'agent_done':
+                    statusEl.textContent = 'Ready';
+                    statusEl.className = 'status';
+                    break;
+
+                case 'agent_error':
+                    if (!stream.text) {
+                        stream.text = 'Error: ' + (data.error || 'Unknown');
+                        stream.bubble.innerHTML = renderMarkdown(stream.text);
+                    }
+                    statusEl.textContent = 'Error';
+                    statusEl.className = 'status';
+                    break;
+
+                case 'chat_reply':
+                    // Final assembled reply — update bubble with full text and model lock
+                    if (data.reply && !stream.text) {
+                        stream.bubble.innerHTML = renderMarkdown(data.reply);
+                    } else if (data.reply && stream.text) {
+                        // Streaming already showed text, just finalize
+                        stream.bubble.innerHTML = renderMarkdown(stream.text);
+                    }
+                    if (data.model_lock) updateModelUI(data.model_lock);
+                    if (data.task_id) {
+                        showToast('Background task started', 'info');
+                    }
+                    break;
+
+                case 'permission_request':
+                    // Interactive approval (#2) — show approve/deny UI
+                    addPermissionRequest(data);
+                    statusEl.textContent = 'Waiting for approval...';
+                    statusEl.className = 'status';
+                    break;
+
+                case 'keepalive':
+                    break;
+            }
+        }
+
+        // ---- Permission approval UI (#2) ----
+        function addPermissionRequest(data) {
+            const el = document.createElement('div');
+            el.className = 'permission-request';
+            const permId = data.id || '';
+            el.innerHTML = '<div class="perm-title">⚠️ Permission: ' + (data.tool || 'Unknown') + '</div>'
+                + '<div class="perm-detail">' + ((data.input || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')) + '</div>'
+                + '<div class="perm-actions" id="perm-actions-' + permId + '">'
+                + '<button class="perm-btn approve" data-perm-id="' + permId + '" data-allow="true">Approve</button>'
+                + '<button class="perm-btn deny" data-perm-id="' + permId + '" data-allow="false">Deny</button>'
+                + '</div>';
+            chatArea.appendChild(el);
+            chatArea.scrollTop = chatArea.scrollHeight;
+
+            // Wire up click handlers
+            el.querySelectorAll('.perm-btn').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const id = btn.dataset.permId;
+                    const allow = btn.dataset.allow;
+                    try {
+                        const fd = new FormData();
+                        fd.append('id', id);
+                        fd.append('allow', allow);
+                        await fetch(API_BASE + '/api/permission-respond', { method: 'POST', body: fd });
+                    } catch (e) { console.error('Permission respond failed:', e); }
+                    // Replace buttons with result
+                    const actionsEl = document.getElementById('perm-actions-' + id);
+                    if (actionsEl) {
+                        actionsEl.innerHTML = allow === 'true'
+                            ? '<span style="color:#22C55E;font-size:12px">✓ Approved</span>'
+                            : '<span style="color:#EF4444;font-size:12px">✗ Denied</span>';
+                    }
+                });
+            });
+        }
+
+        // Text input event handlers
+        textInput.addEventListener('input', () => {
+            textSendBtn.disabled = !textInput.value.trim() || isStreaming;
+        });
+
+        textInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey && textInput.value.trim() && !isStreaming) {
+                e.preventDefault();
+                sendTextMessage(textInput.value);
+                textInput.value = '';
+                textSendBtn.disabled = true;
+            }
+        });
+
+        textSendBtn.addEventListener('click', () => {
+            if (textInput.value.trim() && !isStreaming) {
+                sendTextMessage(textInput.value);
+                textInput.value = '';
+                textSendBtn.disabled = true;
+            }
+        });
 
         // ---- Call timer ----
         function startTimer() {
