@@ -97,8 +97,9 @@ _db_client = None
 
 # Model lock: "auto" (router decides), "opus" (always Opus), "haiku" (always direct),
 # "gpt54" (GPT-5.4 full agent), "gpt54mini" (GPT-5.4-mini full agent)
-model_lock: str = "auto"
+model_lock: str = "gpt54mini"
 LOCKED_GPT_SYNC_TIMEOUT = 90  # Keep browser requests comfortably under proxy timeout
+VOICE_DEFAULT_MODEL_LOCK = "gpt54mini"
 
 
 def _get_db():
@@ -175,22 +176,35 @@ def _append_history(role: str, content: str):
 
 async def _load_history_safe(timeout: float = 2.0) -> list[dict]:
     """Best-effort history load. Never let Cosmos block the live voice path."""
+    started = time.perf_counter()
     try:
-        return await asyncio.wait_for(asyncio.to_thread(_load_history), timeout=timeout)
+        history = await asyncio.wait_for(asyncio.to_thread(_load_history), timeout=timeout)
+        log.info(f"History load: {time.perf_counter() - started:.2f}s ({len(history)} messages)")
+        return history
     except Exception as e:
-        log.warning(f"History load skipped: {e}")
+        log.warning(f"History load skipped after {time.perf_counter() - started:.2f}s: {e}")
         return []
 
 
 async def _append_history_safe(role: str, content: str, timeout: float = 2.0):
     """Best-effort history write. Do not block replies on Cosmos latency."""
+    started = time.perf_counter()
     try:
         await asyncio.wait_for(
             asyncio.to_thread(_append_history, role, content),
             timeout=timeout,
         )
+        log.info(f"History append ({role}): {time.perf_counter() - started:.2f}s")
     except Exception as e:
-        log.warning(f"History append skipped for {role}: {e}")
+        log.warning(f"History append skipped for {role} after {time.perf_counter() - started:.2f}s: {e}")
+
+
+def _apply_voice_model_policy():
+    """Keep live voice on the lower-latency GPT model."""
+    global model_lock
+    if model_lock == "gpt54":
+        model_lock = VOICE_DEFAULT_MODEL_LOCK
+        log.info("Model lock → gpt54mini (voice safety downgrade from gpt54)")
 
 
 # ---------------------------------------------------------------------------
@@ -225,6 +239,7 @@ async def text_to_speech(text: str, voice: str = TTS_VOICE) -> bytes:
     """Convert text to speech using OpenAI TTS."""
     from openai import OpenAI
     client = OpenAI(api_key=OPENAI_API_KEY)
+    started = time.perf_counter()
 
     response = client.audio.speech.create(
         model=TTS_MODEL,
@@ -235,7 +250,7 @@ async def text_to_speech(text: str, voice: str = TTS_VOICE) -> bytes:
     )
 
     audio_bytes = response.content
-    log.info(f"TTS: {len(audio_bytes)} bytes for {len(text)} chars")
+    log.info(f"TTS: {time.perf_counter() - started:.2f}s, {len(audio_bytes)} bytes for {len(text)} chars")
     return audio_bytes
 
 
@@ -394,6 +409,8 @@ async def voice_endpoint(
 ):
     """Main voice endpoint: audio in → audio + text out."""
     verify_token(authorization)
+    _apply_voice_model_policy()
+    request_started = time.perf_counter()
 
     audio_bytes = await audio.read()
     if len(audio_bytes) < 100:
@@ -404,16 +421,27 @@ async def voice_endpoint(
     log.info(f"Voice request: audio={len(audio_bytes)} bytes")
 
     # 1. Speech-to-Text
+    stt_started = time.perf_counter()
     transcript = await speech_to_text(audio_bytes, audio.filename or "audio.wav")
+    stt_elapsed = time.perf_counter() - stt_started
     if not transcript:
         return JSONResponse({"error": "Could not transcribe audio", "transcript": ""})
 
     # 2. Router (fast ~2-5s)
+    handle_started = time.perf_counter()
     result = await handle_message(transcript)
+    handle_elapsed = time.perf_counter() - handle_started
 
     # 3. Text-to-Speech
+    tts_started = time.perf_counter()
     tts_audio = await text_to_speech(result["reply"])
+    tts_elapsed = time.perf_counter() - tts_started
     audio_b64 = base64.b64encode(tts_audio).decode()
+    total_elapsed = time.perf_counter() - request_started
+    log.info(
+        f"Voice timing: stt={stt_elapsed:.2f}s handle={handle_elapsed:.2f}s "
+        f"tts={tts_elapsed:.2f}s total={total_elapsed:.2f}s model={result.get('model_lock', model_lock)}"
+    )
 
     return JSONResponse({
         "transcript": transcript,
