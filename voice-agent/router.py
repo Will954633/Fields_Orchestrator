@@ -279,9 +279,11 @@ MODE: "task" (spawn background Opus worker — minutes, full VM access):
 - Database queries, data analysis
 - Any work requiring file reads/writes on the VM
 - **Knowledge base searches** — "what do our strategy docs say about X", "find meeting notes about Y", "what books cover Z"
-- Set reply to a natural acknowledgment: "On it — I'll search the knowledge base for that."
+- **Accounting queries** — "what did Rossmax spend in FY25", "show me Maxamra transactions", "tax summary for FY24", "how much rent came in", "reconcile my accounts", "what's in the ledgers"
+- Set reply to a natural acknowledgment: "On it — I'll search the knowledge base for that." / "Let me pull up the accounting data."
 - Set spawn_task.prompt to detailed self-contained instructions for the worker.
 - For KB searches, tell the worker to run: python3 scripts/search-kb.py "query" [--type TYPE]
+- For accounting queries, tell the worker to use the accounting tools documented in its system prompt (ledger search, tax summaries, etc.)
 
 When there are recently completed tasks, naturally mention them in your reply.
 
@@ -575,6 +577,29 @@ async def opus_full(
         f"  memory-show / memory-set-recipient — Email memory management\n"
         f"WORKFLOW: read → recipient-profile → draft-reply → show draft → Will approves → send live\n"
         f"IMPORTANT: NEVER send without explicit approval from Will.\n\n"
+        f"ACCOUNTING SYSTEM: Financial data for William Simpson Personal, Maxamra Trust, and Rossmax Pty Ltd.\n"
+        f"Data: /home/fields/samantha-accounting/ (bank statements, JSON ledgers, investments, CGT, property, tax)\n"
+        f"All commands run from: cd /home/fields/samantha-accounting && source /home/fields/venv/bin/activate && set -a && source /home/fields/Fields_Orchestrator/.env && set +a\n\n"
+        f"Accounting commands:\n"
+        f"  python3 update_ledgers.py                           — Rebuild all ledgers from CSV/PDF sources\n"
+        f"  python3 run_accounting_summary.py <entity> <fy>     — FY summary for an entity\n"
+        f"    Entities: William_Simpson_Personal, Maxamra_Trust, Rossmax_Pty_Ltd\n"
+        f"    FYs: FY22, FY23, FY24, FY25\n\n"
+        f"For direct ledger queries, use Python:\n"
+        f"  import sys; sys.path.insert(0, '/home/fields/samantha-accounting/finance-module')\n"
+        f"  from ledger_search import search_transactions, summarize_by_category\n"
+        f"  # Search: search_transactions(entity='Rossmax_Pty_Ltd', fy='FY25', vendor='next Thursday')\n"
+        f"  # Summary: summarize_by_category(entity='William_Simpson_Personal', fy='FY24')\n"
+        f"  from tax_summary import generate_tax_summary\n"
+        f"  # Tax report: generate_tax_summary('Maxamra_Trust', 'FY24')\n\n"
+        f"Ledger JSON files: /home/fields/samantha-accounting/Ledgers/\n"
+        f"  Format: {{entity}}_{{account}}_{{fy}}_Bank.json\n"
+        f"  Each entry: date, amount, currency, balance, vendor, description, expense_category\n"
+        f"Bank statements: /home/fields/samantha-accounting/Bank_Statements/\n"
+        f"Investments: /home/fields/samantha-accounting/Investments/\n"
+        f"CGT data: /home/fields/samantha-accounting/CGT/\n"
+        f"Property (rental): /home/fields/samantha-accounting/Property/46_Balderstone_St_Rental/\n"
+        f"Historical ledgers (Excel): /home/fields/samantha-accounting/Historical_Ledgers/\n\n"
         f"TOOLS: You have full access to all tools including TodoWrite, Task (sub-agents), "
         f"WebSearch, WebFetch, and all file/code tools. Use them freely when they help accomplish the task. "
         f"The restriction on TodoWrite/Agent in commit workflows does NOT apply to general conversation.\n\n"
