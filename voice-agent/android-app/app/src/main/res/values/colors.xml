@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="fields_blue">#2563EB</color>
+    <color name="fields_blue_dark">#1D4ED8</color>
+    <color name="bg_dark">#0A0A0F</color>
+    <color name="surface_dark">#1F2937</color>
+    <color name="text_primary">#F9FAFB</color>
+    <color name="text_secondary">#9CA3AF</color>
+    <color name="user_bubble">#1E3A5F</color>
+    <color name="agent_bubble">#1F2937</color>
+    <color name="recording_red">#EF4444</color>
+
+    <!-- Chip colors -->
+    <color name="chip_text_selected">#FFFFFF</color>
+    <color name="chip_text_unselected">#9CA3AF</color>
+    <color name="chip_bg_selected">#2563EB</color>
+    <color name="chip_bg_unselected">#1F2937</color>
+</resources>
