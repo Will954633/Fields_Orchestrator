@@ -99,8 +99,7 @@ class TaskManager:
 
     def spawn_task(self, title: str, prompt: str, user_message: str,
                    model: str = "opus") -> str:
-        """Create a task and launch a background worker. Returns task_id.
-        model: 'opus' (default), 'gpt54', or 'gpt54mini'."""
+        """Create a task and launch a background worker. Returns task_id."""
         task_id = _task_id(title)
         doc = {
             "_id": task_id,
@@ -134,12 +133,8 @@ class TaskManager:
 
     async def _run_worker(self, task_id: str, prompt: str, model: str = "opus"):
         """Worker coroutine: acquire semaphore, run worker, track lifecycle."""
-        # Wait for a slot (stays queued until semaphore available)
         async with self._semaphore:
-            if model in ("gpt54", "gpt54mini"):
-                await self._execute_gpt(task_id, prompt, model)
-            else:
-                await self._execute(task_id, prompt)
+            await self._execute(task_id, prompt)
 
     async def _execute(self, task_id: str, prompt: str):
         """Execute Claude Code worker via Agent SDK with heartbeat tracking."""
@@ -154,6 +149,29 @@ class TaskManager:
             f"Categories: book, strategy, marketing, code, financial, operational, meeting_notes, general, project, conversations\n"
             f"Get full chunk: python3 scripts/search-kb.py --chunk CHUNK_ID --file path/to/index.json\n"
             f"List categories: python3 scripts/search-kb.py --list-categories\n\n"
+            f"ACCOUNTING SYSTEM: Financial data for William Simpson Personal, Maxamra Trust, and Rossmax Pty Ltd.\n"
+            f"Data: /home/fields/samantha-accounting/ (bank statements, JSON ledgers, investments, CGT, property, tax)\n"
+            f"All commands run from: cd /home/fields/samantha-accounting && source /home/fields/venv/bin/activate && set -a && source /home/fields/Fields_Orchestrator/.env && set +a\n\n"
+            f"Accounting commands:\n"
+            f"  python3 update_ledgers.py                           — Rebuild all ledgers from CSV/PDF sources\n"
+            f"  python3 run_accounting_summary.py <entity> <fy>     — FY summary for an entity\n"
+            f"    Entities: William_Simpson_Personal, Maxamra_Trust, Rossmax_Pty_Ltd\n"
+            f"    FYs: FY22, FY23, FY24, FY25\n\n"
+            f"For direct ledger queries, use Python:\n"
+            f"  import sys; sys.path.insert(0, '/home/fields/samantha-accounting/finance-module')\n"
+            f"  from ledger_search import search_transactions, summarize_by_category\n"
+            f"  # Search: search_transactions(entity='Rossmax_Pty_Ltd', fy='FY25', vendor='next Thursday')\n"
+            f"  # Summary: summarize_by_category(entity='William_Simpson_Personal', fy='FY24')\n"
+            f"  from tax_summary import generate_tax_summary\n"
+            f"  # Tax report: generate_tax_summary('Maxamra_Trust', 'FY24')\n\n"
+            f"Ledger JSON files: /home/fields/samantha-accounting/Ledgers/\n"
+            f"  Format: {{entity}}_{{account}}_{{fy}}_Bank.json\n"
+            f"  Each entry: date, amount, currency, balance, vendor, description, expense_category\n"
+            f"Bank statements: /home/fields/samantha-accounting/Bank_Statements/\n"
+            f"Investments: /home/fields/samantha-accounting/Investments/\n"
+            f"CGT data: /home/fields/samantha-accounting/CGT/\n"
+            f"Property (rental): /home/fields/samantha-accounting/Property/46_Balderstone_St_Rental/\n"
+            f"Historical ledgers (Excel): /home/fields/samantha-accounting/Historical_Ledgers/\n\n"
             f"{context}"
         )
 
@@ -269,104 +287,6 @@ class TaskManager:
                 "summary": summary,
             })
 
-    async def _execute_gpt(self, task_id: str, prompt: str, model: str):
-        """Execute a GPT-based worker (no subprocess — uses OpenAI API agent loop)."""
-        from gpt_agent import gpt_worker, GPT54_MODEL, GPT54_MINI_MODEL
-
-        gpt_model = GPT54_MINI_MODEL if model == "gpt54mini" else GPT54_MODEL
-
-        self._update_task(task_id, {
-            "status": "running",
-            "started_at": _now_iso(),
-            "last_heartbeat_at": _now_iso(),
-        })
-        self._sse.broadcast("task_started", {
-            "task_id": task_id,
-            "title": self._get_task(task_id).get("title", ""),
-            "status": "running",
-        })
-        log.info(f"GPT worker started: {task_id} (model: {gpt_model})")
-
-        # Heartbeat in background
-        hb_running = True
-
-        async def heartbeat():
-            while hb_running:
-                await asyncio.sleep(HEARTBEAT_INTERVAL_SECONDS)
-                if hb_running:
-                    self._update_task(task_id, {"last_heartbeat_at": _now_iso()})
-                    self._sse.broadcast("task_progress", {
-                        "task_id": task_id,
-                        "status": "running",
-                    })
-
-        hb_task = asyncio.create_task(heartbeat())
-
-        try:
-            response = await asyncio.wait_for(
-                gpt_worker(prompt, model=gpt_model),
-                timeout=WORKER_TIMEOUT_SECONDS,
-            )
-        except asyncio.TimeoutError:
-            log.error(f"GPT worker timed out: {task_id}")
-            self._update_task(task_id, {
-                "status": "failed",
-                "finished_at": _now_iso(),
-                "error_text": f"Timed out after {WORKER_TIMEOUT_SECONDS}s",
-            })
-            self._sse.broadcast("task_failed", {
-                "task_id": task_id,
-                "error": f"Timed out after {WORKER_TIMEOUT_SECONDS}s",
-            })
-            return
-        except Exception as e:
-            log.error(f"GPT worker error: {task_id}: {e}")
-            self._update_task(task_id, {
-                "status": "failed",
-                "finished_at": _now_iso(),
-                "error_text": str(e)[:1200],
-            })
-            self._sse.broadcast("task_failed", {
-                "task_id": task_id,
-                "error": str(e)[:200],
-            })
-            return
-        finally:
-            hb_running = False
-            hb_task.cancel()
-            try:
-                await hb_task
-            except asyncio.CancelledError:
-                pass
-
-        if not response:
-            self._update_task(task_id, {
-                "status": "failed",
-                "finished_at": _now_iso(),
-                "error_text": "Empty response from GPT",
-            })
-            self._sse.broadcast("task_failed", {
-                "task_id": task_id,
-                "error": "Empty response",
-            })
-        else:
-            summary = response[:300]
-            if len(response) > 300:
-                summary += "..."
-            log.info(f"GPT worker completed: {task_id} ({len(response)} chars)")
-            self._update_task(task_id, {
-                "status": "completed",
-                "finished_at": _now_iso(),
-                "result_summary": summary,
-                "result_full": response,
-                "notified": False,
-            })
-            task = self._get_task(task_id)
-            self._sse.broadcast("task_completed", {
-                "task_id": task_id,
-                "title": task.get("title", ""),
-                "summary": summary,
-            })
 
     def _update_task(self, task_id: str, updates: dict):
         """Update task document in MongoDB."""
