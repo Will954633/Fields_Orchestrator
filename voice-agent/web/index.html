@@ -346,6 +346,13 @@
         .model-btn.active.gpt54mini {
             background: #10A37F;
         }
+
+        .model-hint {
+            margin-top: 8px;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.72);
+            text-align: center;
+        }
     </style>
 </head>
 <body>
@@ -366,6 +373,7 @@
             <button class="model-btn" data-lock="gpt54" id="btnGpt54">GPT-5.4</button>
             <button class="model-btn active" data-lock="gpt54mini" id="btnGpt54Mini">5.4-mini</button>
         </div>
+        <div class="model-hint" id="modelHint">GPT chat is direct. Code, email, and other work requests run as GPT background tasks.</div>
         <div class="call-timer" id="callTimer">00:00</div>
     </div>
 
@@ -473,8 +481,8 @@
                 auto: 'Auto · Fields Agent',
                 haiku: 'Haiku · Fast',
                 opus: 'Opus · Deep',
-                gpt54: 'GPT-5.4 · Text/Deep',
-                gpt54mini: 'GPT-5.4-mini · Voice',
+                gpt54: 'GPT-5.4 · Chat + GPT Tasks',
+                gpt54mini: 'GPT-5.4-mini · Voice + GPT Tasks',
             };
             modelName.textContent = labels[lock] || labels.auto;
         }
