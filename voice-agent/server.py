@@ -43,7 +43,7 @@ import uvicorn
 # Local modules
 from sse import SSEBroadcaster
 from task_manager import TaskManager
-from router import route_message
+from router import route_message, _opus_converse
 
 # ---------------------------------------------------------------------------
 # Config
@@ -93,6 +93,9 @@ app.add_middleware(
 sse_broadcaster: Optional[SSEBroadcaster] = None
 task_manager: Optional[TaskManager] = None
 _db_client = None
+
+# Model lock: "auto" (router decides), "opus" (always Opus converse), "haiku" (always direct)
+model_lock: str = "auto"
 
 
 def _get_db():
@@ -217,24 +220,74 @@ async def text_to_speech(text: str, voice: str = TTS_VOICE) -> bytes:
 # Core message handler
 # ---------------------------------------------------------------------------
 
+import re
+
+# Voice trigger patterns (case-insensitive)
+_OPUS_TRIGGERS = re.compile(
+    r'\b(speak to opus|switch to opus|talk to opus|use opus|opus mode)\b', re.IGNORECASE
+)
+_HAIKU_TRIGGERS = re.compile(
+    r'\b(switch back|back to haiku|switch to haiku|use haiku|haiku mode)\b', re.IGNORECASE
+)
+# Opus self-downgrade signal
+_SWITCH_HAIKU_SIGNAL = "[SWITCH_HAIKU]"
+
+
 async def handle_message(user_text: str) -> dict:
     """
-    Handle a user message through the router.
+    Handle a user message. Checks voice triggers first, then routes.
 
     Returns:
-        {"reply": str, "task_id": str | None}
+        {"reply": str, "task_id": str | None, "model_lock": str}
     """
+    global model_lock
+
+    # --- Voice trigger detection (skip router entirely) ---
+    if _OPUS_TRIGGERS.search(user_text):
+        model_lock = "opus"
+        log.info("Model lock → opus (voice trigger)")
+        reply = "Switched to Opus. I'm listening."
+        _append_history("user", user_text)
+        _append_history("assistant", reply)
+        return {"reply": reply, "task_id": None, "model_lock": model_lock}
+
+    if _HAIKU_TRIGGERS.search(user_text):
+        model_lock = "auto"
+        log.info("Model lock → auto (voice trigger)")
+        reply = "Switched back. Haiku on routing duty."
+        _append_history("user", user_text)
+        _append_history("assistant", reply)
+        return {"reply": reply, "task_id": None, "model_lock": model_lock}
+
     history = _load_history()
+
+    # --- Model lock: opus → always converse ---
+    if model_lock == "opus":
+        reply = await _opus_converse(user_text, history)
+        # Check if Opus wants to self-downgrade
+        if _SWITCH_HAIKU_SIGNAL in reply:
+            reply = reply.replace(_SWITCH_HAIKU_SIGNAL, "").strip()
+            model_lock = "auto"
+            log.info("Model lock → auto (Opus self-downgrade)")
+        _append_history("user", user_text)
+        _append_history("assistant", reply)
+        return {"reply": reply, "task_id": None, "model_lock": model_lock}
+
+    # --- Model lock: haiku → always direct (no Opus converse) ---
+    # (still allows task spawning — that's work, not conversation)
+
+    # --- Normal routing (auto mode or haiku mode) ---
     active_tasks = task_manager.get_active_tasks()
     completed_unnotified = task_manager.get_unnotified_completed()
 
-    # Route through Haiku (fast, no tools)
-    decision = await route_message(user_text, history, active_tasks, completed_unnotified)
+    decision = await route_message(
+        user_text, history, active_tasks, completed_unnotified,
+        force_direct=(model_lock == "haiku"),
+    )
 
     reply = decision["reply"]
     task_id = None
 
-    # Spawn background task if router decided to
     if decision.get("spawn_task"):
         spawn = decision["spawn_task"]
         task_id = task_manager.spawn_task(
@@ -244,15 +297,13 @@ async def handle_message(user_text: str) -> dict:
         )
         log.info(f"Task spawned: {task_id} — {spawn['title']}")
 
-    # Mark completed tasks as notified (router has incorporated them into reply)
     if completed_unnotified:
         task_manager.mark_notified([t["_id"] for t in completed_unnotified])
 
-    # Store conversation
     _append_history("user", user_text)
     _append_history("assistant", reply)
 
-    return {"reply": reply, "task_id": task_id}
+    return {"reply": reply, "task_id": task_id, "model_lock": model_lock}
 
 
 # ---------------------------------------------------------------------------
@@ -301,7 +352,8 @@ async def voice_endpoint(
     return JSONResponse({
         "transcript": transcript,
         "reply": result["reply"],
-        "task_id": result["task_id"],
+        "task_id": result.get("task_id"),
+        "model_lock": result.get("model_lock", model_lock),
         "audio_base64": audio_b64,
         "audio_format": "mp3",
     })
@@ -321,8 +373,37 @@ async def chat_endpoint(
 
     return JSONResponse({
         "reply": result["reply"],
-        "task_id": result["task_id"],
+        "task_id": result.get("task_id"),
+        "model_lock": result.get("model_lock", model_lock),
     })
+
+
+# ---------------------------------------------------------------------------
+# Model lock endpoint
+# ---------------------------------------------------------------------------
+
+@app.post("/api/model")
+async def set_model(
+    lock: str = Form(...),
+    authorization: Optional[str] = Header(None),
+):
+    """Set model lock: 'auto', 'opus', or 'haiku'."""
+    global model_lock
+    verify_token(authorization)
+
+    if lock not in ("auto", "opus", "haiku"):
+        raise HTTPException(400, "lock must be 'auto', 'opus', or 'haiku'")
+
+    model_lock = lock
+    log.info(f"Model lock set to: {lock}")
+    return JSONResponse({"model_lock": lock})
+
+
+@app.get("/api/model")
+async def get_model(authorization: Optional[str] = Header(None)):
+    """Get current model lock state."""
+    verify_token(authorization)
+    return JSONResponse({"model_lock": model_lock})
 
 
 # ---------------------------------------------------------------------------
