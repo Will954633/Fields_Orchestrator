@@ -169,8 +169,10 @@ MODE: "task" (spawn background Opus worker — minutes, full VM access):
 - Running commands, checking logs, investigating issues
 - Database queries, data analysis
 - Any work requiring file reads/writes on the VM
-- Set reply to a natural acknowledgment: "On it — I'll check the pipeline logs."
+- **Knowledge base searches** — "what do our strategy docs say about X", "find meeting notes about Y", "what books cover Z"
+- Set reply to a natural acknowledgment: "On it — I'll search the knowledge base for that."
 - Set spawn_task.prompt to detailed self-contained instructions for the worker.
+- For KB searches, tell the worker to run: python3 scripts/search-kb.py "query" [--type TYPE]
 
 When there are recently completed tasks, naturally mention them in your reply.
 
@@ -314,6 +316,9 @@ async def _opus_converse(user_text: str, history: list[dict]) -> str:
         f"You have full context on the business, systems, and current state. "
         f"Think carefully and provide substantive, specific advice — not generic strategy talk. "
         f"Be direct, challenge assumptions if warranted, and propose concrete next steps when relevant.\n\n"
+        f"NOTE: You are in converse mode (no tools). If the user asks something that requires "
+        f"searching the knowledge base or running commands, tell them you'll need to switch — "
+        f"suggest they say 'switch to opus' for the full agent, or that this will be picked up as a task.\n\n"
         f"IMPORTANT: If the user's message is simple (a greeting, a quick factual question, a thank you, "
         f"or anything that clearly doesn't need deep reasoning), append the exact text [SWITCH_HAIKU] "
         f"at the very end of your response. This signals the system to switch back to fast Haiku routing. "
@@ -330,6 +335,7 @@ async def _opus_converse(user_text: str, history: list[dict]) -> str:
             "--output-format", "text",
             "--append-system-prompt", system_prompt,
             "--no-session-persistence",
+            "--max-budget-usd", "1.00",
             cwd=ORCHESTRATOR_DIR,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -380,6 +386,13 @@ async def opus_full(user_text: str, history: list[dict]) -> str:
         f"talking directly with Will Simpson (founder). "
         f"You can read files, run commands, edit code, query databases — do whatever is needed. "
         f"Be conversational but substantive.\n\n"
+        f"KNOWLEDGE BASE: You have access to a 1,644-document knowledge base with 7,000+ chunks "
+        f"covering books, strategy docs, marketing plans, meeting notes, code, financials, and operations. "
+        f"Search it with: python3 scripts/search-kb.py \"query\" [--type TYPE] [--max N] [--tag TAG]\n"
+        f"Categories: book, strategy, marketing, code, financial, operational, meeting_notes, general, project, conversations\n"
+        f"Get full chunk: python3 scripts/search-kb.py --chunk CHUNK_ID --file path/to/index.json\n"
+        f"List categories: python3 scripts/search-kb.py --list-categories\n"
+        f"Use the KB when the user asks about strategy, books, past decisions, marketing plans, meeting notes, or anything that might be in the knowledge base.\n\n"
         f"IMPORTANT: If the user's message is simple (a greeting, a quick factual question, a thank you, "
         f"or anything that clearly doesn't need deep reasoning or tools), append the exact text [SWITCH_HAIKU] "
         f"at the very end of your response. This signals the system to switch back to fast Haiku routing. "
@@ -395,6 +408,7 @@ async def opus_full(user_text: str, history: list[dict]) -> str:
             "--output-format", "text",
             "--append-system-prompt", system_prompt,
             "--dangerously-skip-permissions",
+            "--max-budget-usd", "5.00",
             cwd=ORCHESTRATOR_DIR,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
