@@ -98,6 +98,7 @@ _db_client = None
 # Model lock: "auto" (router decides), "opus" (always Opus), "haiku" (always direct),
 # "gpt54" (GPT-5.4 full agent), "gpt54mini" (GPT-5.4-mini full agent)
 model_lock: str = "auto"
+LOCKED_GPT_SYNC_TIMEOUT = 90  # Keep browser requests comfortably under proxy timeout
 
 
 def _get_db():
@@ -285,19 +286,46 @@ async def handle_message(user_text: str) -> dict:
 
     history = _load_history()
 
-    # --- Model lock: gpt54 → full GPT-5.4 agent with all tools ---
-    if model_lock == "gpt54":
-        reply = await gpt_full(user_text, history, model=GPT54_MODEL)
-        _append_history("user", user_text)
-        _append_history("assistant", reply)
-        return {"reply": reply, "task_id": None, "model_lock": model_lock}
+    # --- Model lock: GPT modes route work to background tasks, keep chat sync ---
+    if model_lock in ("gpt54", "gpt54mini"):
+        active_tasks = task_manager.get_active_tasks()
+        completed_unnotified = task_manager.get_unnotified_completed()
+        decision = await route_message(
+            user_text, history, active_tasks, completed_unnotified,
+            force_direct=False,
+        )
 
-    # --- Model lock: gpt54mini → full GPT-5.4-mini agent with all tools ---
-    if model_lock == "gpt54mini":
-        reply = await gpt_full(user_text, history, model=GPT54_MINI_MODEL)
+        task_id = None
+        if decision.get("spawn_task"):
+            spawn = decision["spawn_task"]
+            task_id = task_manager.spawn_task(
+                title=spawn["title"],
+                prompt=spawn["prompt"],
+                user_message=user_text,
+                model=model_lock,
+            )
+            log.info(f"GPT task spawned: {task_id} — {spawn['title']} (model: {model_lock})")
+            reply = decision["reply"]
+        else:
+            gpt_model = GPT54_MINI_MODEL if model_lock == "gpt54mini" else GPT54_MODEL
+            try:
+                reply = await asyncio.wait_for(
+                    gpt_converse(user_text, history, model=gpt_model),
+                    timeout=LOCKED_GPT_SYNC_TIMEOUT,
+                )
+            except asyncio.TimeoutError:
+                log.error(f"Locked GPT sync reply timed out after {LOCKED_GPT_SYNC_TIMEOUT}s (model: {model_lock})")
+                reply = (
+                    "That took too long to answer in-chat. "
+                    "Ask again or phrase it as a task and I'll run it in the background."
+                )
+
+        if completed_unnotified:
+            task_manager.mark_notified([t["_id"] for t in completed_unnotified])
+
         _append_history("user", user_text)
         _append_history("assistant", reply)
-        return {"reply": reply, "task_id": None, "model_lock": model_lock}
+        return {"reply": reply, "task_id": task_id, "model_lock": model_lock}
 
     # --- Model lock: opus → full Opus agent with all tools ---
     if model_lock == "opus":
