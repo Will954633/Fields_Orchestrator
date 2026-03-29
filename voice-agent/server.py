@@ -99,6 +99,7 @@ _db_client = None
 # "gpt54" (GPT-5.4 full agent), "gpt54mini" (GPT-5.4-mini full agent)
 model_lock: str = "gpt54mini"
 LOCKED_GPT_SYNC_TIMEOUT = 90  # Keep browser requests comfortably under proxy timeout
+LOCKED_GPT_ROUTE_TIMEOUT = 8  # Short task-detection pass for GPT lock
 VOICE_DEFAULT_MODEL_LOCK = "gpt54mini"
 
 
@@ -322,11 +323,48 @@ async def handle_message(user_text: str) -> dict:
         _append_history("assistant", reply)
         return {"reply": reply, "task_id": None, "model_lock": model_lock}
 
-    # --- Model lock: GPT modes stay in direct chat path for reliability ---
+    # --- Model lock: GPT modes can spawn GPT tasks, otherwise stay in direct chat ---
     if model_lock in ("gpt54", "gpt54mini"):
         history = await _load_history_safe(timeout=1.0)
         task_id = None
         gpt_model = GPT54_MINI_MODEL if model_lock == "gpt54mini" else GPT54_MODEL
+        active_tasks = task_manager.get_active_tasks()
+        completed_unnotified = task_manager.get_unnotified_completed()
+
+        try:
+            decision = await asyncio.wait_for(
+                route_message(
+                    user_text,
+                    history,
+                    active_tasks,
+                    completed_unnotified,
+                    force_direct=True,
+                ),
+                timeout=LOCKED_GPT_ROUTE_TIMEOUT,
+            )
+        except asyncio.TimeoutError:
+            log.warning(
+                f"Locked GPT task detection timed out after {LOCKED_GPT_ROUTE_TIMEOUT}s "
+                f"(model: {model_lock})"
+            )
+            decision = {"reply": "", "spawn_task": None}
+
+        if decision.get("spawn_task"):
+            spawn = decision["spawn_task"]
+            task_id = task_manager.spawn_task(
+                title=spawn["title"],
+                prompt=spawn["prompt"],
+                user_message=user_text,
+                model=model_lock,
+            )
+            reply = decision["reply"]
+            log.info(f"GPT task spawned: {task_id} — {spawn['title']} (model: {model_lock})")
+            if completed_unnotified:
+                task_manager.mark_notified([t["_id"] for t in completed_unnotified])
+            await _append_history_safe("user", user_text, timeout=1.0)
+            await _append_history_safe("assistant", reply, timeout=1.0)
+            return {"reply": reply, "task_id": task_id, "model_lock": model_lock}
+
         try:
             reply = await asyncio.wait_for(
                 gpt_converse(user_text, history, model=gpt_model),
@@ -338,6 +376,8 @@ async def handle_message(user_text: str) -> dict:
                 "That took too long to answer in-chat. "
                 "Please try again or switch to Opus for VM task execution."
             )
+        if completed_unnotified:
+            task_manager.mark_notified([t["_id"] for t in completed_unnotified])
         await _append_history_safe("user", user_text, timeout=1.0)
         await _append_history_safe("assistant", reply, timeout=1.0)
         return {"reply": reply, "task_id": task_id, "model_lock": model_lock}
