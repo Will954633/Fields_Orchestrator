@@ -48,7 +48,7 @@ from router import route_message, opus_full, _opus_email as opus_email, resolve_
 
 # Session lock — prevents concurrent SDK session access (single-user system)
 _session_lock = asyncio.Lock()
-from gpt_agent import gpt_full, gpt_converse, GPT54_MODEL, GPT54_MINI_MODEL
+# GPT models removed — Anthropic only (Haiku router + Opus SDK)
 
 # ---------------------------------------------------------------------------
 # Config
@@ -99,12 +99,8 @@ sse_broadcaster: Optional[SSEBroadcaster] = None
 task_manager: Optional[TaskManager] = None
 _db_client = None
 
-# Model lock: "auto" (router decides), "opus" (always Opus), "haiku" (always direct),
-# "gpt54" (GPT-5.4 full agent), "gpt54mini" (GPT-5.4-mini full agent)
-model_lock: str = "gpt54mini"
-LOCKED_GPT_SYNC_TIMEOUT = 90  # Keep browser requests comfortably under proxy timeout
-LOCKED_GPT_ROUTE_TIMEOUT = 8  # Short task-detection pass for GPT lock
-VOICE_DEFAULT_MODEL_LOCK = "gpt54mini"
+# Model lock: "auto" (Haiku router decides), "opus" (always Opus), "haiku" (always direct)
+model_lock: str = "auto"
 
 
 def _get_db():
@@ -255,13 +251,6 @@ async def _save_session_id_safe(session_id: str, timeout: float = 2.0):
         log.warning(f"Session ID save failed: {e}")
 
 
-def _apply_voice_model_policy():
-    """Keep live voice on the lower-latency GPT model."""
-    global model_lock
-    if model_lock == "gpt54":
-        model_lock = VOICE_DEFAULT_MODEL_LOCK
-        log.info("Model lock → gpt54mini (voice safety downgrade from gpt54)")
-
 
 def _sniff_audio_extension(audio_bytes: bytes) -> str | None:
     """Infer a safe temp-file extension from common audio container signatures."""
@@ -311,12 +300,52 @@ def _resolve_audio_filename(upload: UploadFile, audio_bytes: bytes) -> tuple[str
 # OpenAI helpers (STT / TTS)
 # ---------------------------------------------------------------------------
 
+def _convert_to_wav(audio_bytes: bytes, src_suffix: str) -> bytes | None:
+    """Convert audio to WAV using ffmpeg. Returns WAV bytes or None on failure."""
+    with tempfile.NamedTemporaryFile(suffix=src_suffix, delete=False) as src:
+        src.write(audio_bytes)
+        src_path = src.name
+    wav_path = src_path + ".wav"
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["ffmpeg", "-y", "-i", src_path, "-ar", "16000", "-ac", "1", "-f", "wav", wav_path],
+            capture_output=True, timeout=10,
+        )
+        if result.returncode == 0 and os.path.exists(wav_path):
+            with open(wav_path, "rb") as f:
+                return f.read()
+        log.warning(f"ffmpeg conversion failed: {result.stderr.decode()[:200]}")
+        return None
+    except Exception as e:
+        log.warning(f"ffmpeg conversion error: {e}")
+        return None
+    finally:
+        for p in [src_path, wav_path]:
+            try:
+                os.unlink(p)
+            except OSError:
+                pass
+
+
 async def speech_to_text(audio_bytes: bytes, filename: str = "audio.wav") -> str:
     """Transcribe audio using OpenAI STT."""
     from openai import OpenAI
     client = OpenAI(api_key=OPENAI_API_KEY)
 
     suffix = Path(filename).suffix or ".wav"
+
+    # If the audio isn't a clean format OpenAI recognises, convert to WAV first
+    sniffed = _sniff_audio_extension(audio_bytes)
+    if not sniffed:
+        log.info(f"Audio header not recognised ({audio_bytes[:4].hex()}), converting to WAV via ffmpeg")
+        wav_bytes = await asyncio.to_thread(_convert_to_wav, audio_bytes, suffix)
+        if wav_bytes:
+            audio_bytes = wav_bytes
+            suffix = ".wav"
+        else:
+            log.warning("ffmpeg conversion failed, trying original bytes anyway")
+
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as f:
         f.write(audio_bytes)
         tmp_path = f.name
@@ -332,7 +361,10 @@ async def speech_to_text(audio_bytes: bytes, filename: str = "audio.wav") -> str
         log.info(f"STT: '{transcript[:100]}...' ({len(audio_bytes)} bytes)")
         return transcript
     finally:
-        os.unlink(tmp_path)
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
 
 
 async def text_to_speech(text: str, voice: str = TTS_VOICE) -> bytes:
@@ -370,14 +402,8 @@ def _sanitize_spoken_text(text: str) -> str:
 
 
 async def summarize_task_for_voice(task: dict) -> str:
-    """Generate a short spoken summary for a completed task using the GPT model family."""
+    """Generate a short spoken summary for a completed task."""
     from openai import OpenAI
-
-    task_model = task.get("model")
-    if task_model == "gpt54":
-        summary_model = GPT54_MODEL
-    else:
-        summary_model = GPT54_MINI_MODEL
 
     task_text = (
         task.get("result_full")
@@ -388,6 +414,7 @@ async def summarize_task_for_voice(task: dict) -> str:
     status = task.get("status", "completed")
     title = task.get("title", "Background task")
     fallback = _sanitize_spoken_text(task.get("result_summary") or f"{title} {status}.")
+    summary_model = "gpt-4o-mini"  # lightweight summarization only
 
     client = OpenAI(api_key=OPENAI_API_KEY)
     system_prompt = (
@@ -433,12 +460,6 @@ _OPUS_TRIGGERS = re.compile(
 )
 _HAIKU_TRIGGERS = re.compile(
     r'\b(switch back|back to haiku|switch to haiku|use haiku|haiku mode|back to auto)\b', re.IGNORECASE
-)
-_GPT54_TRIGGERS = re.compile(
-    r'\b(switch to gpt|use gpt|gpt mode|use gpt.?5\.?4\b|switch to gpt.?5\.?4\b)', re.IGNORECASE
-)
-_GPT54MINI_TRIGGERS = re.compile(
-    r'\b(use gpt.?mini|switch to gpt.?mini|gpt.?mini mode|use gpt.?5\.?4.?mini|switch to gpt.?5\.?4.?mini)', re.IGNORECASE
 )
 # Opus self-downgrade signal
 _SWITCH_HAIKU_SIGNAL = "[SWITCH_HAIKU]"
@@ -622,22 +643,6 @@ async def handle_message(user_text: str) -> dict:
     global model_lock
 
     # --- Voice trigger detection (skip router entirely) ---
-    if _GPT54MINI_TRIGGERS.search(user_text):
-        model_lock = "gpt54mini"
-        log.info("Model lock → gpt54mini (voice trigger)")
-        reply = "Switched to GPT-5.4-mini. Full tools available."
-        _append_history("user", user_text)
-        _append_history("assistant", reply)
-        return {"reply": reply, "task_id": None, "model_lock": model_lock}
-
-    if _GPT54_TRIGGERS.search(user_text):
-        model_lock = "gpt54"
-        log.info("Model lock → gpt54 (voice trigger)")
-        reply = "Switched to GPT-5.4. Full tools available."
-        _append_history("user", user_text)
-        _append_history("assistant", reply)
-        return {"reply": reply, "task_id": None, "model_lock": model_lock}
-
     if _OPUS_TRIGGERS.search(user_text):
         model_lock = "opus"
         log.info("Model lock → opus (voice trigger)")
@@ -653,110 +658,6 @@ async def handle_message(user_text: str) -> dict:
         _append_history("user", user_text)
         _append_history("assistant", reply)
         return {"reply": reply, "task_id": None, "model_lock": model_lock}
-
-    # --- Model lock: GPT modes can spawn GPT tasks, otherwise stay in direct chat ---
-    if model_lock in ("gpt54", "gpt54mini"):
-        history = await _load_history_safe(timeout=1.0)
-        task_id = None
-        gpt_model = GPT54_MINI_MODEL if model_lock == "gpt54mini" else GPT54_MODEL
-        fast_dev_task = _build_fast_dev_task(user_text)
-        if fast_dev_task:
-            prompt = _augment_task_prompt(fast_dev_task["prompt"], history)
-            task_id = task_manager.spawn_task(
-                title=fast_dev_task["title"],
-                prompt=prompt,
-                user_message=user_text,
-                model=model_lock,
-            )
-            reply = fast_dev_task["reply"]
-            log.info(f"GPT fast dev task spawned: {task_id} — {fast_dev_task['title']} (model: {model_lock})")
-            await _append_history_safe("user", user_text, timeout=1.0)
-            await _append_history_safe("assistant", reply, timeout=1.0)
-            return {"reply": reply, "task_id": task_id, "model_lock": model_lock}
-
-        contextual_dev_task = _build_contextual_dev_task(user_text, history)
-        if contextual_dev_task:
-            prompt = _augment_task_prompt(contextual_dev_task["prompt"], history)
-            task_id = task_manager.spawn_task(
-                title=contextual_dev_task["title"],
-                prompt=prompt,
-                user_message=user_text,
-                model=model_lock,
-            )
-            reply = contextual_dev_task["reply"]
-            log.info(f"GPT contextual dev task spawned: {task_id} — {contextual_dev_task['title']} (model: {model_lock})")
-            await _append_history_safe("user", user_text, timeout=1.0)
-            await _append_history_safe("assistant", reply, timeout=1.0)
-            return {"reply": reply, "task_id": task_id, "model_lock": model_lock}
-
-        fast_email_task = _build_fast_email_task(user_text)
-        if fast_email_task:
-            # Email requests → conversational Opus with SDK session persistence
-            log.info(f"Email request detected (fast-path): routing to opus_email (SDK)")
-            session_id = await _load_session_id_safe(timeout=1.0)
-            reply, new_sid = await opus_email(user_text, history, session_id=session_id)
-            if new_sid:
-                await _save_session_id_safe(new_sid, timeout=1.0)
-            if _SWITCH_HAIKU_SIGNAL in reply:
-                reply = reply.replace(_SWITCH_HAIKU_SIGNAL, "").strip()
-            await _append_history_safe("user", user_text, timeout=1.0)
-            await _append_history_safe("assistant", reply, timeout=1.0)
-            return {"reply": reply, "task_id": None, "model_lock": model_lock}
-
-        active_tasks = task_manager.get_active_tasks()
-        completed_unnotified = task_manager.get_unnotified_completed()
-
-        try:
-            decision = await asyncio.wait_for(
-                route_message(
-                    user_text,
-                    history,
-                    active_tasks,
-                    completed_unnotified,
-                    force_direct=True,
-                ),
-                timeout=LOCKED_GPT_ROUTE_TIMEOUT,
-            )
-        except asyncio.TimeoutError:
-            log.warning(
-                f"Locked GPT task detection timed out after {LOCKED_GPT_ROUTE_TIMEOUT}s "
-                f"(model: {model_lock})"
-            )
-            decision = {"reply": "", "spawn_task": None}
-
-        if decision.get("spawn_task"):
-            spawn = decision["spawn_task"]
-            prompt = _augment_task_prompt(spawn["prompt"], history)
-            task_id = task_manager.spawn_task(
-                title=spawn["title"],
-                prompt=prompt,
-                user_message=user_text,
-                model=model_lock,
-            )
-            reply = decision["reply"]
-            log.info(f"GPT task spawned: {task_id} — {spawn['title']} (model: {model_lock})")
-            if completed_unnotified:
-                task_manager.mark_notified([t["_id"] for t in completed_unnotified])
-            await _append_history_safe("user", user_text, timeout=1.0)
-            await _append_history_safe("assistant", reply, timeout=1.0)
-            return {"reply": reply, "task_id": task_id, "model_lock": model_lock}
-
-        try:
-            reply = await asyncio.wait_for(
-                gpt_converse(user_text, history, model=gpt_model),
-                timeout=LOCKED_GPT_SYNC_TIMEOUT,
-            )
-        except asyncio.TimeoutError:
-            log.error(f"Locked GPT sync reply timed out after {LOCKED_GPT_SYNC_TIMEOUT}s (model: {model_lock})")
-            reply = (
-                "That took too long to answer in-chat. "
-                "Please try again or switch to Opus for VM task execution."
-            )
-        if completed_unnotified:
-            task_manager.mark_notified([t["_id"] for t in completed_unnotified])
-        await _append_history_safe("user", user_text, timeout=1.0)
-        await _append_history_safe("assistant", reply, timeout=1.0)
-        return {"reply": reply, "task_id": task_id, "model_lock": model_lock}
 
     # --- Model lock: opus → dev tasks go to background, chat stays synchronous ---
     if model_lock == "opus":
@@ -914,6 +815,7 @@ async def voice_endpoint(
         raise HTTPException(400, "Audio too large (max 25MB)")
 
     resolved_name, sniffed_ext = _resolve_audio_filename(audio, audio_bytes)
+    log.info(f"Audio bytes header: {audio_bytes[:16].hex()} (first 16 bytes)")
     log.info(
         "Voice request: audio=%s bytes filename=%s content_type=%s resolved_name=%s sniffed_ext=%s",
         len(audio_bytes),
@@ -1078,21 +980,7 @@ async def handle_message_streaming(user_text: str, on_stream=None) -> dict:
     """Same as handle_message but passes on_stream to Opus functions."""
     global model_lock
 
-    # Voice triggers — same as handle_message
-    if _GPT54MINI_TRIGGERS.search(user_text):
-        model_lock = "gpt54mini"
-        reply = "Switched to GPT-5.4-mini. Full tools available."
-        _append_history("user", user_text)
-        _append_history("assistant", reply)
-        return {"reply": reply, "task_id": None, "model_lock": model_lock}
-
-    if _GPT54_TRIGGERS.search(user_text):
-        model_lock = "gpt54"
-        reply = "Switched to GPT-5.4. Full tools available."
-        _append_history("user", user_text)
-        _append_history("assistant", reply)
-        return {"reply": reply, "task_id": None, "model_lock": model_lock}
-
+    # Voice triggers
     if _OPUS_TRIGGERS.search(user_text):
         model_lock = "opus"
         reply = "Switched to Opus. I'm listening."
@@ -1165,10 +1053,6 @@ async def handle_message_streaming(user_text: str, on_stream=None) -> dict:
     # Auto/haiku mode — streaming for Opus calls
     history = await _load_history_safe()
     session_id = await _load_session_id_safe()
-
-    # GPT-locked modes don't stream (they use GPT APIs separately)
-    if model_lock in ("gpt54", "gpt54mini"):
-        return await handle_message(user_text)
 
     # Router bypass (#5): if there's an active SDK session and the last assistant
     # message was from Opus (not Haiku), route directly to opus_full for continuity.
@@ -1245,11 +1129,11 @@ async def set_model(
     lock: str = Form(...),
     authorization: Optional[str] = Header(None),
 ):
-    """Set model lock: 'auto', 'opus', 'haiku', 'gpt54', or 'gpt54mini'."""
+    """Set model lock: 'auto', 'opus', or 'haiku'."""
     global model_lock
     verify_token(authorization)
 
-    valid = ("auto", "opus", "haiku", "gpt54", "gpt54mini")
+    valid = ("auto", "opus", "haiku")
     if lock not in valid:
         raise HTTPException(400, f"lock must be one of: {', '.join(valid)}")
 
