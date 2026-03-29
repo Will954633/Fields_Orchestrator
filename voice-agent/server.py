@@ -30,6 +30,7 @@ import base64
 import asyncio
 import logging
 import tempfile
+import mimetypes
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional
@@ -206,6 +207,50 @@ def _apply_voice_model_policy():
     if model_lock == "gpt54":
         model_lock = VOICE_DEFAULT_MODEL_LOCK
         log.info("Model lock → gpt54mini (voice safety downgrade from gpt54)")
+
+
+def _sniff_audio_extension(audio_bytes: bytes) -> str | None:
+    """Infer a safe temp-file extension from common audio container signatures."""
+    if len(audio_bytes) >= 12 and audio_bytes[:4] == b"RIFF" and audio_bytes[8:12] == b"WAVE":
+        return ".wav"
+    if audio_bytes[:4] == b"OggS":
+        return ".ogg"
+    if audio_bytes[:4] == b"\x1a\x45\xdf\xa3":
+        return ".webm"
+    if len(audio_bytes) >= 8 and audio_bytes[4:8] == b"ftyp":
+        return ".mp4"
+    if audio_bytes[:3] == b"ID3" or (len(audio_bytes) >= 2 and audio_bytes[0] == 0xFF and (audio_bytes[1] & 0xE0) == 0xE0):
+        return ".mp3"
+    return None
+
+
+def _extension_from_content_type(content_type: str | None) -> str | None:
+    if not content_type:
+        return None
+    normalized = content_type.split(";", 1)[0].strip().lower()
+    manual = {
+        "audio/webm": ".webm",
+        "video/webm": ".webm",
+        "audio/ogg": ".ogg",
+        "video/ogg": ".ogg",
+        "audio/mp4": ".mp4",
+        "video/mp4": ".mp4",
+        "audio/x-m4a": ".mp4",
+        "audio/mpeg": ".mp3",
+        "audio/mp3": ".mp3",
+        "audio/wav": ".wav",
+        "audio/x-wav": ".wav",
+    }
+    return manual.get(normalized) or mimetypes.guess_extension(normalized)
+
+
+def _resolve_audio_filename(upload: UploadFile, audio_bytes: bytes) -> tuple[str, str | None]:
+    sniffed_ext = _sniff_audio_extension(audio_bytes)
+    content_type_ext = _extension_from_content_type(upload.content_type)
+    original_name = (upload.filename or "").strip()
+    original_ext = Path(original_name).suffix.lower() if original_name else ""
+    chosen_ext = sniffed_ext or content_type_ext or original_ext or ".wav"
+    return f"audio{chosen_ext}", sniffed_ext
 
 
 # ---------------------------------------------------------------------------
@@ -734,12 +779,20 @@ async def voice_endpoint(
     if len(audio_bytes) > 25 * 1024 * 1024:
         raise HTTPException(400, "Audio too large (max 25MB)")
 
-    log.info(f"Voice request: audio={len(audio_bytes)} bytes")
+    resolved_name, sniffed_ext = _resolve_audio_filename(audio, audio_bytes)
+    log.info(
+        "Voice request: audio=%s bytes filename=%s content_type=%s resolved_name=%s sniffed_ext=%s",
+        len(audio_bytes),
+        audio.filename or "",
+        audio.content_type or "",
+        resolved_name,
+        sniffed_ext or "",
+    )
 
     # 1. Speech-to-Text
     stt_started = time.perf_counter()
     try:
-        transcript = await speech_to_text(audio_bytes, audio.filename or "audio.wav")
+        transcript = await speech_to_text(audio_bytes, resolved_name)
     except Exception as e:
         error_text = str(e)
         log.warning(f"STT failed for voice request ({len(audio_bytes)} bytes): {error_text[:300]}")
