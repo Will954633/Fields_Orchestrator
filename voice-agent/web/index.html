@@ -23,7 +23,6 @@
             user-select: none;
         }
 
-        /* Header */
         .header {
             padding: 16px 20px 12px;
             text-align: center;
@@ -61,7 +60,18 @@
             margin-top: 8px;
         }
 
-        /* Chat area */
+        /* Call timer */
+        .call-timer {
+            font-size: 13px;
+            color: #6B7280;
+            margin-top: 4px;
+            display: none;
+        }
+        .call-timer.active {
+            display: block;
+            color: #22C55E;
+        }
+
         .chat-area {
             flex: 1;
             overflow-y: auto;
@@ -72,11 +82,7 @@
             scroll-behavior: smooth;
         }
 
-        .msg-group {
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-        }
+        .msg-group { display: flex; flex-direction: column; gap: 2px; }
 
         .msg-label {
             font-size: 11px;
@@ -84,7 +90,6 @@
             padding: 0 4px;
             margin-top: 8px;
         }
-
         .msg-label.user { text-align: right; }
 
         .msg-bubble {
@@ -115,7 +120,7 @@
             font-size: 13px;
         }
 
-        /* Bottom controls */
+        /* Controls */
         .controls {
             padding: 12px 20px 28px;
             display: flex;
@@ -130,54 +135,65 @@
             color: #9CA3AF;
             min-height: 20px;
         }
-
-        .status.recording { color: #EF4444; }
+        .status.listening { color: #22C55E; }
         .status.processing { color: #F59E0B; }
+        .status.speaking { color: #60A5FA; }
 
-        .ptt-btn {
+        /* Call button — idle state (green phone) */
+        .call-btn {
             width: 80px;
             height: 80px;
             border-radius: 50%;
             border: none;
-            background: #2563EB;
+            background: #22C55E;
             color: white;
-            font-size: 32px;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: all 0.15s;
+            transition: all 0.2s;
             -webkit-tap-highlight-color: transparent;
             touch-action: none;
         }
 
-        .ptt-btn:active, .ptt-btn.recording {
+        /* In-call state (red hangup) */
+        .call-btn.in-call {
             background: #EF4444;
-            transform: scale(1.12);
         }
 
-        .ptt-btn.processing {
-            background: #4B5563;
-            pointer-events: none;
-        }
-
-        .ptt-btn svg {
+        .call-btn svg {
             width: 36px;
             height: 36px;
             fill: currentColor;
         }
 
-        /* Pulse animation while recording */
-        @keyframes pulse {
-            0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
-            50% { box-shadow: 0 0 0 20px rgba(239, 68, 68, 0); }
+        /* Listening pulse */
+        @keyframes listen-pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
+            50% { box-shadow: 0 0 0 18px rgba(34, 197, 94, 0); }
         }
 
-        .ptt-btn.recording {
-            animation: pulse 1.2s ease-in-out infinite;
+        .call-btn.listening {
+            animation: listen-pulse 1.5s ease-in-out infinite;
+            background: #22C55E;
         }
 
-        /* Spinner for processing */
+        /* Processing spin ring */
+        .call-btn.processing {
+            background: #4B5563;
+        }
+
+        /* Speaking glow */
+        @keyframes speak-glow {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(96, 165, 250, 0.3); }
+            50% { box-shadow: 0 0 0 14px rgba(96, 165, 250, 0); }
+        }
+
+        .call-btn.speaking {
+            background: #2563EB;
+            animation: speak-glow 1s ease-in-out infinite;
+        }
+
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
@@ -191,10 +207,26 @@
             animation: spin 0.8s linear infinite;
         }
 
-        /* Connection dot */
+        /* Volume visualiser bar */
+        .volume-bar-wrap {
+            width: 120px;
+            height: 4px;
+            background: #1F2937;
+            border-radius: 2px;
+            overflow: hidden;
+            display: none;
+        }
+        .volume-bar-wrap.active { display: block; }
+        .volume-bar {
+            height: 100%;
+            width: 0%;
+            background: #22C55E;
+            border-radius: 2px;
+            transition: width 0.1s;
+        }
+
         .connection-dot {
-            width: 8px;
-            height: 8px;
+            width: 8px; height: 8px;
             border-radius: 50%;
             display: inline-block;
             margin-right: 6px;
@@ -214,34 +246,70 @@
             <span class="connection-dot checking" id="connDot"></span>
             Claude Sonnet · VM Access
         </div>
+        <div class="call-timer" id="callTimer">00:00</div>
     </div>
 
     <div class="chat-area" id="chatArea"></div>
 
     <div class="controls">
+        <div class="volume-bar-wrap" id="volumeWrap">
+            <div class="volume-bar" id="volumeBar"></div>
+        </div>
         <div class="status" id="status">Connecting...</div>
-        <button class="ptt-btn" id="pttBtn">
-            <svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
+        <button class="call-btn" id="callBtn">
+            <!-- Phone icon -->
+            <svg viewBox="0 0 24 24"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg>
         </button>
     </div>
 
     <script>
+    (function() {
         const API_BASE = location.origin;
+
+        // ---- State ----
         let currentMode = 'work';
-        let isRecording = false;
-        let isBusy = false;
+        let inCall = false;          // Is the call active?
+        let phase = 'idle';          // idle | listening | processing | speaking
+        let mediaStream = null;      // Persistent mic stream for the call
         let mediaRecorder = null;
         let audioChunks = [];
+        let audioContext = null;
+        let analyserNode = null;
+        let currentAudio = null;     // Currently playing TTS audio
 
+        // VAD settings
+        const SILENCE_THRESHOLD = 0.015;  // Volume below this = silence
+        const SILENCE_DURATION = 1500;    // ms of silence before auto-send
+        const MIN_SPEECH_DURATION = 400;  // Must have at least this much speech
+
+        let silenceStart = 0;
+        let speechDetected = false;
+        let speechStart = 0;
+        let vadInterval = null;
+
+        // Call timer
+        let callStartTime = 0;
+        let timerInterval = null;
+
+        // DOM
         const chatArea = document.getElementById('chatArea');
-        const status = document.getElementById('status');
-        const pttBtn = document.getElementById('pttBtn');
+        const statusEl = document.getElementById('status');
+        const callBtn = document.getElementById('callBtn');
         const modelLabel = document.getElementById('modelLabel');
         const connDot = document.getElementById('connDot');
+        const volumeWrap = document.getElementById('volumeWrap');
+        const volumeBar = document.getElementById('volumeBar');
+        const callTimer = document.getElementById('callTimer');
 
-        // --- Mode toggle ---
+        // Icons
+        const PHONE_ICON = '<svg viewBox="0 0 24 24"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg>';
+        const HANGUP_ICON = '<svg viewBox="0 0 24 24"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08c-.18-.17-.29-.42-.29-.7 0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.69-1.36-2.67-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/></svg>';
+        const SPINNER_HTML = '<div class="spinner"></div>';
+
+        // ---- Mode toggle ----
         document.querySelectorAll('.mode-btn').forEach(btn => {
             btn.addEventListener('click', () => {
+                if (inCall) return; // Can't switch during call
                 document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 currentMode = btn.dataset.mode;
@@ -251,23 +319,19 @@
 
         function updateModelLabel() {
             const dot = connDot.outerHTML;
-            if (currentMode === 'strategy') {
-                modelLabel.innerHTML = dot + 'GPT-5.4 · Strategy & Business';
-            } else {
-                modelLabel.innerHTML = dot + 'Claude Sonnet · VM Access';
-            }
+            modelLabel.innerHTML = currentMode === 'strategy'
+                ? dot + 'GPT-5.4 · Strategy & Business'
+                : dot + 'Claude Sonnet · VM Access';
         }
 
-        // --- Health check ---
+        // ---- Health check ----
         async function healthCheck() {
             try {
                 const r = await fetch(API_BASE + '/api/health');
                 if (r.ok) {
                     connDot.className = 'connection-dot ok';
-                    setStatus('Hold button to speak');
-                } else {
-                    throw new Error('not ok');
-                }
+                    setStatus('Tap to start call');
+                } else throw 0;
             } catch {
                 connDot.className = 'connection-dot fail';
                 setStatus('Cannot reach server');
@@ -275,175 +339,313 @@
         }
         healthCheck();
 
-        // --- Status ---
+        // ---- Helpers ----
         function setStatus(text, cls) {
-            status.textContent = text;
-            status.className = 'status' + (cls ? ' ' + cls : '');
+            statusEl.textContent = text;
+            statusEl.className = 'status' + (cls ? ' ' + cls : '');
         }
 
-        // --- Chat bubbles ---
+        function setPhase(p) {
+            phase = p;
+            callBtn.className = 'call-btn in-call' + (p !== 'idle' ? ' ' + p : '');
+
+            if (p === 'listening') {
+                callBtn.innerHTML = HANGUP_ICON;
+                setStatus('Listening...', 'listening');
+                volumeWrap.classList.add('active');
+            } else if (p === 'processing') {
+                callBtn.innerHTML = SPINNER_HTML;
+                setStatus('Thinking...', 'processing');
+                volumeWrap.classList.remove('active');
+            } else if (p === 'speaking') {
+                callBtn.innerHTML = HANGUP_ICON;
+                setStatus('Speaking...', 'speaking');
+                volumeWrap.classList.remove('active');
+            } else {
+                callBtn.innerHTML = PHONE_ICON;
+                callBtn.className = 'call-btn';
+                setStatus('Tap to start call');
+                volumeWrap.classList.remove('active');
+            }
+        }
+
+        function vibrate(ms) {
+            if (navigator.vibrate) navigator.vibrate(ms || 50);
+        }
+
         function addMessage(text, type) {
             const group = document.createElement('div');
             group.className = 'msg-group';
-
             const label = document.createElement('div');
             label.className = 'msg-label ' + type;
             if (type === 'user') label.textContent = 'You';
             else if (type === 'error') label.textContent = '';
             else label.textContent = currentMode === 'work' ? 'Claude' : 'GPT-5.4';
-
             const bubble = document.createElement('div');
             bubble.className = 'msg-bubble ' + type;
             bubble.textContent = text;
-
             if (type !== 'error') group.appendChild(label);
             group.appendChild(bubble);
             chatArea.appendChild(group);
             chatArea.scrollTop = chatArea.scrollHeight;
         }
 
-        // --- Audio playback ---
+        // ---- Call timer ----
+        function startTimer() {
+            callStartTime = Date.now();
+            callTimer.classList.add('active');
+            timerInterval = setInterval(() => {
+                const s = Math.floor((Date.now() - callStartTime) / 1000);
+                const m = Math.floor(s / 60);
+                callTimer.textContent = String(m).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+            }, 1000);
+        }
+
+        function stopTimer() {
+            clearInterval(timerInterval);
+            callTimer.classList.remove('active');
+        }
+
+        // ---- Audio playback ----
         function playBase64Audio(b64, format) {
-            try {
-                const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-                const blob = new Blob([bytes], { type: 'audio/' + format });
-                const url = URL.createObjectURL(blob);
-                const audio = new Audio(url);
-                audio.play().catch(() => {});
-                audio.onended = () => URL.revokeObjectURL(url);
-            } catch (e) {
-                console.error('Audio playback failed:', e);
-            }
-        }
-
-        // --- Recording ---
-        async function startRecording() {
-            if (isBusy || isRecording) return;
-
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true }
-                });
-
-                audioChunks = [];
-                mediaRecorder = new MediaRecorder(stream, {
-                    mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-                        ? 'audio/webm;codecs=opus'
-                        : 'audio/webm'
-                });
-
-                mediaRecorder.ondataavailable = (e) => {
-                    if (e.data.size > 0) audioChunks.push(e.data);
-                };
-
-                mediaRecorder.start(100); // collect chunks every 100ms
-                isRecording = true;
-                pttBtn.classList.add('recording');
-                setStatus('Listening...', 'recording');
-
-                // Haptic feedback
-                if (navigator.vibrate) navigator.vibrate(50);
-
-            } catch (err) {
-                console.error('Mic error:', err);
-                setStatus('Microphone access denied');
-                addMessage('Microphone permission required. Tap the lock icon in your browser address bar to allow it.', 'error');
-            }
-        }
-
-        async function stopRecordingAndSend() {
-            if (!isRecording || !mediaRecorder) return;
-
-            isRecording = false;
-            pttBtn.classList.remove('recording');
-
             return new Promise((resolve) => {
-                mediaRecorder.onstop = async () => {
-                    // Stop all tracks
-                    mediaRecorder.stream.getTracks().forEach(t => t.stop());
-
-                    const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
-
-                    if (audioBlob.size < 1000) {
-                        setStatus('Hold longer to record');
+                try {
+                    const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+                    const blob = new Blob([bytes], { type: 'audio/' + format });
+                    const url = URL.createObjectURL(blob);
+                    currentAudio = new Audio(url);
+                    currentAudio.onended = () => {
+                        URL.revokeObjectURL(url);
+                        currentAudio = null;
                         resolve();
-                        return;
-                    }
-
-                    isBusy = true;
-                    pttBtn.classList.add('processing');
-                    pttBtn.innerHTML = '<div class="spinner"></div>';
-                    setStatus('Processing...', 'processing');
-                    if (navigator.vibrate) navigator.vibrate(50);
-
-                    try {
-                        const formData = new FormData();
-                        const ext = mediaRecorder.mimeType.includes('webm') ? 'webm' : 'ogg';
-                        formData.append('audio', audioBlob, 'recording.' + ext);
-                        formData.append('mode', currentMode);
-
-                        const resp = await fetch(API_BASE + '/api/voice', {
-                            method: 'POST',
-                            body: formData,
-                        });
-
-                        const data = await resp.json();
-
-                        if (data.error) {
-                            addMessage(data.error, 'error');
-                        } else {
-                            if (data.transcript) addMessage(data.transcript, 'user');
-                            if (data.reply) addMessage(data.reply, 'agent');
-                            if (data.audio_base64) playBase64Audio(data.audio_base64, data.audio_format || 'mp3');
-                        }
-                    } catch (err) {
-                        console.error('Send error:', err);
-                        addMessage('Failed to reach server: ' + err.message, 'error');
-                    }
-
-                    isBusy = false;
-                    pttBtn.classList.remove('processing');
-                    pttBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>';
-                    setStatus('Hold button to speak');
+                    };
+                    currentAudio.onerror = () => {
+                        currentAudio = null;
+                        resolve();
+                    };
+                    currentAudio.play().catch(() => resolve());
+                } catch (e) {
+                    console.error('Playback failed:', e);
                     resolve();
-                };
-
-                mediaRecorder.stop();
+                }
             });
         }
 
-        // --- Touch events (works on mobile) ---
-        pttBtn.addEventListener('pointerdown', (e) => {
-            e.preventDefault();
-            startRecording();
+        function stopPlayback() {
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio = null;
+            }
+        }
+
+        // ===============================
+        // CALL LIFECYCLE
+        // ===============================
+
+        // Tap the button: start or end the call
+        callBtn.addEventListener('click', () => {
+            if (inCall) {
+                endCall();
+            } else {
+                startCall();
+            }
         });
 
-        pttBtn.addEventListener('pointerup', (e) => {
-            e.preventDefault();
-            stopRecordingAndSend();
-        });
+        // ---- Start call ----
+        async function startCall() {
+            try {
+                mediaStream = await navigator.mediaDevices.getUserMedia({
+                    audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true }
+                });
+            } catch (err) {
+                addMessage('Microphone permission required. Tap the lock icon in your browser address bar.', 'error');
+                return;
+            }
 
-        pttBtn.addEventListener('pointerleave', (e) => {
-            if (isRecording) stopRecordingAndSend();
-        });
+            inCall = true;
+            vibrate(100);
 
-        // Prevent context menu on long press
-        pttBtn.addEventListener('contextmenu', (e) => e.preventDefault());
+            // Set up audio analyser for VAD
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const source = audioContext.createMediaStreamSource(mediaStream);
+            analyserNode = audioContext.createAnalyser();
+            analyserNode.fftSize = 512;
+            source.connect(analyserNode);
 
-        // --- Keyboard shortcut (spacebar) for desktop ---
+            startTimer();
+            beginListening();
+        }
+
+        // ---- End call ----
+        function endCall() {
+            inCall = false;
+            vibrate(100);
+
+            stopVAD();
+            stopRecorder();
+            stopPlayback();
+            stopTimer();
+
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(t => t.stop());
+                mediaStream = null;
+            }
+            if (audioContext) {
+                audioContext.close().catch(() => {});
+                audioContext = null;
+            }
+
+            setPhase('idle');
+        }
+
+        // ---- Listening phase: record + VAD ----
+        function beginListening() {
+            if (!inCall) return;
+
+            setPhase('listening');
+            audioChunks = [];
+            speechDetected = false;
+            silenceStart = 0;
+
+            mediaRecorder = new MediaRecorder(mediaStream, {
+                mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+                    ? 'audio/webm;codecs=opus'
+                    : 'audio/webm'
+            });
+
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) audioChunks.push(e.data);
+            };
+
+            mediaRecorder.start(100);
+            startVAD();
+        }
+
+        // ---- VAD: detect silence after speech ----
+        function startVAD() {
+            const dataArray = new Float32Array(analyserNode.fftSize);
+
+            vadInterval = setInterval(() => {
+                if (!inCall || phase !== 'listening') return;
+
+                analyserNode.getFloatTimeDomainData(dataArray);
+
+                // RMS volume
+                let sum = 0;
+                for (let i = 0; i < dataArray.length; i++) sum += dataArray[i] * dataArray[i];
+                const rms = Math.sqrt(sum / dataArray.length);
+
+                // Update volume bar
+                const pct = Math.min(100, (rms / 0.15) * 100);
+                volumeBar.style.width = pct + '%';
+
+                const now = Date.now();
+
+                if (rms > SILENCE_THRESHOLD) {
+                    // Speech detected
+                    if (!speechDetected) {
+                        speechDetected = true;
+                        speechStart = now;
+                    }
+                    silenceStart = 0;
+                } else {
+                    // Silence
+                    if (speechDetected && silenceStart === 0) {
+                        silenceStart = now;
+                    }
+
+                    // If we had speech and enough silence has passed, auto-send
+                    if (speechDetected && silenceStart > 0) {
+                        const speechDuration = silenceStart - speechStart;
+                        const silenceDuration = now - silenceStart;
+
+                        if (silenceDuration >= SILENCE_DURATION && speechDuration >= MIN_SPEECH_DURATION) {
+                            stopVAD();
+                            sendAudio();
+                        }
+                    }
+                }
+            }, 50);
+        }
+
+        function stopVAD() {
+            clearInterval(vadInterval);
+            vadInterval = null;
+        }
+
+        function stopRecorder() {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                try { mediaRecorder.stop(); } catch {}
+            }
+            mediaRecorder = null;
+        }
+
+        // ---- Send audio to backend ----
+        async function sendAudio() {
+            if (!inCall) return;
+
+            setPhase('processing');
+
+            // Stop recorder and collect audio
+            await new Promise(resolve => {
+                if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+                    resolve();
+                    return;
+                }
+                mediaRecorder.onstop = () => resolve();
+                mediaRecorder.stop();
+            });
+
+            const audioBlob = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' });
+
+            if (audioBlob.size < 500) {
+                // Too short, go back to listening
+                if (inCall) beginListening();
+                return;
+            }
+
+            try {
+                const formData = new FormData();
+                formData.append('audio', audioBlob, 'recording.webm');
+                formData.append('mode', currentMode);
+
+                const resp = await fetch(API_BASE + '/api/voice', {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                if (!inCall) return; // Hung up during processing
+
+                const data = await resp.json();
+
+                if (data.error) {
+                    addMessage(data.error, 'error');
+                } else {
+                    if (data.transcript) addMessage(data.transcript, 'user');
+                    if (data.reply) addMessage(data.reply, 'agent');
+
+                    // Play TTS, then resume listening
+                    if (data.audio_base64 && inCall) {
+                        setPhase('speaking');
+                        await playBase64Audio(data.audio_base64, data.audio_format || 'mp3');
+                    }
+                }
+            } catch (err) {
+                if (inCall) addMessage('Connection error: ' + err.message, 'error');
+            }
+
+            // Resume listening for next turn
+            if (inCall) beginListening();
+        }
+
+        // ---- Keyboard shortcut: Enter to toggle call ----
         document.addEventListener('keydown', (e) => {
-            if (e.code === 'Space' && !e.repeat && document.activeElement.tagName !== 'INPUT') {
+            if (e.code === 'Enter' && document.activeElement.tagName !== 'INPUT') {
                 e.preventDefault();
-                startRecording();
+                if (inCall) endCall(); else startCall();
             }
         });
-
-        document.addEventListener('keyup', (e) => {
-            if (e.code === 'Space') {
-                e.preventDefault();
-                stopRecordingAndSend();
-            }
-        });
+    })();
     </script>
 </body>
 </html>
