@@ -139,7 +139,13 @@ class TaskManager:
         worker_system = (
             f"You are a background worker agent for Fields Estate. "
             f"Complete the task below thoroughly, then provide a clear summary of what you did. "
-            f"Current time: {datetime.now(AEST).strftime('%Y-%m-%d %H:%M AEST')}"
+            f"Current time: {datetime.now(AEST).strftime('%Y-%m-%d %H:%M AEST')}\n\n"
+            f"KNOWLEDGE BASE: You have access to a 1,644-document knowledge base with 7,000+ chunks "
+            f"covering books, strategy docs, marketing plans, meeting notes, code, financials, and operations. "
+            f"Search it with: python3 scripts/search-kb.py \"query\" [--type TYPE] [--max N] [--tag TAG]\n"
+            f"Categories: book, strategy, marketing, code, financial, operational, meeting_notes, general, project, conversations\n"
+            f"Get full chunk: python3 scripts/search-kb.py --chunk CHUNK_ID --file path/to/index.json\n"
+            f"List categories: python3 scripts/search-kb.py --list-categories"
         )
         append_prompt = f"{worker_system}\n\n{context}"
 
@@ -150,6 +156,7 @@ class TaskManager:
                 "--model", "opus",
                 "--append-system-prompt", append_prompt,
                 "--dangerously-skip-permissions",
+                "--max-budget-usd", "5.00",
                 cwd=ORCHESTRATOR_DIR,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
