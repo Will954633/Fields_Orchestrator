@@ -240,17 +240,20 @@ async def text_to_speech(text: str, voice: str = TTS_VOICE) -> bytes:
     from openai import OpenAI
     client = OpenAI(api_key=OPENAI_API_KEY)
     started = time.perf_counter()
+    spoken_text = (text or "").strip()
+    if not spoken_text:
+        spoken_text = "I hit an empty response. Please try again."
 
     response = client.audio.speech.create(
         model=TTS_MODEL,
         voice=voice,
-        input=text[:4096],
+        input=spoken_text[:4096],
         response_format="mp3",
         instructions="Speak clearly and naturally. You are a helpful business and technical assistant.",
     )
 
     audio_bytes = response.content
-    log.info(f"TTS: {time.perf_counter() - started:.2f}s, {len(audio_bytes)} bytes for {len(text)} chars")
+    log.info(f"TTS: {time.perf_counter() - started:.2f}s, {len(audio_bytes)} bytes for {len(spoken_text)} chars")
     return audio_bytes
 
 
@@ -431,10 +434,14 @@ async def voice_endpoint(
     handle_started = time.perf_counter()
     result = await handle_message(transcript)
     handle_elapsed = time.perf_counter() - handle_started
+    reply_text = (result.get("reply") or "").strip()
+    if not reply_text:
+        reply_text = "I hit an empty response. Please try again."
+        result["reply"] = reply_text
 
     # 3. Text-to-Speech
     tts_started = time.perf_counter()
-    tts_audio = await text_to_speech(result["reply"])
+    tts_audio = await text_to_speech(reply_text)
     tts_elapsed = time.perf_counter() - tts_started
     audio_b64 = base64.b64encode(tts_audio).decode()
     total_elapsed = time.perf_counter() - request_started
