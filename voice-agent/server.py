@@ -1,15 +1,25 @@
 #!/usr/bin/env python3
 """
 Fields Voice Agent — Backend API
-Receives audio/text from web or Android app, processes through STT → LLM → TTS pipeline.
-Single unified agent: Claude Code (Opus) with full VM access — same as terminal.
+
+Two-tier architecture:
+  - Router (Haiku CLI, no tools, ~2-5s): handles all user messages, decides
+    whether to respond directly or spawn a background task.
+  - Workers (Opus CLI, full tools): up to 3 concurrent background tasks.
+  - SSE: pushes task lifecycle events to connected clients.
+
+All Claude calls go through the CLI binary → Max subscription billing.
 
 Endpoints:
-  POST /api/voice       — audio in, audio + text out
-  POST /api/chat        — text in, text out
-  GET  /api/health      — health check
-  GET  /api/history     — conversation history
-  DELETE /api/history   — clear conversation history
+  POST /api/voice           — audio in, audio + text out
+  POST /api/chat            — text in, text out
+  GET  /api/events          — SSE stream (task notifications)
+  GET  /api/tasks           — list tasks
+  GET  /api/tasks/{id}      — task detail
+  POST /api/tasks/{id}/cancel — cancel a task
+  GET  /api/health          — health check
+  GET  /api/history         — conversation history
+  DELETE /api/history       — clear conversation history
 """
 
 import os
@@ -20,16 +30,20 @@ import base64
 import asyncio
 import logging
 import tempfile
-import subprocess
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Header, UploadFile, File, Form
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import uvicorn
+
+# Local modules
+from sse import SSEBroadcaster
+from task_manager import TaskManager
+from router import route_message
 
 # ---------------------------------------------------------------------------
 # Config
@@ -39,15 +53,15 @@ VOICE_AGENT_TOKEN = os.getenv("VOICE_AGENT_TOKEN", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 
-CLAUDE_BIN = "/usr/bin/claude"
 ORCHESTRATOR_DIR = "/home/fields/Fields_Orchestrator"
-MEMORY_DIR = "/home/projects/.claude/projects/-home-fields-Fields-Orchestrator/memory"
 
 STT_MODEL = "gpt-4o-mini-transcribe"
 TTS_MODEL = "gpt-4o-mini-tts"
-TTS_VOICE = "nova"  # Clear, friendly voice
+TTS_VOICE = "nova"
 
 AEST = timezone(timedelta(hours=10))
+MAX_HISTORY = 50
+CONV_COLL = "voice_agent_conversations"
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -64,10 +78,10 @@ logging.basicConfig(
 log = logging.getLogger("voice-agent")
 
 # ---------------------------------------------------------------------------
-# App
+# App + shared state
 # ---------------------------------------------------------------------------
 
-app = FastAPI(title="Fields Voice Agent", version="1.0.0")
+app = FastAPI(title="Fields Voice Agent", version="2.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -75,9 +89,30 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# In-memory conversation history
-conversation_history: list[dict] = []
-MAX_HISTORY = 50
+# Initialised in lifespan (after event loop is ready)
+sse_broadcaster: Optional[SSEBroadcaster] = None
+task_manager: Optional[TaskManager] = None
+_db_client = None
+
+
+def _get_db():
+    """Lazy-init MongoDB client."""
+    global _db_client
+    if _db_client is None:
+        sys.path.insert(0, ORCHESTRATOR_DIR)
+        from shared.db import get_client
+        _db_client = get_client()
+    return _db_client
+
+
+@app.on_event("startup")
+async def startup():
+    global sse_broadcaster, task_manager
+    sse_broadcaster = SSEBroadcaster()
+    client = _get_db()
+    task_manager = TaskManager(client, sse_broadcaster)
+    log.info("Voice Agent v2.0 started — router + task manager ready")
+
 
 # ---------------------------------------------------------------------------
 # Auth
@@ -85,14 +120,55 @@ MAX_HISTORY = 50
 
 def verify_token(authorization: Optional[str] = Header(None)):
     if not VOICE_AGENT_TOKEN:
-        return  # No token configured = open (dev mode)
+        return
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing auth token")
     if authorization.split(" ", 1)[1] != VOICE_AGENT_TOKEN:
         raise HTTPException(status_code=403, detail="Invalid token")
 
+
 # ---------------------------------------------------------------------------
-# OpenAI helpers
+# Conversation history (MongoDB-backed)
+# ---------------------------------------------------------------------------
+
+def _get_conversation_id() -> str:
+    """One conversation per day (AEST). Resets at midnight."""
+    return f"conv_{datetime.now(AEST).strftime('%Y%m%d')}"
+
+
+def _load_history() -> list[dict]:
+    """Load conversation history from MongoDB."""
+    sm = _get_db()["system_monitor"]
+    doc = sm[CONV_COLL].find_one({"_id": _get_conversation_id()})
+    if doc:
+        return doc.get("messages", [])
+    return []
+
+
+def _append_history(role: str, content: str):
+    """Append a message to conversation history in MongoDB."""
+    sm = _get_db()["system_monitor"]
+    conv_id = _get_conversation_id()
+    msg = {"role": role, "content": content, "ts": time.time()}
+
+    sm[CONV_COLL].update_one(
+        {"_id": conv_id},
+        {
+            "$push": {
+                "messages": {
+                    "$each": [msg],
+                    "$slice": -MAX_HISTORY * 2,  # Keep last N messages
+                }
+            },
+            "$set": {"updated_at": datetime.now(AEST).isoformat()},
+            "$setOnInsert": {"created_at": datetime.now(AEST).isoformat()},
+        },
+        upsert=True,
+    )
+
+
+# ---------------------------------------------------------------------------
+# OpenAI helpers (STT / TTS)
 # ---------------------------------------------------------------------------
 
 async def speech_to_text(audio_bytes: bytes, filename: str = "audio.wav") -> str:
@@ -100,7 +176,6 @@ async def speech_to_text(audio_bytes: bytes, filename: str = "audio.wav") -> str
     from openai import OpenAI
     client = OpenAI(api_key=OPENAI_API_KEY)
 
-    # Write to temp file (OpenAI SDK needs a file-like object)
     suffix = Path(filename).suffix or ".wav"
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as f:
         f.write(audio_bytes)
@@ -128,7 +203,7 @@ async def text_to_speech(text: str, voice: str = TTS_VOICE) -> bytes:
     response = client.audio.speech.create(
         model=TTS_MODEL,
         voice=voice,
-        input=text[:4096],  # TTS has input length limits
+        input=text[:4096],
         response_format="mp3",
         instructions="Speak clearly and naturally. You are a helpful business and technical assistant.",
     )
@@ -137,111 +212,48 @@ async def text_to_speech(text: str, voice: str = TTS_VOICE) -> bytes:
     log.info(f"TTS: {len(audio_bytes)} bytes for {len(text)} chars")
     return audio_bytes
 
+
 # ---------------------------------------------------------------------------
-# LLM backends
+# Core message handler
 # ---------------------------------------------------------------------------
 
-def _load_context_docs() -> dict:
-    """Load shared context documents that both modes use."""
-    docs = {}
+async def handle_message(user_text: str) -> dict:
+    """
+    Handle a user message through the router.
 
-    # CLAUDE.md — full project instructions
-    claude_md_path = Path(ORCHESTRATOR_DIR) / "CLAUDE.md"
-    if claude_md_path.exists():
-        docs["claude_md"] = claude_md_path.read_text()
+    Returns:
+        {"reply": str, "task_id": str | None}
+    """
+    history = _load_history()
+    active_tasks = task_manager.get_active_tasks()
+    completed_unnotified = task_manager.get_unnotified_completed()
 
-    # MEMORY.md — persistent memory index
-    memory_path = Path(MEMORY_DIR) / "MEMORY.md"
-    if memory_path.exists():
-        docs["memory_md"] = memory_path.read_text()
+    # Route through Haiku (fast, no tools)
+    decision = await route_message(user_text, history, active_tasks, completed_unnotified)
 
-    # Load individual memory files referenced in MEMORY.md
-    memory_details = []
-    memory_dir = Path(MEMORY_DIR)
-    if memory_dir.exists():
-        for f in sorted(memory_dir.glob("*.md")):
-            if f.name == "MEMORY.md":
-                continue
-            content = f.read_text().strip()
-            if content:
-                memory_details.append(f"### {f.stem}\n{content}")
-    docs["memory_files"] = "\n\n".join(memory_details) if memory_details else ""
+    reply = decision["reply"]
+    task_id = None
 
-    # OPS_STATUS.md — live system status
-    ops_path = Path(ORCHESTRATOR_DIR) / "OPS_STATUS.md"
-    if ops_path.exists():
-        docs["ops_status"] = ops_path.read_text()
-
-    return docs
-
-
-def _build_append_prompt() -> str:
-    """Build supplementary context prompt with memory and ops status."""
-    docs = _load_context_docs()
-
-    return f"""This is a voice/chat interface — keep responses to 2-3 sentences unless asked for detail.
-Current time: {datetime.now(AEST).strftime('%Y-%m-%d %H:%M AEST')}
-
-=== PERSISTENT MEMORY ===
-{docs.get('memory_md', '')}
-
-=== MEMORY FILES ===
-{docs.get('memory_files', '')}
-
-=== LIVE OPS STATUS ===
-{docs.get('ops_status', '')}"""
-
-
-async def llm_claude(user_text: str) -> str:
-    """Route to Claude Code (Opus) with full VM access — no restrictions."""
-    # Build conversation context from recent history
-    context_lines = []
-    for msg in conversation_history[-10:]:  # Last 10 exchanges
-        role = msg["role"]
-        context_lines.append(f"{role}: {msg['content'][:500]}")
-
-    prompt_parts = []
-    if context_lines:
-        prompt_parts.append("Recent conversation:\n" + "\n".join(context_lines))
-    prompt_parts.append(f"User: {user_text}")
-    prompt_parts.append("\nRespond concisely (this is voice/chat output). If a task requires running commands, do it and report results.")
-
-    full_prompt = "\n\n".join(prompt_parts)
-    append_prompt = _build_append_prompt()
-
-    try:
-        result = await asyncio.create_subprocess_exec(
-            CLAUDE_BIN, "-p", full_prompt,
-            "--output-format", "text",
-            "--model", "opus",
-            "--append-system-prompt", append_prompt,
-            cwd=ORCHESTRATOR_DIR,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env={**os.environ, "ANTHROPIC_API_KEY": ANTHROPIC_API_KEY},
+    # Spawn background task if router decided to
+    if decision.get("spawn_task"):
+        spawn = decision["spawn_task"]
+        task_id = task_manager.spawn_task(
+            title=spawn["title"],
+            prompt=spawn["prompt"],
+            user_message=user_text,
         )
-        stdout, stderr = await asyncio.wait_for(result.communicate(), timeout=300)
-        response = stdout.decode().strip()
+        log.info(f"Task spawned: {task_id} — {spawn['title']}")
 
-        if not response:
-            log.warning(f"Claude returned empty. stderr: {stderr.decode()[:500]}")
-            response = "I wasn't able to process that. Could you try again?"
+    # Mark completed tasks as notified (router has incorporated them into reply)
+    if completed_unnotified:
+        task_manager.mark_notified([t["_id"] for t in completed_unnotified])
 
-        # Store in history
-        conversation_history.append({"role": "user", "content": user_text, "ts": time.time()})
-        conversation_history.append({"role": "assistant", "content": response, "ts": time.time()})
-        if len(conversation_history) > MAX_HISTORY * 2:
-            conversation_history[:] = conversation_history[-MAX_HISTORY * 2:]
+    # Store conversation
+    _append_history("user", user_text)
+    _append_history("assistant", reply)
 
-        log.info(f"Claude response: {len(response)} chars")
-        return response
+    return {"reply": reply, "task_id": task_id}
 
-    except asyncio.TimeoutError:
-        log.error("Claude timed out after 300s")
-        return "That's taking too long. I've timed out after five minutes."
-    except Exception as e:
-        log.error(f"Claude error: {e}")
-        return f"I hit an error: {str(e)[:200]}"
 
 # ---------------------------------------------------------------------------
 # Endpoints
@@ -252,14 +264,15 @@ async def health():
     return {
         "status": "ok",
         "time": datetime.now(AEST).isoformat(),
-        "model": "claude-opus",
+        "model": {"router": "claude-haiku", "worker": "claude-opus"},
+        "active_workers": task_manager.active_count if task_manager else 0,
     }
 
 
 @app.post("/api/voice")
 async def voice_endpoint(
     audio: UploadFile = File(...),
-    mode: str = Form("work"),  # Kept for backward compat, ignored
+    mode: str = Form("work"),  # backward compat, ignored
     authorization: Optional[str] = Header(None),
 ):
     """Main voice endpoint: audio in → audio + text out."""
@@ -278,16 +291,17 @@ async def voice_endpoint(
     if not transcript:
         return JSONResponse({"error": "Could not transcribe audio", "transcript": ""})
 
-    # 2. LLM
-    reply = await llm_claude(transcript)
+    # 2. Router (fast ~2-5s)
+    result = await handle_message(transcript)
 
     # 3. Text-to-Speech
-    tts_audio = await text_to_speech(reply)
+    tts_audio = await text_to_speech(result["reply"])
     audio_b64 = base64.b64encode(tts_audio).decode()
 
     return JSONResponse({
         "transcript": transcript,
-        "reply": reply,
+        "reply": result["reply"],
+        "task_id": result["task_id"],
         "audio_base64": audio_b64,
         "audio_format": "mp3",
     })
@@ -296,33 +310,93 @@ async def voice_endpoint(
 @app.post("/api/chat")
 async def chat_endpoint(
     text: str = Form(...),
-    mode: str = Form("work"),  # Kept for backward compat, ignored
+    mode: str = Form("work"),  # backward compat, ignored
     authorization: Optional[str] = Header(None),
 ):
     """Text-only endpoint."""
     verify_token(authorization)
 
     log.info(f"Chat request: text='{text[:100]}'")
-    reply = await llm_claude(text)
+    result = await handle_message(text)
 
-    return JSONResponse({"reply": reply})
+    return JSONResponse({
+        "reply": result["reply"],
+        "task_id": result["task_id"],
+    })
 
+
+# ---------------------------------------------------------------------------
+# SSE endpoint
+# ---------------------------------------------------------------------------
+
+@app.get("/api/events")
+async def sse_endpoint(authorization: Optional[str] = Header(None)):
+    """Server-Sent Events stream for task notifications."""
+    verify_token(authorization)
+    return StreamingResponse(
+        sse_broadcaster.subscribe(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
+# Task endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/api/tasks")
+async def list_tasks(authorization: Optional[str] = Header(None)):
+    """List active + recent tasks."""
+    verify_token(authorization)
+    tasks = task_manager.get_recent_tasks(limit=20)
+    # Convert ObjectId/datetime for JSON serialization
+    for t in tasks:
+        t["_id"] = str(t["_id"])
+    return JSONResponse({"tasks": tasks})
+
+
+@app.get("/api/tasks/{task_id}")
+async def get_task(task_id: str, authorization: Optional[str] = Header(None)):
+    """Get full task detail including result."""
+    verify_token(authorization)
+    task = task_manager.get_task_detail(task_id)
+    if not task:
+        raise HTTPException(404, "Task not found")
+    task["_id"] = str(task["_id"])
+    return JSONResponse({"task": task})
+
+
+@app.post("/api/tasks/{task_id}/cancel")
+async def cancel_task(task_id: str, authorization: Optional[str] = Header(None)):
+    """Cancel a running or queued task."""
+    verify_token(authorization)
+    cancelled = task_manager.cancel_task(task_id)
+    if not cancelled:
+        raise HTTPException(400, "Task not found or already finished")
+    return JSONResponse({"cancelled": True, "task_id": task_id})
+
+
+# ---------------------------------------------------------------------------
+# History endpoints
+# ---------------------------------------------------------------------------
 
 @app.get("/api/history")
-async def get_history(
-    authorization: Optional[str] = Header(None),
-):
+async def get_history(authorization: Optional[str] = Header(None)):
     verify_token(authorization)
-    return JSONResponse({"history": conversation_history})
+    return JSONResponse({"history": _load_history()})
 
 
 @app.delete("/api/history")
-async def clear_history(
-    authorization: Optional[str] = Header(None),
-):
+async def clear_history(authorization: Optional[str] = Header(None)):
     verify_token(authorization)
-    conversation_history.clear()
+    sm = _get_db()["system_monitor"]
+    sm[CONV_COLL].delete_one({"_id": _get_conversation_id()})
     return JSONResponse({"cleared": True})
+
 
 # ---------------------------------------------------------------------------
 # Static files — serve web app at /voice/
@@ -337,7 +411,7 @@ if WEB_DIR.exists():
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    log.info("Starting Fields Voice Agent API...")
+    log.info("Starting Fields Voice Agent API v2.0...")
     uvicorn.run(
         "server:app",
         host="0.0.0.0",
