@@ -355,16 +355,16 @@
         <div class="model-label" id="modelLabel">
             <span>
                 <span class="connection-dot checking" id="connDot"></span>
-                <span id="modelName">Auto · Fields Agent</span>
+                <span id="modelName">GPT-5.4-mini · Voice</span>
             </span>
             <span class="task-badge" id="taskBadge">0 tasks</span>
         </div>
         <div class="model-toggle">
-            <button class="model-btn active" data-lock="auto" id="btnAuto">Auto</button>
+            <button class="model-btn" data-lock="auto" id="btnAuto">Auto</button>
             <button class="model-btn" data-lock="haiku" id="btnHaiku">Haiku</button>
             <button class="model-btn" data-lock="opus" id="btnOpus">Opus</button>
             <button class="model-btn" data-lock="gpt54" id="btnGpt54">GPT-5.4</button>
-            <button class="model-btn" data-lock="gpt54mini" id="btnGpt54Mini">5.4-mini</button>
+            <button class="model-btn active" data-lock="gpt54mini" id="btnGpt54Mini">5.4-mini</button>
         </div>
         <div class="call-timer" id="callTimer">00:00</div>
     </div>
@@ -441,7 +441,7 @@
         const btnHaiku = document.getElementById('btnHaiku');
         const btnOpus = document.getElementById('btnOpus');
 
-        let currentModelLock = 'auto';
+        let currentModelLock = 'gpt54mini';
 
         // Model toggle buttons
         document.querySelectorAll('.model-btn').forEach(btn => {
@@ -473,8 +473,8 @@
                 auto: 'Auto · Fields Agent',
                 haiku: 'Haiku · Fast',
                 opus: 'Opus · Deep',
-                gpt54: 'GPT-5.4 · Full',
-                gpt54mini: 'GPT-5.4-mini · Fast',
+                gpt54: 'GPT-5.4 · Text/Deep',
+                gpt54mini: 'GPT-5.4-mini · Voice',
             };
             modelName.textContent = labels[lock] || labels.auto;
         }
