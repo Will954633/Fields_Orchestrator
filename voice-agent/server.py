@@ -44,6 +44,7 @@ import uvicorn
 from sse import SSEBroadcaster
 from task_manager import TaskManager
 from router import route_message, opus_full
+from gpt_agent import gpt_full, gpt_converse, GPT54_MODEL, GPT54_MINI_MODEL
 
 # ---------------------------------------------------------------------------
 # Config
@@ -94,7 +95,8 @@ sse_broadcaster: Optional[SSEBroadcaster] = None
 task_manager: Optional[TaskManager] = None
 _db_client = None
 
-# Model lock: "auto" (router decides), "opus" (always Opus converse), "haiku" (always direct)
+# Model lock: "auto" (router decides), "opus" (always Opus), "haiku" (always direct),
+# "gpt54" (GPT-5.4 full agent), "gpt54mini" (GPT-5.4-mini full agent)
 model_lock: str = "auto"
 
 
@@ -227,7 +229,13 @@ _OPUS_TRIGGERS = re.compile(
     r'\b(speak to opus|switch to opus|talk to opus|use opus|opus mode)\b', re.IGNORECASE
 )
 _HAIKU_TRIGGERS = re.compile(
-    r'\b(switch back|back to haiku|switch to haiku|use haiku|haiku mode)\b', re.IGNORECASE
+    r'\b(switch back|back to haiku|switch to haiku|use haiku|haiku mode|back to auto)\b', re.IGNORECASE
+)
+_GPT54_TRIGGERS = re.compile(
+    r'\b(switch to gpt|use gpt|gpt mode|use gpt.?5\.?4\b|switch to gpt.?5\.?4\b)', re.IGNORECASE
+)
+_GPT54MINI_TRIGGERS = re.compile(
+    r'\b(use gpt.?mini|switch to gpt.?mini|gpt.?mini mode|use gpt.?5\.?4.?mini|switch to gpt.?5\.?4.?mini)', re.IGNORECASE
 )
 # Opus self-downgrade signal
 _SWITCH_HAIKU_SIGNAL = "[SWITCH_HAIKU]"
@@ -243,6 +251,22 @@ async def handle_message(user_text: str) -> dict:
     global model_lock
 
     # --- Voice trigger detection (skip router entirely) ---
+    if _GPT54MINI_TRIGGERS.search(user_text):
+        model_lock = "gpt54mini"
+        log.info("Model lock → gpt54mini (voice trigger)")
+        reply = "Switched to GPT-5.4-mini. Full tools available."
+        _append_history("user", user_text)
+        _append_history("assistant", reply)
+        return {"reply": reply, "task_id": None, "model_lock": model_lock}
+
+    if _GPT54_TRIGGERS.search(user_text):
+        model_lock = "gpt54"
+        log.info("Model lock → gpt54 (voice trigger)")
+        reply = "Switched to GPT-5.4. Full tools available."
+        _append_history("user", user_text)
+        _append_history("assistant", reply)
+        return {"reply": reply, "task_id": None, "model_lock": model_lock}
+
     if _OPUS_TRIGGERS.search(user_text):
         model_lock = "opus"
         log.info("Model lock → opus (voice trigger)")
@@ -260,6 +284,20 @@ async def handle_message(user_text: str) -> dict:
         return {"reply": reply, "task_id": None, "model_lock": model_lock}
 
     history = _load_history()
+
+    # --- Model lock: gpt54 → full GPT-5.4 agent with all tools ---
+    if model_lock == "gpt54":
+        reply = await gpt_full(user_text, history, model=GPT54_MODEL)
+        _append_history("user", user_text)
+        _append_history("assistant", reply)
+        return {"reply": reply, "task_id": None, "model_lock": model_lock}
+
+    # --- Model lock: gpt54mini → full GPT-5.4-mini agent with all tools ---
+    if model_lock == "gpt54mini":
+        reply = await gpt_full(user_text, history, model=GPT54_MINI_MODEL)
+        _append_history("user", user_text)
+        _append_history("assistant", reply)
+        return {"reply": reply, "task_id": None, "model_lock": model_lock}
 
     # --- Model lock: opus → full Opus agent with all tools ---
     if model_lock == "opus":
@@ -387,12 +425,13 @@ async def set_model(
     lock: str = Form(...),
     authorization: Optional[str] = Header(None),
 ):
-    """Set model lock: 'auto', 'opus', or 'haiku'."""
+    """Set model lock: 'auto', 'opus', 'haiku', 'gpt54', or 'gpt54mini'."""
     global model_lock
     verify_token(authorization)
 
-    if lock not in ("auto", "opus", "haiku"):
-        raise HTTPException(400, "lock must be 'auto', 'opus', or 'haiku'")
+    valid = ("auto", "opus", "haiku", "gpt54", "gpt54mini")
+    if lock not in valid:
+        raise HTTPException(400, f"lock must be one of: {', '.join(valid)}")
 
     model_lock = lock
     log.info(f"Model lock set to: {lock}")
