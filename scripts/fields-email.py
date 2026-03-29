@@ -2,13 +2,14 @@
 """Convenience wrapper around the email CLI with local compatibility fixes.
 
 Usage from Claude Code / orchestrator context:
-    python3 scripts/email.py inbox
-    python3 scripts/email.py search "query"
-    python3 scripts/email.py read <id>
-    python3 scripts/email.py reply <id> --body "text"
-    python3 scripts/email.py send --to addr --subject "subj" --body "text"
+    python3 scripts/fields-email.py inbox
+    python3 scripts/fields-email.py search "query"
+    python3 scripts/fields-email.py read <id>
+    python3 scripts/fields-email.py reply <id> --body "text"
+    python3 scripts/fields-email.py send --to addr --subject "subj" --body "text"
 """
 
+import argparse
 import json
 import os
 import subprocess
@@ -106,6 +107,41 @@ def _cmd_read(env, message_id):
     return rc
 
 
+def _cmd_dry_run_reply(env, message_id, body, cc, bcc):
+    graph = _load_graph_tools(env)
+    payload = graph.get_email_with_attachments_core(message_id)
+    output, rc = _format_read_result(payload)
+    if rc != 0:
+        return rc
+    email = output.get('email', {})
+    preview = {
+        'status': 'dry_run',
+        'action': 'reply',
+        'message_id': message_id,
+        'to': email.get('from', ''),
+        'subject': f"Re: {email.get('subject', '')}" if email.get('subject') else 'Re:',
+        'cc': cc or [],
+        'bcc': bcc or [],
+        'body': body,
+    }
+    print(json.dumps(preview, indent=2, ensure_ascii=False))
+    return 0
+
+
+def _cmd_dry_run_send(to, subject, body, cc, bcc):
+    preview = {
+        'status': 'dry_run',
+        'action': 'send',
+        'to': to,
+        'subject': subject,
+        'cc': cc or [],
+        'bcc': bcc or [],
+        'body': body,
+    }
+    print(json.dumps(preview, indent=2, ensure_ascii=False))
+    return 0
+
+
 def _cmd_thread(env, identifier, limit):
     graph = _load_graph_tools(env)
     email_address = identifier
@@ -144,6 +180,33 @@ def main():
             except Exception:
                 pass
         return _cmd_thread(env, sys.argv[2], limit)
+
+    if len(sys.argv) >= 2 and sys.argv[1] == "reply" and "--dry-run" in sys.argv:
+        parser = argparse.ArgumentParser(add_help=False)
+        parser.add_argument("command")
+        parser.add_argument("message_id")
+        parser.add_argument("--body", required=True)
+        parser.add_argument("--cc")
+        parser.add_argument("--bcc")
+        parser.add_argument("--dry-run", action="store_true")
+        args, _ = parser.parse_known_args(sys.argv[1:])
+        cc = args.cc.split(",") if args.cc else None
+        bcc = args.bcc.split(",") if args.bcc else None
+        return _cmd_dry_run_reply(env, args.message_id, args.body, cc, bcc)
+
+    if len(sys.argv) >= 2 and sys.argv[1] == "send" and "--dry-run" in sys.argv:
+        parser = argparse.ArgumentParser(add_help=False)
+        parser.add_argument("command")
+        parser.add_argument("--to", required=True)
+        parser.add_argument("--subject", required=True)
+        parser.add_argument("--body", required=True)
+        parser.add_argument("--cc")
+        parser.add_argument("--bcc")
+        parser.add_argument("--dry-run", action="store_true")
+        args, _ = parser.parse_known_args(sys.argv[1:])
+        cc = args.cc.split(",") if args.cc else None
+        bcc = args.bcc.split(",") if args.bcc else None
+        return _cmd_dry_run_send(args.to.split(","), args.subject, args.body, cc, bcc)
 
     cmd = [VENV_PYTHON, EMAIL_CLI] + sys.argv[1:]
 
