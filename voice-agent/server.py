@@ -279,6 +279,50 @@ _GPT54MINI_TRIGGERS = re.compile(
 )
 # Opus self-downgrade signal
 _SWITCH_HAIKU_SIGNAL = "[SWITCH_HAIKU]"
+_EMAIL_TASK_PATTERNS = [
+    re.compile(r"\b(check|scan|review|search|read|open)\b.*\b(email|emails|inbox|mail)\b", re.IGNORECASE),
+    re.compile(r"\b(email|emails|inbox|mail)\b.*\b(check|scan|review|search|read|open)\b", re.IGNORECASE),
+    re.compile(r"\bwhat emails\b.*\b(reply|respond)\b", re.IGNORECASE),
+    re.compile(r"\bwhich emails\b.*\b(reply|respond)\b", re.IGNORECASE),
+    re.compile(r"\bneed to (reply|respond)\b.*\b(email|emails)\b", re.IGNORECASE),
+    re.compile(r"\b(draft|reply|respond|send)\b.*\b(email|mail)\b", re.IGNORECASE),
+]
+
+
+def _build_fast_email_task(user_text: str) -> Optional[dict]:
+    """Fast-path clear email intents so GPT voice does not wait on router timeouts."""
+    if not any(pattern.search(user_text) for pattern in _EMAIL_TASK_PATTERNS):
+        return None
+
+    lowered = user_text.lower()
+    if "what emails" in lowered or "which emails" in lowered or "need to reply" in lowered or "need to respond" in lowered:
+        title = "Review inbox for replies"
+        reply = "On it. I'll check your inbox and identify the emails that need a reply."
+        prompt = (
+            "Review Will's email inbox using the VM email tooling and identify which emails need a reply. "
+            "Use python3 scripts/fields-email.py to inspect the inbox, recent messages, and relevant threads. "
+            "Return a concise shortlist with sender, subject, why it needs a reply, and urgency. "
+            "Do not send anything. If a draft reply would help, say so but keep all outbound actions in dry-run only."
+        )
+    elif "search" in lowered:
+        title = "Search email"
+        reply = "On it. I'll search your email now."
+        prompt = (
+            f"Handle this email request using python3 scripts/fields-email.py: {user_text}\n"
+            "Use the email CLI to search and inspect the relevant messages. "
+            "Summarize the useful results clearly. Do not send anything unless explicitly requested, "
+            "and use --dry-run first for any draft/send action."
+        )
+    else:
+        title = "Handle email request"
+        reply = "On it. I'll handle that through your email tools now."
+        prompt = (
+            f"Handle this email request using python3 scripts/fields-email.py: {user_text}\n"
+            "Read/search/review the relevant emails and complete the request as far as possible. "
+            "For replies or sends, always use --dry-run first and present the draft for approval before any live send."
+        )
+
+    return {"title": title, "reply": reply, "prompt": prompt}
 
 
 async def handle_message(user_text: str) -> dict:
@@ -328,6 +372,20 @@ async def handle_message(user_text: str) -> dict:
         history = await _load_history_safe(timeout=1.0)
         task_id = None
         gpt_model = GPT54_MINI_MODEL if model_lock == "gpt54mini" else GPT54_MODEL
+        fast_email_task = _build_fast_email_task(user_text)
+        if fast_email_task:
+            task_id = task_manager.spawn_task(
+                title=fast_email_task["title"],
+                prompt=fast_email_task["prompt"],
+                user_message=user_text,
+                model=model_lock,
+            )
+            reply = fast_email_task["reply"]
+            log.info(f"GPT fast email task spawned: {task_id} — {fast_email_task['title']} (model: {model_lock})")
+            await _append_history_safe("user", user_text, timeout=1.0)
+            await _append_history_safe("assistant", reply, timeout=1.0)
+            return {"reply": reply, "task_id": task_id, "model_lock": model_lock}
+
         active_tasks = task_manager.get_active_tasks()
         completed_unnotified = task_manager.get_unnotified_completed()
 
