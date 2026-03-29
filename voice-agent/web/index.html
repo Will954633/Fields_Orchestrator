@@ -306,6 +306,37 @@
         .connection-dot.ok { background: #22C55E; }
         .connection-dot.fail { background: #EF4444; }
         .connection-dot.checking { background: #F59E0B; }
+
+        /* Model toggle */
+        .model-toggle {
+            display: flex;
+            gap: 4px;
+            background: #1F2937;
+            border-radius: 16px;
+            padding: 2px;
+            margin-top: 8px;
+        }
+
+        .model-btn {
+            padding: 5px 14px;
+            border-radius: 14px;
+            border: none;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: transparent;
+            color: #6B7280;
+        }
+
+        .model-btn.active {
+            background: #2563EB;
+            color: white;
+        }
+
+        .model-btn.active.opus {
+            background: #7C3AED;
+        }
     </style>
 </head>
 <body>
@@ -315,9 +346,14 @@
         <div class="model-label" id="modelLabel">
             <span>
                 <span class="connection-dot checking" id="connDot"></span>
-                Claude Opus · Fields Agent
+                <span id="modelName">Auto · Fields Agent</span>
             </span>
             <span class="task-badge" id="taskBadge">0 tasks</span>
+        </div>
+        <div class="model-toggle">
+            <button class="model-btn active" data-lock="auto" id="btnAuto">Auto</button>
+            <button class="model-btn" data-lock="haiku" id="btnHaiku">Haiku</button>
+            <button class="model-btn" data-lock="opus" id="btnOpus">Opus</button>
         </div>
         <div class="call-timer" id="callTimer">00:00</div>
     </div>
@@ -388,6 +424,48 @@
         const taskPanel = document.getElementById('taskPanel');
         const taskList = document.getElementById('taskList');
         const taskPanelHeader = document.getElementById('taskPanelHeader');
+
+        const modelName = document.getElementById('modelName');
+        const btnAuto = document.getElementById('btnAuto');
+        const btnHaiku = document.getElementById('btnHaiku');
+        const btnOpus = document.getElementById('btnOpus');
+
+        let currentModelLock = 'auto';
+
+        // Model toggle buttons
+        document.querySelectorAll('.model-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const lock = btn.dataset.lock;
+                try {
+                    const formData = new FormData();
+                    formData.append('lock', lock);
+                    await fetch(API_BASE + '/api/model', { method: 'POST', body: formData });
+                    setModelLock(lock);
+                } catch (e) {
+                    console.error('Failed to set model:', e);
+                }
+            });
+        });
+
+        function setModelLock(lock) {
+            currentModelLock = lock;
+            document.querySelectorAll('.model-btn').forEach(b => {
+                b.classList.remove('active', 'opus');
+                if (b.dataset.lock === lock) {
+                    b.classList.add('active');
+                    if (lock === 'opus') b.classList.add('opus');
+                }
+            });
+            const labels = { auto: 'Auto · Fields Agent', haiku: 'Haiku · Fast', opus: 'Opus · Deep' };
+            modelName.textContent = labels[lock] || labels.auto;
+        }
+
+        // Update model lock from server responses
+        function updateModelFromResponse(data) {
+            if (data && data.model_lock && data.model_lock !== currentModelLock) {
+                setModelLock(data.model_lock);
+            }
+        }
 
         // Icons
         const PHONE_ICON = '<svg viewBox="0 0 24 24"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg>';
@@ -520,6 +598,12 @@
                     connDot.className = 'connection-dot ok';
                     setStatus('Tap to start call');
                     connectSSE();
+                    // Sync model lock state
+                    try {
+                        const mr = await fetch(API_BASE + '/api/model');
+                        const md = await mr.json();
+                        if (md.model_lock) setModelLock(md.model_lock);
+                    } catch {};
                 } else throw 0;
             } catch {
                 connDot.className = 'connection-dot fail';
@@ -795,6 +879,7 @@
                 } else {
                     if (data.transcript) addMessage(data.transcript, 'user');
                     if (data.reply) addMessage(data.reply, 'agent');
+                    updateModelFromResponse(data);
 
                     if (data.audio_base64 && inCall) {
                         setPhase('speaking');
