@@ -29,6 +29,7 @@ from ceo_agent_lib import get_client, load_env_file, now_aest, slugify
 REMOTE_HOST = "fields-orchestrator-vm@35.201.6.222"
 REMOTE_DIR = "/home/fields-orchestrator-vm/ceo-agents"
 CODEX_MODEL = "gpt-5.4"
+SESSION_TIMEOUT_SECONDS = 3600  # 1 hour per agent session
 TEAM_PLAN_PATH = Path(__file__).resolve().parent.parent / "config" / "codex_team_plan.yaml"
 LOCAL_RUNS_DIR = Path(__file__).resolve().parent.parent / "artifacts" / "ceo-runs"
 LOCAL_PROPOSALS_DIR = Path(__file__).resolve().parent.parent / "proposals"
@@ -479,7 +480,7 @@ cp -f {REMOTE_DIR}/sandbox/proposals/{DATE_STR}_*.json {agent_workdir}/proposals
 cd {agent_workdir}
 bash {REMOTE_DIR}/ceo-agent-prompts.sh {agent_id} {DATE_STR} > /tmp/ceo_prompt_{agent_id}.txt
 set +e
-timeout 900s codex exec -m {CODEX_MODEL} --full-auto --skip-git-repo-check -o /tmp/ceo_output_{agent_id}.txt "$(cat /tmp/ceo_prompt_{agent_id}.txt)" >/tmp/ceo_stdout_{agent_id}.log 2>&1
+timeout {SESSION_TIMEOUT_SECONDS}s codex exec -m {CODEX_MODEL} --full-auto --skip-git-repo-check -o /tmp/ceo_output_{agent_id}.txt "$(cat /tmp/ceo_prompt_{agent_id}.txt)" >/tmp/ceo_stdout_{agent_id}.log 2>&1
 rc=$?
 set -e
 # Copy outputs back to the persistent sandbox
@@ -496,7 +497,7 @@ fi
 tail -n 40 /tmp/ceo_stdout_{agent_id}.log 2>/dev/null || true
 rm -rf {agent_workdir}
 """
-    result = ssh_run(remote_cmd, timeout=1200)
+    result = ssh_run(remote_cmd, timeout=SESSION_TIMEOUT_SECONDS + 300)  # session timeout + 5 min buffer
     stdout_lines = (result.stdout or "").splitlines()
     rc = 999
     proposal_meta: dict[str, Any] = {"present": False}
@@ -518,6 +519,10 @@ rm -rf {agent_workdir}
         print(f"  ⚠ stderr: {result.stderr[:400]}")
 
     success = rc == 0 and proposal_meta.get("present", False)
+
+    # Check for Telegram messages from the agent
+    _check_and_send_telegram(agent_id)
+
     return {
         "agent": agent_id,
         "success": success,
@@ -526,6 +531,49 @@ rm -rf {agent_workdir}
         "stdout_tail": tail_lines[-20:],
         "stderr_excerpt": (result.stderr or "")[:800],
     }
+
+
+def _check_and_send_telegram(agent_id: str) -> None:
+    """Check if agent left a Telegram message for the founder and send it."""
+    remote_msg_path = f"{REMOTE_DIR}/sandbox/agent-memory/{agent_id}/telegram_message.txt"
+    result = ssh_run(f"cat {remote_msg_path} 2>/dev/null", timeout=15)
+    if result.returncode != 0 or not result.stdout.strip():
+        return
+
+    msg_content = result.stdout.strip()
+    log(f"📱 {agent_id} has a Telegram message for Will")
+
+    # Send via both Telegram and Chat Agent
+    telegram_text = f"🤖 *{agent_id.replace('_', ' ').title()} Agent*\n\n{msg_content}"
+    orch_dir = Path(__file__).resolve().parent.parent
+    try:
+        import subprocess as _sp
+        # Telegram notification
+        _sp.run(
+            ["/home/fields/venv/bin/python3", "scripts/telegram_notify.py", telegram_text],
+            capture_output=True, text=True, timeout=30, cwd=str(orch_dir),
+        )
+        log(f"  ✅ Telegram message sent")
+    except Exception as exc:
+        log(f"  ❌ Telegram send failed: {exc}")
+
+    try:
+        import subprocess as _sp
+        # Also post to Chat Agent as a system message so it shows in Will's next conversation
+        from shared.db import get_client as _tg_client
+        _client = _tg_client()
+        _client["system_monitor"]["agent_messages"].insert_one({
+            "agent": agent_id,
+            "message": msg_content,
+            "status": "pending",
+            "created_at": datetime.now().isoformat(),
+        })
+        log(f"  ✅ Message queued for Chat Agent")
+    except Exception as exc:
+        log(f"  ⚠ Chat Agent queue failed (non-critical): {exc}")
+
+    # Clear the message file so it doesn't re-send
+    ssh_run(f"rm -f {remote_msg_path}", timeout=10)
 
 
 def fetch_agent_memory_updates(agent_ids: list[str]) -> int:
