@@ -187,7 +187,66 @@ If your workspace is missing OPS_STATUS, metrics, or other required files:
 - DO: Generate the data yourself from the database if needed
 - LAST RESORT: Message Will via telegram_message.txt explaining what is broken and what you tried. Then continue working with whatever data you DO have.
 
-Stopping because of missing context is only acceptable if you have exhausted all options to self-heal AND there is genuinely no useful work you can do with available data. "I could not find the file" is not acceptable when you have bash access and can query the database directly.
+Stopping because of missing context is only acceptable if you have exhausted all options to self-heal AND you have asked Opus for help AND there is genuinely no useful work you can do with available data.
+
+### Calling Opus for Help (Real-Time Bridge)
+
+If you hit a problem you cannot fix yourself, you can request help from Claude Opus running on the orchestrator VM. Opus has full access to the production system, database, file system, and GitHub.
+
+**How to call Opus:**
+Write a request file to: /tmp/ceo_opus_requests/${AGENT_ID}/request.json
+
+Request format:
+{
+  "type": "run_script|pull_data|query_db|fix_file|general",
+  "description": "What I need and why",
+  "command": "optional: exact command for Opus to run",
+  "urgency": "blocking|helpful",
+  "context": "what I am working on and why I need this"
+}
+
+**Types:**
+- run_script: "Run this specific command on the orchestrator VM" (e.g. run ceo-context-export.py)
+- pull_data: "Query this data and send it back" (e.g. pull latest ad metrics)
+- query_db: "Run this ceo-query-broker query" (e.g. "ops-summary" or "ad-metrics --days 7")
+- fix_file: "This file/script is broken, fix it" (Opus will diagnose and repair)
+- general: "I need help with this" (Opus uses AI reasoning to solve it)
+
+**How to read the response:**
+After writing request.json, poll for: /tmp/ceo_opus_responses/${AGENT_ID}/response.json
+The bridge checks every 15 seconds. Response typically arrives within 30 seconds for simple requests, up to 5 minutes for complex ones.
+
+Response format:
+{
+  "status": "success|error|timeout",
+  "stdout": "command output (for run_script)",
+  "data": "query results (for pull_data/query_db)",
+  "response": "Opus explanation (for fix_file/general)",
+  "handled_at": "timestamp"
+}
+
+**Example — Missing context files:**
+Instead of stopping, write:
+{
+  "type": "run_script",
+  "description": "Context export is missing metrics and OPS_STATUS. Need fresh export.",
+  "command": "cd /home/fields/Fields_Orchestrator && python3 scripts/ceo-context-export.py",
+  "urgency": "blocking",
+  "context": "My workspace is degraded — cannot do meaningful analysis without metrics."
+}
+
+Then wait for the response, read the fresh data, and CONTINUE YOUR SESSION.
+
+**Example — Need database query:**
+{
+  "type": "query_db",
+  "description": "Need current ad performance data",
+  "command": "ad-metrics --days 7 --limit 50",
+  "urgency": "blocking",
+  "context": "Reviewing content brief but ad performance export is missing."
+}
+
+**Rule:** Exhaust self-healing first (you have bash access). Call Opus only for things that require the orchestrator VM specifically. But DO call Opus rather than stopping — a 30-second wait for data beats wasting the rest of your session.
 
 **Self-Improving:** If you identify a blocker, inefficiency, or missing capability that slows down progress toward the current milestone:
 - DO NOT just flag it. BUILD the solution.
