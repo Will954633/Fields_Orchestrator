@@ -1,0 +1,200 @@
+{
+  "collection": "system_monitor.leads",
+  "purpose": "Stores inbound lead-capture records from buyer-facing and seller-facing capture points.",
+  "document_example": {
+    "_id": "ObjectId",
+    "email": "buyer@example.com",
+    "source": "price_alert",
+    "property_id": "67f1d9b8c2e84b12a4e95f10",
+    "suburb": "robina",
+    "status": "new",
+    "first_response_at": null,
+    "owner": null,
+    "next_action_at": null,
+    "lead_quality": "medium",
+    "notes": "Captured from property page price alert CTA.",
+    "created_at": "2026-03-31T00:00:00Z",
+    "updated_at": "2026-03-31T00:00:00Z"
+  },
+  "mongodb_validator": {
+    "$jsonSchema": {
+      "bsonType": "object",
+      "required": [
+        "email",
+        "source",
+        "status",
+        "created_at",
+        "updated_at"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "_id": {
+          "bsonType": [
+            "objectId",
+            "string"
+          ],
+          "description": "MongoDB document identifier."
+        },
+        "email": {
+          "bsonType": "string",
+          "description": "Lowercased and trimmed lead email.",
+          "minLength": 3,
+          "maxLength": 320,
+          "pattern": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
+        },
+        "source": {
+          "enum": [
+            "price_alert",
+            "analyse_home",
+            "decision_feed",
+            "market_report"
+          ],
+          "description": "Entry point that created the lead."
+        },
+        "property_id": {
+          "bsonType": [
+            "string",
+            "null"
+          ],
+          "description": "Website property identifier when the lead is tied to a specific property."
+        },
+        "suburb": {
+          "bsonType": [
+            "string",
+            "null"
+          ],
+          "description": "Lowercased canonical suburb slug when known.",
+          "minLength": 2,
+          "maxLength": 80
+        },
+        "status": {
+          "enum": [
+            "new",
+            "contacted",
+            "qualified",
+            "rejected"
+          ],
+          "description": "Lead lifecycle state."
+        },
+        "first_response_at": {
+          "bsonType": [
+            "date",
+            "null"
+          ],
+          "description": "First human follow-up timestamp."
+        },
+        "owner": {
+          "bsonType": [
+            "string",
+            "null"
+          ],
+          "description": "Current human owner of the lead.",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "next_action_at": {
+          "bsonType": [
+            "date",
+            "null"
+          ],
+          "description": "Next scheduled follow-up or review time."
+        },
+        "lead_quality": {
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            null
+          ],
+          "description": "Simple triage bucket for early-stage lead handling."
+        },
+        "notes": {
+          "bsonType": [
+            "string",
+            "null"
+          ],
+          "description": "Free-text follow-up notes.",
+          "maxLength": 4000
+        },
+        "created_at": {
+          "bsonType": "date",
+          "description": "Insert timestamp."
+        },
+        "updated_at": {
+          "bsonType": "date",
+          "description": "Last mutation timestamp."
+        }
+      }
+    }
+  },
+  "application_rules": [
+    "Always store email and suburb in lowercase canonical form before insert.",
+    "Set status='new' on insert unless a downstream workflow explicitly overrides it.",
+    "Require property_id for price_alert submissions.",
+    "Require suburb for price_alert, analyse_home, and market_report submissions when the frontend already knows it.",
+    "Set first_response_at the first time status moves away from 'new'.",
+    "Update updated_at on every mutation."
+  ],
+  "index_recommendations": [
+    {
+      "name": "idx_leads_status_next_action_created",
+      "keys": {
+        "status": 1,
+        "next_action_at": 1,
+        "created_at": -1
+      },
+      "options": {},
+      "rationale": "Primary CRM queue for new leads and due follow-ups."
+    },
+    {
+      "name": "idx_leads_owner_status_next_action",
+      "keys": {
+        "owner": 1,
+        "status": 1,
+        "next_action_at": 1
+      },
+      "options": {
+        "partialFilterExpression": {
+          "owner": {
+            "$type": "string"
+          }
+        }
+      },
+      "rationale": "Owner work queue and handoff tracking."
+    },
+    {
+      "name": "idx_leads_source_created",
+      "keys": {
+        "source": 1,
+        "created_at": -1
+      },
+      "options": {},
+      "rationale": "Fast source-level reporting and recent lead capture breakdowns."
+    },
+    {
+      "name": "idx_leads_property_source_created",
+      "keys": {
+        "property_id": 1,
+        "source": 1,
+        "created_at": -1
+      },
+      "options": {
+        "partialFilterExpression": {
+          "property_id": {
+            "$type": "string"
+          }
+        }
+      },
+      "rationale": "Property-page alert lookup and per-property lead history."
+    },
+    {
+      "name": "idx_leads_email_created",
+      "keys": {
+        "email": 1,
+        "created_at": -1
+      },
+      "options": {},
+      "rationale": "Fast lookup of prior submissions by the same email."
+    }
+  ]
+}
