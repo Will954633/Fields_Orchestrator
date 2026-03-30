@@ -24,6 +24,11 @@ from typing import Any
 
 import yaml
 
+# Ensure project root is on sys.path so `shared.*` imports work
+_PROJECT_ROOT = str(Path(__file__).resolve().parent.parent)
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
+
 from ceo_agent_lib import get_client, load_env_file, now_aest, slugify
 from validate_snapshot import build_report_from_manifest, SnapshotReport
 
@@ -803,23 +808,102 @@ def fetch_agent_memory_updates(agent_ids: list[str]) -> int:
 
 
 def push_to_github() -> None:
-    log("Pushing to GitHub sandbox repo...")
+    """Push sandbox changes to GitHub using gh api (git push hangs/fails on both VMs)."""
+    log("Pushing to GitHub sandbox repo via gh api...")
+    REPO = "Will954633/fields-ceo-sandbox"
+    GH_ENV = "GH_CONFIG_DIR=~/.config/gh"
+
+    # Clean up context dirs and get list of changed files
     result = ssh_run(
         f"""
-GH_CONFIG_DIR=~/.config/gh gh auth setup-git >/dev/null 2>&1 || true
 cd {REMOTE_DIR}/sandbox
 rm -rf context context_*
-if git status --porcelain | grep -q .; then
-    git add -A
-    git commit -m "CEO agents run {DATE_STR}"
-    GH_CONFIG_DIR=~/.config/gh git push origin main 2>&1 | tail -3
-else
-    echo 'No new files to push'
-fi
+git add -A
+git status --porcelain 2>/dev/null
 """,
-        timeout=180,
+        timeout=60,
     )
-    print(f"  {result.stdout.strip()}")
+    changed_lines = [
+        line.strip() for line in (result.stdout or "").splitlines() if line.strip()
+    ]
+    if not changed_lines:
+        print("  No new files to push")
+        return
+
+    # Parse file paths from git status output (e.g. "A  proposals/2026-03-31_engineering.json")
+    files_to_push: list[str] = []
+    for line in changed_lines:
+        # git status --porcelain: first 2 chars are status, then space, then path
+        # Handle renames: "R  old -> new" — push the new path
+        parts = line[3:]  # skip status + space
+        if " -> " in parts:
+            parts = parts.split(" -> ", 1)[1]
+        files_to_push.append(parts.strip('"'))
+
+    pushed = 0
+    errors = 0
+    for filepath in files_to_push:
+        # Skip deleted files — we'd need a DELETE call for those
+        status_char = next(
+            (l[:2].strip() for l in changed_lines if filepath in l), ""
+        )
+        if status_char == "D":
+            log(f"  Skipping deleted file: {filepath}")
+            continue
+
+        # Check if file exists on GitHub (to get SHA for updates)
+        sha_result = ssh_run(
+            f'{GH_ENV} gh api "repos/{REPO}/contents/{filepath}" --jq ".sha" 2>/dev/null || echo ""',
+            timeout=30,
+        )
+        sha = (sha_result.stdout or "").strip()
+
+        # Build JSON payload with Python on remote (handles large files safely)
+        local_path = f"{REMOTE_DIR}/sandbox/{filepath}"
+        # Write a helper script to the remote, then run it
+        push_result = ssh_run(
+            f"""cat > /tmp/_gh_push.py << 'PYEOF'
+import json, base64, subprocess, os
+os.environ["GH_CONFIG_DIR"] = os.path.expanduser("~/.config/gh")
+import sys
+local_path, repo_path, message = sys.argv[1], sys.argv[2], sys.argv[3]
+sha = sys.argv[4] if len(sys.argv) > 4 else ""
+with open(local_path, "rb") as f:
+    content = base64.b64encode(f.read()).decode()
+payload = {{"message": message, "content": content}}
+if sha:
+    payload["sha"] = sha
+with open("/tmp/_gh_push_payload.json", "w") as f:
+    json.dump(payload, f)
+r = subprocess.run(
+    ["gh", "api", f"repos/{REPO}/contents/{{repo_path}}", "--method", "PUT", "--input", "/tmp/_gh_push_payload.json"],
+    capture_output=True, text=True, timeout=60,
+)
+if r.returncode == 0:
+    print("OK")
+else:
+    print(f"FAIL: {{r.stderr[:300]}}")
+PYEOF
+python3 /tmp/_gh_push.py "{local_path}" "{filepath}" "CEO agents run {DATE_STR}" "{sha}"
+""",
+            timeout=90,
+        )
+        out = (push_result.stdout or "").strip()
+        if "OK" in out:
+            pushed += 1
+            log(f"  Pushed: {filepath}")
+        else:
+            errors += 1
+            log(f"  Failed: {filepath} — {out}")
+
+    # Commit locally so git status is clean for next run
+    if pushed > 0:
+        ssh_run(
+            f'cd {REMOTE_DIR}/sandbox && git commit -m "CEO agents run {DATE_STR}" 2>/dev/null || true',
+            timeout=30,
+        )
+
+    print(f"  Pushed {pushed} file(s) to GitHub, {errors} error(s)")
 
 
 def fetch_remote_proposals(agent_ids: list[str]) -> list[dict[str, Any]]:
