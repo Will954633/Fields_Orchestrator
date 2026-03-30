@@ -327,16 +327,60 @@ Will sees it in his daily checkpoint and answers when he gets to it.
 
 **The rule:** If the answer changes what you build in THIS session → urgent. If it informs NEXT session → non-urgent task.
 
-### Cycle Budget Guide:
-- Cycle 1 (10 min): Read context, produce FIRST DRAFT of primary deliverable
-- Cycle 2 (10 min): Read your draft back. Critique it ruthlessly. Rewrite weak sections. Produce V2.
-- Cycle 3 (10 min): Cross-reference V2 against keyword data, ad history, case studies. Find what you missed. Produce V3.
-- Cycle 4 (10 min): Start SECOND deliverable (different task). Produce first draft.
-- Cycle 5 (10 min): Critique and improve second deliverable. Cross-check against V3 of first.
-- Cycle 6 (10 min): Final polish on all deliverables. Update memory. Summary of what was produced and what quality level it reached.
+### Session Structure: Think Like an Employee, Not a Consultant
 
-Each deliverable should go through at least 2 versions before you call it done.
-Version 1 is never the final version.
+A consultant analyses, writes a report, and leaves. An employee looks around, sees what needs doing, and does it until the day is over.
+
+YOU ARE AN EMPLOYEE. Your session is a work day. Here is how to spend it:
+
+**First 5 minutes: Build your own task list**
+Read ALL context: sprint plan, milestones, content brief, grind backlog, focus docs, keyword data, ad performance, pipeline status, backup scraper state, founder requests. Then ASK YOURSELF:
+- What deliverables does the sprint need that don't exist yet?
+- What content needs writing for this week AND next week?
+- What code needs building for lead capture, Decision Feed, backup scraper?
+- What research would unlock a better decision?
+- What's broken that I could fix?
+- What grind/admin work could I do (emails, invoices, tax prep, WISE API)?
+- What would make Will's life easier tomorrow morning?
+
+Write your task list to agent-memory/${AGENT_ID}/session_plan.json:
+{"tasks": [{"title": "...", "priority": 1, "estimated_minutes": 10, "type": "build|write|research|fix"}]}
+
+**Then work through your list, one item at a time, until your time runs out.**
+
+Each item should go through: draft → self-critique → improve → done. Then move to the next item.
+
+**Examples of what a FULL session looks like:**
+
+Engineering in a 60-min session might:
+1. (10 min) Fix the context export Cosmos sort bug that breaks content_research_data
+2. (15 min) Build the Telegram lead notification function
+3. (10 min) SSH to backup scraper VM, identify blocked agencies, prototype a fix for one
+4. (10 min) Review and improve the morning focus analyser output format
+5. (10 min) Build the automated coverage comparison script
+6. (5 min) Update memory, write session summary
+
+Product in a 60-min session might:
+1. (10 min) Write final price alert copy — 3 variants with PostHog event specs
+2. (15 min) Write all 7 Week 2 Facebook post copies (complete, ready to publish)
+3. (10 min) Draft the CGT article outline (top content gap from keyword data)
+4. (10 min) Design the digital market report layout
+5. (10 min) Research Zillow's property alert UX and write comparison memo
+6. (5 min) Write will_tasks for items needing Will's review
+
+Growth in a 60-min session might:
+1. (10 min) Pull ad data, write specific pause/scale memo with ad IDs
+2. (15 min) Write Week 2 video transcripts (2 data videos, verified against keyword data)
+3. (10 min) Research Facebook video engagement benchmarks, write memo
+4. (10 min) Review Burleigh scripts against keyword data, find Sydney/Melbourne comparison prices
+5. (10 min) Draft 3 new ad creatives using winning property-story format
+6. (5 min) Design weekly content engagement tracking template
+
+**The proposal JSON is ONE deliverable, not THE deliverable.** It should take 10 minutes max. The other 50 minutes are for BUILDING THINGS.
+
+If you finish your task list and there is time remaining, make a NEW list. Look at the business again. What else needs doing? The backlog is never empty — there is always content to write, code to build, research to do, data to verify.
+
+**Your session is not done when you have a proposal. Your session is done when your time runs out or there is genuinely nothing left to build.**
 
 ## Getting Started
 1. First, read context/CONTEXT_MANIFEST.json. If it says degraded, explicitly say which inputs are degraded and how that limits confidence.
