@@ -584,43 +584,29 @@ tail -n 40 /tmp/ceo_stdout_{agent_id}.log 2>/dev/null || true
 
 
 def _check_and_send_telegram(agent_id: str) -> None:
-    """Check if agent left a Telegram message for the founder and send it."""
+    """Check if agent left a message for the founder — route to Chat Agent (not Telegram)."""
     remote_msg_path = f"{REMOTE_DIR}/sandbox/agent-memory/{agent_id}/telegram_message.txt"
     result = ssh_run(f"cat {remote_msg_path} 2>/dev/null", timeout=15)
     if result.returncode != 0 or not result.stdout.strip():
         return
 
     msg_content = result.stdout.strip()
-    log(f"📱 {agent_id} has a Telegram message for Will")
+    log(f"📋 {agent_id} has a message for Will")
 
-    # Send via both Telegram and Chat Agent
-    telegram_text = f"🤖 *{agent_id.replace('_', ' ').title()} Agent*\n\n{msg_content}"
-    orch_dir = Path(__file__).resolve().parent.parent
+    # Queue in Chat Agent (agent_messages) — the agent poller will surface it via SSE
     try:
-        import subprocess as _sp
-        # Telegram notification
-        _sp.run(
-            ["/home/fields/venv/bin/python3", "scripts/telegram_notify.py", telegram_text],
-            capture_output=True, text=True, timeout=30, cwd=str(orch_dir),
-        )
-        log(f"  ✅ Telegram message sent")
-    except Exception as exc:
-        log(f"  ❌ Telegram send failed: {exc}")
-
-    try:
-        import subprocess as _sp
-        # Also post to Chat Agent as a system message so it shows in Will's next conversation
         from shared.db import get_client as _tg_client
         _client = _tg_client()
         _client["system_monitor"]["agent_messages"].insert_one({
             "agent": agent_id,
+            "type": "agent_summary",
             "message": msg_content,
             "status": "pending",
             "created_at": datetime.now().isoformat(),
         })
         log(f"  ✅ Message queued for Chat Agent")
     except Exception as exc:
-        log(f"  ⚠ Chat Agent queue failed (non-critical): {exc}")
+        log(f"  ⚠ Chat Agent queue failed: {exc}")
 
     # Clear the message file so it doesn't re-send
     ssh_run(f"rm -f {remote_msg_path}", timeout=10)
@@ -645,28 +631,13 @@ def _process_deploy_manifests(agent_id: str) -> None:
     description = manifest.get("description", "No description")
 
     if requires_approval:
-        # Notify Will and wait
+        # Queue approval in DB — Chat Agent poller will surface via SSE
         approval_reason = manifest.get("approval_reason", "Approval required")
         msg = (
-            f"🔧 *{agent_id}* wants to deploy:\n\n"
+            f"{agent_id.replace('_', ' ').title()} wants to deploy:\n\n"
             f"{description}\n\n"
-            f"Reason for approval: {approval_reason}\n\n"
-            f"Reply 'approve' to proceed."
+            f"Reason: {approval_reason}"
         )
-        _check_and_send_telegram.__wrapped__ if hasattr(_check_and_send_telegram, '__wrapped__') else None
-        # Use the telegram notify directly
-        try:
-            orch_dir = Path(__file__).resolve().parent.parent
-            import subprocess as _sp
-            _sp.run(
-                ["/home/fields/venv/bin/python3", str(orch_dir / "scripts" / "telegram_notify.py"), msg],
-                capture_output=True, text=True, timeout=30, cwd=str(orch_dir),
-            )
-            log(f"  📱 Approval request sent to Will: {description}")
-        except Exception as exc:
-            log(f"  ⚠ Telegram failed: {exc}")
-
-        # Queue in DB for Chat Agent
         try:
             from shared.db import get_client as _deploy_client
             _client = _deploy_client()
@@ -678,10 +649,11 @@ def _process_deploy_manifests(agent_id: str) -> None:
                 "status": "pending_approval",
                 "created_at": datetime.now().isoformat(),
             })
-        except Exception:
-            pass
+            log(f"  ✅ Approval queued for Chat Agent: {description}")
+        except Exception as exc:
+            log(f"  ⚠ Approval queue failed: {exc}")
 
-        log(f"  ⏳ Waiting for approval — implementation bridge will pick this up")
+        log(f"  ⏳ Waiting for approval via Chat Agent")
     else:
         # Autonomous — trigger implementation bridge immediately
         log(f"  ✅ Autonomous deployment — triggering bridge")
@@ -733,16 +705,16 @@ def _process_will_tasks(agent_id: str) -> None:
             urgency = task.get("urgency", "this_week")
             log(f"  📌 [{urgency}] {task.get('title', '?')}")
 
-            # Urgent tasks get a Telegram ping
+            # Queue urgent tasks as agent messages for Chat Agent
             if urgency == "today":
                 try:
-                    orch_dir = Path(__file__).resolve().parent.parent
-                    import subprocess as _sp
-                    msg = f"📌 *Task from {agent_id}:*\n{task.get('title', '?')}\n\n{task.get('detail', '')}"
-                    _sp.run(
-                        ["/home/fields/venv/bin/python3", str(orch_dir / "scripts" / "telegram_notify.py"), msg],
-                        capture_output=True, text=True, timeout=30, cwd=str(orch_dir),
-                    )
+                    db["agent_messages"].insert_one({
+                        "agent": agent_id,
+                        "type": "urgent_task",
+                        "message": f"Task: {task.get('title', '?')}\n\n{task.get('detail', '')}",
+                        "status": "pending",
+                        "created_at": datetime.now().isoformat(),
+                    })
                 except Exception:
                     pass
 
