@@ -859,6 +859,227 @@ def export_git_activity() -> None:
     gh_api_put("metrics/git_activity.md", f"# Git Activity (last 14 days)\n\n{content}", "update: git activity")
 
 
+def export_focus_context() -> None:
+    """Export sprint context, proposal feedback, grind status, leads, and KB summary to context/focus/."""
+    print("\n🎯 Exporting focus context...")
+
+    # 1. current_sprint.md — find the current sprint file based on date
+    sprint_dir = ORCHESTRATOR_DIR / "07_Focus" / "sprints"
+    sprint_content = None
+    if sprint_dir.exists():
+        sprint_files = sorted(sprint_dir.glob("sprint-*.md"))
+        # Use the latest numbered sprint (highest number, excluding outline files)
+        numbered = [f for f in sprint_files if re.match(r"sprint-\d+\.md$", f.name)]
+        if numbered:
+            current_sprint = numbered[-1]
+            sprint_content = read_file(current_sprint)
+            gh_api_put("context/focus/current_sprint.md", sprint_content, f"update: current sprint ({current_sprint.name})")
+        else:
+            gh_api_put("context/focus/current_sprint.md", "# Current Sprint\n\nNo numbered sprint files found.", "update: current sprint (empty)")
+    else:
+        gh_api_put("context/focus/current_sprint.md", "# Current Sprint\n\nSprint directory not yet created.", "update: current sprint (missing)")
+
+    # 2. milestone_status.md — generate short status
+    try:
+        from datetime import date
+        today = date.today()
+        q3_start = date(2026, 7, 1)
+        q3_days = (q3_start - today).days
+        milestone_md = f"""# Milestone Status
+Generated: {now_label()}
+
+## Current Goal
+Build buyer audience through data-driven property intelligence (pre-revenue phase).
+
+## Current Milestone
+Complete core suburb coverage (Robina, Varsity Lakes, Burleigh Waters) with enriched listings, valuations, and editorial content.
+
+## Progress Indicators
+- Pipeline: Running nightly at 20:30 AEST
+- Target suburbs: 3 core (Robina, Varsity Lakes, Burleigh Waters)
+- Stage: Pre-revenue, building data infrastructure
+
+## Q3 2026 Countdown
+**{q3_days} days** until Q3 2026 (1 July 2026)
+"""
+        # If we have sprint content, try to extract sprint goal
+        if sprint_content:
+            for line in sprint_content.splitlines():
+                if "goal" in line.lower() and (":" in line or line.strip().startswith("#")):
+                    milestone_md += f"\n## Sprint Goal (from sprint file)\n{line.strip()}\n"
+                    break
+        gh_api_put("context/focus/milestone_status.md", milestone_md, "update: milestone status")
+    except Exception as exc:
+        gh_api_put("context/focus/milestone_status.md", f"# Milestone Status\n\nError generating: {exc}", "update: milestone status (error)")
+
+    # 3. yesterday_outcome.md — summarize latest fix-history
+    try:
+        fix_dir = ORCHESTRATOR_DIR / "logs" / "fix-history"
+        yesterday_md = "# Yesterday's Outcomes\nGenerated: " + now_label() + "\n\n"
+        if fix_dir.exists():
+            fix_files = sorted([f for f in fix_dir.glob("*.md") if f.name != "README.md"])
+            # Get the most recent file(s) — yesterday and today
+            recent_fixes = fix_files[-2:] if len(fix_files) >= 2 else fix_files
+            if recent_fixes:
+                for fpath in recent_fixes:
+                    yesterday_md += f"## {fpath.stem}\n\n"
+                    content = read_file(fpath)
+                    # Extract just the headings for a summary
+                    headings = [line.strip() for line in content.splitlines() if line.strip().startswith("## [")]
+                    if headings:
+                        for h in headings:
+                            yesterday_md += f"- {h}\n"
+                    else:
+                        yesterday_md += "(No structured entries found)\n"
+                    yesterday_md += "\n"
+            else:
+                yesterday_md += "No fix-history files found.\n"
+        else:
+            yesterday_md += "Fix-history directory does not exist.\n"
+        gh_api_put("context/focus/yesterday_outcome.md", yesterday_md, "update: yesterday outcome")
+    except Exception as exc:
+        gh_api_put("context/focus/yesterday_outcome.md", f"# Yesterday's Outcomes\n\nError: {exc}", "update: yesterday outcome (error)")
+
+    # 4. proposal_decisions.md — query ceo_proposals for last 7 days
+    try:
+        from ceo_agent_lib import get_client, to_jsonable
+        client = get_client()
+        sm = client["system_monitor"]
+        cutoff = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+        proposals = list(sm["ceo_proposals"].find(
+            {"date": {"$gte": cutoff}},
+            {"_id": 0, "agent": 1, "date": 1, "title": 1, "approval_status": 1, "status": 1}
+        ).limit(50))
+        client.close()
+
+        decisions_md = f"# Proposal Decisions (last 7 days)\nGenerated: {now_label()}\n\n"
+        if proposals:
+            has_approval = any(p.get("approval_status") for p in proposals)
+            if not has_approval:
+                decisions_md += "> **Note:** `approval_status` field not yet populated on any proposals. Status tracking not yet implemented.\n\n"
+            decisions_md += f"| Date | Agent | Title | Status |\n|------|-------|-------|--------|\n"
+            for p in sorted(proposals, key=lambda x: x.get("date", ""), reverse=True):
+                status = p.get("approval_status") or p.get("status") or "no status"
+                decisions_md += f"| {p.get('date', '?')} | {p.get('agent', '?')} | {p.get('title', 'untitled')[:60]} | {status} |\n"
+        else:
+            decisions_md += "No proposals found in the last 7 days.\n"
+        gh_api_put("context/focus/proposal_decisions.md", decisions_md, "update: proposal decisions")
+    except Exception as exc:
+        gh_api_put("context/focus/proposal_decisions.md", f"# Proposal Decisions\n\nError querying proposals: {exc}", "update: proposal decisions (error)")
+
+    # 5. grind_status.md — static list of grind backlog items
+    grind_md = f"""# Grind Backlog Status
+Generated: {now_label()}
+
+These are operational/admin tasks that need attention but are not sprint work.
+
+| Item | Category | Status |
+|------|----------|--------|
+| PAYG registration | Tax/Compliance | Pending |
+| Tax return (2024-25) | Tax/Compliance | Pending |
+| Ray White invoices | Finance | Pending |
+| Bank reconciliation | Finance | Pending |
+| WISE international transfers | Finance | Pending |
+| API spend tracking (OpenAI, Anthropic, Azure) | Operations | Partially tracked via cost-collector.py |
+
+> This is a static list. Update `ceo-context-export.py` when items are completed or new items are added.
+"""
+    gh_api_put("context/focus/grind_status.md", grind_md, "update: grind status")
+
+    # 6. lead_metrics.md — query system_monitor.leads
+    try:
+        from ceo_agent_lib import get_client, to_jsonable
+        client = get_client()
+        sm = client["system_monitor"]
+        leads_md = f"# Lead Metrics\nGenerated: {now_label()}\n\n"
+
+        # Check if leads collection exists
+        coll_names = sm.list_collection_names()
+        if "leads" in coll_names:
+            total_leads = sm["leads"].count_documents({})
+            leads_md += f"**Total leads:** {total_leads}\n\n"
+
+            if total_leads > 0:
+                # Source breakdown
+                pipeline = [{"$group": {"_id": "$source", "count": {"$sum": 1}}}]
+                sources = list(sm["leads"].aggregate(pipeline))
+                if sources:
+                    leads_md += "## Sources\n| Source | Count |\n|--------|-------|\n"
+                    for s in sorted(sources, key=lambda x: x.get("count", 0), reverse=True):
+                        leads_md += f"| {s.get('_id', 'unknown')} | {s.get('count', 0)} |\n"
+                    leads_md += "\n"
+
+                # Latest lead
+                latest = sm["leads"].find_one({}, sort=[("created_at", -1)])
+                if latest:
+                    leads_md += f"**Latest lead:** {latest.get('created_at', 'unknown timestamp')}\n"
+            else:
+                leads_md += "No leads recorded yet.\n"
+        else:
+            leads_md += "The `leads` collection does not exist yet. Lead tracking has not been implemented.\n"
+        client.close()
+        gh_api_put("context/focus/lead_metrics.md", leads_md, "update: lead metrics")
+    except Exception as exc:
+        gh_api_put("context/focus/lead_metrics.md", f"# Lead Metrics\n\nError: {exc}", "update: lead metrics (error)")
+
+    # 7. kb_summary.md — summarize knowledge base categories and document counts
+    try:
+        kb_dir = Path("/home/fields/knowledge-base")
+        kb_md = f"# Knowledge Base Summary\nGenerated: {now_label()}\n\n"
+        if kb_dir.exists():
+            categories = sorted([d.name for d in kb_dir.iterdir() if d.is_dir()])
+            kb_md += f"**Categories:** {len(categories)}\n\n"
+            kb_md += "| Category | Documents |\n|----------|----------|\n"
+            total_docs = 0
+            for cat in categories:
+                cat_dir = kb_dir / cat
+                doc_count = len(list(cat_dir.glob("*")))
+                total_docs += doc_count
+                kb_md += f"| {cat} | {doc_count} |\n"
+            kb_md += f"\n**Total documents:** {total_docs}\n"
+            kb_md += f"\n**Search:** `python3 scripts/search-kb.py \"query\" --max 5`\n"
+        else:
+            kb_md += "Knowledge base directory (`/home/fields/knowledge-base/`) not found.\n"
+        gh_api_put("context/focus/kb_summary.md", kb_md, "update: kb summary")
+    except Exception as exc:
+        gh_api_put("context/focus/kb_summary.md", f"# Knowledge Base Summary\n\nError: {exc}", "update: kb summary (error)")
+
+    # 8. agent_roles.md — sprint-aware role assignments
+    agent_roles_md = f"""# Agent Role Directives
+Generated: {now_label()}
+
+These role assignments are sprint-aware. Each agent should operate within their defined scope.
+
+## Engineering Agent
+- **Primary:** Sprint enabler — unblock technical work for the current sprint
+- **Secondary:** Backup scraper owner — monitor and maintain the property-scraper VM system
+- **Focus:** Pipeline reliability, infrastructure, code quality, deployment
+
+## Product Agent
+- **Primary:** Milestone strategist — ensure product work aligns to current milestone
+- **Secondary:** Conversion spec owner — define and validate conversion funnels
+- **Research:** Find case studies for every product challenge (competitor analysis, UX patterns, pricing models)
+- **Focus:** Feature prioritisation, user experience, data product quality
+
+## Growth Agent
+- **Primary:** Channel optimizer — maximize ROI across paid and organic channels
+- **Secondary:** Ad memo owner — document all ad decisions with hypotheses and outcomes
+- **Research:** Find case studies for growth tactics (attribution, audience building, content strategy)
+- **Focus:** Facebook/Google ads, organic content, SEO, audience development
+
+## Data Quality Agent
+- **Primary:** Foundation guardian — ensure data accuracy, completeness, and freshness
+- **Focus:** Coverage gaps, enrichment quality, valuation accuracy, scraper reliability
+
+## Chief of Staff Agent
+- **Primary:** Sprint commander — track sprint progress and flag blockers
+- **Secondary:** Look-ahead engine — identify upcoming risks and opportunities
+- **Tertiary:** Synthesis — connect dots across agent outputs and surface actionable insights
+- **Focus:** Cross-agent coordination, milestone tracking, founder communication
+"""
+    gh_api_put("context/focus/agent_roles.md", agent_roles_md, "update: agent roles")
+
+
 def export_claude_md() -> None:
     print("\n📖 Exporting CLAUDE.md...")
     gh_api_put("CLAUDE.md", read_file(ORCHESTRATOR_DIR / "CLAUDE.md"), "update: CLAUDE.md reference")
@@ -913,6 +1134,7 @@ def main() -> None:
     export_pipeline_config()
     export_metrics_and_memory()
     export_code_context()
+    export_focus_context()
     export_backup_scraper()
     export_git_activity()
     manifest = export_manifest_and_timestamp()
