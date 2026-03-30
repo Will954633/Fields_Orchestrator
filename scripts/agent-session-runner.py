@@ -211,28 +211,80 @@ def run_session(agent, date):
                 extra_context = '{"status": "timeout", "note": "Opus did not respond within 5 minutes. Try self-healing or continue with available data."}'
                 continue
 
-        # No Opus request — check if agent stopped naturally
-        # Look for STOP_REASON in memory
+        # No Opus request — check if agent stopped
+        # BUT: do NOT accept a stop in the first 3 segments. Force continuation.
+        agent_wants_stop = False
+        stop_reason = ""
+
         stop_file = f"{workdir}/agent-memory/{agent}/session_status.json"
         if os.path.exists(stop_file):
             try:
                 status = json.load(open(stop_file))
                 if status.get("action") == "STOP":
-                    log(agent, f"🛑 Agent stopped: {status.get('reason', '?')[:100]}")
-                    break
+                    agent_wants_stop = True
+                    stop_reason = status.get("reason", "")
             except Exception:
                 pass
 
-        # If codex exited cleanly and no request, check if there's more to do
-        if result.returncode == 0:
-            # Agent finished a segment without requesting help or explicitly stopping
-            # Check if it produced a stop reason in stderr
-            if "STOP_REASON" in (result.stderr or ""):
-                log(agent, "🛑 Agent stopped (STOP_REASON in output)")
-                break
-            if segment_num >= 6:
-                log(agent, "🛑 Max segments reached (6)")
-                break
+        if not agent_wants_stop and "STOP_REASON" in (result.stderr or ""):
+            agent_wants_stop = True
+            # Extract the stop reason
+            for line in (result.stderr or "").splitlines():
+                if "STOP_REASON" in line:
+                    stop_reason = line.strip()
+                    break
+
+        if agent_wants_stop and segment_num < 3:
+            # FORCE RESTART — too early to stop
+            log(agent, f"⚡ Agent tried to stop after segment {segment_num} — FORCING CONTINUATION")
+            log(agent, f"  Reason given: {stop_reason[:100]}")
+
+            # List what files exist so far
+            existing_files = []
+            agent_dir = f"{workdir}/{agent}"
+            if os.path.isdir(agent_dir):
+                for f in os.listdir(agent_dir):
+                    if not f.startswith("__"):
+                        existing_files.append(f)
+
+            extra_context = f"""## FORCED CONTINUATION — You stopped too early.
+
+You completed segment {segment_num} and tried to stop with reason: "{stop_reason[:200]}"
+
+That is NOT acceptable. You have used {int(active_time)} seconds of your {SESSION_BUDGET_SECONDS} second budget.
+You have {int(SESSION_BUDGET_SECONDS - active_time)} seconds remaining.
+
+Files you have produced so far: {', '.join(existing_files) or 'none'}
+
+## YOUR TASK NOW: Build your own task list and work through it.
+
+Step 1: Create your task list. Write it to agent-memory/{agent}/my_task_list.json
+Think about:
+- What does the sprint need that doesn't exist yet?
+- What would make the biggest difference to the business right now?
+- What can YOU specifically build with your skills?
+- What are the other agents NOT covering that you could do?
+- Include at least ONE exploration task (research something new that might uncover breakthrough ideas)
+
+Step 2: Work through the list, highest value first. Build real deliverables, not proposals.
+
+Step 3: After completing each task, update your task list — mark it done and see if completing it revealed NEW tasks.
+
+You are responsible for finding your own work. You are an employee who looks around and sees what needs doing. The sprint plan is at context/focus/current_sprint.md. The backlog is at context/focus/agent-backlog.md. The milestones are at context/focus/milestone_status.md.
+
+Coordinate with the other agents — read their proposals in proposals/ to see what they are covering. Do NOT duplicate their work. Find the gaps.
+
+You MUST complete at least 2 deliverables before you may stop. Your proposal does not count.
+"""
+            continue
+
+        elif agent_wants_stop and segment_num >= 3:
+            log(agent, f"🛑 Agent stopped after {segment_num} segments: {stop_reason[:100]}")
+            break
+
+        if segment_num >= 6:
+            log(agent, "🛑 Max segments reached (6)")
+            break
 
         extra_context = ""  # No extra context for natural continuation
 
