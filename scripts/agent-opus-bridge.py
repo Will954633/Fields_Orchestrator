@@ -90,8 +90,14 @@ def check_mid_session_messages() -> None:
     """
     for agent in AGENTS:
         # Check multiple possible workdir locations
-        for prefix in ["/tmp/ceo_run3_", "/tmp/ceo_1hr_", "/tmp/ceo_monitored_", "/tmp/ceo_workdir_"]:
-            workdir = f"{prefix}{agent}"
+        # Find ALL workdirs for this agent dynamically
+        try:
+            find_result = ssh_run(f"ls -d /tmp/ceo_*_{agent} 2>/dev/null", timeout=5)
+            workdirs = [d.strip() for d in find_result.stdout.strip().splitlines() if d.strip()] if find_result.returncode == 0 else []
+        except Exception:
+            workdirs = []
+
+        for workdir in workdirs:
 
             # Check for telegram messages
             tg_path = f"{workdir}/agent-memory/{agent}/telegram_message.txt"
