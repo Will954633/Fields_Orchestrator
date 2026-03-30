@@ -35,6 +35,7 @@ from claude_agent_sdk import (
 )
 
 from typing import Callable
+from usage_tracker import CallRecord
 
 # Global permission response channel — used for interactive approval (#2)
 # Key: permission_id, Value: asyncio.Future that resolves to True (allow) or False (deny)
@@ -308,6 +309,7 @@ async def _sdk_query(
     timeout: int = CONVERSE_TIMEOUT,
     max_turns: int = 30,
     on_stream: Optional[Callable] = None,
+    usage_call: Optional[CallRecord] = None,
 ) -> tuple[str, Optional[str]]:
     """Core SDK query helper. Returns (response_text, session_id).
 
@@ -316,6 +318,8 @@ async def _sdk_query(
 
     If on_stream is provided, it's called with (event_type, data_dict) for each
     stream event — enabling real-time SSE updates to the web UI.
+
+    If usage_call is provided, tool calls and turns are tracked on it.
     """
     # Use acceptEdits mode — auto-approves file edits and reads,
     # but the agent still sees all tools. For full interactive approval,
@@ -335,9 +339,14 @@ async def _sdk_query(
 
     if session_id:
         options.resume = session_id
+        if usage_call:
+            usage_call.session_resumed = True
 
     if system_append:
         options.system_prompt = system_append
+
+    if usage_call:
+        usage_call.input_chars = len(prompt) + len(system_append or "")
 
     response_text = ""
     new_session_id = None
@@ -372,11 +381,14 @@ async def _sdk_query(
                     for block in msg.content:
                         if isinstance(block, TextBlock):
                             response_text = block.text
-                        elif isinstance(block, ToolUseBlock) and on_stream:
-                            on_stream("agent_tool_call", {
-                                "tool": block.name,
-                                "input": _summarize_tool_input(block.name, block.input),
-                            })
+                        elif isinstance(block, ToolUseBlock):
+                            if usage_call:
+                                usage_call.add_tool_call(block.name)
+                            if on_stream:
+                                on_stream("agent_tool_call", {
+                                    "tool": block.name,
+                                    "input": _summarize_tool_input(block.name, block.input),
+                                })
 
                 # Tool results
                 elif isinstance(msg, UserMessage) and on_stream:
@@ -390,6 +402,8 @@ async def _sdk_query(
                     new_session_id = msg.session_id
                     if msg.result:
                         response_text = msg.result
+                    if usage_call:
+                        usage_call.turns = max(usage_call.turns, msg.num_turns or 0)
                     if on_stream:
                         on_stream("agent_done", {
                             "turns": msg.num_turns,
@@ -400,16 +414,27 @@ async def _sdk_query(
 
     except asyncio.TimeoutError:
         log.error(f"SDK query timed out after {timeout}s")
+        if usage_call:
+            usage_call.finish(status="timeout", error=f"Timed out after {timeout}s",
+                              output_chars=len(response_text), session_id=new_session_id)
         if on_stream:
             on_stream("agent_error", {"error": f"Timed out after {timeout}s"})
         if not response_text:
             response_text = ""
     except Exception as e:
         log.error(f"SDK query error: {e}")
+        if usage_call:
+            usage_call.finish(status="failed", error=str(e)[:200],
+                              output_chars=len(response_text), session_id=new_session_id)
         if on_stream:
             on_stream("agent_error", {"error": str(e)[:200]})
         if not response_text:
             response_text = ""
+
+    # Finish tracking if not already finished (timeout/error paths finish above)
+    if usage_call and usage_call.status == "running":
+        usage_call.finish(status="completed", output_chars=len(response_text),
+                          session_id=new_session_id)
 
     return response_text, new_session_id
 
@@ -435,9 +460,14 @@ async def _opus_converse(
     history: list[dict],
     session_id: Optional[str] = None,
     on_stream: Optional[Callable] = None,
+    usage_call: Optional[CallRecord] = None,
 ) -> tuple[str, Optional[str]]:
     """Deep conversation with Opus (no tools — pure thinking).
     Returns (reply_text, new_session_id)."""
+
+    if usage_call is None:
+        usage_call = CallRecord(
+            call_type="opus_converse", model="opus", trigger="direct")
 
     context = _load_dynamic_context()
 
@@ -464,13 +494,14 @@ async def _opus_converse(
         timeout=CONVERSE_TIMEOUT,
         max_turns=1,
         on_stream=on_stream,
+        usage_call=usage_call,
     )
 
     if not response:
         response = "I'm having trouble formulating a response. Could you rephrase?"
 
     log.info(f"Opus converse: {len(response)} chars, session={sid}")
-    return response, sid
+    return response, sid, usage_call
 
 
 async def _opus_email(
@@ -478,9 +509,14 @@ async def _opus_email(
     history: list[dict],
     session_id: Optional[str] = None,
     on_stream: Optional[Callable] = None,
+    usage_call: Optional[CallRecord] = None,
 ) -> tuple[str, Optional[str]]:
     """Email-focused Opus conversation with full tools.
     Returns (reply_text, new_session_id)."""
+    if usage_call is None:
+        usage_call = CallRecord(
+            call_type="opus_email", model="opus", trigger="direct",
+            task_category="email")
 
     context = _load_dynamic_context()
 
@@ -528,13 +564,14 @@ async def _opus_email(
         timeout=OPUS_FULL_TIMEOUT,
         max_turns=30,
         on_stream=on_stream,
+        usage_call=usage_call,
     )
 
     if not response:
         response = "I wasn't able to process that email request. Could you try again?"
 
     log.info(f"Opus email: {len(response)} chars, session={sid}")
-    return response, sid
+    return response, sid, usage_call
 
 
 async def opus_full(
@@ -542,9 +579,13 @@ async def opus_full(
     history: list[dict],
     session_id: Optional[str] = None,
     on_stream: Optional[Callable] = None,
+    usage_call: Optional[CallRecord] = None,
 ) -> tuple[str, Optional[str]]:
     """Full Opus agent with all tools — same as the terminal experience.
     Returns (reply_text, new_session_id)."""
+    if usage_call is None:
+        usage_call = CallRecord(
+            call_type="opus_full", model="opus", trigger="direct")
 
     context = _load_dynamic_context()
 
@@ -625,13 +666,14 @@ async def opus_full(
         timeout=OPUS_FULL_TIMEOUT,
         max_turns=30,
         on_stream=on_stream,
+        usage_call=usage_call,
     )
 
     if not response:
         response = "I wasn't able to process that. Could you try again?"
 
     log.info(f"Opus full: {len(response)} chars, session={sid}")
-    return response, sid
+    return response, sid, usage_call
 
 
 # ---------------------------------------------------------------------------
@@ -646,6 +688,7 @@ async def route_message(
     force_direct: bool = False,
     session_id: Optional[str] = None,
     on_stream: Optional[Callable] = None,
+    interaction: "InteractionRecord | None" = None,
 ) -> dict:
     """
     Route a user message. Returns:
@@ -665,6 +708,13 @@ async def route_message(
 
     full_prompt = "\n\n".join(prompt_parts)
     system_prompt = _build_router_system_prompt(active_tasks, completed_tasks)
+
+    # Track the Haiku router call
+    router_call = CallRecord(
+        call_type="haiku_router", model="haiku", trigger="auto_route",
+        task_category="routing",
+    )
+    router_call.input_chars = len(full_prompt) + len(system_prompt)
 
     try:
         proc = await asyncio.create_subprocess_exec(
@@ -687,6 +737,9 @@ async def route_message(
 
         if not raw:
             log.warning(f"Router returned empty. stderr: {stderr.decode()[:500]}")
+            router_call.finish(status="failed", error="Empty response")
+            if interaction:
+                interaction.add_call(router_call)
             return {"reply": "I didn't catch that. Could you say it again?", "mode": "direct", "spawn_task": None, "session_id": session_id}
 
         try:
@@ -718,15 +771,34 @@ async def route_message(
             if mode not in ("task",):
                 spawn = None
 
+            # Finish router tracking
+            router_call.finish(status="completed", output_chars=len(reply), turns=1)
+            if interaction:
+                interaction.add_call(router_call)
+
             # Email mode: synchronous Opus with email tools + session persistence
             if mode == "email" and not force_direct:
-                reply, new_session_id = await _opus_email(user_text, history, session_id, on_stream=on_stream)
+                email_call = CallRecord(
+                    call_type="opus_email", model="opus", trigger="auto_route",
+                    task_category="email")
+                reply, new_session_id, email_call = await _opus_email(
+                    user_text, history, session_id, on_stream=on_stream,
+                    usage_call=email_call)
+                if interaction:
+                    interaction.add_call(email_call)
             elif mode == "email" and force_direct:
                 mode = "direct"
 
             # Converse mode: Opus thinking + session persistence
             if mode == "converse" and not force_direct:
-                reply, new_session_id = await _opus_converse(user_text, history, session_id, on_stream=on_stream)
+                converse_call = CallRecord(
+                    call_type="opus_converse", model="opus", trigger="auto_route",
+                    task_category="conversation")
+                reply, new_session_id, converse_call = await _opus_converse(
+                    user_text, history, session_id, on_stream=on_stream,
+                    usage_call=converse_call)
+                if interaction:
+                    interaction.add_call(converse_call)
             elif mode == "converse" and force_direct:
                 mode = "direct"
 
@@ -735,11 +807,20 @@ async def route_message(
 
         except json.JSONDecodeError:
             log.warning(f"Router JSON parse failed, using raw output")
+            router_call.finish(status="completed", output_chars=len(raw), turns=1)
+            if interaction:
+                interaction.add_call(router_call)
             return {"reply": raw, "mode": "direct", "spawn_task": None, "session_id": session_id}
 
     except asyncio.TimeoutError:
         log.error(f"Router timed out after {ROUTER_TIMEOUT}s")
+        router_call.finish(status="timeout", error=f"Timed out after {ROUTER_TIMEOUT}s")
+        if interaction:
+            interaction.add_call(router_call)
         return {"reply": "Give me a moment, I'm having trouble processing that.", "mode": "direct", "spawn_task": None, "session_id": session_id}
     except Exception as e:
         log.error(f"Router error: {e}")
+        router_call.finish(status="failed", error=str(e)[:200])
+        if interaction:
+            interaction.add_call(router_call)
         return {"reply": f"I hit an error: {str(e)[:200]}", "mode": "direct", "spawn_task": None, "session_id": session_id}
