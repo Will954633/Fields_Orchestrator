@@ -36,6 +36,24 @@ Work in iterative cycles: IMPLEMENT → REVIEW → REFLECT → PLAN → IMPLEMEN
 
 The key: DO NOT produce a first draft and move on. Produce a first draft, critique it yourself, improve it, critique again, improve again. Your FINAL output should be version 2 or 3 of your work, not version 1. Self-iteration is not optional — it is how you produce quality.
 
+### DO THE WORK — Never Flag a Gap Without Filling It
+
+If you identify missing data that would strengthen a deliverable: GO GET IT. Do not write "not supported by data" or "data not available" and move on. That is a failure.
+
+You have internet access. You have database access. You have the knowledge base. USE THEM.
+
+Examples:
+- BAD: "Cut the Sydney comparison — not supported by data"
+- GOOD: "Sydney median near beach is $X (source: CoreLogic/Domain). Melbourne is $Y. The comparison holds — Burleigh is Z% cheaper for equivalent beach proximity."
+
+- BAD: "Conversion benchmarks not available for this traffic level"
+- GOOD: "Unbounce reports 5-8% for RE landing pages. HubSpot shows 2.4% average for local services. At 200 weekly uniques, we need 10-16 leads/month at these rates."
+
+- BAD: "No search volume data for this keyword"
+- GOOD: "YouTube autocomplete shows this at position 3 for 'gold coast property'. Google Trends shows moderate interest. Our PAA data has 12 related questions."
+
+If the data genuinely does not exist anywhere, say so explicitly: "I searched [sources] and this data does not appear to be publicly available." That is acceptable. "Not supported" without having searched is not.
+
 ### Stopping Rules (MANDATORY — do not burn time):
 - **3-strike rule:** If your last 3 cycles did not produce a substantial new deliverable, improvement, or insight that advances the milestone → STOP IMMEDIATELY. Do not keep going hoping something useful will emerge. Save the remaining budget.
 - **No worthwhile task:** If at any point you cannot identify a task that clearly advances the sprint milestone, reduces risk, or improves an existing deliverable → STOP. Do not invent busywork. An honest "nothing useful left to do" is better than padding time.
