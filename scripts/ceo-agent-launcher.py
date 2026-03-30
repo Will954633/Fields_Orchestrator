@@ -17,6 +17,7 @@ import os
 import re
 import subprocess
 import sys
+from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -24,6 +25,7 @@ from typing import Any
 import yaml
 
 from ceo_agent_lib import get_client, load_env_file, now_aest, slugify
+from validate_snapshot import build_report_from_manifest, SnapshotReport
 
 
 REMOTE_HOST = "fields-orchestrator-vm@35.201.6.222"
@@ -435,8 +437,51 @@ def ensure_context_is_healthy(manifest: dict[str, Any]) -> None:
         raise RuntimeError("Context export is degraded; refusing agent run.\n" + "\n".join(lines))
 
 
-def start_run(sm, agents_requested: list[str], manifest: dict[str, Any]) -> str:
+def run_snapshot_guard(manifest: dict[str, Any]) -> SnapshotReport:
+    """Run the engineering snapshot guard against the manifest.
+
+    Returns the report. If Tuesday-critical inputs are missing on a Tuesday,
+    raises RuntimeError to block the founder-facing review.
+    """
+    # Write manifest to a temp file so build_report_from_manifest can read it
+    import tempfile
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        json.dump(manifest, f)
+        tmp_path = Path(f.name)
+    try:
+        report = build_report_from_manifest(tmp_path)
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+    if report.status == "degraded":
+        log(f"Snapshot guard: DEGRADED — missing {len(report.missing_files)} files, {len(report.missing_dirs)} dirs")
+        for path in report.missing_files:
+            log(f"  missing file: {path}")
+        for path in report.missing_dirs:
+            log(f"  missing dir:  {path}")
+
+    if report.missing_tuesday_critical:
+        weekday = now_aest().strftime("%A")
+        if weekday == "Tuesday":
+            raise RuntimeError(
+                "Tuesday-critical inputs missing; blocking founder-facing review.\n"
+                + "\n".join(f"  - {p}" for p in report.missing_tuesday_critical)
+            )
+        else:
+            log(f"Snapshot guard: Tuesday-critical inputs missing (non-Tuesday, continuing): "
+                f"{report.missing_tuesday_critical}")
+
+    return report
+
+
+def start_run(
+    sm,
+    agents_requested: list[str],
+    manifest: dict[str, Any],
+    snapshot_guard: SnapshotReport | None = None,
+) -> str:
     run_id = f"{DATE_STR}_{now_aest().strftime('%H%M%S')}"
+    guard_dict = asdict(snapshot_guard) if snapshot_guard else None
     sm["ceo_runs"].insert_one(
         {
             "_id": run_id,
@@ -448,6 +493,7 @@ def start_run(sm, agents_requested: list[str], manifest: dict[str, Any]) -> str:
             "agent_results": {},
             "context_manifest": manifest,
             "context_degraded": manifest.get("degraded", False),
+            "snapshot_guard": guard_dict,
             "started_at": now_aest().isoformat(),
             "updated_at": now_aest().isoformat(),
         }
@@ -523,6 +569,10 @@ rm -rf {agent_workdir}
     # Check for Telegram messages from the agent
     _check_and_send_telegram(agent_id)
 
+    # Check for deployment manifests and Will tasks
+    _process_deploy_manifests(agent_id)
+    _process_will_tasks(agent_id)
+
     return {
         "agent": agent_id,
         "success": success,
@@ -574,6 +624,133 @@ def _check_and_send_telegram(agent_id: str) -> None:
 
     # Clear the message file so it doesn't re-send
     ssh_run(f"rm -f {remote_msg_path}", timeout=10)
+
+
+def _process_deploy_manifests(agent_id: str) -> None:
+    """Check for DEPLOY.json and trigger immediate implementation via Opus."""
+    remote_deploy = f"{REMOTE_DIR}/sandbox/{agent_id}/DEPLOY.json"
+    result = ssh_run(f"cat {remote_deploy} 2>/dev/null", timeout=15)
+    if result.returncode != 0 or not result.stdout.strip():
+        return
+
+    log(f"🔧 {agent_id} has a DEPLOY.json — processing immediately")
+
+    try:
+        manifest = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        log(f"  ❌ Invalid DEPLOY.json from {agent_id}")
+        return
+
+    requires_approval = manifest.get("requires_approval", True)
+    description = manifest.get("description", "No description")
+
+    if requires_approval:
+        # Notify Will and wait
+        approval_reason = manifest.get("approval_reason", "Approval required")
+        msg = (
+            f"🔧 *{agent_id}* wants to deploy:\n\n"
+            f"{description}\n\n"
+            f"Reason for approval: {approval_reason}\n\n"
+            f"Reply 'approve' to proceed."
+        )
+        _check_and_send_telegram.__wrapped__ if hasattr(_check_and_send_telegram, '__wrapped__') else None
+        # Use the telegram notify directly
+        try:
+            orch_dir = Path(__file__).resolve().parent.parent
+            import subprocess as _sp
+            _sp.run(
+                ["/home/fields/venv/bin/python3", str(orch_dir / "scripts" / "telegram_notify.py"), msg],
+                capture_output=True, text=True, timeout=30, cwd=str(orch_dir),
+            )
+            log(f"  📱 Approval request sent to Will: {description}")
+        except Exception as exc:
+            log(f"  ⚠ Telegram failed: {exc}")
+
+        # Queue in DB for Chat Agent
+        try:
+            from shared.db import get_client as _deploy_client
+            _client = _deploy_client()
+            _client["system_monitor"]["agent_messages"].insert_one({
+                "agent": agent_id,
+                "type": "deploy_approval",
+                "message": msg,
+                "manifest": manifest,
+                "status": "pending_approval",
+                "created_at": datetime.now().isoformat(),
+            })
+        except Exception:
+            pass
+
+        log(f"  ⏳ Waiting for approval — implementation bridge will pick this up")
+    else:
+        # Autonomous — trigger implementation bridge immediately
+        log(f"  ✅ Autonomous deployment — triggering bridge")
+        try:
+            orch_dir = Path(__file__).resolve().parent.parent
+            import subprocess as _sp
+            env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
+            env["GH_CONFIG_DIR"] = "/home/projects/.config/gh"
+            _sp.Popen(
+                ["/home/fields/venv/bin/python3", str(orch_dir / "scripts" / "agent-implementation-bridge.py")],
+                cwd=str(orch_dir), env=env,
+                stdout=open(str(orch_dir / "logs" / "implementation-bridge.log"), "a"),
+                stderr=open(str(orch_dir / "logs" / "implementation-bridge.log"), "a"),
+            )
+            log(f"  🚀 Implementation bridge launched for {agent_id}")
+        except Exception as exc:
+            log(f"  ❌ Bridge launch failed: {exc}")
+
+    # Clear the deploy manifest
+    ssh_run(f"rm -f {remote_deploy}", timeout=10)
+
+
+def _process_will_tasks(agent_id: str) -> None:
+    """Check for will_tasks.json and merge into Will's task list."""
+    remote_tasks = f"{REMOTE_DIR}/sandbox/agent-memory/{agent_id}/will_tasks.json"
+    result = ssh_run(f"cat {remote_tasks} 2>/dev/null", timeout=15)
+    if result.returncode != 0 or not result.stdout.strip():
+        return
+
+    log(f"📋 {agent_id} has tasks for Will")
+
+    try:
+        task_data = json.loads(result.stdout)
+        tasks = task_data.get("tasks", [])
+    except json.JSONDecodeError:
+        log(f"  ❌ Invalid will_tasks.json from {agent_id}")
+        return
+
+    try:
+        from shared.db import get_client as _task_client
+        _client = _task_client()
+        db = _client["system_monitor"]
+
+        for task in tasks:
+            task["assigned_by"] = agent_id
+            task["assigned_at"] = datetime.now().isoformat()
+            task["status"] = "pending"
+            db["will_tasks"].insert_one(task)
+            urgency = task.get("urgency", "this_week")
+            log(f"  📌 [{urgency}] {task.get('title', '?')}")
+
+            # Urgent tasks get a Telegram ping
+            if urgency == "today":
+                try:
+                    orch_dir = Path(__file__).resolve().parent.parent
+                    import subprocess as _sp
+                    msg = f"📌 *Task from {agent_id}:*\n{task.get('title', '?')}\n\n{task.get('detail', '')}"
+                    _sp.run(
+                        ["/home/fields/venv/bin/python3", str(orch_dir / "scripts" / "telegram_notify.py"), msg],
+                        capture_output=True, text=True, timeout=30, cwd=str(orch_dir),
+                    )
+                except Exception:
+                    pass
+
+    except Exception as exc:
+        log(f"  ❌ Task processing failed: {exc}")
+
+    # Clear the tasks file
+    ssh_run(f"rm -f {remote_tasks}", timeout=10)
 
 
 def fetch_agent_memory_updates(agent_ids: list[str]) -> int:
@@ -804,8 +981,10 @@ def render_run_summary(
     run_status: str = "unknown",
     error_message: str | None = None,
     invalid_files: list[dict[str, Any]] | None = None,
+    snapshot_guard: SnapshotReport | None = None,
 ) -> str:
     generated_at = now_aest().strftime("%Y-%m-%d %H:%M:%S AEST")
+    guard_status = snapshot_guard.status if snapshot_guard else "not_run"
     lines = [
         f"# CEO Agent Run Summary - {run_id}",
         "",
@@ -813,11 +992,29 @@ def render_run_summary(
         f"- Generated: `{generated_at}`",
         f"- Run status: `{run_status}`",
         f"- Context degraded: `{manifest.get('degraded', False)}`",
+        f"- Snapshot guard: `{guard_status}`",
         f"- Agents with proposals: `{', '.join(sorted(p.get('agent', 'unknown') for p in proposals)) or 'none'}`",
         "",
     ]
     if error_message:
         lines.extend(["## Run Error", "", error_message, ""])
+    if snapshot_guard and snapshot_guard.status == "degraded":
+        lines.extend(["## Snapshot Guard", ""])
+        if snapshot_guard.missing_files:
+            lines.append("Missing files:")
+            for path in snapshot_guard.missing_files:
+                lines.append(f"- `{path}`")
+            lines.append("")
+        if snapshot_guard.missing_dirs:
+            lines.append("Missing dirs:")
+            for path in snapshot_guard.missing_dirs:
+                lines.append(f"- `{path}`")
+            lines.append("")
+        if snapshot_guard.missing_tuesday_critical:
+            lines.append("Tuesday-critical missing:")
+            for path in snapshot_guard.missing_tuesday_critical:
+                lines.append(f"- `{path}`")
+            lines.append("")
     lines.extend(["## Agent Status", ""])
     if agent_results:
         for agent_id in sorted(agent_results):
@@ -876,6 +1073,7 @@ def write_local_run_artifacts(
     manifest: dict[str, Any],
     agent_results: dict[str, Any],
     run_status: str = "unknown",
+    snapshot_guard: SnapshotReport | None = None,
     error_message: str | None = None,
     invalid_files: list[dict[str, Any]] | None = None,
 ) -> Path:
@@ -1162,9 +1360,17 @@ def main() -> None:
         run_id = f"{DATE_STR}_{now_aest().strftime('%H%M%S')}"
         ensure_context_is_healthy(manifest)
 
+        # Run the engineering snapshot guard for fine-grained input validation
+        snapshot_report = run_snapshot_guard(manifest)
+        if snapshot_report.status == "ok":
+            print("Snapshot guard: all required inputs present.")
+        else:
+            print(f"Snapshot guard: DEGRADED ({len(snapshot_report.missing_files)} missing files, "
+                  f"{len(snapshot_report.missing_dirs)} missing dirs) — proceeding with caution.")
+
         client = get_client()
         sm = client["system_monitor"]
-        run_id = start_run(sm, agents_requested, manifest)
+        run_id = start_run(sm, agents_requested, manifest, snapshot_guard=snapshot_report)
 
         # Recommendation 1: Run specialists in parallel (OpenClaw pattern)
         specialist_results = {}
