@@ -1079,6 +1079,158 @@ These role assignments are sprint-aware. Each agent should operate within their 
 """
     gh_api_put("context/focus/agent_roles.md", agent_roles_md, "update: agent roles")
 
+    # 9. content_research_data.md — trending keywords, top-performing content, ad history
+    print("  📊 Exporting content research data...")
+    try:
+        from shared.db import get_client as _get_content_client
+        _client = _get_content_client()
+        _sm = _client["system_monitor"]
+        _gc = _client["Gold_Coast"]
+
+        content_md = f"# Content Research Data\nGenerated: {now_label()}\n\n"
+        content_md += "Use this data when reviewing content briefs, suggesting topics, or evaluating what's working.\n\n"
+
+        # --- YouTube keyword data ---
+        content_md += "## YouTube Search Suggestions (Top 50 by relevance)\n\n"
+        try:
+            yt_suggestions = list(_sm["search_youtube_suggestions"].find(
+                {"suggestion": {"$regex": "robina|burleigh|varsity|gold coast|property|house|sell|buy", "$options": "i"}},
+                {"_id": 0, "query": 1, "suggestion": 1}
+            ).limit(50))
+            content_md += f"**Total YouTube suggestions in DB:** {_sm['search_youtube_suggestions'].count_documents({})}\n\n"
+            if yt_suggestions:
+                content_md += "| Seed Query | YouTube Autocomplete Suggestion |\n|-----------|-------------------------------|\n"
+                for s in yt_suggestions:
+                    content_md += f"| {s.get('query', '')} | {s.get('suggestion', '')} |\n"
+            else:
+                content_md += "(No matching suggestions found)\n"
+        except Exception as e:
+            content_md += f"(Error querying YouTube suggestions: {e})\n"
+
+        # --- Google autocomplete / People Also Ask ---
+        content_md += "\n## Google People Also Ask — Top Questions\n\n"
+        try:
+            paa = list(_sm["search_paa_questions"].find(
+                {"question": {"$regex": "robina|burleigh|varsity|gold coast|property|house|sell|buy", "$options": "i"}},
+                {"_id": 0, "question": 1, "source_query": 1}
+            ).limit(30))
+            content_md += f"**Total PAA questions in DB:** {_sm['search_paa_questions'].count_documents({})}\n\n"
+            for q in paa:
+                content_md += f"- {q.get('question', '')} *(from: {q.get('source_query', '')})*\n"
+        except Exception as e:
+            content_md += f"(Error: {e})\n"
+
+        # --- Ad performance summary ---
+        content_md += "\n## Facebook Ad Performance (Recent)\n\n"
+        try:
+            ad_profiles = list(_sm["ad_profiles"].find(
+                {},
+                {"_id": 0, "ad_name": 1, "campaign_name": 1, "status": 1, "creative.body": 1}
+            ).limit(30))
+            content_md += f"**Total ad profiles tracked:** {_sm['ad_profiles'].count_documents({})}\n\n"
+            if ad_profiles:
+                content_md += "| Campaign | Ad Name | Status |\n|----------|---------|--------|\n"
+                for a in ad_profiles:
+                    content_md += f"| {(a.get('campaign_name') or '')[:40]} | {(a.get('ad_name') or '')[:50]} | {a.get('status', '?')} |\n"
+        except Exception as e:
+            content_md += f"(Error: {e})\n"
+
+        # --- Ad decisions / experiment history ---
+        content_md += "\n## Ad Decisions Log (Last 10)\n\n"
+        try:
+            decisions = list(_sm["ad_decisions"].find(
+                {},
+                {"_id": 0, "date": 1, "type": 1, "title": 1, "findings": 1}
+            ).sort("created_at", -1).limit(10))
+            for d in decisions:
+                content_md += f"### {d.get('date', '?')} — {d.get('title', '?')} ({d.get('type', '?')})\n"
+                for f in (d.get("findings") or [])[:3]:
+                    content_md += f"- {f}\n"
+                content_md += "\n"
+        except Exception as e:
+            content_md += f"(Error: {e})\n"
+
+        # --- Top articles by event count ---
+        content_md += "\n## Article Performance (Top 15 by Events)\n\n"
+        try:
+            article_stats = list(_sm["article_events"].aggregate([
+                {"$group": {"_id": "$slug", "views": {"$sum": 1}}},
+                {"$sort": {"views": -1}},
+                {"$limit": 15}
+            ]))
+            if article_stats:
+                content_md += "| Article Slug | Events |\n|-------------|--------|\n"
+                for a in article_stats:
+                    content_md += f"| {a['_id']} | {a['views']} |\n"
+        except Exception as e:
+            content_md += f"(Error: {e})\n"
+
+        # --- Published articles list ---
+        content_md += "\n## Published Articles\n\n"
+        try:
+            articles = list(_sm["content_articles"].find(
+                {"status": "published"},
+                {"_id": 0, "title": 1, "slug": 1, "suburb": 1}
+            ).limit(25))
+            content_md += f"**Total published:** {_sm['content_articles'].count_documents({'status': 'published'})}\n\n"
+            for a in articles:
+                content_md += f"- [{a.get('title', '?')}] — /{a.get('slug', '?')} ({a.get('suburb', 'general')})\n"
+        except Exception as e:
+            content_md += f"(Error: {e})\n"
+
+        # --- Facebook organic post performance ---
+        content_md += "\n## Facebook Organic Post Templates & History\n\n"
+        try:
+            post_count = _sm["fb_page_posts"].count_documents({})
+            content_md += f"**Total organic posts tracked:** {post_count}\n\n"
+            # Get recent posts with engagement
+            recent_posts = list(_sm["fb_page_posts"].find(
+                {},
+                {"_id": 0, "template_type": 1, "reach": 1, "engagement": 1, "clicks": 1, "posted_at": 1}
+            ).sort("posted_at", -1).limit(15))
+            if recent_posts:
+                content_md += "| Date | Template | Reach | Engagement | Clicks |\n|------|----------|-------|------------|--------|\n"
+                for p in recent_posts:
+                    posted = str(p.get("posted_at", ""))[:10]
+                    content_md += f"| {posted} | {p.get('template_type', '?')} | {p.get('reach', '?')} | {p.get('engagement', '?')} | {p.get('clicks', '?')} |\n"
+        except Exception as e:
+            content_md += f"(Error: {e})\n"
+
+        # --- Website page performance from PostHog metrics ---
+        content_md += "\n## Website Pages (from recent metrics)\n\n"
+        content_md += "Key pages on fieldsestate.com.au:\n"
+        content_md += "- `/` — Market Intelligence homepage (articles by suburb)\n"
+        content_md += "- `/for-sale` — Active property listings grid\n"
+        content_md += "- `/for-sale-v2` — Decision Feed (prototype, curated property stream)\n"
+        content_md += "- `/property/:id` — Individual property pages with valuation + AI editorial\n"
+        content_md += "- `/market-metrics/:suburb` — Interactive data charts (6 tabs: Sell Now, Buy Now, Crash Risk, Overview, Direction, Comparison)\n"
+        content_md += "- `/analyse-your-home` — Seller lead capture page\n"
+        content_md += "- `/articles/:slug` — Self-hosted articles\n"
+        content_md += "- `/discover` — Swipe/scroll property feed (experimental)\n"
+        content_md += "\nEach market-metrics tab came from a high-performing autocomplete keyword. Each tab is a potential YouTube video.\n"
+
+        # --- Search intent analysis summary ---
+        content_md += "\n## Search Intent Analysis\n\n"
+        try:
+            analyses = list(_sm["search_intent_analysis"].find({}, {"_id": 0}).sort("created_at", -1).limit(1))
+            if analyses:
+                content_md += f"**Latest analysis available.** Run `python3 scripts/search-intent-analyser.py --report` for full output.\n"
+            else:
+                content_md += "No search intent analyses found. Run `python3 scripts/search-intent-analyser.py` to generate.\n"
+            content_md += f"\n**Data sources:** {_sm['search_suggestions'].count_documents({})} autocomplete suggestions, "
+            content_md += f"{_sm['search_youtube_suggestions'].count_documents({})} YouTube suggestions, "
+            content_md += f"{_sm['search_paa_questions'].count_documents({})} PAA questions, "
+            content_md += f"{_sm['search_reddit_posts'].count_documents({})} Reddit posts\n"
+        except Exception as e:
+            content_md += f"(Error: {e})\n"
+
+        content_md += "\n---\n\n**When reviewing content:** Cross-reference this data. What are people searching for? What content already exists? What ads work? What articles get views? Content should answer real questions, not invent topics.\n"
+
+        gh_api_put("context/focus/content_research_data.md", content_md, "update: content research data")
+
+    except Exception as exc:
+        gh_api_put("context/focus/content_research_data.md", f"# Content Research Data\n\nError: {exc}", "update: content research data (error)")
+
 
 def export_claude_md() -> None:
     print("\n📖 Exporting CLAUDE.md...")
