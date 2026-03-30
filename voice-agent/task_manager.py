@@ -23,6 +23,8 @@ from claude_agent_sdk import (
     TextBlock,
 )
 
+from usage_tracker import CallRecord, save_worker_call, classify_task
+
 log = logging.getLogger("voice-agent.tasks")
 
 AEST = timezone(timedelta(hours=10))
@@ -98,8 +100,11 @@ class TaskManager:
             log.warning(f"Marked {result.modified_count} orphaned task(s) as failed")
 
     def spawn_task(self, title: str, prompt: str, user_message: str,
-                   model: str = "opus") -> str:
+                   model: str = "opus", task_category: str = "",
+                   interaction_id: str = "") -> str:
         """Create a task and launch a background worker. Returns task_id."""
+        if not task_category:
+            task_category = classify_task(title, prompt)
         task_id = _task_id(title)
         doc = {
             "_id": task_id,
@@ -108,6 +113,8 @@ class TaskManager:
             "prompt": prompt,
             "user_message": user_message,
             "model": model,
+            "task_category": task_category,
+            "interaction_id": interaction_id,
             "pid": None,
             "created_at": _now_iso(),
             "started_at": None,
@@ -128,15 +135,18 @@ class TaskManager:
         })
 
         # Fire and forget — the worker coroutine manages its own lifecycle
-        asyncio.get_event_loop().create_task(self._run_worker(task_id, prompt, model))
+        asyncio.get_event_loop().create_task(
+            self._run_worker(task_id, prompt, model, task_category, interaction_id))
         return task_id
 
-    async def _run_worker(self, task_id: str, prompt: str, model: str = "opus"):
+    async def _run_worker(self, task_id: str, prompt: str, model: str = "opus",
+                          task_category: str = "", interaction_id: str = ""):
         """Worker coroutine: acquire semaphore, run worker, track lifecycle."""
         async with self._semaphore:
-            await self._execute(task_id, prompt)
+            await self._execute(task_id, prompt, task_category, interaction_id)
 
-    async def _execute(self, task_id: str, prompt: str):
+    async def _execute(self, task_id: str, prompt: str,
+                       task_category: str = "", interaction_id: str = ""):
         """Execute Claude Code worker via Agent SDK with heartbeat tracking."""
         context = _load_context_docs()
         worker_system = (
@@ -185,6 +195,19 @@ class TaskManager:
             f"{context}"
         )
 
+        # Usage tracking
+        task_doc = self._get_task(task_id)
+        title = task_doc.get("title", task_id)
+        worker_usage = CallRecord(
+            call_type="opus_worker",
+            model="opus",
+            trigger="task_spawn",
+            task_category=task_category or classify_task(title, prompt),
+            task_title=title,
+            parent_interaction_id=interaction_id,
+        )
+        worker_usage.input_chars = len(prompt) + len(worker_system)
+
         self._update_task(task_id, {
             "status": "running",
             "started_at": _now_iso(),
@@ -192,7 +215,7 @@ class TaskManager:
         })
         self._sse.broadcast("task_started", {
             "task_id": task_id,
-            "title": self._get_task(task_id).get("title", ""),
+            "title": title,
             "status": "running",
         })
         log.info(f"Worker started (SDK): {task_id}")
@@ -229,14 +252,22 @@ class TaskManager:
                         for block in msg.content:
                             if isinstance(block, TextBlock):
                                 response = block.text
+                            elif hasattr(block, 'name'):
+                                # ToolUseBlock — track it
+                                worker_usage.add_tool_call(block.name)
                     elif isinstance(msg, ResultMessage):
                         if msg.result:
                             response = msg.result
+                        worker_usage.turns = max(worker_usage.turns, msg.num_turns or 0)
 
             await asyncio.wait_for(_run(), timeout=WORKER_TIMEOUT_SECONDS)
 
         except asyncio.TimeoutError:
             log.error(f"Worker timed out: {task_id}")
+            worker_usage.finish(status="timeout",
+                                error=f"Timed out after {WORKER_TIMEOUT_SECONDS}s",
+                                output_chars=len(response))
+            save_worker_call(worker_usage)
             self._update_task(task_id, {
                 "status": "failed",
                 "finished_at": _now_iso(),
@@ -249,6 +280,9 @@ class TaskManager:
             return
         except Exception as e:
             log.error(f"Worker error: {task_id}: {e}")
+            worker_usage.finish(status="failed", error=str(e)[:200],
+                                output_chars=len(response))
+            save_worker_call(worker_usage)
             self._update_task(task_id, {
                 "status": "failed",
                 "finished_at": _now_iso(),
@@ -269,6 +303,8 @@ class TaskManager:
 
         if not response:
             log.error(f"Worker returned empty: {task_id}")
+            worker_usage.finish(status="failed", error="Empty response", output_chars=0)
+            save_worker_call(worker_usage)
             self._update_task(task_id, {
                 "status": "failed",
                 "finished_at": _now_iso(),
@@ -283,6 +319,8 @@ class TaskManager:
             if len(response) > 300:
                 summary += "..."
             log.info(f"Worker completed: {task_id} ({len(response)} chars)")
+            worker_usage.finish(status="completed", output_chars=len(response))
+            save_worker_call(worker_usage)
             self._update_task(task_id, {
                 "status": "completed",
                 "finished_at": _now_iso(),
@@ -290,10 +328,10 @@ class TaskManager:
                 "result_full": response,
                 "notified": False,
             })
-            task = self._get_task(task_id)
+            task_doc = self._get_task(task_id)
             self._sse.broadcast("task_completed", {
                 "task_id": task_id,
-                "title": task.get("title", ""),
+                "title": task_doc.get("title", ""),
                 "summary": summary,
             })
 
