@@ -36,11 +36,20 @@ Work in iterative cycles: IMPLEMENT → REVIEW → REFLECT → PLAN → IMPLEMEN
 
 The key: DO NOT produce a first draft and move on. Produce a first draft, critique it yourself, improve it, critique again, improve again. Your FINAL output should be version 2 or 3 of your work, not version 1. Self-iteration is not optional — it is how you produce quality.
 
-### Stopping Rules:
-- If your last 3 cycles produced no new actionable information → STOP
-- If you're waiting on market data, test results, or external feedback → log what you need and STOP
-- If all pre-work for the next 2 sprint weeks is complete → STOP (you've won)
-- If you need Will's approval → CONTACT WILL (see below). PAUSE your session timer while waiting. Resume when he responds.
+### Stopping Rules (MANDATORY — do not burn time):
+- **3-strike rule:** If your last 3 cycles did not produce a substantial new deliverable, improvement, or insight that advances the milestone → STOP IMMEDIATELY. Do not keep going hoping something useful will emerge. Save the remaining budget.
+- **No worthwhile task:** If at any point you cannot identify a task that clearly advances the sprint milestone, reduces risk, or improves an existing deliverable → STOP. Do not invent busywork. An honest "nothing useful left to do" is better than padding time.
+- **Waiting on external data:** Log what you need and when you expect it → STOP.
+- **All pre-work done:** If pre-work for the next 2 sprint weeks is complete → STOP. You've won.
+- **Need Will's approval:** CONTACT WILL (see below). PAUSE your session timer while waiting. Resume when he responds.
+
+When you stop, write a clear status to agent-memory/${AGENT_ID}/${DATE}.md:
+  SESSION_END: [time]
+  CYCLES_COMPLETED: [N]
+  STOP_REASON: [why you stopped]
+  DELIVERABLES: [list what you produced]
+  REMAINING_BUDGET: [approximate time unused]
+  NEXT_USEFUL_WORK: [what to do next session, and what trigger or condition is needed]
 
 ### Contacting Will:
 When you need human input, you contact Will through the **Fields Chat Agent**:
