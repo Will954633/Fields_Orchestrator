@@ -516,24 +516,20 @@ def run_agent(agent_id: str) -> dict[str, Any]:
     # Each agent gets its own working directory to avoid parallel cp -r races
     # on the shared "context" dir in sandbox.
     agent_workdir = f"/tmp/ceo_workdir_{agent_id}"
+    # Use the session runner for pause/resume capability
+    session_runner = "/tmp/agent-session-runner.py"
     remote_cmd = f"""
 set -e
-rm -rf {agent_workdir}
-mkdir -p {agent_workdir}/proposals {agent_workdir}/{agent_id} {agent_workdir}/agent-memory/{agent_id}
-cp -r {REMOTE_DIR}/context {agent_workdir}/context
-# Pre-populate with existing specialist proposals so chief_of_staff can read them
-cp -f {REMOTE_DIR}/sandbox/proposals/{DATE_STR}_*.json {agent_workdir}/proposals/ 2>/dev/null || true
-cd {agent_workdir}
-bash {REMOTE_DIR}/ceo-agent-prompts.sh {agent_id} {DATE_STR} > /tmp/ceo_prompt_{agent_id}.txt
+# Deploy the session runner if not present or outdated
+cat > {session_runner} << 'RUNNER_EOF'
+{Path(Path(__file__).resolve().parent / "agent-session-runner.py").read_text()}
+RUNNER_EOF
+
+# Run the session (handles segments, Opus requests, pause/resume)
 set +e
-timeout {SESSION_TIMEOUT_SECONDS}s codex exec -m {CODEX_MODEL} --full-auto --skip-git-repo-check -o /tmp/ceo_output_{agent_id}.txt "$(cat /tmp/ceo_prompt_{agent_id}.txt)" >/tmp/ceo_stdout_{agent_id}.log 2>&1
+python3 {session_runner} {agent_id} {DATE_STR} >/tmp/ceo_stdout_{agent_id}.log 2>&1
 rc=$?
 set -e
-# Copy outputs back to the persistent sandbox
-mkdir -p {REMOTE_DIR}/sandbox/proposals {REMOTE_DIR}/sandbox/{agent_id} {REMOTE_DIR}/sandbox/agent-memory/{agent_id}
-cp -f {agent_workdir}/proposals/{DATE_STR}_{agent_id}.json {REMOTE_DIR}/sandbox/proposals/ 2>/dev/null || true
-cp -rf {agent_workdir}/agent-memory/{agent_id}/. {REMOTE_DIR}/sandbox/agent-memory/{agent_id}/ 2>/dev/null || true
-cp -rf {agent_workdir}/{agent_id}/. {REMOTE_DIR}/sandbox/{agent_id}/ 2>/dev/null || true
 echo "__AGENT_RC__:$rc"
 if [ -f {REMOTE_DIR}/sandbox/proposals/{DATE_STR}_{agent_id}.json ]; then
   stat -c "__PROPOSAL__:%n|%Y|%s" {REMOTE_DIR}/sandbox/proposals/{DATE_STR}_{agent_id}.json
@@ -541,7 +537,6 @@ else
   echo "__PROPOSAL__:missing"
 fi
 tail -n 40 /tmp/ceo_stdout_{agent_id}.log 2>/dev/null || true
-rm -rf {agent_workdir}
 """
     result = ssh_run(remote_cmd, timeout=SESSION_TIMEOUT_SECONDS + 300)  # session timeout + 5 min buffer
     stdout_lines = (result.stdout or "").splitlines()
