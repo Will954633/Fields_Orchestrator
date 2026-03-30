@@ -270,3 +270,34 @@ Which one — and why? 👇
 | **Sat/Sun** | Flex | Personal insight video | Record 60-90s |
 
 **Will's total time: ~2 hours** (2 × 15 min recording + 5 × 5 min approvals + 1 × 20 min personal video)
+
+---
+
+## CTA Routing Rules (added 2026-03-30 per growth agent review)
+
+The original brief mixed generic surface URLs with specific property pages. These rules tighten routing so every CTA sends traffic to the strongest conversion surface available.
+
+| Post | Current CTA | Corrected CTA | Reason |
+|------|-------------|---------------|--------|
+| Data Video #1 | `/for-sale?suburb=robina` | **Keep `/for-sale?suburb=robina`** | Property-page price alerts not yet live; `/for-sale` is the strongest capture surface |
+| "Would You Pay?" | (implicit) | **Exact property page** (e.g. `/property/83-glen-eagles-drive-robina`) | Specific = credible (Product rule #4) |
+| Property Story | `/property/132-acanthus-avenue-burleigh-waters` | **Keep as-is** | Already correct |
+| Data Video #2 | `/for-sale?suburb=burleigh-waters` | **Keep `/for-sale?suburb=burleigh-waters`** | Property-page capture not yet ready |
+| "Guess the Price" | `/property/3-chatswood-court-robina` | **Keep as-is** | Already correct |
+| "Would You Rather?" | (no link) | **No change** | Engagement post, no CTA needed |
+| Personal Video | (no link) | **No change** | Brand post, link in comments only |
+
+**When property-page price alerts go live:** Switch Data Video #1 and Data Video #2 CTAs from `/for-sale` to the exact property pages featured in the video.
+
+---
+
+## Paid Work Hold (added 2026-03-30)
+
+> **Do not launch the 2 new Facebook ad variants** until the following exports are confirmed operational:
+> - Ad metrics exports (`fb-metrics-collector.py`, `google-ads-metrics-collector.py`)
+> - Website experiment logs (`website-experiment-log.py`)
+> - Cost collector (`cost-collector.py`)
+>
+> **Drafting ad copy and creative this week is still worthwhile** — just don't spend budget until measurement is confirmed.
+>
+> The ad variants (Value Gap Story + Will on Camera) remain in the brief above for reference.
