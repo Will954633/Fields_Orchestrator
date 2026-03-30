@@ -12,14 +12,29 @@ You have UP TO 60 MINUTES for this session. Do NOT treat this as one pass.
 Work in iterative cycles: IMPLEMENT → REVIEW → REFLECT → PLAN → IMPLEMENT AGAIN.
 
 ### How Each Cycle Works:
-1. **IMPLEMENT:** Do real work — write analysis, draft code, produce specs, research, verify data.
-2. **REVIEW:** Read your own output. Is it actionable? Is the data verified? Does it advance the current sprint milestone?
-3. **REFLECT:** Did this cycle produce something NEW? Is there a clear next step that adds value?
-4. **PLAN:** Decide what to do next:
-   - **NEXT CYCLE:** [specific task for next pass]
-   - **MESSAGE_WILL:** [question needing human input — write to a file and the system will send via Telegram]
-   - **WAIT:** [external data needed before useful next step]
-   - **STOP:** Last 3 cycles didn't add substantial value — done.
+1. **IMPLEMENT:** Do real work — write code, produce specs, draft content, research, build deliverables.
+2. **REVIEW:** Read your own output back. Critically assess it:
+   - Is this actually good? Would a specialist approve this?
+   - Is the data accurate? Have I verified claims against real sources?
+   - Does it advance the current sprint milestone?
+   - Is it complete and usable, or is it a half-finished outline?
+3. **REFLECT:** Be your own harshest critic:
+   - What's weak about what I just produced?
+   - What would I improve if I had another pass?
+   - Did I miss something in the data that would change this?
+   - Would Will look at this and say 'this isn't ready'?
+4. **IMPROVE:** Act on your own reflection. Don't just note the weakness — FIX IT:
+   - Rewrite the weak sections
+   - Add the missing data
+   - Strengthen the argument
+   - Make it more specific, more actionable, more useful
+5. **PLAN:** After improving, decide what's next:
+   - **NEXT CYCLE:** [specific new task — different from what you just did]
+   - **MESSAGE_WILL:** [question needing human input]
+   - **WAIT:** [external data needed]
+   - **STOP:** Genuinely cannot improve further or add new value
+
+The key: DO NOT produce a first draft and move on. Produce a first draft, critique it yourself, improve it, critique again, improve again. Your FINAL output should be version 2 or 3 of your work, not version 1. Self-iteration is not optional — it is how you produce quality.
 
 ### Stopping Rules:
 - If your last 3 cycles produced no new actionable information → STOP
@@ -111,12 +126,15 @@ You can and should BUILD things, not just propose them:
 Every cycle should produce a DELIVERABLE, not just analysis. If you're only observing and not building, you're underperforming.
 
 ### Cycle Budget Guide:
-- Cycle 1 (10 min): Read context, produce initial analysis + first deliverable
-- Cycle 2 (10 min): Review own output, verify data, improve + second deliverable
-- Cycle 3 (10 min): Cross-reference keyword/ad/article data, research externally
-- Cycle 4 (10 min): Refine deliverables based on research findings
-- Cycle 5 (10 min): Self-review all output, ensure sprint-aligned, write final versions
-- Cycle 6 (10 min): Polish, update memory, produce summary, decide if more cycles add value
+- Cycle 1 (10 min): Read context, produce FIRST DRAFT of primary deliverable
+- Cycle 2 (10 min): Read your draft back. Critique it ruthlessly. Rewrite weak sections. Produce V2.
+- Cycle 3 (10 min): Cross-reference V2 against keyword data, ad history, case studies. Find what you missed. Produce V3.
+- Cycle 4 (10 min): Start SECOND deliverable (different task). Produce first draft.
+- Cycle 5 (10 min): Critique and improve second deliverable. Cross-check against V3 of first.
+- Cycle 6 (10 min): Final polish on all deliverables. Update memory. Summary of what was produced and what quality level it reached.
+
+Each deliverable should go through at least 2 versions before you call it done.
+Version 1 is never the final version.
 
 ## Getting Started
 1. First, read context/CONTEXT_MANIFEST.json. If it says degraded, explicitly say which inputs are degraded and how that limits confidence.
