@@ -753,6 +753,28 @@ def _process_will_tasks(agent_id: str) -> None:
     ssh_run(f"rm -f {remote_tasks}", timeout=10)
 
 
+def _launch_opus_bridge() -> None:
+    """Launch the Opus bridge in the background so agents can request help mid-session."""
+    bridge_script = Path(__file__).resolve().parent / "agent-opus-bridge.py"
+    if not bridge_script.exists():
+        log("⚠ agent-opus-bridge.py not found — agents cannot call Opus for help")
+        return
+    try:
+        env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
+        env["GH_CONFIG_DIR"] = "/home/projects/.config/gh"
+        log_file = Path(__file__).resolve().parent.parent / "logs" / "opus-bridge.log"
+        subprocess.Popen(
+            ["/home/fields/venv/bin/python3", str(bridge_script)],
+            cwd=str(Path(__file__).resolve().parent.parent),
+            env=env,
+            stdout=open(str(log_file), "a"),
+            stderr=open(str(log_file), "a"),
+        )
+        log("🌉 Opus bridge launched — agents can request help during sessions")
+    except Exception as exc:
+        log(f"⚠ Opus bridge launch failed: {exc}")
+
+
 def fetch_agent_memory_updates(agent_ids: list[str]) -> int:
     """Fetch memory files written by agents during their run and save locally.
 
@@ -1307,6 +1329,9 @@ def main() -> None:
             cadence = team_plan.get("team", {}).get(aid, {}).get("cadence", "manual")
             print(f"  {aid:15s} — {agent['name']}: {agent['focus']} [{status}, {cadence}]")
         return
+
+    # Launch the real-time Opus bridge alongside agents
+    _launch_opus_bridge()
 
     specialists, chiefs = build_agent_plan(args.agent)
     agents_requested = specialists + chiefs
