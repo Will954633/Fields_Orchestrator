@@ -41,7 +41,7 @@ REMOTE_HOST = "fields-orchestrator-vm@35.201.6.222"
 ORCHESTRATOR_DIR = Path("/home/fields/Fields_Orchestrator")
 REQUEST_DIR = "/tmp/ceo_opus_requests"
 RESPONSE_DIR = "/tmp/ceo_opus_responses"
-POLL_INTERVAL = 15  # seconds
+POLL_INTERVAL = 5  # seconds — fast polling for real-time responsiveness
 AGENTS = ["engineering", "product", "growth", "data_quality", "chief_of_staff"]
 VENV_PYTHON = "/home/fields/venv/bin/python3"
 
@@ -79,9 +79,109 @@ def check_for_requests() -> list[dict]:
             log(f"📨 Request from {agent}: {req.get('description', '?')[:80]}")
         except json.JSONDecodeError:
             log(f"⚠ Invalid JSON from {agent}")
-            # Clear bad request
             ssh_run(f"rm -f {REQUEST_DIR}/{agent}/request.json")
     return requests
+
+
+def check_mid_session_messages() -> None:
+    """Check agent WORKDIRS (not sandbox) for Telegram messages and will_tasks during active sessions.
+
+    This catches messages written mid-session before the sandbox copy-back happens.
+    """
+    for agent in AGENTS:
+        # Check multiple possible workdir locations
+        for prefix in ["/tmp/ceo_run3_", "/tmp/ceo_1hr_", "/tmp/ceo_monitored_", "/tmp/ceo_workdir_"]:
+            workdir = f"{prefix}{agent}"
+
+            # Check for telegram messages
+            tg_path = f"{workdir}/agent-memory/{agent}/telegram_message.txt"
+            result = ssh_run(f"cat {tg_path} 2>/dev/null", timeout=10)
+            if result.returncode == 0 and result.stdout.strip():
+                msg = result.stdout.strip()
+                # Only process if we haven't already sent this one
+                msg_hash = hash(msg)
+                if not hasattr(check_mid_session_messages, '_sent'):
+                    check_mid_session_messages._sent = set()
+                if msg_hash not in check_mid_session_messages._sent:
+                    check_mid_session_messages._sent.add(msg_hash)
+                    log(f"📱 Mid-session Telegram from {agent}")
+                    notify_will(agent, {"description": msg})
+                    # Also queue in DB
+                    try:
+                        sys.path.insert(0, str(ORCHESTRATOR_DIR))
+                        from shared.db import get_client
+                        client = get_client()
+                        client["system_monitor"]["agent_messages"].insert_one({
+                            "agent": agent,
+                            "type": "mid_session_message",
+                            "message": msg,
+                            "status": "delivered",
+                            "created_at": datetime.now().isoformat(),
+                        })
+                    except Exception:
+                        pass
+
+            # Check for will_tasks
+            tasks_path = f"{workdir}/agent-memory/{agent}/will_tasks.json"
+            result = ssh_run(f"cat {tasks_path} 2>/dev/null", timeout=10)
+            if result.returncode == 0 and result.stdout.strip():
+                try:
+                    task_data = json.loads(result.stdout)
+                    tasks = task_data.get("tasks", [])
+                    tasks_hash = hash(result.stdout.strip())
+                    if not hasattr(check_mid_session_messages, '_sent_tasks'):
+                        check_mid_session_messages._sent_tasks = set()
+                    if tasks_hash not in check_mid_session_messages._sent_tasks:
+                        check_mid_session_messages._sent_tasks.add(tasks_hash)
+                        for task in tasks:
+                            urgency = task.get("urgency", "this_week")
+                            title = task.get("title", "?")
+                            log(f"📌 Mid-session task from {agent}: [{urgency}] {title}")
+                            # Store in DB
+                            try:
+                                sys.path.insert(0, str(ORCHESTRATOR_DIR))
+                                from shared.db import get_client
+                                client = get_client()
+                                task["assigned_by"] = agent
+                                task["assigned_at"] = datetime.now().isoformat()
+                                task["status"] = "pending"
+                                client["system_monitor"]["will_tasks"].insert_one(task)
+                            except Exception:
+                                pass
+                            # Telegram for urgent tasks
+                            if urgency == "today":
+                                notify_will(agent, {"description": f"Task: {title}\n{task.get('detail', '')}"})
+                except json.JSONDecodeError:
+                    pass
+
+            # Check for DEPLOY.json
+            deploy_path = f"{workdir}/{agent}/DEPLOY.json"
+            result = ssh_run(f"cat {deploy_path} 2>/dev/null", timeout=10)
+            if result.returncode == 0 and result.stdout.strip():
+                deploy_hash = hash(result.stdout.strip())
+                if not hasattr(check_mid_session_messages, '_sent_deploys'):
+                    check_mid_session_messages._sent_deploys = set()
+                if deploy_hash not in check_mid_session_messages._sent_deploys:
+                    check_mid_session_messages._sent_deploys.add(deploy_hash)
+                    log(f"🔧 Mid-session DEPLOY.json from {agent}")
+                    try:
+                        manifest = json.loads(result.stdout)
+                        if not manifest.get("requires_approval", True):
+                            # Autonomous — trigger implementation immediately
+                            log(f"  ✅ Autonomous deploy — triggering bridge")
+                            env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
+                            env["GH_CONFIG_DIR"] = "/home/projects/.config/gh"
+                            subprocess.Popen(
+                                [VENV_PYTHON, str(ORCHESTRATOR_DIR / "scripts" / "agent-implementation-bridge.py")],
+                                cwd=str(ORCHESTRATOR_DIR), env=env,
+                                stdout=open(str(ORCHESTRATOR_DIR / "logs" / "implementation-bridge.log"), "a"),
+                                stderr=open(str(ORCHESTRATOR_DIR / "logs" / "implementation-bridge.log"), "a"),
+                            )
+                        else:
+                            desc = manifest.get("description", "Deployment requires approval")
+                            notify_will(agent, {"description": f"DEPLOY: {desc}\nApproval needed."})
+                    except json.JSONDecodeError:
+                        pass
 
 
 def handle_request(req: dict) -> dict:
@@ -93,7 +193,7 @@ def handle_request(req: dict) -> dict:
 
     log(f"🔧 Handling {req_type} request from {agent}...")
 
-    if req_type == "run_script" and command:
+    if req_type in ("run_script", "pull_data") and command:
         # Execute a specific command on this VM
         try:
             env = os.environ.copy()
@@ -150,7 +250,41 @@ def handle_request(req: dict) -> dict:
         except Exception as e:
             return {"status": "error", "error": str(e)}
 
-    elif req_type == "fix_file" or req_type == "general":
+    elif req_type == "general" and any(kw in description.lower() for kw in ["missing", "degraded", "telemetry", "context", "export", "bundle", "metrics"]):
+        # Context/data request — try fast path first via query broker
+        log(f"  ⚡ Fast-path: running context export + query broker")
+        try:
+            env = os.environ.copy()
+            env["PATH"] = f"/home/fields/venv/bin:{env.get('PATH', '')}"
+
+            # Run a quick context refresh
+            queries = [
+                ("ops-summary", "ops_summary"),
+                ("ad-metrics --days 7 --limit 20", "ad_metrics"),
+                ("website-metrics --days 7", "website_metrics"),
+                ("collection-counts", "collection_counts"),
+            ]
+            data = {}
+            for query_cmd, key in queries:
+                try:
+                    r = subprocess.run(
+                        [VENV_PYTHON, str(ORCHESTRATOR_DIR / "scripts" / "ceo-query-broker.py")] + query_cmd.split(),
+                        capture_output=True, text=True, timeout=30, cwd=str(ORCHESTRATOR_DIR), env=env,
+                    )
+                    data[key] = r.stdout[-2000:] if r.returncode == 0 else f"Error: {r.stderr[:200]}"
+                except Exception as e:
+                    data[key] = f"Error: {e}"
+
+            return {
+                "status": "success",
+                "data": json.dumps(data, indent=2)[:8000],
+                "note": "Fast-path response via query broker. Full data attached.",
+            }
+        except Exception as e:
+            log(f"  ⚠ Fast-path failed, falling back to Opus: {e}")
+            # Fall through to Opus
+
+    if req_type == "fix_file" or req_type == "general":
         # Complex request — spawn Opus
         prompt = f"""An AI agent ({agent}) running on a remote VM needs your help.
 
@@ -235,7 +369,11 @@ def run_bridge():
 
     while idle_cycles < max_idle:
         try:
+            # Check for Opus help requests
             requests = check_for_requests()
+
+            # Also check for mid-session messages, tasks, and deploys
+            check_mid_session_messages()
 
             if not requests:
                 idle_cycles += 1
