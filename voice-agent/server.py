@@ -45,6 +45,7 @@ import uvicorn
 from sse import SSEBroadcaster
 from task_manager import TaskManager
 from router import route_message, opus_full, _opus_email as opus_email, resolve_permission
+from agent_poller import AgentPoller
 from usage_tracker import (
     InteractionRecord, CallRecord, classify_request, classify_task,
     save_interaction, get_daily_summary, get_daily_summaries,
@@ -103,6 +104,7 @@ app.add_middleware(
 # Initialised in lifespan (after event loop is ready)
 sse_broadcaster: Optional[SSEBroadcaster] = None
 task_manager: Optional[TaskManager] = None
+agent_poller: Optional[AgentPoller] = None
 _db_client = None
 
 # Model lock: "auto" (Haiku router decides), "opus" (always Opus), "haiku" (always direct)
@@ -121,11 +123,13 @@ def _get_db():
 
 @app.on_event("startup")
 async def startup():
-    global sse_broadcaster, task_manager
+    global sse_broadcaster, task_manager, agent_poller
     sse_broadcaster = SSEBroadcaster()
     client = _get_db()
     task_manager = TaskManager(client, sse_broadcaster)
-    log.info("Voice Agent v2.0 started — router + task manager ready")
+    agent_poller = AgentPoller(client, sse_broadcaster)
+    await agent_poller.start()
+    log.info("Voice Agent v2.0 started — router + task manager + agent poller ready")
 
 
 # ---------------------------------------------------------------------------
@@ -790,12 +794,14 @@ async def handle_message(user_text: str, source: str = "chat") -> dict:
     # --- Normal routing (auto mode or haiku mode) ---
     active_tasks = task_manager.get_active_tasks()
     completed_unnotified = task_manager.get_unnotified_completed()
+    pending_agent_msgs = agent_poller.get_pending_messages() if agent_poller else []
 
     decision = await route_message(
         user_text, history, active_tasks, completed_unnotified,
         force_direct=(model_lock == "haiku"),
         session_id=session_id,
         interaction=ix,
+        agent_messages=pending_agent_msgs,
     )
 
     reply = decision["reply"]
@@ -1183,12 +1189,14 @@ async def handle_message_streaming(user_text: str, on_stream=None) -> dict:
 
     active_tasks = task_manager.get_active_tasks()
     completed_unnotified = task_manager.get_unnotified_completed()
+    pending_agent_msgs = agent_poller.get_pending_messages() if agent_poller else []
 
     decision = await route_message(
         user_text, history, active_tasks, completed_unnotified,
         force_direct=(model_lock == "haiku"),
         session_id=session_id,
         interaction=ix,
+        agent_messages=pending_agent_msgs,
     )
 
     reply = decision["reply"]
@@ -1342,6 +1350,54 @@ async def cancel_task(task_id: str, authorization: Optional[str] = Header(None))
     if not cancelled:
         raise HTTPException(400, "Task not found or already finished")
     return JSONResponse({"cancelled": True, "task_id": task_id})
+
+
+# ---------------------------------------------------------------------------
+# Agent messages & approvals
+# ---------------------------------------------------------------------------
+
+@app.get("/api/agent-messages")
+async def get_agent_messages(authorization: Optional[str] = Header(None)):
+    """Get pending agent messages and approvals."""
+    verify_token(authorization)
+    messages = agent_poller.get_pending_messages()
+    return JSONResponse([{
+        "id": str(m.get("_id", "")),
+        "agent": m.get("agent", "unknown"),
+        "message": m.get("message", ""),
+        "type": m.get("type", "info"),
+        "status": m.get("status", "pending"),
+        "manifest": m.get("manifest"),
+        "created_at": m.get("created_at", ""),
+    } for m in messages])
+
+
+@app.post("/api/agent-messages/{message_id}/approve")
+async def approve_agent_message(message_id: str, authorization: Optional[str] = Header(None)):
+    """Approve a deployment request from an agent."""
+    verify_token(authorization)
+    result = await agent_poller.respond_to_approval(message_id, approved=True)
+    if not result["ok"]:
+        raise HTTPException(400, result["error"])
+    return JSONResponse(result)
+
+
+@app.post("/api/agent-messages/{message_id}/deny")
+async def deny_agent_message(message_id: str, authorization: Optional[str] = Header(None)):
+    """Deny a deployment request from an agent."""
+    verify_token(authorization)
+    result = await agent_poller.respond_to_approval(message_id, approved=False)
+    if not result["ok"]:
+        raise HTTPException(400, result["error"])
+    return JSONResponse(result)
+
+
+@app.post("/api/agent-messages/{message_id}/delivered")
+async def mark_message_delivered(message_id: str, authorization: Optional[str] = Header(None)):
+    """Mark a message as seen/delivered."""
+    verify_token(authorization)
+    await agent_poller.mark_delivered(message_id)
+    return JSONResponse({"ok": True})
 
 
 # ---------------------------------------------------------------------------
