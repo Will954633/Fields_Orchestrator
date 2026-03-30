@@ -45,6 +45,12 @@ import uvicorn
 from sse import SSEBroadcaster
 from task_manager import TaskManager
 from router import route_message, opus_full, _opus_email as opus_email, resolve_permission
+from usage_tracker import (
+    InteractionRecord, CallRecord, classify_request, classify_task,
+    save_interaction, get_daily_summary, get_daily_summaries,
+    get_recent_interactions, get_heavy_consumers,
+    get_category_breakdown, get_worker_breakdown,
+)
 
 # Session lock — prevents concurrent SDK session access (single-user system)
 _session_lock = asyncio.Lock()
@@ -633,7 +639,7 @@ def _build_fast_dev_task(user_text: str) -> Optional[dict]:
     return {"title": title, "reply": reply, "prompt": prompt}
 
 
-async def handle_message(user_text: str) -> dict:
+async def handle_message(user_text: str, source: str = "chat") -> dict:
     """
     Handle a user message. Checks voice triggers first, then routes.
 
@@ -642,6 +648,10 @@ async def handle_message(user_text: str) -> dict:
     """
     global model_lock
 
+    # Start usage tracking
+    ix = InteractionRecord(user_text=user_text, source=source, model_lock=model_lock)
+    ix.request_category = classify_request(user_text)
+
     # --- Voice trigger detection (skip router entirely) ---
     if _OPUS_TRIGGERS.search(user_text):
         model_lock = "opus"
@@ -649,6 +659,8 @@ async def handle_message(user_text: str) -> dict:
         reply = "Switched to Opus. I'm listening."
         _append_history("user", user_text)
         _append_history("assistant", reply)
+        ix.finish(route_mode="direct", route_path="voice_trigger_opus", reply_chars=len(reply))
+        save_interaction(ix)
         return {"reply": reply, "task_id": None, "model_lock": model_lock}
 
     if _HAIKU_TRIGGERS.search(user_text):
@@ -657,6 +669,8 @@ async def handle_message(user_text: str) -> dict:
         reply = "Switched back. Haiku on routing duty."
         _append_history("user", user_text)
         _append_history("assistant", reply)
+        ix.finish(route_mode="direct", route_path="voice_trigger_haiku", reply_chars=len(reply))
+        save_interaction(ix)
         return {"reply": reply, "task_id": None, "model_lock": model_lock}
 
     # --- Model lock: opus → dev tasks go to background, chat stays synchronous ---
@@ -668,51 +682,72 @@ async def handle_message(user_text: str) -> dict:
         fast_dev_task = _build_fast_dev_task(user_text)
         if fast_dev_task:
             prompt = _augment_task_prompt(fast_dev_task["prompt"], history)
+            cat = classify_task(fast_dev_task["title"], prompt)
             task_id = task_manager.spawn_task(
-                title=fast_dev_task["title"],
-                prompt=prompt,
-                user_message=user_text,
-                model="opus",
+                title=fast_dev_task["title"], prompt=prompt,
+                user_message=user_text, model="opus",
+                task_category=cat, interaction_id=ix.interaction_id,
             )
             reply = fast_dev_task["reply"]
             log.info(f"Opus dev task spawned as background: {task_id} — {fast_dev_task['title']}")
             await _append_history_safe("user", user_text)
             await _append_history_safe("assistant", reply)
+            ix.task_ids.append(task_id)
+            ix.finish(route_mode="task", route_path="opus_lock_dev_task",
+                      reply_chars=len(reply), request_category=cat)
+            save_interaction(ix)
             return {"reply": reply, "task_id": task_id, "model_lock": model_lock}
 
         # Contextual dev approvals → background worker
         contextual_dev_task = _build_contextual_dev_task(user_text, history)
         if contextual_dev_task:
             prompt = _augment_task_prompt(contextual_dev_task["prompt"], history)
+            cat = classify_task(contextual_dev_task["title"], prompt)
             task_id = task_manager.spawn_task(
-                title=contextual_dev_task["title"],
-                prompt=prompt,
-                user_message=user_text,
-                model="opus",
+                title=contextual_dev_task["title"], prompt=prompt,
+                user_message=user_text, model="opus",
+                task_category=cat, interaction_id=ix.interaction_id,
             )
             reply = contextual_dev_task["reply"]
             log.info(f"Opus contextual dev task spawned: {task_id} — {contextual_dev_task['title']}")
             await _append_history_safe("user", user_text)
             await _append_history_safe("assistant", reply)
+            ix.task_ids.append(task_id)
+            ix.finish(route_mode="task", route_path="opus_lock_contextual_dev",
+                      reply_chars=len(reply), request_category=cat)
+            save_interaction(ix)
             return {"reply": reply, "task_id": task_id, "model_lock": model_lock}
 
         # Email → opus_email (conversational with tools + session persistence)
         fast_email_task = _build_fast_email_task(user_text)
         if fast_email_task:
             log.info("Opus mode email request → opus_email (SDK)")
+            email_call = CallRecord(
+                call_type="opus_email", model="opus",
+                trigger="opus_lock_email", task_category="email")
             session_id = await _load_session_id_safe()
-            reply, new_sid = await opus_email(user_text, history, session_id=session_id)
+            reply, new_sid, email_call = await opus_email(
+                user_text, history, session_id=session_id, usage_call=email_call)
+            ix.add_call(email_call)
             if new_sid:
                 await _save_session_id_safe(new_sid)
             if _SWITCH_HAIKU_SIGNAL in reply:
                 reply = reply.replace(_SWITCH_HAIKU_SIGNAL, "").strip()
             await _append_history_safe("user", user_text)
             await _append_history_safe("assistant", reply)
+            ix.finish(route_mode="email", route_path="opus_lock_email",
+                      reply_chars=len(reply), request_category="email")
+            save_interaction(ix)
             return {"reply": reply, "task_id": None, "model_lock": model_lock}
 
         # Everything else → synchronous opus_full (SDK with session persistence)
+        full_call = CallRecord(
+            call_type="opus_full", model="opus",
+            trigger="opus_lock_general", task_category=ix.request_category)
         session_id = await _load_session_id_safe()
-        reply, new_sid = await opus_full(user_text, history, session_id=session_id)
+        reply, new_sid, full_call = await opus_full(
+            user_text, history, session_id=session_id, usage_call=full_call)
+        ix.add_call(full_call)
         if new_sid:
             await _save_session_id_safe(new_sid)
         if _SWITCH_HAIKU_SIGNAL in reply:
@@ -721,6 +756,9 @@ async def handle_message(user_text: str) -> dict:
             log.info("Model lock → auto (Opus self-downgrade)")
         await _append_history_safe("user", user_text)
         await _append_history_safe("assistant", reply)
+        ix.finish(route_mode="converse", route_path="opus_lock_general",
+                  reply_chars=len(reply))
+        save_interaction(ix)
         return {"reply": reply, "task_id": task_id, "model_lock": model_lock}
 
     # --- Model lock: haiku → always direct (no Opus converse) ---
@@ -732,13 +770,21 @@ async def handle_message(user_text: str) -> dict:
     # Router bypass (#5): active SDK session → direct to Opus
     if model_lock == "auto" and session_id and _should_bypass_router(history):
         log.info("Router bypass: active SDK session, routing to opus_full")
-        reply, new_sid = await opus_full(user_text, history, session_id=session_id)
+        bypass_call = CallRecord(
+            call_type="opus_full", model="opus",
+            trigger="router_bypass", task_category=ix.request_category)
+        reply, new_sid, bypass_call = await opus_full(
+            user_text, history, session_id=session_id, usage_call=bypass_call)
+        ix.add_call(bypass_call)
         if new_sid:
             await _save_session_id_safe(new_sid)
         if _SWITCH_HAIKU_SIGNAL in reply:
             reply = reply.replace(_SWITCH_HAIKU_SIGNAL, "").strip()
         await _append_history_safe("user", user_text)
         await _append_history_safe("assistant", reply)
+        ix.finish(route_mode="converse", route_path="router_bypass",
+                  reply_chars=len(reply))
+        save_interaction(ix)
         return {"reply": reply, "task_id": None, "model_lock": model_lock}
 
     # --- Normal routing (auto mode or haiku mode) ---
@@ -749,6 +795,7 @@ async def handle_message(user_text: str) -> dict:
         user_text, history, active_tasks, completed_unnotified,
         force_direct=(model_lock == "haiku"),
         session_id=session_id,
+        interaction=ix,
     )
 
     reply = decision["reply"]
@@ -762,11 +809,13 @@ async def handle_message(user_text: str) -> dict:
 
     if decision.get("spawn_task"):
         spawn = decision["spawn_task"]
+        cat = classify_task(spawn["title"], spawn["prompt"])
         task_id = task_manager.spawn_task(
-            title=spawn["title"],
-            prompt=spawn["prompt"],
+            title=spawn["title"], prompt=spawn["prompt"],
             user_message=user_text,
+            task_category=cat, interaction_id=ix.interaction_id,
         )
+        ix.task_ids.append(task_id)
         log.info(f"Task spawned: {task_id} — {spawn['title']}")
 
     # Check for SWITCH_HAIKU signal from email/converse modes
@@ -780,6 +829,9 @@ async def handle_message(user_text: str) -> dict:
     await _append_history_safe("user", user_text)
     await _append_history_safe("assistant", reply)
 
+    ix.finish(route_mode=mode, route_path=f"auto_route_{mode}",
+              reply_chars=len(reply))
+    save_interaction(ix)
     return {"reply": reply, "task_id": task_id, "model_lock": model_lock}
 
 
@@ -805,7 +857,6 @@ async def voice_endpoint(
 ):
     """Main voice endpoint: audio in → audio + text out."""
     verify_token(authorization)
-    _apply_voice_model_policy()
     request_started = time.perf_counter()
 
     audio_bytes = await audio.read()
@@ -853,7 +904,7 @@ async def voice_endpoint(
 
     # 2. Router (fast ~2-5s)
     handle_started = time.perf_counter()
-    result = await handle_message(transcript)
+    result = await handle_message(transcript, source="voice")
     handle_elapsed = time.perf_counter() - handle_started
     reply_text = (result.get("reply") or "").strip()
     if not reply_text:
@@ -898,6 +949,25 @@ async def chat_endpoint(
         "task_id": result.get("task_id"),
         "model_lock": result.get("model_lock", model_lock),
     })
+
+
+@app.post("/api/tts")
+async def tts_endpoint(
+    text: str = Form(...),
+    authorization: Optional[str] = Header(None),
+):
+    """Text-to-speech endpoint — returns audio for a given text."""
+    verify_token(authorization)
+    spoken = _sanitize_spoken_text(text[:500])
+    if not spoken:
+        return JSONResponse({"error": "No text to speak"}, status_code=400)
+    try:
+        audio_bytes = await text_to_speech(spoken)
+        b64 = base64.b64encode(audio_bytes).decode()
+        return JSONResponse({"audio_base64": b64, "audio_format": "mp3"})
+    except Exception as e:
+        log.error(f"TTS endpoint error: {e}")
+        return JSONResponse({"error": str(e)[:200]}, status_code=500)
 
 
 @app.post("/api/chat-stream")
@@ -980,12 +1050,17 @@ async def handle_message_streaming(user_text: str, on_stream=None) -> dict:
     """Same as handle_message but passes on_stream to Opus functions."""
     global model_lock
 
+    ix = InteractionRecord(user_text=user_text, source="chat_stream", model_lock=model_lock)
+    ix.request_category = classify_request(user_text)
+
     # Voice triggers
     if _OPUS_TRIGGERS.search(user_text):
         model_lock = "opus"
         reply = "Switched to Opus. I'm listening."
         _append_history("user", user_text)
         _append_history("assistant", reply)
+        ix.finish(route_mode="direct", route_path="voice_trigger_opus", reply_chars=len(reply))
+        save_interaction(ix)
         return {"reply": reply, "task_id": None, "model_lock": model_lock}
 
     if _HAIKU_TRIGGERS.search(user_text):
@@ -993,6 +1068,8 @@ async def handle_message_streaming(user_text: str, on_stream=None) -> dict:
         reply = "Switched back. Haiku on routing duty."
         _append_history("user", user_text)
         _append_history("assistant", reply)
+        ix.finish(route_mode="direct", route_path="voice_trigger_haiku", reply_chars=len(reply))
+        save_interaction(ix)
         return {"reply": reply, "task_id": None, "model_lock": model_lock}
 
     # Opus-locked mode — with streaming
@@ -1004,43 +1081,70 @@ async def handle_message_streaming(user_text: str, on_stream=None) -> dict:
         fast_dev_task = _build_fast_dev_task(user_text)
         if fast_dev_task:
             prompt = _augment_task_prompt(fast_dev_task["prompt"], history)
+            cat = classify_task(fast_dev_task["title"], prompt)
             task_id = task_manager.spawn_task(
                 title=fast_dev_task["title"], prompt=prompt,
                 user_message=user_text, model="opus",
+                task_category=cat, interaction_id=ix.interaction_id,
             )
             reply = fast_dev_task["reply"]
             await _append_history_safe("user", user_text)
             await _append_history_safe("assistant", reply)
+            ix.task_ids.append(task_id)
+            ix.finish(route_mode="task", route_path="opus_lock_dev_task",
+                      reply_chars=len(reply), request_category=cat)
+            save_interaction(ix)
             return {"reply": reply, "task_id": task_id, "model_lock": model_lock}
 
         contextual_dev_task = _build_contextual_dev_task(user_text, history)
         if contextual_dev_task:
             prompt = _augment_task_prompt(contextual_dev_task["prompt"], history)
+            cat = classify_task(contextual_dev_task["title"], prompt)
             task_id = task_manager.spawn_task(
                 title=contextual_dev_task["title"], prompt=prompt,
                 user_message=user_text, model="opus",
+                task_category=cat, interaction_id=ix.interaction_id,
             )
             reply = contextual_dev_task["reply"]
             await _append_history_safe("user", user_text)
             await _append_history_safe("assistant", reply)
+            ix.task_ids.append(task_id)
+            ix.finish(route_mode="task", route_path="opus_lock_contextual_dev",
+                      reply_chars=len(reply), request_category=cat)
+            save_interaction(ix)
             return {"reply": reply, "task_id": task_id, "model_lock": model_lock}
 
         # Email → opus_email with streaming
         fast_email_task = _build_fast_email_task(user_text)
         if fast_email_task:
+            email_call = CallRecord(
+                call_type="opus_email", model="opus",
+                trigger="opus_lock_email", task_category="email")
             session_id = await _load_session_id_safe()
-            reply, new_sid = await opus_email(user_text, history, session_id=session_id, on_stream=on_stream)
+            reply, new_sid, email_call = await opus_email(
+                user_text, history, session_id=session_id,
+                on_stream=on_stream, usage_call=email_call)
+            ix.add_call(email_call)
             if new_sid:
                 await _save_session_id_safe(new_sid)
             if _SWITCH_HAIKU_SIGNAL in reply:
                 reply = reply.replace(_SWITCH_HAIKU_SIGNAL, "").strip()
             await _append_history_safe("user", user_text)
             await _append_history_safe("assistant", reply)
+            ix.finish(route_mode="email", route_path="opus_lock_email",
+                      reply_chars=len(reply), request_category="email")
+            save_interaction(ix)
             return {"reply": reply, "task_id": None, "model_lock": model_lock}
 
         # Everything else → opus_full with streaming
+        full_call = CallRecord(
+            call_type="opus_full", model="opus",
+            trigger="opus_lock_general", task_category=ix.request_category)
         session_id = await _load_session_id_safe()
-        reply, new_sid = await opus_full(user_text, history, session_id=session_id, on_stream=on_stream)
+        reply, new_sid, full_call = await opus_full(
+            user_text, history, session_id=session_id,
+            on_stream=on_stream, usage_call=full_call)
+        ix.add_call(full_call)
         if new_sid:
             await _save_session_id_safe(new_sid)
         if _SWITCH_HAIKU_SIGNAL in reply:
@@ -1048,24 +1152,33 @@ async def handle_message_streaming(user_text: str, on_stream=None) -> dict:
             model_lock = "auto"
         await _append_history_safe("user", user_text)
         await _append_history_safe("assistant", reply)
+        ix.finish(route_mode="converse", route_path="opus_lock_general",
+                  reply_chars=len(reply))
+        save_interaction(ix)
         return {"reply": reply, "task_id": task_id, "model_lock": model_lock}
 
     # Auto/haiku mode — streaming for Opus calls
     history = await _load_history_safe()
     session_id = await _load_session_id_safe()
 
-    # Router bypass (#5): if there's an active SDK session and the last assistant
-    # message was from Opus (not Haiku), route directly to opus_full for continuity.
-    # This avoids the Haiku middleman during active coding/discussion sessions.
     if model_lock == "auto" and session_id and _should_bypass_router(history):
         log.info("Router bypass: active SDK session detected, routing directly to opus_full")
-        reply, new_sid = await opus_full(user_text, history, session_id=session_id, on_stream=on_stream)
+        bypass_call = CallRecord(
+            call_type="opus_full", model="opus",
+            trigger="router_bypass", task_category=ix.request_category)
+        reply, new_sid, bypass_call = await opus_full(
+            user_text, history, session_id=session_id,
+            on_stream=on_stream, usage_call=bypass_call)
+        ix.add_call(bypass_call)
         if new_sid:
             await _save_session_id_safe(new_sid)
         if _SWITCH_HAIKU_SIGNAL in reply:
             reply = reply.replace(_SWITCH_HAIKU_SIGNAL, "").strip()
         await _append_history_safe("user", user_text)
         await _append_history_safe("assistant", reply)
+        ix.finish(route_mode="converse", route_path="router_bypass",
+                  reply_chars=len(reply))
+        save_interaction(ix)
         return {"reply": reply, "task_id": None, "model_lock": model_lock}
 
     active_tasks = task_manager.get_active_tasks()
@@ -1075,6 +1188,7 @@ async def handle_message_streaming(user_text: str, on_stream=None) -> dict:
         user_text, history, active_tasks, completed_unnotified,
         force_direct=(model_lock == "haiku"),
         session_id=session_id,
+        interaction=ix,
     )
 
     reply = decision["reply"]
@@ -1087,9 +1201,13 @@ async def handle_message_streaming(user_text: str, on_stream=None) -> dict:
 
     if decision.get("spawn_task"):
         spawn = decision["spawn_task"]
+        cat = classify_task(spawn["title"], spawn["prompt"])
         task_id = task_manager.spawn_task(
-            title=spawn["title"], prompt=spawn["prompt"], user_message=user_text,
+            title=spawn["title"], prompt=spawn["prompt"],
+            user_message=user_text,
+            task_category=cat, interaction_id=ix.interaction_id,
         )
+        ix.task_ids.append(task_id)
 
     if mode in ("email", "converse") and _SWITCH_HAIKU_SIGNAL in reply:
         reply = reply.replace(_SWITCH_HAIKU_SIGNAL, "").strip()
@@ -1100,6 +1218,9 @@ async def handle_message_streaming(user_text: str, on_stream=None) -> dict:
     await _append_history_safe("user", user_text)
     await _append_history_safe("assistant", reply)
 
+    ix.finish(route_mode=mode, route_path=f"auto_route_{mode}",
+              reply_chars=len(reply))
+    save_interaction(ix)
     return {"reply": reply, "task_id": task_id, "model_lock": model_lock}
 
 
@@ -1335,6 +1456,64 @@ async def snooze_todo(
         raise
     except Exception as e:
         raise HTTPException(400, str(e))
+
+
+# ---------------------------------------------------------------------------
+# Usage tracking endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/api/usage")
+async def usage_endpoint(
+    date: Optional[str] = None,
+    days: int = 1,
+    authorization: Optional[str] = Header(None),
+):
+    """Get usage summary. ?date=2026-03-30 for specific day, ?days=7 for multi-day."""
+    verify_token(authorization)
+    if days > 1:
+        summaries = get_daily_summaries(days)
+        return JSONResponse({"summaries": summaries, "days": days})
+    summary = get_daily_summary(date)
+    return JSONResponse({"summary": summary})
+
+
+@app.get("/api/usage/interactions")
+async def usage_interactions(
+    limit: int = 50,
+    category: Optional[str] = None,
+    date: Optional[str] = None,
+    authorization: Optional[str] = Header(None),
+):
+    """Get recent interactions with optional filters."""
+    verify_token(authorization)
+    interactions = get_recent_interactions(limit=min(limit, 200), category=category, date=date)
+    return JSONResponse({"interactions": interactions, "count": len(interactions)})
+
+
+@app.get("/api/usage/heavy")
+async def usage_heavy(
+    date: Optional[str] = None,
+    limit: int = 20,
+    authorization: Optional[str] = Header(None),
+):
+    """Get heaviest interactions (most turns/calls) for a day."""
+    verify_token(authorization)
+    heavy = get_heavy_consumers(date=date, limit=min(limit, 50))
+    return JSONResponse({"heavy_consumers": heavy, "count": len(heavy)})
+
+
+@app.get("/api/usage/breakdown")
+async def usage_breakdown(
+    date: Optional[str] = None,
+    authorization: Optional[str] = Header(None),
+):
+    """Get per-category and per-worker breakdown for a day."""
+    verify_token(authorization)
+    return JSONResponse({
+        "categories": get_category_breakdown(date),
+        "workers": get_worker_breakdown(date),
+        "date": date or datetime.now(AEST).strftime("%Y-%m-%d"),
+    })
 
 
 # ---------------------------------------------------------------------------
