@@ -6,11 +6,66 @@ AGENT_ID="$1"
 DATE="$2"
 
 COMMON_INSTRUCTIONS="
-## Time Budget (15 minutes total)
-- 2 min: Read manifest, your memory, founder requests
-- 3 min: Read metrics and OPS status
-- 7 min: Analysis and proposal drafting
-- 3 min: Self-review, memory update, JSON write
+## Session Model: Iterative Work (1 Hour)
+
+You have UP TO 60 MINUTES for this session. Do NOT treat this as one pass.
+Work in iterative cycles: IMPLEMENT → REVIEW → REFLECT → PLAN → IMPLEMENT AGAIN.
+
+### How Each Cycle Works:
+1. **IMPLEMENT:** Do real work — write analysis, draft code, produce specs, research, verify data.
+2. **REVIEW:** Read your own output. Is it actionable? Is the data verified? Does it advance the current sprint milestone?
+3. **REFLECT:** Did this cycle produce something NEW? Is there a clear next step that adds value?
+4. **PLAN:** Decide what to do next:
+   - **NEXT CYCLE:** [specific task for next pass]
+   - **MESSAGE_WILL:** [question needing human input — write to a file and the system will send via Telegram]
+   - **WAIT:** [external data needed before useful next step]
+   - **STOP:** Last 3 cycles didn't add substantial value — done.
+
+### Stopping Rules:
+- If your last 3 cycles produced no new actionable information → STOP
+- If you need Will's approval or decision → write the question to agent-memory/${AGENT_ID}/telegram_message.txt and STOP. The system will send it.
+- If you're waiting on market data, test results, or external feedback → log what you need and STOP
+- If all pre-work for the next 2 sprint weeks is complete → STOP (you've won)
+
+### Contacting Will:
+If you need human input, create: agent-memory/${AGENT_ID}/telegram_message.txt
+The system will automatically send this to Will via:
+1. **Telegram** (@WillFieldsBot) — instant notification
+2. **Fields Chat Agent** (vm.fieldsestate.com.au/voice/) — queued for Will's next conversation
+
+Message format:
+  AGENT: ${AGENT_ID}
+  URGENCY: low|medium|high
+  QUESTION: [specific question requiring Will's decision]
+  OPTIONS: [if applicable, list the choices]
+  RECOMMENDATION: [your recommended option and why]
+  CONTEXT: [1-2 sentences of context]
+
+Will can respond via the Chat Agent or Telegram. Keep messages concise and decision-focused.
+Do NOT message Will for things you can decide yourself. Only message when you need approval for:
+- Budget/spend changes
+- Public-facing content or ads going live
+- Strategic direction changes
+- Anything that commits the business externally
+
+### Implementation Capability:
+You can and should BUILD things, not just propose them:
+- Write complete code files (Python scripts, JSON schemas, spec documents)
+- Draft complete content (ad copy, video transcripts, conversion specs)
+- Produce finished deliverables (not outlines — actual usable output)
+- Write to ${AGENT_ID}/ directory for code and specs
+- Write to proposals/ for structured proposals
+- Update agent-memory/${AGENT_ID}/ with learnings
+
+Every cycle should produce a DELIVERABLE, not just analysis. If you're only observing and not building, you're underperforming.
+
+### Cycle Budget Guide:
+- Cycle 1 (10 min): Read context, produce initial analysis + first deliverable
+- Cycle 2 (10 min): Review own output, verify data, improve + second deliverable
+- Cycle 3 (10 min): Cross-reference keyword/ad/article data, research externally
+- Cycle 4 (10 min): Refine deliverables based on research findings
+- Cycle 5 (10 min): Self-review all output, ensure sprint-aligned, write final versions
+- Cycle 6 (10 min): Polish, update memory, produce summary, decide if more cycles add value
 
 ## Getting Started
 1. First, read context/CONTEXT_MANIFEST.json. If it says degraded, explicitly say which inputs are degraded and how that limits confidence.
