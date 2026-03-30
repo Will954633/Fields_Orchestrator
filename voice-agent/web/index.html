@@ -286,6 +286,38 @@
             fill: currentColor;
         }
 
+        /* Go button — quick approval for recommended actions */
+        .controls { position: relative; }
+        .go-btn {
+            position: absolute;
+            top: 8px;
+            right: 16px;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            border: 2px solid #22C55E;
+            background: transparent;
+            color: #22C55E;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            -webkit-tap-highlight-color: transparent;
+            z-index: 5;
+        }
+        .go-btn:active {
+            background: #22C55E;
+            color: #0A0A0F;
+        }
+        .go-btn.processing {
+            border-color: #4B5563;
+            color: #4B5563;
+            pointer-events: none;
+        }
+
         /* Toast notifications */
         .toast-container {
             position: fixed;
@@ -590,13 +622,145 @@
         }
         .todo-action-btn:hover { border-color: #6B7280; color: #D1D5DB; }
         .todo-action-btn.done-btn:hover { border-color: #22C55E; color: #22C55E; }
+
+        /* Menu button (top-right) */
+        .menu-btn {
+            position: absolute;
+            top: 12px;
+            right: 16px;
+            width: 36px;
+            height: 36px;
+            border: none;
+            background: transparent;
+            color: #9CA3AF;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            z-index: 20;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .menu-btn:hover { background: #1F2937; color: #F9FAFB; }
+        .menu-btn svg { width: 20px; height: 20px; fill: currentColor; }
+        .menu-btn .menu-badge {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #EF4444;
+            display: none;
+        }
+        .menu-btn .menu-badge.active { display: block; }
+
+        /* Dropdown */
+        .menu-dropdown {
+            position: absolute;
+            top: 52px;
+            right: 16px;
+            background: #1F2937;
+            border: 1px solid #374151;
+            border-radius: 12px;
+            min-width: 200px;
+            z-index: 30;
+            display: none;
+            overflow: hidden;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+        }
+        .menu-dropdown.open { display: block; }
+        .menu-dropdown-item {
+            padding: 12px 16px;
+            font-size: 14px;
+            color: #D1D5DB;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #374151;
+        }
+        .menu-dropdown-item:last-child { border-bottom: none; }
+        .menu-dropdown-item:hover { background: #374151; }
+        .menu-dropdown-item .item-badge {
+            background: #EF4444;
+            color: white;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 1px 7px;
+            border-radius: 10px;
+            min-width: 20px;
+            text-align: center;
+        }
+        .menu-dropdown-item .item-badge.zero { background: #374151; color: #6B7280; }
+
+        /* Approval card in chat */
+        .approval-card {
+            background: #1a2744;
+            border: 1px solid #F59E0B;
+            border-radius: 12px;
+            padding: 12px 14px;
+            align-self: flex-start;
+            max-width: 88%;
+            margin: 4px 0;
+        }
+        .approval-card .approval-agent {
+            font-size: 12px;
+            color: #F59E0B;
+            font-weight: 600;
+            margin-bottom: 4px;
+            text-transform: capitalize;
+        }
+        .approval-card .approval-body {
+            font-size: 14px;
+            color: #D1D5DB;
+            line-height: 1.4;
+            margin-bottom: 10px;
+            white-space: pre-wrap;
+        }
+        .approval-card .approval-actions {
+            display: flex;
+            gap: 8px;
+        }
+        .approval-card .approval-btn {
+            padding: 6px 20px;
+            border-radius: 8px;
+            border: none;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .approval-btn.approve { background: #22C55E; color: white; }
+        .approval-btn.approve:hover { background: #16A34A; }
+        .approval-btn.deny { background: #374151; color: #D1D5DB; }
+        .approval-btn.deny:hover { background: #EF4444; color: white; }
+        .approval-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .menu-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 25;
+            display: none;
+        }
+        .menu-overlay.open { display: block; }
     </style>
 </head>
 <body>
     <div class="toast-container" id="toastContainer"></div>
 
+    <div class="menu-overlay" id="menuOverlay"></div>
     <div class="header">
         <div class="brand-label">Fields Chat Agent</div>
+        <button class="menu-btn" id="menuBtn" title="Menu">
+            <svg viewBox="0 0 24 24"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
+            <div class="menu-badge" id="menuBadge"></div>
+        </button>
+        <div class="menu-dropdown" id="menuDropdown">
+            <div class="menu-dropdown-item" id="menuApprovals">
+                <span>Agent Messages</span>
+                <span class="item-badge zero" id="approvalsCount">0</span>
+            </div>
+        </div>
         <div class="model-label" id="modelLabel">
             <span>
                 <span class="connection-dot checking" id="connDot"></span>
@@ -649,6 +813,7 @@
         <button class="call-btn" id="callBtn">
             <svg viewBox="0 0 24 24"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg>
         </button>
+        <button class="go-btn" id="goBtn" title="Approve and proceed">GO</button>
     </div>
 
     <script>
@@ -707,6 +872,7 @@
         const btnOpus = document.getElementById('btnOpus');
         const textInput = document.getElementById('textInput');
         const textSendBtn = document.getElementById('textSendBtn');
+        const goBtn = document.getElementById('goBtn');
 
         let currentModelLock = 'auto';
         let isStreaming = false;  // Currently streaming a response
@@ -898,6 +1064,24 @@
                 loadTodos();
             });
 
+            // Agent message notifications
+            eventSource.addEventListener('agent_message', (e) => {
+                const data = JSON.parse(e.data);
+                pollAgentMessageCount();
+                showToast(`Agent: ${(data.agent || '').replace(/_/g, ' ')}`, 'info');
+            });
+
+            eventSource.addEventListener('agent_approval_needed', (e) => {
+                const data = JSON.parse(e.data);
+                pollAgentMessageCount();
+                showToast(`Approval needed from ${(data.agent || '').replace(/_/g, ' ')}`, 'error');
+            });
+
+            eventSource.addEventListener('agent_approval_response', (e) => {
+                const data = JSON.parse(e.data);
+                pollAgentMessageCount();
+            });
+
             eventSource.onerror = () => {
                 // Auto-reconnect is built into EventSource
                 console.log('SSE connection lost, reconnecting...');
@@ -1070,6 +1254,140 @@
 
         // Load todos on startup and refresh every 5 minutes
         loadTodos();
+
+        // ==========================
+        // Menu + Agent Messages
+        // ==========================
+
+        const menuBtn = document.getElementById('menuBtn');
+        const menuDropdown = document.getElementById('menuDropdown');
+        const menuOverlay = document.getElementById('menuOverlay');
+        const menuBadge = document.getElementById('menuBadge');
+        const approvalsCount = document.getElementById('approvalsCount');
+        let agentMessageCount = 0;
+
+        menuBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isOpen = menuDropdown.classList.contains('open');
+            menuDropdown.classList.toggle('open');
+            menuOverlay.classList.toggle('open');
+        });
+
+        menuOverlay.addEventListener('click', () => {
+            menuDropdown.classList.remove('open');
+            menuOverlay.classList.remove('open');
+        });
+
+        document.getElementById('menuApprovals').addEventListener('click', async () => {
+            menuDropdown.classList.remove('open');
+            menuOverlay.classList.remove('open');
+            await loadAgentMessages();
+        });
+
+        async function loadAgentMessages() {
+            try {
+                const resp = await fetch(API_BASE + '/api/agent-messages');
+                if (!resp.ok) throw new Error('Failed to load');
+                const messages = await resp.json();
+
+                if (messages.length === 0) {
+                    addMessage('[No pending agent messages]', 'system');
+                    return;
+                }
+
+                for (const msg of messages) {
+                    const agentName = (msg.agent || 'unknown').replace(/_/g, ' ');
+                    const isApproval = msg.type === 'deploy_approval' || msg.status === 'pending_approval';
+
+                    if (isApproval) {
+                        addApprovalCard(msg.id, agentName, msg.message, msg.manifest);
+                    } else {
+                        // Regular agent message — inject as system message
+                        addMessage('[' + agentName + '] ' + cleanMessage(msg.message), 'agent');
+                        // Mark as delivered
+                        fetch(API_BASE + '/api/agent-messages/' + msg.id + '/delivered', { method: 'POST' }).catch(() => {});
+                    }
+                }
+
+                // Refresh badge
+                pollAgentMessageCount();
+            } catch (e) {
+                addMessage('[Failed to load agent messages: ' + e.message + ']', 'error');
+            }
+        }
+
+        function cleanMessage(text) {
+            // Strip markdown formatting artifacts from agent messages
+            return (text || '')
+                .replace(/\*([^*]+)\*/g, '$1')  // *bold* → bold
+                .replace(/🤖\s*/g, '')           // remove robot emoji prefix
+                .trim();
+        }
+
+        function addApprovalCard(msgId, agentName, message, manifest) {
+            const card = document.createElement('div');
+            card.className = 'approval-card';
+            card.id = 'approval-' + msgId;
+
+            const desc = manifest?.description || cleanMessage(message);
+
+            card.innerHTML = `
+                <div class="approval-agent">${agentName}</div>
+                <div class="approval-body">${desc}</div>
+                <div class="approval-actions">
+                    <button class="approval-btn approve" onclick="handleApproval('${msgId}', true)">Approve</button>
+                    <button class="approval-btn deny" onclick="handleApproval('${msgId}', false)">Deny</button>
+                </div>
+            `;
+            chatArea.appendChild(card);
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+
+        window.handleApproval = async function(msgId, approved) {
+            const card = document.getElementById('approval-' + msgId);
+            const btns = card?.querySelectorAll('.approval-btn');
+            if (btns) btns.forEach(b => b.disabled = true);
+
+            const endpoint = approved ? '/approve' : '/deny';
+            try {
+                const resp = await fetch(API_BASE + '/api/agent-messages/' + msgId + endpoint, { method: 'POST' });
+                if (!resp.ok) throw new Error('Request failed');
+
+                const action = approved ? 'Approved' : 'Denied';
+                if (card) {
+                    card.querySelector('.approval-actions').innerHTML =
+                        '<span style="color:' + (approved ? '#22C55E' : '#EF4444') + ';font-size:13px;font-weight:600">' + action + '</span>';
+                    card.style.borderColor = approved ? '#22C55E' : '#EF4444';
+                }
+                showToast(action, approved ? 'success' : 'info');
+                pollAgentMessageCount();
+            } catch (e) {
+                showToast('Failed: ' + e.message, 'error');
+                if (btns) btns.forEach(b => b.disabled = false);
+            }
+        };
+
+        async function pollAgentMessageCount() {
+            try {
+                const resp = await fetch(API_BASE + '/api/agent-messages');
+                if (!resp.ok) return;
+                const messages = await resp.json();
+                agentMessageCount = messages.length;
+
+                approvalsCount.textContent = agentMessageCount;
+                approvalsCount.className = 'item-badge' + (agentMessageCount === 0 ? ' zero' : '');
+
+                if (agentMessageCount > 0) {
+                    menuBadge.classList.add('active');
+                } else {
+                    menuBadge.classList.remove('active');
+                }
+            } catch (e) {}
+        }
+
+        // Poll message count on startup and every 30s
+        pollAgentMessageCount();
+        setInterval(pollAgentMessageCount, 30000);
         setInterval(loadTodos, 300000);
 
         // SSE listener for todo reminders
@@ -1451,6 +1769,77 @@
                 textInput.value = '';
                 textSendBtn.disabled = true;
             }
+        });
+
+        // ---- Go button — quick approval ----
+        goBtn.addEventListener('click', async () => {
+            if (goBtn.classList.contains('processing')) return;
+
+            // If in a call and listening, cancel the recording
+            if (inCall && phase === 'listening') {
+                stopVAD();
+                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                    try { mediaRecorder.stop(); } catch {}
+                }
+                audioChunks = [];
+            }
+
+            goBtn.classList.add('processing');
+            goBtn.textContent = '...';
+            addMessage('Go ahead.', 'user');
+
+            if (inCall) {
+                // Voice mode — send as voice request so we get TTS response back
+                setPhase('processing');
+                try {
+                    const formData = new FormData();
+                    // Create a tiny silent audio blob — the server needs an audio file
+                    // but we're sending text. Use the /api/chat endpoint text instead,
+                    // then TTS the response ourselves.
+                    const resp = await fetch(API_BASE + '/api/chat', {
+                        method: 'POST',
+                        body: (() => { const fd = new FormData(); fd.append('text', 'Go ahead.'); return fd; })(),
+                    });
+                    const data = await resp.json();
+
+                    if (data.reply) {
+                        addMessage(data.reply, 'agent');
+                        updateModelFromResponse(data);
+                        if (data.task_id) syncTaskById(data.task_id, 'Background task');
+
+                        // TTS the response for voice feedback
+                        if (inCall) {
+                            try {
+                                const ttsResp = await fetch(API_BASE + '/api/tts', {
+                                    method: 'POST',
+                                    body: (() => { const fd = new FormData(); fd.append('text', data.reply.slice(0, 500)); return fd; })(),
+                                });
+                                if (ttsResp.ok) {
+                                    const ttsData = await ttsResp.json();
+                                    if (ttsData.audio_base64) {
+                                        setPhase('speaking');
+                                        await playBase64Audio(ttsData.audio_base64, ttsData.audio_format || 'mp3');
+                                    }
+                                }
+                            } catch (e) {
+                                // TTS failed, no audio feedback — that's ok
+                            }
+                        }
+                    }
+                } catch (err) {
+                    addMessage('Connection error: ' + err.message, 'error');
+                }
+
+                if (inCall) {
+                    beginListening();
+                }
+            } else {
+                // Text mode — send via streaming endpoint
+                await sendTextMessage('Go ahead.');
+            }
+
+            goBtn.classList.remove('processing');
+            goBtn.textContent = 'GO';
         });
 
         // ---- Call timer ----
