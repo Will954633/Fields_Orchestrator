@@ -209,9 +209,31 @@ def _load_dynamic_context() -> str:
     return "\n\n".join(sections)
 
 
+def _format_agent_messages(messages: list[dict] | None) -> str:
+    """Format agent messages for injection into the router system prompt."""
+    if not messages:
+        return ""
+
+    lines = ["AGENT MESSAGES (from CEO agent team):"]
+    for m in messages:
+        agent = m.get("agent", "unknown").replace("_", " ").title()
+        msg_type = m.get("type", "info")
+        msg_id = str(m.get("_id", ""))
+        content = m.get("message", "")[:300]
+
+        if msg_type == "deploy_approval":
+            desc = m.get("manifest", {}).get("description", content)
+            lines.append(f"  ⚠ APPROVAL NEEDED [{agent}] (id: {msg_id}): {desc}")
+        else:
+            lines.append(f"  📋 [{agent}] (id: {msg_id}): {content}")
+
+    return "\n".join(lines)
+
+
 def _build_router_system_prompt(
     active_tasks: list[dict],
     completed_tasks: list[dict],
+    agent_messages: list[dict] | None = None,
 ) -> str:
     """Build the system prompt that tells the router how to decide."""
 
@@ -287,6 +309,9 @@ MODE: "task" (spawn background Opus worker — minutes, full VM access):
 - For accounting queries, tell the worker to use the accounting tools documented in its system prompt (ledger search, tax summaries, etc.)
 
 When there are recently completed tasks, naturally mention them in your reply.
+If there are AGENT MESSAGES below, proactively mention them — especially approvals. E.g. "The engineering agent needs your approval to deploy X — approve or deny?"
+For non-approval messages, briefly summarise what each agent reported. Don't read them verbatim — give Will the gist.
+If Will says "approve" or "deny" in response to an approval, route as "task" with instructions to call the /api/agent-messages/ID/approve or /deny endpoint.
 
 ACTIVE TASKS:
 {active_block}
@@ -294,6 +319,7 @@ ACTIVE TASKS:
 RECENTLY COMPLETED (not yet reported):
 {completed_block}
 
+{_format_agent_messages(agent_messages)}
 {context}"""
 
 
@@ -689,6 +715,7 @@ async def route_message(
     session_id: Optional[str] = None,
     on_stream: Optional[Callable] = None,
     interaction: "InteractionRecord | None" = None,
+    agent_messages: list[dict] | None = None,
 ) -> dict:
     """
     Route a user message. Returns:
@@ -707,7 +734,7 @@ async def route_message(
     prompt_parts.append(f"User: {user_text}")
 
     full_prompt = "\n\n".join(prompt_parts)
-    system_prompt = _build_router_system_prompt(active_tasks, completed_tasks)
+    system_prompt = _build_router_system_prompt(active_tasks, completed_tasks, agent_messages)
 
     # Track the Haiku router call
     router_call = CallRecord(
