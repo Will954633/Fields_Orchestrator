@@ -5,7 +5,7 @@
 AGENT_ID="$1"
 DATE="$2"
 
-COMMON_INSTRUCTIONS="
+read -r -d '' COMMON_INSTRUCTIONS << 'COMMON_EOF'
 ## Session Model: Iterative Work (1 Hour)
 
 You have UP TO 60 MINUTES for this session. Do NOT treat this as one pass.
@@ -228,9 +228,12 @@ If your analysis reveals an issue that falls primarily under another agent's dom
     ]
 }
 
-Today's date: ${DATE}
+Today's date: __DATE_PLACEHOLDER__
 Begin your analysis now.
-"
+COMMON_EOF
+
+# Replace date placeholder (heredoc is single-quoted so $DATE won't expand inside)
+COMMON_INSTRUCTIONS="${COMMON_INSTRUCTIONS//__DATE_PLACEHOLDER__/$DATE}"
 
 case "$AGENT_ID" in
   engineering)
