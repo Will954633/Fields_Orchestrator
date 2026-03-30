@@ -1,0 +1,205 @@
+{
+  "taxonomy_version": 1,
+  "goal": "Measure lead-capture impressions, submit starts, and successful captures across Sprint 1 entry points.",
+  "common_properties": {
+    "required": [
+      "source",
+      "page_type",
+      "path"
+    ],
+    "optional": [
+      "property_id",
+      "suburb",
+      "placement",
+      "cta_text",
+      "experiment_key",
+      "experiment_variant",
+      "device_type",
+      "referrer_path"
+    ]
+  },
+  "events": [
+    {
+      "event": "price_alert_impression",
+      "trigger": "Price-alert module renders in viewport on a property page.",
+      "properties": {
+        "required": [
+          "source",
+          "page_type",
+          "path",
+          "property_id",
+          "suburb",
+          "placement",
+          "cta_text"
+        ],
+        "optional": [
+          "listing_status",
+          "price_displayed",
+          "experiment_key",
+          "experiment_variant",
+          "device_type",
+          "referrer_path"
+        ]
+      }
+    },
+    {
+      "event": "price_alert_submit_start",
+      "trigger": "User focuses or submits the first actionable field in the price-alert form.",
+      "properties": {
+        "required": [
+          "source",
+          "page_type",
+          "path",
+          "property_id",
+          "suburb",
+          "placement",
+          "cta_text"
+        ],
+        "optional": [
+          "form_id",
+          "prefilled_email",
+          "experiment_key",
+          "experiment_variant",
+          "device_type"
+        ]
+      }
+    },
+    {
+      "event": "price_alert_submit_success",
+      "trigger": "Backend accepts the price-alert submission and lead record is created.",
+      "properties": {
+        "required": [
+          "source",
+          "page_type",
+          "path",
+          "property_id",
+          "suburb",
+          "placement",
+          "lead_id"
+        ],
+        "optional": [
+          "cta_text",
+          "delivery_channel",
+          "telegram_notified",
+          "experiment_key",
+          "experiment_variant",
+          "device_type"
+        ]
+      }
+    },
+    {
+      "event": "analyse_home_impression",
+      "trigger": "Analyse Your Home capture surface renders in viewport.",
+      "properties": {
+        "required": [
+          "source",
+          "page_type",
+          "path",
+          "suburb",
+          "placement",
+          "cta_text"
+        ],
+        "optional": [
+          "entry_context",
+          "experiment_key",
+          "experiment_variant",
+          "device_type",
+          "referrer_path"
+        ]
+      }
+    },
+    {
+      "event": "analyse_home_submit_start",
+      "trigger": "User starts completing the Analyse Your Home form.",
+      "properties": {
+        "required": [
+          "source",
+          "page_type",
+          "path",
+          "placement",
+          "cta_text"
+        ],
+        "optional": [
+          "suburb",
+          "address_prefilled",
+          "form_id",
+          "experiment_key",
+          "experiment_variant",
+          "device_type"
+        ]
+      }
+    },
+    {
+      "event": "analyse_home_submit_success",
+      "trigger": "Backend accepts Analyse Your Home submission and lead record is created.",
+      "properties": {
+        "required": [
+          "source",
+          "page_type",
+          "path",
+          "placement",
+          "lead_id"
+        ],
+        "optional": [
+          "suburb",
+          "address_submitted",
+          "telegram_notified",
+          "experiment_key",
+          "experiment_variant",
+          "device_type"
+        ]
+      }
+    },
+    {
+      "event": "decision_feed_cta_impression",
+      "trigger": "Decision Feed lead CTA enters viewport.",
+      "properties": {
+        "required": [
+          "source",
+          "page_type",
+          "path",
+          "placement",
+          "cta_text"
+        ],
+        "optional": [
+          "property_id",
+          "suburb",
+          "feed_rank",
+          "feed_reason",
+          "experiment_key",
+          "experiment_variant",
+          "device_type"
+        ]
+      }
+    },
+    {
+      "event": "decision_feed_cta_click",
+      "trigger": "User clicks the Decision Feed CTA.",
+      "properties": {
+        "required": [
+          "source",
+          "page_type",
+          "path",
+          "placement",
+          "cta_text"
+        ],
+        "optional": [
+          "property_id",
+          "suburb",
+          "feed_rank",
+          "feed_reason",
+          "destination_type",
+          "experiment_key",
+          "experiment_variant",
+          "device_type"
+        ]
+      }
+    }
+  ],
+  "implementation_notes": [
+    "Use the same source values as the MongoDB leads schema: price_alert, analyse_home, decision_feed, market_report.",
+    "Emit success events only after the backend confirms the write to system_monitor.leads.",
+    "Set lead_id to the inserted MongoDB document id string on success events.",
+    "Do not send email address or other raw PII to PostHog."
+  ]
+}
