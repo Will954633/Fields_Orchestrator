@@ -1298,8 +1298,16 @@
                 for (const msg of messages) {
                     const agentName = (msg.agent || 'unknown').replace(/_/g, ' ');
                     const isApproval = msg.type === 'deploy_approval' || msg.status === 'pending_approval';
+                    // Detect decision-requesting messages (agents asking for approval as mid_session_message)
+                    const msgText = (msg.message || '').toUpperCase();
+                    const isDecisionRequest = !isApproval && (
+                        (msgText.includes('QUESTION') && (msgText.includes('OPTION') || msgText.includes('RECOMMEND'))) ||
+                        msgText.includes('APPROVE') ||
+                        msgText.includes('APPROVAL NEEDED') ||
+                        msgText.includes('REQUESTING APPROVAL')
+                    );
 
-                    if (isApproval) {
+                    if (isApproval || isDecisionRequest) {
                         addApprovalCard(msg.id, agentName, msg.message, msg.manifest);
                     } else {
                         // Regular agent message — inject as system message
