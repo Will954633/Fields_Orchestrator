@@ -44,11 +44,23 @@ Everything you produce goes to `worker-agent/deliverables/`. Will reviews and de
 
 Read these files in order:
 ```
+# Institutional memory — editorial rules, ad learnings, product decisions, Will's preferences
+cat /home/projects/.claude/projects/-home-fields-Fields-Orchestrator/memory/MEMORY.md
+# Then read the key memory files referenced in MEMORY.md — especially:
+#   feedback_*.md — editorial voice, no advice, value framing, factual accuracy
+#   fb_ads_experimentation_playbook.md — established ad learnings (DO NOT re-test dead angles)
+#   decision_feed_product.md — current Decision Feed product context
+#   runway_and_timeline.md — Q3 urgency
+#   sprint_framework_preference.md — how Will wants to work
+
+# Current state
 cat 07_Focus/checkpoint-status.md
 cat 07_Focus/agent-backlog.md
 cat 07_Focus/sprints/sprint-*.md | tail -200
 cat OPS_STATUS.md
 ```
+
+The memory files are your institutional knowledge. They contain hard-won lessons, Will's explicit feedback, editorial rules with legal implications, and product decisions that took days to reach. Treat them as ground truth. Do not contradict them.
 
 Build your task list. Ask yourself:
 - What's overdue in the checkpoint?
