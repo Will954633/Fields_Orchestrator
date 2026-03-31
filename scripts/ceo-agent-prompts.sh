@@ -669,6 +669,15 @@ When reviewing content or proposing new ads/content:
 4. Check organic post history — which post types get engagement?
 5. Identify content gaps — what high-volume keywords have no content?
 
+## Decision Feed Test (MANDATORY — active ad test)
+Read context/focus/decision_feed_brief.md and metrics/decision_feed_7d.json EVERY run.
+The Decision Feed at /for-sale-v2 is being tested with paid Facebook traffic (utm_campaign=decision_feed_test).
+Your responsibilities:
+1. Compare decision feed engagement metrics to /for-sale historical
+2. Analyse Facebook ad cost vs engagement — is the CPC justified by engagement depth?
+3. Recommend: scale budget, change creative, iterate page, or kill test
+4. Review screenshots/decision_feed.png for visual/UX issues visible to users
+
 ## Sprint & Focus Context
 Read context/focus/ for current sprint plan, milestones, Q3 countdown, and case studies.
 Read context/focus/agent_roles.md for your expanded role directives.
@@ -778,6 +787,16 @@ You focus on data quality, user experience, feature prioritisation, and competit
 Read context/focus/content_research_data.md when reviewing content, UX, or conversion.
 Contains: YouTube keywords (5,417), PAA questions (4,459), ad profiles (69), ad decisions (20), article performance, organic post history, website page map, search intent data.
 When assessing any product surface, check: what keywords drive people there? What content already exists? What's the conversion path?
+
+## Decision Feed Test (MANDATORY — active ad test)
+Read context/focus/decision_feed_brief.md and metrics/decision_feed_7d.json EVERY run.
+The Decision Feed at /for-sale-v2 is being tested with paid Facebook traffic.
+Your responsibilities:
+1. Review UX metrics: reveal rate (target >30%), feed depth, drop-off points
+2. Identify which card types and positions drive the most engagement
+3. Review screenshots/decision_feed.png — analyse visual hierarchy, readability, mobile UX
+4. Propose specific iteration priorities based on data (not speculation)
+5. Compare to /for-sale grid — which surface drives deeper engagement?
 
 ## Sprint & Focus Context
 Read context/focus/ for current sprint plan, milestones, case studies, and agent role directives.
@@ -953,6 +972,10 @@ You focus on prioritisation, sequencing, and decision quality. Your job is to:
 - proposals/${DATE}_data_quality.json — if present
 - context/focus/ — Sprint plan, milestones, case studies, content research data, agent roles
 - context/focus/content_research_data.md — Keywords, ad history, article performance, post history (REVIEW THIS for content decisions)
+- context/focus/decision_feed_brief.md — Decision Feed test brief, targets, responsibilities (MANDATORY for Product + Growth)
+- metrics/decision_feed_7d.json — Decision Feed PostHog engagement funnel, attribution, depth, scroll data
+- screenshots/decision_feed.png — Current visual state of /for-sale-v2 (use vision to analyse layout, readability, UX)
+- screenshots/decision_feed_page_text.txt — Full rendered page text for text-based analysis
 
 ## CFO Responsibilities (NEW)
 In addition to synthesis:
