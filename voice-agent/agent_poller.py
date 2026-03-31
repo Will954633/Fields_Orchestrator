@@ -32,6 +32,9 @@ class AgentPoller:
         self._task: Optional[asyncio.Task] = None
         # Cache of pending messages for router context injection
         self._pending_messages: list[dict] = []
+        # Session cache — keeps delivered messages so router can still reference them
+        # for conversational approval (e.g. Will says "approve" after viewing)
+        self._session_messages: list[dict] = []
 
     async def start(self):
         """Start the polling loop."""
@@ -54,6 +57,19 @@ class AgentPoller:
         """Return cached pending messages for router context injection."""
         return list(self._pending_messages)
 
+    def get_session_messages(self) -> list[dict]:
+        """Return all session messages (pending + recently delivered) for router context.
+        This ensures the router can still reference messages after they've been viewed."""
+        # Merge pending + session, dedup by _id
+        seen = set()
+        result = []
+        for m in self._pending_messages + self._session_messages:
+            mid = str(m.get("_id", ""))
+            if mid not in seen:
+                seen.add(mid)
+                result.append(m)
+        return result
+
     def get_pending_approvals(self) -> list[dict]:
         """Return only messages that need approval."""
         return [m for m in self._pending_messages if m.get("type") == "deploy_approval"]
@@ -70,7 +86,7 @@ class AgentPoller:
         if not msg:
             return {"ok": False, "error": "Message not found"}
 
-        if msg.get("status") not in ("pending", "pending_approval"):
+        if msg.get("status") not in ("pending", "pending_approval", "delivered"):
             return {"ok": False, "error": f"Already handled (status: {msg.get('status')})"}
 
         new_status = "approved" if approved else "denied"
@@ -91,7 +107,7 @@ class AgentPoller:
         })
 
         # If approved, trigger the implementation bridge
-        if approved and msg.get("type") == "deploy_approval":
+        if approved and msg.get("type") in ("deploy_approval", "mid_session_message"):
             asyncio.create_task(self._trigger_bridge(msg))
 
         # Refresh cache
@@ -102,17 +118,34 @@ class AgentPoller:
         return {"ok": True, "status": new_status}
 
     async def mark_delivered(self, message_id: str):
-        """Mark a non-approval message as delivered (Will has seen it)."""
+        """Mark a non-approval message as delivered (Will has seen it).
+        Keeps it in session cache so router can still reference it for conversational approval."""
         from bson import ObjectId
         try:
             oid = ObjectId(message_id)
         except Exception:
             return
+
+        # Capture the message into session cache before it leaves pending
+        for m in self._pending_messages:
+            if str(m.get("_id")) == message_id:
+                m_copy = dict(m)
+                m_copy["status"] = "delivered"
+                # Avoid duplicates in session cache
+                session_ids = {str(s.get("_id")) for s in self._session_messages}
+                if message_id not in session_ids:
+                    self._session_messages.append(m_copy)
+                break
+
         self._db[COLLECTION].update_one(
             {"_id": oid, "status": "pending"},
             {"$set": {"status": "delivered", "delivered_at": datetime.now(AEST).isoformat()}},
         )
         await self._refresh_pending()
+
+        # Cap session cache to last 20 messages
+        if len(self._session_messages) > 20:
+            self._session_messages = self._session_messages[-20:]
 
     async def _poll_loop(self):
         """Main polling loop."""
