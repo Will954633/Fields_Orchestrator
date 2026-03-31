@@ -538,6 +538,144 @@ def fetch_experiment_results(days: int) -> dict[str, Any]:
     return result
 
 
+def fetch_decision_feed_metrics(days: int) -> dict[str, Any]:
+    """Fetch Decision Feed (/for-sale-v2) engagement metrics from PostHog."""
+    import os, json
+    from urllib.request import Request, urlopen
+    from collections import defaultdict
+
+    api_key = os.environ.get("POSTHOG_PERSONAL_API_KEY", "")
+    project_id = os.environ.get("POSTHOG_PROJECT_ID", "348370")
+    if not api_key:
+        return {"source": "posthog", "error": "POSTHOG_PERSONAL_API_KEY not set", "days": days}
+
+    base = f"https://us.i.posthog.com/api/projects/{project_id}"
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    cutoff = (now_aest() - timedelta(days=days)).isoformat()
+
+    FEED_EVENTS = [
+        "decision_feed_view", "feed_card_impression", "feed_card_reveal",
+        "feed_card_click", "hero_cta_click", "quiz_answer", "compare_view",
+        "compare_click", "surprise_card_view", "filter_apply",
+        "lead_cta_click", "scroll_depth", "time_on_page",
+    ]
+
+    result: dict[str, Any] = {
+        "source": "posthog", "page": "/for-sale-v2", "days": days,
+        "event_counts": {}, "unique_users": 0,
+        "engagement_funnel": {},
+        "feed_depth": {},
+        "attribution": {},
+    }
+
+    try:
+        all_uids: set[str] = set()
+        event_uids: dict[str, set[str]] = defaultdict(set)
+        event_counts: dict[str, int] = defaultdict(int)
+        card_positions: list[int] = []
+        scroll_depths: list[int] = []
+        time_thresholds: dict[int, int] = defaultdict(int)
+        utm_sources: dict[str, int] = defaultdict(int)
+        suburbs_filtered: dict[str, int] = defaultdict(int)
+        reveal_by_classification: dict[str, int] = defaultdict(int)
+
+        for evt in FEED_EVENTS:
+            query = json.dumps({"query": {
+                "kind": "EventsQuery",
+                "select": ["event", "distinct_id", "properties", "timestamp"],
+                "after": cutoff,
+                "limit": 5000,
+                "event": evt,
+            }}).encode()
+            req = Request(f"{base}/query/", data=query, headers=headers, method="POST")
+            with urlopen(req, timeout=30) as resp:
+                data = json.loads(resp.read())
+
+            for row in data.get("results", []):
+                event_name, uid, raw_props, _ts = row[0], row[1], row[2], row[3]
+                props = json.loads(raw_props) if isinstance(raw_props, str) else (raw_props or {})
+                event_counts[event_name] += 1
+                event_uids[event_name].add(uid)
+                all_uids.add(uid)
+
+                if event_name == "feed_card_impression":
+                    pos = props.get("feed_position")
+                    if pos is not None:
+                        card_positions.append(int(pos))
+
+                if event_name == "feed_card_reveal":
+                    cls = props.get("classification", "unknown")
+                    reveal_by_classification[cls] += 1
+
+                if event_name == "scroll_depth":
+                    depth = props.get("depth")
+                    if depth is not None:
+                        scroll_depths.append(int(depth))
+
+                if event_name == "time_on_page":
+                    dur = props.get("duration")
+                    if dur is not None:
+                        time_thresholds[int(dur)] += 1
+
+                if event_name == "decision_feed_view":
+                    src = props.get("utm_source") or props.get("$initial_utm_source") or "direct"
+                    utm_sources[src] += 1
+
+                if event_name == "filter_apply":
+                    val = props.get("filter_value", "unknown")
+                    suburbs_filtered[val] += 1
+
+        result["event_counts"] = dict(event_counts)
+        result["unique_users"] = len(all_uids)
+
+        # Engagement funnel
+        views = len(event_uids.get("decision_feed_view", set()))
+        impressions = len(event_uids.get("feed_card_impression", set()))
+        reveals = len(event_uids.get("feed_card_reveal", set()))
+        clicks = len(event_uids.get("feed_card_click", set()))
+        result["engagement_funnel"] = {
+            "page_views": views,
+            "users_who_scrolled": impressions,
+            "scroll_rate": round(impressions / max(views, 1) * 100, 1),
+            "users_who_revealed": reveals,
+            "reveal_rate": round(reveals / max(impressions, 1) * 100, 1),
+            "users_who_clicked": clicks,
+            "click_rate": round(clicks / max(impressions, 1) * 100, 1),
+        }
+
+        # Feed depth
+        if card_positions:
+            result["feed_depth"] = {
+                "max_card_seen": max(card_positions),
+                "median_card_seen": sorted(card_positions)[len(card_positions) // 2],
+                "avg_cards_seen_per_user": round(len(card_positions) / max(impressions, 1), 1),
+            }
+
+        # Scroll depth distribution
+        if scroll_depths:
+            result["scroll_depth_distribution"] = {
+                "reached_25pct": sum(1 for d in scroll_depths if d >= 25),
+                "reached_50pct": sum(1 for d in scroll_depths if d >= 50),
+                "reached_75pct": sum(1 for d in scroll_depths if d >= 75),
+                "reached_100pct": sum(1 for d in scroll_depths if d >= 100),
+            }
+
+        result["time_on_page"] = dict(time_thresholds)
+        result["attribution"] = dict(utm_sources)
+        result["suburb_filter_usage"] = dict(suburbs_filtered)
+        result["reveal_by_classification"] = dict(reveal_by_classification)
+        result["quiz_engagement"] = event_counts.get("quiz_answer", 0)
+        result["compare_engagement"] = {
+            "views": event_counts.get("compare_view", 0),
+            "clicks": event_counts.get("compare_click", 0),
+        }
+
+    except Exception as exc:
+        result["error"] = str(exc)
+
+    return result
+
+
 def fetch_ad_metrics(sm, days: int, limit: int) -> dict[str, Any]:
     cutoff = (now_aest() - timedelta(days=days)).strftime("%Y-%m-%d")
     fb = list(sm["ad_daily_metrics"].find({"date": {"$gte": cutoff}}, {"_id": 0}).limit(limit * 4))
@@ -938,6 +1076,9 @@ def main() -> None:
     gsc_p = sub.add_parser("search-console")
     gsc_p.add_argument("--days", type=int, default=7)
 
+    df_p = sub.add_parser("decision-feed-metrics")
+    df_p.add_argument("--days", type=int, default=7)
+
     args = parser.parse_args()
 
     if args.command == "founder-truths":
@@ -948,6 +1089,9 @@ def main() -> None:
         return
     if args.command == "search-console":
         print(dumps_json(fetch_search_console(args.days)))
+        return
+    if args.command == "decision-feed-metrics":
+        print(dumps_json(fetch_decision_feed_metrics(args.days)))
         return
 
     client = get_client()
