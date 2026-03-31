@@ -65,16 +65,14 @@ Read the above context. Build your task list from overdue items and highest-prio
 PROMPT
 
 # Run Claude with worker agent instructions
-# Guardrails:
-#   - --disallowed-tools blocks git push, Edit (production files), Write (outside deliverables)
-#   - System prompt reinforces hard limits
-#   - Bash is unrestricted for read operations, scripts, screenshots, database queries
-claude -p \
+# Hard time limit: 100 minutes (agent should self-stop at 90, this is the backstop)
+# Guardrails: system prompt enforces hard limits on writes/deploys/ads
+timeout 6000 claude -p \
     --model opus \
     --system-prompt "$(cat "$SCRIPT_DIR/WORKER_AGENT.md")" \
     --dangerously-skip-permissions \
     "$(cat /tmp/worker-agent-prompt.txt)" \
-    2>&1 | tee -a "$LOG_FILE"
+    2>&1 | tee -a "$LOG_FILE" || true
 
 rm -f /tmp/worker-agent-prompt.txt
 
