@@ -794,7 +794,7 @@ async def handle_message(user_text: str, source: str = "chat") -> dict:
     # --- Normal routing (auto mode or haiku mode) ---
     active_tasks = task_manager.get_active_tasks()
     completed_unnotified = task_manager.get_unnotified_completed()
-    pending_agent_msgs = agent_poller.get_pending_messages() if agent_poller else []
+    pending_agent_msgs = agent_poller.get_session_messages() if agent_poller else []
 
     decision = await route_message(
         user_text, history, active_tasks, completed_unnotified,
@@ -1189,7 +1189,7 @@ async def handle_message_streaming(user_text: str, on_stream=None) -> dict:
 
     active_tasks = task_manager.get_active_tasks()
     completed_unnotified = task_manager.get_unnotified_completed()
-    pending_agent_msgs = agent_poller.get_pending_messages() if agent_poller else []
+    pending_agent_msgs = agent_poller.get_session_messages() if agent_poller else []
 
     decision = await route_message(
         user_text, history, active_tasks, completed_unnotified,
@@ -1358,9 +1358,9 @@ async def cancel_task(task_id: str, authorization: Optional[str] = Header(None))
 
 @app.get("/api/agent-messages")
 async def get_agent_messages(authorization: Optional[str] = Header(None)):
-    """Get pending agent messages and approvals."""
+    """Get pending + session agent messages (includes recently delivered)."""
     verify_token(authorization)
-    messages = agent_poller.get_pending_messages()
+    messages = agent_poller.get_session_messages()
     return JSONResponse([{
         "id": str(m.get("_id", "")),
         "agent": m.get("agent", "unknown"),
@@ -1437,6 +1437,10 @@ async def list_todos(authorization: Optional[str] = Header(None)):
             else:
                 urgency = f"due in {days_left}d"
 
+        created = t.get("created_at", "")
+        if isinstance(created, datetime):
+            created = created.isoformat()
+
         result.append({
             "_id": str(t["_id"]),
             "title": t.get("title", ""),
@@ -1447,7 +1451,7 @@ async def list_todos(authorization: Optional[str] = Header(None)):
             "tags": t.get("tags", []),
             "notes": t.get("notes", ""),
             "source": t.get("source", ""),
-            "created_at": t.get("created_at", ""),
+            "created_at": created,
         })
 
     # Sort: overdue first, then priority, then due date
