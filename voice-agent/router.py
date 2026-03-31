@@ -219,11 +219,16 @@ def _format_agent_messages(messages: list[dict] | None) -> str:
         agent = m.get("agent", "unknown").replace("_", " ").title()
         msg_type = m.get("type", "info")
         msg_id = str(m.get("_id", ""))
-        content = m.get("message", "")[:300]
+        content = m.get("message", "")[:500]
+        status = m.get("status", "pending")
 
         if msg_type == "deploy_approval":
             desc = m.get("manifest", {}).get("description", content)
             lines.append(f"  ⚠ APPROVAL NEEDED [{agent}] (id: {msg_id}): {desc}")
+        elif "QUESTION" in content.upper() or "APPROVE" in content.upper() or "OPTIONS" in content.upper():
+            # Decision-requesting message — treat as actionable
+            label = "⚠ DECISION REQUESTED" if status != "approved" else "✅ APPROVED"
+            lines.append(f"  {label} [{agent}] (id: {msg_id}): {content}")
         else:
             lines.append(f"  📋 [{agent}] (id: {msg_id}): {content}")
 
