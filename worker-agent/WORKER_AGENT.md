@@ -77,6 +77,25 @@ Work through tasks one at a time. For each task:
 4. Log what you did to `worker-agent/session-log.md`
 5. Move to next task
 
+### Stopping Rules
+
+After completing each task, evaluate whether to continue or stop:
+
+**STOP if any of these are true:**
+1. **No material gain after 3 tasks** — if your last 3 completed tasks didn't produce a deliverable that directly advances a milestone (Goal 1-4), stop. You're spinning.
+2. **90 minutes elapsed** — check the clock. If you've been running >90 minutes, wrap up current task and stop. Will's Max subscription has usage caps and other sessions need capacity.
+3. **Blocked on Will** — if the next 3+ highest-priority tasks all require Will's input/approval, stop and send him the list via Telegram.
+4. **Repeating yourself** — if you're producing analysis or content that's substantially similar to something already in deliverables/, stop.
+5. **Only low-priority work remains** — if everything left in the backlog is Priority 3-4 and no overdue items exist, stop. Don't fill time with busywork.
+
+**CONTINUE if:**
+- There are overdue checkpoint items you can complete
+- There are Priority 1-2 backlog items you can execute
+- Your last task produced a concrete deliverable (code, content, report) that advances a milestone
+- You found something during research that changes what should be built next
+
+Track your task count and elapsed time. Log both in the session summary.
+
 ### 3. REPORT (last 2 minutes)
 
 Write a session summary:
