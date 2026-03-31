@@ -543,6 +543,8 @@ def export_metrics_and_memory() -> None:
     metrics["memory/structured_memory.json"] = structured
     metrics["experiments/active_experiments.json"] = structured.get("active_experiments", [])
     metrics["experiments/experiment_results_7d.json"] = query_json(["/home/fields/venv/bin/python3", "scripts/ceo-query-broker.py", "experiment-results", "--days", "7"])
+    metrics["metrics/decision_feed_7d.json"] = query_json(["/home/fields/venv/bin/python3", "scripts/ceo-query-broker.py", "decision-feed-metrics", "--days", "7"])
+
     try:
         metrics["metrics/search_console_7d.json"] = query_json(["/home/fields/venv/bin/python3", "scripts/ceo-query-broker.py", "search-console", "--days", "7"])
     except Exception as exc:
@@ -859,6 +861,85 @@ def export_git_activity() -> None:
     gh_api_put("metrics/git_activity.md", f"# Git Activity (last 14 days)\n\n{content}", "update: git activity")
 
 
+def export_screenshots() -> None:
+    """Take screenshots of key pages and push as base64-encoded PNGs for agent vision analysis."""
+    print("\n📸 Exporting page screenshots...")
+
+    pages = [
+        ("/for-sale-v2", "decision_feed"),
+        ("/for-sale", "for_sale_grid"),
+    ]
+
+    for url_path, name in pages:
+        try:
+            result = subprocess.run(
+                ["node", "scripts/site-inspector.js", "--url", url_path],
+                capture_output=True, text=True, timeout=60, cwd=str(ORCHESTRATOR_DIR),
+            )
+            # Find the screenshot file
+            output_dir = None
+            for line in result.stdout.splitlines():
+                if "Output:" in line:
+                    output_dir = line.split("Output:")[-1].strip()
+                    break
+            if not output_dir:
+                # Fall back to finding most recent artifacts dir
+                artifacts = ORCHESTRATOR_DIR / "artifacts" / "browser_artifacts"
+                if artifacts.exists():
+                    dirs = sorted(artifacts.iterdir(), reverse=True)
+                    if dirs:
+                        output_dir = str(dirs[0])
+
+            if output_dir:
+                # Find the screenshot PNG in subdirectories
+                screenshot_path = None
+                for root, _dirs, files in os.walk(output_dir):
+                    for f in files:
+                        if f == "screenshot.png":
+                            screenshot_path = os.path.join(root, f)
+                            break
+                    if screenshot_path:
+                        break
+
+                if screenshot_path and os.path.exists(screenshot_path):
+                    with open(screenshot_path, "rb") as f:
+                        png_b64 = base64.b64encode(f.read()).decode("utf-8")
+
+                    # Push as binary via gh api
+                    sha = SHA_CACHE.get(f"screenshots/{name}.png")
+                    payload = {"message": f"update: screenshot {name}", "content": png_b64}
+                    if sha:
+                        payload["sha"] = sha
+
+                    import tempfile as _tf
+                    with _tf.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tmp:
+                        json.dump(payload, tmp)
+                        tmp_path = tmp.name
+
+                    r = subprocess.run(
+                        ["gh", "api", f"repos/{REPO}/contents/screenshots/{name}.png",
+                         "--method", "PUT", "--input", tmp_path, "--jq", ".commit.sha"],
+                        capture_output=True, text=True, timeout=120,
+                    )
+                    os.unlink(tmp_path)
+                    if r.returncode == 0:
+                        SHA_CACHE[f"screenshots/{name}.png"] = r.stdout.strip()
+                        print(f"  ✓ screenshots/{name}.png → {r.stdout.strip()[:8]}")
+                    else:
+                        print(f"  ✗ screenshots/{name}.png: {r.stderr.strip()[:200]}")
+
+                    # Also push the page text for text-only agents
+                    page_text_path = os.path.join(os.path.dirname(screenshot_path), "page-text.txt")
+                    if os.path.exists(page_text_path):
+                        gh_api_put(f"screenshots/{name}_page_text.txt", read_file(Path(page_text_path)), f"update: page text {name}")
+                else:
+                    print(f"  ✗ screenshots/{name}.png: screenshot file not found")
+            else:
+                print(f"  ✗ screenshots/{name}.png: output directory not found")
+        except Exception as exc:
+            print(f"  ✗ screenshots/{name}.png: {exc}")
+
+
 def export_focus_context() -> None:
     """Export sprint context, proposal feedback, grind status, leads, and KB summary to context/focus/."""
     print("\n🎯 Exporting focus context...")
@@ -878,6 +959,11 @@ def export_focus_context() -> None:
             gh_api_put("context/focus/current_sprint.md", "# Current Sprint\n\nNo numbered sprint files found.", "update: current sprint (empty)")
     else:
         gh_api_put("context/focus/current_sprint.md", "# Current Sprint\n\nSprint directory not yet created.", "update: current sprint (missing)")
+
+    # 1b. decision_feed_brief.md — active test context for agents
+    brief_path = ORCHESTRATOR_DIR / "07_Focus" / "decision_feed_brief.md"
+    if brief_path.exists():
+        gh_api_put("context/focus/decision_feed_brief.md", read_file(brief_path), "update: decision feed brief")
 
     # 2. milestone_status.md — generate short status
     try:
@@ -1287,6 +1373,7 @@ def main() -> None:
     export_metrics_and_memory()
     export_code_context()
     export_focus_context()
+    export_screenshots()
     export_backup_scraper()
     export_git_activity()
     manifest = export_manifest_and_timestamp()
