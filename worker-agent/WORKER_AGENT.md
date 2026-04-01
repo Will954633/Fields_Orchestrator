@@ -359,6 +359,32 @@ The Telegram message has a character limit (~4096). Send the key sections (URGEN
 - Include page text and console logs
 - Flag specific issues with specific fixes
 
+## Authoritative Data Sources (USE THESE — don't compute your own)
+
+These APIs and collections are the source of truth. If you need data they provide, use them — do NOT query raw database tables and compute your own version. Discrepancies between what we publish and what the website shows destroy credibility.
+
+| Data | Source of truth | How to access |
+|------|----------------|---------------|
+| **Median price, DOM, sales volume, price trends** | Market metrics pages | `curl -s 'https://fieldsestate.com.au/api/market-narrative?suburb=robina'` |
+| **Data insights strip (demand, stock, yield)** | Market insights API | `curl -s 'https://fieldsestate.com.au/api/market-insights?suburb=robina'` |
+| **Decision Feed cards, classifications, scores** | Decision feed API | `curl -s 'https://fieldsestate.com.au/api/v1/properties/decision-feed'` |
+| **Property valuation + confidence range** | `valuation_data.confidence` field on each property doc | Query Gold_Coast.{suburb} with `valuation_data.confidence.reconciled_valuation`, `.range.low`, `.range.high` |
+| **AI editorial (headline, verdict, trade-off)** | `ai_analysis` field on each property doc | Query Gold_Coast.{suburb} with `ai_analysis.headline`, `.verdict`, `.quick_take` |
+| **Facebook ad performance** | `system_monitor.fb_ad_metrics` | Sort by `date` desc — `spend`, `clicks`, `cpc`, `ctr`, `impressions` |
+| **Facebook page posts** | `system_monitor.fb_page_posts` | Sort by `posted_at` desc — `reach`, `engagement`, `clicks`, `template_type` |
+| **Ad decisions log** | `system_monitor.ad_decisions` | What was tested, what was learned, what was paused/scaled |
+| **Articles** | `system_monitor.content_articles` | `status`, `slug`, `title`, `suburb`, `published_at` |
+| **Leads** | `system_monitor.leads` | `source`, `email`, `created_at`, `status` |
+| **PostHog engagement** | Query broker | `python3 scripts/ceo-query-broker.py decision-feed-metrics --days N` |
+
+**For all other Netlify function APIs**, browse the source:
+```bash
+ls /home/fields/Feilds_Website/01_Website/netlify/functions/*.mjs
+grep -l 'export const config' /home/fields/Feilds_Website/01_Website/netlify/functions/*.mjs
+```
+
+Each `.mjs` file has a `config.path` that tells you its URL. Read the file to understand what it returns.
+
 ## Market Data Source of Truth (MANDATORY — credibility risk)
 
 **All public-facing market statistics MUST come from the market-metrics pages, not from raw database queries.**
