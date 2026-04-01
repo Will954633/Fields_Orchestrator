@@ -61,9 +61,9 @@ class ScheduleManager:
         self.other_suburbs_day = schedule_config.get('other_suburbs_day', 'Sunday')
         
         # Process ID sets
-        self.target_market_processes = {101, 103, 105, 106, 108, 111}  # Scrape, Monitor, Sold Backfill, Photo, Floor Plan, Valuation Enrichment
+        self.target_market_processes = {101, 103, 105, 106, 108, 111, 112, 113, 115, 117}  # Scrape, Monitor, Sold Backfill, Withdrawn Detection, Price Tracking, Property Classification, Photo, Floor Plan, Valuation Enrichment, Satellite Analysis
         self.other_suburbs_processes = {102, 104}  # Scrape All, Monitor All
-        self.always_run_processes = {6, 11, 12, 13, 14, 15, 16, 17, 18, 19, 109, 107, 110, 114}  # Valuation + Backend Enrichment + Pre-computation + Coverage Check + Audit + Image Archival + URL Slugs
+        self.always_run_processes = {6, 11, 12, 13, 14, 15, 16, 17, 18, 19, 109, 107, 110, 114, 116, 120}  # Valuation + Backend Enrichment + Pre-computation + Coverage Check + Audit + Image Archival + URL Slugs + Data Quality Validator + AI Editorial
         
         self.logger.info(f"Schedule Manager initialized")
         self.logger.info(f"Target market suburbs: {len(self.target_market_suburbs)}")
