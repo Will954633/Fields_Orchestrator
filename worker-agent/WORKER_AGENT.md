@@ -285,8 +285,48 @@ After completing each task, evaluate whether to continue or stop:
 - There's an active test that needs assets or analysis
 - There are funnel gaps that need code/content to close
 - Your last task produced a concrete deliverable that advances a milestone
+- You have time remaining and the backup scraper needs work (see below)
+
+**Minimum session time: 60 minutes.** Do not stop before 60 minutes unless you've genuinely attempted 3 tasks and found nothing productive to do. If growth engine tasks are done for the day, move to the backup scraper project.
 
 Track your task count and elapsed time. Log both in the session summary.
+
+### Backup Scraper Project (ongoing — fill remaining time)
+
+**This is existential risk insurance.** If Domain.com.au blocks our primary scraper, we lose all property data overnight. The backup scraper is an independent system that does NOT hit Domain — it uses SearXNG meta-search + agency website scraping + GPT verification.
+
+**Target:** 80%+ coverage of Robina, Burleigh Waters, and Varsity Lakes using zero Domain.com.au data.
+
+**Where it runs:** property-scraper VM (35.201.6.222)
+```bash
+# Check status
+ssh fields-orchestrator-vm@35.201.6.222 "sudo bash /home/projects/scraper/status.sh"
+# Check logs
+ssh fields-orchestrator-vm@35.201.6.222 "sudo tail -100 /home/projects/scraper/scraper.log"
+# Check discovered URLs per suburb
+ssh fields-orchestrator-vm@35.201.6.222 "sudo ls -la /home/projects/scraper/discovered_urls/"
+# Check coverage
+ssh fields-orchestrator-vm@35.201.6.222 "sudo cat /home/projects/scraper/discovered_urls/robina.json | python3 -c 'import json,sys; d=json.load(sys.stdin); print(len(d), \"URLs\")'"
+```
+
+**Milestones:**
+1. BS1: Audit current state — what's working, what's broken, what's the Robina coverage vs primary?
+2. BS2: Fix blocked agencies (403 errors) — identify each blocked agency, write fix, test
+3. BS3: Robina 80%+ coverage — compare discovered URLs vs Gold_Coast.robina active listings
+4. BS4: Automated comparison report — daily coverage gap report
+5. BS5: Expand to Burleigh Waters + Varsity Lakes with same coverage target
+6. BS6: Failover-ready — if primary dies, backup can sustain the pipeline
+
+**Key code files:** `continuous_monitor.py`, `direct_agency_scraper.py`, `gpt_verifier.py`, `url_tracker.py`
+**Entry point:** `url_tracking_run.py` → `ContinuousMonitor` class
+
+**Rules:**
+- You CAN read code, logs, status, and coverage data via SSH
+- You CAN draft fixes and save them to `worker-agent/deliverables/YYYY-MM-DD/code/backup-scraper/`
+- You CANNOT deploy changes to the scraper VM directly — save code for Will to review
+- Work on this DAILY until BS3 (Robina 80%) is achieved, then move to BS5
+
+Each session, spend 10-30 minutes on this after growth engine work is done. Log progress in the session summary.
 
 ### Phase 7: MORNING BRIEF (last 5 minutes)
 
