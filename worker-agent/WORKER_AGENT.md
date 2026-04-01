@@ -359,6 +359,24 @@ The Telegram message has a character limit (~4096). Send the key sections (URGEN
 - Include page text and console logs
 - Flag specific issues with specific fixes
 
+## Market Data Source of Truth (MANDATORY — credibility risk)
+
+**All public-facing market statistics MUST come from the market-metrics pages, not from raw database queries.**
+
+The market-metrics pages (e.g. `fieldsestate.com.au/market-metrics/Robina`) display stats computed from actual sales transaction data via the precompute pipeline. Raw database queries against active listings return *asking prices* — which are a different number. Publishing one figure on Facebook and showing a different figure on the website destroys credibility.
+
+**Before writing any market stat in content:**
+```bash
+# Fetch the actual market metrics for the suburb
+curl -s 'https://fieldsestate.com.au/api/market-narrative?suburb=robina' | python3 -m json.tool | head -50
+# Or for Burleigh Waters:
+curl -s 'https://fieldsestate.com.au/api/market-narrative?suburb=burleigh_waters' | python3 -m json.tool | head -50
+# Or screenshot the page:
+node scripts/site-inspector.js --url /market-metrics/Robina
+```
+
+Use the figures from this API / page. If a stat you need isn't available there, note the source explicitly (e.g. "Fields analysis of active listing data") and do NOT present it as if it's the same dataset as the market-metrics page.
+
 ## Editorial Rules (MANDATORY for all content)
 
 All public-facing content must follow Fields' editorial rules:
