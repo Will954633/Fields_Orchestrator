@@ -28,8 +28,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from pymongo import MongoClient
 from curl_cffi import requests as cffi_requests
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT))
+
+from shared.env import load_env  # type: ignore
+from shared.db import get_client, get_db  # type: ignore
+
+load_env()
 
 # Paths
 SUBURBS_JSON = Path(__file__).parent.parent.parent / (
@@ -38,7 +45,6 @@ SUBURBS_JSON = Path(__file__).parent.parent.parent / (
 )
 LOG_FILE = Path(__file__).parent.parent / "logs" / "coverage_check.log"
 
-MONGODB_URI = os.getenv('COSMOS_CONNECTION_STRING') or os.getenv('MONGODB_URI', 'mongodb://127.0.0.1:27017/')
 DATABASE_NAME = 'Gold_Coast'
 
 # Domain URL template — swap in suburb slug (e.g. "robina-qld-4226")
@@ -141,6 +147,20 @@ def get_db_count(db, suburb: Dict) -> int:
         return -1
 
 
+def get_db_recent_sold_count(db, suburb: Dict, days: int = 14) -> int:
+    """Count listings marked sold in the last N days (still visible on Domain search)."""
+    collection_name = suburb['name'].lower().replace(' ', '_').replace('-', '_')
+    cutoff = (datetime.now() - __import__('datetime').timedelta(days=days)).strftime('%Y-%m-%d')
+    try:
+        collection = db[collection_name]
+        return collection.count_documents({
+            "listing_status": "sold",
+            "sold_date": {"$gte": cutoff}
+        })
+    except Exception:
+        return 0
+
+
 def get_db_sold_count(db, suburb: Dict, days: int = 30) -> int:
     """Count sold documents in the last N days."""
     collection_name = suburb['name'].lower().replace(' ', '_').replace('-', '_')
@@ -233,9 +253,9 @@ Examples:
 
     # Connect to MongoDB
     try:
-        client = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=10000, tlsAllowInvalidCertificates=True)
+        client = get_client()
         client.admin.command('ping')
-        db = client[DATABASE_NAME]
+        db = get_db(DATABASE_NAME)
         print("MongoDB connected.\n")
     except Exception as e:
         print(f"ERROR: MongoDB connection failed: {e}")
@@ -251,6 +271,12 @@ Examples:
 
             domain_count = fetch_domain_count(suburb)
             db_count = get_db_count(db, suburb)
+            recent_sold = get_db_recent_sold_count(db, suburb, days=14)
+
+            # Domain search results include recently-sold listings that we've
+            # correctly detected and marked as sold.  Compare Domain's count
+            # against our for_sale + recent_sold to avoid false-positive gaps.
+            db_total_visible = db_count + recent_sold
 
             if domain_count is None:
                 status = 'DOMAIN_UNAVAILABLE'
@@ -262,13 +288,13 @@ Examples:
                 flag = 'WARN'
                 diff = None
                 diff_str = 'N/A'
-            elif domain_count == db_count:
+            elif db_total_visible >= domain_count:
                 status = 'OK'
                 flag = 'OK'
                 diff = 0
                 diff_str = '0'
             else:
-                diff = db_count - domain_count  # negative = we have fewer than Domain
+                diff = db_total_visible - domain_count  # negative = we have fewer than Domain
                 status = 'GAP'
                 flag = 'ERROR'
                 gaps_found += 1
@@ -278,18 +304,20 @@ Examples:
                 'suburb': name,
                 'domain_count': domain_count,
                 'db_count': db_count,
+                'recent_sold': recent_sold,
                 'diff': diff,
                 'status': status,
             })
 
             # Console output
             if flag == 'OK':
-                print(f"  OK     Domain={domain_count}  DB={db_count}")
+                sold_note = f"  (+ {recent_sold} recent sold)" if recent_sold else ""
+                print(f"  OK     Domain={domain_count}  DB={db_count}{sold_note}")
             elif flag == 'WARN':
                 print(f"  WARN   Domain={domain_count}  DB={db_count}  ({status})")
             else:
-                missing = domain_count - db_count if domain_count and db_count >= 0 else '?'
-                print(f"  ERROR  Domain={domain_count}  DB={db_count}  (missing {missing} properties)")
+                missing = domain_count - db_total_visible if domain_count and db_count >= 0 else '?'
+                print(f"  ERROR  Domain={domain_count}  DB={db_count} (+{recent_sold} sold)  (missing {missing} properties)")
 
         # --- SOLD COVERAGE CHECK ---
         print(f"\n{'=' * 70}")
@@ -312,12 +340,14 @@ Examples:
                 domain_ct = r.get('domain_count') or 0
                 db_ct = r.get('db_count') or 0
 
+                recent_sold = r.get('recent_sold', 0)
+
                 # Determine status for OPS dashboard
                 if r['status'] == 'OK':
                     di_status = 'ok'
-                elif r['status'] == 'GAP' and db_ct < domain_ct:
+                elif r['status'] == 'GAP' and (db_ct + recent_sold) < domain_ct:
                     di_status = 'critical'  # Missing listings
-                elif r['status'] == 'GAP' and db_ct > domain_ct:
+                elif r['status'] == 'GAP' and (db_ct + recent_sold) > domain_ct:
                     di_status = 'ok'  # We have more than Domain — not a problem
                 else:
                     di_status = 'warning'
@@ -371,8 +401,9 @@ Examples:
         print(f"\nSUBURBS WITH GAPS:")
         for r in results:
             if r['status'] == 'GAP':
-                missing = r['domain_count'] - r['db_count']
-                print(f"  {r['suburb']:30s}  Domain={r['domain_count']}  DB={r['db_count']}  missing={missing}")
+                total = r['db_count'] + r.get('recent_sold', 0)
+                missing = r['domain_count'] - total
+                print(f"  {r['suburb']:30s}  Domain={r['domain_count']}  DB={r['db_count']} (+{r.get('recent_sold', 0)} sold)  missing={missing}")
     else:
         print("No coverage gaps detected.")
     print(f"{'=' * 70}\n")
