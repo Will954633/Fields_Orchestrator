@@ -212,9 +212,18 @@ def cmd_submit_all():
         f"{SITE_URL}/market-intelligence/Robina",
         f"{SITE_URL}/market-intelligence/Varsity-Lakes",
         f"{SITE_URL}/market-intelligence/Burleigh-Waters",
-        f"{SITE_URL}/analyse",
+        f"{SITE_URL}/analyse-your-home",
         f"{SITE_URL}/why-fields",
     ]
+
+    # Market metrics pages (SEO-critical — these target high-intent search queries)
+    market_metrics_suburbs = ["Robina", "Varsity-Lakes", "Burleigh-Waters"]
+    market_metrics_categories = ["sell-now", "buy", "crash-risk", "overview", "direction", "suburb-compare"]
+    for suburb in market_metrics_suburbs:
+        static_urls.append(f"{SITE_URL}/market-metrics/{suburb}")
+        for cat in market_metrics_categories:
+            static_urls.append(f"{SITE_URL}/market-metrics/{suburb}/{cat}")
+
     all_urls = static_urls + urls
 
     print(f"Found {len(all_urls)} URLs ({len(static_urls)} static + {len(urls)} properties)")
