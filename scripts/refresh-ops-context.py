@@ -296,20 +296,54 @@ def fetch_article_events(db):
     return {"publishes": publishes, "builds": builds}
 
 def fetch_scraper_health(db):
-    """Get scraper health / last scrape time per suburb."""
-    col = db["system_monitor"]["scraper_health"]
-    try:
-        docs = list(col.find({}).limit(500))
-        docs.sort(key=lambda d: d.get("checked_at") or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
-        # Latest per suburb
-        seen = {}
-        for doc in docs:
-            suburb = doc.get("suburb", "unknown")
-            if suburb not in seen:
-                seen[suburb] = doc
-        return list(seen.values())
-    except Exception:
-        return []
+    """Compute scraper freshness directly from Gold_Coast listing data.
+
+    For each target suburb, find the most recent ``last_updated`` on a
+    for-sale document — that's when the scraper last touched it.
+    """
+    TARGET_SUBURBS = [
+        "robina", "burleigh_waters", "varsity_lakes",
+        "burleigh_heads", "mudgeeraba", "reedy_creek",
+        "merrimac", "worongary", "carrara",
+    ]
+    gc_db = db["Gold_Coast"]
+    now = datetime.now(timezone.utc)
+    results = []
+    for suburb in TARGET_SUBURBS:
+        try:
+            col = gc_db[suburb]
+            # Find most recent last_updated among for_sale docs
+            sample = list(col.find(
+                {"listing_status": "for_sale"},
+                {"last_updated": 1}
+            ).limit(300))
+            sample.sort(key=lambda d: d.get("last_updated") or datetime.min, reverse=True)
+            last_scrape = sample[0].get("last_updated") if sample else None
+
+            if last_scrape:
+                last_dt = last_scrape
+                if not getattr(last_dt, 'tzinfo', None):
+                    last_dt = last_dt.replace(tzinfo=timezone.utc)
+                age_hours = (now - last_dt).total_seconds() / 3600
+                if age_hours <= 26:
+                    status = "healthy"
+                elif age_hours <= 50:
+                    status = "stale"
+                else:
+                    status = "critical"
+            else:
+                age_hours = None
+                status = "unknown"
+
+            results.append({
+                "suburb": suburb,
+                "last_scrape_time": last_scrape,
+                "staleness_hours": round(age_hours, 1) if age_hours is not None else None,
+                "status": status,
+            })
+        except Exception:
+            results.append({"suburb": suburb, "status": "unknown"})
+    return results
 
 def fetch_listing_counts(client):
     """Count active listings and enrichment per suburb from Gold_Coast.
@@ -637,6 +671,50 @@ def render_ops_status(orch, api, coverage, repairs, articles, listing_counts, er
         title = last.get("title") or last.get("description") or "Untitled"
         st = last.get("status", "?")
         lines.append(f"  Last request: {status_icon(st)} {title} — {st} ({age_str(last.get('created_at'))})")
+
+    # ── 9. Personal Todos ──────────────────────────────────────────────────────
+    sep()
+    h(2, "9. Personal Todos")
+    try:
+        todo_coll = client["system_monitor"]["user_todos"]
+        open_todos = list(todo_coll.find({"status": "open"}).limit(20))
+        if open_todos:
+            overdue = []
+            due_soon = []
+            other = []
+            for t in open_todos:
+                dd = t.get("due_date")
+                if dd:
+                    if dd.tzinfo is None:
+                        dd = dd.replace(tzinfo=now.tzinfo)
+                    delta = (dd.replace(hour=0, minute=0, second=0, microsecond=0) - now.replace(hour=0, minute=0, second=0, microsecond=0)).days
+                    if delta < 0:
+                        overdue.append((t, abs(delta)))
+                    elif delta <= 7:
+                        due_soon.append((t, delta))
+                    else:
+                        other.append((t, delta))
+                else:
+                    other.append((t, None))
+
+            if overdue:
+                for t, d in overdue:
+                    lines.append(f"  !! OVERDUE ({d}d): **{t['title']}** [{t.get('priority','medium')}]")
+            if due_soon:
+                for t, d in due_soon:
+                    label = "TODAY" if d == 0 else f"in {d}d"
+                    dd_str = t['due_date'].strftime('%d %b') if t.get('due_date') else '—'
+                    lines.append(f"  ! Due {label} ({dd_str}): **{t['title']}** [{t.get('priority','medium')}]")
+            if other:
+                for t, d in other:
+                    dd_str = t['due_date'].strftime('%d %b') if t.get('due_date') else 'no date'
+                    lines.append(f"  - {dd_str}: {t['title']} [{t.get('priority','medium')}]")
+
+            lines.append(f"\n**{len(open_todos)} open todo(s)**")
+        else:
+            lines.append("No pending todos.")
+    except Exception as e:
+        lines.append(f"(todo fetch error: {e})")
 
     # ── Footer ───────────────────────────────────────────────────────────────
     sep()
