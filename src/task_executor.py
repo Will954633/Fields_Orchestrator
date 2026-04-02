@@ -1093,7 +1093,19 @@ class TaskExecutor:
             run_ctx.write_summary(run_summary)
         except Exception as e:
             self.logger.warning(f"Failed to write run summary: {e}")
-        
+
+        # Write scraper health + audit snapshots for OPS dashboard
+        import subprocess as _sp
+        for _snap_script in [
+            "/home/fields/Fields_Orchestrator/write-scraper-health.py",
+            "/home/fields/Fields_Orchestrator/write-audit-snapshot.py",
+        ]:
+            try:
+                self.logger.info(f"📊 Running {_snap_script.split('/')[-1]}")
+                _sp.run(["python3", _snap_script], timeout=60, check=False, capture_output=True)
+            except Exception as _e:
+                self.logger.warning(f"Snapshot script failed (non-fatal): {_e}")
+
         return {
             "success": steps_failed == 0,
             "steps_completed": steps_completed,
