@@ -34,18 +34,22 @@ import argparse
 import requests
 import traceback
 from datetime import datetime, timezone, timedelta
-from dotenv import load_dotenv
-from pymongo import MongoClient, UpdateOne
+from pymongo import UpdateOne
 from pymongo.errors import BulkWriteError
 
-load_dotenv("/home/fields/Fields_Orchestrator/.env")
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, REPO_ROOT)
+
+from shared.env import load_env  # type: ignore
+from shared.db import get_client, get_db  # type: ignore
+
+load_env()
 
 TOKEN = os.environ["FACEBOOK_ADS_TOKEN"]
 AD_ACCOUNT_ID = os.environ["FACEBOOK_AD_ACCOUNT_ID"]
 PAGE_ID = os.environ.get("FACEBOOK_PAGE_ID", "")
 API_VERSION = os.environ.get("FACEBOOK_API_VERSION", "v18.0")
 BASE = f"https://graph.facebook.com/{API_VERSION}"
-COSMOS_URI = os.environ["COSMOS_CONNECTION_STRING"]
 
 RETENTION_DAYS = 90
 
@@ -168,6 +172,19 @@ def fetch_ad_lifetime_insights():
     return results
 
 
+def fetch_ad_7d_insights():
+    """Per-ad last 7d metrics (API aggregate — more reliable than daily sum)."""
+    fields = ("ad_id,ad_name,impressions,reach,clicks,spend,ctr,cpc,cpm,"
+              "frequency,actions,cost_per_action_type")
+    results = fb_get_all(f"/{AD_ACCOUNT_ID}/insights", {
+        "fields": fields,
+        "date_preset": "last_7d",
+        "level": "ad",
+        "limit": 500,
+    })
+    return results
+
+
 def fetch_ad_30d_insights():
     """Per-ad last 30d metrics."""
     fields = ("ad_id,ad_name,impressions,reach,clicks,spend,ctr,cpc,cpm,"
@@ -283,7 +300,7 @@ def parse_daily_row(row):
 
 
 def build_ad_profile(ad_meta, daily_rows, demo_rows, placement_rows,
-                     agg_30d=None, agg_lifetime=None):
+                     agg_7d=None, agg_30d=None, agg_lifetime=None):
     """Build a unified ad profile document from all data sources."""
     ad_id = ad_meta.get("id", "")
     creative = ad_meta.get("creative", {})
@@ -367,8 +384,35 @@ def build_ad_profile(ad_meta, daily_rows, demo_rows, placement_rows,
         ad_format = "single_image"
 
     # Aggregate daily metrics for last 7d and last 14d
-    agg_7d = aggregate_daily(daily_rows, days=7)
+    daily_7d = aggregate_daily(daily_rows, days=7)
     agg_14d = aggregate_daily(daily_rows, days=14)
+
+    # Use API 7d aggregate as authoritative source (handles new/recently
+    # activated ads whose daily rows may not yet exist locally).
+    # Fall back to daily-computed aggregate if API data is unavailable.
+    if agg_7d and agg_7d.get("impressions", 0) > 0:
+        # API aggregate is the source of truth — supplement with daily-only
+        # fields (video_views, post_engagement) that the aggregate also has
+        final_7d = {
+            "impressions": agg_7d.get("impressions", 0),
+            "reach": agg_7d.get("reach", 0),
+            "clicks": agg_7d.get("clicks", 0),
+            "link_clicks": agg_7d.get("link_clicks", 0),
+            "landing_page_views": agg_7d.get("landing_page_views", 0),
+            "view_content": agg_7d.get("view_content", 0),
+            "post_engagement": agg_7d.get("post_engagement", 0),
+            "video_views": agg_7d.get("video_views", 0),
+            "spend_aud": agg_7d.get("spend_aud", 0),
+            "ctr": agg_7d.get("ctr", 0),
+            "cpc": agg_7d.get("cpc_aud"),
+            "cpm": agg_7d.get("cpm_aud"),
+            "cost_per_link_click": agg_7d.get("cost_per_link_click"),
+            "cost_per_view_content": agg_7d.get("cost_per_view_content"),
+            "frequency": agg_7d.get("frequency"),
+            "days_with_data": daily_7d.get("days_with_data", 0),
+        }
+    else:
+        final_7d = daily_7d
 
     # Trend: compare last 7d vs previous 7d
     recent_7d = [r for r in daily_rows if is_within_days(r["date"], 7)]
@@ -436,12 +480,15 @@ def build_ad_profile(ad_meta, daily_rows, demo_rows, placement_rows,
             "text_style": text_style,
         },
         # Performance aggregates
-        "last_7d": agg_7d,
+        "last_7d": final_7d,
         "last_14d": agg_14d,
         "trend_7d_vs_prev": trend,
         # 30-day and lifetime aggregates (from API, not computed from daily)
-        "last_30d": agg_30d or {},
-        "lifetime": agg_lifetime or {},
+        # Note: FB API omits long-paused ads from these presets. When None,
+        # the $set upsert below will leave the existing DB value intact via
+        # the conditional save logic in save_all().
+        "last_30d": agg_30d,
+        "lifetime": agg_lifetime,
         # Daily performance (last 14 days for quick charting)
         "daily": [
             {
@@ -720,12 +767,11 @@ def build_legacy_snapshot(ad_profiles, campaigns, account_daily):
 def build_article_ad_coverage(ads):
     """Compare ads' link URLs against article_index to find coverage gaps."""
     try:
-        client = MongoClient(COSMOS_URI)
-        sm = client["system_monitor"]
+        client = get_client()
+        sm = get_db("system_monitor")
         articles = list(sm["article_index"].find(
             {}, {"_id": 1, "title": 1, "url": 1, "category": 1, "suburbs": 1}
         ))
-        client.close()
     except Exception:
         return {"error": "Could not read article_index"}
 
@@ -819,8 +865,8 @@ def batched_bulk_write(collection, ops, batch_size=10, delay=0.5, label=""):
 def save_all(ad_profiles, daily_metrics, demographics, placements,
              legacy_snapshot):
     """Write all data to MongoDB with batched writes to avoid RU throttling."""
-    client = MongoClient(COSMOS_URI)
-    sm = client["system_monitor"]
+    client = get_client()
+    sm = get_db("system_monitor")
     now_iso = datetime.now(timezone.utc).isoformat()
     today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
@@ -839,12 +885,16 @@ def save_all(ad_profiles, daily_metrics, demographics, placements,
                                delay=0.5, label="ad_daily_metrics")
 
     # 2. Ad profiles — one doc per ad
+    #    Don't overwrite last_30d/lifetime with None when FB API omits
+    #    long-paused ads from those presets — preserve existing DB data.
     if ad_profiles:
         ops = []
         for profile in ad_profiles:
+            set_fields = {k: v for k, v in profile.items()
+                          if v is not None or k not in ("last_30d", "lifetime")}
             ops.append(UpdateOne(
                 {"_id": profile["_id"]},
-                {"$set": profile},
+                {"$set": set_fields},
                 upsert=True,
             ))
         if ops:
@@ -1013,7 +1063,18 @@ def main():
     else:
         print("Skipping placements (--quick mode)")
 
-    # Step 5: 30d and lifetime per-ad aggregates
+    # Step 5: 7d, 30d and lifetime per-ad aggregates
+    print("Fetching 7d per-ad aggregates (API)...")
+    agg_7d_by_ad = {}
+    try:
+        raw_7d = fetch_ad_7d_insights()
+        for row in raw_7d:
+            parsed = parse_aggregate_row(row)
+            agg_7d_by_ad[parsed["ad_id"]] = parsed
+        print(f"  Got 7d data for {len(agg_7d_by_ad)} ads")
+    except Exception as e:
+        print(f"  WARNING: 7d fetch failed: {e}")
+
     print("Fetching 30d per-ad aggregates...")
     agg_30d_by_ad = {}
     try:
@@ -1051,6 +1112,7 @@ def main():
             daily_by_ad.get(ad_id, []),
             demo_by_ad.get(ad_id, []),
             placement_by_ad.get(ad_id, []),
+            agg_7d=agg_7d_by_ad.get(ad_id),
             agg_30d=agg_30d_by_ad.get(ad_id),
             agg_lifetime=agg_lifetime_by_ad.get(ad_id),
         )
