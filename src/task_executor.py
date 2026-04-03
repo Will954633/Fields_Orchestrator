@@ -1106,6 +1106,18 @@ class TaskExecutor:
             except Exception as _e:
                 self.logger.warning(f"Snapshot script failed (non-fatal): {_e}")
 
+        # Trigger Netlify rebuild so sitemap includes new/removed listings
+        try:
+            import requests as _req
+            _hook_url = "https://api.netlify.com/build_hooks/699faf0aa7c588800d79f95d"
+            _resp = _req.post(_hook_url, timeout=10)
+            if _resp.ok:
+                self.logger.info("🔄 Netlify rebuild triggered (sitemap refresh)")
+            else:
+                self.logger.warning(f"Netlify rebuild trigger returned {_resp.status_code}")
+        except Exception as _e:
+            self.logger.warning(f"Netlify rebuild trigger failed (non-fatal): {_e}")
+
         return {
             "success": steps_failed == 0,
             "steps_completed": steps_completed,
