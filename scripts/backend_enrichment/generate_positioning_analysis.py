@@ -412,18 +412,27 @@ def compute_street_stats(prop: Dict, db, suburb: str) -> Dict:
     }
 
 
+def _safe_int(val, default=0) -> int:
+    """Safely convert to int, handling dicts, None, etc."""
+    if isinstance(val, (int, float)):
+        return int(val)
+    return default
+
+
 def classify_archetype(prop: Dict) -> str:
     """Rule-based property archetype classification."""
-    beds = prop.get("bedrooms", 0) or 0
+    beds = _safe_int(prop.get("bedrooms"), 0)
     floor_area = get_floor_area(prop) or 0
-    lot_size = prop.get("lot_size_sqm") or prop.get("land_area", 0) or 0
+    lot_size = _safe_int(prop.get("lot_size_sqm") or prop.get("land_area"), 0)
     features = prop.get("features") or []
-    features_lower = [f.lower() for f in features]
+    if not isinstance(features, list):
+        features = []
+    features_lower = [f.lower() for f in features if isinstance(f, str)]
 
     has_pool = any("pool" in f for f in features_lower)
     is_waterfront = any(w in " ".join(features_lower) for w in ("water", "lake", "canal", "river"))
     prop_type = (prop.get("classified_property_type") or prop.get("property_type", "")).lower()
-    storeys = prop.get("floor_plan_analysis", {}).get("levels", 1) or 1
+    storeys = _safe_int(prop.get("floor_plan_analysis", {}).get("levels"), 1)
 
     if is_waterfront and has_pool:
         return "premium_waterfront_entertainer"
@@ -445,6 +454,8 @@ def classify_archetype(prop: Dict) -> str:
     # Check renovation level
     condition = prop.get("property_valuation_data", {}).get("condition_summary", {})
     reno_score = condition.get("overall_score", 5)
+    if not isinstance(reno_score, (int, float)):
+        reno_score = 5
     if reno_score >= 8:
         return "renovated_family_home"
 
