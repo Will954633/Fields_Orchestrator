@@ -636,6 +636,9 @@ class CurlCffiSuburbScraper:
                 if has_blob_images:
                     # Active listing with blob images — preserve them
                     skip_fields |= self.IMAGE_FIELDS
+                if was_already_for_sale and existing_doc.get('first_listed_timestamp'):
+                    # Preserve original listing date — don't overwrite on re-scrape
+                    skip_fields |= {'first_listed_timestamp', 'first_listed_date', 'first_listed_year', 'first_listed_full', 'days_on_domain'}
                 update_data = {k: v for k, v in property_data.items() if k not in skip_fields}
                 update_data['listing_status'] = 'for_sale'
 
