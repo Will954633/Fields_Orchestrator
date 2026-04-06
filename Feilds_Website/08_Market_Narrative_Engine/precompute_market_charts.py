@@ -516,6 +516,7 @@ def calculate_days_on_market_data(gc_db, sold_db, suburb_collection_name):
                     'month': month_num,
                     'month_name': month_names[month_num - 1],
                     'avg_days': round(mean(seasonal_data[month_num]), 1),
+                    'median_days': round(median(seasonal_data[month_num]), 1),
                 })
 
         print(f"      ✅ Calculated {len(seasonal_trend)} monthly seasonal averages")
