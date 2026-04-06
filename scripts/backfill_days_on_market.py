@@ -63,15 +63,30 @@ def backfill_suburb(db, suburb, apply=False):
             skipped += 1
             continue
 
-        # Source 1: Domain timeline
+        # Source 1: Domain timeline (fuzzy match — sold_date vs timeline date
+        # can differ by weeks because Domain uses settlement date)
         timeline = record.get("scraped_data", {}).get("property_timeline", [])
-        for t in timeline:
-            if (t.get("date") == sold_date
-                    and t.get("category") == "Sale"
-                    and t.get("days_on_market") is not None):
-                dom = int(t["days_on_market"])
-                source = "domain_timeline"
-                break
+        sale_events = [
+            t for t in timeline
+            if t.get("category") == "Sale" and t.get("is_sold")
+            and t.get("days_on_market") is not None and t.get("date")
+        ]
+        if sale_events:
+            try:
+                sd = datetime.strptime(sold_date[:10], "%Y-%m-%d")
+                best_match = None
+                best_diff = 999
+                for t in sale_events:
+                    td = datetime.strptime(t["date"][:10], "%Y-%m-%d")
+                    diff = abs((sd - td).days)
+                    if diff <= 60 and diff < best_diff:
+                        best_diff = diff
+                        best_match = t
+                if best_match:
+                    dom = int(best_match["days_on_market"])
+                    source = "domain_timeline"
+            except (ValueError, TypeError):
+                pass
 
         # Source 2: first_listed_timestamp (only if timeline didn't have it)
         if dom is None and record.get("first_listed_timestamp"):
