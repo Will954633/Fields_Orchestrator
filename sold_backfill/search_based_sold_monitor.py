@@ -473,6 +473,26 @@ class SearchBasedSoldMonitor:
                     except (ValueError, TypeError, ZeroDivisionError):
                         pass
 
+                # Compute days on market from first_listed_timestamp
+                flt = doc.get("first_listed_timestamp")
+                sold_date_str = sold_rec.get("sold_date")
+                if flt and sold_date_str:
+                    try:
+                        from datetime import datetime as dt_cls
+                        if isinstance(flt, str):
+                            flt_date = dt_cls.fromisoformat(flt.replace("Z", "+00:00")).date()
+                        else:
+                            flt_date = flt.date() if hasattr(flt, 'date') else None
+                        if flt_date:
+                            sd_date = dt_cls.strptime(sold_date_str[:10], "%Y-%m-%d").date()
+                            dom = (sd_date - flt_date).days
+                            if 0 <= dom <= 730:
+                                update_fields["days_on_market"] = dom
+                                update_fields["days_on_market_source"] = "computed_at_sold_detection"
+                                print(f"      Days on market: {dom}")
+                    except (ValueError, TypeError):
+                        pass
+
                 # Remove None values
                 update_fields = {k: v for k, v in update_fields.items() if v is not None}
 
