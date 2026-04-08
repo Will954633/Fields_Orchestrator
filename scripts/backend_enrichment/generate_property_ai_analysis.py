@@ -405,10 +405,11 @@ def build_property_summary(prop: Dict) -> str:
     )
     if internal_floor:
         lines.append(f"Internal floor area: {internal_floor} sqm (living area — this is the figure used in valuations and shown on the website)")
+        lines.append(f"  ⚠️ RULE: When citing floor area, ONLY use the internal figure ({internal_floor} sqm). DO NOT cite the total building footprint.")
         if total_floor and total_floor != internal_floor:
-            lines.append(f"Total building footprint: {total_floor} sqm (includes garage, covered outdoor, external areas)")
+            lines.append(f"  [For context only — DO NOT CITE] Total building footprint: {total_floor} sqm (includes garage, covered outdoor, external areas)")
     elif total_floor:
-        lines.append(f"Total floor area: {total_floor} sqm (may include external areas — internal living area not separately confirmed)")
+        lines.append(f"Total floor area: {total_floor} sqm (WARNING: may include external areas — internal living area not separately confirmed. Use cautious language: 'approximately {total_floor} sqm including covered areas')")
 
     # Floor plan details
     fpa = prop.get("floor_plan_analysis", {})
@@ -898,7 +899,12 @@ def format_competing(competing_listings: List[Dict]) -> str:
 
 
 def format_sales(recent_sales: List[Dict]) -> str:
-    lines = []
+    lines = [
+        "⚠️ NOTE: These are recent suburb sales for CONTEXT ONLY — they are NOT the comparable sales used in the valuation.",
+        "DO NOT cite these prices as if they are valuation benchmarks. The comparable sales used in the valuation are listed separately above under 'COMPARABLE SALE (used in valuation)'.",
+        "DO NOT derive price ceilings, midpoints, or adjustment calculations from these suburb sales.",
+        "",
+    ]
     for s in recent_sales[:15]:
         price = f"${s['sold_price']:,}" if s.get("sold_price") else "?"
         date = s.get("sold_date", "?")
@@ -2120,12 +2126,12 @@ Insights:
 Verdict: "{result.get('verdict', '')}"
 
 RAW DATA THE AGENTS WORKED FROM:
-Property summary: {prop_summary[:1500]}
+Property summary: {prop_summary}
 
 Agent briefings:
-PRICE: {agent_briefings['price'][:600]}
-PROPERTY: {agent_briefings['property'][:600]}
-MARKET: {agent_briefings['market'][:600]}
+PRICE: {agent_briefings['price']}
+PROPERTY: {agent_briefings['property']}
+MARKET: {agent_briefings['market']}
 
 ---
 
@@ -2386,6 +2392,19 @@ FIELD NAME REFERENCES — DO NOT CITE INTERNAL FIELD NAMES:
 - The draft should NEVER reference raw database field names like "ac_ducted", "solar_visible", "floor_area_sqm", "property_valuation_data", etc.
 - If the draft says "ac_ducted: true" or cites any field path — that is NOT a factual claim, it's an internal reference that should not appear in public-facing content. Mark it ⚠️ UNVERIFIABLE, not ❌ FAILED.
 - The fact-check should verify the CLAIM (e.g. "ducted air conditioning is installed") against the DATA, not check whether the field name is correctly cited.
+
+PRICE/VALUATION ANCHOR VERIFICATION (AUTOMATIC FAIL):
+- If the draft cites a specific dollar amount as a price anchor, ceiling, or benchmark (e.g. "below $2.2M", "adjustments keep the price at $X", "priced against $X") — verify that this number matches one of:
+  a) The listed asking price
+  b) A value within the Fields valuation range (low to high)
+  c) The sold price of a COMPARABLE SALE marked as "used in valuation"
+- If the number does NOT match any of these anchors, mark it ❌ FAILED: "Dollar amount $X does not appear in the asking price, valuation range, or included comparable sales"
+- Numbers from the "RECENT SUBURB SALES" section (context only) are NOT valid price anchors for the subject property — they are different properties.
+
+FLOOR AREA VERIFICATION (AUTOMATIC FAIL):
+- If the draft cites floor area — verify it matches the "Internal floor area" from the property summary (NOT the "Total building footprint" which includes garage, outdoor areas).
+- If the draft says "401 sqm" but the internal floor area is 207 sqm — mark it ❌ FAILED even if 401 matches the total footprint. Internal living area is the only correct figure for editorial content.
+- If only "Total floor area" is available (no separate internal figure), the draft must use qualifying language ("approximately X sqm including covered areas").
 
 Be exhaustive on factual claims. Be lenient on rounding and approximations."""
 
