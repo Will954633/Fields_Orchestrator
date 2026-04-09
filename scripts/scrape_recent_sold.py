@@ -43,6 +43,7 @@ TARGET_SUBURBS = [
     {"name": "Robina", "postcode": "4226", "collection": "robina"},
     {"name": "Varsity Lakes", "postcode": "4227", "collection": "varsity_lakes"},
     {"name": "Burleigh Waters", "postcode": "4220", "collection": "burleigh_waters"},
+    {"name": "Merrimac", "postcode": "4226", "collection": "merrimac"},
 ]
 
 DATABASE_NAME = "Gold_Coast"
