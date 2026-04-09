@@ -75,18 +75,12 @@
   .cover-meta span { color: #8a94a6; }
   .cover-logo {
     position: absolute;
-    top: 24px;
+    top: 28px;
     left: 36px;
-    color: #ffffff;
-    font-size: 13pt;
-    font-weight: 700;
-    letter-spacing: 1.5px;
-    text-shadow: 0 1px 4px rgba(0,0,0,0.5);
   }
-  .cover-logo em {
-    font-style: normal;
-    font-weight: 300;
-    opacity: 0.8;
+  .cover-logo img {
+    height: 32px;
+    width: auto;
   }
 
   /* ---------- PAGE LAYOUT ---------- */
@@ -401,7 +395,7 @@
 
 <!-- ==================== COVER ==================== -->
 <div class="cover">
-  <div class="cover-logo">FIELDS <em>ESTATE</em></div>
+  <div class="cover-logo"><img src="{{ logo_white_path }}" alt="Fields Estate"></div>
   <img class="cover-image" src="{{ hero_photo }}" alt="Property hero">
   <div class="cover-overlay"></div>
   <div class="cover-bottom">
@@ -418,7 +412,7 @@
 <!-- ==================== PAGE 2: EXECUTIVE SUMMARY ==================== -->
 <div class="page">
   <div class="page-header">
-    <div class="page-header-left">Fields Estate</div>
+    <div class="page-header-left"><img src="{{ logo_path }}" alt="Fields Estate" style="height: 18px; width: auto;"></div>
     <div class="page-header-right">{{ street_address }}</div>
   </div>
 
@@ -476,7 +470,7 @@
 <!-- ==================== PAGE 3: YOUR PROPERTY ==================== -->
 <div class="page">
   <div class="page-header">
-    <div class="page-header-left">Fields Estate</div>
+    <div class="page-header-left"><img src="{{ logo_path }}" alt="Fields Estate" style="height: 18px; width: auto;"></div>
     <div class="page-header-right">{{ street_address }}</div>
   </div>
 
@@ -520,7 +514,7 @@
 <!-- ==================== PAGE 4: COMPARABLE SALES ==================== -->
 <div class="page">
   <div class="page-header">
-    <div class="page-header-left">Fields Estate</div>
+    <div class="page-header-left"><img src="{{ logo_path }}" alt="Fields Estate" style="height: 18px; width: auto;"></div>
     <div class="page-header-right">{{ street_address }}</div>
   </div>
 
@@ -532,10 +526,11 @@
       <tr>
         <th>Address</th>
         <th>Sale Price</th>
+        <th>Adjusted*</th>
         <th>Date</th>
-        <th>Beds</th>
+        <th>Config</th>
         <th>Land</th>
-        <th>$/m²</th>
+        <th>Adj $/m²</th>
       </tr>
     </thead>
     <tbody>
@@ -543,6 +538,7 @@
       <tr>
         <td>{{ comp.address }}</td>
         <td>{{ comp.price_display }}</td>
+        <td>{{ comp.adjusted_display }}</td>
         <td>{{ comp.date }}</td>
         <td>{{ comp.bedrooms }}bd {{ comp.bathrooms }}ba</td>
         <td>{{ comp.land_size }} m²</td>
@@ -551,6 +547,8 @@
       {% endfor %}
     </tbody>
   </table>
+
+  <p class="text-sm text-muted mt-8">* Adjusted prices reflect estimated current-day value using Merrimac's median house price growth rate (~0.5%/month). This accounts for market movement between the sale date and today.</p>
 
   <div class="callout">
     <strong>Note on confidence:</strong> {{ confidence_note }}
@@ -567,7 +565,7 @@
 <!-- ==================== PAGE 6: POSITIONING STRATEGY ==================== -->
 <div class="page">
   <div class="page-header">
-    <div class="page-header-left">Fields Estate</div>
+    <div class="page-header-left"><img src="{{ logo_path }}" alt="Fields Estate" style="height: 18px; width: auto;"></div>
     <div class="page-header-right">{{ street_address }}</div>
   </div>
 
@@ -600,7 +598,7 @@
 <!-- ==================== PAGE 7: MARKET CONTEXT ==================== -->
 <div class="page">
   <div class="page-header">
-    <div class="page-header-left">Fields Estate</div>
+    <div class="page-header-left"><img src="{{ logo_path }}" alt="Fields Estate" style="height: 18px; width: auto;"></div>
     <div class="page-header-right">{{ street_address }}</div>
   </div>
 
@@ -642,7 +640,7 @@
 <!-- ==================== PAGE 8: WHY FIELDS + NEXT STEPS ==================== -->
 <div class="page">
   <div class="page-header">
-    <div class="page-header-left">Fields Estate</div>
+    <div class="page-header-left"><img src="{{ logo_path }}" alt="Fields Estate" style="height: 18px; width: auto;"></div>
     <div class="page-header-right">{{ street_address }}</div>
   </div>
 
