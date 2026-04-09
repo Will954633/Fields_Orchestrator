@@ -65,7 +65,7 @@ sys.path.insert(0, str(REPO_ROOT))
 from shared.monitor_client import MonitorClient
 from shared.ru_guard import cosmos_retry, sleep_with_jitter
 
-TARGET_SUBURBS = ["robina", "varsity_lakes", "burleigh_waters"]
+TARGET_SUBURBS = ["robina", "varsity_lakes", "burleigh_waters", "merrimac"]
 
 # ---------------------------------------------------------------------------
 # Configuration — all tuneable parameters in one place
