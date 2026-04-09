@@ -457,7 +457,7 @@ This means an auction listing in Queensland starts with a fundamentally smaller 
 
 **Problem 2: Without a price guide, buyers form their own estimate -- and it's usually low.**
 
-When buyers cannot see a price, they must come to their own conclusions about value. In the absence of professional guidance (which the legislation prevents the agent from providing), buyers tend to estimate conservatively. This is a well-documented psychological effect known as ambiguity aversion: when people face uncertainty about the value of an option, they systematically discount it. The effect was first described by Ellsberg (1961) and has been extensively studied in decision science -- Frisch and Baron (1988) found that "people have a rule of thumb to avoid options where information is missing." In property, the missing information is the price, and the avoidance manifests as lower offers or no offer at all.
+When buyers cannot see a price, they must come to their own conclusions about value. In the absence of professional guidance (which the legislation prevents the agent from providing), buyers tend to estimate conservatively. This is a well-documented psychological effect known as ambiguity aversion. When people face uncertainty about the value of an option, they systematically discount it -- often below the value of the worst guaranteed outcome (Gneezy, List & Wu, 2006, *Quarterly Journal of Economics*). The effect was first described by Ellsberg (1961) and has been extensively replicated. Fox and Tversky (1995) found that decision-makers prefer options about which they feel more knowledgeable, and that even when warned about this bias, 80% of subjects still exhibit it. Frisch and Baron (1988) found that "people have a rule of thumb to avoid options where information is missing." In property, the missing information is the price, and the avoidance manifests as lower offers or no offer at all.
 
 Consider this from the agent's perspective. In a private treaty sale, when a buyer asks "what's it worth?", the agent can say: "Based on comparable sales, here's what similar properties have sold for. Here's what makes this property worth the asking price. Here's the data." That conversation builds value. It defends the price. It gives the buyer confidence that the price is justified.
 
@@ -518,7 +518,7 @@ These findings were echoed in a separate study in the *Journal of Real Estate Ec
 
 The mechanism is straightforward. When a property is priced well above what the market will pay, qualified buyers don't enquire. Without enquiries, the property doesn't sell. It sits. Over time, the current pool of buyers assumes something must be wrong with the property, the seller, or the deal. The listing becomes stigmatised.
 
-Multiple studies confirm the damage caused by overpricing. Taylor (1999) found that properties overpriced by more than 10% above market value take 2-5 times longer to sell and develop a stigma effect that persists even after price reductions. Knight (2002) demonstrated that getting the initial price right matters more than any subsequent adjustment -- once a property enters the market overpriced, the damage to buyer perception is difficult to reverse. Anglin, Rutherford, and Springer (2003) found a direct, measurable relationship between the degree of overpricing and the eventual discount below market value at which the property sells.
+Multiple studies confirm the damage caused by overpricing. Taylor (1999) found that properties overpriced by more than 10% above market value take 2-5 times longer to sell and develop a stigma effect that persists even after price reductions. Knight (2002) demonstrated that getting the initial price right matters more than any subsequent adjustment -- once a property enters the market overpriced, the damage to buyer perception is difficult to reverse. Anglin, Rutherford, and Springer (2003) found a direct, measurable relationship between the degree of overpricing and the eventual discount below market value at which the property sells. More recently, Zillow Research (2019) analysed US-wide listing data and found that homes priced 12% or more above estimated market value were almost 50% less likely to sell within 60 days compared to correctly priced homes -- and that homes lingering on market sold for 5% less after just two months.
 
 When a property fails to sell, the homeowner faces two options:
 
@@ -659,7 +659,7 @@ The data is clear on which pre-sale improvements generate returns and which do n
 
 These improvements share common characteristics: they are relatively low cost, they address what buyers notice first, and they remove reasons for buyers to discount their offer.
 
-This is broadly consistent with Australian property expert Andrew Winter's findings and recommendations on pre-sale preparation: the improvements that generate the best returns are those that address first impressions and remove objections, not those that add new features. Fresh paint, in particular, is consistently identified across multiple sources as the single highest-ROI pre-sale action -- it is low cost, visually transformative, and signals to buyers that the property has been maintained. Landscaping operates similarly: research on "kerb appeal" consistently shows that the exterior presentation shapes buyer expectations before they enter the property, and a well-presented garden creates a perception of value that influences the entire inspection experience.
+This is broadly consistent with Australian property expert Andrew Winter's findings and recommendations on pre-sale preparation: the improvements that generate the best returns are those that address first impressions and remove objections, not those that add new features. Fresh paint, in particular, is consistently identified across multiple sources as the single highest-ROI pre-sale action -- it is low cost, visually transformative, and signals to buyers that the property has been maintained. Industry data suggests properties with fresh paint and updated fixtures sell approximately 25% faster and receive offers 3-5% higher than unpainted equivalent properties. Landscaping operates similarly: research on "kerb appeal" consistently shows that the exterior presentation shapes buyer expectations before they enter the property, and a well-presented garden creates a perception of value that influences the entire inspection experience.
 
 **Low-Return Improvements:**
 
@@ -694,7 +694,7 @@ The gap between agent-phone photography and professional property photography is
 
 [PHOTOGRAPH: Comparison of agent-phone photo vs professional property photography of a similar room]
 
-*Note: Much of the virtual tour engagement data originates from the 2020-2022 period when physical inspections were restricted. While virtual tour usage has moderated since restrictions lifted, the underlying behavioural mechanism -- the endowment effect -- is well-established in decision science and is not dependent on pandemic conditions. The trend toward richer digital property experiences (3D walkthroughs, video tours, interactive floor plans) continues to grow as buyer expectations for online property presentation increase.*
+*Note: The virtual tour engagement data originates from the 2020-2022 period. A 2024 NBER study (Soleymanian & Qian, analysing 75,000+ home sales in Los Angeles) confirmed that virtual tours still increase sale prices by an average of 1%, but the differential advantage has narrowed as tours have shifted from novel differentiator to standard expectation. In 2022, 61% of buyers wished 3D tours were available on more listings (Zillow). The underlying behavioural mechanism -- the endowment effect -- is well-established in decision science and is not pandemic-dependent. Virtual tours are now table-stakes rather than competitive advantage: not having one may hurt more than having one helps.*
 
 Virtual tours are particularly effective because they trigger what behavioural scientists call the "endowment effect." When buyers navigate through a home at their own pace, choosing which rooms to enter and which views to linger on, they begin to mentally take ownership. This mental ownership -- the feeling that the home is already "theirs" -- increases their willingness to pay. It is the same psychological mechanism that makes car dealerships encourage test drives: once you've sat in the driver's seat, you're harder to walk away.
 
@@ -989,9 +989,9 @@ There is a common assumption that social media is "for young people" and therefo
 | 55-64 years | 2,100,000 |
 | 65+ years | 1,900,000 |
 
-*(Source: Australian Facebook Demographics analysis, October 2023, Genroe. Note: These figures have likely grown since this analysis -- Meta's global user base has continued to expand, with the 45+ demographic being the fastest-growing segment across multiple markets.)*
+*(Source: Genroe, October 2023. Updated Meta ad reach data from ROI.com.au (2026) indicates the 45+ cohort has grown to approximately 7.5-8 million, with Facebook reaching 78% of Australian internet users overall (Meltwater, 2026). Australia's under-16 social media ban, effective December 2025, further concentrates Facebook's audience in the adult demographics most relevant to property.)*
 
-More than 6.9 million active Facebook users are aged 45 and over. This is the demographic most likely to be buying or selling established family homes on the Gold Coast. Dismissing social media as a marketing channel means dismissing a platform that reaches the exact demographic most likely to be your buyer.
+More than 7.5 million active Facebook users are aged 45 and over. This is the demographic most likely to be buying or selling established family homes on the Gold Coast. Dismissing social media as a marketing channel means dismissing a platform that reaches the exact demographic most likely to be your buyer.
 
 Social media marketing for property offers several advantages:
 
@@ -1566,7 +1566,15 @@ fieldsestate.com.au
 
 13. Frisch, D. & Baron, J. (1988). "Ambiguity and Rationality." *Journal of Behavioral Decision Making*, 1(3), 149-157. — "People have a rule of thumb to avoid options where information is missing."
 
-14. Deakin University (multiple authors). — Structural issues with auction clearance rate calculation and reporting methodology.
+14. Fox, C.R. & Tversky, A. (1995). "Ambiguity Aversion and Comparative Ignorance." *Quarterly Journal of Economics*, 110(3), 585-603. — Decision-makers prefer options about which they feel more knowledgeable; 80% still exhibit ambiguity aversion even when warned.
+
+15. Gneezy, U., List, J.A. & Wu, G. (2006). "The Uncertainty Effect: When a Risky Prospect Is Valued Less Than Its Worst Possible Outcome." *Quarterly Journal of Economics*, 121(4), 1283-1309. — Uncertain prospects valued below worst guaranteed outcome.
+
+16. Soleymanian, M. & Qian, Y. (2024). "From Novelty to Norm: Uncovering the Drivers of Virtual Tour Effectiveness in Real Estate Sales." NBER Working Paper No. 33204. — Virtual tours increase sale prices ~1% but differential advantage narrowing post-COVID (75,000+ sales analysed).
+
+17. Zillow Research (2019). — Homes priced 12%+ above market value almost 50% less likely to sell within 60 days; homes lingering on market sell for 5% less after 2 months.
+
+18. Deakin University (multiple authors). — Structural issues with auction clearance rate calculation and reporting methodology.
 
 ### Industry Research
 
