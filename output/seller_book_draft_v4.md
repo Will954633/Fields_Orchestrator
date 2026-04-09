@@ -128,9 +128,21 @@ When an automated estimate tells you your home is worth $1,580,000 and the compa
 
 The platforms aren't being dishonest. Their models use publicly available data — land size, bedroom count, postcode, recent sales in the area. But they can't see inside your home. They don't know that your renovated kitchen adds value or that your bathroom hasn't been touched since 1997. They don't know the house behind you just built a second storey that now overlooks your backyard. They don't know the flight path shifted. They're doing their best with limited information, and their best overvalues your home almost nine times out of ten.
 
+## Why "Comparable Sales" Isn't Enough Without a Method
+
+I was at an open home recently. The property was going to auction — no price guide, as Queensland law requires. An older woman approached the agent and asked what kind of price the property might achieve.
+
+He pointed vaguely across the street: "Well, I sold a three-bedroom home over there last week for $1,300,000. And before that I sold a four-bedroom for $1,450,000."
+
+She looked at him, nodded politely, and walked away.
+
+He'd given her two comparable sales. Technically, that's the right starting point. But without any context for how those sales related to the property she was standing in, they were just numbers. Was this home a three-bedroom or a four-bedroom? Was the block the same size? Was the condition comparable? Was she closer to the $1,300,000 sale or the $1,450,000 one? She had no framework to evaluate what she'd just been told.
+
+That moment captures the problem this chapter exists to solve. Comparable sales are the foundation of every credible valuation — but raw comparable sales, without adjustment and weighting, tell you almost nothing. Two prices from two different properties on two different streets are not a valuation. They're a starting point that requires a method.
+
 ## How Comparable-Sales Analysis Actually Works
 
-The alternative is a comparable-sales valuation, and understanding how it works is worth the few minutes it takes to explain. This is the method used by banks, valuers, and — when they're being honest — agents.
+Here is that method — the same one used by banks, licensed valuers, and agents when they're being rigorous.
 
 The process looks like this. You'll see three to eight properties that recently sold near you, selected because they share the characteristics that actually drive price in your market. Same suburb. Similar land size. Comparable floor area. Similar bedroom and bathroom count. Sold within the last six to twelve months. Close enough geographically that the street-level factors — the park access, the traffic noise, the school catchment — are roughly comparable.
 
