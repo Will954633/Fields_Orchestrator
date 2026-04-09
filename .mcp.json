@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "google-drive": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["/home/fields/Fields_Orchestrator/mcp-servers/gdrive/index.mjs"],
+      "env": {
+        "GDRIVE_OAUTH_PATH": "/home/fields/.gdrive-oauth.keys.json",
+        "GDRIVE_CREDENTIALS_PATH": "/home/fields/.gdrive-server-credentials.json"
+      }
+    }
+  }
+}
