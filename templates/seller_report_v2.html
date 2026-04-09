@@ -312,7 +312,53 @@
   <div class="page-footer">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div>
 </div>
 
-<!-- ══════ PAGE 6: WHO BUYS THIS HOME ══════ -->
+<!-- ══════ PAGE 6: LOCATION & LIFESTYLE ══════ -->
+<div class="page">
+  <div class="page-header">
+    <img src="{{ logo_path }}" alt="Fields Estate">
+    <div class="page-header-right">{{ street_address }}</div>
+  </div>
+
+  <h2>Location &amp; Lifestyle</h2>
+  <p class="subtitle">Satellite analysis and proximity data for {{ street_address }}.</p>
+
+  {% if satellite_image_url %}
+  <img class="photo-hero" src="{{ satellite_image_url }}" alt="Satellite view" style="height: 220px;">
+  {% endif %}
+
+  <div class="room-grid">
+    <div class="room-card">
+      <span class="room-score" style="background: #166534;">{{ sat_green_space }}</span>
+      <h3>Setting</h3>
+      <div class="room-detail">{{ sat_overall_setting }}</div>
+    </div>
+    <div class="room-card">
+      <span class="room-score" style="background: #166534;">{{ sat_frontage }}</span>
+      <h3>Street Position</h3>
+      <div class="room-detail">{{ sat_road_proximity }}</div>
+    </div>
+  </div>
+
+  <h3 class="mt-12">What's Nearby</h3>
+  <div class="room-grid">
+    {% for poi in key_pois %}
+    <div class="room-card">
+      <h3 style="font-size: 9.5pt;">{{ poi.name }}</h3>
+      <div class="room-detail">{{ poi.category }} &mdash; {{ poi.distance }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% if seasonality_section %}
+  <hr class="divider">
+  <h3>Selling Timeline: {{ sell_timeline_label }}</h3>
+  <p style="font-size: 9.5pt; color: #374151;">{{ seasonality_section }}</p>
+  {% endif %}
+
+  <div class="page-footer">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div>
+</div>
+
+<!-- ══════ PAGE 7: WHO BUYS THIS HOME ══════ -->
 <div class="page">
   <div class="page-header">
     <img src="{{ logo_path }}" alt="Fields Estate">
