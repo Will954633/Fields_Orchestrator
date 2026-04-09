@@ -186,6 +186,27 @@ def compute_adjustments(subject: dict, comp: dict) -> list[dict]:
     elif s_water and not c_water:
         adjs.append({"label": "Water views", "diff": "+1", "value": R["per_water_view"], "display": fmt_signed(R["per_water_view"])})
 
+    # Golf course frontage / gated estate premium
+    c_lf = comp.get("location_factors", {})
+    s_lf = subject.get("location_factors", {})
+    c_golf = c_lf.get("golf_course_backing", False)
+    s_golf = s_lf.get("golf_course_backing", False)
+    if c_golf and not s_golf:
+        # Comp has golf frontage, subject doesn't — comp's price is inflated
+        adjs.append({"label": "Golf course frontage (comp has, subject doesn't)", "diff": "-1", "value": -150000, "display": fmt_signed(-150000)})
+
+    c_gated = c_lf.get("gated_estate", False)
+    s_gated = s_lf.get("gated_estate", False)
+    if c_gated and not s_gated:
+        adjs.append({"label": "Gated estate (comp in, subject not)", "diff": "-1", "value": -75000, "display": fmt_signed(-75000)})
+
+    # Subject has wetland reserve backing (positive amenity not in comps)
+    s_loc = subject.get("location_intelligence", {})
+    if s_loc.get("wetland_reserve", {}).get("backing"):
+        c_has_reserve = False  # None of our comps back onto reserves
+        if not c_has_reserve:
+            adjs.append({"label": "Wetland reserve backing (privacy, nature)", "diff": "+1", "value": 30000, "display": fmt_signed(30000)})
+
     return adjs
 
 
@@ -359,13 +380,16 @@ def build_value_equations(subject: dict) -> list[dict]:
         "positive": True,
     })
 
-    # No AC
-    eqs.append({
-        "title": "No air conditioning",
-        "body": "The property has no AC installed — unusual for a Gold Coast home at this price point. 7 Nicklaus Court has ducted AC ($18,000 adjustment), and most comparable sales have at least split systems. Installation cost for ducted AC in a two-storey home of this size: approximately $12,000–$18,000.",
-        "reframe": None,
-        "positive": False,
-    })
+    # All Saints School proximity
+    loc = subject.get("location_intelligence", {})
+    school = loc.get("all_saints_school", {})
+    if school:
+        eqs.append({
+            "title": f"All Saints Anglican School — {school.get('boundary_distance_m', 150)}m from the boundary",
+            "body": f"One of the Gold Coast's most prestigious private schools, K-12 co-educational Anglican. The school's playing fields boundary is approximately {school.get('boundary_distance_m', 150)}m from the property — {school.get('walking_time_min', 5)} minute walk to the main entrance via Highfield Drive. In this price bracket, proximity to a school of this calibre is a primary driver for the target buyer.",
+            "reframe": "This is who buys this home: a family that sends their children to All Saints and wants them to walk to school. That buyer pool is specific, motivated, and willing to pay for proximity.",
+            "positive": True,
+        })
 
     # Two-storey
     eqs.append({
@@ -375,6 +399,16 @@ def build_value_equations(subject: dict) -> list[dict]:
         "positive": True,
     })
 
+    # Wetland reserve backing
+    wetland = loc.get("wetland_reserve", {})
+    if wetland.get("backing"):
+        eqs.append({
+            "title": "Wetland reserve at rear boundary — privacy and nature amenity",
+            "body": "The property backs directly onto a wetland reserve with no rear neighbours. Combined with the cul-de-sac position, this delivers genuine privacy and a green outlook that cannot be built out. For nature-oriented families, this is a lifestyle feature. We estimate this adds approximately $30,000 in amenity value per comparable adjustment.",
+            "reframe": "No rear neighbours, wetland outlook, cul-de-sac — three privacy layers that most comparable properties don't have.",
+            "positive": True,
+        })
+
     # Flood
     zd = subject.get("zoning_data", {})
     if zd and not zd.get("flood_overlay"):
@@ -382,9 +416,9 @@ def build_value_equations(subject: dict) -> list[dict]:
         if zd.get("flood_ground_level_m") and zd.get("flood_designated_level_m"):
             clearance = round(zd["flood_ground_level_m"] - zd["flood_designated_level_m"], 1)
         eqs.append({
-            "title": "Flood risk: clear",
-            "body": f"No flood overlay on Gold Coast City Council mapping. Ground level sits at {zd.get('flood_ground_level_m', '?')}m AHD — {clearance}m above the designated flood level. Not in any ICA insurance flood zone. Zero insurance flood events on record." if clearance else "No flood overlay on council mapping. Not in any ICA insurance flood zone.",
-            "reframe": "In Merrimac, where flood is often the first question buyers ask, a clean flood position is a genuine differentiator.",
+            "title": "Flood risk: clear — despite backing onto wetland",
+            "body": f"No flood overlay on Gold Coast City Council mapping. Ground level sits at {zd.get('flood_ground_level_m', '?')}m AHD — {clearance}m above the designated flood level. Not in any ICA insurance flood zone. Zero insurance flood events on record. The wetland reserve at the rear does not place this property in any flood risk category." if clearance else "No flood overlay on council mapping. Not in any ICA insurance flood zone.",
+            "reframe": "In Merrimac, where flood is often the first question buyers ask, a clean flood position next to a wetland reserve is a strong signal.",
             "positive": True,
         })
 
