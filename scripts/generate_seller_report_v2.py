@@ -359,7 +359,7 @@ def build_value_equations(subject: dict) -> list[dict]:
     # Land
     eqs.append({
         "title": "Land: 658 m² — mid-sized for Merrimac",
-        "body": "3 Islay Court sold on 765 m² and 4 Mull Court on 799 m². At $375/m² in Merrimac, that's $40,000–$53,000 less land value. But the outdoor package on this property — inground pool (excellent condition), 52.5 m² covered deck, outdoor kitchen — would cost $95,000–$145,000 to replicate.",
+        "body": "3 Islay Court sold on 765 m² and 7 Nicklaus Court on 825 m². At $375/m² in Merrimac, that's $40,000–$63,000 less land value. But the outdoor package on this property — inground pool (excellent condition), 52.5 m² covered deck, outdoor kitchen — would cost $95,000–$145,000 to replicate.",
         "reframe": "The outdoor infrastructure more than compensates for the land gap.",
         "positive": True,
     })
@@ -367,15 +367,15 @@ def build_value_equations(subject: dict) -> list[dict]:
     # Floor area
     eqs.append({
         "title": "Internal floor area: 221 m² across two levels",
-        "body": "4 Mull Court has 168 m² (single storey) and 3 Islay Court has 241 m². At $2,000/m², Dee's property carries +$106,000 over Mull Court but -$40,000 vs Islay Court. The two-storey layout delivers more living space per square metre of land — but requires stairs.",
-        "reframe": "53 m² more living than the closest twin (4 Mull Court). That's an entire extra living zone.",
+        "body": "3 Islay Court has 241 m² and 7 Nicklaus Court has 370 m². At $2,000/m², this property sits below both comparables on internal area — but the two-storey layout delivers more living space per square metre of land than a single-level design, and the dual-living configuration makes every square metre functional.",
+        "reframe": "The two-storey layout enables genuine dual living — a configuration none of the comparables offer.",
         "positive": True,
     })
 
     # Condition
     eqs.append({
         "title": "Condition: 9/10 — the renovation is already done",
-        "body": "Stone benchtops, modern cabinetry, premium appliances, island bench in the kitchen (9/10). Pool in excellent condition (9/10). Exterior freshly painted with new render (9/10). At 5% per condition point on a $1.4M base, each point is worth ~$70,000. The 1-point advantage over 3 Islay Court (8/10) is worth approximately $70,000.",
+        "body": "Stone benchtops, modern cabinetry, premium appliances, island bench in the kitchen (9/10). Pool in excellent condition (9/10). Exterior freshly painted with new render (9/10). At 5% per condition point on a $1.4M base, each point is worth approximately $70,000. The 1-point advantage over 3 Islay Court (8/10) is worth approximately $70,000. The 1-point advantage over 7 Nicklaus Court (also adjusted down for renovation level) adds further separation.",
         "reframe": "A buyer choosing this over a condition-8 home avoids $150,000–$250,000 in renovation spend and 6–12 months of disruption.",
         "positive": True,
     })
@@ -475,7 +475,7 @@ PROPERTY: 13 Terrace Court, Merrimac QLD 4226
 658 sqm land, 221 sqm internal, 2-storey contemporary/Hamptons, 9/10 condition.
 Pool (excellent), dual living, stone kitchen, butler's pantry, covered deck 52.5 sqm.
 No air conditioning. Last sold $1,330,000 Feb 2023.
-Valuation: $2,000,000 (range $1,760,000–$2,240,000).
+Valuation: $1,800,000 (range $1,600,000–$1,955,000).
 
 COMPARABLE ADJUSTMENTS:
 {comp_text}
@@ -514,10 +514,10 @@ Return ONLY valid JSON."""
 
 def _fallback_positioning():
     return {
-        "pricing_strategy": "Based on comparable-adjusted analysis, we would position at $1,995,000 — sitting just below the $2M psychological threshold while reflecting the 50% capital growth since the February 2023 purchase at $1,330,000. The three closest comparables adjust to $1,558,000 (4 Mull Court), $1,561,000 (3 Islay Court), and $1,909,000 (7 Nicklaus Court), with the premium end reflecting the property's superior condition and dual-living configuration.",
-        "key_selling_points": "Dual living configuration with genuine separation (ground floor self-contained zone) — unmatched by 90% of recent sales which are 3-4 bedroom single-level homes. 9/10 condition eliminates $150,000-$250,000 renovation spend. 221 sqm internal — 53 sqm more than the closest comparable twin (4 Mull Court). Pool + outdoor kitchen + 52.5 sqm covered deck — $95,000-$145,000 to replicate. Zero direct competition at this spec under $4,900,000.",
-        "marketing_approach": "Premium campaign emphasising the dual living and lifestyle proposition through professional photography focused on the pool-to-deck-to-kitchen flow. Private inspections initially to create exclusivity, followed by structured open homes ending at the outdoor entertaining area (peak-end rule from behavioural research). Digital targeting: local upgraders and interstate families in the $1.76M-$2.24M bracket.",
-        "market_assessment": "Merrimac shows measured activity — 43 house sales in 12 months with a $1,065,000 median. Only 2 of those 43 exceeded $1,600,000, indicating limited premium stock turnover. The 15 current listings offer zero competition at this specification. The specialised nature means a slightly longer marketing period (45-60 days) to find the right buyer, but the lack of direct competition supports firm pricing.",
+        "pricing_strategy": "We would position at $1,800,000 based on three comparable-adjusted sales. 48 Lakelands Drive (sold $2,300,000, 5 weeks ago) adjusts to $1,954,874 after removing its golf frontage and gated estate premiums. 7 Nicklaus Court ($2,230,000, 11 months ago) adjusts to $1,735,137 after accounting for water views, golf frontage, and larger floor area. 3 Islay Court ($1,400,000, 7 months ago) adjusts to $1,607,616 after condition and renovation credits. The weighted average supports $1,800,000 within a range of $1,600,000 to $1,955,000.",
+        "key_selling_points": "The dual living configuration drives the highest value differential, evidenced by the $354,868 gap between comparable properties with and without this feature. The executive pool and 52.5 sqm covered entertaining deck combination adds significant premium based on the outdoor lifestyle adjustments across comparables. The stone kitchen with butler's pantry and 5-bedroom plus study layout positions against the luxury end of the market. The 221 sqm internal space on 658 sqm delivers optimal density for the price point, while the 4-car accommodation meets executive buyer expectations.",
+        "marketing_approach": "We would launch with a 4-week intensive campaign targeting the luxury family segment through prestige property platforms and executive relocation networks. Photography would emphasize the dual living zones, pool entertainment areas, and kitchen-to-deck flow that justify the premium positioning. Open homes would be structured as private appointments initially, then weekend opens in weeks 3-4 to create urgency. The campaign would highlight the zero direct competition factor across all channels.",
+        "market_assessment": "Merrimac's 43 sales in 12 months with only 15 current listings indicates healthy turnover and limited oversupply at this tier. The complete absence of 5-bedroom plus pool plus dual living properties under $4,900,000 creates a significant market gap that favors our positioning. We would expect 21-28 days on market given the specification rarity, with the luxury family buyer pool driving activity. The timing benefits from the post-holiday market activation period when executive buyers typically transact.",
     }
 
 
@@ -555,6 +555,23 @@ def render_html(prop, client_name, top_comps, room_assessments, value_equations,
     ai = prop.get("ai_analysis", {})
     qt = ai.get("quick_take", {})
 
+    # Seller-context editorial overrides (replace buyer-facing AI analysis)
+    seller_headline = "Your property sits well above the Merrimac median, supported by three recent comparable sales"
+    seller_sub_headline = "A five-bedroom home with pool, dual living, and 9/10 condition in a market with zero direct competition at this specification"
+    seller_verdict = (
+        "Based on three adjusted comparable sales ranging from $1,607,616 to $1,954,874, "
+        "we estimate your property's current market position at approximately $1,800,000, "
+        "within a range of $1,600,000 to $1,955,000. The primary value drivers are the dual living "
+        "configuration, pool and outdoor entertaining package, overall 9/10 condition, and "
+        "proximity to All Saints Anglican School."
+    )
+    seller_strengths = [
+        "9/10 condition with stone benchtops, inground pool, outdoor kitchen, and 52.5 sqm entertaining deck — roughly $165,000–$230,000 of renovation already done",
+        "Five bedrooms with genuine dual-living layout and zero direct competition in Merrimac under $4,900,000",
+        "150m from All Saints Anglican School boundary — a primary driver for the target buyer pool",
+    ]
+    seller_trade_off = "658 sqm lot (107 sqm less than the nearest comp), 221 sqm internal floor area, and a two-storey layout that rules out single-level living"
+
     context = {
         "client_name": client_name,
         "report_date": datetime.now(AEST).strftime("%d %B %Y"),
@@ -567,15 +584,15 @@ def render_html(prop, client_name, top_comps, room_assessments, value_equations,
         "internal_area": prop.get("floor_plan_analysis", {}).get("internal_floor_area", {}).get("value", 221),
         "condition_score": prop.get("property_valuation_data", {}).get("property_overview", {}).get("overall_condition_score", 9),
         # Valuation
-        "valuation_display": fmt(vd.get("reconciled_valuation", 2000000)),
-        "valuation_low_display": fmt(vd.get("range", {}).get("low", 1760000)),
-        "valuation_high_display": fmt(vd.get("range", {}).get("high", 2240000)),
-        # Fields Take
-        "headline": ai.get("headline", ""),
-        "sub_headline": ai.get("sub_headline", ""),
-        "verdict": ai.get("verdict", ""),
-        "strengths": qt.get("strengths", []),
-        "trade_off": qt.get("trade_off", ""),
+        "valuation_display": fmt(1800000),
+        "valuation_low_display": fmt(1600000),
+        "valuation_high_display": fmt(1955000),
+        # Fields Take (seller context)
+        "headline": seller_headline,
+        "sub_headline": seller_sub_headline,
+        "verdict": seller_verdict,
+        "strengths": seller_strengths,
+        "trade_off": seller_trade_off,
         # Comps
         "top_comps": top_comps,
         "adj_sample_size": "25",
@@ -749,7 +766,6 @@ def main():
     col = client["Gold_Coast"][args.suburb]
     comp_queries = [
         {"STREET_NO_1": "48", "STREET_NAME": "LAKELANDS", "STREET_TYPE": "DRIVE"},
-        {"STREET_NO_1": "4", "STREET_NAME": "MULL", "STREET_TYPE": "COURT"},
         {"STREET_NO_1": "7", "STREET_NAME": "NICKLAUS", "STREET_TYPE": "COURT"},
         {"STREET_NO_1": "3", "STREET_NAME": "ISLAY", "STREET_TYPE": "COURT"},
     ]
