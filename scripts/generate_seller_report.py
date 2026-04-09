@@ -81,15 +81,70 @@ def format_price(value: Any) -> str:
         return str(value)
 
 
-def get_sold_comparables(db, suburb: str, prop: dict) -> list[dict]:
-    """Get recent house sales in the suburb with prices."""
+def time_adjust_price(price: int, sold_date: str, monthly_growth_rate: float = 0.005) -> tuple[int, float]:
+    """Adjust a historical sale price to today's terms using median growth rate.
+    Returns (adjusted_price, adjustment_factor)."""
+    if not sold_date:
+        return price, 1.0
+    try:
+        from datetime import datetime as dt
+        sold = dt.strptime(sold_date[:10], "%Y-%m-%d")
+        now = dt.now()
+        months = (now.year - sold.year) * 12 + (now.month - sold.month)
+        factor = (1 + monthly_growth_rate) ** months
+        return int(price * factor), factor
+    except (ValueError, TypeError):
+        return price, 1.0
+
+
+# Manually curated comparables that Will identified as relevant
+MANUAL_COMPS = [
+    {
+        "address": "65 Nicklaus Court, Merrimac",
+        "price": 2085000,
+        "date": "2025-11-16",
+        "bedrooms": 5,
+        "bathrooms": 2,
+        "carspaces": 4,
+        "land_size_sqm": 459,
+        "source": "manual",
+    },
+    {
+        "address": "93 Highfield Drive, Merrimac",
+        "price": 1400000,
+        "date": "2025-07-05",
+        "bedrooms": 6,
+        "bathrooms": 4,
+        "carspaces": 4,
+        "land_size_sqm": 649,
+        "source": "manual",
+    },
+    {
+        "address": "7 Nicklaus Court, Merrimac",
+        "price": 2230000,
+        "date": "2025-05-22",
+        "bedrooms": 5,
+        "bathrooms": 4,
+        "carspaces": 2,
+        "land_size_sqm": 825,
+        "source": "manual",
+    },
+]
+
+
+def get_sold_comparables(db, suburb: str, prop: dict, min_beds: int = 4) -> list[dict]:
+    """Get relevant comparable house sales: 4+ beds, has price & land data.
+    Includes manually curated comps and applies time-adjustment to older sales."""
     col = db["Gold_Coast"][suburb]
     sold = list(col.find({
         "listing_status": "sold",
-        "property_type": {"$regex": "house", "$options": "i"},
+        "property_type": {"$regex": "house|semi", "$options": "i"},
     }))
 
     results = []
+    seen_addresses = set()
+
+    # Process DB records
     for s in sold:
         price_raw = s.get("sold_price") or s.get("sale_price") or s.get("listing_price", "")
         price_str = str(price_raw) if price_raw else ""
@@ -99,31 +154,76 @@ def get_sold_comparables(db, suburb: str, prop: dict) -> list[dict]:
         if not match:
             continue
         price = int(match)
-        date = str(s.get("sold_date", ""))
-        if date < "2025-04-01":
+        if price < 500000:
+            continue
+
+        beds = s.get("bedrooms")
+        if not beds or (isinstance(beds, (int, float)) and beds < min_beds):
+            continue
+        if isinstance(beds, str) and beds.isdigit() and int(beds) < min_beds:
             continue
 
         land = s.get("land_size_sqm") or s.get("lot_size_sqm")
-        land_val = int(float(land)) if land and float(land) > 1 else None
-        price_per_sqm = f"${int(price / land_val):,}" if land_val and land_val > 50 else "—"
+        land_val = int(float(land)) if land and float(land) > 50 else None
+        if not land_val:
+            continue
+
+        date = str(s.get("sold_date", ""))
+        if date < "2024-04-01":
+            continue
+
         addr = (s.get("display_address") or s.get("complete_address") or
                 s.get("street_address") or s.get("address") or "—")
-        # Clean up address
         addr = addr.replace(", QLD 4226", "").replace(", Merrimac", "").replace(" MERRIMAC QLD 4226", "")
+        addr_key = re.sub(r"\s+", " ", addr.upper().strip())
+        addr_key = re.sub(r",?\s*(MERRIMAC|QLD|4226)\s*", " ", addr_key).strip()
+        if addr_key in seen_addresses:
+            continue
+        seen_addresses.add(addr_key)
+
+        adjusted_price, factor = time_adjust_price(price, date)
+        price_per_sqm = f"${int(adjusted_price / land_val):,}" if land_val else "—"
 
         results.append({
             "address": addr,
             "price": price,
+            "adjusted_price": adjusted_price,
             "price_display": format_price(price),
+            "adjusted_display": format_price(adjusted_price) if factor > 1.02 else "",
             "date": date,
-            "bedrooms": s.get("bedrooms", "?"),
+            "bedrooms": beds,
             "bathrooms": s.get("bathrooms", "?"),
+            "land_size": str(land_val),
+            "price_per_sqm": price_per_sqm,
+        })
+
+    # Add manual comps (deduped)
+    for mc in MANUAL_COMPS:
+        addr_key = re.sub(r"\s+", " ", mc["address"].upper().strip())
+        addr_key = re.sub(r",?\s*(MERRIMAC|QLD|4226)\s*", " ", addr_key).strip()
+        if addr_key in seen_addresses:
+            continue
+        seen_addresses.add(addr_key)
+
+        land_val = mc.get("land_size_sqm")
+        adjusted_price, factor = time_adjust_price(mc["price"], mc["date"])
+        price_per_sqm = f"${int(adjusted_price / land_val):,}" if land_val else "—"
+
+        results.append({
+            "address": mc["address"],
+            "price": mc["price"],
+            "adjusted_price": adjusted_price,
+            "price_display": format_price(mc["price"]),
+            "adjusted_display": format_price(adjusted_price) if factor > 1.02 else "",
+            "date": mc["date"],
+            "bedrooms": mc["bedrooms"],
+            "bathrooms": mc["bathrooms"],
             "land_size": str(land_val) if land_val else "—",
             "price_per_sqm": price_per_sqm,
         })
 
     results.sort(key=lambda x: x["date"], reverse=True)
-    return results[:15]
+    return results[:12]
 
 
 def get_market_stats(db, suburb: str) -> dict:
@@ -399,6 +499,8 @@ def render_html(prop: dict, client_name: str, comparables: list, market_stats: d
         "aerial_photo": f"file://{photo_paths.get('aerial', '')}",
         "pool_photo": f"file://{photo_paths.get('pool', '')}",
         "floorplan_photo": f"file://{photo_paths.get('floorplan', '')}",
+        "logo_path": f"file://{TEMPLATE_DIR / 'fields-logo-transparent.png'}",
+        "logo_white_path": f"file://{TEMPLATE_DIR / 'fields-logo-white.png'}",
     }
 
     return template.render(**context)
