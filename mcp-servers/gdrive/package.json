@@ -1,0 +1,10 @@
+{
+  "name": "fields-gdrive-mcp",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "googleapis": "^144.0.0"
+  }
+}
