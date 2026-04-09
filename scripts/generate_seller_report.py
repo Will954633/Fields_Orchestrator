@@ -194,7 +194,7 @@ def generate_positioning_strategy(prop: dict, comparables: list, market_stats: d
 
 PROPERTY:
 - Address: {address}, {suburb}, QLD
-- Configuration: {beds} bedrooms (actually 5 beds + study), {baths} bathrooms, {prop.get('carspaces', '?')} car
+- Configuration: 5 bedrooms plus a dedicated study (NOT 6 bedrooms — the study is not a bedroom), {baths} bathrooms, {prop.get('carspaces', '?')} car
 - Land: {land} sqm, Internal: {internal} sqm, 2-storey contemporary
 - Condition: {condition}/10 — excellent. Hamptons-themed, pool, dual living, stone benchtops, butler's pantry
 - Valuation: {reconciled} (range {val_range})
