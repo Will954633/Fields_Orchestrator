@@ -385,6 +385,46 @@ Monthly market metrics summaries written collaboratively (Will + Claude in VS Co
 
 ---
 
+## Google Drive (MCP)
+
+You have **full read/write access to Google Drive** via MCP tools (configured in `.mcp.json`).
+
+**Server:** Custom MCP at `mcp-servers/gdrive/index.mjs` — uses OAuth2 with auto token refresh.
+
+### Available Tools
+
+| Tool | Purpose |
+|------|---------|
+| `search` | Find files by query (natural language or raw Drive syntax) |
+| `list_folder` | Browse folder contents by ID (default: root) |
+| `read_file` | Read text content (Docs → Markdown, Sheets → CSV, capped 512KB) |
+| `read_file_metadata` | Get file info (size, parents, links, dates) |
+| `create_file` | Create files or Google Docs in a folder |
+| `update_file` | Update file content (works with Google Docs) |
+| `create_folder` | Create folders |
+| `move_file` | Move between folders |
+| `copy_file` | Duplicate files |
+| `delete_file` | Trash (not permanent delete) |
+| `download_file` | Save Drive file to local VM path |
+| `upload_file` | Push local file to Drive |
+
+### Key Folders
+
+| Folder | ID | Contents |
+|--------|----|----------|
+| Research | `1AYkf2FPojjKTTPFjx8CkkqX9nXCsM1h9` | Property positioning research & analysis |
+| Seller Book | `1Ga_UdxLQQIAeYtKdqGH2V1w5POI5DL67` | Seller book project files |
+| Seller Book V2 source | `1pkV-EkTmq4qzVTdG8abVN-ggRiMmkOeo` | 26 V2 source files |
+
+### Usage Notes
+
+- For Google Docs, `create_file` with `mimeType: "application/vnd.google-apps.document"` — content as plain text/markdown
+- `read_file` exports Docs as Markdown and Sheets as CSV automatically
+- Search supports raw Drive query syntax: `name contains 'report' and mimeType='application/pdf'`
+- Credentials at `/home/fields/.gdrive-oauth.keys.json` + `/home/fields/.gdrive-server-credentials.json`
+
+---
+
 ## Environment & Credentials
 
 All credentials in `.env` files — never hardcode.
