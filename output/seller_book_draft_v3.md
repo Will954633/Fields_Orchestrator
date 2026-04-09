@@ -303,7 +303,7 @@ These findings may challenge assumptions. Many homeowners invest tens of thousan
 
 Some agents use a tactic known in the industry as "buying the listing." They tell a homeowner what they want to hear -- a high price estimate -- to win the listing agreement. Once the property is on the market and fails to attract offers at the inflated price, the agent then applies pressure to reduce.
 
-This is the pattern described by the Consumer Action Law Centre: "The temptation is that agents who will tell an owner what they want to hear are more likely to get the listing."
+This is the pattern described by the Consumer Action Law Centre (Stephanie Tonkin, CEO): "The temptation is that agents who will tell an owner what they want to hear are more likely to get the listing." [Source: Consumer Action Law Centre submission to Victorian parliamentary inquiry into the real estate industry]
 
 The data on what happens next is covered in Chapter 4, but in summary: homes that enter the market overpriced take significantly longer to sell and ultimately sell for *less* than they would have if priced correctly from the start.
 
@@ -363,13 +363,15 @@ The speed at which properties transact differs meaningfully between suburbs:
 
 | Suburb | Average Days on Market |
 |--------|----------------------|
-| Robina | 33 days |
-| Varsity Lakes | 30 days |
-| Burleigh Waters | 42 days |
+| Robina | 22 days (median) |
+| Varsity Lakes | 21 days (median) |
+| Burleigh Waters | 31 days (median) |
 
-Burleigh Waters properties take longer to sell on average. This reflects the higher price point (median $1,710,000) -- properties above $1,500,000 naturally take longer as the pool of qualified buyers is smaller. This is normal market behaviour, not a sign of weakness.
+*Note: Median days on market is used rather than the average, because a small number of properties that sit on the market for extended periods can skew the average significantly upward.*
 
-Varsity Lakes is the fastest-moving of the three markets, consistent with its younger demographic profile and more accessible price point (median $1,224,000).
+Burleigh Waters properties take longer to sell at a median of 31 days. This reflects the higher price point (median $1,710,000) -- properties above $1,500,000 naturally take longer as the pool of qualified buyers is smaller. This is normal premium-market behaviour, not a sign of weakness.
+
+Robina and Varsity Lakes move at a very similar pace (22 and 21 days respectively), with the majority of properties transacting within three weeks -- consistent with the "three-week sweet spot" discussed above.
 
 ### Life Timing vs. Market Timing
 
@@ -379,7 +381,7 @@ A growing family needs more space. A couple whose children have left wants to do
 
 These are the real reasons most homes come to market. The idea of perfectly "timing the market" is appealing but it assumes the seller has the luxury of choosing when to sell -- and most don't. Life events set the timeline.
 
-This is not a problem. As the data below shows, the difference between the best and worst months for selling is meaningful but not dramatic. A seller whose life circumstances dictate selling in February rather than November is not making a catastrophic error. They are making a rational decision based on the full picture of their life, not just the property market.
+This is not a problem. The seasonal data in this chapter shows that the difference between the best and worst months for selling is meaningful but not dramatic -- typically in the range of 3-8% in median price variation across the year. A seller whose life circumstances dictate selling in February rather than November is not making a catastrophic error. They are making a rational decision based on the full picture of their life, not just the property market.
 
 The seasonal data matters at the margin. It can help a seller who has flexibility choose a slightly better month to list. But it is not a reason to delay a sale that life circumstances require.
 
@@ -455,7 +457,7 @@ This means an auction listing in Queensland starts with a fundamentally smaller 
 
 **Problem 2: Without a price guide, buyers form their own estimate -- and it's usually low.**
 
-When buyers cannot see a price, they must come to their own conclusions about value. In the absence of professional guidance (which the legislation prevents the agent from providing), buyers tend to estimate conservatively. This is a well-documented psychological effect: uncertainty leads to lower willingness to pay.
+When buyers cannot see a price, they must come to their own conclusions about value. In the absence of professional guidance (which the legislation prevents the agent from providing), buyers tend to estimate conservatively. This is a well-documented psychological effect known as ambiguity aversion: when people face uncertainty about the value of an option, they systematically discount it. The effect was first described by Ellsberg (1961) and has been extensively studied in decision science -- Frisch and Baron (1988) found that "people have a rule of thumb to avoid options where information is missing." In property, the missing information is the price, and the avoidance manifests as lower offers or no offer at all.
 
 Consider this from the agent's perspective. In a private treaty sale, when a buyer asks "what's it worth?", the agent can say: "Based on comparable sales, here's what similar properties have sold for. Here's what makes this property worth the asking price. Here's the data." That conversation builds value. It defends the price. It gives the buyer confidence that the price is justified.
 
@@ -516,7 +518,7 @@ These findings were echoed in a separate study in the *Journal of Real Estate Ec
 
 The mechanism is straightforward. When a property is priced well above what the market will pay, qualified buyers don't enquire. Without enquiries, the property doesn't sell. It sits. Over time, the current pool of buyers assumes something must be wrong with the property, the seller, or the deal. The listing becomes stigmatised.
 
-Research indicates that overpricing by more than 10% above market value is universally destructive -- properties overpriced by this margin take 2-5 times longer to sell and develop a stigma effect that can persist even after price reductions (Taylor 1999).
+Multiple studies confirm the damage caused by overpricing. Taylor (1999) found that properties overpriced by more than 10% above market value take 2-5 times longer to sell and develop a stigma effect that persists even after price reductions. Knight (2002) demonstrated that getting the initial price right matters more than any subsequent adjustment -- once a property enters the market overpriced, the damage to buyer perception is difficult to reverse. Anglin, Rutherford, and Springer (2003) found a direct, measurable relationship between the degree of overpricing and the eventual discount below market value at which the property sells.
 
 When a property fails to sell, the homeowner faces two options:
 
@@ -545,17 +547,15 @@ The optimal listing price attracts interest from all relevant buyers while exclu
 
 Research by Cardella and Seiler (2016) reveals a pricing strategy that consistently improves outcomes with minimal effort.
 
-**Setting a precise listing price -- slightly above a rounded number -- generates higher final sale prices and smaller negotiation discounts.**
+**Setting a precise listing price -- slightly above a rounded number -- generates the highest final sale prices and smallest negotiation discounts.**
 
-For example, listing a home at $1,295,000 rather than $1,300,000 produces better results. The study found: "A high precise price generates the highest final sale price, smallest percentage discount off the list price, and the largest fraction of the surplus to the seller."
+Cardella and Seiler tested four pricing strategies on equivalent properties. Around a $200,000 property, the conditions were: a rounded price ($200,000), a "just below" price ($199,000), a low precise price ($198,674), and a high precise price ($201,326).
 
-In contrast, "just below" pricing (e.g., $1,199,000) leads to larger discounts and lower sale prices, as buyers view these listings as more negotiable.
+The high precise price -- precise AND above the round number -- was the clear winner. The study found: "A high precise price generates the highest final sale price, smallest percentage discount off the list price, and the largest fraction of the surplus to the seller."
 
-Even rounded prices like $1,200,000 prompt lower initial offers and longer negotiations compared to precise prices.
+**What this means in practice:** For a property valued around $1,300,000, the optimal listing price strategy would be something like **$1,315,000** -- a precise figure that sits above the round number. Not $1,300,000 (rounded, signals negotiability). Not $1,299,000 (just below, buyers see it as a marketing trick and negotiate harder -- this was the worst-performing strategy in the study). Not $1,285,000 (precise but below, leaves money on the table).
 
-**A practical example:** Suppose the valuation for a property in Robina is $1,250,000. The listing price options might include $1,249,000, $1,250,000, or $1,255,000. The data suggests $1,255,000 is the strongest choice. It is precise (signalling that the seller knows exactly what the property is worth), it sits above the round number (avoiding the "negotiable" signal that just-below pricing creates), and it captures buyers searching up to $1,300,000 while also being visible to buyers searching in the $1,250,000 to $1,500,000 bracket on property portals.
-
-The psychological mechanism is anchoring. A precise price signals to buyers that the seller has done careful analysis and knows exactly what the property is worth. A round number signals that the price is approximate and therefore negotiable.
+The psychological mechanism is anchoring. A precise price above the round number signals two things simultaneously: (1) the seller has done careful analysis and knows exactly what the property is worth, and (2) the price is not a starting point for negotiation downward. A round number signals approximation and invites lower offers.
 
 ### Price Brackets and Portal Visibility
 
@@ -571,7 +571,7 @@ Optimal bracket positioning means pricing at the top of a search bracket rather 
 
 Across our three suburbs, we track the gap between asking prices and sale prices. This data reveals how realistic local pricing has been:
 
-In Burleigh Waters, asking prices recently crossed above valuations for the first time on record -- meaning homeowners and agents are listing properties above where the comparable-sales data suggests they should be valued. This is a market indicator worth monitoring, as it can signal either growing confidence or an overheating market where persistent asking-price premiums above comparable-sales valuations have historically preceded periods of price moderation in other markets.
+In Burleigh Waters, asking prices recently crossed above comparable-sales valuations for the first time in our tracking period -- meaning homeowners and agents began listing properties above where the comparable-sales data suggested they should be valued. Asking prices have since fluctuated, at one point reaching 136% above valuations before correcting sharply. This volatility is a market indicator worth monitoring, as historically, persistent asking-price premiums above comparable-sales valuations have preceded periods of price moderation in other markets.
 
 In Robina and Varsity Lakes, asking prices have more closely tracked valuation-supported levels, though individual properties regularly test the upper boundary.
 
@@ -594,6 +594,14 @@ When a buyer begins seriously considering a property, they embark on an emotiona
 This peak cannot be sustained. It is temporary. After reaching the pinnacle, the buyer's emotional state begins to decline. Doubts creep in. They start second-guessing. They think about other options, other suburbs, other prices. The offer they would have written on Tuesday becomes the offer they hesitate about on Friday.
 
 **Skilled agents understand this cycle.** The role of the agent is not just to find buyers and show them through the home. It is to recognise when a buyer has reached their emotional peak and to extract the best possible offer at that moment -- not before (when the buyer hasn't committed enough to make a strong offer) and not after (when doubt has begun to erode their willingness to pay).
+
+**The Role of Visual Content in Building the Peak**
+
+Between inspections, buyers return to the listing. They scroll through the photographs again. They show their partner the video tour. They zoom in on the kitchen, the backyard, the street view. Each time they revisit this content, they are reinforcing their emotional connection to the property -- building and sustaining the peak rather than letting it decay.
+
+This is why the quality of photography and videography matters so much. A buyer who returns to blurry phone photos and a sparse listing description has nothing to sustain their imagination. A buyer who returns to professional twilight photography, a walkthrough video that captures the feeling of moving through the home, and drone footage that shows the park across the street and the hinterland behind -- that buyer's emotional investment deepens with every viewing.
+
+The highest-quality visual content functions as a tool for buyers to keep justifying and building their desire to own the property. It gives them material to build a vision of what their life would look like in this home. Research in behavioural science on "elaboration" -- the process of mentally engaging with and expanding on information -- suggests that richer, more detailed content enables buyers to construct more vivid mental simulations of ownership, which in turn increases their willingness to pay and reduces their sensitivity to price.
 
 This pattern explains why early offers frequently represent strong market signals -- the buyers behind them have often been searching longest and are at their most motivated. Buyers who make an offer in the first two weeks of a listing have often been searching for months. They have missed out on previous properties. They have calibrated their expectations against dozens of homes. When they recognise the right one, they move quickly -- and they move at their emotional peak.
 
@@ -651,12 +659,14 @@ The data is clear on which pre-sale improvements generate returns and which do n
 
 These improvements share common characteristics: they are relatively low cost, they address what buyers notice first, and they remove reasons for buyers to discount their offer.
 
+This is broadly consistent with Australian property expert Andrew Winter's findings and recommendations on pre-sale preparation: the improvements that generate the best returns are those that address first impressions and remove objections, not those that add new features. Fresh paint, in particular, is consistently identified across multiple sources as the single highest-ROI pre-sale action -- it is low cost, visually transformative, and signals to buyers that the property has been maintained. Landscaping operates similarly: research on "kerb appeal" consistently shows that the exterior presentation shapes buyer expectations before they enter the property, and a well-presented garden creates a perception of value that influences the entire inspection experience.
+
 **Low-Return Improvements:**
 
 | Action | Typical ROI | Why |
 |--------|-----------|-----|
-| Full kitchen renovation | ~57% return on investment | The data shows renovated kitchens do not recover their cost in sale price in Robina and Varsity Lakes. The renovation may cost $30,000-$60,000 but the price per square metre doesn't significantly increase. |
-| Full bathroom renovation | ~75% return on investment | Better than kitchens but still a net loss. The money spent exceeds the additional value created. |
+| Full kitchen renovation | ~57% return on investment | A $40,000 kitchen renovation recovers approximately $22,800 in sale price. The data shows renovated kitchens do not recover their cost in Robina and Varsity Lakes -- the price per square metre doesn't significantly increase. |
+| Full bathroom renovation | ~75% return on investment | A $20,000 bathroom renovation recovers approximately $15,000. Better return than kitchens, but still a net loss on the investment. |
 | Pool installation | 0.6-3.7% increase in price per sqm | A pool can cost $40,000-$80,000 to install. The price data shows it adds negligible value on a per-square-metre basis. |
 | Over-renovating for the street | Negative in many cases | A home that is renovated far beyond the norm for its street can actually lose money. Buyers in that location are drawn by the area's price point. Excessive renovation pushes the asking price above what the location supports. |
 
@@ -683,6 +693,8 @@ The gap between agent-phone photography and professional property photography is
 - **Virtual tours**, which research shows generate 77 seconds of engagement compared to 44 seconds for static images -- a 75% increase in time spent with the property
 
 [PHOTOGRAPH: Comparison of agent-phone photo vs professional property photography of a similar room]
+
+*Note: Much of the virtual tour engagement data originates from the 2020-2022 period when physical inspections were restricted. While virtual tour usage has moderated since restrictions lifted, the underlying behavioural mechanism -- the endowment effect -- is well-established in decision science and is not dependent on pandemic conditions. The trend toward richer digital property experiences (3D walkthroughs, video tours, interactive floor plans) continues to grow as buyer expectations for online property presentation increase.*
 
 Virtual tours are particularly effective because they trigger what behavioural scientists call the "endowment effect." When buyers navigate through a home at their own pace, choosing which rooms to enter and which views to linger on, they begin to mentally take ownership. This mental ownership -- the feeling that the home is already "theirs" -- increases their willingness to pay. It is the same psychological mechanism that makes car dealerships encourage test drives: once you've sat in the driver's seat, you're harder to walk away.
 
@@ -742,15 +754,15 @@ A skilled agent performs this competitive analysis before listing the property a
 
 ### The Suburb Effect: Why the Same Renovation Has Different Returns
 
-The most counterintuitive finding from our data is that full renovation *reduces* price per square metre in Robina and Varsity Lakes but *increases* it in Burleigh Waters by approximately 14%.
+One finding from our data that warrants careful interpretation: fully renovated properties in Robina and Varsity Lakes showed *lower* price per square metre than original-condition properties, while in Burleigh Waters, renovation appeared to add approximately 14% to the rate.
 
-This is worth understanding, because it fundamentally changes the pre-sale renovation decision depending on which suburb the property is in.
+**An important caveat:** This finding may partly reflect a floor-area effect. Larger homes tend to have lower price per square metre (a well-established pattern across all suburbs), and larger homes are also more likely to be renovated. Without controlling for floor area within size brackets, some of the apparent renovation discount in Robina and Varsity Lakes may be explained by renovated homes being larger rather than renovation itself reducing value. Further analysis controlling for floor area is underway.
 
-**In Robina and Varsity Lakes** (median prices $1,400,000 and $1,224,000 respectively), the buyer demographic is predominantly families seeking value. These buyers are price-sensitive and often plan to renovate to their own taste after purchase. A pre-sale renovation pushes the asking price higher, which moves the property into a bracket where it competes against larger or better-located homes. The renovation cost is not recovered because the buyer pool at the higher price point has different expectations.
+What the data does support more clearly is the suburb difference:
 
-**In Burleigh Waters** (median $1,710,000), the buyer demographic skews toward established professionals and downsizers who expect turnkey quality. At this price point, buyers are less willing to project-manage a renovation. A well-renovated property in Burleigh Waters commands a premium because it removes the effort and uncertainty of post-purchase work.
+**In Robina and Varsity Lakes** (median prices $1,400,000 and $1,224,000 respectively), the buyer demographic is predominantly families seeking value. These buyers are often price-sensitive and plan to renovate to their own taste after purchase. At these price points, over-capitalising on renovation before sale is a genuine risk.
 
-The practical implication: a $40,000 kitchen renovation in Robina may not change the sale price at all. The same renovation in Burleigh Waters may add $50,000-$70,000 to the sale price. The difference is not the quality of the renovation -- it's the buyer who is looking at it.
+**In Burleigh Waters** (median $1,710,000), the buyer demographic skews toward established professionals and downsizers who expect turnkey quality. At this price point, buyers are less willing to project-manage a renovation. A well-renovated property in Burleigh Waters is more likely to recover renovation costs because the buyer pool at this level values presentation completeness differently.
 
 ### What NOT to Do: Manufactured Urgency
 
@@ -909,7 +921,7 @@ The data points to several indicators that distinguish agents who are likely to 
 
 3. **They are transparent about risks.** Every property and every market has risks. An agent who only tells a seller what they want to hear is following the "buy the listing" playbook described earlier. Transparency about both strengths and challenges builds trust and leads to better decision-making.
 
-4. **They can explain their marketing strategy.** A clear plan for how the property will reach both active and passive buyers, with a budget breakdown and rationale for each channel.
+4. **They can explain their marketing strategy.** A clear plan for how the property will reach both active and passive buyers, with a budget breakdown and rationale for each channel. Chapter 7 of this book covers what an effective marketing strategy includes -- an agent who can articulate a plan consistent with those principles is demonstrating competence; one who cannot is signalling that marketing is an afterthought.
 
 5. **They demonstrate buyer relationships.** An agent's network of qualified buyers is one of their most valuable assets. Asking about their current buyer pipeline for the property's price range and type is a reasonable and revealing question.
 
@@ -977,7 +989,7 @@ There is a common assumption that social media is "for young people" and therefo
 | 55-64 years | 2,100,000 |
 | 65+ years | 1,900,000 |
 
-*(Source: Australian Facebook Demographics analysis, October 2023, Genroe)*
+*(Source: Australian Facebook Demographics analysis, October 2023, Genroe. Note: These figures have likely grown since this analysis -- Meta's global user base has continued to expand, with the 45+ demographic being the fastest-growing segment across multiple markets.)*
 
 More than 6.9 million active Facebook users are aged 45 and over. This is the demographic most likely to be buying or selling established family homes on the Gold Coast. Dismissing social media as a marketing channel means dismissing a platform that reaches the exact demographic most likely to be your buyer.
 
@@ -1185,7 +1197,7 @@ Robina feels like a suburb designed for families who want everything within a 10
 |--------|-------|
 | Median Sale Price | $1,400,000 |
 | Active Listings | 55 |
-| Average Days on Market | 33 days |
+| Median Days on Market | 22 days |
 | Sold in Last 12 Months | 357 |
 | Properties with Valuations | 54 |
 
@@ -1193,7 +1205,7 @@ Robina feels like a suburb designed for families who want everything within a 10
 
 Robina's median of $1,400,000 reflects a market anchored by family homes in the $1,000,000 to $1,800,000 range, with premium estates pushing above $2,500,000. The property mix is predominantly houses (approximately 83%), with a smaller but active townhouse and unit segment.
 
-At 33 days average time on market, Robina sits between Varsity Lakes (faster) and Burleigh Waters (slower), consistent with its mid-range position in terms of price and buyer competition.
+At a median of 22 days on market, Robina moves at a pace nearly identical to Varsity Lakes (21 days) and significantly faster than Burleigh Waters (31 days). The majority of Robina properties transact within three weeks of listing.
 
 **Dominant agencies in Robina:**
 Ray White Robina leads with 61 sales. The highest price premiums, however, are achieved by McGrath Palm Beach (+8%, 10 days average) and RE/MAX Property Centre (+7.4%, 12 days average).
@@ -1217,7 +1229,7 @@ Varsity Lakes has a rhythm different from its neighbours. The lake defines the s
 |--------|-------|
 | Median Sale Price | $1,224,000 |
 | Active Listings | 32 |
-| Average Days on Market | 30 days |
+| Median Days on Market | 21 days |
 | Sold in Last 12 Months | 302 |
 | Properties with Valuations | 29 |
 
@@ -1249,7 +1261,7 @@ Burleigh Waters occupies a position on the Gold Coast that is hard to replicate.
 |--------|-------|
 | Median Sale Price | $1,710,000 |
 | Active Listings | 37 |
-| Average Days on Market | 42 days |
+| Median Days on Market | 31 days |
 | Sold in Last 12 Months | 272 |
 | Properties with Valuations | 36 |
 
@@ -1277,7 +1289,7 @@ March consistently produces both the highest prices and fastest sales in Burleig
 |--------|--------|---------------|-----------------|
 | Median Sale Price | $1,400,000 | $1,224,000 | $1,710,000 |
 | Active Listings | 55 | 32 | 37 |
-| Avg Days on Market | 33 | 30 | 42 |
+| Median Days on Market | 22 | 21 | 31 |
 | Sold (12 months) | 357 | 302 | 272 |
 | Dominant Property Type | Houses (83%) | Houses (84%) | Houses (83%) |
 | Auction Rate | <2% | <2% | <2% |
@@ -1548,7 +1560,13 @@ fieldsestate.com.au
 
 10. University of Sydney (multiple authors). — Auction vs private treaty: no significant price difference when controlling for property characteristics (1.2 million home sales, Sydney and Melbourne).
 
-11. Deakin University (multiple authors). — Structural issues with auction clearance rate calculation and reporting methodology.
+11. Anglin, P.M., Rutherford, R., & Springer, T.M. (2003). "The Trade-off Between the Selling Price of Residential Properties and Time-on-the-Market." *Journal of Real Estate Finance and Economics*, 26(1), 95-111. — Direct relationship between degree of overpricing and eventual discount below market value.
+
+12. Ellsberg, D. (1961). "Risk, Ambiguity, and the Savage Axioms." *Quarterly Journal of Economics*, 75(4), 643-669. — Foundational paper on ambiguity aversion: people discount options when information is missing.
+
+13. Frisch, D. & Baron, J. (1988). "Ambiguity and Rationality." *Journal of Behavioral Decision Making*, 1(3), 149-157. — "People have a rule of thumb to avoid options where information is missing."
+
+14. Deakin University (multiple authors). — Structural issues with auction clearance rate calculation and reporting methodology.
 
 ### Industry Research
 
