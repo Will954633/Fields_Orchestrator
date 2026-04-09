@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Property Position Report — {{ address }}</title>
+<style>
+  @page {
+    size: A4;
+    margin: 0;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    color: #1a1a2e;
+    font-size: 11pt;
+    line-height: 1.55;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* ---------- COVER PAGE ---------- */
+  .cover {
+    width: 210mm;
+    height: 297mm;
+    position: relative;
+    overflow: hidden;
+    page-break-after: always;
+  }
+  .cover-image {
+    width: 100%;
+    height: 65%;
+    object-fit: cover;
+    display: block;
+  }
+  .cover-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 65%;
+    background: linear-gradient(180deg, rgba(10,15,36,0.25) 0%, rgba(10,15,36,0) 40%, rgba(10,15,36,0.55) 100%);
+  }
+  .cover-bottom {
+    height: 35%;
+    background: #0a0f24;
+    padding: 36px 48px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .cover-label {
+    font-size: 10pt;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #8a94a6;
+    margin-bottom: 12px;
+  }
+  .cover-address {
+    font-size: 28pt;
+    font-weight: 700;
+    color: #ffffff;
+    line-height: 1.15;
+    margin-bottom: 8px;
+  }
+  .cover-suburb {
+    font-size: 14pt;
+    color: #c0c8d8;
+    font-weight: 300;
+    margin-bottom: 24px;
+  }
+  .cover-meta {
+    font-size: 9pt;
+    color: #6b7280;
+    margin-top: auto;
+  }
+  .cover-meta span { color: #8a94a6; }
+  .cover-logo {
+    position: absolute;
+    top: 24px;
+    left: 36px;
+    color: #ffffff;
+    font-size: 13pt;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+  }
+  .cover-logo em {
+    font-style: normal;
+    font-weight: 300;
+    opacity: 0.8;
+  }
+
+  /* ---------- PAGE LAYOUT ---------- */
+  .page {
+    width: 210mm;
+    min-height: 297mm;
+    padding: 36px 44px 60px;
+    page-break-after: always;
+    page-break-inside: avoid;
+    position: relative;
+    overflow: hidden;
+  }
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1.5px solid #e5e7eb;
+    padding-bottom: 10px;
+    margin-bottom: 28px;
+  }
+  .page-header-left {
+    font-size: 8.5pt;
+    color: #6b7280;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+  }
+  .page-header-right {
+    font-size: 8.5pt;
+    color: #9ca3af;
+  }
+  .page-footer {
+    position: absolute;
+    bottom: 24px;
+    left: 44px;
+    right: 44px;
+    text-align: center;
+    font-size: 7.5pt;
+    color: #9ca3af;
+    border-top: 1px solid #f0f0f0;
+    padding-top: 8px;
+  }
+
+  /* ---------- TYPOGRAPHY ---------- */
+  h1 {
+    font-size: 22pt;
+    font-weight: 700;
+    color: #0a0f24;
+    margin-bottom: 6px;
+    line-height: 1.2;
+  }
+  h2 {
+    font-size: 16pt;
+    font-weight: 700;
+    color: #0a0f24;
+    margin-bottom: 16px;
+    line-height: 1.25;
+  }
+  h3 {
+    font-size: 12pt;
+    font-weight: 600;
+    color: #1a1a2e;
+    margin-bottom: 8px;
+  }
+  .section-subtitle {
+    font-size: 10pt;
+    color: #6b7280;
+    margin-top: -12px;
+    margin-bottom: 20px;
+  }
+
+  /* ---------- EXECUTIVE SUMMARY ---------- */
+  .exec-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+    margin: 20px 0;
+  }
+  .exec-card {
+    background: #f8f9fb;
+    border-radius: 8px;
+    padding: 18px 16px;
+    text-align: center;
+  }
+  .exec-card-label {
+    font-size: 8.5pt;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+  }
+  .exec-card-value {
+    font-size: 20pt;
+    font-weight: 700;
+    color: #0a0f24;
+  }
+  .exec-card-sub {
+    font-size: 8.5pt;
+    color: #9ca3af;
+    margin-top: 4px;
+  }
+  .valuation-banner {
+    background: #0a0f24;
+    color: #ffffff;
+    border-radius: 10px;
+    padding: 28px 32px;
+    text-align: center;
+    margin: 24px 0;
+  }
+  .valuation-label {
+    font-size: 9pt;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #8a94a6;
+    margin-bottom: 8px;
+  }
+  .valuation-figure {
+    font-size: 32pt;
+    font-weight: 700;
+    letter-spacing: -1px;
+  }
+  .valuation-range {
+    font-size: 11pt;
+    color: #c0c8d8;
+    margin-top: 6px;
+  }
+
+  /* ---------- FEATURES ---------- */
+  .features-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin: 16px 0;
+  }
+  .feature-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: #f8f9fb;
+    border-radius: 6px;
+  }
+  .feature-icon {
+    width: 32px;
+    height: 32px;
+    background: #0a0f24;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ffffff;
+    font-size: 14pt;
+    flex-shrink: 0;
+  }
+  .feature-text {
+    font-size: 10pt;
+  }
+  .feature-text strong { display: block; font-size: 11pt; }
+
+  /* ---------- PHOTO GRID ---------- */
+  .photo-grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin: 16px 0;
+  }
+  .photo-grid-2 img {
+    width: 100%;
+    height: 180px;
+    object-fit: cover;
+    border-radius: 6px;
+  }
+  .photo-hero {
+    width: 100%;
+    height: 240px;
+    object-fit: cover;
+    border-radius: 8px;
+    margin: 16px 0;
+  }
+  .photo-full {
+    width: 100%;
+    object-fit: contain;
+    border-radius: 6px;
+    margin: 12px 0;
+  }
+
+  /* ---------- COMPARABLES TABLE ---------- */
+  .comp-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+    font-size: 8.5pt;
+  }
+  .comp-table th {
+    background: #f8f9fb;
+    padding: 7px 10px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 7.5pt;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #6b7280;
+    border-bottom: 2px solid #e5e7eb;
+  }
+  .comp-table td {
+    padding: 6px 10px;
+    border-bottom: 1px solid #f0f0f0;
+  }
+  .comp-table tr:last-child td { border-bottom: none; }
+
+  /* ---------- POSITIONING ---------- */
+  .strategy-card {
+    background: #f0f4ff;
+    border-left: 4px solid #0a0f24;
+    border-radius: 0 8px 8px 0;
+    padding: 16px 20px;
+    margin: 12px 0;
+    page-break-inside: avoid;
+  }
+  .strategy-card h3 { color: #0a0f24; margin-bottom: 4px; font-size: 11pt; }
+  .strategy-card p { font-size: 9.5pt; color: #374151; line-height: 1.45; }
+
+  .callout {
+    background: #fffbeb;
+    border: 1px solid #fcd34d;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin: 12px 0;
+    font-size: 9pt;
+    page-break-inside: avoid;
+  }
+  .callout strong { color: #92400e; }
+
+  /* ---------- NEXT STEPS ---------- */
+  .steps-list {
+    list-style: none;
+    counter-reset: step;
+    margin: 16px 0;
+  }
+  .steps-list li {
+    counter-increment: step;
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    margin-bottom: 16px;
+  }
+  .steps-list li::before {
+    content: counter(step);
+    background: #0a0f24;
+    color: #fff;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11pt;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .step-content { flex: 1; }
+  .step-content strong { display: block; margin-bottom: 2px; }
+  .step-content p { font-size: 10pt; color: #4b5563; }
+
+  /* ---------- WHY FIELDS ---------- */
+  .diff-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 16px 0;
+  }
+  .diff-card {
+    padding: 18px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+  }
+  .diff-card h3 { font-size: 11pt; margin-bottom: 6px; }
+  .diff-card p { font-size: 9.5pt; color: #4b5563; }
+
+  .cta-banner {
+    background: #0a0f24;
+    color: #ffffff;
+    border-radius: 10px;
+    padding: 28px 32px;
+    text-align: center;
+    margin: 24px 0;
+  }
+  .cta-banner h2 { color: #ffffff; margin-bottom: 8px; }
+  .cta-banner p { color: #c0c8d8; font-size: 10.5pt; }
+  .cta-banner .contact {
+    margin-top: 16px;
+    font-size: 13pt;
+    font-weight: 600;
+  }
+
+  /* ---------- UTILITIES ---------- */
+  .text-sm { font-size: 9.5pt; }
+  .text-muted { color: #6b7280; }
+  .text-center { text-align: center; }
+  .mt-8 { margin-top: 8px; }
+  .mt-16 { margin-top: 16px; }
+  .mt-24 { margin-top: 24px; }
+  .mb-8 { margin-bottom: 8px; }
+  .mb-16 { margin-bottom: 16px; }
+  .divider {
+    border: none;
+    border-top: 1px solid #e5e7eb;
+    margin: 20px 0;
+  }
+</style>
+</head>
+<body>
+
+<!-- ==================== COVER ==================== -->
+<div class="cover">
+  <div class="cover-logo">FIELDS <em>ESTATE</em></div>
+  <img class="cover-image" src="{{ hero_photo }}" alt="Property hero">
+  <div class="cover-overlay"></div>
+  <div class="cover-bottom">
+    <div class="cover-label">Property Position Report</div>
+    <div class="cover-address">{{ street_address }}</div>
+    <div class="cover-suburb">{{ suburb }}, QLD {{ postcode }}</div>
+    <div class="cover-meta">
+      Prepared for <span>{{ client_name }}</span> &nbsp;|&nbsp; {{ report_date }}
+      <br>Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Smarter with data
+    </div>
+  </div>
+</div>
+
+<!-- ==================== PAGE 2: EXECUTIVE SUMMARY ==================== -->
+<div class="page">
+  <div class="page-header">
+    <div class="page-header-left">Fields Estate</div>
+    <div class="page-header-right">{{ street_address }}</div>
+  </div>
+
+  <h1>Your Property Position</h1>
+  <p class="section-subtitle">A data-driven assessment of where your property sits in today's market.</p>
+
+  <div class="valuation-banner">
+    <div class="valuation-label">Comparable-Adjusted Valuation</div>
+    <div class="valuation-figure">{{ valuation_display }}</div>
+    <div class="valuation-range">Range: {{ valuation_low_display }} — {{ valuation_high_display }}</div>
+  </div>
+
+  <div class="exec-grid">
+    <div class="exec-card">
+      <div class="exec-card-label">Configuration</div>
+      <div class="exec-card-value">{{ bedrooms }}bd {{ bathrooms }}ba</div>
+      <div class="exec-card-sub">{{ carspaces }} car &nbsp;|&nbsp; {{ property_type }}</div>
+    </div>
+    <div class="exec-card">
+      <div class="exec-card-label">Land Area</div>
+      <div class="exec-card-value">{{ land_size }} m²</div>
+      <div class="exec-card-sub">Internal: {{ internal_area }} m²</div>
+    </div>
+    <div class="exec-card">
+      <div class="exec-card-label">Condition</div>
+      <div class="exec-card-value">{{ condition_score }}/10</div>
+      <div class="exec-card-sub">{{ condition_label }}</div>
+    </div>
+  </div>
+
+  <div class="exec-grid">
+    <div class="exec-card">
+      <div class="exec-card-label">Last Sale</div>
+      <div class="exec-card-value">{{ last_sale_price }}</div>
+      <div class="exec-card-sub">{{ last_sale_date }}</div>
+    </div>
+    <div class="exec-card">
+      <div class="exec-card-label">Capital Growth</div>
+      <div class="exec-card-value">{{ capital_growth }}</div>
+      <div class="exec-card-sub">Since last sale</div>
+    </div>
+    <div class="exec-card">
+      <div class="exec-card-label">Domain Estimate</div>
+      <div class="exec-card-value">{{ domain_mid_display }}</div>
+      <div class="exec-card-sub">{{ domain_low_display }} — {{ domain_high_display }}</div>
+    </div>
+  </div>
+
+  <hr class="divider">
+  <p class="text-sm text-muted">This valuation is based on adjusted comparable sales within {{ suburb }} and surrounding suburbs, weighted by proximity, recency, property similarity, and data quality. It is not an automated estimate — each comparable has been individually assessed.</p>
+
+  <div class="page-footer">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential — prepared for {{ client_name }}</div>
+</div>
+
+<!-- ==================== PAGE 3: YOUR PROPERTY ==================== -->
+<div class="page">
+  <div class="page-header">
+    <div class="page-header-left">Fields Estate</div>
+    <div class="page-header-right">{{ street_address }}</div>
+  </div>
+
+  <h2>Your Property</h2>
+
+  <img class="photo-hero" src="{{ exterior_photo }}" alt="Property exterior">
+
+  <div class="features-grid">
+    <div class="feature-item">
+      <div class="feature-icon">&#9634;</div>
+      <div class="feature-text"><strong>{{ bedrooms }} Bedrooms{% if has_study %} + Study{% endif %}</strong>{{ bedroom_detail }}</div>
+    </div>
+    <div class="feature-item">
+      <div class="feature-icon">&#9679;</div>
+      <div class="feature-text"><strong>{{ bathrooms }} Bathrooms</strong>Including ensuite to master</div>
+    </div>
+    <div class="feature-item">
+      <div class="feature-icon">&#9650;</div>
+      <div class="feature-text"><strong>{{ land_size }} m² Block</strong>{{ internal_area }} m² internal living</div>
+    </div>
+    <div class="feature-item">
+      <div class="feature-icon">&#9733;</div>
+      <div class="feature-text"><strong>Condition: {{ condition_score }}/10</strong>{{ condition_label }}</div>
+    </div>
+    {% for feature in key_features %}
+    <div class="feature-item">
+      <div class="feature-icon">&#10003;</div>
+      <div class="feature-text"><strong>{{ feature.title }}</strong>{{ feature.detail }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="photo-grid-2">
+    <img src="{{ kitchen_photo }}" alt="Kitchen">
+    <img src="{{ living_photo }}" alt="Living">
+  </div>
+
+  <div class="page-footer">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential — prepared for {{ client_name }}</div>
+</div>
+
+<!-- ==================== PAGE 4: FLOOR PLAN ==================== -->
+<div class="page">
+  <div class="page-header">
+    <div class="page-header-left">Fields Estate</div>
+    <div class="page-header-right">{{ street_address }}</div>
+  </div>
+
+  <h2>Floor Plan &amp; Layout</h2>
+  <p class="section-subtitle">Internal: {{ internal_area }} m² &nbsp;|&nbsp; External: {{ external_area }} m² &nbsp;|&nbsp; Total: {{ total_area }} m²</p>
+
+  <img class="photo-full" src="{{ floorplan_photo }}" alt="Floor plan" style="max-height: 500px;">
+
+  <div class="mt-16">
+    <h3>Layout Summary</h3>
+    <p>{{ layout_summary }}</p>
+  </div>
+
+  <div class="page-footer">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential — prepared for {{ client_name }}</div>
+</div>
+
+<!-- ==================== PAGE 5: COMPARABLE SALES ==================== -->
+<div class="page">
+  <div class="page-header">
+    <div class="page-header-left">Fields Estate</div>
+    <div class="page-header-right">{{ street_address }}</div>
+  </div>
+
+  <h2>Comparable Sales Analysis</h2>
+  <p class="section-subtitle">Recent sales in {{ suburb }} and surrounding suburbs used to determine your property's current market position.</p>
+
+  <table class="comp-table">
+    <thead>
+      <tr>
+        <th>Address</th>
+        <th>Sale Price</th>
+        <th>Date</th>
+        <th>Beds</th>
+        <th>Land</th>
+        <th>$/m²</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for comp in comparables %}
+      <tr>
+        <td>{{ comp.address }}</td>
+        <td>{{ comp.price_display }}</td>
+        <td>{{ comp.date }}</td>
+        <td>{{ comp.bedrooms }}bd {{ comp.bathrooms }}ba</td>
+        <td>{{ comp.land_size }} m²</td>
+        <td>{{ comp.price_per_sqm }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <strong>Note on confidence:</strong> {{ confidence_note }}
+  </div>
+
+  <hr class="divider">
+
+  <h3>How We Calculate Your Valuation</h3>
+  <p class="text-sm">Unlike automated estimates, our valuation selects comparable properties that closely match yours in size, configuration, and location. Each comparable is individually adjusted for differences in floor area, land size, condition, and location premium. The final figure is a weighted average of these adjusted values — giving greater weight to properties that are most similar, most recent, and have the best data quality.</p>
+
+  <div class="page-footer">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential — prepared for {{ client_name }}</div>
+</div>
+
+<!-- ==================== PAGE 6: POSITIONING STRATEGY ==================== -->
+<div class="page">
+  <div class="page-header">
+    <div class="page-header-left">Fields Estate</div>
+    <div class="page-header-right">{{ street_address }}</div>
+  </div>
+
+  <h2>How We Would Position Your Property</h2>
+  <p class="section-subtitle">Based on analysis of {{ research_stats }} in the Gold Coast market.</p>
+
+  <div class="strategy-card">
+    <h3>Target Buyer Profile</h3>
+    <p>{{ buyer_profile }}</p>
+  </div>
+
+  <div class="strategy-card">
+    <h3>Pricing Strategy</h3>
+    <p>{{ pricing_strategy }}</p>
+  </div>
+
+  <div class="strategy-card">
+    <h3>Key Selling Points</h3>
+    <p>{{ key_selling_points }}</p>
+  </div>
+
+  <div class="strategy-card">
+    <h3>Marketing Approach</h3>
+    <p>{{ marketing_approach }}</p>
+  </div>
+
+  <div class="page-footer">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential — prepared for {{ client_name }}</div>
+</div>
+
+<!-- ==================== PAGE 7: MARKET CONTEXT ==================== -->
+<div class="page">
+  <div class="page-header">
+    <div class="page-header-left">Fields Estate</div>
+    <div class="page-header-right">{{ street_address }}</div>
+  </div>
+
+  <h2>Market Context — {{ suburb }}</h2>
+
+  <div class="exec-grid">
+    <div class="exec-card">
+      <div class="exec-card-label">Median House Price</div>
+      <div class="exec-card-value">{{ suburb_median }}</div>
+      <div class="exec-card-sub">Last 12 months</div>
+    </div>
+    <div class="exec-card">
+      <div class="exec-card-label">Houses Sold</div>
+      <div class="exec-card-value">{{ houses_sold_12m }}</div>
+      <div class="exec-card-sub">Last 12 months</div>
+    </div>
+    <div class="exec-card">
+      <div class="exec-card-label">Currently Listed</div>
+      <div class="exec-card-value">{{ currently_listed }}</div>
+      <div class="exec-card-sub">Active for-sale listings</div>
+    </div>
+  </div>
+
+  <div class="mt-16">
+    <h3>Market Assessment</h3>
+    <p>{{ market_assessment }}</p>
+  </div>
+
+  <hr class="divider">
+
+  <div class="photo-grid-2">
+    <img src="{{ aerial_photo }}" alt="Aerial view">
+    <img src="{{ pool_photo }}" alt="Pool and outdoor">
+  </div>
+
+  <div class="page-footer">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential — prepared for {{ client_name }}</div>
+</div>
+
+<!-- ==================== PAGE 8: WHY FIELDS + NEXT STEPS ==================== -->
+<div class="page">
+  <div class="page-header">
+    <div class="page-header-left">Fields Estate</div>
+    <div class="page-header-right">{{ street_address }}</div>
+  </div>
+
+  <h2>Why Fields Estate</h2>
+
+  <div class="diff-grid">
+    <div class="diff-card">
+      <h3>Data-Driven Analysis</h3>
+      <p>Every recommendation is backed by comparable sales data, market research, and behavioural science — not opinion. We analyse {{ total_sold_tracked }} sold properties across the Gold Coast to inform our positioning.</p>
+    </div>
+    <div class="diff-card">
+      <h3>Transparent Methodology</h3>
+      <p>You can see exactly how we arrived at every figure. No black boxes, no automated estimates presented as fact. The comparable sales, adjustments, and weightings are all shown.</p>
+    </div>
+    <div class="diff-card">
+      <h3>Buyer-First Approach</h3>
+      <p>We build trust with buyers through free data, honest analysis, and transparent valuations. That buyer audience becomes your marketing advantage when it's time to sell.</p>
+    </div>
+    <div class="diff-card">
+      <h3>Local Market Intelligence</h3>
+      <p>We track every listing, every sale, and every market shift across the southern Gold Coast — daily. That intelligence shapes how we position your property against current competition.</p>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <h2>Next Steps</h2>
+  <ol class="steps-list">
+    <li>
+      <div class="step-content">
+        <strong>Review this report</strong>
+        <p>Take your time to review the valuation, comparables, and positioning strategy. Note any questions or details you'd like to discuss.</p>
+      </div>
+    </li>
+    <li>
+      <div class="step-content">
+        <strong>Have a conversation</strong>
+        <p>No pressure, no pitch. We'll walk through the data together, answer your questions, and discuss your timeline and priorities.</p>
+      </div>
+    </li>
+    <li>
+      <div class="step-content">
+        <strong>Decide on your terms</strong>
+        <p>If you'd like to explore selling with Fields Estate, we'll build a tailored campaign strategy. If not, this report is yours to keep — no obligation.</p>
+      </div>
+    </li>
+  </ol>
+
+  <div class="cta-banner">
+    <h2>Ready to discuss?</h2>
+    <p>I'd welcome the opportunity to walk you through this analysis in person.</p>
+    <div class="contact">
+      Will Simpson &nbsp;|&nbsp; will@fieldsestate.com.au &nbsp;|&nbsp; fieldsestate.com.au
+    </div>
+  </div>
+
+  <div class="page-footer">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential — prepared for {{ client_name }}</div>
+</div>
+
+</body>
+</html>
