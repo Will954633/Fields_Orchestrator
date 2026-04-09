@@ -538,7 +538,8 @@ def download_photos(prop: dict, work_dir: Path) -> dict:
 # ── RENDER ──
 
 def render_html(prop, client_name, top_comps, room_assessments, value_equations,
-                buyer_profiles, positioning, market_stats, photo_paths) -> str:
+                buyer_profiles, positioning, market_stats, photo_paths,
+                sell_timeline: str = "", sell_timeline_label: str = "") -> str:
     env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)))
     template = env.get_template("seller_report_v2.html")
 
@@ -599,9 +600,85 @@ def render_html(prop, client_name, top_comps, room_assessments, value_equations,
         "pool_photo": f"file://{photo_paths.get('pool', '')}",
         "logo_path": f"file://{TEMPLATE_DIR / 'fields-logo-transparent.png'}",
         "logo_white_path": f"file://{TEMPLATE_DIR / 'fields-logo-white.png'}",
+        # Satellite analysis
+        "satellite_image_url": prop.get("satellite_analysis", {}).get("satellite_image_url", ""),
+        "sat_green_space": _fmt_sat_label(prop.get("satellite_analysis", {}).get("categories", {}).get("amenity_premiums", {}).get("green_space_proximity", "")),
+        "sat_frontage": _fmt_sat_label(prop.get("satellite_analysis", {}).get("categories", {}).get("adjacency", {}).get("frontage", "")),
+        "sat_overall_setting": prop.get("satellite_analysis", {}).get("narrative", {}).get("overall_setting", ""),
+        "sat_road_proximity": prop.get("satellite_analysis", {}).get("narrative", {}).get("road_proximity", ""),
+        # POI data
+        "key_pois": _build_key_pois(prop),
+        # Seasonality
+        "sell_timeline_label": sell_timeline_label,
+        "seasonality_section": _build_seasonality_section(sell_timeline),
     }
 
     return template.render(**context)
+
+
+def _fmt_sat_label(val: str) -> str:
+    if not val:
+        return ""
+    return val.replace("_", " ").title()
+
+
+def _build_key_pois(prop: dict) -> list[dict]:
+    pois = prop.get("nearby_pois", {}).get("by_category", {})
+    key = []
+    # Schools first (most important for this property)
+    for school in pois.get("primary_school", [])[:2]:
+        key.append({"name": school["name"], "category": "School (K-12)", "distance": f"{school['distance_m']}m walk"})
+    for s in pois.get("park", [])[:2]:
+        key.append({"name": s["name"], "category": "Park / Reserve", "distance": f"{s['distance_m']}m"})
+    for s in pois.get("cafe", [])[:1]:
+        key.append({"name": s["name"], "category": "Cafe", "distance": f"{s['distance_m']}m"})
+    for s in pois.get("supermarket", [])[:1]:
+        key.append({"name": s["name"], "category": "Supermarket", "distance": f"{s['distance_m']}m"})
+    for s in pois.get("childcare", [])[:1]:
+        key.append({"name": s["name"], "category": "Childcare", "distance": f"{s['distance_m']}m"})
+    for s in pois.get("secondary_school", [])[:1]:
+        if s["name"] not in [p["name"] for p in key]:
+            key.append({"name": s["name"], "category": "Secondary School", "distance": f"{s['distance_m']}m"})
+    return key[:8]
+
+
+def _build_seasonality_section(sell_timeline: str) -> str:
+    """Build seasonality advice based on the seller's stated timeline."""
+    # Dee said 3-6 months → listing between July and October 2026
+    if sell_timeline in ("3-6months", "3-6 months"):
+        return (
+            "A 3-6 month timeline places your likely listing window between July and October 2026. "
+            "Our analysis of 13,585 Gold Coast sales (2020-2025) shows the second half of the year "
+            "consistently outperforms the first half on price. September and October are historically "
+            "strong months — buyer activity increases post-winter as families prepare for the new "
+            "school year. For a property positioned around All Saints Anglican School, this timing "
+            "aligns well: parents making school-year decisions actively search in this window. "
+            "Our research also shows that properties priced correctly from day one and selling within "
+            "15-21 days achieve the highest final prices (from analysis of 44,937 Gold Coast sales). "
+            "We would recommend preparing the property during June-July for an August-September launch."
+        )
+    elif sell_timeline in ("1-3months", "1-3 months"):
+        return (
+            "A 1-3 month timeline means listing between May and July 2026. May is historically the "
+            "fastest-selling month across the Gold Coast corridor. While winter months see slightly "
+            "lower buyer volumes, serious buyers remain active and competition from other sellers "
+            "drops — meaning less direct competition for your listing. Our research shows properties "
+            "priced correctly from day one and selling within 15-21 days achieve the highest prices."
+        )
+    elif sell_timeline == "asap":
+        return (
+            "For an immediate listing, current market conditions show balanced activity with 15 active "
+            "listings in Merrimac and zero direct competition at your property's specification. "
+            "Our research across 44,937 sales shows properties priced correctly from day one and "
+            "selling within 15-21 days achieve the highest final prices. Speed of preparation is key — "
+            "we would focus on presentation-ready improvements only."
+        )
+    return (
+        "Our analysis of 13,585 Gold Coast sales (2020-2025) shows the second half of the year "
+        "consistently outperforms the first half on price. Timing your listing to align with "
+        "buyer activity peaks — typically September-November — can improve both sale price and "
+        "days on market. We would discuss optimal timing based on your specific circumstances."
+    )
 
 
 def html_to_pdf(html_path: str, pdf_path: str) -> bool:
@@ -649,6 +726,7 @@ def main():
     parser.add_argument("--client", required=True)
     parser.add_argument("--suburb", required=True)
     parser.add_argument("--skip-ai", action="store_true")
+    parser.add_argument("--sell-timeline", default="3-6months", help="Seller's stated timeline (asap, 1-3months, 3-6months, not-sure)")
     args = parser.parse_args()
 
     print(f"Generating V2 Seller Report: {args.address} for {args.client}")
@@ -700,9 +778,12 @@ def main():
         print("  Generating positioning via Claude...")
         positioning = generate_positioning(prop, top_comps, market_stats)
 
+    timeline_labels = {"asap": "ASAP", "1-3months": "1-3 Months", "3-6months": "3-6 Months", "not-sure": "Flexible"}
     print("  Rendering HTML...")
     html = render_html(prop, args.client, top_comps, room_assessments, value_equations,
-                       buyer_profiles, positioning, market_stats, photo_paths)
+                       buyer_profiles, positioning, market_stats, photo_paths,
+                       sell_timeline=args.sell_timeline,
+                       sell_timeline_label=timeline_labels.get(args.sell_timeline, args.sell_timeline))
     html_path = work_dir / "report.html"
     html_path.write_text(html)
 
