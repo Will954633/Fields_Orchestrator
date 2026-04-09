@@ -427,17 +427,25 @@ def build_value_equations(subject: dict) -> list[dict]:
 
 # ── BUYER PROFILES ──
 
-def build_buyer_profiles(ai: dict) -> list[dict]:
-    best_for = ai.get("best_for", [])
-    profiles = []
-    labels = ["Primary Buyer", "Secondary Buyer", "Tertiary Buyer"]
-    for i, b in enumerate(best_for[:3]):
-        profiles.append({"label": labels[i] if i < len(labels) else f"Buyer {i+1}", "description": b})
-    if not profiles:
-        profiles = [
-            {"label": "Primary Buyer", "description": "Multi-generational families needing genuine dual living separation across two levels."},
-            {"label": "Secondary Buyer", "description": "Growing families with teenagers who want zoned living and outdoor entertaining."},
-        ]
+def build_buyer_profiles(ai: dict, prop: dict) -> list[dict]:
+    # Override with specific, accurate profiles (AI-generated ones may have stale bedroom count)
+    loc = prop.get("location_intelligence", {})
+    school = loc.get("all_saints_school", {})
+
+    profiles = [
+        {
+            "label": "Primary Buyer",
+            "description": f"All Saints families. A family currently enrolled at or planning to enrol at All Saints Anglican School ({school.get('boundary_distance_m', 150)}m from the boundary) who want their children to walk to school. Five bedrooms plus study, pool, and dual living make this a family headquarters — not just a house near a school.",
+        },
+        {
+            "label": "Secondary Buyer",
+            "description": "Multi-generational households. The genuine dual living layout — ground floor with its own bedrooms, bathroom, family room, and deck access — suits families with parents or adult children who need independence without separation. This configuration is rare in Merrimac.",
+        },
+        {
+            "label": "Tertiary Buyer",
+            "description": "Executive families upgrading from 3-4 bedroom homes who want a finished property with no renovation required. The 9/10 condition, Hamptons styling, pool, and entertaining deck offer immediate lifestyle value without the 6-12 month renovation timeline.",
+        },
+    ]
     return profiles
 
 
@@ -763,7 +771,7 @@ def main():
     value_equations = build_value_equations(prop)
 
     print("  Building buyer profiles...")
-    buyer_profiles = build_buyer_profiles(prop.get("ai_analysis", {}))
+    buyer_profiles = build_buyer_profiles(prop.get("ai_analysis", {}), prop)
 
     print("  Loading market stats...")
     market_stats = get_market_stats(client, args.suburb)
