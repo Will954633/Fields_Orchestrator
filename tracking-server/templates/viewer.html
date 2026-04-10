@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ property_address }} — Fields</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --fields-grass: #22382C;
+            --fields-birch: #E6DDD2;
+            --fields-copper: #B76749;
+            --fields-white: #FFFFFF;
+            --fields-text: #22382C;
+            --fields-muted: #7a7a6e;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Poppins', 'Verdana', sans-serif;
+            background: var(--fields-birch);
+            color: var(--fields-text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        .header {
+            background: var(--fields-grass);
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .header-brand {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .header-brand img {
+            height: 28px;
+            width: auto;
+        }
+
+        .header-address {
+            color: var(--fields-birch);
+            font-size: 13px;
+            font-weight: 300;
+            opacity: 0.7;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .btn {
+            padding: 8px 24px;
+            border: 1.5px solid var(--fields-birch);
+            background: transparent;
+            color: var(--fields-birch);
+            font-family: 'Poppins', sans-serif;
+            font-size: 12px;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border-radius: 2px;
+        }
+
+        .btn:hover {
+            background: var(--fields-birch);
+            color: var(--fields-grass);
+        }
+
+        .btn-solid {
+            background: var(--fields-copper);
+            border-color: var(--fields-copper);
+            color: var(--fields-white);
+        }
+
+        .btn-solid:hover {
+            background: #a35a3e;
+            border-color: #a35a3e;
+        }
+
+        /* Navigation bar */
+        .nav-bar {
+            background: var(--fields-grass);
+            padding: 10px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 24px;
+            border-top: 1px solid rgba(230, 221, 210, 0.1);
+        }
+
+        .nav-bar button {
+            background: none;
+            border: none;
+            color: var(--fields-birch);
+            font-family: 'Poppins', sans-serif;
+            font-size: 13px;
+            font-weight: 400;
+            cursor: pointer;
+            padding: 4px 16px;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+
+        .nav-bar button:hover { opacity: 1; }
+        .nav-bar button:disabled { opacity: 0.3; cursor: default; }
+
+        .page-info {
+            color: var(--fields-birch);
+            font-size: 13px;
+            font-weight: 400;
+            min-width: 110px;
+            text-align: center;
+            opacity: 0.8;
+        }
+
+        /* Page image container */
+        .viewer-container {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            overflow-y: auto;
+            padding: 24px;
+            background: var(--fields-birch);
+        }
+
+        .page-image {
+            max-width: 100%;
+            height: auto;
+            box-shadow: 0 2px 16px rgba(34, 56, 44, 0.12);
+            display: block;
+        }
+
+        /* Loading */
+        .loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 80px 24px;
+            color: var(--fields-text);
+        }
+
+        .loading-spinner {
+            width: 36px;
+            height: 36px;
+            border: 3px solid rgba(34, 56, 44, 0.15);
+            border-top-color: var(--fields-grass);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-bottom: 16px;
+        }
+
+        .loading p {
+            font-size: 14px;
+            font-weight: 300;
+            color: var(--fields-muted);
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Footer */
+        .footer {
+            background: var(--fields-grass);
+            padding: 14px 24px;
+            text-align: center;
+        }
+
+        .footer-text {
+            color: var(--fields-birch);
+            font-size: 12px;
+            font-weight: 300;
+            opacity: 0.6;
+        }
+
+        .footer-text a {
+            color: var(--fields-copper);
+            text-decoration: none;
+            font-weight: 400;
+        }
+
+        /* Mobile */
+        @media (max-width: 640px) {
+            .header { flex-direction: column; gap: 8px; text-align: center; }
+            .header-address { display: none; }
+            .viewer-container { padding: 8px; }
+            .nav-bar { gap: 12px; }
+            .nav-bar button { padding: 4px 8px; font-size: 12px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <div class="header-brand">
+        <img src="/track/logo/white" alt="Fields">
+        <span class="header-address">{{ property_address }}</span>
+    </div>
+    <div class="header-actions">
+        <button class="btn btn-solid" id="btn-download">Download PDF</button>
+    </div>
+</div>
+
+<div class="nav-bar">
+    <button id="btn-prev" disabled>&#8592; Previous</button>
+    <span class="page-info" id="page-info">Loading...</span>
+    <button id="btn-next" disabled>Next &#8594;</button>
+</div>
+
+<div class="viewer-container" id="viewer-container">
+    <div class="loading" id="loading">
+        <div class="loading-spinner"></div>
+        <p>Preparing your report...</p>
+    </div>
+    <img class="page-image" id="page-image" style="display:none;" alt="Report page">
+</div>
+
+<div class="footer">
+    <p class="footer-text">
+        Prepared by <a href="https://fieldsestate.com.au">Fields</a> &mdash; Smarter with data
+    </p>
+</div>
+
+<script>
+(function() {
+    const TRACKING_ID = "{{ tracking_id }}";
+    const TOTAL_PAGES = {{ total_pages }};
+    const BASE_URL = window.location.origin + "/track";
+
+    let currentPage = 1;
+    let sessionStartTime = Date.now();
+    let pageStartTime = Date.now();
+    let pageTimings = {};
+
+    const img = document.getElementById("page-image");
+    const loading = document.getElementById("loading");
+    const pageInfo = document.getElementById("page-info");
+    const btnPrev = document.getElementById("btn-prev");
+    const btnNext = document.getElementById("btn-next");
+
+    // ---------------------------------------------------------------------------
+    // Tracking
+    // ---------------------------------------------------------------------------
+    function sendEvent(type, data) {
+        fetch(BASE_URL + "/event", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({tracking_id: TRACKING_ID, type: type, data: data || {}}),
+        }).catch(function(){});
+    }
+
+    // Heartbeat every 5s
+    setInterval(function() {
+        if (!img.src) return;
+        var elapsed = (Date.now() - pageStartTime) / 1000;
+        sendEvent("heartbeat", {
+            current_page: currentPage,
+            interval_seconds: 5,
+            page_elapsed_seconds: Math.round(elapsed),
+            total_session_seconds: Math.round((Date.now() - sessionStartTime) / 1000),
+        });
+    }, 5000);
+
+    function recordPageTime() {
+        var elapsed = Date.now() - pageStartTime;
+        pageTimings[currentPage] = (pageTimings[currentPage] || 0) + elapsed;
+    }
+
+    // Session end
+    window.addEventListener("beforeunload", function() {
+        recordPageTime();
+        var totalTime = (Date.now() - sessionStartTime) / 1000;
+        var timings = {};
+        for (var k in pageTimings) { timings[k] = Math.round(pageTimings[k] / 1000); }
+        var payload = JSON.stringify({
+            tracking_id: TRACKING_ID,
+            type: "session_end",
+            data: {
+                total_time_seconds: Math.round(totalTime),
+                pages_viewed: Object.keys(pageTimings).map(Number),
+                page_timings: timings,
+            },
+        });
+        navigator.sendBeacon(BASE_URL + "/event", new Blob([payload], {type: "application/json"}));
+    });
+
+    document.addEventListener("visibilitychange", function() {
+        if (document.hidden) { recordPageTime(); } else { pageStartTime = Date.now(); }
+    });
+
+    // ---------------------------------------------------------------------------
+    // Page rendering (server-side images)
+    // ---------------------------------------------------------------------------
+    function loadPage(num) {
+        loading.style.display = "flex";
+        img.style.display = "none";
+
+        var pageImg = new Image();
+        pageImg.onload = function() {
+            img.src = pageImg.src;
+            img.style.display = "block";
+            loading.style.display = "none";
+            pageInfo.textContent = "Page " + num + " of " + TOTAL_PAGES;
+            btnPrev.disabled = num <= 1;
+            btnNext.disabled = num >= TOTAL_PAGES;
+            document.getElementById("viewer-container").scrollTop = 0;
+        };
+        pageImg.onerror = function() {
+            loading.innerHTML = '<p style="color: #B76749;">Unable to load page. Please try refreshing.</p>';
+        };
+        pageImg.src = BASE_URL + "/page/" + TRACKING_ID + "/" + num;
+    }
+
+    // ---------------------------------------------------------------------------
+    // Navigation
+    // ---------------------------------------------------------------------------
+    btnPrev.addEventListener("click", function() {
+        if (currentPage <= 1) return;
+        recordPageTime();
+        currentPage--;
+        pageStartTime = Date.now();
+        sendEvent("page_view", {page: currentPage});
+        loadPage(currentPage);
+    });
+
+    btnNext.addEventListener("click", function() {
+        if (currentPage >= TOTAL_PAGES) return;
+        recordPageTime();
+        currentPage++;
+        pageStartTime = Date.now();
+        sendEvent("page_view", {page: currentPage});
+        loadPage(currentPage);
+    });
+
+    document.getElementById("btn-download").addEventListener("click", function() {
+        window.open(BASE_URL + "/download/" + TRACKING_ID, "_blank");
+    });
+
+    document.addEventListener("keydown", function(e) {
+        if (e.key === "ArrowLeft" || e.key === "ArrowUp") { btnPrev.click(); e.preventDefault(); }
+        if (e.key === "ArrowRight" || e.key === "ArrowDown") { btnNext.click(); e.preventDefault(); }
+    });
+
+    // ---------------------------------------------------------------------------
+    // Init
+    // ---------------------------------------------------------------------------
+    sendEvent("page_view", {page: 1});
+    loadPage(1);
+})();
+</script>
+
+</body>
+</html>
