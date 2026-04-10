@@ -201,11 +201,10 @@ def compute_adjustments(subject: dict, comp: dict) -> list[dict]:
         adjs.append({"label": "Gated estate (comp in, subject not)", "diff": "-1", "value": -75000, "display": fmt_signed(-75000)})
 
     # Subject has wetland reserve backing (positive amenity not in comps)
+    # Skip if comp has golf course frontage — similar green outlook / no rear neighbours
     s_loc = subject.get("location_intelligence", {})
-    if s_loc.get("wetland_reserve", {}).get("backing"):
-        c_has_reserve = False  # None of our comps back onto reserves
-        if not c_has_reserve:
-            adjs.append({"label": "Wetland reserve backing (privacy, nature)", "diff": "+1", "value": 30000, "display": fmt_signed(30000)})
+    if s_loc.get("wetland_reserve", {}).get("backing") and not c_golf:
+            adjs.append({"label": "Wetland reserve backing (privacy, nature)", "diff": "+1", "value": 70000, "display": fmt_signed(70000)})
 
     return adjs
 
@@ -404,7 +403,7 @@ def build_value_equations(subject: dict) -> list[dict]:
     if wetland.get("backing"):
         eqs.append({
             "title": "Wetland reserve at rear boundary — privacy and nature amenity",
-            "body": "The property backs directly onto a wetland reserve with no rear neighbours. Combined with the cul-de-sac position, this delivers genuine privacy and a green outlook that cannot be built out. For nature-oriented families, this is a lifestyle feature. We estimate this adds approximately $30,000 in amenity value per comparable adjustment.",
+            "body": "The property backs directly onto a wetland reserve with no rear neighbours. Combined with the cul-de-sac position, this delivers genuine privacy and a green outlook that cannot be built out. For nature-oriented families, this is a lifestyle feature. We estimate this adds approximately $70,000 in amenity value when comparing to properties without equivalent green outlook. Golf course-fronting comparables already carry a similar privacy premium, so this adjustment applies selectively.",
             "reframe": "No rear neighbours, wetland outlook, cul-de-sac — three privacy layers that most comparable properties don't have.",
             "positive": True,
         })
