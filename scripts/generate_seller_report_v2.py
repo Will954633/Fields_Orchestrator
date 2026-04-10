@@ -255,8 +255,15 @@ def build_top_comps(subject: dict, comp_docs: list[dict]) -> list[dict]:
         internal = fpa.get("internal_floor_area", {}).get("value", "?")
         condition = pvd.get("property_overview", {}).get("overall_condition_score", "?")
 
-        # Narrative
-        desc = cdoc.get("agents_description", "")[:80]
+        # Narrative — reno level + pool + short description extract
+        raw_desc = cdoc.get("agents_description", "")
+        # Take first clause (up to first comma or period), capped at 80 chars
+        for sep in [". ", ", "]:
+            if sep in raw_desc[:100]:
+                desc_short = raw_desc[:raw_desc.index(sep, 0, 100)]
+                break
+        else:
+            desc_short = raw_desc[:80]
         pool_str = "Pool" if pvd.get("outdoor", {}).get("pool_present") else "No pool"
         reno = pvd.get("renovation", {}).get("overall_renovation_level", "?").replace("_", " ").title()
 
@@ -285,7 +292,7 @@ def build_top_comps(subject: dict, comp_docs: list[dict]) -> list[dict]:
             "months_ago": str(months),
             "adjusted_total": adjusted_total,
             "adjusted_total_display": fmt(adjusted_total),
-            "narrative": f"{reno}. {pool_str}. {desc}",
+            "narrative": f"{reno}. {pool_str}. {desc_short}.",
         })
 
     return results
@@ -627,11 +634,12 @@ def _fallback_positioning():
                            "appreciate this from street-level photos. Worth approximately $70,000 in comparable adjustment.",
             },
             {
-                "feature": "Zero Direct Competition",
-                "strategy": "There is not a single 5-bedroom + pool + dual living property listed in Merrimac under "
-                           "$4,900,000. Scarcity is factual, verifiable, and the strongest urgency lever available. "
-                           "Every ad carries this data point. We would never use manufactured urgency ('Don't miss out!') "
-                           "— in premium markets, that backfires. The data speaks for itself.",
+                "feature": "Genuine Scarcity — 5 sales in 12 months, 1 with a pool",
+                "strategy": "Of 58 houses sold in Merrimac over 12 months, only 5 had five or more bedrooms. "
+                           "Only 1 of those 5 included a pool (48 Lakelands Drive, $2,300,000). None had dual "
+                           "living. This is verifiable scarcity backed by transaction data — the strongest "
+                           "positioning lever available. We would never use manufactured urgency ('Don't miss "
+                           "out!') — in premium markets, that backfires. The data speaks for itself.",
             },
         ],
         "campaign_structure": (
@@ -700,7 +708,7 @@ def render_html(prop, client_name, top_comps, room_assessments, value_equations,
 
     # Seller-context editorial overrides (replace buyer-facing AI analysis)
     seller_headline = "Your property sits well above the Merrimac median, supported by three recent comparable sales"
-    seller_sub_headline = "A five-bedroom home with pool, dual living, and 9/10 condition in a market with zero direct competition at this specification"
+    seller_sub_headline = "A five-bedroom home with pool, dual living, and 9/10 condition — only 5 five-bedroom homes have sold in Merrimac in 12 months, and only 1 had a pool"
     seller_verdict = (
         "Based on three adjusted comparable sales ranging from $1,712,616 to $1,924,874, "
         "we estimate a most likely selling range of $1,725,000 to $1,925,000, with a recommended "
@@ -710,7 +718,7 @@ def render_html(prop, client_name, top_comps, room_assessments, value_equations,
     )
     seller_strengths = [
         "9/10 condition with stone benchtops, inground pool, outdoor kitchen, and 52.5 sqm entertaining deck — roughly $165,000–$230,000 of renovation already done",
-        "Five bedrooms with genuine dual-living layout and zero direct competition in Merrimac under $4,900,000",
+        "Five bedrooms with genuine dual-living layout — only 5 five-bedroom homes sold in Merrimac in the last 12 months, and only 1 of those had a pool",
         "150m from All Saints Anglican School boundary — a primary driver for the target buyer pool",
     ]
     seller_trade_off = "658 sqm lot (107 sqm less than the nearest comp), 221 sqm internal floor area, and a two-storey layout that rules out single-level living"
@@ -747,8 +755,8 @@ def render_html(prop, client_name, top_comps, room_assessments, value_equations,
         # Buyer profiles
         "buyer_profiles": buyer_profiles,
         "not_ideal_for": ai.get("not_ideal_for", []),
-        "scarcity_count": "0",
-        "scarcity_statement": "direct competitors at 5-bedroom + pool + dual living in Merrimac under $4,900,000",
+        "scarcity_count": "5",
+        "scarcity_statement": "five-bedroom homes sold in Merrimac in 12 months — out of 58 total sales. Only 1 had a pool.",
         # Market
         "suburb_median": market_stats.get("median", "N/A"),
         "houses_sold_12m": market_stats.get("houses_sold_12m", "?"),
