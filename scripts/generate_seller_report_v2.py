@@ -428,6 +428,7 @@ def build_value_equations(subject: dict) -> list[dict]:
             "body": f"No flood overlay on Gold Coast City Council mapping. Ground level sits at {zd.get('flood_ground_level_m', '?')}m AHD — {clearance}m above the designated flood level. Not in any ICA insurance flood zone. Zero insurance flood events on record. The wetland reserve at the rear does not place this property in any flood risk category." if clearance else "No flood overlay on council mapping. Not in any ICA insurance flood zone.",
             "reframe": "In Merrimac, where flood is often the first question buyers ask, a clean flood position next to a wetland reserve is a strong signal.",
             "positive": True,
+            "is_flood": True,
         })
 
     return eqs
@@ -530,36 +531,67 @@ def _fallback_positioning():
             "around, and it's positioned in a market where zero other five-bedroom properties with pool "
             "and dual living exist under $4,900,000 in Merrimac."
         ),
-        "pricing_strategy": (
-            "Subject to property analyst inspection, we recommend a listing range of $1,765,000 to "
-            "$1,825,000. You'll notice these are precise figures, not round numbers — and that's "
-            "deliberate. Research across 538 transactions (Cardella & Seiler 2016) found that precise "
-            "prices set above round numbers generate the highest final sale prices and the smallest "
-            "buyer discounts. A listing at $1,765,000 signals data-backed pricing, not aspiration. "
-            "A round figure like $1,750,000 or $1,800,000 signals guesswork.\n\n"
-            "We recommend listing with a price range rather than a single asking price. Research "
-            "(Nikiforou et al. 2022, 538 transactions) shows that range-priced listings attract a "
-            "wider pool of qualified buyers — the lower bound captures buyers filtering the bracket "
-            "below ($1.5M–$1.75M) at the crossover point, while the upper bound anchors perceived "
-            "value. Range pricing also reduces the stigma of price reductions: a property listed at a "
-            "single figure that drops appears distressed, whereas a range inherently accommodates "
-            "negotiation. In this bracket, $1,765,000–$1,825,000 sits inside the $1.75M–$2M portal "
-            "search bracket where Merrimac currently has zero competing 5-bedroom properties — every "
-            "buyer filtering this bracket sees your property without competition.\n\n"
-            "On the question of auction versus private treaty: auction clearance rates in Merrimac are "
-            "low, and the research is clear that auction works best in high-demand, low-supply markets "
-            "with multiple comparable recent sales to anchor buyer expectations. With only three "
-            "adjusted comparables and a unique specification (dual living, pool, school proximity), "
-            "private treaty gives you more control over the negotiation process and avoids the risk of "
-            "a passed-in result. That said, this is your decision — if you prefer auction, we would "
-            "structure the campaign to support that approach. Our role is to present the evidence and "
-            "support your preference.\n\n"
-            "Our research across 44,937 Gold Coast sales confirms: properties priced correctly from "
-            "day one and selling within 15–21 days achieve the highest final prices. Overpricing by "
-            "more than 10% is universally destructive — 2–5x longer days on market and permanent "
-            "stigma effect (Taylor 1999). Our comparable evidence supports a selling range of "
-            "$1,725,000–$1,925,000; the recommended listing range sits precisely in the credible zone."
-        ),
+        "pricing_cards": [
+            {
+                "title": "Why Precise Numbers, Not Round Figures",
+                "callout_stat": "$1,765,000 not $1,750,000",
+                "callout_label": "Precise prices outperform round numbers",
+                "body": (
+                    "Subject to property analyst inspection, we recommend a listing range of "
+                    "$1,765,000 to $1,825,000. You'll notice these are precise figures, not round "
+                    "numbers — and that's deliberate. Research across 538 transactions (Cardella & "
+                    "Seiler 2016) found that precise prices set above round numbers generate the "
+                    "highest final sale prices and the smallest buyer discounts. A listing at "
+                    "$1,765,000 signals data-backed pricing, not aspiration. A round figure like "
+                    "$1,750,000 or $1,800,000 signals guesswork."
+                ),
+            },
+            {
+                "title": "Why List with a Range",
+                "callout_stat": "Wider buyer pool",
+                "callout_label": "Range pricing captures two search brackets",
+                "body": (
+                    "We recommend listing with a price range rather than a single asking price. "
+                    "Research (Nikiforou et al. 2022, 538 transactions) shows that range-priced "
+                    "listings attract a wider pool of qualified buyers — the lower bound captures "
+                    "buyers filtering the bracket below ($1.5M–$1.75M) at the crossover point, while "
+                    "the upper bound anchors perceived value. Range pricing also reduces the stigma of "
+                    "price reductions: a property listed at a single figure that drops appears "
+                    "distressed, whereas a range inherently accommodates negotiation. In this bracket, "
+                    "$1,765,000–$1,825,000 sits inside the $1.75M–$2M portal search bracket where "
+                    "Merrimac currently has zero competing 5-bedroom properties — every buyer filtering "
+                    "this bracket sees your property without competition."
+                ),
+            },
+            {
+                "title": "Private Treaty vs Auction",
+                "callout_stat": "Private treaty recommended",
+                "callout_label": "But we support your preference",
+                "body": (
+                    "Auction clearance rates in Merrimac are low, and the research is clear that "
+                    "auction works best in high-demand, low-supply markets with multiple comparable "
+                    "recent sales to anchor buyer expectations. With only three adjusted comparables "
+                    "and a unique specification (dual living, pool, school proximity), private treaty "
+                    "gives you more control over the negotiation process and avoids the risk of a "
+                    "passed-in result. That said, this is your decision — if you prefer auction, we "
+                    "would structure the campaign to support that approach. Our role is to present the "
+                    "evidence and support your preference."
+                ),
+            },
+            {
+                "title": "Getting the Price Right from Day One",
+                "callout_stat": "15–21 days",
+                "callout_label": "Optimal window for highest sale price",
+                "body": (
+                    "Our research across 44,937 Gold Coast sales confirms: properties priced correctly "
+                    "from day one and selling within 15–21 days achieve the highest final prices. "
+                    "Overpricing by more than 10% is universally destructive — 2–5x longer days on "
+                    "market and permanent stigma effect (Taylor 1999). Our comparable evidence supports "
+                    "a selling range of $1,725,000–$1,925,000; the recommended listing range sits "
+                    "precisely in the credible zone."
+                ),
+            },
+        ],
         "feature_positioning": [
             {
                 "feature": "Dual Living Configuration — $354,868 value differential",
@@ -723,7 +755,7 @@ def render_html(prop, client_name, top_comps, room_assessments, value_equations,
         "currently_listed": market_stats.get("currently_listed", "?"),
         # Positioning
         "lifestyle_narrative": positioning.get("lifestyle_narrative", ""),
-        "pricing_strategy": positioning.get("pricing_strategy", ""),
+        "pricing_cards": positioning.get("pricing_cards", []),
         "feature_positioning": positioning.get("feature_positioning", []),
         "campaign_structure": positioning.get("campaign_structure", ""),
         "photography_strategy": positioning.get("photography_strategy", ""),
