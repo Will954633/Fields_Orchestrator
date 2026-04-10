@@ -44,7 +44,8 @@
   .cover-label { font-size: 9pt; letter-spacing: 3px; text-transform: uppercase; color: var(--sky); margin-bottom: 10px; font-weight: 500; }
   .cover-address { font-size: 28pt; font-weight: 700; color: var(--birch); line-height: 1.15; margin-bottom: 6px; }
   .cover-suburb { font-size: 13pt; color: var(--birch-dark); font-weight: 300; margin-bottom: 24px; }
-  .cover-client { font-size: 14pt; font-weight: 600; color: var(--sun); margin-bottom: 6px; }
+  .cover-client { font-size: 14pt; font-weight: 600; color: var(--sun); margin-bottom: 2px; }
+  .cover-author { font-size: 9.5pt; font-weight: 400; color: var(--birch-dark); margin-bottom: 6px; }
   .cover-meta { font-size: 8.5pt; color: var(--text-muted); margin-top: auto; }
   .cover-meta span { color: var(--birch); }
 
@@ -195,6 +196,7 @@
     <div class="cover-address">{{ street_address }}</div>
     <div class="cover-suburb">{{ suburb }}, QLD {{ postcode }}</div>
     <div class="cover-client">Prepared for {{ client_name }}</div>
+    <div class="cover-author">by Will Simpson, Property Analyst</div>
     <div class="cover-meta">
       {{ report_date }}
       <br>Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Smarter with data.
@@ -447,7 +449,11 @@
     <p style="color: var(--birch); font-size: 9pt; line-height: 1.55; font-style: italic; margin: 0;">{{ lifestyle_narrative }}</p>
   </div>
 
-  <div class="strategy-card"><h3>Pricing Strategy &mdash; Why These Numbers</h3><p>{{ pricing_strategy }}</p></div>
+  <div class="strategy-card"><h3>Pricing Strategy &mdash; Why These Numbers</h3>
+    {% for para in pricing_strategy.split('\n\n') %}
+    <p {% if not loop.first %}style="margin-top: 8px;"{% endif %}>{{ para }}</p>
+    {% endfor %}
+  </div>
 
   <div class="strategy-card">
     <h3>How Each Feature Maximises Sale Value</h3>
