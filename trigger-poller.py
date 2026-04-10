@@ -95,6 +95,11 @@ def run_trigger(trigger_doc, process_map, dry_run=False):
     working_dir = proc_config.get("working_dir", str(BASE_DIR))
     timeout_seconds = proc_config.get("estimated_duration_minutes", 60) * 60 + 300  # +5min buffer
 
+    # Substitute PIPELINE_ID placeholder with value from trigger note field
+    note = trigger_doc.get("note", "")
+    if "PIPELINE_ID" in command and note:
+        command = command.replace("PIPELINE_ID", note)
+
     log.info(f"Trigger {trigger_id}: Running process {process_id} — {proc_config['name']}")
     log.info(f"  Command: {command}")
     log.info(f"  Working dir: {working_dir}")
