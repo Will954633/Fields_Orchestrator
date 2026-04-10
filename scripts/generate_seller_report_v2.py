@@ -513,10 +513,97 @@ Return ONLY valid JSON."""
 
 def _fallback_positioning():
     return {
-        "pricing_strategy": "We would position at $1,800,000 based on three comparable-adjusted sales. 48 Lakelands Drive (sold $2,300,000, 5 weeks ago) adjusts to $1,954,874 after removing its golf frontage and gated estate premiums. 7 Nicklaus Court ($2,230,000, 11 months ago) adjusts to $1,735,137 after accounting for water views, golf frontage, and larger floor area. 3 Islay Court ($1,400,000, 7 months ago) adjusts to $1,607,616 after condition and renovation credits. The weighted average supports $1,800,000 within a range of $1,600,000 to $1,955,000.",
-        "key_selling_points": "The dual living configuration drives the highest value differential, evidenced by the $354,868 gap between comparable properties with and without this feature. The executive pool and 52.5 sqm covered entertaining deck combination adds significant premium based on the outdoor lifestyle adjustments across comparables. The stone kitchen with butler's pantry and 5-bedroom plus study layout positions against the luxury end of the market. The 221 sqm internal space on 658 sqm delivers optimal density for the price point, while the 4-car accommodation meets executive buyer expectations.",
-        "marketing_approach": "We would launch with a 4-week intensive campaign targeting the luxury family segment through prestige property platforms and executive relocation networks. Photography would emphasize the dual living zones, pool entertainment areas, and kitchen-to-deck flow that justify the premium positioning. Open homes would be structured as private appointments initially, then weekend opens in weeks 3-4 to create urgency. The campaign would highlight the zero direct competition factor across all channels.",
-        "market_assessment": "Merrimac's 43 sales in 12 months with only 15 current listings indicates healthy turnover and limited oversupply at this tier. The complete absence of 5-bedroom plus pool plus dual living properties under $4,900,000 creates a significant market gap that favors our positioning. We would expect 21-28 days on market given the specification rarity, with the luxury family buyer pool driving activity. The timing benefits from the post-holiday market activation period when executive buyers typically transact.",
+        "lifestyle_narrative": (
+            "Saturday morning starts at the pool. The kids are in the water, you're under the covered "
+            "alfresco at the outdoor kitchen, and nobody is driving anywhere. By mid-morning the children "
+            "are walking to All Saints — five minutes, no car required. Sunday is the same, minus a "
+            "renovation to-do list, because there isn't one. That's the daily reality this home is built "
+            "around, and it's positioned in a market where zero other five-bedroom properties with pool "
+            "and dual living exist under $4,900,000 in Merrimac."
+        ),
+        "pricing_strategy": (
+            "We would list at $1,795,000 — a precise figure, not a round number. Research across 538 "
+            "transactions (Cardella & Seiler 2016) shows precise prices above round numbers generate the "
+            "highest final sale prices and the smallest buyer discounts. $1,795,000 signals informed "
+            "pricing rather than aspiration. It sits inside the $1.75M–$2M portal search bracket, where "
+            "Merrimac currently has zero competing 5-bedroom properties — meaning every buyer filtering "
+            "this bracket sees your property without competition. The listing range of $1,765,000 to "
+            "$1,825,000 captures buyers searching the bracket below ($1.5M–$1.75M) at the crossover "
+            "point. Our research across 44,937 Gold Coast sales confirms: properties priced correctly "
+            "from day one and selling within 15–21 days achieve the highest final prices. Overpricing "
+            "by more than 10% is universally destructive — 2–5x longer days on market and permanent "
+            "stigma (Taylor 1999). Our comparable evidence supports $1,725,000–$1,925,000; listing at "
+            "$1,795,000 sits precisely in the credible zone."
+        ),
+        "feature_positioning": [
+            {
+                "feature": "Dual Living Configuration — $354,868 value differential",
+                "strategy": "This is the single largest value driver. Ground floor operates as a self-contained zone "
+                           "(bedrooms, bathroom, family room, deck access). We would lead every piece of marketing with "
+                           "this — it eliminates 90% of Merrimac's competing stock and activates multi-generational "
+                           "family buyers who have almost no options in this suburb.",
+            },
+            {
+                "feature": "Pool + 52.5 sqm Covered Deck + Outdoor Kitchen — $95,000–$145,000 to replicate",
+                "strategy": "Photography ends here. Behavioural research (peak-end rule) shows the last thing a buyer "
+                           "sees at an inspection determines their emotional anchor. We would route every open home "
+                           "to finish at the pool deck. Twilight photography of this space becomes the hero image — "
+                           "it sells a lifestyle, not a floor plan.",
+            },
+            {
+                "feature": "9/10 Condition — $150,000–$250,000 renovation avoided",
+                "strategy": "Frame this as time saved, not money saved. A condition-8 home requires 6–12 months of "
+                           "disruption. For a family with school-age children, that matters more than the dollar figure. "
+                           "Marketing copy: 'Move in this term, not next year.'",
+            },
+            {
+                "feature": "All Saints Anglican School — 150m from boundary",
+                "strategy": "This defines the primary buyer pool. Every marketing channel would geo-target families "
+                           "currently enrolled at or considering All Saints. The school's enrolment catchment drives "
+                           "a willing-to-pay premium that generic Merrimac buyers don't carry. We would mention the "
+                           "walking distance in the headline of every ad.",
+            },
+            {
+                "feature": "Wetland Reserve Backing — permanent privacy",
+                "strategy": "No rear neighbours, green outlook that cannot be built out, cul-de-sac position. Three "
+                           "privacy layers. We would use drone photography to show the reserve boundary — buyers can't "
+                           "appreciate this from street-level photos. Worth approximately $70,000 in comparable adjustment.",
+            },
+            {
+                "feature": "Zero Direct Competition",
+                "strategy": "There is not a single 5-bedroom + pool + dual living property listed in Merrimac under "
+                           "$4,900,000. Scarcity is factual, verifiable, and the strongest urgency lever available. "
+                           "Every ad carries this data point. We would never use manufactured urgency ('Don't miss out!') "
+                           "— in premium markets, that backfires. The data speaks for itself.",
+            },
+        ],
+        "campaign_structure": (
+            "Private treaty, not auction — auction clearance in Merrimac is too low to justify the risk. "
+            "Week 1–2: private inspections only, by appointment. This creates exclusivity and filters "
+            "serious buyers from browsers. Week 3–4: structured weekend open homes. If no offer by day "
+            "28, we reassess positioning — but we do not reduce price before day 35. Our research shows "
+            "the optimal campaign is 4 weeks with a 7-day price review trigger after day 35 if required. "
+            "Digital targeting: All Saints families, executive relocators, and multi-generational "
+            "households within a 30km radius. We would run a 'Coming Soon' pre-launch teaser 7 days "
+            "before the first open home to build an enquiry list."
+        ),
+        "photography_strategy": (
+            "25–30 images minimum. Twilight exterior mandatory — the pool and covered deck photograph "
+            "dramatically at dusk with lighting. Virtual tour recommended: research shows virtual tours "
+            "generate 77 seconds of engagement vs 44 seconds for static galleries, triggering the "
+            "endowment effect (mental ownership before inspection). Drone photography of the wetland "
+            "reserve boundary — this feature is invisible from the street. Floor plan with dual-living "
+            "zones colour-coded. The hero image is the pool-to-deck-to-kitchen flow shot at twilight."
+        ),
+        "open_home_strategy": (
+            "Route: enter through the front, move through the kitchen and living areas (establish quality), "
+            "then upstairs to master suite (aspiration), back down to the ground floor dual-living zone "
+            "(reveal the unique feature), and finish on the pool deck with the outdoor kitchen "
+            "(peak-end rule — the strongest emotional anchor is the last thing they experience). "
+            "Offer refreshments at the outdoor kitchen during the final 5 minutes. "
+            "Research confirms: the last moment of an experience disproportionately shapes the overall "
+            "memory. Every inspection ends at the pool."
+        ),
     }
 
 
@@ -558,11 +645,11 @@ def render_html(prop, client_name, top_comps, room_assessments, value_equations,
     seller_headline = "Your property sits well above the Merrimac median, supported by three recent comparable sales"
     seller_sub_headline = "A five-bedroom home with pool, dual living, and 9/10 condition in a market with zero direct competition at this specification"
     seller_verdict = (
-        "Based on three adjusted comparable sales ranging from $1,607,616 to $1,954,874, "
-        "we estimate your property's current market position at approximately $1,800,000, "
-        "within a range of $1,600,000 to $1,955,000. The primary value drivers are the dual living "
-        "configuration, pool and outdoor entertaining package, overall 9/10 condition, and "
-        "proximity to All Saints Anglican School."
+        "Based on three adjusted comparable sales ranging from $1,712,616 to $1,924,874, "
+        "we estimate a most likely selling range of $1,725,000 to $1,925,000, with a recommended "
+        "listing range of $1,765,000 to $1,825,000, subject to property analyst inspection. "
+        "The primary value drivers are the dual living configuration, pool and outdoor entertaining "
+        "package, overall 9/10 condition, and proximity to All Saints Anglican School."
     )
     seller_strengths = [
         "9/10 condition with stone benchtops, inground pool, outdoor kitchen, and 52.5 sqm entertaining deck — roughly $165,000–$230,000 of renovation already done",
@@ -582,10 +669,11 @@ def render_html(prop, client_name, top_comps, room_assessments, value_equations,
         "land_size": int(prop.get("land_size_sqm", 658)),
         "internal_area": prop.get("floor_plan_analysis", {}).get("internal_floor_area", {}).get("value", 221),
         "condition_score": prop.get("property_valuation_data", {}).get("property_overview", {}).get("overall_condition_score", 9),
-        # Valuation
-        "valuation_display": fmt(1800000),
-        "valuation_low_display": fmt(1600000),
-        "valuation_high_display": fmt(1955000),
+        # Valuation ranges
+        "selling_range_low": fmt(1725000),
+        "selling_range_high": fmt(1925000),
+        "listing_range_low": fmt(1765000),
+        "listing_range_high": fmt(1825000),
         # Fields Take (seller context)
         "headline": seller_headline,
         "sub_headline": seller_sub_headline,
@@ -609,10 +697,12 @@ def render_html(prop, client_name, top_comps, room_assessments, value_equations,
         "houses_sold_12m": market_stats.get("houses_sold_12m", "?"),
         "currently_listed": market_stats.get("currently_listed", "?"),
         # Positioning
+        "lifestyle_narrative": positioning.get("lifestyle_narrative", ""),
         "pricing_strategy": positioning.get("pricing_strategy", ""),
-        "key_selling_points": positioning.get("key_selling_points", ""),
-        "marketing_approach": positioning.get("marketing_approach", ""),
-        "market_assessment": positioning.get("market_assessment", ""),
+        "feature_positioning": positioning.get("feature_positioning", []),
+        "campaign_structure": positioning.get("campaign_structure", ""),
+        "photography_strategy": positioning.get("photography_strategy", ""),
+        "open_home_strategy": positioning.get("open_home_strategy", ""),
         "research_stats": RESEARCH_STATS,
         "total_sold_tracked": TOTAL_SOLD_TRACKED,
         # Photos
@@ -634,6 +724,7 @@ def render_html(prop, client_name, top_comps, room_assessments, value_equations,
         "key_pois": _build_key_pois(prop),
         # Seasonality
         "sell_timeline_label": sell_timeline_label,
+        "sell_window": "July to October 2026",
         "seasonality_section": _build_seasonality_section(sell_timeline),
     }
 
