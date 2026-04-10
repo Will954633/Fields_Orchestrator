@@ -260,11 +260,20 @@ def build_top_comps(subject: dict, comp_docs: list[dict]) -> list[dict]:
         pool_str = "Pool" if pvd.get("outdoor", {}).get("pool_present") else "No pool"
         reno = pvd.get("renovation", {}).get("overall_renovation_level", "?").replace("_", " ").title()
 
+        # Human-readable date: "6 March 2026"
+        date_display = sold_date[:10] if sold_date else "?"
+        try:
+            dt = datetime.strptime(sold_date[:10], "%Y-%m-%d")
+            date_display = dt.strftime("%-d %B %Y")
+        except (ValueError, TypeError):
+            pass
+
         results.append({
             "address": addr,
             "sold_price": price,
             "sold_display": fmt(price),
             "date": sold_date[:10] if sold_date else "?",
+            "date_display": date_display,
             "config": f"{beds}bd {baths}ba {cars}car",
             "land": str(int(float(land))) if land and land != "?" else "?",
             "internal": str(internal),
