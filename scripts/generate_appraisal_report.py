@@ -72,7 +72,7 @@ def get_db():
     conn = os.environ.get("COSMOS_CONNECTION_STRING")
     if not conn:
         sys.exit("[ERROR] COSMOS_CONNECTION_STRING not set")
-    client = MongoClient(conn, retryReads=True, retryWrites=True)
+    client = MongoClient(conn, retryReads=True, retryWrites=False)
     return client
 
 
@@ -203,9 +203,9 @@ def select_comps(client, suburb: str, subject: dict, max_comps: int = 5) -> list
 
         candidates.append((score, price, doc))
 
-    # Sort by score descending, take top N
+    # Sort by score descending, take top 3 (tight comp set = higher quality report)
     candidates.sort(key=lambda x: x[0], reverse=True)
-    return [doc for _, _, doc in candidates[:max_comps]]
+    return [doc for _, _, doc in candidates[:min(max_comps, 3)]]
 
 
 def _parse_price(val) -> Optional[float]:
@@ -354,10 +354,11 @@ def build_top_comps(subject: dict, comp_docs: list[dict], rates: dict) -> list[d
         time_mult = time_adjust(sold_date)
         adjusted = int((sold_price + total_adj) * time_mult)
         addr = doc.get("display_address") or doc.get("complete_address") or doc.get("address") or "?"
-        # Clean up address for display
-        for suffix in [" QLD ", " Qld "]:
-            if suffix in addr:
-                addr = addr.split(suffix)[0]
+        # Clean up address — remove suburb, state, postcode for compact display
+        import re as _re
+        addr = _re.sub(r'\s+(QLD|Qld|qld)\s+\d{4}\s*$', '', addr)
+        addr = _re.sub(r'\s+(ROBINA|MERRIMAC|BURLEIGH WATERS|VARSITY LAKES|MUDGEERABA|REEDY CREEK|WORONGARY|CARRARA)\s*$', '', addr, flags=_re.IGNORECASE)
+        addr = addr.strip().strip(",")
 
         cards.append({
             "address": addr,
@@ -479,7 +480,20 @@ def generate_editorial(prop: dict, top_comps: list, market_stats: dict, rates: d
     # Scarcity data
     scarcity_text = f"{beds}-bedroom homes in {suburb}"
 
-    prompt = f"""You are the Fields Estate editorial team. Generate ALL editorial content for a seller appraisal report.
+    # Build detailed adjustment summary for each comp
+    adj_detail = ""
+    for c in top_comps:
+        adj_lines = []
+        for a in c.get("adjustments", []):
+            adj_lines.append(f"      {a['label']}: {a['diff']} = {a['display']}")
+        adj_detail += f"  {c['address']}: sold {c['sold_display']} ({c['date']})\n"
+        adj_detail += f"    Total property adjustment: {c['total_adj_display']}\n"
+        adj_detail += f"    Time adjustment factor: {c['time_factor']}\n"
+        adj_detail += f"    Adjusted value for subject: {c['adjusted_total_display']}\n"
+        if adj_lines:
+            adj_detail += f"    Line-item adjustments:\n" + "\n".join(adj_lines) + "\n"
+
+    prompt = f"""You are the Fields Estate editorial team writing a seller appraisal report. This must be PUBLICATION QUALITY — specific, data-dense, honest, and compelling. Every claim must cite data.
 
 PROPERTY: {address}
 {beds} bedrooms, {baths} bathrooms, {cars} car spaces.
@@ -487,56 +501,67 @@ PROPERTY: {address}
 Pool: {pool}. Renovation: {reno}. Kitchen: {kitchen}. AC: {ac}.
 {poi_text}
 
-COMPARABLE ADJUSTMENTS (used to derive valuation):
-{comp_text}
+COMPARABLE SALES WITH FULL ADJUSTMENT DETAIL:
+{adj_detail}
 
 VALUATION RANGE: {fmt(val_low)} to {fmt(val_high)} (mid-point {fmt(val_mid)})
 
-MARKET: {suburb} median {market_stats['median']}. {market_stats['houses_sold_12m']} houses sold in 12m. {market_stats['currently_listed']} currently listed.
+MARKET CONTEXT: {suburb} median {market_stats['median']}. {market_stats['houses_sold_12m']} houses sold in 12m. {market_stats['currently_listed']} currently listed.
+
+QUALITY STANDARD — follow this example of what "good" looks like:
+
+Example headline: "Your property sits well above the Merrimac median, supported by three recent comparable sales"
+Example strength bullet: "9/10 condition with stone benchtops, inground pool, outdoor kitchen, and 52.5 sqm entertaining deck — roughly $165,000–$230,000 of renovation already done"
+Example value equation: "Land: 658 m² — mid-sized for Merrimac. 3 Islay Court sold on 769 m² and 7 Nicklaus Court on 825 m². At $375/m², that's $40,000–$63,000 less land value. But the outdoor package on this property — inground pool (excellent condition), 5.25 m² covered deck, outdoor kitchen — would cost $195,000–$145,000 to replicate. The outdoor infrastructure more than compensates for the land gap."
+Example trade-off: "658 sqm lot (107 sqm less than the nearest comp), 221 sqm internal floor area, and a two-storey layout that rules out single-level living"
 
 RULES (MANDATORY):
-- Frame as "we would" not "you should". No advice language. No "you should sell/buy/consider".
+- Frame as "we would" not "you should". NEVER give advice. Data only — reader draws conclusions.
 - No forbidden words: stunning, nestled, boasting, rare opportunity, robust market.
-- Be specific — cite the data (comparable addresses, prices, percentages).
+- Cite specific comp addresses, prices, adjustment figures, and percentages.
 - Price format: $1,250,000 not $1.25m. Suburbs always capitalised.
-- Every trade-off is value, not a flaw. A seller should read this and feel their property is positioned honestly.
-- No predictions: use conditional language ("if X, data suggests Y").
+- Every trade-off must be reframed as value — a seller reading this should feel their property is positioned honestly and favourably.
+- No predictions. Use conditional language ("if X, data suggests Y").
+- Be SPECIFIC — mention actual room sizes, materials, distances, scores. Generic statements are unacceptable.
 
 Return JSON with these keys:
 
 {{
-  "headline": "One sentence: what the data shows about this property's position (cite median, comp range)",
-  "sub_headline": "One sentence: key differentiators and scarcity statement",
-  "verdict": "3-4 sentences: valuation range with evidence, recommended listing range, primary value drivers. Cite specific comp addresses and adjusted prices.",
-  "strengths": ["3-4 bullet points: specific features with dollar impacts from the adjustment data"],
-  "trade_off": "One sentence: the main trade-off, framed as value (not a flaw)",
+  "headline": "One sentence citing the comparable range and median position. Must include specific numbers.",
+  "sub_headline": "One sentence: key differentiators with specifics (bedroom count, pool, condition score, scarcity). Include a scarcity data point.",
+  "verdict": "4-5 sentences: Start with 'Based on [N] adjusted comparable sales ranging from [X] to [Y]...'. State the selling range, recommended listing range, and the 3-4 primary value drivers with dollar references. Cite at least 2 comp addresses by name.",
+  "strengths": ["3-4 bullets, each with SPECIFIC dollar impacts or measurements. E.g. 'Pool and outdoor package valued at approximately $X based on adjustment data from [comp address]'. Never generic."],
+  "trade_off": "One sentence with specific measurements — what the property gives up AND why it doesn't matter (reframe as value).",
   "value_equations": [
-    {{"title": "Feature name", "body": "2-3 sentences explaining what the data shows about this feature's value impact. Cite specific comparables.", "reframe": "One sentence reframing any negative as value", "positive": true}}
+    {{"title": "Feature: specific measurement", "body": "3-4 sentences. MUST cite at least one comp by address. State the dollar impact from the adjustment data. Compare specific measurements (sqm, scores, features). End with the net value implication.", "reframe": "One sentence: the bold editorial reframe — why this feature is actually an advantage even if it looks like a weakness. Written in italics-worthy confident tone.", "positive": true}}
   ],
   "buyer_profiles": [
-    {{"name": "Profile name", "description": "2 sentences: who this buyer is and why this property fits them"}}
+    {{"name": "Specific buyer persona (e.g. 'Young family upgrading from 3-bed')", "description": "3 sentences: Who they are, why this property fits (cite specific features), and what drives their purchase decision. Reference nearby schools, parks, or lifestyle features by name."}}
   ],
-  "scarcity_count": "Number of similar properties that sold in 12 months (e.g. '5')",
-  "scarcity_statement": "One sentence about scarcity (e.g. 'five-bedroom homes sold in {suburb} in 12 months')",
-  "lifestyle_narrative": "2-3 sentences: the lifestyle this property offers, grounded in data (proximity to schools, parks, etc.)",
+  "scarcity_count": "Exact number of similar-spec properties that sold in the suburb in 12 months",
+  "scarcity_statement": "Specific scarcity statement citing bedroom count, key features, and the total sold number. E.g. 'five-bedroom homes sold in Merrimac in 12 months — out of 58 total sales. Only 1 had a pool.'",
+  "lifestyle_narrative": "3-4 sentences grounded in POI data. Name specific schools, parks, shops with distances. Paint the daily life picture.",
   "pricing_cards": [
-    {{"label": "Strategy name", "range": "$X - $Y", "rationale": "1-2 sentences citing comparable evidence"}}
+    {{"label": "Strategy name (e.g. 'Aspirational Pricing')", "range": "$X,XXX,XXX — $X,XXX,XXX", "rationale": "2-3 sentences citing specific comparable evidence for this price bracket."}}
   ],
   "feature_positioning": [
-    {{"feature": "Feature name", "impact": "$XX,XXX", "strategy": "How to leverage this in marketing"}}
+    {{"feature": "Specific feature with measurement", "impact": "$XX,XXX — $XX,XXX", "strategy": "2 sentences: how to position this in marketing, what buyer emotion it triggers, what photography angle captures it."}}
   ],
-  "campaign_structure": "2-3 sentences: recommended campaign approach",
-  "photography_strategy": "2 sentences: what to photograph and why",
-  "open_home_strategy": "2 sentences: approach to inspections"
+  "campaign_structure": "3-4 sentences: specific campaign approach — duration, channels, staging priorities, open home schedule. Reference the property's specific strengths.",
+  "photography_strategy": "3 sentences: specific rooms/angles to prioritise, time of day, what to stage. Reference the property's actual features (pool, kitchen, deck, etc.).",
+  "open_home_strategy": "3 sentences: approach to inspections — what to highlight on the walk-through, where to start, what creates the emotional peak."
 }}
 
-Generate 5-7 value_equations, 3 buyer_profiles, 3-4 pricing_cards, and 4-6 feature_positioning items.
-Return ONLY valid JSON."""
+Generate EXACTLY 5-7 value_equations covering: land size, internal floor area, condition/renovation, key feature (pool/kitchen/etc), location/school proximity, buyer scarcity, and one trade-off reframe.
+Generate EXACTLY 3 buyer_profiles (primary, secondary, tertiary).
+Generate EXACTLY 4 pricing_cards (aspirational, competitive, strategic, floor).
+Generate EXACTLY 5-6 feature_positioning items.
+Return ONLY valid JSON. No markdown, no commentary."""
 
     try:
         resp = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=4000,
+            model="claude-opus-4-20250514",
+            max_tokens=6000,
             messages=[{"role": "user", "content": prompt}],
         )
         text = resp.content[0].text.strip()
@@ -552,29 +577,78 @@ Return ONLY valid JSON."""
 
 
 def _minimal_editorial(prop: dict, top_comps: list, market_stats: dict) -> dict:
-    """Fallback when Claude is unavailable — data-only, no prose."""
+    """Fallback when Claude is unavailable — data-driven, no AI prose but not empty."""
     adj_prices = [c["adjusted_total"] for c in top_comps if c.get("adjusted_total")]
     val_low = min(adj_prices) if adj_prices else 0
     val_high = max(adj_prices) if adj_prices else 0
+    val_mid = int(sum(adj_prices) / len(adj_prices)) if adj_prices else 0
     beds = prop.get("bedrooms", "?")
+    baths = prop.get("bathrooms", "?")
     suburb = prop.get("suburb", "?")
+    pvd = prop.get("property_valuation_data", {})
+    condition = pvd.get("property_overview", {}).get("overall_condition_score", "?")
+    pool = "with pool" if pvd.get("outdoor", {}).get("pool_present") else ""
+    land = prop.get("land_size_sqm") or prop.get("lot_size_sqm") or "?"
+
+    # Build value equations from adjustment data
+    value_equations = []
+    if top_comps:
+        # Land
+        value_equations.append({
+            "title": f"Land: {land} m\u00b2",
+            "body": f"Compared against {len(top_comps)} recent sales in {suburb}. Land size adjustments ranged from {top_comps[0].get('adjustments', [{}])[0].get('display', 'N/A')} to {top_comps[-1].get('adjustments', [{}])[0].get('display', 'N/A') if len(top_comps) > 1 else 'N/A'} across comparables.",
+            "reframe": "Land size is one factor among many — condition, layout, and outdoor amenities often outweigh raw lot dimensions.",
+            "positive": True,
+        })
+        # Condition
+        if condition != "?":
+            value_equations.append({
+                "title": f"Condition: {condition}/10",
+                "body": f"An overall condition score of {condition}/10 positions this property relative to the comparable set. Condition adjustments are applied as a percentage of sale price, reflecting the cost a buyer would incur to match this level of finish.",
+                "reframe": "The condition score reflects the current state — every property has a score, and this data point helps buyers understand what they are getting for the price.",
+                "positive": condition >= 7,
+            })
+
+    # Build strengths from top adjustment line items
+    strengths = []
+    for c in top_comps[:2]:
+        for adj in c.get("adjustments", []):
+            if adj["value"] > 20000:
+                strengths.append(f"{adj['label']}: {adj['display']} adjustment vs {c['address']}")
+            if len(strengths) >= 3:
+                break
+        if len(strengths) >= 3:
+            break
+    if not strengths:
+        strengths = [f"Adjusted comparable range: {fmt(val_low)} to {fmt(val_high)}"]
+
+    comp_addresses = [c["address"] for c in top_comps]
+    comp_cite = " and ".join(comp_addresses[:2]) if len(comp_addresses) >= 2 else comp_addresses[0] if comp_addresses else "comparable sales"
 
     return {
-        "headline": f"Based on {len(top_comps)} adjusted comparable sales, this property sits above the {suburb} median of {market_stats['median']}",
-        "sub_headline": f"A {beds}-bedroom property with adjusted comparable range of {fmt(val_low)} to {fmt(val_high)}",
-        "verdict": f"Based on {len(top_comps)} adjusted comparable sales ranging from {fmt(val_low)} to {fmt(val_high)}, this property's estimated selling range is {fmt(val_low)} to {fmt(val_high)}, subject to property analyst inspection.",
-        "strengths": [f"Adjusted comparable range: {fmt(val_low)} to {fmt(val_high)}"],
-        "trade_off": "Refer to detailed comparable analysis for specific adjustments",
-        "value_equations": [],
-        "buyer_profiles": [{"name": "Target buyer", "description": f"Buyers seeking a {beds}-bedroom property in {suburb}"}],
+        "headline": f"Based on {len(top_comps)} adjusted comparable sales, this property sits {'above' if val_mid > int(market_stats.get('median', '$0').replace('$', '').replace(',', '') or 0) else 'around'} the {suburb} median of {market_stats['median']}",
+        "sub_headline": f"A {beds}-bedroom {pool} property with an adjusted comparable range of {fmt(val_low)} to {fmt(val_high)}",
+        "verdict": f"Based on {len(top_comps)} adjusted comparable sales — {comp_cite} — ranging from {fmt(val_low)} to {fmt(val_high)}, we estimate a selling range of {fmt(val_low)} to {fmt(val_high)}, with a recommended listing range of {fmt(round(val_mid * 0.97 / 5000) * 5000)} to {fmt(round(val_mid * 1.03 / 5000) * 5000)}, subject to property analyst inspection.",
+        "strengths": strengths,
+        "trade_off": f"Refer to the detailed comparable adjustment analysis for feature-by-feature value impacts",
+        "value_equations": value_equations,
+        "buyer_profiles": [
+            {"name": f"Families seeking {beds} bedrooms in {suburb}", "description": f"Buyers looking for a {beds}-bedroom home in {suburb} with proximity to local schools and amenities. This property's specification matches the most active buyer segment in the suburb."},
+            {"name": "Upgraders from smaller homes", "description": f"Owners of 2-3 bedroom properties in the southern Gold Coast corridor looking to upsize. {suburb}'s median of {market_stats['median']} offers value relative to beachside suburbs."},
+            {"name": "Investors seeking rental yield", "description": f"With {market_stats.get('currently_listed', '?')} properties currently listed and {market_stats.get('houses_sold_12m', '?')} sales in the last 12 months, {suburb} shows balanced supply and demand."},
+        ],
         "scarcity_count": market_stats.get("houses_sold_12m", "?"),
-        "scarcity_statement": f"houses sold in {suburb} in the last 12 months",
-        "lifestyle_narrative": "",
-        "pricing_cards": [{"label": "Comparable Range", "range": f"{fmt(val_low)} \u2013 {fmt(val_high)}", "rationale": f"Based on {len(top_comps)} adjusted comparable sales"}],
+        "scarcity_statement": f"{beds}-bedroom houses sold in {suburb} in the last 12 months",
+        "lifestyle_narrative": f"Located in {suburb}, this property offers access to local schools, parks, and shopping within the southern Gold Coast corridor.",
+        "pricing_cards": [
+            {"label": "Aspirational", "range": f"{fmt(val_high)} +", "rationale": f"At the top of the comparable range, supported by {comp_addresses[-1] if comp_addresses else 'the highest comparable'}."},
+            {"label": "Competitive", "range": f"{fmt(round(val_mid / 5000) * 5000)} \u2013 {fmt(round(val_high * 0.97 / 5000) * 5000)}", "rationale": f"Mid-range positioning designed to attract multiple offers within the first 3 weeks."},
+            {"label": "Strategic", "range": f"{fmt(round(val_low * 1.02 / 5000) * 5000)} \u2013 {fmt(round(val_mid / 5000) * 5000)}", "rationale": f"Below the mid-point to generate urgency and competition among buyers."},
+        ],
         "feature_positioning": [],
-        "campaign_structure": "",
-        "photography_strategy": "",
-        "open_home_strategy": "",
+        "campaign_structure": f"A 3-4 week campaign with professional photography, targeted digital advertising to {suburb} and surrounding suburbs, and weekend open homes.",
+        "photography_strategy": f"Prioritise the front elevation, main living areas, kitchen, and outdoor spaces. Shoot in the morning for natural light.",
+        "open_home_strategy": f"Saturday open homes from 10-10:30am. Start at the front entrance and guide through living areas before revealing outdoor spaces last for maximum impact.",
     }
 
 
@@ -697,11 +771,14 @@ def render_html(prop, client_name, top_comps, room_assessments, editorial,
     adj_prices = [c["adjusted_total"] for c in top_comps if c.get("adjusted_total")]
     val_low = min(adj_prices) if adj_prices else 0
     val_high = max(adj_prices) if adj_prices else 0
-    # Listing range: tighten by ~5%
-    listing_low = int(val_low * 1.02) if val_low else 0
-    listing_high = int(val_high * 0.95) if val_high else 0
-    if listing_high < listing_low:
-        listing_low, listing_high = listing_high, listing_low
+    val_mid = int(sum(adj_prices) / len(adj_prices)) if adj_prices else 0
+    # Listing range: tighter band around the middle — recommended pricing bracket
+    spread = val_high - val_low
+    listing_low = int(val_mid - spread * 0.2) if val_mid else 0
+    listing_high = int(val_mid + spread * 0.15) if val_mid else 0
+    # Round to nearest $5,000 for clean presentation
+    listing_low = round(listing_low / 5000) * 5000
+    listing_high = round(listing_high / 5000) * 5000
 
     context = {
         "client_name": client_name,
