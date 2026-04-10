@@ -50,7 +50,7 @@
   .cover-meta span { color: var(--birch); }
 
   /* ── PAGE ── */
-  .page { width: 210mm; min-height: 297mm; padding: 30px 38px 52px; page-break-after: always; position: relative; overflow: hidden; background: var(--white); counter-increment: page-counter; }
+  .page { width: 210mm; min-height: 297mm; padding: 30px 38px 58px; page-break-after: always; position: relative; overflow: hidden; background: var(--white); counter-increment: page-counter; }
   .page-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1.5px solid var(--birch); padding-bottom: 8px; margin-bottom: 22px; }
   .page-header img { height: 18px; width: auto; }
   .page-header-right { font-size: 8pt; color: var(--text-muted); }
@@ -157,6 +157,14 @@
   .season-callout { background: var(--birch); border-radius: 6px; padding: 8px 10px; text-align: center; }
   .season-callout-stat { font-size: 10pt; font-weight: 700; color: var(--grass); }
   .season-callout-label { font-size: 6.5pt; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+
+  /* ── PRICING CARDS ── */
+  .pricing-card { background: var(--birch); border-left: 3px solid var(--copper); border-radius: 0 8px 8px 0; padding: 12px 16px; margin: 8px 0; page-break-inside: avoid; }
+  .pricing-card h4 { color: var(--grass); font-size: 9.5pt; font-weight: 600; margin-bottom: 6px; }
+  .pricing-card p { font-size: 8.5pt; color: var(--text-secondary); line-height: 1.4; }
+  .pricing-callout { display: inline-block; background: var(--grass); color: var(--birch); border-radius: 6px; padding: 6px 12px; margin-bottom: 8px; }
+  .pricing-callout-stat { font-size: 9pt; font-weight: 700; }
+  .pricing-callout-label { font-size: 6.5pt; text-transform: uppercase; letter-spacing: 0.5px; color: var(--sky); margin-left: 6px; }
 
   /* ── WHY FIELDS ── */
   .diff-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; }
@@ -318,8 +326,8 @@
   <div class="page-footer"><div class="page-footer-center">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div><div class="page-footer-right">4</div></div>
 </div>
 
-<!-- ══════ PAGE 5: HONEST ASSESSMENT (no page break — let flood flow naturally) ══════ -->
-<div class="page" style="page-break-after: auto;">
+<!-- ══════ PAGE 5: HONEST ASSESSMENT ══════ -->
+<div class="page">
   <div class="page-header">
     <img src="{{ logo_path }}" alt="Fields Estate">
     <div class="page-header-right">{{ street_address }}</div>
@@ -327,12 +335,15 @@
   <h2>The Honest Assessment</h2>
   <p class="subtitle">What works for your property, what works against it, and what it means in dollar terms.</p>
   {% for eq in value_equations %}
+  {% if not eq.is_flood %}
   <div class="value-eq {% if eq.positive %}positive-signal{% else %}negative-signal{% endif %}">
     <h3>{{ eq.title }}</h3>
     <p>{{ eq.body }}</p>
     {% if eq.reframe %}<p class="reframe mt-8">{{ eq.reframe }}</p>{% endif %}
   </div>
+  {% endif %}
   {% endfor %}
+  <div class="page-footer"><div class="page-footer-center">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div><div class="page-footer-right">5</div></div>
 </div>
 
 <!-- ══════ PAGE 6: LOCATION & LIFESTYLE ══════ -->
@@ -343,6 +354,16 @@
   </div>
   <h2>Location &amp; Lifestyle</h2>
   <p class="subtitle">Satellite analysis and proximity data for {{ street_address }}.</p>
+  <!-- Flood section (location attribute) -->
+  {% for eq in value_equations %}
+  {% if eq.is_flood %}
+  <div class="value-eq positive-signal" style="margin-bottom: 14px;">
+    <h3>{{ eq.title }}</h3>
+    <p>{{ eq.body }}</p>
+    {% if eq.reframe %}<p class="reframe mt-8">{{ eq.reframe }}</p>{% endif %}
+  </div>
+  {% endif %}
+  {% endfor %}
   {% if satellite_image_url %}
   <img class="photo-hero" src="{{ satellite_image_url }}" alt="Satellite view" style="height: 200px;">
   {% endif %}
@@ -367,25 +388,6 @@
     </div>
     {% endfor %}
   </div>
-  {% if seasonality_section %}
-  <hr class="divider">
-  <h3>Seasonality and Your Selling Window: {{ sell_window }}</h3>
-  <div class="season-callouts">
-    <div class="season-callout">
-      <div class="season-callout-stat">H2 &gt; H1</div>
-      <div class="season-callout-label">Second half outperforms on price</div>
-    </div>
-    <div class="season-callout">
-      <div class="season-callout-stat">15–21 days</div>
-      <div class="season-callout-label">Optimal selling window for highest price</div>
-    </div>
-    <div class="season-callout">
-      <div class="season-callout-stat">Sep–Oct</div>
-      <div class="season-callout-label">Peak buyer activity for school families</div>
-    </div>
-  </div>
-  <p style="font-size: 8.5pt; color: var(--text-secondary); line-height: 1.45;">{{ seasonality_section }}</p>
-  {% endif %}
   <div class="page-footer"><div class="page-footer-center">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div><div class="page-footer-right">6</div></div>
 </div>
 
@@ -432,6 +434,25 @@
       <div class="exec-card-sub">Active for-sale</div>
     </div>
   </div>
+  {% if seasonality_section %}
+  <hr class="divider">
+  <h3>Seasonality and Your Selling Window: {{ sell_window }}</h3>
+  <div class="season-callouts">
+    <div class="season-callout">
+      <div class="season-callout-stat">H2 &gt; H1</div>
+      <div class="season-callout-label">Second half outperforms on price</div>
+    </div>
+    <div class="season-callout">
+      <div class="season-callout-stat">15–21 days</div>
+      <div class="season-callout-label">Optimal selling window for highest price</div>
+    </div>
+    <div class="season-callout">
+      <div class="season-callout-stat">Sep–Oct</div>
+      <div class="season-callout-label">Peak buyer activity for school families</div>
+    </div>
+  </div>
+  <p style="font-size: 8pt; color: var(--text-secondary); line-height: 1.4;">{{ seasonality_section }}</p>
+  {% endif %}
   <div class="page-footer"><div class="page-footer-center">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div><div class="page-footer-right">7</div></div>
 </div>
 
@@ -449,11 +470,17 @@
     <p style="color: var(--birch); font-size: 9pt; line-height: 1.55; font-style: italic; margin: 0;">{{ lifestyle_narrative }}</p>
   </div>
 
-  <div class="strategy-card"><h3>Pricing Strategy &mdash; Why These Numbers</h3>
-    {% for para in pricing_strategy.split('\n\n') %}
-    <p {% if not loop.first %}style="margin-top: 8px;"{% endif %}>{{ para }}</p>
-    {% endfor %}
+  <h3 style="margin-top: 12px; margin-bottom: 8px;">Pricing Strategy &mdash; Why These Numbers</h3>
+  {% for card in pricing_cards %}
+  <div class="pricing-card">
+    <h4>{{ card.title }}</h4>
+    <div class="pricing-callout">
+      <span class="pricing-callout-stat">{{ card.callout_stat }}</span>
+      <span class="pricing-callout-label">{{ card.callout_label }}</span>
+    </div>
+    <p>{{ card.body }}</p>
   </div>
+  {% endfor %}
 
   <div class="strategy-card">
     <h3>How Each Feature Maximises Sale Value</h3>
