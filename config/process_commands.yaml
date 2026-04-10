@@ -525,3 +525,18 @@ phases:
     name: "Daily Backup"
     description: "Create MongoDB backup after all processes complete"
     steps: []  # Handled separately
+
+  # ============================================================================
+  # APPRAISAL PIPELINE
+  # ============================================================================
+
+  - id: 300
+    name: "Generate Appraisal Report"
+    description: "Auto-generates a draft seller appraisal report for a new lead. Triggered by analyse-lead form. PIPELINE_ID in note field is substituted into command."
+    phase: "appraisal"
+    command: "python3 scripts/generate_appraisal_report.py --pipeline-id PIPELINE_ID"
+    working_dir: "/home/fields/Fields_Orchestrator"
+    mongodb_activity: "moderate_read"
+    requires_browser: true
+    estimated_duration_minutes: 5
+    cooldown_seconds: 30
