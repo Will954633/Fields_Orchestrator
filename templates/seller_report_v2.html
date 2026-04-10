@@ -75,23 +75,26 @@
   .strengths-box li, .tradeoff-box li { font-size: 8.5pt; margin-bottom: 3px; color: var(--text-secondary); }
 
   /* ── VALUATION ── */
-  .val-banner { background: var(--grass); color: var(--birch); border-radius: 10px; padding: 20px 26px; text-align: center; margin: 10px 0 16px; }
-  .val-label { font-size: 8pt; letter-spacing: 2px; text-transform: uppercase; color: var(--sky); margin-bottom: 3px; font-weight: 500; }
-  .val-figure { font-size: 26pt; font-weight: 700; color: var(--birch); }
-  .val-range { font-size: 9.5pt; color: var(--birch-dark); margin-top: 3px; }
-  .comp-card { border: 1px solid var(--birch-dark); border-radius: 8px; padding: 14px; margin: 8px 0; page-break-inside: avoid; }
-  .comp-card-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
-  .comp-card-addr { font-size: 10.5pt; font-weight: 600; color: var(--grass); }
-  .comp-card-price { font-size: 10.5pt; font-weight: 700; color: var(--grass); }
-  .comp-card-meta { font-size: 8pt; color: var(--text-muted); margin-bottom: 6px; }
-  .adj-grid { display: grid; grid-template-columns: 1fr auto auto; gap: 1px 10px; font-size: 8pt; margin: 6px 0; }
+  .val-banner { background: var(--grass); color: var(--birch); border-radius: 10px; padding: 24px 26px; text-align: center; margin: 10px 0 16px; }
+  .val-label { font-size: 8pt; letter-spacing: 2px; text-transform: uppercase; color: var(--sky); margin-bottom: 6px; font-weight: 500; }
+  .val-ranges { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 10px; }
+  .val-range-box { padding: 14px; border-radius: 8px; background: rgba(255,255,255,0.08); }
+  .val-range-label { font-size: 7pt; letter-spacing: 1.5px; text-transform: uppercase; color: var(--sky); margin-bottom: 4px; font-weight: 500; }
+  .val-range-figure { font-size: 16pt; font-weight: 700; color: var(--birch); }
+  .val-disclaimer { font-size: 7.5pt; color: var(--birch-dark); margin-top: 10px; font-style: italic; }
+  .comp-card { border: 1px solid var(--birch-dark); border-radius: 8px; padding: 10px 12px; margin: 6px 0; }
+  .comp-card-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
+  .comp-card-addr { font-size: 9.5pt; font-weight: 600; color: var(--grass); }
+  .comp-card-price { font-size: 9.5pt; font-weight: 700; color: var(--grass); }
+  .comp-card-meta { font-size: 7pt; color: var(--text-muted); margin-bottom: 4px; }
+  .adj-grid { display: grid; grid-template-columns: 1fr auto auto; gap: 0px 8px; font-size: 7pt; margin: 4px 0; }
   .adj-label { color: var(--text-secondary); }
   .adj-diff { color: var(--text-muted); text-align: right; }
   .adj-val { font-weight: 600; text-align: right; }
   .adj-pos { color: #2d6a4f; }
   .adj-neg { color: var(--copper); }
-  .adj-total { border-top: 1.5px solid var(--grass); padding-top: 3px; margin-top: 3px; font-weight: 700; font-size: 9pt; }
-  .comp-card-narrative { font-size: 8.5pt; color: var(--text-muted); margin-top: 5px; font-style: italic; }
+  .adj-total { border-top: 1.5px solid var(--grass); padding-top: 2px; margin-top: 2px; font-weight: 700; font-size: 8pt; }
+  .comp-card-narrative { font-size: 7pt; color: var(--text-muted); margin-top: 3px; font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 
   /* ── ROOM ASSESSMENT ── */
   .room-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0; }
@@ -228,17 +231,26 @@
   <p class="subtitle">Every number here is built from comparable sales, individually adjusted. No black boxes.</p>
   <div class="val-banner">
     <div class="val-label">Comparable-Adjusted Valuation</div>
-    <div class="val-figure">{{ valuation_display }}</div>
-    <div class="val-range">Range: {{ valuation_low_display }} &mdash; {{ valuation_high_display }}</div>
+    <div class="val-ranges">
+      <div class="val-range-box">
+        <div class="val-range-label">Most Likely Selling Range</div>
+        <div class="val-range-figure">{{ selling_range_low }} &mdash; {{ selling_range_high }}</div>
+      </div>
+      <div class="val-range-box">
+        <div class="val-range-label">Most Likely Listing Range</div>
+        <div class="val-range-figure">{{ listing_range_low }} &mdash; {{ listing_range_high }}</div>
+      </div>
+    </div>
+    <div class="val-disclaimer">Subject to property analyst inspection</div>
   </div>
   {% for comp in top_comps %}
   <div class="comp-card">
     <div class="comp-card-header">
       <div>
-        <div class="comp-card-addr">{{ comp.address }}</div>
+        <div class="comp-card-addr">{{ comp.address }} <span style="font-weight:400;color:var(--text-muted);font-size:9pt;">&mdash; Sold {{ comp.date }}</span></div>
         <div class="comp-card-meta">{{ comp.config }} &nbsp;|&nbsp; {{ comp.land }} m&sup2; &nbsp;|&nbsp; {{ comp.internal }} m&sup2; internal &nbsp;|&nbsp; {{ comp.condition }}/10 condition</div>
       </div>
-      <div class="comp-card-price">{{ comp.sold_display }} <span style="font-size:7.5pt;color:var(--text-muted);">({{ comp.date }})</span></div>
+      <div class="comp-card-price">{{ comp.sold_display }}</div>
     </div>
     <div class="adj-grid">
       {% for adj in comp.adjustments %}
@@ -339,7 +351,7 @@
   </div>
   {% if seasonality_section %}
   <hr class="divider">
-  <h3>Selling Timeline: {{ sell_timeline_label }}</h3>
+  <h3>Seasonality and Your Selling Window: {{ sell_window }}</h3>
   <p style="font-size: 8.5pt; color: var(--text-secondary); line-height: 1.45;">{{ seasonality_section }}</p>
   {% endif %}
   <div class="page-footer">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div>
@@ -399,10 +411,28 @@
   </div>
   <h2>How We Would Position &amp; Sell Your Property</h2>
   <p class="subtitle">Strategy backed by {{ research_stats }}.</p>
-  <div class="strategy-card"><h3>Pricing Strategy</h3><p>{{ pricing_strategy }}</p></div>
-  <div class="strategy-card"><h3>Key Selling Points &mdash; In Order of Impact</h3><p>{{ key_selling_points }}</p></div>
-  <div class="strategy-card"><h3>Campaign &amp; Marketing Approach</h3><p>{{ marketing_approach }}</p></div>
-  <div class="strategy-card"><h3>Market Timing</h3><p>{{ market_assessment }}</p></div>
+
+  <!-- Lifestyle narrative -->
+  <div class="strategy-card" style="background: var(--grass); border-left: none; border-radius: 8px;">
+    <p style="color: var(--birch); font-size: 9pt; line-height: 1.55; font-style: italic; margin: 0;">{{ lifestyle_narrative }}</p>
+  </div>
+
+  <div class="strategy-card"><h3>Pricing Strategy &mdash; Why These Numbers</h3><p>{{ pricing_strategy }}</p></div>
+
+  <div class="strategy-card">
+    <h3>How Each Feature Maximises Sale Value</h3>
+    {% for feat in feature_positioning %}
+    <div style="margin-bottom: 8px;">
+      <div style="font-size: 8.5pt; font-weight: 600; color: var(--grass);">{{ feat.feature }}</div>
+      <p style="font-size: 8pt; color: var(--text-secondary); line-height: 1.4; margin: 2px 0;">{{ feat.strategy }}</p>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="strategy-card"><h3>Campaign Structure</h3><p>{{ campaign_structure }}</p></div>
+  <div class="strategy-card"><h3>Photography &amp; Presentation</h3><p>{{ photography_strategy }}</p></div>
+  <div class="strategy-card"><h3>Open Home Strategy</h3><p>{{ open_home_strategy }}</p></div>
+
   <div class="photo-pair" style="margin-top: 12px;">
     <img src="{{ aerial_photo }}" alt="Aerial view">
     <img src="{{ pool_photo }}" alt="Pool">
