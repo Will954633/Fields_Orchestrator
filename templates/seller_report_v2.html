@@ -31,6 +31,7 @@
     line-height: 1.5;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+    counter-reset: page-counter;
   }
 
   /* ── COVER ── */
@@ -43,15 +44,18 @@
   .cover-label { font-size: 9pt; letter-spacing: 3px; text-transform: uppercase; color: var(--sky); margin-bottom: 10px; font-weight: 500; }
   .cover-address { font-size: 28pt; font-weight: 700; color: var(--birch); line-height: 1.15; margin-bottom: 6px; }
   .cover-suburb { font-size: 13pt; color: var(--birch-dark); font-weight: 300; margin-bottom: 24px; }
+  .cover-client { font-size: 14pt; font-weight: 600; color: var(--sun); margin-bottom: 6px; }
   .cover-meta { font-size: 8.5pt; color: var(--text-muted); margin-top: auto; }
   .cover-meta span { color: var(--birch); }
 
   /* ── PAGE ── */
-  .page { width: 210mm; min-height: 297mm; padding: 30px 38px 52px; page-break-after: always; position: relative; overflow: hidden; background: var(--white); }
+  .page { width: 210mm; min-height: 297mm; padding: 30px 38px 52px; page-break-after: always; position: relative; overflow: hidden; background: var(--white); counter-increment: page-counter; }
   .page-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1.5px solid var(--birch); padding-bottom: 8px; margin-bottom: 22px; }
   .page-header img { height: 18px; width: auto; }
   .page-header-right { font-size: 8pt; color: var(--text-muted); }
-  .page-footer { position: absolute; bottom: 18px; left: 38px; right: 38px; text-align: center; font-size: 7pt; color: var(--text-muted); border-top: 1px solid var(--birch); padding-top: 5px; }
+  .page-footer { position: absolute; bottom: 18px; left: 38px; right: 38px; text-align: center; font-size: 7pt; color: var(--text-muted); border-top: 1px solid var(--birch); padding-top: 5px; display: flex; justify-content: space-between; }
+  .page-footer-center { flex: 1; text-align: center; }
+  .page-footer-right { font-size: 7pt; color: var(--text-muted); }
 
   /* ── TYPOGRAPHY ── */
   h1 { font-size: 19pt; font-weight: 700; color: var(--grass); margin-bottom: 3px; line-height: 1.2; }
@@ -79,6 +83,7 @@
   .val-label { font-size: 8pt; letter-spacing: 2px; text-transform: uppercase; color: var(--sky); margin-bottom: 6px; font-weight: 500; }
   .val-ranges { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 10px; }
   .val-range-box { padding: 14px; border-radius: 8px; background: rgba(255,255,255,0.08); }
+  .val-range-box.listing { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.2); }
   .val-range-label { font-size: 7pt; letter-spacing: 1.5px; text-transform: uppercase; color: var(--sky); margin-bottom: 4px; font-weight: 500; }
   .val-range-figure { font-size: 16pt; font-weight: 700; color: var(--birch); }
   .val-disclaimer { font-size: 7.5pt; color: var(--birch-dark); margin-top: 10px; font-style: italic; }
@@ -94,7 +99,8 @@
   .adj-pos { color: #2d6a4f; }
   .adj-neg { color: var(--copper); }
   .adj-total { border-top: 1.5px solid var(--grass); padding-top: 2px; margin-top: 2px; font-weight: 700; font-size: 8pt; }
-  .comp-card-narrative { font-size: 7pt; color: var(--text-muted); margin-top: 3px; font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+  .comp-card-narrative { font-size: 7pt; color: var(--text-muted); margin-top: 3px; font-style: italic; line-height: 1.3; }
+  .adj-footnote { margin-top: 12px; padding-top: 6px; border-top: 1px solid var(--birch); }
 
   /* ── ROOM ASSESSMENT ── */
   .room-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0; }
@@ -133,6 +139,10 @@
   .strategy-card { background: var(--birch); border-left: 3px solid var(--copper); border-radius: 0 8px 8px 0; padding: 12px 16px; margin: 8px 0; page-break-inside: avoid; }
   .strategy-card h3 { color: var(--grass); margin-bottom: 3px; font-size: 9.5pt; }
   .strategy-card p { font-size: 8.5pt; color: var(--text-secondary); line-height: 1.4; }
+  .feature-item { margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--birch-dark); }
+  .feature-item:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+  .feature-label { font-size: 8.5pt; font-weight: 600; color: var(--grass); padding-left: 10px; border-left: 3px solid var(--sun); }
+  .feature-desc { font-size: 8pt; color: var(--text-secondary); line-height: 1.4; margin: 2px 0 0 13px; }
 
   /* ── EXEC CARDS ── */
   .exec-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin: 10px 0; }
@@ -140,6 +150,12 @@
   .exec-card-label { font-size: 7pt; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 3px; }
   .exec-card-value { font-size: 16pt; font-weight: 700; color: var(--grass); }
   .exec-card-sub { font-size: 7.5pt; color: var(--text-muted); margin-top: 2px; }
+
+  /* ── SEASONALITY CALLOUTS ── */
+  .season-callouts { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin: 10px 0; }
+  .season-callout { background: var(--birch); border-radius: 6px; padding: 8px 10px; text-align: center; }
+  .season-callout-stat { font-size: 10pt; font-weight: 700; color: var(--grass); }
+  .season-callout-label { font-size: 6.5pt; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
 
   /* ── WHY FIELDS ── */
   .diff-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; }
@@ -178,8 +194,9 @@
     <div class="cover-label">Property Position Report</div>
     <div class="cover-address">{{ street_address }}</div>
     <div class="cover-suburb">{{ suburb }}, QLD {{ postcode }}</div>
+    <div class="cover-client">Prepared for {{ client_name }}</div>
     <div class="cover-meta">
-      Prepared for <span>{{ client_name }}</span> &nbsp;|&nbsp; {{ report_date }}
+      {{ report_date }}
       <br>Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Smarter with data.
     </div>
   </div>
@@ -218,7 +235,7 @@
       <p style="font-size: 8.5pt; color: var(--copper);">{{ trade_off }}</p>
     </div>
   </div>
-  <div class="page-footer">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div>
+  <div class="page-footer"><div class="page-footer-center">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div><div class="page-footer-right">2</div></div>
 </div>
 
 <!-- ══════ PAGE 3: VALUATION ══════ -->
@@ -236,8 +253,8 @@
         <div class="val-range-label">Most Likely Selling Range</div>
         <div class="val-range-figure">{{ selling_range_low }} &mdash; {{ selling_range_high }}</div>
       </div>
-      <div class="val-range-box">
-        <div class="val-range-label">Most Likely Listing Range</div>
+      <div class="val-range-box listing">
+        <div class="val-range-label">Recommended Listing Range</div>
         <div class="val-range-figure">{{ listing_range_low }} &mdash; {{ listing_range_high }}</div>
       </div>
     </div>
@@ -247,7 +264,7 @@
   <div class="comp-card">
     <div class="comp-card-header">
       <div>
-        <div class="comp-card-addr">{{ comp.address }} <span style="font-weight:400;color:var(--text-muted);font-size:9pt;">&mdash; Sold {{ comp.date }}</span></div>
+        <div class="comp-card-addr">{{ comp.address }} <span style="font-weight:400;color:var(--text-muted);font-size:9pt;">&mdash; Sold {{ comp.date_display }}</span></div>
         <div class="comp-card-meta">{{ comp.config }} &nbsp;|&nbsp; {{ comp.land }} m&sup2; &nbsp;|&nbsp; {{ comp.internal }} m&sup2; internal &nbsp;|&nbsp; {{ comp.condition }}/10 condition</div>
       </div>
       <div class="comp-card-price">{{ comp.sold_display }}</div>
@@ -270,8 +287,8 @@
     <div class="comp-card-narrative">{{ comp.narrative }}</div>
   </div>
   {% endfor %}
-  <p class="text-sm text-muted mt-8">Adjustment rates derived from {{ adj_sample_size }} sold properties in Merrimac.</p>
-  <div class="page-footer">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div>
+  <p class="text-sm text-muted adj-footnote">Adjustment rates derived from {{ adj_sample_size }} sold properties in Merrimac.</p>
+  <div class="page-footer"><div class="page-footer-center">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div><div class="page-footer-right">3</div></div>
 </div>
 
 <!-- ══════ PAGE 4: YOUR PROPERTY ══════ -->
@@ -296,11 +313,11 @@
     <img src="{{ kitchen_photo }}" alt="Kitchen">
     <img src="{{ living_photo }}" alt="Living">
   </div>
-  <div class="page-footer">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div>
+  <div class="page-footer"><div class="page-footer-center">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div><div class="page-footer-right">4</div></div>
 </div>
 
-<!-- ══════ PAGE 5: HONEST ASSESSMENT ══════ -->
-<div class="page">
+<!-- ══════ PAGE 5: HONEST ASSESSMENT (no page break — let flood flow naturally) ══════ -->
+<div class="page" style="page-break-after: auto;">
   <div class="page-header">
     <img src="{{ logo_path }}" alt="Fields Estate">
     <div class="page-header-right">{{ street_address }}</div>
@@ -314,7 +331,6 @@
     {% if eq.reframe %}<p class="reframe mt-8">{{ eq.reframe }}</p>{% endif %}
   </div>
   {% endfor %}
-  <div class="page-footer">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div>
 </div>
 
 <!-- ══════ PAGE 6: LOCATION & LIFESTYLE ══════ -->
@@ -352,9 +368,23 @@
   {% if seasonality_section %}
   <hr class="divider">
   <h3>Seasonality and Your Selling Window: {{ sell_window }}</h3>
+  <div class="season-callouts">
+    <div class="season-callout">
+      <div class="season-callout-stat">H2 &gt; H1</div>
+      <div class="season-callout-label">Second half outperforms on price</div>
+    </div>
+    <div class="season-callout">
+      <div class="season-callout-stat">15–21 days</div>
+      <div class="season-callout-label">Optimal selling window for highest price</div>
+    </div>
+    <div class="season-callout">
+      <div class="season-callout-stat">Sep–Oct</div>
+      <div class="season-callout-label">Peak buyer activity for school families</div>
+    </div>
+  </div>
   <p style="font-size: 8.5pt; color: var(--text-secondary); line-height: 1.45;">{{ seasonality_section }}</p>
   {% endif %}
-  <div class="page-footer">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div>
+  <div class="page-footer"><div class="page-footer-center">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div><div class="page-footer-right">6</div></div>
 </div>
 
 <!-- ══════ PAGE 7: WHO BUYS THIS HOME ══════ -->
@@ -400,7 +430,7 @@
       <div class="exec-card-sub">Active for-sale</div>
     </div>
   </div>
-  <div class="page-footer">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div>
+  <div class="page-footer"><div class="page-footer-center">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div><div class="page-footer-right">7</div></div>
 </div>
 
 <!-- ══════ PAGE 8: POSITIONING ══════ -->
@@ -422,9 +452,9 @@
   <div class="strategy-card">
     <h3>How Each Feature Maximises Sale Value</h3>
     {% for feat in feature_positioning %}
-    <div style="margin-bottom: 8px;">
-      <div style="font-size: 8.5pt; font-weight: 600; color: var(--grass);">{{ feat.feature }}</div>
-      <p style="font-size: 8pt; color: var(--text-secondary); line-height: 1.4; margin: 2px 0;">{{ feat.strategy }}</p>
+    <div class="feature-item">
+      <div class="feature-label">{{ feat.feature }}</div>
+      <p class="feature-desc">{{ feat.strategy }}</p>
     </div>
     {% endfor %}
   </div>
@@ -433,11 +463,7 @@
   <div class="strategy-card"><h3>Photography &amp; Presentation</h3><p>{{ photography_strategy }}</p></div>
   <div class="strategy-card"><h3>Open Home Strategy</h3><p>{{ open_home_strategy }}</p></div>
 
-  <div class="photo-pair" style="margin-top: 12px;">
-    <img src="{{ aerial_photo }}" alt="Aerial view">
-    <img src="{{ pool_photo }}" alt="Pool">
-  </div>
-  <div class="page-footer">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div>
+  <div class="page-footer"><div class="page-footer-center">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div><div class="page-footer-right">8</div></div>
 </div>
 
 <!-- ══════ PAGE 9: WHY FIELDS + NEXT STEPS ══════ -->
@@ -448,10 +474,10 @@
   </div>
   <h2>Why Fields Estate</h2>
   <div class="diff-grid">
-    <div class="diff-card"><h3>Data-Driven Analysis</h3><p>Every recommendation is backed by comparable sales, market research, and behavioural science. We analyse {{ total_sold_tracked }} sold properties across the Gold Coast.</p></div>
+    <div class="diff-card"><h3>25 Sold Properties Analysed</h3><p>Every adjustment rate in this report is derived from actual Merrimac sales. Not regional averages — your suburb, your street-level data.</p></div>
     <div class="diff-card"><h3>Transparent Methodology</h3><p>You can see exactly how we arrived at every figure. No black boxes. The comparable sales, adjustments, and weightings are all shown.</p></div>
-    <div class="diff-card"><h3>Buyer-First Approach</h3><p>We build trust with buyers through free data, honest analysis, and transparent valuations. That audience becomes your marketing advantage.</p></div>
-    <div class="diff-card"><h3>Local Market Intelligence</h3><p>We track every listing, every sale, and every market shift across the southern Gold Coast &mdash; daily.</p></div>
+    <div class="diff-card"><h3>Research-Backed Strategy</h3><p>Our positioning draws on 60+ studies and 14 academic papers — from precise pricing (Cardella & Seiler) to open home psychology (peak-end rule).</p></div>
+    <div class="diff-card"><h3>Local Market Intelligence</h3><p>We track every listing, every sale, and every market shift across the southern Gold Coast &mdash; daily. {{ total_sold_tracked }} properties and counting.</p></div>
   </div>
   <hr class="divider">
   <h2>Next Steps</h2>
@@ -465,7 +491,7 @@
     <p>I'd welcome the opportunity to walk you through this analysis in person.</p>
     <div class="contact">Will Simpson &nbsp;|&nbsp; will@fieldsestate.com.au &nbsp;|&nbsp; fieldsestate.com.au</div>
   </div>
-  <div class="page-footer">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div>
+  <div class="page-footer"><div class="page-footer-center">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div><div class="page-footer-right">9</div></div>
 </div>
 
 </body>
