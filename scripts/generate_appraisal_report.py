@@ -944,10 +944,41 @@ def main():
         size_kb = pdf_path.stat().st_size / 1024
         print(f"\n  PDF: {pdf_path} ({size_kb:.0f} KB)")
 
+        # Create tracking record so the analyst can preview via the same viewer link
+        tracking_id = None
+        try:
+            sys.path.insert(0, str(ROOT / "tracking-server"))
+            from send_report import create_tracking_record, count_pdf_pages
+            subject = f"Your Property Appraisal \u2014 {address}"
+            total_pages = count_pdf_pages(str(pdf_path))
+            monitor_db = db_client["system_monitor"]
+            tracking_id = create_tracking_record(
+                monitor_db,
+                pipeline["email"] if args.pipeline_id else "preview@fieldsestate.com.au",
+                client_name, address, str(pdf_path), subject, total_pages,
+            )
+            print(f"  Tracking ID: {tracking_id}")
+            print(f"  Preview: https://vm.fieldsestate.com.au/track/view/{tracking_id}")
+        except Exception as e:
+            print(f"  [WARN] Tracking record creation failed: {e}")
+
         # Update pipeline if applicable
         if args.pipeline_id:
+            extra = {"report_path": str(pdf_path)}
+            if tracking_id:
+                extra["tracking_id"] = tracking_id
             update_pipeline(args.pipeline_id, "draft_ready", str(pdf_path))
-            notify_telegram(f"Draft appraisal report ready for review:\n{address}\nClient: {client_name}")
+            # Also set tracking_id directly
+            if tracking_id:
+                db_client["system_monitor"]["appraisal_pipeline"].update_one(
+                    {"_id": ObjectId(args.pipeline_id)},
+                    {"$set": {"tracking_id": tracking_id}},
+                )
+            notify_telegram(
+                f"Draft appraisal report ready for review:\n{address}\nClient: {client_name}\n"
+                f"Preview: https://vm.fieldsestate.com.au/track/view/{tracking_id}" if tracking_id else
+                f"Draft appraisal report ready for review:\n{address}\nClient: {client_name}"
+            )
     else:
         print(f"\n  [ERROR] PDF conversion failed. HTML at: {html_path}")
         if args.pipeline_id:
