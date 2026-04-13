@@ -592,7 +592,7 @@ Maximising sale price is all about building emotion with buyers. When buyers sta
 
 [FIGURE: CH4-3 — Figure 9. The buyer's emotional investment over time, showing the rise to an emotional pinnacle followed by a decline as doubt sets in. Offers obtained at the peak yield the highest prices. Source: Fields Estate positioning research, 2026.]
 
-The emotional peak cannot be sustained. It will drop at which point the buyer begins to second-guess their decision. Offers must be obtained at the emotional peak — not before it (when the buyer hasn't committed enough to stretch) and not after (when doubt has set in and the willingness to pay has declined).
+**The emotional peak cannot be sustained. It will drop at which point the buyer begins to second-guess their decision. Offers must be obtained at the emotional peak — not before it (when the buyer hasn't committed enough to stretch) and not after (when doubt has set in and the willingness to pay has declined).**
 
 This is where the quality of photography, videography, and listing content plays a direct role. Between inspections, buyers return to the listing. They scroll through the photographs. They show their partner the video tour. Each time they revisit this content, they are reinforcing their emotional connection to the property — building and sustaining the peak rather than letting it decay. A buyer who returns to professional twilight photography and a detailed video walkthrough deepens their emotional investment with every viewing. A buyer who returns to dark, blurry photos has nothing to sustain their imagination.
 
@@ -657,6 +657,10 @@ That's what it looks like when the data informs the decisions. Not perfection. N
 The second half of this book will cover the remaining decisions: choosing the right agent, executing the marketing campaign, navigating the negotiation, and managing the legal process from contract to settlement. Each one matters. But none of them can overcome a wrong price.
 
 Get the price right, and everything else gets easier.
+
+---
+
+[PHOTO: CH4-5 — Aerial view of Burleigh Heads and coastline, southern Gold Coast.]
 
 ---
 
@@ -1342,31 +1346,6 @@ For live market data on Robina, Varsity Lakes, Burleigh Waters and the broader s
 
 ---
 
-
-# Sarah and Mark: The Final Accounting
-
-You've followed Sarah and Mark through every chapter. Here are the numbers:
-
-| | Amount |
-|---|---|
-| Purchase price (2019) | $1,120,000 |
-| Domain estimate | $1,580,000 |
-| Comparable-sales valuation | $1,380,000 - $1,430,000 |
-| Listing price | $1,415,000 |
-| Sale price | $1,420,000 |
-| Contract adjustment | -$3,000 |
-| Net sale price | $1,417,000 |
-| Days on market | 13 |
-
-"We almost listed at $1,580,000," Sarah said afterward. "If we had, we'd probably still be on the market -- or we'd have sold for less than what we actually got."
-
-Mark was more direct: "The Domain number almost cost us six figures."
-
-The data had suggested a range. The agent had confirmed it with comparable sales. The marketing had reached both buyer pools. The positioning had led with the right image. The pricing had generated competition. The negotiation had extracted a premium within the valuation range.
-
-Every decision had been informed. None had been lucky (Figure 18).
-
-[FIGURE: SM-1 — Figure 18. Sarah and Mark's final accounting — from Domain estimate through comparable-sales valuation, listing price, sale price, and net proceeds.]
 
 ---
 
