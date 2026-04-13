@@ -1,3 +1,7 @@
+[PHOTO: COVER — Full-bleed aerial shot of southern Gold Coast suburbs at golden hour. Hinterland in background, rooftops and tree canopy in foreground.]
+
+[PHOTO: INSIDE-COVER — Full-page street-level shot of a tree-lined residential street in Robina or Burleigh Waters. Quiet, green, no cars.]
+
 # Strategic House Price Maximisation
 
 ### A Data-Driven Guide for Gold Coast Homeowners
@@ -62,6 +66,8 @@ We bought a property. We paid too much. Not catastrophically — we weren't reck
 
 That moment changed my career.
 
+[PHOTO: V-1 — Will working at his desk or on location photographing properties. Establishes Will as a real person, not a faceless author.]
+
 I spent the next five years building what I wished had existed when we were buying: a platform that gives ordinary people access to the same data the industry uses to make decisions. I taught myself to code. I built scrapers that track every listing on the Gold Coast. I studied academic research on pricing psychology, auction theory, and buyer behaviour. I analysed thousands of transactions, one by one, until the patterns became impossible to ignore.
 
 This book is the result.
@@ -96,6 +102,8 @@ Then I look at the property three doors down that sold two months earlier. Same 
 
 Those discount-listed homes consistently sell for $50,000 to $100,000 less than equivalent properties with proper campaigns. And no one tells the vendor, because the vendor doesn't know what the comparables said.
 
+[PHOTO: HST-1 — Side-by-side comparison: agent-phone photo of a property vs professional twilight photo of a similar property. The visual argument for the entire chapter in a single image.]
+
 Houses don't sell themselves. They sell at a price determined by a series of decisions — most of which are made before a single buyer walks through the door. The valuation method. The pricing strategy. The sale method. The photography. The timing. The agent selection. Each decision either adds value or leaves it behind.
 
 The difference between a well-executed sale and a poorly-executed one isn't a rounding error. It's a renovation. It's a year of school fees. It's the gap between your next home being the one you wanted and the one you settled for.
@@ -126,6 +134,8 @@ Let that settle for a moment. Not 89% were inaccurate — that would be unremark
 
 When an automated estimate tells you your home is worth $1,580,000 and the comparable sales suggest $1,400,000, the estimate hasn't just been wrong. It's anchored you to a number that is $180,000 above reality. Every agent who walks through your door now has to overcome that anchor. The ones who tell you the truth sound pessimistic. The ones who confirm the fantasy sound optimistic. Guess who gets hired.
 
+[CHART: CH1-1 — Bar chart: Domain Estimate Accuracy by Price Bracket. X-axis: price brackets ($500K-$1M, $1M-$1.5M, $1.5M-$2M, $2M+). Y-axis: median error %. Shows 25-34% error at lower end dropping to 8% at premium. Source: Fields Estate analysis of 1,689 Domain estimates.]
+
 The platforms aren't being dishonest. Their models use publicly available data — land size, bedroom count, postcode, recent sales in the area. But they can't see inside your home. They don't know that your renovated kitchen adds value or that your bathroom hasn't been touched since 1997. They don't know the house behind you just built a second storey that now overlooks your backyard. They don't know the flight path shifted. They're doing their best with limited information, and their best overvalues your home almost nine times out of ten.
 
 ## Why "Comparable Sales" Isn't Enough Without a Method
@@ -137,6 +147,8 @@ He pointed vaguely across the street: "Well, I sold a three-bedroom home over th
 She looked at him, nodded politely, and walked away.
 
 He'd given her two comparable sales. Technically, that's the right starting point. But without any context for how those sales related to the property she was standing in, they were just numbers. Was this home a three-bedroom or a four-bedroom? Was the block the same size? Was the condition comparable? Was she closer to the $1,300,000 sale or the $1,450,000 one? She had no framework to evaluate what she'd just been told.
+
+[PHOTO: CH1-2 — A Gold Coast open home scene. Agent with clipboard, buyers walking through.]
 
 That moment captures the problem this chapter exists to solve. Comparable sales are the foundation of every credible valuation — but raw comparable sales, without adjustment and weighting, tell you almost nothing. Two prices from two different properties on two different streets are not a valuation. They're a starting point that requires a method.
 
@@ -151,6 +163,8 @@ Each of those sales is then adjusted. If a comparable has a larger floor area, t
 The adjusted prices are then weighted. A sale from last month gets more weight than one from ten months ago. A property two streets away gets more weight than one a kilometre distant. A comparable with a high-confidence adjustment gets more weight than one where the adjustment was large and uncertain.
 
 The result is a range — not a single number. Fields Real Estate's comparable-sales model produces valuations that are accurate within the stated range 97% of the time in Robina. That's not a marketing claim. It's a tested figure across hundreds of properties where we had the valuation before the sale occurred.
+
+[FIGURE: CH1-3 — Infographic: How Comparable-Sales Valuation Works. Simple 4-step visual: Select comparables, Adjust for differences, Weight by quality, Produce a range. Clean, minimal, not cluttered.]
 
 The reason a range matters is that your home's value genuinely is a range. It depends on who walks through the door, what else is on the market that week, whether it rains on open-home day, whether the buyer's pre-approval gets extended. A single number creates false precision. A range reflects reality.
 
@@ -190,6 +204,8 @@ This doesn't mean pools are worthless to buyers — many families on the Gold Co
 
 If you've spent $60,000 on a pool and expected to see $60,000 more at sale time, the data doesn't support that expectation. This is one of those findings that surprises no one in the valuation industry and surprises almost every homeowner I mention it to.
 
+[CHART: CH1-4 — Horizontal bar chart: What Drives Price Per Square Metre. Ranked by impact: Floor area (0.68-0.79 correlation), Bedrooms ($255K-$607K per bedroom), Location (67% suburb variance). Then a "Does NOT drive $/sqm" section: Condition score, Kitchen finishes, Pool, Corner lot. Visual contrast between the two groups.]
+
 ## What Doesn't Drive Value (As Much As You'd Think)
 
 Renovations are the big one here, and the nuance matters.
@@ -224,6 +240,8 @@ The first step in maximising your sale price is understanding what your home is 
 
 Everything else in this book builds on that foundation.
 
+[PHOTO: CH1-5 — Full-page spread: Robina streetscape. A premium residential street — manicured lawns, mature trees, family homes. The kind of street where the book's reader lives.]
+
 ---
 
 # Chapter 2: When Is the Right Time to Sell?
@@ -256,6 +274,8 @@ Fields Real Estate has analysed 13,585 Gold Coast sales for seasonal timing patt
 | Varsity Lakes | April | May | Younger demographic committing after summer |
 | Burleigh Waters | March | March | Premium buyers decide faster, less school-year constrained |
 
+[CHART: CH2-1 — Heatmap: Monthly Sale Price Performance by Suburb. 12 months x 3 suburbs grid. Green for above-average months, red for below-average. Shows the November (Robina), April (VL), March (BW) peaks visually. Title: "When do properties sell for the most in your suburb?"]
+
 The variation between the best and worst months is typically 3% to 8% -- on a $1,400,000 sale, that's $42,000 to $112,000. Meaningful, but not transformative. And these are historical averages; in any given year, a rate decision or supply shock can override the pattern. The seasonal data is a tailwind, not a strategy.
 
 ## The Three-Week Sweet Spot
@@ -277,6 +297,8 @@ Robina and Varsity Lakes sit right at the sweet spot. Properties in these suburb
 But there's an important distinction here. A property that is deliberately marketed for 31 days at a considered price — building buyer relationships, running multiple open homes, allowing time for pre-approval processes — is in a fundamentally different position from one that has been on the market for 31 days because it was overpriced and no one made an offer.
 
 The difference between the two is invisible to anyone browsing the portals. But it's the difference between a confident sale and a desperate one.
+
+[CHART: CH2-2 — Scatter plot or histogram: Days on Market vs Price-to-Valuation Ratio. Shows the cluster of high-premium sales in the 15-21 day window, with a visible drop-off after 30+ days. Title: "The three-week window: when premium prices happen."]
 
 I've tracked listings in Burleigh Waters where the agent clearly had a strategy: price firmly, run three open homes, let the buyer pool build, review offers in week four. Those properties often sold within 5% of asking. Then I've watched other Burleigh Waters listings — similar homes, similar streets — sit for 50 or 60 days because the opening price was aspirational. By the time those sellers adjusted, the first wave of serious buyers had already purchased somewhere else. The second wave got a bargain.
 
@@ -301,6 +323,8 @@ What you're watching for is a sudden spike in listings — a month where supply 
 I track this data weekly across all three suburbs. I can tell you right now that Varsity Lakes has 32 active listings — the lowest inventory of the three. A well-priced home in Varsity Lakes right now faces less competition than at almost any point in the last twelve months. Robina, with 55 active listings, has more competition — but also a deeper buyer pool. Burleigh Waters sits at 37, which, at its median price of $1,710,000, represents a relatively thin market where each new listing is noticed.
 
 These numbers shift constantly. But the habit of checking them before you finalise your listing date — rather than just picking the first available Saturday — is a small advantage that costs nothing and can influence how many buyers walk through your door on opening weekend.
+
+[PHOTO: CH2-3 — Varsity Lakes lake and park area. Lifestyle shot that says "this is why people buy here."]
 
 One more thing about supply that's worth understanding: inventory in your specific price bracket matters more than total suburb inventory. If there are 55 listings in Robina but only six of them are four-bedroom homes priced between $1,300,000 and $1,500,000, your competitive set is six, not fifty-five. The other forty-nine listings are noise. Knowing your competitive set — the properties that your buyer is comparing you to — helps you understand whether you're listing into a crowded field or an open one.
 
@@ -341,6 +365,8 @@ In property, this is called ambiguity aversion, and it's one of the most powerfu
 Uri Gneezy's research at UC San Diego has demonstrated this across multiple contexts: people don't just prefer certainty — they'll pay a premium for it. And Fox and Tversky's work at Stanford showed that the aversion to ambiguity increases as the stakes get higher. Property is about the highest-stakes purchase most people make.
 
 So the question isn't just "auction or private treaty?" It's "do you want to sell your home using a method that 72% of buyers instinctively avoid?"
+
+[CHART: CH3-1 — Simple visual: 100 buyer icons (stick figures or dots). 72 are greyed out, 28 are highlighted. Title: "72 out of 100 buyers scroll past auction listings without a price guide."]
 
 ## The Largest Study Ever Conducted
 
@@ -400,6 +426,8 @@ Sarah had been mildly curious about auction — her sister in Melbourne had sold
 
 They would sell by private treaty, with a clear price that told every buyer scrolling past on Saturday morning exactly where they stood.
 
+[CHART: CH3-2 — Pie chart or bar: Method of Sale in Target Suburbs. Private Treaty 98%+, Auction <2%. Title: "How properties actually sell in Robina, Varsity Lakes, and Burleigh Waters."]
+
 ## What I've Seen
 
 I've attended dozens of Gold Coast auctions. The atmosphere is different from Melbourne — quieter, fewer bidders, more passed-in results. I remember one in Burleigh Waters where a beautiful home — four bedrooms, pool, 600-square-metre block — went to auction with a crowd of about thirty people. Four had registered to bid. Two actually bid. The property passed in, and the vendor accepted a private treaty offer the following Tuesday that was $40,000 below what a properly-priced private treaty campaign would likely have achieved on day one.
@@ -409,6 +437,8 @@ The data explains why. When 72% of your potential buyers skip the listing becaus
 The question isn't whether auction is a bad system. It works well in markets built around it. The question is whether it works well here, in your suburb, in your price bracket, in a state where the rules make it harder than it needs to be.
 
 For most Gold Coast sellers, the answer is no. The 98% who choose private treaty aren't making a timid choice. They're making the one the data supports.
+
+[PHOTO: CH3-3 — Full-page spread: Burleigh Waters premium home exterior. Large block, established gardens, afternoon light.]
 
 ---
 
@@ -441,6 +471,8 @@ The academic evidence is extensive and consistent across markets, countries, and
 **Zillow** — working with a dataset of 25,000 sales — put a specific number on the penalty: homes overpriced by 12% or more were 50% less likely to sell within 60 days. Half the probability of selling in a normal timeframe, simply because the opening number was wrong.
 
 The mechanism isn't mysterious. A buyer looking at properties in the $1,250,000 to $1,400,000 range in Robina has perhaps 15 to 20 options on any given Saturday. They have time to inspect maybe four or five. They will shortlist the ones that appear to offer the best value for the price shown. A property listed at $1,450,000 that is worth $1,300,000 doesn't appear on their shortlist — not because they can't afford $1,450,000, but because other properties at that price are clearly better value. The overpriced listing is invisible to its natural buyer pool and uncompetitive in the pool it's been placed into.
+
+[CHART: CH4-1 — Timeline chart: The Overpricing Penalty. Shows a hypothetical property: Day 1 listed at $1,450K (too high), Day 42 price reduced to $1,350K, Day 97 sold at $1,290K. Versus: Day 1 listed at $1,320K (right price), Day 16 sold at $1,340K. Two lines on the same chart — one declining, one quick and flat. Title: "Two homes. Same street. Different pricing strategies."]
 
 The seller's mistake wasn't wanting a high price. Everyone wants a high price. The mistake was confusing the asking price with the sale price. They're different things, and the relationship between them is more complex than "list high, negotiate down."
 
@@ -494,6 +526,8 @@ When all four conditions are met, the research shows that buyers anchor to the p
 
 To put this in Gold Coast terms: the difference between listing at $1,400,000 and $1,415,000 isn't cosmetic. It's a pricing signal. The round number says "we think it's worth about $1.4 million." The precise number says "we've analysed the comparables, assessed the specific features of this property, and arrived at $1,415,000." The buyer reads that signal, consciously or not, and it changes how they approach the negotiation.
 
+[FIGURE: CH4-2 — The Four Pricing Conditions. Rounded ($1,300,000), Just Below ($1,299,000 — WORST), Low Precise ($1,285,000), High Precise ($1,315,000 — BEST). Green highlight on HP, red X on JB. Title: "Precise and above the round number wins."]
+
 I've tracked this in our data. Properties in Robina listed at precise prices above round numbers — $1,315,000 instead of $1,300,000, $1,415,000 instead of $1,400,000 — show a measurably tighter spread between listing price and sale price. The negotiation gap shrinks. Sellers who use precise pricing tend to achieve final prices closer to their asking price, not because the buyers are being tricked, but because the precision communicates that the price is already considered.
 
 The practical application looks like this: if your home's comparable-sales range is $1,380,000 to $1,430,000, and you're pricing at the top end, $1,415,000 is a better listing price than $1,400,000 or $1,430,000. It's precise. It's above the round number. The gap is small. And if your marketing materials present the home at its best, the fourth condition is met.
@@ -522,6 +556,8 @@ An overpriced listing wastes this window. The buyers come, they feel the emotion
 
 A correctly priced listing converts that emotional peak into action. The offer comes in while the excitement is fresh, and the negotiation starts from mutual enthusiasm rather than mutual suspicion.
 
+[FIGURE: CH4-3 — Curve diagram: The Buyer's Emotional Peak. Simple rising curve that peaks (labelled "emotional pinnacle — offers extracted here") then declines (labelled "doubt, second-guessing, withdrawal"). Mark the 15-21 day sweet spot on the x-axis. Title: "The emotional window for premium offers."]
+
 ## Visual Content and the Emotional Peak
 
 Professional visual content extends that emotional window. Twilight photography -- shot in the golden hour before sunset, with interior lights on and exterior colours warm -- creates an emotional response that agent-phone photos cannot match. A floor plan converts emotional interest into practical consideration, removing hesitation about layout. Video walkthroughs give interstate and overseas buyers -- a significant portion of the Gold Coast market -- a way to engage deeply before flying in.
@@ -531,6 +567,8 @@ The data from 931 transactions shows that properties with professional visual co
 The Gold Coast light is both an asset and a trap. At twilight, a Robina home with the garden lights on and the sky turning purple behind the Hinterland creates an emotional response you can't manufacture in Photoshop. At 2pm in January, that same home looks bleached and flat. Emotionally, they're selling two different homes. The twilight version invites you in. The midday version is a documentary record.
 
 Sellers who treat photography as an expense to be minimised are choosing to present their home at half its emotional potential to every buyer who scrolls past in the first critical week.
+
+[PHOTO: CH4-4 — Example of a high-quality property listing image. Twilight/golden-hour shot that stops the scroll. From Will's portfolio.]
 
 ## Sarah and Mark's Price
 
@@ -610,6 +648,8 @@ Think of a buyer's journey through your property as three layers. Each layer ope
 
 These aren't marketing concepts. They're backed by behavioural research and verified against local sales data. Let me walk through each one.
 
+[FIGURE: CH5-1 — Three-layer framework diagram. Three concentric circles or stacked layers: outer = "What buyers SEE" (3-second scroll), middle = "What buyers FEEL" (emotional engagement), inner = "What buyers COMPARE" (competitive context). Title: "The three layers of property positioning."]
+
 ---
 
 ### Layer 1: What Buyers See First
@@ -631,6 +671,10 @@ This is where the highest-ROI pre-sale spending lives:
 **Virtual tours.** Research shows virtual tours generate 77 seconds of engagement compared to 44 seconds for static images -- a 75% increase in time spent with the property. A 2024 NBER study analysing 75,000 home sales in Los Angeles confirmed that virtual tours still increase sale prices by approximately 1%. But the study also noted the differential advantage has narrowed as tours have shifted from novelty to expectation. Virtual tours are now table-stakes: not having one hurts more than having one helps.
 
 The pattern across all of these is the same: they address what happens in the first three seconds. Paint and landscaping create the curb appeal that survives a drive-by. Photography creates the scroll-stopping moment on the portal. Virtual tours extend the buyer's attention from seconds to minutes. None of them cost more than a few thousand dollars. All of them have measurable effects on both speed and price.
+
+[PHOTO: CH5-2 — Side-by-side: same room, standard photo vs professional photo. Shows the difference lighting and angle make.]
+
+[PHOTO: CH5-3 — Example of a scroll-stopping lead image. A property backyard at golden hour — the kind of image that makes someone stop scrolling. From Will's photography portfolio.]
 
 ---
 
@@ -728,6 +772,8 @@ What the data does support more clearly is the suburb difference in buyer demogr
 
 In Burleigh Waters (median $1,710,000), the buyer demographic skews toward established professionals and downsizers who expect turnkey quality. At this price point, buyers are less willing to project-manage a renovation. A well-renovated property in Burleigh Waters is more likely to recover renovation costs because the buyer pool values presentation completeness differently.
 
+[CHART: CH5-4 — Horizontal bar chart: Pre-Sale Improvement ROI. Ranked: Fresh paint (up to 5%, cost $2K-$8K), Landscaping (up to 20% perceived, cost $500-$5K), Deep clean ($300-$800), Minor repairs ($200-$2K). Then below: Kitchen reno (~57% return), Bathroom (~75%), Pool (0.6-3.7%). Green above break-even, red below. Title: "Where your pre-sale dollars have the highest return."]
+
 ---
 
 ### Sarah and Mark: Positioning 8 Pinehurst Place
@@ -748,6 +794,8 @@ The backyard, with the spotted gums and the hinterland rising behind them, was. 
 
 The kitchen would close the deal. The backyard would open it.
 
+[PHOTO: CH5-5 — A north-facing backyard with afternoon light. Trees, hinterland visible in background. The visual of what Sarah's agent chose as the lead image over the kitchen.]
+
 ---
 
 ### Will's View
@@ -759,6 +807,8 @@ It's the feeling. The light on a deck. A tree-lined street at golden hour. A vie
 That three-second scroll decision is worth more than any renovation. I have watched a $45,000 kitchen fail to generate a single enquiry because the lead image was a wide-angle shot of the living room taken on an overcast morning. And I have watched a $800 garden refresh generate fourteen groups at the first open home because the twilight photographer caught the jacaranda in bloom.
 
 The data supports this. The photography research supports this. My own experience supports this. If there is one takeaway from this chapter, it is this: spend the money where the buyer's eye goes first. Everything else follows from there.
+
+[PHOTO: CH5-6 — Full-page spread: Gold Coast hinterland viewed from a suburban backyard. Late afternoon light through spotted gums or similar. Coffee table book quality.]
 
 ---
 
@@ -783,6 +833,8 @@ The results challenge one of the most deeply held assumptions in the property in
 On a property valued at $1,000,000, that difference equates to approximately **$96,000.**
 
 The names on the billboards, the faces on the letterbox flyers, the agents who dominate every bus shelter and shopping centre bench -- they sell the most homes. But high volume does not equal high prices. The data is unambiguous.
+
+[CHART: CH6-1 — Scatter plot: Agent Volume vs Price Premium. X-axis: annual sales volume (3-5, 6-10, 11-20, 20+). Y-axis: average price premium %. Shows the 9.6% gap between low-volume high-performers and high-volume average performers. Title: "Does the busiest agent get the best price? 1,475 sales say no."]
 
 ---
 
@@ -846,6 +898,8 @@ This is not to suggest that all expensive agents are good or all affordable agen
 
 But the principle holds: in a transaction involving more than $1,000,000, even small differences in agent effectiveness translate into large differences in financial outcomes. A 2% difference in sale price on a $1,400,000 Robina home is $28,000. That dwarfs any commission differential.
 
+[CHART: CH6-2 — Table visual (styled infographic): The Commission Comparison. Four-row table showing 1.5% through 2.75% agents with premium, fee, and net to seller. Title: "Commission is a cost. But it's not the biggest cost."]
+
 ---
 
 ### The Cost of Getting It Wrong
@@ -904,6 +958,8 @@ When agencies are ranked by price premium achieved above market valuation, a dif
 The pattern is consistent across all three suburbs: the agencies achieving the highest price premiums are not the highest-volume agencies.
 
 The Burleigh Waters data is particularly striking. Kollosche's +26.5% premium reflects the luxury end of the market where agent-buyer relationships are especially powerful -- the buyer pool is small, the stakes are high, and the agent's knowledge of individual buyer motivations has an outsized effect on the final price.
+
+[PHOTO: CH6-3 — A "For Sale" sign on a residential street. Local, real, recognisable suburb. Not stock photography.]
 
 ---
 
@@ -966,6 +1022,8 @@ In any market condition, at least 30% of potential buyers are passive. In a soft
 
 Missing one motivated buyer means one less person competing for the property. One less competitor can mean $20,000, $50,000, or more in the final sale price. The financial risk of insufficient marketing is not theoretical. It is the difference between two bidders and three.
 
+[CHART: CH7-1 — Infographic: The Buyer Pool. Two groups: Active (searching REA, attending opens) and Passive (not looking but would buy the right property). Show the 30-60% split. Title: "Up to 60% of your potential buyers aren't looking on realestate.com.au."]
+
 ---
 
 ### REA Is Essential -- And Not Enough
@@ -984,6 +1042,8 @@ The premium listing tier generates measurably better results:
 These are not small improvements. Premiere Plus essentially triples the property's visibility within the portal.
 
 The cost of NOT being listed -- or being listed at the basic tier -- is quantifiable. PropTrack analysis found that Brisbane properties sold off-market (not listed on realestate.com.au at all) sold for 3.6% less than those listed on the platform. On a $1,400,000 Robina home, 3.6% is approximately $50,000.
+
+[FIGURE: CH7-2 — Visual comparison: Standard listing vs Premiere Plus. Show the size difference in search results, with the 2.6x/2.9x/2.1x stats overlaid. Title: "What the buyer sees: Standard vs Premiere Plus."]
 
 But REA, even at the premium tier, only reaches active buyers. The buyers already searching. The buyers who already know what suburb they want. It does not reach the family in Helensvale who hasn't considered Robina yet. It does not reach the couple in Brisbane who are thinking about the Gold Coast but haven't started looking. It does not reach the parents of a buyer who would forward the listing if they saw it on social media.
 
@@ -1044,6 +1104,8 @@ The incentive structure is clear. When marketing costs are left to agents, they 
 
 This is not an argument for limitless spending. It is an argument for strategic spending, directed by the seller, with full visibility of what each dollar buys.
 
+[CHART: CH7-3 — Simple bar chart: Who Benefits from Better Marketing? Two bars: Agent net gain ($1,000) vs Vendor net gain ($191,000). Extreme contrast makes the point instantly. Title: "For every $1 the agent gains from better marketing, the seller gains $191."]
+
 ---
 
 ### Marketing Budget Allocation
@@ -1091,6 +1153,8 @@ Every property that sells has a buyer. But most properties also have a second-be
 
 You don't know what you lost. That's what makes insufficient marketing so dangerous. The seller who saves $3,000 on marketing and gets one offer instead of three will never know the difference. They'll think the market spoke. In reality, the market was never given the chance to speak.
 
+[PHOTO: CH7-4 — Full-page spread: Aerial drone shot of a suburb. Properties, parks, streetscape from above. Shows the neighbourhood context that drone photography provides.]
+
 ---
 
 # Chapter 8: The Selling Process
@@ -1098,6 +1162,8 @@ You don't know what you lost. That's what makes insufficient marketing so danger
 Selling a home involves a sequence of steps that typically spans eight to sixteen weeks from the decision to list through to handing over the keys. For most homeowners, this is the first time -- or at most the second or third time -- they've been through this process. Not knowing what comes next is one of the biggest sources of stress.
 
 This chapter maps the entire process so there are no surprises.
+
+[FIGURE: CH8-1 — Timeline infographic: The Selling Process. Five phases on a horizontal timeline: Preparation (Weeks 1-3), On Market (Weeks 3-7), Negotiation (Weeks 4-8), Under Contract (Weeks 6-10), Settlement (Weeks 10-16). Clean, with key milestones marked.]
 
 ---
 
@@ -1167,6 +1233,8 @@ The conveyancers manage the process: documents are signed, adjustment statements
 *Can the settlement date change?* Yes, with agreement from both parties. The requesting party may compensate the other for costs incurred by the delay.
 
 *Can settlement be brought forward?* Yes, if both parties agree and finance is ready.
+
+[PHOTO: CH8-2 — A front door with a "SOLD" sticker on the sign. The emotional moment of completion. Local property, real sign.]
 
 ---
 
@@ -1258,7 +1326,7 @@ Each of these suburbs has a personality the data reflects. The figures below are
 
 ## Robina (Postcode 4226)
 
-[PHOTOGRAPH: Robina Town Centre and surrounding residential from elevated angle - Will's local photography]
+[PHOTO: CH9-1 — Robina Town Centre and surrounding residential from elevated angle. Will's local photography.]
 
 Robina is master-planned in a way that works -- it feels lived in, not engineered. Families come for the schools, the convenience, and the ten-minute-drive-to-everything practicality. Most of them stay.
 
@@ -1280,7 +1348,7 @@ Robina's median of $1,400,000 reflects a market anchored by family homes in the 
 
 ## Varsity Lakes (Postcode 4227)
 
-[PHOTOGRAPH: Varsity Lakes lakeside walking paths - Will's local photography]
+[PHOTO: CH9-2 — Varsity Lakes lakeside walking paths. Will's local photography.]
 
 Varsity Lakes feels younger and more dynamic than its postcode might suggest. The lake defines the suburb's rhythm, and buyers respond to that energy -- which is why it turns over faster than any other suburb in this book.
 
@@ -1302,7 +1370,7 @@ Varsity Lakes is the most accessible of the three suburbs by price and the faste
 
 ## Burleigh Waters (Postcode 4220)
 
-[PHOTOGRAPH: Burleigh Waters streetscape with hinterland backdrop - Will's local photography]
+[PHOTO: CH9-3 — Burleigh Waters streetscape with hinterland backdrop. Will's local photography.]
 
 Burleigh Waters is close enough to the beach to hear the surf on still evenings, but far enough from the tourist strip that the streets are quiet. Families put down roots and stay, which is why listing volumes are low and prices are high.
 
@@ -1342,6 +1410,8 @@ The suburb is almost entirely built out. There is virtually no new land to devel
 
 Varsity Lakes is the most accessible market and the fastest-moving. Robina offers the broadest range from entry-level to premium. Burleigh Waters commands the highest prices with the lowest supply relative to demand.
 
+[CHART: CH9-4 — Radar chart or grouped bar: Three Suburbs Compared. Compare median price, DOM, active listings, and sold volume across the three suburbs in a single visual. Title: "Three suburbs, three markets."]
+
 All three are private treaty markets. All three have tight absorption rates consistent with seller-favourable conditions. The differences between them -- in price level, buyer demographics, renovation returns, and timing patterns -- are exactly why suburb-specific data matters. A strategy that works in Varsity Lakes may not work in Burleigh Waters, and vice versa.
 
 > *Live market data for all three suburbs: fieldsestate.com.au/market-metrics*
@@ -1365,6 +1435,8 @@ You've followed Sarah and Mark through every chapter. Here are the numbers:
 | Contract adjustment | -$3,000 |
 | Net sale price | $1,417,000 |
 | Days on market | 13 |
+
+[FIGURE: SM-1 — The accounting table above, styled as a clean, bordered infographic rather than raw markdown table.]
 
 "We almost listed at $1,580,000," Sarah said afterward. "If we had, we'd probably still be on the market -- or we'd have sold for less than what we actually got."
 
@@ -1397,6 +1469,8 @@ Buyers frequently do a "drive-by" before deciding to attend an inspection. The e
 - [ ] Repaint facade or fence if paint is heavily damaged or peeling
 - [ ] Ensure the street number is clearly visible
 - [ ] Check all exterior lights are working; keep them on during the campaign
+
+[PHOTO: AA-2 — A manicured front garden with clear path and visible street number. The "curb appeal" visual.]
 
 ### Kitchen
 
@@ -1442,7 +1516,7 @@ The kitchen is the room buyers scrutinise most, because they understand the high
 
 For Gold Coast properties, the outdoor area is often the most emotionally compelling space for buyers. This is where the sale is often won or lost.
 
-[PHOTOGRAPH: Well-presented Gold Coast outdoor entertaining area]
+[PHOTO: AA-1 — Well-presented Gold Coast outdoor entertaining area. Will's local photography.]
 
 - [ ] Clean and pressure-wash deck, patio, or entertaining area
 - [ ] Clean outdoor furniture or stage with simple, clean pieces
@@ -1538,7 +1612,7 @@ Founder, Fields Estate
 will@fieldsestate.com.au
 fieldsestate.com.au
 
-[PHOTOGRAPH: Will Simpson, local Gold Coast photography]
+[PHOTO: ABOUT-1 — Will Simpson portrait/environmental shot. Local Gold Coast photography.]
 
 ---
 
