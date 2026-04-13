@@ -329,6 +329,150 @@ def generate_html(book_data: dict, pdf_url: str = "seller_book.pdf") -> str:
     return html
 
 
+def split_chapter_to_pages(chapter_html: str, chapter_title: str, chapter_id: str) -> list[dict]:
+    """Split a chapter's HTML into individual pages for the reader.
+
+    Strategy: split on <h2> and <h3> headings, and extract spread images
+    as separate image pages.
+    """
+    pages = []
+
+    # First, extract any full-spread images and replace with markers
+    spread_pattern = r'<figure class="book-image spread">.*?</figure>'
+    spreads = re.findall(spread_pattern, chapter_html, re.DOTALL)
+
+    # Replace spreads with split markers
+    for i, spread in enumerate(spreads):
+        # Extract image src
+        src_match = re.search(r'src="([^"]+)"', spread)
+        if src_match:
+            chapter_html = chapter_html.replace(spread, f'<!--SPREAD:{src_match.group(1)}-->')
+
+    # Split on h2 headings (major sections within a chapter)
+    # First page of each chapter gets the h1 title
+    sections = re.split(r'(?=<h2[^>]*>)', chapter_html)
+
+    for i, section in enumerate(sections):
+        section = section.strip()
+        if not section:
+            continue
+
+        # Check for spread markers in this section
+        parts = re.split(r'<!--SPREAD:([^>]+)-->', section)
+
+        for j, part in enumerate(parts):
+            part = part.strip()
+            if not part:
+                continue
+
+            # Odd indices are spread image paths
+            if j % 2 == 1:
+                pages.append({
+                    "type": "image",
+                    "content": "",
+                    "image_src": part,
+                    "id": f"{chapter_id}-spread-{len(pages)}",
+                })
+            else:
+                # Content page - add chapter title to first section
+                if i == 0 and j == 0:
+                    content = f'<h1>{chapter_title}</h1>\n{part}'
+                else:
+                    content = part
+
+                # Skip if only whitespace/empty tags
+                text_only = re.sub(r'<[^>]+>', '', content).strip()
+                if len(text_only) < 10:
+                    continue
+
+                # Further split long sections by h3 if content is very long
+                # Estimate: >2000 chars of text probably needs splitting
+                if len(text_only) > 2000:
+                    h3_parts = re.split(r'(?=<h3[^>]*>)', content)
+                    for h3_part in h3_parts:
+                        h3_part = h3_part.strip()
+                        h3_text = re.sub(r'<[^>]+>', '', h3_part).strip()
+                        if len(h3_text) < 10:
+                            continue
+                        pages.append({
+                            "type": "content",
+                            "content": h3_part,
+                            "image_src": None,
+                            "id": f"{chapter_id}-p{len(pages)}",
+                        })
+                else:
+                    pages.append({
+                        "type": "content",
+                        "content": content,
+                        "image_src": None,
+                        "id": f"{chapter_id}-p{len(pages)}",
+                    })
+
+    return pages
+
+
+def generate_reader_html(book_data: dict, pdf_url: str = "/seller-guide.pdf") -> str:
+    """Render the book as a single-page reader experience."""
+    env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)))
+    template = env.get_template("seller_book_reader.html")
+
+    all_pages = []
+
+    # Page 1: Cover
+    all_pages.append({
+        "type": "cover",
+        "content": "",
+        "image_src": None,
+        "id": "cover",
+    })
+
+    # Page 2: Inside cover (full-bleed Burleigh photo)
+    all_pages.append({
+        "type": "image",
+        "content": "",
+        "image_src": "book-images/inside-cover.jpg",
+        "id": "inside-cover",
+    })
+
+    # Page 3: Table of contents
+    rendered_chapters = []
+    for ch in book_data["chapters"]:
+        rendered_chapters.append({
+            "id": ch["id"],
+            "title": ch["title"],
+            "content": render_chapter_md(ch["content_md"]),
+        })
+
+    toc_html = '<h2 class="toc-heading">Contents</h2><ol class="toc-list">'
+    for i, ch in enumerate(rendered_chapters):
+        toc_html += f'<li><span class="toc-num">{i+1:02d}</span> {ch["title"]}</li>'
+    toc_html += '</ol>'
+
+    all_pages.append({
+        "type": "toc",
+        "content": toc_html,
+        "image_src": None,
+        "id": "toc",
+    })
+
+    # Chapters: split each into pages
+    for ch in rendered_chapters:
+        chapter_pages = split_chapter_to_pages(ch["content"], ch["title"], ch["id"])
+        all_pages.extend(chapter_pages)
+
+    html = template.render(
+        title=book_data["title"],
+        subtitle=book_data["subtitle"],
+        author=book_data["author"],
+        pages=all_pages,
+        total_pages=len(all_pages),
+        generated_date=datetime.now(AEST).strftime("%B %Y"),
+        pdf_url=pdf_url,
+    )
+
+    return html
+
+
 def html_to_pdf(html_path: str, pdf_path: str) -> bool:
     """Convert HTML to PDF using Chrome headless."""
     chrome = None
@@ -397,12 +541,23 @@ def main():
         for ch in book_data["chapters"]:
             print(f"    - {ch['title']}")
 
-        # Generate HTML
-        print("Generating HTML...")
+        # Generate print HTML (for PDF)
+        print("Generating print HTML...")
         html_content = generate_html(book_data, pdf_url="seller_book.pdf")
         html_path.write_text(html_content, encoding="utf-8")
         html_size = html_path.stat().st_size / 1024
-        print(f"  HTML: {html_path} ({html_size:.0f} KB)")
+        print(f"  Print HTML: {html_path} ({html_size:.0f} KB)")
+
+        # Generate reader HTML (for web)
+        reader_path = output_dir / "seller_book_reader.html"
+        print("Generating reader HTML...")
+        try:
+            reader_content = generate_reader_html(book_data, pdf_url="/seller-guide.pdf")
+            reader_path.write_text(reader_content, encoding="utf-8")
+            reader_size = reader_path.stat().st_size / 1024
+            print(f"  Reader HTML: {reader_path} ({reader_size:.0f} KB)")
+        except Exception as e:
+            print(f"  Reader generation failed: {e} (template may not exist yet)")
 
     if not args.html_only:
         if not html_path.exists():
