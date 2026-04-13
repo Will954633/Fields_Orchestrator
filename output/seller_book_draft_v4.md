@@ -1253,7 +1253,6 @@ The conveyancers manage the process: documents are signed, adjustment statements
 
 *Can settlement be brought forward?* Yes, if both parties agree and finance is ready.
 
-[PHOTO: CH8-2 — A front door with a "SOLD" sticker on the sign. The emotional moment of completion. Local property, real sign.]
 
 ---
 
@@ -1393,7 +1392,6 @@ Buyers frequently do a "drive-by" before deciding to attend an inspection. The e
 - [ ] Ensure the street number is clearly visible
 - [ ] Check all exterior lights are working; keep them on during the campaign
 
-[PHOTO: AA-2 — A manicured front garden with clear path and visible street number. The "curb appeal" visual.]
 
 ### Kitchen
 
