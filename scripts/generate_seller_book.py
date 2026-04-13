@@ -208,11 +208,11 @@ def render_chapter_md(md_text: str) -> str:
             return (
                 f'\n<div class="image-comparison">'
                 f'<div class="comparison-item">'
-                f'<img src="/{img1}" alt="{label1}" loading="lazy">'
+                f'<img src="{img1}" alt="{label1}" loading="lazy">'
                 f'<span class="comparison-label">{label1}</span>'
                 f'</div>'
                 f'<div class="comparison-item">'
-                f'<img src="/{img2}" alt="{label2}" loading="lazy">'
+                f'<img src="{img2}" alt="{label2}" loading="lazy">'
                 f'<span class="comparison-label">{label2}</span>'
                 f'</div>'
                 f'</div>\n'
@@ -227,7 +227,7 @@ def render_chapter_md(md_text: str) -> str:
             caption_html = f'<figcaption>{caption}</figcaption>' if caption else ''
             return (
                 f'\n<figure class="{css_class}">'
-                f'<img src="/{img_path}" alt="{description}" loading="lazy">'
+                f'<img src="{img_path}" alt="{description}" loading="lazy">'
                 f'{caption_html}'
                 f'</figure>\n'
             )
