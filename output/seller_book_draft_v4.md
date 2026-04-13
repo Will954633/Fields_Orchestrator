@@ -2,9 +2,9 @@
 
 [PHOTO: INSIDE-COVER — Full-page street-level shot of a tree-lined residential street in Robina or Burleigh Waters. Quiet, green, no cars.]
 
-# Strategic House Price Maximisation
+# Before You List
 
-### A Data-Driven Guide for Gold Coast Homeowners
+### A Data-Driven Guide for Southern Gold Coast Homeowners
 
 **By Will Simpson — Fields Real Estate**
 
