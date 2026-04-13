@@ -169,6 +169,31 @@ def render_chapter_md(md_text: str) -> str:
         "ABOUT-1": "book-images/will-headshot.jpg",
     }
 
+    # Chart and figure image mapping
+    CHART_MAP = {
+        "CH1-1": "book-images/charts/ch1-1-domain-accuracy.png",
+        "CH1-4": "book-images/charts/ch1-4-price-drivers.png",
+        "CH2-1": "book-images/charts/ch2-1-monthly-heatmap.png",
+        "CH3-1": "book-images/charts/ch3-1-buyer-skip.png",
+        "CH3-2": "book-images/charts/ch3-2-method-of-sale.png",
+        "CH4-1": "book-images/charts/ch4-1-overpricing-penalty.png",
+        "CH5-4": "book-images/charts/ch5-4-presale-roi.png",
+        "CH6-1": "book-images/charts/ch6-1-agent-volume.png",
+        "CH6-2": "book-images/charts/ch6-2-commission-comparison.png",
+        "CH7-1": "book-images/charts/ch7-1-buyer-pool.png",
+        "CH7-3": "book-images/charts/ch7-3-marketing-benefit.png",
+    }
+
+    FIGURE_MAP = {
+        "CH1-3": None,  # TBD — comparable-sales infographic (needs custom design)
+        "CH4-2": "book-images/charts/ch4-2-pricing-conditions.png",
+        "CH4-3": "book-images/charts/ch4-3-emotional-peak.png",
+        "CH5-1": "book-images/charts/ch5-1-positioning-framework.png",
+        "CH7-2": "book-images/charts/ch7-2-rea-comparison.png",
+        "CH8-1": "book-images/charts/ch8-1-selling-timeline.png",
+        "SM-1": None,   # TBD — Sarah & Mark accounting table (styled in HTML)
+    }
+
     # Side-by-side comparison pairs
     COMPARISON_PAIRS = {
         "HST-1": ("book-images/interior-bad.jpg", "book-images/interior-good.jpg",
@@ -179,9 +204,25 @@ def render_chapter_md(md_text: str) -> str:
 
     # Captions for specific images
     CAPTIONS = {
-        "CH4-4": "Image: Vela, 224 Christine Avenue. Credit: burleighconstructions.com.au",
-        "INSIDE-COVER": None,  # no caption
+        "CH4-4": "Image: Vela, 224 Christine Avenue, Burleigh Waters. Credit: burleighconstructions.com.au",
+        "INSIDE-COVER": None,
         "V-1": "Will Simpson — Founder of Fields Real Estate",
+        "HST-1": None,  # handled by comparison labels
+        "CH1-2": "Buyers arriving at an open home on the southern Gold Coast.",
+        "CH1-5": None,  # full spread, no caption
+        "CH2-3": "Robina parklands — the lifestyle that draws families to the southern Gold Coast.",
+        "CH3-3": None,  # full spread, no caption
+        "CH5-2": None,  # handled by comparison labels
+        "CH5-3": "Covered outdoor entertaining with pool — the kind of image that stops a buyer mid-scroll.",
+        "CH5-5": "North-facing backyard at golden hour. This was the lead image Sarah's agent chose over the renovated kitchen.",
+        "CH5-6": None,  # full spread, no caption
+        "CH7-4": None,  # full spread, no caption
+        "CH9-1": "Robina Town Centre at twilight.",
+        "CH9-2": "Family afternoon at a Varsity Lakes park.",
+        "CH9-3": "Tallebudgera Creek, Burleigh Waters.",
+        "AA-1": "Well-presented outdoor entertaining — the Gold Coast lifestyle that sells.",
+        "AA-2": None,
+        "ABOUT-1": None,  # About section, no caption needed
     }
 
     # Pre-process visual markers before markdown conversion
@@ -216,6 +257,27 @@ def render_chapter_md(md_text: str) -> str:
                 f'<span class="comparison-label">{label2}</span>'
                 f'</div>'
                 f'</div>\n'
+            )
+
+        # Check for chart/figure images
+        if marker_type == "CHART" and marker_id in CHART_MAP and CHART_MAP[marker_id]:
+            img_path = CHART_MAP[marker_id]
+            caption_html = f'<figcaption>{description}</figcaption>' if description else ''
+            return (
+                f'\n<figure class="book-image book-chart">'
+                f'<img src="{img_path}" alt="{description}" loading="lazy">'
+                f'{caption_html}'
+                f'</figure>\n'
+            )
+
+        if marker_type == "FIGURE" and marker_id in FIGURE_MAP and FIGURE_MAP[marker_id]:
+            img_path = FIGURE_MAP[marker_id]
+            caption_html = f'<figcaption>{description}</figcaption>' if description else ''
+            return (
+                f'\n<figure class="book-image book-figure">'
+                f'<img src="{img_path}" alt="{description}" loading="lazy">'
+                f'{caption_html}'
+                f'</figure>\n'
             )
 
         # Check if we have an actual image for this marker
