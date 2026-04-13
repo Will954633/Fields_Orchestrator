@@ -143,15 +143,56 @@ def render_chapter_md(md_text: str) -> str:
     - Tables
     - Blockquotes
     """
+    # Image mapping: marker ID -> actual image file
+    IMAGE_MAP = {
+        "COVER": "book-images/inside-cover.jpg",  # placeholder until UX cover
+        "INSIDE-COVER": "book-images/inside-cover.jpg",
+        "V-1": "book-images/will-at-desk.jpg",
+        "HST-1": None,  # special: side-by-side comparison
+        "CH1-2": "book-images/open-home.jpg",
+        "CH1-5": "book-images/burleigh-sunrise.jpg",
+        "CH2-3": "book-images/varsity-lake-cycling.jpg",
+        "CH3-3": "book-images/twilight-home.jpg",
+        "CH4-4": "book-images/vela-224.jpg",
+        "CH5-2": None,  # special: side-by-side comparison (reuse HST-1)
+        "CH5-3": "book-images/outdoor-entertaining.jpg",
+        "CH5-5": "book-images/backyard-golden-hour.jpg",
+        "CH5-6": "book-images/palmer-colonial-aerial.jpg",
+        "CH6-3": None,  # TBD
+        "CH7-4": "book-images/lakelands-aerial.jpg",
+        "CH8-2": None,  # TBD
+        "CH9-1": "book-images/robina-town-centre.jpg",
+        "CH9-2": "book-images/varsity-park-family.jpg",
+        "CH9-3": "book-images/beach-kids.jpg",
+        "AA-1": "book-images/outdoor-entertaining.jpg",  # reuse CH5-3
+        "AA-2": None,  # TBD
+        "ABOUT-1": "book-images/will-headshot.jpg",
+    }
+
+    # Side-by-side comparison pairs
+    COMPARISON_PAIRS = {
+        "HST-1": ("book-images/interior-bad.jpg", "book-images/interior-good.jpg",
+                   "Agent-phone listing photo", "Professional listing photo"),
+        "CH5-2": ("book-images/interior-bad.jpg", "book-images/interior-good.jpg",
+                   "Standard interior photo", "Professional interior photo"),
+    }
+
+    # Captions for specific images
+    CAPTIONS = {
+        "CH4-4": "Image: Vela, 224 Christine Avenue. Credit: burleighconstructions.com.au",
+        "INSIDE-COVER": None,  # no caption
+        "V-1": None,
+    }
+
     # Pre-process visual markers before markdown conversion
-    # Replace [PHOTO: ID — description] with styled placeholder divs
+    # Replace [PHOTO: ID — description] with actual images or styled placeholders
     def replace_visual_marker(match):
         marker_type = match.group(1).upper()
         content = match.group(2).strip()
 
         # Parse ID and description
-        if "—" in content:
-            marker_id, description = content.split("—", 1)
+        if "\u2014" in content:
+            marker_id, description = content.split("\u2014", 1)
         elif " - " in content:
             marker_id, description = content.split(" - ", 1)
         else:
@@ -161,14 +202,37 @@ def render_chapter_md(md_text: str) -> str:
         marker_id = marker_id.strip()
         description = description.strip()
 
-        type_labels = {
-            "PHOTO": "📷 PHOTOGRAPH",
-            "CHART": "📊 DATA VISUALISATION",
-            "FIGURE": "📐 FIGURE",
-            "QR CODE": "🔗 QR CODE",
-        }
-        label = type_labels.get(marker_type, marker_type)
+        # Check for side-by-side comparisons
+        if marker_id in COMPARISON_PAIRS:
+            img1, img2, label1, label2 = COMPARISON_PAIRS[marker_id]
+            return (
+                f'\n<div class="image-comparison">'
+                f'<div class="comparison-item">'
+                f'<img src="/{img1}" alt="{label1}" loading="lazy">'
+                f'<span class="comparison-label">{label1}</span>'
+                f'</div>'
+                f'<div class="comparison-item">'
+                f'<img src="/{img2}" alt="{label2}" loading="lazy">'
+                f'<span class="comparison-label">{label2}</span>'
+                f'</div>'
+                f'</div>\n'
+            )
 
+        # Check if we have an actual image for this marker
+        if marker_type == "PHOTO" and marker_id in IMAGE_MAP and IMAGE_MAP[marker_id]:
+            img_path = IMAGE_MAP[marker_id]
+            caption = CAPTIONS.get(marker_id, description)
+            is_spread = marker_id in ("INSIDE-COVER", "CH1-5", "CH5-6", "CH7-4")
+            css_class = "book-image spread" if is_spread else "book-image"
+            caption_html = f'<figcaption>{caption}</figcaption>' if caption else ''
+            return (
+                f'\n<figure class="{css_class}">'
+                f'<img src="/{img_path}" alt="{description}" loading="lazy">'
+                f'{caption_html}'
+                f'</figure>\n'
+            )
+
+        # QR codes
         if marker_type == "QR CODE":
             return (
                 f'\n<div class="qr-marker">'
@@ -177,7 +241,15 @@ def render_chapter_md(md_text: str) -> str:
                 f'</div>\n'
             )
 
-        full_desc = f"{marker_id} — {description}" if marker_id and description else (marker_id or description)
+        # Fallback: styled placeholder for charts, figures, and unassigned photos
+        type_labels = {
+            "PHOTO": "\U0001f4f7 PHOTOGRAPH",
+            "CHART": "\U0001f4ca DATA VISUALISATION",
+            "FIGURE": "\U0001f4d0 FIGURE",
+            "QR CODE": "\U0001f517 QR CODE",
+        }
+        label = type_labels.get(marker_type, marker_type)
+        full_desc = f"{marker_id} \u2014 {description}" if marker_id and description else (marker_id or description)
         return (
             f'\n<div class="visual-marker">'
             f'<span class="visual-marker-type">{label}</span>'
