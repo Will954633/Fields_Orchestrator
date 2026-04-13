@@ -40,7 +40,7 @@ The case study of "Sarah and Mark" is a composite narrative drawn from real sell
 
 **Vulnerable** — Why I wrote this book
 
-**Houses Sell Themselves** — The most expensive myth in real estate
+**Houses Sell Themselves — They Just Do a Bad Job of It**
 
 **Chapter 1:** What Is Your Home Actually Worth?
 
@@ -54,47 +54,91 @@ The case study of "Sarah and Mark" is a composite narrative drawn from real sell
 
 # Vulnerable
 
-I need to tell you something uncomfortable before we start.
+You're feeling vulnerable because you are vulnerable. Or you have been vulnerable.
 
-In 2019, I was a buyer. My wife and I had just moved to the Gold Coast from the UK. We didn't know the suburbs, the streets, the agents. We didn't know what anything was worth. We were, in every meaningful sense, vulnerable.
+I know because it happened to me.
 
-And we were treated that way.
+Seven years ago my wife and I were considering moving into a slightly bigger home. We had a baby on the way and were looking for more space.
 
-Not with malice — I want to be fair about that. The agents we dealt with were pleasant, professional, well-dressed. They returned our calls. They smiled at open homes. But the information asymmetry was enormous. They knew the comparable sales, the vendor's motivation, the reserve price, the other offers on the table. We knew what we could see on Domain and what they chose to tell us.
+We lived in Brisbane in a nice suburb called Corinda, just west of Indooroopilly on the other side of the river. Our house was at the top of a hill and from our bedroom, you could see the night lights of the city. It was walking distance to the train, cafes, and a good school.
 
-We bought a property. We paid too much. Not catastrophically — we weren't reckless. But when I later learned how to read comparable sales data, when I understood what the home two streets away had sold for six weeks earlier, I realised we'd left money on the table. Money that went to a vendor who probably didn't even know they were getting above market value. Money that was transferred from us to them because we didn't have the information to negotiate properly.
+We loved our house. It was just a bit small. My wife was pregnant and it didn't have quite enough room to raise a family.
 
-That moment changed my career.
+First of all, I wanted to get a clear idea of what price we might achieve so I could understand the quality of home we could move to.
+
+House prices were expensive, terribly expensive, and we had just spent $80,000 doing renovations. We put in a pool, a carport, and a back deck. We painted the house and had all-new landscaping put in by a well-renowned gardener.
+
+The place looked great.
+
+I started looking at comparable homes for sale and their listing prices. Given the number of bedrooms, the size of our block, and the recent renovation, it seemed our home would conservatively be worth somewhere between $870,000 and $970,000. This was 2016.
+
+My next thoughts turned to our local real estate agent. He was very well established in the area and often had himself and his team sprawled across a massive billboard on the main route to Indooroopilly. He was a name everyone in the area was familiar with, and I really felt he was someone I could trust even though I had never met him. I wanted his opinion on what he thought our house was worth and how long it might take to sell.
+
+I called the agency and told them what I was thinking of doing. They made the process very easy and we organised a time and date for him to come and do an appraisal.
+
+Two days later the agent arrived with his lovely wife who also worked at the office. They were very friendly and approachable. It wasn't very long before the conversation turned to price. "Look, you've done some great renovations here but the trouble is the market won't pay extra for them. At the end of the day, this is a small home on a small lot. We see it bringing a best price scenario of around $750,000."
+
+I was shocked, but I tried not to show it. How could that be? We had bought the property for $675,000 in 2014. At the time it had an old tree hanging perilously across the roof, the external paint was faded, and nobody wanted it. I know I had bought it at a good price because I had it valued by an external valuer before I bought it. How could it now only be worth $75,000 more three years later and with $80,000 of renovations? The market had been solid.
+
+What was going on? The agent's valuation just didn't seem right. At least, if it was, it was going to take more evidence to convince me. I had seen other properties on the market for much more than that. They were no different to our place. Some looked worse.
+
+Maybe I couldn't trust that popular local agent after all.
 
 [PHOTO: V-1 — Will working at his desk or on location photographing properties. Establishes Will as a real person, not a faceless author.]
 
-I spent the next five years building what I wished had existed when we were buying: a platform that gives ordinary people access to the same data the industry uses to make decisions. I taught myself to code. I built scrapers that track every listing on the Gold Coast. I studied academic research on pricing psychology, auction theory, and buyer behaviour. I analysed thousands of transactions, one by one, until the patterns became impossible to ignore.
+I decided to get an unbiased valuation of our house, like the one I'd done when I first bought it. I looked to see if there were any do-it-yourself options so I could get it done quickly. I stumbled across RP Data. This platform provided online valuations and was the same data that banks use when assessing mortgages. Good enough for me. I paid a small fee and the results were in.
 
-This book is the result.
+$900,000.
 
-It's built on 931 verified sales across the southern Gold Coast — Robina, Varsity Lakes, and Burleigh Waters. It references peer-reviewed studies from economists at Stanford, the University of Sydney, and the University of Texas. It includes findings from datasets of 25,000, 14,000, and 1.2 million transactions.
+How could the agent have suggested our house was worth $750,000? That's 17% less than this valuation. That's a bloody big difference.
 
-But it's not an academic paper. It's the book I would want to read if I were selling my home and I suspected — correctly — that the process was designed to benefit everyone except me.
+I had been so convinced I could trust that agent. He sold far more homes in the area than anyone else. He completely dominated the market. The possibilities took a while to sink in. Could he really have been trying to push our price expectations down to get a quick sale? Would he do that?
 
-Some of what you'll read will confirm what you already believe. Some will challenge it. A few findings genuinely surprised me, and I've been staring at this data for years.
+A few weeks later the agent was back in touch with us. "We've got this great home we're bringing to market. It's going to go to auction and it's within your price range. You should come have a look." It was exactly what we'd been wanting — well, it was a lot more than what we'd been wanting. This home was a little closer to the city, in a very nice suburb, and what's more, it was right on the river. How could this home be within our price range? I couldn't understand it, but we went to take a look anyway.
 
-I've tried to be honest throughout. Where the data is clear, I'll say so. Where it's ambiguous, I'll say that too. Where I have an opinion that goes beyond what the numbers show, I'll tell you it's an opinion.
+It had a big backyard with well-established gardens. The home was a beautiful old Queensland-style with high ceilings. From the back living room, you could see the river. Just as we were about to leave, the agent approached us and we started talking about price. "Look, we're expecting this home to bring around $1,100,000 to $1,200,000. The auction is two weeks from now. You should both definitely come along. We can get your house sold on an extended settlement allowing you time to sell yours."
 
-You deserve better than the current system gives you. Not because agents are bad people — most aren't — but because the incentive structures are misaligned in ways that cost you real money. This book will show you where those misalignments are and what the research says about navigating them.
+What was he saying? How could such a large block, with a good home, on the river only be worth around $1,100,000 to $1,200,000? In 2016 most homes of that calibre were worth more like $1,500,000 to $1,800,000. It just didn't make sense.
+
+We didn't go to the auction but waited for the results.
+
+The property went to auction and was sold shortly after by private treaty.
+
+The price? **$1,400,000.**
+
+What was going on? The agent would have known it would sell within that price range. It wasn't even in our ballpark. Why had he told us we could have gotten it for so much less?
+
+### Agents and Underquoting
+
+Underquoting is the practice of real estate agents deliberately listing properties with unrealistically low price guides to lure buyers in and get homes sold, fast.
+
+Agents following this practice typically take homes to auction, where, if there are enough bidders, the property will sell at a higher price than what was underquoted — however, often for less than what the sellers had hoped for. The practice works well from the agent's perspective because it maximises interest in the property, drawing large numbers of people to auctions and improving chances of a sale.
+
+In an effort to tackle underquoting, the state government of Queensland banned the practice of advertising price guides on homes going to auction. However, agents can still be found verbally suggesting low price ranges to both sellers and buyers to produce the same effect.
+
+---
+
+**It's time to stop being vulnerable.**
+
+**It's time to start being informed.**
+
+---
+
+That experience — being underquoted on our own home by 17%, then being told we could buy a $1,400,000 property for $1,100,000 — is why Fields Estate exists. I built it so that homeowners have access to the same data the industry uses to make decisions. Not opinions. Not promises. Data.
+
+Everything in this book comes from real analysis: 931 verified sales across the southern Gold Coast, 60 academic studies, and a valuation methodology tested against 1,689 online property estimates. This book won't tell you what to do. It will show you what the data says. The decisions are yours.
 
 In the chapters that follow, you'll meet Sarah and Mark — a Robina couple whose selling journey illustrates every concept in this book. Their story is a composite drawn from real experiences across the southern Gold Coast. Like mine, it starts with a valuation.
 
 ---
 
-# Houses Sell Themselves
+# Houses Sell Themselves — They Just Do a Bad Job of It
 
-There's a phrase you hear in real estate, usually muttered between agents at an open home after a quick sale: *"That one was always going to sell itself."*
+Any home listed at an attractive price on realestate.com.au will sell. That's a fact. It's why discount agents exist. Their model is simple: list the property, price it where buyers want it — not where sellers want it — and wait. The home sells. The agent takes their cut. Transaction complete.
 
-But here's what that phrase actually means when you translate it from industry shorthand into dollars: *"This property will transact at some price, so the campaign quality doesn't matter."*
+That process gets homes sold. But it does not get homes sold well.
 
-That's the most expensive myth in real estate.
-
-A home that "sells itself" still sells at a price. The question is whether that price reflects the property's full value or whether it leaves $50,000 to $120,000 on the table because the campaign was adequate instead of excellent.
+The difference between "sold" and "sold well" is whether the price reflects the property's full value or whether it leaves $50,000 to $120,000 on the table because the campaign was adequate instead of excellent.
 
 I see it every week in Robina. A new listing on the golf course streets — four bedrooms, decent block, renovated in the last five years. The photos are agent-phone quality. Slightly dark, slightly crooked, taken at 2pm when the sun is blasting through the front windows. The price is set to move fast — $30,000 to $50,000 below where the comparables say it could land with a proper campaign. It sells in two weeks. The vendor is happy because it was quick. The agent is happy because the commission came easy.
 
@@ -270,7 +314,7 @@ That said, if you have the luxury of choosing when to list — if your timeline 
 
 Fields Real Estate has analysed 13,585 Gold Coast sales for seasonal timing patterns. The results vary by suburb:
 
-| Suburb | Best Price Month | Fastest Sale Month | Likely Driver |
+| Suburb | Best Price Month | Fastest Sale Month | Driver |
 |--------|-----------------|-------------------|---------------|
 | Robina | November | May | Pre-Christmas supply constraint + family urgency |
 | Varsity Lakes | April | May | Younger demographic committing after summer |
