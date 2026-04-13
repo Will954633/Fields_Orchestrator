@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ title }} — Fields Estate</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* ── BRAND TOKENS ── */
+  :root {
+    --grass: #22382C;
+    --grass-light: #2d4a3a;
+    --birch: #E6DDD2;
+    --birch-dark: #d4c9bc;
+    --copper: #B76749;
+    --copper-light: #c9836a;
+    --sun: #FEC66F;
+    --sky: #A0D1C9;
+    --white: #FFFFFF;
+    --text: #22382C;
+    --text-secondary: #4a5e52;
+    --text-muted: #7a8a80;
+    --placeholder-bg: #f5f2ee;
+    --placeholder-border: #b0a89e;
+  }
+
+  /* ── RESET ── */
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  /* ── BASE ── */
+  html {
+    scroll-behavior: smooth;
+    font-size: 16px;
+  }
+
+  body {
+    font-family: 'Poppins', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    color: var(--text);
+    background: var(--birch);
+    line-height: 1.7;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* ================================================================
+     SCREEN LAYOUT
+     ================================================================ */
+
+  /* ── NAVIGATION (screen only) ── */
+  .book-nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    background: var(--grass);
+    border-bottom: 2px solid var(--copper);
+    transition: transform 0.3s ease;
+  }
+
+  .book-nav-inner {
+    max-width: 960px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    padding: 0 24px;
+    height: 56px;
+    gap: 8px;
+  }
+
+  .book-nav-brand {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--birch);
+    white-space: nowrap;
+    margin-right: 16px;
+    letter-spacing: 0.5px;
+  }
+
+  .book-nav-links {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex: 1;
+  }
+
+  .book-nav-links::-webkit-scrollbar { display: none; }
+
+  .book-nav-links a {
+    color: var(--birch-dark);
+    text-decoration: none;
+    font-size: 12px;
+    font-weight: 400;
+    padding: 6px 12px;
+    border-radius: 4px;
+    white-space: nowrap;
+    transition: background 0.2s, color 0.2s;
+  }
+
+  .book-nav-links a:hover,
+  .book-nav-links a.active {
+    background: rgba(230, 221, 210, 0.12);
+    color: var(--white);
+  }
+
+  .book-nav-toggle {
+    display: none;
+    background: none;
+    border: none;
+    color: var(--birch);
+    font-size: 22px;
+    cursor: pointer;
+    padding: 4px;
+    line-height: 1;
+  }
+
+  /* ── CONTENT WRAPPER ── */
+  .book-wrapper {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 0 24px;
+    padding-top: 56px; /* nav height */
+  }
+
+  /* ── COVER ── */
+  .cover {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    background: var(--grass);
+    color: var(--birch);
+    margin: 0 -24px;
+    padding: 80px 40px 60px;
+    position: relative;
+  }
+
+  .cover::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: radial-gradient(ellipse at 30% 20%, rgba(160, 209, 201, 0.08) 0%, transparent 60%),
+                radial-gradient(ellipse at 70% 80%, rgba(183, 103, 73, 0.06) 0%, transparent 50%);
+    pointer-events: none;
+  }
+
+  .cover-content {
+    position: relative;
+    z-index: 1;
+    max-width: 560px;
+  }
+
+  .cover-label {
+    font-size: 11px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--sky);
+    font-weight: 500;
+    margin-bottom: 32px;
+  }
+
+  .cover h1 {
+    font-size: 42px;
+    font-weight: 800;
+    line-height: 1.1;
+    color: var(--white);
+    margin-bottom: 16px;
+    letter-spacing: -0.5px;
+  }
+
+  .cover-subtitle {
+    font-size: 18px;
+    font-weight: 300;
+    color: var(--birch);
+    line-height: 1.5;
+    margin-bottom: 48px;
+  }
+
+  .cover-divider {
+    width: 48px;
+    height: 2px;
+    background: var(--copper);
+    margin: 0 auto 32px;
+  }
+
+  .cover-author {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--sun);
+    margin-bottom: 4px;
+  }
+
+  .cover-date {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 300;
+  }
+
+  .cover-logo {
+    position: absolute;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    opacity: 0.4;
+  }
+
+  .cover-logo img {
+    height: 28px;
+    width: auto;
+  }
+
+  /* ── TABLE OF CONTENTS ── */
+  .toc {
+    background: var(--white);
+    margin: 0 -24px;
+    padding: 64px 40px;
+  }
+
+  .toc-inner {
+    max-width: 480px;
+    margin: 0 auto;
+  }
+
+  .toc h2 {
+    font-size: 13px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    font-weight: 500;
+    margin-bottom: 32px;
+  }
+
+  .toc-list {
+    list-style: none;
+    counter-reset: toc-counter;
+  }
+
+  .toc-list li {
+    counter-increment: toc-counter;
+    border-bottom: 1px solid var(--birch);
+  }
+
+  .toc-list li:last-child {
+    border-bottom: none;
+  }
+
+  .toc-list a {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    padding: 14px 0;
+    text-decoration: none;
+    color: var(--text);
+    transition: color 0.2s;
+  }
+
+  .toc-list a:hover {
+    color: var(--copper);
+  }
+
+  .toc-list a::before {
+    content: counter(toc-counter, decimal-leading-zero);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--copper);
+    min-width: 28px;
+  }
+
+  .toc-list a span {
+    font-size: 16px;
+    font-weight: 500;
+    line-height: 1.3;
+  }
+
+  /* ── CHAPTERS ── */
+  .chapter {
+    background: var(--white);
+    margin: 2px -24px 0;
+    padding: 64px 40px 72px;
+    position: relative;
+  }
+
+  .chapter::before {
+    content: '';
+    display: block;
+    width: 40px;
+    height: 3px;
+    background: var(--copper);
+    margin-bottom: 24px;
+  }
+
+  .chapter > h1 {
+    font-size: 28pt;
+    font-weight: 700;
+    color: var(--grass);
+    line-height: 1.2;
+    margin-bottom: 32px;
+    letter-spacing: -0.3px;
+  }
+
+  /* ── TYPOGRAPHY ── */
+  .chapter h2 {
+    font-size: 18pt;
+    font-weight: 700;
+    color: var(--grass);
+    margin-top: 40px;
+    margin-bottom: 16px;
+    line-height: 1.25;
+  }
+
+  .chapter h3 {
+    font-size: 14pt;
+    font-weight: 600;
+    color: var(--grass);
+    margin-top: 32px;
+    margin-bottom: 12px;
+    line-height: 1.3;
+  }
+
+  .chapter h4 {
+    font-size: 12pt;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-top: 24px;
+    margin-bottom: 8px;
+    line-height: 1.3;
+  }
+
+  .chapter p {
+    font-size: 11pt;
+    line-height: 1.7;
+    margin-bottom: 16px;
+    color: var(--text);
+  }
+
+  .chapter a {
+    color: var(--copper);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    transition: color 0.2s;
+  }
+
+  .chapter a:hover {
+    color: var(--grass);
+  }
+
+  /* ── LISTS ── */
+  .chapter ul,
+  .chapter ol {
+    margin: 0 0 20px 0;
+    padding-left: 24px;
+  }
+
+  .chapter ul { list-style: none; }
+
+  .chapter ul li {
+    position: relative;
+    padding-left: 4px;
+    margin-bottom: 8px;
+    font-size: 11pt;
+    line-height: 1.6;
+  }
+
+  .chapter ul li::before {
+    content: '';
+    position: absolute;
+    left: -16px;
+    top: 10px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--copper);
+  }
+
+  .chapter ol li {
+    margin-bottom: 8px;
+    font-size: 11pt;
+    line-height: 1.6;
+    padding-left: 4px;
+  }
+
+  .chapter ol li::marker {
+    color: var(--copper);
+    font-weight: 600;
+  }
+
+  /* ── BLOCKQUOTES / PULL QUOTES ── */
+  .chapter blockquote {
+    border-left: 3px solid var(--copper);
+    margin: 28px 0;
+    padding: 16px 24px;
+    font-style: italic;
+    color: var(--text-secondary);
+    background: var(--placeholder-bg);
+    border-radius: 0 6px 6px 0;
+    font-size: 11pt;
+    line-height: 1.6;
+  }
+
+  .chapter blockquote p {
+    margin-bottom: 0;
+    color: var(--text-secondary);
+  }
+
+  .chapter blockquote p:not(:last-child) {
+    margin-bottom: 8px;
+  }
+
+  /* Pull quote — use <div class="pull-quote"> in chapter content */
+  .pull-quote {
+    border-left: 4px solid var(--copper);
+    margin: 36px 0;
+    padding: 24px 28px;
+    font-size: 18pt;
+    font-weight: 600;
+    line-height: 1.35;
+    color: var(--grass);
+    background: transparent;
+  }
+
+  /* Key statistic — use <div class="key-stat"> in chapter content */
+  .key-stat {
+    border-left: 4px solid var(--sun);
+    margin: 28px 0;
+    padding: 20px 24px;
+    background: #fdf9f0;
+    border-radius: 0 8px 8px 0;
+  }
+
+  .key-stat .stat-value {
+    font-size: 32px;
+    font-weight: 800;
+    color: var(--grass);
+    line-height: 1.1;
+    margin-bottom: 4px;
+  }
+
+  .key-stat .stat-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-weight: 400;
+    line-height: 1.4;
+  }
+
+  /* ── TABLES ── */
+  .chapter table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 24px 0;
+    font-size: 10pt;
+  }
+
+  .chapter thead th {
+    background: var(--grass);
+    color: var(--white);
+    font-weight: 600;
+    padding: 10px 14px;
+    text-align: left;
+    font-size: 10pt;
+    letter-spacing: 0.3px;
+  }
+
+  .chapter thead th:first-child {
+    border-radius: 6px 0 0 0;
+  }
+
+  .chapter thead th:last-child {
+    border-radius: 0 6px 0 0;
+  }
+
+  .chapter tbody td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--birch);
+    font-size: 10pt;
+    line-height: 1.5;
+  }
+
+  .chapter tbody tr:nth-child(even) {
+    background: var(--birch);
+  }
+
+  .chapter tbody tr:nth-child(odd) {
+    background: var(--white);
+  }
+
+  .chapter tbody tr:last-child td:first-child {
+    border-radius: 0 0 0 6px;
+  }
+
+  .chapter tbody tr:last-child td:last-child {
+    border-radius: 0 0 6px 0;
+  }
+
+  /* ── VISUAL MARKER PLACEHOLDERS ── */
+  .visual-marker {
+    border: 2px dashed var(--placeholder-border);
+    background: var(--placeholder-bg);
+    border-radius: 8px;
+    padding: 28px 24px;
+    margin: 28px 0;
+    text-align: center;
+    position: relative;
+  }
+
+  .visual-marker-type {
+    display: inline-block;
+    background: var(--grass);
+    color: var(--white);
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 3px 10px;
+    border-radius: 3px;
+    position: absolute;
+    top: -10px;
+    left: 20px;
+  }
+
+  .visual-marker-desc {
+    font-size: 9pt;
+    color: var(--text-muted);
+    line-height: 1.5;
+    font-style: italic;
+  }
+
+  /* ── QR CODE MARKER ── */
+  .qr-marker {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    border: 1px solid var(--birch-dark);
+    background: var(--white);
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin: 16px 0;
+  }
+
+  .qr-marker-icon {
+    width: 48px;
+    height: 48px;
+    border: 2px dashed var(--placeholder-border);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+
+  .qr-marker-text {
+    font-size: 9pt;
+    color: var(--text-secondary);
+    line-height: 1.4;
+  }
+
+  /* ── IMAGES ── */
+  .chapter img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 6px;
+    margin: 20px 0;
+  }
+
+  /* ── HORIZONTAL RULE ── */
+  .chapter hr {
+    border: none;
+    height: 1px;
+    background: var(--birch);
+    margin: 40px 0;
+  }
+
+  /* ── FOOTER ── */
+  .book-footer {
+    background: var(--grass);
+    color: var(--birch);
+    margin: 0 -24px;
+    padding: 48px 40px;
+    text-align: center;
+  }
+
+  .book-footer-brand {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--white);
+    margin-bottom: 8px;
+  }
+
+  .book-footer-tagline {
+    font-size: 12px;
+    color: var(--sky);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    font-weight: 400;
+    margin-bottom: 24px;
+  }
+
+  .book-footer p {
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.6;
+    max-width: 400px;
+    margin: 0 auto;
+  }
+
+  .book-footer a {
+    color: var(--copper-light);
+    text-decoration: none;
+  }
+
+  /* ── DOWNLOAD BUTTON (screen only) ── */
+  .download-btn {
+    position: fixed;
+    bottom: 28px;
+    right: 28px;
+    z-index: 200;
+    background: var(--grass);
+    color: var(--white);
+    text-decoration: none;
+    font-family: 'Poppins', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 14px 24px;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(34, 56, 44, 0.35);
+    transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .download-btn:hover {
+    background: var(--grass-light);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(34, 56, 44, 0.45);
+  }
+
+  .download-btn:active {
+    transform: translateY(0);
+  }
+
+  .download-btn svg {
+    width: 16px;
+    height: 16px;
+    fill: currentColor;
+  }
+
+  /* ── CALLOUT BOX ── */
+  .callout {
+    background: #eef5f0;
+    border: 1px solid var(--sky);
+    border-radius: 8px;
+    padding: 20px 24px;
+    margin: 24px 0;
+  }
+
+  .callout-title {
+    font-size: 11pt;
+    font-weight: 600;
+    color: var(--grass);
+    margin-bottom: 8px;
+  }
+
+  .callout p {
+    font-size: 10pt;
+    margin-bottom: 8px;
+  }
+
+  .callout p:last-child {
+    margin-bottom: 0;
+  }
+
+  /* ── WARNING BOX ── */
+  .callout-warning {
+    background: #fdf5ef;
+    border: 1px solid var(--copper-light);
+  }
+
+  .callout-warning .callout-title {
+    color: var(--copper);
+  }
+
+  /* ================================================================
+     RESPONSIVE — MOBILE
+     ================================================================ */
+
+  @media (max-width: 768px) {
+    .book-nav-inner {
+      flex-wrap: wrap;
+      height: auto;
+      padding: 12px 16px;
+    }
+
+    .book-nav-brand {
+      flex: 1;
+    }
+
+    .book-nav-toggle {
+      display: block;
+    }
+
+    .book-nav-links {
+      display: none;
+      flex-direction: column;
+      width: 100%;
+      gap: 0;
+      padding-top: 8px;
+      border-top: 1px solid rgba(230, 221, 210, 0.15);
+      margin-top: 8px;
+    }
+
+    .book-nav-links.open {
+      display: flex;
+    }
+
+    .book-nav-links a {
+      padding: 10px 12px;
+      font-size: 13px;
+    }
+
+    .book-wrapper {
+      padding: 0 0;
+      padding-top: 56px;
+    }
+
+    .cover {
+      min-height: 100vh;
+      min-height: 100dvh;
+      padding: 60px 24px 48px;
+      margin: 0;
+    }
+
+    .cover h1 {
+      font-size: 30px;
+    }
+
+    .cover-subtitle {
+      font-size: 15px;
+    }
+
+    .toc,
+    .chapter,
+    .book-footer {
+      margin: 0;
+      padding-left: 24px;
+      padding-right: 24px;
+    }
+
+    .chapter > h1 {
+      font-size: 22pt;
+    }
+
+    .chapter h2 {
+      font-size: 16pt;
+    }
+
+    .chapter h3 {
+      font-size: 13pt;
+    }
+
+    .pull-quote {
+      font-size: 15pt;
+      padding: 20px 20px;
+    }
+
+    .key-stat .stat-value {
+      font-size: 26px;
+    }
+
+    .download-btn {
+      bottom: 16px;
+      right: 16px;
+      padding: 12px 18px;
+      font-size: 12px;
+    }
+
+    .chapter table {
+      font-size: 9pt;
+      display: block;
+      overflow-x: auto;
+    }
+  }
+
+  /* ================================================================
+     PRINT MODE — A4 / Chrome --print-to-pdf
+     ================================================================ */
+
+  @media print {
+    @page {
+      size: A4 portrait;
+      margin: 20mm 18mm 24mm 18mm;
+
+      @top-left {
+        content: "Fields Estate";
+        font-family: 'Poppins', sans-serif;
+        font-size: 8pt;
+        color: #7a8a80;
+      }
+      @top-right {
+        content: counter(page);
+        font-family: 'Poppins', sans-serif;
+        font-size: 8pt;
+        color: #7a8a80;
+      }
+    }
+
+    @page :first {
+      margin: 0;
+      @top-left { content: none; }
+      @top-right { content: none; }
+    }
+
+    html {
+      font-size: 11pt;
+    }
+
+    body {
+      background: var(--white);
+    }
+
+    /* Hide screen-only elements */
+    .book-nav,
+    .download-btn {
+      display: none !important;
+    }
+
+    .book-wrapper {
+      max-width: none;
+      padding: 0;
+    }
+
+    /* ── COVER (print) ── */
+    .cover {
+      width: 210mm;
+      height: 297mm;
+      min-height: 0;
+      margin: -20mm -18mm 0;
+      padding: 0 40mm;
+      display: flex;
+      justify-content: center;
+      page-break-after: always;
+      break-after: page;
+    }
+
+    .cover h1 {
+      font-size: 34pt;
+    }
+
+    .cover-subtitle {
+      font-size: 14pt;
+    }
+
+    .cover-logo {
+      bottom: 24mm;
+    }
+
+    /* ── TOC (print) ── */
+    .toc {
+      margin: 0;
+      padding: 0;
+      background: var(--white);
+      page-break-after: always;
+      break-after: page;
+    }
+
+    .toc-inner {
+      max-width: none;
+    }
+
+    /* ── CHAPTERS (print) ── */
+    .chapter {
+      margin: 0;
+      padding: 0;
+      background: var(--white);
+      page-break-before: always;
+      break-before: page;
+    }
+
+    .chapter > h1 {
+      font-size: 24pt;
+    }
+
+    .chapter h2 {
+      font-size: 16pt;
+      page-break-after: avoid;
+      break-after: avoid;
+    }
+
+    .chapter h3 {
+      font-size: 13pt;
+      page-break-after: avoid;
+      break-after: avoid;
+    }
+
+    .chapter h4 {
+      page-break-after: avoid;
+      break-after: avoid;
+    }
+
+    .chapter p {
+      orphans: 3;
+      widows: 3;
+    }
+
+    .chapter blockquote,
+    .pull-quote,
+    .key-stat,
+    .callout,
+    .visual-marker {
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+
+    .chapter table {
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+
+    .chapter thead {
+      display: table-header-group;
+    }
+
+    /* ── FOOTER (print) ── */
+    .book-footer {
+      margin: 0;
+      page-break-before: always;
+      break-before: page;
+    }
+
+    /* Ensure dark backgrounds print correctly */
+    .cover,
+    .book-footer,
+    .chapter thead th,
+    .visual-marker-type {
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+  }
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════════════
+     NAVIGATION (screen only)
+     ════════════════════════════════════════════════════════════════ -->
+<nav class="book-nav" role="navigation" aria-label="Chapter navigation">
+  <div class="book-nav-inner">
+    <span class="book-nav-brand">Fields Estate</span>
+    <button class="book-nav-toggle" aria-label="Toggle navigation" aria-expanded="false">&#9776;</button>
+    <div class="book-nav-links" id="navLinks">
+      <a href="#cover">Cover</a>
+      <a href="#toc">Contents</a>
+      {% for chapter in chapters %}
+      <a href="#{{ chapter.id }}">{{ chapter.title }}</a>
+      {% endfor %}
+    </div>
+  </div>
+</nav>
+
+<!-- ════════════════════════════════════════════════════════════════
+     COVER
+     ════════════════════════════════════════════════════════════════ -->
+<div class="book-wrapper">
+
+<section class="cover" id="cover">
+  <div class="cover-content">
+    <div class="cover-label">Fields Estate</div>
+    <h1>{{ title }}</h1>
+    <p class="cover-subtitle">{{ subtitle }}</p>
+    <div class="cover-divider"></div>
+    <p class="cover-author">{{ author }}</p>
+    <p class="cover-date">{{ generated_date }}</p>
+  </div>
+  <div class="cover-logo">
+    <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='20' fill='%23E6DDD2'%3E%3Ctext x='0' y='15' font-family='Poppins,sans-serif' font-size='14' font-weight='600' opacity='0.5'%3EFields%3C/text%3E%3C/svg%3E" alt="Fields Estate">
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════
+     TABLE OF CONTENTS
+     ════════════════════════════════════════════════════════════════ -->
+<section class="toc" id="toc">
+  <div class="toc-inner">
+    <h2>Contents</h2>
+    <ol class="toc-list">
+      {% for chapter in chapters %}
+      <li><a href="#{{ chapter.id }}"><span>{{ chapter.title }}</span></a></li>
+      {% endfor %}
+    </ol>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════
+     CHAPTERS
+     ════════════════════════════════════════════════════════════════ -->
+{% for chapter in chapters %}
+<section class="chapter" id="{{ chapter.id }}">
+  <h1>{{ chapter.title }}</h1>
+  {{ chapter.content }}
+</section>
+{% endfor %}
+
+<!-- ════════════════════════════════════════════════════════════════
+     FOOTER
+     ════════════════════════════════════════════════════════════════ -->
+<footer class="book-footer">
+  <div class="book-footer-brand">Fields Estate</div>
+  <div class="book-footer-tagline">Smarter with data</div>
+  <p>
+    &copy; {{ generated_date }} Fields Estate. All rights reserved.<br>
+    <a href="https://fieldsestate.com.au">fieldsestate.com.au</a>&ensp;|&ensp;
+    <a href="mailto:will@fieldsestate.com.au">will@fieldsestate.com.au</a>
+  </p>
+</footer>
+
+</div><!-- .book-wrapper -->
+
+<!-- ════════════════════════════════════════════════════════════════
+     DOWNLOAD BUTTON (screen only)
+     ════════════════════════════════════════════════════════════════ -->
+<a href="{{ pdf_url }}" class="download-btn" download>
+  <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M8 12L3 7h3V1h4v6h3L8 12z"/><path d="M14 14H2v-2H0v4h16v-4h-2v2z"/></svg>
+  Download PDF
+</a>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SCRIPTS
+     ════════════════════════════════════════════════════════════════ -->
+<script>
+(function() {
+  'use strict';
+
+  // ── Mobile nav toggle ──
+  var toggle = document.querySelector('.book-nav-toggle');
+  var links = document.getElementById('navLinks');
+
+  if (toggle && links) {
+    toggle.addEventListener('click', function() {
+      var isOpen = links.classList.toggle('open');
+      toggle.setAttribute('aria-expanded', isOpen);
+    });
+
+    // Close nav when a link is clicked (mobile)
+    links.addEventListener('click', function(e) {
+      if (e.target.tagName === 'A') {
+        links.classList.remove('open');
+        toggle.setAttribute('aria-expanded', 'false');
+      }
+    });
+  }
+
+  // ── Active nav link tracking ──
+  var navLinks = document.querySelectorAll('.book-nav-links a');
+  var sections = [];
+
+  navLinks.forEach(function(link) {
+    var href = link.getAttribute('href');
+    if (href && href.charAt(0) === '#') {
+      var target = document.getElementById(href.substring(1));
+      if (target) {
+        sections.push({ el: target, link: link });
+      }
+    }
+  });
+
+  function updateActiveLink() {
+    var scrollPos = window.scrollY + 120;
+    var current = null;
+
+    for (var i = 0; i < sections.length; i++) {
+      if (sections[i].el.offsetTop <= scrollPos) {
+        current = sections[i].link;
+      }
+    }
+
+    navLinks.forEach(function(link) {
+      link.classList.remove('active');
+    });
+
+    if (current) {
+      current.classList.add('active');
+    }
+  }
+
+  var ticking = false;
+  window.addEventListener('scroll', function() {
+    if (!ticking) {
+      window.requestAnimationFrame(function() {
+        updateActiveLink();
+        ticking = false;
+      });
+      ticking = true;
+    }
+  });
+
+  updateActiveLink();
+
+  // ── Visual marker placeholder styling ──
+  // Finds [PHOTO: ...], [CHART: ...], [FIGURE: ...], [QR: ...] patterns
+  // in chapter content and wraps them in styled placeholder boxes.
+  var chapters = document.querySelectorAll('.chapter');
+
+  chapters.forEach(function(chapter) {
+    var html = chapter.innerHTML;
+
+    // Match [TYPE: description] patterns
+    html = html.replace(
+      /\[(PHOTO|CHART|FIGURE|IMAGE|DIAGRAM|MAP|GRAPH|ILLUSTRATION):\s*([^\]]+)\]/gi,
+      function(match, type, desc) {
+        var typeUpper = type.toUpperCase();
+        return '<div class="visual-marker">' +
+               '<span class="visual-marker-type">' + typeUpper + '</span>' +
+               '<span class="visual-marker-desc">' + desc.trim() + '</span>' +
+               '</div>';
+      }
+    );
+
+    // Match [QR: description] patterns
+    html = html.replace(
+      /\[QR:\s*([^\]]+)\]/gi,
+      function(match, desc) {
+        return '<div class="qr-marker">' +
+               '<div class="qr-marker-icon">QR</div>' +
+               '<span class="qr-marker-text">' + desc.trim() + '</span>' +
+               '</div>';
+      }
+    );
+
+    chapter.innerHTML = html;
+  });
+
+})();
+</script>
+
+</body>
+</html>
