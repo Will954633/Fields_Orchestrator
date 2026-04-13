@@ -172,16 +172,16 @@ def render_chapter_md(md_text: str) -> str:
     # Side-by-side comparison pairs
     COMPARISON_PAIRS = {
         "HST-1": ("book-images/interior-bad.jpg", "book-images/interior-good.jpg",
-                   "Agent-phone listing photo", "Professional listing photo"),
+                   "Poor lighting reduces buyer enquiry", "Professional photography generates 118% more online views — more viewers, more competition, higher prices (REA Group)"),
         "CH5-2": ("book-images/interior-bad.jpg", "book-images/interior-good.jpg",
-                   "Standard interior photo", "Professional interior photo"),
+                   "Poor lighting reduces buyer enquiry", "Professional photography generates 118% more online views — more viewers, more competition, higher prices (REA Group)"),
     }
 
     # Captions for specific images
     CAPTIONS = {
         "CH4-4": "Image: Vela, 224 Christine Avenue. Credit: burleighconstructions.com.au",
         "INSIDE-COVER": None,  # no caption
-        "V-1": None,
+        "V-1": "Will Simpson — Founder of Fields Real Estate",
     }
 
     # Pre-process visual markers before markdown conversion
