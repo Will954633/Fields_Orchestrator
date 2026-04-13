@@ -501,6 +501,54 @@
     border-radius: 0 0 6px 0;
   }
 
+  /* ── BOOK IMAGES ── */
+  .book-image {
+    margin: 28px 0;
+    text-align: center;
+  }
+  .book-image img {
+    width: 100%;
+    max-width: 100%;
+    border-radius: 6px;
+    display: block;
+  }
+  .book-image.spread img {
+    border-radius: 0;
+    margin-left: -38px;
+    margin-right: -38px;
+    width: calc(100% + 76px);
+    max-width: calc(100% + 76px);
+  }
+  .book-image figcaption {
+    font-size: 8pt;
+    color: var(--text-muted);
+    margin-top: 6px;
+    font-style: italic;
+  }
+
+  /* ── IMAGE COMPARISON (side-by-side) ── */
+  .image-comparison {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 28px 0;
+  }
+  .comparison-item {
+    text-align: center;
+  }
+  .comparison-item img {
+    width: 100%;
+    border-radius: 6px;
+    display: block;
+  }
+  .comparison-label {
+    display: block;
+    font-size: 8.5pt;
+    color: var(--text-secondary);
+    margin-top: 6px;
+    font-weight: 500;
+  }
+
   /* ── VISUAL MARKER PLACEHOLDERS ── */
   .visual-marker {
     border: 2px dashed var(--placeholder-border);
