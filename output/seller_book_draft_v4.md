@@ -62,7 +62,7 @@ Seven years ago my wife and I were considering moving into a slightly bigger hom
 
 We lived in Brisbane in a nice suburb called Corinda, just west of Indooroopilly on the other side of the river. Our house was at the top of a hill and from our bedroom, you could see the night lights of the city. It was walking distance to the train, cafes, and a good school.
 
-We loved our house. It was just a bit small. My wife was pregnant and it didn't have quite enough room to raise a family.
+We loved our house. It was just a bit small, and it didn't have quite enough room to raise a family.
 
 First of all, I wanted to get a clear idea of what price we might achieve so I could understand the quality of home we could move to.
 
@@ -86,7 +86,7 @@ Maybe I couldn't trust that popular local agent after all.
 
 [PHOTO: V-1 — Will working at his desk or on location photographing properties. Establishes Will as a real person, not a faceless author.]
 
-I decided to get an unbiased valuation of our house, like the one I'd done when I first bought it. I looked to see if there were any do-it-yourself options so I could get it done quickly. I stumbled across RP Data. This platform provided online valuations and was the same data that banks use when assessing mortgages. Good enough for me. I paid a small fee and the results were in.
+I decided to get an unbiased valuation of our house, like the one I'd done when I first bought it. I looked to see if there were any do-it-yourself options so I could get it done quickly. I stumbled across RP Data (now Cotality). This platform provided online valuations and was the same data that banks use when assessing mortgages. Good enough for me. I paid a small fee and the results were in.
 
 $900,000.
 
@@ -98,7 +98,7 @@ A few weeks later the agent was back in touch with us. "We've got this great hom
 
 It had a big backyard with well-established gardens. The home was a beautiful old Queensland-style with high ceilings. From the back living room, you could see the river. Just as we were about to leave, the agent approached us and we started talking about price. "Look, we're expecting this home to bring around $1,100,000 to $1,200,000. The auction is two weeks from now. You should both definitely come along. We can get your house sold on an extended settlement allowing you time to sell yours."
 
-What was he saying? How could such a large block, with a good home, on the river only be worth around $1,100,000 to $1,200,000? In 2016 most homes of that calibre were worth more like $1,500,000 to $1,800,000. It just didn't make sense.
+What was he saying? How could such a large block, with a good home, on the high side of the river only be worth around $1,100,000 to $1,200,000? In 2016 most homes of that calibre were worth more like $1,500,000 to $1,800,000. It just didn't make sense.
 
 We didn't go to the auction but waited for the results.
 
@@ -118,9 +118,9 @@ In an effort to tackle underquoting, the state government of Queensland banned t
 
 ---
 
-**It's time to stop being vulnerable.**
+## **It's time to stop being vulnerable.**
 
-**It's time to start being informed.**
+## **It's time to start being informed.**
 
 ---
 
@@ -136,7 +136,7 @@ In the chapters that follow, you'll meet Sarah and Mark — a Robina couple whos
 
 Any home listed at an attractive price on realestate.com.au will sell. That's a fact. It's why discount agents exist. Their model is simple: list the property, price it where buyers want it — not where sellers want it — and wait. The home sells. The agent takes their cut. Transaction complete.
 
-That process gets homes sold. But it does not get homes sold well.
+**That process gets homes sold. But it does not get homes sold well.**
 
 The difference between "sold" and "sold well" is whether the price reflects the property's full value or whether it leaves $50,000 to $120,000 on the table because the campaign was adequate instead of excellent.
 
@@ -151,6 +151,8 @@ Those discount-listed homes consistently sell for $50,000 to $100,000 less than 
 Houses don't sell themselves. They sell at a price determined by a series of decisions — most of which are made before a single buyer walks through the door. The valuation method. The pricing strategy. The sale method. The photography. The timing. The agent selection. Each decision either adds value or leaves it behind.
 
 The difference between a well-executed sale and a poorly-executed one isn't a rounding error. It's a renovation. It's a year of school fees. It's the gap between your next home being the one you wanted and the one you settled for.
+
+**The highest sale price comes from the highest number of emotionally invested buyers competing at the same time. Everything in this book exists to create that outcome.**
 
 This book will walk through each of those decisions with the data in front of you — from 931 transactions across the southern Gold Coast, supported by academic research across millions more.
 
@@ -172,7 +174,7 @@ Here's what happened when that number met reality.
 
 Domain, Realestate.com.au, and similar platforms offer automated property estimates. They're free, they're instant, and they're wildly popular. They're also, on average, wrong — and wrong in a direction that costs sellers money.
 
-Fields Real Estate has tested 1,689 automated valuations against actual sale prices across the Gold Coast. The results are stark: 89% of properties were overvalued by the online estimate.
+Fields Real Estate has tested 1,689 automated valuations against actual sale prices across the Gold Coast. The results are stark: **89% of properties were overvalued by the online estimate.**
 
 Let that settle for a moment. Not 89% were inaccurate — that would be unremarkable for an automated tool. Eighty-nine percent were overvalued. The error has a direction, and that direction creates a specific problem for sellers.
 
@@ -206,7 +208,7 @@ This is how professional comparable-sales valuation works — whether performed 
 
 The adjusted prices are then weighted. A sale from last month gets more weight than one from ten months ago. A property two streets away gets more weight than one a kilometre distant. A comparable with a high-confidence adjustment gets more weight than one where the adjustment was large and uncertain.
 
-The result is a range — not a single number. Fields Real Estate's comparable-sales model produces valuations that are accurate within the stated range 97% of the time in Robina. That's not a marketing claim. It's a tested figure across hundreds of properties where we had the valuation before the sale occurred.
+The result is a range — not a single number. **Fields Real Estate's comparable-sales model produces valuations that are accurate within the stated range 97% of the time on Southern Gold Coast houses.** That's not a marketing claim. It's a tested figure across hundreds of properties where we had the valuation before the sale occurred.
 
 [FIGURE: CH1-3 — Infographic: How Comparable-Sales Valuation Works. Simple 4-step visual: Select comparables, Adjust for differences, Weight by quality, Produce a range. Clean, minimal, not cluttered.]
 
@@ -262,11 +264,13 @@ But here's the complication: renovated homes also tend to be larger. They tend t
 
 This doesn't mean renovations don't matter. It means they matter less independently than most people assume, because floor area captures a large portion of what people attribute to renovation quality. A beautifully renovated small home still sells like a small home. A large home with an original kitchen still sells like a large home.
 
-The practical implication for sellers is this: renovating before sale can help your home sell faster and with less buyer resistance, but the data suggests it rarely adds dollar-for-dollar value in the sale price. A $40,000 kitchen renovation might make your home easier to sell at its comparable-sales value, but it's unlikely to push the price $40,000 above that value.
+The practical implication for sellers is this: **renovating before sale can help your home sell faster and with less buyer resistance, but the data suggests it rarely adds dollar-for-dollar value in the sale price**. A $40,000 kitchen renovation might make your home easier to sell at its comparable-sales value, but it's unlikely to push the price $40,000 above that value.
 
 I see this play out in Robina constantly. Two homes on the same street, built in the same year, same number of bedrooms. One has a beautifully renovated kitchen and bathroom — stone benchtops, matte-black tapware, the full 2024 Pinterest aesthetic. The other has the original kitchen, clean but dated. The renovated home sells for $30,000 more. The renovation cost $65,000. The owner is happy because they "got more than the neighbours." But the numbers tell a different story: they invested $65,000 to recover $30,000 at the point of sale. The remaining $35,000 was the cost of enjoying the renovation while they lived there — which is perfectly valid, but shouldn't be confused with an investment return.
 
 This finding is counter-intuitive for many homeowners, and I want to be careful with it. I'm not saying renovations are pointless. I'm saying the financial return on renovation at point of sale is usually lower than people expect, because floor area captures so much of the value that renovations appear to add. If your motivation for renovating before sale is enjoyment during the marketing period and faster buyer decisions — both legitimate — that's a clear-eyed choice. If your motivation is to add $65,000 to the sale price, the data suggests you'll be disappointed.
+
+**NOTE — Burleigh Waters is the exception.** Our data shows that in Burleigh Waters, fully renovated properties achieve approximately 14% higher price per square metre than original-condition properties. This premium is not clearly present in Robina or Varsity Lakes, where fully renovated homes actually showed lower $/sqm than originals. The likely explanation is buyer demographics: Burleigh Waters buyers are purchasing at a higher price point (median $1,710,000) where turnkey quality is expected and valued. However, there is a trade-off — fully renovated homes in Burleigh Waters take approximately three times longer to sell than original-condition properties (30 days vs 11 days median), likely because the higher asking price narrows the buyer pool. The renovation adds value, but it also adds time.
 
 ## Sarah and Mark Meet Reality
 
@@ -280,9 +284,9 @@ Mark's reaction was what you'd expect. "That can't be right. The Taylors got $1.
 
 The Domain estimate hadn't known that. It had seen four bedrooms, a Robina postcode, a 600-square-metre block, and recent sales in the $1.4 to $1.7 million range. It had produced a number that was mathematically reasonable and practically misleading.
 
-I see this pattern every week. A homeowner anchors to an online number, rejects the first agent who tells them the truth, and hires the one who confirms the fantasy. The ending is always the same. The property lists too high, sits on the market for six or eight weeks, takes a price reduction, and eventually sells at or below where the comparables said it would. Except now it's sold with the stigma of a stale listing and a price drop, which often pushes the final price below what a correctly-priced day-one campaign would have achieved.
+I see this pattern every week. A homeowner anchors to an online number, rejects the first agent who tells them the truth, and hires the one who confirms the fantasy. **The ending is always the same. The property lists too high, sits on the market for six or eight weeks, takes a price reduction, and eventually sells at or below where the comparables said it would**. Except now it's sold with the stigma of a stale listing and a price drop, which often pushes the final price below what a correctly-priced day-one campaign would have achieved.
 
-The first step in maximising your sale price is understanding what your home is actually worth. Not what you hope it's worth, not what a website guesses, not what your neighbour got for a larger home on a better street. What the comparable sales, adjusted for the specific characteristics of your property, say it's worth.
+**The first step in maximising your sale price is understanding what your home is actually worth. From there, you can understand what a reasonable price looks like and what a truly excellent price looks like, but without an accurate initial valuation, you have no starting point and no end point to work towards.** Not what you hope it's worth, not what a website guesses, not what your neighbour got for a larger home on a better street. What the comparable sales, adjusted for the specific characteristics of your property, say it's worth.
 
 Everything else in this book builds on that foundation.
 
@@ -348,7 +352,7 @@ I track this data weekly across all three suburbs. I can tell you right now that
 
 These numbers shift constantly. But the habit of checking them before you finalise your listing date — rather than just picking the first available Saturday — is a small advantage that costs nothing and can influence how many buyers walk through your door on opening weekend.
 
-[PHOTO: CH2-3 — Varsity Lakes lake and park area. Lifestyle shot that says "this is why people buy here."]
+[PHOTO: CH2-3 — Robina parklands. Lifestyle shot that says "this is why people buy here."]
 
 One more thing about supply that's worth understanding: inventory in your specific price bracket matters more than total suburb inventory. If there are 55 listings in Robina but only six of them are four-bedroom homes priced between $1,300,000 and $1,500,000, your competitive set is six, not fifty-five. The other forty-nine listings are noise. Knowing your competitive set — the properties that your buyer is comparing you to — helps you understand whether you're listing into a crowded field or an open one.
 
@@ -368,7 +372,7 @@ I've stopped having opinions about market timing. I've seen too many people wait
 
 What I do have is six years of data showing which months produce the best results in each suburb. That's more useful than any prediction. It's not a crystal ball — it's a rearview mirror. But in a world where everyone is trying to guess what happens next, knowing what has consistently happened before is an underrated advantage.
 
-The most reliable path to a strong sale price isn't finding the perfect month. It's pricing correctly, marketing well, and giving the market enough time to do what it does. The sellers who do those three things well tend to get good outcomes regardless of whether they list in the "best" month or not.
+**The most reliable path to a strong sale price isn't finding the perfect month. It's pricing correctly, marketing well, and giving the market enough time to do what it does. The sellers who do those three things well tend to get good outcomes regardless of whether they list in the "best" month or not.**
 
 Time your life first. Then check the data. If they align, wonderful. If they don't, know that correct pricing on day one covers more ground than any seasonal advantage ever could.
 
@@ -380,7 +384,9 @@ Imagine you're a buyer on a Saturday morning, scrolling through Realestate.com.a
 
 Do you click? Or do you scroll to the next listing that tells you what it costs?
 
-If you're like 72% of property buyers, you scroll past.
+**72% of property buyers scroll past auction listings.**¹
+
+¹ REA Group (2014). Internal platform data showing 72% of buyers skip listings without a displayed price guide. Referenced in: Queensland Parliament, Property Occupations Act 2014 review submissions.
 
 That number comes from research into buyer behaviour on property portals, and it reflects something psychologists have understood since Daniel Ellsberg's work (Ellsberg, 1961): people avoid ambiguity. Given a choice between a known quantity and an unknown one, most people choose the known quantity — even if the unknown one might be better.
 
@@ -396,7 +402,7 @@ So the question isn't just "auction or private treaty?" It's "do you want to sel
 
 The University of Sydney, in partnership with the Reserve Bank (University of Sydney, multiple authors), analysed 1.2 million residential sales across Australia. The study compared auction sales to private treaty sales, controlling for property type, location, and market conditions.
 
-The finding: no statistically significant difference in sale price between auction and private treaty.
+The finding: **no statistically significant difference in sale price between auction and private treaty.**
 
 This is worth repeating because it contradicts the single most common claim made by agents who advocate for auction — that auction "creates competition" which "drives the price up." Across 1.2 million transactions, that claim has no support. Properties sold by auction achieved, on average, the same prices as comparable properties sold by private treaty.
 
@@ -424,7 +430,7 @@ There's an honest conversation worth having about why some agents still recommen
 
 One practical difference between the two methods rarely gets discussed, and it matters more than most sellers realise.
 
-In a private treaty sale, when a buyer expresses interest and asks about price, the agent has a number to work with. They can say: "The property is listed at $1,415,000, and the sellers are committed to that range based on comparable sales." The buyer can then decide whether they want to proceed, negotiate, or walk away. The agent can advocate for the seller's price because there is a price to advocate for.
+In a private treaty sale, when a buyer expresses interest and asks about price, the agent has a number to work with. They can say: "The property is listed at $1,415,000, and the sellers are committed to that range based on comparable sales." The buyer can then decide whether they want to proceed, negotiate, or walk away. **The agent can advocate for the seller's price because there is a price to advocate for.**
 
 In an auction sale, that conversation is legally different in Queensland. The agent cannot provide a price guide. When a buyer asks what the sellers expect, the agent is limited to vague responses: "Register your interest and come along on auction day." This isn't the agent being evasive — they're complying with the law. But from the buyer's perspective, it feels evasive. It creates friction. It reduces trust.
 
@@ -558,6 +564,10 @@ I've tracked this in our data. Properties in Robina listed at precise prices abo
 
 The practical application looks like this: if your home's comparable-sales range is $1,380,000 to $1,430,000, and you're pricing at the top end, $1,415,000 is a better listing price than $1,400,000 or $1,430,000. It's precise. It's above the round number. The gap is small. And if your marketing materials present the home at its best, the fourth condition is met.
 
+### The Principle Behind All of This
+
+Here is the principle that underpins everything in this chapter: **when multiple buyers want the same property, they stop negotiating against the seller and start negotiating against each other.** That shift changes everything. A single interested buyer will try to bring the price down. Two or more interested buyers will push each other up. The seller's role is not to negotiate harder — it is to create the conditions where buyers compete. Accurate pricing, strong presentation, and broad marketing are what create those conditions. The negotiation takes care of itself when the competition is real.
+
 ## Price Brackets and Portal Visibility
 
 There's a second, purely mechanical reason why your listing price matters: property portal search brackets.
@@ -576,7 +586,7 @@ The bracket strategy is simple: identify your natural buyer pool, find the brack
 
 Maximising sale price is all about building emotion with buyers. When buyers start considering a home purchase, they embark on a journey towards what we call their emotional pinnacle.
 
-To secure the best possible price — or even exceed expectations — an agent must possess the expertise to artfully elevate buyer emotions to a peak and then skillfully extract their optimal offer. Timing is crucial; if done too late or without proper guidance, buyers may fail to reach this emotional high or lose interest altogether.
+**To secure the best possible price — or even exceed expectations — an agent must possess the expertise to artfully elevate buyer emotions to a peak and then skillfully extract their optimal offer.** **Timing is crucial; if done too late or without proper guidance, buyers may fail to reach this emotional high or lose interest altogether.**
 
 [FIGURE: CH4-3 — The buyer's emotional peak and decline. Shows rising emotional investment peaking then declining as doubt sets in.]
 
@@ -630,7 +640,7 @@ Compare that to the Federal Place property from the opening of this chapter: 97 
 
 ## The Hardest Conversation
 
-The most valuable thing an agent can give you is an accurate starting point. Not an inflated number to win the listing. Not a deflated number to guarantee a quick sale. An accurate number — because every strategy in this book depends on knowing where real value sits. From there, the work of achieving a premium begins.
+The most valuable thing an agent can give you is an accurate starting point. Not an inflated number to win the listing. Not a deflated number to guarantee a quick sale. An accurate number — **because every strategy in this book depends on knowing where real value sits. From there, the work of achieving a premium begins.**
 
 Sellers who engage with that range honestly — who let go of the number in their heads and work with the number the data produces — tend to achieve outcomes at the top of the range. They price correctly, market well, and sell within three weeks to a buyer who is emotionally engaged and financially qualified.
 
@@ -650,9 +660,9 @@ Get the price right, and everything else gets easier.
 
 # Chapter 5: The Three Things That Actually Move the Price
 
-Every homeowner I've met believes their renovation added value. Most of them are wrong -- at least in Robina and Varsity Lakes. The data on this is surprising, counterintuitive, and potentially worth tens of thousands of dollars.
+Many homeowners believe their renovation added significant value to their sale price. The data tells a more nuanced story -- at least in Robina and Varsity Lakes. The data on this is surprising, counterintuitive, and potentially worth tens of thousands of dollars.
 
-I've spent two years building a database of property sales across the southern Gold Coast. When I started, I assumed what everyone assumes: that a beautiful kitchen adds serious money to a sale price, that a pool is a no-brainer in Queensland, and that a freshly renovated home will always outperform an original one.
+I've spent two years analysing property sales across the southern Gold Coast. When I started, I assumed what everyone assumes: that a beautiful kitchen adds serious money to a sale price, that a pool is a no-brainer in Queensland, and that a freshly renovated home will always outperform an original one.
 
 The data told a different story. And after synthesising 60 academic studies, 14 peer-reviewed papers, and 2,153 sold properties, I can tell you this: the three things that actually move a property's sale price are not the three things most sellers spend money on.
 
@@ -822,7 +832,7 @@ The kitchen would close the deal. The backyard would open it.
 
 ### Will's View
 
-I photograph homes in these suburbs every week. The ones that sell fastest share a pattern: the lead image stops you. It's never the kitchen. It's never the bathroom. It's never the new carpet or the fresh tiles.
+I'm looking at listings in these suburbs every week. The ones that sell fastest share a pattern: the lead image stops you. It's never the kitchen. It's never the bathroom. It's never the new carpet or the fresh tiles.
 
 It's the feeling. The light on a deck. A tree-lined street at golden hour. A view you didn't expect from a suburb fifteen minutes from the highway. A backyard that looks like it belongs in the hinterland, not in a residential estate.
 
@@ -894,6 +904,19 @@ An agent who knows that a young family needs to be within walking distance of a 
 
 ---
 
+### What Good Negotiation Actually Looks Like
+
+A skilled agent's negotiation advantage comes from managing multiple buyers simultaneously. **The strongest negotiating position a seller can be in is having more than one buyer who believes this is their home.** When that happens, the agent's job is to:
+
+- Never negotiate with a single buyer in isolation when other interest exists
+- Use time strategically — creating enough urgency that buyers stretch to their best offer without feeling pressured into a decision they'll regret
+- Control the flow of information — letting each buyer know there is competition without revealing specific numbers or identities
+- Help each buyer reach their emotional peak at the same time, so the best offers land in the same window
+
+This is the skill that separates an agent who sells at valuation from one who sells above it. It cannot be faked, and it cannot be replaced by enthusiasm or market knowledge alone. When evaluating agents, the question is not "are you a good negotiator?" — everyone says yes. The question is "walk me through how you managed the last property where you had multiple interested buyers." The answer will tell you everything.
+
+---
+
 ### The Commission Conversation
 
 Commission rates on the Gold Coast typically range from 1.5% to 2.75%, with the average around 2.56%.
@@ -916,7 +939,6 @@ The seller who chose the cheaper agent saved $12,000 in commission. The seller w
 | Agent B (2.5%, 5% premium) | $30,000 | $1,260,000 | $1,230,000 |
 | **Difference** | +$12,000 | +$60,000 | **+$48,000** |
 
-This is not to suggest that all expensive agents are good or all affordable agents are bad. Commission rate is a poor proxy for agent quality. The data that matters is the agent's track record of achieving price premiums in the relevant suburb and price range.
 
 But the principle holds: in a transaction involving more than $1,000,000, even small differences in agent effectiveness translate into large differences in financial outcomes. A 2% difference in sale price on a $1,400,000 Robina home is $28,000. That dwarfs any commission differential.
 
@@ -945,43 +967,6 @@ The data points to five indicators that distinguish agents likely to achieve hig
 **4. They can explain their marketing strategy in detail.** A clear plan for how the property will reach both active and passive buyers, with a budget breakdown and rationale for each channel. An agent who says "we'll put it on REA and see what happens" is signalling that marketing is an afterthought.
 
 **5. They demonstrate buyer relationships.** An agent's network of qualified buyers is one of their most valuable assets. Asking about their current buyer pipeline for the property's price range and type is a reasonable and revealing question. The answer will tell you whether this agent knows their buyers -- or just knows their listings.
-
----
-
-### Agency Performance by Suburb
-
-When agencies are ranked by price premium achieved above market valuation, a different set of names emerges than the volume leaders.
-
-**Robina:**
-
-| Agency | Price Premium | Avg Days on Market | Volume |
-|--------|-------------|-------------------|--------|
-| McGrath Palm Beach | +8.0% | 10 days | Low |
-| RE/MAX Property Centre | +7.4% | 12 days | Low |
-| Ray White Robina (volume leader) | — | — | 61 sales |
-
-**Varsity Lakes:**
-
-| Agency | Price Premium | Avg Days on Market | Volume |
-|--------|-------------|-------------------|--------|
-| Coastal Real Estate | +5.7% | 17 days | Low |
-| Drew Property | +5.5% | 18 days | Low |
-| Harcourts (volume leader) | — | — | 38 sales |
-
-**Burleigh Waters:**
-
-| Agency | Price Premium | Avg Days on Market | Volume |
-|--------|-------------|-------------------|--------|
-| Kollosche | +26.5% | 20 days | Low |
-| Kingfisher Realty | +15.4% | 16 days | Low |
-| Lacey West | +7.6% | 16 days | Low |
-| Realty Blue (volume leader) | — | — | 34 sales |
-
-The pattern is consistent across all three suburbs: the agencies achieving the highest price premiums are not the highest-volume agencies.
-
-The Burleigh Waters data is particularly striking. Kollosche's +26.5% premium reflects the luxury end of the market where agent-buyer relationships are especially powerful -- the buyer pool is small, the stakes are high, and the agent's knowledge of individual buyer motivations has an outsized effect on the final price.
-
-[PHOTO: CH6-3 — A "For Sale" sign on a residential street. Local, real, recognisable suburb. Not stock photography.]
 
 ---
 
@@ -1020,6 +1005,12 @@ A property in Varsity Lakes sat on the market for 47 days with a Standard listin
 The new agent upgraded to Premiere Plus on realestate.com.au and launched a targeted Facebook campaign within a 20-kilometre radius. Three enquiries arrived in the first week. One of those enquiries became the buyer, at $35,000 above the previous agent's recommended price reduction.
 
 The property hadn't changed. The market hadn't changed. What changed was who saw it.
+
+---
+
+### The Real Goal of Marketing
+
+The goal of marketing is not exposure for its own sake. **The goal is to concentrate as many qualified buyers as possible into the same narrow window of time.** When ten serious buyers inspect a property in the same week, each one knows the others exist. That awareness changes behaviour — it creates urgency, reduces lowball offers, and gives the agent leverage in every conversation. When those same ten buyers are spread across six weeks, they never compete. They each feel like the only option, and they negotiate accordingly. The difference between a $1,300,000 sale and a $1,380,000 sale is often not the property. It is whether the marketing created concentration or allowed dilution.
 
 ---
 
@@ -1142,6 +1133,12 @@ For a typical Gold Coast property sale in 2026, a reasonable marketing budget br
 | Staging (if property is vacant or poorly furnished) | $2,000 - $5,000 | Inspection experience |
 
 A total budget of $6,000 to $12,000 covers most properties in the $1,200,000 to $1,800,000 range across the southern Gold Coast. The specific allocation depends on the property, the target buyer, and the competitive landscape -- but the principle is the same: spend where the return is measurable, and ensure the property reaches both buyer pools.
+
+---
+
+### The First Seven to Ten Days
+
+**The first seven to ten days of a campaign are the highest-leverage period in the entire selling process.** This is when every active buyer in the market sees the property for the first time. It is when the listing is newest, most visible, and most likely to generate inspections. The buyers who have been searching for weeks or months — who know the market, who have missed out on other properties, who are ready to act — will see your listing in this window. If the photography is strong, the price is right, and the marketing reaches both active and passive buyers, this is when competitive tension builds. If the property is poorly presented, overpriced, or under-marketed during this window, the opportunity doesn't come back. New buyers enter the market every week, but they arrive one by one. The first-week audience arrives all at once.
 
 ---
 
