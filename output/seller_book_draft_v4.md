@@ -180,7 +180,7 @@ Let that settle for a moment. Not 89% were inaccurate — that would be unremark
 
 When an automated estimate tells you your home is worth $1,580,000 and the comparable sales suggest $1,400,000, the estimate hasn't just been wrong. It's anchored you to a number that is $180,000 above reality. Every agent who walks through your door now has to overcome that anchor. The ones who tell you the truth sound pessimistic. The ones who confirm the fantasy sound optimistic. Guess who gets hired. Figure 1 shows the scale of the problem by price bracket.
 
-[CHART: CH1-1 — Figure 1. Median estimation error by price bracket, based on 1,689 Domain property estimates compared against actual sale prices across the Gold Coast. Properties under $750,000 showed the highest error at 34%, declining to 8% for properties above $2,000,000.]
+[CHART: CH1-1 — Figure 1. Median estimation error by price bracket, based on 1,689 Domain property estimates compared against actual sale prices across the Gold Coast. Properties under $750,000 showed the highest error at 34%, declining to 8% for properties above $2,000,000. Source: Fields Estate analysis of 1,689 Domain estimates, 2026.]
 
 The platforms aren't being dishonest. Their models use publicly available data — land size, bedroom count, postcode, recent sales in the area. But they can't see inside your home. They don't know that your renovated kitchen adds value or that your bathroom hasn't been touched since 1997. They don't know the house behind you just built a second storey that now overlooks your backyard. They don't know the flight path shifted. They're doing their best with limited information, and their best overvalues your home almost nine times out of ten.
 
@@ -252,7 +252,7 @@ This doesn't mean pools are worthless to buyers — many families on the Gold Co
 
 If you've spent $60,000 on a pool and expected to see $60,000 more at sale time, the data doesn't support that expectation. This is one of those findings that surprises no one in the valuation industry and surprises almost every homeowner I mention it to. Figure 3 summarises these findings.
 
-[CHART: CH1-4 — Figure 3. Factors that drive and do not drive price per square metre across 931 southern Gold Coast sales. Floor area, bedroom count, and location account for the majority of price variation, while condition scores, kitchen finishes, pools, and corner lots show no statistically significant impact.]
+[CHART: CH1-4 — Figure 3. Factors that drive and do not drive price per square metre across 931 southern Gold Coast sales. Floor area, bedroom count, and location account for the majority of price variation, while condition scores, kitchen finishes, pools, and corner lots show no statistically significant impact. Source: Fields Estate, 2026.]
 
 ## What Doesn't Drive Value (As Much As You'd Think)
 
@@ -326,7 +326,7 @@ Fields Real Estate has analysed 13,585 Gold Coast sales for seasonal timing patt
 
 See Figure 4.
 
-[CHART: CH2-1 — Figure 4. Monthly sale price performance by suburb, showing historical seasonal patterns. Peak price months vary by suburb: November for Robina, April for Varsity Lakes, and March for Burleigh Waters.]
+[CHART: CH2-1 — Figure 4. Monthly sale price performance by suburb, showing historical seasonal patterns. Peak price months vary by suburb: November for Robina, April for Varsity Lakes, and March for Burleigh Waters. Source: Fields Estate, 2026.]
 
 The variation between the best and worst months is typically 3% to 8% -- on a $1,400,000 sale, that's $42,000 to $112,000. Meaningful, but not transformative. And these are historical averages; in any given year, a rate decision or supply shock can override the pattern. The seasonal data is a tailwind, not a strategy.
 
@@ -398,7 +398,7 @@ Uri Gneezy's research (Gneezy, List, and Wu, 2006) at UC San Diego has demonstra
 
 So the question isn't just "auction or private treaty?" It's "do you want to sell your home using a method that 72% of buyers instinctively avoid?" Figure 5 illustrates the impact.
 
-[CHART: CH3-1 — Figure 5. Of every 100 potential buyers searching property portals, 72 scroll past listings that do not display a price guide — the standard format for Queensland auction listings.]
+[CHART: CH3-1 — Figure 5. Of every 100 potential buyers searching property portals, 72 scroll past listings that do not display a price guide — the standard format for Queensland auction listings. Source: REA Group, 2014.]
 
 ## The Largest Study Ever Conducted
 
@@ -458,7 +458,7 @@ Sarah had been mildly curious about auction — her sister in Melbourne had sold
 
 They would sell by private treaty, with a clear price that told every buyer scrolling past on Saturday morning exactly where they stood (Figure 6).
 
-[CHART: CH3-2 — Figure 6. Method of sale across the southern Gold Coast. Private treaty is the dominant method, with auction representing a small minority of total transactions.]
+[CHART: CH3-2 — Figure 6. Method of sale across the southern Gold Coast. Private treaty is the dominant method, with auction representing a small minority of total transactions. Source: Fields Estate, 2026.]
 
 ## What I've Seen
 
@@ -504,7 +504,7 @@ The academic evidence is extensive and consistent across markets, countries, and
 
 The mechanism isn't mysterious. A buyer looking at properties in the $1,250,000 to $1,400,000 range in Robina has perhaps 15 to 20 options on any given Saturday. They have time to inspect maybe four or five. They will shortlist the ones that appear to offer the best value for the price shown. A property listed at $1,450,000 that is worth $1,300,000 doesn't appear on their shortlist — not because they can't afford $1,450,000, but because other properties at that price are clearly better value. The overpriced listing is invisible to its natural buyer pool and uncompetitive in the pool it's been placed into. Figure 7 shows how this plays out in practice.
 
-[CHART: CH4-1 — Figure 7. The overpricing penalty illustrated through two hypothetical properties on the same street. The overpriced property listed at $1,450,000, reduced after 42 days, and sold at $1,290,000 after 97 days. The correctly priced property listed at $1,320,000 and sold at $1,340,000 in 16 days.]
+[CHART: CH4-1 — Figure 7. The overpricing penalty illustrated through two hypothetical properties on the same street. The overpriced property listed at $1,450,000, reduced after 42 days, and sold at $1,290,000 after 97 days. The correctly priced property listed at $1,320,000 and sold at $1,340,000 in 16 days. Source: Illustrative example based on Gold Coast market data.]
 
 The seller's mistake wasn't wanting a high price. Everyone wants a high price. The mistake was confusing the asking price with the sale price. They're different things, and the relationship between them is more complex than "list high, negotiate down."
 
@@ -560,7 +560,7 @@ When all four conditions are met, the research shows that buyers anchor to the p
 
 To put this in Gold Coast terms: the difference between listing at $1,400,000 and $1,415,000 isn't cosmetic. It's a pricing signal. The round number says "we think it's worth about $1.4 million." The precise number says "we've analysed the comparables, assessed the specific features of this property, and arrived at $1,415,000." The buyer reads that signal, consciously or not, and it changes how they approach the negotiation.
 
-[FIGURE: CH4-2 — Figure 8. The four pricing conditions tested by Cardella and Seiler (2016). The high-precise condition — a precise price set slightly above the nearest round number — generated the highest final sale prices and smallest negotiation discounts.]
+[FIGURE: CH4-2 — Figure 8. The four pricing conditions tested by Cardella and Seiler (2016). The high-precise condition — a precise price set slightly above the nearest round number — generated the highest final sale prices and smallest negotiation discounts. Source: Cardella and Seiler (2016), Journal of Real Estate Finance and Economics.]
 
 I've tracked this in our data. Properties in Robina listed at precise prices above round numbers — $1,315,000 instead of $1,300,000, $1,415,000 instead of $1,400,000 — show a measurably tighter spread between listing price and sale price. The negotiation gap shrinks. Sellers who use precise pricing tend to achieve higher final sale prices and retain a larger share of the difference between their asking price and the buyer's opening offer, not because the buyers are being tricked, but because the precision communicates that the price is already considered.
 
@@ -590,7 +590,7 @@ Maximising sale price is all about building emotion with buyers. When buyers sta
 
 **To secure the best possible price — or even exceed expectations — an agent must possess the expertise to artfully elevate buyer emotions to a peak and then skillfully extract their optimal offer.** **Timing is crucial; if done too late or without proper guidance, buyers may fail to reach this emotional high or lose interest altogether.** Figure 9 illustrates this dynamic.
 
-[FIGURE: CH4-3 — Figure 9. The buyer's emotional investment over time, showing the rise to an emotional pinnacle followed by a decline as doubt sets in. Offers obtained at the peak yield the highest prices.]
+[FIGURE: CH4-3 — Figure 9. The buyer's emotional investment over time, showing the rise to an emotional pinnacle followed by a decline as doubt sets in. Offers obtained at the peak yield the highest prices. Source: Fields Estate positioning research, 2026.]
 
 The emotional peak cannot be sustained. It will drop at which point the buyer begins to second-guess their decision. Offers must be obtained at the emotional peak — not before it (when the buyer hasn't committed enough to stretch) and not after (when doubt has set in and the willingness to pay has declined).
 
@@ -682,7 +682,7 @@ Think of a buyer's journey through your property as three layers. Each layer ope
 
 These aren't marketing concepts. They're backed by behavioural research and verified against local sales data. Let me walk through each one (Figure 10).
 
-[FIGURE: CH5-1 — Figure 10. The three layers of property positioning: what buyers see first (the three-second scroll decision), what buyers feel (emotional engagement and mental ownership), and what buyers compare (competitive context against other listings).]
+[FIGURE: CH5-1 — Figure 10. The three layers of property positioning: what buyers see first (the three-second scroll decision), what buyers feel (emotional engagement and mental ownership), and what buyers compare (competitive context against other listings). Source: Fields Estate positioning research, 2026.]
 
 ---
 
@@ -806,7 +806,7 @@ What the data does support more clearly is the suburb difference in buyer demogr
 
 In Burleigh Waters (median $1,710,000), the buyer demographic skews toward established professionals and downsizers who expect turnkey quality. At this price point, buyers are less willing to project-manage a renovation. A well-renovated property in Burleigh Waters is more likely to recover renovation costs because the buyer pool values presentation completeness differently. Figure 11 summarises the return on investment for common pre-sale improvements.
 
-[CHART: CH5-4 — Figure 11. Return on investment for common pre-sale improvements. Fresh paint, landscaping, deep cleaning, and minor repairs show positive returns. Full kitchen renovations (~57% return), bathroom renovations (~75% return), and pool installation (0.6–3.7% price-per-square-metre impact) do not recover their cost.]
+[CHART: CH5-4 — Figure 11. Return on investment for common pre-sale improvements. Fresh paint, landscaping, deep cleaning, and minor repairs show positive returns. Full kitchen renovations (~57% return), bathroom renovations (~75% return), and pool installation (0.6–3.7% price-per-square-metre impact) do not recover their cost. Source: Fields Estate, 2026.]
 
 ---
 
@@ -868,7 +868,7 @@ On a property valued at $1,000,000, that difference equates to approximately **$
 
 The names on the billboards, the faces on the letterbox flyers, the agents who dominate every bus shelter and shopping centre bench -- they sell the most homes. But high volume does not equal high prices. The data is unambiguous. Figure 12 shows the relationship.
 
-[CHART: CH6-1 — Figure 12. Agent annual sales volume plotted against average price premium achieved, based on 1,475 Gold Coast property sales. Agents selling 3–5 properties per year achieved premiums 9.6% higher on average than agents selling 20 or more — a difference of approximately $96,000 on a $1,000,000 property.]
+[CHART: CH6-1 — Figure 12. Agent annual sales volume plotted against average price premium achieved, based on 1,475 Gold Coast property sales. Agents selling 3–5 properties per year achieved premiums 9.6% higher on average than agents selling 20 or more — a difference of approximately $96,000 on a $1,000,000 property. Source: Fields Estate, 2026.]
 
 ---
 
@@ -944,7 +944,7 @@ The seller who chose the cheaper agent saved $12,000 in commission. The seller w
 
 But the principle holds: in a transaction involving more than $1,000,000, even small differences in agent effectiveness translate into large differences in financial outcomes. A 2% difference in sale price on a $1,400,000 Robina home is $28,000. That dwarfs any commission differential. Figure 13 extends this comparison across four commission rates.
 
-[CHART: CH6-2 — Figure 13. Net proceeds to the seller on a $1,200,000 property at four commission rates, assuming each agent tier achieves a progressively higher sale premium. The lowest-commission agent nets the seller $1,182,000; the highest-commission agent nets $1,251,000 — a difference of $69,000.]
+[CHART: CH6-2 — Figure 13. Net proceeds to the seller on a $1,200,000 property at four commission rates, assuming each agent tier achieves a progressively higher sale premium. The lowest-commission agent nets the seller $1,182,000; the highest-commission agent nets $1,251,000 — a difference of $69,000. Source: Fields Estate, 2026.]
 
 ---
 
@@ -1035,7 +1035,7 @@ In any market condition, at least 30% of potential buyers are passive. In a soft
 
 Missing one motivated buyer means one less person competing for the property. One less competitor can mean $20,000, $50,000, or more in the final sale price. The financial risk of insufficient marketing is not theoretical. It is the difference between two bidders and three.
 
-[CHART: CH7-1 — Figure 14. The split between active buyers (searching portals and attending open homes) and passive buyers (not actively looking but open to the right property). Passive buyers represent 30–60% of any market, depending on conditions.]
+[CHART: CH7-1 — Figure 14. The split between active buyers (searching portals and attending open homes) and passive buyers (not actively looking but open to the right property). Passive buyers represent 30–60% of any market, depending on conditions. Source: Fields Estate, 2026.]
 
 ---
 
@@ -1056,7 +1056,7 @@ These are not small improvements. Premiere Plus essentially triples the property
 
 The cost of NOT being listed -- or being listed at the basic tier -- is quantifiable. PropTrack analysis found that Brisbane properties sold off-market (not listed on realestate.com.au at all) sold for 3.6% less than those listed on the platform. On a $1,400,000 Robina home, 3.6% is approximately $50,000. See Figure 15.
 
-[FIGURE: CH7-2 — Figure 15. Comparison of Standard and Premiere Plus listing tiers on realestate.com.au. Premiere Plus generates 2.6 times more enquiries, 2.9 times more views, 2.1 times more search appearances, and sells 10 days faster.]
+[FIGURE: CH7-2 — Figure 15. Comparison of Standard and Premiere Plus listing tiers on realestate.com.au. Premiere Plus generates 2.6 times more enquiries, 2.9 times more views, 2.1 times more search appearances, and sells 10 days faster. Source: REA Group listing performance data.]
 
 But REA, even at the premium tier, only reaches active buyers. The buyers already searching. The buyers who already know what suburb they want. It does not reach the family in Helensvale who hasn't considered Robina yet. It does not reach the couple in Brisbane who are thinking about the Gold Coast but haven't started looking. It does not reach the parents of a buyer who would forward the listing if they saw it on social media.
 
@@ -1117,7 +1117,7 @@ The incentive structure is clear. When marketing costs are left to agents, they 
 
 This is not an argument for limitless spending. It is an argument for strategic spending, directed by the seller, with full visibility of what each dollar buys. Figure 16 shows the net financial gain for each party.
 
-[CHART: CH7-3 — Figure 16. Net financial gain from upgrading marketing from minimal to comprehensive. The agent's net gain from better marketing is approximately $1,000. The vendor's net gain is approximately $191,000.]
+[CHART: CH7-3 — Figure 16. Net financial gain from upgrading marketing from minimal to comprehensive. The agent's net gain from better marketing is approximately $1,000. The vendor's net gain is approximately $191,000. Source: Fields Estate, 2026.]
 
 ---
 
