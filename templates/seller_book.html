@@ -121,10 +121,25 @@
 
   /* ── CONTENT WRAPPER ── */
   .book-wrapper {
-    max-width: 720px;
+    max-width: 900px;
     margin: 0 auto;
     padding: 0 24px;
     padding-top: 56px; /* nav height */
+  }
+
+  /* ── INSIDE COVER (full-bleed landscape photo) ── */
+  .inside-cover {
+    margin: 0 -24px;
+    padding: 0;
+    overflow: hidden;
+    line-height: 0;
+  }
+  .inside-cover img {
+    width: 100%;
+    height: 60vh;
+    object-fit: cover;
+    object-position: center 40%;
+    display: block;
   }
 
   /* ── COVER ── */
@@ -846,27 +861,8 @@
 
   @media print {
     @page {
-      size: A4 portrait;
-      margin: 20mm 18mm 24mm 18mm;
-
-      @top-left {
-        content: "Fields Estate";
-        font-family: 'Poppins', sans-serif;
-        font-size: 8pt;
-        color: #7a8a80;
-      }
-      @top-right {
-        content: counter(page);
-        font-family: 'Poppins', sans-serif;
-        font-size: 8pt;
-        color: #7a8a80;
-      }
-    }
-
-    @page :first {
+      size: A4 landscape;
       margin: 0;
-      @top-left { content: none; }
-      @top-right { content: none; }
     }
 
     html {
@@ -888,13 +884,13 @@
       padding: 0;
     }
 
-    /* ── COVER (print) ── */
+    /* ── COVER (print, landscape) ── */
     .cover {
-      width: 210mm;
-      height: 297mm;
+      width: 297mm;
+      height: 210mm;
       min-height: 0;
-      margin: -20mm -18mm 0;
-      padding: 0 40mm;
+      margin: 0;
+      padding: 0 60mm;
       display: flex;
       justify-content: center;
       page-break-after: always;
@@ -910,13 +906,44 @@
     }
 
     .cover-logo {
-      bottom: 24mm;
+      bottom: 20mm;
+    }
+
+    /* ── INSIDE COVER (print, landscape full-bleed) ── */
+    .inside-cover {
+      width: 297mm;
+      height: 210mm;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      page-break-before: always;
+      page-break-after: always;
+    }
+    .inside-cover img {
+      width: 297mm;
+      height: 210mm;
+      object-fit: cover;
+      object-position: center 40%;
+      display: block;
+    }
+
+    /* ── SPREAD IMAGES (print, landscape) ── */
+    .book-image.spread {
+      margin: 0 -20mm;
+      page-break-before: always;
+      page-break-after: always;
+    }
+    .book-image.spread img {
+      width: 297mm;
+      max-width: 297mm;
+      margin: 0;
+      border-radius: 0;
     }
 
     /* ── TOC (print) ── */
     .toc {
       margin: 0;
-      padding: 0;
+      padding: 16mm 24mm 20mm 24mm;
       background: var(--white);
       page-break-after: always;
       break-after: page;
@@ -929,7 +956,7 @@
     /* ── CHAPTERS (print) ── */
     .chapter {
       margin: 0;
-      padding: 0;
+      padding: 16mm 24mm 20mm 24mm;
       background: var(--white);
       page-break-before: always;
       break-before: page;
@@ -1033,6 +1060,11 @@
   <div class="cover-logo">
     <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='20' fill='%23E6DDD2'%3E%3Ctext x='0' y='15' font-family='Poppins,sans-serif' font-size='14' font-weight='600' opacity='0.5'%3EFields%3C/text%3E%3C/svg%3E" alt="Fields Estate">
   </div>
+</section>
+
+<!-- Inside cover: full-bleed photo (separate page in print) -->
+<section class="inside-cover">
+  <img src="book-images/inside-cover.jpg" alt="Burleigh Beach, Gold Coast">
 </section>
 
 <!-- ════════════════════════════════════════════════════════════════
