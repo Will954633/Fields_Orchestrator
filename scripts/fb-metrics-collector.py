@@ -102,7 +102,8 @@ def fetch_account_insights(date_preset="last_7d"):
         "date_preset": date_preset,
         "level": "account",
     })
-    return data.get("data", [{}])[0]
+    result = data.get("data", [])
+    return result[0] if result else {}
 
 
 def fetch_account_daily(days=14):
@@ -943,32 +944,36 @@ def save_all(ad_profiles, daily_metrics, demographics, placements,
 
     time.sleep(1)  # Breathe before legacy writes
 
-    # 5. Legacy backward-compatible snapshot
-    sm["facebook_ads"].replace_one(
-        {"_id": "latest"},
-        {"_id": "latest", **legacy_snapshot},
-        upsert=True,
-    )
-    print("  facebook_ads: updated 'latest'")
+    # 5. Legacy backward-compatible snapshot (skip if None — saved separately)
+    if legacy_snapshot is not None:
+        sm["facebook_ads"].replace_one(
+            {"_id": "latest"},
+            {"_id": "latest", **legacy_snapshot},
+            upsert=True,
+        )
+        print("  facebook_ads: updated 'latest'")
 
-    time.sleep(0.5)
+        time.sleep(0.5)
 
-    # 6. Legacy daily history
-    history_doc = {
-        "_id": today_str,
-        "ads": legacy_snapshot.get("ads", []),
-        "account_7d": legacy_snapshot.get("last_7d", {}),
-        "fetched_at": now_iso,
-    }
-    sm["facebook_ads_history"].replace_one(
-        {"_id": today_str}, history_doc, upsert=True
-    )
-    print(f"  facebook_ads_history: updated {today_str}")
+        # 6. Legacy daily history
+        history_doc = {
+            "_id": today_str,
+            "ads": legacy_snapshot.get("ads", []),
+            "account_7d": legacy_snapshot.get("last_7d", {}),
+            "fetched_at": now_iso,
+        }
+        sm["facebook_ads_history"].replace_one(
+            {"_id": today_str}, history_doc, upsert=True
+        )
+        print(f"  facebook_ads_history: updated {today_str}")
+    else:
+        print("  facebook_ads: skipped (legacy snapshot not available)")
 
     # 7. Prune old data beyond retention period
     prune_old_data(sm)
 
-    client.close()
+    # Don't close client here — caller may need it for legacy snapshot
+    # client.close() is handled at end of main()
 
 
 def prune_old_data(sm):
@@ -1118,14 +1123,51 @@ def main():
         )
         ad_profiles.append(profile)
 
-    # Step 8: Build legacy snapshot
-    print("Building legacy-compatible snapshot...")
-    legacy = build_legacy_snapshot(ad_profiles, campaigns, account_daily)
+    # Step 8: Save critical data FIRST (daily metrics, profiles, demographics, placements)
+    # This ensures we don't lose data if the legacy snapshot build fails
+    print("\nSaving critical data to MongoDB...")
+    save_all(
+        ad_profiles=ad_profiles,
+        daily_metrics=daily_metrics,
+        demographics=demo_by_ad,
+        placements=placement_by_ad,
+        legacy_snapshot=None,  # Will save legacy separately below
+    )
+
+    # Step 9: Build legacy snapshot (non-critical — wrapped in try/except)
+    legacy = None
+    try:
+        print("Building legacy-compatible snapshot...")
+        legacy = build_legacy_snapshot(ad_profiles, campaigns, account_daily)
+
+        # Save legacy snapshot separately
+        client = get_client()
+        sm = get_db("system_monitor")
+        today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        sm["facebook_ads"].update_one(
+            {"_id": "latest"},
+            {"$set": {**legacy, "updated_at": datetime.now(timezone.utc).isoformat()}},
+            upsert=True,
+        )
+        sm["facebook_ads_history"].update_one(
+            {"_id": today_str},
+            {"$set": {**legacy, "date": today_str}},
+            upsert=True,
+        )
+        print("  facebook_ads: updated 'latest'")
+        print(f"  facebook_ads_history: updated {today_str}")
+    except Exception as e:
+        print(f"  Warning: Legacy snapshot failed: {e}")
+        print("  Daily metrics + profiles were saved successfully.")
 
     # Summary
     active_count = len([p for p in ad_profiles if p["effective_status"] == "ACTIVE"])
-    total_spend_7d = legacy["last_7d"]["spend_aud"]
-    total_imp_7d = legacy["last_7d"]["impressions"]
+    if legacy:
+        total_spend_7d = legacy["last_7d"]["spend_aud"]
+        total_imp_7d = legacy["last_7d"]["impressions"]
+    else:
+        total_spend_7d = 0
+        total_imp_7d = 0
 
     print(f"\n--- Summary ---")
     print(f"  Ads: {len(ad_profiles)} total, {active_count} active")
@@ -1134,7 +1176,8 @@ def main():
     print(f"  Placement entries: {sum(len(v) for v in placement_by_ad.values())}")
     print(f"  Spend (7d): ${total_spend_7d:.2f} AUD")
     print(f"  Impressions (7d): {total_imp_7d:,}")
-    print(f"  Campaigns: {legacy['campaigns']['active']} active / {legacy['campaigns']['total']} total")
+    if legacy:
+        print(f"  Campaigns: {legacy['campaigns']['active']} active / {legacy['campaigns']['total']} total")
 
     if getattr(args, "print"):
         # Print top 5 ads by CTR
@@ -1151,16 +1194,6 @@ def main():
                   f"Imp: {p['last_7d'].get('impressions', 0):,}  "
                   f"Trend: {p['trend_7d_vs_prev'].get('direction', '?')}")
         return
-
-    # Step 9: Save everything
-    print("\nSaving to MongoDB...")
-    save_all(
-        ad_profiles=ad_profiles,
-        daily_metrics=daily_metrics,
-        demographics=demo_by_ad,
-        placements=placement_by_ad,
-        legacy_snapshot=legacy,
-    )
 
     print(f"\nDone. Collections updated: ad_daily_metrics, ad_profiles, "
           f"ad_demographics, ad_placements, facebook_ads, facebook_ads_history")
