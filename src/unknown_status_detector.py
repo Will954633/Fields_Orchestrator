@@ -78,7 +78,7 @@ class UnknownStatusDetector:
         """
         try:
             self.client = MongoClient(self.mongodb_uri, serverSelectionTimeoutMS=5000,
-                                      retryWrites=False, tls=True, tlsAllowInvalidCertificates=True)
+                                      retryWrites=False, **({"tls": True, "tlsAllowInvalidCertificates": True} if "cosmos.azure.com" in self.mongodb_uri else {}))
             self.client.admin.command('ping')
             self.db = self.client[self.for_sale_db]
             self.logger.info("✅ Connected to MongoDB")
