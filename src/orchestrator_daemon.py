@@ -96,16 +96,6 @@ class OrchestratorDaemon:
         # so that ALL child processes (scraping scripts, etc.) inherit it.
         # Without this, subprocesses fall back to 127.0.0.1:27017 and fail.
         if mongo_uri:
-            # Validate the URI before exporting
-            if '127.0.0.1' in mongo_uri or 'localhost' in mongo_uri:
-                self.logger.error("=" * 60)
-                self.logger.error("CRITICAL: MongoDB URI resolves to LOCALHOST!")
-                self.logger.error(f"URI: {mongo_uri}")
-                self.logger.error("This will cause all scraping scripts to fail.")
-                self.logger.error("Check COSMOS_CONNECTION_STRING environment variable.")
-                self.logger.error("=" * 60)
-                raise ValueError("MongoDB URI must not be localhost in cloud deployment")
-            
             if '${' in mongo_uri or '$' in mongo_uri:
                 self.logger.error("=" * 60)
                 self.logger.error("CRITICAL: MongoDB URI contains unresolved template!")
