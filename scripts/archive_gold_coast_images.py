@@ -51,7 +51,9 @@ from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from pymongo import MongoClient
-from azure.storage.blob import BlobServiceClient, ContentSettings
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, REPO_ROOT)
+from shared import blob_storage  # type: ignore
 
 # ── Configuration ──────────────────────────────────────────────────────────────
 
@@ -96,8 +98,8 @@ def slugify_address(address):
     return s[:80]  # cap length
 
 
-def get_blob_url(account_name, blob_name):
-    return f"https://{account_name}.{BLOB_DOMAIN}/{CONTAINER_NAME}/{blob_name}"
+def get_blob_url(_account_name_unused, blob_name):
+    return blob_storage.public_url(CONTAINER_NAME, blob_name)
 
 
 def is_already_uploaded(doc):
@@ -168,24 +170,12 @@ def upload_property_images(blob_service_client, doc, suburb, dry_run):
         if data is None:
             return (i, None)
         try:
-            blob_client = blob_service_client.get_blob_client(
-                container=CONTAINER_NAME, blob=blob_name
+            blob_url = blob_storage.upload(
+                CONTAINER_NAME, blob_name, data,
+                content_type='image/jpeg',
+                cache_control='public, max-age=31536000',
             )
-            blob_client.upload_blob(
-                data,
-                overwrite=True,
-                content_settings=ContentSettings(
-                    content_type='image/jpeg',
-                    cache_control='public, max-age=31536000',
-                ),
-                metadata={
-                    'document_id': doc_id,
-                    'address':     address[:256],
-                    'suburb':      suburb,
-                    'source_url':  url[:256],
-                },
-            )
-            return (i, get_blob_url(account_name, blob_name))
+            return (i, blob_url)
         except Exception as e:
             print(f"    WARNING: Blob upload failed for {blob_name}: {e}", flush=True)
             return (i, None)
@@ -322,22 +312,8 @@ Examples:
     except Exception as e:
         fail(f"ERROR: MongoDB connection failed: {e}")
 
-    # Connect Azure Blob
-    try:
-        blob_service_client = BlobServiceClient.from_connection_string(
-            AZURE_STORAGE_CONNECTION_STRING
-        )
-        container_client = blob_service_client.get_container_client(CONTAINER_NAME)
-        try:
-            container_client.get_container_properties()
-            print(f"Azure Blob container '{CONTAINER_NAME}' exists.\n")
-        except Exception:
-            print(f"Creating container '{CONTAINER_NAME}'...")
-            blob_service_client.create_container(CONTAINER_NAME, public_access='blob')
-            print(f"Container '{CONTAINER_NAME}' created.\n")
-    except Exception as e:
-        mongo_client.close()
-        fail(f"ERROR: Azure Blob Storage connection failed: {e}")
+    blob_service_client = None  # legacy positional, no longer used
+    print(f"Blob backend: {os.getenv('BLOB_BACKEND', 'local')} (container '{CONTAINER_NAME}')\n")
 
     # Determine collections to process
     if args.suburbs:
