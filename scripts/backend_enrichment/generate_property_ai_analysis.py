@@ -67,6 +67,44 @@ from shared.ru_guard import cosmos_retry, sleep_with_jitter
 
 TARGET_SUBURBS = ["robina", "varsity_lakes", "burleigh_waters", "merrimac"]
 
+# Suburbs where /analyse-your-home-v3 may invoke cadastral analysis on user-entered addresses
+CADASTRAL_SUBURBS = [
+    "robina", "varsity_lakes", "burleigh_waters", "merrimac",
+    "mudgeeraba", "carrara", "reedy_creek", "worongary",
+]
+
+# ---------------------------------------------------------------------------
+# Cadastral mode — adapts the for-sale pipeline for owner-asking-about-own-home
+# ---------------------------------------------------------------------------
+
+CADASTRAL_NOTICE = """
+================================================================================
+CADASTRAL ANALYSIS MODE — READ FIRST, OVERRIDES NORMAL FRAMING
+================================================================================
+This property is NOT currently for sale. The reader is the property OWNER asking
+Fields to analyse their own home. They are not a buyer evaluating a listing.
+
+ADAPT YOUR ANALYSIS:
+- Address the reader as "your home" / "your property" — never "the buyer".
+- Anchor every price reference to Fields' RECONCILED VALUATION (in
+  valuation_data.confidence.reconciled_valuation, reported as a RANGE) — there
+  is no asking price.
+- DO NOT reference: asking price, listing price, days on market, "the listing",
+  agent description (none exists), or any selling-decision context that assumes
+  this property is on market.
+- DO substitute: "this home would likely sit in the $X – $Y range based on
+  recent comparable sales" instead of "this listing is asking $X".
+- Frame the editorial as "where your home sits in the market" — not "should
+  this listing sell well".
+- All other rules unchanged: every claim backed by data, ranges not single
+  numbers, trade-offs surfaced as value equations, plain language not jargon,
+  selling principles still demonstrate Fields' competence and honesty.
+- For features missing from the data (e.g. no photo analysis, no agent's
+  description, no listing photos): say so plainly. "Photographic analysis is
+  not available for this address" — never invent details.
+================================================================================
+"""
+
 # ---------------------------------------------------------------------------
 # Configuration — all tuneable parameters in one place
 # ---------------------------------------------------------------------------
@@ -2894,6 +2932,137 @@ def store_analysis(db, suburb: str, property_id, analysis: Dict) -> None:
 # Main
 # ---------------------------------------------------------------------------
 
+def find_property_by_id(db, suburb: str, property_id: str) -> Optional[Dict]:
+    """Look up any property in a suburb collection by ObjectId — no listing_status filter.
+    Used by cadastral mode (V3 analyse-your-home flow) where the property is not for sale.
+    """
+    from bson import ObjectId
+    try:
+        oid = ObjectId(property_id)
+    except Exception:
+        return None
+    return cosmos_retry(
+        lambda: db[suburb].find_one({"_id": oid}),
+        f"find_cadastral_{suburb}",
+    )
+
+
+def process_cadastral_property(
+    db, suburb: str, prop: Dict, api_key: str, force: bool = False,
+    use_gemini_gather: bool = False, gemini_api_key: str = None,
+    use_openai_gather: bool = False, openai_api_key: str = None,
+    use_hybrid_gather: bool = False,
+) -> Dict:
+    """Run the AI analysis pipeline for a NOT-currently-listed property.
+
+    Differences from process_property:
+      - No data-readiness gates that require listing-only fields (floor plans,
+        photo analysis, agent description, days_on_domain).
+      - No satellite verification (cadastral records typically don't have
+        satellite_analysis).
+      - Property summary is prefixed with CADASTRAL_NOTICE so every agent
+        adapts its framing to "owner asking about own home".
+      - Stores result with ai_analysis.mode = 'cadastral' for the V3 frontend.
+    """
+    address = prop.get("address") or prop.get("complete_address") or "Unknown"
+    prop_id = prop["_id"]
+
+    # Skip if recent cadastral analysis exists (within 7 days) and not forced
+    if not force:
+        existing = prop.get("ai_analysis") or {}
+        if (
+            existing.get("mode") == "cadastral"
+            and existing.get("status") in ("draft", "published")
+            and existing.get("generated_at")
+        ):
+            try:
+                gen = datetime.fromisoformat(existing["generated_at"].replace("Z", "+00:00"))
+                age_days = (datetime.now(timezone.utc) - gen).days
+                if age_days < 7:
+                    print(f"[SKIP] {address} — fresh cadastral analysis ({age_days}d old, use --force)")
+                    return existing
+            except Exception:
+                pass
+
+    print(f"\n{'='*60}")
+    print(f"Processing (CADASTRAL): {address}")
+    print(f"{'='*60}")
+
+    # Best-effort zoning enrichment (works for any address with LOT/PLAN)
+    if not prop.get("zoning_data") or not (prop.get("zoning_data") or {}).get("ica_flood_zones"):
+        print("[0/5] Enriching zoning + flood data (best effort)...")
+        try:
+            sys.path.insert(0, str(Path(__file__).resolve().parent))
+            from enrich_zoning_data import enrich_property_zoning
+            zoning = enrich_property_zoning(prop)
+            if zoning:
+                cosmos_retry(lambda: db[suburb].update_one(
+                    {"_id": prop_id},
+                    {"$set": {"zoning_data": zoning}},
+                ), "cadastral_enrich_zoning")
+                prop["zoning_data"] = zoning
+                print(f"  Zoned: {zoning.get('zone', '?')} | Flood: {zoning.get('flood_overlay', '?')}")
+        except Exception as e:
+            print(f"  [WARN] Zoning enrichment skipped: {e}")
+
+    # Pipeline 1: serialise property document, prepend CADASTRAL_NOTICE
+    print("[1/5] Serialising property document with cadastral notice...")
+    import json as _json
+    _skip_keys = {
+        '_id', 'ai_analysis', 'property_images', 'property_images_original',
+        'scraped_property_images', 'image_history', 'image_analysis',
+        'floor_plans', 'floor_plans_original', 'scraped_floor_plans',
+        'images_blob_uploaded_at', 'images_uploaded_to_blob',
+        'processing_status', 'extraction_method', 'extraction_date', 'scrape_mode',
+        'scraped_at', 'last_updated', 'last_updated_date', 'last_enriched',
+        'enrichment_attempted', 'enrichment_error', 'enrichment_data',
+        'ADDRESS_PID', 'ADDRESS_STANDARD', 'ADDRESS_STATUS', 'UNIT_TYPE',
+        'GEOCODE_TYPE', 'LOTPLAN_STATUS', 'DATUM', 'PLAN', 'LOT',
+        'classified_at', 'classification_model', 'classification_confidence',
+        'classification_reasoning', 'classified_property_type',
+        'cadastral_enriched_at', 'last_valuation_date',
+    }
+    _prop_clean = {k: v for k, v in prop.items() if k not in _skip_keys}
+    summary_body = _json.dumps(_prop_clean, indent=2, default=str)
+    summary = CADASTRAL_NOTICE + "\n\nPROPERTY DATA:\n" + summary_body
+    print(f"  Property document: {len(summary):,} chars (~{len(summary)//4:,} tokens)")
+
+    # Pipelines 2/3/4: same suburb-context fetches as the listing path
+    print("[2/5] Fetching suburb medians...")
+    medians = get_suburb_medians(db, suburb)
+    print("[3/5] Fetching competing listings...")
+    competing = get_competing_listings(db, suburb, exclude_id=prop_id)
+    print("[4/5] Fetching recent sales...")
+    sales = get_recent_sales(db, suburb)
+
+    # Run multi-agent pipeline — same orchestrator, the cadastral notice in
+    # `summary` shifts every agent's framing
+    print(f"\nRunning multi-agent pipeline (cadastral mode)...")
+    t0 = time.time()
+    analysis = run_multi_agent_pipeline(
+        summary, medians, competing, sales, suburb, address, api_key,
+        use_gemini_gather=use_gemini_gather, gemini_api_key=gemini_api_key,
+        use_openai_gather=use_openai_gather, openai_api_key=openai_api_key,
+        use_hybrid_gather=use_hybrid_gather,
+    )
+    elapsed = time.time() - t0
+    print(f"Pipeline complete in {elapsed:.1f}s")
+
+    print(f"\n--- GENERATED ANALYSIS (cadastral) ---")
+    print(f"Headline:    {analysis.get('headline', '?')}")
+    print(f"Sub-head:    {analysis.get('sub_headline', '?')}")
+    for i, ins in enumerate(analysis.get('insights', []), 1):
+        h2 = ins.get('h2') or ins.get('lead', '?')
+        print(f"Insight {i}:   {h2}")
+
+    analysis = _fix_year_hallucinations(analysis, prop)
+    # Tag mode so the V3 frontend can render the cadastral disclaimer
+    analysis["mode"] = "cadastral"
+
+    store_analysis(db, suburb, prop_id, analysis)
+    return analysis
+
+
 def process_property(db, suburb: str, prop: Dict, api_key: str, force: bool = False, use_gemini_gather: bool = False, gemini_api_key: str = None, use_openai_gather: bool = False, openai_api_key: str = None, use_hybrid_gather: bool = False) -> Dict:
     """Run the full pipeline for one property."""
     address = prop.get("address", "Unknown")
@@ -3139,6 +3308,8 @@ def main():
     group.add_argument("--address", help="Address substring to match")
     group.add_argument("--new-listings", action="store_true", help="Process new listings (<=7 days) missing ai_analysis")
     group.add_argument("--backfill", action="store_true", help="Process ALL properties missing ai_analysis")
+    group.add_argument("--cadastral", action="store_true", help="Cadastral mode — analyse a NOT-currently-listed property by suburb + property_id (used by V3 analyse-your-home flow)")
+    parser.add_argument("--property-id", help="MongoDB ObjectId — required with --cadastral")
     parser.add_argument("--days", type=int, default=7, help="Days threshold for --new-listings (default 7)")
     parser.add_argument("--force", action="store_true", help="Regenerate even if analysis exists")
     parser.add_argument("--suburb", help="Restrict to one suburb")
@@ -3249,6 +3420,25 @@ def main():
                 except Exception as e:
                     print(f"[ERROR] Failed on {prop.get('address', '?')}: {e}")
         print(f"\nDone. Processed {total} new listings.")
+
+    elif args.cadastral:
+        if not args.suburb or not args.property_id:
+            print("[ERROR] --cadastral requires --suburb and --property-id")
+            sys.exit(1)
+        if args.suburb not in CADASTRAL_SUBURBS:
+            print(f"[ERROR] suburb '{args.suburb}' not in CADASTRAL_SUBURBS")
+            sys.exit(1)
+        prop = find_property_by_id(db, args.suburb, args.property_id)
+        if not prop:
+            print(f"[ERROR] No property found in {args.suburb} with _id={args.property_id}")
+            sys.exit(1)
+        print(f"Found in {args.suburb}: {prop.get('address') or prop.get('complete_address')}")
+        process_cadastral_property(
+            db, args.suburb, prop, api_key, force=args.force,
+            use_gemini_gather=use_gemini, gemini_api_key=gemini_api_key,
+            use_openai_gather=use_openai, openai_api_key=openai_api_key,
+            use_hybrid_gather=use_hybrid,
+        )
 
     elif args.backfill:
         suburbs = [args.suburb] if args.suburb else TARGET_SUBURBS
