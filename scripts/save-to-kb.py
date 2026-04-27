@@ -293,19 +293,14 @@ def save_index(index: dict, category: str) -> Path:
 
 
 def upload_to_blob(local_path: Path, blob_name: str) -> bool:
-    """Upload index file to Azure Blob Storage for persistence."""
-    conn_str = os.environ.get("AZURE_STORAGE_CONNECTION_STRING", "")
-    if not conn_str:
-        print("Warning: AZURE_STORAGE_CONNECTION_STRING not set, skipping blob upload", file=sys.stderr)
-        return False
-
+    """Upload to blob storage via shared.blob_storage (local FS or Azure)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from shared import blob_storage  # type: ignore
     try:
-        from azure.storage.blob import BlobServiceClient
-        client = BlobServiceClient.from_connection_string(conn_str)
-        container = client.get_container_client("knowledge-base")
         with open(local_path, "rb") as f:
-            container.upload_blob(blob_name, f, overwrite=True)
-        return True
+            data = f.read()
+        url = blob_storage.upload("knowledge-base", blob_name, data, content_type="application/json")
+        return url is not None
     except Exception as e:
         print(f"Warning: Blob upload failed: {e}", file=sys.stderr)
         return False
