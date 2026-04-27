@@ -35,12 +35,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from pymongo import MongoClient
-from azure.storage.blob import BlobServiceClient, ContentSettings
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, REPO_ROOT)
+
+from shared.env import load_env  # type: ignore
+from shared.db import get_client  # type: ignore
+from shared import blob_storage  # type: ignore
+
+load_env()
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
-MONGODB_URI = os.getenv('MONGODB_URI', 'mongodb://127.0.0.1:27017/')
 AZURE_STORAGE_CONNECTION_STRING = os.getenv('AZURE_STORAGE_CONNECTION_STRING', '')
 
 DB_FOR_SALE        = 'Gold_Coast'
@@ -101,8 +106,8 @@ def download_single_image(url):
         return None
 
 
-def get_blob_url(account_name, blob_name):
-    return f"https://{account_name}.{BLOB_DOMAIN}/{CONTAINER_NAME}/{blob_name}"
+def get_blob_url(_account_name_unused, blob_name):
+    return blob_storage.public_url(CONTAINER_NAME, blob_name)
 
 
 def upload_images_for_property(blob_service_client, doc, db_label, suburb, dry_run,
@@ -121,7 +126,7 @@ def upload_images_for_property(blob_service_client, doc, db_label, suburb, dry_r
     if photo_urls and isinstance(photo_urls[0], str) and BLOB_DOMAIN in photo_urls[0]:
         return (photo_urls, fp_urls)
 
-    account_name = blob_service_client.account_name
+    account_name = None  # unused in local backend; kept for signature compat
 
     # Use dated subfolder for historical image tracking
     if date_prefix is None:
@@ -159,22 +164,14 @@ def upload_images_for_property(blob_service_client, doc, db_label, suburb, dry_r
         data = download_single_image(url)
         if data is None:
             return (category, idx, None)
-        try:
-            blob_client = blob_service_client.get_blob_client(
-                container=CONTAINER_NAME, blob=blob_name
-            )
-            blob_client.upload_blob(
-                data,
-                overwrite=True,
-                content_settings=ContentSettings(
-                    content_type='image/jpeg',
-                    cache_control='public, max-age=31536000',
-                ),
-            )
-            return (category, idx, get_blob_url(account_name, blob_name))
-        except Exception as e:
-            print(f"    WARNING: Blob upload failed for {blob_name}: {e}", flush=True)
-            return (category, idx, None)
+        blob_url = blob_storage.upload(
+            CONTAINER_NAME, blob_name, data,
+            content_type='image/jpeg',
+            cache_control='public, max-age=31536000',
+        )
+        if blob_url is None:
+            print(f"    WARNING: Blob upload failed for {blob_name}", flush=True)
+        return (category, idx, blob_url)
 
     with ThreadPoolExecutor(max_workers=DOWNLOAD_THREADS) as executor:
         futures = {executor.submit(upload_one, task): task for task in tasks}
@@ -330,30 +327,14 @@ Examples:
 
     # Connect MongoDB
     try:
-        mongo_client = MongoClient(
-            MONGODB_URI, serverSelectionTimeoutMS=10000, tlsAllowInvalidCertificates=True
-        )
+        mongo_client = get_client()
         mongo_client.admin.command('ping')
         print("MongoDB connected.\n")
     except Exception as e:
         fail(f"ERROR: MongoDB connection failed: {e}")
 
-    # Connect Azure Blob Storage
-    try:
-        blob_service_client = BlobServiceClient.from_connection_string(
-            AZURE_STORAGE_CONNECTION_STRING
-        )
-        container_client = blob_service_client.get_container_client(CONTAINER_NAME)
-        try:
-            container_client.get_container_properties()
-            print(f"Azure Blob container '{CONTAINER_NAME}' exists.\n")
-        except Exception:
-            print(f"Creating container '{CONTAINER_NAME}'...")
-            blob_service_client.create_container(CONTAINER_NAME, public_access='blob')
-            print(f"Container '{CONTAINER_NAME}' created.\n")
-    except Exception as e:
-        mongo_client.close()
-        fail(f"ERROR: Azure Blob Storage connection failed: {e}")
+    blob_service_client = None  # legacy positional arg, no longer used
+    print(f"Blob backend: {os.getenv('BLOB_BACKEND', 'local')} (container '{CONTAINER_NAME}')\n")
 
     # Determine database scope
     db_scope = []
