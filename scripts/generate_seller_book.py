@@ -392,7 +392,8 @@ def generate_html(book_data: dict, pdf_url: str = "seller_book.pdf") -> str:
     env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)))
     template = env.get_template("seller_book.html")
 
-    # Render each chapter's markdown to HTML
+    # Render each chapter's markdown to HTML (kept for compatibility — print template
+    # now iterates over `pages` instead, but some shared helpers may still use chapters)
     rendered_chapters = []
     for ch in book_data["chapters"]:
         rendered_chapters.append({
@@ -404,11 +405,17 @@ def generate_html(book_data: dict, pdf_url: str = "seller_book.pdf") -> str:
     # Render front matter
     front_matter_html = render_chapter_md(book_data.get("front_matter_md", ""))
 
+    # Build the full pages list (same data the reader uses) so the print template
+    # can render image-only pages, double-page spreads, and overlay captions.
+    all_pages = build_pages(book_data)
+
     html = template.render(
         title=book_data["title"],
         subtitle=book_data["subtitle"],
         author=book_data["author"],
         chapters=rendered_chapters,
+        pages=all_pages,
+        total_pages=len(all_pages),
         front_matter=front_matter_html,
         toc=build_toc(rendered_chapters),
         generated_date=datetime.now(AEST).strftime("%B %Y"),
@@ -533,11 +540,16 @@ def split_chapter_to_pages(chapter_html: str, chapter_title: str, chapter_id: st
     return pages
 
 
-def generate_reader_html(book_data: dict, pdf_url: str = "/seller-guide.pdf") -> str:
-    """Render the book as a single-page reader experience."""
-    env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)))
-    template = env.get_template("seller_book_reader.html")
-
+def build_pages(book_data: dict) -> list[dict]:
+    """Build the unified ordered page list used by both the web reader and the
+    print/PDF template. Returns a list of page dicts with keys:
+      type     — "cover" | "toc" | "image" | "content"
+      id       — stable identifier
+      content  — rendered HTML for content/toc pages
+      image_src — path to image for image pages
+      caption  — overlay caption text (image pages only)
+      spread_side — "left" or "right" when a paired double-spread; absent otherwise
+    """
     all_pages = []
 
     # Page 1: Cover
@@ -548,7 +560,7 @@ def generate_reader_html(book_data: dict, pdf_url: str = "/seller-guide.pdf") ->
         "id": "cover",
     })
 
-    # Page 2: Inside cover (full-bleed Burleigh photo)
+    # Page 2: Inside cover (full-bleed Burleigh photo) — single-page image, no split
     all_pages.append({
         "type": "image",
         "content": "",
@@ -578,7 +590,9 @@ def generate_reader_html(book_data: dict, pdf_url: str = "/seller-guide.pdf") ->
         "id": "toc",
     })
 
-    # Double-page photo spreads inserted before specific chapters
+    # Double-page photo spreads inserted before specific chapters.
+    # These will be marked spread_side=left/right so the print template can
+    # render each half across the gutter when bound.
     SPREADS_BEFORE_CHAPTER = {
         "chapter-3-auction-or-private-treaty": "book-images/burleigh-kayaking-spread.jpg",
         "chapter-4-setting-the-right-price": "book-images/robina-town-centre-spread.jpg",
@@ -608,6 +622,7 @@ def generate_reader_html(book_data: dict, pdf_url: str = "/seller-guide.pdf") ->
                 "content": "",
                 "image_src": spread_src,
                 "caption": spread_caption,
+                "spread_side": "left",
                 "id": f"{ch['id']}-pre-spread-1",
             })
             all_pages.append({
@@ -615,6 +630,7 @@ def generate_reader_html(book_data: dict, pdf_url: str = "/seller-guide.pdf") ->
                 "content": "",
                 "image_src": spread_src,
                 "caption": spread_caption,
+                "spread_side": "right",
                 "id": f"{ch['id']}-pre-spread-2",
             })
         chapter_pages = split_chapter_to_pages(ch["content"], ch["title"], ch["id"])
@@ -624,17 +640,19 @@ def generate_reader_html(book_data: dict, pdf_url: str = "/seller-guide.pdf") ->
                 p["caption"] = SPREAD_CAPTIONS[p["image_src"]]
         all_pages.extend(chapter_pages)
 
-    # Closing spread — Burleigh Beach long view, double-page bookend
+    # Closing spread — Burleigh Beach long view, true double-page bookend
     all_pages.append({
         "type": "image",
         "content": "",
         "image_src": "book-images/burleigh-beach-spread.jpg",
+        "spread_side": "left",
         "id": "closing-spread-1",
     })
     all_pages.append({
         "type": "image",
         "content": "",
         "image_src": "book-images/burleigh-beach-spread.jpg",
+        "spread_side": "right",
         "id": "closing-spread-2",
     })
 
@@ -642,6 +660,16 @@ def generate_reader_html(book_data: dict, pdf_url: str = "/seller-guide.pdf") ->
     for p in all_pages:
         if p.get("type") == "image" and p.get("image_src") in SPREAD_CAPTIONS and not p.get("caption"):
             p["caption"] = SPREAD_CAPTIONS[p["image_src"]]
+
+    return all_pages
+
+
+def generate_reader_html(book_data: dict, pdf_url: str = "/seller-guide.pdf") -> str:
+    """Render the book as a single-page reader experience."""
+    env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)))
+    template = env.get_template("seller_book_reader.html")
+
+    all_pages = build_pages(book_data)
 
     html = template.render(
         title=book_data["title"],
