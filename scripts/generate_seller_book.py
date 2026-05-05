@@ -470,25 +470,42 @@ def split_chapter_to_pages(chapter_html: str, chapter_title: str, chapter_id: st
                 if len(text_only) > 2000:
                     h3_parts = re.split(r'(?=<h3[^>]*>)', content)
                     buffer = ""
+                    buffer_weight = 0
+                    PAGE_MAX = 1800  # target text-equivalent chars per page
+                    IMG_WEIGHT = 1000  # each figure/img occupies ~this much vertical room
+
+                    def _weight(html_part: str) -> int:
+                        text_len = len(re.sub(r'<[^>]+>', '', html_part).strip())
+                        img_count = len(re.findall(r'<(img|figure)\b', html_part))
+                        return text_len + img_count * IMG_WEIGHT
+
                     for h3_part in h3_parts:
                         h3_part = h3_part.strip()
                         h3_text = re.sub(r'<[^>]+>', '', h3_part).strip()
                         if len(h3_text) < 10:
                             continue
-                        # Pre-h3 content (h1/h2 headings or section preamble) buffers
-                        # forward and merges with the first h3 page so we don't get
-                        # orphan heading-only pages.
+                        part_weight = _weight(h3_part)
+                        # Pre-h3 content (h1/h2 + section preamble) buffers forward
+                        # so we don't emit orphan heading-only pages.
                         if '<h3' not in h3_part:
                             buffer = (buffer + '\n' + h3_part) if buffer else h3_part
+                            buffer_weight += part_weight
                             continue
-                        full_part = (buffer + '\n' + h3_part) if buffer else h3_part
-                        buffer = ""
-                        pages.append({
-                            "type": "content",
-                            "content": full_part,
-                            "image_src": None,
-                            "id": f"{chapter_id}-p{len(pages)}",
-                        })
+                        # Only flush if the buffer already contains an h3 section
+                        # AND adding this one would overfill. Pre-h3 content (h2/h1 +
+                        # preamble) must always glue to the first h3 to avoid orphans.
+                        if buffer and '<h3' in buffer and (buffer_weight + part_weight) > PAGE_MAX:
+                            pages.append({
+                                "type": "content",
+                                "content": buffer,
+                                "image_src": None,
+                                "id": f"{chapter_id}-p{len(pages)}",
+                            })
+                            buffer = h3_part
+                            buffer_weight = part_weight
+                        else:
+                            buffer = (buffer + '\n' + h3_part) if buffer else h3_part
+                            buffer_weight += part_weight
                     if buffer:
                         pages.append({
                             "type": "content",
