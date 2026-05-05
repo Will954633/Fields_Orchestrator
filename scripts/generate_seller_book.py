@@ -167,6 +167,7 @@ def render_chapter_md(md_text: str) -> str:
         "AA-1": "book-images/outdoor-entertaining.jpg",  # reuse CH5-3
         "AA-2": None,  # TBD
         "ABOUT-1": "book-images/will-headshot.jpg",
+        "CH4-5": "book-images/burleigh-headland-aerial.jpg",
     }
 
     # Chart and figure image mapping
@@ -185,13 +186,13 @@ def render_chapter_md(md_text: str) -> str:
     }
 
     FIGURE_MAP = {
-        "CH1-3": None,  # TBD — comparable-sales infographic (needs custom design)
+        "CH1-3": "book-images/charts/ch1-3-valuation-process.png",
         "CH4-2": "book-images/charts/ch4-2-pricing-conditions.png",
         "CH4-3": "book-images/charts/ch4-3-emotional-peak.png",
         "CH5-1": "book-images/charts/ch5-1-positioning-framework.png",
         "CH7-2": "book-images/charts/ch7-2-rea-comparison.png",
         "CH8-1": "book-images/charts/ch8-1-selling-timeline.png",
-        "SM-1": None,   # TBD — Sarah & Mark accounting table (styled in HTML)
+        "SM-1": "book-images/charts/sm-1-final-accounting.png",
     }
 
     # Side-by-side comparison pairs
@@ -211,7 +212,8 @@ def render_chapter_md(md_text: str) -> str:
         "CH1-2": "Buyers arriving at an open home on the southern Gold Coast.",
         "CH1-5": None,  # full spread, no caption
         "CH2-3": "Robina parklands — the lifestyle that draws families to the southern Gold Coast.",
-        "CH3-3": None,  # full spread, no caption
+        "CH3-3": "17A Sandpiper Drive, Burleigh Waters, tested the local market with a new record listing price of $4,150,000 in March, 2026. Twilight photography and warm lighting perfectly set the tone for the property, which gathered significant interest. The property sold on the 31st of March after listing for approximately 6 weeks.",
+        "CH4-5": None,  # full spread, no caption
         "CH5-2": None,  # handled by comparison labels
         "CH5-3": "Covered outdoor entertaining with pool — the kind of image that stops a buyer mid-scroll.",
         "CH5-5": "North-facing backyard at golden hour. This was the lead image Sarah's agent chose over the renovated kitchen.",
@@ -284,7 +286,7 @@ def render_chapter_md(md_text: str) -> str:
         if marker_type == "PHOTO" and marker_id in IMAGE_MAP and IMAGE_MAP[marker_id]:
             img_path = IMAGE_MAP[marker_id]
             caption = CAPTIONS.get(marker_id, description)
-            is_spread = marker_id in ("INSIDE-COVER", "CH1-5", "CH5-6", "CH7-4")
+            is_spread = marker_id in ("INSIDE-COVER", "CH1-5", "CH4-5", "CH5-6", "CH7-4")
             css_class = "book-image spread" if is_spread else "book-image"
             caption_html = f'<figcaption>{caption}</figcaption>' if caption else ''
             return (
