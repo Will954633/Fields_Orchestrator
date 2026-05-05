@@ -762,12 +762,10 @@ def chart_ch3_2():
     )
 
     # Centre text
-    ax.text(0, 0.18, "Private\nTreaty", ha='center', va='center',
+    ax.text(0, 0.10, "Private Treaty", ha='center', va='center',
             fontsize=20, fontweight='bold', color=GRASS)
-    ax.text(0, -0.12, "92%", ha='center', va='center',
+    ax.text(0, -0.18, "92%", ha='center', va='center',
             fontsize=28, fontweight='bold', color=GRASS)
-    ax.text(0, -0.32, "of listings", ha='center', va='center',
-            fontsize=11, color=TEXT_MUTED)
 
     # Auction label — position outside the auction wedge with arrow
     import math
