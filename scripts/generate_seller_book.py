@@ -291,7 +291,13 @@ def render_chapter_md(md_text: str) -> str:
             img_path = IMAGE_MAP[marker_id]
             caption = CAPTIONS.get(marker_id, description)
             is_spread = marker_id in ("INSIDE-COVER", "CH1-5", "CH4-5", "CH5-6", "CH7-4")
-            css_class = "book-image spread" if is_spread else "book-image"
+            is_portrait = marker_id in ("ABOUT-1",)
+            if is_spread:
+                css_class = "book-image spread"
+            elif is_portrait:
+                css_class = "book-image portrait"
+            else:
+                css_class = "book-image"
             caption_html = f'<figcaption>{caption}</figcaption>' if caption else ''
             return (
                 f'\n<figure class="{css_class}">'
@@ -457,14 +463,30 @@ def split_chapter_to_pages(chapter_html: str, chapter_title: str, chapter_id: st
                 # Estimate: >2000 chars of text probably needs splitting
                 if len(text_only) > 2000:
                     h3_parts = re.split(r'(?=<h3[^>]*>)', content)
+                    buffer = ""
                     for h3_part in h3_parts:
                         h3_part = h3_part.strip()
                         h3_text = re.sub(r'<[^>]+>', '', h3_part).strip()
                         if len(h3_text) < 10:
                             continue
+                        # Pre-h3 content (h1/h2 headings or section preamble) buffers
+                        # forward and merges with the first h3 page so we don't get
+                        # orphan heading-only pages.
+                        if '<h3' not in h3_part:
+                            buffer = (buffer + '\n' + h3_part) if buffer else h3_part
+                            continue
+                        full_part = (buffer + '\n' + h3_part) if buffer else h3_part
+                        buffer = ""
                         pages.append({
                             "type": "content",
-                            "content": h3_part,
+                            "content": full_part,
+                            "image_src": None,
+                            "id": f"{chapter_id}-p{len(pages)}",
+                        })
+                    if buffer:
+                        pages.append({
+                            "type": "content",
+                            "content": buffer,
                             "image_src": None,
                             "id": f"{chapter_id}-p{len(pages)}",
                         })
