@@ -433,111 +433,140 @@ def split_chapter_to_pages(chapter_html: str, chapter_title: str, chapter_id: st
     """
     pages = []
 
-    # First, extract any full-spread images and replace with markers
+    # ── Extract full-bleed spread photos at the chapter level — they remain
+    #    inline markers so they appear at the position they were placed. ──
     spread_pattern = r'<figure class="book-image spread">.*?</figure>'
-    spreads = re.findall(spread_pattern, chapter_html, re.DOTALL)
-
-    # Replace spreads with split markers
-    for i, spread in enumerate(spreads):
-        # Extract image src
-        src_match = re.search(r'src="([^"]+)"', spread)
+    for m in re.finditer(spread_pattern, chapter_html, re.DOTALL):
+        src_match = re.search(r'src="([^"]+)"', m.group(0))
         if src_match:
-            chapter_html = chapter_html.replace(spread, f'<!--SPREAD:{src_match.group(1)}-->')
+            chapter_html = chapter_html.replace(m.group(0), f'<!--SPREAD:{src_match.group(1)}-->', 1)
 
-    # Split on h2 headings (major sections within a chapter)
-    # First page of each chapter gets the h1 title
+    chart_pattern = r'<figure class="book-image book-(?:chart|figure)">(.*?)</figure>'
+
     sections = re.split(r'(?=<h2[^>]*>)', chapter_html)
 
+    first_chunk = True
     for i, section in enumerate(sections):
         section = section.strip()
         if not section:
             continue
 
-        # Check for spread markers in this section
-        parts = re.split(r'<!--SPREAD:([^>]+)-->', section)
+        # Extract charts/figures from THIS section only — defer them so they
+        # render after the section's text. This keeps text pages dense and
+        # places each chart on its own page at the end of its h2 section.
+        section_charts = []
+        while True:
+            cm = re.search(chart_pattern, section, re.DOTALL)
+            if not cm:
+                break
+            inner = cm.group(1)
+            src_match = re.search(r'src="([^"]+)"', inner)
+            cap_match = re.search(r'<figcaption>(.*?)</figcaption>', inner, re.DOTALL)
+            if src_match:
+                section_charts.append((
+                    src_match.group(1),
+                    cap_match.group(1).strip() if cap_match else "",
+                ))
+            section = section.replace(cm.group(0), "", 1)
 
-        for j, part in enumerate(parts):
-            part = part.strip()
-            if not part:
-                continue
+        # Now process the section's text + spread markers
+        marker_re = r'<!--(SPREAD):([^>]+?)-->'
+        tokens = re.split(marker_re, section)
+        # tokens: [text, "SPREAD", src, text, "SPREAD", src, ...]
 
-            # Odd indices are spread image paths
-            if j % 2 == 1:
+        idx_t = 0
+        while idx_t < len(tokens):
+            chunk = tokens[idx_t]
+            _emit_content_pages(pages, chunk, chapter_id, chapter_title, first_chunk)
+            if chunk and chunk.strip():
+                first_chunk = False
+
+            if idx_t + 2 < len(tokens) and tokens[idx_t + 1] == "SPREAD":
                 pages.append({
                     "type": "image",
                     "content": "",
-                    "image_src": part,
+                    "image_src": tokens[idx_t + 2],
                     "id": f"{chapter_id}-spread-{len(pages)}",
                 })
+                idx_t += 3
             else:
-                # Content page - add chapter title to first section
-                if i == 0 and j == 0:
-                    content = f'<h1>{chapter_title}</h1>\n{part}'
-                else:
-                    content = part
+                idx_t += 1
 
-                # Skip if only whitespace/empty tags
-                text_only = re.sub(r'<[^>]+>', '', content).strip()
-                if len(text_only) < 10:
-                    continue
-
-                # Further split long sections by h3 if content is very long
-                # Estimate: >2000 chars of text probably needs splitting
-                if len(text_only) > 2000:
-                    h3_parts = re.split(r'(?=<h3[^>]*>)', content)
-                    buffer = ""
-                    buffer_weight = 0
-                    PAGE_MAX = 1800  # target text-equivalent chars per page
-                    IMG_WEIGHT = 1000  # each figure/img occupies ~this much vertical room
-
-                    def _weight(html_part: str) -> int:
-                        text_len = len(re.sub(r'<[^>]+>', '', html_part).strip())
-                        img_count = len(re.findall(r'<(img|figure)\b', html_part))
-                        return text_len + img_count * IMG_WEIGHT
-
-                    for h3_part in h3_parts:
-                        h3_part = h3_part.strip()
-                        h3_text = re.sub(r'<[^>]+>', '', h3_part).strip()
-                        if len(h3_text) < 10:
-                            continue
-                        part_weight = _weight(h3_part)
-                        # Pre-h3 content (h1/h2 + section preamble) buffers forward
-                        # so we don't emit orphan heading-only pages.
-                        if '<h3' not in h3_part:
-                            buffer = (buffer + '\n' + h3_part) if buffer else h3_part
-                            buffer_weight += part_weight
-                            continue
-                        # Only flush if the buffer already contains an h3 section
-                        # AND adding this one would overfill. Pre-h3 content (h2/h1 +
-                        # preamble) must always glue to the first h3 to avoid orphans.
-                        if buffer and '<h3' in buffer and (buffer_weight + part_weight) > PAGE_MAX:
-                            pages.append({
-                                "type": "content",
-                                "content": buffer,
-                                "image_src": None,
-                                "id": f"{chapter_id}-p{len(pages)}",
-                            })
-                            buffer = h3_part
-                            buffer_weight = part_weight
-                        else:
-                            buffer = (buffer + '\n' + h3_part) if buffer else h3_part
-                            buffer_weight += part_weight
-                    if buffer:
-                        pages.append({
-                            "type": "content",
-                            "content": buffer,
-                            "image_src": None,
-                            "id": f"{chapter_id}-p{len(pages)}",
-                        })
-                else:
-                    pages.append({
-                        "type": "content",
-                        "content": content,
-                        "image_src": None,
-                        "id": f"{chapter_id}-p{len(pages)}",
-                    })
+        # Emit the section's chart/figure pages AFTER its text
+        for src, cap in section_charts:
+            pages.append({
+                "type": "chart",
+                "content": "",
+                "image_src": src,
+                "caption": cap,
+                "id": f"{chapter_id}-chart-{len(pages)}",
+            })
 
     return pages
+
+
+def _emit_content_pages(pages: list, content: str, chapter_id: str, chapter_title: str, is_first: bool) -> None:
+    """Emit one or more content pages from a text chunk. Adds the chapter h1
+    to the first chunk, then applies the existing h3-split + page-fill logic."""
+    content = content.strip()
+    if not content:
+        return
+
+    if is_first:
+        content = f'<h1>{chapter_title}</h1>\n{content}'
+
+    text_only = re.sub(r'<[^>]+>', '', content).strip()
+    if len(text_only) < 10:
+        return
+
+    if len(text_only) > 2000:
+        h3_parts = re.split(r'(?=<h3[^>]*>)', content)
+        buffer = ""
+        buffer_weight = 0
+        PAGE_MAX = 1800
+        IMG_WEIGHT = 1000
+
+        def _weight(html_part: str) -> int:
+            text_len = len(re.sub(r'<[^>]+>', '', html_part).strip())
+            img_count = len(re.findall(r'<(img|figure)\b', html_part))
+            return text_len + img_count * IMG_WEIGHT
+
+        for h3_part in h3_parts:
+            h3_part = h3_part.strip()
+            h3_text = re.sub(r'<[^>]+>', '', h3_part).strip()
+            if len(h3_text) < 10:
+                continue
+            part_weight = _weight(h3_part)
+            if '<h3' not in h3_part:
+                buffer = (buffer + '\n' + h3_part) if buffer else h3_part
+                buffer_weight += part_weight
+                continue
+            if buffer and '<h3' in buffer and (buffer_weight + part_weight) > PAGE_MAX:
+                pages.append({
+                    "type": "content",
+                    "content": buffer,
+                    "image_src": None,
+                    "id": f"{chapter_id}-p{len(pages)}",
+                })
+                buffer = h3_part
+                buffer_weight = part_weight
+            else:
+                buffer = (buffer + '\n' + h3_part) if buffer else h3_part
+                buffer_weight += part_weight
+        if buffer:
+            pages.append({
+                "type": "content",
+                "content": buffer,
+                "image_src": None,
+                "id": f"{chapter_id}-p{len(pages)}",
+            })
+    else:
+        pages.append({
+            "type": "content",
+            "content": content,
+            "image_src": None,
+            "id": f"{chapter_id}-p{len(pages)}",
+        })
 
 
 def build_pages(book_data: dict) -> list[dict]:
