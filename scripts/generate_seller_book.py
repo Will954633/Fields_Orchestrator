@@ -155,6 +155,8 @@ def render_chapter_md(md_text: str) -> str:
         "CH3-3": "book-images/twilight-home.jpg",
         "CH3-STUDY": "book-images/auction-study-abstract.png",
         "CH1-INLINE": "book-images/currumbin-beach-kids.jpg",
+        "CH6-INLINE": "book-images/burleigh-market.jpg",
+        "CH7-INLINE": "book-images/hampton-park.jpg",
         "CH4-4": "book-images/vela-224.jpg",
         "CH5-2": None,  # special: side-by-side comparison (reuse HST-1)
         "CH5-3": "book-images/outdoor-entertaining.jpg",
@@ -220,6 +222,8 @@ def render_chapter_md(md_text: str) -> str:
         "CH3-3": "17A Sandpiper Drive, Burleigh Waters, tested the local market with a new record listing price of $4,150,000 in March, 2026. Twilight photography and warm lighting perfectly set the tone for the property, which gathered significant interest. The property sold on the 31st of March after listing for approximately 6 weeks (sale price not disclosed).",
         "CH3-STUDY": "Frino, A., Peat, M. and Wright, D. (2012), The impact of auctions on residential property prices. Accounting & Finance, 52: 815-830.",
         "CH1-INLINE": "Currumbin Beach — the lifestyle Gold Coast families build their lives around.",
+        "CH6-INLINE": "Burleigh Heads weekend markets — the rhythm of life that draws buyers to the southern Gold Coast.",
+        "CH7-INLINE": "Hampton Park, Burleigh Waters — the kind of green space that anchors family life in the suburb.",
         "CH4-5": None,  # full spread, no caption
         "CH5-2": None,  # handled by comparison labels
         "CH5-3": "Covered outdoor entertaining with pool — the kind of image that stops a buyer mid-scroll.",
@@ -298,7 +302,7 @@ def render_chapter_md(md_text: str) -> str:
             is_spread = marker_id in ("INSIDE-COVER", "CH1-5", "CH4-5", "CH5-6", "CH7-4")
             is_portrait = marker_id in ("ABOUT-1",)
             is_document = marker_id in ("CH3-STUDY",)
-            is_inline_right = marker_id in ("CH1-INLINE",)
+            is_inline_right = marker_id in ("CH1-INLINE", "CH6-INLINE", "CH7-INLINE")
             if is_spread:
                 css_class = "book-image spread"
             elif is_portrait:
