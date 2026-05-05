@@ -480,7 +480,7 @@ def chart_ch7_1():
 
     ax.set_xticks(x)
     ax.set_xticklabels(categories, fontsize=12)
-    ax.set_ylim(0, 115)
+    ax.set_ylim(0, 105)
     ax.yaxis.set_major_formatter(mticker.PercentFormatter())
     ax.grid(axis='x', visible=False)
 
@@ -491,14 +491,15 @@ def chart_ch7_1():
         ax.text(i, a + p / 2, f'{p}%', ha='center', va='center',
                 fontsize=14, fontweight='bold', color=WHITE)
 
-    ax.legend(fontsize=9, frameon=False, loc='upper right',
-              bbox_to_anchor=(1.0, 1.05), ncol=2, columnspacing=3)
+    ax.legend(fontsize=9, frameon=False, loc='upper center',
+              bbox_to_anchor=(0.5, -0.12), ncol=2, columnspacing=3)
 
     ax.set_title("Up to 60% of your potential buyers aren't on realestate.com.au", pad=30)
     ax.text(0.5, 1.025, "The passive buyer pool most marketing strategies miss",
             transform=ax.transAxes, ha='center', fontsize=9, color=TEXT_MUTED)
     _source_line(ax)
     fig.tight_layout(pad=2)
+    fig.subplots_adjust(bottom=0.22)
     _save(fig, 'ch7-1-buyer-pool.png')
 
 
