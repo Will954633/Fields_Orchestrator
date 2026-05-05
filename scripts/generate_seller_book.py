@@ -433,8 +433,9 @@ def split_chapter_to_pages(chapter_html: str, chapter_title: str, chapter_id: st
     """
     pages = []
 
-    # ── Extract full-bleed spread photos at the chapter level — they remain
-    #    inline markers so they appear at the position they were placed. ──
+    # ── Extract full-bleed spread photos at the chapter level — these become
+    #    true double-page spreads (left half + right half on consecutive
+    #    pages) so the bound book opens to one continuous panoramic image. ──
     spread_pattern = r'<figure class="book-image spread">.*?</figure>'
     for m in re.finditer(spread_pattern, chapter_html, re.DOTALL):
         src_match = re.search(r'src="([^"]+)"', m.group(0))
@@ -482,11 +483,21 @@ def split_chapter_to_pages(chapter_html: str, chapter_title: str, chapter_id: st
                 first_chunk = False
 
             if idx_t + 2 < len(tokens) and tokens[idx_t + 1] == "SPREAD":
+                # In-chapter spreads are also true double-page (left + right)
+                spread_src = tokens[idx_t + 2]
                 pages.append({
                     "type": "image",
                     "content": "",
-                    "image_src": tokens[idx_t + 2],
-                    "id": f"{chapter_id}-spread-{len(pages)}",
+                    "image_src": spread_src,
+                    "spread_side": "left",
+                    "id": f"{chapter_id}-spread-{len(pages)}-l",
+                })
+                pages.append({
+                    "type": "image",
+                    "content": "",
+                    "image_src": spread_src,
+                    "spread_side": "right",
+                    "id": f"{chapter_id}-spread-{len(pages)}-r",
                 })
                 idx_t += 3
             else:
@@ -519,17 +530,61 @@ def _emit_content_pages(pages: list, content: str, chapter_id: str, chapter_titl
     if len(text_only) < 10:
         return
 
-    if len(text_only) > 2000:
+    # PAGE_MAX tuned for 14×11 in landscape with ~1in body padding —
+    # at 11pt body + 1.6 line-height a content page comfortably holds
+    # this many char-equivalents before risking visual overflow.
+    PAGE_MAX = 2000
+    IMG_WEIGHT = 900
+
+    def _weight(html_part: str) -> int:
+        text_len = len(re.sub(r'<[^>]+>', '', html_part).strip())
+        img_count = len(re.findall(r'<(img|figure)\b', html_part))
+        return text_len + img_count * IMG_WEIGHT
+
+    # Only paragraph-split chunks that exceed the page budget. Buffer logic
+    # already produces page-sized chunks normally; this catches the rare
+    # oversize single-section case (e.g. long pre-h3 prologues) and breaks
+    # them at paragraph boundaries.
+    SPLIT_TRIGGER = int(PAGE_MAX * 1.15)
+    SPLIT_TARGET = PAGE_MAX
+
+    def _split_paragraphs(html_part: str) -> list[str]:
+        if _weight(html_part) <= SPLIT_TRIGGER:
+            return [html_part]
+        elements = re.split(r'(?=<(?:p|ul|ol|table|blockquote|h3|h4|figure|hr)[^>]*>)',
+                            html_part)
+        elements = [e for e in (e.strip() for e in elements) if e]
+        if len(elements) <= 1:
+            return [html_part]
+        chunks = []
+        cur = ""
+        cur_w = 0
+        for el in elements:
+            el_w = _weight(el)
+            if cur and (cur_w + el_w) > SPLIT_TARGET:
+                chunks.append(cur)
+                cur = el
+                cur_w = el_w
+            else:
+                cur = (cur + '\n' + el) if cur else el
+                cur_w += el_w
+        if cur:
+            chunks.append(cur)
+        return chunks
+
+    def _emit_chunk(html_part: str):
+        for sub in _split_paragraphs(html_part):
+            pages.append({
+                "type": "content",
+                "content": sub,
+                "image_src": None,
+                "id": f"{chapter_id}-p{len(pages)}",
+            })
+
+    if len(text_only) > 1800:
         h3_parts = re.split(r'(?=<h3[^>]*>)', content)
         buffer = ""
         buffer_weight = 0
-        PAGE_MAX = 1800
-        IMG_WEIGHT = 1000
-
-        def _weight(html_part: str) -> int:
-            text_len = len(re.sub(r'<[^>]+>', '', html_part).strip())
-            img_count = len(re.findall(r'<(img|figure)\b', html_part))
-            return text_len + img_count * IMG_WEIGHT
 
         for h3_part in h3_parts:
             h3_part = h3_part.strip()
@@ -542,31 +597,16 @@ def _emit_content_pages(pages: list, content: str, chapter_id: str, chapter_titl
                 buffer_weight += part_weight
                 continue
             if buffer and '<h3' in buffer and (buffer_weight + part_weight) > PAGE_MAX:
-                pages.append({
-                    "type": "content",
-                    "content": buffer,
-                    "image_src": None,
-                    "id": f"{chapter_id}-p{len(pages)}",
-                })
+                _emit_chunk(buffer)
                 buffer = h3_part
                 buffer_weight = part_weight
             else:
                 buffer = (buffer + '\n' + h3_part) if buffer else h3_part
                 buffer_weight += part_weight
         if buffer:
-            pages.append({
-                "type": "content",
-                "content": buffer,
-                "image_src": None,
-                "id": f"{chapter_id}-p{len(pages)}",
-            })
+            _emit_chunk(buffer)
     else:
-        pages.append({
-            "type": "content",
-            "content": content,
-            "image_src": None,
-            "id": f"{chapter_id}-p{len(pages)}",
-        })
+        _emit_chunk(content)
 
 
 def build_pages(book_data: dict) -> list[dict]:
