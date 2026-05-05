@@ -157,6 +157,8 @@ def render_chapter_md(md_text: str) -> str:
         "CH5-2": None,  # special: side-by-side comparison (reuse HST-1)
         "CH5-3": "book-images/outdoor-entertaining.jpg",
         "CH5-5": "book-images/backyard-golden-hour.jpg",
+        "CH5-FG1": "book-images/front-garden-before.png",
+        "CH5-FG2": "book-images/front-garden-after.png",
         "CH5-6": "book-images/palmer-colonial-aerial.jpg",
         "CH6-3": None,  # TBD
         "CH7-4": "book-images/lakelands-aerial.jpg",
@@ -217,6 +219,8 @@ def render_chapter_md(md_text: str) -> str:
         "CH5-2": None,  # handled by comparison labels
         "CH5-3": "Covered outdoor entertaining with pool — the kind of image that stops a buyer mid-scroll.",
         "CH5-5": "North-facing backyard at golden hour. This was the lead image Sarah's agent chose over the renovated kitchen.",
+        "CH5-FG1": "Midday photo with poor lighting and empty right-side garden bed.",
+        "CH5-FG2": "Twilight photography with fully landscaped right-side garden bed. Notice the distinct contrast in the feel of the two images.",
         "CH5-6": None,  # full spread, no caption
         "CH7-4": None,  # full spread, no caption
         "CH9-1": "Robina Town Centre at twilight.",
