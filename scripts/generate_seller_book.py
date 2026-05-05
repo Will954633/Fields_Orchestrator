@@ -212,7 +212,7 @@ def render_chapter_md(md_text: str) -> str:
         "CH1-2": "Buyers arriving at an open home on the southern Gold Coast.",
         "CH1-5": None,  # full spread, no caption
         "CH2-3": "Robina parklands — the lifestyle that draws families to the southern Gold Coast.",
-        "CH3-3": "17A Sandpiper Drive, Burleigh Waters, tested the local market with a new record listing price of $4,150,000 in March, 2026. Twilight photography and warm lighting perfectly set the tone for the property, which gathered significant interest. The property sold on the 31st of March after listing for approximately 6 weeks.",
+        "CH3-3": "17A Sandpiper Drive, Burleigh Waters, tested the local market with a new record listing price of $4,150,000 in March, 2026. Twilight photography and warm lighting perfectly set the tone for the property, which gathered significant interest. The property sold on the 31st of March after listing for approximately 6 weeks (sale price not disclosed).",
         "CH4-5": None,  # full spread, no caption
         "CH5-2": None,  # handled by comparison labels
         "CH5-3": "Covered outdoor entertaining with pool — the kind of image that stops a buyer mid-scroll.",
