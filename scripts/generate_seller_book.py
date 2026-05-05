@@ -154,6 +154,7 @@ def render_chapter_md(md_text: str) -> str:
         "CH2-3": "book-images/varsity-lake-cycling.jpg",
         "CH3-3": "book-images/twilight-home.jpg",
         "CH3-STUDY": "book-images/auction-study-abstract.png",
+        "CH1-INLINE": "book-images/currumbin-beach-kids.jpg",
         "CH4-4": "book-images/vela-224.jpg",
         "CH5-2": None,  # special: side-by-side comparison (reuse HST-1)
         "CH5-3": "book-images/outdoor-entertaining.jpg",
@@ -218,6 +219,7 @@ def render_chapter_md(md_text: str) -> str:
         "CH2-3": "Robina parklands — the lifestyle that draws families to the southern Gold Coast.",
         "CH3-3": "17A Sandpiper Drive, Burleigh Waters, tested the local market with a new record listing price of $4,150,000 in March, 2026. Twilight photography and warm lighting perfectly set the tone for the property, which gathered significant interest. The property sold on the 31st of March after listing for approximately 6 weeks (sale price not disclosed).",
         "CH3-STUDY": "Frino, A., Peat, M. and Wright, D. (2012), The impact of auctions on residential property prices. Accounting & Finance, 52: 815-830.",
+        "CH1-INLINE": "Currumbin Beach — the lifestyle Gold Coast families build their lives around.",
         "CH4-5": None,  # full spread, no caption
         "CH5-2": None,  # handled by comparison labels
         "CH5-3": "Covered outdoor entertaining with pool — the kind of image that stops a buyer mid-scroll.",
@@ -296,12 +298,15 @@ def render_chapter_md(md_text: str) -> str:
             is_spread = marker_id in ("INSIDE-COVER", "CH1-5", "CH4-5", "CH5-6", "CH7-4")
             is_portrait = marker_id in ("ABOUT-1",)
             is_document = marker_id in ("CH3-STUDY",)
+            is_inline_right = marker_id in ("CH1-INLINE",)
             if is_spread:
                 css_class = "book-image spread"
             elif is_portrait:
                 css_class = "book-image portrait"
             elif is_document:
                 css_class = "book-image document"
+            elif is_inline_right:
+                css_class = "book-image inline-right"
             else:
                 css_class = "book-image"
             caption_html = f'<figcaption>{caption}</figcaption>' if caption else ''
@@ -568,8 +573,29 @@ def generate_reader_html(book_data: dict, pdf_url: str = "/seller-guide.pdf") ->
         "id": "toc",
     })
 
+    # Double-page photo spreads inserted before specific chapters
+    SPREADS_BEFORE_CHAPTER = {
+        "chapter-3-auction-or-private-treaty": "book-images/burleigh-kayaking-spread.jpg",
+        "chapter-4-setting-the-right-price": "book-images/robina-town-centre-spread.jpg",
+        "chapter-7-the-marketing-that-actually-matters": "book-images/cbus-spread.jpg",
+    }
+
     # Chapters: split each into pages
     for ch in rendered_chapters:
+        if ch["id"] in SPREADS_BEFORE_CHAPTER:
+            spread_src = SPREADS_BEFORE_CHAPTER[ch["id"]]
+            all_pages.append({
+                "type": "image",
+                "content": "",
+                "image_src": spread_src,
+                "id": f"{ch['id']}-pre-spread-1",
+            })
+            all_pages.append({
+                "type": "image",
+                "content": "",
+                "image_src": spread_src,
+                "id": f"{ch['id']}-pre-spread-2",
+            })
         chapter_pages = split_chapter_to_pages(ch["content"], ch["title"], ch["id"])
         all_pages.extend(chapter_pages)
 
