@@ -185,6 +185,7 @@ def render_chapter_md(md_text: str) -> str:
         "CH6-2": "book-images/charts/ch6-2-commission-comparison.png",
         "CH7-1": "book-images/charts/ch7-1-buyer-pool.png",
         "CH7-3": "book-images/charts/ch7-3-marketing-benefit.png",
+        "APPX-C-1": "book-images/charts/appx-c-1-leading-lagging.png",
     }
 
     FIGURE_MAP = {
