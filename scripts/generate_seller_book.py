@@ -553,6 +553,7 @@ def generate_reader_html(book_data: dict, pdf_url: str = "/seller-guide.pdf") ->
         "type": "image",
         "content": "",
         "image_src": "book-images/inside-cover.jpg",
+        "caption": "Sunrise off Burleigh Heads. The point break behind these paddlers was declared a National Surfing Reserve in February 2012.",
         "id": "inside-cover",
     })
 
@@ -584,23 +585,43 @@ def generate_reader_html(book_data: dict, pdf_url: str = "/seller-guide.pdf") ->
         "chapter-7-the-marketing-that-actually-matters": "book-images/cbus-spread.jpg",
     }
 
+    # Caption overlays for full-bleed photo pages (keyed by image src)
+    SPREAD_CAPTIONS = {
+        "book-images/inside-cover.jpg": "Sunrise off Burleigh Heads. The point break behind these paddlers was declared a National Surfing Reserve in February 2012.",
+        "book-images/burleigh-sunrise.jpg": "Rick Shores at the foot of the Burleigh Pavilions. Opened 2016 — named Best Restaurant in Queensland in the Delicious 100 and a Good Food Guide hat.",
+        "book-images/burleigh-kayaking-spread.jpg": "Burleigh Beach. Fifteen minutes east of Robina, Varsity Lakes, and Burleigh Waters — and one of the most consistent right-hand point breaks in Australia.",
+        "book-images/robina-town-centre-spread.jpg": "Robina Town Centre opened in 1996 — 130,000 m² of retail across 400 stores, the largest enclosed mall ever built in Australia in a single development. The suburb around it is one of the country's largest master-planned communities.",
+        "book-images/burleigh-headland-aerial.jpg": "The headlands of Burleigh and North Burleigh are remnants of the Tweed Volcano — at 23 million years old, the largest erosion caldera in the Southern Hemisphere. The basalt outcrops shape every wave that runs along this coast.",
+        "book-images/palmer-colonial-aerial.jpg": "Palmer Colonial in the foreground, CBUS Super Stadium and the Springbrook plateau beyond. Springbrook sits within the Gondwana Rainforests of Australia World Heritage Area — one of the most extensive subtropical rainforest systems on Earth.",
+        "book-images/cbus-spread.jpg": "CBUS Super Stadium, 1 December 2024. A crowd of 25,297 watched the Matildas play Brazil — the Olympic silver medallists — at the home of the Gold Coast Titans.",
+        "book-images/lakelands-aerial.jpg": "Lakelands Golf Club, Merrimac — Australia's first Jack Nicklaus Signature course, opened 17 February 1997. The Surfers Paradise skyline runs along the horizon, fifteen minutes north.",
+        "book-images/burleigh-beach-spread.jpg": "South from North Burleigh — the same coastline that opened this book at sunrise.",
+    }
+
     # Chapters: split each into pages
     for ch in rendered_chapters:
         if ch["id"] in SPREADS_BEFORE_CHAPTER:
             spread_src = SPREADS_BEFORE_CHAPTER[ch["id"]]
+            spread_caption = SPREAD_CAPTIONS.get(spread_src)
             all_pages.append({
                 "type": "image",
                 "content": "",
                 "image_src": spread_src,
+                "caption": spread_caption,
                 "id": f"{ch['id']}-pre-spread-1",
             })
             all_pages.append({
                 "type": "image",
                 "content": "",
                 "image_src": spread_src,
+                "caption": spread_caption,
                 "id": f"{ch['id']}-pre-spread-2",
             })
         chapter_pages = split_chapter_to_pages(ch["content"], ch["title"], ch["id"])
+        # Attach captions to any in-chapter spread image pages
+        for p in chapter_pages:
+            if p.get("type") == "image" and p.get("image_src") in SPREAD_CAPTIONS:
+                p["caption"] = SPREAD_CAPTIONS[p["image_src"]]
         all_pages.extend(chapter_pages)
 
     # Closing spread — Burleigh Beach long view, double-page bookend
@@ -616,6 +637,11 @@ def generate_reader_html(book_data: dict, pdf_url: str = "/seller-guide.pdf") ->
         "image_src": "book-images/burleigh-beach-spread.jpg",
         "id": "closing-spread-2",
     })
+
+    # Final pass: ensure every image page that has a mapped caption gets it
+    for p in all_pages:
+        if p.get("type") == "image" and p.get("image_src") in SPREAD_CAPTIONS and not p.get("caption"):
+            p["caption"] = SPREAD_CAPTIONS[p["image_src"]]
 
     html = template.render(
         title=book_data["title"],
