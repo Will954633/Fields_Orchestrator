@@ -560,7 +560,7 @@ Return JSON with these keys:
     ],
     "closing": "One sentence reaffirming why an in-person inspection by our property analyst matters before signing. Honest, not dismissive."
   }},
-  "morning_in_this_home": "EXACTLY 200-250 words. Present-tense sensory narrative written as if you ARE a prospective buyer experiencing the home for the first time. ABSOLUTE RULES: (a) NEVER use 'you' or 'your' addressing the seller; the narrator IS a buyer, so 'you' may not appear at all — write in 1st-person 'I' or 3rd-person 'they' or implied present-tense ('the kettle is on'); (b) MUST reference at least one named POI from the property's data (a school, park, cafe, beach, reserve, by name); (c) MUST reference at least one named feature of THIS property (pool, deck, kitchen island, the wetland boundary, the cul-de-sac, etc.); (d) MUST reference a named time of day or moment (morning, dusk, twilight, Sunday afternoon, etc.); (e) MUST end on a quiet sensory image, not a conclusion or pitch. Style: short clean sentences, sensory verbs, no real-estate clichés, no advice, no 'you should'. Think Cereal magazine, not a brochure."
+  "morning_in_this_home": "Length target: 200-250 words (validator rejects below 170 or above 290). Tune the narrative length silently — if your draft is under 200 words, add one sensory beat in-place (a sound, a texture, a small movement); if over 250, trim the least-essential sentence in-place. Do not output the word count or any commentary about your length-tuning. Style: present-tense sensory narrative written as if you ARE a prospective buyer experiencing the home for the first time. ABSOLUTE RULES: (a) NEVER use 'you' or 'your' addressing the seller; the narrator IS a buyer, so 'you' may not appear at all — write in 1st-person 'I' or 3rd-person 'they' or implied present-tense ('the kettle is on'); (b) MUST reference at least one named POI from the property's data (a school, park, cafe, beach, reserve, by name); (c) MUST reference at least one named feature of THIS property (pool, deck, kitchen island, the wetland boundary, the cul-de-sac, etc.); (d) MUST reference a named time of day or moment (morning, dusk, twilight, Sunday afternoon, etc.); (e) MUST end on a quiet sensory image, not a conclusion or pitch; (f) DO NOT INVENT THE SELLER'S POSSESSIONS, HOBBIES, VEHICLES, PETS, NAMED NEIGHBOURS, OR SPECIFIC LOCAL EVENTS. Reference ONLY: items present in the property data (pool, deck, kitchen, room types, gardens), named POIs from `nearby_pois`, public landmarks, and generic family-life moments (kids, coffee, weekend mornings, lawnmowers, birds, neighbours waving). DO NOT name a specific car model (no Mustang, no Tesla), boat, motorcycle, art collection, school event ('weekend fair', 'rugby game'), named neighbour, named pet, or specific weekend activity unless that item is explicitly present in the property's data fields. When in doubt, omit. Short clean sentences, sensory verbs, no real-estate clichés, no advice, no 'you should'. Think Cereal magazine, not a brochure."
 }}
 
 Generate EXACTLY 5-7 value_equations covering: land size, internal floor area, condition/renovation, key feature (pool/kitchen/etc), location/school proximity, buyer scarcity, and one trade-off reframe.
@@ -569,7 +569,13 @@ Generate EXACTLY 4 pricing_cards (aspirational, competitive, strategic, floor).
 Generate EXACTLY 5-6 feature_positioning items.
 Generate EXACTLY 4 limits_of_evidence.items (interior_condition, build_defects, neighbour_disputes, council_DAs_or_strata) — this is the new "What We Did Not See" section.
 The morning_in_this_home narrative is for the new buyer-perspective page — pay close attention to the absolute rules. If you cannot satisfy all five rules, regenerate this single field internally before returning JSON.
-Return ONLY valid JSON. No markdown, no commentary."""
+
+OUTPUT FORMAT (CRITICAL — parser is strict):
+- Return ONLY a single valid JSON object. Nothing else.
+- No markdown fences (no ```json or ```).
+- No prose before the opening curly brace.
+- No prose after the closing curly brace — no word counts, no compliance notes, no "Here is the JSON:", no explanation, nothing.
+- Your entire response must be parseable by json.loads() on the raw text."""
 
     try:
         resp = client.messages.create(
@@ -578,10 +584,21 @@ Return ONLY valid JSON. No markdown, no commentary."""
             messages=[{"role": "user", "content": prompt}],
         )
         text = resp.content[0].text.strip()
+        # Strip markdown code fences if Claude wrapped the JSON
         if text.startswith("```"):
             text = re.sub(r"^```\w*\n?", "", text)
             text = re.sub(r"\n?```$", "", text)
-        editorial = json.loads(text)
+        # Skip any prose before the first '{'
+        first_brace = text.find("{")
+        if first_brace > 0:
+            text = text[first_brace:]
+        # Use raw_decode so any trailing prose / word counts / commentary after the JSON
+        # object don't break parsing. (Claude occasionally ignores "no commentary" — defend.)
+        decoder = json.JSONDecoder()
+        editorial, end_idx = decoder.raw_decode(text)
+        trailing = text[end_idx:].strip()
+        if trailing:
+            print(f"  [INFO] Claude appended {len(trailing)} chars after JSON; ignored.")
         print("  Claude editorial generated successfully")
         return editorial
     except Exception as e:
@@ -1088,7 +1105,7 @@ def main():
             for c in review.warns:
                 print(f"    warn  {c.name}: {c.detail}")
         else:
-            print(f"  Editorial review: PASS (14/14)")
+            print(f"  Editorial review: PASS ({len(review.checks)}/{len(review.checks)})")
         if args.strict and not review.passed:
             sys.exit("[ERROR] Editorial review failed under --strict; aborting render.")
     except ImportError:

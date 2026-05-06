@@ -50,17 +50,19 @@ FORBIDDEN_WORDS = [
 ]
 
 ADVICE_PATTERNS = [
-    # "You should" framing — forbidden by feedback_no_advice_data_only.md
+    # "You should" framing — forbidden by feedback_no_advice_data_only.md.
+    # Restricted to seller-directed framing only; "buyers move quickly" is fine to describe.
+    # NB. Do NOT add bare patterns like \bact now\b or \bmove quickly\b — they false-positive
+    # when the prose describes buyer behaviour, not seller advice.
     r"\byou should\b",
     r"\byou must\b",
     r"\byou need to\b",
     r"\byou ought to\b",
     r"\byou'd better\b",
     r"\byou had better\b",
-    # Imperative urgency tied to the seller's action
-    r"\bact now\b",
-    r"\bmove quickly\b",
-    r"\blist immediately\b",
+    # Seller-directed urgency (specifically prefixed with "you" or imperative-at-sentence-start)
+    r"(?:^|[.!?]\s+)(?:Act now|List immediately|Move quickly|Sell now)\b",
+    r"\byou (?:must|need to|should) (?:act|list|sell|move) (?:now|quickly|immediately|today)\b",
 ]
 
 PREDICTION_PATTERNS = [
@@ -301,15 +303,18 @@ def check_strengths_quality(editorial: dict) -> CheckResult:
             weak.append(f"strength looks like _minimal_editorial fallback: {s[:60]}…")
             continue
         has_dollar = bool(re.search(r"\$[\d,]+", s))
-        has_measurement = bool(re.search(r"\d+\s*(m²|sqm|m2|/10|metres|m\b|ha\b)", s, re.IGNORECASE))
+        has_measurement = bool(re.search(r"\d+\s*(m²|sqm|m2|/10|metres|m\b|km\b|kilometres|ha\b)", s, re.IGNORECASE))
         # Count-with-unit (e.g. "5 sold in 12 months", "1 had a pool", "3 bedrooms")
         has_count = bool(re.search(
             r"\b\d+\s*(sold|listed|sales|months?|years?|days?|weeks?|"
-            r"bedrooms?|bathrooms?|cars?|properties|homes?|metres?|points?)\b",
+            r"bedrooms?|bathrooms?|cars?|properties|homes?|metres?|points?|"
+            r"premium|segment|catchment|inspections?|enquiries|enquiry)\b",
             s, re.IGNORECASE,
         ))
-        if not (has_dollar or has_measurement or has_count):
-            weak.append(f"strength lacks dollar/measurement/count: {s[:60]}…")
+        # Percentage anchor (e.g. "15% buyer premium", "32% faster sales")
+        has_pct = bool(re.search(r"\d+(?:\.\d+)?\s*%", s))
+        if not (has_dollar or has_measurement or has_count or has_pct):
+            weak.append(f"strength lacks dollar/measurement/count/%: {s[:60]}…")
     if weak:
         return CheckResult("strengths_quality", False, "; ".join(weak))
     return CheckResult("strengths_quality", True)
@@ -376,9 +381,12 @@ def check_value_equation_quality(editorial: dict) -> CheckResult:
             weak.append(f"#{i+1} '{title[:30]}': reframe missing/too short")
             continue
         has_specific = bool(
-            re.search(r"\$[\d,]+", body)
-            or ADDRESS_PATTERN.search(body)
-            or re.search(r"\d+\s*(m²|sqm|m2|/10)", body, re.IGNORECASE)
+            re.search(r"\$[\d,]+", body)                                # dollar
+            or ADDRESS_PATTERN.search(body)                              # comp address
+            or re.search(r"\d+\s*(m²|sqm|m2|/10)", body, re.IGNORECASE)  # measurement
+            or re.search(r"\d+(?:\.\d+)?\s*%", body)                     # percentage
+            or re.search(r"\d+\s+of\s+\d+", body, re.IGNORECASE)         # count-of-N ("2 of 117")
+            or re.search(r"\d+[-–]\d+\s*(?:months?|years?|weeks?|days?)\b", body, re.IGNORECASE)  # time period
         )
         if not has_specific:
             weak.append(f"#{i+1} '{title[:30]}': body lacks specific anchor")

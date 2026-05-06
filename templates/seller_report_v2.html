@@ -707,23 +707,38 @@
   </div>
   {% endif %}
   {% endfor %}
-  {% if limits_of_evidence and limits_of_evidence.items %}
-  <div class="limits-of-evidence" style="margin-top: 16px; padding: 14px 18px; background: var(--birch); border-radius: 10px; page-break-inside: avoid;">
-    <h3 style="margin: 0 0 6px 0;">What We Did Not See</h3>
-    {% if limits_of_evidence.intro %}<p style="margin: 0 0 10px 0; font-size: 9pt; color: var(--text-secondary);">{{ limits_of_evidence.intro }}</p>{% endif %}
-    <ul style="margin: 0; padding-left: 18px; font-size: 9pt; line-height: 1.5;">
-      {% for item in limits_of_evidence.items %}
-      <li style="margin-bottom: 6px;"><strong>{{ item.title }}</strong> &mdash; {{ item.body }}</li>
-      {% endfor %}
-    </ul>
-    {% if limits_of_evidence.closing %}<p style="margin: 10px 0 0 0; font-size: 9pt; font-style: italic; color: var(--text-secondary);">{{ limits_of_evidence.closing }}</p>{% endif %}
+  <div class="page-footer">
+    <div class="page-footer-meta">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div>
+    {{ smarter_with_data() }}
   </div>
+</div>
+
+
+<!-- ══════ PAGE 5b: WHAT WE DID NOT SEE (M6, dedicated page) ══════ -->
+{# NB: limits_of_evidence['items'] uses bracket form because dict.items is a Python method in Jinja #}
+{% if limits_of_evidence and limits_of_evidence['items'] %}
+<div class="page">
+  <div class="page-header">
+    <div class="page-header-title">{{ street_address }}</div>
+    <div class="page-header-mark">{{ f_mark('#22382C', 22) }}</div>
+  </div>
+  <h2>What We Did Not See</h2>
+  {% if limits_of_evidence.intro %}<p class="subtitle">{{ limits_of_evidence.intro }}</p>{% endif %}
+  {% for item in limits_of_evidence['items'] %}
+  <div class="value-eq positive-signal" style="margin: 8px 0;">
+    <h3>{{ item.title }}</h3>
+    <p>{{ item.body }}</p>
+  </div>
+  {% endfor %}
+  {% if limits_of_evidence.closing %}
+  <p style="margin-top: 16px; font-size: 9pt; font-style: italic; color: var(--text-secondary);">{{ limits_of_evidence.closing }}</p>
   {% endif %}
   <div class="page-footer">
     <div class="page-footer-meta">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div>
     {{ smarter_with_data() }}
   </div>
 </div>
+{% endif %}
 
 
 <!-- ══════ PAGE 6: LOCATION & LIFESTYLE ══════ -->
