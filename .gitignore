@@ -1,5 +1,8 @@
 # Logs and runtime state
-logs/
+logs/*
+# Exception: human-curated fix history is documentation, not runtime state
+# (CLAUDE.md mandatory rule #1: every fix gets a log entry; rule #2: push for disaster recovery)
+!logs/fix-history/
 state/
 *.log
 *.pid
@@ -31,6 +34,10 @@ VM_MONGODB_CONNECTION_FIX_SUMMARY.md
 VM_MONGODB_URI_EXPORT_FIX_COMPLETE.md
 VM_ORCHESTRATOR_NIGHT_RUN_ANALYSIS.md
 
+# Generated run artifacts
+artifacts/
+proposals/
+
 # Backup/temp files
 *.bak
 *.backup
@@ -39,3 +46,6 @@ VM_ORCHESTRATOR_NIGHT_RUN_ANALYSIS.md
 *.BROKEN_LOCAL_PATHS_*
 .tmp.driveupload/
 .env
+
+# Local Netlify folder
+.netlify

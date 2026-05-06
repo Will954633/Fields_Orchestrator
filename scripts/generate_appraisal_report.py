@@ -549,13 +549,26 @@ Return JSON with these keys:
   ],
   "campaign_structure": "3-4 sentences: specific campaign approach — duration, channels, staging priorities, open home schedule. Reference the property's specific strengths.",
   "photography_strategy": "3 sentences: specific rooms/angles to prioritise, time of day, what to stage. Reference the property's actual features (pool, kitchen, deck, etc.).",
-  "open_home_strategy": "3 sentences: approach to inspections — what to highlight on the walk-through, where to start, what creates the emotional peak."
+  "open_home_strategy": "3 sentences: approach to inspections — what to highlight on the walk-through, where to start, what creates the emotional peak.",
+  "limits_of_evidence": {{
+    "intro": "One sentence introducing why this section exists. Frame as: we want you to know what we couldn't see, so you can weigh our analysis honestly.",
+    "items": [
+      {{"title": "Interior condition", "body": "2-3 sentences. State that our score is derived from photos, name a specific signal an in-person inspection might find (e.g. dampness, hidden mould, dated wiring, structural cracks, sub-floor issues), and quantify the % range impact (e.g. 3-8%) if that signal were present."}},
+      {{"title": "Recent build defects or repairs", "body": "2-3 sentences. State we have no record of repairs to roof, waterproofing, structural elements, or recent insurance claims. Mention what a pest-and-building report could change."}},
+      {{"title": "Neighbour disputes / fence lines / overlooks", "body": "2-3 sentences. State this isn't visible from our data sources. Note that boundary disputes and informal fence-line agreements only surface in the contract/disclosure phase."}},
+      {{"title": "Council DAs and infrastructure proposals within 500m", "body": "2-3 sentences. State we monitor council DAs but minor proposals or recently-approved works affecting view lines or noise can shift desirability. (For units only: substitute body corporate / strata health — recent special levies, scheduled major works, sinking fund balance — which we read from the disclosure but cannot independently verify.)"}}
+    ],
+    "closing": "One sentence reaffirming why an in-person inspection by our property analyst matters before signing. Honest, not dismissive."
+  }},
+  "morning_in_this_home": "EXACTLY 200-250 words. Present-tense sensory narrative written as if you ARE a prospective buyer experiencing the home for the first time. ABSOLUTE RULES: (a) NEVER use 'you' or 'your' addressing the seller; the narrator IS a buyer, so 'you' may not appear at all — write in 1st-person 'I' or 3rd-person 'they' or implied present-tense ('the kettle is on'); (b) MUST reference at least one named POI from the property's data (a school, park, cafe, beach, reserve, by name); (c) MUST reference at least one named feature of THIS property (pool, deck, kitchen island, the wetland boundary, the cul-de-sac, etc.); (d) MUST reference a named time of day or moment (morning, dusk, twilight, Sunday afternoon, etc.); (e) MUST end on a quiet sensory image, not a conclusion or pitch. Style: short clean sentences, sensory verbs, no real-estate clichés, no advice, no 'you should'. Think Cereal magazine, not a brochure."
 }}
 
 Generate EXACTLY 5-7 value_equations covering: land size, internal floor area, condition/renovation, key feature (pool/kitchen/etc), location/school proximity, buyer scarcity, and one trade-off reframe.
 Generate EXACTLY 3 buyer_profiles (primary, secondary, tertiary).
 Generate EXACTLY 4 pricing_cards (aspirational, competitive, strategic, floor).
 Generate EXACTLY 5-6 feature_positioning items.
+Generate EXACTLY 4 limits_of_evidence.items (interior_condition, build_defects, neighbour_disputes, council_DAs_or_strata) — this is the new "What We Did Not See" section.
+The morning_in_this_home narrative is for the new buyer-perspective page — pay close attention to the absolute rules. If you cannot satisfy all five rules, regenerate this single field internally before returning JSON.
 Return ONLY valid JSON. No markdown, no commentary."""
 
     try:
@@ -853,6 +866,10 @@ def render_html(prop, client_name, top_comps, room_assessments, editorial,
         "campaign_structure": editorial.get("campaign_structure", ""),
         "photography_strategy": editorial.get("photography_strategy", ""),
         "open_home_strategy": editorial.get("open_home_strategy", ""),
+        # Phase 1 modules (M6 + M11) — new fields, optional in older cached editorials.
+        # Template guards via {% if %} so old editorial JSONs render unchanged.
+        "limits_of_evidence": editorial.get("limits_of_evidence"),
+        "morning_in_this_home": editorial.get("morning_in_this_home", ""),
         "research_stats": RESEARCH_STATS,
         "total_sold_tracked": TOTAL_SOLD_TRACKED,
         # Photos — emit empty string (not "file://") when absent so {% if %} guards work

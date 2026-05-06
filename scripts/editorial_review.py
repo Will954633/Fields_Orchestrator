@@ -400,6 +400,79 @@ def check_buyer_profile_specificity(editorial: dict) -> CheckResult:
     return CheckResult("buyer_profile_quality", True)
 
 
+def check_limits_of_evidence(editorial: dict) -> CheckResult:
+    """M6 — Limits of Our Evidence. Optional in older cached editorials (warn if missing)."""
+    loe = editorial.get("limits_of_evidence")
+    if not loe:
+        return CheckResult("limits_of_evidence", False,
+                           "missing — Phase 1 module M6 not generated (older editorial?)",
+                           severity="warn")
+    if not isinstance(loe, dict):
+        return CheckResult("limits_of_evidence", False, "not a dict")
+    items = loe.get("items") or []
+    if len(items) != 4:
+        return CheckResult("limits_of_evidence", False,
+                           f"got {len(items)} items, expected exactly 4")
+    intro = (loe.get("intro") or "").strip()
+    closing = (loe.get("closing") or "").strip()
+    if len(intro) < 25:
+        return CheckResult("limits_of_evidence", False, "intro missing or too short (< 25 chars)")
+    if len(closing) < 25:
+        return CheckResult("limits_of_evidence", False, "closing missing or too short (< 25 chars)")
+    for i, item in enumerate(items):
+        if not isinstance(item, dict):
+            return CheckResult("limits_of_evidence", False, f"item {i+1} not a dict")
+        title = (item.get("title") or "").strip()
+        body = (item.get("body") or "").strip()
+        if not title or len(body) < 60:
+            return CheckResult("limits_of_evidence", False,
+                               f"item {i+1} missing title or body too short (< 60 chars)")
+    return CheckResult("limits_of_evidence", True)
+
+
+def check_morning_narrative(editorial: dict) -> CheckResult:
+    """M11 — narrative transportation page. Optional in older cached editorials (warn if missing).
+
+    Strict rules when present: 200-250 words, no second-person 'you' addressing the seller,
+    references at least one named time of day, ends on a sensory image not a conclusion.
+    """
+    text = (editorial.get("morning_in_this_home") or "").strip()
+    if not text:
+        return CheckResult("morning_narrative", False,
+                           "missing — Phase 1 module M11 not generated (older editorial?)",
+                           severity="warn")
+    word_count = len(text.split())
+    # Tolerate slightly outside the 200-250 target — but flag obvious off-target generations.
+    if word_count < 170 or word_count > 290:
+        return CheckResult("morning_narrative", False,
+                           f"word count {word_count}, expected 200-250 (tolerated 170-290)")
+    # No "you" addressing — narrator IS the buyer.
+    # NB. Permitted if it's clearly part of an inner thought ("could you imagine living here") but the
+    # rule is strict for safety; if a legitimate phrasing trips this, edit prompt to forbid the construction.
+    if re.search(r"\b(you|your|you're|you've|you'll|you'd)\b", text, re.IGNORECASE):
+        return CheckResult("morning_narrative", False,
+                           "contains 'you'/'your' — narrator must be a buyer, not address the seller")
+    # Must reference a named time of day or temporal moment.
+    times = [
+        "morning", "afternoon", "evening", "dusk", "dawn", "sunrise", "sunset",
+        "twilight", "midday", "midnight", "midmorning", "midafternoon",
+        "first light", "early", "late afternoon", "late evening",
+        "saturday", "sunday", "weekend",
+    ]
+    if not any(re.search(rf"\b{re.escape(t)}\b", text, re.IGNORECASE) for t in times):
+        return CheckResult("morning_narrative", False, "no named time of day or temporal moment")
+    # Should not end with a hard pitch / conclusion. Heuristic: last sentence shouldn't contain
+    # advice/CTA verbs.
+    last_sentence = re.split(r"(?<=[.!?])\s+", text)[-1].strip()
+    pitch_words = ["consider", "discover", "experience this", "this is the", "don't miss",
+                   "act now", "the perfect"]
+    if any(p in last_sentence.lower() for p in pitch_words):
+        return CheckResult("morning_narrative", False,
+                           f"ending reads as pitch/conclusion, not sensory image: '{last_sentence[:60]}…'",
+                           severity="warn")
+    return CheckResult("morning_narrative", True)
+
+
 def check_pricing_cards(editorial: dict) -> CheckResult:
     """4 pricing cards expected; each must have a range and rationale."""
     cards = editorial.get("pricing_cards", []) or []
@@ -436,6 +509,9 @@ ALL_CHECKS = [
     check_value_equation_quality,
     check_buyer_profile_specificity,
     check_pricing_cards,
+    # Phase 1 modules — warn-severity when field absent (backwards-compat with older cached editorials)
+    check_limits_of_evidence,
+    check_morning_narrative,
 ]
 
 

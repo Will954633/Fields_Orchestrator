@@ -707,6 +707,18 @@
   </div>
   {% endif %}
   {% endfor %}
+  {% if limits_of_evidence and limits_of_evidence.items %}
+  <div class="limits-of-evidence" style="margin-top: 16px; padding: 14px 18px; background: var(--birch); border-radius: 10px; page-break-inside: avoid;">
+    <h3 style="margin: 0 0 6px 0;">What We Did Not See</h3>
+    {% if limits_of_evidence.intro %}<p style="margin: 0 0 10px 0; font-size: 9pt; color: var(--text-secondary);">{{ limits_of_evidence.intro }}</p>{% endif %}
+    <ul style="margin: 0; padding-left: 18px; font-size: 9pt; line-height: 1.5;">
+      {% for item in limits_of_evidence.items %}
+      <li style="margin-bottom: 6px;"><strong>{{ item.title }}</strong> &mdash; {{ item.body }}</li>
+      {% endfor %}
+    </ul>
+    {% if limits_of_evidence.closing %}<p style="margin: 10px 0 0 0; font-size: 9pt; font-style: italic; color: var(--text-secondary);">{{ limits_of_evidence.closing }}</p>{% endif %}
+  </div>
+  {% endif %}
   <div class="page-footer">
     <div class="page-footer-meta">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div>
     {{ smarter_with_data() }}
@@ -782,6 +794,13 @@
   <div class="not-for-box">
     <h3>Not Ideal For</h3>
     <ul>{% for n in not_ideal_for %}<li>{{ n }}</li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+  {% if morning_in_this_home %}
+  <hr class="divider">
+  <div class="morning-narrative" style="background: var(--grass); border-radius: 10px; padding: 18px 22px; margin: 8px 0; page-break-inside: avoid;">
+    <div style="font-size: 8pt; letter-spacing: 1.5px; text-transform: uppercase; color: var(--copper); margin-bottom: 8px;">A Morning In This Home</div>
+    <p style="color: var(--birch); font-size: 9.5pt; line-height: 1.6; margin: 0; font-style: italic;">{{ morning_in_this_home }}</p>
   </div>
   {% endif %}
   <hr class="divider">
