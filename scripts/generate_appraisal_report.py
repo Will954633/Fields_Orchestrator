@@ -661,6 +661,10 @@ def download_photos(prop: dict, work_dir: Path) -> dict:
     images = prop.get("property_images", [])
     paths = {}
 
+    # Per-property local cache fallback (used when blob storage is unavailable
+    # or for offline preview runs). Files named hero.jpg, exterior.jpg, etc.
+    cache_dir = ROOT / "cache" / "property_photos" / str(prop.get("_id", ""))
+
     # Dynamic: take first available for each role
     # Hero = first image, kitchen = try index 3, living = try index 7, aerial = try index 2
     roles = [
@@ -684,7 +688,11 @@ def download_photos(prop: dict, work_dir: Path) -> dict:
                 except Exception:
                     continue
         if not found:
-            paths[name] = ""
+            cached = cache_dir / f"{name}.jpg"
+            if cached.is_file():
+                paths[name] = str(cached)
+            else:
+                paths[name] = ""
     return paths
 
 
@@ -780,10 +788,20 @@ def render_html(prop, client_name, top_comps, room_assessments, editorial,
     listing_low = round(listing_low / 5000) * 5000
     listing_high = round(listing_high / 5000) * 5000
 
+    raw_street = prop.get("street_address") or prop.get("address", "")
+    # Stack the street address onto multiple lines for the cover copper tab.
+    # "13 Terrace Court" → "13<br>Terrace<br>Court"
+    _stack_words = raw_street.split()
+    street_address_stacked = "<br>".join(_stack_words) if _stack_words else raw_street
+    report_date_now = datetime.now(AEST)
+
     context = {
         "client_name": client_name,
-        "report_date": datetime.now(AEST).strftime("%d %B %Y"),
-        "street_address": prop.get("street_address") or prop.get("address", ""),
+        "report_date": report_date_now.strftime("%d %B %Y"),
+        "report_date_upper": report_date_now.strftime("%d %B %Y").upper(),
+        "street_address": raw_street,
+        "street_address_stacked": street_address_stacked,
+        "icons_dir": f"file://{TEMPLATE_DIR / 'icons'}",
         "suburb": suburb_display,
         "postcode": prop.get("postcode", ""),
         "bedrooms": prop.get("bedrooms", "?"),
@@ -827,13 +845,13 @@ def render_html(prop, client_name, top_comps, room_assessments, editorial,
         "open_home_strategy": editorial.get("open_home_strategy", ""),
         "research_stats": RESEARCH_STATS,
         "total_sold_tracked": TOTAL_SOLD_TRACKED,
-        # Photos
-        "hero_photo": f"file://{photo_paths.get('hero', '')}",
-        "exterior_photo": f"file://{photo_paths.get('exterior', '')}",
-        "kitchen_photo": f"file://{photo_paths.get('kitchen', '')}",
-        "living_photo": f"file://{photo_paths.get('living', '')}",
-        "aerial_photo": f"file://{photo_paths.get('aerial', '')}",
-        "pool_photo": f"file://{photo_paths.get('pool', '')}",
+        # Photos — emit empty string (not "file://") when absent so {% if %} guards work
+        "hero_photo": (f"file://{photo_paths['hero']}" if photo_paths.get('hero') else ""),
+        "exterior_photo": (f"file://{photo_paths['exterior']}" if photo_paths.get('exterior') else ""),
+        "kitchen_photo": (f"file://{photo_paths['kitchen']}" if photo_paths.get('kitchen') else ""),
+        "living_photo": (f"file://{photo_paths['living']}" if photo_paths.get('living') else ""),
+        "aerial_photo": (f"file://{photo_paths['aerial']}" if photo_paths.get('aerial') else ""),
+        "pool_photo": (f"file://{photo_paths['pool']}" if photo_paths.get('pool') else ""),
         "logo_path": f"file://{TEMPLATE_DIR / 'fields-logo-transparent.png'}",
         "logo_white_path": f"file://{TEMPLATE_DIR / 'fields-logo-white.png'}",
         # Satellite analysis

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>Property Position Report — {{ address }}</title>
-<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   @page { size: A4; margin: 0; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -11,14 +11,15 @@
   /* ── BRAND TOKENS ── */
   :root {
     --grass: #22382C;
+    --grass-deep: #1B2D24;
     --birch: #E6DDD2;
+    --birch-dark: #d4c9bc;
     --copper: #B76749;
+    --copper-soft: #f0d9cc;
+    --copper-tint: #fdf3ec;
     --sun: #FEC66F;
     --sky: #A0D1C9;
     --white: #FFFFFF;
-    --grass-light: #2d4a3a;
-    --birch-dark: #d4c9bc;
-    --copper-light: #c9836a;
     --text: #22382C;
     --text-secondary: #4a5e52;
     --text-muted: #7a8a80;
@@ -31,156 +32,440 @@
     line-height: 1.5;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
-    counter-reset: page-counter;
+    background: var(--birch);
   }
 
-  /* ── COVER ── */
-  .cover { width: 210mm; height: 297mm; position: relative; overflow: hidden; page-break-after: always; }
-  .cover-image { width: 100%; height: 62%; object-fit: cover; display: block; }
-  .cover-overlay { position: absolute; top: 0; left: 0; right: 0; height: 62%; background: linear-gradient(180deg, rgba(34,56,44,0.3) 0%, rgba(34,56,44,0) 30%, rgba(34,56,44,0.5) 100%); }
-  .cover-logo { position: absolute; top: 28px; left: 36px; }
-  .cover-logo img { height: 32px; width: auto; }
-  .cover-bottom { height: 38%; background: var(--grass); padding: 36px 48px; display: flex; flex-direction: column; justify-content: center; }
-  .cover-label { font-size: 9pt; letter-spacing: 3px; text-transform: uppercase; color: var(--sky); margin-bottom: 10px; font-weight: 500; }
-  .cover-address { font-size: 28pt; font-weight: 700; color: var(--birch); line-height: 1.15; margin-bottom: 6px; }
-  .cover-suburb { font-size: 13pt; color: var(--birch-dark); font-weight: 300; margin-bottom: 24px; }
-  .cover-client { font-size: 14pt; font-weight: 600; color: var(--sun); margin-bottom: 2px; }
-  .cover-author { font-size: 9.5pt; font-weight: 400; color: var(--birch-dark); margin-bottom: 6px; }
-  .cover-meta { font-size: 8.5pt; color: var(--text-muted); margin-top: auto; }
-  .cover-meta span { color: var(--birch); }
+  /* ── DECORATIVE F MARK (outline) ── */
+  .deco-f {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 175px;
+    height: 175px;
+    pointer-events: none;
+    z-index: 3;
+  }
+  .deco-f-watermark {
+    position: absolute;
+    width: 240px;
+    height: 240px;
+    opacity: 0.08;
+    pointer-events: none;
+  }
 
-  /* ── PAGE ── */
-  .page { width: 210mm; min-height: 297mm; padding: 30px 38px 58px; page-break-after: always; position: relative; overflow: hidden; background: var(--white); counter-increment: page-counter; }
-  .page-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1.5px solid var(--birch); padding-bottom: 8px; margin-bottom: 22px; }
-  .page-header img { height: 18px; width: auto; }
-  .page-header-right { font-size: 8pt; color: var(--text-muted); }
-  .page-footer { position: absolute; bottom: 18px; left: 38px; right: 38px; text-align: center; font-size: 7pt; color: var(--text-muted); border-top: 1px solid var(--birch); padding-top: 5px; display: flex; justify-content: space-between; }
-  .page-footer-center { flex: 1; text-align: center; }
-  .page-footer-right { font-size: 7pt; color: var(--text-muted); }
+  /* The "Smarter with data" footer mark (small copper F) */
+  .smarter-mark {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 8pt;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--copper);
+    font-weight: 500;
+  }
+  .smarter-mark svg { width: 16px; height: 16px; }
+  .smarter-mark.on-dark { color: var(--copper-soft); }
+  .smarter-mark.on-dark svg path { fill: var(--copper); }
+
+  /* ── COVER ── */
+  .cover {
+    width: 210mm;
+    height: 297mm;
+    position: relative;
+    overflow: hidden;
+    background: var(--grass);
+    page-break-after: always;
+  }
+  .cover-image {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 75%;
+    object-fit: cover;
+    display: block;
+  }
+  .cover-shade {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 75%;
+    background: linear-gradient(180deg, rgba(34,56,44,0) 0%, rgba(34,56,44,0) 60%, rgba(34,56,44,0.45) 100%);
+  }
+  .cover-logo {
+    position: absolute;
+    top: 30px;
+    right: 40px;
+    z-index: 4;
+  }
+  .cover-logo img { height: 30px; width: auto; }
+
+  /* Copper address tab bleeding off the left edge, straddling photo + green band */
+  .cover-address-tab {
+    position: absolute;
+    left: -30px;
+    bottom: 30%;
+    z-index: 4;
+    background: var(--copper);
+    border-radius: 0 32px 32px 0;
+    padding: 28px 40px 26px 60px;
+    width: 290px;
+    color: var(--white);
+  }
+  .cover-address-tab .street {
+    font-size: 36pt;
+    font-weight: 700;
+    line-height: 0.95;
+    letter-spacing: -0.5px;
+  }
+  .cover-address-tab .suburb {
+    margin-top: 18px;
+    font-size: 10pt;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+
+  /* Dark green bottom band */
+  .cover-band {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 25%;
+    background: var(--grass);
+    padding: 32px 48px 32px 270px;
+    color: var(--birch);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .cover-band-label {
+    font-size: 9.5pt;
+    letter-spacing: 5px;
+    text-transform: uppercase;
+    color: var(--birch);
+    margin-bottom: 18px;
+    font-weight: 400;
+  }
+  .cover-band-prepared {
+    font-size: 11.5pt;
+    font-weight: 700;
+    color: var(--birch);
+    margin-bottom: 4px;
+    padding-bottom: 6px;
+    border-bottom: 1.5px solid var(--copper);
+    display: inline-block;
+  }
+  .cover-band-author {
+    margin-top: 8px;
+    font-size: 9.5pt;
+    color: var(--birch-dark);
+    font-weight: 300;
+    line-height: 1.5;
+  }
+  .cover-band-author a { color: var(--birch-dark); text-decoration: none; }
+
+  .cover-footer {
+    position: absolute;
+    left: 48px; right: 48px; bottom: 28px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 4;
+    color: var(--birch);
+    font-size: 9pt;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+  }
+
+  /* ── INTERIOR PAGE ── */
+  .page {
+    width: 210mm;
+    min-height: 297mm;
+    padding: 28px 38px 60px;
+    page-break-after: always;
+    position: relative;
+    overflow: hidden;
+    background: var(--birch);
+  }
+  .page:last-of-type { page-break-after: auto; }
+
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+  }
+  .page-header-title {
+    font-size: 9pt;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--copper);
+    font-weight: 500;
+    border-bottom: 1.5px solid var(--copper);
+    padding: 0 0 4px 0;
+  }
+  .page-header-mark { width: 26px; height: 26px; }
+
+  .page-footer {
+    position: absolute;
+    bottom: 22px;
+    left: 38px;
+    right: 38px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 7.5pt;
+    color: var(--text-muted);
+    border-top: 1px solid var(--birch-dark);
+    padding-top: 8px;
+  }
+  .page-footer-meta { color: var(--text-muted); }
 
   /* ── TYPOGRAPHY ── */
-  h1 { font-size: 19pt; font-weight: 700; color: var(--grass); margin-bottom: 3px; line-height: 1.2; }
-  h2 { font-size: 14pt; font-weight: 700; color: var(--grass); margin-bottom: 10px; line-height: 1.2; }
+  h1 { font-size: 26pt; font-weight: 700; color: var(--grass); margin-bottom: 4px; line-height: 1.1; letter-spacing: -0.5px; }
+  h2 { font-size: 17pt; font-weight: 700; color: var(--grass); margin-bottom: 8px; line-height: 1.2; letter-spacing: -0.3px; }
   h3 { font-size: 10.5pt; font-weight: 600; color: var(--grass); margin-bottom: 5px; }
-  .subtitle { font-size: 9pt; color: var(--text-muted); margin-top: -6px; margin-bottom: 14px; }
+  .subtitle { font-size: 10pt; color: var(--text-secondary); margin-top: -2px; margin-bottom: 14px; line-height: 1.45; }
 
-  /* ── FIELDS TAKE ── */
-  .take-headline { font-size: 16pt; font-weight: 700; color: var(--grass); line-height: 1.25; margin-bottom: 5px; }
-  .take-subhead { font-size: 10pt; color: var(--text-secondary); line-height: 1.5; margin-bottom: 16px; }
-  .take-verdict-box { background: var(--grass); color: var(--birch); border-radius: 10px; padding: 22px 26px; margin: 14px 0; }
-  .take-verdict-label { font-size: 7.5pt; letter-spacing: 2px; text-transform: uppercase; color: var(--sky); margin-bottom: 5px; font-weight: 500; }
-  .take-verdict-text { font-size: 10.5pt; line-height: 1.5; color: var(--birch); }
-  .take-pills { display: flex; gap: 8px; flex-wrap: wrap; margin: 14px 0; }
-  .take-pill { background: var(--birch); border: 1px solid var(--birch-dark); border-radius: 20px; padding: 5px 12px; font-size: 8.5pt; color: var(--grass); font-weight: 500; }
-  .strengths-tradeoff { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 14px 0; }
-  .strengths-box { padding: 14px; border-radius: 8px; background: #eef5f0; border: 1px solid var(--sky); }
-  .tradeoff-box { padding: 14px; border-radius: 8px; background: #fdf5ef; border: 1px solid var(--copper-light); }
-  .strengths-box h3 { color: var(--grass); font-size: 10pt; }
-  .tradeoff-box h3 { color: var(--copper); font-size: 10pt; }
-  .strengths-box li, .tradeoff-box li { font-size: 8.5pt; margin-bottom: 3px; color: var(--text-secondary); }
+  /* ── FIELDS TAKE PAGE ── */
+  .take-row {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    gap: 28px;
+    align-items: start;
+    margin-bottom: 22px;
+  }
+  .take-tab {
+    background: var(--copper);
+    color: var(--white);
+    border-radius: 0 32px 32px 0;
+    margin-left: -38px;
+    padding: 30px 24px 32px 38px;
+    font-size: 30pt;
+    font-weight: 700;
+    line-height: 0.95;
+    letter-spacing: -0.5px;
+  }
+  .take-intro {
+    padding-top: 14px;
+  }
+  .take-intro p {
+    font-size: 11pt;
+    color: var(--grass);
+    font-weight: 600;
+    line-height: 1.45;
+  }
+  .take-headline {
+    font-size: 19pt;
+    font-weight: 700;
+    color: var(--grass);
+    line-height: 1.2;
+    margin: 6px 0 10px;
+    letter-spacing: -0.3px;
+  }
+  .take-subhead {
+    font-size: 10pt;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin-bottom: 14px;
+  }
+  .take-pills { display: flex; gap: 7px; flex-wrap: wrap; margin: 12px 0 16px; }
+  .take-pill {
+    background: var(--white);
+    border: 1px solid var(--birch-dark);
+    border-radius: 22px;
+    padding: 5px 14px;
+    font-size: 8.5pt;
+    color: var(--grass);
+    font-weight: 500;
+  }
+  .take-verdict-box {
+    position: relative;
+    background: var(--grass);
+    color: var(--birch);
+    border-radius: 12px;
+    padding: 22px 26px;
+    margin: 14px 0 18px;
+    overflow: hidden;
+  }
+  .take-verdict-label {
+    font-size: 8.5pt;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--copper-soft);
+    margin-bottom: 8px;
+    font-weight: 500;
+  }
+  .take-verdict-text {
+    font-size: 10.5pt;
+    line-height: 1.55;
+    color: var(--birch);
+    position: relative;
+    z-index: 2;
+  }
+
+  .strengths-tradeoff {
+    display: grid;
+    grid-template-columns: 1.05fr 1fr;
+    gap: 14px;
+    margin-top: 10px;
+  }
+  .strengths-box {
+    padding: 16px 18px;
+  }
+  .strengths-box h3 {
+    font-size: 10pt;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--grass);
+    font-weight: 500;
+    margin-bottom: 12px;
+  }
+  .strength-item {
+    display: grid;
+    grid-template-columns: 36px 1fr;
+    gap: 12px;
+    align-items: start;
+    padding: 10px 0;
+    border-top: 1px solid var(--birch-dark);
+  }
+  .strength-item:first-of-type { border-top: none; padding-top: 4px; }
+  .strength-item img { width: 36px; height: 36px; }
+  .strength-item p {
+    font-size: 8.5pt;
+    color: var(--text-secondary);
+    line-height: 1.45;
+  }
+
+  .tradeoff-box {
+    padding: 14px 16px 16px;
+    border: 1.5px solid var(--copper);
+    border-radius: 12px;
+    background: var(--copper-tint);
+  }
+  .tradeoff-box h3 {
+    font-size: 10pt;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--copper);
+    font-weight: 500;
+    margin-bottom: 8px;
+  }
+  .tradeoff-box p {
+    font-size: 8.5pt;
+    color: var(--copper);
+    line-height: 1.45;
+    margin-bottom: 10px;
+  }
+  .tradeoff-box img {
+    width: 100%;
+    height: 110px;
+    object-fit: cover;
+    border-radius: 6px;
+  }
 
   /* ── VALUATION ── */
-  .val-banner { background: var(--grass); color: var(--birch); border-radius: 10px; padding: 24px 26px; text-align: center; margin: 10px 0 16px; }
-  .val-label { font-size: 8pt; letter-spacing: 2px; text-transform: uppercase; color: var(--sky); margin-bottom: 6px; font-weight: 500; }
-  .val-ranges { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 10px; }
-  .val-range-box { padding: 14px; border-radius: 8px; background: rgba(255,255,255,0.08); }
-  .val-range-box.listing { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.2); }
-  .val-range-label { font-size: 7pt; letter-spacing: 1.5px; text-transform: uppercase; color: var(--sky); margin-bottom: 4px; font-weight: 500; }
-  .val-range-figure { font-size: 16pt; font-weight: 700; color: var(--birch); }
-  .val-disclaimer { font-size: 7.5pt; color: var(--birch-dark); margin-top: 10px; font-style: italic; }
-  .comp-card { border: 1px solid var(--birch-dark); border-radius: 8px; padding: 10px 12px; margin: 6px 0; }
+  .val-banner { background: var(--grass); color: var(--birch); border-radius: 12px; padding: 24px 26px; text-align: center; margin: 10px 0 16px; }
+  .val-label { font-size: 8.5pt; letter-spacing: 4px; text-transform: uppercase; color: var(--copper-soft); margin-bottom: 14px; font-weight: 500; }
+  .val-ranges { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .val-range-box { padding: 16px 14px; border-radius: 10px; background: rgba(255,255,255,0.06); }
+  .val-range-box.listing { background: rgba(255,255,255,0.13); }
+  .val-range-label { font-size: 7pt; letter-spacing: 2.5px; text-transform: uppercase; color: var(--birch); margin-bottom: 6px; font-weight: 500; }
+  .val-range-figure { font-size: 17pt; font-weight: 700; color: var(--white); letter-spacing: -0.3px; }
+  .val-disclaimer { font-size: 8pt; color: var(--birch-dark); margin-top: 12px; font-style: italic; }
+
+  .comp-card { background: var(--white); border: 1px solid var(--birch-dark); border-radius: 10px; padding: 12px 14px; margin: 8px 0; }
   .comp-card-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
   .comp-card-addr { font-size: 9.5pt; font-weight: 600; color: var(--grass); }
-  .comp-card-price { font-size: 9.5pt; font-weight: 700; color: var(--grass); }
-  .comp-card-meta { font-size: 7pt; color: var(--text-muted); margin-bottom: 4px; }
-  .adj-grid { display: grid; grid-template-columns: 1fr auto auto; gap: 0px 8px; font-size: 7pt; margin: 4px 0; }
+  .comp-card-price { font-size: 10pt; font-weight: 700; color: var(--grass); }
+  .comp-card-meta { font-size: 7pt; color: var(--text-muted); margin-bottom: 6px; }
+  .adj-grid { display: grid; grid-template-columns: 1fr auto auto; gap: 0px 8px; font-size: 7.5pt; margin: 4px 0; }
   .adj-label { color: var(--text-secondary); }
   .adj-diff { color: var(--text-muted); text-align: right; }
   .adj-val { font-weight: 600; text-align: right; }
   .adj-pos { color: #2d6a4f; }
   .adj-neg { color: var(--copper); }
-  .adj-total { border-top: 1.5px solid var(--grass); padding-top: 2px; margin-top: 2px; font-weight: 700; font-size: 8pt; }
-  .comp-card-narrative { font-size: 7pt; color: var(--text-muted); margin-top: 3px; font-style: italic; line-height: 1.3; }
-  .adj-footnote { margin-top: 12px; padding-top: 6px; border-top: 1px solid var(--birch); }
+  .adj-total { border-top: 1.5px solid var(--grass); padding-top: 3px; margin-top: 2px; font-weight: 700; font-size: 8.5pt; color: var(--grass); }
+  .comp-card-narrative { font-size: 7pt; color: var(--text-muted); margin-top: 4px; font-style: italic; line-height: 1.4; }
+  .adj-footnote { margin-top: 12px; padding-top: 6px; border-top: 1px solid var(--birch-dark); }
 
   /* ── ROOM ASSESSMENT ── */
   .room-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0; }
-  .room-card { background: var(--birch); border-radius: 8px; padding: 10px 12px; }
+  .room-card { background: var(--white); border: 1px solid var(--birch-dark); border-radius: 10px; padding: 10px 12px; }
   .room-card h3 { font-size: 9.5pt; margin-bottom: 3px; }
   .room-score { display: inline-block; background: var(--grass); color: var(--birch); border-radius: 4px; padding: 2px 7px; font-size: 8pt; font-weight: 700; margin-bottom: 3px; }
   .room-detail { font-size: 8pt; color: var(--text-secondary); }
   .photo-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 8px 0; }
-  .photo-pair img { width: 100%; height: 150px; object-fit: cover; border-radius: 6px; }
-  .photo-hero { width: 100%; height: 190px; object-fit: cover; border-radius: 8px; margin: 8px 0; }
+  .photo-pair img { width: 100%; height: 150px; object-fit: cover; border-radius: 8px; }
+  .photo-hero { width: 100%; height: 200px; object-fit: cover; border-radius: 10px; margin: 8px 0; }
 
   /* ── VALUE EQUATIONS ── */
-  .value-eq { background: var(--birch); border-left: 3px solid var(--grass); border-radius: 0 8px 8px 0; padding: 12px 16px; margin: 8px 0; page-break-inside: avoid; }
+  .value-eq { background: var(--white); border-left: 3px solid var(--grass); border-radius: 0 10px 10px 0; padding: 12px 16px; margin: 8px 0; page-break-inside: avoid; }
   .value-eq h3 { font-size: 9.5pt; margin-bottom: 3px; color: var(--grass); }
-  .value-eq p { font-size: 8.5pt; color: var(--text-secondary); line-height: 1.4; }
+  .value-eq p { font-size: 8.5pt; color: var(--text-secondary); line-height: 1.45; }
   .value-eq .reframe { font-weight: 600; color: #2d6a4f; }
   .positive-signal { border-left-color: #2d6a4f; }
-  .negative-signal { border-left-color: var(--copper); background: #fdf5ef; }
+  .negative-signal { border-left-color: var(--copper); background: var(--copper-tint); }
 
   /* ── BUYER PROFILES ── */
   .buyer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0; }
-  .buyer-card { padding: 14px; border: 1px solid var(--birch-dark); border-radius: 8px; background: var(--white); }
+  .buyer-card { padding: 14px; border: 1px solid var(--birch-dark); border-radius: 10px; background: var(--white); }
   .buyer-card.primary { border-color: var(--grass); border-width: 2px; }
   .buyer-card h3 { font-size: 10pt; margin-bottom: 4px; color: var(--grass); }
   .buyer-card p { font-size: 8.5pt; color: var(--text-secondary); }
-  .not-for-box { background: #fdf5ef; border: 1px solid var(--copper-light); border-radius: 8px; padding: 12px 16px; margin: 10px 0; }
-  .not-for-box h3 { color: var(--copper); font-size: 9.5pt; margin-bottom: 3px; }
-  .not-for-box li { font-size: 8.5pt; color: var(--copper); margin-bottom: 2px; }
+  .not-for-box { background: var(--copper-tint); border: 1px solid var(--copper); border-radius: 10px; padding: 12px 16px; margin: 10px 0; }
+  .not-for-box h3 { color: var(--copper); font-size: 9.5pt; margin-bottom: 3px; letter-spacing: 2px; text-transform: uppercase; }
+  .not-for-box li { font-size: 8.5pt; color: var(--copper); margin-bottom: 2px; margin-left: 16px; }
 
   /* ── SCARCITY ── */
-  .scarcity-banner { background: var(--grass); color: var(--birch); border-radius: 8px; padding: 14px 18px; margin: 10px 0; text-align: center; }
-  .scarcity-banner .stat { font-size: 22pt; font-weight: 700; color: var(--sun); }
+  .scarcity-banner { background: var(--grass); color: var(--birch); border-radius: 10px; padding: 16px 18px; margin: 10px 0; text-align: center; }
+  .scarcity-banner .stat { font-size: 22pt; font-weight: 700; color: var(--copper-soft); }
   .scarcity-banner .label { font-size: 8.5pt; color: var(--birch-dark); }
 
   /* ── STRATEGY ── */
-  .strategy-card { background: var(--birch); border-left: 3px solid var(--copper); border-radius: 0 8px 8px 0; padding: 12px 16px; margin: 8px 0; page-break-inside: avoid; }
+  .strategy-card { background: var(--white); border-left: 3px solid var(--copper); border-radius: 0 10px 10px 0; padding: 12px 16px; margin: 8px 0; page-break-inside: avoid; }
   .strategy-card h3 { color: var(--grass); margin-bottom: 3px; font-size: 9.5pt; }
-  .strategy-card p { font-size: 8.5pt; color: var(--text-secondary); line-height: 1.4; }
+  .strategy-card p { font-size: 8.5pt; color: var(--text-secondary); line-height: 1.45; }
   .feature-item { margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--birch-dark); }
   .feature-item:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
-  .feature-label { font-size: 8.5pt; font-weight: 600; color: var(--grass); padding-left: 10px; border-left: 3px solid var(--sun); }
-  .feature-desc { font-size: 8pt; color: var(--text-secondary); line-height: 1.4; margin: 2px 0 0 13px; }
+  .feature-label { font-size: 8.5pt; font-weight: 600; color: var(--grass); padding-left: 10px; border-left: 3px solid var(--copper); }
+  .feature-desc { font-size: 8pt; color: var(--text-secondary); line-height: 1.45; margin: 2px 0 0 13px; }
 
   /* ── EXEC CARDS ── */
   .exec-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin: 10px 0; }
-  .exec-card { background: var(--birch); border-radius: 8px; padding: 12px 10px; text-align: center; }
-  .exec-card-label { font-size: 7pt; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 3px; }
-  .exec-card-value { font-size: 16pt; font-weight: 700; color: var(--grass); }
-  .exec-card-sub { font-size: 7.5pt; color: var(--text-muted); margin-top: 2px; }
+  .exec-card { background: var(--white); border: 1px solid var(--birch-dark); border-radius: 10px; padding: 14px 10px; text-align: center; }
+  .exec-card-label { font-size: 7pt; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 4px; }
+  .exec-card-value { font-size: 17pt; font-weight: 700; color: var(--grass); }
+  .exec-card-sub { font-size: 7.5pt; color: var(--text-muted); margin-top: 3px; }
 
   /* ── SEASONALITY CALLOUTS ── */
   .season-callouts { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin: 10px 0; }
-  .season-callout { background: var(--birch); border-radius: 6px; padding: 8px 10px; text-align: center; }
-  .season-callout-stat { font-size: 10pt; font-weight: 700; color: var(--grass); }
+  .season-callout { background: var(--white); border: 1px solid var(--birch-dark); border-radius: 8px; padding: 10px 10px; text-align: center; }
+  .season-callout-stat { font-size: 11pt; font-weight: 700; color: var(--grass); }
   .season-callout-label { font-size: 6.5pt; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
 
   /* ── PRICING CARDS ── */
-  .pricing-card { background: var(--birch); border-left: 3px solid var(--copper); border-radius: 0 8px 8px 0; padding: 12px 16px; margin: 8px 0; page-break-inside: avoid; }
+  .pricing-card { background: var(--white); border-left: 3px solid var(--copper); border-radius: 0 10px 10px 0; padding: 12px 16px; margin: 8px 0; page-break-inside: avoid; }
   .pricing-card h4 { color: var(--grass); font-size: 9.5pt; font-weight: 600; margin-bottom: 6px; }
-  .pricing-card p { font-size: 8.5pt; color: var(--text-secondary); line-height: 1.4; }
+  .pricing-card p { font-size: 8.5pt; color: var(--text-secondary); line-height: 1.45; }
   .pricing-callout { display: inline-block; background: var(--grass); color: var(--birch); border-radius: 6px; padding: 6px 12px; margin-bottom: 8px; }
   .pricing-callout-stat { font-size: 9pt; font-weight: 700; }
-  .pricing-callout-label { font-size: 6.5pt; text-transform: uppercase; letter-spacing: 0.5px; color: var(--sky); margin-left: 6px; }
+  .pricing-callout-label { font-size: 6.5pt; text-transform: uppercase; letter-spacing: 0.5px; color: var(--copper-soft); margin-left: 6px; }
 
   /* ── WHY FIELDS ── */
   .diff-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; }
-  .diff-card { padding: 12px; border: 1px solid var(--birch-dark); border-radius: 8px; }
+  .diff-card { padding: 14px; border: 1px solid var(--birch-dark); border-radius: 10px; background: var(--white); }
   .diff-card h3 { font-size: 9.5pt; margin-bottom: 3px; color: var(--grass); }
-  .diff-card p { font-size: 8pt; color: var(--text-secondary); }
+  .diff-card p { font-size: 8pt; color: var(--text-secondary); line-height: 1.45; }
   .steps-list { list-style: none; counter-reset: step; margin: 10px 0; }
-  .steps-list li { counter-increment: step; display: flex; gap: 10px; align-items: flex-start; margin-bottom: 10px; }
-  .steps-list li::before { content: counter(step); background: var(--grass); color: var(--birch); width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9.5pt; font-weight: 700; flex-shrink: 0; }
+  .steps-list li { counter-increment: step; display: flex; gap: 12px; align-items: flex-start; margin-bottom: 12px; }
+  .steps-list li::before { content: counter(step); background: var(--copper); color: var(--white); width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9.5pt; font-weight: 700; flex-shrink: 0; }
   .step-content { flex: 1; }
   .step-content strong { display: block; font-size: 9.5pt; margin-bottom: 1px; color: var(--grass); }
   .step-content p { font-size: 8.5pt; color: var(--text-secondary); }
-  .cta-banner { background: var(--grass); color: var(--birch); border-radius: 10px; padding: 22px 26px; text-align: center; margin: 16px 0; }
-  .cta-banner h2 { color: var(--birch); margin-bottom: 5px; font-size: 15pt; }
+  .cta-banner { background: var(--grass); color: var(--birch); border-radius: 12px; padding: 24px 26px; text-align: center; margin: 16px 0; }
+  .cta-banner h2 { color: var(--birch); margin-bottom: 5px; font-size: 16pt; }
   .cta-banner p { color: var(--birch-dark); font-size: 9.5pt; }
-  .cta-banner .contact { margin-top: 10px; font-size: 11pt; font-weight: 600; color: var(--sun); }
+  .cta-banner .contact { margin-top: 12px; font-size: 11pt; font-weight: 600; color: var(--copper-soft); }
 
   /* ── UTILITIES ── */
   .text-sm { font-size: 8.5pt; }
@@ -189,39 +474,91 @@
   .mt-8 { margin-top: 8px; }
   .mt-12 { margin-top: 12px; }
   .mb-8 { margin-bottom: 8px; }
-  .divider { border: none; border-top: 1px solid var(--birch); margin: 14px 0; }
+  .divider { border: none; border-top: 1px solid var(--birch-dark); margin: 14px 0; }
 </style>
 </head>
 <body>
 
+{# Reusable SVG snippets via Jinja macros #}
+{% macro f_mark(color, size) %}
+<svg viewBox="0 0 200 240" width="{{ size }}" height="{{ size * 1.2 }}" xmlns="http://www.w3.org/2000/svg">
+  <path fill="{{ color }}" d="M30 0 L200 0 Q200 60 160 60 L90 60 L90 90 L170 90 Q170 145 130 145 L90 145 L90 200 Q90 240 50 240 L30 240 Z M0 0 L30 0 L30 240 L0 240 Z"/>
+</svg>
+{% endmacro %}
+
+{% macro deco_f_outline(color) %}
+<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="{{ color }}" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M 25 195 L 25 50 Q 25 25 50 25 L 195 25"/>
+  <path d="M 25 110 L 145 110"/>
+  <path d="M 195 25 Q 195 80 140 80"/>
+  <path d="M 145 110 Q 145 165 90 165"/>
+  <path d="M 25 195 Q 50 195 50 165"/>
+</svg>
+{% endmacro %}
+
+{% macro smarter_with_data(on_dark=false) %}
+<div class="smarter-mark{% if on_dark %} on-dark{% endif %}">
+  {{ f_mark('#B76749', 14) }}
+  <span>Smarter with Data</span>
+</div>
+{% endmacro %}
+
+
 <!-- ══════ COVER ══════ -->
 <div class="cover">
-  <div class="cover-logo"><img src="{{ logo_white_path }}" alt="Fields Estate"></div>
   <img class="cover-image" src="{{ hero_photo }}" alt="Property">
-  <div class="cover-overlay"></div>
-  <div class="cover-bottom">
-    <div class="cover-label">Property Position Report</div>
-    <div class="cover-address">{{ street_address }}</div>
-    <div class="cover-suburb">{{ suburb }}, QLD {{ postcode }}</div>
-    <div class="cover-client">Prepared for {{ client_name }}</div>
-    <div class="cover-author">by Will Simpson, Property Analyst</div>
-    <div class="cover-meta">
-      {{ report_date }}
-      <br>Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Smarter with data.
+  <div class="cover-shade"></div>
+
+  <!-- Decorative outline F top-left -->
+  <div class="deco-f">
+    {{ deco_f_outline('#B76749') }}
+  </div>
+
+  <!-- White Fields wordmark top-right -->
+  <div class="cover-logo"><img src="{{ logo_white_path }}" alt="Fields Estate"></div>
+
+  <!-- Copper address tab straddling photo and band -->
+  <div class="cover-address-tab">
+    <div class="street">{{ street_address_stacked|safe }}</div>
+    <div class="suburb">{{ suburb }}, QLD {{ postcode }}</div>
+  </div>
+
+  <!-- Dark green band at bottom -->
+  <div class="cover-band">
+    <div class="cover-band-label">Property Position Report</div>
+    <div>
+      <div class="cover-band-prepared">Prepared for {{ client_name }}</div>
+    </div>
+    <div class="cover-band-author">
+      by Will Simpson, Lead Analyst<br>
+      <a href="https://fieldsestate.com.au">fieldsestate.com.au</a>
     </div>
   </div>
+
+  <div class="cover-footer">
+    <div>{{ report_date_upper }}</div>
+    {{ smarter_with_data(true) }}
+  </div>
 </div>
+
 
 <!-- ══════ PAGE 2: THE FIELDS TAKE ══════ -->
 <div class="page">
   <div class="page-header">
-    <img src="{{ logo_path }}" alt="Fields Estate">
-    <div class="page-header-right">{{ street_address }}</div>
+    <div class="page-header-title">{{ street_address }}</div>
+    <div class="page-header-mark">{{ f_mark('#22382C', 22) }}</div>
   </div>
-  <h1>The Fields Take</h1>
-  <p class="subtitle">Our assessment of your property &mdash; what the data says and what it means.</p>
+
+  <div class="take-row">
+    <div class="take-tab">The<br>Fields<br>Take</div>
+    <div class="take-intro">
+      <p>Our assessment of your property &mdash; what the data says and what it means.</p>
+    </div>
+  </div>
+
   <div class="take-headline">{{ headline }}</div>
   <div class="take-subhead">{{ sub_headline }}</div>
+
   <div class="take-pills">
     <span class="take-pill">{{ bedrooms }}bd + Study</span>
     <span class="take-pill">{{ bathrooms }}ba</span>
@@ -231,31 +568,46 @@
     <span class="take-pill">Pool</span>
     <span class="take-pill">Dual Living</span>
   </div>
+
   <div class="take-verdict-box">
     <div class="take-verdict-label">The Verdict</div>
     <div class="take-verdict-text">{{ verdict }}</div>
   </div>
+
   <div class="strengths-tradeoff">
     <div class="strengths-box">
       <h3>Strengths</h3>
-      <ul>{% for s in strengths %}<li>{{ s }}</li>{% endfor %}</ul>
+      {% set icons = ['Tick-Dark.svg', 'House-Dark.svg', 'Location-Dark.svg', 'Key-Dark.svg', 'Pool-Dark.svg'] %}
+      {% for s in strengths %}
+      <div class="strength-item">
+        <img src="{{ icons_dir }}/{{ icons[loop.index0 % icons|length] }}" alt="">
+        <p>{{ s }}</p>
+      </div>
+      {% endfor %}
     </div>
     <div class="tradeoff-box">
       <h3>Key Trade-Off</h3>
-      <p style="font-size: 8.5pt; color: var(--copper);">{{ trade_off }}</p>
+      <p>{{ trade_off }}</p>
+      {% if pool_photo %}<img src="{{ pool_photo }}" alt="">{% endif %}
     </div>
   </div>
-  <div class="page-footer"><div class="page-footer-center">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div><div class="page-footer-right">2</div></div>
+
+  <div class="page-footer">
+    <div class="page-footer-meta">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div>
+    {{ smarter_with_data() }}
+  </div>
 </div>
+
 
 <!-- ══════ PAGE 3: VALUATION ══════ -->
 <div class="page">
   <div class="page-header">
-    <img src="{{ logo_path }}" alt="Fields Estate">
-    <div class="page-header-right">{{ street_address }}</div>
+    <div class="page-header-title">{{ street_address }}</div>
+    <div class="page-header-mark">{{ f_mark('#22382C', 22) }}</div>
   </div>
   <h2>What Your Property Is Worth &mdash; and Why</h2>
   <p class="subtitle">Every number here is built from comparable sales, individually adjusted. No black boxes.</p>
+
   <div class="val-banner">
     <div class="val-label">Comparable-Adjusted Valuation</div>
     <div class="val-ranges">
@@ -270,6 +622,7 @@
     </div>
     <div class="val-disclaimer">Subject to property analyst inspection</div>
   </div>
+
   {% for comp in top_comps %}
   <div class="comp-card">
     <div class="comp-card-header">
@@ -297,19 +650,24 @@
     <div class="comp-card-narrative">{{ comp.narrative }}</div>
   </div>
   {% endfor %}
-  <p class="text-sm text-muted adj-footnote">Adjustment rates derived from {{ adj_sample_size }} sold properties in Merrimac.</p>
-  <div class="page-footer"><div class="page-footer-center">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div><div class="page-footer-right">3</div></div>
+  <p class="text-sm text-muted adj-footnote">Adjustment rates derived from {{ adj_sample_size }} sold properties in {{ suburb }}.</p>
+
+  <div class="page-footer">
+    <div class="page-footer-meta">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div>
+    {{ smarter_with_data() }}
+  </div>
 </div>
+
 
 <!-- ══════ PAGE 4: YOUR PROPERTY ══════ -->
 <div class="page">
   <div class="page-header">
-    <img src="{{ logo_path }}" alt="Fields Estate">
-    <div class="page-header-right">{{ street_address }}</div>
+    <div class="page-header-title">{{ street_address }}</div>
+    <div class="page-header-mark">{{ f_mark('#22382C', 22) }}</div>
   </div>
   <h2>Your Property Through Our Eyes</h2>
   <p class="subtitle">Room-by-room condition assessment from professional photography analysis.</p>
-  <img class="photo-hero" src="{{ exterior_photo }}" alt="Property exterior">
+  {% if exterior_photo %}<img class="photo-hero" src="{{ exterior_photo }}" alt="Property exterior">{% endif %}
   <div class="room-grid">
     {% for room in room_assessments %}
     <div class="room-card">
@@ -319,18 +677,24 @@
     </div>
     {% endfor %}
   </div>
+  {% if kitchen_photo and living_photo %}
   <div class="photo-pair">
     <img src="{{ kitchen_photo }}" alt="Kitchen">
     <img src="{{ living_photo }}" alt="Living">
   </div>
-  <div class="page-footer"><div class="page-footer-center">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div><div class="page-footer-right">4</div></div>
+  {% endif %}
+  <div class="page-footer">
+    <div class="page-footer-meta">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div>
+    {{ smarter_with_data() }}
+  </div>
 </div>
+
 
 <!-- ══════ PAGE 5: HONEST ASSESSMENT ══════ -->
 <div class="page">
   <div class="page-header">
-    <img src="{{ logo_path }}" alt="Fields Estate">
-    <div class="page-header-right">{{ street_address }}</div>
+    <div class="page-header-title">{{ street_address }}</div>
+    <div class="page-header-mark">{{ f_mark('#22382C', 22) }}</div>
   </div>
   <h2>The Honest Assessment</h2>
   <p class="subtitle">What works for your property, what works against it, and what it means in dollar terms.</p>
@@ -343,18 +707,21 @@
   </div>
   {% endif %}
   {% endfor %}
-  <div class="page-footer"><div class="page-footer-center">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div><div class="page-footer-right">5</div></div>
+  <div class="page-footer">
+    <div class="page-footer-meta">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div>
+    {{ smarter_with_data() }}
+  </div>
 </div>
+
 
 <!-- ══════ PAGE 6: LOCATION & LIFESTYLE ══════ -->
 <div class="page">
   <div class="page-header">
-    <img src="{{ logo_path }}" alt="Fields Estate">
-    <div class="page-header-right">{{ street_address }}</div>
+    <div class="page-header-title">{{ street_address }}</div>
+    <div class="page-header-mark">{{ f_mark('#22382C', 22) }}</div>
   </div>
   <h2>Location &amp; Lifestyle</h2>
   <p class="subtitle">Satellite analysis and proximity data for {{ street_address }}.</p>
-  <!-- Flood section (location attribute) -->
   {% for eq in value_equations %}
   {% if eq.is_flood %}
   <div class="value-eq positive-signal" style="margin-bottom: 14px;">
@@ -388,29 +755,35 @@
     </div>
     {% endfor %}
   </div>
-  <div class="page-footer"><div class="page-footer-center">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div><div class="page-footer-right">6</div></div>
+  <div class="page-footer">
+    <div class="page-footer-meta">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div>
+    {{ smarter_with_data() }}
+  </div>
 </div>
+
 
 <!-- ══════ PAGE 7: WHO BUYS THIS HOME ══════ -->
 <div class="page">
   <div class="page-header">
-    <img src="{{ logo_path }}" alt="Fields Estate">
-    <div class="page-header-right">{{ street_address }}</div>
+    <div class="page-header-title">{{ street_address }}</div>
+    <div class="page-header-mark">{{ f_mark('#22382C', 22) }}</div>
   </div>
   <h2>Who Buys This Home</h2>
   <p class="subtitle">The specific buyer profiles this property attracts &mdash; and who it doesn't suit.</p>
   <div class="buyer-grid">
     {% for buyer in buyer_profiles %}
     <div class="buyer-card {% if loop.index <= 2 %}primary{% endif %}">
-      <h3>{{ buyer.label }}</h3>
+      <h3>{{ buyer.label or buyer.name }}</h3>
       <p>{{ buyer.description }}</p>
     </div>
     {% endfor %}
   </div>
+  {% if not_ideal_for %}
   <div class="not-for-box">
     <h3>Not Ideal For</h3>
     <ul>{% for n in not_ideal_for %}<li>{{ n }}</li>{% endfor %}</ul>
   </div>
+  {% endif %}
   <hr class="divider">
   <h3>Market Scarcity</h3>
   <div class="scarcity-banner">
@@ -436,60 +809,75 @@
   </div>
   {% if seasonality_section %}
   <hr class="divider">
-  <h3>Seasonality and Your Selling Window: {{ sell_window }}</h3>
+  <h3>Seasonality and Your Selling Window</h3>
   <div class="season-callouts">
     <div class="season-callout">
       <div class="season-callout-stat">H2 &gt; H1</div>
       <div class="season-callout-label">Second half outperforms on price</div>
     </div>
     <div class="season-callout">
-      <div class="season-callout-stat">15–21 days</div>
+      <div class="season-callout-stat">15&ndash;21 days</div>
       <div class="season-callout-label">Optimal selling window for highest price</div>
     </div>
     <div class="season-callout">
-      <div class="season-callout-stat">Sep–Oct</div>
+      <div class="season-callout-stat">Sep&ndash;Oct</div>
       <div class="season-callout-label">Peak buyer activity for school families</div>
     </div>
   </div>
-  <p style="font-size: 8pt; color: var(--text-secondary); line-height: 1.4;">{{ seasonality_section }}</p>
+  <p style="font-size: 8pt; color: var(--text-secondary); line-height: 1.45;">{{ seasonality_section }}</p>
   {% endif %}
-  <div class="page-footer"><div class="page-footer-center">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div><div class="page-footer-right">7</div></div>
+  <div class="page-footer">
+    <div class="page-footer-meta">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div>
+    {{ smarter_with_data() }}
+  </div>
 </div>
+
 
 <!-- ══════ PAGE 8: POSITIONING — PRICING ══════ -->
 <div class="page">
   <div class="page-header">
-    <img src="{{ logo_path }}" alt="Fields Estate">
-    <div class="page-header-right">{{ street_address }}</div>
+    <div class="page-header-title">{{ street_address }}</div>
+    <div class="page-header-mark">{{ f_mark('#22382C', 22) }}</div>
   </div>
   <h2>How We Would Position &amp; Sell Your Property</h2>
   <p class="subtitle">Strategy backed by {{ research_stats }}.</p>
 
-  <!-- Lifestyle narrative -->
-  <div class="strategy-card" style="background: var(--grass); border-left: none; border-radius: 8px;">
+  {% if lifestyle_narrative %}
+  <div class="strategy-card" style="background: var(--grass); border-left: none; border-radius: 10px;">
     <p style="color: var(--birch); font-size: 9pt; line-height: 1.55; font-style: italic; margin: 0;">{{ lifestyle_narrative }}</p>
   </div>
+  {% endif %}
 
   <h3 style="margin-top: 12px; margin-bottom: 8px;">Pricing Strategy &mdash; Why These Numbers</h3>
   {% for card in pricing_cards %}
   <div class="pricing-card">
-    <h4>{{ card.title }}</h4>
+    <h4>{{ card.title or card.label }}</h4>
+    {% if card.callout_stat %}
     <div class="pricing-callout">
       <span class="pricing-callout-stat">{{ card.callout_stat }}</span>
       <span class="pricing-callout-label">{{ card.callout_label }}</span>
     </div>
-    <p>{{ card.body }}</p>
+    {% elif card.range %}
+    <div class="pricing-callout">
+      <span class="pricing-callout-stat">{{ card.range }}</span>
+    </div>
+    {% endif %}
+    <p>{{ card.body or card.rationale }}</p>
   </div>
   {% endfor %}
 
-  <div class="page-footer"><div class="page-footer-center">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div><div class="page-footer-right">8</div></div>
+  <div class="page-footer">
+    <div class="page-footer-meta">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div>
+    {{ smarter_with_data() }}
+  </div>
 </div>
 
-<!-- ══════ PAGE 9: POSITIONING — FEATURES & EXECUTION ══════ -->
+
+<!-- ══════ PAGE 9: POSITIONING — FEATURES ══════ -->
 <div class="page">
   <div class="page-header">
-    <img src="{{ logo_path }}" alt="Fields Estate">
-    <div class="page-header-right">{{ street_address }}</div>
+    <div class="page-header-title">{{ street_address }}</div>
+    <div class="page-header-mark">{{ f_mark('#22382C', 22) }}</div>
   </div>
   <h2>How We Would Position &amp; Sell Your Property</h2>
   <p class="subtitle">Features, campaign, and execution plan.</p>
@@ -504,14 +892,18 @@
     {% endfor %}
   </div>
 
-  <div class="page-footer"><div class="page-footer-center">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div><div class="page-footer-right">9</div></div>
+  <div class="page-footer">
+    <div class="page-footer-meta">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div>
+    {{ smarter_with_data() }}
+  </div>
 </div>
 
-<!-- ══════ PAGE 10: POSITIONING — CAMPAIGN & EXECUTION ══════ -->
+
+<!-- ══════ PAGE 10: POSITIONING — CAMPAIGN ══════ -->
 <div class="page">
   <div class="page-header">
-    <img src="{{ logo_path }}" alt="Fields Estate">
-    <div class="page-header-right">{{ street_address }}</div>
+    <div class="page-header-title">{{ street_address }}</div>
+    <div class="page-header-mark">{{ f_mark('#22382C', 22) }}</div>
   </div>
   <h2>How We Would Position &amp; Sell Your Property</h2>
   <p class="subtitle">Campaign structure and execution.</p>
@@ -520,20 +912,24 @@
   <div class="strategy-card"><h3>Photography &amp; Presentation</h3><p>{{ photography_strategy }}</p></div>
   <div class="strategy-card"><h3>Open Home Strategy</h3><p>{{ open_home_strategy }}</p></div>
 
-  <div class="page-footer"><div class="page-footer-center">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div><div class="page-footer-right">10</div></div>
+  <div class="page-footer">
+    <div class="page-footer-meta">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div>
+    {{ smarter_with_data() }}
+  </div>
 </div>
+
 
 <!-- ══════ PAGE 11: WHY FIELDS + NEXT STEPS ══════ -->
 <div class="page">
   <div class="page-header">
-    <img src="{{ logo_path }}" alt="Fields Estate">
-    <div class="page-header-right">{{ street_address }}</div>
+    <div class="page-header-title">{{ street_address }}</div>
+    <div class="page-header-mark">{{ f_mark('#22382C', 22) }}</div>
   </div>
   <h2>Why Fields Estate</h2>
   <div class="diff-grid">
-    <div class="diff-card"><h3>25 Sold Properties Analysed</h3><p>Every adjustment rate in this report is derived from actual Merrimac sales. Not regional averages — your suburb, your street-level data.</p></div>
+    <div class="diff-card"><h3>{{ adj_sample_size }} Sold Properties Analysed</h3><p>Every adjustment rate in this report is derived from actual {{ suburb }} sales. Not regional averages &mdash; your suburb, your street-level data.</p></div>
     <div class="diff-card"><h3>Transparent Methodology</h3><p>You can see exactly how we arrived at every figure. No black boxes. The comparable sales, adjustments, and weightings are all shown.</p></div>
-    <div class="diff-card"><h3>Research-Backed Strategy</h3><p>Our positioning draws on 60+ studies and 14 academic papers — from precise pricing (Cardella & Seiler) to open home psychology (peak-end rule).</p></div>
+    <div class="diff-card"><h3>Research-Backed Strategy</h3><p>Our positioning draws on 60+ studies and 14 academic papers &mdash; from precise pricing (Cardella &amp; Seiler) to open home psychology (peak-end rule).</p></div>
     <div class="diff-card"><h3>Local Market Intelligence</h3><p>We track every listing, every sale, and every market shift across the southern Gold Coast &mdash; daily. {{ total_sold_tracked }} properties and counting.</p></div>
   </div>
   <hr class="divider">
@@ -548,7 +944,10 @@
     <p>I'd welcome the opportunity to walk you through this analysis in person.</p>
     <div class="contact">Will Simpson &nbsp;|&nbsp; will@fieldsestate.com.au &nbsp;|&nbsp; fieldsestate.com.au</div>
   </div>
-  <div class="page-footer"><div class="page-footer-center">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div><div class="page-footer-right">11</div></div>
+  <div class="page-footer">
+    <div class="page-footer-meta">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div>
+    {{ smarter_with_data() }}
+  </div>
 </div>
 
 </body>
