@@ -1,0 +1,74 @@
+# Pre-sale ROI lookup for M18 (Pre-Sale Recommendations) page in the Print Master.
+#
+# Each item has:
+#   action     — short title shown in the table column
+#   cost       — typical out-of-pocket cost range (string for display)
+#   recovery   — expected sale-price uplift range (string for display)
+#   note       — 1–2 sentence rationale grounded in research / our internal data
+#   conditional_on  — optional Python expression checked against (prop, suburb_display).
+#                     If the expression evaluates falsy for a property, the item is hidden.
+#                     Available variables: prop (Mongo doc), suburb (display name), pvd (PVD dict),
+#                                          condition (overall_condition_score), pool_present.
+#
+# Recovery ranges drawn from:
+#  - VHT Studios n=200,000 photography study (matched-pair: $934–$116,076 uplift, 32% DOM reduction)
+#  - Seller book v4 Chapter 5 pre-sale ROI dataset (Fields internal analysis)
+#  - REIQ vendor preparation surveys
+#
+# Suburb-specific multipliers can be added later. For v0 we use Gold-Coast-wide medians.
+
+default:
+  closing: |
+    Recovery estimates are mid-range from comparable Gold Coast pre-sale studies and our
+    internal photography-ROI dataset. Actual results vary by execution quality and the
+    competitive set on listing day. We coordinate the items that suit your timeline before
+    campaign launch — the goal is presentation parity with the strongest comparables, not
+    over-investment.
+  items:
+    - action: Twilight + drone photography
+      cost: $1,200 – $2,000
+      recovery: $4,000 – $18,000
+      note: |
+        Drone-equipped twilight shoot positions the listing in the top decile of presentation
+        within the first scroll. NAR data: listings with drone + virtual tour generate +87%
+        enquiry rate vs static-only galleries.
+    - action: Professional staging or styling
+      cost: $3,500 – $7,000
+      recovery: $10,000 – $35,000
+      note: |
+        Lifts perceived size and lifestyle without renovation. Strongest ROI on properties
+        that show as cluttered or dated. Less impact when condition is already 9/10.
+      conditional_on: condition < 9
+    - action: Painting (interior touch-ups + key rooms)
+      cost: $4,000 – $8,500
+      recovery: $8,000 – $20,000
+      note: |
+        Targeted to scuffed walls, dated palettes, and any rooms that photograph dark.
+        Generally not whole-house — focus on living, kitchen, hallway visible from photos.
+      conditional_on: condition < 8
+    - action: Re-grout main bathroom + ensuite
+      cost: $1,500 – $3,000
+      recovery: $3,000 – $7,000
+      note: |
+        Discoloured grout reads as 'tired' in photos even when the bathroom is otherwise fine.
+        Highest-leverage micro-fix for older bathrooms.
+      conditional_on: condition < 8
+    - action: Garden tidy + edge / mulch
+      cost: $1,000 – $2,500
+      recovery: $3,000 – $8,000
+      note: |
+        Front kerb-appeal photo is the listing's first impression. Edged lawn, fresh mulch,
+        trimmed hedges. Cost negligible for the visual lift.
+    - action: Pool clean + pump check
+      cost: $400 – $900
+      recovery: $2,000 – $8,000
+      note: |
+        Crystal-clear water in twilight photos is the difference between a pool that sells the
+        home and a pool that just exists in it.
+      conditional_on: pool_present
+    - action: Decluttering session (1–2 days)
+      cost: $0 – $1,500
+      recovery: $5,000 – $15,000
+      note: |
+        Personal-effect-removal makes spaces read 15–20% larger in photos. Free if the seller
+        has the time; $1,500 with a professional service.

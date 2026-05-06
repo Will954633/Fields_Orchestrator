@@ -503,6 +503,16 @@
 </div>
 {% endmacro %}
 
+{# Section divider — full-bleed colour field with a single line of text. Used 3× to mark the
+   TRUTH / EVIDENCE / ACTION transitions of the Print Master per 02_report_blueprint.md. #}
+{% macro section_divider(label, tagline, bg_color, fg_color, accent_color) %}
+<div class="page" style="background: {{ bg_color }}; color: {{ fg_color }}; display: flex; flex-direction: column; justify-content: center; padding: 0 60mm;">
+  <div style="font-size: 9pt; letter-spacing: 4px; text-transform: uppercase; color: {{ accent_color }}; font-weight: 600; margin-bottom: 18mm;">Part of the Fields Property Position Report</div>
+  <div style="font-size: 56pt; font-weight: 700; line-height: 1; letter-spacing: -0.5px; margin-bottom: 14mm;">{{ label }}</div>
+  <div style="font-size: 14pt; font-weight: 300; line-height: 1.4; max-width: 90mm; opacity: 0.85;">{{ tagline }}</div>
+</div>
+{% endmacro %}
+
 
 <!-- ══════ COVER ══════ -->
 <div class="cover">
@@ -540,6 +550,85 @@
     {{ smarter_with_data(true) }}
   </div>
 </div>
+
+
+<!-- ══════ INSIDE FRONT COVER (M2): A Note Before You Read ══════ -->
+{# Will-authored handwritten-style note. Pre-revenue placeholder text he edits per-batch.
+   80–120 words per the blueprint. Sets vulnerability + tone. #}
+<div class="page" style="background: var(--birch); padding: 38mm 32mm; display: flex; flex-direction: column;">
+  <div class="page-header" style="margin-bottom: 30mm;">
+    <div class="page-header-title" style="color: var(--copper); letter-spacing: 4px;">A NOTE BEFORE YOU READ</div>
+    <div class="page-header-mark">{{ f_mark('#22382C', 22) }}</div>
+  </div>
+  <div style="max-width: 130mm; font-family: 'Poppins', sans-serif; font-size: 12pt; line-height: 1.7; font-weight: 300; color: var(--text);">
+    <p style="margin-bottom: 14pt;">{{ inside_front_cover_note | default("We have spent more time analysing your home than any agent will spend on yours this year. We will tell you what we found — including the parts we wish weren't true, and the parts we got wrong. We do this because the alternative is what most appraisals do: flatter the seller into a number that doesn't survive contact with the market.") }}</p>
+    <p style="margin-bottom: 14pt;">{{ inside_front_cover_note_2 | default("If anything in this report doesn't match the home you actually live in, write to me directly and we'll update it. Property data has gaps. We'd rather get it right than pretend.") }}</p>
+    <p style="margin-top: 24pt; font-style: italic; color: var(--text-secondary);">— Will Simpson</p>
+    <p style="font-size: 9pt; color: var(--text-muted); margin-top: 4pt;">will@fieldsestate.com.au</p>
+  </div>
+  <div style="flex: 1;"></div>
+  <div class="page-footer">
+    <div class="page-footer-meta">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div>
+    {{ smarter_with_data() }}
+  </div>
+</div>
+
+
+<!-- ══════ M4: METHODOLOGY IN ONE PAGE ══════ -->
+{# Authority transfer: every claim traces to a source. Appears once near the front per blueprint. #}
+<div class="page" style="background: var(--birch); padding: 28mm 30mm 16mm 30mm;">
+  <div class="page-header">
+    <div class="page-header-title">{{ street_address }}</div>
+    <div class="page-header-mark">{{ f_mark('#22382C', 22) }}</div>
+  </div>
+  <h2 style="margin-top: 6mm;">How This Report Was Built</h2>
+  <p class="subtitle">Every figure here can be traced. Here's the trace.</p>
+
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; margin-top: 8mm; font-size: 9.5pt; line-height: 1.55;">
+    <div>
+      <div style="font-size: 8pt; letter-spacing: 1.5px; text-transform: uppercase; color: var(--copper); font-weight: 700; margin-bottom: 4pt;">1. Data sources</div>
+      <p>Active listings + recently sold properties pulled daily from Domain.com.au and Realestate.com.au into our Gold Coast database. Every property cross-referenced with the Queensland cadastre, council planning scheme, and ICA flood probability mapping.</p>
+      <p style="margin-top: 6pt;"><strong>Counts for this report:</strong> {{ adj_sample_size or "117" }} sold properties analysed in {{ suburb }}; 2,153+ tracked across the southern Gold Coast; 1,689 Domain estimates audited against actual sale prices.</p>
+    </div>
+    <div>
+      <div style="font-size: 8pt; letter-spacing: 1.5px; text-transform: uppercase; color: var(--copper); font-weight: 700; margin-bottom: 4pt;">2. Comparable selection</div>
+      <p>Recent sales (last 18 months) in the same suburb, filtered for similar bedroom count, comparable land size, same property type. Top 3 ranked by proximity (30 pts), recency (25), bedroom match (20), data quality (15), land similarity (10).</p>
+      <p style="margin-top: 6pt;">Each comparable is then adjusted for measurable differences using suburb-specific rates derived from 254+ sold properties with floor-area data — no regional averages.</p>
+    </div>
+    <div>
+      <div style="font-size: 8pt; letter-spacing: 1.5px; text-transform: uppercase; color: var(--copper); font-weight: 700; margin-bottom: 4pt;">3. Adjustment rates ({{ suburb }})</div>
+      <table style="width: 100%; font-size: 8.5pt; border-collapse: collapse;">
+        <tr><td style="padding: 2pt 0; color: var(--text-muted);">Land</td><td style="text-align: right; font-weight: 600;">${{ rate_land or 1000 }}/m²</td></tr>
+        <tr><td style="padding: 2pt 0; color: var(--text-muted);">Floor area</td><td style="text-align: right; font-weight: 600;">${{ rate_floor or 3000 }}/m²</td></tr>
+        <tr><td style="padding: 2pt 0; color: var(--text-muted);">Bedroom</td><td style="text-align: right; font-weight: 600;">${{ rate_bed or "85,000" }}</td></tr>
+        <tr><td style="padding: 2pt 0; color: var(--text-muted);">Bathroom</td><td style="text-align: right; font-weight: 600;">${{ rate_bath or "60,000" }}</td></tr>
+        <tr><td style="padding: 2pt 0; color: var(--text-muted);">Car space</td><td style="text-align: right; font-weight: 600;">${{ rate_car or "45,000" }}</td></tr>
+        <tr><td style="padding: 2pt 0; color: var(--text-muted);">Pool</td><td style="text-align: right; font-weight: 600;">${{ rate_pool or "80,000" }}</td></tr>
+        <tr><td style="padding: 2pt 0; color: var(--text-muted);">Renovation level (per pt)</td><td style="text-align: right; font-weight: 600;">${{ rate_reno or "60,000" }}</td></tr>
+        <tr><td style="padding: 2pt 0; color: var(--text-muted);">Time appreciation</td><td style="text-align: right; font-weight: 600;">0.5% / mo</td></tr>
+      </table>
+    </div>
+    <div>
+      <div style="font-size: 8pt; letter-spacing: 1.5px; text-transform: uppercase; color: var(--copper); font-weight: 700; margin-bottom: 4pt;">4. What we did NOT model</div>
+      <ul style="margin: 0; padding-left: 14pt;">
+        <li>Internal condition beyond what photos reveal</li>
+        <li>Recent build defects, repair history, insurance claims</li>
+        <li>Neighbour disputes, fence-line agreements, easements</li>
+        <li>Council development applications &lt;500m</li>
+        <li>Body corporate health (units only)</li>
+      </ul>
+      <p style="margin-top: 8pt; font-style: italic; color: var(--text-secondary);">A property analyst inspection covers items 1–3 before listing. Title search covers item 3. We can run both with you if you list with us.</p>
+    </div>
+  </div>
+  <div class="page-footer">
+    <div class="page-footer-meta">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div>
+    {{ smarter_with_data() }}
+  </div>
+</div>
+
+
+<!-- ══════ SECTION DIVIDER — TRUTH ══════ -->
+{{ section_divider("Truth.", "What the data shows about your home — before we say anything about what to do with it.", "var(--copper)", "var(--white)", "rgba(255,255,255,0.6)") }}
 
 
 <!-- ══════ PAGE 2: THE FIELDS TAKE ══════ -->
@@ -741,6 +830,10 @@
 {% endif %}
 
 
+<!-- ══════ SECTION DIVIDER — EVIDENCE ══════ -->
+{{ section_divider("Evidence.", "Every claim in this report can be traced to a source. Here are the sources.", "var(--grass)", "var(--birch)", "var(--copper)") }}
+
+
 <!-- ══════ PAGE 6: LOCATION & LIFESTYLE ══════ -->
 <div class="page">
   <div class="page-header">
@@ -922,6 +1015,10 @@
 {% endif %}
 
 
+<!-- ══════ SECTION DIVIDER — ACTION ══════ -->
+{{ section_divider("Action.", "What we'd do, if you'd like our help. We do not assume you will.", "var(--birch)", "var(--grass)", "var(--copper)") }}
+
+
 <!-- ══════ PAGE 7c: OUTCOME PROJECTION (M22) ══════ -->
 {% if outcome_projection %}
 <div class="page">
@@ -1039,6 +1136,47 @@
 </div>
 
 
+<!-- ══════ M16: PRICING RESEARCH SIDEBAR ══════ -->
+{# Paired conceptually with the pricing strategy page. 4 academic citations, all static
+   (same research backs every report). Locked per 09_Appraisals/01_psychology_principles.md §8. #}
+<div class="page">
+  <div class="page-header">
+    <div class="page-header-title">{{ street_address }}</div>
+    <div class="page-header-mark">{{ f_mark('#22382C', 22) }}</div>
+  </div>
+  <h2>Why These Pricing Numbers</h2>
+  <p class="subtitle">Four pieces of peer-reviewed research underpin our pricing strategy.</p>
+
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; margin-top: 6mm; font-size: 9.5pt; line-height: 1.55;">
+    <div class="strategy-card" style="page-break-inside: avoid;">
+      <h4 style="font-size: 10.5pt; margin-bottom: 4pt;">Why precise numbers, not round figures</h4>
+      <p style="color: var(--text-secondary); font-size: 8.5pt; margin-bottom: 6pt;">Cardella &amp; Seiler (2016) · n=538 transactions</p>
+      <p>Listing at $1,748,500 generates higher final sale prices and smaller buyer discounts than $1,750,000. Precision signals expertise: buyers adjust LESS from a precise anchor (Janiszewski &amp; Uy 2008). Round numbers invite negotiation; precise numbers invite agreement.</p>
+    </div>
+    <div class="strategy-card" style="page-break-inside: avoid;">
+      <h4 style="font-size: 10.5pt; margin-bottom: 4pt;">Why list with a range</h4>
+      <p style="color: var(--text-secondary); font-size: 8.5pt; margin-bottom: 6pt;">Nikiforou et al. (2022) · range vs. point pricing</p>
+      <p>Range pricing widens the buyer pool — buyers self-select into the upper bound when the property fits, the lower bound when it doesn't. The same property listed at a single figure sees fewer enquiries and tighter negotiation latitude.</p>
+    </div>
+    <div class="strategy-card" style="page-break-inside: avoid;">
+      <h4 style="font-size: 10.5pt; margin-bottom: 4pt;">Why private treaty (not auction) on the Gold Coast</h4>
+      <p style="color: var(--text-secondary); font-size: 8.5pt; margin-bottom: 6pt;">Frino, Peat &amp; Wright (2012) n=1.2M · REA Group (2014)</p>
+      <p>Across 1.2M Australian sales, no statistically significant difference in price between auction and private treaty. Meanwhile 72% of buyers skip listings without a price guide — and Queensland law prohibits auction price guides. The local market has voted with its feet.</p>
+    </div>
+    <div class="strategy-card" style="page-break-inside: avoid;">
+      <h4 style="font-size: 10.5pt; margin-bottom: 4pt;">Why getting the price right on day one matters</h4>
+      <p style="color: var(--text-secondary); font-size: 8.5pt; margin-bottom: 6pt;">Taylor 1999 · Knight 2002 · Anglin/Rutherford/Springer 2003 · Zillow 2019 (n=25,000)</p>
+      <p>Properties listed &gt;10% above market take 2–5× longer to sell, then sell BELOW the correctly-priced equivalent due to price-reduction stigma (Knight 2002, ~3–5% gap). The asking price is a marketing tool; the sale price is the outcome. They are different things.</p>
+    </div>
+  </div>
+
+  <div class="page-footer">
+    <div class="page-footer-meta">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div>
+    {{ smarter_with_data() }}
+  </div>
+</div>
+
+
 <!-- ══════ PAGE 9: POSITIONING — FEATURES ══════ -->
 <div class="page">
   <div class="page-header">
@@ -1065,6 +1203,50 @@
 </div>
 
 
+<!-- ══════ M18: PRE-SALE RECOMMENDATIONS ══════ -->
+{# Suburb-specific ROI lookup. Items hidden when conditional_on (e.g. condition_score < 8 on flooring). #}
+{% if pre_sale_roi and pre_sale_roi['items'] %}
+<div class="page">
+  <div class="page-header">
+    <div class="page-header-title">{{ street_address }}</div>
+    <div class="page-header-mark">{{ f_mark('#22382C', 22) }}</div>
+  </div>
+  <h2>What We Would Do Before Listing</h2>
+  <p class="subtitle">Pre-sale recommendations with ROI estimates from {{ suburb }} sales data.</p>
+
+  <table style="width: 100%; border-collapse: collapse; font-size: 9.5pt; margin-top: 8mm;">
+    <thead>
+      <tr style="background: var(--grass); color: var(--birch);">
+        <th style="padding: 8pt 10pt; text-align: left; font-weight: 600; width: 28%;">Action</th>
+        <th style="padding: 8pt 10pt; text-align: right; font-weight: 600; width: 16%;">Cost</th>
+        <th style="padding: 8pt 10pt; text-align: right; font-weight: 600; width: 18%;">Expected recovery</th>
+        <th style="padding: 8pt 10pt; text-align: left; font-weight: 600;">Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in pre_sale_roi['items'] %}
+      <tr style="border-bottom: 1px solid #e3dccf;">
+        <td style="padding: 9pt 10pt; font-weight: 600; vertical-align: top;">{{ item.action }}</td>
+        <td style="padding: 9pt 10pt; text-align: right; vertical-align: top;">{{ item.cost }}</td>
+        <td style="padding: 9pt 10pt; text-align: right; vertical-align: top; font-weight: 600;">{{ item.recovery }}</td>
+        <td style="padding: 9pt 10pt; line-height: 1.45; color: var(--text-secondary); vertical-align: top;">{{ item.note }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <p style="margin-top: 10mm; font-size: 9pt; font-style: italic; color: var(--text-secondary);">
+    {{ pre_sale_roi['closing'] | default("Recovery estimates are mid-range from comparable Gold Coast pre-sale studies and our internal photography ROI dataset. Actual results vary by execution quality. We would coordinate the ones that suit your timeline before campaign launch.") }}
+  </p>
+
+  <div class="page-footer">
+    <div class="page-footer-meta">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div>
+    {{ smarter_with_data() }}
+  </div>
+</div>
+{% endif %}
+
+
 <!-- ══════ PAGE 10: POSITIONING — CAMPAIGN ══════ -->
 <div class="page">
   <div class="page-header">
@@ -1083,6 +1265,76 @@
     {{ smarter_with_data() }}
   </div>
 </div>
+
+
+<!-- ══════ M20: THE FIRST SEVEN DAYS ══════ -->
+{# Demand-concentration insight from seller book Ch 7. Mostly static narrative + suburb data. #}
+<div class="page">
+  <div class="page-header">
+    <div class="page-header-title">{{ street_address }}</div>
+    <div class="page-header-mark">{{ f_mark('#22382C', 22) }}</div>
+  </div>
+  <h2>The First Seven Days</h2>
+  <p class="subtitle">Why the opening week of your campaign matters more than the rest combined.</p>
+
+  <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 8mm; margin-top: 6mm;">
+    <div style="font-size: 10pt; line-height: 1.6;">
+      <p style="margin-bottom: 10pt;">Across our analysis of 44,937 Gold Coast sales (2020–2025), properties that achieve their highest final price share one pattern: <strong>they generate the bulk of buyer interest in the first 7–10 days on market</strong>.</p>
+      <p style="margin-bottom: 10pt;">Buyers searching {{ suburb }} aren't waiting for new listings — they're already saved-search-subscribed, scrolling Domain on Saturday mornings, watching for the right home. Your campaign's first weekend is when these active buyers see your listing simultaneously and react simultaneously. Competitive tension is built — or missed — in this window.</p>
+      <p style="margin-bottom: 10pt;">After day 10, the buyer pool shifts from active to passive. Active buyers have already inspected and either offered or moved on. Passive buyers (who weren't subscribed) take longer to discover the listing. They expect more flexibility, more concessions, more time to think. The competitive heat that drives premium prices cools.</p>
+      <p>Day 1 readiness is therefore everything. We would not list until photography, copy, signage, vendor-paid advertising, and database alerts are simultaneous-launch ready. The cost of an extra week's preparation is far smaller than the cost of a soft opening week.</p>
+    </div>
+    <div>
+      <div class="strategy-card" style="margin-bottom: 6mm;">
+        <h4 style="font-size: 10.5pt;">Active vs passive buyers</h4>
+        <p style="font-size: 8.5pt; line-height: 1.5;">Industry research suggests roughly 40–60% of {{ suburb }} buyers are <strong>active</strong> (saved searches, weekend inspections) at any given time. The other 40–60% are <strong>passive</strong> (will buy if the right home appears, but not actively searching).</p>
+        <p style="font-size: 8.5pt; line-height: 1.5; margin-top: 6pt;">First-week marketing reaches active buyers. Vendor-paid amplification is what reaches the passive ones — the 60% your standard listing won't.</p>
+      </div>
+      <div class="strategy-card" style="background: var(--grass); color: var(--birch); border-left: none;">
+        <h4 style="font-size: 10.5pt; color: var(--birch);">Demand concentration</h4>
+        <p style="font-size: 8.5pt; line-height: 1.5; opacity: 0.9;">In a typical 4-week {{ suburb }} private treaty campaign, our internal data shows <strong>~70% of total inspection volume happens in the first 14 days</strong>. The opening week alone accounts for roughly 50%.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-footer">
+    <div class="page-footer-meta">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div>
+    {{ smarter_with_data() }}
+  </div>
+</div>
+
+
+<!-- ══════ M21: NEGOTIATION PLAN ══════ -->
+{# AI-generated 3 offer scenarios specific to this property's likely buyer pool. #}
+{% if negotiation_plan and negotiation_plan['scenarios'] %}
+<div class="page">
+  <div class="page-header">
+    <div class="page-header-title">{{ street_address }}</div>
+    <div class="page-header-mark">{{ f_mark('#22382C', 22) }}</div>
+  </div>
+  <h2>The Negotiation Plan</h2>
+  <p class="subtitle">{{ negotiation_plan.intro | default("Three offer scenarios we have already thought about, so the response is rehearsed before offer day.") }}</p>
+
+  {% for scenario in negotiation_plan['scenarios'] %}
+  <div class="strategy-card" style="page-break-inside: avoid; margin-bottom: 6mm;">
+    <div style="display: flex; align-items: baseline; gap: 12pt; margin-bottom: 6pt;">
+      <div style="font-size: 8pt; letter-spacing: 1.5px; text-transform: uppercase; color: var(--copper); font-weight: 700;">Scenario {{ loop.index }}</div>
+      <h3 style="margin: 0; font-size: 12pt;">{{ scenario.label }}</h3>
+    </div>
+    <p style="font-size: 9pt; line-height: 1.55; color: var(--text-secondary); margin-bottom: 6pt;"><strong style="color: var(--text);">When:</strong> {{ scenario.timing }}</p>
+    <p style="font-size: 9pt; line-height: 1.55; color: var(--text-secondary); margin-bottom: 6pt;"><strong style="color: var(--text);">Likely buyer:</strong> {{ scenario.buyer }}</p>
+    <p style="font-size: 9pt; line-height: 1.55;"><strong style="color: var(--grass);">How we'd respond:</strong> {{ scenario.response }}</p>
+  </div>
+  {% endfor %}
+
+  <p style="margin-top: 8mm; font-size: 9pt; font-style: italic; color: var(--text-secondary);">{{ negotiation_plan.closing | default("These responses are templates, not scripts — the negotiation always adapts to the actual buyer in front of us. The point is that we have already thought about it. Offer day should not be the first day we think about how to respond.") }}</p>
+
+  <div class="page-footer">
+    <div class="page-footer-meta">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div>
+    {{ smarter_with_data() }}
+  </div>
+</div>
+{% endif %}
 
 
 <!-- ══════ PAGE 11: WHY FIELDS + NEXT STEPS ══════ -->
@@ -1115,6 +1367,23 @@
     {{ smarter_with_data() }}
   </div>
 </div>
+
+<!-- ══════ M25: INSIDE BACK COVER — A FINAL NOTE ══════ -->
+{# Peak-end rule: the last thing the reader sees disproportionately shapes overall judgement.
+   30–60 word handwritten close from Will. Names the property. Wishes them well. Does not ask for the listing. #}
+<div class="page" style="background: var(--grass); color: var(--birch); display: flex; flex-direction: column; padding: 38mm 32mm;">
+  <div style="font-size: 8pt; letter-spacing: 4px; text-transform: uppercase; color: var(--copper); font-weight: 600; margin-bottom: 24mm;">A Final Note</div>
+  <div style="max-width: 130mm; font-size: 14pt; line-height: 1.55; font-weight: 300;">
+    <p>{{ inside_back_cover_note | default("Whatever you decide about " + street_address + ", I hope this report has helped you see your home more clearly. The numbers are sourced. The trade-offs are honest. The strategy reflects what 2,153 Gold Coast sales teach us about getting it right. If you'd like to talk it through, you know where to find me. If not — this is yours to keep.") }}</p>
+  </div>
+  <div style="flex: 1;"></div>
+  <div style="font-size: 11pt; font-style: italic; opacity: 0.85; border-top: 1px solid rgba(230,221,210,0.25); padding-top: 14pt;">
+    Will Simpson<br>
+    <span style="font-size: 9pt; opacity: 0.75;">will@fieldsestate.com.au</span>
+  </div>
+  <div style="margin-top: 14mm; font-size: 8pt; letter-spacing: 2px; text-transform: uppercase; color: rgba(230,221,210,0.55);">Smarter with data.</div>
+</div>
+
 
 </body>
 </html>

@@ -727,6 +727,15 @@ Return JSON with these keys:
   "campaign_structure": "3-4 sentences: specific campaign approach — duration, channels, staging priorities, open home schedule. Reference the property's specific strengths.",
   "photography_strategy": "3 sentences: specific rooms/angles to prioritise, time of day, what to stage. Reference the property's actual features (pool, kitchen, deck, etc.).",
   "open_home_strategy": "3 sentences: approach to inspections — what to highlight on the walk-through, where to start, what creates the emotional peak.",
+  "negotiation_plan": {{
+    "intro": "One sentence framing the page. Suggested: 'Three offer scenarios we have already thought about, so the response is rehearsed before offer day.'",
+    "scenarios": [
+      {{"label": "Early high offer (week 1)", "timing": "Days 4–10 of the campaign, often after the first or second weekend's open homes.", "buyer": "Specific buyer-type description (e.g. 'Interstate relocator on a tight settlement timeline', 'Local upgrader who has missed multiple homes already this quarter'). Reference the buyer pool from this property's specific market.", "response": "3-4 sentences naming the Fields response: hold firm vs counter, why, what we'd say. Reference the property's specific value drivers as anchors. Do NOT use the word 'auction'."}},
+      {{"label": "Mid-range cluster (weeks 2–3)", "timing": "Week 2-3 — multiple offers within $50k-$100k of each other.", "buyer": "Specific description of the most likely cluster (e.g. 'Multiple Marymount families', 'Three downsizers from acreage all chasing the same low-maintenance lifestyle'). Property-specific.", "response": "3-4 sentences naming the Fields response: best-and-final vs sequential negotiation, why, the 1-2 levers we'd use to break the tie."}},
+      {{"label": "Late low offer (week 4+)", "timing": "Week 4 onward — campaign has slowed, buyer pool narrowed.", "buyer": "Specific description (e.g. 'Bargain-hunter testing for vendor fatigue', 'Conservative buyer waiting for a price reduction').", "response": "3-4 sentences naming the Fields response: when to engage vs when to refuse, what concessions we would and wouldn't accept, the reframe we use to restore competitive tension. Reference the property's strongest positioning data."}}
+    ],
+    "closing": "One sentence: 'These responses are templates, not scripts — the negotiation always adapts to the actual buyer in front of us. The point is that we have already thought about it. Offer day should not be the first day we think about how to respond.'"
+  }},
   "limits_of_evidence": {{
     "intro": "One sentence introducing why this section exists. Frame as: we want you to know what we couldn't see, so you can weigh our analysis honestly.",
     "items": [
@@ -1377,6 +1386,66 @@ def build_outcome_projection(listing_low: int, listing_high: int, selling_low: i
 
 
 # ---------------------------------------------------------------------------
+# M18 — Pre-sale Recommendations data builder
+# ---------------------------------------------------------------------------
+def build_pre_sale_roi(prop: dict, suburb_display: str) -> dict:
+    """Load pre-sale ROI items from config/pre_sale_roi.yaml, filter by conditional_on.
+
+    Each item's `conditional_on` is a Python expression evaluated against:
+      condition (overall_condition_score, default 7), pool_present (bool), suburb (str).
+    Items without `conditional_on` always render.
+    Returns {} if YAML can't be loaded — template guards via {% if %}.
+    """
+    config_path = ROOT / "config" / "pre_sale_roi.yaml"
+    if not config_path.exists():
+        return {}
+    try:
+        import yaml
+        cfg = yaml.safe_load(config_path.read_text())
+    except Exception as e:
+        print(f"  [WARN] pre_sale_roi.yaml load failed: {e}")
+        return {}
+
+    # Per-suburb override (not yet used; reserved for tier multipliers later)
+    suburb_key = suburb_display.lower().replace(" ", "_")
+    section = cfg.get(suburb_key) or cfg.get("default") or {}
+    if not section:
+        return {}
+
+    pvd = prop.get("property_valuation_data", {}) or {}
+    overview = pvd.get("property_overview", {}) or {}
+    condition = overview.get("overall_condition_score") or 7
+    pool_present = bool((pvd.get("outdoor", {}) or {}).get("pool_present"))
+    eval_ctx = {
+        "condition": condition,
+        "pool_present": pool_present,
+        "suburb": suburb_display,
+    }
+
+    filtered = []
+    for item in section.get("items", []) or []:
+        cond_expr = item.get("conditional_on")
+        if cond_expr:
+            try:
+                if not eval(cond_expr, {"__builtins__": {}}, eval_ctx):
+                    continue
+            except Exception:
+                # Keep the item if the expression fails to parse — better to over-include than drop
+                pass
+        filtered.append({
+            "action": item.get("action", ""),
+            "cost": item.get("cost", ""),
+            "recovery": item.get("recovery", ""),
+            "note": item.get("note", "").strip(),
+        })
+
+    return {
+        "items": filtered,
+        "closing": section.get("closing", "").strip() or None,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Satellite label formatter
 # ---------------------------------------------------------------------------
 def _fmt_sat_label(val: str) -> str:
@@ -1390,9 +1459,11 @@ def _fmt_sat_label(val: str) -> str:
 # ---------------------------------------------------------------------------
 def render_html(prop, client_name, top_comps, room_assessments, editorial,
                 market_stats, photo_paths, suburb_display: str,
-                sell_timeline: str = "", sell_timeline_label: str = "") -> str:
+                sell_timeline: str = "", sell_timeline_label: str = "",
+                rates: dict = None) -> str:
     env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)))
     template = env.get_template("seller_report_v2.html")
+    rates = rates or {}
 
     pvd = prop.get("property_valuation_data", {})
     fpa = prop.get("floor_plan_analysis", {})
@@ -1485,6 +1556,17 @@ def render_html(prop, client_name, top_comps, room_assessments, editorial,
         "outcome_projection": build_outcome_projection(
             listing_low, listing_high, val_low, val_high, suburb_display,
         ),
+        # Print Master modules (M4 methodology rates, M18 pre-sale, M21 negotiation).
+        # Each guarded with {% if %} so a digital-only render isn't broken.
+        "rate_land": rates.get("land_per_sqm"),
+        "rate_floor": rates.get("floor_per_sqm"),
+        "rate_bed": fmt(rates.get("per_bedroom", 0)).replace("$",""),
+        "rate_bath": fmt(rates.get("per_bathroom", 0)).replace("$",""),
+        "rate_car": fmt(rates.get("per_car_space", 0)).replace("$",""),
+        "rate_pool": fmt(rates.get("per_pool", 0)).replace("$",""),
+        "rate_reno": fmt(rates.get("per_renovation_level", 0)).replace("$",""),
+        "pre_sale_roi": build_pre_sale_roi(prop, suburb_display),
+        "negotiation_plan": editorial.get("negotiation_plan"),
         "research_stats": RESEARCH_STATS,
         "total_sold_tracked": TOTAL_SOLD_TRACKED,
         # Photos — emit empty string (not "file://") when absent so {% if %} guards work
@@ -1728,7 +1810,8 @@ def main():
     html = render_html(prop, client_name, top_comps, room_assessments, editorial,
                        market_stats, photo_paths, suburb_display,
                        sell_timeline=sell_timeline,
-                       sell_timeline_label=timeline_labels.get(sell_timeline, sell_timeline))
+                       sell_timeline_label=timeline_labels.get(sell_timeline, sell_timeline),
+                       rates=rates)
     html_path = work_dir / "report.html"
     html_path.write_text(html)
 
