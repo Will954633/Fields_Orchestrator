@@ -517,7 +517,7 @@ Example trade-off: "658 sqm lot (107 sqm less than the nearest comp), 221 sqm in
 
 RULES (MANDATORY):
 - Frame as "we would" not "you should". NEVER give advice. Data only — reader draws conclusions.
-- No forbidden words: stunning, nestled, boasting, rare opportunity, robust market.
+- No forbidden words ANYWHERE in the output: stunning, nestled, boasting, rare opportunity, robust market, must-see, dream home, won't last, act fast, don't miss, perfect for, exquisite, tranquil oasis. The validator REJECTS any output containing these phrases.
 - Cite specific comp addresses, prices, adjustment figures, and percentages.
 - Price format: $1,250,000 not $1.25m. Suburbs always capitalised.
 - Every trade-off must be reframed as value — a seller reading this should feel their property is positioned honestly and favourably.
@@ -560,10 +560,10 @@ Return JSON with these keys:
     ],
     "closing": "One sentence reaffirming why an in-person inspection by our property analyst matters before signing. Honest, not dismissive."
   }},
-  "morning_in_this_home": "Length target: 200-250 words (validator rejects below 170 or above 290). Tune the narrative length silently — if your draft is under 200 words, add one sensory beat in-place (a sound, a texture, a small movement); if over 250, trim the least-essential sentence in-place. Do not output the word count or any commentary about your length-tuning. Style: present-tense sensory narrative written as if you ARE a prospective buyer experiencing the home for the first time. ABSOLUTE RULES: (a) NEVER use 'you' or 'your' addressing the seller; the narrator IS a buyer, so 'you' may not appear at all — write in 1st-person 'I' or 3rd-person 'they' or implied present-tense ('the kettle is on'); (b) MUST reference at least one named POI from the property's data (a school, park, cafe, beach, reserve, by name); (c) MUST reference at least one named feature of THIS property (pool, deck, kitchen island, the wetland boundary, the cul-de-sac, etc.); (d) MUST reference a named time of day or moment (morning, dusk, twilight, Sunday afternoon, etc.); (e) MUST end on a quiet sensory image, not a conclusion or pitch; (f) DO NOT INVENT THE SELLER'S POSSESSIONS, HOBBIES, VEHICLES, PETS, NAMED NEIGHBOURS, OR SPECIFIC LOCAL EVENTS. Reference ONLY: items present in the property data (pool, deck, kitchen, room types, gardens), named POIs from `nearby_pois`, public landmarks, and generic family-life moments (kids, coffee, weekend mornings, lawnmowers, birds, neighbours waving). DO NOT name a specific car model (no Mustang, no Tesla), boat, motorcycle, art collection, school event ('weekend fair', 'rugby game'), named neighbour, named pet, or specific weekend activity unless that item is explicitly present in the property's data fields. When in doubt, omit. Short clean sentences, sensory verbs, no real-estate clichés, no advice, no 'you should'. Think Cereal magazine, not a brochure."
+  "morning_in_this_home": "Length: 200-250 words. AIM FOR THE TOP OF THE RANGE (240 words) — better to slightly trim a long draft than to fall short of 200, because the validator rejects below 170. Style: present-tense sensory narrative, written as if you ARE a prospective buyer experiencing the home for the first time. Short clean sentences. ABSOLUTE RULES: (a) NEVER use 'you' or 'your' — the narrator IS a buyer, so 'you' may not appear at all (write in 1st-person 'I' or implied present-tense like 'the kettle is on'); (b) MUST reference at least one named POI from `nearby_pois` (a specific school, park, beach, reserve, by name); (c) MUST reference at least one named feature of THIS property (the pool, the deck, the kitchen island, the wetland boundary, the cul-de-sac, etc.); (d) MUST reference a named time of day or moment (Saturday morning, dusk, twilight, etc.); (e) MUST end on a quiet sensory image — an animal, a sound, a texture — NOT a conclusion or pitch; (f) DO NOT IMPLY THE SELLER OWNS ANY OBJECT NOT IN THE PROPERTY DATA. The waterfront/canal/lake properties especially are a hallucination trap — DO NOT write 'the boat waits on its trailer', 'the family boat', 'the kayak in the garage', 'the jet ski', 'the bikes hanging in the garage', 'the Mustang', 'their Tesla', 'the dog by the door', 'the cat on the windowsill'. These all imply belongings we have no record of. ALLOWED equivalents that describe activity AROUND the property: 'a boat puttering past on the waterway', 'a kayaker glides upstream', 'a paddleboarder navigates the bend', 'a neighbour walking a dog past the fence', 'a kookaburra calls from the eucalypt', 'cars heading toward the M1'. The narrator is a buyer experiencing the home, not the current owner — describe what is OBSERVABLE from the home (pool, deck, kitchen, view, neighbours, traffic, wildlife), NOT what the seller might own. Reference ONLY: items present in the property data (pool, deck, kitchen, room types, gardens), named POIs from `nearby_pois`, public landmarks, and generic family-life moments (kids, coffee, weekend mornings, lawnmowers, birds, distant traffic). DO NOT name a specific car model, boat, motorcycle, jet ski, art collection, school event ('weekend fair', 'rugby game'), named neighbour, named pet, or specific weekend activity unless that item is explicitly present in the property's data fields. When in doubt, omit. No real-estate clichés. No advice. No 'you should'. Think Cereal magazine, not a brochure."
 }}
 
-Generate EXACTLY 5-7 value_equations covering: land size, internal floor area, condition/renovation, key feature (pool/kitchen/etc), location/school proximity, buyer scarcity, and one trade-off reframe.
+Generate EXACTLY 5 value_equations covering the 5 strongest value drivers for this property, each anchored in specific comp-adjustment data. Suggested categories: land size, internal floor area, condition/renovation, key feature (pool/kitchen/outdoor/dual-living/etc), location/school proximity. Buyer scarcity is handled by the `scarcity_statement` field; this property's main trade-off is handled by the dedicated `trade_off` field — do NOT duplicate them as value_equations. Five well-evidenced value_equations beat seven thin ones; the page layout is calibrated for 5.
 Generate EXACTLY 3 buyer_profiles (primary, secondary, tertiary).
 Generate EXACTLY 4 pricing_cards (aspirational, competitive, strategic, floor).
 Generate EXACTLY 5-6 feature_positioning items.
@@ -604,6 +604,74 @@ OUTPUT FORMAT (CRITICAL — parser is strict):
     except Exception as e:
         print(f"  [WARN] Claude editorial failed: {e}")
         return _minimal_editorial(prop, top_comps, market_stats)
+
+
+def regenerate_morning_narrative(client, prop: dict, current_morning: str, target_low: int = 200, target_high: int = 250, max_retries: int = 2) -> str:
+    """Regenerate morning_in_this_home until it lands within target word range, or give up after max_retries.
+
+    Cost: ~$0.50 per retry (single-field Claude call, max_tokens 1500).
+    Returns the original `current_morning` if all retries fail.
+    """
+    morning = current_morning
+    wc = len(morning.split())
+    if target_low <= wc <= target_high:
+        return morning  # already in range
+
+    address = prop.get("complete_address") or prop.get("address", "the property")
+    nearby_pois = prop.get("nearby_pois", {}).get("by_category", {})
+    poi_names = []
+    for cat in ["primary_school", "secondary_school", "park", "cafe", "supermarket", "beach"]:
+        for p in nearby_pois.get(cat, [])[:2]:
+            if p.get("name"):
+                poi_names.append(p["name"])
+    poi_hint = ", ".join(poi_names[:6]) if poi_names else "(no named POIs available)"
+
+    for attempt in range(max_retries):
+        direction = "EXPAND TO 200-250 WORDS" if wc < target_low else "TRIM TO 200-250 WORDS"
+        print(f"  M11 retry {attempt + 1}/{max_retries}: current {wc} words, target 200-250")
+
+        retry_prompt = f"""Below is a morning_in_this_home narrative for {address}. It is currently {wc} words. The required length is 200-250 words.
+
+{direction}. Keep the same sensory tone, named POIs, and property features.
+
+ABSOLUTE RULES (the validator will reject violations):
+- Do NOT use 'you' or 'your' addressing the seller. The narrator IS a buyer.
+- Do NOT use forbidden words: stunning, nestled, boasting, rare opportunity, robust market, must-see, dream home, won't last, perfect for, exquisite, tranquil oasis.
+- Do NOT IMPLY THE SELLER OWNS ANY OBJECT not in the property data. Specifically forbidden: 'the boat waits', 'the family boat', 'the kayak in the garage', 'the jet ski', 'the bikes', 'the Mustang/Tesla', 'the dog/cat', 'their X' where X is a vehicle/pet/hobby gear. These imply belongings we have no record of.
+- Allowed equivalents that describe activity AROUND the home: 'a boat puttering past on the waterway', 'a kayaker glides upstream', 'a paddleboarder navigates the bend', 'a neighbour walking a dog past the fence', 'a kookaburra calls from the eucalypt', 'cars heading toward the M1'.
+- The narrator is a prospective buyer experiencing the home — describe what is OBSERVABLE from the home (pool, deck, kitchen, view, neighbours, traffic, wildlife), NOT what the seller might own.
+
+Available named POIs to reference if needed: {poi_hint}
+
+Return ONLY the new narrative text. No JSON, no quotes around it, no commentary, no word count.
+
+Current narrative:
+\"\"\"
+{morning}
+\"\"\""""
+        try:
+            resp = client.messages.create(
+                model="claude-opus-4-20250514",
+                max_tokens=1500,
+                messages=[{"role": "user", "content": retry_prompt}],
+            )
+            new_morning = resp.content[0].text.strip().strip('"').strip("'").strip()
+            # Strip any leading/trailing triple quotes that Claude might wrap with
+            new_morning = re.sub(r'^\s*"""', '', new_morning)
+            new_morning = re.sub(r'"""\s*$', '', new_morning)
+            new_wc = len(new_morning.split())
+            print(f"  M11 retry {attempt + 1}: {wc} → {new_wc} words")
+            if target_low <= new_wc <= target_high:
+                return new_morning
+            morning = new_morning
+            wc = new_wc
+        except Exception as e:
+            print(f"  M11 retry {attempt + 1} failed: {e}")
+            return current_morning  # fall back to original on API failure
+
+    # All retries used and still out of range — return the best attempt
+    print(f"  M11 retries exhausted; returning best attempt at {wc} words")
+    return morning
 
 
 def _minimal_editorial(prop: dict, top_comps: list, market_stats: dict) -> dict:
@@ -1083,6 +1151,19 @@ def main():
     else:
         print("  Generating editorial via Claude...")
         editorial = generate_editorial(prop, top_comps, market_stats, rates, suburb_display)
+        # Regenerate the morning_in_this_home narrative if the length is out of range.
+        # Word-count compliance varies between properties (BW kept undershooting on premium-property
+        # density), so we use a targeted single-field retry rather than tuning the whole-prompt
+        # blunt instrument. ~$0.50 per retry, max 2 retries.
+        if not args.skip_ai and editorial.get("morning_in_this_home"):
+            try:
+                import anthropic
+                client_anth = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
+                editorial["morning_in_this_home"] = regenerate_morning_narrative(
+                    client_anth, prop, editorial["morning_in_this_home"]
+                )
+            except Exception as e:
+                print(f"  [WARN] M11 regen loop unavailable: {e}")
         # Cache the editorial alongside the PDF so future renders can --reuse-editorial it.
         try:
             editorial_json_path.write_text(json.dumps(editorial, indent=2, ensure_ascii=False))

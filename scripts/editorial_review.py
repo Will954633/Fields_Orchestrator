@@ -75,9 +75,14 @@ PREDICTION_PATTERNS = [
     r"\bguaranteed to\b",
 ]
 
-# Round-number formats forbidden in BODY copy (not in headline framing)
+# Round-number formats forbidden in BODY copy (not in headline framing).
+# Allowed contexts (NOT flagged): "$3 million" (full word), "$3m+" (price-tier),
+# "$3m threshold/market/tier/bracket/segment/range/band/category/level/territory/space/sector/class"
+# (semantic price-tier references — these aren't precise valuations, they're conceptual segments).
 ROUND_DOLLAR_PATTERN = re.compile(
-    r"\$\d+(?:\.\d+)?\s*[mM](?!illion)"  # $1.5m, $2M (but allow "$1.5 million" in narrative)
+    r"\$\d+(?:\.\d+)?\s*[mM]"
+    r"(?!illion|\+|\s+(?:threshold|market|tier|bracket|segment|range|band|"
+    r"category|level|territory|space|sector|class|club|cohort|stock))"
 )
 
 # Precise dollar pattern — what we WANT to see
@@ -111,7 +116,7 @@ REQUIRED_KEYS = [
 # Expected counts per 04_content_modules.md
 EXPECTED_COUNTS = {
     "strengths": (3, 4),               # 3-4
-    "value_equations": (5, 7),         # 5-7
+    "value_equations": (5, 5),         # exactly 5 (was 5-7 — tightened to fit page layout)
     "buyer_profiles": (3, 3),          # exactly 3
     "pricing_cards": (4, 4),           # exactly 4
     "feature_positioning": (5, 6),     # 5-6
@@ -481,6 +486,53 @@ def check_morning_narrative(editorial: dict) -> CheckResult:
     return CheckResult("morning_narrative", True)
 
 
+def check_seller_possession_hallucination(editorial: dict) -> CheckResult:
+    """M11 hallucination guard: detect phrases that imply the seller owns objects we have no data for.
+
+    Pattern: possessive determiners ('the X', 'their X', 'the family X') paired with belongings
+    we cannot verify (boat, kayak, Mustang, dog, etc.). Generic descriptions of activity AROUND
+    the home (a boat puttering past, a kayaker gliding upstream) are fine — they don't claim
+    seller ownership.
+
+    Severity: WARN (surfaces for human review without blocking; some patterns may be legitimate
+    in context, e.g. 'the boat ramp at Currumbin Creek').
+    """
+    morning = (editorial.get("morning_in_this_home") or "").strip()
+    if not morning:
+        return CheckResult("seller_possession_hallucination", True, severity="warn")
+
+    suspicious = []
+
+    # Pattern 1: "the X" / "the family X" where X is a vehicle/pet/hobby gear that implies ownership.
+    # We require the determiner "the" + space + the noun, NOT followed by neutral landmarks
+    # (ramp, dock, club, shed, storage, repair, hire).
+    nouns_strong = r"(?:Mustang|Tesla|BMW|Audi|Mercedes|Porsche|Lamborghini|Ferrari|Range Rover|Jet ?Ski|jet-ski|surfboards?)"
+    nouns_medium = r"(?:boat|kayak|motorcycle|motorbike|caravan|trailer|jetski|jet ski)"
+    pat_strong = re.compile(rf"\b(?:the|the family|their|her|his)\s+{nouns_strong}\b", re.IGNORECASE)
+    pat_medium = re.compile(
+        rf"\b(?:the|the family|their|her|his)\s+{nouns_medium}\b"
+        r"(?!\s+(?:ramp|dock|club|shed|storage|hire|repair|trip|ride|sail|tour))",
+        re.IGNORECASE,
+    )
+    for pat in (pat_strong, pat_medium):
+        for m in pat.finditer(morning):
+            suspicious.append(m.group(0))
+
+    # Pattern 2: "their dog/cat" or "the family dog/cat" — pets the seller may not have.
+    pat_pet = re.compile(r"\b(?:their|her|his|the family)\s+(?:dog|cat|pet|puppy|kitten)\b", re.IGNORECASE)
+    for m in pat_pet.finditer(morning):
+        suspicious.append(m.group(0))
+
+    if suspicious:
+        unique = list(dict.fromkeys(suspicious))  # dedupe preserve order
+        return CheckResult(
+            "seller_possession_hallucination", False,
+            f"Possible invented seller belongings: {unique}",
+            severity="warn",  # warn — needs human review, may be legitimate
+        )
+    return CheckResult("seller_possession_hallucination", True)
+
+
 def check_pricing_cards(editorial: dict) -> CheckResult:
     """4 pricing cards expected; each must have a range and rationale."""
     cards = editorial.get("pricing_cards", []) or []
@@ -520,6 +572,8 @@ ALL_CHECKS = [
     # Phase 1 modules — warn-severity when field absent (backwards-compat with older cached editorials)
     check_limits_of_evidence,
     check_morning_narrative,
+    # Hallucination guard for M11 (warn — may need human judgement on edge cases)
+    check_seller_possession_hallucination,
 ]
 
 
