@@ -563,8 +563,8 @@
     <span class="take-pill">{{ bedrooms }}bd</span>
     <span class="take-pill">{{ bathrooms }}ba</span>
     <span class="take-pill">{{ land_size }} m&sup2;</span>
-    <span class="take-pill">{{ internal_area }} m&sup2; internal</span>
-    <span class="take-pill">{{ condition_score }}/10 condition</span>
+    {% if internal_area and internal_area != "?" %}<span class="take-pill">{{ internal_area }} m&sup2; internal</span>{% endif %}
+    {% if condition_score and condition_score != "?" %}<span class="take-pill">{{ condition_score }}/10 condition</span>{% endif %}
     {% if has_pool %}<span class="take-pill">Pool</span>{% endif %}
     {% if has_dual_living %}<span class="take-pill">Dual Living</span>{% endif %}
   </div>
@@ -627,8 +627,8 @@
   <div class="comp-card">
     <div class="comp-card-header">
       <div>
-        <div class="comp-card-addr">{{ comp.address }} <span style="font-weight:400;color:var(--text-muted);font-size:9pt;">&mdash; Sold {{ comp.date_display }}</span></div>
-        <div class="comp-card-meta">{{ comp.config }} &nbsp;|&nbsp; {{ comp.land }} m&sup2; &nbsp;|&nbsp; {{ comp.internal }} m&sup2; internal &nbsp;|&nbsp; {{ comp.condition }}/10 condition</div>
+        <div class="comp-card-addr">{{ comp.address }}{% if comp.date_display and comp.date_display != "?" %} <span style="font-weight:400;color:var(--text-muted);font-size:9pt;">&mdash; Sold {{ comp.date_display }}</span>{% endif %}</div>
+        <div class="comp-card-meta">{{ comp.config }} &nbsp;|&nbsp; {{ comp.land }} m&sup2;{% if comp.internal %} &nbsp;|&nbsp; {{ comp.internal }} m&sup2; internal{% endif %}{% if comp.condition %} &nbsp;|&nbsp; {{ comp.condition }}/10 condition{% endif %}</div>
       </div>
       <div class="comp-card-price">{{ comp.sold_display }}</div>
     </div>

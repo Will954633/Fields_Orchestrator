@@ -342,6 +342,29 @@ def time_adjust(sold_date_val, monthly_rate: float = 0.005) -> float:
         return 1.0
 
 
+def _format_sold_date(iso_date: str) -> str:
+    """Convert '2025-10-07' → '7 October 2025'. Falls back to the raw string on failure."""
+    if not iso_date:
+        return "?"
+    try:
+        d = datetime.strptime(iso_date[:10], "%Y-%m-%d")
+        return d.strftime("%-d %B %Y")  # %-d strips leading zero on Linux
+    except Exception:
+        return iso_date[:10]
+
+
+def _months_between(iso_date: str) -> int:
+    """Months from sold_date to now (always >= 0)."""
+    if not iso_date:
+        return 0
+    try:
+        d = datetime.strptime(iso_date[:10], "%Y-%m-%d")
+        now = datetime.now()
+        return max(0, (now.year - d.year) * 12 + (now.month - d.month))
+    except Exception:
+        return 0
+
+
 def build_top_comps(subject: dict, comp_docs: list[dict], rates: dict) -> list[dict]:
     cards = []
     for doc in comp_docs:
@@ -360,20 +383,65 @@ def build_top_comps(subject: dict, comp_docs: list[dict], rates: dict) -> list[d
         addr = _re.sub(r'\s+(ROBINA|MERRIMAC|BURLEIGH WATERS|VARSITY LAKES|MUDGEERABA|REEDY CREEK|WORONGARY|CARRARA)\s*$', '', addr, flags=_re.IGNORECASE)
         addr = addr.strip().strip(",")
 
+        # Pull internal floor area + condition score from comp's own data — both can be None
+        c_fpa = doc.get("floor_plan_analysis", {}) or {}
+        c_internal = (c_fpa.get("internal_floor_area") or {}).get("value") or doc.get("floor_area_sqm")
+        c_pvd = doc.get("property_valuation_data", {}) or {}
+        c_overview = c_pvd.get("property_overview", {}) or {}
+        c_condition = c_overview.get("overall_condition_score")
+        c_beds = doc.get("bedrooms")
+        c_baths = doc.get("bathrooms")
+        c_cars = doc.get("car_spaces") or doc.get("carspaces")
+        # Build "5bd 3ba 4car" config string with only the fields we have
+        config_parts = []
+        if c_beds is not None: config_parts.append(f"{c_beds}bd")
+        if c_baths is not None: config_parts.append(f"{c_baths}ba")
+        if c_cars is not None: config_parts.append(f"{c_cars}car")
+        config = " ".join(config_parts) if config_parts else "?"
+
+        # Time adjustment: dollar effect of the time multiplier on the (sold + total_adj) base
+        # time_mult is e.g. 1.045 → 4.5% appreciation since sale; the time adjustment in dollars
+        # is what was added by that multiplier.
+        pre_time = sold_price + total_adj
+        time_adj_dollars = adjusted - pre_time
+        months_ago = _months_between(sold_date)
+
+        # Narrative (best-effort one-liner). We don't synthesise from agent description because
+        # those tend to be marketing-speak; surface a structural one-liner instead.
+        narrative_parts = []
+        if c_overview.get("overall_condition") and c_overview.get("overall_condition") != "good":
+            narrative_parts.append(c_overview["overall_condition"].title())
+        reno_level = (c_pvd.get("renovation", {}) or {}).get("overall_renovation_level")
+        if reno_level:
+            narrative_parts.append(reno_level.replace("_", " ").title())
+        outdoor = c_pvd.get("outdoor", {}) or {}
+        if outdoor.get("pool_present"):
+            narrative_parts.append("Pool")
+        narrative = ". ".join(narrative_parts) + ("." if narrative_parts else "")
+
         cards.append({
             "address": addr,
             "sold_display": fmt(sold_price),
             "sold_price": sold_price,
             "date": sold_date[:10] if sold_date else "?",
-            "beds": doc.get("bedrooms", "?"),
-            "baths": doc.get("bathrooms", "?"),
+            "date_display": _format_sold_date(sold_date),
+            "beds": c_beds if c_beds is not None else "?",
+            "baths": c_baths if c_baths is not None else "?",
+            "cars": c_cars if c_cars is not None else "?",
+            "config": config,
             "land": doc.get("land_size_sqm") or doc.get("lot_size_sqm") or "?",
+            "internal": int(c_internal) if c_internal is not None else None,
+            "condition": c_condition if c_condition is not None else None,
             "adjustments": adjs,
             "total_adj": total_adj,
             "total_adj_display": fmt_signed(total_adj),
             "time_factor": f"{time_mult:.3f}",
+            "time_adj_dollars": time_adj_dollars,
+            "time_adj_display": fmt_signed(time_adj_dollars) if time_adj_dollars else "",
+            "months_ago": months_ago,
             "adjusted_total": adjusted,
             "adjusted_total_display": fmt(adjusted),
+            "narrative": narrative,
         })
     cards.sort(key=lambda c: c["adjusted_total"])
     return cards
@@ -382,26 +450,81 @@ def build_top_comps(subject: dict, comp_docs: list[dict], rates: dict) -> list[d
 # ---------------------------------------------------------------------------
 # Room assessments (fully dynamic from property_valuation_data)
 # ---------------------------------------------------------------------------
+# String-rated condition → /10 score. Used as fallback when a per-room
+# `quality_score` field isn't populated (which is most of the time on the current
+# enrichment pipeline). Derived from the AI vision pipeline's vocab.
+_CONDITION_TO_SCORE = {
+    "excellent": 9, "very_good": 8, "good": 7, "fair": 6, "poor": 5, "very_poor": 4,
+    "modern": 8, "contemporary": 8, "updated": 8, "renovated": 8, "new": 9,
+    "dated": 5, "original": 5, "tired": 4,
+}
+
+
+def _derive_room_score(room_data: dict, condition_field_priorities: list[str], pvd_overall_score) -> int | None:
+    """Best-effort score derivation:
+       1. Explicit `quality_score` if set (rare on current data)
+       2. Highest mapped condition string from the priority list (good/excellent/dated/etc.)
+       3. Fallback to overall property condition score
+       4. None if nothing usable
+    """
+    if not isinstance(room_data, dict):
+        return None
+    explicit = room_data.get("quality_score") or room_data.get("overall_facade_score")
+    if isinstance(explicit, (int, float)) and explicit > 0:
+        return int(explicit)
+    # Try condition-string derivation
+    candidates = []
+    for f in condition_field_priorities:
+        v = room_data.get(f)
+        if isinstance(v, str):
+            mapped = _CONDITION_TO_SCORE.get(v.lower().replace(" ", "_"))
+            if mapped:
+                candidates.append(mapped)
+        elif isinstance(v, (int, float)) and v > 0:
+            candidates.append(int(v))
+    if candidates:
+        # Take the highest-scoring derivation (most generous reasonable read)
+        return max(candidates)
+    # Fallback to overall property condition
+    if isinstance(pvd_overall_score, (int, float)) and pvd_overall_score > 0:
+        return int(pvd_overall_score)
+    return None
+
+
 def build_room_assessments(pvd: dict) -> list[dict]:
-    rooms = []
+    """Build /10 condition cards for the 'Property Through Our Eyes' page.
+
+    Skips rooms where we have no usable data — better to show fewer accurate
+    cards than to render 'None/10' placeholders that look like data quality issues.
+    """
+    if not isinstance(pvd, dict):
+        return []
+    overall_score = (pvd.get("property_overview", {}) or {}).get("overall_condition_score")
+    # Each tuple: (display_name, pvd_key, condition_field_priorities, detail_fields_to_render)
     mapping = [
-        ("Kitchen", "kitchen", ["quality_score", "benchtop_material", "age_description"]),
-        ("Bathrooms", "bathrooms", ["quality_score", "fixtures_quality", "age_description"]),
-        ("Living Areas", "living_areas", ["quality_score", "flooring_material", "natural_light"]),
-        ("Master Bedroom", "master_bedroom", ["quality_score", "ensuite_quality", "walk_in_robe"]),
-        ("Exterior", "exterior", ["cladding_material", "roof_condition", "overall_facade_score"]),
-        ("Outdoor", "outdoor", ["pool_present", "entertaining_area_sqm", "landscaping_quality"]),
+        ("Kitchen",         "kitchen",         ["cabinet_condition", "quality_score"], ["benchtop_material", "cabinet_style", "appliances_quality"]),
+        ("Bathrooms",       "bathrooms",       ["overall_quality", "quality_score", "fixtures_quality"], ["fixtures_quality", "tiling_condition"]),
+        ("Living Areas",    "living_areas",    ["overall_quality", "quality_score"], ["flooring_material", "natural_light"]),
+        ("Master Bedroom",  "master_bedroom",  ["overall_quality", "quality_score"], ["ensuite_quality", "walk_in_robe"]),
+        ("Exterior",        "exterior",        ["cladding_condition", "paint_condition", "overall_facade_score", "quality_score"], ["cladding_material", "paint_condition", "roof_type"]),
+        ("Outdoor",         "outdoor",         ["pool_condition", "landscaping_quality", "quality_score", "pool_condition_score"], ["pool_type", "pool_condition", "alfresco_size", "landscaping_quality"]),
     ]
-    for label, key, fields in mapping:
-        data = pvd.get(key, {})
+    rooms = []
+    for label, key, score_fields, detail_fields in mapping:
+        data = pvd.get(key)
         if not data or isinstance(data, list):
             continue
-        score = data.get("quality_score") or data.get("overall_facade_score") or data.get("overall_condition_score")
+        score = _derive_room_score(data, score_fields, overall_score)
+        if score is None:
+            continue  # skip rooms with no usable score — better than 'None/10'
         details = []
-        for f in fields:
+        for f in detail_fields:
             v = data.get(f)
-            if v is not None and f != "quality_score":
-                details.append(f"{f.replace('_', ' ').title()}: {v}")
+            if v is None or v == "" or v is False:
+                continue
+            label_display = f.replace("_", " ").title()
+            value_display = str(v).replace("_", " ").title() if isinstance(v, str) else v
+            details.append(f"{label_display}: {value_display}")
         rooms.append({"name": label, "score": score, "details": details})
     return rooms
 
@@ -518,6 +641,8 @@ Example trade-off: "658 sqm lot (107 sqm less than the nearest comp), 221 sqm in
 RULES (MANDATORY):
 - Frame as "we would" not "you should". NEVER give advice. Data only — reader draws conclusions.
 - No forbidden words ANYWHERE in the output: stunning, nestled, boasting, rare opportunity, robust market, must-see, dream home, won't last, act fast, don't miss, perfect for, exquisite, tranquil oasis. The validator REJECTS any output containing these phrases.
+- INOCULATION (mandatory): of the 5 value_equations, AT LEAST 2 MUST be "trade-off" panels — they identify a measurement where the property is BELOW comparables (smaller land, smaller floor area, lower condition, fewer car spaces, single-level when 2-storey is preferred, etc.) and then reframe that trade-off as value. Set `positive: false` on those panels. Reports where all 5 panels are positive read as marketing brochures, not honest analysis.
+- CAMPAIGN CONSISTENCY (mandatory): for Gold Coast properties, the DEFAULT recommendation is private treaty (per Frino, Peat & Wright 2012, n=1.2M; REA Group 2014 — 72% of buyers skip auction listings without price guides). Only recommend auction if the property is genuinely unique (waterfront with no comparable sale, architecturally significant, deceased estate requiring auction by law). If you DO recommend auction in `campaign_structure`, the first sentence must explicitly state why the property qualifies as one of these exceptions. Do not recommend auction by default for premium homes — premium price and auction-suitability are not the same thing.
 - Cite specific comp addresses, prices, adjustment figures, and percentages.
 - Price format: $1,250,000 not $1.25m. Suburbs always capitalised.
 - Every trade-off must be reframed as value — a seller reading this should feel their property is positioned honestly and favourably.
@@ -538,6 +663,7 @@ Return JSON with these keys:
   "buyer_profiles": [
     {{"name": "Specific buyer persona (e.g. 'Young family upgrading from 3-bed')", "description": "3 sentences: Who they are, why this property fits (cite specific features), and what drives their purchase decision. Reference nearby schools, parks, or lifestyle features by name."}}
   ],
+  "not_ideal_for": ["3-4 short bullet points naming buyer types this property does NOT suit. Inoculation: name what THIS specific property's structural features (size, layout, condition, location) make it unsuitable for. Examples: 'Single-level seekers' (for two-storey homes), 'Buyers needing 3+ car garaging' (for narrow blocks), 'Families wanting acreage feel' (for sub-600 sqm), 'Pet-free buyers concerned about previous animal residency' (only if applicable from data). Each item under 8 words. Be specific to THIS property's structural characteristics, not generic."],
   "scarcity_count": "Exact number of similar-spec properties that sold in the suburb in 12 months",
   "scarcity_statement": "Specific scarcity statement citing bedroom count, key features, and the total sold number. E.g. 'five-bedroom homes sold in Merrimac in 12 months — out of 58 total sales. Only 1 had a pool.'",
   "lifestyle_narrative": "3-4 sentences grounded in POI data. Name specific schools, parks, shops with distances. Paint the daily life picture.",
@@ -563,7 +689,9 @@ Return JSON with these keys:
   "morning_in_this_home": "Length: 200-250 words. AIM FOR THE TOP OF THE RANGE (240 words) — better to slightly trim a long draft than to fall short of 200, because the validator rejects below 170. Style: present-tense sensory narrative, written as if you ARE a prospective buyer experiencing the home for the first time. Short clean sentences. ABSOLUTE RULES: (a) NEVER use 'you' or 'your' — the narrator IS a buyer, so 'you' may not appear at all (write in 1st-person 'I' or implied present-tense like 'the kettle is on'); (b) MUST reference at least one named POI from `nearby_pois` (a specific school, park, beach, reserve, by name); (c) MUST reference at least one named feature of THIS property (the pool, the deck, the kitchen island, the wetland boundary, the cul-de-sac, etc.); (d) MUST reference a named time of day or moment (Saturday morning, dusk, twilight, etc.); (e) MUST end on a quiet sensory image — an animal, a sound, a texture — NOT a conclusion or pitch; (f) DO NOT IMPLY THE SELLER OWNS ANY OBJECT NOT IN THE PROPERTY DATA. The waterfront/canal/lake properties especially are a hallucination trap — DO NOT write 'the boat waits on its trailer', 'the family boat', 'the kayak in the garage', 'the jet ski', 'the bikes hanging in the garage', 'the Mustang', 'their Tesla', 'the dog by the door', 'the cat on the windowsill'. These all imply belongings we have no record of. ALLOWED equivalents that describe activity AROUND the property: 'a boat puttering past on the waterway', 'a kayaker glides upstream', 'a paddleboarder navigates the bend', 'a neighbour walking a dog past the fence', 'a kookaburra calls from the eucalypt', 'cars heading toward the M1'. The narrator is a buyer experiencing the home, not the current owner — describe what is OBSERVABLE from the home (pool, deck, kitchen, view, neighbours, traffic, wildlife), NOT what the seller might own. Reference ONLY: items present in the property data (pool, deck, kitchen, room types, gardens), named POIs from `nearby_pois`, public landmarks, and generic family-life moments (kids, coffee, weekend mornings, lawnmowers, birds, distant traffic). DO NOT name a specific car model, boat, motorcycle, jet ski, art collection, school event ('weekend fair', 'rugby game'), named neighbour, named pet, or specific weekend activity unless that item is explicitly present in the property's data fields. When in doubt, omit. No real-estate clichés. No advice. No 'you should'. Think Cereal magazine, not a brochure."
 }}
 
-Generate EXACTLY 5 value_equations covering the 5 strongest value drivers for this property, each anchored in specific comp-adjustment data. Suggested categories: land size, internal floor area, condition/renovation, key feature (pool/kitchen/outdoor/dual-living/etc), location/school proximity. Buyer scarcity is handled by the `scarcity_statement` field; this property's main trade-off is handled by the dedicated `trade_off` field — do NOT duplicate them as value_equations. Five well-evidenced value_equations beat seven thin ones; the page layout is calibrated for 5.
+Generate EXACTLY 5 value_equations: AT LEAST 2 must be trade-off panels (positive: false) where the property sits BELOW a comparable on a measurable axis, and the reframe explains why that trade-off creates value. The other 3 are positive value drivers (positive: true) anchored in specific comp-adjustment data. Suggested categories: land size, internal floor area, condition/renovation, key feature (pool/kitchen/outdoor/dual-living/etc), location/school proximity, layout (storey count), kitchen quality. Buyer scarcity is handled by the `scarcity_statement` field; this property's main trade-off is handled by the dedicated `trade_off` field — do NOT duplicate them as value_equations. Five well-evidenced value_equations beat seven thin ones; the page layout is calibrated for 5.
+
+Generate 3 not_ideal_for items — short bullets (under 8 words each) naming the specific buyer types this property's STRUCTURAL features make unsuitable. Be specific to the property, not generic.
 Generate EXACTLY 3 buyer_profiles (primary, secondary, tertiary).
 Generate EXACTLY 4 pricing_cards (aspirational, competitive, strategic, floor).
 Generate EXACTLY 5-6 feature_positioning items.
@@ -1282,7 +1410,7 @@ def render_html(prop, client_name, top_comps, room_assessments, editorial,
         "value_equations": editorial.get("value_equations", []),
         # Buyer profiles
         "buyer_profiles": editorial.get("buyer_profiles", []),
-        "not_ideal_for": [],
+        "not_ideal_for": editorial.get("not_ideal_for", []),
         "scarcity_count": editorial.get("scarcity_count", "?"),
         "scarcity_statement": editorial.get("scarcity_statement", ""),
         # Market
