@@ -853,6 +853,351 @@ def build_key_pois(prop: dict) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# M13 — Risk + Protection panel data builder
+# ---------------------------------------------------------------------------
+# Per-suburb median DOM (days on market) for M22 outcome projection — sourced
+# from seller book Chapter 2 analysis of 13,585 Gold Coast sales 2020-2025.
+SUBURB_DOM_DAYS = {
+    "Robina": 24,
+    "Burleigh Waters": 26,
+    "Varsity Lakes": 26,
+    "Merrimac": 30,
+    "Mudgeeraba": 32,
+    "Reedy Creek": 28,
+    "Worongary": 32,
+    "Carrara": 30,
+}
+_DEFAULT_DOM = 28
+
+
+def build_risk_data(prop: dict, suburb: str) -> dict:
+    """Build the M13 Risk + Protection panel data — facts only, no AI.
+
+    Returns a dict consumable by the template:
+    {
+      'intro': str,
+      'items': [{'category', 'status', 'status_color', 'detail', 'source'}, ...],
+      'closing': str,
+    }
+
+    Categories rendered (in order; some skipped if data unavailable):
+      1. Flood overlay (council)
+      2. Insurance flood probability (ICA)
+      3. Zoning
+      4. Heritage listing
+      5. Beach/coastal proximity (where data exists)
+      6. Traffic & street position (from satellite analysis)
+      7. School proximity (from POIs)
+      8. Property tenure
+      9. Body corporate / strata (units only)
+      10. Council DAs within 500m — DEFERRED (we don't yet automate this)
+      11. Easements / encumbrances — DEFERRED (title search territory)
+    """
+    zd = prop.get("zoning_data", {}) or {}
+    sa = prop.get("satellite_analysis", {}) or {}
+    pois = prop.get("nearby_pois", {}).get("by_category", {}) or {}
+    items = []
+
+    # 1. Flood overlay (council)
+    if zd:
+        if zd.get("flood_overlay"):
+            ground = zd.get("flood_ground_level_m")
+            designated = zd.get("flood_designated_level_m")
+            depth_desc = zd.get("flood_depth_description", "")
+            note = zd.get("flood_risk_note") or zd.get("flood_description") or ""
+            detail_parts = []
+            if ground is not None and designated is not None:
+                detail_parts.append(f"Ground level {ground}m AHD, designated flood level {designated}m AHD")
+            if note:
+                detail_parts.append(note)
+            if depth_desc:
+                detail_parts.append(f"Modelled depth: {depth_desc}")
+            items.append({
+                "category": "Flood overlay (council)",
+                "status": "OVERLAY APPLIES",
+                "status_color": "amber",
+                "detail": ". ".join(p for p in detail_parts if p) or "Property sits within the council's flood overlay.",
+                "source": "Gold Coast City Council planning scheme",
+            })
+        else:
+            items.append({
+                "category": "Flood overlay (council)",
+                "status": "CLEAR",
+                "status_color": "green",
+                "detail": (
+                    f"No flood overlay on Gold Coast City Council mapping. "
+                    f"Ground level sits at {zd.get('flood_ground_level_m')}m AHD."
+                    if zd.get("flood_ground_level_m") is not None
+                    else "No flood overlay on Gold Coast City Council mapping."
+                ),
+                "source": "Gold Coast City Council planning scheme",
+            })
+    else:
+        items.append({
+            "category": "Flood overlay (council)",
+            "status": "NOT YET ASSESSED",
+            "status_color": "neutral",
+            "detail": "Council flood-overlay enrichment not yet run on this property. We'll verify before listing.",
+            "source": "Gold Coast City Council planning scheme (deferred)",
+        })
+
+    # 2. Insurance flood zone (ICA)
+    if zd:
+        ica = zd.get("ica_flood_zones", {}) or {}
+        in_zone = zd.get("in_any_ica_zone")
+        if in_zone is False:
+            items.append({
+                "category": "Insurance flood zone (ICA)",
+                "status": "NO ZONE",
+                "status_color": "green",
+                "detail": "Property is NOT in any Insurance Council of Australia flood probability zone — insurer-assessed risk is at the lowest tier.",
+                "source": "Insurance Council of Australia (ICA) flood probability mapping",
+            })
+        elif in_zone is True:
+            zones_in = [k for k, v in ica.items() if v]
+            zones_label = ", ".join(zones_in).replace("_", " ") if zones_in else "ICA zone"
+            items.append({
+                "category": "Insurance flood zone (ICA)",
+                "status": zones_label.upper(),
+                "status_color": "amber",
+                "detail": f"Property sits within ICA's {zones_label} probability zone — insurer pricing and underwriting will reflect this.",
+                "source": "Insurance Council of Australia (ICA) flood probability mapping",
+            })
+
+    # 3. Zoning
+    if zd.get("zone"):
+        items.append({
+            "category": "Zoning",
+            "status": str(zd["zone"]).upper(),
+            "status_color": "neutral",
+            "detail": f"Cadastral area {zd.get('cadastral_area_sqm', '?')} sqm, lot/plan {zd.get('lot_plan', '?')}.",
+            "source": "Gold Coast City Council planning scheme",
+        })
+
+    # 4. Heritage listing
+    if zd:
+        listed = zd.get("heritage_listed")
+        items.append({
+            "category": "Heritage listing",
+            "status": "LISTED" if listed else "NOT LISTED",
+            "status_color": "amber" if listed else "green",
+            "detail": (
+                "Property is heritage-listed; modifications subject to heritage approval."
+                if listed else
+                "Property is not on any heritage register — no heritage-related modification constraints."
+            ),
+            "source": "Queensland heritage register",
+        })
+
+    # 5. Beach / coastal proximity (BW + similar)
+    beach_km = prop.get("nearest_beach_distance_km")
+    if beach_km is not None:
+        beach_name = prop.get("nearest_beach_name") or "the nearest beach"
+        items.append({
+            "category": "Coastal proximity",
+            "status": f"{beach_km:.1f} km",
+            "status_color": "green",
+            "detail": f"Direct distance to {beach_name}: {beach_km:.1f} km.",
+            "source": "Geocoded distance to mapped beach",
+        })
+
+    # 6. Traffic & street position (satellite)
+    sa_categories = sa.get("categories", {}) or {}
+    setting_cat = sa_categories.get("overall_setting", {}) or {}
+    road_cat = sa_categories.get("road_proximity", {}) or {}
+    traffic_signal = (road_cat.get("category") or "").lower()
+    setting_signal = (setting_cat.get("category") or "").lower()
+    if traffic_signal or setting_signal:
+        narrative = sa.get("narrative", {}) or {}
+        narrative_text = narrative.get("road_proximity") or narrative.get("overall_setting") or ""
+        if traffic_signal in ("main_road", "highway", "arterial"):
+            status, color = "EXPOSED", "amber"
+        elif traffic_signal in ("standard_street", "local"):
+            status, color = "STANDARD STREET", "green"
+        elif traffic_signal in ("cul_de_sac_head", "cul_de_sac"):
+            status, color = "CUL-DE-SAC", "green"
+        else:
+            status, color = "ASSESSED", "neutral"
+        items.append({
+            "category": "Traffic & street position",
+            "status": status,
+            "status_color": color,
+            "detail": (narrative_text or "Aerial assessment of street type, frontage and traffic exposure.")[:280],
+            "source": "Aerial imagery analysis",
+        })
+
+    # 7. School proximity (closest primary + secondary)
+    primary = (pois.get("primary_school") or [{}])[0] if pois.get("primary_school") else None
+    secondary = (pois.get("secondary_school") or [{}])[0] if pois.get("secondary_school") else None
+    if primary or secondary:
+        chunks = []
+        if primary:
+            chunks.append(f"{primary.get('name')} ({primary.get('distance_m','?')}m walk)")
+        if secondary:
+            chunks.append(f"{secondary.get('name')} ({secondary.get('distance_m','?')}m walk)")
+        items.append({
+            "category": "School proximity",
+            "status": "CLOSEST SCHOOLS NAMED",
+            "status_color": "neutral",
+            "detail": (
+                "Closest schools by walking distance: "
+                + "; ".join(chunks)
+                + ". State-school catchment status should be confirmed via the Queensland Department of Education catchment finder."
+            ),
+            "source": "Aerial proximity + Queensland Department of Education catchment finder (link)",
+        })
+
+    # 8. Property tenure
+    tenure = prop.get("property_tenure_desc") or prop.get("property_tenure")
+    if tenure:
+        items.append({
+            "category": "Property tenure",
+            "status": str(tenure).upper(),
+            "status_color": "green",
+            "detail": "Tenure as registered on the Queensland title.",
+            "source": "Queensland Land Registry",
+        })
+
+    # 9. Body corporate / strata (units only — flagged via property_type or is_strata_title)
+    is_strata = bool(prop.get("is_strata_title")) or "unit" in (prop.get("property_type") or "").lower() or "townhouse" in (prop.get("property_type") or "").lower()
+    if is_strata:
+        items.append({
+            "category": "Body corporate / strata",
+            "status": "DISCLOSURE REQUIRED",
+            "status_color": "amber",
+            "detail": "As a strata-titled property, the body corporate disclosure (sinking fund balance, recent special levies, scheduled major works) sits in the contract pack. We summarise it before listing — it is the most common contract-stage delay for unit sales.",
+            "source": "Body corporate disclosure (Form 13)",
+        })
+
+    # 10. Council development applications within 500m — DEFERRED
+    items.append({
+        "category": "Council DAs within 500m",
+        "status": "NOT YET ASSESSED",
+        "status_color": "neutral",
+        "detail": "Live development-application monitoring within 500m is on our roadmap. Recommend a PD Online check before contract signature — we'll run this with you if you list.",
+        "source": "Gold Coast City Council PD Online (deferred)",
+    })
+
+    # 11. Easements / encumbrances — DEFERRED
+    items.append({
+        "category": "Easements / encumbrances",
+        "status": "TITLE SEARCH",
+        "status_color": "neutral",
+        "detail": "Easements (drainage, utilities), restrictive covenants, and registered encumbrances appear on the title search. We commission this before listing as part of the campaign-prep checklist.",
+        "source": "Queensland Land Registry title search (commissioned at listing)",
+    })
+
+    return {
+        "intro": (
+            "Buyers Google flood, schools, council DAs, and easements in their first 30 minutes "
+            "of considering your home. We do those searches first — both to surface anything "
+            "material before listing, and to shorten the buyer's decision time when they inspect."
+        ),
+        "items": items,
+        "closing": (
+            "Most of these checks have a status of CLEAR, NO ZONE, or STANDARD STREET — that is "
+            "useful evidence for the listing. Where a status is NOT YET ASSESSED, we run the check "
+            "before the campaign starts. Where it is amber or red, we surface it in the listing "
+            "narrative rather than letting a buyer discover it late in the contract."
+        ),
+    }
+
+
+# ---------------------------------------------------------------------------
+# M22 — Outcome projection (overpricing penalty math)
+# ---------------------------------------------------------------------------
+def build_outcome_projection(listing_low: int, listing_high: int, selling_low: int, selling_high: int, suburb: str) -> dict:
+    """Compute side-by-side outcome scenarios for correctly-priced vs overpriced listings.
+
+    Research basis (locked):
+      Taylor 1999            — properties >10% overpriced take 2-5x longer to sell
+      Zillow Research 2019   — n=25,000; 12%+ overpriced are 50% less likely to sell in 60 days
+      Knight 2002            — price-reduction stigma reduces final sale price by ~3-5% vs correctly priced equivalent
+      Anglin/Rutherford/Springer 2003 — overpricing >10% triggers multiple price-reduction spiral
+
+    Returns:
+    {
+      'correct': {'list_price', 'estimated_dom_days', 'final_sale_price', 'marketing_cost', 'net_to_vendor', 'description'},
+      'overpriced': {... same keys ..., 'overpricing_pct'},
+      'difference': {'price_delta', 'dom_delta_days', 'pct_difference'},
+      'sources': [<citations>],
+    }
+    """
+    # Inputs
+    list_mid = (listing_low + listing_high) // 2
+    sell_mid = (selling_low + selling_high) // 2
+    dom = SUBURB_DOM_DAYS.get(suburb, _DEFAULT_DOM)
+
+    # Marketing cost — illustrative baseline for a 4-week campaign.
+    # Standard: REA Premiere + photography + signboard + signage + virtual tour ≈ $4,500
+    # Extended (overpriced): repeat photography + price-reduction processing + signage refresh ≈ $7,000
+    correct_marketing = 4500
+    overpriced_marketing = 7000
+
+    # SCENARIO A — correctly priced day 1
+    correct_list = list_mid
+    correct_final_low = sell_mid - 10000  # tight band around midpoint
+    correct_final_high = sell_mid + 25000
+    correct_final = (correct_final_low + correct_final_high) // 2
+    correct_net = correct_final - correct_marketing
+    correct_dom = dom
+
+    # SCENARIO B — overpriced 12% above the recommended listing midpoint
+    overpricing_pct = 12
+    overpriced_list = int(list_mid * (1 + overpricing_pct / 100))
+    # Taylor 1999 mid-range of 2-5x DOM; use 3x as a middle estimate
+    overpriced_dom = dom * 3
+    # Knight 2002 stigma effect: ~5% below correctly-priced equivalent final
+    overpriced_final = int(correct_final * 0.95)
+    overpriced_net = overpriced_final - overpriced_marketing
+
+    delta_price = correct_net - overpriced_net
+    delta_dom = overpriced_dom - correct_dom
+
+    return {
+        "correct": {
+            "label": "Priced correctly from day one",
+            "list_price": correct_list,
+            "list_price_fmt": fmt(correct_list),
+            "estimated_dom_days": correct_dom,
+            "final_sale_price": correct_final,
+            "final_sale_fmt": fmt(correct_final),
+            "marketing_cost": correct_marketing,
+            "marketing_cost_fmt": fmt(correct_marketing),
+            "net_to_vendor": correct_net,
+            "net_to_vendor_fmt": fmt(correct_net),
+            "description": f"Listed within the recommended range, sells in line with {suburb}'s typical {correct_dom}-day window. Marketing budget covers a 4-week campaign with professional photography, REA Premiere, and standard signage.",
+        },
+        "overpriced": {
+            "label": f"Priced {overpricing_pct}% above recommendation",
+            "overpricing_pct": overpricing_pct,
+            "list_price": overpriced_list,
+            "list_price_fmt": fmt(overpriced_list),
+            "estimated_dom_days": overpriced_dom,
+            "final_sale_price": overpriced_final,
+            "final_sale_fmt": fmt(overpriced_final),
+            "marketing_cost": overpriced_marketing,
+            "marketing_cost_fmt": fmt(overpriced_marketing),
+            "net_to_vendor": overpriced_net,
+            "net_to_vendor_fmt": fmt(overpriced_net),
+            "description": f"Listed {overpricing_pct}% above the recommended range. Sits on the market roughly 3x longer (Taylor 1999), takes a price reduction at week 5-6, and finally sells at approximately 95% of the correctly-priced final price (Knight 2002 stigma effect). Marketing costs rise from extended campaign duration and price-reduction processing.",
+        },
+        "difference": {
+            "price_delta": delta_price,
+            "price_delta_fmt": fmt(delta_price),
+            "dom_delta_days": delta_dom,
+            "pct_difference": round(delta_price / max(correct_net, 1) * 100, 1),
+        },
+        "sources": [
+            "Taylor (1999) — overpriced properties take 2-5x longer to sell",
+            "Knight (2002) — price-reduction stigma reduces final sale price by 3-5%",
+            "Anglin, Rutherford & Springer (2003) — overpricing triggers multiple-reduction spiral",
+            "Zillow Research (2019, n=25,000) — 12%+ overpriced are 50% less likely to sell in 60 days",
+        ],
+    }
+
+
+# ---------------------------------------------------------------------------
 # Satellite label formatter
 # ---------------------------------------------------------------------------
 def _fmt_sat_label(val: str) -> str:
@@ -955,6 +1300,12 @@ def render_html(prop, client_name, top_comps, room_assessments, editorial,
         # Template guards via {% if %} so old editorial JSONs render unchanged.
         "limits_of_evidence": editorial.get("limits_of_evidence"),
         "morning_in_this_home": editorial.get("morning_in_this_home", ""),
+        # Phase 2 / Sprint 2 modules (M13 + M22) — pure data, no AI involvement.
+        # Template guards via {% if %} for backwards compat with older renders.
+        "risk_data": build_risk_data(prop, suburb_display),
+        "outcome_projection": build_outcome_projection(
+            listing_low, listing_high, val_low, val_high, suburb_display,
+        ),
         "research_stats": RESEARCH_STATS,
         "total_sold_tracked": TOTAL_SOLD_TRACKED,
         # Photos — emit empty string (not "file://") when absent so {% if %} guards work

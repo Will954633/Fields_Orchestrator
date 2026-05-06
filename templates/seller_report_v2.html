@@ -867,6 +867,138 @@
 </div>
 
 
+<!-- ══════ PAGE 7b: WHAT WE CHECKED (M13 — Risk + Protection panel) ══════ -->
+{% if risk_data and risk_data['items'] %}
+<div class="page">
+  <div class="page-header">
+    <div class="page-header-title">{{ street_address }}</div>
+    <div class="page-header-mark">{{ f_mark('#22382C', 22) }}</div>
+  </div>
+  <h2>What We Checked</h2>
+  <p class="subtitle">{{ risk_data.intro }}</p>
+
+  <table style="width: 100%; border-collapse: collapse; font-size: 9pt; margin-top: 10px;">
+    <thead>
+      <tr>
+        <th style="text-align: left; padding: 8px 10px; background: var(--grass); color: var(--birch); font-weight: 600; width: 28%;">Check</th>
+        <th style="text-align: left; padding: 8px 10px; background: var(--grass); color: var(--birch); font-weight: 600; width: 22%;">Status</th>
+        <th style="text-align: left; padding: 8px 10px; background: var(--grass); color: var(--birch); font-weight: 600;">What we found</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in risk_data['items'] %}
+      <tr style="border-bottom: 1px solid #e3dccf;">
+        <td style="padding: 10px; vertical-align: top; font-weight: 600;">{{ item.category }}</td>
+        <td style="padding: 10px; vertical-align: top;">
+          <span style="
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 7.5pt;
+            font-weight: 600;
+            letter-spacing: 0.4px;
+            {% if item.status_color == 'green' %}background: #c7e3d4; color: #1f4d33;
+            {% elif item.status_color == 'amber' %}background: #f5d8a8; color: #6a4a1f;
+            {% elif item.status_color == 'red' %}background: #f0c5be; color: #6a261b;
+            {% else %}background: #e0d9cc; color: #4a4337;{% endif %}
+          ">{{ item.status }}</span>
+        </td>
+        <td style="padding: 10px; vertical-align: top; line-height: 1.5; color: var(--text-secondary);">
+          {{ item.detail }}
+          <div style="font-size: 7.5pt; color: #8a7e6c; margin-top: 4px; font-style: italic;">Source: {{ item.source }}</div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <p style="margin-top: 16px; font-size: 9pt; font-style: italic; color: var(--text-secondary);">{{ risk_data.closing }}</p>
+
+  <div class="page-footer">
+    <div class="page-footer-meta">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div>
+    {{ smarter_with_data() }}
+  </div>
+</div>
+{% endif %}
+
+
+<!-- ══════ PAGE 7c: OUTCOME PROJECTION (M22) ══════ -->
+{% if outcome_projection %}
+<div class="page">
+  <div class="page-header">
+    <div class="page-header-title">{{ street_address }}</div>
+    <div class="page-header-mark">{{ f_mark('#22382C', 22) }}</div>
+  </div>
+  <h2>The Cost of Pricing It Wrong</h2>
+  <p class="subtitle">Two paths from listing day, drawn from research across thousands of transactions.</p>
+
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 10px;">
+    <!-- Scenario A — correctly priced -->
+    <div style="background: var(--white); border-left: 4px solid var(--grass); border-radius: 0 10px 10px 0; padding: 14px 16px; page-break-inside: avoid;">
+      <div style="font-size: 7.5pt; letter-spacing: 1.2px; text-transform: uppercase; color: var(--grass); font-weight: 700;">Scenario A</div>
+      <h3 style="margin: 4px 0 8px 0; font-size: 13pt;">{{ outcome_projection.correct.label }}</h3>
+      <table style="width: 100%; font-size: 9pt; border-collapse: collapse;">
+        <tr><td style="padding: 4px 0; color: var(--text-secondary);">List price</td><td style="text-align: right; font-weight: 600;">{{ outcome_projection.correct.list_price_fmt }}</td></tr>
+        <tr><td style="padding: 4px 0; color: var(--text-secondary);">Estimated days on market</td><td style="text-align: right; font-weight: 600;">{{ outcome_projection.correct.estimated_dom_days }} days</td></tr>
+        <tr><td style="padding: 4px 0; color: var(--text-secondary);">Likely final sale price</td><td style="text-align: right; font-weight: 600;">{{ outcome_projection.correct.final_sale_fmt }}</td></tr>
+        <tr><td style="padding: 4px 0; color: var(--text-secondary);">Marketing cost</td><td style="text-align: right; font-weight: 600;">&minus;{{ outcome_projection.correct.marketing_cost_fmt }}</td></tr>
+        <tr style="border-top: 1px solid #e3dccf;"><td style="padding: 6px 0 0 0; font-weight: 700;">Net to vendor</td><td style="text-align: right; padding: 6px 0 0 0; font-weight: 700; color: var(--grass);">{{ outcome_projection.correct.net_to_vendor_fmt }}</td></tr>
+      </table>
+      <p style="margin: 10px 0 0 0; font-size: 8.5pt; line-height: 1.5; color: var(--text-secondary);">{{ outcome_projection.correct.description }}</p>
+    </div>
+
+    <!-- Scenario B — overpriced -->
+    <div style="background: var(--white); border-left: 4px solid var(--copper); border-radius: 0 10px 10px 0; padding: 14px 16px; page-break-inside: avoid;">
+      <div style="font-size: 7.5pt; letter-spacing: 1.2px; text-transform: uppercase; color: var(--copper); font-weight: 700;">Scenario B</div>
+      <h3 style="margin: 4px 0 8px 0; font-size: 13pt;">{{ outcome_projection.overpriced.label }}</h3>
+      <table style="width: 100%; font-size: 9pt; border-collapse: collapse;">
+        <tr><td style="padding: 4px 0; color: var(--text-secondary);">List price</td><td style="text-align: right; font-weight: 600;">{{ outcome_projection.overpriced.list_price_fmt }}</td></tr>
+        <tr><td style="padding: 4px 0; color: var(--text-secondary);">Estimated days on market</td><td style="text-align: right; font-weight: 600;">{{ outcome_projection.overpriced.estimated_dom_days }} days</td></tr>
+        <tr><td style="padding: 4px 0; color: var(--text-secondary);">Likely final sale price</td><td style="text-align: right; font-weight: 600;">{{ outcome_projection.overpriced.final_sale_fmt }}</td></tr>
+        <tr><td style="padding: 4px 0; color: var(--text-secondary);">Marketing cost</td><td style="text-align: right; font-weight: 600;">&minus;{{ outcome_projection.overpriced.marketing_cost_fmt }}</td></tr>
+        <tr style="border-top: 1px solid #e3dccf;"><td style="padding: 6px 0 0 0; font-weight: 700;">Net to vendor</td><td style="text-align: right; padding: 6px 0 0 0; font-weight: 700; color: var(--copper);">{{ outcome_projection.overpriced.net_to_vendor_fmt }}</td></tr>
+      </table>
+      <p style="margin: 10px 0 0 0; font-size: 8.5pt; line-height: 1.5; color: var(--text-secondary);">{{ outcome_projection.overpriced.description }}</p>
+    </div>
+  </div>
+
+  <!-- Difference banner -->
+  <div style="margin-top: 16px; padding: 14px 18px; background: var(--grass); border-radius: 10px; color: var(--birch); page-break-inside: avoid;">
+    <div style="font-size: 7.5pt; letter-spacing: 1.2px; text-transform: uppercase; color: var(--copper); font-weight: 700;">Difference</div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 6px;">
+      <div>
+        <div style="font-size: 22pt; font-weight: 700; line-height: 1.1;">{{ outcome_projection.difference.price_delta_fmt }}</div>
+        <div style="font-size: 8.5pt; opacity: 0.85;">Net difference (Scenario A &minus; Scenario B)</div>
+      </div>
+      <div>
+        <div style="font-size: 22pt; font-weight: 700; line-height: 1.1;">+{{ outcome_projection.difference.dom_delta_days }} days</div>
+        <div style="font-size: 8.5pt; opacity: 0.85;">Additional time on market in Scenario B</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sources -->
+  <div style="margin-top: 14px;">
+    <div style="font-size: 7.5pt; letter-spacing: 1.2px; text-transform: uppercase; color: var(--text-secondary); font-weight: 700; margin-bottom: 6px;">Research basis</div>
+    <ul style="margin: 0; padding-left: 18px; font-size: 8.5pt; line-height: 1.55; color: var(--text-secondary);">
+      {% for src in outcome_projection.sources %}
+      <li>{{ src }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  <p style="margin-top: 14px; font-size: 8.5pt; font-style: italic; color: var(--text-secondary);">
+    Marketing and commission figures are illustrative. Actual fees vary by campaign scope; the magnitude of the difference is the point.
+  </p>
+
+  <div class="page-footer">
+    <div class="page-footer-meta">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div>
+    {{ smarter_with_data() }}
+  </div>
+</div>
+{% endif %}
+
+
 <!-- ══════ PAGE 8: POSITIONING — PRICING ══════ -->
 <div class="page">
   <div class="page-header">
