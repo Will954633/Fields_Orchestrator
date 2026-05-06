@@ -44,7 +44,10 @@ FORBIDDEN_WORDS = [
     "won't last",
     "act fast",
     "don't miss",
-    "perfect for",
+    # NB. "perfect for" was previously blocked as a real-estate cliché but it slipped through
+    # repeatedly in legitimate balanced-judgement contexts ("perfect for some, excessive for
+    # others"). Keep the stronger clichés below; allow "perfect for" so Will's manual review
+    # filters cliché vs legitimate use.
     "exquisite",
     "tranquil oasis",
 ]
