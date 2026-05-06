@@ -491,6 +491,44 @@ def _derive_room_score(room_data: dict, condition_field_priorities: list[str], p
     return None
 
 
+def _collapse_room_array(arr) -> dict | None:
+    """Reduce an array of room entries (bathrooms[], living_areas[]) to a single
+    representative dict by picking the entry with the highest quality_score
+    (falling back to condition_score, then first visible entry).
+
+    The enrichment pipeline emits arrays per the schema in
+    enrich_for_sale_batch.py; the report renders a single card per room category,
+    so we surface the best-rated representative.
+    """
+    if not isinstance(arr, list) or not arr:
+        return None
+    visible = [r for r in arr if isinstance(r, dict) and r.get("visible") is not False]
+    if not visible:
+        return None
+
+    def _rank(entry: dict) -> float:
+        for f in ("quality_score", "condition_score"):
+            v = entry.get(f)
+            if isinstance(v, (int, float)) and v > 0:
+                return float(v)
+        return 0.0
+
+    return max(visible, key=_rank)
+
+
+def _extract_master_bedroom(pvd: dict) -> dict | None:
+    """The schema stores all bedrooms in pvd['bedrooms'] as an array, with the
+    master tagged via bedroom_label='master'. Find and return that entry.
+    """
+    bedrooms = pvd.get("bedrooms")
+    if not isinstance(bedrooms, list):
+        return None
+    for b in bedrooms:
+        if isinstance(b, dict) and b.get("bedroom_label") == "master":
+            return b
+    return None
+
+
 def build_room_assessments(pvd: dict) -> list[dict]:
     """Build /10 condition cards for the 'Property Through Our Eyes' page.
 
@@ -501,18 +539,26 @@ def build_room_assessments(pvd: dict) -> list[dict]:
         return []
     overall_score = (pvd.get("property_overview", {}) or {}).get("overall_condition_score")
     # Each tuple: (display_name, pvd_key, condition_field_priorities, detail_fields_to_render)
+    # Detail field names match the enrichment schema in enrich_for_sale_batch.py.
     mapping = [
         ("Kitchen",         "kitchen",         ["cabinet_condition", "quality_score"], ["benchtop_material", "cabinet_style", "appliances_quality"]),
-        ("Bathrooms",       "bathrooms",       ["overall_quality", "quality_score", "fixtures_quality"], ["fixtures_quality", "tiling_condition"]),
-        ("Living Areas",    "living_areas",    ["overall_quality", "quality_score"], ["flooring_material", "natural_light"]),
-        ("Master Bedroom",  "master_bedroom",  ["overall_quality", "quality_score"], ["ensuite_quality", "walk_in_robe"]),
+        ("Bathrooms",       "bathrooms",       ["quality_score", "condition_score", "fixtures_quality"], ["fixtures_quality", "tile_condition", "vanity_style"]),
+        ("Living Areas",    "living_areas",    ["quality_score", "condition_score"], ["flooring_type", "natural_light", "ceiling_height"]),
+        ("Master Bedroom",  "master_bedroom",  ["quality_score", "condition_score"], ["walk_in_robe", "ensuite", "flooring_type"]),
         ("Exterior",        "exterior",        ["cladding_condition", "paint_condition", "overall_facade_score", "quality_score"], ["cladding_material", "paint_condition", "roof_type"]),
         ("Outdoor",         "outdoor",         ["pool_condition", "landscaping_quality", "quality_score", "pool_condition_score"], ["pool_type", "pool_condition", "alfresco_size", "landscaping_quality"]),
     ]
     rooms = []
     for label, key, score_fields, detail_fields in mapping:
         data = pvd.get(key)
-        if not data or isinstance(data, list):
+        # Master bedroom is stored inside bedrooms[] — pull it out by label.
+        if key == "master_bedroom" and not isinstance(data, dict):
+            data = _extract_master_bedroom(pvd)
+        # Bathrooms / living_areas (and any future array-shaped room) are emitted
+        # as arrays by the enrichment schema; collapse to the best representative.
+        if isinstance(data, list):
+            data = _collapse_room_array(data)
+        if not data or not isinstance(data, dict):
             continue
         score = _derive_room_score(data, score_fields, overall_score)
         if score is None:
@@ -523,7 +569,12 @@ def build_room_assessments(pvd: dict) -> list[dict]:
             if v is None or v == "" or v is False:
                 continue
             label_display = f.replace("_", " ").title()
-            value_display = str(v).replace("_", " ").title() if isinstance(v, str) else v
+            if isinstance(v, bool):
+                value_display = "Yes"
+            elif isinstance(v, str):
+                value_display = v.replace("_", " ").title()
+            else:
+                value_display = v
             details.append(f"{label_display}: {value_display}")
         rooms.append({"name": label, "score": score, "details": details})
     return rooms
