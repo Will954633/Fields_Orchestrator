@@ -166,23 +166,95 @@ def record_event(tracking_id, event_type, req, extra_data=None):
             {"$set": {"summary.last_session_duration": total}},
         )
 
+    # Sync engagement data to CRM contact
+    sync_crm_engagement(tracking_id, doc, event_type, extra_data)
+
     # Telegram notification (skip heartbeats to avoid spam)
     if event_type != "heartbeat":
         name = doc.get("recipient_name", "Unknown")
         addr = doc.get("property_address", "Unknown property")
         aest_now = now.astimezone(AEST).strftime("%H:%M AEST")
 
+        scroll_pct = (extra_data or {}).get("max_scroll_pct")
+        scroll_suffix = f" · scrolled {scroll_pct}%" if scroll_pct is not None else ""
+        feedback_text = (extra_data or {}).get("text", "")
         messages = {
             "email_opened": f"*Email opened* by {name}\n{addr}\n{aest_now}",
             "viewer_opened": f"*Report opened* by {name}\n{addr}\n{aest_now}",
             "page_view": f"*Viewing page {(extra_data or {}).get('page', '?')}* — {name}\n{addr}",
             "pdf_downloaded": f"*PDF downloaded* by {name}\n{addr}\n{aest_now}",
-            "session_end": f"*Session ended* — {name} spent {(extra_data or {}).get('total_time_seconds', 0):.0f}s on report\n{addr}",
+            "session_end": (
+                f"*Session ended* — {name} spent {(extra_data or {}).get('total_time_seconds', 0):.0f}s "
+                f"on report{scroll_suffix}\n{addr}"
+            ),
+            "conversation_requested": f"*Conversation requested* by {name}\n{addr}\n{aest_now}",
+            "feedback_submitted": (
+                f"*Feedback submitted* by {name}\n{addr}\n\"{feedback_text[:200]}\"\n{aest_now}"
+                if feedback_text else
+                f"*Feedback submitted* by {name}\n{addr}\n{aest_now}"
+            ),
+            # feedback_intent (button click without submission) is silent — too noisy for Telegram
         }
-        msg = messages.get(event_type, f"*{event_type}* — {name}\n{addr}")
-        notify_telegram(msg)
+        # Recorded in the events array but skipped from Telegram (clicks without follow-through are noise)
+        if event_type != "feedback_intent":
+            msg = messages.get(event_type, f"*{event_type}* — {name}\n{addr}")
+            notify_telegram(msg)
 
     log.info(f"Event: {event_type} for {tracking_id} from {event['ip']}")
+
+
+# ---------------------------------------------------------------------------
+# CRM sync — mirror engagement data to crm_contacts
+# ---------------------------------------------------------------------------
+def sync_crm_engagement(tracking_id, tracking_doc, event_type, extra_data):
+    """Update the CRM contact's engagement data from tracking events."""
+    try:
+        email = tracking_doc.get("recipient_email")
+        if not email:
+            return
+
+        now = datetime.now(timezone.utc)
+        update = {"$set": {"updated_at": now, "last_seen": now.astimezone(AEST).strftime("%Y-%m-%d")}}
+
+        if event_type == "email_opened":
+            update["$set"]["engagement.email_opened"] = True
+        elif event_type == "viewer_opened":
+            update["$set"]["engagement.report_viewed"] = True
+        elif event_type == "page_view":
+            page = (extra_data or {}).get("page")
+            if page is not None:
+                update.setdefault("$addToSet", {})["engagement.pages_viewed"] = page
+        elif event_type == "heartbeat":
+            time_delta = (extra_data or {}).get("interval_seconds", 5)
+            update.setdefault("$inc", {})["engagement.total_time_seconds"] = time_delta
+            page = (extra_data or {}).get("current_page")
+            if page is not None:
+                update.setdefault("$inc", {})[f"engagement.time_per_page.{page}"] = time_delta
+            update["$set"]["engagement.last_interaction"] = now
+        elif event_type == "pdf_downloaded":
+            update["$set"]["engagement.pdf_downloaded"] = True
+        elif event_type == "session_end":
+            total = (extra_data or {}).get("total_time_seconds", 0)
+            update["$set"]["engagement.last_session_duration"] = total
+            update["$set"]["engagement.last_interaction"] = now
+            # Log session to communications timeline
+            page_timings = (extra_data or {}).get("page_timings", {})
+            session_entry = {
+                "type": "report_session",
+                "date": now.astimezone(AEST).isoformat(),
+                "tracking_id": tracking_id,
+                "total_time_seconds": total,
+                "pages_viewed": (extra_data or {}).get("pages_viewed", []),
+                "page_timings": page_timings,
+            }
+            get_db()["crm_contacts"].update_one(
+                {"email": email},
+                {"$push": {"communications": session_entry}},
+            )
+
+        get_db()["crm_contacts"].update_one({"email": email}, update)
+    except Exception as e:
+        log.error(f"CRM sync error: {e}")
 
 
 # ---------------------------------------------------------------------------

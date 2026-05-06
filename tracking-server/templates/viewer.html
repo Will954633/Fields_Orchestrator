@@ -19,187 +19,207 @@
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
+        html { scroll-behavior: smooth; }
+
         body {
             font-family: 'Poppins', 'Verdana', sans-serif;
-            background: var(--fields-birch);
+            background: #f0e9dd;
             color: var(--fields-text);
             min-height: 100vh;
-            display: flex;
-            flex-direction: column;
         }
 
-        /* Header */
+        /* Sticky header */
         .header {
+            position: sticky;
+            top: 0;
+            z-index: 100;
             background: var(--fields-grass);
             padding: 12px 24px;
             display: flex;
             align-items: center;
             justify-content: space-between;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
         }
 
-        .header-brand {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-        }
-
-        .header-brand img {
-            height: 28px;
-            width: auto;
-        }
-
+        .header-brand { display: flex; align-items: center; gap: 16px; }
+        .header-brand img { height: 26px; width: auto; }
         .header-address {
             color: var(--fields-birch);
-            font-size: 13px;
+            font-size: 12.5px;
             font-weight: 300;
-            opacity: 0.7;
+            letter-spacing: 0.3px;
+            opacity: 0.85;
         }
 
-        .header-actions {
+        .header-meta {
             display: flex;
-            gap: 12px;
             align-items: center;
+            gap: 18px;
+        }
+
+        .page-indicator {
+            color: var(--fields-birch);
+            font-size: 11.5px;
+            font-weight: 400;
+            letter-spacing: 0.4px;
+            opacity: 0.75;
+            min-width: 90px;
+            text-align: right;
         }
 
         .btn {
-            padding: 8px 24px;
+            padding: 7px 18px;
             border: 1.5px solid var(--fields-birch);
             background: transparent;
             color: var(--fields-birch);
             font-family: 'Poppins', sans-serif;
-            font-size: 12px;
+            font-size: 11.5px;
             font-weight: 500;
             letter-spacing: 0.5px;
             cursor: pointer;
             transition: all 0.2s;
             border-radius: 2px;
+            text-decoration: none;
+            display: inline-block;
         }
-
-        .btn:hover {
-            background: var(--fields-birch);
-            color: var(--fields-grass);
-        }
-
+        .btn:hover { background: var(--fields-birch); color: var(--fields-grass); }
         .btn-solid {
             background: var(--fields-copper);
             border-color: var(--fields-copper);
             color: var(--fields-white);
         }
+        .btn-solid:hover { background: #a35a3e; border-color: #a35a3e; }
 
-        .btn-solid:hover {
-            background: #a35a3e;
-            border-color: #a35a3e;
+        /* Report stream — vertical stack of all pages */
+        .report-stream {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 28px 16px 12px 16px;
         }
 
-        /* Navigation bar */
-        .nav-bar {
-            background: var(--fields-grass);
-            padding: 10px 24px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 24px;
-            border-top: 1px solid rgba(230, 221, 210, 0.1);
+        .page-card {
+            background: var(--fields-white);
+            margin-bottom: 18px;
+            border-radius: 4px;
+            box-shadow: 0 4px 18px rgba(34, 56, 44, 0.08);
+            overflow: hidden;
+            position: relative;
+            min-height: 200px;
         }
 
-        .nav-bar button {
-            background: none;
-            border: none;
-            color: var(--fields-birch);
-            font-family: 'Poppins', sans-serif;
-            font-size: 13px;
-            font-weight: 400;
-            cursor: pointer;
-            padding: 4px 16px;
-            opacity: 0.7;
-            transition: opacity 0.2s;
-        }
-
-        .nav-bar button:hover { opacity: 1; }
-        .nav-bar button:disabled { opacity: 0.3; cursor: default; }
-
-        .page-info {
-            color: var(--fields-birch);
-            font-size: 13px;
-            font-weight: 400;
-            min-width: 110px;
-            text-align: center;
-            opacity: 0.8;
-        }
-
-        /* Page image container */
-        .viewer-container {
-            flex: 1;
-            display: flex;
-            justify-content: center;
-            align-items: flex-start;
-            overflow-y: auto;
-            padding: 24px;
-            background: var(--fields-birch);
-        }
-
-        .page-image {
-            max-width: 100%;
+        .page-card img {
+            width: 100%;
             height: auto;
-            box-shadow: 0 2px 16px rgba(34, 56, 44, 0.12);
             display: block;
         }
 
-        /* Loading */
-        .loading {
+        .page-card-label {
+            position: absolute;
+            top: 10px;
+            right: 12px;
+            background: rgba(34, 56, 44, 0.78);
+            color: var(--fields-birch);
+            font-size: 10px;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+            padding: 3px 9px;
+            border-radius: 12px;
+            opacity: 0;
+            transition: opacity 0.4s;
+            pointer-events: none;
+        }
+        .page-card.in-view .page-card-label { opacity: 0.8; }
+
+        .page-loading {
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            padding: 80px 24px;
-            color: var(--fields-text);
+            min-height: 280px;
+            color: var(--fields-muted);
         }
-
-        .loading-spinner {
-            width: 36px;
-            height: 36px;
-            border: 3px solid rgba(34, 56, 44, 0.15);
+        .page-loading-spinner {
+            width: 28px;
+            height: 28px;
+            border: 2.5px solid rgba(34, 56, 44, 0.15);
             border-top-color: var(--fields-grass);
             border-radius: 50%;
             animation: spin 0.8s linear infinite;
+            margin-bottom: 10px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* End-of-document CTA panel */
+        .end-cta {
+            max-width: 900px;
+            margin: 32px auto 0 auto;
+            padding: 0 16px;
+        }
+        .end-cta-card {
+            background: var(--fields-grass);
+            color: var(--fields-birch);
+            padding: 28px 32px;
+            border-radius: 4px;
+            box-shadow: 0 4px 18px rgba(34, 56, 44, 0.10);
+        }
+        .end-cta-eyebrow {
+            font-size: 10.5px;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: var(--fields-copper);
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .end-cta h2 {
+            font-size: 22px;
+            font-weight: 600;
+            line-height: 1.2;
+            margin-bottom: 10px;
+        }
+        .end-cta p {
+            font-size: 13.5px;
+            font-weight: 300;
+            line-height: 1.55;
+            opacity: 0.88;
             margin-bottom: 16px;
         }
+        .end-cta-actions { display: flex; gap: 12px; flex-wrap: wrap; }
 
-        .loading p {
-            font-size: 14px;
+        .end-cta-secondary {
+            margin-top: 16px;
+            padding-top: 14px;
+            border-top: 1px solid rgba(230, 221, 210, 0.18);
+            font-size: 12px;
             font-weight: 300;
-            color: var(--fields-muted);
+            opacity: 0.75;
         }
-
-        @keyframes spin { to { transform: rotate(360deg); } }
 
         /* Footer */
         .footer {
-            background: var(--fields-grass);
-            padding: 14px 24px;
             text-align: center;
-        }
-
-        .footer-text {
-            color: var(--fields-birch);
-            font-size: 12px;
+            padding: 32px 16px 28px;
+            color: var(--fields-muted);
+            font-size: 11px;
             font-weight: 300;
-            opacity: 0.6;
         }
-
-        .footer-text a {
+        .footer a {
             color: var(--fields-copper);
             text-decoration: none;
             font-weight: 400;
         }
 
         /* Mobile */
-        @media (max-width: 640px) {
-            .header { flex-direction: column; gap: 8px; text-align: center; }
+        @media (max-width: 720px) {
+            .header { padding: 10px 14px; }
             .header-address { display: none; }
-            .viewer-container { padding: 8px; }
-            .nav-bar { gap: 12px; }
-            .nav-bar button { padding: 4px 8px; font-size: 12px; }
+            .header-brand img { height: 22px; }
+            .header-meta { gap: 10px; }
+            .btn { padding: 6px 12px; font-size: 11px; }
+            .page-indicator { font-size: 10.5px; min-width: 70px; }
+            .report-stream { padding: 16px 8px 8px 8px; }
+            .page-card { margin-bottom: 12px; }
+            .end-cta-card { padding: 22px 22px; }
+            .end-cta h2 { font-size: 18px; }
         }
     </style>
 </head>
@@ -210,156 +230,247 @@
         <img src="/track/logo/white" alt="Fields">
         <span class="header-address">{{ property_address }}</span>
     </div>
-    <div class="header-actions">
+    <div class="header-meta">
+        <span class="page-indicator" id="page-indicator">Page 1 of {{ total_pages }}</span>
         <button class="btn btn-solid" id="btn-download">Download PDF</button>
     </div>
 </div>
 
-<div class="nav-bar">
-    <button id="btn-prev" disabled>&#8592; Previous</button>
-    <span class="page-info" id="page-info">Loading...</span>
-    <button id="btn-next" disabled>Next &#8594;</button>
+<div class="report-stream" id="report-stream">
+    {% for page_num in range(1, total_pages + 1) %}
+    <div class="page-card" data-page="{{ page_num }}">
+        <span class="page-card-label">{{ page_num }} of {{ total_pages }}</span>
+        <div class="page-loading">
+            <div class="page-loading-spinner"></div>
+        </div>
+        <img
+            data-src="/track/page/{{ tracking_id }}/{{ page_num }}"
+            alt="Report page {{ page_num }}"
+            style="display:none;"
+            onload="this.style.display='block'; this.parentNode.querySelector('.page-loading').style.display='none';"
+        >
+    </div>
+    {% endfor %}
 </div>
 
-<div class="viewer-container" id="viewer-container">
-    <div class="loading" id="loading">
-        <div class="loading-spinner"></div>
-        <p>Preparing your report...</p>
+<div class="end-cta">
+    <div class="end-cta-card">
+        <div class="end-cta-eyebrow">Next Steps</div>
+        <h2>Have a 30-minute walk-through with Will</h2>
+        <p>
+            No pressure, no pitch. We'll walk you through the comparable adjustments, the positioning strategy, and any questions you have. If, after the conversation, this isn't right for you, the report is yours to keep.
+        </p>
+        <div class="end-cta-actions">
+            <a href="#" class="btn btn-solid" id="btn-book">Book a conversation</a>
+            <button class="btn" id="btn-feedback" type="button">Tell us if anything's wrong</button>
+        </div>
+        <div class="end-cta-secondary">
+            If anything in this report doesn't match the home you live in, let us know and we'll update it. Property data has gaps and we'd rather get it right.
+        </div>
     </div>
-    <img class="page-image" id="page-image" style="display:none;" alt="Report page">
 </div>
 
 <div class="footer">
-    <p class="footer-text">
-        Prepared by <a href="https://fieldsestate.com.au">Fields</a> &mdash; Smarter with data
-    </p>
+    Prepared by <a href="https://fieldsestate.com.au">Fields</a> &mdash; Smarter with data
 </div>
 
 <script>
 (function() {
-    const TRACKING_ID = "{{ tracking_id }}";
+    const TRACKING_ID = {{ tracking_id|tojson }};
     const TOTAL_PAGES = {{ total_pages }};
+    const PROPERTY_ADDRESS = {{ property_address|tojson }};
     const BASE_URL = window.location.origin + "/track";
 
+    const sessionStartTime = Date.now();
+    const pageEnterTimes = {};   // page → timestamp when last entered viewport
+    const pageTimings = {};      // page → cumulative ms in viewport
+    const pagesViewed = new Set();
     let currentPage = 1;
-    let sessionStartTime = Date.now();
-    let pageStartTime = Date.now();
-    let pageTimings = {};
+    let maxScrollPct = 0;
 
-    const img = document.getElementById("page-image");
-    const loading = document.getElementById("loading");
-    const pageInfo = document.getElementById("page-info");
-    const btnPrev = document.getElementById("btn-prev");
-    const btnNext = document.getElementById("btn-next");
+    const indicator = document.getElementById("page-indicator");
+    const cards = Array.from(document.querySelectorAll(".page-card"));
 
-    // ---------------------------------------------------------------------------
-    // Tracking
-    // ---------------------------------------------------------------------------
+    // -----------------------------------------------------------------------
+    // Telemetry — preserves the existing event shape so Telegram notifications
+    // and CRM engagement sync continue to work without server-side changes.
+    // -----------------------------------------------------------------------
     function sendEvent(type, data) {
-        fetch(BASE_URL + "/event", {
-            method: "POST",
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({tracking_id: TRACKING_ID, type: type, data: data || {}}),
-        }).catch(function(){});
+        try {
+            fetch(BASE_URL + "/event", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({tracking_id: TRACKING_ID, type: type, data: data || {}}),
+                keepalive: true,
+            }).catch(function(){});
+        } catch (e) { /* swallow — telemetry must never break the viewer */ }
     }
 
-    // Heartbeat every 5s
+    // -----------------------------------------------------------------------
+    // Lazy-load page images via IntersectionObserver — pre-load 2 pages above
+    // and 2 below the current viewport so scrolling feels instant.
+    // -----------------------------------------------------------------------
+    const lazyLoad = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+            if (!entry.isIntersecting) return;
+            const card = entry.target;
+            const img = card.querySelector("img");
+            if (img && img.dataset.src && !img.src) {
+                img.src = img.dataset.src;
+            }
+        });
+    }, { rootMargin: "1000px 0px" });
+    cards.forEach(function(card) { lazyLoad.observe(card); });
+
+    // -----------------------------------------------------------------------
+    // Page-visibility tracking — IntersectionObserver tells us which page is
+    // most prominent in the viewport. We treat that as the "current page" and
+    // fire page_view + maintain per-page timings.
+    // -----------------------------------------------------------------------
+    const visibleRatios = new Map();   // pageNum → ratio
+    const inView = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+            const pageNum = parseInt(entry.target.dataset.page, 10);
+            visibleRatios.set(pageNum, entry.intersectionRatio);
+            entry.target.classList.toggle("in-view", entry.intersectionRatio > 0.4);
+        });
+        // Page with the highest visible ratio is the "current" page
+        let best = currentPage;
+        let bestRatio = 0;
+        visibleRatios.forEach(function(ratio, pageNum) {
+            if (ratio > bestRatio) { bestRatio = ratio; best = pageNum; }
+        });
+        if (best !== currentPage && bestRatio > 0.25) {
+            // record time on previous page
+            if (pageEnterTimes[currentPage]) {
+                pageTimings[currentPage] = (pageTimings[currentPage] || 0) + (Date.now() - pageEnterTimes[currentPage]);
+                delete pageEnterTimes[currentPage];
+            }
+            currentPage = best;
+            pageEnterTimes[currentPage] = Date.now();
+            indicator.textContent = "Page " + currentPage + " of " + TOTAL_PAGES;
+            // First time this page becomes current → page_view event
+            if (!pagesViewed.has(currentPage)) {
+                pagesViewed.add(currentPage);
+                sendEvent("page_view", {page: currentPage});
+            }
+        }
+    }, { threshold: [0, 0.25, 0.5, 0.75, 1.0] });
+    cards.forEach(function(card) { inView.observe(card); });
+
+    // Initial page 1 view fires immediately
+    pageEnterTimes[1] = sessionStartTime;
+    pagesViewed.add(1);
+    sendEvent("page_view", {page: 1});
+
+    // -----------------------------------------------------------------------
+    // Scroll-depth tracking — record the maximum % through the document the
+    // user has reached this session. Sent with heartbeat + session_end.
+    // -----------------------------------------------------------------------
+    function updateScrollDepth() {
+        const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+        if (docHeight <= 0) return;
+        const pct = Math.min(100, Math.round((window.scrollY / docHeight) * 100));
+        if (pct > maxScrollPct) maxScrollPct = pct;
+    }
+    window.addEventListener("scroll", updateScrollDepth, { passive: true });
+
+    // -----------------------------------------------------------------------
+    // Heartbeat (every 5s) — same shape as before. Adds max_scroll_pct and
+    // continues firing per-page time so existing CRM rollups still work.
+    // -----------------------------------------------------------------------
     setInterval(function() {
-        if (!img.src) return;
-        var elapsed = (Date.now() - pageStartTime) / 1000;
+        if (document.hidden) return;
+        const elapsed = (Date.now() - (pageEnterTimes[currentPage] || sessionStartTime)) / 1000;
         sendEvent("heartbeat", {
             current_page: currentPage,
             interval_seconds: 5,
             page_elapsed_seconds: Math.round(elapsed),
             total_session_seconds: Math.round((Date.now() - sessionStartTime) / 1000),
+            max_scroll_pct: maxScrollPct,
         });
     }, 5000);
 
-    function recordPageTime() {
-        var elapsed = Date.now() - pageStartTime;
-        pageTimings[currentPage] = (pageTimings[currentPage] || 0) + elapsed;
+    // -----------------------------------------------------------------------
+    // Session end — record final timings + scroll depth. Uses sendBeacon so
+    // the request survives page unload.
+    // -----------------------------------------------------------------------
+    function recordPageTimeForCurrent() {
+        if (pageEnterTimes[currentPage]) {
+            pageTimings[currentPage] = (pageTimings[currentPage] || 0) + (Date.now() - pageEnterTimes[currentPage]);
+            pageEnterTimes[currentPage] = Date.now();
+        }
     }
 
-    // Session end
     window.addEventListener("beforeunload", function() {
-        recordPageTime();
-        var totalTime = (Date.now() - sessionStartTime) / 1000;
-        var timings = {};
-        for (var k in pageTimings) { timings[k] = Math.round(pageTimings[k] / 1000); }
-        var payload = JSON.stringify({
+        recordPageTimeForCurrent();
+        const totalTime = (Date.now() - sessionStartTime) / 1000;
+        const timingsSec = {};
+        for (const k in pageTimings) { timingsSec[k] = Math.round(pageTimings[k] / 1000); }
+        const payload = JSON.stringify({
             tracking_id: TRACKING_ID,
             type: "session_end",
             data: {
                 total_time_seconds: Math.round(totalTime),
-                pages_viewed: Object.keys(pageTimings).map(Number),
-                page_timings: timings,
+                pages_viewed: Array.from(pagesViewed).sort(function(a,b){return a-b;}),
+                page_timings: timingsSec,
+                max_scroll_pct: maxScrollPct,
             },
         });
-        navigator.sendBeacon(BASE_URL + "/event", new Blob([payload], {type: "application/json"}));
+        try {
+            navigator.sendBeacon(BASE_URL + "/event", new Blob([payload], {type: "application/json"}));
+        } catch (e) { /* ignore */ }
     });
 
     document.addEventListener("visibilitychange", function() {
-        if (document.hidden) { recordPageTime(); } else { pageStartTime = Date.now(); }
+        if (document.hidden) recordPageTimeForCurrent();
+        else if (pageEnterTimes[currentPage] === undefined) pageEnterTimes[currentPage] = Date.now();
     });
 
-    // ---------------------------------------------------------------------------
-    // Page rendering (server-side images)
-    // ---------------------------------------------------------------------------
-    function loadPage(num) {
-        loading.style.display = "flex";
-        img.style.display = "none";
-
-        var pageImg = new Image();
-        pageImg.onload = function() {
-            img.src = pageImg.src;
-            img.style.display = "block";
-            loading.style.display = "none";
-            pageInfo.textContent = "Page " + num + " of " + TOTAL_PAGES;
-            btnPrev.disabled = num <= 1;
-            btnNext.disabled = num >= TOTAL_PAGES;
-            document.getElementById("viewer-container").scrollTop = 0;
-        };
-        pageImg.onerror = function() {
-            loading.innerHTML = '<p style="color: #B76749;">Unable to load page. Please try refreshing.</p>';
-        };
-        pageImg.src = BASE_URL + "/page/" + TRACKING_ID + "/" + num;
-    }
-
-    // ---------------------------------------------------------------------------
-    // Navigation
-    // ---------------------------------------------------------------------------
-    btnPrev.addEventListener("click", function() {
-        if (currentPage <= 1) return;
-        recordPageTime();
-        currentPage--;
-        pageStartTime = Date.now();
-        sendEvent("page_view", {page: currentPage});
-        loadPage(currentPage);
-    });
-
-    btnNext.addEventListener("click", function() {
-        if (currentPage >= TOTAL_PAGES) return;
-        recordPageTime();
-        currentPage++;
-        pageStartTime = Date.now();
-        sendEvent("page_view", {page: currentPage});
-        loadPage(currentPage);
-    });
-
+    // -----------------------------------------------------------------------
+    // Buttons
+    // -----------------------------------------------------------------------
     document.getElementById("btn-download").addEventListener("click", function() {
+        sendEvent("pdf_downloaded", {});
         window.open(BASE_URL + "/download/" + TRACKING_ID, "_blank");
     });
 
-    document.addEventListener("keydown", function(e) {
-        if (e.key === "ArrowLeft" || e.key === "ArrowUp") { btnPrev.click(); e.preventDefault(); }
-        if (e.key === "ArrowRight" || e.key === "ArrowDown") { btnNext.click(); e.preventDefault(); }
+    document.getElementById("btn-book").addEventListener("click", function(e) {
+        e.preventDefault();
+        sendEvent("conversation_requested", {via: "mailto"});
+        const subject = "Conversation about " + PROPERTY_ADDRESS;
+        const body = "Hi Will,\n\nI'd like to discuss my property appraisal for " + PROPERTY_ADDRESS + ".\n\n";
+        window.location.href = "mailto:will@fieldsestate.com.au?subject="
+            + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body);
     });
 
-    // ---------------------------------------------------------------------------
-    // Init
-    // ---------------------------------------------------------------------------
-    sendEvent("page_view", {page: 1});
-    loadPage(1);
+    document.getElementById("btn-feedback").addEventListener("click", function() {
+        sendEvent("feedback_intent", {});
+        // Sprint 4 will replace this prompt with a proper inline form;
+        // for v0 we collect the correction via mailto so it lands in Will's inbox immediately.
+        const correction = window.prompt(
+            "What did we get wrong?\n\nE.g. 'The kitchen was renovated 2 years ago' or 'There are 4 bedrooms, not 5'."
+        );
+        if (correction && correction.trim()) {
+            sendEvent("feedback_submitted", {text: correction.trim().slice(0, 500)});
+            const subject = "Correction for " + PROPERTY_ADDRESS;
+            const body = "What we got wrong:\n\n" + correction.trim() + "\n\n— Sent from the appraisal viewer";
+            window.location.href = "mailto:will@fieldsestate.com.au?subject="
+                + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body);
+        }
+    });
+
+    // Keyboard nav (jump to next/prev page)
+    document.addEventListener("keydown", function(e) {
+        if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+        if (e.key === "ArrowRight" || e.key === "PageDown" || e.key === "j") {
+            const next = cards[currentPage]; // currentPage is 1-indexed; cards[currentPage] = next page
+            if (next) { next.scrollIntoView({behavior: "smooth", block: "start"}); e.preventDefault(); }
+        } else if (e.key === "ArrowLeft" || e.key === "PageUp" || e.key === "k") {
+            const prev = cards[currentPage - 2];
+            if (prev) { prev.scrollIntoView({behavior: "smooth", block: "start"}); e.preventDefault(); }
+        }
+    });
 })();
 </script>
 
