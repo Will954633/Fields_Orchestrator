@@ -153,66 +153,79 @@
     background: var(--grass);
     color: var(--birch);
     margin: 0 -24px;
-    padding: 80px 40px 60px;
+    padding: 80px 60px 60px;
     position: relative;
+    overflow: hidden;
   }
 
+  /* Subtle brand mark watermark in bottom-right */
   .cover::before {
     content: '';
     position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: radial-gradient(ellipse at 30% 20%, rgba(160, 209, 201, 0.08) 0%, transparent 60%),
-                radial-gradient(ellipse at 70% 80%, rgba(183, 103, 73, 0.06) 0%, transparent 50%);
+    bottom: -40px;
+    right: -40px;
+    width: 320px;
+    height: 320px;
+    background: url('book-images/fields-logo-white.png') no-repeat center;
+    background-size: contain;
+    opacity: 0.04;
     pointer-events: none;
   }
 
   .cover-content {
     position: relative;
     z-index: 1;
-    max-width: 560px;
+    max-width: 700px;
+  }
+
+  .cover-logo-main {
+    margin-bottom: 48px;
+  }
+
+  .cover-logo-main img {
+    height: 56px;
+    width: auto;
   }
 
   .cover-label {
     font-size: 11px;
-    letter-spacing: 4px;
+    letter-spacing: 5px;
     text-transform: uppercase;
-    color: var(--sky);
-    font-weight: 500;
-    margin-bottom: 32px;
+    color: var(--birch-dark);
+    font-weight: 400;
+    margin-bottom: 20px;
   }
 
   .cover h1 {
-    font-size: 42px;
+    font-size: 52px;
     font-weight: 800;
-    line-height: 1.1;
+    line-height: 1.05;
     color: var(--white);
-    margin-bottom: 16px;
-    letter-spacing: -0.5px;
+    margin-bottom: 20px;
+    letter-spacing: -1px;
   }
 
   .cover-subtitle {
-    font-size: 18px;
+    font-size: 19px;
     font-weight: 300;
     color: var(--birch);
     line-height: 1.5;
-    margin-bottom: 48px;
+    margin-bottom: 56px;
   }
 
   .cover-divider {
-    width: 48px;
-    height: 2px;
+    width: 56px;
+    height: 3px;
     background: var(--copper);
-    margin: 0 auto 32px;
+    margin: 0 auto 36px;
   }
 
   .cover-author {
-    font-size: 14px;
-    font-weight: 500;
+    font-size: 15px;
+    font-weight: 600;
     color: var(--sun);
-    margin-bottom: 4px;
+    margin-bottom: 6px;
+    letter-spacing: 0.5px;
   }
 
   .cover-date {
@@ -221,15 +234,20 @@
     font-weight: 300;
   }
 
-  .cover-logo {
+  .cover-tagline {
     position: absolute;
     bottom: 40px;
     left: 50%;
     transform: translateX(-50%);
-    opacity: 0.4;
+    font-size: 13px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--birch-dark);
+    font-weight: 400;
+    opacity: 0.6;
   }
 
-  .cover-logo img {
+  .cover-tagline-placeholder {
     height: 28px;
     width: auto;
   }
@@ -526,6 +544,16 @@
     max-width: 100%;
     border-radius: 6px;
     display: block;
+    margin: 0 auto;
+  }
+  .book-chart, .book-figure {
+    text-align: center;
+    margin: 20px auto;
+  }
+  .book-chart img, .book-figure img {
+    display: block;
+    margin: 0 auto;
+    max-width: 90%;
   }
   .book-image.spread img {
     border-radius: 0;
@@ -533,6 +561,43 @@
     margin-right: -38px;
     width: calc(100% + 76px);
     max-width: calc(100% + 76px);
+  }
+  /* Portrait images (e.g. headshots) — render at native size to avoid upscaling blur */
+  .book-image.portrait img {
+    width: auto;
+    max-width: 280px;
+    border-radius: 50%;
+  }
+  /* Inline photographs — float right, text wraps to the left */
+  .book-image.inline-right {
+    float: right;
+    width: 44%;
+    margin: 4px 0 14px 22px;
+    text-align: center;
+  }
+  .book-image.inline-right img {
+    width: 100%;
+    max-width: 100%;
+    border-radius: 6px;
+    display: block;
+  }
+
+  /* Document/abstract screenshots — float right, text wraps to the left */
+  .book-image.document {
+    float: right;
+    width: 44%;
+    margin: 4px 0 14px 22px;
+    text-align: center;
+  }
+  .book-image.document img {
+    width: 100%;
+    max-width: 100%;
+    border-radius: 4px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    display: block;
+  }
+  .book-image.document figcaption {
+    margin-top: 6px;
   }
   .book-image figcaption {
     font-size: 8pt;
@@ -860,8 +925,9 @@
      ================================================================ */
 
   @media print {
+    /* Page size: 14×11 in trim + 3 mm bleed on every edge = 14.236×11.236 in */
     @page {
-      size: A4 landscape;
+      size: 14.236in 11.236in;
       margin: 0;
     }
 
@@ -871,96 +937,204 @@
 
     body {
       background: var(--white);
+      margin: 0;
+      padding: 0;
     }
 
     /* Hide screen-only elements */
     .book-nav,
-    .download-btn {
+    .download-btn,
+    .book-footer {
       display: none !important;
     }
 
     .book-wrapper {
       max-width: none;
       padding: 0;
+      margin: 0;
     }
 
-    /* ── COVER (print, landscape) ── */
-    .cover {
-      width: 297mm;
-      height: 210mm;
-      min-height: 0;
+    /* ── UNIFIED PRINT PAGE — 14×11 trim + 3 mm bleed (= 14.236×11.236 in) ── */
+    .print-page {
+      width: 14.236in;
+      height: 11.236in;
       margin: 0;
-      padding: 0 60mm;
-      display: flex;
-      justify-content: center;
+      padding: 0;
+      position: relative;
+      overflow: hidden;
       page-break-after: always;
       break-after: page;
+      background: var(--white);
+    }
+    .print-page:last-child {
+      page-break-after: auto;
+      break-after: auto;
     }
 
-    .cover h1 {
-      font-size: 34pt;
+    /* ── COVER (print) — padding accounts for 3 mm bleed so content sits inside trim ── */
+    .print-page.cover {
+      background: var(--grass);
+      color: var(--birch);
+      padding: 0 calc(1.5in + 3mm);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
     }
-
+    .print-page.cover h1 {
+      font-size: 44pt;
+    }
     .cover-subtitle {
       font-size: 14pt;
     }
-
-    .cover-logo {
-      bottom: 20mm;
+    .cover-logo-main img {
+      height: 48px;
+    }
+    .cover-tagline {
+      bottom: 0.5in;
     }
 
-    /* ── INSIDE COVER (print, landscape full-bleed) ── */
-    .inside-cover {
-      width: 297mm;
-      height: 210mm;
-      margin: 0;
-      padding: 0;
-      overflow: hidden;
-      page-break-before: always;
-      page-break-after: always;
-    }
-    .inside-cover img {
-      width: 297mm;
-      height: 210mm;
-      object-fit: cover;
-      object-position: center 40%;
-      display: block;
-    }
-
-    /* ── SPREAD IMAGES (print, landscape) ── */
-    .book-image.spread {
-      margin: 0 -20mm;
-      page-break-before: always;
-      page-break-after: always;
-    }
-    .book-image.spread img {
-      width: 297mm;
-      max-width: 297mm;
-      margin: 0;
-      border-radius: 0;
-    }
-
-    /* ── TOC (print) ── */
-    .toc {
-      margin: 0;
-      padding: 16mm 24mm 20mm 24mm;
+    /* ── TOC (print) — padding accounts for 3 mm bleed ── */
+    .print-page.toc {
+      padding: calc(0.9in + 3mm) calc(1.2in + 3mm);
       background: var(--white);
-      page-break-after: always;
-      break-after: page;
     }
-
     .toc-inner {
       max-width: none;
     }
 
-    /* ── CHAPTERS (print) ── */
-    .chapter {
-      margin: 0;
-      padding: 16mm 24mm 20mm 24mm;
-      background: var(--white);
-      page-break-before: always;
-      break-before: page;
+    /* ── IMAGE PAGE (full-bleed single image) ──
+       Image fills the entire page including 3 mm bleed area on all edges. */
+    .print-page.image {
+      padding: 0;
+      background: #000;
     }
+    .print-page.image img {
+      width: 14.236in;
+      height: 11.236in;
+      object-fit: cover;
+      display: block;
+    }
+
+    /* ── DOUBLE-PAGE SPREAD HALVES ──
+       Each spread page renders the same source image at 200% page width with
+       aspect ratio preserved. background-position left/right center crops
+       the image to show its left or right half. When the printed book is
+       bound and trimmed, the two halves form one continuous spread across
+       the gutter, with 3 mm bleed extending past the outer trim edges. */
+    .print-page.image.spread-left,
+    .print-page.image.spread-right {
+      background-size: 200% auto;
+      background-repeat: no-repeat;
+    }
+    .print-page.image.spread-left {
+      background-position: left center;
+    }
+    .print-page.image.spread-right {
+      background-position: right center;
+    }
+
+    /* ── CAPTION OVERLAY ──
+       Position values include 3 mm bleed offset so caption sits at intended
+       margin from the trim edge after the printer cuts. */
+    .image-caption-overlay {
+      position: absolute;
+      bottom: calc(0.5in + 3mm);
+      left: calc(0.6in + 3mm);
+      max-width: 6in;
+      padding: 14pt 18pt;
+      background: rgba(0, 0, 0, 0.62);
+      color: rgba(255, 255, 255, 0.97);
+      font-size: 11.5pt;
+      line-height: 1.5;
+      font-style: italic;
+      border-left: 4pt solid var(--copper);
+      border-radius: 0 4pt 4pt 0;
+    }
+
+    /* ── CHAPTER CONTENT — padding includes 3 mm bleed offset so safe area
+       (where text lives) sits inside the trim edge ── */
+    .print-page.chapter {
+      padding: calc(0.9in + 3mm) calc(1.2in + 3mm);
+      background: var(--white);
+      overflow: hidden;
+    }
+
+    /* Inline non-floated photos in content pages — figure shrinks to image
+       width so it centers properly on the page, and caption sits beneath
+       the image (not stretched across the page). Image height capped to
+       leave room for surrounding text. */
+    .print-page.chapter .book-image:not(.inline-right):not(.document):not(.portrait) {
+      display: table;
+      margin: 14pt auto;
+      page-break-inside: avoid;
+      break-inside: avoid;
+      max-width: 80%;
+    }
+    .print-page.chapter .book-image:not(.inline-right):not(.document):not(.portrait) img {
+      max-height: 3.5in;
+      max-width: 100%;
+      width: auto;
+      height: auto;
+      object-fit: contain;
+      display: block;
+    }
+    .print-page.chapter .book-image:not(.inline-right):not(.document):not(.portrait) figcaption {
+      display: table-caption;
+      caption-side: bottom;
+      font-size: 9pt;
+      line-height: 1.4;
+      margin-top: 6pt;
+      text-align: center;
+      color: var(--text-muted);
+      font-style: italic;
+    }
+
+    /* Comparison images (side-by-side pairs) — cap height so text + pair
+       fit on a single content page without overflow. */
+    .print-page.chapter .image-comparison {
+      margin: 14pt auto;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    .print-page.chapter .image-comparison img {
+      max-height: 2.6in;
+      width: auto;
+      max-width: 100%;
+      object-fit: contain;
+      margin: 0 auto;
+    }
+
+    /* ── CHART/FIGURE PAGE — chart on its own page with caption beneath ── */
+    .print-page.chart-page {
+      padding: calc(1in + 3mm) calc(1.2in + 3mm);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background: var(--white);
+    }
+    .print-page.chart-page img {
+      max-width: 100%;
+      max-height: 7.5in;
+      width: auto;
+      height: auto;
+      object-fit: contain;
+      display: block;
+    }
+    .print-page.chart-page figcaption {
+      margin-top: 0.4in;
+      max-width: 9in;
+      font-size: 10.5pt;
+      line-height: 1.5;
+      font-style: italic;
+      text-align: center;
+      color: var(--text-muted);
+    }
+
+    /* Existing .chapter typography rules below still apply because content
+       sections still carry the .chapter class. */
 
     .chapter > h1 {
       font-size: 24pt;
@@ -1044,51 +1218,64 @@
 </nav>
 
 <!-- ════════════════════════════════════════════════════════════════
-     COVER
+     PAGES — iterate the unified pages list (cover, toc, image, content)
      ════════════════════════════════════════════════════════════════ -->
 <div class="book-wrapper">
 
-<section class="cover" id="cover">
-  <div class="cover-content">
-    <div class="cover-label">Fields Estate</div>
-    <h1>{{ title }}</h1>
-    <p class="cover-subtitle">{{ subtitle }}</p>
-    <div class="cover-divider"></div>
-    <p class="cover-author">{{ author }}</p>
-    <p class="cover-date">{{ generated_date }}</p>
-  </div>
-  <div class="cover-logo">
-    <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='20' fill='%23E6DDD2'%3E%3Ctext x='0' y='15' font-family='Poppins,sans-serif' font-size='14' font-weight='600' opacity='0.5'%3EFields%3C/text%3E%3C/svg%3E" alt="Fields Estate">
-  </div>
-</section>
+{% for page in pages %}
+  {% if page.type == 'cover' %}
+  <section class="print-page cover" id="cover">
+    <div class="cover-content">
+      <div class="cover-logo-main">
+        <img src="book-images/fields-logo-white.png" alt="Fields Estate">
+      </div>
+      <div class="cover-label">Property Intelligence</div>
+      <h1>{{ title }}</h1>
+      <p class="cover-subtitle">{{ subtitle }}</p>
+      <div class="cover-divider"></div>
+      <p class="cover-author">{{ author }}</p>
+      <p class="cover-date">{{ generated_date }}</p>
+    </div>
+    <div class="cover-tagline">Smarter with data</div>
+  </section>
 
-<!-- Inside cover: full-bleed photo (separate page in print) -->
-<section class="inside-cover">
-  <img src="book-images/inside-cover.jpg" alt="Burleigh Beach, Gold Coast">
-</section>
+  {% elif page.type == 'toc' %}
+  <section class="print-page toc" id="toc">
+    <div class="toc-inner">
+      <h2>Contents</h2>
+      <ol class="toc-list">
+        {% for chapter in chapters %}
+        <li><a href="#{{ chapter.id }}"><span>{{ chapter.title }}</span></a></li>
+        {% endfor %}
+      </ol>
+    </div>
+  </section>
 
-<!-- ════════════════════════════════════════════════════════════════
-     TABLE OF CONTENTS
-     ════════════════════════════════════════════════════════════════ -->
-<section class="toc" id="toc">
-  <div class="toc-inner">
-    <h2>Contents</h2>
-    <ol class="toc-list">
-      {% for chapter in chapters %}
-      <li><a href="#{{ chapter.id }}"><span>{{ chapter.title }}</span></a></li>
-      {% endfor %}
-    </ol>
-  </div>
-</section>
+  {% elif page.type == 'image' %}
+    {% if page.spread_side == 'left' %}
+    <section class="print-page image spread-left" id="{{ page.id }}" style="background-image: url('{{ page.image_src }}');"></section>
+    {% elif page.spread_side == 'right' %}
+    <section class="print-page image spread-right" id="{{ page.id }}" style="background-image: url('{{ page.image_src }}');">
+      {% if page.caption %}<div class="image-caption-overlay">{{ page.caption }}</div>{% endif %}
+    </section>
+    {% else %}
+    <section class="print-page image" id="{{ page.id }}">
+      <img src="{{ page.image_src }}" alt="">
+      {% if page.caption %}<div class="image-caption-overlay">{{ page.caption }}</div>{% endif %}
+    </section>
+    {% endif %}
 
-<!-- ════════════════════════════════════════════════════════════════
-     CHAPTERS
-     ════════════════════════════════════════════════════════════════ -->
-{% for chapter in chapters %}
-<section class="chapter" id="{{ chapter.id }}">
-  <h1>{{ chapter.title }}</h1>
-  {{ chapter.content }}
-</section>
+  {% elif page.type == 'chart' %}
+  <section class="print-page chart-page" id="{{ page.id }}">
+    <img src="{{ page.image_src }}" alt="">
+    {% if page.caption %}<figcaption>{{ page.caption }}</figcaption>{% endif %}
+  </section>
+
+  {% else %}
+  <section class="print-page content chapter" id="{{ page.id }}">
+    {{ page.content | safe }}
+  </section>
+  {% endif %}
 {% endfor %}
 
 <!-- ════════════════════════════════════════════════════════════════

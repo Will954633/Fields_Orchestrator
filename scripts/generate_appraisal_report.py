@@ -809,6 +809,16 @@ def render_html(prop, client_name, top_comps, room_assessments, editorial,
         "land_size": int(float(prop.get("land_size_sqm") or prop.get("lot_size_sqm") or 0)),
         "internal_area": fpa.get("internal_floor_area", {}).get("value") or prop.get("floor_area_sqm") or "?",
         "condition_score": pvd.get("property_overview", {}).get("overall_condition_score") or "?",
+        # Feature pills — conditional in the template so they only render when the data supports them.
+        # Pool: read directly from valuation data. Dual living: check several plausible Mongo paths
+        # plus a top-level prop flag, defaulting False if no signal — better to under-claim than mis-claim.
+        "has_pool": bool(pvd.get("outdoor", {}).get("pool_present")),
+        "has_dual_living": bool(
+            pvd.get("layout", {}).get("dual_living")
+            or pvd.get("dual_living")
+            or prop.get("dual_living")
+            or prop.get("has_dual_living")
+        ),
         # Valuation ranges (derived from comps)
         "selling_range_low": fmt(val_low),
         "selling_range_high": fmt(val_high),
@@ -936,7 +946,14 @@ def main():
     parser.add_argument("--client", help="Client name")
     parser.add_argument("--suburb", help="Suburb collection name (lowercase)")
     parser.add_argument("--sell-timeline", default="3-6months")
-    parser.add_argument("--skip-ai", action="store_true")
+    parser.add_argument("--skip-ai", action="store_true",
+                        help="Skip Claude editorial; use _minimal_editorial fallback")
+    parser.add_argument("--reuse-editorial", metavar="PATH",
+                        help="Path to a saved editorial JSON to load instead of regenerating "
+                             "(skips Claude — useful for visual/template iteration without burning credits)")
+    parser.add_argument("--strict", action="store_true",
+                        help="Run scripts/editorial_review.py against the editorial JSON before render; "
+                             "abort if any FAIL-severity check fails")
     args = parser.parse_args()
 
     db_client = get_db()
@@ -1011,12 +1028,54 @@ def main():
     print("  Downloading photos...")
     photo_paths = download_photos(prop, work_dir)
 
-    # 8. AI editorial (or minimal fallback)
-    if args.skip_ai:
+    # 8. AI editorial — three modes:
+    #    --reuse-editorial PATH : load JSON from disk (no AI call, no $$ burn)
+    #    --skip-ai              : use _minimal_editorial fallback (placeholder content — for testing only)
+    #    default                : call Claude and cache the JSON next to the PDF for future reuse
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    slug = address.lower().replace(" ", "-").replace(",", "").replace("'", "")
+    pdf_name = f"{datetime.now(AEST).strftime('%Y-%m-%d')}_{slug}_{client_name.lower()}_v2.pdf"
+    pdf_path = OUTPUT_DIR / pdf_name
+    editorial_json_path = pdf_path.with_name(pdf_path.stem.replace("_v2", "") + "_editorial.json")
+
+    if args.reuse_editorial:
+        reuse_path = Path(args.reuse_editorial)
+        if not reuse_path.exists():
+            sys.exit(f"[ERROR] --reuse-editorial path not found: {reuse_path}")
+        print(f"  Loading editorial from {reuse_path} (no AI call)")
+        editorial = json.loads(reuse_path.read_text())
+    elif args.skip_ai:
         editorial = _minimal_editorial(prop, top_comps, market_stats)
     else:
         print("  Generating editorial via Claude...")
         editorial = generate_editorial(prop, top_comps, market_stats, rates, suburb_display)
+        # Cache the editorial alongside the PDF so future renders can --reuse-editorial it.
+        try:
+            editorial_json_path.write_text(json.dumps(editorial, indent=2, ensure_ascii=False))
+            print(f"  Editorial cached: {editorial_json_path}")
+        except Exception as e:
+            print(f"  [WARN] Could not cache editorial JSON: {e}")
+
+    # 8b. Optional editorial review gate.
+    # Always informational; only blocks if --strict.
+    try:
+        sys.path.insert(0, str(ROOT / "scripts"))
+        from editorial_review import validate_editorial
+        review = validate_editorial(editorial)
+        fail_n = len(review.fails)
+        warn_n = len(review.warns)
+        if fail_n or warn_n:
+            print(f"  Editorial review: {fail_n} fail, {warn_n} warn")
+            for c in review.fails:
+                print(f"    FAIL  {c.name}: {c.detail}")
+            for c in review.warns:
+                print(f"    warn  {c.name}: {c.detail}")
+        else:
+            print(f"  Editorial review: PASS (14/14)")
+        if args.strict and not review.passed:
+            sys.exit("[ERROR] Editorial review failed under --strict; aborting render.")
+    except ImportError:
+        pass  # editorial_review module not available; skip gate
 
     # 9. Render HTML
     timeline_labels = {"asap": "ASAP", "1-3months": "1\u20133 Months", "3-6months": "3\u20136 Months", "not-sure": "Flexible"}
@@ -1028,12 +1087,7 @@ def main():
     html_path = work_dir / "report.html"
     html_path.write_text(html)
 
-    # 10. Convert to PDF
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    slug = address.lower().replace(" ", "-").replace(",", "").replace("'", "")
-    pdf_name = f"{datetime.now(AEST).strftime('%Y-%m-%d')}_{slug}_{client_name.lower()}_v2.pdf"
-    pdf_path = OUTPUT_DIR / pdf_name
-
+    # 10. Convert to PDF (pdf_path already computed in step 8 for editorial caching)
     print("  Converting to PDF...")
     if html_to_pdf(str(html_path), str(pdf_path)):
         size_kb = pdf_path.stat().st_size / 1024

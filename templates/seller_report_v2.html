@@ -565,8 +565,8 @@
     <span class="take-pill">{{ land_size }} m&sup2;</span>
     <span class="take-pill">{{ internal_area }} m&sup2; internal</span>
     <span class="take-pill">{{ condition_score }}/10 condition</span>
-    <span class="take-pill">Pool</span>
-    <span class="take-pill">Dual Living</span>
+    {% if has_pool %}<span class="take-pill">Pool</span>{% endif %}
+    {% if has_dual_living %}<span class="take-pill">Dual Living</span>{% endif %}
   </div>
 
   <div class="take-verdict-box">

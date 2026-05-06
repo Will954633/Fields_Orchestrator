@@ -226,11 +226,46 @@
   }
 
   /* ================================================================
+     PAGE TYPE: CHART (data viz on its own page, caption beneath)
+     ================================================================ */
+  .page-chart {
+    background: var(--white);
+    padding: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .page-chart .chart-inner {
+    max-width: 90%;
+    max-height: 100%;
+    text-align: center;
+  }
+  .page-chart img {
+    max-width: 100%;
+    max-height: 78%;
+    height: auto;
+    width: auto;
+    display: block;
+    margin: 0 auto;
+  }
+  .page-chart figcaption {
+    margin-top: 16px;
+    font-size: 12px;
+    line-height: 1.5;
+    font-style: italic;
+    color: var(--text-muted);
+    max-width: 720px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  /* ================================================================
      PAGE TYPE: IMAGE (full-bleed)
      ================================================================ */
   .page-image {
     background: #000;
     padding: 0;
+    position: relative;
   }
 
   .page-image img {
@@ -238,6 +273,23 @@
     height: 100%;
     object-fit: cover;
     display: block;
+  }
+
+  .image-caption-overlay {
+    position: absolute;
+    bottom: 32px;
+    left: 32px;
+    max-width: 56%;
+    padding: 14px 18px;
+    background: rgba(0, 0, 0, 0.58);
+    color: rgba(255, 255, 255, 0.96);
+    font-size: 13px;
+    line-height: 1.55;
+    font-style: italic;
+    border-left: 3px solid var(--copper);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    border-radius: 0 4px 4px 0;
   }
 
   /* ================================================================
@@ -486,6 +538,57 @@
     max-width: 100%;
     border-radius: 6px;
     display: block;
+    margin: 0 auto;
+  }
+
+  /* Portrait images (e.g. headshots) — render at native size to avoid upscaling blur */
+  .book-image.portrait img {
+    width: auto;
+    max-width: 320px;
+    border-radius: 50%;
+  }
+
+  /* Inline photographs — float right, text wraps to the left */
+  .book-image.inline-right {
+    float: right;
+    width: 46%;
+    margin: 4px 0 16px 24px;
+    text-align: center;
+  }
+  .book-image.inline-right img {
+    width: 100%;
+    max-width: 100%;
+    border-radius: 6px;
+    display: block;
+  }
+
+  /* Document/abstract screenshots — float right, text wraps to the left */
+  .book-image.document {
+    float: right;
+    width: 46%;
+    margin: 4px 0 16px 24px;
+    text-align: center;
+  }
+  .book-image.document img {
+    width: 100%;
+    max-width: 100%;
+    border-radius: 4px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    display: block;
+  }
+  .book-image.document figcaption {
+    margin-top: 8px;
+  }
+
+  .book-chart, .book-figure {
+    text-align: center;
+    margin: 20px auto;
+  }
+
+  .book-chart img, .book-figure img {
+    display: block;
+    margin: 0 auto;
+    max-width: 90%;
   }
 
   .book-image figcaption,
@@ -936,13 +1039,22 @@
         <div class="cover-divider"></div>
         <div class="cover-author">{{ author }}</div>
         <div class="cover-date">{{ generated_date }}</div>
-        <div class="cover-suburbs">ROBINA &middot; VARSITY LAKES &middot; BURLEIGH WATERS</div>
+        <!-- suburbs removed for broader distribution -->
         <div class="cover-tagline">SMARTER WITH DATA</div>
       </div>
 
       {% elif page.type == 'image' %}
       <div class="page page-image" id="{{ page.id or 'page-' ~ loop.index }}" data-page-index="{{ loop.index0 }}">
         <img src="{{ page.image_src }}" alt="" loading="lazy">
+        {% if page.caption %}<div class="image-caption-overlay">{{ page.caption }}</div>{% endif %}
+      </div>
+
+      {% elif page.type == 'chart' %}
+      <div class="page page-chart" id="{{ page.id or 'page-' ~ loop.index }}" data-page-index="{{ loop.index0 }}">
+        <div class="chart-inner">
+          <img src="{{ page.image_src }}" alt="" loading="lazy">
+          {% if page.caption %}<figcaption>{{ page.caption }}</figcaption>{% endif %}
+        </div>
       </div>
 
       {% elif page.type == 'toc' %}
