@@ -603,7 +603,7 @@ def get_market_stats(client, suburb):
 # ---------------------------------------------------------------------------
 # AI-generated editorial content (Claude)
 # ---------------------------------------------------------------------------
-def generate_editorial(prop: dict, top_comps: list, market_stats: dict, rates: dict, suburb: str) -> dict:
+def generate_editorial(prop: dict, top_comps: list, market_stats: dict, rates: dict, suburb: str, scarcity_stats: dict = None) -> dict:
     """Generate ALL editorial content via Claude — headline, verdict, value equations, buyer profiles, positioning."""
     try:
         import anthropic
@@ -667,6 +667,14 @@ def generate_editorial(prop: dict, top_comps: list, market_stats: dict, rates: d
         if adj_lines:
             adj_detail += f"    Line-item adjustments:\n" + "\n".join(adj_lines) + "\n"
 
+    # Build scarcity block for the prompt — feeds the AI hard "N of M" counts
+    # so feature_positioning entries can cite verifiable transaction-data scarcity claims
+    # (matching Dee's April 10 v2 quality bar: "Of 58 sales, only 5 had 5+ bedrooms…").
+    scarcity_stats = scarcity_stats or {}
+    scarcity_total = scarcity_stats.get("total_12m_sales", 0) or 0
+    scarcity_lines = scarcity_stats.get("statements") or []
+    scarcity_block = "\n".join(f"  - {s}" for s in scarcity_lines) if scarcity_lines else "  - (no scarcity data available — fall back to general suburb stats)"
+
     prompt = f"""You are the Fields Estate editorial team writing a seller appraisal report. This must be PUBLICATION QUALITY — specific, data-dense, honest, and compelling. Every claim must cite data.
 
 PROPERTY: {address}
@@ -681,6 +689,9 @@ COMPARABLE SALES WITH FULL ADJUSTMENT DETAIL:
 VALUATION RANGE: {fmt(val_low)} to {fmt(val_high)} (mid-point {fmt(val_mid)})
 
 MARKET CONTEXT: {suburb} median {market_stats['median']}. {market_stats['houses_sold_12m']} houses sold in 12m. {market_stats['currently_listed']} currently listed.
+
+SCARCITY DATA FOR THIS PROPERTY (computed from {scarcity_total} {suburb} sales in last 12 months — these are HARD FACTS you MUST cite verbatim in feature_positioning entries; the entire purpose of this section is to back each feature with a verifiable transaction-data scarcity claim):
+{scarcity_block}
 
 QUALITY STANDARD — follow this example of what "good" looks like:
 
@@ -722,7 +733,10 @@ Return JSON with these keys:
     {{"label": "Strategy name (e.g. 'Aspirational Pricing')", "range": "$X,XXX,XXX — $X,XXX,XXX", "rationale": "2-3 sentences citing specific comparable evidence for this price bracket."}}
   ],
   "feature_positioning": [
-    {{"feature": "Specific feature with measurement", "impact": "$XX,XXX — $XX,XXX", "strategy": "2 sentences: how to position this in marketing, what buyer emotion it triggers, what photography angle captures it."}}
+    {{
+      "feature": "Title format: 'Feature name — $ figure or scarcity claim'. Examples: 'Dual Living Configuration — $354,868 value differential', 'Pool + 52.5 sqm Covered Deck + Outdoor Kitchen — $95,000-$145,000 to replicate', 'All Saints Anglican School — 150m from boundary', 'Genuine Scarcity — 5 sales in 12 months, 1 with a pool'. The TITLE ITSELF must contain a number (a dollar adjustment, a replacement-cost range, a distance, a count). NEVER 'Pool and outdoor entertainment' — always 'Pool... — $X,XXX-$Y,YYY differential'.",
+      "strategy": "3-4 sentences. SENTENCE 1: lead with the hard data claim — quote the comp adjustment dollar value if available, OR cite a scarcity statement from the SCARCITY DATA block above (use the exact numbers — e.g. 'Of {scarcity_total} suburb sales in 12 months, only N had X'). SENTENCE 2: explain the buyer-pool implication of that scarcity / value (e.g. 'eliminates 90% of competing stock', 'activates multi-generational buyers who have almost no options in this suburb'). SENTENCE 3: name the marketing/photography action. SENTENCE 4 (optional): one bold reframe. DO NOT lead with photography directions — lead with the data."
+    }}
   ],
   "campaign_structure": "3-4 sentences: specific campaign approach — duration, channels, staging priorities, open home schedule. Reference the property's specific strengths.",
   "photography_strategy": "3 sentences: specific rooms/angles to prioritise, time of day, what to stage. Reference the property's actual features (pool, kitchen, deck, etc.).",
@@ -754,7 +768,7 @@ Generate EXACTLY 5 value_equations: AT LEAST 2 must be trade-off panels (positiv
 Generate 3 not_ideal_for items — short bullets (under 8 words each) naming the specific buyer types this property's STRUCTURAL features make unsuitable. Be specific to the property, not generic.
 Generate EXACTLY 3 buyer_profiles (primary, secondary, tertiary).
 Generate EXACTLY 4 pricing_cards (aspirational, competitive, strategic, floor).
-Generate EXACTLY 5-6 feature_positioning items.
+Generate EXACTLY 5-6 feature_positioning items. The LAST item MUST be a "Genuine Scarcity" entry titled with the strongest scarcity number from the SCARCITY DATA block above (typically the killer-combo or zero-count statement, e.g. "Genuine Scarcity — 0 sales in 12 months matched this combination"). Its strategy field must restate the scarcity statement using the exact numbers from the data block, explain why this is the strongest positioning lever available, and close by noting we would never use manufactured urgency in premium markets because the data speaks for itself. Do NOT skip this item.
 Generate EXACTLY 4 limits_of_evidence.items (interior_condition, build_defects, neighbour_disputes, council_DAs_or_strata) — this is the new "What We Did Not See" section.
 The morning_in_this_home narrative is for the new buyer-perspective page — pay close attention to the absolute rules. If you cannot satisfy all five rules, regenerate this single field internally before returning JSON.
 
@@ -1388,6 +1402,141 @@ def build_outcome_projection(listing_low: int, listing_high: int, selling_low: i
 # ---------------------------------------------------------------------------
 # M18 — Pre-sale Recommendations data builder
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Scarcity statistics — feature-level "N sold in 12 months" hooks
+# ---------------------------------------------------------------------------
+def compute_scarcity_stats(client, prop: dict, suburb_key: str, top_comps: list) -> dict:
+    """For the property's distinguishing features, count how many comparable sales
+    in the last 12 months share that feature. Returns a dict shaped for AI prompt
+    injection and template rendering.
+
+    The intent: every feature_positioning entry should be backed by a verifiable
+    'N of M sold in 12 months had X' claim, the way Dee's April 10 v2 was structured
+    (e.g. 'Of 58 houses sold in Merrimac... only 5 had 5+ bedrooms. Only 1 had a pool.
+    None had dual living.'). The AI invents impressionistic strategies; we feed it
+    hard counts so the strategies have evidence to anchor on.
+    """
+    col = client["Gold_Coast"][suburb_key]
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=365)).strftime("%Y-%m-%d")
+    base_match = {
+        "listing_status": "sold",
+        "sold_date": {"$gte": cutoff},
+        "property_type": {"$regex": "house", "$options": "i"},
+    }
+
+    def safe_count(extra_match):
+        try:
+            return cosmos_retry(col.count_documents, {**base_match, **extra_match})
+        except Exception:
+            return None
+
+    s_beds = prop.get("bedrooms")
+    s_pvd = prop.get("property_valuation_data", {}) or {}
+    s_overview = s_pvd.get("property_overview", {}) or {}
+    s_outdoor = s_pvd.get("outdoor", {}) or {}
+    s_pool = bool(s_outdoor.get("pool_present"))
+    s_cars = prop.get("car_spaces") or prop.get("carspaces")
+    s_land = prop.get("land_size_sqm") or prop.get("lot_size_sqm")
+    s_internal = (prop.get("floor_plan_analysis", {}) or {}).get("internal_floor_area", {}).get("value") or prop.get("floor_area_sqm")
+    s_condition = s_overview.get("overall_condition_score")
+
+    # Total + bedroom-count distribution
+    total_12m = safe_count({}) or 0
+    same_bed = safe_count({"bedrooms": s_beds}) if s_beds else None
+    same_bed_or_more = safe_count({"bedrooms": {"$gte": s_beds}}) if s_beds else None
+
+    # Pool combos
+    same_bed_with_pool = safe_count({
+        "bedrooms": s_beds,
+        "property_valuation_data.outdoor.pool_present": True,
+    }) if (s_beds and s_pool) else None
+
+    # Car spaces — look at exact AND ≥ property
+    same_or_more_cars = None
+    if s_cars and isinstance(s_cars, (int, float)) and s_cars > 0:
+        same_or_more_cars = safe_count({
+            "$or": [{"car_spaces": {"$gte": int(s_cars)}}, {"carspaces": {"$gte": int(s_cars)}}],
+        })
+
+    # Land size — count properties with land >= this property's land
+    same_or_more_land = None
+    if s_land and isinstance(s_land, (int, float)) and s_land > 0:
+        same_or_more_land = safe_count({
+            "$or": [{"land_size_sqm": {"$gte": int(s_land)}}, {"lot_size_sqm": {"$gte": int(s_land)}}],
+        })
+
+    # Internal area — only meaningful if subject has data
+    same_or_more_internal = None
+    if s_internal and isinstance(s_internal, (int, float)) and s_internal > 0:
+        same_or_more_internal = safe_count({
+            "floor_plan_analysis.internal_floor_area.value": {"$gte": int(s_internal)},
+        })
+
+    # Condition >= property
+    same_or_more_condition = None
+    if s_condition and isinstance(s_condition, (int, float)) and s_condition > 0:
+        same_or_more_condition = safe_count({
+            "property_valuation_data.property_overview.overall_condition_score": {"$gte": int(s_condition)},
+        })
+
+    # KILLER COMBO — properties matching MULTIPLE distinguishing features at once.
+    # E.g. "5+ bed AND pool AND 1000+ sqm land" — usually returns 0 or 1.
+    killer_filters = {}
+    if s_beds: killer_filters["bedrooms"] = {"$gte": s_beds}
+    if s_pool: killer_filters["property_valuation_data.outdoor.pool_present"] = True
+    if s_land:
+        killer_filters["$or"] = [{"land_size_sqm": {"$gte": int(s_land)}}, {"lot_size_sqm": {"$gte": int(s_land)}}]
+    killer_count = safe_count(killer_filters) if killer_filters else None
+    killer_label = []
+    if s_beds: killer_label.append(f"{s_beds}+ bedrooms")
+    if s_pool: killer_label.append("a pool")
+    if s_land: killer_label.append(f"{int(s_land)}+ sqm land")
+    killer_label_str = ", ".join(killer_label) if killer_label else None
+
+    # Build human-readable scarcity statements the AI can copy verbatim
+    statements = []
+    if total_12m and same_bed is not None:
+        pct = round(same_bed / total_12m * 100) if total_12m else 0
+        statements.append(f"Of {total_12m} {suburb_key.replace('_',' ').title()} houses sold in the last 12 months, only {same_bed} had {s_beds} bedrooms ({pct}% of the market).")
+    if same_bed_with_pool is not None:
+        statements.append(f"Of those {same_bed} {s_beds}-bedroom sales, only {same_bed_with_pool} included a pool.")
+    if same_or_more_cars is not None and s_cars:
+        if same_or_more_cars == 0:
+            statements.append(f"ZERO {suburb_key.replace('_',' ').title()} houses sold in the last 12 months had {int(s_cars)} or more car spaces. This property is the only one of its kind on the market this year.")
+        else:
+            statements.append(f"Only {same_or_more_cars} of {total_12m} {suburb_key.replace('_',' ').title()} sales had {int(s_cars)}+ car spaces.")
+    if same_or_more_land is not None and s_land:
+        if same_or_more_land == 0:
+            statements.append(f"ZERO {suburb_key.replace('_',' ').title()} houses sold in the last 12 months had {int(s_land)}+ sqm land. This property exceeds every house sold in the suburb this year on land area.")
+        else:
+            statements.append(f"Only {same_or_more_land} of {total_12m} sales had {int(s_land)}+ sqm land.")
+    if same_or_more_internal is not None and s_internal:
+        statements.append(f"Only {same_or_more_internal} of {total_12m} sales had {int(s_internal)}+ sqm internal floor area.")
+    if killer_count is not None and killer_label_str and killer_count <= 3:
+        if killer_count == 0:
+            statements.append(f"ZERO sales in the last 12 months matched the combination of {killer_label_str}. This property is unique on every measurable axis.")
+        else:
+            statements.append(f"Only {killer_count} of {total_12m} sales matched the combination of {killer_label_str}.")
+
+    return {
+        "total_12m_sales": total_12m,
+        "same_bedroom_count": same_bed,
+        "same_bedroom_or_more_count": same_bed_or_more,
+        "same_bed_with_pool_count": same_bed_with_pool,
+        "same_or_more_cars_count": same_or_more_cars,
+        "same_or_more_land_count": same_or_more_land,
+        "same_or_more_internal_count": same_or_more_internal,
+        "same_or_more_condition_count": same_or_more_condition,
+        "killer_combo_count": killer_count,
+        "killer_combo_label": killer_label_str,
+        "subject_features": {
+            "beds": s_beds, "cars": s_cars, "land": s_land,
+            "internal": s_internal, "condition": s_condition, "pool": s_pool,
+        },
+        "statements": statements,
+    }
+
+
 def build_pre_sale_roi(prop: dict, suburb_display: str) -> dict:
     """Load pre-sale ROI items from config/pre_sale_roi.yaml, filter by conditional_on.
 
@@ -1729,6 +1878,10 @@ def main():
     print("  Computing adjustments...")
     top_comps = build_top_comps(prop, comp_docs, rates)
 
+    # 4b. Compute scarcity stats — feature-level "N sold in 12 months" hooks for feature_positioning
+    print("  Computing scarcity statistics...")
+    scarcity_stats = compute_scarcity_stats(db_client, prop, suburb_key, top_comps)
+
     # 5. Room assessments
     print("  Building room assessments...")
     room_assessments = build_room_assessments(prop.get("property_valuation_data", {}))
@@ -1762,7 +1915,7 @@ def main():
         editorial = _minimal_editorial(prop, top_comps, market_stats)
     else:
         print("  Generating editorial via Claude...")
-        editorial = generate_editorial(prop, top_comps, market_stats, rates, suburb_display)
+        editorial = generate_editorial(prop, top_comps, market_stats, rates, suburb_display, scarcity_stats=scarcity_stats)
         # Regenerate the morning_in_this_home narrative if the length is out of range.
         # Word-count compliance varies between properties (BW kept undershooting on premium-property
         # density), so we use a targeted single-field retry rather than tuning the whole-prompt
