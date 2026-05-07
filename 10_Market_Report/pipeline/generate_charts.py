@@ -233,14 +233,17 @@ def chart_conviction_map(db, path):
                    s=size, c=color, edgecolors=edgecolor, linewidths=0.6,
                    alpha=alpha, zorder=zorder)
 
-    # Pad axis limits so quadrant text in the corners doesn't overprint
-    # extreme dots, and so the y=0 boundary line sits visibly *inside* the
-    # plot rather than at its edge — readers need to see clearly that all
-    # core-suburb dots fall below z=0 (i.e. inside STANDOFF, not HEATING).
+    # Symmetric quadrants — readers expect 2x2 strategy-matrix layouts to
+    # have equal-sized cells. Extend each axis to ±max(abs(value)) rounded up
+    # to the next "nice" unit so all four quadrants are the same size and the
+    # y=0 / x=0 boundary lines sit dead-centre.
+    import math
     _xmin, _xmax = ax.get_xlim()
     _ymin, _ymax = ax.get_ylim()
-    ax.set_xlim(_xmin - 0.5, _xmax + 0.5)
-    ax.set_ylim(_ymin - 0.6, max(_ymax, 0) + 1.2)
+    x_extreme = math.ceil((max(abs(_xmin), abs(_xmax)) + 1) / 5) * 5
+    y_extreme = math.ceil(max(abs(_ymin), abs(_ymax)) + 0.5)
+    ax.set_xlim(-x_extreme, x_extreme)
+    ax.set_ylim(-y_extreme, y_extreme)
 
     # Pass 2: place labels with corner-collision avoidance. Dots that land in
     # the right-edge quadrant zones (HEATING top-right, STANDOFF bottom-right)
