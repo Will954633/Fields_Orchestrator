@@ -234,12 +234,13 @@ def chart_conviction_map(db, path):
                    alpha=alpha, zorder=zorder)
 
     # Pad axis limits so quadrant text in the corners doesn't overprint
-    # extreme dots (e.g. a suburb sitting at z=-4 is otherwise rendered at the
-    # same y as the STANDOFF "price ↑   volume ↓" block).
+    # extreme dots, and so the y=0 boundary line sits visibly *inside* the
+    # plot rather than at its edge — readers need to see clearly that all
+    # core-suburb dots fall below z=0 (i.e. inside STANDOFF, not HEATING).
     _xmin, _xmax = ax.get_xlim()
     _ymin, _ymax = ax.get_ylim()
     ax.set_xlim(_xmin - 0.5, _xmax + 0.5)
-    ax.set_ylim(_ymin - 0.6, _ymax + 0.2)
+    ax.set_ylim(_ymin - 0.6, max(_ymax, 0) + 1.2)
 
     # Pass 2: place labels with corner-collision avoidance. Dots that land in
     # the right-edge quadrant zones (HEATING top-right, STANDOFF bottom-right)
@@ -273,9 +274,10 @@ def chart_conviction_map(db, path):
                         fontsize=8, color=SLATE, fontweight="normal",
                         ha=ha, va="center", zorder=4)
 
-    # Quadrant lines
-    ax.axhline(0, color=LIGHT_GREY, linewidth=0.6, zorder=1)
-    ax.axvline(0, color=LIGHT_GREY, linewidth=0.6, zorder=1)
+    # Quadrant boundary lines — darker/thicker than gridlines so readers can
+    # see at a glance which side of zero each dot sits on.
+    ax.axhline(0, color=SLATE, linewidth=1.0, zorder=1)
+    ax.axvline(0, color=SLATE, linewidth=1.0, zorder=1)
 
     # Quadrant labels (positioned in corners)
     xlim = ax.get_xlim()
