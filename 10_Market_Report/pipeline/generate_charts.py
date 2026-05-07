@@ -396,7 +396,7 @@ def chart_tension(suburb_series, composite, path):
 
     add_title_block(fig,
         "The Standoff — when the price line and the conviction line separate",
-        "Both series rebased to Q1 2023 = 100. The two lines tracked closely until mid-2025; they have separated since.")
+        "Both series rebased to Q1 2023 = 100. The two lines tracked within ~1.5 points through Q3 2023, then began separating in Q4 2023; the gap has widened progressively since.")
 
     style_axes(ax, ylabel="Index (Q1 2023 = 100)")
     ax.xaxis.set_major_locator(mdates.YearLocator())
