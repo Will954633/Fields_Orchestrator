@@ -78,9 +78,17 @@ def apply_theme():
     })
 
 
-def add_source_line(fig, text):
-    """Add a small source line at the bottom of the figure."""
-    fig.text(0.02, 0.015, text, fontsize=7, color=SLATE, fontstyle="italic")
+def add_source_line(fig, text, wrap_chars=170):
+    """Add a small source line at the bottom of the figure.
+
+    Wraps long text so a verbose methodology footnote doesn't expand the
+    saved PNG width when `savefig.bbox = "tight"` is in effect (which would
+    otherwise leave the chart axes occupying only half the rendered image
+    and make the chart appear small on the page).
+    """
+    import textwrap as _tw
+    wrapped = "\n".join(_tw.wrap(text, width=wrap_chars)) if text else ""
+    fig.text(0.02, 0.015, wrapped, fontsize=7, color=SLATE, fontstyle="italic")
 
 
 def add_title_block(fig, title, subtitle=None):
