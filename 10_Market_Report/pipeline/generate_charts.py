@@ -302,8 +302,7 @@ def chart_conviction_map(db, path):
 
     add_source_line(fig,
         "Source: precomputed_indexed_prices.rolling_12m_yoy_pct (X) + precomputed_market_charts.sales_volume.sales_count z-scored against own history (Y). "
-        "Sample restricted to suburbs with ≥30 trailing-12m transactions. The Gold-Coast-wide composite aggregate is excluded because it is z-scored against its own aggregate history, "
-        "not against suburb-level history, and so is not directly comparable to the suburb dots.")
+        "Sample restricted to suburbs with ≥30 trailing-12m transactions.")
     plt.tight_layout(rect=[0, 0.04, 1, 0.85])
     plt.savefig(path)
     plt.close()
