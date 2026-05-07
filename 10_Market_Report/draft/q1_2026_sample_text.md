@@ -120,8 +120,8 @@ Caption: *Y axis: stock-on-market deviation from 5-year baseline (z-score). X ax
 **The Standoff.**
 
 [HALF-PAGE HERO CHART, left page]
-Description: Twin-line chart, 36 months. Line 1 (brand blue, heavy): southern Gold Coast composite indexed median (rebased Q1 2023 = 100). Line 2 (slate grey, heavy): southern Gold Coast composite Fields Conviction Index (rebased Q1 2020 = 100, native scale). Lines move together until Q3 2025 then diverge — indexed price climbs from 110 to 121, FCI falls from 105 to 95.9. The gap between the two lines IS the standoff, made visible.
-Caption: *Sources: Fields composite indexed median (rolling 12mo); Fields Conviction Index v1. The two lines tracked closely from 2023 to mid-2025; they have separated since. See methodology p.28.*
+Description: Twin-line chart, 36 months. Line 1 (brand blue, heavy): southern Gold Coast composite indexed median (rebased Q1 2023 = 100). Line 2 (slate grey, heavy): southern Gold Coast composite Fields Conviction Index (rebased Q1 2023 = 100). Lines track within ~1.5 points through Q3 2023, separate in Q4 2023 (gap +7), and the gap widens through 2024-2025 to peak near +43 in Q4 2025. Q1 2026 closes at 138.4 vs 98.9. The gap between the two lines IS the standoff, made visible.
+Caption: *Sources: Fields composite indexed median (rolling 12mo); Fields Conviction Index v1. The two lines tracked closely through Q3 2023, then began separating in Q4 2023; the gap has widened progressively since. See methodology p.28.*
 
 A four-bedroom on Allambi Avenue sold three weeks ago for $1,830,000 against a campaign quote of $1,650,000 to $1,720,000. It listed in late February, took three offers and twenty-six days, and finished above the upper end of its quote. Two streets over, a similar four-bedroom listed in mid-January at $1,800,000 has not sold and now carries a revised price. *[ILLUSTRATIVE; specific addresses anonymised pending consent]*
 
