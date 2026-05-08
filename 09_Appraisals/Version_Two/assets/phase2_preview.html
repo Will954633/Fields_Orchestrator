@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Phase 2 · Opening 2 · Four-quadrant analysis spread</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Playfair+Display:wght@400;600;700;800&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --grass: #22382C;
+  --grass-deep: #1B2D24;
+  --birch: #E6DDD2;
+  --birch-dark: #d4c9bc;
+  --copper: #B76749;
+  --copper-soft: #f0d9cc;
+  --copper-tint: #fdf3ec;
+  --copper-vivid: #d97a52;
+  --white: #FFFFFF;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #efe8de;
+  font-family: 'Poppins', sans-serif;
+  color: var(--grass);
+  font-weight: 300;
+  padding: 0;
+}
+
+/* Render at exact double-page A4 spread: 420mm × 297mm at 96dpi = 1587 × 1123 px */
+.spread {
+  width: 420mm;
+  height: 297mm;
+  background: var(--birch);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto 1fr 1fr;
+  position: relative;
+  overflow: hidden;
+}
+
+@media screen {
+  body { padding: 24px; }
+  .spread { box-shadow: 0 16px 50px rgba(0,0,0,0.20); }
+}
+
+/* Spread title bar (full width, top) */
+.spread-title-bar {
+  grid-column: 1 / 3;
+  padding: 9mm 14mm 7mm;
+  border-bottom: 1px solid rgba(34,56,44,0.15);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  position: relative;
+}
+.spread-title-bar::after {
+  /* gutter line down the middle (shows the spine) */
+  content: "";
+  position: absolute;
+  top: 0; bottom: -100vh;
+  left: 50%;
+  width: 1px;
+  background: rgba(34,56,44,0.07);
+  pointer-events: none;
+}
+.spread-title-eyebrow {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8pt;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--copper);
+  font-weight: 600;
+  margin-bottom: 4mm;
+  display: block;
+}
+.spread-title-h {
+  font-family: 'Playfair Display', serif;
+  font-size: 26pt;
+  font-weight: 700;
+  color: var(--grass);
+  line-height: 1.05;
+  letter-spacing: -0.4px;
+  max-width: 280mm;
+}
+.spread-title-meta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8pt;
+  color: var(--copper);
+  letter-spacing: 1.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  text-align: right;
+  white-space: nowrap;
+}
+.spread-title-meta .num {
+  font-family: 'Playfair Display', serif;
+  font-size: 22pt;
+  color: var(--copper);
+  display: block;
+  margin-top: 2mm;
+}
+
+/* Quadrant — generic */
+.q {
+  padding: 7mm 10mm;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.q-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 4mm;
+  padding-bottom: 3mm;
+  border-bottom: 1px solid var(--copper);
+}
+.q-header .label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7.5pt;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--copper);
+  font-weight: 700;
+}
+.q-header .conf {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7.5pt;
+  color: var(--text-muted, #7a8a80);
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+.q-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 13pt;
+  font-weight: 700;
+  color: var(--grass);
+  line-height: 1.15;
+  margin-bottom: 4mm;
+}
+
+/* Image-with-overlay primitive */
+.img-stage {
+  position: relative;
+  width: 100%;
+  flex: 1;
+  background: #000;
+  border-radius: 3px;
+  overflow: hidden;
+  min-height: 0;
+}
+.img-stage img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.img-stage svg.overlay {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* SVG primitives */
+.reticle-corner { fill: none; stroke: var(--copper); stroke-width: 3; }
+.reticle-corner.thin { stroke-width: 2; }
+.bbox-fill { fill: rgba(183, 103, 73, 0.06); stroke: rgba(183, 103, 73, 0.55); stroke-width: 1.5; stroke-dasharray: 5 3; }
+.bbox-fill.solid { stroke-dasharray: none; stroke: rgba(183, 103, 73, 0.75); }
+.trace { fill: none; stroke: var(--copper); stroke-width: 2; stroke-linejoin: round; }
+.trace.dashed { stroke-dasharray: 6 3; }
+.crosshair { fill: none; stroke: var(--copper); stroke-width: 1.2; }
+.chip-bg { fill: var(--grass); }
+.chip-accent { fill: var(--copper); }
+.chip-text {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: 600;
+  fill: var(--birch);
+  letter-spacing: 0.4px;
+}
+.chip-text-class {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: 500;
+  fill: var(--copper-soft);
+  letter-spacing: 0.5px;
+}
+
+/* Mini segmentation legend (top-right of any image) */
+.legend-mini {
+  position: absolute;
+  top: 4mm;
+  right: 4mm;
+  background: rgba(34, 56, 44, 0.92);
+  color: var(--birch);
+  padding: 5px 7px;
+  border-radius: 2px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7pt;
+  letter-spacing: 0.3px;
+}
+.legend-mini .lg-row { display: flex; align-items: center; gap: 4px; padding: 1px 0; }
+.legend-mini .sw { width: 7px; height: 7px; border-radius: 1px; }
+.legend-mini .lg-foot { font-size: 6pt; opacity: 0.6; margin-top: 3px; padding-top: 2px; border-top: 1px solid rgba(240,217,204,0.2); }
+
+/* Quadrant footer caption */
+.q-foot {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7pt;
+  color: var(--text-muted, #7a8a80);
+  letter-spacing: 0.5px;
+  margin-top: 3mm;
+  font-style: italic;
+}
+
+/* Photo trio (TR quadrant) */
+.photo-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 4mm;
+  flex: 1;
+  min-height: 0;
+}
+.photo-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.photo-stage {
+  position: relative;
+  width: 100%;
+  flex: 1;
+  border-radius: 2px;
+  overflow: hidden;
+  background: #000;
+  min-height: 0;
+}
+.photo-stage img { width: 100%; height: 100%; object-fit: cover; }
+.photo-stage svg.overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+.photo-meta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7pt;
+  margin-top: 2mm;
+  color: var(--grass);
+  letter-spacing: 0.3px;
+  line-height: 1.4;
+}
+.photo-meta .room {
+  text-transform: uppercase;
+  color: var(--copper);
+  font-weight: 700;
+  font-size: 7.5pt;
+  letter-spacing: 1.5px;
+  display: block;
+  margin-bottom: 0.8mm;
+}
+.photo-meta .score {
+  display: inline-block;
+  background: var(--grass);
+  color: var(--birch);
+  padding: 0.5mm 2mm;
+  border-radius: 2px;
+  margin-right: 2mm;
+}
+
+/* BR quadrant — Derived findings panel */
+.findings-panel { display: flex; flex-direction: column; gap: 3mm; }
+.finding-row {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  gap: 4mm;
+  padding: 3mm 0;
+  border-bottom: 1px solid rgba(34,56,44,0.10);
+}
+.finding-row:last-child { border-bottom: none; }
+.finding-row .icon {
+  width: 30px;
+  height: 30px;
+  background: var(--copper-tint);
+  border: 1px solid var(--copper);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9pt;
+  font-weight: 700;
+  color: var(--copper);
+}
+.finding-row .text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5mm;
+}
+.finding-row .head {
+  font-family: 'Playfair Display', serif;
+  font-size: 11pt;
+  font-weight: 700;
+  color: var(--grass);
+  line-height: 1.2;
+}
+.finding-row .body {
+  font-size: 9pt;
+  color: var(--grass);
+  line-height: 1.45;
+  font-weight: 300;
+}
+.finding-row .meta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7pt;
+  color: var(--copper);
+  letter-spacing: 0.5px;
+  margin-top: 0.5mm;
+}
+
+/* Floor plan annotations — room dim chips */
+.fp-chip-bg { fill: rgba(34, 56, 44, 0.92); }
+.fp-chip-text { font-family: 'JetBrains Mono', monospace; font-size: 9px; fill: var(--birch); font-weight: 600; }
+.fp-chip-class { font-family: 'JetBrains Mono', monospace; font-size: 9px; fill: var(--copper-soft); }
+.fp-trace { fill: rgba(183, 103, 73, 0.18); stroke: var(--copper); stroke-width: 2.5; stroke-linejoin: round; }
+.fp-leader { stroke: var(--copper); stroke-width: 1.2; fill: none; }
+.fp-dot { fill: var(--copper); }
+</style>
+</head>
+<body>
+
+<div class="spread">
+
+  <!-- ═══════════════ TITLE BAR (full width) ═══════════════ -->
+  <div class="spread-title-bar">
+    <div>
+      <span class="spread-title-eyebrow">For 13 Terrace Court · Spread 01 continued</span>
+      <h1 class="spread-title-h">The analyses, up close.<br>Four passes — one home.</h1>
+    </div>
+    <div class="spread-title-meta">
+      Pages 8 / 9
+      <span class="num">01</span>
+    </div>
+  </div>
+
+  <!-- ═══════════════ TOP-LEFT — SATELLITE ANALYSIS ═══════════════ -->
+  <div class="q" style="border-right: 1px solid rgba(34,56,44,0.15);">
+    <div class="q-header">
+      <span class="label">Pass 01 · Satellite vision</span>
+      <span class="conf">model: gpt-5.4 · z19 · 2026-04-09</span>
+    </div>
+    <h3 class="q-title">Bushland-adjacent cul-de-sac head — only 4 of 142 active GC listings.</h3>
+
+    <div class="img-stage">
+      <img src="satellite_13_terrace_court.png" alt="Satellite of 13 Terrace Court">
+      <div class="legend-mini">
+        <div class="lg-row"><span class="sw" style="background:#B76749"></span>BUILDING 0.96</div>
+        <div class="lg-row"><span class="sw" style="background:#4FA8C5"></span>POOL 0.97</div>
+        <div class="lg-row"><span class="sw" style="background:#4A6B3F"></span>VEGETATION 0.94</div>
+        <div class="lg-row"><span class="sw" style="background:#C9B895"></span>HARDSCAPE 0.92</div>
+        <div class="lg-row"><span class="sw" style="background:#6B6B6B"></span>ROAD 0.95</div>
+        <div class="lg-foot">5 / 5 detected · 1280²</div>
+      </div>
+      <svg class="overlay" viewBox="0 0 1280 1280" preserveAspectRatio="none">
+        <!-- Subject building outline trace -->
+        <path class="trace" d="M 245 200 L 700 200 L 720 410 L 720 580 L 760 580 L 760 720 L 470 720 L 470 660 L 350 660 L 350 540 L 245 540 Z"/>
+
+        <!-- Pool bbox -->
+        <rect class="bbox-fill" x="640" y="555" width="100" height="105" rx="2"/>
+        <path class="reticle-corner" d="M 640 555 L 640 580 M 640 555 L 665 555"/>
+        <path class="reticle-corner" d="M 740 555 L 740 580 M 740 555 L 715 555"/>
+        <path class="reticle-corner" d="M 640 660 L 640 635 M 640 660 L 665 660"/>
+        <path class="reticle-corner" d="M 740 660 L 740 635 M 740 660 L 715 660"/>
+        <g transform="translate(770, 555)">
+          <rect class="chip-bg" x="0" y="0" width="220" height="32" rx="3"/>
+          <rect class="chip-accent" x="0" y="0" width="4" height="32"/>
+          <text class="chip-text" x="12" y="14">POOL</text>
+          <text class="chip-text-class" x="12" y="26">0.97 · ~32 m² · INGROUND</text>
+        </g>
+
+        <!-- Bushland boundary trace -->
+        <path class="trace dashed" d="M 800 0 Q 820 200 800 400 T 810 720 Q 830 920 820 1100 T 830 1280" stroke-width="3"/>
+        <g transform="translate(840, 100)">
+          <rect class="chip-bg" x="0" y="0" width="280" height="40" rx="3"/>
+          <rect class="chip-accent" x="0" y="0" width="4" height="40"/>
+          <text class="chip-text" x="12" y="15">BUSHLAND BOUNDARY</text>
+          <text class="chip-text-class" x="12" y="29">UNBUILDABLE · BACKS_ONTO 1.00</text>
+        </g>
+
+        <!-- Cul-de-sac bbox -->
+        <rect class="bbox-fill" x="0" y="500" width="190" height="320" rx="4"/>
+        <path class="reticle-corner" d="M 0 500 L 0 525 M 0 500 L 25 500"/>
+        <path class="reticle-corner" d="M 190 500 L 190 525 M 190 500 L 165 500"/>
+        <path class="reticle-corner" d="M 0 820 L 0 795 M 0 820 L 25 820"/>
+        <path class="reticle-corner" d="M 190 820 L 190 795 M 190 820 L 165 820"/>
+        <g transform="translate(0, 840)">
+          <rect class="chip-bg" x="0" y="0" width="290" height="40" rx="3"/>
+          <rect class="chip-accent" x="0" y="0" width="4" height="40"/>
+          <text class="chip-text" x="12" y="15">CUL-DE-SAC HEAD</text>
+          <text class="chip-text-class" x="12" y="29">FRONTAGE: cul_de_sac_head 0.94</text>
+        </g>
+
+        <!-- Crosshair on subject -->
+        <circle class="crosshair" cx="500" cy="460" r="22"/>
+        <line class="crosshair" x1="472" y1="460" x2="488" y2="460"/>
+        <line class="crosshair" x1="512" y1="460" x2="528" y2="460"/>
+        <line class="crosshair" x1="500" y1="432" x2="500" y2="448"/>
+        <line class="crosshair" x1="500" y1="472" x2="500" y2="488"/>
+
+        <!-- Compass rose top-left -->
+        <g transform="translate(40, 40)">
+          <circle fill="rgba(34,56,44,0.85)" cx="22" cy="22" r="22"/>
+          <path fill="#B76749" d="M 22 6 L 18 20 L 22 17 L 26 20 Z"/>
+          <text font-family="JetBrains Mono" font-size="11" font-weight="700" fill="#E6DDD2" x="22" y="38" text-anchor="middle">N</text>
+        </g>
+      </svg>
+    </div>
+    <div class="q-foot">Source: Google Static Maps z19 · Fields satellite analysis pipeline (Step 117)</div>
+  </div>
+
+  <!-- ═══════════════ TOP-RIGHT — PHOTO ANALYSIS ═══════════════ -->
+  <div class="q">
+    <div class="q-header">
+      <span class="label">Pass 02 · Photo vision</span>
+      <span class="conf">model: gpt-5.4 vision · 47 images · 3 shown</span>
+    </div>
+    <h3 class="q-title">Three rooms, three condition scores. Materials called by name, finish dated to the year.</h3>
+
+    <div class="photo-row">
+      <!-- KITCHEN -->
+      <div class="photo-card">
+        <div class="photo-stage">
+          <img src="kitchen.jpg" alt="Kitchen">
+          <svg class="overlay" viewBox="0 0 960 720" preserveAspectRatio="none">
+            <!-- Stone benchtop -->
+            <rect class="bbox-fill solid" x="170" y="380" width="540" height="100" rx="2"/>
+            <path class="reticle-corner thin" d="M 170 380 L 170 396 M 170 380 L 186 380"/>
+            <path class="reticle-corner thin" d="M 710 380 L 710 396 M 710 380 L 694 380"/>
+            <path class="reticle-corner thin" d="M 170 480 L 170 464 M 170 480 L 186 480"/>
+            <path class="reticle-corner thin" d="M 710 480 L 710 464 M 710 480 L 694 480"/>
+            <g transform="translate(170, 348)">
+              <rect class="chip-bg" x="0" y="0" width="200" height="22" rx="2"/>
+              <rect class="chip-accent" x="0" y="0" width="3" height="22"/>
+              <text class="chip-text" x="8" y="14">STONE BENCHTOP · 0.96</text>
+            </g>
+            <!-- Range -->
+            <rect class="bbox-fill" x="540" y="280" width="150" height="120" rx="2"/>
+            <g transform="translate(540, 250)">
+              <rect class="chip-bg" x="0" y="0" width="180" height="22" rx="2"/>
+              <rect class="chip-accent" x="0" y="0" width="3" height="22"/>
+              <text class="chip-text" x="8" y="14">PREMIUM RANGE · 0.93</text>
+            </g>
+            <!-- Cabinet style -->
+            <rect class="bbox-fill" x="370" y="100" width="430" height="240" rx="2"/>
+            <g transform="translate(370, 70)">
+              <rect class="chip-bg" x="0" y="0" width="220" height="22" rx="2"/>
+              <rect class="chip-accent" x="0" y="0" width="3" height="22"/>
+              <text class="chip-text" x="8" y="14">SHAKER CABINET · MODERN</text>
+            </g>
+            <!-- Natural light -->
+            <g transform="translate(20, 20)">
+              <rect class="chip-bg" x="0" y="0" width="200" height="22" rx="2"/>
+              <rect class="chip-accent" x="0" y="0" width="3" height="22"/>
+              <text class="chip-text" x="8" y="14">NATURAL LIGHT · EXCELLENT</text>
+            </g>
+          </svg>
+        </div>
+        <div class="photo-meta">
+          <span class="room">Kitchen</span>
+          <span class="score">9 / 10</span>quality 9 · island bench · butler-pantry: no<br>
+          stone · shaker · premium range · tile splash
+        </div>
+      </div>
+
+      <!-- LIVING -->
+      <div class="photo-card">
+        <div class="photo-stage">
+          <img src="living.jpg" alt="Living">
+          <svg class="overlay" viewBox="0 0 960 720" preserveAspectRatio="none">
+            <!-- Timber flooring -->
+            <rect class="bbox-fill solid" x="0" y="510" width="960" height="210" rx="0"/>
+            <g transform="translate(20, 480)">
+              <rect class="chip-bg" x="0" y="0" width="240" height="22" rx="2"/>
+              <rect class="chip-accent" x="0" y="0" width="3" height="22"/>
+              <text class="chip-text" x="8" y="14">TIMBER FLOORING · GOOD</text>
+            </g>
+            <!-- Plantation shutters -->
+            <rect class="bbox-fill" x="640" y="200" width="200" height="280" rx="2"/>
+            <path class="reticle-corner thin" d="M 640 200 L 640 216 M 640 200 L 656 200"/>
+            <path class="reticle-corner thin" d="M 840 200 L 840 216 M 840 200 L 824 200"/>
+            <path class="reticle-corner thin" d="M 640 480 L 640 464 M 640 480 L 656 480"/>
+            <path class="reticle-corner thin" d="M 840 480 L 840 464 M 840 480 L 824 480"/>
+            <g transform="translate(640, 168)">
+              <rect class="chip-bg" x="0" y="0" width="200" height="22" rx="2"/>
+              <rect class="chip-accent" x="0" y="0" width="3" height="22"/>
+              <text class="chip-text" x="8" y="14">PLANTATION SHUTTER</text>
+            </g>
+            <!-- Open-plan flag -->
+            <g transform="translate(20, 20)">
+              <rect class="chip-bg" x="0" y="0" width="220" height="22" rx="2"/>
+              <rect class="chip-accent" x="0" y="0" width="3" height="22"/>
+              <text class="chip-text" x="8" y="14">OPEN-PLAN W/ KITCHEN</text>
+            </g>
+          </svg>
+        </div>
+        <div class="photo-meta">
+          <span class="room">Living</span>
+          <span class="score">9 / 10</span>quality 9 · open-plan · standard ceiling<br>
+          timber · plantation shutter · excellent light
+        </div>
+      </div>
+
+      <!-- POOL / EXTERIOR -->
+      <div class="photo-card">
+        <div class="photo-stage">
+          <img src="exterior.jpg" alt="Pool exterior">
+          <svg class="overlay" viewBox="0 0 1920 1440" preserveAspectRatio="none">
+            <!-- Pool -->
+            <rect class="bbox-fill solid" x="800" y="800" width="700" height="420" rx="2"/>
+            <path class="reticle-corner thin" d="M 800 800 L 800 826 M 800 800 L 826 800" stroke-width="4"/>
+            <path class="reticle-corner thin" d="M 1500 800 L 1500 826 M 1500 800 L 1474 800" stroke-width="4"/>
+            <path class="reticle-corner thin" d="M 800 1220 L 800 1194 M 800 1220 L 826 1220" stroke-width="4"/>
+            <path class="reticle-corner thin" d="M 1500 1220 L 1500 1194 M 1500 1220 L 1474 1220" stroke-width="4"/>
+            <g transform="translate(800, 740)">
+              <rect class="chip-bg" x="0" y="0" width="380" height="44" rx="3"/>
+              <rect class="chip-accent" x="0" y="0" width="6" height="44"/>
+              <text class="chip-text" font-size="16" x="14" y="20">INGROUND POOL</text>
+              <text class="chip-text-class" font-size="16" x="14" y="36">9/10 · GLASS FENCE</text>
+            </g>
+            <!-- Cladding -->
+            <g transform="translate(40, 40)">
+              <rect class="chip-bg" x="0" y="0" width="380" height="44" rx="3"/>
+              <rect class="chip-accent" x="0" y="0" width="6" height="44"/>
+              <text class="chip-text" font-size="16" x="14" y="20">RENDER CLADDING</text>
+              <text class="chip-text-class" font-size="16" x="14" y="36">PAINT: NEW · COND 9/10</text>
+            </g>
+          </svg>
+        </div>
+        <div class="photo-meta">
+          <span class="room">Exterior</span>
+          <span class="score">9 / 10</span>render · new paint · alfresco covered<br>
+          outdoor BBQ · landscape 8 · entertain 9
+        </div>
+      </div>
+    </div>
+    <div class="q-foot">Source: Fields photo-analysis pipeline · 47 photos analysed · this is a representative subset</div>
+  </div>
+
+  <!-- ═══════════════ BOTTOM-LEFT — FLOOR PLAN ═══════════════ -->
+  <div class="q" style="border-right: 1px solid rgba(34,56,44,0.15); border-top: 1px solid rgba(34,56,44,0.15);">
+    <div class="q-header">
+      <span class="label">Pass 03 · Floor-plan extraction</span>
+      <span class="conf">13 rooms · 2 levels · clarity: high</span>
+    </div>
+    <h3 class="q-title">221 m² internal · top quartile floor-to-land ratio · dual-living confirmed.</h3>
+
+    <div class="img-stage">
+      <img src="floorplan.png" alt="Floor plan">
+      <svg class="overlay" viewBox="0 0 1521 1080" preserveAspectRatio="none">
+        <!-- Ground floor highlight (left section of floor plan) -->
+        <rect class="fp-trace" x="40" y="100" width="430" height="380" rx="4" stroke-dasharray="8 4" fill="none"/>
+        <g transform="translate(40, 70)">
+          <rect class="fp-chip-bg" x="0" y="0" width="240" height="26" rx="2"/>
+          <text class="fp-chip-text" x="8" y="11">GROUND FLOOR</text>
+          <text class="fp-chip-class" x="8" y="22">8 ROOMS · LIVING ZONE 1</text>
+        </g>
+
+        <!-- First floor highlight -->
+        <rect class="fp-trace" x="40" y="540" width="430" height="430" rx="4" stroke-dasharray="8 4" fill="none"/>
+        <g transform="translate(40, 510)">
+          <rect class="fp-chip-bg" x="0" y="0" width="240" height="26" rx="2"/>
+          <text class="fp-chip-text" x="8" y="11">FIRST FLOOR</text>
+          <text class="fp-chip-class" x="8" y="22">5 ROOMS · LIVING ZONE 2</text>
+        </g>
+
+        <!-- Site plan (right section) — outdoor zones -->
+        <rect class="fp-trace" x="990" y="100" width="450" height="850" rx="4" stroke-dasharray="8 4" fill="none"/>
+        <g transform="translate(990, 70)">
+          <rect class="fp-chip-bg" x="0" y="0" width="280" height="26" rx="2"/>
+          <text class="fp-chip-text" x="8" y="11">SITE PLAN</text>
+          <text class="fp-chip-class" x="8" y="22">658 m² · 4 OUTDOOR SPACES</text>
+        </g>
+
+        <!-- Pool callout on site plan -->
+        <circle class="fp-dot" cx="1180" cy="240" r="5"/>
+        <line class="fp-leader" x1="1180" y1="240" x2="1290" y2="190"/>
+        <g transform="translate(1290, 175)">
+          <rect class="fp-chip-bg" x="0" y="0" width="180" height="20" rx="2"/>
+          <text class="fp-chip-text" x="8" y="13">POOL · 32 m²</text>
+        </g>
+
+        <!-- Deck callout -->
+        <circle class="fp-dot" cx="1130" cy="430" r="5"/>
+        <line class="fp-leader" x1="1130" y1="430" x2="1280" y2="460"/>
+        <g transform="translate(1280, 446)">
+          <rect class="fp-chip-bg" x="0" y="0" width="200" height="20" rx="2"/>
+          <text class="fp-chip-text" x="8" y="13">DECK · 10.5 × 5.0 m</text>
+        </g>
+
+        <!-- Internal-floor-to-land chip -->
+        <g transform="translate(560, 940)">
+          <rect class="chip-bg" x="0" y="0" width="380" height="40" rx="3"/>
+          <rect class="chip-accent" x="0" y="0" width="6" height="40"/>
+          <text class="chip-text" font-size="11" x="14" y="16">INTERNAL : LAND RATIO</text>
+          <text class="chip-text-class" font-size="11" x="14" y="30">0.34 · TOP QUARTILE FOR MERRIMAC</text>
+        </g>
+      </svg>
+    </div>
+    <div class="q-foot">Source: Fields floor-plan extraction pipeline · agent: REMAX Greg Parker · plan dated 2023-02-12</div>
+  </div>
+
+  <!-- ═══════════════ BOTTOM-RIGHT — DERIVED FINDINGS ═══════════════ -->
+  <div class="q" style="border-top: 1px solid rgba(34,56,44,0.15); background: rgba(34,56,44,0.02);">
+    <div class="q-header">
+      <span class="label">Pass 04 · Derived findings</span>
+      <span class="conf">6 of 1,247 data points · selected for impact</span>
+    </div>
+    <h3 class="q-title">What the four passes, taken together, told us about your home.</h3>
+
+    <div class="findings-panel">
+      <div class="finding-row">
+        <div class="icon">01</div>
+        <div class="text">
+          <div class="head">Cul-de-sac head, bushland boundary, no future neighbour at the rear.</div>
+          <div class="body">The combination — cul-de-sac frontage + unbuildable rear boundary — appears in only 4 of 142 active listings across the southern Gold Coast.</div>
+          <div class="meta">SAT 0.94 · BUSH 1.00 · DEVELOP ON SPREAD 02</div>
+        </div>
+      </div>
+
+      <div class="finding-row">
+        <div class="icon">02</div>
+        <div class="text">
+          <div class="head">Dual-living configuration, two functional living zones.</div>
+          <div class="body">Ground floor and first floor each carry their own kitchen / living arrangement — opens a multi-generational buyer pool 89% of comparable listings cannot serve.</div>
+          <div class="meta">FP 0.92 · DEVELOP ON SPREAD 03</div>
+        </div>
+      </div>
+
+      <div class="finding-row">
+        <div class="icon">03</div>
+        <div class="text">
+          <div class="head">Top-tertile condition across kitchen, living, exterior, outdoor.</div>
+          <div class="body">9/10 across all four categories surveyed by the photo-analysis pass — the highest finish band in the 46-sale Merrimac cohort.</div>
+          <div class="meta">PHOTO 0.95 avg · DEVELOP ON SPREAD 06</div>
+        </div>
+      </div>
+
+      <div class="finding-row">
+        <div class="icon">04</div>
+        <div class="text">
+          <div class="head">Internal floor 221 m² on a 658 m² block — top-quartile efficiency.</div>
+          <div class="body">A floor-to-land ratio of 0.34 means usable internal space without crowding the outdoor envelope — pool, deck, and lawn all retained.</div>
+          <div class="meta">FP 0.96 · COMPS 0.93 · DEVELOP ON SPREAD 07</div>
+        </div>
+      </div>
+
+      <div class="finding-row">
+        <div class="icon">05</div>
+        <div class="text">
+          <div class="head">387 m walk to All Saints Anglican School.</div>
+          <div class="body">Shorter walk than 91% of homes currently listed in the Merrimac primary catchment — primary catchment for the multi-generational family persona.</div>
+          <div class="meta">POI 1.00 · DEVELOP ON SPREAD 03</div>
+        </div>
+      </div>
+
+      <div class="finding-row">
+        <div class="icon">06</div>
+        <div class="text">
+          <div class="head">Renovation level: fully renovated, 0–5 years recency.</div>
+          <div class="body">Cross-validated against materials catalogued in the photo pass — kitchen, bathrooms, flooring, exterior all confirmed renovated within five years.</div>
+          <div class="meta">PHOTO + FP CROSS-VAL 0.94 · DEVELOP ON SPREAD 09</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>
