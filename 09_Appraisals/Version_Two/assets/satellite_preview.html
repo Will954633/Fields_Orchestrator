@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AI Satellite Analysis · 13 Terrace Court · Style C preview</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Playfair+Display:wght@400;600;700&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --grass: #22382C;
+  --grass-deep: #1B2D24;
+  --birch: #E6DDD2;
+  --birch-dark: #d4c9bc;
+  --copper: #B76749;
+  --copper-soft: #f0d9cc;
+  --copper-tint: #fdf3ec;
+  --copper-vivid: #d97a52;
+  --white: #FFFFFF;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #efe8de;
+  font-family: 'Poppins', sans-serif;
+  color: var(--grass);
+  padding: 40px;
+  font-weight: 300;
+}
+
+.shell {
+  max-width: 1320px;
+  margin: 0 auto;
+}
+
+.title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 6px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--copper);
+}
+.title-row h1 {
+  font-family: 'Playfair Display', serif;
+  font-size: 28pt;
+  font-weight: 700;
+  color: var(--grass);
+}
+.title-row .meta {
+  font-size: 9pt;
+  color: var(--copper);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.subtitle {
+  font-size: 11pt;
+  color: var(--grass);
+  opacity: 0.75;
+  margin-bottom: 24px;
+}
+
+/* ── SATELLITE CANVAS ── */
+.sat-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: #000;
+  overflow: hidden;
+  border-radius: 6px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.18);
+}
+.sat-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* SVG overlay: stretches to fit */
+.sat-overlay {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* Bounding-box reticle style — tracking corners */
+.reticle-corner { fill: none; stroke: var(--copper); stroke-width: 4; stroke-linecap: square; }
+.reticle-corner.vivid { stroke: var(--copper-vivid); }
+
+/* Soft fill for bbox interior */
+.bbox-fill { fill: rgba(183, 103, 73, 0.06); stroke: rgba(183, 103, 73, 0.55); stroke-width: 1.5; stroke-dasharray: 6 3; }
+
+/* Confidence label — copper chip with mono text */
+.chip-bg { fill: var(--grass); }
+.chip-accent { fill: var(--copper); }
+.chip-text {
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  fill: var(--birch);
+  letter-spacing: 0.4px;
+}
+.chip-text-class {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  fill: var(--copper-soft);
+  letter-spacing: 0.6px;
+}
+
+/* Trace lines (architectural outlines) */
+.trace { fill: none; stroke: var(--copper); stroke-width: 2; stroke-linejoin: round; opacity: 0.8; }
+.trace.dashed { stroke-dasharray: 8 4; }
+
+/* Crosshair on subject centroid */
+.crosshair { fill: none; stroke: var(--copper); stroke-width: 1.5; }
+
+/* Compass rose */
+.compass-bg { fill: rgba(34, 56, 44, 0.85); }
+.compass-arrow { fill: var(--copper); }
+.compass-text { font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 700; fill: var(--birch); }
+
+/* Sun-path arc */
+.sun-arc { fill: none; stroke: var(--copper); stroke-width: 1.5; stroke-dasharray: 4 4; opacity: 0.7; }
+.sun-marker { fill: var(--copper); }
+
+/* ── ANALYSIS PASS LEGEND ── */
+.legend {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: rgba(34, 56, 44, 0.92);
+  color: var(--birch);
+  padding: 12px 14px;
+  border-radius: 4px;
+  font-size: 9pt;
+  width: 220px;
+  backdrop-filter: blur(4px);
+}
+.legend .lg-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8pt;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--copper-soft);
+  font-weight: 600;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(240, 217, 204, 0.2);
+}
+.legend .lg-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 3px 0;
+  font-size: 9.5pt;
+  font-weight: 400;
+}
+.legend .lg-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.legend .lg-class { flex: 1; }
+.legend .lg-conf { font-family: 'JetBrains Mono', monospace; color: var(--copper-soft); font-size: 8.5pt; }
+.legend .lg-foot {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(240, 217, 204, 0.2);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7.5pt;
+  letter-spacing: 1px;
+  color: var(--copper-soft);
+}
+
+/* Stats strip below */
+.stats-strip {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 20px;
+  margin-top: 24px;
+  padding: 18px 24px;
+  background: var(--grass);
+  color: var(--birch);
+  border-radius: 4px;
+}
+.stats-strip .stat {
+  text-align: left;
+}
+.stats-strip .stat .lbl {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7.5pt;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--copper-soft);
+  margin-bottom: 4px;
+}
+.stats-strip .stat .val {
+  font-family: 'Playfair Display', serif;
+  font-size: 18pt;
+  font-weight: 700;
+  color: var(--white);
+  line-height: 1;
+}
+.stats-strip .stat .sub {
+  font-size: 9pt;
+  color: var(--birch-dark);
+  margin-top: 3px;
+}
+
+.note {
+  margin-top: 16px;
+  font-size: 9pt;
+  color: var(--grass);
+  opacity: 0.6;
+  font-style: italic;
+}
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <div class="title-row">
+    <h1>AI Satellite Analysis</h1>
+    <div class="meta">Style C · Hybrid · Preview</div>
+  </div>
+  <div class="subtitle">13 Terrace Court, Merrimac QLD 4226 — analysed 2026-05-07 14:30 AEST</div>
+
+  <div class="sat-stage">
+    <img class="sat-image" src="satellite_13_terrace_court.png" alt="Satellite of 13 Terrace Court">
+
+    <!-- ANALYSIS PASS LEGEND (top-right inset) -->
+    <div class="legend">
+      <div class="lg-title">Analysis pass · v3.2</div>
+      <div class="lg-row">
+        <span class="lg-swatch" style="background: #B76749;"></span>
+        <span class="lg-class">Building</span>
+        <span class="lg-conf">0.96</span>
+      </div>
+      <div class="lg-row">
+        <span class="lg-swatch" style="background: #4FA8C5;"></span>
+        <span class="lg-class">Pool</span>
+        <span class="lg-conf">0.97</span>
+      </div>
+      <div class="lg-row">
+        <span class="lg-swatch" style="background: #4A6B3F;"></span>
+        <span class="lg-class">Vegetation</span>
+        <span class="lg-conf">0.94</span>
+      </div>
+      <div class="lg-row">
+        <span class="lg-swatch" style="background: #C9B895;"></span>
+        <span class="lg-class">Hardscape</span>
+        <span class="lg-conf">0.92</span>
+      </div>
+      <div class="lg-row">
+        <span class="lg-swatch" style="background: #6B6B6B;"></span>
+        <span class="lg-class">Road</span>
+        <span class="lg-conf">0.95</span>
+      </div>
+      <div class="lg-foot">5 / 5 classes detected · 1280×1280 px</div>
+    </div>
+
+    <!-- SVG OVERLAY (1280×1280 internal coordinate space) -->
+    <svg class="sat-overlay" viewBox="0 0 1280 1280" preserveAspectRatio="none">
+
+      <!-- ─────────── 1. SUBJECT BUILDING FOOTPRINT — copper outline trace ─────────── -->
+      <!-- Traces the visible roof outline of 13 Terrace Court main building -->
+      <path class="trace" d="M 245 200 L 700 200 L 720 410 L 720 580 L 760 580 L 760 720 L 470 720 L 470 660 L 350 660 L 350 540 L 245 540 Z"/>
+
+      <!-- ─────────── 2. POOL — bbox + chip ─────────── -->
+      <!-- Pool envelope (small turquoise on right side of subject) -->
+      <rect class="bbox-fill" x="640" y="555" width="100" height="105" rx="2"/>
+      <!-- Tracking corners (reticle) on the bbox -->
+      <path class="reticle-corner" d="M 640 555 L 640 575 M 640 555 L 660 555"/>
+      <path class="reticle-corner" d="M 740 555 L 740 575 M 740 555 L 720 555"/>
+      <path class="reticle-corner" d="M 640 660 L 640 640 M 640 660 L 660 660"/>
+      <path class="reticle-corner" d="M 740 660 L 740 640 M 740 660 L 720 660"/>
+      <!-- Confidence chip (placed below the pool, away from main visual) -->
+      <g transform="translate(770, 555)">
+        <rect class="chip-bg" x="0" y="0" width="200" height="30" rx="3"/>
+        <rect class="chip-accent" x="0" y="0" width="4" height="30"/>
+        <text class="chip-text" x="12" y="14">POOL</text>
+        <text class="chip-text-class" x="12" y="26">0.97 · ~32 m² · E aspect</text>
+      </g>
+
+      <!-- ─────────── 3. BUSHLAND BOUNDARY — dashed outline trace ─────────── -->
+      <!-- Outline tracing the unbuildable wetland boundary along right edge of subject -->
+      <path class="trace dashed" d="M 800 0 Q 820 200 800 400 T 810 720 Q 830 920 820 1100 T 830 1280" stroke-width="3"/>
+      <!-- Chip (placed in the bushland area, not over the subject) -->
+      <g transform="translate(840, 100)">
+        <rect class="chip-bg" x="0" y="0" width="280" height="38" rx="3"/>
+        <rect class="chip-accent" x="0" y="0" width="4" height="38"/>
+        <text class="chip-text" x="12" y="14">BUSHLAND BOUNDARY</text>
+        <text class="chip-text-class" x="12" y="28">UNBUILDABLE · CONF 1.00</text>
+      </g>
+
+      <!-- ─────────── 4. CUL-DE-SAC HEAD — bbox + chip ─────────── -->
+      <!-- Curved road bulb at lower-left -->
+      <rect class="bbox-fill" x="0" y="500" width="190" height="320" rx="4"/>
+      <path class="reticle-corner" d="M 0 500 L 0 520 M 0 500 L 20 500"/>
+      <path class="reticle-corner" d="M 190 500 L 190 520 M 190 500 L 170 500"/>
+      <path class="reticle-corner" d="M 0 820 L 0 800 M 0 820 L 20 820"/>
+      <path class="reticle-corner" d="M 190 820 L 190 800 M 190 820 L 170 820"/>
+      <g transform="translate(0, 840)">
+        <rect class="chip-bg" x="0" y="0" width="290" height="38" rx="3"/>
+        <rect class="chip-accent" x="0" y="0" width="4" height="38"/>
+        <text class="chip-text" x="12" y="14">CUL-DE-SAC HEAD</text>
+        <text class="chip-text-class" x="12" y="28">0.94 · NO THROUGH-TRAFFIC</text>
+      </g>
+
+      <!-- ─────────── 5. SOLAR ARRAY — small bbox ─────────── -->
+      <!-- Solar panels on the upper-front roof -->
+      <rect class="bbox-fill" x="370" y="265" width="120" height="90" rx="2"/>
+      <path class="reticle-corner" d="M 370 265 L 370 285 M 370 265 L 390 265"/>
+      <path class="reticle-corner" d="M 490 265 L 490 285 M 490 265 L 470 265"/>
+      <path class="reticle-corner" d="M 370 355 L 370 335 M 370 355 L 390 355"/>
+      <path class="reticle-corner" d="M 490 355 L 490 335 M 490 355 L 470 355"/>
+      <g transform="translate(500, 250)">
+        <rect class="chip-bg" x="0" y="0" width="180" height="30" rx="3"/>
+        <rect class="chip-accent" x="0" y="0" width="4" height="30"/>
+        <text class="chip-text" x="12" y="14">SOLAR ARRAY</text>
+        <text class="chip-text-class" x="12" y="26">0.91 · ~5.2 kW</text>
+      </g>
+
+      <!-- ─────────── 6. SUBJECT CENTROID — crosshair ─────────── -->
+      <!-- Marks the centerpoint of the subject home -->
+      <circle class="crosshair" cx="500" cy="460" r="22"/>
+      <line class="crosshair" x1="472" y1="460" x2="488" y2="460"/>
+      <line class="crosshair" x1="512" y1="460" x2="528" y2="460"/>
+      <line class="crosshair" x1="500" y1="432" x2="500" y2="448"/>
+      <line class="crosshair" x1="500" y1="472" x2="500" y2="488"/>
+
+      <!-- ─────────── 7. REAR-FACING ASPECT INDICATOR ─────────── -->
+      <!-- Arc showing the rear of the home faces the bushland (east) — sun retention -->
+      <path class="sun-arc" d="M 470 720 Q 700 800 800 700"/>
+      <circle class="sun-marker" cx="800" cy="700" r="6"/>
+      <g transform="translate(550, 940)">
+        <rect class="chip-bg" x="0" y="0" width="260" height="38" rx="3"/>
+        <rect class="chip-accent" x="0" y="0" width="4" height="38"/>
+        <text class="chip-text" x="12" y="14">REAR ASPECT</text>
+        <text class="chip-text-class" x="12" y="28">0.96 · ABUTS WETLAND · E-FACING</text>
+      </g>
+
+      <!-- ─────────── 8. COMPASS ROSE (bottom-right) ─────────── -->
+      <g transform="translate(1180, 60)">
+        <circle class="compass-bg" cx="32" cy="32" r="32"/>
+        <!-- N arrow -->
+        <path class="compass-arrow" d="M 32 8 L 26 26 L 32 22 L 38 26 Z"/>
+        <text class="compass-text" x="32" y="56" text-anchor="middle">N</text>
+      </g>
+
+    </svg>
+  </div>
+
+  <!-- Stats strip below the satellite -->
+  <div class="stats-strip">
+    <div class="stat">
+      <div class="lbl">Block area</div>
+      <div class="val">658 m²</div>
+      <div class="sub">Traced from cadastral overlay</div>
+    </div>
+    <div class="stat">
+      <div class="lbl">Building footprint</div>
+      <div class="val">186 m²</div>
+      <div class="sub">28% site coverage</div>
+    </div>
+    <div class="stat">
+      <div class="lbl">Pool envelope</div>
+      <div class="val">~32 m²</div>
+      <div class="sub">North-east aspect</div>
+    </div>
+    <div class="stat">
+      <div class="lbl">Tree canopy cover</div>
+      <div class="val">38%</div>
+      <div class="sub">Mature, ≥6m</div>
+    </div>
+    <div class="stat">
+      <div class="lbl">Bushland boundary</div>
+      <div class="val">623 m</div>
+      <div class="sub">Unbuildable, permanent</div>
+    </div>
+  </div>
+
+  <p class="note">Style C · Hybrid: subtle architectural outlines on major features (subject building footprint, bushland boundary), tactical bounding boxes with confidence labels on specific findings (pool, cul-de-sac, solar, north-facing rear), and a segmentation-pass legend inset (top-right). All in Fields' brand palette: copper accents, grass-green panels, cream fields. The leader-line callouts to page-margin data points come in Phase 3 once this aesthetic is locked.</p>
+
+</div>
+
+</body>
+</html>
