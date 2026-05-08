@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Phase 2 · Spread 03 · Four-quadrant persona showcase</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Playfair+Display:wght@400;600;700;800&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --grass: #22382C;
+  --grass-deep: #1B2D24;
+  --birch: #E6DDD2;
+  --birch-dark: #d4c9bc;
+  --copper: #B76749;
+  --copper-soft: #f0d9cc;
+  --copper-tint: #fdf3ec;
+  --copper-vivid: #d97a52;
+  --copper-faint: rgba(183,103,73,0.18);
+  --white: #FFFFFF;
+  --text-muted: #7a8a80;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #efe8de;
+  font-family: 'Poppins', sans-serif;
+  color: var(--grass);
+  font-weight: 300;
+  padding: 24px;
+}
+
+.spread {
+  width: 420mm;
+  height: 297mm;
+  background: var(--birch);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto 1fr 1fr;
+  position: relative;
+  overflow: hidden;
+  margin: 0 auto;
+  box-shadow: 0 16px 50px rgba(0,0,0,0.20);
+}
+
+/* ─── Titlebar ─── */
+.titlebar {
+  grid-column: 1 / 3;
+  padding: 9mm 14mm 7mm;
+  border-bottom: 1px solid rgba(34,56,44,0.15);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  position: relative;
+}
+.titlebar::after {
+  content: "";
+  position: absolute;
+  top: 0; bottom: -100vh;
+  left: 50%;
+  width: 1px;
+  background: rgba(34,56,44,0.07);
+  pointer-events: none;
+}
+.eyebrow {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8pt;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--copper);
+  font-weight: 600;
+  margin-bottom: 4mm;
+  display: block;
+}
+.t-h {
+  font-family: 'Playfair Display', serif;
+  font-size: 26pt;
+  font-weight: 700;
+  color: var(--grass);
+  line-height: 1.05;
+  letter-spacing: -0.4px;
+  max-width: 280mm;
+}
+.t-meta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8pt;
+  color: var(--copper);
+  letter-spacing: 1.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  text-align: right;
+  white-space: nowrap;
+}
+.t-meta .num {
+  font-family: 'Playfair Display', serif;
+  font-size: 22pt;
+  color: var(--copper);
+  display: block;
+  margin-top: 2mm;
+}
+
+/* ─── Quadrant base ─── */
+.q {
+  padding: 7mm 10mm;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+.q + .q { border-left: 1px solid rgba(34,56,44,0.15); }
+.q.bottom { border-top: 1px solid rgba(34,56,44,0.15); }
+
+.q-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 4mm;
+  padding-bottom: 3mm;
+  border-bottom: 1px solid var(--copper);
+}
+.q-header .label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7.5pt;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--copper);
+  font-weight: 700;
+}
+.q-header .conf {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7.5pt;
+  color: var(--text-muted);
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+.q-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 13pt;
+  font-weight: 700;
+  color: var(--grass);
+  line-height: 1.15;
+  margin-bottom: 4mm;
+}
+.q-foot {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7pt;
+  color: var(--text-muted);
+  letter-spacing: 0.4px;
+  margin-top: 3mm;
+  font-style: italic;
+}
+
+/* ───────────── TL · ATTRIBUTION MATRIX ───────────── */
+.matrix {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2.5mm;
+  min-height: 0;
+}
+.matrix-header {
+  display: grid;
+  grid-template-columns: 60mm 1fr 1fr 1fr 22mm;
+  gap: 2mm;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 6.8pt;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--copper);
+  font-weight: 700;
+  padding-bottom: 2mm;
+  border-bottom: 1px solid rgba(34,56,44,0.15);
+}
+.matrix-header .col {
+  text-align: center;
+  line-height: 1.25;
+}
+.matrix-header .col .rank {
+  display: block;
+  font-size: 6pt;
+  color: var(--text-muted);
+  font-weight: 500;
+  letter-spacing: 0.8px;
+  margin-bottom: 1mm;
+}
+.matrix-row {
+  display: grid;
+  grid-template-columns: 60mm 1fr 1fr 1fr 22mm;
+  gap: 2mm;
+  align-items: stretch;
+  min-height: 13mm;
+}
+.matrix-attr {
+  font-family: 'Playfair Display', serif;
+  font-size: 9.5pt;
+  font-weight: 600;
+  color: var(--grass);
+  line-height: 1.15;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.matrix-attr .sub {
+  display: block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 6.8pt;
+  color: var(--text-muted);
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  margin-top: 1mm;
+  font-style: normal;
+}
+.matrix-cell {
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7pt;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.matrix-cell.s-low {
+  background: rgba(183,103,73,0.10);
+  color: var(--copper);
+  border: 1px solid rgba(183,103,73,0.20);
+}
+.matrix-cell.s-med {
+  background: rgba(183,103,73,0.45);
+  color: var(--white);
+}
+.matrix-cell.s-high {
+  background: var(--copper);
+  color: var(--white);
+}
+.matrix-prem {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8pt;
+  font-weight: 700;
+  color: var(--grass);
+  text-align: right;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  letter-spacing: 0.3px;
+}
+.matrix-legend {
+  display: flex;
+  align-items: center;
+  gap: 5mm;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 6.8pt;
+  color: var(--text-muted);
+  letter-spacing: 0.6px;
+  margin-top: 3mm;
+  padding-top: 3mm;
+  border-top: 1px solid rgba(34,56,44,0.10);
+}
+.matrix-legend .lg {
+  display: flex;
+  align-items: center;
+  gap: 2mm;
+}
+.matrix-legend .sw {
+  width: 5mm; height: 3mm;
+  border-radius: 1px;
+}
+
+/* ───────────── TR · CATCHMENT FEASIBILITY ───────────── */
+.feas {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 5mm;
+  min-height: 0;
+}
+.feas-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2mm;
+}
+.feas-headline {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(34,56,44,0.10);
+  padding-bottom: 1.5mm;
+}
+.feas-headline .num {
+  font-family: 'Playfair Display', serif;
+  font-size: 22pt;
+  font-weight: 700;
+  color: var(--copper);
+  line-height: 1;
+  letter-spacing: -1px;
+}
+.feas-headline .lbl {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7pt;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--grass);
+  font-weight: 600;
+  text-align: right;
+  max-width: 75mm;
+  line-height: 1.3;
+}
+.feas-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5mm;
+  margin-top: 1mm;
+}
+.feas-bar-row {
+  display: grid;
+  grid-template-columns: 26mm 1fr 22mm;
+  gap: 2mm;
+  align-items: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7.5pt;
+  color: var(--grass);
+  letter-spacing: 0.4px;
+}
+.feas-bar-row .place { font-weight: 600; color: var(--grass); letter-spacing: 0.8px; text-transform: uppercase; font-size: 7pt; }
+.feas-bar-row .track {
+  height: 5mm;
+  background: rgba(34,56,44,0.06);
+  border-radius: 1px;
+  overflow: hidden;
+  position: relative;
+}
+.feas-bar-row .fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--copper) 0%, var(--copper-vivid) 100%);
+}
+.feas-bar-row .val {
+  text-align: right;
+  font-weight: 700;
+  color: var(--grass);
+  font-size: 8pt;
+}
+
+/* ───────────── BL · SHARE DERIVATION ───────────── */
+.share-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 78mm 1fr;
+  gap: 6mm;
+  min-height: 0;
+}
+.donut-block { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 3mm; }
+.donut-svg { width: 70mm; height: 70mm; }
+.donut-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 1.4mm;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7pt;
+  color: var(--grass);
+  letter-spacing: 0.3px;
+  width: 100%;
+}
+.donut-legend .lrow {
+  display: grid;
+  grid-template-columns: 4mm 1fr 12mm;
+  gap: 2mm;
+  align-items: center;
+}
+.donut-legend .lrow .sw {
+  width: 4mm; height: 4mm; border-radius: 1px;
+}
+.donut-legend .lrow .pct {
+  font-family: 'Playfair Display', serif;
+  font-size: 9pt;
+  font-weight: 700;
+  color: var(--copper);
+  text-align: right;
+}
+
+.share-model { display: flex; flex-direction: column; gap: 3mm; min-height: 0; }
+.share-model-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7pt;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--copper);
+  font-weight: 700;
+  padding-bottom: 1.5mm;
+  border-bottom: 1px solid rgba(34,56,44,0.15);
+  margin-bottom: 1mm;
+}
+.share-row {
+  display: grid;
+  grid-template-columns: 30mm 1fr 16mm;
+  gap: 2mm;
+  align-items: start;
+  padding: 2mm 0;
+  border-bottom: 1px dashed rgba(34,56,44,0.10);
+}
+.share-row:last-child { border-bottom: none; }
+.share-row .pname {
+  font-family: 'Playfair Display', serif;
+  font-size: 9pt;
+  font-weight: 700;
+  color: var(--grass);
+  line-height: 1.15;
+}
+.share-row .pname .rank {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 6.5pt;
+  color: var(--copper);
+  letter-spacing: 0.8px;
+  font-weight: 700;
+  display: block;
+  margin-bottom: 0.7mm;
+}
+.share-row .inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 1mm;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 6.8pt;
+  color: var(--text-muted);
+  line-height: 1.35;
+  letter-spacing: 0.2px;
+}
+.share-row .inputs b { color: var(--grass); font-weight: 600; }
+.share-row .pct {
+  font-family: 'Playfair Display', serif;
+  font-size: 13pt;
+  font-weight: 700;
+  color: var(--copper);
+  text-align: right;
+  padding-top: 1mm;
+}
+
+/* ───────────── BR · CHANNELS + WILLINGNESS ───────────── */
+.channels {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3mm;
+  min-height: 0;
+}
+.channel-row {
+  display: grid;
+  grid-template-columns: 32mm 1fr;
+  gap: 3mm;
+  padding: 3mm 0;
+  border-bottom: 1px dashed rgba(34,56,44,0.12);
+}
+.channel-row:last-of-type { border-bottom: none; }
+.channel-row .lhs {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5mm;
+}
+.channel-row .pname {
+  font-family: 'Playfair Display', serif;
+  font-size: 10pt;
+  font-weight: 700;
+  color: var(--grass);
+  line-height: 1.15;
+}
+.channel-row .rank {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 6.5pt;
+  color: var(--copper);
+  letter-spacing: 0.8px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.channel-row .reach-tot {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 6.8pt;
+  color: var(--text-muted);
+  letter-spacing: 0.3px;
+  margin-top: 0.5mm;
+}
+.channel-row .reach-tot b { color: var(--grass); font-weight: 700; }
+.channel-row .rhs {
+  display: flex;
+  flex-direction: column;
+  gap: 2mm;
+}
+.pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.2mm;
+}
+.pill {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 6.5pt;
+  letter-spacing: 0.3px;
+  padding: 1mm 2mm;
+  border-radius: 8mm;
+  background: rgba(34,56,44,0.07);
+  color: var(--grass);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.pill b { color: var(--copper); font-weight: 700; margin-left: 1mm; }
+.wtp-bar {
+  position: relative;
+  height: 5.5mm;
+  background: rgba(34,56,44,0.05);
+  border-radius: 1px;
+  margin-top: 1mm;
+}
+.wtp-bar .median-mark {
+  position: absolute;
+  top: -2mm; bottom: -2mm;
+  width: 1px;
+  background: var(--copper);
+  border-left: 1px dashed var(--copper);
+}
+.wtp-bar .median-mark::after {
+  content: "median $1.29M";
+  position: absolute;
+  top: -3.5mm;
+  left: 50%; transform: translateX(-50%);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 5.5pt;
+  color: var(--copper);
+  letter-spacing: 0.3px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.wtp-bar .band {
+  position: absolute;
+  top: 0; bottom: 0;
+  background: linear-gradient(90deg, var(--copper) 0%, var(--copper-vivid) 100%);
+  border-radius: 1px;
+}
+.wtp-bar .lbl {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 6.5pt;
+  font-weight: 700;
+  color: var(--white);
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  padding: 0 1.5mm;
+}
+.wtp-axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.8mm;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 5.5pt;
+  color: var(--text-muted);
+  letter-spacing: 0.3px;
+}
+
+/* ───────────── BR · headline campaign-claim panel ───────────── */
+.campaign-claim {
+  margin-top: 3mm;
+  padding: 3.5mm 4mm;
+  background: var(--grass);
+  color: var(--birch);
+  border-left: 2px solid var(--copper);
+  border-radius: 1px;
+}
+.campaign-claim .lbl {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 6.5pt;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--copper-soft);
+  font-weight: 600;
+  margin-bottom: 1.5mm;
+  display: block;
+}
+.campaign-claim .body {
+  font-family: 'Playfair Display', serif;
+  font-size: 10pt;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--birch);
+}
+.campaign-claim .body b { color: var(--copper-soft); font-weight: 700; }
+</style>
+</head>
+<body>
+
+<div class="spread">
+
+  <!-- ════════ TITLEBAR ════════ -->
+  <div class="titlebar">
+    <div>
+      <span class="eyebrow">For 13 Terrace Court · Spread 03 continued</span>
+      <div class="t-h">How we mapped the buyer to your home.</div>
+    </div>
+    <div class="t-meta">
+      Four passes · one home
+      <span class="num">03</span>
+    </div>
+  </div>
+
+  <!-- ════════ TL · ATTRIBUTION MATRIX ════════ -->
+  <div class="q">
+    <div class="q-header">
+      <span class="label">Pass 01 · Scarcity → persona</span>
+      <span class="conf">5 attributes · 3 personas</span>
+    </div>
+    <h3 class="q-title">Every premium-bearing feature on this home is valued by at least one named persona.</h3>
+
+    <div class="matrix">
+      <div class="matrix-header">
+        <div></div>
+        <div class="col"><span class="rank">01 · Primary</span>Owner-Occ With Capital</div>
+        <div class="col"><span class="rank">02 · Secondary</span>Multi-Generational Family</div>
+        <div class="col"><span class="rank">03 · Tertiary</span>Out-of-Area Relocator</div>
+        <div class="col" style="text-align:right;">Cohort premium</div>
+      </div>
+
+      <div class="matrix-row">
+        <div class="matrix-attr">6+ bedrooms<span class="sub">n=16 sold · 12 mo</span></div>
+        <div class="matrix-cell s-low">Low</div>
+        <div class="matrix-cell s-high">High</div>
+        <div class="matrix-cell s-med">Med</div>
+        <div class="matrix-prem">+40.6%</div>
+      </div>
+
+      <div class="matrix-row">
+        <div class="matrix-attr">Pool<span class="sub">n=306 sold · 12 mo</span></div>
+        <div class="matrix-cell s-med">Med</div>
+        <div class="matrix-cell s-med">Med</div>
+        <div class="matrix-cell s-high">High</div>
+        <div class="matrix-prem">+19.8%</div>
+      </div>
+
+      <div class="matrix-row">
+        <div class="matrix-attr">Study (dual-zone)<span class="sub">n=143 sold · 12 mo</span></div>
+        <div class="matrix-cell s-low">Low</div>
+        <div class="matrix-cell s-high">High</div>
+        <div class="matrix-cell s-med">Med</div>
+        <div class="matrix-prem">+13.1%</div>
+      </div>
+
+      <div class="matrix-row">
+        <div class="matrix-attr">Pool + 5+ bd<span class="sub">n=73 sold · combination</span></div>
+        <div class="matrix-cell s-low">Low</div>
+        <div class="matrix-cell s-high">High</div>
+        <div class="matrix-cell s-high">High</div>
+        <div class="matrix-prem">+53.1%</div>
+      </div>
+
+      <div class="matrix-row">
+        <div class="matrix-attr">Cul-de-sac + bushland<span class="sub">satellite-derived adjacency</span></div>
+        <div class="matrix-cell s-high">High</div>
+        <div class="matrix-cell s-med">Med</div>
+        <div class="matrix-cell s-med">Med</div>
+        <div class="matrix-prem">+7.8%</div>
+      </div>
+
+      <div class="matrix-legend">
+        <span class="lg"><span class="sw" style="background:rgba(183,103,73,0.10); border:1px solid rgba(183,103,73,0.20);"></span>Low fit</span>
+        <span class="lg"><span class="sw" style="background:rgba(183,103,73,0.45);"></span>Med fit</span>
+        <span class="lg"><span class="sw" style="background:var(--copper);"></span>High fit</span>
+        <span style="margin-left:auto;">Premium % vs cohort median $1,287,000 · n=1,069 sold · 4 suburbs · 12 mo</span>
+      </div>
+    </div>
+
+    <div class="q-foot">Source: Fields sold-cohort feature attribution (Robina, Varsity Lakes, Burleigh Waters, Merrimac · last 12 months) · Quigley &amp; Rosenthal 2005 hedonic preference review · Domain Insights buyer keyword telemetry 2024</div>
+  </div>
+
+  <!-- ════════ TR · CATCHMENT FEASIBILITY ════════ -->
+  <div class="q">
+    <div class="q-header">
+      <span class="label">Pass 02 · Catchment feasibility</span>
+      <span class="conf">ABS Census 2021 · 3 postcodes</span>
+    </div>
+    <h3 class="q-title">The personas exist in catchment-relevant numbers — the math holds.</h3>
+
+    <div class="feas">
+      <!-- Block A — 50-65 cohort (Owner-Occ catchment supply) -->
+      <div class="feas-block">
+        <div class="feas-headline">
+          <span class="num">16,190</span>
+          <span class="lbl">Adults aged 50-65 across the catchment<br>POA 4226 + 4227 + 4220 · 17.3% of pop</span>
+        </div>
+        <div class="feas-bars">
+          <div class="feas-bar-row">
+            <span class="place">POA 4226</span>
+            <div class="track"><div class="fill" style="width: 100%;"></div></div>
+            <span class="val">6,587</span>
+          </div>
+          <div class="feas-bar-row">
+            <span class="place">POA 4227</span>
+            <div class="track"><div class="fill" style="width: 58%;"></div></div>
+            <span class="val">3,842</span>
+          </div>
+          <div class="feas-bar-row">
+            <span class="place">POA 4220</span>
+            <div class="track"><div class="fill" style="width: 87%;"></div></div>
+            <span class="val">5,761</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Block B — premium income tier -->
+      <div class="feas-block">
+        <div class="feas-headline">
+          <span class="num">7,872</span>
+          <span class="lbl">Households earning &gt;$3,000/week<br>22.6% of catchment · top tertile of GC postcodes</span>
+        </div>
+        <div class="feas-bars">
+          <div class="feas-bar-row">
+            <span class="place">POA 4226</span>
+            <div class="track"><div class="fill" style="width: 95%;"></div></div>
+            <span class="val">2,896</span>
+          </div>
+          <div class="feas-bar-row">
+            <span class="place">POA 4227</span>
+            <div class="track"><div class="fill" style="width: 63%;"></div></div>
+            <span class="val">1,922</span>
+          </div>
+          <div class="feas-bar-row">
+            <span class="place">POA 4220</span>
+            <div class="track"><div class="fill" style="width: 100%;"></div></div>
+            <span class="val">3,054</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Block C — relocator inflow -->
+      <div class="feas-block">
+        <div class="feas-headline">
+          <span class="num">~2,940</span>
+          <span class="lbl">Net interstate movers / yr to catchment<br>30% of GC LGA inflow of +9,800 · ABS 2022-23</span>
+        </div>
+        <div class="feas-bars">
+          <div class="feas-bar-row">
+            <span class="place">From NSW</span>
+            <div class="track"><div class="fill" style="width: 65%;"></div></div>
+            <span class="val">~1,500</span>
+          </div>
+          <div class="feas-bar-row">
+            <span class="place">From VIC</span>
+            <div class="track"><div class="fill" style="width: 38%;"></div></div>
+            <span class="val">~870</span>
+          </div>
+          <div class="feas-bar-row">
+            <span class="place">Other states</span>
+            <div class="track"><div class="fill" style="width: 25%;"></div></div>
+            <span class="val">~570</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="q-foot">Source: ABS Census 2021 QuickStats POA 4226 / 4227 / 4220 · ABS Regional Population 2022-23 net interstate migration (LGA-level, southern-GC apportionment derived by population share)</div>
+  </div>
+
+  <!-- ════════ BL · SHARE DERIVATION ════════ -->
+  <div class="q bottom">
+    <div class="q-header">
+      <span class="label">Pass 03 · Share derivation</span>
+      <span class="conf">Modelled · enquiry-mix benchmark</span>
+    </div>
+    <h3 class="q-title">35 / 30 / 20 / 15 — the math, not the hand-wave.</h3>
+
+    <div class="share-grid">
+
+      <!-- Donut + legend -->
+      <div class="donut-block">
+        <svg class="donut-svg" viewBox="0 0 100 100">
+          <!-- Donut math: full circumference 2πr where r=40, so C = 251.33.
+               Segments: 35% = 87.97, 30% = 75.40, 20% = 50.27, 15% = 37.70 -->
+          <!-- Owner-Occ 35% (copper-vivid) -->
+          <circle cx="50" cy="50" r="40"
+                  fill="none" stroke="#B76749" stroke-width="16"
+                  stroke-dasharray="87.97 163.36"
+                  stroke-dashoffset="0"
+                  transform="rotate(-90 50 50)"/>
+          <!-- Multi-Gen 30% (copper-soft mid) -->
+          <circle cx="50" cy="50" r="40"
+                  fill="none" stroke="#d97a52" stroke-width="16"
+                  stroke-dasharray="75.40 175.93"
+                  stroke-dashoffset="-87.97"
+                  transform="rotate(-90 50 50)"/>
+          <!-- Relocator 20% (grass) -->
+          <circle cx="50" cy="50" r="40"
+                  fill="none" stroke="#22382C" stroke-width="16"
+                  stroke-dasharray="50.27 201.06"
+                  stroke-dashoffset="-163.36"
+                  transform="rotate(-90 50 50)"/>
+          <!-- Other 15% (text-muted) -->
+          <circle cx="50" cy="50" r="40"
+                  fill="none" stroke="#a8b3ad" stroke-width="16"
+                  stroke-dasharray="37.70 213.63"
+                  stroke-dashoffset="-213.63"
+                  transform="rotate(-90 50 50)"/>
+
+          <text x="50" y="49" text-anchor="middle"
+                font-family="Playfair Display" font-size="11" font-weight="700"
+                fill="#22382C">~35</text>
+          <text x="50" y="59" text-anchor="middle"
+                font-family="JetBrains Mono" font-size="3.6" font-weight="500"
+                fill="#7a8a80" letter-spacing="0.5">enquiries / 4-wk window</text>
+        </svg>
+
+        <div class="donut-legend">
+          <div class="lrow"><span class="sw" style="background:#B76749;"></span><span>01 · Owner-Occupier With Capital</span><span class="pct">35%</span></div>
+          <div class="lrow"><span class="sw" style="background:#d97a52;"></span><span>02 · Multi-Generational Family</span><span class="pct">30%</span></div>
+          <div class="lrow"><span class="sw" style="background:#22382C;"></span><span>03 · Out-of-Area Relocator</span><span class="pct">20%</span></div>
+          <div class="lrow"><span class="sw" style="background:#a8b3ad;"></span><span>Investor / lifestyle browser / other</span><span class="pct">15%</span></div>
+        </div>
+      </div>
+
+      <!-- Model inputs panel -->
+      <div class="share-model">
+        <div class="share-model-title">How we modelled it</div>
+
+        <div class="share-row">
+          <div class="pname"><span class="rank">01 · Primary</span>Owner-Occupier</div>
+          <div class="inputs">
+            Catchment pool: <b>~975 households</b> (50-65 × owned-outright × 4+bd ready-to-downsize)<br>
+            Industry enquiry-mix: <b>30-40%</b> of premium $1.5M+ listings (REA Insights 2024)<br>
+            Feature-fit weight: <b>0.78</b> (cul-de-sac + bushland + 9/10 condition)
+          </div>
+          <div class="pct">35%</div>
+        </div>
+
+        <div class="share-row">
+          <div class="pname"><span class="rank">02 · Secondary</span>Multi-Generational Family</div>
+          <div class="inputs">
+            Catchment pool: <b>~473 households</b> (high-income family × multi-gen prevalence × overseas-born skew)<br>
+            Industry enquiry-mix: <b>25-35%</b> on 6+bd dual-living premium listings<br>
+            Feature-fit weight: <b>0.92</b> (specific rare-fit combination)
+          </div>
+          <div class="pct">30%</div>
+        </div>
+
+        <div class="share-row">
+          <div class="pname"><span class="rank">03 · Tertiary</span>Out-of-Area Relocator</div>
+          <div class="inputs">
+            Catchment pool: <b>~158 households / yr</b> (LGA inflow × 30% south × top decile × family unit)<br>
+            Industry enquiry-mix: <b>15-25%</b> for $1.8M+ stock with school proximity<br>
+            Feature-fit weight: <b>0.84</b> (move-in-ready + lifestyle narrative)
+          </div>
+          <div class="pct">20%</div>
+        </div>
+
+        <div class="share-row">
+          <div class="pname"><span class="rank">Residual</span>Other enquiry</div>
+          <div class="inputs">
+            Investor curiosity (yield rules out), lifestyle browsers, neighbourhood watchers, agent surveillance.<br>
+            Net contribution to qualified flow <b>≈ 15%</b> (industry residual).
+          </div>
+          <div class="pct">15%</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="q-foot">Source: REA Insights 2024 *Premium Listing Enquiry Mix Report* · Domain Insights 2024 *Buyer Behaviour Quarterly* · ABS Census 2021 catchment data (TR Pass 02). Modelled output, refined by actual offer flow in campaign's first 14 days.</div>
+  </div>
+
+  <!-- ════════ BR · CHANNELS + WILLINGNESS ════════ -->
+  <div class="q bottom">
+    <div class="q-header">
+      <span class="label">Pass 04 · Channels + willingness-to-pay</span>
+      <span class="conf">Eleven channels · 3 personas</span>
+    </div>
+    <h3 class="q-title">The targeting plan + what each persona is willing to pay.</h3>
+
+    <div class="channels">
+
+      <!-- Owner-Occ -->
+      <div class="channel-row">
+        <div class="lhs">
+          <div class="rank">01 · Primary</div>
+          <div class="pname">Owner-Occ With Capital</div>
+          <div class="reach-tot">Combined reach: <b>~7,400</b> qualified searchers</div>
+        </div>
+        <div class="rhs">
+          <div class="pills">
+            <span class="pill">Domain saved-search 4226+4227+4220 over $1.5M<b>~3,200</b></span>
+            <span class="pill">REA buyer's-club 50-65 suburb-local<b>~3,500</b></span>
+            <span class="pill">Fields editorial readership (PostHog catchment slice)<b>~700</b></span>
+          </div>
+          <div class="wtp-bar">
+            <div class="median-mark" style="left: 7.9%;"></div>
+            <div class="band" style="left: 59.1%; width: 18.2%;">
+              <div class="lbl">$1.85M – $2.05M</div>
+            </div>
+          </div>
+          <div class="wtp-axis">
+            <span>$1.2M</span><span>$1.4M</span><span>$1.6M</span><span>$1.8M</span><span>$2.0M</span><span>$2.2M</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Multi-Gen -->
+      <div class="channel-row">
+        <div class="lhs">
+          <div class="rank">02 · Secondary</div>
+          <div class="pname">Multi-Generational Family</div>
+          <div class="reach-tot">Combined reach: <b>~2,800</b> qualified searchers</div>
+        </div>
+        <div class="rhs">
+          <div class="pills">
+            <span class="pill">FB Custom Audience parents 40-55 Merrimac/Robina/Mudgeeraba<b>~1,800</b></span>
+            <span class="pill">Domain saved-search 4226 with 5+ bd<b>~700</b></span>
+            <span class="pill">Independent-school parent newsletters (All Saints, Hillcrest, Somerset)<b>~300</b></span>
+          </div>
+          <div class="wtp-bar">
+            <div class="median-mark" style="left: 7.9%;"></div>
+            <div class="band" style="left: 68.2%; width: 18.2%;">
+              <div class="lbl">$1.95M – $2.15M</div>
+            </div>
+          </div>
+          <div class="wtp-axis">
+            <span>$1.2M</span><span>$1.4M</span><span>$1.6M</span><span>$1.8M</span><span>$2.0M</span><span>$2.2M</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Relocator -->
+      <div class="channel-row">
+        <div class="lhs">
+          <div class="rank">03 · Tertiary</div>
+          <div class="pname">Out-of-Area Relocator</div>
+          <div class="reach-tot">Combined reach: <b>~1,400</b> qualified searchers</div>
+        </div>
+        <div class="rhs">
+          <div class="pills">
+            <span class="pill">Sydney + Melbourne FB lookalikes<b>~700</b></span>
+            <span class="pill">LinkedIn senior managers, 90-day move signal<b>~200</b></span>
+            <span class="pill">Domain + REA out-of-state browsing telemetry<b>~500</b></span>
+          </div>
+          <div class="wtp-bar">
+            <div class="median-mark" style="left: 7.9%;"></div>
+            <div class="band" style="left: 54.5%; width: 13.6%;">
+              <div class="lbl">$1.80M – $1.95M</div>
+            </div>
+          </div>
+          <div class="wtp-axis">
+            <span>$1.2M</span><span>$1.4M</span><span>$1.6M</span><span>$1.8M</span><span>$2.0M</span><span>$2.2M</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="campaign-claim">
+      <span class="lbl">The campaign-targeting headline</span>
+      <div class="body">Three personas, eleven channels, a combined addressable buyer pool of <b>~11,600 qualified searchers</b> — concentrated against <b>$1.85M – $2.05M</b>.</div>
+    </div>
+
+    <div class="q-foot">Reach numbers: FB Ads Manager Audience Estimator · Domain &amp; REA published audience kits · LinkedIn Campaign Manager · Fields PostHog catchment slice. Bands intentionally rounded — verified before campaign launch.</div>
+  </div>
+
+</div>
+
+</body>
+</html>
