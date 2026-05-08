@@ -61,6 +61,17 @@ def stage_html():
             if f.is_file() and f.suffix.lower() in (".jpg", ".jpeg", ".png"):
                 shutil.copy2(f, dst_maps / f.name)
 
+    # Stage logo files (cover + masthead)
+    src_logo = HERE / "output" / "logo"
+    dst_logo = RENDER_DIR / "logo"
+    if src_logo.exists():
+        if dst_logo.exists():
+            shutil.rmtree(dst_logo)
+        dst_logo.mkdir()
+        for f in src_logo.iterdir():
+            if f.is_file() and f.suffix.lower() in (".jpg", ".jpeg", ".png", ".svg"):
+                shutil.copy2(f, dst_logo / f.name)
+
     return dst
 
 
