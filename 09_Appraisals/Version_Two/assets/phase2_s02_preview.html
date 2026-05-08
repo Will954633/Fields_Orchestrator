@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Phase 2 · Spread 02 · Four-quadrant scarcity showcase</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Playfair+Display:wght@400;600;700;800&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --grass: #22382C;
+  --grass-deep: #1B2D24;
+  --birch: #E6DDD2;
+  --birch-dark: #d4c9bc;
+  --copper: #B76749;
+  --copper-soft: #f0d9cc;
+  --copper-tint: #fdf3ec;
+  --copper-vivid: #d97a52;
+  --white: #FFFFFF;
+  --text-muted: #7a8a80;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #efe8de;
+  font-family: 'Poppins', sans-serif;
+  color: var(--grass);
+  font-weight: 300;
+  padding: 24px;
+}
+
+.spread {
+  width: 420mm;
+  height: 297mm;
+  background: var(--birch);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto 1fr 1fr;
+  position: relative;
+  overflow: hidden;
+  margin: 0 auto;
+  box-shadow: 0 16px 50px rgba(0,0,0,0.20);
+}
+
+/* Title bar */
+.titlebar {
+  grid-column: 1 / 3;
+  padding: 9mm 14mm 7mm;
+  border-bottom: 1px solid rgba(34,56,44,0.15);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  position: relative;
+}
+.titlebar::after {
+  content: "";
+  position: absolute;
+  top: 0; bottom: -100vh;
+  left: 50%;
+  width: 1px;
+  background: rgba(34,56,44,0.07);
+  pointer-events: none;
+}
+.eyebrow {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8pt;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--copper);
+  font-weight: 600;
+  margin-bottom: 4mm;
+  display: block;
+}
+.t-h {
+  font-family: 'Playfair Display', serif;
+  font-size: 26pt;
+  font-weight: 700;
+  color: var(--grass);
+  line-height: 1.05;
+  letter-spacing: -0.4px;
+  max-width: 280mm;
+}
+.t-meta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8pt;
+  color: var(--copper);
+  letter-spacing: 1.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  text-align: right;
+  white-space: nowrap;
+}
+.t-meta .num {
+  font-family: 'Playfair Display', serif;
+  font-size: 22pt;
+  color: var(--copper);
+  display: block;
+  margin-top: 2mm;
+}
+
+.q {
+  padding: 7mm 10mm;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+.q + .q { border-left: 1px solid rgba(34,56,44,0.15); }
+.q.bottom { border-top: 1px solid rgba(34,56,44,0.15); }
+
+.q-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 4mm;
+  padding-bottom: 3mm;
+  border-bottom: 1px solid var(--copper);
+}
+.q-header .label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7.5pt;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--copper);
+  font-weight: 700;
+}
+.q-header .conf {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7.5pt;
+  color: var(--text-muted);
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+.q-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 13pt;
+  font-weight: 700;
+  color: var(--grass);
+  line-height: 1.15;
+  margin-bottom: 4mm;
+}
+.q-foot {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7pt;
+  color: var(--text-muted);
+  letter-spacing: 0.4px;
+  margin-top: 3mm;
+  font-style: italic;
+}
+
+/* ─────────────────────────── TL: THE FUNNEL ─────────────────────────── */
+.funnel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3mm;
+  padding-top: 3mm;
+  min-height: 0;
+}
+.funnel-row {
+  display: flex;
+  align-items: center;
+  gap: 4mm;
+  position: relative;
+}
+.funnel-bar {
+  height: 14mm;
+  background: linear-gradient(90deg, var(--copper) 0%, var(--copper-vivid) 100%);
+  border-radius: 2px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 4mm;
+  color: var(--white);
+  font-family: 'Playfair Display', serif;
+  font-size: 18pt;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  flex-shrink: 0;
+}
+.funnel-bar.subject {
+  background: linear-gradient(90deg, var(--grass) 0%, var(--grass-deep) 100%);
+}
+.funnel-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8pt;
+  color: var(--grass);
+  letter-spacing: 0.5px;
+  display: flex;
+  flex-direction: column;
+  gap: 1mm;
+  flex: 1;
+}
+.funnel-label .filter {
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--copper);
+  letter-spacing: 1.5px;
+  font-size: 7pt;
+}
+.funnel-label .desc { font-size: 8pt; line-height: 1.35; color: var(--grass); }
+
+.funnel-tick {
+  position: absolute;
+  left: -3mm; top: 50%;
+  width: 2mm; height: 1px;
+  background: var(--copper);
+}
+
+/* ─────────────────────────── TR: COMPETITIVE SET ─────────────────────────── */
+.tr-stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3mm;
+  min-height: 0;
+}
+.tr-map {
+  position: relative;
+  flex: 1;
+  border-radius: 3px;
+  overflow: hidden;
+  background: #eee;
+  min-height: 0;
+}
+.tr-map img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tr-map svg.overlay { position: absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; }
+
+.tr-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 3mm;
+}
+.tr-card {
+  background: var(--white);
+  border-radius: 3px;
+  padding: 3mm;
+  border-top: 2px solid var(--copper);
+}
+.tr-card.subject { border-top-color: var(--grass); background: var(--grass); color: var(--birch); }
+.tr-card .photo {
+  width: 100%;
+  height: 22mm;
+  background: #ddd;
+  border-radius: 2px;
+  margin-bottom: 2mm;
+  background-size: cover;
+  background-position: center;
+}
+.tr-card .pin-num {
+  display: inline-block;
+  width: 6mm; height: 6mm;
+  background: var(--copper);
+  color: var(--white);
+  border-radius: 50%;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8pt;
+  font-weight: 700;
+  text-align: center;
+  line-height: 6mm;
+  margin-right: 2mm;
+}
+.tr-card.subject .pin-num { background: var(--copper); }
+.tr-card .addr {
+  font-family: 'Playfair Display', serif;
+  font-size: 9pt;
+  font-weight: 700;
+  color: inherit;
+  line-height: 1.2;
+  margin-bottom: 1.5mm;
+}
+.tr-card .specs {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7pt;
+  letter-spacing: 0.3px;
+  line-height: 1.5;
+  color: inherit;
+  opacity: 0.85;
+}
+.tr-card .price {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8pt;
+  color: var(--copper);
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  margin-top: 1.5mm;
+  padding-top: 1.5mm;
+  border-top: 1px solid rgba(34,56,44,0.15);
+}
+.tr-card.subject .price { color: var(--copper-soft); border-top-color: rgba(230,221,210,0.25); }
+
+/* ─────────────────────────── BL: PREMIUM CHART ─────────────────────────── */
+.chart {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4mm;
+  padding-top: 4mm;
+  min-height: 0;
+}
+.chart-row {
+  display: grid;
+  grid-template-columns: 50mm 1fr 24mm;
+  gap: 3mm;
+  align-items: center;
+}
+.chart-feature {
+  font-family: 'Playfair Display', serif;
+  font-size: 10.5pt;
+  font-weight: 600;
+  color: var(--grass);
+  text-align: right;
+  line-height: 1.15;
+}
+.chart-feature .n {
+  display: block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7pt;
+  color: var(--text-muted);
+  font-weight: 400;
+  margin-top: 0.5mm;
+  letter-spacing: 0.5px;
+}
+.chart-bar-track {
+  height: 9mm;
+  background: rgba(34,56,44,0.08);
+  border-radius: 1px;
+  position: relative;
+  overflow: hidden;
+}
+.chart-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--copper) 0%, var(--copper-vivid) 100%);
+  border-radius: 1px;
+  display: flex;
+  align-items: center;
+  padding-right: 3mm;
+  color: var(--white);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8pt;
+  font-weight: 700;
+  justify-content: flex-end;
+}
+.chart-pct {
+  font-family: 'Playfair Display', serif;
+  font-size: 14pt;
+  font-weight: 800;
+  color: var(--copper);
+  letter-spacing: -0.5px;
+}
+.chart-baseline-note {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7pt;
+  color: var(--text-muted);
+  font-style: italic;
+  text-align: right;
+  letter-spacing: 0.4px;
+}
+
+/* ─────────────────────────── BR: WALKING-DISTANCE ─────────────────────────── */
+.iso-stage {
+  flex: 1;
+  position: relative;
+  background: var(--copper-tint);
+  border-radius: 3px;
+  overflow: hidden;
+  min-height: 0;
+}
+.iso-stage svg { width: 100%; height: 100%; display: block; }
+
+.iso-legend {
+  position: absolute;
+  bottom: 3mm; right: 3mm;
+  background: rgba(34,56,44,0.92);
+  color: var(--birch);
+  padding: 4px 7px;
+  border-radius: 2px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7pt;
+  letter-spacing: 0.3px;
+  line-height: 1.5;
+}
+.iso-legend .lg-row { display: flex; align-items: center; gap: 5px; }
+.iso-legend .swatch { width: 10px; height: 4px; border-radius: 1px; background: var(--copper); }
+
+.iso-claim {
+  margin-top: 3mm;
+  padding: 4mm 5mm;
+  background: var(--grass);
+  color: var(--birch);
+  border-radius: 3px;
+  border-left: 3px solid var(--copper);
+}
+.iso-claim .lbl {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7pt;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--copper-soft);
+  font-weight: 600;
+  margin-bottom: 1.5mm;
+}
+.iso-claim .body {
+  font-family: 'Playfair Display', serif;
+  font-size: 11pt;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.iso-claim .body em {
+  font-style: italic;
+  color: var(--copper-soft);
+}
+</style>
+</head>
+<body>
+
+<div class="spread">
+
+  <!-- ════════════════ TITLE BAR ════════════════ -->
+  <div class="titlebar">
+    <div>
+      <span class="eyebrow">For 13 Terrace Court · Spread 02 continued</span>
+      <h1 class="t-h">How we proved your home is rare —<br>and what that rarity has been worth.</h1>
+    </div>
+    <div class="t-meta">
+      Pages 12 / 13<br>
+      Scarcity, computed<span class="num">02</span>
+    </div>
+  </div>
+
+  <!-- ════════════════ TL: THE FUNNEL ════════════════ -->
+  <div class="q">
+    <div class="q-header">
+      <span class="label">Pass 01 · Combinatorial filter</span>
+      <span class="conf">142 active · 4 filters · run 2026-05-07</span>
+    </div>
+    <h3 class="q-title">142 to 2 — the active competitive set, narrowed.</h3>
+
+    <div class="funnel">
+      <div class="funnel-row">
+        <div class="funnel-bar" style="width: 100%;">142</div>
+      </div>
+      <div class="funnel-label">
+        <span class="filter">Step 0 · Active inventory</span>
+        <span class="desc">Active listings across Robina (67), Varsity Lakes (33), Burleigh Waters (42)</span>
+      </div>
+
+      <div class="funnel-row">
+        <div class="funnel-bar" style="width: 14.1%;">20</div>
+      </div>
+      <div class="funnel-label">
+        <span class="filter">Filter 1 · 5+ bedrooms</span>
+        <span class="desc">14% of the active pool clear the bedroom-count threshold</span>
+      </div>
+
+      <div class="funnel-row">
+        <div class="funnel-bar" style="width: 12.7%;">18</div>
+      </div>
+      <div class="funnel-label">
+        <span class="filter">Filter 2 · + pool</span>
+        <span class="desc">Almost all 5+ bedroom homes have a pool — 18 of 20</span>
+      </div>
+
+      <div class="funnel-row">
+        <div class="funnel-bar" style="width: 6.3%;">9</div>
+      </div>
+      <div class="funnel-label">
+        <span class="filter">Filter 3 · + cul-de-sac frontage</span>
+        <span class="desc">Cul-de-sac at the bulb, no through-traffic, derived from satellite analysis</span>
+      </div>
+
+      <div class="funnel-row">
+        <div class="funnel-bar subject" style="width: 1.4%;">2</div>
+      </div>
+      <div class="funnel-label">
+        <span class="filter">Filter 4 · + natural rear backing</span>
+        <span class="desc">Bushland, reserve or park unbuildable behind the lot — only 2 active matches across 142</span>
+      </div>
+    </div>
+    <div class="q-foot">Source: Fields Gold_Coast active-listings index · 142 listings indexed nightly · adjacency tags from Step-117 satellite analysis</div>
+  </div>
+
+  <!-- ════════════════ TR: COMPETITIVE SET ════════════════ -->
+  <div class="q">
+    <div class="q-header">
+      <span class="label">Pass 02 · The actual competitive set</span>
+      <span class="conf">Subject + 2 active matches</span>
+    </div>
+    <h3 class="q-title">The two homes a buyer at your price will actually be choosing between.</h3>
+
+    <div class="tr-stage">
+      <div class="tr-map">
+        <img src="competitor_map.png" alt="Competitive set map">
+      </div>
+      <div class="tr-cards">
+        <div class="tr-card subject">
+          <div class="photo" style="background-image: url('exterior.jpg');"></div>
+          <div class="addr"><span class="pin-num" style="background:var(--copper);">S</span>13 Terrace Court</div>
+          <div class="specs">Merrimac · 6 bd / 3 ba<br>658 m² · pool · dual-living</div>
+          <div class="price">SOLD $1,330,000 · Feb 2023</div>
+        </div>
+        <div class="tr-card">
+          <div class="photo" style="background-image: url('comp_5-straite-drive-robina.jpg');"></div>
+          <div class="addr"><span class="pin-num">1</span>5 Straite Drive</div>
+          <div class="specs">Robina · 5 bd / 2 ba<br>800 m² · pool · cul-de-sac · reserve</div>
+          <div class="price">$1,950,000 — for sale</div>
+        </div>
+        <div class="tr-card">
+          <div class="photo" style="background-image: url('comp_20-federal-place-robina.jpg');"></div>
+          <div class="addr"><span class="pin-num">2</span>20 Federal Place</div>
+          <div class="specs">Robina · 6 bd / 6 ba<br>785 m² · pool · cul-de-sac · golf reserve</div>
+          <div class="price">$2,349,000 — for sale</div>
+        </div>
+      </div>
+    </div>
+    <div class="q-foot">Source: Domain.com.au scrape (current) · Fields satellite-analysis adjacency tags · prices as listed 2026-05-07</div>
+  </div>
+
+  <!-- ════════════════ BL: PREMIUM VALIDATION ════════════════ -->
+  <div class="q bottom">
+    <div class="q-header">
+      <span class="label">Pass 03 · Demand-side validation</span>
+      <span class="conf">999 sold properties · 24 months · 4 suburbs</span>
+    </div>
+    <h3 class="q-title">What buyers have paid for these features over the last 24 months.</h3>
+
+    <div class="chart">
+      <div class="chart-row">
+        <div class="chart-feature">6+ bedrooms<span class="n">n=17 sold · median $1.81M</span></div>
+        <div class="chart-bar-track"><div class="chart-bar-fill" style="width: 78%;">+39.2%</div></div>
+        <div class="chart-pct">+39%</div>
+      </div>
+      <div class="chart-row">
+        <div class="chart-feature">Pool<span class="n">n=452 sold · median $1.55M</span></div>
+        <div class="chart-bar-track"><div class="chart-bar-fill" style="width: 38%;">+18.9%</div></div>
+        <div class="chart-pct">+19%</div>
+      </div>
+      <div class="chart-row">
+        <div class="chart-feature">Cul-de-sac frontage<span class="n">n=17 sold · median $1.40M</span></div>
+        <div class="chart-bar-track"><div class="chart-bar-fill" style="width: 16%;">+7.8%</div></div>
+        <div class="chart-pct">+8%</div>
+      </div>
+      <div class="chart-row">
+        <div class="chart-feature">Bushland backing<span class="n">n=8 sold · median $1.40M</span></div>
+        <div class="chart-bar-track"><div class="chart-bar-fill" style="width: 16%;">+7.8%</div></div>
+        <div class="chart-pct">+8%</div>
+      </div>
+      <div class="chart-row">
+        <div class="chart-feature">Natural backing<span class="n">n=16 sold · median $1.38M</span></div>
+        <div class="chart-bar-track"><div class="chart-bar-fill" style="width: 12%;">+5.8%</div></div>
+        <div class="chart-pct">+6%</div>
+      </div>
+      <div class="chart-baseline-note">% premium vs $1,300,000 cohort median across Robina, Varsity Lakes, Burleigh Waters, Merrimac · sold cohort 2024-04 to 2026-04</div>
+    </div>
+    <div class="q-foot">Source: Fields Gold_Coast sold cohort, n=999 transactions · 24-month rolling window · refreshed nightly</div>
+  </div>
+
+  <!-- ════════════════ BR: WALKING-DISTANCE ISOCHRONE ════════════════ -->
+  <div class="q bottom">
+    <div class="q-header">
+      <span class="label">Pass 04 · Walking-distance monopoly</span>
+      <span class="conf">23 POIs · 1.5 km radius · isochrone analysis</span>
+    </div>
+    <h3 class="q-title">The proximities your home holds that no competitor can match.</h3>
+
+    <div class="iso-stage">
+      <svg viewBox="0 0 600 380" preserveAspectRatio="xMidYMid meet">
+        <!-- Concentric isochrone rings centred on subject -->
+        <circle cx="300" cy="200" r="160" fill="rgba(183,103,73,0.05)" stroke="rgba(183,103,73,0.4)" stroke-width="1" stroke-dasharray="4 3"/>
+        <circle cx="300" cy="200" r="110" fill="rgba(183,103,73,0.07)" stroke="rgba(183,103,73,0.45)" stroke-width="1" stroke-dasharray="4 3"/>
+        <circle cx="300" cy="200" r="60" fill="rgba(183,103,73,0.1)" stroke="rgba(183,103,73,0.55)" stroke-width="1" stroke-dasharray="4 3"/>
+
+        <!-- Ring labels -->
+        <text x="300" y="50" text-anchor="middle" font-family="JetBrains Mono" font-size="8" font-weight="600" fill="#B76749" letter-spacing="1.5">1.5 KM · 18-MIN WALK</text>
+        <text x="300" y="98" text-anchor="middle" font-family="JetBrains Mono" font-size="7.5" font-weight="500" fill="#B76749" letter-spacing="1.2">800 M · 10 MIN</text>
+        <text x="300" y="148" text-anchor="middle" font-family="JetBrains Mono" font-size="7" font-weight="500" fill="#B76749" letter-spacing="1">400 M · 5 MIN</text>
+
+        <!-- Subject pin -->
+        <circle cx="300" cy="200" r="10" fill="#B76749" stroke="#22382C" stroke-width="2"/>
+        <text x="300" y="204" text-anchor="middle" font-family="JetBrains Mono" font-size="9" font-weight="700" fill="#FFF">S</text>
+        <text x="300" y="225" text-anchor="middle" font-family="JetBrains Mono" font-size="7" font-weight="700" fill="#22382C" letter-spacing="0.5">13 TERRACE COURT</text>
+
+        <!-- POIs with leader lines -->
+        <!-- All Saints Anglican (387m, ~5min) -->
+        <circle cx="252" cy="170" r="5" fill="#22382C"/>
+        <line x1="252" y1="170" x2="200" y2="135" stroke="#22382C" stroke-width="1"/>
+        <g transform="translate(50, 122)">
+          <rect x="0" y="0" width="150" height="26" fill="#22382C" rx="2"/>
+          <rect x="0" y="0" width="3" height="26" fill="#B76749"/>
+          <text x="9" y="11" font-family="JetBrains Mono" font-size="7" font-weight="700" fill="#E6DDD2" letter-spacing="0.5">ALL SAINTS ANGLICAN</text>
+          <text x="9" y="22" font-family="JetBrains Mono" font-size="7" font-weight="500" fill="#f0d9cc" letter-spacing="0.5">387 M · 5-MIN WALK</text>
+        </g>
+
+        <!-- Kingary Wetland Reserve (623m) -->
+        <circle cx="380" cy="160" r="5" fill="#22382C"/>
+        <line x1="380" y1="160" x2="445" y2="125" stroke="#22382C" stroke-width="1"/>
+        <g transform="translate(440, 110)">
+          <rect x="0" y="0" width="150" height="26" fill="#22382C" rx="2"/>
+          <rect x="0" y="0" width="3" height="26" fill="#B76749"/>
+          <text x="9" y="11" font-family="JetBrains Mono" font-size="7" font-weight="700" fill="#E6DDD2" letter-spacing="0.5">KINGARY WETLAND</text>
+          <text x="9" y="22" font-family="JetBrains Mono" font-size="7" font-weight="500" fill="#f0d9cc" letter-spacing="0.5">623 M · BUSHLAND</text>
+        </g>
+
+        <!-- Bourton Road Cafe (823m) -->
+        <circle cx="220" cy="265" r="5" fill="#22382C"/>
+        <line x1="220" y1="265" x2="170" y2="305" stroke="#22382C" stroke-width="1"/>
+        <g transform="translate(20, 295)">
+          <rect x="0" y="0" width="150" height="26" fill="#22382C" rx="2"/>
+          <rect x="0" y="0" width="3" height="26" fill="#B76749"/>
+          <text x="9" y="11" font-family="JetBrains Mono" font-size="7" font-weight="700" fill="#E6DDD2" letter-spacing="0.5">BOURTON ROAD CAFE</text>
+          <text x="9" y="22" font-family="JetBrains Mono" font-size="7" font-weight="500" fill="#f0d9cc" letter-spacing="0.5">823 M · 10 MIN</text>
+        </g>
+
+        <!-- Star of the Sea School (1085m) -->
+        <circle cx="380" cy="280" r="5" fill="#22382C"/>
+        <line x1="380" y1="280" x2="445" y2="320" stroke="#22382C" stroke-width="1"/>
+        <g transform="translate(440, 310)">
+          <rect x="0" y="0" width="150" height="26" fill="#22382C" rx="2"/>
+          <rect x="0" y="0" width="3" height="26" fill="#B76749"/>
+          <text x="9" y="11" font-family="JetBrains Mono" font-size="7" font-weight="700" fill="#E6DDD2" letter-spacing="0.5">STAR OF THE SEA</text>
+          <text x="9" y="22" font-family="JetBrains Mono" font-size="7" font-weight="500" fill="#f0d9cc" letter-spacing="0.5">1,085 M · 13 MIN</text>
+        </g>
+
+        <!-- Compass rose (small) -->
+        <g transform="translate(550, 30)">
+          <circle cx="20" cy="20" r="18" fill="rgba(34,56,44,0.85)"/>
+          <path fill="#B76749" d="M 20 8 L 16 22 L 20 18 L 24 22 Z"/>
+          <text x="20" y="35" text-anchor="middle" font-family="JetBrains Mono" font-size="9" font-weight="700" fill="#E6DDD2">N</text>
+        </g>
+      </svg>
+
+      <div class="iso-legend">
+        <div class="lg-row"><span class="swatch"></span> ISOCHRONE · WALKING ROUTE</div>
+        <div style="margin-top:1px;">SUBJECT · 23 POIs · 1.5 km radius</div>
+      </div>
+    </div>
+
+    <div class="iso-claim">
+      <div class="lbl">The headline proximity claim</div>
+      <div class="body">387 m to All Saints Anglican — <em>shorter than 91% of homes currently listed in the catchment.</em> No active competitor closes the gap.</div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>
