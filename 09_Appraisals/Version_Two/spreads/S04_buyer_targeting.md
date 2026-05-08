@@ -30,7 +30,7 @@ A premium price requires a premium buyer in the room. Most agencies hope the rig
 
 - **Engagement telemetry feeds back to the campaign.** PostHog tracks every interaction with the listing. Within 72 hours of going live, we know which photo has the highest dwell time, which portion of the editorial copy is being re-read, and which feature is driving the most enquiries — and we adjust the campaign accordingly.
 
-- **Buyer database outreach pre-launch.** Before the public listing goes live, qualified buyers we have engaged through the broader Fields ecosystem (newsletter, Five Property Friday, market intelligence pages, decision feed) are notified and matched to your property by archetype, price band, and feature requirement. This is the practice known in the industry as the [Mat Steinwede method](https://fieldsestate.com.au/articles/699d7223a47edd0001e077e8) — by the time the first public open home runs, serious buyers are already competing.
+- **Property Intelligence editorial pre-launch placement + retargeting waves.** Three days before public launch, your home appears in a featured slot on Fields' Property Intelligence editorial section — an editorial layer that drew **2,493 visitor sessions** in the last 17 days observed. Buyers who engage with the editorial are tagged for retargeting; ad creative follows them across Facebook, Instagram, Google Display, and search retargeting for the full 28-day campaign. Most agencies serve a small list of past enquirers (typical agent buyer database: 400-800 historical emails, suburb-local, often months stale). We surface the listing in front of every qualified buyer the moment behavioural signals say they're in market — wherever they are on the internet, across Brisbane, the Gold Coast, Sydney, and Melbourne.
 
 ### The evidence
 
@@ -54,60 +54,64 @@ The agency that runs your campaign on "list it and see who calls" is leaving the
 
 ### Headline finding
 
-> **Approximately 380 qualified buyers will be searching for a home like yours in the next 30 days. We have a specific channel plan for each of the three personas that account for 83% of them.**
+> **Your campaign reaches an estimated ~52,000 qualified internet impressions across four cities — Brisbane, Gold Coast, Sydney, Melbourne — narrowing through eleven channels and two retargeting waves to ~45 inspecting buyers and one buyer at the right price.**
 
-### Buyer pool, sized
+### Reach, sized — across four cities, eleven channels
 
-For 13 Terrace Court, in the $1.80-2.10M Merrimac/Robina bracket with five-or-more bedrooms:
+For 13 Terrace Court, a $5K paid-media budget over 28 days addressed at persona-matched audiences:
 
-- **Realestate.com.au monthly search volume:** approximately **220 buyers/month** in the suburb-bracket combination
-- **Domain.com.au monthly search volume:** approximately **140 buyers/month**
-- **Facebook ad audience size, persona-matched:** **18,400** (Multi-Gen Family + Established Downsizer + Relocating)
-- **Fields ecosystem buyer pool, southern GC active:** approximately **920 unique buyers** with prior engagement in the price band
-- **Estimated qualified-and-active buyers in next 30 days:** **~380** *(de-duplicated across portals + Fields ecosystem; modelled from observed engagement-to-enquiry ratios in the Fields decision feed and editorial telemetry)*
+- **Targeted internet impressions:** approximately **52,000** across persona-matched FB Custom Audiences + lookalikes, Instagram, Google Search ("house Robina", "6 bedroom Gold Coast"), Google Display premium audience network — anchored on industry premium-real-estate CPMs ($25-40 FB CPM persona-matched, $3-5 Display, $1.77 search CPC)
+- **Click-through engagements:** approximately **3,800** (industry benchmark 4.5-7%, validated against Fields' actual recent FB CTR of **4.10%** across 275,234 impressions)
+- **Property Intelligence editorial views:** approximately **480** (Day −3 featured-slot placement; ~13% of click-throughs)
+- **Deep engagements (3+ touchpoints, retargeted):** approximately **95**
+- **Estimated inspections over 28-day campaign:** **~45** *(industry: 40-55% deep-engaged → inspection rate)*
+- **Buyer at the right price:** **1**
 
 ### Channel plan, per persona
 
-**01 — The Multi-Generational Family** *(38% of qualified flow)*
+**01 — The Established Owner-Occupier With Capital** *(35% of qualified enquiry flow)*
 
 | Channel | Activation | Cadence |
 |---|---|---|
-| Facebook ads, Custom Audience: Merrimac/Robina/Mudgeeraba parents 40-55 | Day 1 (pre-launch) | 7-day burst, $35/day |
-| Facebook ads, Lookalike of Fields buyer enquirers | Day 1 | 21-day burst, $25/day |
-| Domain.com.au "5+ bedroom Merrimac" saved-search push | Day 0 (pre-launch) | One-time launch alert |
-| Independent-school parent-newsletter ad placement | Day 4 | Single insertion |
-| Fields decision feed, featured slot | Day 0 | 14-day rotation |
+| Property Intelligence editorial featured slot | Day −3 | Continuous, 28+ days |
+| Domain.com.au saved-search recipients in 4226+4227+4220 over $1.5M | Day 0 | One-time launch alert |
+| Realestate.com.au "buyer's-club" demographics 50-65 suburb-local | Day 1 | 21-day campaign |
+| Google Search ads — "house Robina", "6 bedroom Gold Coast" | Day 1 | 28-day continuous, $800 |
 
-**02 — The Established Owner-Occupier With Capital** *(27%)*
-
-| Channel | Activation | Cadence |
-|---|---|---|
-| Domain.com.au saved-search recipients in 4226 over $1.5M | Day 0 | One-time launch alert |
-| Realestate.com.au "buyer's-club" demographics 50-65 | Day 1 | 21-day campaign |
-| Fields editorial / market intelligence audience (PostHog-modelled) | Day 0 | Continuous |
-| Direct outreach via Fields buyer database | Day −3 (pre-public-launch) | Personal email/call from Will |
-
-**03 — The High-Income Family Relocating** *(18%)*
+**02 — The Multi-Generational Family** *(30%)*
 
 | Channel | Activation | Cadence |
 |---|---|---|
-| Facebook ads, Sydney/Melbourne lookalike of GC relocation enquirers | Day 1 | 28-day campaign, $40/day |
-| LinkedIn ads, senior managers, GC-relocation interest signals | Day 3 | 21-day campaign |
-| Realestate.com.au out-of-state-browsing premium placement | Day 1 | 14-day premium |
+| Facebook Custom Audience — parents 40-55 Merrimac/Robina/Mudgeeraba | Day 1 | 7-day burst, $700 |
+| Facebook Lookalike of Fields buyer enquirers | Day 1 | 21-day campaign, $500 |
+| Domain.com.au "5+ bedroom Merrimac" saved-search push | Day 0 | One-time launch alert |
+| Independent-school parent-newsletter (All Saints, Hillcrest, Somerset) | Day 4 | Single insertion |
 
-### Pre-launch buyer-database outreach
+**03 — The High-Income Family Relocating** *(20%)*
 
-Fields' active buyer database includes **920 unique southern-Gold-Coast buyers** with engagement-pattern matches in the $1.6-2.2M bracket over the last 90 days. We will hand-match this database against the three personas above and reach approximately **45-70 buyers** by personal email from Will three days before public launch — buyers who have already engaged with our editorial, articles, or prior listings, and for whom the home matches their stated criteria.
+| Channel | Activation | Cadence |
+|---|---|---|
+| Facebook ads, Sydney + Melbourne lookalikes of GC relocation enquirers | Day 1 | 28-day campaign, $1,000 |
+| LinkedIn ads, senior managers with GC-relocation signals | Day 3 | 21-day campaign, $400 |
+| Realestate.com.au out-of-state browsing premium placement | Day 1 | 14-day premium |
+
+**All personas — retargeting waves**
+
+| Channel | Activation | Cadence |
+|---|---|---|
+| Retargeting wave 1 — site visitors who didn't enquire | Day 4 | 14-day from Day 4, $300 |
+| Retargeting wave 2 — engaged-but-didn't-inspect | Day 14 | 14-day from Day 14, $300 |
+
+### Pre-launch Property Intelligence editorial placement
+
+Three days before public launch, the listing appears in Fields' Property Intelligence editorial featured-slot section, with editorial copy positioning the home against three persona narratives. Visitors are tagged via PostHog and routed to retargeting audiences. Within 72 hours of launch, retargeting wave 1 surfaces the listing back to engaged-but-not-converted visitors with adjusted creative.
 
 ### Visual
 
-Two visuals on the right page:
+The Opening 2 spread on the next two pages develops the visualisation: TL the digital-reach funnel (52,000 → 1), TR the 28-day Gantt of channel activation, BL the geographic reach map across Brisbane / Gold Coast / Sydney / Melbourne plus the database-vs-digital contrast panel, BR the live PostHog telemetry from past Fields ecosystem campaigns.
 
-1. **Buyer-flow funnel** — five stacked bands showing total southern-GC buyer pool (~18,400 ad-audience-eligible) → portal-active in bracket (~360) → persona-matched (~310) → Fields-database-engaged in bracket (~70) → estimated to inspect (~45). Funnel is illustrative; numbers update as campaign runs.
-2. **Channel timeline** — a 28-day Gantt strip showing the activation schedule of each channel for each persona, with budget allocation indicated by bar height.
-
-*Caption: "Buyer-pool sizing combines portal monthly search-volume data with Fields ecosystem engagement telemetry; figures are estimates updated nightly during campaign and reported to the seller in the daily briefing."*
+*Caption: "Reach numbers anchored on industry premium-real-estate CPMs and validated against Fields' actual platform CTRs (4.10% FB across 275,234 recent impressions). Bands intentionally rounded — verified before campaign launch."*
 
 ### What this means for your sale
 
-This is the campaign infrastructure your home deserves. Most listings receive a single Domain placement, a single Realestate.com.au listing, and a Saturday Facebook post from the agency. Yours receives a sequenced, persona-targeted campaign across nine channels with $4-6K of paid media budget — a campaign that the same agency could not run because they do not maintain the Custom Audiences, the buyer database, the engagement telemetry, or the editorial reach. Spread 05 explains why the buyers we reach already trust the source they are reading from.
+Most agents have a small static email list — historical contacts, suburb-local, often months stale. Your campaign uses the entire qualified-buyer footprint of the eastern seaboard, addressed live, with creative tailored per persona and adjusted within 72 hours of launch by telemetric feedback. The same agencies cannot run this campaign because they do not maintain the Custom Audiences, the editorial reach, the retargeting pixels, or the data pipeline. Spread 05 explains why the buyers we reach already trust the source they are reading from.
