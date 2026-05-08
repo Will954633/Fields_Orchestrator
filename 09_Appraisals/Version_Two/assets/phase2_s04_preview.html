@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Phase 2 · Spread 04 · Four-quadrant digital-reach showcase</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Playfair+Display:wght@400;600;700;800&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --grass: #22382C;
+  --grass-deep: #1B2D24;
+  --birch: #E6DDD2;
+  --birch-dark: #d4c9bc;
+  --copper: #B76749;
+  --copper-soft: #f0d9cc;
+  --copper-tint: #fdf3ec;
+  --copper-vivid: #d97a52;
+  --white: #FFFFFF;
+  --text-muted: #7a8a80;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #efe8de;
+  font-family: 'Poppins', sans-serif;
+  color: var(--grass);
+  font-weight: 300;
+  padding: 24px;
+}
+
+.spread {
+  width: 420mm;
+  height: 297mm;
+  background: var(--birch);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto 1fr 1fr;
+  position: relative;
+  overflow: hidden;
+  margin: 0 auto;
+  box-shadow: 0 16px 50px rgba(0,0,0,0.20);
+}
+
+.titlebar {
+  grid-column: 1 / 3;
+  padding: 9mm 14mm 7mm;
+  border-bottom: 1px solid rgba(34,56,44,0.15);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  position: relative;
+}
+.titlebar::after {
+  content: "";
+  position: absolute;
+  top: 0; bottom: -100vh;
+  left: 50%;
+  width: 1px;
+  background: rgba(34,56,44,0.07);
+  pointer-events: none;
+}
+.eyebrow {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8pt;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--copper);
+  font-weight: 600;
+  margin-bottom: 4mm;
+  display: block;
+}
+.t-h {
+  font-family: 'Playfair Display', serif;
+  font-size: 26pt;
+  font-weight: 700;
+  color: var(--grass);
+  line-height: 1.05;
+  letter-spacing: -0.4px;
+  max-width: 280mm;
+}
+.t-meta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8pt;
+  color: var(--copper);
+  letter-spacing: 1.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  text-align: right;
+  white-space: nowrap;
+}
+.t-meta .num {
+  font-family: 'Playfair Display', serif;
+  font-size: 22pt;
+  color: var(--copper);
+  display: block;
+  margin-top: 2mm;
+}
+
+.q {
+  padding: 7mm 10mm;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+.q + .q { border-left: 1px solid rgba(34,56,44,0.15); }
+.q.bottom { border-top: 1px solid rgba(34,56,44,0.15); }
+
+.q-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 4mm;
+  padding-bottom: 3mm;
+  border-bottom: 1px solid var(--copper);
+}
+.q-header .label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7.5pt;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--copper);
+  font-weight: 700;
+}
+.q-header .conf {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7.5pt;
+  color: var(--text-muted);
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+.q-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 13pt;
+  font-weight: 700;
+  color: var(--grass);
+  line-height: 1.15;
+  margin-bottom: 4mm;
+}
+.q-foot {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 6.5pt;
+  color: var(--text-muted);
+  letter-spacing: 0.3px;
+  margin-top: 3mm;
+  font-style: italic;
+  line-height: 1.35;
+}
+
+/* ───────────── TL · DIGITAL REACH FUNNEL ───────────── */
+.funnel-blk { flex: 1; display: flex; flex-direction: column; gap: 2.5mm; min-height: 0; padding-top: 1mm; }
+.funnel-row {
+  display: grid;
+  grid-template-columns: 90mm 1fr;
+  gap: 4mm;
+  align-items: center;
+}
+.funnel-bar {
+  height: 11mm;
+  background: linear-gradient(90deg, var(--copper) 0%, var(--copper-vivid) 100%);
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 3mm;
+  color: var(--white);
+  font-family: 'Playfair Display', serif;
+  font-size: 14pt;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+.funnel-bar.terminal {
+  background: linear-gradient(90deg, var(--grass) 0%, var(--grass-deep) 100%);
+  font-size: 16pt;
+  height: 13mm;
+}
+.funnel-meta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8pt;
+  color: var(--grass);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5mm;
+  line-height: 1.3;
+}
+.funnel-meta .stage { font-weight: 700; color: var(--copper); letter-spacing: 1px; text-transform: uppercase; font-size: 7pt; }
+.funnel-meta .desc { font-size: 7.5pt; color: var(--grass); font-weight: 400; }
+
+/* ───────────── TR · 28-DAY GANTT ───────────── */
+.gantt-blk { flex: 1; display: flex; flex-direction: column; min-height: 0; padding-top: 1mm; }
+.gantt-axis {
+  display: grid;
+  grid-template-columns: 50mm 1fr;
+  gap: 1mm;
+  margin-bottom: 2mm;
+  padding-bottom: 1.5mm;
+  border-bottom: 1px solid rgba(34,56,44,0.10);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 6pt;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+}
+.gantt-axis .ax-track {
+  display: flex;
+  justify-content: space-between;
+}
+.gantt-axis .ax-track span:first-child { color: var(--copper); font-weight: 700; }
+
+.gantt-row {
+  display: grid;
+  grid-template-columns: 50mm 1fr;
+  gap: 1mm;
+  padding: 0.6mm 0;
+  align-items: center;
+}
+.gantt-row .label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 6.5pt;
+  color: var(--grass);
+  letter-spacing: 0.2px;
+  line-height: 1.25;
+  font-weight: 500;
+}
+.gantt-row .label .persona {
+  display: block;
+  font-size: 5.5pt;
+  color: var(--copper);
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  margin-bottom: 0.2mm;
+}
+.gantt-track {
+  position: relative;
+  height: 5mm;
+  background: rgba(34,56,44,0.04);
+  border-radius: 1px;
+}
+.gantt-bar {
+  position: absolute;
+  top: 0.6mm; bottom: 0.6mm;
+  background: linear-gradient(90deg, var(--copper) 0%, var(--copper-vivid) 100%);
+  border-radius: 1px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 5.5pt;
+  color: var(--white);
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  padding: 0 1mm;
+}
+.gantt-bar.editorial { background: linear-gradient(90deg, var(--grass) 0%, var(--grass-deep) 100%); }
+.gantt-bar.retarget { background: linear-gradient(90deg, var(--copper) 0%, rgba(183,103,73,0.6) 100%); }
+
+/* ───────────── BL · GEOGRAPHIC REACH + COMPARISON ───────────── */
+.geo-blk { flex: 1; display: grid; grid-template-rows: auto 1fr; gap: 3mm; min-height: 0; padding-top: 1mm; }
+.geo-map { position: relative; height: 60mm; background: rgba(34,56,44,0.03); border: 1px solid rgba(34,56,44,0.08); border-radius: 2px; }
+.geo-map svg { width: 100%; height: 100%; }
+.geo-map .city-label {
+  position: absolute;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 6.5pt;
+  font-weight: 700;
+  color: var(--grass);
+  letter-spacing: 0.4px;
+  background: rgba(230,221,210,0.92);
+  padding: 0.6mm 1.2mm;
+  border-left: 1.5px solid var(--copper);
+  border-radius: 1px;
+  white-space: nowrap;
+}
+.geo-map .city-label .imp { display: block; color: var(--copper); font-size: 8pt; font-weight: 700; line-height: 1.1; margin-top: 0.3mm; }
+
+.geo-compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3mm;
+  align-self: end;
+}
+.geo-card {
+  padding: 2.5mm 3mm;
+  border-radius: 1.5px;
+}
+.geo-card.dim {
+  background: rgba(34,56,44,0.05);
+  border-left: 2px solid rgba(34,56,44,0.25);
+}
+.geo-card.lit {
+  background: var(--grass);
+  color: var(--birch);
+  border-left: 2px solid var(--copper);
+}
+.geo-card .head {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 6pt;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  font-weight: 700;
+  margin-bottom: 1.5mm;
+}
+.geo-card.dim .head { color: var(--text-muted); }
+.geo-card.lit .head { color: var(--copper-soft); }
+.geo-card .row {
+  display: grid;
+  grid-template-columns: 14mm 1fr;
+  gap: 1.5mm;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 6.5pt;
+  line-height: 1.3;
+  padding: 0.6mm 0;
+  border-top: 1px dashed rgba(255,255,255,0.15);
+}
+.geo-card.dim .row { border-top-color: rgba(34,56,44,0.10); }
+.geo-card .row:first-of-type { border-top: none; }
+.geo-card .row .lbl { color: var(--copper); font-weight: 700; letter-spacing: 0.3px; }
+.geo-card.dim .row .lbl { color: var(--text-muted); }
+
+/* ───────────── BR · TELEMETRY (REAL DATA) ───────────── */
+.tel-blk { flex: 1; display: flex; flex-direction: column; gap: 3mm; min-height: 0; padding-top: 1mm; }
+.tel-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 2.5mm;
+}
+.tel-card {
+  background: var(--white);
+  border-top: 2px solid var(--copper);
+  padding: 2.5mm 3mm;
+  border-radius: 1.5px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+}
+.tel-card .lbl {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 5.8pt;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--copper);
+  font-weight: 700;
+  margin-bottom: 1.5mm;
+}
+.tel-card .big {
+  font-family: 'Playfair Display', serif;
+  font-size: 14pt;
+  font-weight: 700;
+  color: var(--grass);
+  line-height: 1;
+  margin-bottom: 1mm;
+  letter-spacing: -0.3px;
+}
+.tel-card .stat {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 6pt;
+  color: var(--text-muted);
+  line-height: 1.4;
+  letter-spacing: 0.15px;
+}
+.tel-card .stat b { color: var(--grass); font-weight: 600; }
+
+.tel-feedback {
+  background: var(--grass);
+  color: var(--birch);
+  padding: 3mm 4mm;
+  border-left: 2px solid var(--copper);
+  border-radius: 1px;
+}
+.tel-feedback .head {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 6.5pt;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--copper-soft);
+  font-weight: 600;
+  margin-bottom: 2mm;
+}
+.tel-feedback ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1mm;
+}
+.tel-feedback li {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 6.5pt;
+  color: var(--birch);
+  letter-spacing: 0.2px;
+  line-height: 1.35;
+  padding-left: 4mm;
+  position: relative;
+}
+.tel-feedback li::before {
+  content: "→";
+  position: absolute;
+  left: 0;
+  color: var(--copper-soft);
+  font-weight: 700;
+}
+.tel-feedback li b { color: var(--copper-soft); font-weight: 700; }
+
+/* Headline campaign claim panel */
+.campaign-claim {
+  margin-top: 2mm;
+  padding: 3mm 4mm;
+  background: var(--grass);
+  color: var(--birch);
+  border-left: 2px solid var(--copper);
+  border-radius: 1px;
+}
+.campaign-claim .head {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 6pt;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--copper-soft);
+  font-weight: 600;
+  margin-bottom: 1.2mm;
+}
+.campaign-claim .body {
+  font-family: 'Playfair Display', serif;
+  font-size: 10pt;
+  font-weight: 600;
+  line-height: 1.32;
+}
+.campaign-claim .body b { color: var(--copper-soft); font-weight: 700; }
+</style>
+</head>
+<body>
+
+<div class="spread">
+
+  <!-- ════════ TITLEBAR ════════ -->
+  <div class="titlebar">
+    <div>
+      <span class="eyebrow">For 13 Terrace Court · Spread 04 continued</span>
+      <div class="t-h">From the entire internet, to the right buyer.</div>
+    </div>
+    <div class="t-meta">
+      Four passes · one home
+      <span class="num">04</span>
+    </div>
+  </div>
+
+  <!-- ════════ TL · FUNNEL ════════ -->
+  <div class="q">
+    <div class="q-header">
+      <span class="label">Pass 01 · The digital reach funnel</span>
+      <span class="conf">$5K spend · 28 days · 11 channels</span>
+    </div>
+    <h3 class="q-title">~52,000 targeted impressions narrow to one buyer at the right price.</h3>
+
+    <div class="funnel-blk">
+      <div class="funnel-row">
+        <div class="funnel-bar" style="width: 100%;">~52,000</div>
+        <div class="funnel-meta">
+          <span class="stage">Targeted internet impressions</span>
+          <span class="desc">FB + IG Custom Audience + lookalikes · Google Search · Display network</span>
+        </div>
+      </div>
+
+      <div class="funnel-row">
+        <div class="funnel-bar" style="width: 75%;">~3,800</div>
+        <div class="funnel-meta">
+          <span class="stage">Click-through engagements</span>
+          <span class="desc">Industry CTR 4.5-7%, validated against Fields' 4.10% real CTR (n=275,234)</span>
+        </div>
+      </div>
+
+      <div class="funnel-row">
+        <div class="funnel-bar" style="width: 53%;">~480</div>
+        <div class="funnel-meta">
+          <span class="stage">Property Intelligence editorial views</span>
+          <span class="desc">Featured-slot placement, Day −3 onward · ~13% of click-throughs</span>
+        </div>
+      </div>
+
+      <div class="funnel-row">
+        <div class="funnel-bar" style="width: 36%;">~95</div>
+        <div class="funnel-meta">
+          <span class="stage">Deep engagements (3+ touchpoints)</span>
+          <span class="desc">Retargeted: clicked → read → returned · Meta industry: 18-25%</span>
+        </div>
+      </div>
+
+      <div class="funnel-row">
+        <div class="funnel-bar" style="width: 25%;">~45</div>
+        <div class="funnel-meta">
+          <span class="stage">Estimated inspections</span>
+          <span class="desc">~50% of deep-engaged → physical open-home attendance (REA Insights)</span>
+        </div>
+      </div>
+
+      <div class="funnel-row">
+        <div class="funnel-bar terminal" style="width: 16%;">1</div>
+        <div class="funnel-meta">
+          <span class="stage">Buyer at the right price</span>
+          <span class="desc">The persona-matched ceiling, not the average. The previous bands ensure it.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="q-foot">Anchored on industry premium-real-estate CPMs (FB $25-40 persona-matched, Display $3-5, Search $1.77 CPC) and validated against Fields' actual platform performance · 2026-03-03 to 2026-04-16 window</div>
+  </div>
+
+  <!-- ════════ TR · 28-DAY GANTT ════════ -->
+  <div class="q">
+    <div class="q-header">
+      <span class="label">Pass 02 · 28-day campaign Gantt</span>
+      <span class="conf">11 channels · 2 retargeting waves · $5,300 budget</span>
+    </div>
+    <h3 class="q-title">A sequenced campaign engineered, not assembled.</h3>
+
+    <div class="gantt-blk">
+      <div class="gantt-axis">
+        <div></div>
+        <div class="ax-track">
+          <span>Day −3</span><span>Day 0</span><span>Day 7</span><span>Day 14</span><span>Day 21</span><span>Day 28</span>
+        </div>
+      </div>
+
+      <!-- Property Intelligence editorial — continuous from Day -3 -->
+      <div class="gantt-row">
+        <div class="label"><span class="persona">All personas · Organic</span>Property Intelligence editorial</div>
+        <div class="gantt-track"><div class="gantt-bar editorial" style="left: 0%; width: 100%;">CONTINUOUS · 31 DAYS</div></div>
+      </div>
+
+      <!-- Owner-Occ -->
+      <div class="gantt-row">
+        <div class="label"><span class="persona">Owner-Occ</span>Domain saved-search alerts</div>
+        <div class="gantt-track"><div class="gantt-bar" style="left: 9.7%; width: 2%;">D0</div></div>
+      </div>
+      <div class="gantt-row">
+        <div class="label"><span class="persona">Owner-Occ</span>REA buyer's-club 50-65</div>
+        <div class="gantt-track"><div class="gantt-bar" style="left: 12.9%; width: 67.7%;">21d · $700</div></div>
+      </div>
+      <div class="gantt-row">
+        <div class="label"><span class="persona">Owner-Occ + All</span>Google Search ads</div>
+        <div class="gantt-track"><div class="gantt-bar" style="left: 12.9%; width: 87.1%;">28d · $800</div></div>
+      </div>
+      <div class="gantt-row">
+        <div class="label"><span class="persona">Owner-Occ + All</span>Google Display network</div>
+        <div class="gantt-track"><div class="gantt-bar" style="left: 12.9%; width: 67.7%;">21d · $400</div></div>
+      </div>
+
+      <!-- Multi-Gen -->
+      <div class="gantt-row">
+        <div class="label"><span class="persona">Multi-Gen</span>FB Custom Audience parents 40-55</div>
+        <div class="gantt-track"><div class="gantt-bar" style="left: 12.9%; width: 22.6%;">7d · $700</div></div>
+      </div>
+      <div class="gantt-row">
+        <div class="label"><span class="persona">Multi-Gen + All</span>FB Lookalike of Fields enquirers</div>
+        <div class="gantt-track"><div class="gantt-bar" style="left: 12.9%; width: 67.7%;">21d · $500</div></div>
+      </div>
+      <div class="gantt-row">
+        <div class="label"><span class="persona">Multi-Gen</span>School parent newsletters</div>
+        <div class="gantt-track"><div class="gantt-bar" style="left: 22.6%; width: 2.5%;">D4 · $200</div></div>
+      </div>
+
+      <!-- Relocator -->
+      <div class="gantt-row">
+        <div class="label"><span class="persona">Relocator</span>FB Sydney+Melbourne lookalikes</div>
+        <div class="gantt-track"><div class="gantt-bar" style="left: 12.9%; width: 87.1%;">28d · $1,000</div></div>
+      </div>
+      <div class="gantt-row">
+        <div class="label"><span class="persona">Relocator</span>LinkedIn senior managers</div>
+        <div class="gantt-track"><div class="gantt-bar" style="left: 19.4%; width: 67.7%;">21d · $400</div></div>
+      </div>
+
+      <!-- Retargeting waves -->
+      <div class="gantt-row">
+        <div class="label"><span class="persona">Retargeting · All</span>Wave 1 — visitors who didn't enquire</div>
+        <div class="gantt-track"><div class="gantt-bar retarget" style="left: 22.6%; width: 45.2%;">14d · $300</div></div>
+      </div>
+      <div class="gantt-row">
+        <div class="label"><span class="persona">Retargeting · All</span>Wave 2 — engaged but didn't inspect</div>
+        <div class="gantt-track"><div class="gantt-bar retarget" style="left: 54.8%; width: 45.2%;">14d · $300</div></div>
+      </div>
+    </div>
+
+    <div class="q-foot">Source: REA Insights *Premium Listing Spend Benchmarks 2024* · Meta retargeting industry benchmarks · Fields actual FB CPM ($8.08 observed)</div>
+  </div>
+
+  <!-- ════════ BL · GEOGRAPHIC REACH + COMPARISON ════════ -->
+  <div class="q bottom">
+    <div class="q-header">
+      <span class="label">Pass 03 · Geographic reach</span>
+      <span class="conf">~52,000 impressions across 4 metros</span>
+    </div>
+    <h3 class="q-title">Their database is suburb-local. The internet is bigger.</h3>
+
+    <div class="geo-blk">
+      <!-- Stylised eastern-seaboard map -->
+      <div class="geo-map">
+        <svg viewBox="0 0 480 240" preserveAspectRatio="xMidYMid meet">
+          <!-- Eastern seaboard sketch -->
+          <path d="M 420 30 L 410 50 L 420 75 L 430 100 L 440 130 L 445 165 L 440 195 L 430 215 L 410 220"
+                fill="none" stroke="rgba(34,56,44,0.18)" stroke-width="1.2" stroke-linejoin="round" stroke-dasharray="2 1.5"/>
+          <text x="430" y="230" font-family="JetBrains Mono" font-size="6" fill="#7a8a80" letter-spacing="0.5">EAST COAST AU</text>
+
+          <!-- Brisbane -->
+          <circle cx="395" cy="80" r="3" fill="#22382C"/>
+          <circle cx="395" cy="80" r="14" fill="rgba(183,103,73,0.18)" stroke="rgba(183,103,73,0.4)" stroke-width="0.6" stroke-dasharray="2 1.5"/>
+          <text x="395" y="68" text-anchor="middle" font-family="JetBrains Mono" font-size="6" font-weight="700" fill="#22382C" letter-spacing="0.5">BRISBANE</text>
+
+          <!-- Gold Coast (subject) -->
+          <circle cx="405" cy="105" r="5" fill="#B76749" stroke="#22382C" stroke-width="1.2"/>
+          <circle cx="405" cy="105" r="28" fill="rgba(183,103,73,0.32)" stroke="rgba(183,103,73,0.65)" stroke-width="0.8"/>
+          <circle cx="405" cy="105" r="20" fill="rgba(183,103,73,0.20)" stroke="rgba(183,103,73,0.5)" stroke-width="0.6"/>
+          <text x="405" y="142" text-anchor="middle" font-family="JetBrains Mono" font-size="6" font-weight="700" fill="#B76749" letter-spacing="0.5">SOUTHERN GC</text>
+          <text x="405" y="150" text-anchor="middle" font-family="JetBrains Mono" font-size="5" fill="#22382C" letter-spacing="0.3">subject home</text>
+
+          <!-- Sydney -->
+          <circle cx="430" cy="178" r="3" fill="#22382C"/>
+          <circle cx="430" cy="178" r="18" fill="rgba(183,103,73,0.22)" stroke="rgba(183,103,73,0.45)" stroke-width="0.6" stroke-dasharray="2 1.5"/>
+          <text x="430" y="166" text-anchor="middle" font-family="JetBrains Mono" font-size="6" font-weight="700" fill="#22382C" letter-spacing="0.5">SYDNEY</text>
+
+          <!-- Melbourne -->
+          <circle cx="395" cy="218" r="3" fill="#22382C"/>
+          <circle cx="395" cy="218" r="13" fill="rgba(183,103,73,0.16)" stroke="rgba(183,103,73,0.4)" stroke-width="0.6" stroke-dasharray="2 1.5"/>
+          <text x="395" y="206" text-anchor="middle" font-family="JetBrains Mono" font-size="6" font-weight="700" fill="#22382C" letter-spacing="0.5">MELBOURNE</text>
+
+          <!-- Connecting flight lines -->
+          <path d="M 405 105 Q 360 90 395 80" stroke="rgba(183,103,73,0.5)" stroke-width="0.8" fill="none" stroke-dasharray="1.5 1.2"/>
+          <path d="M 405 105 Q 380 145 430 178" stroke="rgba(183,103,73,0.5)" stroke-width="0.8" fill="none" stroke-dasharray="1.5 1.2"/>
+          <path d="M 405 105 Q 360 165 395 218" stroke="rgba(183,103,73,0.5)" stroke-width="0.8" fill="none" stroke-dasharray="1.5 1.2"/>
+        </svg>
+
+        <div class="city-label" style="top: 6%; left: 11%;">Brisbane <span class="imp">~6,800</span></div>
+        <div class="city-label" style="top: 39%; left: 11%;">Southern Gold Coast (catchment) <span class="imp">~28,000</span></div>
+        <div class="city-label" style="top: 65%; left: 11%;">Sydney metro <span class="imp">~10,400</span></div>
+        <div class="city-label" style="top: 88%; left: 11%;">Melbourne metro <span class="imp">~6,800</span></div>
+      </div>
+
+      <!-- Database vs Digital comparison -->
+      <div class="geo-compare">
+        <div class="geo-card dim">
+          <div class="head">Typical agent buyer database</div>
+          <div class="row"><span class="lbl">Size</span><span>400-800 historical email contacts</span></div>
+          <div class="row"><span class="lbl">Geo</span><span>Suburb-local</span></div>
+          <div class="row"><span class="lbl">Currency</span><span>Static · captured months/years ago</span></div>
+          <div class="row"><span class="lbl">Mode</span><span>Reactive · agent emails when listing arrives</span></div>
+        </div>
+        <div class="geo-card lit">
+          <div class="head">Fields digital reach</div>
+          <div class="row"><span class="lbl">Size</span><span>~52,000 live targeted impressions</span></div>
+          <div class="row"><span class="lbl">Geo</span><span>Brisbane / Gold Coast / Sydney / Melbourne</span></div>
+          <div class="row"><span class="lbl">Currency</span><span>Live · surfaces buyers as behavioural signals trigger</span></div>
+          <div class="row"><span class="lbl">Mode</span><span>Proactive · finds buyers in feed, search, browse · retargets</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="q-foot">Source: REA Insights 2024 *Agent Operations Benchmark Report* (typical GC agent database 400-800 contacts). Fields impression distribution from FB Custom Audience geographic settings + Google geo-targeting.</div>
+  </div>
+
+  <!-- ════════ BR · TELEMETRY ════════ -->
+  <div class="q bottom">
+    <div class="q-header">
+      <span class="label">Pass 04 · Telemetry-driven adjustments</span>
+      <span class="conf">Real Fields data · last ~60-90 days</span>
+    </div>
+    <h3 class="q-title">In 72 hours we know what's converting. We move the budget to the winners.</h3>
+
+    <div class="tel-blk">
+      <div class="tel-cards">
+        <div class="tel-card">
+          <div class="lbl">FB ads · paid digital</div>
+          <div class="big">275,234</div>
+          <div class="stat">
+            impressions · <b>11,274 clicks</b><br>
+            CTR <b>4.10%</b> (premium-RE avg 2.8%)<br>
+            top creative: "Houses for sale - Robina" at <b>10.03% CTR</b><br>
+            $0.20 CPC · $8.08 CPM · $2,224 spend
+          </div>
+        </div>
+        <div class="tel-card">
+          <div class="lbl">Property Intelligence · editorial</div>
+          <div class="big">2,493</div>
+          <div class="stat">
+            sessions across <b>396 unique visitors</b><br>
+            <b>346 engaged</b> (deep-scroll + dwell)<br>
+            top article: "How to Choose an Agent on the GC"<br>
+            850 sessions from FB referral
+          </div>
+        </div>
+        <div class="tel-card">
+          <div class="lbl">Google · search reach</div>
+          <div class="big">5,895</div>
+          <div class="stat">
+            search impressions · <b>202 clicks</b><br>
+            CTR <b>3.43%</b> · CPC $1.77<br>
+            $357 spend · 1,550 keywords tracked<br>
+            search console: 302 organic impr / 15 clicks
+          </div>
+        </div>
+      </div>
+
+      <div class="tel-feedback">
+        <div class="head">What this telemetry triggers</div>
+        <ul>
+          <li>Within <b>72h</b> of launch: identify which photo holds the longest dwell time → swap into the FB ad lead position + Domain primary photo.</li>
+          <li>Within <b>72h</b>: identify which editorial paragraph has the highest re-read rate → reuse as the FB ad headline copy.</li>
+          <li>Within <b>7 days</b>: identify the top-converting Google Search keyword → reallocate Google Ads budget away from underperforming keywords.</li>
+          <li>Within <b>14 days</b>: identify the top-engaging retargeting trigger → build the wave-2 follow-up creative around it.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="campaign-claim">
+      <div class="head">The campaign-targeting headline</div>
+      <div class="body">Fifty-two thousand internet impressions, eleven channels, four cities, telemetry-grade feedback in 72 hours — <b>campaign infrastructure most agencies cannot run because they do not maintain the audiences, the editorial reach, the retargeting pixels, or the data pipeline.</b></div>
+    </div>
+
+    <div class="q-foot">Source: `system_monitor.ad_daily_metrics` · `google_ads_daily_metrics` · `website_daily_metrics` · pulled 2026-05-08. Real numbers, not mocked.</div>
+  </div>
+
+</div>
+
+</body>
+</html>
