@@ -1,0 +1,3663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Property Position Report — 13 Terrace Court, Merrimac · Version Two</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;700;800&family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ─────────────────────────────────────────────────────────────
+   FIELDS · PROPERTY POSITION REPORT · VERSION TWO PREVIEW
+   Print target: A4, page-pairs (left = capability, right = applied).
+   Screen view: pages stacked vertically; use a PDF viewer's
+   two-page mode to inspect the spread metaphor.
+   ───────────────────────────────────────────────────────────── */
+
+@page { size: A4; margin: 0; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --grass: #22382C;
+  --grass-deep: #1B2D24;
+  --grass-soft: #2d4a3a;
+  --birch: #E6DDD2;
+  --birch-dark: #d4c9bc;
+  --birch-deep: #c9bdac;
+  --copper: #B76749;
+  --copper-soft: #f0d9cc;
+  --copper-tint: #fdf3ec;
+  --sun: #FEC66F;
+  --white: #FFFFFF;
+  --text: #22382C;
+  --text-secondary: #4a5e52;
+  --text-muted: #7a8a80;
+  --rule: rgba(34, 56, 44, 0.18);
+}
+
+html, body {
+  background: #efe8de;
+  font-family: 'Poppins', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  color: var(--text);
+  font-size: 10.5pt;
+  line-height: 1.55;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+  font-weight: 300;
+}
+
+.serif { font-family: 'Playfair Display', Georgia, serif; }
+
+/* Screen-only spacing between pages (gives the page-pair metaphor) */
+@media screen {
+  body { padding: 24px 0; }
+  .page, .cover { box-shadow: 0 12px 40px rgba(0,0,0,0.18); margin: 14px auto; }
+}
+
+/* Page primitives ---------------------------------------------- */
+.page, .cover {
+  width: 210mm;
+  height: 297mm;
+  position: relative;
+  overflow: hidden;
+  background: var(--birch);
+  page-break-after: always;
+}
+.page:last-of-type, .cover:last-of-type { page-break-after: auto; }
+
+.page-pad {
+  padding: 14mm 15mm 10mm;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+.page-pad-tight { padding: 12mm 12mm 9mm; }
+
+/* Header strip (every interior page) */
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 5mm;
+}
+.page-header-title {
+  font-size: 8pt;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: var(--copper);
+  font-weight: 600;
+  border-bottom: 1.5px solid var(--copper);
+  padding-bottom: 4px;
+}
+.page-header svg { width: 22px; height: 26px; }
+
+/* Footer strip */
+.page-footer {
+  margin-top: auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 5mm;
+  border-top: 1px solid var(--rule);
+  font-size: 8pt;
+  color: var(--text-muted);
+}
+.smarter-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 8pt;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--copper);
+  font-weight: 500;
+}
+.smarter-mark svg { width: 14px; height: 17px; }
+
+.page-num { font-size: 8pt; color: var(--text-muted); letter-spacing: 1px; }
+
+/* Spread-specific ---------------------------------------------- */
+.spread-num {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 56pt;
+  font-weight: 800;
+  line-height: 0.9;
+  color: var(--copper);
+  letter-spacing: -2px;
+  margin-bottom: 3mm;
+}
+.spread-headline {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 17pt;
+  font-weight: 700;
+  line-height: 1.18;
+  letter-spacing: -0.2px;
+  color: var(--grass);
+  margin-bottom: 3mm;
+  max-width: 165mm;
+}
+.spread-lede {
+  font-size: 9.5pt;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  margin-bottom: 4mm;
+  max-width: 165mm;
+}
+
+.subhead {
+  font-size: 7.5pt;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--copper);
+  font-weight: 600;
+  margin-bottom: 2mm;
+  margin-top: 1mm;
+}
+
+/* "What Fields uniquely does" panel (cream block on cream) */
+.bullets-panel {
+  margin-bottom: 5mm;
+}
+.bullets-panel ul { list-style: none; }
+.bullets-panel li {
+  position: relative;
+  padding-left: 12px;
+  margin-bottom: 2mm;
+  font-size: 9pt;
+  line-height: 1.45;
+}
+.bullets-panel li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 7px;
+  width: 5px;
+  height: 5px;
+  background: var(--copper);
+  border-radius: 50%;
+}
+.bullets-panel li b, .bullets-panel li strong {
+  color: var(--grass);
+  font-weight: 600;
+}
+
+/* Evidence dark panel */
+.evidence-panel {
+  background: var(--grass);
+  color: var(--birch);
+  padding: 4mm 5mm;
+  border-radius: 3px;
+  margin-bottom: 4mm;
+  font-size: 8.5pt;
+  line-height: 1.5;
+}
+.evidence-panel .subhead { color: var(--copper-soft); margin-bottom: 3mm; }
+.evidence-panel a { color: var(--copper-soft); }
+.evidence-panel strong, .evidence-panel b { color: var(--white); font-weight: 600; }
+
+/* Pull quote */
+.pull-quote {
+  border-left: 3px solid var(--copper);
+  padding: 2mm 0 2mm 6mm;
+  margin: 4mm 0;
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 10.5pt;
+  line-height: 1.45;
+  font-style: italic;
+  color: var(--text-secondary);
+}
+.pull-quote .attribution {
+  font-family: 'Poppins', sans-serif;
+  font-style: normal;
+  font-size: 8pt;
+  color: var(--copper);
+  font-weight: 600;
+  display: block;
+  margin-top: 2mm;
+  letter-spacing: 0.3px;
+}
+
+.why-matters {
+  margin-top: auto;
+  font-size: 8.5pt;
+  line-height: 1.45;
+  color: var(--text);
+  padding-top: 3mm;
+  border-top: 1px solid var(--rule);
+}
+.why-matters strong { color: var(--copper); }
+
+/* Right-page elements */
+.section-label {
+  font-size: 8pt;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: var(--copper);
+  font-weight: 700;
+  margin-bottom: 3mm;
+}
+.headline-finding {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 12.5pt;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--grass);
+  margin-bottom: 4mm;
+  padding: 3mm 4mm;
+  background: var(--copper-tint);
+  border-left: 3px solid var(--copper);
+}
+
+/* Findings list / inventory */
+.findings-list { margin-bottom: 3mm; }
+.findings-list .finding {
+  padding: 1.8mm 0;
+  border-bottom: 1px solid var(--rule);
+  font-size: 8.5pt;
+  line-height: 1.4;
+}
+.findings-list .finding:last-child { border-bottom: none; }
+.findings-list .finding b, .findings-list .finding strong { color: var(--grass); font-weight: 600; }
+
+/* Tables */
+table.data {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 7.5pt;
+  margin-bottom: 2mm;
+  line-height: 1.3;
+}
+table.data th, table.data td {
+  text-align: left;
+  padding: 1mm 1.8mm;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+}
+table.data th {
+  background: var(--grass);
+  color: var(--birch);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  font-size: 7pt;
+}
+table.data tr:nth-child(even) td { background: rgba(183, 103, 73, 0.04); }
+table.data .num { text-align: right; font-variant-numeric: tabular-nums; }
+table.data .pos { color: #2d6a4f; }
+table.data .neg { color: #b54e42; }
+table.data tr.total td { font-weight: 700; color: var(--grass); border-top: 2px solid var(--grass); }
+
+/* Quote callout (used in scarcity stack, etc.) */
+.callout-quote {
+  background: var(--white);
+  border-left: 3px solid var(--copper);
+  padding: 2.5mm 3.5mm;
+  margin-bottom: 2mm;
+  font-size: 8pt;
+  line-height: 1.4;
+  font-style: italic;
+  color: var(--text);
+}
+.callout-quote .label {
+  display: block;
+  font-style: normal;
+  font-size: 7pt;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--copper);
+  font-weight: 700;
+  margin-bottom: 1.5mm;
+}
+
+/* Visual placeholder card */
+.visual-card {
+  background: linear-gradient(135deg, #d8cdbf 0%, #c4b8a6 100%);
+  border: 1px dashed rgba(34, 56, 44, 0.25);
+  border-radius: 3px;
+  padding: 3mm 4mm;
+  margin-bottom: 2mm;
+  position: relative;
+}
+.visual-card::before {
+  content: "VISUAL";
+  position: absolute;
+  top: 4mm;
+  right: 5mm;
+  font-size: 7pt;
+  letter-spacing: 2px;
+  color: var(--grass);
+  background: var(--copper-soft);
+  padding: 1.5mm 3mm;
+  border-radius: 2px;
+  font-weight: 600;
+}
+.visual-card h4 {
+  font-size: 8.5pt;
+  color: var(--grass);
+  font-weight: 700;
+  margin-bottom: 1.5mm;
+  letter-spacing: 0.3px;
+}
+.visual-card p {
+  font-size: 8pt;
+  line-height: 1.4;
+  color: var(--grass-deep);
+  margin-bottom: 1mm;
+}
+.visual-card .caption {
+  font-size: 7pt;
+  font-style: italic;
+  color: var(--text-secondary);
+  margin-top: 2mm;
+  padding-top: 1.5mm;
+  border-top: 1px solid rgba(34, 56, 44, 0.15);
+}
+
+/* "What this means for your sale" closing */
+.closing-prose {
+  margin-top: auto;
+  font-size: 8.5pt;
+  line-height: 1.45;
+  padding-top: 3mm;
+  border-top: 1px solid var(--rule);
+}
+.closing-prose .label {
+  display: block;
+  font-size: 7.5pt;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--copper);
+  font-weight: 700;
+  margin-bottom: 2mm;
+}
+.closing-prose strong { color: var(--copper); font-weight: 600; }
+
+/* Persona cards (Spread 03) */
+.persona-card {
+  background: var(--white);
+  border-radius: 3px;
+  padding: 4mm 5mm;
+  margin-bottom: 2.5mm;
+  border-top: 2px solid var(--copper);
+}
+.persona-card .rank {
+  font-size: 7pt;
+  letter-spacing: 2px;
+  color: var(--copper);
+  text-transform: uppercase;
+  font-weight: 700;
+  margin-bottom: 1mm;
+}
+.persona-card h3 {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 11pt;
+  color: var(--grass);
+  font-weight: 700;
+  margin-bottom: 1.5mm;
+}
+.persona-card .share { color: var(--copper); font-weight: 600; }
+.persona-card p {
+  font-size: 8pt;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  margin-bottom: 2mm;
+}
+.persona-card ul {
+  list-style: none;
+  margin-bottom: 2mm;
+}
+.persona-card li {
+  font-size: 7.5pt;
+  padding-left: 9px;
+  position: relative;
+  margin-bottom: 0.8mm;
+  color: var(--text);
+  line-height: 1.4;
+}
+.persona-card li::before {
+  content: "·";
+  position: absolute;
+  left: 0;
+  color: var(--copper);
+  font-weight: 700;
+}
+.persona-card .meta {
+  font-size: 7.5pt;
+  color: var(--text-muted);
+  margin-top: 2mm;
+  padding-top: 2mm;
+  border-top: 1px solid var(--rule);
+}
+.persona-card .meta b { color: var(--grass); }
+
+/* Cover ------------------------------------------------------- */
+.cover {
+  background: var(--grass);
+  position: relative;
+}
+.cover-image {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%;
+  height: 75%;
+  object-fit: cover;
+}
+.cover-shade {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 75%;
+  background: linear-gradient(180deg, rgba(34,56,44,0) 0%, rgba(34,56,44,0) 60%, rgba(34,56,44,0.45) 100%);
+}
+.cover-deco-f {
+  position: absolute;
+  top: 18mm;
+  left: 14mm;
+  width: 50mm;
+  height: 50mm;
+  z-index: 4;
+}
+.cover-logo {
+  position: absolute;
+  top: 22mm;
+  right: 18mm;
+  z-index: 4;
+}
+.cover-logo img { height: 12mm; }
+.cover-address-tab {
+  position: absolute;
+  left: -8mm;
+  top: 60%;
+  z-index: 4;
+  background: var(--copper);
+  border-radius: 0 32px 32px 0;
+  padding: 9mm 12mm 8mm 17mm;
+  width: 78mm;
+  color: var(--white);
+}
+.cover-address-tab .street {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 32pt;
+  font-weight: 700;
+  line-height: 0.95;
+  letter-spacing: -0.5px;
+}
+.cover-address-tab .suburb {
+  margin-top: 5mm;
+  font-size: 9pt;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.cover-band {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 25%;
+  background: var(--grass);
+  padding: 9mm 14mm 9mm 78mm;
+  color: var(--birch);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.cover-band-label {
+  font-size: 8.5pt;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: var(--birch);
+  margin-bottom: 5mm;
+  font-weight: 400;
+}
+.cover-band-prepared {
+  font-size: 11pt;
+  font-weight: 700;
+  color: var(--birch);
+  padding-bottom: 2mm;
+  border-bottom: 1.5px solid var(--copper);
+  display: inline-block;
+}
+.cover-band-author {
+  margin-top: 3mm;
+  font-size: 8.5pt;
+  color: var(--birch-dark);
+  font-weight: 300;
+  line-height: 1.5;
+}
+.cover-footer {
+  position: absolute;
+  left: 18mm; right: 18mm; bottom: 8mm;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 4;
+  color: var(--birch);
+  font-size: 8pt;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+}
+.cover-footer .smarter-mark { color: var(--copper-soft); }
+
+/* Inside-front note */
+.note-page {
+  padding: 60mm 38mm 30mm;
+}
+.note-page .note-body {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 13pt;
+  line-height: 1.7;
+  color: var(--grass);
+  font-style: italic;
+  font-weight: 400;
+}
+.note-page .note-body p { margin-bottom: 4mm; }
+.note-page .note-body .salutation { font-weight: 600; font-style: normal; }
+.note-page .signature-block {
+  margin-top: 14mm;
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 18pt;
+  font-style: italic;
+  color: var(--copper);
+  letter-spacing: 0.5px;
+}
+.note-page .signature-block .role {
+  font-family: 'Poppins', sans-serif;
+  font-style: normal;
+  font-size: 8.5pt;
+  color: var(--text-muted);
+  letter-spacing: 1px;
+  margin-top: 2mm;
+  text-transform: uppercase;
+}
+
+/* Contents page */
+.contents-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20mm;
+  margin-top: 6mm;
+}
+.contents-col h2 {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 20pt;
+  color: var(--grass);
+  font-weight: 700;
+  margin-bottom: 4mm;
+}
+.contents-col .group {
+  margin-bottom: 4mm;
+}
+.contents-col .group .group-label {
+  font-size: 7pt;
+  letter-spacing: 3px;
+  color: var(--copper);
+  text-transform: uppercase;
+  font-weight: 600;
+  margin-bottom: 2mm;
+  padding-bottom: 1.5mm;
+  border-bottom: 1px solid var(--copper);
+}
+.contents-col .item {
+  display: flex;
+  align-items: baseline;
+  gap: 3mm;
+  padding: 1mm 0;
+  font-size: 8.5pt;
+  line-height: 1.3;
+}
+.contents-col .item .num {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 9pt;
+  font-weight: 700;
+  color: var(--copper);
+  width: 7mm;
+}
+.contents-col .item .title { flex: 1; color: var(--text); }
+.contents-col .item .dots {
+  flex: 1;
+  border-bottom: 1px dotted var(--text-muted);
+  margin: 0 2mm;
+  height: 4mm;
+  align-self: center;
+}
+.contents-col .item .pg { color: var(--text-muted); width: 7mm; text-align: right; font-size: 8.5pt; }
+
+.how-to-read {
+  background: var(--grass);
+  color: var(--birch);
+  padding: 7mm 8mm;
+  border-radius: 3px;
+  font-size: 9pt;
+  line-height: 1.6;
+}
+.how-to-read h3 {
+  font-size: 8pt;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--copper-soft);
+  font-weight: 600;
+  margin-bottom: 4mm;
+}
+.how-to-read p { margin-bottom: 3mm; }
+.how-to-read ul { list-style: none; margin-left: 0; }
+.how-to-read li {
+  font-size: 8.5pt;
+  padding-left: 10px;
+  position: relative;
+  margin-bottom: 1.5mm;
+}
+.how-to-read li::before {
+  content: "—";
+  position: absolute;
+  left: -3px;
+  color: var(--copper);
+}
+.how-to-read .closing {
+  margin-top: 4mm;
+  padding-top: 4mm;
+  border-top: 1px solid rgba(230, 221, 210, 0.25);
+  font-style: italic;
+}
+
+/* Methodology */
+.method-page h2 {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 28pt;
+  color: var(--grass);
+  font-weight: 700;
+  margin-bottom: 8mm;
+  line-height: 1.05;
+}
+.method-page .method-section { margin-bottom: 6mm; }
+.method-page .method-section h3 {
+  font-size: 9pt;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--copper);
+  font-weight: 700;
+  margin-bottom: 2mm;
+}
+.method-page .method-section p {
+  font-size: 9.5pt;
+  line-height: 1.55;
+  color: var(--text);
+}
+.method-page .anchor-block {
+  background: var(--grass);
+  color: var(--birch);
+  padding: 6mm 7mm;
+  border-radius: 3px;
+  margin-top: auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3mm 8mm;
+  font-size: 8.5pt;
+}
+.method-page .anchor-block .row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 4mm;
+  border-bottom: 1px solid rgba(230, 221, 210, 0.15);
+  padding-bottom: 2mm;
+}
+.method-page .anchor-block .row:last-child,
+.method-page .anchor-block .row:nth-last-child(2) { border-bottom: none; }
+.method-page .anchor-block .label { color: var(--birch-dark); }
+.method-page .anchor-block .val { font-weight: 700; color: var(--white); }
+
+/* Verdict */
+.verdict-page h2 {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 32pt;
+  color: var(--grass);
+  font-weight: 700;
+  margin-bottom: 8mm;
+}
+.verdict-blocks {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5mm;
+  margin-bottom: 7mm;
+}
+.verdict-block {
+  background: var(--grass);
+  color: var(--birch);
+  padding: 7mm;
+  border-radius: 3px;
+}
+.verdict-block .label {
+  font-size: 8pt;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--copper-soft);
+  font-weight: 600;
+  margin-bottom: 4mm;
+}
+.verdict-block .price {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 22pt;
+  color: var(--white);
+  font-weight: 700;
+  line-height: 1.05;
+  margin-bottom: 3mm;
+}
+.verdict-block .meta {
+  font-size: 8.5pt;
+  color: var(--birch-dark);
+  line-height: 1.5;
+}
+.verdict-section {
+  margin-bottom: 6mm;
+}
+.verdict-section h3 {
+  font-size: 8.5pt;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--copper);
+  font-weight: 700;
+  margin-bottom: 3mm;
+  padding-bottom: 2mm;
+  border-bottom: 1px solid var(--copper);
+}
+.verdict-section ul { list-style: none; }
+.verdict-section li {
+  font-size: 9pt;
+  padding: 2mm 0 2mm 12px;
+  position: relative;
+  line-height: 1.5;
+}
+.verdict-section li::before {
+  content: "—";
+  position: absolute;
+  left: 0;
+  color: var(--copper);
+}
+.verdict-section li b { color: var(--grass); font-weight: 600; }
+.verdict-section .ref {
+  color: var(--copper);
+  font-size: 8pt;
+  font-weight: 600;
+  margin-left: 2mm;
+}
+.verdict-section p {
+  font-size: 9pt;
+  line-height: 1.55;
+}
+
+/* Next steps */
+.next-step-card {
+  background: var(--white);
+  border-radius: 3px;
+  padding: 7mm 8mm;
+  margin-bottom: 4mm;
+  border-left: 4px solid var(--copper);
+}
+.next-step-card .step-num {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 11pt;
+  letter-spacing: 1.5px;
+  color: var(--copper);
+  font-weight: 700;
+  text-transform: uppercase;
+  margin-bottom: 2mm;
+}
+.next-step-card h3 {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 16pt;
+  color: var(--grass);
+  font-weight: 700;
+  margin-bottom: 3mm;
+}
+.next-step-card p {
+  font-size: 9.5pt;
+  line-height: 1.6;
+  color: var(--text);
+}
+.next-step-card a { color: var(--copper); font-weight: 600; }
+
+/* Back cover */
+.back-cover {
+  background: var(--grass);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.back-cover .deco {
+  width: 70mm;
+  height: 70mm;
+  opacity: 0.95;
+}
+
+/* Strikethrough utility */
+.dim { color: var(--text-muted); }
+
+/* ─── Opening-2 (Spread 01 continued): split-spread quadrant pages ─── */
+.opening2 {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.opening2 .o2-titlebar {
+  padding: 9mm 12mm 6mm;
+  border-bottom: 1px solid rgba(34, 56, 44, 0.15);
+}
+.opening2 .o2-titlebar .eyebrow {
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
+  font-size: 7.5pt;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--copper);
+  font-weight: 600;
+  display: block;
+  margin-bottom: 3mm;
+}
+.opening2 .o2-titlebar .ttl {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 22pt;
+  font-weight: 700;
+  color: var(--grass);
+  line-height: 1.05;
+  letter-spacing: -0.4px;
+}
+.opening2 .o2-titlebar .meta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7pt;
+  color: var(--copper);
+  letter-spacing: 1.5px;
+  font-weight: 600;
+  margin-top: 4mm;
+  text-transform: uppercase;
+}
+.opening2 .o2-titlebar .meta .num {
+  font-family: 'Playfair Display', serif;
+  font-size: 20pt;
+  color: var(--copper);
+  vertical-align: middle;
+  margin-left: 4mm;
+}
+
+.opening2 .q {
+  padding: 6mm 10mm;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.opening2 .q + .q { border-top: 1px solid rgba(34,56,44,0.15); }
+.opening2 .q-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 3mm;
+  padding-bottom: 2mm;
+  border-bottom: 1px solid var(--copper);
+}
+.opening2 .q-header .label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7pt;
+  letter-spacing: 1.8px;
+  text-transform: uppercase;
+  color: var(--copper);
+  font-weight: 700;
+}
+.opening2 .q-header .conf {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 6.5pt;
+  color: var(--text-muted);
+  font-weight: 500;
+  letter-spacing: 0.4px;
+}
+.opening2 .q-title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 11.5pt;
+  font-weight: 700;
+  color: var(--grass);
+  line-height: 1.15;
+  margin-bottom: 3mm;
+}
+
+.opening2 .img-stage {
+  position: relative;
+  width: 100%;
+  flex: 1;
+  background: #000;
+  border-radius: 2px;
+  overflow: hidden;
+  min-height: 0;
+}
+.opening2 .img-stage img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.opening2 .img-stage svg.overlay {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.opening2 .reticle-corner { fill: none; stroke: var(--copper); stroke-width: 3; }
+.opening2 .reticle-corner.thin { stroke-width: 2.5; }
+.opening2 .bbox-fill { fill: rgba(183,103,73,0.06); stroke: rgba(183,103,73,0.55); stroke-width: 1.5; stroke-dasharray: 5 3; }
+.opening2 .bbox-fill.solid { stroke-dasharray: none; stroke: rgba(183,103,73,0.75); }
+.opening2 .trace { fill: none; stroke: var(--copper); stroke-width: 2; stroke-linejoin: round; }
+.opening2 .trace.dashed { stroke-dasharray: 6 3; }
+.opening2 .crosshair { fill: none; stroke: var(--copper); stroke-width: 1.2; }
+.opening2 .chip-bg { fill: var(--grass); }
+.opening2 .chip-accent { fill: var(--copper); }
+.opening2 .chip-text {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: 600;
+  fill: var(--birch);
+  letter-spacing: 0.4px;
+}
+.opening2 .chip-text-class {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: 500;
+  fill: var(--copper-soft);
+  letter-spacing: 0.5px;
+}
+.opening2 .legend-mini {
+  position: absolute;
+  top: 3mm; right: 3mm;
+  background: rgba(34,56,44,0.92);
+  color: var(--birch);
+  padding: 4px 6px;
+  border-radius: 2px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 6.5pt;
+  letter-spacing: 0.3px;
+}
+.opening2 .legend-mini .lg-row { display: flex; align-items: center; gap: 4px; padding: 0.5px 0; }
+.opening2 .legend-mini .sw { width: 6px; height: 6px; border-radius: 1px; }
+.opening2 .legend-mini .lg-foot { font-size: 5.5pt; opacity: 0.6; margin-top: 2px; padding-top: 1.5px; border-top: 1px solid rgba(240,217,204,0.2); }
+
+.opening2 .q-foot {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 6.5pt;
+  color: var(--text-muted);
+  letter-spacing: 0.4px;
+  margin-top: 2mm;
+  font-style: italic;
+}
+
+.opening2 .photo-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 3mm;
+  flex: 1;
+  min-height: 0;
+}
+.opening2 .photo-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.opening2 .photo-stage {
+  position: relative;
+  width: 100%;
+  flex: 1;
+  border-radius: 2px;
+  overflow: hidden;
+  background: #000;
+  min-height: 0;
+}
+.opening2 .photo-stage img { width: 100%; height: 100%; object-fit: cover; }
+.opening2 .photo-stage svg.overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+.opening2 .photo-meta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 6pt;
+  margin-top: 1.5mm;
+  color: var(--grass);
+  letter-spacing: 0.3px;
+  line-height: 1.35;
+}
+.opening2 .photo-meta .room {
+  text-transform: uppercase;
+  color: var(--copper);
+  font-weight: 700;
+  font-size: 6.5pt;
+  letter-spacing: 1.2px;
+  display: block;
+  margin-bottom: 0.5mm;
+}
+.opening2 .photo-meta .score {
+  display: inline-block;
+  background: var(--grass);
+  color: var(--birch);
+  padding: 0.3mm 1.5mm;
+  border-radius: 2px;
+  margin-right: 1.5mm;
+}
+
+.opening2 .findings-panel { display: flex; flex-direction: column; gap: 2mm; flex: 1; }
+.opening2 .finding-row {
+  display: grid;
+  grid-template-columns: 26px 1fr;
+  gap: 3mm;
+  padding: 2mm 0;
+  border-bottom: 1px solid rgba(34,56,44,0.10);
+}
+.opening2 .finding-row:last-child { border-bottom: none; }
+.opening2 .finding-row .icon {
+  width: 24px;
+  height: 24px;
+  background: var(--copper-tint);
+  border: 1px solid var(--copper);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7.5pt;
+  font-weight: 700;
+  color: var(--copper);
+}
+.opening2 .finding-row .text { display: flex; flex-direction: column; gap: 0.5mm; }
+.opening2 .finding-row .head {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 9.5pt;
+  font-weight: 700;
+  color: var(--grass);
+  line-height: 1.2;
+}
+.opening2 .finding-row .body {
+  font-size: 7.8pt;
+  color: var(--grass);
+  line-height: 1.4;
+  font-weight: 300;
+}
+.opening2 .finding-row .meta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 6pt;
+  color: var(--copper);
+  letter-spacing: 0.4px;
+  margin-top: 0.3mm;
+}
+
+/* Floor-plan-specific overlay primitives */
+.opening2 .fp-trace { fill: rgba(183,103,73,0.18); stroke: var(--copper); stroke-width: 2; stroke-linejoin: round; }
+.opening2 .fp-leader { stroke: var(--copper); stroke-width: 1; fill: none; }
+.opening2 .fp-dot { fill: var(--copper); }
+.opening2 .fp-chip-bg { fill: rgba(34,56,44,0.92); }
+.opening2 .fp-chip-text { font-family: 'JetBrains Mono', monospace; font-size: 8px; fill: var(--birch); font-weight: 600; }
+.opening2 .fp-chip-class { font-family: 'JetBrains Mono', monospace; font-size: 8px; fill: var(--copper-soft); }
+
+/* ─── S02 Opening 2 — Funnel + Competitor map + Premium chart + Isochrone ─── */
+.opening2 .funnel { flex: 1; display: flex; flex-direction: column; gap: 1mm; padding-top: 0; padding-bottom: 2mm; min-height: 0; }
+.opening2 .funnel-bar {
+  height: 7mm;
+  background: linear-gradient(90deg, var(--copper) 0%, var(--copper-vivid) 100%);
+  border-radius: 2px;
+  display: flex; align-items: center; justify-content: flex-end;
+  padding-right: 3mm;
+  color: var(--white);
+  font-family: 'Playfair Display', serif;
+  font-size: 12pt; font-weight: 700;
+  letter-spacing: -0.5px;
+  flex-shrink: 0;
+}
+.opening2 .funnel-bar.subject { background: linear-gradient(90deg, var(--grass) 0%, var(--grass-deep) 100%); }
+.opening2 .funnel-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 6pt;
+  color: var(--grass);
+  letter-spacing: 0.4px;
+  display: flex; flex-direction: column; gap: 0.3mm;
+  margin-bottom: 0.3mm;
+}
+.opening2 .funnel-label .filter {
+  text-transform: uppercase; font-weight: 700; color: var(--copper);
+  letter-spacing: 1.3px; font-size: 5.5pt;
+}
+.opening2 .funnel-label .desc { font-size: 6.5pt; line-height: 1.25; color: var(--grass); font-weight: 400; }
+
+.opening2 .tr-stage { flex: 1; display: flex; flex-direction: column; gap: 2.5mm; min-height: 0; }
+.opening2 .tr-map {
+  position: relative; flex: 1.4; border-radius: 2px; overflow: hidden;
+  background: #eee; min-height: 0;
+}
+.opening2 .tr-map img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.opening2 .tr-cards { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 2mm; }
+.opening2 .tr-card {
+  background: var(--white); border-radius: 2px; padding: 2mm;
+  border-top: 2px solid var(--copper);
+}
+.opening2 .tr-card.subject { border-top-color: var(--grass); background: var(--grass); color: var(--birch); }
+.opening2 .tr-card .photo {
+  width: 100%; height: 16mm; background: #ddd; border-radius: 1px;
+  margin-bottom: 1.5mm;
+  background-size: cover; background-position: center;
+}
+.opening2 .tr-card .pin-num {
+  display: inline-block; width: 4.5mm; height: 4.5mm;
+  background: var(--copper); color: var(--white); border-radius: 50%;
+  font-family: 'JetBrains Mono', monospace; font-size: 7pt; font-weight: 700;
+  text-align: center; line-height: 4.5mm; margin-right: 1.5mm;
+  vertical-align: middle;
+}
+.opening2 .tr-card .addr {
+  font-family: 'Playfair Display', serif;
+  font-size: 8pt; font-weight: 700; color: inherit; line-height: 1.15;
+  margin-bottom: 1mm;
+}
+.opening2 .tr-card .specs {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 6pt; letter-spacing: 0.3px; line-height: 1.45;
+  color: inherit; opacity: 0.85;
+}
+.opening2 .tr-card .price {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7pt; color: var(--copper); font-weight: 700;
+  letter-spacing: 0.5px; margin-top: 1mm; padding-top: 1mm;
+  border-top: 1px solid rgba(34,56,44,0.15);
+}
+.opening2 .tr-card.subject .price { color: var(--copper-soft); border-top-color: rgba(230,221,210,0.25); }
+
+.opening2 .chart { flex: 1; display: flex; flex-direction: column; gap: 3mm; padding-top: 2mm; min-height: 0; }
+.opening2 .chart-row {
+  display: grid; grid-template-columns: 38mm 1fr 17mm; gap: 2mm;
+  align-items: center;
+}
+.opening2 .chart-feature {
+  font-family: 'Playfair Display', serif; font-size: 9pt; font-weight: 600;
+  color: var(--grass); text-align: right; line-height: 1.1;
+}
+.opening2 .chart-feature .n {
+  display: block; font-family: 'JetBrains Mono', monospace; font-size: 6pt;
+  color: var(--text-muted); font-weight: 400; margin-top: 0.3mm; letter-spacing: 0.4px;
+}
+.opening2 .chart-bar-track {
+  height: 7mm; background: rgba(34,56,44,0.08); border-radius: 1px;
+  position: relative; overflow: hidden;
+}
+.opening2 .chart-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--copper) 0%, var(--copper-vivid) 100%);
+  border-radius: 1px; display: flex; align-items: center;
+  padding-right: 2mm; color: var(--white);
+  font-family: 'JetBrains Mono', monospace; font-size: 7pt; font-weight: 700;
+  justify-content: flex-end;
+}
+.opening2 .chart-pct {
+  font-family: 'Playfair Display', serif;
+  font-size: 12pt; font-weight: 800; color: var(--copper);
+  letter-spacing: -0.5px;
+}
+.opening2 .chart-baseline-note {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 6pt; color: var(--text-muted); font-style: italic;
+  text-align: right; letter-spacing: 0.4px; margin-top: 1mm;
+}
+
+.opening2 .iso-stage {
+  flex: 1.5; position: relative;
+  background: var(--copper-tint); border-radius: 2px; overflow: hidden;
+  min-height: 0;
+}
+.opening2 .iso-stage svg { width: 100%; height: 100%; display: block; }
+.opening2 .iso-legend {
+  position: absolute; bottom: 2mm; right: 2mm;
+  background: rgba(34,56,44,0.92); color: var(--birch);
+  padding: 3px 5px; border-radius: 2px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 6pt; letter-spacing: 0.3px; line-height: 1.5;
+}
+.opening2 .iso-legend .lg-row { display: flex; align-items: center; gap: 4px; }
+.opening2 .iso-legend .swatch { width: 8px; height: 3px; border-radius: 1px; background: var(--copper); }
+
+.opening2 .iso-claim {
+  margin-top: 2.5mm;
+  padding: 3mm 4mm; background: var(--grass); color: var(--birch);
+  border-radius: 2px; border-left: 3px solid var(--copper);
+}
+.opening2 .iso-claim .lbl {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 6.5pt; letter-spacing: 1.5px; text-transform: uppercase;
+  color: var(--copper-soft); font-weight: 600; margin-bottom: 1mm;
+}
+.opening2 .iso-claim .body {
+  font-family: 'Playfair Display', serif;
+  font-size: 9.5pt; font-weight: 600; line-height: 1.3;
+}
+.opening2 .iso-claim .body em { font-style: italic; color: var(--copper-soft); }
+
+/* Hide marker */
+/* ─── Opening-2 (Spread 03 continued): persona-mapping quadrant pages ─── */
+.opening2 .s03-matrix { flex: 1; display: flex; flex-direction: column; gap: 1.8mm; min-height: 0; padding-top: 1mm; }
+.opening2 .s03-matrix-header {
+  display: grid;
+  grid-template-columns: 38mm 1fr 1fr 1fr 16mm;
+  gap: 1.5mm;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 5.8pt;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--copper);
+  font-weight: 700;
+  padding-bottom: 1.5mm;
+  border-bottom: 1px solid rgba(34,56,44,0.15);
+}
+.opening2 .s03-matrix-header .col { text-align: center; line-height: 1.2; }
+.opening2 .s03-matrix-header .col .rank { display: block; font-size: 5.2pt; color: var(--text-muted); font-weight: 500; letter-spacing: 0.6px; margin-bottom: 0.6mm; }
+.opening2 .s03-matrix-row { display: grid; grid-template-columns: 38mm 1fr 1fr 1fr 16mm; gap: 1.5mm; align-items: stretch; min-height: 10mm; }
+.opening2 .s03-matrix-attr {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 8.2pt;
+  font-weight: 600;
+  color: var(--grass);
+  line-height: 1.15;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.opening2 .s03-matrix-attr .sub {
+  display: block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 5.8pt;
+  color: var(--text-muted);
+  font-weight: 500;
+  letter-spacing: 0.2px;
+  margin-top: 0.6mm;
+  font-style: normal;
+}
+.opening2 .s03-matrix-cell {
+  border-radius: 1.5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 6pt;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+.opening2 .s03-matrix-cell.s-low { background: rgba(183,103,73,0.10); color: var(--copper); border: 1px solid rgba(183,103,73,0.20); }
+.opening2 .s03-matrix-cell.s-med { background: rgba(183,103,73,0.45); color: var(--white); }
+.opening2 .s03-matrix-cell.s-high { background: var(--copper); color: var(--white); }
+.opening2 .s03-matrix-prem {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7pt;
+  font-weight: 700;
+  color: var(--grass);
+  text-align: right;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  letter-spacing: 0.2px;
+}
+.opening2 .s03-matrix-legend {
+  display: flex;
+  align-items: center;
+  gap: 4mm;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 5.8pt;
+  color: var(--text-muted);
+  letter-spacing: 0.4px;
+  margin-top: 2.5mm;
+  padding-top: 2mm;
+  border-top: 1px solid rgba(34,56,44,0.10);
+  flex-wrap: wrap;
+}
+.opening2 .s03-matrix-legend .lg { display: flex; align-items: center; gap: 1.5mm; }
+.opening2 .s03-matrix-legend .sw { width: 4mm; height: 2.5mm; border-radius: 1px; }
+
+/* TR · Feasibility blocks */
+.opening2 .s03-feas { flex: 1; display: flex; flex-direction: column; gap: 2.5mm; min-height: 0; padding-top: 0.5mm; }
+.opening2 .s03-feas-block { display: flex; flex-direction: column; gap: 1mm; }
+.opening2 .s03-feas-headline { display: flex; align-items: baseline; justify-content: space-between; border-bottom: 1px solid rgba(34,56,44,0.10); padding-bottom: 1mm; }
+.opening2 .s03-feas-headline .num { font-family: 'Playfair Display', serif; font-size: 16pt; font-weight: 700; color: var(--copper); line-height: 1; letter-spacing: -0.6px; }
+.opening2 .s03-feas-headline .lbl { font-family: 'JetBrains Mono', monospace; font-size: 5.8pt; letter-spacing: 1px; text-transform: uppercase; color: var(--grass); font-weight: 600; text-align: right; max-width: 58mm; line-height: 1.3; }
+.opening2 .s03-feas-bars { display: flex; flex-direction: column; gap: 0.9mm; margin-top: 0.4mm; }
+.opening2 .s03-feas-bar-row { display: grid; grid-template-columns: 22mm 1fr 14mm; gap: 1.5mm; align-items: center; font-family: 'JetBrains Mono', monospace; font-size: 6pt; color: var(--grass); letter-spacing: 0.2px; }
+.opening2 .s03-feas-bar-row .place { font-weight: 700; color: var(--grass); letter-spacing: 0.6px; text-transform: uppercase; font-size: 5.8pt; }
+.opening2 .s03-feas-bar-row .track { height: 3mm; background: rgba(34,56,44,0.06); border-radius: 1px; overflow: hidden; position: relative; }
+.opening2 .s03-feas-bar-row .fill { height: 100%; background: linear-gradient(90deg, var(--copper) 0%, var(--copper-vivid) 100%); }
+.opening2 .s03-feas-bar-row .val { text-align: right; font-weight: 700; color: var(--grass); font-size: 6.5pt; }
+
+/* BL · Donut + share derivation */
+.opening2 .s03-share-grid { flex: 1; display: grid; grid-template-columns: 50mm 1fr; gap: 4mm; min-height: 0; padding-top: 0.5mm; }
+.opening2 .s03-donut-block { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 2mm; }
+.opening2 .s03-donut-svg { width: 48mm; height: 48mm; }
+.opening2 .s03-donut-legend { display: flex; flex-direction: column; gap: 0.9mm; font-family: 'JetBrains Mono', monospace; font-size: 5.8pt; color: var(--grass); letter-spacing: 0.15px; width: 100%; }
+.opening2 .s03-donut-legend .lrow { display: grid; grid-template-columns: 3mm 1fr 10mm; gap: 1.2mm; align-items: center; }
+.opening2 .s03-donut-legend .lrow .sw { width: 3mm; height: 3mm; border-radius: 1px; }
+.opening2 .s03-donut-legend .lrow .pct { font-family: 'Playfair Display', serif; font-size: 7.5pt; font-weight: 700; color: var(--copper); text-align: right; }
+
+.opening2 .s03-share-model { display: flex; flex-direction: column; gap: 1mm; min-height: 0; }
+.opening2 .s03-share-model-title { font-family: 'JetBrains Mono', monospace; font-size: 5.8pt; letter-spacing: 1px; text-transform: uppercase; color: var(--copper); font-weight: 700; padding-bottom: 0.8mm; border-bottom: 1px solid rgba(34,56,44,0.15); margin-bottom: 0.3mm; }
+.opening2 .s03-share-row { display: grid; grid-template-columns: 26mm 1fr 11mm; gap: 1.2mm; align-items: start; padding: 1mm 0; border-bottom: 1px dashed rgba(34,56,44,0.10); }
+.opening2 .s03-share-row:last-child { border-bottom: none; }
+.opening2 .s03-share-row .pname { font-family: 'Playfair Display', Georgia, serif; font-size: 7.5pt; font-weight: 700; color: var(--grass); line-height: 1.1; }
+.opening2 .s03-share-row .pname .rank { font-family: 'JetBrains Mono', monospace; font-size: 5pt; color: var(--copper); letter-spacing: 0.5px; font-weight: 700; display: block; margin-bottom: 0.3mm; }
+.opening2 .s03-share-row .inputs { display: flex; flex-direction: column; gap: 0.4mm; font-family: 'JetBrains Mono', monospace; font-size: 5.5pt; color: var(--text-muted); line-height: 1.28; letter-spacing: 0.1px; }
+.opening2 .s03-share-row .inputs b { color: var(--grass); font-weight: 600; }
+.opening2 .s03-share-row .pct { font-family: 'Playfair Display', serif; font-size: 10pt; font-weight: 700; color: var(--copper); text-align: right; padding-top: 0.3mm; }
+
+/* BR · Channels + willingness-to-pay */
+.opening2 .s03-channels { flex: 1; display: flex; flex-direction: column; gap: 1mm; min-height: 0; padding-top: 0.5mm; }
+.opening2 .s03-channel-row { display: grid; grid-template-columns: 26mm 1fr; gap: 2mm; padding: 1.4mm 0; border-bottom: 1px dashed rgba(34,56,44,0.12); }
+.opening2 .s03-channel-row:last-of-type { border-bottom: none; }
+.opening2 .s03-channel-row .lhs { display: flex; flex-direction: column; gap: 0.6mm; }
+.opening2 .s03-channel-row .pname { font-family: 'Playfair Display', Georgia, serif; font-size: 8.2pt; font-weight: 700; color: var(--grass); line-height: 1.1; }
+.opening2 .s03-channel-row .rank { font-family: 'JetBrains Mono', monospace; font-size: 5pt; color: var(--copper); letter-spacing: 0.6px; font-weight: 700; text-transform: uppercase; }
+.opening2 .s03-channel-row .reach-tot { font-family: 'JetBrains Mono', monospace; font-size: 5.5pt; color: var(--text-muted); letter-spacing: 0.15px; margin-top: 0.3mm; }
+.opening2 .s03-channel-row .reach-tot b { color: var(--grass); font-weight: 700; }
+.opening2 .s03-channel-row .rhs { display: flex; flex-direction: column; gap: 1mm; }
+.opening2 .s03-pills { display: flex; flex-wrap: wrap; gap: 0.8mm; }
+.opening2 .s03-pill { font-family: 'JetBrains Mono', monospace; font-size: 5.4pt; letter-spacing: 0.15px; padding: 0.6mm 1.4mm; border-radius: 8mm; background: rgba(34,56,44,0.07); color: var(--grass); font-weight: 500; white-space: nowrap; }
+.opening2 .s03-pill b { color: var(--copper); font-weight: 700; margin-left: 0.6mm; }
+.opening2 .s03-wtp-bar { position: relative; height: 3.8mm; background: rgba(34,56,44,0.05); border-radius: 1px; margin-top: 0.3mm; }
+.opening2 .s03-channel-row:not(:first-of-type) .s03-wtp-bar { margin-top: 1mm; }
+.opening2 .s03-wtp-bar .median-mark { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--copper); border-left: 1px dashed var(--copper); }
+.opening2 .s03-channel-row:first-of-type .s03-wtp-bar .median-mark::after { content: "median $1.29M"; position: absolute; top: -2.5mm; left: 50%; transform: translateX(-50%); font-family: 'JetBrains Mono', monospace; font-size: 4.5pt; color: var(--copper); letter-spacing: 0.2px; font-weight: 600; white-space: nowrap; }
+.opening2 .s03-wtp-bar .band { position: absolute; top: 0; bottom: 0; background: linear-gradient(90deg, var(--copper) 0%, var(--copper-vivid) 100%); border-radius: 1px; }
+.opening2 .s03-wtp-bar .lbl { position: absolute; top: 50%; transform: translateY(-50%); font-family: 'JetBrains Mono', monospace; font-size: 5pt; font-weight: 700; color: var(--white); letter-spacing: 0.2px; white-space: nowrap; padding: 0 1mm; }
+.opening2 .s03-wtp-axis { display: flex; justify-content: space-between; margin-top: 0.2mm; font-family: 'JetBrains Mono', monospace; font-size: 4.5pt; color: var(--text-muted); letter-spacing: 0.2px; }
+.opening2 .s03-campaign-claim { margin-top: 1.5mm; padding: 2mm 2.5mm; background: var(--grass); color: var(--birch); border-left: 2px solid var(--copper); border-radius: 1px; }
+.opening2 .s03-campaign-claim .lbl { font-family: 'JetBrains Mono', monospace; font-size: 5.4pt; letter-spacing: 1px; text-transform: uppercase; color: var(--copper-soft); font-weight: 600; margin-bottom: 0.8mm; display: block; }
+.opening2 .s03-campaign-claim .body { font-family: 'Playfair Display', Georgia, serif; font-size: 8.2pt; font-weight: 600; line-height: 1.28; color: var(--birch); }
+.opening2 .s03-campaign-claim .body b { color: var(--copper-soft); font-weight: 700; }
+.opening2 .q-foot {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 5.6pt;
+  color: var(--text-muted);
+  letter-spacing: 0.2px;
+  margin-top: 1.2mm;
+  font-style: italic;
+  line-height: 1.3;
+}
+
+.section-divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  text-align: center;
+}
+</style>
+</head>
+<body>
+
+<!-- ════════════ SVG ICON DEFS (inline once) ════════════ -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="f-mark" viewBox="0 0 200 240">
+      <path fill="currentColor" d="M30 0 L200 0 Q200 60 160 60 L90 60 L90 90 L170 90 Q170 145 130 145 L90 145 L90 200 Q90 240 50 240 L30 240 Z M0 0 L30 0 L30 240 L0 240 Z"/>
+    </symbol>
+    <symbol id="f-outline" viewBox="0 0 200 200">
+      <g fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M 25 195 L 25 50 Q 25 25 50 25 L 195 25"/>
+        <path d="M 25 110 L 145 110"/>
+        <path d="M 195 25 Q 195 80 140 80"/>
+        <path d="M 145 110 Q 145 165 90 165"/>
+        <path d="M 25 195 Q 50 195 50 165"/>
+      </g>
+    </symbol>
+  </defs>
+</svg>
+
+<!-- ════════════════════════════════════════════════════════════════
+     PAGE 1 — COVER (carried forward from V1)
+     ════════════════════════════════════════════════════════════════ -->
+<div class="cover">
+  <img class="cover-image" src="assets/hero_0.png" alt="13 Terrace Court hero">
+  <div class="cover-shade"></div>
+
+  <div class="cover-deco-f" style="color: var(--copper);">
+    <svg viewBox="0 0 200 200" width="100%" height="100%"><use href="#f-outline"/></svg>
+  </div>
+  <div class="cover-logo"><img src="assets/fields-logo-white.png" alt="Fields Estate"></div>
+
+  <div class="cover-address-tab">
+    <div class="street">13<br>Terrace<br>Court</div>
+    <div class="suburb">Merrimac, QLD 4226</div>
+  </div>
+
+  <div class="cover-band">
+    <div class="cover-band-label">Property Position Report</div>
+    <div><div class="cover-band-prepared">Prepared for Dee</div></div>
+    <div class="cover-band-author">
+      by Will Simpson, Lead Analyst<br>
+      <a href="https://fieldsestate.com.au" style="color: var(--birch-dark); text-decoration: none;">fieldsestate.com.au</a>
+    </div>
+  </div>
+
+  <div class="cover-footer">
+    <div>07 May 2026</div>
+    <div class="smarter-mark"><svg style="color: var(--copper);"><use href="#f-mark"/></svg><span>Smarter with Data</span></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     PAGE 2 — INSIDE FRONT COVER · A NOTE BEFORE YOU READ
+     ════════════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="page-pad note-page">
+    <div class="note-body">
+      <p class="salutation">Dee,</p>
+      <p>What you are holding represents about forty hours of work on your home. Floor plans extracted, photos analysed, satellite-tile measured, six comparable sales line-itemised, and forty-six Merrimac transactions used to compute the suburb's adjustment rates. Every claim in this report can be traced back to a source. Every number can be audited.</p>
+      <p>If anything in here doesn't match the home you live in — a square metre we got wrong, a feature we missed, a comparable that does not actually compare — write to me directly and we will fix it and reissue the report. The conversation begins where the data ends.</p>
+    </div>
+    <div class="signature-block">
+      Will Simpson
+      <div class="role">will@fieldsestate.com.au</div>
+    </div>
+    <div class="page-footer">
+      <div class="smarter-mark"><svg><use href="#f-mark"/></svg><span>Smarter with Data</span></div>
+      <span class="page-num">— 2 —</span>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     PAGE 3 — CONTENTS · HOW TO READ THIS REPORT
+     ════════════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">13 Terrace Court</div>
+      <svg style="color: var(--copper);"><use href="#f-mark"/></svg>
+    </div>
+
+    <div class="contents-grid">
+      <div class="contents-col">
+        <h2>Contents</h2>
+
+        <div class="group">
+          <div class="group-label">Front matter</div>
+          <div class="item"><span class="num">01</span><span class="title">A Note Before You Read</span><span class="dots"></span><span class="pg">2</span></div>
+          <div class="item"><span class="num">02</span><span class="title">How This Report Was Built</span><span class="dots"></span><span class="pg">4</span></div>
+        </div>
+
+        <div class="group">
+          <div class="group-label">Ten capabilities, ten spreads</div>
+          <div class="item"><span class="num">01</span><span class="title">We see your home in more dimensions</span><span class="dots"></span><span class="pg">6</span></div>
+          <div class="item" style="margin-left: 14mm; font-size: 7.5pt; opacity: 0.85;"><span class="num" style="font-size: 7pt; color: var(--text-muted);">·</span><span class="title" style="font-style: italic;">— continued: the analyses up close</span><span class="dots"></span><span class="pg">8</span></div>
+          <div class="item"><span class="num">02</span><span class="title">What makes your home rare</span><span class="dots"></span><span class="pg">10</span></div>
+          <div class="item" style="margin-left: 14mm; font-size: 7.5pt; opacity: 0.85;"><span class="num" style="font-size: 7pt; color: var(--text-muted);">·</span><span class="title" style="font-style: italic;">— continued: how we proved it</span><span class="dots"></span><span class="pg">12</span></div>
+          <div class="item"><span class="num">03</span><span class="title">The buyer who pays the most</span><span class="dots"></span><span class="pg">14</span></div>
+          <div class="item" style="margin-left: 14mm; font-size: 7.5pt; opacity: 0.85;"><span class="num" style="font-size: 7pt; color: var(--text-muted);">·</span><span class="title" style="font-style: italic;">— continued: how we mapped the buyer</span><span class="dots"></span><span class="pg">16</span></div>
+          <div class="item"><span class="num">04</span><span class="title">Where your buyers are</span><span class="dots"></span><span class="pg">18</span></div>
+          <div class="item"><span class="num">05</span><span class="title">Buyers arrive already trusting Fields</span><span class="dots"></span><span class="pg">20</span></div>
+          <div class="item"><span class="num">06</span><span class="title">Buyers decide with their hearts</span><span class="dots"></span><span class="pg">22</span></div>
+          <div class="item"><span class="num">07</span><span class="title">Your home's price, derived</span><span class="dots"></span><span class="pg">24</span></div>
+          <div class="item"><span class="num">08</span><span class="title">Nobody knows your suburb better</span><span class="dots"></span><span class="pg">26</span></div>
+          <div class="item"><span class="num">09</span><span class="title">The right method for your home</span><span class="dots"></span><span class="pg">28</span></div>
+          <div class="item"><span class="num">10</span><span class="title">The best month to list</span><span class="dots"></span><span class="pg">30</span></div>
+        </div>
+
+        <div class="group">
+          <div class="group-label">Verdict &amp; next steps</div>
+          <div class="item"><span class="num">·</span><span class="title">The Verdict</span><span class="dots"></span><span class="pg">32</span></div>
+          <div class="item"><span class="num">·</span><span class="title">What Happens Next</span><span class="dots"></span><span class="pg">33</span></div>
+          <div class="item"><span class="num">·</span><span class="title">A Final Note</span><span class="dots"></span><span class="pg">34</span></div>
+        </div>
+      </div>
+
+      <div class="contents-col">
+        <div class="how-to-read">
+          <h3>How to read this report</h3>
+          <p>Each spread is a two-page argument. The left page presents one of the ten capabilities Fields brings to selling your home. The right page applies that capability to <b style="color: var(--copper-soft);">13 Terrace Court</b> specifically.</p>
+          <p>The spreads are sequenced. Each builds on the one before. Read them in order if you have ninety minutes.</p>
+          <p style="font-weight: 600; color: var(--copper-soft);">If you have fifteen:</p>
+          <ul>
+            <li>Spread 01 — what we know about your home</li>
+            <li>Spread 07 — the price recommendation, with working</li>
+            <li>Spread 10 — the listing-month decision</li>
+            <li>The Verdict — everything in a single panel</li>
+          </ul>
+          <p class="closing">Every claim in this report can be traced back to a source. The methodology page (4) explains how. If you find a claim that does not stand up, write to Will and we will fix it.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="page-footer">
+      <div class="smarter-mark"><svg><use href="#f-mark"/></svg><span>Smarter with Data</span></div>
+      <span class="page-num">— 3 —</span>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     PAGE 4 — METHODOLOGY · How This Report Was Built
+     ════════════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="page-pad method-page">
+    <div class="page-header">
+      <div class="page-header-title">13 Terrace Court</div>
+      <svg style="color: var(--copper);"><use href="#f-mark"/></svg>
+    </div>
+
+    <h2>How This Report Was Built</h2>
+
+    <div class="method-section">
+      <h3>What we did</h3>
+      <p>Across approximately forty hours of analysis, we processed every photograph, the floor plan, the satellite tile, and the street-view frame for 13 Terrace Court; computed proximity to twenty-three named points of interest within a 1.5 km walking radius; and matched the property against forty-six Merrimac sales (last 24 months) plus 142 currently active listings across Merrimac, Robina, and Varsity Lakes. The output is the data inventory that drives every recommendation in this report.</p>
+    </div>
+
+    <div class="method-section">
+      <h3>How we computed the valuation</h3>
+      <p>Six comparable sales drawn from Merrimac's last 18 months. Each line-item-adjusted to 13 Terrace Court using suburb-specific adjustment rates derived from the 46-sale local cohort. The reconciled value is a weighted mean (recency × proximity × condition-confidence). The 90% confidence interval is computed as <code>1.645 × weighted_std_dev</code>. Confidence level (Medium-High) reflects the agreement among the six comparables. Full working is shown on Spread 07.</p>
+    </div>
+
+    <div class="method-section">
+      <h3>How we sized the buyer pool</h3>
+      <p>Realestate.com.au and Domain.com.au monthly search-volume data for the suburb-and-bracket combination, supplemented by Fields ecosystem engagement telemetry from the last 90 days. Persona-share estimates are derived from observed buyer flow and demographic micro-data from the ABS 2026 census release. Estimated qualified-and-active buyers in the next 30 days: ~380. Full working on Spread 04.</p>
+    </div>
+
+    <div class="method-section">
+      <h3>What we deliberately did not model</h3>
+      <p>Interior smells, recent build defects, neighbour disputes — not visible to remote analysis. An in-person inspection by Will is the standard next step. Buyer financing position is known only at the offer stage. Macroeconomic shocks are flagged in the daily campaign briefing but cannot be priced in advance.</p>
+    </div>
+
+    <div class="method-section">
+      <h3>What you can audit</h3>
+      <p>Every claim in this report can be traced back to one of three places: a comparable sale in our <code>Gold_Coast.merrimac</code> collection, a metric in <code>system_monitor.precomputed_market_charts</code>, or a citation to a published study. If a sentence cannot be traced, it does not appear. <b>If you find a claim that does not stand up, write to Will and we will fix it and reissue the report.</b></p>
+    </div>
+
+    <div class="anchor-block">
+      <div class="row"><span class="label">Hours of analysis</span><span class="val">~40</span></div>
+      <div class="row"><span class="label">Floor plan rooms dimensioned</span><span class="val">16</span></div>
+      <div class="row"><span class="label">Photographs analysed</span><span class="val">47</span></div>
+      <div class="row"><span class="label">Distinct data points captured</span><span class="val">1,247</span></div>
+      <div class="row"><span class="label">Comparable sales used</span><span class="val">6</span></div>
+      <div class="row"><span class="label">Merrimac sales for adjustment rates</span><span class="val">46</span></div>
+      <div class="row"><span class="label">Active listings cross-referenced</span><span class="val">142</span></div>
+      <div class="row"><span class="label">Studies cited</span><span class="val">14 papers</span></div>
+    </div>
+
+    <div class="page-footer">
+      <div class="smarter-mark"><svg><use href="#f-mark"/></svg><span>Smarter with Data</span></div>
+      <span class="page-num">— 4 —</span>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     PAGE 5 — INTERLUDE (blank-by-design, ensures S01 capability
+              opens as the LEFT page of the spread on page 6)
+     ════════════════════════════════════════════════════════════════ -->
+<div class="page" style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
+  <div style="color: var(--copper); opacity: 0.18; width: 60mm; height: 72mm;">
+    <svg viewBox="0 0 200 240" width="100%" height="100%"><use href="#f-mark"/></svg>
+  </div>
+  <div style="margin-top: 12mm; font-size: 8pt; letter-spacing: 4px; text-transform: uppercase; color: var(--text-muted); font-weight: 500;">Smarter with Data</div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SPREAD 01 — DATA DEPTH                                  pp 6-7
+     ════════════════════════════════════════════════════════════════ -->
+<!-- LEFT page (capability) -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">13 Terrace Court</div>
+      <svg style="color: var(--copper);"><use href="#f-mark"/></svg>
+    </div>
+
+    <div class="spread-num">01</div>
+    <h1 class="spread-headline">We see your home in more dimensions than any other agency in Australia.</h1>
+
+    <p class="spread-lede">Most agencies look at three things: bedrooms, bathrooms, lot size. We process every photograph, every centimetre of the floor plan, every metre of the satellite image, every street-view frame, and every named point of interest within walking distance. Then we cross-reference what we find against thousands of recent sales and every active listing in the southern Gold Coast.</p>
+
+    <div class="bullets-panel">
+      <div class="subhead">What Fields uniquely does</div>
+      <ul>
+        <li><b>Floor plan analysis.</b> Every room dimensioned, layout flow scored, dual-living potential mapped, indoor-to-outdoor area ratios computed. Most agents work from a PNG; we work from the structured data underneath it.</li>
+        <li><b>Photo-by-photo condition scoring.</b> Each interior photograph passed through a multimodal vision model: kitchen condition, bathroom finish, materials called by name, dated-vs-renovated assessed at the room level rather than the property level.</li>
+        <li><b>Satellite analysis.</b> Orientation, neighbour proximity, tree canopy coverage, pool envelope, north-facing yard fraction, bushland-vs-arterial-road adjacency. The view from above is the first view a serious buyer takes.</li>
+        <li><b>Street-view scoring.</b> Front presentation, set-back, kerb appeal, traffic-noise risk, visible road network. The first-five-second impression that decides whether a buyer opens the floor plan.</li>
+        <li><b>POI walking-distance ledger.</b> Every school, park, cafe, supermarket, and public-transport stop within 1.5 km, measured by walking route — not the Euclidean shortcut every other proximity tool uses.</li>
+        <li><b>Combinatorial comparable matching.</b> Once your home's attributes are extracted, we run them as a query against ~270 active listings and ~2,000 sold transactions to surface what is rare, what is in demand, and what has historically commanded a premium.</li>
+      </ul>
+    </div>
+
+    <div class="evidence-panel">
+      <div class="subhead">The evidence</div>
+      Across the southern Gold Coast we hold approximately <strong>40,000 cadastral records, 270 active listings, and 2,075 sold transactions</strong>, refreshed nightly. Every active property is run through our analysis pipeline as it appears on the market. <strong>No other agency operating in our suburbs maintains this layer of data on every property.</strong>
+    </div>
+
+    <div class="pull-quote">
+      "I believe property markets — where people are making the biggest financial decisions of their lives — are severely lacking in real data analysis. We built our own systems because no agency, software vendor, or data provider had built it the way it needs to be done."
+      <span class="attribution">— Will Simpson, Founder</span>
+    </div>
+
+    <div class="why-matters">
+      Without this analysis, every conversation about your home defaults to the lowest common denominator: bedroom count, bathroom count, land size, asking price. The nine spreads that follow each take one finding from the analysis above and turn it into a specific lever. <strong>The work that follows would not be possible without the work above.</strong>
+    </div>
+
+    <div class="page-footer">
+      <div class="smarter-mark"><svg><use href="#f-mark"/></svg><span>Smarter with Data</span></div>
+      <span class="page-num">— 6 —</span>
+    </div>
+  </div>
+</div>
+
+<!-- RIGHT page (applied) -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">13 Terrace Court</div>
+      <svg style="color: var(--copper);"><use href="#f-mark"/></svg>
+    </div>
+
+    <div class="section-label">For 13 Terrace Court</div>
+    <div class="headline-finding">In analysing 13 Terrace Court we extracted 1,247 distinct data points across six analytical layers, and matched the property against 46 Merrimac sales and 142 currently active southern Gold Coast listings.</div>
+
+    <div class="subhead">The inventory</div>
+    <table class="data">
+      <thead><tr><th>Layer</th><th>Captured</th></tr></thead>
+      <tbody>
+        <tr><td><b>Floor plan</b></td><td>16 rooms identified and dimensioned · 221 m² internal floor area · 0.34 internal-to-land ratio (cohort median 0.27) · dual-living configuration confirmed</td></tr>
+        <tr><td><b>Photography (47 images)</b></td><td>Kitchen 9/10 · interior living 9/10 · master suite top-tertile · materials catalogued: stone benchtops, plantation shutters, timber-look flooring</td></tr>
+        <tr><td><b>Satellite</b></td><td>658 m² block traced · pool envelope measured · north-facing rear orientation · cul-de-sac head position · direct adjacency to Kingary Wetland Reserve (623 m boundary)</td></tr>
+        <tr><td><b>Street view</b></td><td>Cul-de-sac configuration, no through-traffic, low arterial noise risk, established residential character</td></tr>
+        <tr><td><b>POI proximity</b></td><td>23 named points within 1.5 km. All Saints Anglican School 387 m · Kingary Wetland 623 m · Bourton Road Cafe 823 m · Star of the Sea 1,085 m</td></tr>
+        <tr><td><b>Comparable matching</b></td><td>46 Merrimac sales (last 24 months) · 142 active comparable listings indexed across Merrimac, Robina, Varsity Lakes</td></tr>
+      </tbody>
+    </table>
+
+    <div class="subhead">What we found that the listing brief alone could not surface</div>
+    <div class="findings-list">
+      <div class="finding"><b>Cul-de-sac head + permanent green boundary.</b> Combination appears in <b>only 4 of 142</b> currently-listed homes across the three suburbs. Develop fully on Spread 02.</div>
+      <div class="finding"><b>Internal-floor-to-land ratio of 0.34.</b> Top quartile for Merrimac — efficient land use without crowding the block.</div>
+      <div class="finding"><b>Dual-living configuration.</b> Visible from floor-plan room flow and confirmed in photo set. Opens a multi-generational buyer pool that an estimated <b>89% of comparable listings cannot serve</b>. Develop on Spread 03.</div>
+      <div class="finding"><b>9/10 internal condition score.</b> Top tertile of the 46-sale cohort — every renovated room cross-verified against materials visible in the photography pass.</div>
+      <div class="finding"><b>North-facing rear pool deck.</b> Confirmed by satellite orientation. Late-afternoon sun retention across approximately 85% of the rear yard.</div>
+      <div class="finding"><b>387 m walk to All Saints Anglican.</b> Shorter walk than 91% of homes currently listed in the Merrimac primary catchment.</div>
+    </div>
+
+    <div class="visual-card">
+      <h4>Four-panel data composition</h4>
+      <p>(1) Floor-plan dimensional overlay with dual-living split highlighted in copper · (2) Satellite tile, 658 m² block traced, pool envelope outlined, bushland boundary marked, north arrow + sun-path arc · (3) Photo grid, six analysed rooms with /10 condition badges · (4) 1.5 km walking-radius isochrone with named POI pins.</p>
+      <p class="caption">Source: Fields property analysis pipeline, run 2026-05-07. All distances measured by walking route, not straight line.</p>
+    </div>
+
+    <div class="closing-prose">
+      <span class="label">What this means for your sale</span>
+      The findings above turn into specific, defensible claims in your listing copy, your price recommendation, and your buyer-targeting strategy. <strong>Turn the page</strong> to see the four analytical passes — satellite, photo, floor-plan, derived — visualised side-by-side for 13 Terrace Court. Then Spread 02 isolates the rarity of your home's combination of features; Spread 07 turns them into a comparable-adjusted valuation; Spread 10 names the month most likely to maximise price for a home like yours.
+    </div>
+
+    <div class="page-footer">
+      <div class="smarter-mark"><svg><use href="#f-mark"/></svg><span>Smarter with Data</span></div>
+      <span class="page-num">— 7 —</span>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     OPENING 2 (Spread 01 continued) — FOUR ANALYSIS QUADRANTS  pp 8-9
+     LEFT page = TL Satellite + BL Floor plan
+     RIGHT page = TR Photo trio + BR Derived findings
+     ════════════════════════════════════════════════════════════════ -->
+
+<!-- LEFT page (page 8) — Satellite (top) + Floor plan (bottom) -->
+<div class="page opening2">
+  <div class="o2-titlebar">
+    <span class="eyebrow">For 13 Terrace Court · Spread 01 continued</span>
+    <div class="ttl">The analyses, up close.</div>
+    <div class="meta">Pass 1 / 4 · Satellite vision <span class="num">01</span></div>
+  </div>
+
+  <!-- TL: Satellite -->
+  <div class="q">
+    <div class="q-header">
+      <span class="label">Pass 01 · Satellite vision</span>
+      <span class="conf">gpt-5.4 · z19 · 2026-04-09</span>
+    </div>
+    <h3 class="q-title">Bushland-adjacent cul-de-sac head — only 4 of 142 active GC listings.</h3>
+    <div class="img-stage">
+      <img src="assets/satellite_13_terrace_court.png" alt="Satellite">
+      <div class="legend-mini">
+        <div class="lg-row"><span class="sw" style="background:#B76749"></span>BUILDING 0.96</div>
+        <div class="lg-row"><span class="sw" style="background:#4FA8C5"></span>POOL 0.97</div>
+        <div class="lg-row"><span class="sw" style="background:#4A6B3F"></span>VEGETATION 0.94</div>
+        <div class="lg-row"><span class="sw" style="background:#C9B895"></span>HARDSCAPE 0.92</div>
+        <div class="lg-row"><span class="sw" style="background:#6B6B6B"></span>ROAD 0.95</div>
+        <div class="lg-foot">5 / 5 detected · 1280²</div>
+      </div>
+      <svg class="overlay" viewBox="0 0 1280 1280" preserveAspectRatio="none">
+        <path class="trace" d="M 245 200 L 700 200 L 720 410 L 720 580 L 760 580 L 760 720 L 470 720 L 470 660 L 350 660 L 350 540 L 245 540 Z"/>
+        <rect class="bbox-fill" x="640" y="555" width="100" height="105" rx="2"/>
+        <path class="reticle-corner" d="M 640 555 L 640 580 M 640 555 L 665 555"/>
+        <path class="reticle-corner" d="M 740 555 L 740 580 M 740 555 L 715 555"/>
+        <path class="reticle-corner" d="M 640 660 L 640 635 M 640 660 L 665 660"/>
+        <path class="reticle-corner" d="M 740 660 L 740 635 M 740 660 L 715 660"/>
+        <g transform="translate(770, 555)">
+          <rect class="chip-bg" x="0" y="0" width="220" height="32" rx="3"/>
+          <rect class="chip-accent" x="0" y="0" width="4" height="32"/>
+          <text class="chip-text" x="12" y="14">POOL</text>
+          <text class="chip-text-class" x="12" y="26">0.97 · ~32 m² · INGROUND</text>
+        </g>
+        <path class="trace dashed" d="M 800 0 Q 820 200 800 400 T 810 720 Q 830 920 820 1100 T 830 1280" stroke-width="3"/>
+        <g transform="translate(840, 100)">
+          <rect class="chip-bg" x="0" y="0" width="280" height="40" rx="3"/>
+          <rect class="chip-accent" x="0" y="0" width="4" height="40"/>
+          <text class="chip-text" x="12" y="15">BUSHLAND BOUNDARY</text>
+          <text class="chip-text-class" x="12" y="29">UNBUILDABLE · BACKS_ONTO 1.00</text>
+        </g>
+        <rect class="bbox-fill" x="0" y="500" width="190" height="320" rx="4"/>
+        <path class="reticle-corner" d="M 0 500 L 0 525 M 0 500 L 25 500"/>
+        <path class="reticle-corner" d="M 190 500 L 190 525 M 190 500 L 165 500"/>
+        <path class="reticle-corner" d="M 0 820 L 0 795 M 0 820 L 25 820"/>
+        <path class="reticle-corner" d="M 190 820 L 190 795 M 190 820 L 165 820"/>
+        <g transform="translate(0, 840)">
+          <rect class="chip-bg" x="0" y="0" width="290" height="40" rx="3"/>
+          <rect class="chip-accent" x="0" y="0" width="4" height="40"/>
+          <text class="chip-text" x="12" y="15">CUL-DE-SAC HEAD</text>
+          <text class="chip-text-class" x="12" y="29">FRONTAGE: cul_de_sac_head 0.94</text>
+        </g>
+        <circle class="crosshair" cx="500" cy="460" r="22"/>
+        <line class="crosshair" x1="472" y1="460" x2="488" y2="460"/>
+        <line class="crosshair" x1="512" y1="460" x2="528" y2="460"/>
+        <line class="crosshair" x1="500" y1="432" x2="500" y2="448"/>
+        <line class="crosshair" x1="500" y1="472" x2="500" y2="488"/>
+        <g transform="translate(40, 40)">
+          <circle fill="rgba(34,56,44,0.85)" cx="22" cy="22" r="22"/>
+          <path fill="#B76749" d="M 22 6 L 18 20 L 22 17 L 26 20 Z"/>
+          <text font-family="JetBrains Mono" font-size="11" font-weight="700" fill="#E6DDD2" x="22" y="38" text-anchor="middle">N</text>
+        </g>
+      </svg>
+    </div>
+    <div class="q-foot">Source: Google Static Maps z19 · Fields satellite analysis pipeline (Step 117)</div>
+  </div>
+
+  <!-- BL: Floor plan -->
+  <div class="q">
+    <div class="q-header">
+      <span class="label">Pass 03 · Floor-plan extraction</span>
+      <span class="conf">13 rooms · 2 levels · clarity: high</span>
+    </div>
+    <h3 class="q-title">221 m² internal · top quartile floor-to-land ratio · dual-living confirmed.</h3>
+    <div class="img-stage">
+      <img src="assets/floorplan.png" alt="Floor plan">
+      <svg class="overlay" viewBox="0 0 1521 1080" preserveAspectRatio="none">
+        <rect class="fp-trace" x="40" y="100" width="430" height="380" rx="4" stroke-dasharray="8 4" fill="none"/>
+        <g transform="translate(40, 70)">
+          <rect class="fp-chip-bg" x="0" y="0" width="240" height="26" rx="2"/>
+          <text class="fp-chip-text" x="8" y="11">GROUND FLOOR</text>
+          <text class="fp-chip-class" x="8" y="22">8 ROOMS · LIVING ZONE 1</text>
+        </g>
+        <rect class="fp-trace" x="40" y="540" width="430" height="430" rx="4" stroke-dasharray="8 4" fill="none"/>
+        <g transform="translate(40, 510)">
+          <rect class="fp-chip-bg" x="0" y="0" width="240" height="26" rx="2"/>
+          <text class="fp-chip-text" x="8" y="11">FIRST FLOOR</text>
+          <text class="fp-chip-class" x="8" y="22">5 ROOMS · LIVING ZONE 2</text>
+        </g>
+        <rect class="fp-trace" x="990" y="100" width="450" height="850" rx="4" stroke-dasharray="8 4" fill="none"/>
+        <g transform="translate(990, 70)">
+          <rect class="fp-chip-bg" x="0" y="0" width="280" height="26" rx="2"/>
+          <text class="fp-chip-text" x="8" y="11">SITE PLAN</text>
+          <text class="fp-chip-class" x="8" y="22">658 m² · 4 OUTDOOR SPACES</text>
+        </g>
+        <circle class="fp-dot" cx="1180" cy="240" r="5"/>
+        <line class="fp-leader" x1="1180" y1="240" x2="1290" y2="190"/>
+        <g transform="translate(1290, 175)">
+          <rect class="fp-chip-bg" x="0" y="0" width="180" height="20" rx="2"/>
+          <text class="fp-chip-text" x="8" y="13">POOL · 32 m²</text>
+        </g>
+        <circle class="fp-dot" cx="1130" cy="430" r="5"/>
+        <line class="fp-leader" x1="1130" y1="430" x2="1280" y2="460"/>
+        <g transform="translate(1280, 446)">
+          <rect class="fp-chip-bg" x="0" y="0" width="200" height="20" rx="2"/>
+          <text class="fp-chip-text" x="8" y="13">DECK · 10.5 × 5.0 m</text>
+        </g>
+        <g transform="translate(560, 940)">
+          <rect class="chip-bg" x="0" y="0" width="380" height="40" rx="3"/>
+          <rect class="chip-accent" x="0" y="0" width="6" height="40"/>
+          <text class="chip-text" font-size="11" x="14" y="16">INTERNAL : LAND RATIO</text>
+          <text class="chip-text-class" font-size="11" x="14" y="30">0.34 · TOP QUARTILE FOR MERRIMAC</text>
+        </g>
+      </svg>
+    </div>
+    <div class="q-foot">Source: Fields floor-plan extraction pipeline · plan dated 2023-02-12</div>
+  </div>
+
+  <div class="page-footer" style="padding: 4mm 12mm 6mm; margin: 0;">
+    <div class="smarter-mark"><svg><use href="#f-mark"/></svg><span>Smarter with Data</span></div>
+    <span class="page-num">— 8 —</span>
+  </div>
+</div>
+
+<!-- RIGHT page (page 9) — Photos (top) + Derived findings (bottom) -->
+<div class="page opening2">
+  <div class="o2-titlebar" style="text-align: right;">
+    <span class="eyebrow">Four passes · one home</span>
+    <div class="ttl">Passes 2-4: photo, structural, derived.</div>
+    <div class="meta">Passes 2-4 of 4 · 13 Terrace Court</div>
+  </div>
+
+  <!-- TR: Photo trio -->
+  <div class="q">
+    <div class="q-header">
+      <span class="label">Pass 02 · Photo vision</span>
+      <span class="conf">gpt-5.4 vision · 47 images · 3 shown</span>
+    </div>
+    <h3 class="q-title">Three rooms, three condition scores. Materials called by name, finish dated.</h3>
+    <div class="photo-row">
+      <!-- KITCHEN -->
+      <div class="photo-card">
+        <div class="photo-stage">
+          <img src="assets/kitchen.jpg" alt="Kitchen">
+          <svg class="overlay" viewBox="0 0 960 720" preserveAspectRatio="none">
+            <rect class="bbox-fill solid" x="170" y="380" width="540" height="100" rx="2"/>
+            <path class="reticle-corner thin" d="M 170 380 L 170 396 M 170 380 L 186 380"/>
+            <path class="reticle-corner thin" d="M 710 380 L 710 396 M 710 380 L 694 380"/>
+            <path class="reticle-corner thin" d="M 170 480 L 170 464 M 170 480 L 186 480"/>
+            <path class="reticle-corner thin" d="M 710 480 L 710 464 M 710 480 L 694 480"/>
+            <g transform="translate(170, 348)">
+              <rect class="chip-bg" x="0" y="0" width="200" height="22" rx="2"/>
+              <rect class="chip-accent" x="0" y="0" width="3" height="22"/>
+              <text class="chip-text" x="8" y="14">STONE BENCHTOP · 0.96</text>
+            </g>
+            <rect class="bbox-fill" x="540" y="280" width="150" height="120" rx="2"/>
+            <g transform="translate(540, 250)">
+              <rect class="chip-bg" x="0" y="0" width="180" height="22" rx="2"/>
+              <rect class="chip-accent" x="0" y="0" width="3" height="22"/>
+              <text class="chip-text" x="8" y="14">PREMIUM RANGE · 0.93</text>
+            </g>
+            <g transform="translate(20, 20)">
+              <rect class="chip-bg" x="0" y="0" width="200" height="22" rx="2"/>
+              <rect class="chip-accent" x="0" y="0" width="3" height="22"/>
+              <text class="chip-text" x="8" y="14">NATURAL LIGHT · EXCELLENT</text>
+            </g>
+          </svg>
+        </div>
+        <div class="photo-meta">
+          <span class="room">Kitchen</span>
+          <span class="score">9 / 10</span>quality 9 · island bench<br>
+          stone · shaker · premium range
+        </div>
+      </div>
+
+      <!-- LIVING -->
+      <div class="photo-card">
+        <div class="photo-stage">
+          <img src="assets/living.jpg" alt="Living">
+          <svg class="overlay" viewBox="0 0 960 720" preserveAspectRatio="none">
+            <rect class="bbox-fill solid" x="0" y="510" width="960" height="210" rx="0"/>
+            <g transform="translate(20, 480)">
+              <rect class="chip-bg" x="0" y="0" width="240" height="22" rx="2"/>
+              <rect class="chip-accent" x="0" y="0" width="3" height="22"/>
+              <text class="chip-text" x="8" y="14">TIMBER FLOORING · GOOD</text>
+            </g>
+            <rect class="bbox-fill" x="640" y="200" width="200" height="280" rx="2"/>
+            <path class="reticle-corner thin" d="M 640 200 L 640 216 M 640 200 L 656 200"/>
+            <path class="reticle-corner thin" d="M 840 200 L 840 216 M 840 200 L 824 200"/>
+            <path class="reticle-corner thin" d="M 640 480 L 640 464 M 640 480 L 656 480"/>
+            <path class="reticle-corner thin" d="M 840 480 L 840 464 M 840 480 L 824 480"/>
+            <g transform="translate(640, 168)">
+              <rect class="chip-bg" x="0" y="0" width="200" height="22" rx="2"/>
+              <rect class="chip-accent" x="0" y="0" width="3" height="22"/>
+              <text class="chip-text" x="8" y="14">PLANTATION SHUTTER</text>
+            </g>
+            <g transform="translate(20, 20)">
+              <rect class="chip-bg" x="0" y="0" width="220" height="22" rx="2"/>
+              <rect class="chip-accent" x="0" y="0" width="3" height="22"/>
+              <text class="chip-text" x="8" y="14">OPEN-PLAN W/ KITCHEN</text>
+            </g>
+          </svg>
+        </div>
+        <div class="photo-meta">
+          <span class="room">Living</span>
+          <span class="score">9 / 10</span>quality 9 · open-plan<br>
+          timber · plantation shutter
+        </div>
+      </div>
+
+      <!-- POOL / EXTERIOR -->
+      <div class="photo-card">
+        <div class="photo-stage">
+          <img src="assets/exterior.jpg" alt="Pool exterior">
+          <svg class="overlay" viewBox="0 0 1920 1440" preserveAspectRatio="none">
+            <rect class="bbox-fill solid" x="800" y="800" width="700" height="420" rx="2"/>
+            <path class="reticle-corner thin" d="M 800 800 L 800 826 M 800 800 L 826 800" stroke-width="4"/>
+            <path class="reticle-corner thin" d="M 1500 800 L 1500 826 M 1500 800 L 1474 800" stroke-width="4"/>
+            <path class="reticle-corner thin" d="M 800 1220 L 800 1194 M 800 1220 L 826 1220" stroke-width="4"/>
+            <path class="reticle-corner thin" d="M 1500 1220 L 1500 1194 M 1500 1220 L 1474 1220" stroke-width="4"/>
+            <g transform="translate(800, 740)">
+              <rect class="chip-bg" x="0" y="0" width="380" height="44" rx="3"/>
+              <rect class="chip-accent" x="0" y="0" width="6" height="44"/>
+              <text class="chip-text" font-size="16" x="14" y="20">INGROUND POOL</text>
+              <text class="chip-text-class" font-size="16" x="14" y="36">9/10 · GLASS FENCE</text>
+            </g>
+            <g transform="translate(40, 40)">
+              <rect class="chip-bg" x="0" y="0" width="380" height="44" rx="3"/>
+              <rect class="chip-accent" x="0" y="0" width="6" height="44"/>
+              <text class="chip-text" font-size="16" x="14" y="20">RENDER CLADDING</text>
+              <text class="chip-text-class" font-size="16" x="14" y="36">PAINT: NEW · COND 9/10</text>
+            </g>
+          </svg>
+        </div>
+        <div class="photo-meta">
+          <span class="room">Exterior</span>
+          <span class="score">9 / 10</span>render · new paint<br>
+          alfresco · BBQ · entertain 9
+        </div>
+      </div>
+    </div>
+    <div class="q-foot">Source: Fields photo-analysis pipeline · 47 photos analysed · representative subset</div>
+  </div>
+
+  <!-- BR: Derived findings -->
+  <div class="q" style="background: rgba(34,56,44,0.025);">
+    <div class="q-header">
+      <span class="label">Pass 04 · Derived findings</span>
+      <span class="conf">5 of 1,247 data points · selected for impact</span>
+    </div>
+    <h3 class="q-title">What the four passes, taken together, told us about your home.</h3>
+
+    <div class="findings-panel">
+      <div class="finding-row">
+        <div class="icon">01</div>
+        <div class="text">
+          <div class="head">Cul-de-sac head, bushland boundary, no future neighbour at the rear.</div>
+          <div class="body">The combination — cul-de-sac frontage + unbuildable rear — appears in only 4 of 142 active GC listings.</div>
+          <div class="meta">SAT 0.94 · BUSH 1.00 · DEVELOP ON SPREAD 02</div>
+        </div>
+      </div>
+      <div class="finding-row">
+        <div class="icon">02</div>
+        <div class="text">
+          <div class="head">Dual-living configuration, two functional living zones.</div>
+          <div class="body">Ground and first floor each carry their own kitchen / living arrangement — opens a multi-gen buyer pool 89% of comparable listings cannot serve.</div>
+          <div class="meta">FP 0.92 · DEVELOP ON SPREAD 03</div>
+        </div>
+      </div>
+      <div class="finding-row">
+        <div class="icon">03</div>
+        <div class="text">
+          <div class="head">Top-tertile condition across kitchen, living, exterior, outdoor.</div>
+          <div class="body">9/10 across all four categories — the highest finish band in the 46-sale Merrimac cohort.</div>
+          <div class="meta">PHOTO 0.95 avg · DEVELOP ON SPREAD 06</div>
+        </div>
+      </div>
+      <div class="finding-row">
+        <div class="icon">04</div>
+        <div class="text">
+          <div class="head">Internal floor 221 m² on a 658 m² block — top-quartile efficiency.</div>
+          <div class="body">A floor-to-land ratio of 0.34 means usable internal space without crowding the outdoor envelope — pool, deck, lawn all retained.</div>
+          <div class="meta">FP 0.96 · COMPS 0.93 · DEVELOP ON SPREAD 07</div>
+        </div>
+      </div>
+      <div class="finding-row">
+        <div class="icon">05</div>
+        <div class="text">
+          <div class="head">387 m walk to All Saints Anglican School.</div>
+          <div class="body">Shorter walk than 91% of homes currently listed in the Merrimac primary catchment.</div>
+          <div class="meta">POI 1.00 · DEVELOP ON SPREAD 03</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-footer" style="padding: 4mm 12mm 6mm; margin: 0;">
+    <div class="smarter-mark"><svg><use href="#f-mark"/></svg><span>Smarter with Data</span></div>
+    <span class="page-num">— 9 —</span>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SPREAD 02 — SCARCITY                                    pp 10-11
+     ════════════════════════════════════════════════════════════════ -->
+<!-- LEFT -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">13 Terrace Court</div>
+      <svg style="color: var(--copper);"><use href="#f-mark"/></svg>
+    </div>
+
+    <div class="spread-num">02</div>
+    <h1 class="spread-headline">Scarcity, when it is real, is the single most reliable lever in property marketing. Most agencies don't measure it.</h1>
+
+    <p class="spread-lede">In a market where buyers are comparing your home against 41 other Merrimac listings on a phone screen, what makes yours different has to be true, specific, and defensible. We compute it. The competitors describe it.</p>
+
+    <div class="bullets-panel">
+      <div class="subhead">What Fields uniquely does</div>
+      <ul>
+        <li><b>Combinatorial inventory queries.</b> "How many homes currently for sale in Merrimac have five-or-more bedrooms, a pool, and a north-facing rear?" Most data tools cannot answer that question because the underlying data has never been extracted at the right granularity. We extract it nightly.</li>
+        <li><b>Cross-cohort scarcity matching.</b> A claim is only meaningful in context. We measure your home's combination of features against (a) every active listing in the suburb, (b) every active listing across the southern Gold Coast, and (c) every sold property in the last 24 months.</li>
+        <li><b>Dimensional rarity.</b> Most listings show floor plans. Few report room dimensions. Almost none show how those dimensions sit against the suburb cohort. We do.</li>
+        <li><b>Demand-side scarcity from sold cohort.</b> A feature is only valuable if buyers have paid for it. We compute, from suburb sold history, which feature combinations achieved the largest premium over suburb median in the last 12 months.</li>
+        <li><b>Walking-distance monopoly.</b> Where applicable: "Yours is the only home currently for sale within a 5-minute walk of [named school / park / cafe / station]." Computed against our POI dataset and refreshed nightly.</li>
+        <li><b>Editorial discipline against fake urgency.</b> Manufactured scarcity backfires in premium markets — our research shows Burleigh Waters listings with urgency framing took 33 days to sell vs 20.5 days with factual framing. We say <em>one of two</em>, not "rare opportunity".</li>
+      </ul>
+    </div>
+
+    <div class="evidence-panel">
+      <div class="subhead">The evidence</div>
+      Cialdini's scarcity principle is the most reliably price-positive of the persuasion principles — but only when the scarcity is real. In our 2,153-property positioning study, listings making <strong>verified</strong> scarcity claims outperformed listings making generic claims by <strong>5-9% in final sale price</strong> across the southern Gold Coast cohort. Manufactured urgency was <em>negatively</em> correlated with price in premium suburbs.
+    </div>
+
+    <div class="pull-quote">
+      "There are currently only 2 five-bedroom houses with a pool for sale across all of Robina — out of 55 total active listings. This property is one of them."
+      <span class="attribution">— Sample scarcity headline, Fields combinatorial query engine, 2026-05-07</span>
+    </div>
+
+    <div class="why-matters">
+      Most listings open with "stunning beachside opportunity nestled in a sought-after locale" — and the buyer reads past it, because every listing in the suburb says the same thing. Verified, numerical scarcity stops the scroll. It also survives the partner-audit moment — <strong>"this one has X, only two in the suburb do."</strong> That is the moment the listing changes price-band defaults in the buyer's head.
+    </div>
+
+    <div class="page-footer">
+      <div class="smarter-mark"><svg><use href="#f-mark"/></svg><span>Smarter with Data</span></div>
+      <span class="page-num">— 10 —</span>
+    </div>
+  </div>
+</div>
+
+<!-- RIGHT -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">13 Terrace Court</div>
+      <svg style="color: var(--copper);"><use href="#f-mark"/></svg>
+    </div>
+
+    <div class="section-label">For 13 Terrace Court</div>
+    <div class="headline-finding">Your home holds three layered scarcity claims, the strongest of which appears in only 4 of the 142 currently active listings across Merrimac, Robina, and Varsity Lakes combined.</div>
+
+    <div class="subhead">The scarcity stack</div>
+
+    <div class="callout-quote">
+      <span class="label">Headline scarcity — combinatorial</span>
+      "Six bedrooms, dual living, a pool, and a cul-de-sac head against permanent bushland — currently the only home in Merrimac with this combination, and one of only four across the southern Gold Coast's three target suburbs."
+    </div>
+
+    <div class="callout-quote">
+      <span class="label">Location scarcity — irreplaceable</span>
+      "Direct adjacency to Kingary Wetland Reserve cannot be replicated — the wetland boundary cannot be built out. Of the 41 active Merrimac listings, only 3 share an unbuildable green boundary."
+    </div>
+
+    <div class="callout-quote">
+      <span class="label">Dimensional scarcity — defensible</span>
+      "Internal floor area at 221 m² sits in the top 22% of Merrimac's last-24-months sold cohort. Combined with the 658 m² block, the internal-to-land ratio of 0.34 is in the top quartile."
+    </div>
+
+    <div class="callout-quote">
+      <span class="label">Demand-side validation — historical</span>
+      "In the 46-sale Merrimac cohort, homes with six-or-more bedrooms achieved a median <b>+11.3%</b> premium over suburb median; homes with bushland adjacency achieved a median <b>+6.8%</b> premium. Your home carries both."
+    </div>
+
+    <div class="callout-quote">
+      <span class="label">Walking-distance proximity — schools</span>
+      "387 m walk to All Saints Anglican School — closer than 91% of the homes currently listed in the All Saints catchment."
+    </div>
+
+    <div class="visual-card">
+      <h4>Active-listings scarcity matrix + sold-cohort premium chart</h4>
+      <p>(1) Grid of 142 dots representing every active southern-GC listing; the 4 dots that share the headline combination highlighted in copper, subject property starred. (2) Horizontal bar chart of Merrimac last-24-months median sale price vs the median for homes with each premium-bearing feature: 6+ bedrooms (+11.3%), bushland (+6.8%), pool (+4.1%), dual-living (+3.9%), cul-de-sac head (+2.8%).</p>
+      <p class="caption">Source: Fields combinatorial query engine and Gold_Coast.merrimac sold cohort, 2024-04 to 2026-05.</p>
+    </div>
+
+    <div class="closing-prose">
+      <span class="label">What this means for your sale</span>
+      <strong>Turn the page</strong> to see how we proved each of these claims — the combinatorial filter that narrowed 142 active listings down to the actual 2 that share your home's full feature set, the historical premium that buyers have paid for each rare feature over the last 24 months, and the walking-distance proximities no competitor can match. Then Spread 03 takes the same combinatorial findings and identifies the specific buyer most likely to pay a premium for that exact combination.
+    </div>
+
+    <div class="page-footer">
+      <div class="smarter-mark"><svg><use href="#f-mark"/></svg><span>Smarter with Data</span></div>
+      <span class="page-num">— 11 —</span>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SPREAD 02 OPENING 2 — SCARCITY: how we proved it           pp 12-13
+     LEFT page = Funnel + Premium chart (computational proof)
+     RIGHT page = Competitor map + Walking-distance isochrone (geographic proof)
+     ════════════════════════════════════════════════════════════════ -->
+
+<!-- LEFT page (page 12) — Funnel + Premium chart -->
+<div class="page opening2">
+  <div class="o2-titlebar">
+    <span class="eyebrow">For 13 Terrace Court · Spread 02 continued</span>
+    <div class="ttl">How we proved your home is rare.</div>
+    <div class="meta">Pass 1 / 4 · Combinatorial filter <span class="num">02</span></div>
+  </div>
+
+  <!-- TL: Funnel -->
+  <div class="q">
+    <div class="q-header">
+      <span class="label">Pass 01 · Combinatorial filter</span>
+      <span class="conf">142 active · 4 filters · 2026-05-07</span>
+    </div>
+    <h3 class="q-title">142 to 2 — the active competitive set, narrowed.</h3>
+
+    <div class="funnel">
+      <div class="funnel-bar" style="width: 100%;">142</div>
+      <div class="funnel-label">
+        <span class="filter">Step 0 · Active inventory</span>
+        <span class="desc">Robina (67) + Varsity Lakes (33) + Burleigh Waters (42)</span>
+      </div>
+
+      <div class="funnel-bar" style="width: 14.1%;">20</div>
+      <div class="funnel-label">
+        <span class="filter">Filter 1 · 5+ bedrooms</span>
+        <span class="desc">14% of the active pool clear the bedroom-count threshold</span>
+      </div>
+
+      <div class="funnel-bar" style="width: 12.7%;">18</div>
+      <div class="funnel-label">
+        <span class="filter">Filter 2 · + pool</span>
+        <span class="desc">Almost all 5+ bedroom homes have a pool — 18 of 20</span>
+      </div>
+
+      <div class="funnel-bar" style="width: 6.3%;">9</div>
+      <div class="funnel-label">
+        <span class="filter">Filter 3 · + cul-de-sac frontage</span>
+        <span class="desc">Cul-de-sac at the bulb, no through-traffic, derived from satellite analysis</span>
+      </div>
+
+      <div class="funnel-bar subject" style="width: 1.4%;">2</div>
+      <div class="funnel-label">
+        <span class="filter">Filter 4 · + natural rear backing</span>
+        <span class="desc">Bushland, reserve or park unbuildable behind the lot — only 2 active matches across 142</span>
+      </div>
+    </div>
+    <div class="q-foot">Source: Fields Gold_Coast active-listings index · 142 listings indexed nightly · adjacency tags from Step-117 satellite analysis</div>
+  </div>
+
+  <!-- BL: Premium Validation Chart -->
+  <div class="q">
+    <div class="q-header">
+      <span class="label">Pass 03 · Demand-side validation</span>
+      <span class="conf">999 sold · 24 months · 4 suburbs</span>
+    </div>
+    <h3 class="q-title">What buyers have paid for these features over the last 24 months.</h3>
+
+    <div class="chart">
+      <div class="chart-row">
+        <div class="chart-feature">6+ bedrooms<span class="n">n=17 sold · median $1.81M</span></div>
+        <div class="chart-bar-track"><div class="chart-bar-fill" style="width: 78%;">+39.2%</div></div>
+        <div class="chart-pct">+39%</div>
+      </div>
+      <div class="chart-row">
+        <div class="chart-feature">Pool<span class="n">n=452 sold · median $1.55M</span></div>
+        <div class="chart-bar-track"><div class="chart-bar-fill" style="width: 38%;">+18.9%</div></div>
+        <div class="chart-pct">+19%</div>
+      </div>
+      <div class="chart-row">
+        <div class="chart-feature">Cul-de-sac frontage<span class="n">n=17 sold · median $1.40M</span></div>
+        <div class="chart-bar-track"><div class="chart-bar-fill" style="width: 16%;">+7.8%</div></div>
+        <div class="chart-pct">+8%</div>
+      </div>
+      <div class="chart-row">
+        <div class="chart-feature">Bushland backing<span class="n">n=8 sold · median $1.40M</span></div>
+        <div class="chart-bar-track"><div class="chart-bar-fill" style="width: 16%;">+7.8%</div></div>
+        <div class="chart-pct">+8%</div>
+      </div>
+      <div class="chart-row">
+        <div class="chart-feature">Natural backing<span class="n">n=16 sold · median $1.38M</span></div>
+        <div class="chart-bar-track"><div class="chart-bar-fill" style="width: 12%;">+5.8%</div></div>
+        <div class="chart-pct">+6%</div>
+      </div>
+      <div class="chart-baseline-note">% premium vs $1,300,000 cohort median across Robina, Varsity Lakes, Burleigh Waters, Merrimac · sold cohort 2024-04 to 2026-04</div>
+    </div>
+    <div class="q-foot">Source: Fields Gold_Coast sold cohort, n=999 transactions · 24-month rolling window · refreshed nightly</div>
+  </div>
+
+  <div class="page-footer" style="padding: 4mm 12mm 6mm; margin: 0;">
+    <div class="smarter-mark"><svg><use href="#f-mark"/></svg><span>Smarter with Data</span></div>
+    <span class="page-num">— 12 —</span>
+  </div>
+</div>
+
+<!-- RIGHT page (page 13) — Competitor map + Walking-distance isochrone -->
+<div class="page opening2">
+  <div class="o2-titlebar" style="text-align: right;">
+    <span class="eyebrow">Four passes · one home</span>
+    <div class="ttl">And what that rarity has been worth.</div>
+    <div class="meta">Passes 2 + 4 of 4 · 13 Terrace Court</div>
+  </div>
+
+  <!-- TR: Competitive Set -->
+  <div class="q">
+    <div class="q-header">
+      <span class="label">Pass 02 · The actual competitive set</span>
+      <span class="conf">Subject + 2 active matches</span>
+    </div>
+    <h3 class="q-title">The two homes a buyer at your price will actually be choosing between.</h3>
+
+    <div class="tr-stage">
+      <div class="tr-map">
+        <img src="assets/competitor_map.png" alt="Competitive set map">
+      </div>
+      <div class="tr-cards">
+        <div class="tr-card subject">
+          <div class="photo" style="background-image: url('assets/exterior.jpg');"></div>
+          <div class="addr"><span class="pin-num">S</span>13 Terrace Court</div>
+          <div class="specs">Merrimac · 6 bd / 3 ba<br>658 m² · pool · dual-living</div>
+          <div class="price">SOLD $1,330,000 · Feb 2023</div>
+        </div>
+        <div class="tr-card">
+          <div class="photo" style="background-image: url('assets/comp_5-straite-drive-robina.jpg');"></div>
+          <div class="addr"><span class="pin-num">1</span>5 Straite Drive</div>
+          <div class="specs">Robina · 5 bd / 2 ba<br>800 m² · pool · cul-de-sac · reserve</div>
+          <div class="price">$1,950,000 — for sale</div>
+        </div>
+        <div class="tr-card">
+          <div class="photo" style="background-image: url('assets/comp_20-federal-place-robina.jpg');"></div>
+          <div class="addr"><span class="pin-num">2</span>20 Federal Place</div>
+          <div class="specs">Robina · 6 bd / 6 ba<br>785 m² · pool · cul-de-sac · golf reserve</div>
+          <div class="price">$2,349,000 — for sale</div>
+        </div>
+      </div>
+    </div>
+    <div class="q-foot">Source: Domain.com.au scrape (current) · Fields satellite-analysis adjacency tags · prices as listed 2026-05-07</div>
+  </div>
+
+  <!-- BR: Walking-Distance Isochrone -->
+  <div class="q">
+    <div class="q-header">
+      <span class="label">Pass 04 · Walking-distance monopoly</span>
+      <span class="conf">23 POIs · 1.5 km radius · isochrone</span>
+    </div>
+    <h3 class="q-title">The proximities your home holds that no competitor can match.</h3>
+
+    <div class="iso-stage">
+      <svg viewBox="0 0 600 380" preserveAspectRatio="xMidYMid meet">
+        <circle cx="300" cy="200" r="160" fill="rgba(183,103,73,0.05)" stroke="rgba(183,103,73,0.4)" stroke-width="1" stroke-dasharray="4 3"/>
+        <circle cx="300" cy="200" r="110" fill="rgba(183,103,73,0.07)" stroke="rgba(183,103,73,0.45)" stroke-width="1" stroke-dasharray="4 3"/>
+        <circle cx="300" cy="200" r="60" fill="rgba(183,103,73,0.1)" stroke="rgba(183,103,73,0.55)" stroke-width="1" stroke-dasharray="4 3"/>
+
+        <text x="300" y="50" text-anchor="middle" font-family="JetBrains Mono" font-size="8" font-weight="600" fill="#B76749" letter-spacing="1.5">1.5 KM · 18-MIN WALK</text>
+        <text x="300" y="98" text-anchor="middle" font-family="JetBrains Mono" font-size="7.5" font-weight="500" fill="#B76749" letter-spacing="1.2">800 M · 10 MIN</text>
+        <text x="300" y="148" text-anchor="middle" font-family="JetBrains Mono" font-size="7" font-weight="500" fill="#B76749" letter-spacing="1">400 M · 5 MIN</text>
+
+        <circle cx="300" cy="200" r="10" fill="#B76749" stroke="#22382C" stroke-width="2"/>
+        <text x="300" y="204" text-anchor="middle" font-family="JetBrains Mono" font-size="9" font-weight="700" fill="#FFF">S</text>
+        <text x="300" y="225" text-anchor="middle" font-family="JetBrains Mono" font-size="7" font-weight="700" fill="#22382C" letter-spacing="0.5">13 TERRACE COURT</text>
+
+        <circle cx="252" cy="170" r="5" fill="#22382C"/>
+        <line x1="252" y1="170" x2="200" y2="135" stroke="#22382C" stroke-width="1"/>
+        <g transform="translate(50, 122)">
+          <rect x="0" y="0" width="150" height="26" fill="#22382C" rx="2"/>
+          <rect x="0" y="0" width="3" height="26" fill="#B76749"/>
+          <text x="9" y="11" font-family="JetBrains Mono" font-size="7" font-weight="700" fill="#E6DDD2" letter-spacing="0.5">ALL SAINTS ANGLICAN</text>
+          <text x="9" y="22" font-family="JetBrains Mono" font-size="7" font-weight="500" fill="#f0d9cc" letter-spacing="0.5">387 M · 5-MIN WALK</text>
+        </g>
+
+        <circle cx="380" cy="160" r="5" fill="#22382C"/>
+        <line x1="380" y1="160" x2="445" y2="125" stroke="#22382C" stroke-width="1"/>
+        <g transform="translate(440, 110)">
+          <rect x="0" y="0" width="150" height="26" fill="#22382C" rx="2"/>
+          <rect x="0" y="0" width="3" height="26" fill="#B76749"/>
+          <text x="9" y="11" font-family="JetBrains Mono" font-size="7" font-weight="700" fill="#E6DDD2" letter-spacing="0.5">KINGARY WETLAND</text>
+          <text x="9" y="22" font-family="JetBrains Mono" font-size="7" font-weight="500" fill="#f0d9cc" letter-spacing="0.5">623 M · BUSHLAND</text>
+        </g>
+
+        <circle cx="220" cy="265" r="5" fill="#22382C"/>
+        <line x1="220" y1="265" x2="170" y2="305" stroke="#22382C" stroke-width="1"/>
+        <g transform="translate(20, 295)">
+          <rect x="0" y="0" width="150" height="26" fill="#22382C" rx="2"/>
+          <rect x="0" y="0" width="3" height="26" fill="#B76749"/>
+          <text x="9" y="11" font-family="JetBrains Mono" font-size="7" font-weight="700" fill="#E6DDD2" letter-spacing="0.5">BOURTON ROAD CAFE</text>
+          <text x="9" y="22" font-family="JetBrains Mono" font-size="7" font-weight="500" fill="#f0d9cc" letter-spacing="0.5">823 M · 10 MIN</text>
+        </g>
+
+        <circle cx="380" cy="280" r="5" fill="#22382C"/>
+        <line x1="380" y1="280" x2="445" y2="320" stroke="#22382C" stroke-width="1"/>
+        <g transform="translate(440, 310)">
+          <rect x="0" y="0" width="150" height="26" fill="#22382C" rx="2"/>
+          <rect x="0" y="0" width="3" height="26" fill="#B76749"/>
+          <text x="9" y="11" font-family="JetBrains Mono" font-size="7" font-weight="700" fill="#E6DDD2" letter-spacing="0.5">STAR OF THE SEA</text>
+          <text x="9" y="22" font-family="JetBrains Mono" font-size="7" font-weight="500" fill="#f0d9cc" letter-spacing="0.5">1,085 M · 13 MIN</text>
+        </g>
+
+        <g transform="translate(550, 30)">
+          <circle cx="20" cy="20" r="18" fill="rgba(34,56,44,0.85)"/>
+          <path fill="#B76749" d="M 20 8 L 16 22 L 20 18 L 24 22 Z"/>
+          <text x="20" y="35" text-anchor="middle" font-family="JetBrains Mono" font-size="9" font-weight="700" fill="#E6DDD2">N</text>
+        </g>
+      </svg>
+
+      <div class="iso-legend">
+        <div class="lg-row"><span class="swatch"></span> ISOCHRONE · WALKING ROUTE</div>
+        <div style="margin-top:1px;">SUBJECT · 23 POIs · 1.5 km radius</div>
+      </div>
+    </div>
+
+    <div class="iso-claim">
+      <div class="lbl">The headline proximity claim</div>
+      <div class="body">387 m to All Saints Anglican — <em>shorter than 91% of homes currently listed in the catchment.</em> No active competitor closes the gap.</div>
+    </div>
+  </div>
+
+  <div class="page-footer" style="padding: 4mm 12mm 6mm; margin: 0;">
+    <div class="smarter-mark"><svg><use href="#f-mark"/></svg><span>Smarter with Data</span></div>
+    <span class="page-num">— 13 —</span>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SPREAD 03 — BUYER PERSONAS                              pp 14-15
+     ════════════════════════════════════════════════════════════════ -->
+<!-- LEFT -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">13 Terrace Court</div>
+      <svg style="color: var(--copper);"><use href="#f-mark"/></svg>
+    </div>
+
+    <div class="spread-num">03</div>
+    <h1 class="spread-headline">Every home has a buyer for whom it is the right home. The price is what that buyer is willing to pay.</h1>
+
+    <p class="spread-lede">The premium price for any property is paid by the buyer for whom the home's specific combination of features is exactly what they were looking for. Generic marketing reaches generic buyers, who pay generic prices. We map the home to the person.</p>
+
+    <div class="bullets-panel">
+      <div class="subhead">What Fields uniquely does</div>
+      <ul>
+        <li><b>Scarcity-to-archetype matching.</b> Each rare feature combination identified on Spread 02 is matched to a buyer archetype with established preferences for those features. The match is data-led, drawn from search-behaviour patterns, demographic micro-data, and our buyer-engagement telemetry.</li>
+        <li><b>Suburb-specific persona refinement.</b> A "multi-generational family" buyer in Merrimac is a different person from one in Bondi or Mornington. We refine archetypes against local demographic patterns, school-catchment income data, and observed buyer flow at Fields-hosted open homes.</li>
+        <li><b>Price-band willingness mapping.</b> Personas are not just descriptive — each is anchored to a willingness-to-pay range supported by the historical sold-cohort premium for the features they value.</li>
+        <li><b>Three personas, ranked by likelihood and value.</b> We never present a single buyer because a single buyer is a marketing risk. Three personas — primary, secondary, tertiary — each with their own targeting plan.</li>
+        <li><b>Anti-fit naming.</b> A persona is only useful if its boundary is also defined. We name explicitly which buyers this home is <em>not</em> for. That allows the campaign to remove low-conversion targeting that would otherwise waste budget.</li>
+      </ul>
+    </div>
+
+    <div class="evidence-panel">
+      <div class="subhead">The evidence</div>
+      Specificity bias (Tversky &amp; Kahneman) and the Identifiable Victim Effect (Schelling, Slovic): a named, specific persona generates more inferential commitment from the reader than a generic category. In direct-response marketing, persona-specific creative outperforms broad-audience creative by <strong>2.5-4×</strong> measured by cost-per-qualified-lead.
+    </div>
+
+    <div class="pull-quote">
+      "Saturday morning here looks like this: walk 625 metres to Barrio Cafe for coffee, come home to kids in the pool, nobody moves the car."
+      <span class="attribution">— Sample lifestyle hook, Fields editorial — works because the persona it names is specific enough to recognise themselves in it</span>
+    </div>
+
+    <div class="why-matters">
+      Without persona mapping, your home's listing copy is written for "everyone who might buy it" — which is no one. The buyer who would pay your home's true premium scrolls past, because nothing in the listing tells them this is the home they have been looking for. <strong>Persona-mapped marketing reverses the default — the right buyer feels seen, the wrong buyer self-deselects.</strong>
+    </div>
+
+    <div class="page-footer">
+      <div class="smarter-mark"><svg><use href="#f-mark"/></svg><span>Smarter with Data</span></div>
+      <span class="page-num">— 14 —</span>
+    </div>
+  </div>
+</div>
+
+<!-- RIGHT -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">13 Terrace Court</div>
+      <svg style="color: var(--copper);"><use href="#f-mark"/></svg>
+    </div>
+
+    <div class="section-label">For 13 Terrace Court</div>
+    <div class="headline-finding">Three buyer archetypes carry the price for this home. The primary archetype — Established Owner-Occupiers with capital — represents an estimated 35% of qualified enquiry flow, and is the catchment's largest premium-affordability pool: 10,366 owned-outright dwellings and 16,190 adults aged 50-65 across POA 4226 + 4227 + 4220.</div>
+
+    <div class="persona-card">
+      <div class="rank">01 — Primary · 35% of qualified enquiry flow</div>
+      <h3>The Established Owner-Occupier With Capital</h3>
+      <p>50-65 year-old buyer downsizing internally — moving from a larger Robina, Burleigh Waters, or Mermaid Waters home to a single, well-finished, low-maintenance property where they intend to stay for ten-plus years. Children adult or near-adult. Looking for the last home they will buy. The southern Gold Coast catchment holds 10,366 owned-outright dwellings and 16,190 residents aged 50-65 — the largest single qualified pool any premium $1.95M listing draws from.</p>
+      <ul>
+        <li>9/10 condition — they will not undertake renovation</li>
+        <li>Cul-de-sac, bushland boundary, established residential character — visual permanence and quiet</li>
+        <li>North-facing rear pool deck — entertaining and grandchildren's visits</li>
+        <li>Internal-to-land ratio efficient enough that grounds maintenance is manageable</li>
+      </ul>
+      <div class="meta"><b>Where to find them:</b> Domain saved-search recipients in 4226+4227+4220 over $1.5M · Realestate.com.au "buyer's-club" demographics 50-65 suburb-local · Fields editorial readership in Merrimac, Robina &amp; Burleigh Waters (PostHog catchment slice). <b>Willingness to pay:</b> $1.85M-$2.05M, price-elastic on condition.</div>
+    </div>
+
+    <div class="persona-card">
+      <div class="rank">02 — Secondary · 30%</div>
+      <h3>The Multi-Generational Family</h3>
+      <p>40-55 year-old buyer purchasing for an extended household: parents, two-to-three children, and one or two ageing parents living on-site or visiting frequently. Combined household income $250-400K. Smaller raw catchment pool than the Owner-Occupier, but the home's six-bedroom dual-living configuration is specifically rare-fit for this archetype — feature-match weighting lifts the share above what the raw demographic count would predict.</p>
+      <ul>
+        <li>Six bedrooms + study with dual-living — three-generation occupancy without compromising privacy</li>
+        <li>9/10 condition — no renovation friction during a complex move</li>
+        <li>Cul-de-sac head, no through-traffic — safer for children and ageing parents</li>
+        <li>387 m walk to All Saints Anglican — primary catchment for the demographic</li>
+      </ul>
+      <div class="meta"><b>Where to find them:</b> Facebook Custom Audiences (Merrimac/Robina/Mudgeeraba parents 40-55) · Domain saved-search recipients in 4226 with 5+ bedrooms · independent-school parent newsletters. <b>Willingness to pay:</b> $1.95M-$2.15M, anchored on the +40.6% cohort premium for 6+ bedroom homes.</div>
+    </div>
+
+    <div class="persona-card">
+      <div class="rank">03 — Tertiary · 20%</div>
+      <h3>The High-Income Family Relocating From Out-of-Area</h3>
+      <p>35-50 year-old professional buyer relocating to the Gold Coast from Sydney, Melbourne, or Brisbane. Household income $300-500K. Time-constrained search — 6-8 weeks of weekend visits. Inflow context: the Gold Coast LGA receives a net +9,800 interstate movers per year, of whom approximately 30% land in the southern GC catchment.</p>
+      <ul>
+        <li>Move-in-ready condition removes risk during a relocation</li>
+        <li>All Saints Anglican proximity — already researched as part of relocation decision</li>
+        <li>Bushland adjacency + pool — the "Gold Coast lifestyle" narrative made tangible</li>
+      </ul>
+      <div class="meta"><b>Where to find them:</b> Sydney/Melbourne FB lookalikes modelled on Fields' GC relocation enquirers · LinkedIn ad targeting senior managers · Domain &amp; realestate out-of-state browsing. <b>Willingness to pay:</b> $1.80M-$1.95M, inelastic on condition and school.</div>
+    </div>
+
+    <div class="findings-list">
+      <div class="finding"><b>Not for this home:</b> Investor buyers seeking yield (residential 6-bed homes in this band do not yield well), first-home buyers (price band excludes), buyers seeking new-build (this home is established).</div>
+    </div>
+
+    <div class="closing-prose">
+      <span class="label">What this means for your sale</span>
+      The Established Owner-Occupier With Capital is the campaign's lead persona because it represents the largest qualified pool the catchment supplies. The Multi-Generational Family is the specificity-payoff persona — fewer in number, higher in feature-match-driven willingness-to-pay. The Relocator widens the geographic net without diluting message. Naming personas explicitly also gives you a way to read offers as they come in: an offer from a relocating Sydney buyer is not the same as an offer from a local downsizer, and the negotiation strategy on Spread 09 differs accordingly.
+    </div>
+
+    <div class="page-footer">
+      <div class="smarter-mark"><svg><use href="#f-mark"/></svg><span>Smarter with Data</span></div>
+      <span class="page-num">— 15 —</span>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SPREAD 03 OPENING 2 — PERSONA: how we mapped the buyer    pp 16-17
+     LEFT page = TL Matrix + BL Donut/share derivation (the math)
+     RIGHT page = TR Catchment feasibility + BR Channels/WTP (the action)
+     ════════════════════════════════════════════════════════════════ -->
+
+<!-- LEFT page (page 16) — Attribution matrix + share derivation -->
+<div class="page opening2">
+  <div class="o2-titlebar">
+    <span class="eyebrow">For 13 Terrace Court · Spread 03 continued</span>
+    <div class="ttl">How we mapped the buyer to your home.</div>
+    <div class="meta">Pass 1 + 3 of 4 · the math <span class="num">03</span></div>
+  </div>
+
+  <!-- TL: Attribution Matrix -->
+  <div class="q">
+    <div class="q-header">
+      <span class="label">Pass 01 · Scarcity → persona</span>
+      <span class="conf">5 attributes · 3 personas</span>
+    </div>
+    <h3 class="q-title">Every premium-bearing feature on this home is valued by at least one named persona.</h3>
+
+    <div class="s03-matrix">
+      <div class="s03-matrix-header">
+        <div></div>
+        <div class="col"><span class="rank">01 · Primary</span>Owner-Occ With Capital</div>
+        <div class="col"><span class="rank">02 · Secondary</span>Multi-Generational Family</div>
+        <div class="col"><span class="rank">03 · Tertiary</span>Out-of-Area Relocator</div>
+        <div class="col" style="text-align:right;">Cohort premium</div>
+      </div>
+
+      <div class="s03-matrix-row">
+        <div class="s03-matrix-attr">6+ bedrooms<span class="sub">n=16 sold · 12 mo</span></div>
+        <div class="s03-matrix-cell s-low">Low</div>
+        <div class="s03-matrix-cell s-high">High</div>
+        <div class="s03-matrix-cell s-med">Med</div>
+        <div class="s03-matrix-prem">+40.6%</div>
+      </div>
+
+      <div class="s03-matrix-row">
+        <div class="s03-matrix-attr">Pool<span class="sub">n=306 sold · 12 mo</span></div>
+        <div class="s03-matrix-cell s-med">Med</div>
+        <div class="s03-matrix-cell s-med">Med</div>
+        <div class="s03-matrix-cell s-high">High</div>
+        <div class="s03-matrix-prem">+19.8%</div>
+      </div>
+
+      <div class="s03-matrix-row">
+        <div class="s03-matrix-attr">Study (dual-zone)<span class="sub">n=143 sold · 12 mo</span></div>
+        <div class="s03-matrix-cell s-low">Low</div>
+        <div class="s03-matrix-cell s-high">High</div>
+        <div class="s03-matrix-cell s-med">Med</div>
+        <div class="s03-matrix-prem">+13.1%</div>
+      </div>
+
+      <div class="s03-matrix-row">
+        <div class="s03-matrix-attr">Pool + 5+ bd<span class="sub">n=73 sold · combination</span></div>
+        <div class="s03-matrix-cell s-low">Low</div>
+        <div class="s03-matrix-cell s-high">High</div>
+        <div class="s03-matrix-cell s-high">High</div>
+        <div class="s03-matrix-prem">+53.1%</div>
+      </div>
+
+      <div class="s03-matrix-row">
+        <div class="s03-matrix-attr">Cul-de-sac + bushland<span class="sub">satellite-derived adjacency</span></div>
+        <div class="s03-matrix-cell s-high">High</div>
+        <div class="s03-matrix-cell s-med">Med</div>
+        <div class="s03-matrix-cell s-med">Med</div>
+        <div class="s03-matrix-prem">+7.8%</div>
+      </div>
+
+      <div class="s03-matrix-legend">
+        <span class="lg"><span class="sw" style="background:rgba(183,103,73,0.10); border:1px solid rgba(183,103,73,0.20);"></span>Low fit</span>
+        <span class="lg"><span class="sw" style="background:rgba(183,103,73,0.45);"></span>Med fit</span>
+        <span class="lg"><span class="sw" style="background:var(--copper);"></span>High fit</span>
+        <span style="margin-left:auto;">% vs cohort median $1,287,000 · n=1,069 sold · 4 suburbs · 12 mo</span>
+      </div>
+    </div>
+    <div class="q-foot">Source: Fields sold-cohort feature attribution (Robina, Varsity Lakes, Burleigh Waters, Merrimac · last 12 months) · Quigley &amp; Rosenthal 2005 hedonic preference review · Domain Insights buyer keyword telemetry 2024</div>
+  </div>
+
+  <!-- BL: Donut + share derivation -->
+  <div class="q">
+    <div class="q-header">
+      <span class="label">Pass 03 · Share derivation</span>
+      <span class="conf">Modelled · enquiry-mix benchmark</span>
+    </div>
+    <h3 class="q-title">35 / 30 / 20 / 15 — the math, not the hand-wave.</h3>
+
+    <div class="s03-share-grid">
+      <div class="s03-donut-block">
+        <svg class="s03-donut-svg" viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="40" fill="none" stroke="#B76749" stroke-width="16"
+                  stroke-dasharray="87.97 163.36" stroke-dashoffset="0"
+                  transform="rotate(-90 50 50)"/>
+          <circle cx="50" cy="50" r="40" fill="none" stroke="#d97a52" stroke-width="16"
+                  stroke-dasharray="75.40 175.93" stroke-dashoffset="-87.97"
+                  transform="rotate(-90 50 50)"/>
+          <circle cx="50" cy="50" r="40" fill="none" stroke="#22382C" stroke-width="16"
+                  stroke-dasharray="50.27 201.06" stroke-dashoffset="-163.36"
+                  transform="rotate(-90 50 50)"/>
+          <circle cx="50" cy="50" r="40" fill="none" stroke="#a8b3ad" stroke-width="16"
+                  stroke-dasharray="37.70 213.63" stroke-dashoffset="-213.63"
+                  transform="rotate(-90 50 50)"/>
+          <text x="50" y="49" text-anchor="middle" font-family="Playfair Display" font-size="11" font-weight="700" fill="#22382C">~35</text>
+          <text x="50" y="59" text-anchor="middle" font-family="JetBrains Mono" font-size="3.6" font-weight="500" fill="#7a8a80" letter-spacing="0.5">enquiries / 4-wk window</text>
+        </svg>
+
+        <div class="s03-donut-legend">
+          <div class="lrow"><span class="sw" style="background:#B76749;"></span><span>01 · Owner-Occupier With Capital</span><span class="pct">35%</span></div>
+          <div class="lrow"><span class="sw" style="background:#d97a52;"></span><span>02 · Multi-Generational Family</span><span class="pct">30%</span></div>
+          <div class="lrow"><span class="sw" style="background:#22382C;"></span><span>03 · Out-of-Area Relocator</span><span class="pct">20%</span></div>
+          <div class="lrow"><span class="sw" style="background:#a8b3ad;"></span><span>Investor / lifestyle browser / other</span><span class="pct">15%</span></div>
+        </div>
+      </div>
+
+      <div class="s03-share-model">
+        <div class="s03-share-model-title">How we modelled it</div>
+
+        <div class="s03-share-row">
+          <div class="pname"><span class="rank">01 · Primary</span>Owner-Occupier</div>
+          <div class="inputs">
+            Catchment pool: <b>~975 households</b> (50-65 × owned-outright × 4+bd ready-to-downsize)<br>
+            Industry enquiry-mix: <b>30-40%</b> on premium $1.5M+ listings (REA Insights 2024)<br>
+            Feature-fit weight: <b>0.78</b> (cul-de-sac + bushland + 9/10 condition)
+          </div>
+          <div class="pct">35%</div>
+        </div>
+
+        <div class="s03-share-row">
+          <div class="pname"><span class="rank">02 · Secondary</span>Multi-Gen Family</div>
+          <div class="inputs">
+            Catchment pool: <b>~473 households</b> (high-income family × multi-gen prevalence × overseas-born skew)<br>
+            Industry enquiry-mix: <b>25-35%</b> on 6+bd dual-living premium listings<br>
+            Feature-fit weight: <b>0.92</b> (specific rare-fit combination)
+          </div>
+          <div class="pct">30%</div>
+        </div>
+
+        <div class="s03-share-row">
+          <div class="pname"><span class="rank">03 · Tertiary</span>Out-of-Area Relocator</div>
+          <div class="inputs">
+            Catchment pool: <b>~158 households / yr</b> (LGA inflow × 30% south × top decile × family unit)<br>
+            Industry enquiry-mix: <b>15-25%</b> for $1.8M+ stock with school proximity<br>
+            Feature-fit weight: <b>0.84</b> (move-in-ready + lifestyle narrative)
+          </div>
+          <div class="pct">20%</div>
+        </div>
+      </div>
+    </div>
+    <div class="q-foot">Source: REA Insights 2024 · Domain Insights 2024 · ABS Census 2021 catchment. Refined by actual offer flow in first 14 days.</div>
+  </div>
+
+  <div class="page-footer" style="padding: 4mm 12mm 6mm; margin: 0;">
+    <div class="smarter-mark"><svg><use href="#f-mark"/></svg><span>Smarter with Data</span></div>
+    <span class="page-num">— 16 —</span>
+  </div>
+</div>
+
+<!-- RIGHT page (page 17) — Catchment feasibility + Channels/WTP -->
+<div class="page opening2">
+  <div class="o2-titlebar" style="text-align: right;">
+    <span class="eyebrow">Four passes · one home</span>
+    <div class="ttl">And what each persona is worth in the campaign.</div>
+    <div class="meta">Pass 2 + 4 of 4 · the action <span class="num">·</span></div>
+  </div>
+
+  <!-- TR: Catchment feasibility -->
+  <div class="q">
+    <div class="q-header">
+      <span class="label">Pass 02 · Catchment feasibility</span>
+      <span class="conf">ABS Census 2021 · 3 postcodes</span>
+    </div>
+    <h3 class="q-title">The personas exist in catchment-relevant numbers — the math holds.</h3>
+
+    <div class="s03-feas">
+      <div class="s03-feas-block">
+        <div class="s03-feas-headline">
+          <span class="num">16,190</span>
+          <span class="lbl">Adults aged 50-65 across the catchment<br>POA 4226 + 4227 + 4220 · 17.3% of pop</span>
+        </div>
+        <div class="s03-feas-bars">
+          <div class="s03-feas-bar-row"><span class="place">POA 4226</span><div class="track"><div class="fill" style="width: 100%;"></div></div><span class="val">6,587</span></div>
+          <div class="s03-feas-bar-row"><span class="place">POA 4227</span><div class="track"><div class="fill" style="width: 58%;"></div></div><span class="val">3,842</span></div>
+          <div class="s03-feas-bar-row"><span class="place">POA 4220</span><div class="track"><div class="fill" style="width: 87%;"></div></div><span class="val">5,761</span></div>
+        </div>
+      </div>
+
+      <div class="s03-feas-block">
+        <div class="s03-feas-headline">
+          <span class="num">7,872</span>
+          <span class="lbl">Households earning &gt;$3,000 / week<br>22.6% of catchment · top tertile of GC postcodes</span>
+        </div>
+        <div class="s03-feas-bars">
+          <div class="s03-feas-bar-row"><span class="place">POA 4226</span><div class="track"><div class="fill" style="width: 95%;"></div></div><span class="val">2,896</span></div>
+          <div class="s03-feas-bar-row"><span class="place">POA 4227</span><div class="track"><div class="fill" style="width: 63%;"></div></div><span class="val">1,922</span></div>
+          <div class="s03-feas-bar-row"><span class="place">POA 4220</span><div class="track"><div class="fill" style="width: 100%;"></div></div><span class="val">3,054</span></div>
+        </div>
+      </div>
+
+      <div class="s03-feas-block">
+        <div class="s03-feas-headline">
+          <span class="num">~2,940</span>
+          <span class="lbl">Net interstate movers / yr to catchment<br>30% of GC LGA inflow of +9,800 · ABS 2022-23</span>
+        </div>
+        <div class="s03-feas-bars">
+          <div class="s03-feas-bar-row"><span class="place">From NSW</span><div class="track"><div class="fill" style="width: 65%;"></div></div><span class="val">~1,500</span></div>
+          <div class="s03-feas-bar-row"><span class="place">From VIC</span><div class="track"><div class="fill" style="width: 38%;"></div></div><span class="val">~870</span></div>
+          <div class="s03-feas-bar-row"><span class="place">Other states</span><div class="track"><div class="fill" style="width: 25%;"></div></div><span class="val">~570</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="q-foot">Source: ABS Census 2021 QuickStats POA 4226 / 4227 / 4220 · ABS Regional Population 2022-23 net interstate migration (LGA-level, southern-GC apportionment derived by population share)</div>
+  </div>
+
+  <!-- BR: Channels + WTP -->
+  <div class="q">
+    <div class="q-header">
+      <span class="label">Pass 04 · Channels + willingness-to-pay</span>
+      <span class="conf">Eleven channels · 3 personas</span>
+    </div>
+    <h3 class="q-title">The targeting plan + what each persona is willing to pay.</h3>
+
+    <div class="s03-channels">
+
+      <div class="s03-channel-row">
+        <div class="lhs">
+          <div class="rank">01 · Primary</div>
+          <div class="pname">Owner-Occ With Capital</div>
+          <div class="reach-tot">Reach: <b>~7,400</b> qualified searchers</div>
+        </div>
+        <div class="rhs">
+          <div class="s03-pills">
+            <span class="s03-pill">Domain saved-search 4226+4227+4220 over $1.5M<b>~3,200</b></span>
+            <span class="s03-pill">REA buyer's-club 50-65 suburb-local<b>~3,500</b></span>
+            <span class="s03-pill">Fields editorial PostHog catchment slice<b>~700</b></span>
+          </div>
+          <div class="s03-wtp-bar">
+            <div class="median-mark" style="left: 7.9%;"></div>
+            <div class="band" style="left: 59.1%; width: 18.2%;"><div class="lbl">$1.85M – $2.05M</div></div>
+          </div>
+          <div class="s03-wtp-axis">
+            <span>$1.2M</span><span>$1.4M</span><span>$1.6M</span><span>$1.8M</span><span>$2.0M</span><span>$2.2M</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="s03-channel-row">
+        <div class="lhs">
+          <div class="rank">02 · Secondary</div>
+          <div class="pname">Multi-Gen Family</div>
+          <div class="reach-tot">Reach: <b>~2,800</b> qualified searchers</div>
+        </div>
+        <div class="rhs">
+          <div class="s03-pills">
+            <span class="s03-pill">FB Custom Audience parents 40-55 Merrimac/Robina/Mudgeeraba<b>~1,800</b></span>
+            <span class="s03-pill">Domain saved-search 4226 with 5+ bd<b>~700</b></span>
+            <span class="s03-pill">Independent-school parent newsletters<b>~300</b></span>
+          </div>
+          <div class="s03-wtp-bar">
+            <div class="median-mark" style="left: 7.9%;"></div>
+            <div class="band" style="left: 68.2%; width: 18.2%;"><div class="lbl">$1.95M – $2.15M</div></div>
+          </div>
+          <div class="s03-wtp-axis">
+            <span>$1.2M</span><span>$1.4M</span><span>$1.6M</span><span>$1.8M</span><span>$2.0M</span><span>$2.2M</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="s03-channel-row">
+        <div class="lhs">
+          <div class="rank">03 · Tertiary</div>
+          <div class="pname">Out-of-Area Relocator</div>
+          <div class="reach-tot">Reach: <b>~1,400</b> qualified searchers</div>
+        </div>
+        <div class="rhs">
+          <div class="s03-pills">
+            <span class="s03-pill">Sydney + Melbourne FB lookalikes<b>~700</b></span>
+            <span class="s03-pill">LinkedIn senior managers, 90-day move signal<b>~200</b></span>
+            <span class="s03-pill">Domain + REA out-of-state browsing telemetry<b>~500</b></span>
+          </div>
+          <div class="s03-wtp-bar">
+            <div class="median-mark" style="left: 7.9%;"></div>
+            <div class="band" style="left: 54.5%; width: 13.6%;"><div class="lbl">$1.80M – $1.95M</div></div>
+          </div>
+          <div class="s03-wtp-axis">
+            <span>$1.2M</span><span>$1.4M</span><span>$1.6M</span><span>$1.8M</span><span>$2.0M</span><span>$2.2M</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="s03-campaign-claim">
+      <span class="lbl">The campaign-targeting headline</span>
+      <div class="body">Three personas, eleven channels, a combined addressable buyer pool of <b>~11,600 qualified searchers</b> — concentrated against <b>$1.85M – $2.05M</b>.</div>
+    </div>
+    <div class="q-foot">Reach numbers: FB Ads Manager Audience Estimator · Domain &amp; REA published audience kits · LinkedIn Campaign Manager · Fields PostHog catchment slice. Bands intentionally rounded — verified before campaign launch.</div>
+  </div>
+
+  <div class="page-footer" style="padding: 4mm 12mm 6mm; margin: 0;">
+    <div class="smarter-mark"><svg><use href="#f-mark"/></svg><span>Smarter with Data</span></div>
+    <span class="page-num">— 17 —</span>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SPREAD 04 — BUYER TARGETING                             pp 18-19
+     ════════════════════════════════════════════════════════════════ -->
+<!-- LEFT -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">13 Terrace Court</div>
+      <svg style="color: var(--copper);"><use href="#f-mark"/></svg>
+    </div>
+
+    <div class="spread-num">04</div>
+    <h1 class="spread-headline">Marketing only works if it reaches the buyer who would have paid the premium. We can size that buyer pool, and we know exactly where to find it.</h1>
+
+    <p class="spread-lede">A premium price requires a premium buyer in the room. Most agencies hope the right buyer will see the listing on Domain. We engineer the campaign to put the home in front of every buyer matching the personas identified on Spread 03, on the channels each persona actually uses.</p>
+
+    <div class="bullets-panel">
+      <div class="subhead">What Fields uniquely does</div>
+      <ul>
+        <li><b>Buyer-pool sizing per persona, per price band.</b> Using portal monthly search-volume data plus Fields ecosystem engagement telemetry, we estimate qualified buyers as a specific number with a confidence band.</li>
+        <li><b>Channel mix designed around persona behaviour.</b> Established Owner-Occupier reads Domain newsletters; Relocating Sydney Family browses LinkedIn during work hours; Multi-Gen Family searches Facebook Marketplace on Sunday evenings. The campaign is engineered around each.</li>
+        <li><b>Custom-audience targeting at the platform level.</b> Facebook Custom Audiences specific to the southern Gold Coast (Page Engagers 180d, Robina/VL/Merrimac Buyers, Seller Intent, GC Market Interest, All Ad Engagers 180d), plus lookalikes modelled on Fields enquirers.</li>
+        <li><b>Geo-temporal layering.</b> Buyer behaviour is time-of-day specific: 7-9pm weeknights for browsing, 10am-noon Saturday for inspection-planning, 4-6pm Sunday for decisions.</li>
+        <li><b>Engagement telemetry feeds back to the campaign.</b> PostHog tracks every interaction. Within 72 hours we know which photo has highest dwell, which copy is being re-read, which feature drives enquiries.</li>
+        <li><b>Buyer database outreach pre-launch.</b> Before public launch, qualified buyers from the Fields ecosystem are notified and matched by archetype, price band, and feature requirement — by the time the first open home runs, serious buyers are already competing.</li>
+      </ul>
+    </div>
+
+    <div class="evidence-panel">
+      <div class="subhead">The evidence</div>
+      Fields' Decision Feed served <strong>~4,820 unique visitors</strong> in March 2026 filtered to southern Gold Coast suburbs, average session length 4.7 minutes. Property Intelligence editorial layer was viewed <strong>~3,120 times</strong> in the same period across our active listing portfolio. <em>Numbers illustrative; production figures pulled live from PostHog at campaign launch.</em>
+    </div>
+
+    <div class="pull-quote">
+      "In the four weeks leading up to your campaign launch, the Fields decision feed served roughly 4,800 unique visitors filtered to your suburb's bracket — buyers who arrived having already consumed two or three Fields articles. They did not arrive cold."
+      <span class="attribution">— Standard pre-campaign briefing, Fields ecosystem telemetry per listing</span>
+    </div>
+
+    <div class="why-matters">
+      The agency that runs your campaign on "list it and see who calls" is leaving the price on the table for the buyers who happen to look. The agency that ships the listing to every persona on every channel they use, in the right moment of their week, with creative tailored to their archetype, is the agency that gets the right buyer in the room. <strong>Price follows.</strong>
+    </div>
+
+    <div class="page-footer">
+      <div class="smarter-mark"><svg><use href="#f-mark"/></svg><span>Smarter with Data</span></div>
+      <span class="page-num">— 18 —</span>
+    </div>
+  </div>
+</div>
+
+<!-- RIGHT -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">13 Terrace Court</div>
+      <svg style="color: var(--copper);"><use href="#f-mark"/></svg>
+    </div>
+
+    <div class="section-label">For 13 Terrace Court</div>
+    <div class="headline-finding">Approximately 380 qualified buyers will be searching for a home like yours in the next 30 days. We have a specific channel plan for each of the three personas that account for 83% of them.</div>
+
+    <div class="subhead">Buyer pool, sized</div>
+    <table class="data">
+      <tbody>
+        <tr><td>Realestate.com.au monthly search volume, suburb-bracket</td><td class="num">~220 / mo</td></tr>
+        <tr><td>Domain.com.au monthly search volume</td><td class="num">~140 / mo</td></tr>
+        <tr><td>Facebook ad audience size, persona-matched</td><td class="num">18,400</td></tr>
+        <tr><td>Fields ecosystem buyer pool, southern GC active</td><td class="num">~920</td></tr>
+        <tr class="total"><td>Estimated qualified-and-active in next 30 days</td><td class="num">~380</td></tr>
+      </tbody>
+    </table>
+
+    <div class="subhead">Channel plan, per persona</div>
+
+    <p style="font-size: 8.5pt; color: var(--grass); font-weight: 600; margin: 2mm 0 1mm;">01 — Multi-Generational Family (38%)</p>
+    <table class="data">
+      <thead><tr><th>Channel</th><th>Activation</th><th>Cadence</th></tr></thead>
+      <tbody>
+        <tr><td>Facebook Custom Audience: parents 40-55</td><td>Day 1</td><td>7-day burst, $35/day</td></tr>
+        <tr><td>Facebook Lookalike of Fields enquirers</td><td>Day 1</td><td>21-day burst, $25/day</td></tr>
+        <tr><td>Domain "5+ bd Merrimac" saved-search push</td><td>Day 0</td><td>One-time launch alert</td></tr>
+        <tr><td>Independent-school parent newsletter</td><td>Day 4</td><td>Single insertion</td></tr>
+        <tr><td>Fields decision feed featured slot</td><td>Day 0</td><td>14-day rotation</td></tr>
+      </tbody>
+    </table>
+
+    <p style="font-size: 8.5pt; color: var(--grass); font-weight: 600; margin: 2mm 0 1mm;">02 — Established Owner-Occupier (27%)</p>
+    <table class="data">
+      <thead><tr><th>Channel</th><th>Activation</th><th>Cadence</th></tr></thead>
+      <tbody>
+        <tr><td>Domain saved-search recipients in 4226 over $1.5M</td><td>Day 0</td><td>One-time alert</td></tr>
+        <tr><td>Realestate.com.au "buyer's-club" 50-65 demo</td><td>Day 1</td><td>21-day campaign</td></tr>
+        <tr><td>Direct outreach via Fields buyer database</td><td>Day −3</td><td>Personal email/call from Will</td></tr>
+      </tbody>
+    </table>
+
+    <p style="font-size: 8.5pt; color: var(--grass); font-weight: 600; margin: 2mm 0 1mm;">03 — Relocating From Out-of-Area (18%)</p>
+    <table class="data">
+      <thead><tr><th>Channel</th><th>Activation</th><th>Cadence</th></tr></thead>
+      <tbody>
+        <tr><td>FB ads, Sydney/Melbourne lookalike of GC relocators</td><td>Day 1</td><td>28-day, $40/day</td></tr>
+        <tr><td>LinkedIn ads, senior managers, GC-relocation signals</td><td>Day 3</td><td>21-day campaign</td></tr>
+        <tr><td>Realestate.com.au out-of-state premium placement</td><td>Day 1</td><td>14-day premium</td></tr>
+      </tbody>
+    </table>
+
+    <div class="visual-card">
+      <h4>Buyer-flow funnel + 28-day channel timeline</h4>
+      <p>(1) Five stacked bands: total ad-eligible audience (~18,400) → portal-active in bracket (~360) → persona-matched (~310) → Fields-database-engaged (~70) → estimated to inspect (~45). (2) 28-day Gantt strip showing each channel's activation and budget allocation per persona.</p>
+      <p class="caption">Buyer-pool sizing combines portal search-volume data with Fields ecosystem telemetry; figures update nightly during campaign.</p>
+    </div>
+
+    <div class="closing-prose">
+      <span class="label">What this means for your sale</span>
+      Most listings receive a single Domain placement, a single Realestate.com.au listing, and a Saturday Facebook post from the agency. Yours receives a sequenced, persona-targeted campaign across nine channels — a campaign the same agency could not run because they do not maintain the Custom Audiences, the buyer database, the engagement telemetry, or the editorial reach. <strong>Spread 05 explains why the buyers we reach already trust the source they are reading from.</strong>
+    </div>
+
+    <div class="page-footer">
+      <div class="smarter-mark"><svg><use href="#f-mark"/></svg><span>Smarter with Data</span></div>
+      <span class="page-num">— 19 —</span>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SPREAD 05 — BUYER TRUST                                 pp 15-16
+     ════════════════════════════════════════════════════════════════ -->
+<!-- LEFT -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">13 Terrace Court</div>
+      <svg style="color: var(--copper);"><use href="#f-mark"/></svg>
+    </div>
+
+    <div class="spread-num">05</div>
+    <h1 class="spread-headline">Trust is the variable that decides how hard a buyer negotiates. Buyers reading Fields content arrive trusting Fields. That changes the price.</h1>
+
+    <p class="spread-lede">The conversation an agent has with a buyer at the open home is worth more than everything the seller spent on styling, photography, and marketing combined. The pre-built trust extends that conversation back by weeks. A buyer who has read three Fields articles before walking into your home is starting from a position of credibility — and they negotiate softer against agencies they trust.</p>
+
+    <div class="bullets-panel">
+      <div class="subhead">What Fields uniquely does</div>
+      <ul>
+        <li><b>The Property Intelligence editorial layer.</b> Every active listing on fieldsestate.com.au carries a Fields-written editorial — an <em>objective</em> analysis of the property's price position, value drivers, trade-offs, comparables, and verdict. Where agency copy says "stunning beachside opportunity nestled in a sought-after locale," ours says "the kitchen hasn't been updated since 2008 — a $30K refresh and you're still buying beachside living for $250K under suburb median." <b>No other agency in Australia does this.</b></li>
+        <li><b>The market intelligence pages.</b> Live, suburb-level data with editorial narrative — published continuously, not buried in quarterly PDFs. Average session length 4.7 minutes, structurally longer than the Domain grid.</li>
+        <li><b>The decision feed.</b> Curated property cards with opinionated market judgements — buyers spend 4-7 minutes per session. The feed surfaces every active listing in our suburbs, not just Fields' own — because honest market coverage is the trust layer the franchise model cannot match.</li>
+        <li><b>The article library.</b> 53 published articles on Gold Coast economics, agent selection, pricing strategy, market timing, flood data, scarcity research. All liability-safe, all data-backed, all citable.</li>
+        <li><b>The social reach.</b> Organic Facebook, paid ad campaigns, Five Property Friday newsletter. The buyer who arrives at your open home has likely seen Fields content in their feed for weeks.</li>
+      </ul>
+    </div>
+
+    <div class="evidence-panel">
+      <div class="subhead">The evidence</div>
+      Australian real estate sits at a <strong>−22% net trust score</strong> (Governance Institute Ethics Index 2025) — last among ten professions surveyed. The structural correction is not louder marketing; it is honest, queryable analysis published before the listing exists. The Fields decision feed and Property Intelligence editorial layer are designed to operate from the buyer's side of the relationship, which is precisely what makes them effective from the seller's.
+    </div>
+
+    <div class="pull-quote">
+      "The agency that brings you data your buyers can audit, your partner can challenge, and you can verify against any other appraisal you receive — before you sign anything."
+      <span class="attribution">— Will Simpson, The Science of Getting More for Your Home</span>
+    </div>
+
+    <div class="why-matters">
+      Trust is not a soft variable. Trust determines whether a buyer walks into your open home with their guard up or down. Trust determines whether they assume the asking price is a starting point for haggling or a defensible reflection of the home's value. <strong>Buyers who trust the source they are reading from negotiate against weaker assumptions — which means the seller carries less of the price-discovery cost.</strong>
+    </div>
+
+    <div class="page-footer">
+      <div class="smarter-mark"><svg><use href="#f-mark"/></svg><span>Smarter with Data</span></div>
+      <span class="page-num">— 20 —</span>
+    </div>
+  </div>
+</div>
+
+<!-- RIGHT -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">13 Terrace Court</div>
+      <svg style="color: var(--copper);"><use href="#f-mark"/></svg>
+    </div>
+
+    <div class="section-label">For 13 Terrace Court</div>
+    <div class="headline-finding">In the four weeks before your campaign launches, an estimated 4,820 buyers will read Fields content covering Merrimac, Robina, and Varsity Lakes — the buyer pool will not arrive cold.</div>
+
+    <div class="subhead">The buyer ecosystem your campaign inherits</div>
+    <table class="data">
+      <tbody>
+        <tr><td>Decision feed visitors, southern GC, last 4 weeks</td><td class="num">~4,820 unique</td></tr>
+        <tr><td>Average session length on decision feed</td><td class="num">4.7 minutes</td></tr>
+        <tr><td>Articles consumed per visitor (median)</td><td class="num">2.3</td></tr>
+        <tr><td>Property Intelligence editorial views, last 4 weeks</td><td class="num">~3,120</td></tr>
+        <tr><td>Five Property Friday subscribers, southern GC bracket</td><td class="num">~1,640</td></tr>
+        <tr><td>Facebook page reach, last 28 days</td><td class="num">22,400 imp · 5,800 unique</td></tr>
+        <tr><td>Market metrics monthly visitors (Robina)</td><td class="num">~1,180</td></tr>
+        <tr><td>Market metrics monthly visitors (BW)</td><td class="num">~890</td></tr>
+        <tr><td>Market metrics monthly visitors (Merrimac/VL)</td><td class="num">~720</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size: 8pt; color: var(--text-muted); font-style: italic; margin-bottom: 5mm;">Numbers illustrative pre-launch estimates from last 90 days of PostHog telemetry; production figures refreshed in the daily campaign brief.</p>
+
+    <div class="findings-list">
+      <div class="finding"><b>A pre-warmed audience of ~4,820 buyers</b> who have engaged with Fields editorial in the last 30 days, ~920 of whom show active engagement in the $1.6-2.2M bracket. Spread 04's Custom Audiences are sourced directly from this pool.</div>
+      <div class="finding"><b>A trust gradient.</b> A Fields-warmed buyer arrives assuming price is a defensible position. A portal-cold buyer assumes price is a starting point for haggling.</div>
+      <div class="finding"><b>A documented editorial position on this home itself.</b> Once your listing goes live, Fields will publish a Property Intelligence piece naming strengths, naming trade-offs honestly, and anchoring the price to Spread 07's comparable evidence.</div>
+      <div class="finding"><b>A buyer database hand-match.</b> Approximately 45-70 buyers in the Fields ecosystem currently match the three personas. They will receive a personal pre-launch email from Will three days before public launch.</div>
+    </div>
+
+    <div class="visual-card">
+      <h4>Four-panel telemetry dashboard</h4>
+      <p>(1) Editorial reach line chart, last 90 days of decision-feed visitor count, weekly. (2) Article-consumption heatmap, most-read articles by visitors who later enquired in $1.6-2.2M southern GC. (3) Audience-source mix donut. (4) "Trust gradient" infographic comparing Fields-warmed vs portal-cold buyer at the open-home moment.</p>
+      <p class="caption">Source: Fields PostHog telemetry, Five Property Friday subscriber list, Facebook Insights, 2026-04. Aggregated and de-identified.</p>
+    </div>
+
+    <div class="closing-prose">
+      <span class="label">What this means for your sale</span>
+      The pre-built trust is not a marketing claim — it is the reason the buyer arriving at your home has already been trained to negotiate softer against Fields' framing. <strong>Spread 06 explains the second half: the photography, copy, and open-home choreography that take a Fields-warmed buyer the rest of the way from "interested" to "in love with this specific home."</strong>
+    </div>
+
+    <div class="page-footer">
+      <div class="smarter-mark"><svg><use href="#f-mark"/></svg><span>Smarter with Data</span></div>
+      <span class="page-num">— 21 —</span>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SPREAD 06 — HEARTS-FIRST                                pp 17-18
+     ════════════════════════════════════════════════════════════════ -->
+<!-- LEFT -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">13 Terrace Court</div>
+      <svg style="color: var(--copper);"><use href="#f-mark"/></svg>
+    </div>
+
+    <div class="spread-num">06</div>
+    <h1 class="spread-headline">Buyers decide emotionally and justify logically. The home that wins their heart in the first six seconds wins the negotiation.</h1>
+
+    <p class="spread-lede">Modern buyer psychology says emotion drives the decision and logic ratifies it. Most agencies invert that order — pages of specifications, a wide-angle photo, a price guide. We engineer the opposite: the home as it would <em>feel</em> on a Saturday morning, presented through the cues a buyer's heart can read in six seconds.</p>
+
+    <div class="bullets-panel">
+      <div class="subhead">What Fields uniquely does</div>
+      <ul>
+        <li><b>Twilight photography as the default.</b> The Redfin photography study (n=180,000) found professional twilight photography lifted asking-price-per-sqft by <b>47%</b> and shortened time-on-market by <b>3 weeks</b> in the $200K-$1M band. We brief twilight on every listing, not as an upgrade.</li>
+        <li><b>Lifestyle copy that names the specific Saturday morning.</b> Named distances, named venues, lived-experience specificity. The line "walk 625 metres to Barrio Cafe for coffee, come home to kids in the pool, nobody moves the car" cannot be produced from an agency template — it requires the POI dataset and editorial discipline we built.</li>
+        <li><b>Peak-end open-home choreography.</b> Kahneman's peak-end rule: people remember the peak emotional moment and the final moment, not the average. We design the inspection route to end at the home's strongest feature — never at the laundry or the garage.</li>
+        <li><b>Floor plan with extracted dimensions.</b> Most listings show a PNG floor plan and assume the buyer can read it. We publish room-by-room dimensions alongside, with comparison to the suburb median. The buyer does not squint; they see the data.</li>
+        <li><b>Banned-vocabulary editorial discipline.</b> "Stunning, nestled, boasting, rare opportunity, robust market" — banned across all Fields editorial. Every adjective in our copy carries a measurable referent.</li>
+        <li><b>Satellite framing for "the view from above".</b> Modern buyers Google-Map every property they consider. We frame what they will see — orientation, neighbour proximity, tree canopy, pool envelope — before they have a chance to misinterpret it.</li>
+      </ul>
+    </div>
+
+    <div class="evidence-panel">
+      <div class="subhead">The evidence</div>
+      Redfin DSLR/twilight study: professional twilight adds <strong>$3,400-$11,200</strong> in the $200K-$1M band, <strong>47%</strong> higher asking price per sq ft, sells <strong>3 weeks faster</strong>. NAR 2025 Profile of Home Staging: <strong>29%</strong> of agents reported a 1-10% price lift; <strong>49%</strong> reported reduced DOM. Fields' own positioning research (n=2,153): listings with named-distance lifestyle copy outperformed adjective-led copy by <strong>5.4%</strong> on final sale price.
+    </div>
+
+    <div class="pull-quote">
+      "Stunning beachside opportunity nestled in a sought-after locale… is what every other listing in the suburb says, which is why the buyer scrolled past it."
+      <span class="attribution">— Fields editorial brief, banned-vocabulary section</span>
+    </div>
+
+    <div class="why-matters">
+      The buyer's first decision is not "will I bid for this home?" but "will I read past the second photograph?" Twilight photography, named-distance lifestyle copy, peak-end open-home design, and clean dimensional floor plans are the four levers that decide that first decision. <strong>Once the buyer has read past photo two, the work on Spreads 02 through 05 has somewhere to land. Without it, the buyer never gets that far.</strong>
+    </div>
+
+    <div class="page-footer">
+      <div class="smarter-mark"><svg><use href="#f-mark"/></svg><span>Smarter with Data</span></div>
+      <span class="page-num">— 22 —</span>
+    </div>
+  </div>
+</div>
+
+<!-- RIGHT -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">13 Terrace Court</div>
+      <svg style="color: var(--copper);"><use href="#f-mark"/></svg>
+    </div>
+
+    <div class="section-label">For 13 Terrace Court</div>
+    <div class="headline-finding">Five photography directions, three lifestyle hooks, and a peak-end inspection route — engineered around the specific moments at 13 Terrace Court that win a buyer's heart in the first six seconds.</div>
+
+    <div class="subhead">The photography brief</div>
+    <div class="findings-list">
+      <div class="finding"><b>1. Twilight pool deck looking back at the home.</b> Pool lights on, interior lights warm, sky in late dusk. North-facing rear means the home glows. <em>Listing's lead photograph.</em></div>
+      <div class="finding"><b>2. Wide-angle interior of the dual-living split.</b> Captures the home's signature feature in a single frame. Shot at 4:30pm to catch the cross-light through both wings.</div>
+      <div class="finding"><b>3. Drone elevation showing cul-de-sac head + bushland boundary.</b> Establishes the irreplaceable scarcity from Spread 02 in a single frame.</div>
+      <div class="finding"><b>4. Kitchen at golden hour with usable countertop.</b> Avoid the empty-staged-kitchen cliché. One bowl of fruit, one cookbook open, one lit candle — buyers project their own life onto a kitchen that looks lived-in.</div>
+      <div class="finding"><b>5. The 387-metre walk to All Saints Anglican.</b> A photo essay rather than a single frame — front door → footpath → crossing → school gate.</div>
+    </div>
+
+    <div class="subhead">The lifestyle copy</div>
+
+    <div class="callout-quote">
+      <span class="label">Hook 1 — The Saturday morning</span>
+      "Saturday morning here looks like this: walk 387 metres to All Saints Anglican drop-off, swing past Bourton Road Cafe for coffee on the way home, kids in the pool by ten. The cul-de-sac means no one moves the car. The wetland boundary means no neighbour will ever build out the rear view."
+    </div>
+
+    <div class="callout-quote">
+      <span class="label">Hook 2 — The dual-living narrative</span>
+      "Two living zones, two distinct atmospheres, one home. The east wing is the family's daily centre — kitchen, dining, kids' lounge. The west wing is the second living, the studio, the in-law's quarters, the teenager's hideout."
+    </div>
+
+    <div class="callout-quote">
+      <span class="label">Hook 3 — The permanence</span>
+      "The block is 658 m², the home is 221 m² internal, and the rear boundary is Kingary Wetland Reserve. The wetland cannot be built out. Whatever changes around Merrimac in the next twenty years, this view will still be this view."
+    </div>
+
+    <div class="subhead">Open-home choreography (peak-end)</div>
+    <table class="data">
+      <tbody>
+        <tr><td>1.</td><td><b>Entry</b> — front door → entry hall → main living. Establishes scale.</td></tr>
+        <tr><td>2.</td><td><b>Kitchen and dining</b> — buyers spend longest here in our open-home telemetry.</td></tr>
+        <tr><td>3.</td><td><b>The dual-living split</b> — the differentiating feature, presented in sequence.</td></tr>
+        <tr><td>4.</td><td><b>Master suite + ensuite</b> — the personal-space answer.</td></tr>
+        <tr><td>5.</td><td><b>Children's bedrooms + bathroom</b> — practical-question answer.</td></tr>
+        <tr><td>6.</td><td><b>Garden + pool deck</b> <span style="color: var(--copper); font-weight: 700;">(peak)</span> — emotional high.</td></tr>
+        <tr><td>7.</td><td><b>Bushland boundary view</b> <span style="color: var(--copper); font-weight: 700;">(end)</span> — the irreplaceable feature, the last thing they see.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="closing-prose">
+      <span class="label">What this means for your sale</span>
+      The work on this spread translates the analytical findings of Spreads 01-05 into the moments a buyer actually experiences — the photo they see first, the line that stops their scroll, the room they remember walking out of. Without it, the data on the other spreads has nowhere to land. <strong>With it, the buyer's heart has been won before the first offer is written, and the negotiation begins from the price our valuation engine — Spread 07 — defines.</strong>
+    </div>
+
+    <div class="page-footer">
+      <div class="smarter-mark"><svg><use href="#f-mark"/></svg><span>Smarter with Data</span></div>
+      <span class="page-num">— 23 —</span>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SPREAD 07 — VALUATION ENGINE                            pp 19-20
+     ════════════════════════════════════════════════════════════════ -->
+<!-- LEFT -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">13 Terrace Court</div>
+      <svg style="color: var(--copper);"><use href="#f-mark"/></svg>
+    </div>
+
+    <div class="spread-num">07</div>
+    <h1 class="spread-headline">Most agents arrive with three comparables and a verbal pitch. We arrive with the math, every step, every dollar, every source.</h1>
+
+    <p class="spread-lede">There is no number in this report more important than the price recommendation, and there is no recommendation that more deserves to be audited. So we built a valuation engine designed to be audited — by you, by your partner, by any second-opinion you choose to seek.</p>
+
+    <div class="bullets-panel">
+      <div class="subhead">What Fields uniquely does</div>
+      <ul>
+        <li><b>Reconciled valuation from 3-8 named comparable sales.</b> Every comparable named, dated, sourced. Every adjustment line-itemised: land area, internal floor, bedrooms, bathrooms, car spaces, pool, condition, renovation level, view, school catchment, time-to-today.</li>
+        <li><b>Suburb-specific adjustment rates.</b> When we adjust a comp by +153 m² of land, we don't apply a national rule of thumb — we compute the suburb's own $/m² rate from its sold cohort.</li>
+        <li><b>Confidence interval, computed not asserted.</b> 90% CI via <code>1.645 × weighted_std_dev</code>; confidence level (High / Medium / Low / Very Low) computed from the agreement among the comparables. If comps disagree, the engine says so.</li>
+        <li><b>Bracket-aware listing-price recommendation.</b> Cardella &amp; Seiler 2016 (n=538): precise prices outperform round; suburb-specific negotiation room (Robina +1-3%, VL +2-4%, BW +3-5%); top of bracket beats bottom of next.</li>
+        <li><b>Backtested against 1,683 Domain valuations.</b> Median absolute error reported by suburb. Most agency CMAs are not accuracy-tested against anything.</li>
+        <li><b>Above $2.5M, we publish a comp range and decline a single figure.</b> Where the comparable cohort is too thin to support a single figure with adequate confidence, we publish the range honestly rather than fabricate a precision the data does not justify.</li>
+      </ul>
+    </div>
+
+    <div class="evidence-panel">
+      <div class="subhead">The evidence</div>
+      The Halo Strategy seller research (n=2,351 conversations) found the top question across the Property Valuation theme was: <em>"Why is there such a wide range in the property valuations provided by different agents?"</em> — 188 mentions, 88 sub-topics. Two agents arrive, quote $1.45M and $1.65M, the seller has no way to choose. <strong>The Fields engine closes that gap by publishing every step of the working.</strong>
+    </div>
+
+    <div class="pull-quote">
+      "PriceFinder/Cotality CMAs give agents three comparables and let the agent decide which to highlight. Our valuation reconstructs the math — six comps, named, sourced, dated, every adjustment dollarised, weighting transparent, CI computed."
+      <span class="attribution">— Seller Benefits Framework, §10</span>
+    </div>
+
+    <div class="why-matters">
+      The price recommendation is the single most consequential number you will receive from any agent. If you cannot audit it, you cannot trust it. If you cannot trust it, you cannot defend it during negotiation. <strong>A reconciled valuation built from named, line-item-adjusted comparables is the only document a sceptical second reader cannot dismiss as marketing.</strong>
+    </div>
+
+    <div class="page-footer">
+      <div class="smarter-mark"><svg><use href="#f-mark"/></svg><span>Smarter with Data</span></div>
+      <span class="page-num">— 24 —</span>
+    </div>
+  </div>
+</div>
+
+<!-- RIGHT — Spread 07 (the valuation tables — single page, dense) -->
+<div class="page">
+  <div class="page-pad page-pad-tight">
+    <div class="page-header">
+      <div class="page-header-title">13 Terrace Court</div>
+      <svg style="color: var(--copper);"><use href="#f-mark"/></svg>
+    </div>
+
+    <div class="section-label">For 13 Terrace Court</div>
+    <div class="headline-finding">Most-likely selling range: $1,884,000 — $2,073,000. Recommended listing range: $1,950,000 — $2,100,000. Confidence: Medium-High, drawn from six adjusted comparables in Merrimac, last 18 months.</div>
+
+    <div class="subhead">The six comparables (line-item-adjusted to 13 Terrace Court)</div>
+
+    <table class="data" style="font-size: 7.8pt;">
+      <thead>
+        <tr><th style="width: 30%;">Comparable · sold · specs</th><th>Adjustments</th><th class="num">Adjusted</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><b>4 Mull Court</b><br>$1,400,000 · Mar 2026<br>799 m² · 168 m² internal · 5bd/3ba · 7/10</td>
+          <td>Land −141 m² <span class="neg">−$48,237</span> · Floor +53 m² <span class="pos">+$112,250</span> · Bd +1 <span class="pos">+$45,000</span> · Pool +1 <span class="pos">+$58,000</span> · Cond +2 <span class="pos">+$95,200</span> · Time +0.4% <span class="pos">+$5,840</span></td>
+          <td class="num"><b>$1,668,053</b></td>
+        </tr>
+        <tr>
+          <td><b>3 Islay Court</b><br>$1,400,000 · Feb 2026<br>765 m² · 241 m² · 5bd/2ba · 7/10 · pool</td>
+          <td>Land −107 m² <span class="neg">−$36,605</span> · Floor −20 m² <span class="neg">−$42,400</span> · Bd +1 <span class="pos">+$45,000</span> · Ba +1 <span class="pos">+$32,500</span> · Cond +2 <span class="pos">+$98,000</span> · Time +0.6% <span class="pos">+$8,400</span></td>
+          <td class="num"><b>$1,504,895</b></td>
+        </tr>
+        <tr>
+          <td><b>21 Bayford Court</b><br>$1,825,000 · Nov 2025<br>692 m² · 215 m² · 6bd/3ba · 8/10 · pool · cul-de-sac</td>
+          <td>Land −34 m² <span class="neg">−$11,628</span> · Floor +6 m² <span class="pos">+$12,720</span> · Cond +1 <span class="pos">+$54,750</span> · Time +1.7% <span class="pos">+$31,025</span></td>
+          <td class="num"><b>$1,911,867</b></td>
+        </tr>
+        <tr>
+          <td><b>52 Highfield Drive</b><br>$1,975,000 · Aug 2025<br>716 m² · 231 m² · 6bd/3ba · 9/10 · pool · bushland</td>
+          <td>Land −58 m² <span class="neg">−$19,836</span> · Floor −10 m² <span class="neg">−$21,200</span> · Time +2.4% <span class="pos">+$47,400</span></td>
+          <td class="num"><b>$1,981,364</b></td>
+        </tr>
+        <tr>
+          <td><b>8 Trinity Place</b><br>$2,150,000 · Jun 2025<br>624 m² · 244 m² · 6bd/3ba · 9/10 · pool · dual-living · cul-de-sac</td>
+          <td>Land +34 m² <span class="pos">+$11,628</span> · Floor −23 m² <span class="neg">−$48,760</span> · Time +3.0% <span class="pos">+$64,500</span></td>
+          <td class="num"><b>$2,177,368</b></td>
+        </tr>
+        <tr>
+          <td><b>14 Indooroopilly Court</b><br>$1,510,000 · Apr 2025<br>505 m² · 209 m² · 5bd/2ba · 8/10</td>
+          <td>Land +153 m² <span class="pos">+$52,326</span> · Floor +12 m² <span class="pos">+$25,440</span> · Bd +1 <span class="pos">+$45,000</span> · Ba +1 <span class="pos">+$32,500</span> · Pool +1 <span class="pos">+$58,000</span> · Cond +1 <span class="pos">+$45,300</span> · Time +3.7% <span class="pos">+$55,870</span></td>
+          <td class="num"><b>$1,824,436</b></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="subhead">The reconciled valuation</div>
+    <table class="data">
+      <tbody>
+        <tr><td>Mean of six adjusted comparables</td><td class="num">$1,844,664</td></tr>
+        <tr><td>Weighted reconciled value (recency × proximity × condition)</td><td class="num">$1,978,200</td></tr>
+        <tr><td>90% confidence interval (1.645 × weighted_std_dev)</td><td class="num">±$94,400</td></tr>
+        <tr class="total"><td>Most-likely selling range</td><td class="num">$1,884,000 — $2,073,000</td></tr>
+        <tr class="total"><td>Recommended listing range</td><td class="num">$1,950,000 — $2,100,000</td></tr>
+        <tr><td>Confidence level</td><td class="num">Medium-High</td></tr>
+        <tr><td>Adjustment rates derived from</td><td class="num">46 Merrimac sales · 24 months</td></tr>
+      </tbody>
+    </table>
+
+    <div class="closing-prose">
+      <span class="label">What this means for your sale</span>
+      The recommended listing range of <strong>$1,950,000-$2,100,000</strong> is the position from which your campaign launches and the position your negotiation defends. Spread 09 explains the method choice; Spread 10 names the listing month that would maximise the price within this range. The valuation above is also the document you can hand to any second opinion and ask: <em>show me the working.</em> Most cannot.
+    </div>
+
+    <div class="page-footer">
+      <div class="smarter-mark"><svg><use href="#f-mark"/></svg><span>Smarter with Data</span></div>
+      <span class="page-num">— 25 —</span>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SPREAD 08 — LOCAL MARKET INTEL                          pp 21-22
+     ════════════════════════════════════════════════════════════════ -->
+<!-- LEFT -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">13 Terrace Court</div>
+      <svg style="color: var(--copper);"><use href="#f-mark"/></svg>
+    </div>
+
+    <div class="spread-num">08</div>
+    <h1 class="spread-headline">The deepest seller fear during a campaign is the unknown change. The agency that sees the change first is the only agency that can adapt without losing the seller money.</h1>
+
+    <p class="spread-lede">Most agencies talk about the market in two tenses: "right now" and "last quarter." We talk about it in three: "right now," "what is changing," and "what is leading the change." The third tense is the one that protects the campaign when the market moves under your feet.</p>
+
+    <div class="bullets-panel">
+      <div class="subhead">What Fields uniquely does</div>
+      <ul>
+        <li><b>The Fields Conviction Index (FCI).</b> Weighted composite: indexed price (40%, hedonic, 12-month rolling), sale-to-list ratio (20%), stock-on-market vs 5-year baseline (20%), median DOM (20% inverse). Z-scored, rebased to 100 at January 2020. Scale: &lt;80 buyers' advantage, 80-95 cooling, 95-105 balanced, 105-115 firming, 115+ tight. <b>No other GC agency publishes anything equivalent.</b></li>
+        <li><b>Suburb-specific leading indicators.</b> Burleigh Waters: retail spending. Robina: wage price growth. Merrimac: hybrid weighted by school-catchment shift. <b>Interest rates are LAGGING in our markets</b> — a finding most of the industry assumes is impossible.</li>
+        <li><b>Nightly pipeline, not quarterly briefing.</b> Stock drops, sale-to-list shifts, DOM percentile changes — picked up the morning after they happen, not at the next broker briefing.</li>
+        <li><b>Live market metrics pages.</b> Only agency in southern GC publishing live, suburb-level data with editorial narrative. PRD Burleigh's biannual PDF is the closest local benchmark; we surpass it on cadence and depth.</li>
+        <li><b>Property-level alerts during campaign.</b> If a directly comparable property lists or sells, the daily briefing flags it within 24 hours with the implication for your price position made explicit.</li>
+        <li><b>Demand-bracket analysis.</b> For your recommended listing range, we measure how many active listings sit in the same Domain/realestate.com.au portal bracket.</li>
+      </ul>
+    </div>
+
+    <div class="evidence-panel">
+      <div class="subhead">The evidence</div>
+      Cotality and Domain hold the underlying transaction data. Neither publishes a named, composite, behaviour-state index aimed at consumers. The Fields Conviction Index is to the GC market what Knight Frank's PIRI 100 is to global prestige property — a citable, brand-attached, monthly-refreshable instrument.
+    </div>
+
+    <div class="pull-quote">
+      "Our pipeline runs nightly. The watchdog catches anomalies. Stock-on-market drops, sale-to-list ratios shift, days-on-market percentile changes — all picked up the morning after they happen, not at the next quarterly broker briefing."
+      <span class="attribution">— Seller Benefits Framework, §3</span>
+    </div>
+
+    <div class="why-matters">
+      Your campaign will run for three to six weeks. In that time, the market may move. Most agencies either deny the move or react to it weeks late. <strong>The Fields infrastructure surfaces the change the morning it appears in the data, and the daily briefing translates the change into a specific recommendation: hold the price, adjust the campaign, accept the offer on the table.</strong>
+    </div>
+
+    <div class="page-footer">
+      <div class="smarter-mark"><svg><use href="#f-mark"/></svg><span>Smarter with Data</span></div>
+      <span class="page-num">— 26 —</span>
+    </div>
+  </div>
+</div>
+
+<!-- RIGHT -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">13 Terrace Court</div>
+      <svg style="color: var(--copper);"><use href="#f-mark"/></svg>
+    </div>
+
+    <div class="section-label">For 13 Terrace Court</div>
+    <div class="headline-finding">Merrimac's FCI sits at 102 — balanced-firming. The leading indicator (Robina wage growth) is up 1.8% quarter-on-quarter. Stock in your bracket is below five-year baseline.</div>
+
+    <div class="subhead">The market state today</div>
+    <table class="data">
+      <thead><tr><th>Indicator</th><th>Reading</th><th>5-year context</th></tr></thead>
+      <tbody>
+        <tr><td><b>Fields Conviction Index, Merrimac</b></td><td><b style="color: var(--copper);">102</b> (balanced-firming)</td><td>5-yr mean 98; +0.4 σ above mean</td></tr>
+        <tr><td>Indexed price, 12m rolling</td><td>$1,071,000 median · $1,225/m²</td><td>+4.2% YoY · +1.7% QoQ</td></tr>
+        <tr><td>Sale-to-list ratio</td><td>0.974</td><td>5-yr mean 0.961 · sellers 1.3% closer to ask</td></tr>
+        <tr><td>Stock-on-market, Merrimac</td><td>41 active</td><td>5-yr median 47 · <b style="color: var(--copper);">−13% below baseline</b></td></tr>
+        <tr><td>Median DOM, $1.5-2.5M</td><td>38 days</td><td>5-yr median 44 · <b style="color: var(--copper);">6 days faster</b></td></tr>
+        <tr><td>Direct competitors $1.95-2.05M</td><td><b>0 active listings</b></td><td>Bracket empty as at 2026-05-07</td></tr>
+      </tbody>
+    </table>
+
+    <div class="subhead">The leading indicators</div>
+    <table class="data">
+      <thead><tr><th>Indicator</th><th>Reading</th><th>Trend</th></tr></thead>
+      <tbody>
+        <tr><td>Robina wage price growth, last quarter</td><td>+1.8%</td><td>Up · Merrimac correlation r=0.71</td></tr>
+        <tr><td>Gold Coast retail spending, 12m rolling</td><td>+3.6%</td><td>Stable · correlation r=0.42</td></tr>
+        <tr><td>Building approvals, Merrimac postcode</td><td>4 (last quarter)</td><td>Down from 7</td></tr>
+        <tr><td>Domain saved-search demand, 4226</td><td>1,840 saved</td><td>Up 7% MoM</td></tr>
+        <tr><td>RBA cash rate trajectory</td><td>Hold</td><td>Lagging in this suburb</td></tr>
+      </tbody>
+    </table>
+
+    <div class="subhead">Demand-bracket map</div>
+    <p style="font-size: 9pt; line-height: 1.55; margin-bottom: 5mm;">Your recommended listing range ($1,950,000-$2,100,000) straddles two Domain price brackets, by design. The lower asking-end ($1,950K-$1,999K) sits in the <b>$1.75M-$2M bracket</b> alongside <b>3 active Merrimac competitors</b>. The upper asking-end ($2,000K-$2,100K) sits in the <b>$2M-$2.25M bracket</b> — currently <b>empty in Merrimac</b>. Buyers searching either bracket see your home; buyers searching the upper bracket see your home alone in Merrimac.</p>
+
+    <div class="visual-card">
+      <h4>Market-state dashboard (4 panels)</h4>
+      <p>(1) FCI gauge, Merrimac at 102, with 5-year band on the dial face. (2) Indexed-price line chart, last 60 months with current point marked, plus inset of Robina wage-growth as 12-month-leading indicator. (3) Stock-on-market chart, last 60 months, current point at −13% below baseline. (4) Demand-bracket bar chart, $1.5M-$2.5M, with the recommended-range bracket highlighted as empty.</p>
+      <p class="caption">Source: Fields Gold_Coast database (nightly refresh), system_monitor.precomputed_market_charts, RBA, Domain saved-search data. As at 2026-05-07.</p>
+    </div>
+
+    <div class="closing-prose">
+      <span class="label">What this means for your sale</span>
+      You are launching into a market state that supports the upper end of the recommended listing range, with zero direct competitors at your price point and a leading indicator (wage growth) trending up. <strong>The market state may change during your campaign, but the daily briefing will surface any change the morning it appears in the data.</strong> Spread 09 explains the method choice appropriate to this market state.
+    </div>
+
+    <div class="page-footer">
+      <div class="smarter-mark"><svg><use href="#f-mark"/></svg><span>Smarter with Data</span></div>
+      <span class="page-num">— 27 —</span>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SPREAD 09 — METHOD CHOICE                               pp 23-24
+     ════════════════════════════════════════════════════════════════ -->
+<!-- LEFT -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">13 Terrace Court</div>
+      <svg style="color: var(--copper);"><use href="#f-mark"/></svg>
+    </div>
+
+    <div class="spread-num">09</div>
+    <h1 class="spread-headline">Neither method is structurally better. The right one depends on the property, the market, and the seller.</h1>
+
+    <p class="spread-lede">Most agencies have a preferred method because their brand depends on it: auction is "their weapon" or private treaty is "the local way." Fields has no brand stake in the choice. The recommendation is computed for each property against the data on the property's behalf, not the agency's.</p>
+
+    <div class="bullets-panel">
+      <div class="subhead">What Fields uniquely does</div>
+      <ul>
+        <li><b>Method recommendation per listing.</b> Each appraisal includes a written recommendation with the data behind it: which method, why this method for this home, what the rejected method would cost.</li>
+        <li><b>The southern Gold Coast reality, named honestly.</b> Across our 2,075-sale sold cohort, auctions account for <b>&lt;2% of target-market transactions</b>. The market here is private treaty. An agency that pushes auction is fighting the market.</li>
+        <li><b>Engagement on realestate.com.au is structurally higher for priced private-treaty</b> than for "Auction" / "Contact Agent" listings — buyers filter by price band and unpriced listings drop out.</li>
+        <li><b>Lower seller pressure.</b> No 30-day countdown. No public theatre. Negotiation happens privately.</li>
+        <li><b>No QLD price-guide weirdness.</b> QLD bans advertised price guides on auctions, which forces verbal-range discussions that incentivise underquoting. Private treaty exposes the price honestly.</li>
+        <li><b>Time-control.</b> The seller can extend, withdraw, accept early — choices auction strips away once the date is set.</li>
+        <li><b>Open-home flexibility around the seller.</b> Inspection times scheduled around your week — weekday twilights, Sunday mornings, by-appointment private inspections — engineered around your work, your kids, your life.</li>
+      </ul>
+    </div>
+
+    <div class="evidence-panel">
+      <div class="subhead">The evidence</div>
+      Frino, Peat &amp; Wright 2012 (n=1.2M Australian sales): the auction premium is method-by-market and disappears entirely in markets with thin bidding density. REA Insights 2014: priced listings receive significantly higher engagement than unpriced listings on realestate.com.au. Halo Strategy: trust and control are the two themes most damaged by an inappropriate method choice.
+    </div>
+
+    <div class="pull-quote">
+      "Ray White's USP is 'auction is our weapon' — they cannot recommend private treaty without contradicting their brand. We are method-agnostic by design."
+      <span class="attribution">— Seller Benefits Framework, §6</span>
+    </div>
+
+    <div class="why-matters">
+      The method decision shapes everything that follows: the marketing, the buyer behaviour, the timeline, the negotiation dynamics, the cost, the seller's stress level. It is one of two or three decisions in a campaign where the agent's incentives can run directly counter to the seller's. <strong>The Fields recommendation is computed on the data, not the brand.</strong>
+    </div>
+
+    <div class="page-footer">
+      <div class="smarter-mark"><svg><use href="#f-mark"/></svg><span>Smarter with Data</span></div>
+      <span class="page-num">— 28 —</span>
+    </div>
+  </div>
+</div>
+
+<!-- RIGHT -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">13 Terrace Court</div>
+      <svg style="color: var(--copper);"><use href="#f-mark"/></svg>
+    </div>
+
+    <div class="section-label">For 13 Terrace Court</div>
+    <div class="headline-finding">Recommendation: private treaty, listed at $1,950,000-$2,100,000, with a 28-day primary campaign window. Auction was considered and rejected on three specific grounds.</div>
+
+    <div class="subhead">The recommendation, with the working</div>
+    <table class="data">
+      <tbody>
+        <tr><td><b>Method</b></td><td>Private treaty.</td></tr>
+        <tr><td><b>Listing range</b></td><td>$1,950,000 — $2,100,000 (deliberately straddles $1.75M-$2M and $2M-$2.25M Domain brackets — captures search volume in the lower bracket and stands as the only Merrimac listing in the empty upper bracket).</td></tr>
+        <tr><td><b>Campaign duration</b></td><td>28 days primary, 14-day extension permitted, total cap 42 days.</td></tr>
+        <tr><td><b>Open-home cadence</b></td><td>Saturday 10:30-11:00am + Wednesday 5:30-6:00pm, fortnightly. Three private inspections per week available by appointment.</td></tr>
+        <tr><td><b>Inspection-route choreography</b></td><td>As specified in Spread 06, ending at the rear-fence vantage onto Kingary Wetland.</td></tr>
+        <tr><td><b>Negotiation framework</b></td><td>Disclosed-but-not-published recommended floor price ($1,890,000), recommended acceptance threshold ($2,000,000), recommended target ($2,070,000).</td></tr>
+      </tbody>
+    </table>
+
+    <div class="subhead">Why auction was rejected</div>
+    <div class="findings-list">
+      <div class="finding"><b>1. Method-share data.</b> Across the southern Gold Coast 2,075-sale sold cohort, auctions account for &lt;2% of transactions in the $1.5-2.5M bracket. The market here is structurally private treaty.</div>
+      <div class="finding"><b>2. Buyer-pool concentration.</b> The three personas on Spread 03 are not a concentrated, single-Saturday-bidding-room pool — they are a distributed pool of 380 qualified buyers active across 30 days, sourced through different channels and reaching the listing on different days. A 28-day private-treaty window allows each persona to engage on their own timeline.</div>
+      <div class="finding"><b>3. Seller risk profile.</b> A rejected auction in this market means the listing reverts to private treaty with the public knowledge that the home did not sell — a starting position weaker than launching as private treaty in the first place. The downside risk is asymmetrically larger than the upside potential for a property of this archetype.</div>
+    </div>
+
+    <div class="visual-card">
+      <h4>Method-comparison matrix + 28-day campaign timeline</h4>
+      <p>(1) Two-column comparison: Private Treaty vs Auction across six rows (engagement on portals, time-to-decision for buyer, seller pressure, price-discovery risk, control, suitability). Private treaty wins on five of six rows for this property. (2) 28-day Gantt strip showing pre-launch buyer-database outreach (days −3 to 0), launch + open homes (0-21), negotiation phase (14-28), 14-day extension trigger (day 21).</p>
+      <p class="caption">Source: Fields Gold_Coast sold cohort (n=2,075), Frino/Peat/Wright 2012, REA Insights 2014.</p>
+    </div>
+
+    <div class="closing-prose">
+      <span class="label">What this means for your sale</span>
+      Private treaty at $1,950,000-$2,100,000 with a 28-day window is the path that maximises probability-of-sale × achieved-price for a six-bedroom dual-living home in a balanced-firming Merrimac market. <strong>Spread 10 takes the same property and answers the remaining question — when — by naming the listing month most likely to add another 1-3% to the realised price.</strong>
+    </div>
+
+    <div class="page-footer">
+      <div class="smarter-mark"><svg><use href="#f-mark"/></svg><span>Smarter with Data</span></div>
+      <span class="page-num">— 29 —</span>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SPREAD 10 — OPTIMAL TIMING                              pp 25-26
+     ════════════════════════════════════════════════════════════════ -->
+<!-- LEFT -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">13 Terrace Court</div>
+      <svg style="color: var(--copper);"><use href="#f-mark"/></svg>
+    </div>
+
+    <div class="spread-num">10</div>
+    <h1 class="spread-headline">The right listing month is the difference of 1-3% on the final price for most southern Gold Coast homes. We can name the month for your suburb.</h1>
+
+    <p class="spread-lede">Industry intuition is "spring is busy" and "Easter is dead." That is not a recommendation; it is folklore. We compute the listing-month effect from the local sold cohort, suburb by suburb, archetype by archetype, dollar by dollar.</p>
+
+    <div class="bullets-panel">
+      <div class="subhead">What Fields uniquely does</div>
+      <ul>
+        <li><b>Empirical seasonality from local sold history.</b> Across the three target suburbs (Robina, Burleigh Waters, Varsity Lakes) we hold a 24-month cohort large enough to detect monthly seasonality with statistical confidence (&gt;200 sales per suburb). Best month for <em>price</em> and best month for <em>speed</em> reported separately.</li>
+        <li><b>Archetype-level refinement.</b> A four-bedroom family home is not seasonal in the same way as a three-bedroom apartment. Each archetype is calibrated against its own slice of the cohort.</li>
+        <li><b>Headwind/tailwind decomposition.</b> Each month decomposed into school-holiday penalties, post-rate-decision windows, end-of-financial-year dynamics, weather-pattern impact on inspection attendance.</li>
+        <li><b>The school-holiday penalty, named.</b> Late-June through mid-July adds <b>4-7 days of additional DOM</b> in our suburbs.</li>
+        <li><b>Post-rate-decision windows.</b> 14 days after a cut historically add momentum to active campaigns; 14 days after a hold or hike soften them.</li>
+        <li><b>The trust signal of the recommendation itself.</b> If the data says October, we tell you so — even though that delays our commission. <b>The agency whose income depends on listing now will not say "wait until October." We will.</b></li>
+      </ul>
+    </div>
+
+    <div class="evidence-panel">
+      <div class="subhead">The evidence (target-suburb cohort)</div>
+      <strong>Robina:</strong> Best price-month November (+2.4% above annual mean). Fastest May (DOM 19 vs 27). <strong>Varsity Lakes:</strong> Best price April (+2.1%). Fastest May (21 vs 28). <strong>Burleigh Waters:</strong> Best price March (+2.7%) — both axes converge. <strong>Merrimac:</strong> Best price November (+1.9%). Fastest May. <em>(Smaller cohort — recommendation flagged with lower confidence than the three above.)</em>
+    </div>
+
+    <div class="pull-quote">
+      "The seller may delay their campaign by weeks based on this advice — and we cost ourselves commission velocity by recommending it. That recommendation is itself the trust signal."
+      <span class="attribution">— Seller Benefits Framework, §5</span>
+    </div>
+
+    <div class="why-matters">
+      A 1-3% price impact on a $2M home is $20K-$60K. That is the order of magnitude of "list now versus list at peak." The decision is yours; the data is ours to provide. <strong>Most agencies do not have the cohort to compute the recommendation, and many that do would not share it because the answer reduces their listing inventory in the short term.</strong>
+    </div>
+
+    <div class="page-footer">
+      <div class="smarter-mark"><svg><use href="#f-mark"/></svg><span>Smarter with Data</span></div>
+      <span class="page-num">— 30 —</span>
+    </div>
+  </div>
+</div>
+
+<!-- RIGHT -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">13 Terrace Court</div>
+      <svg style="color: var(--copper);"><use href="#f-mark"/></svg>
+    </div>
+
+    <div class="section-label">For 13 Terrace Court</div>
+    <div class="headline-finding">For a six-bedroom Merrimac home, the price-optimal listing month is November. November vs May: estimated +$30,000-$60,000 on price, but speed-to-sale is best in May, ~12 days faster.</div>
+
+    <div class="subhead">The decision matrix for 13 Terrace Court</div>
+    <table class="data">
+      <thead><tr><th></th><th>List May 2026 (now)</th><th>List November 2026</th></tr></thead>
+      <tbody>
+        <tr><td><b>Estimated realised price</b></td><td>$1,940K — $2,030K</td><td><b style="color: var(--copper);">$1,975K — $2,090K</b></td></tr>
+        <tr><td>Estimated DOM</td><td><b style="color: var(--copper);">26-34 days</b></td><td>35-45 days</td></tr>
+        <tr><td>Buyer pool size, 30-day window</td><td>~380</td><td>~440 (school-decision peak)</td></tr>
+        <tr><td>Direct competitors at price point</td><td>0 in $1.95-2.05M</td><td>Estimated 2-4 (typical Nov)</td></tr>
+        <tr><td>FCI projected</td><td>102 (current)</td><td>104-107 (typical Nov)</td></tr>
+        <tr><td>Seasonal factors</td><td>Late-autumn momentum</td><td>Pre-summer + year-end inflow</td></tr>
+        <tr class="total"><td>Estimated benefit November vs May</td><td>—</td><td>+$30K-$60K · −12 days speed</td></tr>
+      </tbody>
+    </table>
+
+    <div class="subhead">Headwinds and tailwinds, named</div>
+    <div class="findings-list">
+      <div class="finding"><b>May (current) tailwinds:</b> No direct competitor at price point · Stock −13% below baseline · Post-Easter activity peaking · Wage-growth indicator +1.8% QoQ.<br><b>Headwinds:</b> Approaching mid-year school-holiday window (4-7 day DOM penalty if campaign extends into July); single buyer-pool peak.</div>
+      <div class="finding"><b>November tailwinds:</b> Merrimac's price peak month historically · School-decision cycle peaks Oct-Nov (Multi-Gen Family persona most active) · Pre-summer market mood favourable.<br><b>Headwinds:</b> Estimated 2-4 direct competitors typical for November (vs zero now); six-month delay carries cost-of-time and exposure to broader market change.</div>
+    </div>
+
+    <div class="subhead">The pre-sale work, costed (if listing November)</div>
+    <table class="data">
+      <thead><tr><th>Intervention</th><th class="num">Cost</th><th class="num">Uplift</th><th class="num">ROI</th></tr></thead>
+      <tbody>
+        <tr><td>Interior repaint, high-traffic zones</td><td class="num">$6,500</td><td class="num">$10K-18K</td><td class="num">1.5-2.8×</td></tr>
+        <tr><td>Garden + landscaping refresh</td><td class="num">$3,500</td><td class="num">$4K-8K</td><td class="num">1.1-2.3×</td></tr>
+        <tr><td>Minor kitchen update</td><td class="num">$2,800</td><td class="num">$3K-6K</td><td class="num">1.1-2.1×</td></tr>
+        <tr><td>Deck stain + outdoor lighting</td><td class="num">$1,400</td><td class="num">$2K-5K</td><td class="num">1.4-3.6×</td></tr>
+        <tr class="total"><td>Total</td><td class="num">$14,200</td><td class="num">$19K-37K</td><td class="num">1.3-2.6×</td></tr>
+      </tbody>
+    </table>
+
+    <div class="visual-card">
+      <h4>Seasonality chart + May vs November decision card</h4>
+      <p>(1) 12-month bar chart of Merrimac average sale-price index (last 36 months, six-bed cohort) — November highlighted as price peak, May as speed peak. (2) Side-by-side decision card with both scenarios: estimated price ranges, DOM, net-to-vendor after marketing costs.</p>
+      <p class="caption">Source: Fields Gold_Coast.merrimac sold cohort (n=46 last 24 months), expanded to n=140 across the three target suburbs. Recomputed if macro market state shifts.</p>
+    </div>
+
+    <div class="closing-prose">
+      <span class="label">What this means for your sale</span>
+      The timing decision is yours. The data behind it is ours to share, and we will share it whether the answer is "list this week" or "list in November." <strong>The recommendation closes the report and opens the conversation: a 30-minute call where we walk through the trade-off in your specific context and arrive at the listing date that fits your life and your priorities.</strong>
+    </div>
+
+    <div class="page-footer">
+      <div class="smarter-mark"><svg><use href="#f-mark"/></svg><span>Smarter with Data</span></div>
+      <span class="page-num">— 31 —</span>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     BACK · THE VERDICT                                      page 27
+     ════════════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="page-pad verdict-page">
+    <div class="page-header">
+      <div class="page-header-title">13 Terrace Court · Merrimac QLD 4226</div>
+      <svg style="color: var(--copper);"><use href="#f-mark"/></svg>
+    </div>
+
+    <h2>The Verdict</h2>
+
+    <div class="verdict-blocks">
+      <div class="verdict-block">
+        <div class="label">Most-likely selling range</div>
+        <div class="price">$1,884,000 — $2,073,000</div>
+        <div class="meta">Confidence: Medium-High<br>6 adjusted comparables, Merrimac, last 18 months</div>
+      </div>
+      <div class="verdict-block">
+        <div class="label">Recommended listing range</div>
+        <div class="price">$1,950,000 — $2,100,000</div>
+        <div class="meta">Straddles $1.75-2M and $2-2.25M brackets<br>(empty in Merrimac, alone there)</div>
+      </div>
+    </div>
+
+    <div class="verdict-section">
+      <h3>Three primary reasons this home supports this price</h3>
+      <ul>
+        <li>6bd / 3ba / dual-living / pool / cul-de-sac / bushland-adjacent: combination held by 4 of 142 active southern-GC listings. <span class="ref">Spread 02</span></li>
+        <li>9/10 condition · top tertile of the 46-sale Merrimac cohort. Multi-Generational Family persona (38% of qualified flow) pays a +11.3% bedroom-count premium. <span class="ref">Spread 03</span></li>
+        <li>387m walk to All Saints Anglican School · shorter than 91% of homes currently listed in the catchment. <span class="ref">Spread 02</span></li>
+      </ul>
+    </div>
+
+    <div class="verdict-section">
+      <h3>The method</h3>
+      <p>Private treaty. 28-day primary window, 14-day extension permitted. Auction rejected on three grounds. <span class="ref">Spread 09</span></p>
+    </div>
+
+    <div class="verdict-section">
+      <h3>The timing decision</h3>
+      <ul>
+        <li>List May 2026 (now): $1,940K-$2,030K · 26-34 day DOM</li>
+        <li>List November 2026: $1,975K-$2,090K · 35-45 day DOM</li>
+        <li>Estimated November uplift over May: <b>+$30K-$60K</b> on price. Pre-sale work adds $19K-$37K at $14K cost. <span class="ref">Spread 10</span></li>
+      </ul>
+    </div>
+
+    <div class="verdict-section">
+      <h3>The market state</h3>
+      <p>Merrimac FCI 102 (balanced-firming). Stock 13% below five-year baseline. Wage-growth leading indicator +1.8% QoQ. <span class="ref">Spread 08</span></p>
+    </div>
+
+    <div class="page-footer">
+      <div class="smarter-mark"><svg><use href="#f-mark"/></svg><span>Smarter with Data</span></div>
+      <span class="page-num">— 32 —</span>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     BACK · WHAT HAPPENS NEXT                                page 28
+     ════════════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">13 Terrace Court</div>
+      <svg style="color: var(--copper);"><use href="#f-mark"/></svg>
+    </div>
+
+    <h2 style="font-family: 'Playfair Display', serif; font-size: 32pt; color: var(--grass); font-weight: 700; margin-bottom: 10mm;">What Happens Next</h2>
+
+    <div class="next-step-card">
+      <div class="step-num">01 — Review</div>
+      <h3>Read this report at the pace it deserves.</h3>
+      <p>Show it to your partner, your accountant, or any agent you would like to compare it against. Every claim is auditable; every comparable is named.</p>
+    </div>
+
+    <div class="next-step-card">
+      <div class="step-num">02 — Conversation</div>
+      <h3>A 30-minute walk-through with Will.</h3>
+      <p>We discuss the findings, reconcile them with your circumstances, and name the listing date that fits your life. Conducted at your home, by phone, or video — your choice.</p>
+      <p style="margin-top: 4mm;">Book at <a href="https://fieldsestate.com.au/conversation">fieldsestate.com.au/conversation</a><br>Or write to <a href="mailto:will@fieldsestate.com.au">will@fieldsestate.com.au</a></p>
+    </div>
+
+    <div class="next-step-card">
+      <div class="step-num">03 — Decide</div>
+      <h3>If, after our conversation, this is not the right engagement for you, this report is yours to keep.</h3>
+      <p>The data inventory, the comparable analysis, the buyer-pool sizing, the timing recommendation — all of it stays with you regardless of what you decide.</p>
+    </div>
+
+    <div style="margin-top: 10mm; padding: 6mm 7mm; background: var(--copper-tint); border-left: 3px solid var(--copper); border-radius: 3px;">
+      <div style="font-family: 'Playfair Display', serif; font-size: 14pt; color: var(--grass); font-weight: 700; margin-bottom: 1.5mm;">Will Simpson</div>
+      <div style="font-size: 9pt; color: var(--text-muted); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 3mm;">Founder, Fields Real Estate</div>
+      <div style="font-size: 9.5pt;"><a href="mailto:will@fieldsestate.com.au" style="color: var(--copper);">will@fieldsestate.com.au</a><br><a href="https://fieldsestate.com.au" style="color: var(--copper);">fieldsestate.com.au</a></div>
+    </div>
+
+    <div class="page-footer">
+      <div class="smarter-mark"><svg><use href="#f-mark"/></svg><span>Smarter with Data</span></div>
+      <span class="page-num">— 33 —</span>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     BACK · INSIDE BACK NOTE                                 page 29
+     ════════════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="page-pad note-page">
+    <div class="note-body" style="margin-top: auto;">
+      <p>Dee,</p>
+      <p>Whatever you decide for 13 Terrace Court — and whether or not Fields plays a part in it — I hope this report is the most thorough piece of analysis your home has received from anyone.</p>
+    </div>
+    <div class="signature-block" style="margin-top: 12mm;">
+      Will
+    </div>
+    <div style="margin-top: auto; padding-top: 14mm;">
+      <div class="smarter-mark" style="font-size: 7pt;">
+        <svg><use href="#f-mark"/></svg>
+        <span>Smarter with Data</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     BACK COVER                                              page 30
+     ════════════════════════════════════════════════════════════════ -->
+<div class="cover back-cover">
+  <div class="deco" style="color: var(--copper); opacity: 0.85;">
+    <svg viewBox="0 0 200 240" width="100%" height="100%"><use href="#f-mark"/></svg>
+  </div>
+</div>
+
+</body>
+</html>
