@@ -50,6 +50,17 @@ REPORT_CONFIGS: dict[str, dict[str, Any]] = {
             "condition": 9,
             "valuation_low": 1_884_000,
             "valuation_high": 2_073_000,
+            # Street-address-only names of the 6 named comps used in the
+            # valuation engine. Cross-referenced against active listings to
+            # detect "one of your comps is currently for sale" moments.
+            "comps": [
+                "4 Mull Court",
+                "3 Islay Court",
+                "21 Bayford Court",
+                "52 Highfield Drive",
+                "8 Trinity Place",
+                "14 Indooroopilly Court",
+            ],
         },
         # Suburbs to monitor for competition + comp sales
         "competition_suburbs": ["merrimac", "robina", "varsity_lakes"],
@@ -58,6 +69,13 @@ REPORT_CONFIGS: dict[str, dict[str, Any]] = {
         "competition_price_max": 2_500_000,
         # Min bedrooms to flag as competitor
         "competition_min_bedrooms": 5,
+        # Always-on market snapshot (refreshed by date when the script runs)
+        "market_state": {
+            "fci": 102,
+            "fci_label": "Balanced-firming",
+            "stock_vs_baseline_pct": -13,
+            "wage_growth_qoq_pct": 1.8,
+        },
     },
 }
 
@@ -110,6 +128,35 @@ def short_address(address: str) -> str:
     return address.split(",")[0].strip() if address else address
 
 
+def normalize_address(address: str) -> str:
+    """Normalise for cross-referencing against the comps list.
+
+    '21 Bayford Court, Merrimac, QLD 4226' → '21 bayford court'
+    Handles 'Ct.' / 'Court', 'St' / 'Street', extra whitespace.
+    """
+    if not address:
+        return ""
+    short = address.split(",")[0].strip().lower()
+    abbrev = {
+        " ct": " court", " st": " street", " rd": " road", " pl": " place",
+        " dr": " drive", " ave": " avenue", " cres": " crescent", " cl": " close",
+    }
+    short = re.sub(r"[.]", "", short)
+    short = re.sub(r"\s+", " ", short)
+    for k, v in abbrev.items():
+        if short.endswith(k):
+            short = short[: -len(k)] + v
+            break
+    return short
+
+
+def is_named_comp(address: str, comps: list[str]) -> bool:
+    if not address or not comps:
+        return False
+    target = normalize_address(address)
+    return any(normalize_address(c) == target for c in comps)
+
+
 def days_since(d: dt.datetime | None) -> int | None:
     if not d:
         return None
@@ -148,10 +195,18 @@ def coerce_price(v: Any) -> float | None:
 def new_listings_activity(
     db, config: dict[str, Any], days: int
 ) -> list[dict[str, Any]]:
-    """Active listings first_seen in the last N days that compete with subject."""
+    """Active listings first_seen in the last N days that compete with subject.
+
+    Emits two kinds:
+      - comp_on_market — one of the subject's named valuation comps is also
+        for sale. Editorial moment.
+      - new_listing — generic competing listing.
+    """
     items: list[dict[str, Any]] = []
     cutoff = dt.datetime.utcnow() - dt.timedelta(days=days)
     subj_suburb = config["subject"]["suburb"].lower().replace(" ", "_")
+    named_comps: list[str] = config["subject"].get("comps", [])
+    n_comps = len(named_comps)
 
     for suburb in config["competition_suburbs"]:
         col = db[suburb]
@@ -176,15 +231,33 @@ def new_listings_activity(
                 continue
 
             first_seen = d.get("first_seen")
-            addr = short_address(d.get("address", ""))
+            full_addr = d.get("address", "")
+            addr = short_address(full_addr)
             in_subj_suburb = suburb == subj_suburb
             location_phrase = "" if in_subj_suburb else f" in {suburb.replace('_', ' ').title()}"
-            kind_phrase = (
-                "Direct competitor" if in_subj_suburb else "Cross-suburb competitor"
-            )
+
+            # Cross-reference against named comps
+            if is_named_comp(full_addr, named_comps):
+                items.append({
+                    "date": first_seen.date().isoformat() if first_seen else None,
+                    "kind": "comp_on_market",
+                    "source_id": f"comp_active:{d.get('listing_url') or addr}",
+                    "headline": f"One of your {n_comps} comps is currently for sale: {addr}",
+                    "body": (
+                        f"{describe_listing(d)} Listed{location_phrase} at {fmt_aud(price_mid)}. "
+                        f"This is the same property the valuation engine used as one of its named comparables."
+                    ),
+                    "effect_on_your_home": (
+                        "An active listing of a comp is the cleanest signal of how buyers are currently reading "
+                        "homes like yours — every day this listing sits, that asking price becomes the market's "
+                        "answer. Watch it: a price drop says the original ask was high; a quick sale says yours can ask the same or more."
+                    ),
+                    "image_src": pick_first_image(d.get("property_images")),
+                    "href": d.get("listing_url"),
+                })
+                continue  # don't double-emit as new_listing
 
             effect = build_listing_effect(d, price_mid, config["subject"])
-
             items.append({
                 "date": first_seen.date().isoformat() if first_seen else None,
                 "kind": "new_listing",
@@ -194,10 +267,49 @@ def new_listings_activity(
                 "effect_on_your_home": effect,
                 "image_src": pick_first_image(d.get("property_images")),
                 "href": d.get("listing_url"),
-                "_kind_phrase": kind_phrase,
             })
 
     return items
+
+
+def market_state_activity(config: dict[str, Any]) -> list[dict[str, Any]]:
+    """Always-on freshness item dated today: current suburb market snapshot.
+
+    Provides a dated-today item at the top of every feed so sellers never
+    arrive to a feed whose most recent item is months old. Refresh values
+    later by querying market_metrics (v0.4).
+    """
+    ms = config.get("market_state")
+    if not ms:
+        return []
+
+    today = dt.date.today().isoformat()
+    suburb_pretty = config["subject"]["suburb"]
+    fci = ms["fci"]
+    fci_label = ms["fci_label"].lower()
+    stock_delta = ms["stock_vs_baseline_pct"]
+    wage = ms["wage_growth_qoq_pct"]
+
+    stock_phrase = (
+        f"{abs(stock_delta)}% below" if stock_delta < 0 else f"{stock_delta}% above"
+    )
+
+    return [{
+        "date": today,
+        "kind": "market_state",
+        "source_id": f"market_state:{today}",
+        "headline": f"{suburb_pretty} is {fci_label} today (FCI {fci}). Stock {stock_phrase} the 5-year baseline.",
+        "body": (
+            f"The Fields Conviction Index for {suburb_pretty} sits at {fci} ({fci_label}). "
+            f"Active listings remain {stock_phrase} the five-year baseline. "
+            f"Wage growth — the leading indicator for Gold Coast prices (Abelson et al. 2005, r=0.940) — "
+            f"is running at +{wage}% QoQ."
+        ),
+        "effect_on_your_home": (
+            "Tighter supply at the top of the bracket favours sellers. The wage growth indicator gives an "
+            "early read on where prices are likely to sit 9-12 months from now."
+        ),
+    }]
 
 
 def build_listing_effect(listing: dict[str, Any], price_mid: float, subject: dict[str, Any]) -> str:
@@ -315,6 +427,17 @@ def pick_first_image(images: Any) -> str | None:
 
 
 def build_activity_for_slug(slug: str, days: int, client) -> list[dict[str, Any]]:
+    """Generate a balanced 10-item feed.
+
+    Mix discipline: market_state (always-on, dated today) sits at the top.
+    Then per-kind caps so a flood of new articles can't drown out the rarer
+    but more interesting listings + sales. Articles are capped at 2 because
+    they publish far more frequently than property events.
+
+    Cold-start safety: if real estate activity in `days` is thin, widen the
+    lookback to 90 days before bailing — better to show "from 60 days ago"
+    than nothing.
+    """
     config = REPORT_CONFIGS.get(slug)
     if not config:
         log.error("No config for slug %s", slug)
@@ -323,21 +446,54 @@ def build_activity_for_slug(slug: str, days: int, client) -> list[dict[str, Any]
     db_gc = client["Gold_Coast"]
     db_sm = client["system_monitor"]
 
-    items: list[dict[str, Any]] = []
-    items.extend(new_listings_activity(db_gc, config, days))
-    items.extend(recent_sales_activity(db_gc, config, days))
-    items.extend(new_articles_activity(db_sm, config["subject"]["suburb"], days))
+    def _generate(window_days: int) -> dict[str, list[dict[str, Any]]]:
+        listings_raw = new_listings_activity(db_gc, config, window_days)
+        return {
+            "market_state": market_state_activity(config),
+            "comp_on_market": [i for i in listings_raw if i["kind"] == "comp_on_market"],
+            "sold": recent_sales_activity(db_gc, config, window_days),
+            "new_listing": [i for i in listings_raw if i["kind"] == "new_listing"],
+            "article": new_articles_activity(db_sm, config["subject"]["suburb"], window_days),
+        }
 
-    # Sort desc by date, dedup by source_id, cap at 10
+    by_kind = _generate(days)
+    # Cold-start: widen lookback if the property-event side is thin
+    estate_count = (
+        len(by_kind["comp_on_market"]) + len(by_kind["sold"]) + len(by_kind["new_listing"])
+    )
+    if estate_count < 3 and days < 90:
+        log.info("Only %d estate items at %dd; widening to 90 days", estate_count, days)
+        by_kind = _generate(90)
+
+    # Sort each kind desc by date
+    for k in by_kind:
+        by_kind[k].sort(key=lambda x: x.get("date") or "", reverse=True)
+
+    # Priority allocation + per-kind caps (totals to <= 12 to allow some slack)
+    CAPS = {
+        "market_state": 1,
+        "comp_on_market": 2,
+        "sold": 3,
+        "new_listing": 4,
+        "article": 2,
+    }
+    selected: list[dict[str, Any]] = []
+    for kind, cap in CAPS.items():
+        selected.extend(by_kind.get(kind, [])[:cap])
+
+    # Dedup + final sort. market_state pinned to top, otherwise by date desc.
     seen: set[str] = set()
-    unique: list[dict[str, Any]] = []
-    for item in sorted(items, key=lambda x: x.get("date") or "", reverse=True):
+    final: list[dict[str, Any]] = []
+    pinned = [i for i in selected if i["kind"] == "market_state"]
+    rest = [i for i in selected if i["kind"] != "market_state"]
+    rest.sort(key=lambda x: x.get("date") or "", reverse=True)
+    for item in pinned + rest:
         sid = item.get("source_id") or ""
         if sid in seen:
             continue
         seen.add(sid)
-        unique.append(item)
-    return unique[:10]
+        final.append(item)
+    return final[:10]
 
 
 def upsert_report(client, slug: str, activity: list[dict[str, Any]]) -> None:
