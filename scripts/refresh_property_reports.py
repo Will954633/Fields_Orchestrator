@@ -272,6 +272,48 @@ def new_listings_activity(
     return items
 
 
+def valuation_event_activity(report_doc: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Emit a 'recommendation signed off' item when valuation_finalised_at is set.
+
+    Persistent: lives on the report doc itself so cron runs don't lose the event.
+    The python upsert is careful to preserve `valuation_finalised_at` and
+    `recommendation` fields if they're set elsewhere (e.g. consultant signoff
+    workflow once lead capture is wired).
+    """
+    if not report_doc:
+        return []
+    ts = report_doc.get("valuation_finalised_at")
+    if not ts:
+        return []
+    if isinstance(ts, dt.datetime):
+        date_str = ts.date().isoformat()
+    elif isinstance(ts, str):
+        date_str = ts[:10]
+    else:
+        return []
+    rec = report_doc.get("recommendation") or {}
+    listing = rec.get("listing_price")
+    target = rec.get("target_sale_price")
+    price_phrase = ""
+    if listing and target:
+        price_phrase = f" Recommended listing price: ${listing:,}. Target sale price: ${target:,}."
+    return [{
+        "date": date_str,
+        "kind": "valuation",
+        "source_id": f"valuation_finalised:{date_str}",
+        "headline": "Your recommendation is signed off",
+        "body": (
+            "Will reviewed every comparable, every adjustment, and the weighted reconciliation."
+            + price_phrase
+        ),
+        "effect_on_your_home": (
+            "See the full reasoning, the four conditions of the precise-pricing protocol, "
+            "and the inspection caveat on the Valuation tab."
+        ),
+        "href": "#valuation",
+    }]
+
+
 def market_state_activity(config: dict[str, Any]) -> list[dict[str, Any]]:
     """Always-on freshness item dated today: current suburb market snapshot.
 
@@ -446,10 +488,15 @@ def build_activity_for_slug(slug: str, days: int, client) -> list[dict[str, Any]
     db_gc = client["Gold_Coast"]
     db_sm = client["system_monitor"]
 
+    # Load existing doc to pick up persistent fields (valuation_finalised_at,
+    # recommendation, manual_items[])
+    existing = db_sm["property_reports"].find_one({"slug": slug})
+
     def _generate(window_days: int) -> dict[str, list[dict[str, Any]]]:
         listings_raw = new_listings_activity(db_gc, config, window_days)
         return {
             "market_state": market_state_activity(config),
+            "valuation": valuation_event_activity(existing),
             "comp_on_market": [i for i in listings_raw if i["kind"] == "comp_on_market"],
             "sold": recent_sales_activity(db_gc, config, window_days),
             "new_listing": [i for i in listings_raw if i["kind"] == "new_listing"],
@@ -469,9 +516,10 @@ def build_activity_for_slug(slug: str, days: int, client) -> list[dict[str, Any]
     for k in by_kind:
         by_kind[k].sort(key=lambda x: x.get("date") or "", reverse=True)
 
-    # Priority allocation + per-kind caps (totals to <= 12 to allow some slack)
+    # Priority allocation + per-kind caps (totals to <= 13 to allow some slack)
     CAPS = {
         "market_state": 1,
+        "valuation": 1,
         "comp_on_market": 2,
         "sold": 3,
         "new_listing": 4,
@@ -481,11 +529,11 @@ def build_activity_for_slug(slug: str, days: int, client) -> list[dict[str, Any]
     for kind, cap in CAPS.items():
         selected.extend(by_kind.get(kind, [])[:cap])
 
-    # Dedup + final sort. market_state pinned to top, otherwise by date desc.
+    # Dedup + final sort. market_state + valuation pinned to top, then by date desc.
     seen: set[str] = set()
     final: list[dict[str, Any]] = []
-    pinned = [i for i in selected if i["kind"] == "market_state"]
-    rest = [i for i in selected if i["kind"] != "market_state"]
+    pinned = [i for i in selected if i["kind"] in ("market_state", "valuation")]
+    rest = [i for i in selected if i["kind"] not in ("market_state", "valuation")]
     rest.sort(key=lambda x: x.get("date") or "", reverse=True)
     for item in pinned + rest:
         sid = item.get("source_id") or ""
