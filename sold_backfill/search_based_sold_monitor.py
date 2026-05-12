@@ -53,6 +53,9 @@ try:
 except ImportError:
     _MONITOR_AVAILABLE = False
 
+# Bright Data Web Unlocker for Domain fetches (bypasses Akamai bot challenge)
+from shared.domain_fetch import fetch_html as _domain_fetch_html
+
 # Configuration
 MONGODB_URI = os.getenv('MONGODB_URI', 'mongodb://127.0.0.1:27017/')
 DATABASE_NAME = 'Gold_Coast'
@@ -222,31 +225,14 @@ class SearchBasedSoldMonitor:
             self.session = None
 
     def fetch_page(self, url: str) -> str:
-        """Fetch a page with retry logic. Returns HTML string."""
-        for attempt in range(1, HTTP_RETRY_ATTEMPTS + 1):
-            try:
-                response = self.session.get(url, timeout=30)
-                if response.status_code == 200:
-                    return response.text
-                elif response.status_code == 429:
-                    print(f"    Rate limited (429), waiting {HTTP_RETRY_DELAY}s (attempt {attempt}/{HTTP_RETRY_ATTEMPTS})")
-                    time.sleep(HTTP_RETRY_DELAY)
-                    continue
-                else:
-                    print(f"    HTTP {response.status_code} for {url} (attempt {attempt}/{HTTP_RETRY_ATTEMPTS})")
-                    if attempt < HTTP_RETRY_ATTEMPTS:
-                        time.sleep(HTTP_RETRY_DELAY)
-                        continue
-                    # Return whatever we got on last attempt
-                    return response.text
-            except Exception as e:
-                print(f"    Fetch error: {e} (attempt {attempt}/{HTTP_RETRY_ATTEMPTS})")
-                if attempt < HTTP_RETRY_ATTEMPTS:
-                    time.sleep(HTTP_RETRY_DELAY)
-                    continue
-                raise
-        # Should not reach here, but just in case
-        return ""
+        """Fetch a page with retry logic via Bright Data Web Unlocker.
+        Falls back to direct curl_cffi when BRIGHTDATA_API_KEY is unset.
+        Returns HTML string (empty on failure)."""
+        html = _domain_fetch_html(url, retries=HTTP_RETRY_ATTEMPTS)
+        if not html:
+            print(f"    Fetch failed for {url}")
+            return ""
+        return html
 
     # ------------------------------------------------------------------
     # Sold detection via search results
