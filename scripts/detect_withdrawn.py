@@ -31,7 +31,14 @@ import sys
 import time
 import argparse
 from datetime import datetime, timezone, timedelta
-from pymongo import MongoClient
+
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, REPO_ROOT)
+
+from shared.env import load_env  # type: ignore
+from shared.db import get_client, get_db  # type: ignore
+
+load_env()
 
 try:
     from curl_cffi.requests import Session
@@ -45,6 +52,9 @@ try:
     _MONITOR_AVAILABLE = True
 except ImportError:
     _MONITOR_AVAILABLE = False
+
+# Bright Data Web Unlocker (bypasses Akamai on individual listing URLs)
+from shared.domain_fetch import fetch_with_status as _domain_fetch_with_status
 
 # Configuration
 DATABASE_NAME = 'Gold_Coast'
@@ -77,57 +87,61 @@ def retry_db(fn, max_retries=COSMOS_RETRY_ATTEMPTS):
     return fn()
 
 
+_TITLE_RE = re.compile(r'<title[^>]*>([^<]+)</title>', re.IGNORECASE)
+
+
 def check_listing_status(session, listing_url):
     """Check if a listing URL is still active on Domain.
 
+    Routes through Bright Data Web Unlocker (bypasses Akamai).
+
     Returns:
-        "active"    — HTTP 200, listing still live
-        "withdrawn" — HTTP 301 to /property-profile/ or HTTP 404
-        "error"     — request failed
+        "active"    — listing still live on Domain
+        "withdrawn" — listing removed (404, /property-profile/ redirect, or "off the market" body)
+        "sold"      — Domain still serves the page but title shows "Sold ..." — step 103 should
+                       have already caught this; we return "active" here to avoid stomping its work
+        "error"     — fetch failed
     """
-    for attempt in range(1, MAX_RETRIES + 1):
-        try:
-            r = session.get(listing_url, timeout=REQUEST_TIMEOUT, allow_redirects=False)
+    result = _domain_fetch_with_status(listing_url, retries=MAX_RETRIES, timeout=REQUEST_TIMEOUT)
+    if not result:
+        return "error"
 
-            if r.status_code == 200:
-                return "active"
-            elif r.status_code == 301:
-                location = r.headers.get("Location", "")
-                if "/property-profile/" in location:
-                    return "withdrawn"
-                # 301 to somewhere else — could be URL change, treat as active
-                return "active"
-            elif r.status_code == 404:
-                return "withdrawn"
-            elif r.status_code == 429:
-                print(f"    Rate limited (429), waiting {RETRY_DELAY * 2}s")
-                time.sleep(RETRY_DELAY * 2)
-                continue
-            else:
-                print(f"    Unexpected HTTP {r.status_code} for {listing_url}")
-                if attempt < MAX_RETRIES:
-                    time.sleep(RETRY_DELAY)
-                    continue
-                return "error"
-        except Exception as e:
-            print(f"    Request error: {e}")
-            if attempt < MAX_RETRIES:
-                time.sleep(RETRY_DELAY)
-                continue
-            return "error"
+    status = result.get('status', 0)
+    final_url = result.get('url', '') or ''
+    body = result.get('body', '') or ''
 
-    return "error"
+    if status == 404:
+        return "withdrawn"
+
+    # Domain redirects withdrawn listings to /property-profile/<slug>
+    if '/property-profile/' in final_url:
+        return "withdrawn"
+
+    if status != 200:
+        return "error"
+
+    # Status 200 but title may reflect terminal state. Domain serves the listing page
+    # for sold properties with title "Sold <address> on <date> ...".
+    title_match = _TITLE_RE.search(body)
+    title = title_match.group(1).strip() if title_match else ''
+    title_lower = title.lower()
+
+    if title_lower.startswith('sold '):
+        # Step 103 owns sold detection — don't touch from here
+        return "active"
+
+    # Explicit withdrawn markers in Domain copy
+    body_lower = body.lower()
+    if 'no longer for sale' in body_lower or 'off the market' in body_lower:
+        return "withdrawn"
+
+    return "active"
 
 
 def run_withdrawn_detection(suburbs, dry_run=False):
     """Main detection loop."""
-    conn_str = os.environ.get("COSMOS_CONNECTION_STRING") or os.environ.get("MONGODB_URI")
-    if not conn_str:
-        print("ERROR: No COSMOS_CONNECTION_STRING or MONGODB_URI set")
-        sys.exit(1)
-
-    client = MongoClient(conn_str)
-    db = client[DATABASE_NAME]
+    client = get_client()
+    db = get_db(DATABASE_NAME)
     client.admin.command("ping")
     print(f"  MongoDB connected — {DATABASE_NAME}")
 
@@ -225,9 +239,8 @@ def run_withdrawn_detection(suburbs, dry_run=False):
 
 def show_report():
     """Show current withdrawn property counts across all suburbs."""
-    conn_str = os.environ.get("COSMOS_CONNECTION_STRING") or os.environ.get("MONGODB_URI")
-    client = MongoClient(conn_str)
-    db = client[DATABASE_NAME]
+    client = get_client()
+    db = get_db(DATABASE_NAME)
 
     print(f"\n{'='*60}")
     print(f"  WITHDRAWN PROPERTIES REPORT")
@@ -274,14 +287,11 @@ def main():
     if args.suburbs:
         suburbs = args.suburbs
     elif args.all:
-        conn_str = os.environ.get("COSMOS_CONNECTION_STRING") or os.environ.get("MONGODB_URI")
-        client = MongoClient(conn_str)
-        db = client[DATABASE_NAME]
+        db = get_db(DATABASE_NAME)
         suburbs = [c for c in db.list_collection_names()
                    if not c.startswith('system.') and c not in (
                        'suburb_median_prices', 'suburb_statistics',
                        'change_detection_snapshots', 'address_search_index')]
-        client.close()
     else:
         suburbs = TARGET_SUBURBS
 
