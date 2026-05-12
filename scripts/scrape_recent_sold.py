@@ -36,6 +36,10 @@ except ImportError:
     print("ERROR: curl_cffi not installed. pip install curl_cffi")
     sys.exit(1)
 
+# Bright Data Web Unlocker for Domain fetches (bypasses Akamai bot challenge)
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from shared.domain_fetch import fetch_html as _domain_fetch_html  # type: ignore
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
@@ -236,35 +240,12 @@ class RecentSoldScraper:
             self.session = None
 
     def fetch_page(self, url: str) -> str:
-        """Fetch a URL with retry logic. Returns HTML string."""
-        for attempt in range(1, HTTP_RETRIES + 1):
-            try:
-                resp = self.session.get(url, timeout=30)
-                if resp.status_code == 200:
-                    return resp.text
-                elif resp.status_code == 429:
-                    wait = HTTP_RETRY_DELAY * attempt
-                    print(f"    Rate limited (429), waiting {wait}s (attempt {attempt}/{HTTP_RETRIES})", flush=True)
-                    time.sleep(wait)
-                    continue
-                elif resp.status_code == 403:
-                    print(f"    Blocked (403) on attempt {attempt}/{HTTP_RETRIES}", flush=True)
-                    if attempt < HTTP_RETRIES:
-                        time.sleep(HTTP_RETRY_DELAY)
-                    continue
-                else:
-                    print(f"    HTTP {resp.status_code} on attempt {attempt}/{HTTP_RETRIES}", flush=True)
-                    if attempt < HTTP_RETRIES:
-                        time.sleep(HTTP_RETRY_DELAY)
-                    continue
-            except Exception as e:
-                print(f"    Fetch error (attempt {attempt}/{HTTP_RETRIES}): {e}", flush=True)
-                if attempt < HTTP_RETRIES:
-                    time.sleep(HTTP_RETRY_DELAY)
-                continue
-
-        print(f"    FAILED to fetch {url} after {HTTP_RETRIES} attempts", flush=True)
-        return ""
+        """Fetch a URL via Bright Data Web Unlocker. Returns HTML string (empty on failure)."""
+        html = _domain_fetch_html(url, retries=HTTP_RETRIES)
+        if not html:
+            print(f"    FAILED to fetch {url}", flush=True)
+            return ""
+        return html
 
     def parse_listing_cards(self, html: str, suburb_info: Dict) -> List[Dict]:
         """Parse all listing cards from a search results page."""
