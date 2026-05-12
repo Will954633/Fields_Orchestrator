@@ -35,6 +35,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from shared.env import load_env  # type: ignore
 from shared.db import get_client, get_db  # type: ignore
+from shared.domain_fetch import fetch_html as _domain_fetch_html  # type: ignore
 
 load_env()
 
@@ -97,42 +98,24 @@ def fetch_domain_count(suburb: Dict) -> Optional[int]:
     slug = suburb.get('slug', '')
     url = DOMAIN_URL_TEMPLATE.format(slug=slug)
 
-    for attempt in range(1, MAX_RETRIES + 1):
-        try:
-            resp = cffi_requests.get(
-                url,
-                impersonate="chrome120",
-                timeout=30,
-            )
-            if resp.status_code != 200:
-                print(f"  Attempt {attempt}/{MAX_RETRIES}: HTTP {resp.status_code} for {suburb['name']}", flush=True)
-                if attempt < MAX_RETRIES:
-                    time.sleep(RETRY_DELAY)
-                continue
+    # Fetch via Bright Data Web Unlocker (helper handles retries + Akamai bypass)
+    html = _domain_fetch_html(url, retries=MAX_RETRIES)
+    if not html:
+        print(f"  WARNING: Fetch failed for {suburb['name']} ({url})")
+        return None
 
-            html = resp.text
-            match = COUNT_PATTERN.search(html)
-            if match:
-                return int(match.group(1))
+    match = COUNT_PATTERN.search(html)
+    if match:
+        return int(match.group(1))
 
-            # Fallback: look for data-testid="summary"
-            summary_match = re.search(
-                r'data-testid="summary"[^>]*>.*?<strong[^>]*>(\d+)\s+Propert',
-                html, re.IGNORECASE | re.DOTALL
-            )
-            if summary_match:
-                return int(summary_match.group(1))
+    summary_match = re.search(
+        r'data-testid="summary"[^>]*>.*?<strong[^>]*>(\d+)\s+Propert',
+        html, re.IGNORECASE | re.DOTALL
+    )
+    if summary_match:
+        return int(summary_match.group(1))
 
-            print(f"  Attempt {attempt}/{MAX_RETRIES}: Could not extract count from Domain page for {suburb['name']}", flush=True)
-            if attempt < MAX_RETRIES:
-                time.sleep(RETRY_DELAY)
-
-        except Exception as e:
-            print(f"  Attempt {attempt}/{MAX_RETRIES}: Request error for {suburb['name']}: {e}", flush=True)
-            if attempt < MAX_RETRIES:
-                time.sleep(RETRY_DELAY)
-
-    print(f"  WARNING: All {MAX_RETRIES} attempts failed for {suburb['name']} ({url})")
+    print(f"  WARNING: Could not extract count from Domain page for {suburb['name']}")
     return None
 
 
@@ -180,31 +163,13 @@ def fetch_domain_sold_count(suburb: Dict) -> Optional[int]:
     slug = suburb.get('slug', '')
     url = f"https://www.domain.com.au/sold-listings/{slug}/?ssubs=0"
 
-    for attempt in range(1, MAX_RETRIES + 1):
-        try:
-            resp = cffi_requests.get(
-                url,
-                impersonate="chrome120",
-                timeout=30,
-            )
-            if resp.status_code != 200:
-                if attempt < MAX_RETRIES:
-                    time.sleep(RETRY_DELAY)
-                continue
-
-            html = resp.text
-            # Domain sold page H1: "5571 Properties sold in Robina, QLD, 4226"
-            match = re.search(r'(\d+)\s+Propert\w+\s*sold\s+in', html, re.IGNORECASE)
-            if match:
-                return int(match.group(1))
-
-            if attempt < MAX_RETRIES:
-                time.sleep(RETRY_DELAY)
-
-        except Exception:
-            if attempt < MAX_RETRIES:
-                time.sleep(RETRY_DELAY)
-
+    html = _domain_fetch_html(url, retries=MAX_RETRIES)
+    if not html:
+        return None
+    # Domain sold page H1: "5571 Properties sold in Robina, QLD, 4226"
+    match = re.search(r'(\d+)\s+Propert\w+\s*sold\s+in', html, re.IGNORECASE)
+    if match:
+        return int(match.group(1))
     return None
 
 
