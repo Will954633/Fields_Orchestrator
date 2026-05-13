@@ -37,15 +37,22 @@ SNAPSHOT_FIELDS = (
     "carspaces",
     "property_type",
     "sale_price",
+    "price",  # textual price guidance — "Contact Agent", "Offers Over $X", etc.
     "sold_date",
     "land_size_sqm",
+    "total_floor_area",  # internal m² area
     "description",
     "features",
     "property_images",
+    "floor_plans",
     "listing_url",
     "extraction_method",
     "extraction_confidence",
     "agents_description",
+    "agent_name",
+    "agent_names",
+    "inspection_times",
+    "first_listed_date",
     "og_title",
 )
 
@@ -281,7 +288,7 @@ class URLTracker:
         snapshot = {
             f"backup_scraper.{k}": extracted_data.get(k)
             for k in SNAPSHOT_FIELDS
-            if extracted_data.get(k) is not None
+            if extracted_data.get(k) not in (None, [], "")
         }
         snapshot.update(
             {
@@ -295,6 +302,22 @@ class URLTracker:
             snapshot["listing_status"] = new_status
             snapshot["scrape_source"] = "backup_scraper"
             snapshot["last_updated"] = scraped_at
+
+        # Cadastral fallback: if the listing didn't expose land_size_sqm but
+        # the cadastral doc has one, copy it onto the snapshot so the surfaced
+        # value is at least present (production does the same).
+        cadastral_lot = self.db[suburb.lower()].find_one(
+            {"complete_address_norm": addr_norm, "cadastral_match": {"$ne": False}},
+            {"lot_size_sqm": 1, "LATITUDE": 1, "LONGITUDE": 1, "_id": 0},
+        )
+        if cadastral_lot:
+            if extracted_data.get("land_size_sqm") in (None, "") and cadastral_lot.get("lot_size_sqm"):
+                snapshot["backup_scraper.land_size_sqm_from_cadastral"] = cadastral_lot["lot_size_sqm"]
+            # Stamp lat/lng onto the snapshot for downstream consumers
+            if cadastral_lot.get("LATITUDE") is not None:
+                snapshot["backup_scraper.latitude"] = cadastral_lot["LATITUDE"]
+            if cadastral_lot.get("LONGITUDE") is not None:
+                snapshot["backup_scraper.longitude"] = cadastral_lot["LONGITUDE"]
 
         # Match on complete_address_norm — populated by remediate_cadastral_norm.py
         # for cadastral docs, set on insert for listings-only stubs.
