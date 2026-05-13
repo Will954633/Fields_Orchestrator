@@ -35,24 +35,37 @@ from typing import Optional, Dict
 
 from curl_cffi import requests as cffi_requests
 
-BRIGHTDATA_API_KEY = os.environ.get('BRIGHTDATA_API_KEY')
-BRIGHTDATA_ZONE = os.environ.get('BRIGHTDATA_ZONE', 'web_unlocker2')
 BRIGHTDATA_ENDPOINT = 'https://api.brightdata.com/request'
 
 DEFAULT_TIMEOUT = 90
 DEFAULT_RETRIES = 3
 
 
+def _api_key() -> Optional[str]:
+    """Read env at call time (not import time) so callers can load_env() after import."""
+    return os.environ.get('BRIGHTDATA_API_KEY')
+
+
+def _zone() -> str:
+    return os.environ.get('BRIGHTDATA_ZONE', 'web_unlocker2')
+
+
+# Back-compat module attributes for callers that introspect them
+BRIGHTDATA_API_KEY = property(lambda self: _api_key())  # type: ignore
+BRIGHTDATA_ZONE = property(lambda self: _zone())  # type: ignore
+
+
 def _post_unlocker(url: str, return_json: bool = False, timeout: int = DEFAULT_TIMEOUT) -> Optional[Dict]:
     """POST to Bright Data Web Unlocker. Returns dict with 'body' (always) plus
     'status' and 'url' when return_json=True. None on failure."""
-    if not BRIGHTDATA_API_KEY:
+    api_key = _api_key()
+    if not api_key:
         return None
 
-    payload = {'zone': BRIGHTDATA_ZONE, 'url': url, 'format': 'json' if return_json else 'raw'}
+    payload = {'zone': _zone(), 'url': url, 'format': 'json' if return_json else 'raw'}
     headers = {
         'Content-Type': 'application/json',
-        'Authorization': f'Bearer {BRIGHTDATA_API_KEY}',
+        'Authorization': f'Bearer {api_key}',
     }
     try:
         resp = cffi_requests.post(BRIGHTDATA_ENDPOINT, headers=headers, json=payload, timeout=timeout)
@@ -79,8 +92,9 @@ def fetch_html(url: str, retries: int = DEFAULT_RETRIES, timeout: int = DEFAULT_
     Routes through Bright Data Web Unlocker if BRIGHTDATA_API_KEY is set, else
     falls back to direct curl_cffi with chrome120 TLS impersonation.
     """
+    use_unlocker = bool(_api_key())
     for attempt in range(retries):
-        if BRIGHTDATA_API_KEY:
+        if use_unlocker:
             result = _post_unlocker(url, return_json=False, timeout=timeout)
             if result and result.get('body'):
                 return result['body']
@@ -109,8 +123,9 @@ def fetch_with_status(url: str, retries: int = DEFAULT_RETRIES, timeout: int = D
     redirects (Domain's pattern for withdrawn listings), check if `'/property-profile/'`
     appears in the returned `url` field.
     """
+    use_unlocker = bool(_api_key())
     for attempt in range(retries):
-        if BRIGHTDATA_API_KEY:
+        if use_unlocker:
             result = _post_unlocker(url, return_json=True, timeout=timeout)
             if result:
                 return result
