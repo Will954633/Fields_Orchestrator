@@ -192,6 +192,31 @@ def coerce_price(v: Any) -> float | None:
 # ---------------------------------------------------------------------------
 
 
+def _cross_suburb_feature_match(d: dict[str, Any], subject: dict[str, Any]) -> bool:
+    """Stricter relevance check for listings outside the subject's own suburb.
+
+    Rule (Will, 2026-05-13): cross-suburb listings only earn a slot in the
+    activity feed if they're plausibly competing for the same buyer as the
+    subject home. Same-suburb listings have suburb-relevance for free.
+
+    Checks bedrooms >= subject bedrooms (within 1) AND either a pool match
+    or a price-band match. Conservative because Domain's `features` array
+    is reliable for 'Pool' but not for 'dual living' or 'cul-de-sac'.
+    """
+    subj_bd = subject.get("bedrooms", 6)
+    bd = d.get("bedrooms") or 0
+    if bd < subj_bd:  # require exact bedroom parity or more
+        return False
+    # Either has pool OR sits inside the valuation band — and price is checked
+    # in the calling scope anyway, so just require the pool to clear the bar.
+    features_lower = {str(f).lower() for f in (d.get("features") or [])}
+    if "pool" in features_lower:
+        return True
+    # Otherwise must clear the higher land-area heuristic
+    land = d.get("land_area") or 0
+    return land >= 600
+
+
 def new_listings_activity(
     db, config: dict[str, Any], days: int
 ) -> list[dict[str, Any]]:
@@ -201,6 +226,11 @@ def new_listings_activity(
       - comp_on_market — one of the subject's named valuation comps is also
         for sale. Editorial moment.
       - new_listing — generic competing listing.
+
+    Same-suburb listings clear `competition_min_bedrooms`. Cross-suburb
+    listings additionally must pass `_cross_suburb_feature_match` — without
+    feature overlap, a Robina 5-bed at $1.65M isn't useful context for a
+    Merrimac 6-bed seller (Will, 2026-05-13).
     """
     items: list[dict[str, Any]] = []
     cutoff = dt.datetime.utcnow() - dt.timedelta(days=days)
@@ -217,7 +247,8 @@ def new_listings_activity(
                 "bedrooms": {"$gte": config["competition_min_bedrooms"]},
             },
             {"_id": 0, "address": 1, "price": 1, "first_seen": 1, "bedrooms": 1,
-             "bathrooms": 1, "property_type": 1, "listing_url": 1, "property_images": 1},
+             "bathrooms": 1, "property_type": 1, "listing_url": 1, "property_images": 1,
+             "features": 1, "land_area": 1},
         ).sort("first_seen", -1).limit(10)
 
         for d in cursor:
@@ -235,6 +266,12 @@ def new_listings_activity(
             addr = short_address(full_addr)
             in_subj_suburb = suburb == subj_suburb
             location_phrase = "" if in_subj_suburb else f" in {suburb.replace('_', ' ').title()}"
+
+            # Cross-suburb relevance gate — drop weakly-relevant items.
+            # Always let named comps through regardless of suburb (handled below).
+            if not in_subj_suburb and not is_named_comp(full_addr, named_comps):
+                if not _cross_suburb_feature_match(d, config["subject"]):
+                    continue
 
             # Cross-reference against named comps
             if is_named_comp(full_addr, named_comps):
@@ -312,6 +349,254 @@ def valuation_event_activity(report_doc: dict[str, Any] | None) -> list[dict[str
         ),
         "href": "#valuation",
     }]
+
+
+def valuation_delta_activity(
+    config: dict[str, Any], existing: dict[str, Any] | None
+) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+    """Detect a material change in the reconciled valuation since the last
+    snapshot and emit an activity item when one's found.
+
+    Cadence (Will, 2026-05-13): the reconciled valuation only moves when the
+    underlying comparable cohort moves, which is weekly at best. We refresh
+    daily but only emit on actual movement — daily ticks against an unchanged
+    figure would be theatre.
+
+    Threshold: emit when |midpoint change| >= max($5,000, 0.5% of midpoint).
+    Below that, treat as noise.
+
+    Returns (items, new_history_entry) — caller persists the history entry
+    on the report doc.
+    """
+    val_low = config["subject"].get("valuation_low")
+    val_high = config["subject"].get("valuation_high")
+    if val_low is None or val_high is None:
+        return [], None
+
+    midpoint = (val_low + val_high) / 2
+    today_iso = dt.date.today().isoformat()
+    new_entry = {
+        "date": today_iso,
+        "low": int(val_low),
+        "high": int(val_high),
+        "midpoint": int(midpoint),
+    }
+
+    history: list[dict[str, Any]] = []
+    if existing:
+        history = list(existing.get("valuation_history") or [])
+
+    if not history:
+        # No baseline — seed silently. Don't emit, no "rose by $X from $0".
+        return [], new_entry
+
+    last = history[-1]
+    if last.get("low") == new_entry["low"] and last.get("high") == new_entry["high"]:
+        # Nothing changed since last run — no emit, no new history entry.
+        return [], None
+
+    delta = new_entry["midpoint"] - last.get("midpoint", new_entry["midpoint"])
+    threshold = max(5_000, int(new_entry["midpoint"] * 0.005))
+    if abs(delta) < threshold:
+        # Below noise floor — record the new figure (so we track drift) but
+        # don't emit an activity item.
+        return [], new_entry
+
+    direction = "rose" if delta > 0 else "fell"
+    last_low = last.get("low", 0)
+    last_high = last.get("high", 0)
+    range_phrase_prev = f"{fmt_aud(last_low)}–{fmt_aud(last_high)}"
+    range_phrase_now = f"{fmt_aud(val_low)}–{fmt_aud(val_high)}"
+    delta_phrase = fmt_aud(abs(delta))
+
+    items = [{
+        "date": today_iso,
+        "kind": "valuation_delta",
+        "source_id": f"valuation_delta:{today_iso}",
+        "headline": (
+            f"Your reconciled range {direction} {delta_phrase} this week — "
+            f"now {range_phrase_now}."
+        ),
+        "body": (
+            f"Previous range: {range_phrase_prev}. New range: {range_phrase_now}. "
+            f"Movement reflects updates to the comparable cohort used by the valuation engine — "
+            f"a sold comparable above or below the prior cohort median shifts the weighted reconciliation."
+        ),
+        "effect_on_your_home": (
+            "Open the Valuation tab to see which comparables are currently driving the figure. "
+            "Material movements are reviewed by Will before the consultant-signed recommendation is updated."
+        ),
+        "href": "#valuation",
+    }]
+    return items, new_entry
+
+
+def _query_comp_state(db_gc, suburbs: list[str], comp_name: str) -> dict[str, Any] | None:
+    """Find a named comp's current state across the watch suburbs.
+
+    Returns the most recent record (active listing if one exists, else most
+    recent sold record). None if no record found.
+    """
+    target_norm = normalize_address(comp_name)
+    for suburb in suburbs:
+        col = db_gc[suburb]
+        # Use a forgiving regex on the address — handles "Ct" vs "Court" etc.
+        pattern = re.escape(comp_name)
+        cursor = col.find(
+            {"address": {"$regex": rf"^{pattern}\b", "$options": "i"}},
+            {"_id": 0, "address": 1, "listing_status": 1, "price": 1, "sold_price": 1,
+             "sale_date": 1, "last_seen": 1, "first_seen": 1, "listing_url": 1,
+             "property_images": 1, "bedrooms": 1, "bathrooms": 1, "days_on_market": 1},
+        ).limit(5)
+        # Prefer for_sale; otherwise most recent sold
+        for_sale = None
+        sold = None
+        for d in cursor:
+            if normalize_address(d.get("address", "")) != target_norm:
+                continue
+            if d.get("listing_status") == "for_sale":
+                for_sale = d
+                break
+            if d.get("listing_status") == "sold":
+                if sold is None or (d.get("sale_date") or "") > (sold.get("sale_date") or ""):
+                    sold = d
+        if for_sale:
+            return {**for_sale, "_suburb": suburb}
+        if sold:
+            return {**sold, "_suburb": suburb}
+    return None
+
+
+def comp_lifecycle_activity(
+    db_gc, config: dict[str, Any], existing: dict[str, Any] | None
+) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
+    """Track each named comp and emit when its state changes.
+
+    Snapshot kept in `comp_state_snapshots` on the report doc — keyed by
+    normalised address, value is `{status, price, sale_date, snapshot_date}`.
+
+    Emits:
+      - comp_price_change — comp was for_sale at price X, now for_sale at Y
+      - comp_sold        — comp was for_sale (or unknown), now sold
+      - comp_withdrawn   — comp was for_sale, now no for_sale or sold record
+
+    Doesn't duplicate the existing `comp_on_market` flow (new_listings_activity
+    already handles "freshly listed within window"). Comp re-listings older
+    than the window will surface here as a status-change event.
+    """
+    suburbs = config.get("competition_suburbs") or [config["subject"]["suburb"].lower().replace(" ", "_")]
+    named_comps: list[str] = config["subject"].get("comps", [])
+    today_iso = dt.date.today().isoformat()
+
+    prior_snapshots: dict[str, dict[str, Any]] = {}
+    if existing:
+        prior_snapshots = dict(existing.get("comp_state_snapshots") or {})
+
+    items: list[dict[str, Any]] = []
+    new_snapshots: dict[str, dict[str, Any]] = {}
+
+    for comp_name in named_comps:
+        key = normalize_address(comp_name)
+        prior = prior_snapshots.get(key) or {}
+        curr = _query_comp_state(db_gc, suburbs, comp_name)
+
+        # Build the new snapshot — defaults to 'unknown' if no record exists
+        if curr is None:
+            new_state = {"status": "unknown", "snapshot_date": today_iso}
+            curr_status = "unknown"
+            curr_price = None
+            sale_date = None
+        else:
+            curr_status = curr.get("listing_status") or "unknown"
+            curr_price_raw = curr.get("price") if curr_status == "for_sale" else curr.get("sold_price")
+            curr_price = coerce_price(curr_price_raw)
+            sale_date = curr.get("sale_date")
+            sd_str = sale_date if isinstance(sale_date, str) else (sale_date.isoformat()[:10] if sale_date else None)
+            new_state = {
+                "status": curr_status,
+                "price": curr_price,
+                "sale_date": sd_str,
+                "suburb": curr.get("_suburb"),
+                "snapshot_date": today_iso,
+            }
+        new_snapshots[key] = new_state
+
+        prior_status = prior.get("status")
+        prior_price = prior.get("price")
+
+        # Skip emit when no prior snapshot — seeding only
+        if not prior:
+            continue
+
+        # comp_sold — previous was for_sale (or unknown with no sale), now sold
+        if curr_status == "sold" and prior_status != "sold":
+            sold_phrase = fmt_aud(curr_price) if curr_price else "an undisclosed price"
+            items.append({
+                "date": (sd_str if curr is not None else today_iso),
+                "kind": "comp_sold",
+                "source_id": f"comp_sold:{key}",
+                "headline": f"{comp_name} just sold for {sold_phrase}",
+                "body": (
+                    f"One of your six named comparables transacted. "
+                    f"This will be re-evaluated by the valuation engine in the next pass."
+                ),
+                "effect_on_your_home": (
+                    "When a named comparable sells, its actual sale price replaces its asking price "
+                    "in the next valuation cohort review. Watch the Valuation tab for the updated range."
+                ),
+                "image_src": pick_first_image(curr.get("property_images")) if curr else None,
+                "href": curr.get("listing_url") if curr else None,
+            })
+
+        # comp_price_change — still for_sale, but the asking price moved
+        elif (
+            curr_status == "for_sale" and prior_status == "for_sale"
+            and curr_price is not None and prior_price is not None
+            and abs(curr_price - prior_price) >= 5_000
+        ):
+            direction = "lifted" if curr_price > prior_price else "reduced"
+            delta = abs(curr_price - prior_price)
+            items.append({
+                "date": today_iso,
+                "kind": "comp_price_change",
+                "source_id": f"comp_price_change:{key}:{int(curr_price)}",
+                "headline": f"{comp_name} {direction} its asking price by {fmt_aud(delta)} to {fmt_aud(curr_price)}",
+                "body": (
+                    f"A named comparable from your valuation moved its asking price. "
+                    f"Previous: {fmt_aud(prior_price)}. Current: {fmt_aud(curr_price)}."
+                ),
+                "effect_on_your_home": (
+                    "A price reduction on a named comp signals the original ask was high — useful "
+                    "downside reference. A price lift signals a seller testing higher — useful upside reference."
+                    if direction == "reduced"
+                    else
+                    "A price lift on a named comp signals a seller testing higher — useful upside reference "
+                    "but watch days-on-market for confirmation."
+                ),
+                "image_src": pick_first_image(curr.get("property_images")) if curr else None,
+                "href": curr.get("listing_url") if curr else None,
+            })
+
+        # comp_withdrawn — was for_sale, now not findable as for_sale or sold.
+        # Conservative: only fire if we had a real prior 'for_sale' snapshot.
+        elif prior_status == "for_sale" and curr_status not in ("for_sale", "sold"):
+            items.append({
+                "date": today_iso,
+                "kind": "comp_withdrawn",
+                "source_id": f"comp_withdrawn:{key}:{today_iso}",
+                "headline": f"{comp_name} was withdrawn from market",
+                "body": (
+                    f"A named comparable that was previously for sale at "
+                    f"{fmt_aud(prior_price) if prior_price else 'an undisclosed price'} is no longer listed. "
+                    f"This may indicate withdrawal, off-market sale, or temporary delisting for refresh."
+                ),
+                "effect_on_your_home": (
+                    "Withdrawn listings tighten visible supply at your bedroom + price band. "
+                    "The valuation engine de-weights this comp until a transaction outcome is recorded."
+                ),
+            })
+
+    return items, new_snapshots
 
 
 def market_state_activity(config: dict[str, Any]) -> list[dict[str, Any]]:
@@ -421,20 +706,64 @@ def recent_sales_activity(
     return items
 
 
-def new_articles_activity(db_sysmon, suburb: str, days: int) -> list[dict[str, Any]]:
-    """Articles published in last N days mentioning the suburb."""
+def _feature_tag_variants(features: list[str]) -> list[str]:
+    """Map subject feature slugs to all the tag styles they might appear as.
+
+    `north_facing_rear` becomes ['north_facing_rear', 'north-facing-rear',
+    'north facing rear', 'northfacingrear']. Matches case-insensitively
+    against article tags.
+    """
+    variants: list[str] = []
+    for f in features:
+        f = f.lower().strip()
+        variants.append(f)
+        variants.append(f.replace("_", "-"))
+        variants.append(f.replace("_", " "))
+        variants.append(f.replace("_", ""))
+    return sorted(set(variants))
+
+
+def new_articles_activity(
+    db_sysmon, subject: dict[str, Any], days: int
+) -> list[dict[str, Any]]:
+    """Articles published in last N days that are SUBJECT-SPECIFIC.
+
+    Hard rule (Will, 2026-05-13): no generic content in the activity feed.
+    An article passes only if at least one of the following is true:
+      (a) The article's title contains the subject suburb as a word boundary
+          ("\\bMerrimac\\b"), so a passing mention in body text no longer
+          slips a 'How to choose an agent' article into a seller's dashboard.
+      (b) The article's tags include the subject suburb (normalised), or
+          any of the subject home's feature tags ('north-facing-rear',
+          'dual-living', 'pool', etc.). Tag-based matches let
+          feature-specific editorial through even when the title is generic.
+
+    Anything weaker than that — passing mention in body, generic 'Gold Coast
+    market' tags — belongs in an email digest, not the dashboard.
+    """
     items: list[dict[str, Any]] = []
     col = db_sysmon["content_articles"]
     cutoff = (dt.datetime.utcnow() - dt.timedelta(days=days)).isoformat()
-    suburb_clean = suburb.replace("_", " ")
+    suburb_clean = subject["suburb"].replace("_", " ")
+    suburb_variants = sorted({
+        suburb_clean,
+        suburb_clean.replace(" ", "-"),
+        suburb_clean.replace(" ", "_"),
+        suburb_clean.replace(" ", "").lower(),
+        suburb_clean.lower(),
+    })
+    feature_variants = _feature_tag_variants(subject.get("features", []))
+
+    # Word-boundary suburb match in title — drops the passing-mention case.
+    title_regex = rf"\b{re.escape(suburb_clean)}\b"
 
     cursor = col.find(
         {
             "published_at": {"$gte": cutoff},
             "$or": [
-                {"title": {"$regex": suburb_clean, "$options": "i"}},
-                {"tags": {"$regex": suburb_clean, "$options": "i"}},
-                {"html": {"$regex": suburb_clean, "$options": "i"}},
+                {"title": {"$regex": title_regex, "$options": "i"}},
+                {"tags": {"$in": suburb_variants}},
+                {"tags": {"$in": feature_variants}},
             ],
         },
         {"_id": 0, "title": 1, "slug": 1, "published_at": 1, "custom_excerpt": 1,
@@ -442,6 +771,27 @@ def new_articles_activity(db_sysmon, suburb: str, days: int) -> list[dict[str, A
     ).sort("published_at", -1).limit(5)
 
     for d in cursor:
+        # Identify which match path qualified this article so the effect-on-
+        # your-home line can be specific. Tag matches against the subject's
+        # features get the strongest framing.
+        tags_lower = {str(t).lower() for t in (d.get("tags") or [])}
+        feature_hits = [v for v in feature_variants if v in tags_lower]
+        suburb_hit_title = bool(re.search(title_regex, d.get("title", ""), re.I))
+
+        if feature_hits:
+            effect = (
+                f"Tagged to '{feature_hits[0]}' — a feature your home shares. "
+                f"This is the editorial buyers will read when they research what your home offers."
+            )
+        elif suburb_hit_title:
+            effect = (
+                f"About {suburb_clean.title()} specifically. "
+                f"Adds context buyers will see when they research your suburb."
+            )
+        else:
+            # Tag-suburb match, no title match. Still relevant.
+            effect = f"Tagged to {suburb_clean.title()} — adds suburb context to the buyer research path."
+
         published = d.get("published_at", "")
         items.append({
             "date": published[:10],
@@ -449,7 +799,7 @@ def new_articles_activity(db_sysmon, suburb: str, days: int) -> list[dict[str, A
             "source_id": f"article:{d.get('slug')}",
             "headline": d.get("title", ""),
             "body": d.get("custom_excerpt") or "New analysis published on fieldsestate.com.au.",
-            "effect_on_your_home": f"Fresh editorial about {suburb_clean.title()} — adds context buyers will see when they research your suburb.",
+            "effect_on_your_home": effect,
             "image_src": d.get("feature_image"),
             "href": f"/articles/{d.get('slug')}",
         })
@@ -468,39 +818,46 @@ def pick_first_image(images: Any) -> str | None:
 # ---------------------------------------------------------------------------
 
 
-def build_activity_for_slug(slug: str, days: int, client) -> list[dict[str, Any]]:
-    """Generate a balanced 10-item feed.
+def build_activity_for_slug(
+    slug: str, days: int, client
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Generate a balanced feed AND the state to persist alongside it.
 
-    Mix discipline: market_state (always-on, dated today) sits at the top.
-    Then per-kind caps so a flood of new articles can't drown out the rarer
-    but more interesting listings + sales. Articles are capped at 2 because
-    they publish far more frequently than property events.
+    Returns (activity, side_state) where side_state holds the new
+    valuation_history entry (if any) and the refreshed comp_state_snapshots
+    so upsert_report can persist them.
 
-    Cold-start safety: if real estate activity in `days` is thin, widen the
-    lookback to 90 days before bailing — better to show "from 60 days ago"
-    than nothing.
+    Mix discipline: market_state, valuation, and valuation_delta pin top.
+    Then per-kind caps so any one source can't crowd out the others.
     """
     config = REPORT_CONFIGS.get(slug)
     if not config:
         log.error("No config for slug %s", slug)
-        return []
+        return [], {}
 
     db_gc = client["Gold_Coast"]
     db_sm = client["system_monitor"]
 
     # Load existing doc to pick up persistent fields (valuation_finalised_at,
-    # recommendation, manual_items[])
+    # recommendation, valuation_history, comp_state_snapshots, manual_items[])
     existing = db_sm["property_reports"].find_one({"slug": slug})
+
+    val_delta_items, val_history_entry = valuation_delta_activity(config, existing)
+    comp_lifecycle_items, comp_snapshots = comp_lifecycle_activity(db_gc, config, existing)
 
     def _generate(window_days: int) -> dict[str, list[dict[str, Any]]]:
         listings_raw = new_listings_activity(db_gc, config, window_days)
         return {
             "market_state": market_state_activity(config),
             "valuation": valuation_event_activity(existing),
+            "valuation_delta": val_delta_items,
             "comp_on_market": [i for i in listings_raw if i["kind"] == "comp_on_market"],
+            "comp_sold": [i for i in comp_lifecycle_items if i["kind"] == "comp_sold"],
+            "comp_price_change": [i for i in comp_lifecycle_items if i["kind"] == "comp_price_change"],
+            "comp_withdrawn": [i for i in comp_lifecycle_items if i["kind"] == "comp_withdrawn"],
             "sold": recent_sales_activity(db_gc, config, window_days),
             "new_listing": [i for i in listings_raw if i["kind"] == "new_listing"],
-            "article": new_articles_activity(db_sm, config["subject"]["suburb"], window_days),
+            "article": new_articles_activity(db_sm, config["subject"], window_days),
         }
 
     by_kind = _generate(days)
@@ -516,11 +873,15 @@ def build_activity_for_slug(slug: str, days: int, client) -> list[dict[str, Any]
     for k in by_kind:
         by_kind[k].sort(key=lambda x: x.get("date") or "", reverse=True)
 
-    # Priority allocation + per-kind caps (totals to <= 13 to allow some slack)
+    # Priority allocation + per-kind caps
     CAPS = {
         "market_state": 1,
         "valuation": 1,
+        "valuation_delta": 1,
         "comp_on_market": 2,
+        "comp_sold": 2,
+        "comp_price_change": 2,
+        "comp_withdrawn": 1,
         "sold": 3,
         "new_listing": 4,
         "article": 2,
@@ -529,11 +890,12 @@ def build_activity_for_slug(slug: str, days: int, client) -> list[dict[str, Any]
     for kind, cap in CAPS.items():
         selected.extend(by_kind.get(kind, [])[:cap])
 
-    # Dedup + final sort. market_state + valuation pinned to top, then by date desc.
+    # Pin order: market_state + valuation + valuation_delta at top, then by date desc.
+    PINNED = {"market_state", "valuation", "valuation_delta"}
     seen: set[str] = set()
     final: list[dict[str, Any]] = []
-    pinned = [i for i in selected if i["kind"] in ("market_state", "valuation")]
-    rest = [i for i in selected if i["kind"] not in ("market_state", "valuation")]
+    pinned = [i for i in selected if i["kind"] in PINNED]
+    rest = [i for i in selected if i["kind"] not in PINNED]
     rest.sort(key=lambda x: x.get("date") or "", reverse=True)
     for item in pinned + rest:
         sid = item.get("source_id") or ""
@@ -541,24 +903,36 @@ def build_activity_for_slug(slug: str, days: int, client) -> list[dict[str, Any]
             continue
         seen.add(sid)
         final.append(item)
-    return final[:10]
+
+    side_state = {
+        "valuation_history_append": val_history_entry,
+        "comp_state_snapshots": comp_snapshots,
+    }
+    return final[:10], side_state
 
 
-def upsert_report(client, slug: str, activity: list[dict[str, Any]]) -> None:
+def upsert_report(
+    client, slug: str, activity: list[dict[str, Any]], side_state: dict[str, Any]
+) -> None:
     col = client["system_monitor"]["property_reports"]
     now = dt.datetime.utcnow()
-    col.update_one(
-        {"slug": slug},
-        {
-            "$set": {
-                "slug": slug,
-                "activity": activity,
-                "activity_refreshed_at": now,
-            },
-            "$setOnInsert": {"created_at": now},
-        },
-        upsert=True,
-    )
+
+    set_fields: dict[str, Any] = {
+        "slug": slug,
+        "activity": activity,
+        "activity_refreshed_at": now,
+        "comp_state_snapshots": side_state.get("comp_state_snapshots") or {},
+    }
+    update_doc: dict[str, Any] = {
+        "$set": set_fields,
+        "$setOnInsert": {"created_at": now},
+    }
+
+    new_history_entry = side_state.get("valuation_history_append")
+    if new_history_entry is not None:
+        update_doc["$push"] = {"valuation_history": new_history_entry}
+
+    col.update_one({"slug": slug}, update_doc, upsert=True)
     log.info("Upserted %d activity items for %s", len(activity), slug)
 
 
@@ -574,14 +948,20 @@ def main() -> int:
 
     for slug in slugs:
         log.info("=== %s ===", slug)
-        activity = build_activity_for_slug(slug, args.days, client)
+        activity, side_state = build_activity_for_slug(slug, args.days, client)
         log.info("Built %d activity items", len(activity))
         for item in activity:
             log.info("  [%s] %s — %s", item.get("kind"), item.get("date"), item.get("headline"))
+        if side_state.get("valuation_history_append"):
+            entry = side_state["valuation_history_append"]
+            log.info(
+                "  valuation_history += %s (low=%s high=%s)",
+                entry.get("date"), entry.get("low"), entry.get("high"),
+            )
         if args.dry_run:
             log.info("DRY RUN — skipping write")
         else:
-            upsert_report(client, slug, activity)
+            upsert_report(client, slug, activity, side_state)
 
     return 0
 
