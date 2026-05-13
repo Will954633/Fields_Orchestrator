@@ -23,10 +23,26 @@ DB_NAME = "Gold_Coast"
 SUBURBS = ["robina", "varsity_lakes", "burleigh_waters"]
 
 
+STREET_ABBREV = {
+    "AVE": "AVENUE", "AV": "AVENUE", "RD": "ROAD", "DR": "DRIVE", "DRV": "DRIVE",
+    "CT": "COURT", "CRT": "COURT", "PL": "PLACE", "CRES": "CRESCENT", "CR": "CRESCENT",
+    "CCT": "CIRCUIT", "CIR": "CIRCUIT", "CCKT": "CIRCUIT", "WY": "WAY",
+    "BLVD": "BOULEVARD", "TCE": "TERRACE", "TER": "TERRACE", "HWY": "HIGHWAY",
+    "PDE": "PARADE", "CL": "CLOSE", "LN": "LANE", "GR": "GROVE",
+}
+
+
 def normalise(addr: str) -> str:
+    """Mirrors url_tracker._normalise_address — see that for full doc."""
     if not addr:
         return ""
-    return re.sub(r"\s+", " ", addr.replace(",", " ").strip().upper())
+    cleaned = re.sub(r"\s+", " ", addr.replace(",", " ").strip().upper())
+    tokens = cleaned.split()
+    expanded = [
+        STREET_ABBREV.get(tok, tok) if 0 < i < len(tokens) - 3 else tok
+        for i, tok in enumerate(tokens)
+    ]
+    return " ".join(expanded)
 
 
 def main():
