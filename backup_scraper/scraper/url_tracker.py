@@ -50,16 +50,52 @@ SNAPSHOT_FIELDS = (
 )
 
 
+# Australian street-type abbreviations → full forms. Cadastral uses full names
+# (AVENUE, STREET, DRIVE) while agency-scraped addresses often use abbreviations
+# (Ave, St, Dr). Expand abbreviations when they appear in a non-terminal middle
+# position (between street name and suburb) so we don't accidentally expand
+# tokens like "ST IVES" (proper noun).
+STREET_ABBREV = {
+    "AVE": "AVENUE", "AV": "AVENUE",
+    "RD": "ROAD",
+    "DR": "DRIVE", "DRV": "DRIVE",
+    "CT": "COURT", "CRT": "COURT",
+    "PL": "PLACE",
+    "CRES": "CRESCENT", "CR": "CRESCENT",
+    "CCT": "CIRCUIT", "CIR": "CIRCUIT", "CCKT": "CIRCUIT",
+    "WY": "WAY",
+    "BLVD": "BOULEVARD",
+    "TCE": "TERRACE", "TER": "TERRACE",
+    "HWY": "HIGHWAY",
+    "PDE": "PARADE",
+    "CL": "CLOSE",
+    "LN": "LANE",
+    "GR": "GROVE",
+}
+
+
 def _normalise_address(addr: str) -> str:
     """
-    Uppercase, strip commas, collapse whitespace for stable address matching.
-    JSON files use either "33 Trinity Place, Robina, QLD 4226" (with commas)
-    or "33 TRINITY PLACE ROBINA QLD 4226" (cadastral format). Both reduce to
-    "33 TRINITY PLACE ROBINA QLD 4226" after normalization.
+    Uppercase, strip commas, expand street-type abbreviations, collapse whitespace.
+    Both "33 Trinity Pl, Robina, QLD 4226" and "33 TRINITY PLACE ROBINA QLD 4226"
+    reduce to "33 TRINITY PLACE ROBINA QLD 4226".
+
+    Abbreviations are expanded only when they appear in a non-terminal middle
+    position (typically the street type just before the suburb), so proper nouns
+    like "ST IVES" are preserved.
     """
     if not addr:
         return ""
-    return re.sub(r"\s+", " ", addr.replace(",", " ").strip().upper())
+    cleaned = re.sub(r"\s+", " ", addr.replace(",", " ").strip().upper())
+    tokens = cleaned.split()
+    # Last 3 tokens are typically [suburb, STATE, postcode]; abbreviation is the
+    # token at len-4 (e.g. ".. TRINITY PL ROBINA QLD 4226"). Expand any token
+    # except the first and last 3.
+    expanded = [
+        STREET_ABBREV.get(tok, tok) if 0 < i < len(tokens) - 3 else tok
+        for i, tok in enumerate(tokens)
+    ]
+    return " ".join(expanded)
 
 
 class URLTracker:
