@@ -1,0 +1,21 @@
+[Unit]
+Description=Fields Property Report Poller — resolves stub property_reports docs into under_review (slot resolver)
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=projects
+WorkingDirectory=/home/fields/Fields_Orchestrator
+EnvironmentFile=/home/fields/Fields_Orchestrator/.env
+Environment=PYTHONPATH=/home/fields/Fields_Orchestrator
+Environment=PROPERTY_REPORTS_POLL_INTERVAL=15
+ExecStart=/home/fields/venv/bin/python3 -m scripts.property_reports.poller
+Restart=always
+RestartSec=15
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=fields-property-report-poller
+
+[Install]
+WantedBy=multi-user.target
