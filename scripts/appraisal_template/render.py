@@ -25,6 +25,131 @@ from jinja2 import Environment, BaseLoader, select_autoescape  # type: ignore
 from scripts.appraisal_template import data_pull, dot_grid, pick_highlight, substantiation
 
 
+SECTION_02_RIGHT_TEMPLATE = """\
+<!-- ============================================================ -->
+<!-- PAGE 07 — SECTION 02 RIGHT — Three buyers. One outbids.       -->
+<!-- Live HTML, template-driven from                                  -->
+<!-- scripts/appraisal_template/render.render_section_02_right_html() -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">For {{ subject.short_address }}</div>
+      <svg viewBox="0 0 22 26" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 3 2 L 3 24 L 6 24 L 6 14 L 17 14 Q 20 14 20 11 Q 20 8 17 8 L 6 8 L 6 2 Z M 6 10 L 17 10 Q 17.5 10 17.5 11 Q 17.5 12 17 12 L 6 12 Z" fill="#B76749"/>
+      </svg>
+    </div>
+
+    <h2 class="right-headline" style="font-size:28pt; margin-bottom:3mm;">{{ s02.headline_html | safe }}</h2>
+    <div class="right-subhead" style="margin-bottom:6mm;">{{ s02.subhead }}</div>
+
+    <div class="personas">
+{% for p in s02.personas %}
+      <div class="persona-card{% if p.rank_class == 'primary' %} primary{% endif %}">
+        <span class="persona-rank">{{ p.rank_label }}</span>
+        <span class="persona-share">{{ p.share_pct }}% share</span>
+
+        <div>
+          <div class="persona-name">{{ p.label }}</div>
+          <div class="persona-demo">{{ p.demographics | safe }}</div>
+          <div class="persona-evidence">{{ p.evidence_note | safe }}</div>
+        </div>
+
+        <div class="match-bar">
+{% for row in p.match_bars %}          <div class="match-bar-label">{{ row.label }}</div>
+          <div class="match-dots">{% for d in row.dots %}<span class="dot{% if d == 'full' %} full{% elif d == 'half' %} half{% endif %}"></span>{% endfor %}</div>
+{% endfor %}        </div>
+{% if p.willingness_range %}
+        <div class="willingness">
+          <span class="willingness-label">Willingness to pay</span>
+          <span class="willingness-range">{{ p.willingness_range }}</span>
+        </div>
+{% endif %}
+      </div>
+{% endfor %}
+    </div>
+
+    <div class="anti-fit" style="margin:1mm 0 2mm; font-size:9.5pt;">{{ s02.anti_fit }}</div>
+
+    <div class="source-line" style="margin-bottom:2mm; font-size:7pt;">{{ s02.caption }}</div>
+
+    <div class="fields-advantage" style="padding:3.5mm 7mm 3.5mm 8mm;">
+      <span class="fa-label" style="margin-bottom:2mm;">{{ s02.advantage_label }}</span>
+      <p class="fa-body" style="font-size:9.5pt; line-height:1.45;">{{ s02.advantage_body_html | safe }}</p>
+    </div>
+
+    <div class="page-footer">
+      <span class="smarter-mark">
+        <svg viewBox="0 0 14 17" xmlns="http://www.w3.org/2000/svg">
+          <path d="M 2 2 L 2 15 L 4 15 L 4 9 L 11 9 Q 13 9 13 7 Q 13 5 11 5 L 4 5 L 4 2 Z M 4 6 L 11 6 Q 11.5 6 11.5 7 Q 11.5 8 11 8 L 4 8 Z" fill="#B76749"/>
+        </svg>
+        Smarter with data
+      </span>
+      <span class="page-num">7</span>
+    </div>
+  </div>
+</div>"""
+
+
+def render_section_02_right_html(
+    subject_id: str,
+    *,
+    valuation_mid: float | None = None,
+    editorial_overrides: dict | None = None,
+    write_substantiation: bool = True,
+) -> str:
+    """Return the §02 right page as a ready-to-insert HTML block.
+
+    Args:
+        subject_id: MongoDB _id (string) of the subject property.
+        valuation_mid: midpoint of the reconciled valuation range. Drives
+            per-persona willingness-to-pay calculations. None = leave blank.
+        editorial_overrides: optional overrides — `subhead`, `anti_fit`,
+            `personas` (full replacement), `advantage_body_html`.
+        write_substantiation: dual-write the substantiation record (default
+            True).
+    """
+    overrides = editorial_overrides or {}
+    subject = data_pull.get_subject(subject_id)
+
+    s02 = data_pull.section_02_right(subject_id, valuation_mid=valuation_mid)
+
+    # Apply editorial overrides
+    if "subhead" in overrides:
+        s02["subhead"] = overrides["subhead"]
+    if "anti_fit" in overrides:
+        s02["anti_fit"] = overrides["anti_fit"]
+    if "personas" in overrides:
+        s02["personas"] = overrides["personas"]
+
+    advantage_body_html = overrides.get("advantage_body_html") or s02["advantage_box"]["body"]
+
+    ctx = {
+        "subject": {"short_address": _short_address(subject), "id": str(subject["_id"])},
+        "s02": {
+            "headline_html": s02["headline_html"],
+            "subhead": s02["subhead"],
+            "personas": s02["personas"],
+            "anti_fit": s02["anti_fit"],
+            "caption": s02["caption"],
+            "advantage_label": s02["advantage_box"]["label"],
+            "advantage_body_html": advantage_body_html,
+        },
+    }
+
+    env = Environment(loader=BaseLoader(), autoescape=select_autoescape(["html"]))
+    template = env.from_string(SECTION_02_RIGHT_TEMPLATE)
+    html = template.render(**ctx)
+
+    if write_substantiation:
+        record = dict(s02["substantiation_record"])
+        record["editorial_overrides_applied"] = {k: True for k in overrides}
+        record["rendered_html_hash"] = _hash(html)
+        substantiation.save(record)
+
+    return html
+
+
 SECTION_01_RIGHT_TEMPLATE = """\
 <!-- ============================================================ -->
 <!-- PAGE 05 — SECTION 01 RIGHT — Why this home is hard to replace -->
