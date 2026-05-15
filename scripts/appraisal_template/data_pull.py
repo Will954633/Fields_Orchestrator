@@ -276,3 +276,79 @@ FIELDS_ADVANTAGE_01 = {
         "That is the difference between describing a home and positioning it."
     ),
 }
+
+# Fields Advantage — 02. New copy per framework doc (replaces the universal-
+# negative "No agency in the southern Gold Coast operates this analysis on
+# a per-listing basis" that was flagged as B6 in the claim audit).
+FIELDS_ADVANTAGE_02 = {
+    "label": "FIELDS ADVANTAGE — 02",
+    "body": (
+        "Fields' buyer-mapping model is built from <strong>2,075 sold transactions</strong>, "
+        "demographics for <strong>16,190 qualified residents</strong>, and enquiry-mix "
+        "benchmarks across premium catchment listings over the last 24 months. "
+        "Each feature combination is matched to the persona historically willing "
+        "to pay the most for it — so the campaign reaches the right person, not "
+        "the largest list. <strong>The campaign is built around how that buyer "
+        "experiences the home, not around what the listing contains.</strong>"
+    ),
+}
+
+
+# ---------------------------------------------------------------------------
+# Section 02 right — Three buyers. One outbids the field.
+# ---------------------------------------------------------------------------
+
+
+def section_02_right(
+    subject_id: str,
+    catchment: list[str] | None = None,
+    valuation_mid: float | None = None,
+) -> dict:
+    """Section 02 right page — "Three buyers. One outbids the field."
+
+    Returns the render payload for the persona triptych. Personas come from
+    `personas.resolve_personas()` — defaulted from the southern-GC-premium
+    library, overridable via the ops UI on the appraisal_pipeline record.
+
+    Match-bar fills are computed from the subject's actual structured feature
+    values cross-referenced against per-persona feature_weights. Willingness-
+    to-pay ranges are derived from `valuation_mid` and per-persona multipliers
+    (caller-supplied; pulled from valuation engine output upstream).
+    """
+    from . import personas
+
+    subject = get_subject(subject_id)
+    catchment = catchment or catchment_for(subject)
+    resolved = personas.resolve_personas(subject, valuation_mid=valuation_mid)
+
+    as_at = datetime.now(timezone.utc).strftime("%-d %B %Y")
+    catchment_str = _format_suburbs(catchment)
+
+    caption = (
+        f"Source: ABS Census 2021 Table G33 (household income) — "
+        f"POA 4226 + 4227 + 4220 · ABS Regional Population 2022-23 · "
+        f"Fields sold-cohort premium analysis · {catchment_str} · "
+        f"{as_at} · methodology at fieldsestate.com.au/methodology"
+    )
+
+    sub_record = {
+        "section": "02_right",
+        "subject_id": str(subject["_id"]),
+        "subject_address": subject.get("complete_address"),
+        "catchment": catchment,
+        "personas_resolved": [{"id": p["id"], "share_pct": p["share_pct"]} for p in resolved],
+        "valuation_mid_input": valuation_mid,
+        "as_at_date": datetime.now(timezone.utc).isoformat(),
+        "valid_until": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+        "framework_version": "2026-05-15",
+    }
+
+    return {
+        "headline_html": 'Three buyers. One <span class="copper">outbids</span> the field.',
+        "subhead": "Your premium price likely comes from one of these three.",
+        "personas": resolved,
+        "anti_fit": "Not for this home: investors seeking yield, first-home buyers, new-build seekers.",
+        "caption": caption,
+        "advantage_box": FIELDS_ADVANTAGE_02,
+        "substantiation_record": sub_record,
+    }
