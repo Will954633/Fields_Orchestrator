@@ -41,6 +41,50 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 from shared.db import get_client  # type: ignore
+from scripts.appraisal_template import data_pull, pick_highlight  # type: ignore
+
+
+def find_subject_by_slug(slug: str) -> dict | None:
+    """Find the Gold_Coast property doc matching this property_reports slug.
+    Uses normalised address matching since slug → address → DB is fuzzy."""
+    street, suburb = slug_to_address(slug)
+    if not street or not suburb:
+        return None
+    db = get_client()["Gold_Coast"]
+    suburb_key = suburb.lower().replace(" ", "_")
+    coll = db[suburb_key]
+    # Normalised match — DB stores complete_address uppercase
+    norm_street = street.lower().strip()
+    norm_suburb = suburb.lower().strip()
+    for doc in coll.find({
+        "$or": [
+            {"street_address": {"$regex": f"^{street}$", "$options": "i"}},
+            {"complete_address": {"$regex": street, "$options": "i"}},
+        ]
+    }, {"_id": 1, "street_address": 1, "complete_address": 1, "bedrooms": 1, "bathrooms": 1, "carspaces": 1, "land_size_sqm": 1, "property_valuation_data": 1}).limit(5):
+        comp_addr = (doc.get("complete_address") or "").lower()
+        if norm_street in comp_addr and norm_suburb in comp_addr:
+            return doc
+    return None
+
+
+def compute_highlight_candidates(subject_doc: dict) -> list[dict]:
+    """Run the highlight ranker for this subject and return the top-5 candidate
+    list ready to embed on the pipeline record. Pruned for UI display —
+    drops the raw filter dict (not useful in the ops UI; preserved in the
+    substantiation file at render time)."""
+    ranked = pick_highlight.rank(subject_doc, top_n=5)
+    return [
+        {
+            "key": c["key"],
+            "description": c["description"],
+            "count": c["count"],
+            "universe_total": c["universe_total"],
+            "ratio_str": c["ratio_str"],
+            "share_pct": round(c["share"] * 100, 1),
+        }
+        for c in ranked
+    ]
 
 
 def slug_to_address(slug: str) -> tuple[str, str]:
@@ -95,8 +139,23 @@ def build_pipeline_record_from_property_report(pr: dict) -> dict:
 
     address = f"{street}, {suburb}, QLD" if street and suburb else slug
 
+    # Look up the subject in Gold_Coast and pre-compute highlight candidates
+    # so the ops UI surfaces them without round-tripping through Python.
+    subject_doc = find_subject_by_slug(slug)
+    candidates: list[dict] = []
+    subject_oid = None
+    if subject_doc:
+        subject_oid = str(subject_doc["_id"])
+        try:
+            candidates = compute_highlight_candidates(subject_doc)
+        except Exception:
+            candidates = []
+
     return {
         "property_reports_slug": slug,
+        "subject_property_id": subject_oid,
+        "highlight_candidates": candidates,
+        "highlight_chosen_key": candidates[0]["key"] if candidates else None,
         "source": "mini_site",
         "delivery_method": "print_only",
         # Address-only funnel: no contact data captured at entry.
@@ -121,11 +180,19 @@ def build_pipeline_record_from_property_report(pr: dict) -> dict:
     }
 
 
-def sync_once(verbose: bool = True) -> dict:
-    """Mirror any unmirrored property_reports docs into appraisal_pipeline.
-    Returns counts dict."""
+def sync_once(verbose: bool = True, refresh: bool = False) -> dict:
+    """Mirror unmirrored property_reports docs into appraisal_pipeline. If
+    `refresh=True`, also re-populate highlight_candidates on already-bridged
+    records (useful when the cohort changes or the candidate ranker updates).
+    """
     sm = get_client()["system_monitor"]
-    counts = {"property_reports_total": 0, "already_bridged": 0, "newly_bridged": 0, "errors": 0}
+    counts = {
+        "property_reports_total": 0,
+        "already_bridged": 0,
+        "newly_bridged": 0,
+        "refreshed": 0,
+        "errors": 0,
+    }
 
     for pr in sm.property_reports.find({}):
         counts["property_reports_total"] += 1
@@ -138,8 +205,32 @@ def sync_once(verbose: bool = True) -> dict:
         existing = sm.appraisal_pipeline.find_one({"property_reports_slug": slug})
         if existing:
             counts["already_bridged"] += 1
-            if verbose:
-                print(f"  [skip] {slug} → already bridged (pipeline _id={existing['_id']})")
+            if refresh:
+                try:
+                    new_record = build_pipeline_record_from_property_report(pr)
+                    # Refresh only the volatile cohort-derived fields, preserve
+                    # everything else (especially analyst-edited fields).
+                    sm.appraisal_pipeline.update_one(
+                        {"_id": existing["_id"]},
+                        {"$set": {
+                            "subject_property_id": new_record["subject_property_id"],
+                            "highlight_candidates": new_record["highlight_candidates"],
+                            "highlight_chosen_key": existing.get("highlight_chosen_key") or new_record["highlight_chosen_key"],
+                            "updated_at": datetime.now(timezone.utc),
+                            "candidates_refreshed_at": datetime.now(timezone.utc),
+                        }},
+                    )
+                    counts["refreshed"] += 1
+                    if verbose:
+                        nc = len(new_record["highlight_candidates"])
+                        print(f"  [↻] {slug} → refreshed ({nc} candidates)")
+                except Exception as e:
+                    counts["errors"] += 1
+                    if verbose:
+                        print(f"  [err] refresh {slug}: {e}")
+            else:
+                if verbose:
+                    print(f"  [skip] {slug} → already bridged (pipeline _id={existing['_id']})")
             continue
 
         try:
@@ -149,7 +240,8 @@ def sync_once(verbose: bool = True) -> dict:
             if verbose:
                 print(
                     f"  [+] {slug} → pipeline _id={result.inserted_id} "
-                    f"stage={record['stage']} address={record['address']}"
+                    f"stage={record['stage']} address={record['address']} "
+                    f"({len(record['highlight_candidates'])} candidates)"
                 )
         except Exception as e:
             counts["errors"] += 1
@@ -162,6 +254,7 @@ def sync_once(verbose: bool = True) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--watch", action="store_true", help="Poll every 60s instead of running once")
+    parser.add_argument("--refresh", action="store_true", help="Re-populate highlight_candidates on already-bridged records")
     parser.add_argument("--quiet", action="store_true", help="Suppress per-record logs")
     args = parser.parse_args()
 
@@ -169,14 +262,14 @@ def main() -> None:
         print("Bridge sync — watch mode (60s poll)")
         while True:
             t0 = time.time()
-            counts = sync_once(verbose=not args.quiet)
-            if counts["newly_bridged"]:
-                print(f"  {datetime.now().isoformat(timespec='seconds')} — synced {counts['newly_bridged']} new ({time.time()-t0:.1f}s)")
+            counts = sync_once(verbose=not args.quiet, refresh=args.refresh)
+            if counts["newly_bridged"] or counts["refreshed"]:
+                print(f"  {datetime.now().isoformat(timespec='seconds')} — synced {counts['newly_bridged']} new, {counts['refreshed']} refreshed ({time.time()-t0:.1f}s)")
             sleep_for = max(60 - (time.time() - t0), 5)
             time.sleep(sleep_for)
     else:
         print(f"Bridge sync — once. Started: {datetime.now().isoformat(timespec='seconds')}")
-        counts = sync_once(verbose=not args.quiet)
+        counts = sync_once(verbose=not args.quiet, refresh=args.refresh)
         print(f"\nTotals: {counts}")
 
 
