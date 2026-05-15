@@ -39,8 +39,8 @@ SECTION_01_LEFT_TEMPLATE = """\
       </svg>
     </div>
 
-    <div style="display:flex; flex-direction:column; height: 100%; justify-content:center; padding: 0 6mm;">
-      <div style="font-family:'IBM Plex Mono', monospace; font-size:9pt; letter-spacing:0.15em; text-transform:uppercase; color:#B76749; margin-bottom:8mm;">01</div>
+    <div style="display:flex; flex-direction:column; padding: 0 6mm;">
+      <div class="spread-number">01</div>
 
       <h1 style="font-family:'Cormorant Garamond', serif; font-size:38pt; line-height:1.05; font-weight:500; color:#22382C; margin: 0 0 10mm;">Buyers pay more for what they <span class="copper">cannot easily replace</span>.</h1>
 
