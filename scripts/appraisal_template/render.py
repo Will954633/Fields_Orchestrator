@@ -25,6 +25,75 @@ from jinja2 import Environment, BaseLoader, select_autoescape  # type: ignore
 from scripts.appraisal_template import data_pull, dot_grid, pick_highlight, substantiation
 
 
+SECTION_01_LEFT_TEMPLATE = """\
+<!-- ============================================================ -->
+<!-- PAGE 04 — SECTION 01 LEFT — Buyers pay more for what they      -->
+<!-- cannot easily replace. (Live HTML, was locked_p01.png.)        -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">For {{ subject.short_address }}</div>
+      <svg viewBox="0 0 22 26" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 3 2 L 3 24 L 6 24 L 6 14 L 17 14 Q 20 14 20 11 Q 20 8 17 8 L 6 8 L 6 2 Z M 6 10 L 17 10 Q 17.5 10 17.5 11 Q 17.5 12 17 12 L 6 12 Z" fill="#B76749"/>
+      </svg>
+    </div>
+
+    <div style="display:flex; flex-direction:column; height: 100%; justify-content:center; padding: 0 6mm;">
+      <div style="font-family:'IBM Plex Mono', monospace; font-size:9pt; letter-spacing:0.15em; text-transform:uppercase; color:#B76749; margin-bottom:8mm;">01</div>
+
+      <h1 style="font-family:'Cormorant Garamond', serif; font-size:38pt; line-height:1.05; font-weight:500; color:#22382C; margin: 0 0 10mm;">Buyers pay more for what they <span class="copper">cannot easily replace</span>.</h1>
+
+      <p style="font-size:11pt; line-height:1.6; color:#2c2924; margin: 0 0 6mm;">A buyer does not value features in isolation. They value combinations.</p>
+
+      <p style="font-size:11pt; line-height:1.6; color:#2c2924; margin: 0 0 6mm;">A bedroom count matters. A pool matters. A quiet street matters. A permanent green boundary matters. The premium is created when those features work together to solve a buyer's problem better than the alternatives.</p>
+
+      <p style="font-size:11pt; line-height:1.6; color:#2c2924; margin: 0 0 8mm;">Fields analyses that combination before the home goes to market — not to make a loose claim of rarity, but to identify the parts of the home that should carry the valuation, the buyer strategy, the presentation and the negotiation.</p>
+
+      <p style="font-family:'Cormorant Garamond', serif; font-style:italic; font-size:13pt; line-height:1.5; color:#B76749; margin: 4mm 0 0;">For {{ subject.short_address }}, the strongest position is the combination.</p>
+    </div>
+
+    <div class="page-footer">
+      <span class="smarter-mark">
+        <svg viewBox="0 0 14 17" xmlns="http://www.w3.org/2000/svg">
+          <path d="M 2 2 L 2 15 L 4 15 L 4 9 L 11 9 Q 13 9 13 7 Q 13 5 11 5 L 4 5 L 4 2 Z M 4 6 L 11 6 Q 11.5 6 11.5 7 Q 11.5 8 11 8 L 4 8 Z" fill="#B76749"/>
+        </svg>
+        Smarter with data
+      </span>
+      <span class="page-num">— 4 —</span>
+    </div>
+  </div>
+</div>"""
+
+
+def render_section_01_left_html(
+    subject_id: str,
+    *,
+    editorial_overrides: dict | None = None,
+    write_substantiation: bool = True,
+) -> str:
+    """Return §01 left page (the irreplaceability thesis) as HTML.
+    Editorial copy from the framework doc (07_amendments §5.1)."""
+    overrides = editorial_overrides or {}
+    subject = data_pull.get_subject(subject_id)
+    ctx = {
+        "subject": {"short_address": _short_address(subject), "id": str(subject["_id"])},
+    }
+    env = Environment(loader=BaseLoader(), autoescape=select_autoescape(["html"]))
+    html = env.from_string(SECTION_01_LEFT_TEMPLATE).render(**ctx)
+    if write_substantiation:
+        from datetime import datetime, timezone
+        substantiation.save({
+            "section": "01_left",
+            "subject_id": subject_id,
+            "subject_address": subject.get("complete_address"),
+            "as_at_date": datetime.now(timezone.utc).isoformat(),
+            "framework_version": "2026-05-15",
+            "rendered_html_hash": _hash(html),
+        })
+    return html
+
+
 SECTION_00_COVER_TEMPLATE = """\
 <!-- ============================================================ -->
 <!-- PAGE 01 — OUTER COVER (Alex-designed system)                  -->
