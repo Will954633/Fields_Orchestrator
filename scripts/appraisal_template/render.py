@@ -698,11 +698,13 @@ def render_section_01_right_html(
             "<strong>That is the difference between describing a home and positioning it.</strong>",
         )
 
-    sat_src = (
-        satellite_image_src
-        or (subject.get("satellite_analysis") or {}).get("satellite_image_url")
-        or _default_satellite_src(subject_id)
-    )
+    # Filter dead Azure blob URLs — the migration left these as stale refs
+    # on subject docs but the blob account is shut down. Same filter pattern
+    # the Netlify functions use in their image-fallback chain.
+    _stored = (subject.get("satellite_analysis") or {}).get("satellite_image_url") or ""
+    if "blob.core.windows.net" in _stored:
+        _stored = ""
+    sat_src = satellite_image_src or _stored or _default_satellite_src(subject_id)
 
     ctx = {
         "subject": {"short_address": short_addr, "id": str(subject["_id"])},
