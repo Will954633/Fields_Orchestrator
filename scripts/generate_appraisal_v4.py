@@ -283,11 +283,18 @@ def render_appraisal(
         if title_addr and title_addr != "13 Terrace Court":
             text = text.replace("13 Terrace Court", title_addr)
             text = text.replace("13 TERRACE COURT", upper_addr or title_addr.upper())
-        # Prepared-for name substitution — handle BOTH "Prepared for Dee" (cover band)
-        # and the inside-cover <span class="name">Dee</span> pattern.
+        # Prepared-for name substitution — handle:
+        # - "Prepared for Dee" (cover band)
+        # - <span class="name">Dee</span> (inside-cover)
+        # - "and for Dee" (page 19 closing sign-off — drop the clause entirely
+        #   when there is no real name on the pipeline record, otherwise swap).
         if prepared_for_name:
             text = text.replace("Prepared for Dee", f"Prepared for {prepared_for_name}")
             text = text.replace('<span class="name">Dee</span>', f'<span class="name">{prepared_for_name}</span>')
+            if prepared_for_name == "the Owner":
+                text = text.replace(" and for Dee", "")
+            else:
+                text = text.replace("for Dee", f"for {prepared_for_name}")
         # Suburb substitution — handle multiple patterns:
         #   "· Merrimac" (thesis eyebrow) → "· {suburb}"
         #   "<street_addr><br>\n      Merrimac, QLD 4226" (inside cover) → use subject's actual suburb+postcode
