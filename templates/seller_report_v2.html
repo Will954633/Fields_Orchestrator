@@ -912,11 +912,19 @@
   </div>
   {% endif %}
   <hr class="divider">
-  <h3>Market Scarcity</h3>
-  <div class="scarcity-banner">
-    <div class="stat">{{ scarcity_count }}</div>
-    <div class="label">{{ scarcity_statement }}</div>
-  </div>
+  {% if section_01_right_html %}
+    {# Appraisal template system (Phase A) — auto-generated, framework-compliant.
+       Renders the V4 §01 right page block in place of the legacy scarcity-banner. #}
+    {{ section_01_right_html|safe }}
+  {% else %}
+    {# Legacy fallback — used when the appraisal_pipeline record has no
+       highlight_chosen_key (e.g. older records pre-bridge). #}
+    <h3>Market Scarcity</h3>
+    <div class="scarcity-banner">
+      <div class="stat">{{ scarcity_count }}</div>
+      <div class="label">{{ scarcity_statement }}</div>
+    </div>
+  {% endif %}
   <div class="exec-row">
     <div class="exec-card">
       <div class="exec-card-label">Median House Price</div>
