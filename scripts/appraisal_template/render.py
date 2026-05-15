@@ -238,6 +238,21 @@ SECTION_03_RECEIPTS_TEMPLATE = """\
       </svg>
     </div>
 
+{% if s03r.pending_review %}
+    <h2 class="right-headline s03" style="font-size:26pt; margin-bottom:2mm;">Comp adjustments — <span class="copper">pending review</span>.</h2>
+    <div class="right-subhead" style="margin-bottom:5mm;">Per-comp adjustment cards itemise the dollar moves behind the valuation range.</div>
+
+    <div style="background:#fdf3ec; border-left:3px solid #B76749; padding:7mm 9mm; margin:6mm 0;">
+      <div style="font-family:'IBM Plex Mono', monospace; font-size:9pt; letter-spacing:0.18em; text-transform:uppercase; color:#B76749; margin-bottom:4mm;">Analyst review required</div>
+      <p style="font-size:11pt; line-height:1.55; color:#2c2924; margin:0 0 4mm;">No comparable sales have been confirmed for this subject yet. Each card on this page shows the subject-versus-comp differences, dollar adjustments and weight — and only renders once the analyst confirms the comparable set in the ops dashboard.</p>
+      <p style="font-size:9.5pt; line-height:1.5; color:#5a554d; font-style:italic; margin:0;">Workflow: Ops dashboard → Appraisal Pipeline → confirm comparables → re-render report.</p>
+    </div>
+
+    <div style="background:#fdf3ec; border-left:3px solid #B76749; padding:3mm 5mm; display:flex; align-items:center; gap:4mm; margin-bottom:4mm;">
+      <div style="font-family:'Cormorant Garamond', serif; font-size:24pt; color:#B76749; line-height:1;">{{ s03r.backtest_stat.mae_pct }}%</div>
+      <div style="font-size:9pt; line-height:1.45; color:#2c2924;">{{ s03r.backtest_stat.label | safe }}<br><span style="font-family:'IBM Plex Mono', monospace; font-size:7.5pt; letter-spacing:0.06em; text-transform:uppercase; color:#8d4d33;">Source: Fields valuation backtest · comparable_sales_v3 · 2026-03</span></div>
+    </div>
+{% else %}
     <h2 class="right-headline s03" style="font-size:26pt; margin-bottom:2mm;">{{ s03r.headline_html | safe }}</h2>
     <div class="right-subhead" style="margin-bottom:5mm;">{{ s03r.subhead }}</div>
 
@@ -282,6 +297,7 @@ SECTION_03_RECEIPTS_TEMPLATE = """\
     </div>
 
     <div class="source-line" style="font-size:7.5pt;">{{ s03r.caption }}</div>
+{% endif %}
 
     <div class="page-footer">
       <span class="smarter-mark"><svg viewBox="0 0 14 17" xmlns="http://www.w3.org/2000/svg"><path d="M 2 1 L 2 16 L 4 16 L 4 9 L 11 9 Q 13 9 13 7 Q 13 5 11 5 L 4 5 L 4 1 Z M 4 6.5 L 11 6.5 Q 11.5 6.5 11.5 7 Q 11.5 7.5 11 7.5 L 4 7.5 Z" fill="#B76749"/></svg>Smarter with data</span>
@@ -489,6 +505,22 @@ SECTION_03_RIGHT_TEMPLATE = """\
       </svg>
     </div>
 
+{% if s03.pending_review %}
+    <h2 class="right-headline s03"><span class="copper">The range, derived</span> — pending review.</h2>
+    <div class="right-subhead" style="margin-bottom:6mm;">This page reports the catchment-anchored valuation range for the subject.</div>
+
+    <div style="background:#fdf3ec; border-left:3px solid #B76749; padding:7mm 9mm; margin:8mm 0;">
+      <div style="font-family:'IBM Plex Mono', monospace; font-size:9pt; letter-spacing:0.18em; text-transform:uppercase; color:#B76749; margin-bottom:4mm;">Analyst review required</div>
+      <p style="font-size:11pt; line-height:1.55; color:#2c2924; margin:0 0 4mm;">The Fields valuation engine has not yet produced a reconciled range for this property. The comparable set, attribute weights, and derived range populate once the analyst confirms the comparables in the ops dashboard.</p>
+      <p style="font-size:9.5pt; line-height:1.5; color:#5a554d; font-style:italic; margin:0;">Workflow: Ops dashboard → Appraisal Pipeline → confirm comparables → re-render report.</p>
+    </div>
+
+    <div class="cohort-anchor">
+      {{ s03.cohort_anchor_html | safe }}
+    </div>
+
+    <div class="source-line">{{ s03.caption }}</div>
+{% else %}
     <h2 class="right-headline s03"><span class="copper">{{ s03.headline_dollar_range }}.</span> The range, derived.</h2>
     <div class="right-subhead" style="margin-bottom:6mm;">{{ s03.subhead }}</div>
 
@@ -517,6 +549,7 @@ SECTION_03_RIGHT_TEMPLATE = """\
     <div class="confidence-row">n={{ s03.n_comps }} comparable transactions analysed · cohort-weighted with attribute-level adjustment · confidence: {{ s03.confidence_label }}</div>
 
     <div class="source-line">{{ s03.caption }}</div>
+{% endif %}
 
     <div class="fields-advantage">
       <span class="fa-label">{{ s03.advantage_label }}</span>
@@ -568,6 +601,7 @@ def render_section_03_right_html(
     ctx = {
         "subject": {"short_address": _short_address(subject), "id": str(subject["_id"])},
         "s03": {
+            "pending_review": s03.get("pending_review", False),
             "headline_dollar_range": s03["headline_dollar_range"],
             "subhead": overrides.get("subhead") or s03["subhead"],
             "cohort_anchor_html": s03["cohort_anchor_html"],
@@ -968,14 +1002,21 @@ SECTION_RECOMMENDATION_TEMPLATE = '''\
     <div style="font-family:IBM Plex Mono, monospace; font-size:9pt; letter-spacing:0.15em; text-transform:uppercase; color:#B76749; margin-bottom:3mm;">Recommendation</div>
     <h2 class="right-headline" style="font-size:30pt; margin-bottom:3mm;">{{ rec.headline_html | safe }}</h2>
     <div class="right-subhead" style="margin-bottom:6mm;">{{ rec.subhead }}</div>
+    {% if rec.pending_review %}
+    <div style="background:#fdf3ec; border-left:3px solid #B76749; padding:7mm 9mm; margin-bottom:6mm;">
+      <div style="font-family:'IBM Plex Mono', monospace; font-size:9pt; letter-spacing:0.18em; text-transform:uppercase; color:#B76749; margin-bottom:4mm;">Analyst review required</div>
+      <p style="font-size:11pt; line-height:1.55; color:#2c2924; margin:0 0 4mm;">The recommended listing price and target sale price are set by the analyst on top of the derived valuation range. Both are populated in the ops dashboard after the valuation is confirmed.</p>
+      <p style="font-size:9.5pt; line-height:1.5; color:#5a554d; font-style:italic; margin:0;">Workflow: Ops dashboard → Appraisal Pipeline → set listing &amp; target prices → re-render report.</p>
+    </div>
+    {% else %}
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:6mm; margin-bottom:6mm;">
       <div style="background:#fdf3ec; border-left:3px solid #B76749; padding:5mm 6mm;">
         <div style="font-family:IBM Plex Mono, monospace; font-size:8pt; letter-spacing:0.06em; text-transform:uppercase; color:#8d4d33; margin-bottom:3mm;">Recommended listing price</div>
-        <div style="font-family:Cormorant Garamond, serif; font-size:36pt; color:#B76749; line-height:1;">{% if rec.listing_price %}${{ '{:,}'.format(rec.listing_price) }}{% else %}—{% endif %}</div>
+        <div style="font-family:Cormorant Garamond, serif; font-size:36pt; color:#B76749; line-height:1;">${{ '{:,}'.format(rec.listing_price) }}</div>
       </div>
       <div style="background:#fdf3ec; border-left:3px solid #B76749; padding:5mm 6mm;">
         <div style="font-family:IBM Plex Mono, monospace; font-size:8pt; letter-spacing:0.06em; text-transform:uppercase; color:#8d4d33; margin-bottom:3mm;">Target sale price</div>
-        <div style="font-family:Cormorant Garamond, serif; font-size:26pt; color:#B76749; line-height:1.15;">{% if rec.target_sale_price_low %}${{ '{:,}'.format(rec.target_sale_price_low) }} –<br>${{ '{:,}'.format(rec.target_sale_price_high) }}{% else %}—{% endif %}</div>
+        <div style="font-family:Cormorant Garamond, serif; font-size:26pt; color:#B76749; line-height:1.15;">${{ '{:,}'.format(rec.target_sale_price_low) }} –<br>${{ '{:,}'.format(rec.target_sale_price_high) }}</div>
       </div>
     </div>
     {% if rec.page_number == 11 %}
@@ -985,6 +1026,7 @@ SECTION_RECOMMENDATION_TEMPLATE = '''\
       <div><div style="font-family:IBM Plex Mono, monospace; font-size:8pt; letter-spacing:0.06em; text-transform:uppercase; color:#8d4d33;">Campaign duration</div><div style="font-family:Cormorant Garamond, serif; font-size:30pt; color:#B76749;">{{ rec.campaign_duration_days }} days</div></div>
       <div><div style="font-family:IBM Plex Mono, monospace; font-size:8pt; letter-spacing:0.06em; text-transform:uppercase; color:#8d4d33;">Estimated inspections</div><div style="font-family:Cormorant Garamond, serif; font-size:30pt; color:#B76749;">{{ rec.estimated_inspections }}</div></div>
     </div>
+    {% endif %}
     {% endif %}
     <div class="page-footer"><span class="smarter-mark"><svg viewBox="0 0 14 17" xmlns="http://www.w3.org/2000/svg"><path d="M 2 1 L 2 16 L 4 16 L 4 9 L 11 9 Q 13 9 13 7 Q 13 5 11 5 L 4 5 L 4 1 Z M 4 6.5 L 11 6.5 Q 11.5 6.5 11.5 7 Q 11.5 7.5 11 7.5 L 4 7.5 Z" fill="#B76749"/></svg>Smarter with data</span><span class="page-num">— {{ rec.page_number }} —</span></div>
   </div>
