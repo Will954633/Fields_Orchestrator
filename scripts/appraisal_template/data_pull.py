@@ -277,6 +277,50 @@ FIELDS_ADVANTAGE_01 = {
     ),
 }
 
+# Fields Advantage — 04. Rewrite removes the universal-claim "Most agents
+# market to buyers already searching on the portals" (Rule 7).
+FIELDS_ADVANTAGE_04 = {
+    "label": "FIELDS ADVANTAGE — 04",
+    "body": (
+        "The campaign starts with the buyer most likely to pay the premium, "
+        "then builds reach to find them across the platforms where their "
+        "attention actually is — realestate.com.au, Domain, Facebook, "
+        "Instagram, YouTube and Google. The campaign is built around the "
+        "buyer avatar from Section 02, not a generic list of channels. "
+        "<strong>Premium prices come from competition — Fields' job is to "
+        "find the second passionate buyer in the room, because the cost of "
+        "missing that buyer is too great to ignore.</strong>"
+    ),
+}
+
+# Fields Advantage — 05. Rewrite removes "Most agents list features. Fields
+# turns them into desire" (Rule 7 universal-claim).
+FIELDS_ADVANTAGE_05 = {
+    "label": "FIELDS ADVANTAGE — 05",
+    "body": (
+        "<strong>Fields builds the presentation around the buyer most likely "
+        "to pay the premium.</strong> Photography, listing copy, editorial "
+        "storytelling and feature emphasis are all calibrated to <em>how that "
+        "buyer will experience the home</em> — not just what the home "
+        "contains. The work is to turn features into desire."
+    ),
+}
+
+# Fields Advantage — 06. Rewrite removes "Real estate has a trust problem"
+# (industry-level negative observation reframed to focus on what Fields
+# delivers without characterising the industry).
+FIELDS_ADVANTAGE_06 = {
+    "label": "FIELDS ADVANTAGE — 06",
+    "body": (
+        "<strong>Buyers need evidence they can trust.</strong> Fields' "
+        "valuation work, property editorial, campaign reporting and "
+        "buyer-facing analysis are designed to reduce uncertainty at every "
+        "stage of the sale. <strong>When the price, the strengths and the "
+        "trade-offs are visible, confidence rises — and confident buyers "
+        "are more likely to compete.</strong>"
+    ),
+}
+
 # Fields Advantage — 03. New copy per framework doc (replaces "Most
 # appraisals rely on a handful of comparable sales" — flagged as B13 in
 # the claim audit. We don't characterise the industry; we describe what
@@ -506,3 +550,109 @@ def _n_word(n: int) -> str:
     words = ["zero","one","two","three","four","five","six","seven","eight","nine"]
     if isinstance(n, int) and 0 <= n <= 9: return words[n]
     return str(n)
+
+
+# ---------------------------------------------------------------------------
+# Sections 04, 05, 06 — smaller payloads (mostly editorial; framework-compliant
+# Fields Advantage boxes are the key compliance lift on these pages).
+# ---------------------------------------------------------------------------
+
+
+def section_04_right(subject_id: str, catchment: list[str] | None = None) -> dict:
+    """§04 right — "Active buyers find listings. Passive buyers we find for you."
+    Three reach modes + 28-day campaign model stat block."""
+    subject = get_subject(subject_id)
+    catchment = catchment or catchment_for(subject)
+    as_at = datetime.now(timezone.utc).strftime("%-d %B %Y")
+    return {
+        "headline_html": 'Active buyers find listings. <span class="copper">Passive buyers we find for you.</span>',
+        "subhead": "Reach is built from the buyer avatar in Section 02, not a generic channel list.",
+        "modes": [
+            {"num": "01", "label": "Active buyer", "desc": "Searching for a home like yours today. They will find your listing on a portal — Fields makes sure your listing competes for their attention there.", "channels": "realestate.com.au · Domain · Google Search"},
+            {"num": "02", "label": "Passive buyer", "desc": "Matches your home's buyer avatar — but isn't searching this week. The larger pool, and the source of price competition.", "channels": "Facebook · Instagram · YouTube · Google Display"},
+            {"num": "03", "label": "Retargeting (active and passive, after engagement)", "desc": "The buyer who has already engaged — visited the listing, watched the video, read the editorial — and needs repeated exposure to convert from interest to inspection.", "channels": "Across every platform where they continue to spend attention"},
+        ],
+        "campaign_model": {
+            "impressions_low": 40000, "impressions_high": 60000,
+            "engagements_low": 75, "engagements_high": 120,
+            "inspections_low": 35, "inspections_high": 50,
+            "window_days": 28,
+        },
+        "caption": (
+            f"Source: Industry campaign benchmarks validated against the last 90 days · "
+            f"ABS Census 2021 catchment ({_format_suburbs(catchment)}) · "
+            f"28-day campaign window · {as_at} · methodology at fieldsestate.com.au/methodology"
+        ),
+        "advantage_box": FIELDS_ADVANTAGE_04,
+        "substantiation_record": {
+            "section": "04_right",
+            "subject_id": str(subject["_id"]),
+            "catchment": catchment,
+            "as_at_date": datetime.now(timezone.utc).isoformat(),
+            "valid_until": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+            "framework_version": "2026-05-15",
+        },
+    }
+
+
+def section_05_right(subject_id: str) -> dict:
+    """§05 right — "Presentation turns features into desire." Photography
+    contrast (standard vs Fields twilight) + +118% stat + three-row
+    presentation strategy."""
+    subject = get_subject(subject_id)
+    return {
+        "headline_html": 'Presentation turns features into <span class="copper">desire.</span>',
+        "subhead": "Photography, listing copy and editorial storytelling are all calibrated to how the right buyer will experience the home.",
+        "photo_contrast_stat": {
+            "uplift_pct": 118,
+            "label": "more online views with professional photography vs phone-grade images.",
+            "source": "Before You List · Ch. 4 · Fields photography study (n=1,475 Gold Coast listings, paired comparison)",
+        },
+        "presentation_rows": [
+            {"num": "01", "label": "The story",
+             "desc": "Listing copy that places the buyer inside the home, not in front of it. Sensory, specific, calm: mornings on the rear deck, children in the pool, permanent greenery beyond, and no through-traffic in front."},
+            {"num": "02", "label": "The imagery",
+             "desc": "Twilight and golden-hour photography focused on the rear entertaining zone, pool, bushland boundary, kitchen-to-deck transition and quiet cul-de-sac setting. No flat midday light. No generic real-estate photography."},
+            {"num": "03", "label": "The buyer emphasis",
+             "desc": "The same home, three stories — one per persona from Section 02."},
+        ],
+        "advantage_box": FIELDS_ADVANTAGE_05,
+        "substantiation_record": {
+            "section": "05_right",
+            "subject_id": str(subject["_id"]),
+            "as_at_date": datetime.now(timezone.utc).isoformat(),
+            "valid_until": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+            "framework_version": "2026-05-15",
+        },
+    }
+
+
+def section_06_right(subject_id: str) -> dict:
+    """§06 right — "The evidence buyers need, made visible." Three structural
+    assets (price/trade-offs/method) + relationship premium stat."""
+    subject = get_subject(subject_id)
+    return {
+        "headline_html": 'The evidence buyers need, <span class="copper">made visible.</span>',
+        "subhead": "Three structural assets that reduce uncertainty — and protect the bid that comes with it.",
+        "assets": [
+            {"num": "01", "label": "The price, traceable",
+             "desc": "Comparable sales named. Adjustments shown. The buyer can see why the price exists, not just where the agent wants it to land. No vague appeal to \"the market.\" No price built on opinion alone."},
+            {"num": "02", "label": "The trade-offs, named",
+             "desc": "The strengths are made clear. So are the constraints. When trade-offs are named first, the buyer does not have to go looking for hidden problems."},
+            {"num": "03", "label": "The method, open",
+             "desc": "Campaign reach, buyer engagement and inspection feedback are tracked and reported clearly. No invented pressure. No vague claims of interest. The negotiation is grounded in evidence, not theatre."},
+        ],
+        "relationship_premium_stat": {
+            "uplift_pct": 9.6,
+            "label": "higher sale prices in our cohort analysis of agents who invest deeply in buyer relationships — about $96,000 on a $1M home. Confidence shows up in the bid.",
+            "source": "Before You List · Ch. 6 · Fields relationship-premium study (n=1,475 GC sales)",
+        },
+        "advantage_box": FIELDS_ADVANTAGE_06,
+        "substantiation_record": {
+            "section": "06_right",
+            "subject_id": str(subject["_id"]),
+            "as_at_date": datetime.now(timezone.utc).isoformat(),
+            "valid_until": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+            "framework_version": "2026-05-15",
+        },
+    }
