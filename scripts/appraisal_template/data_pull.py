@@ -404,9 +404,24 @@ def section_02_right(
         "framework_version": "2026-05-15",
     }
 
+    # Headline/subhead derived from persona count so editorial overrides that
+    # add or remove personas via the ops UI keep the copy honest.
+    n = len(resolved)
+    n_word_title = _n_word(n).title()
+    headline_html = (
+        f'{n_word_title} buyers. One <span class="copper">outbids</span> the field.'
+        if n != 1
+        else 'One buyer. They <span class="copper">outbid</span> the field.'
+    )
+    subhead = (
+        f"Your premium price likely comes from one of these {_n_word(n)}."
+        if n > 1
+        else "Your premium price likely comes from this buyer."
+    )
+
     return {
-        "headline_html": 'Three buyers. One <span class="copper">outbids</span> the field.',
-        "subhead": "Your premium price likely comes from one of these three.",
+        "headline_html": headline_html,
+        "subhead": subhead,
         "personas": resolved,
         "anti_fit": "Not for this home: investors seeking yield, first-home buyers, new-build seekers.",
         "caption": caption,
