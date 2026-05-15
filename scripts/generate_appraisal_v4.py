@@ -63,6 +63,10 @@ SPLICE_POINTS = {
         "<!-- PAGE 01 — OUTER COVER",
         "<!-- PAGE 02 — INSIDE FRONT COVER",
     ),
+    "s01_left": (
+        "<!-- PAGE 04 — Locked from V3: Section 01 LEFT",
+        "<!-- PAGE 05 — SECTION 01 RIGHT",
+    ),
     "s01_right": (
         "<!-- PAGE 05 — SECTION 01 RIGHT",
         "<!-- PAGE 04 — SPREAD 02 LEFT",
@@ -149,6 +153,13 @@ def render_appraisal(
     )
     sections_rendered.append("00_cover")
 
+    s01_left = render.render_section_01_left_html(
+        subject_id,
+        editorial_overrides=get_overrides("01_left"),
+        write_substantiation=True,
+    )
+    sections_rendered.append("01_left")
+
     s01 = render.render_section_01_right_html(
         subject_id,
         highlight_key=pipeline_record.get("highlight_chosen_key"),
@@ -201,6 +212,7 @@ def render_appraisal(
     # Load template + splice
     text = TEMPLATE_FILE.read_text()
     text = splice(text, "cover", cover_html)
+    text = splice(text, "s01_left", s01_left)
     text = splice(text, "s01_right", s01)
     text = splice(text, "s02_right", s02)
     text = splice(text, "s03_right", s03)
