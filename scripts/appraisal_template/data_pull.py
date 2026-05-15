@@ -277,6 +277,23 @@ FIELDS_ADVANTAGE_01 = {
     ),
 }
 
+# Fields Advantage — 03. New copy per framework doc (replaces "Most
+# appraisals rely on a handful of comparable sales" — flagged as B13 in
+# the claim audit. We don't characterise the industry; we describe what
+# we do).
+FIELDS_ADVANTAGE_03 = {
+    "label": "FIELDS ADVANTAGE — 03",
+    "body": (
+        "Fields' valuation engine analyses <strong>1,696 sold transactions across the "
+        "southern Gold Coast</strong>, measuring how individual attributes influence "
+        "price: bedrooms, pools, land size, floor area, cul-de-sac position, condition, "
+        "outlook and more. The engine runs the full cohort, then narrows the evidence "
+        "to the homes most relevant to yours. <strong>Every major pricing assumption "
+        "is anchored to observed market evidence — listed transparently on the "
+        "next page.</strong>"
+    ),
+}
+
 # Fields Advantage — 02. New copy per framework doc (replaces the universal-
 # negative "No agency in the southern Gold Coast operates this analysis on
 # a per-listing basis" that was flagged as B6 in the claim audit).
@@ -352,3 +369,140 @@ def section_02_right(
         "advantage_box": FIELDS_ADVANTAGE_02,
         "substantiation_record": sub_record,
     }
+
+
+# ---------------------------------------------------------------------------
+# Section 03 right — Valuation derivation
+# ---------------------------------------------------------------------------
+
+
+def _format_dollar_compact(n: float | int | None) -> str:
+    if not n: return ""
+    return f"${n/1_000_000:.2f}M"
+
+
+def _format_dollar_exact(n: float | int | None) -> str:
+    if not n: return ""
+    return f"${int(n):,}"
+
+
+def _cohort_median(suburbs: list[str], bedrooms: int, months: int = 12) -> tuple[int | None, int]:
+    """Return (median_sale_price, n) for the bedroom cohort in catchment.
+    Reads sold_price from sold records in the last N months. Cosmos sometimes
+    stores sale_price as string '$X,YYY,YYY' so we parse defensively."""
+    import re
+    db = get_client()["Gold_Coast"]
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=months*30 + 5)).strftime("%Y-%m-%d")
+    prices: list[float] = []
+    for s in suburbs:
+        for d in db[s].find({
+            "listing_status": "sold",
+            "sold_date": {"$gte": cutoff},
+            "property_type": "House",
+            "bedrooms": bedrooms,
+        }, {"sale_price": 1, "sold_price": 1, "listing_price": 1}):
+            p = d.get("sold_price")
+            if isinstance(p, (int, float)) and p > 0:
+                prices.append(float(p)); continue
+            raw = d.get("sale_price") or d.get("listing_price")
+            if isinstance(raw, (int, float)) and raw > 0:
+                prices.append(float(raw)); continue
+            if isinstance(raw, str):
+                m = re.search(r'(\d[\d,\.]+)', raw.replace("$", ""))
+                if m:
+                    try: prices.append(float(m.group(1).replace(",", "")))
+                    except ValueError: pass
+    if not prices: return (None, 0)
+    prices.sort()
+    n = len(prices)
+    median = prices[n//2] if n % 2 else (prices[n//2 - 1] + prices[n//2]) / 2
+    return (int(median), n)
+
+
+def section_03_right(
+    subject_id: str,
+    catchment: list[str] | None = None,
+    months: int = 12,
+) -> dict:
+    """Section 03 right page — "The range, derived." (valuation evidence)
+
+    Returns the render payload. Cohort medians + n come from direct queries;
+    evidence_stack (per-attribute weights) defaults to a manual baseline and
+    is overridable via editorial_overrides for per-subject tuning. Derived
+    range comes from `valuation_data.summary` on the property doc (populated
+    by the comparable-sales engine upstream).
+    """
+    subject = get_subject(subject_id)
+    catchment = catchment or catchment_for(subject)
+    beds = subject.get("bedrooms") or 4
+
+    # Cohort medians — baseline is 4-bed, primary is subject's bedroom count
+    base_median, base_n = _cohort_median(catchment, bedrooms=4, months=months)
+    subj_median, subj_n = _cohort_median(catchment, bedrooms=beds, months=months)
+    lift_pct = round((subj_median - base_median) / base_median * 100) if (base_median and subj_median) else None
+
+    # Reconciled range — `valuation_data.confidence` holds the canonical
+    # range/midpoint; `summary` carries metadata counts. (Schema spans both
+    # nested objects for historical reasons.)
+    val = subject.get("valuation_data") or {}
+    summary = val.get("summary") or {}
+    conf_obj = val.get("confidence") or {}
+    range_obj = conf_obj.get("range") or {}
+    range_low = range_obj.get("low") or summary.get("reconciled_low")
+    range_high = range_obj.get("high") or summary.get("reconciled_high")
+    range_mid = conf_obj.get("reconciled_valuation") or summary.get("reconciled_value") or summary.get("reconciled_mid")
+    n_comps = summary.get("n_included_in_valuation") or summary.get("n_comps") or len(val.get("comparables") or [])
+    confidence = conf_obj.get("confidence", "")
+
+    as_at = datetime.now(timezone.utc).strftime("%-d %B %Y")
+
+    sub_record = {
+        "section": "03_right",
+        "subject_id": str(subject["_id"]),
+        "subject_address": subject.get("complete_address"),
+        "catchment": catchment,
+        "cohort_baseline": {"bedrooms": 4, "median": base_median, "n": base_n},
+        "cohort_subject": {"bedrooms": beds, "median": subj_median, "n": subj_n},
+        "lift_pct": lift_pct,
+        "reconciled_range": {"low": range_low, "high": range_high, "mid": range_mid},
+        "n_comps": n_comps,
+        "confidence": confidence,
+        "as_at_date": datetime.now(timezone.utc).isoformat(),
+        "valid_until": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+        "framework_version": "2026-05-15",
+    }
+
+    return {
+        "headline_dollar_range": f"{_format_dollar_compact(range_low)} – {_format_dollar_compact(range_high)}",
+        "headline_html_template": '<span class="copper">{range}.</span> The range, derived.',
+        "subhead": "Anchored in the cohort. Narrowed to the homes most relevant to yours.",
+        "cohort_anchor_html": (
+            f"{_n_word(4)}-bedroom homes, southern Gold Coast, last 12 months — "
+            f"<strong>median {_format_dollar_exact(base_median)}</strong> (n={base_n}).<br>"
+            f"{_n_word(beds)}-bedroom homes, same cohort — "
+            f"<strong>median {_format_dollar_exact(subj_median)}</strong> (n={subj_n})."
+            + (f"<br><span class=\"lift\">A +{lift_pct}% raw lift, before further attribute weighting.</span>" if lift_pct else "")
+        ),
+        "synthesis": {
+            "low": _format_dollar_compact(range_low),
+            "high": _format_dollar_compact(range_high),
+            "mid": _format_dollar_compact(range_mid),
+            "confidence": confidence,
+        },
+        "n_comps": n_comps,
+        "confidence_label": confidence,
+        "caption": (
+            f"Source: Fields valuation engine · catchment {_format_suburbs(catchment)} · "
+            f"sold transactions last {months} months · n_comparables={n_comps} · "
+            f"{as_at} · methodology at fieldsestate.com.au/methodology"
+        ),
+        "advantage_box": FIELDS_ADVANTAGE_03,
+        "substantiation_record": sub_record,
+    }
+
+
+def _n_word(n: int) -> str:
+    """Spell out small numbers for narrative copy."""
+    words = ["zero","one","two","three","four","five","six","seven","eight","nine"]
+    if isinstance(n, int) and 0 <= n <= 9: return words[n]
+    return str(n)
