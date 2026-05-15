@@ -1,0 +1,3017 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Property Position Report — 13 Terrace Court · Version Four · S02 + S03 Proof</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800&family=Poppins:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ─────────────────────────────────────────────────────────────
+   FIELDS · V4 · SECTION 02 PROOF — buyer avatar spread
+   ───────────────────────────────────────────────────────────── */
+
+@page { size: A4; margin: 0; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --grass: #22382C;
+  --grass-deep: #1B2D24;
+  --birch: #E6DDD2;
+  --birch-warm: #efe8de;
+  --copper: #B76749;
+  --copper-deep: #8d4d33;
+  --copper-soft: #f0d9cc;
+  --copper-tint: #fdf3ec;
+  --text: #22382C;
+  --text-secondary: #4a5e52;
+  --text-muted: #7a8a80;
+  --rule: rgba(34, 56, 44, 0.18);
+  --rule-soft: rgba(34, 56, 44, 0.10);
+}
+
+html, body {
+  background: #d8cfc1;
+  font-family: 'Poppins', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  color: var(--text);
+  font-size: 11.5pt;
+  line-height: 1.7;
+  font-weight: 300;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+@media screen {
+  body { padding: 24px 0; }
+  .page { box-shadow: 0 12px 40px rgba(0,0,0,0.18); margin: 14px auto; }
+}
+
+.page {
+  width: 210mm;
+  height: 297mm;
+  position: relative;
+  overflow: hidden;
+  background: var(--birch);
+  page-break-after: always;
+}
+.page:last-of-type { page-break-after: auto; }
+
+.page-pad {
+  padding: 18mm 20mm 14mm;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 10mm;
+}
+.page-header-title {
+  font-size: 8pt;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: var(--copper);
+  font-weight: 600;
+  border-bottom: 1.5px solid var(--copper);
+  padding-bottom: 4px;
+}
+.page-header svg { width: 22px; height: 26px; }
+
+.page-footer {
+  margin-top: auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 6mm;
+  border-top: 1px solid var(--rule-soft);
+  font-size: 8pt;
+  color: var(--text-muted);
+}
+.smarter-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 8pt;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--copper);
+  font-weight: 500;
+}
+.smarter-mark svg { width: 14px; height: 17px; }
+.page-num { font-size: 8pt; color: var(--text-muted); letter-spacing: 1px; }
+
+/* Spread number + headline (left page) ---------------------------- */
+.spread-number {
+  font-family: 'Playfair Display', serif;
+  font-size: 84pt;
+  font-weight: 300;
+  line-height: 0.9;
+  color: var(--copper);
+  letter-spacing: -3px;
+  margin-top: 12mm;
+  margin-bottom: 14mm;
+}
+.spread-headline {
+  font-family: 'Playfair Display', serif;
+  font-size: 38pt;
+  font-weight: 500;
+  line-height: 1.05;
+  letter-spacing: -0.5px;
+  color: var(--grass);
+  max-width: 155mm;
+  margin-bottom: 12mm;
+}
+.spread-body {
+  font-family: 'Playfair Display', serif;
+  font-size: 12.5pt;
+  font-weight: 400;
+  line-height: 1.65;
+  color: var(--text);
+  max-width: 145mm;
+}
+.spread-body p { margin-bottom: 6mm; }
+.spread-body p:last-child { margin-bottom: 0; }
+
+.thesis-close {
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+  font-size: 14pt;
+  line-height: 1.4;
+  color: var(--copper);
+  margin-top: 10mm;
+  font-weight: 400;
+}
+
+/* Right page primitives ------------------------------------------- */
+.right-headline {
+  font-family: 'Playfair Display', serif;
+  font-size: 32pt;
+  font-weight: 500;
+  line-height: 1.05;
+  color: var(--grass);
+  letter-spacing: -0.4px;
+  margin-bottom: 4mm;
+  max-width: 165mm;
+}
+.right-headline .copper { color: var(--copper); }
+
+.right-subhead {
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+  font-size: 12pt;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  margin-bottom: 8mm;
+  font-weight: 400;
+  max-width: 165mm;
+}
+
+/* Persona cards --------------------------------------------------- */
+.personas {
+  display: flex;
+  flex-direction: column;
+  gap: 3mm;
+  margin-bottom: 3mm;
+}
+.persona-card {
+  background: rgba(255, 255, 255, 0.45);
+  border: 1px solid var(--rule-soft);
+  border-radius: 1.5mm;
+  padding: 4mm 5mm 3.5mm 5mm;
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2mm 5mm;
+  align-items: start;
+}
+.persona-card.primary {
+  border-color: var(--copper);
+  background: rgba(255, 255, 255, 0.7);
+}
+.persona-rank {
+  position: absolute;
+  top: -2.5mm;
+  left: 4mm;
+  background: var(--copper);
+  color: var(--birch);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7pt;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  padding: 0.8mm 2.5mm;
+  border-radius: 1mm;
+}
+.persona-share {
+  position: absolute;
+  top: -2.5mm;
+  right: 4mm;
+  background: var(--grass-deep);
+  color: var(--copper-soft);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7pt;
+  font-weight: 600;
+  letter-spacing: 1px;
+  padding: 0.8mm 2.5mm;
+  border-radius: 1mm;
+}
+.persona-name {
+  font-family: 'Playfair Display', serif;
+  font-size: 13pt;
+  font-weight: 600;
+  color: var(--grass);
+  letter-spacing: -0.2px;
+  margin-bottom: 1mm;
+  margin-top: 1mm;
+}
+.persona-demo {
+  font-size: 9pt;
+  line-height: 1.4;
+  color: var(--text-secondary);
+  margin-bottom: 1.5mm;
+  max-width: 95mm;
+}
+.persona-demo strong {
+  color: var(--copper);
+  font-weight: 500;
+}
+.persona-evidence {
+  font-size: 8pt;
+  line-height: 1.4;
+  color: var(--text-muted);
+  font-style: italic;
+  max-width: 95mm;
+}
+
+/* Match bar — five attribute dots --------------------------------- */
+.match-bar {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 1.2mm 3mm;
+  align-items: center;
+  justify-self: end;
+  align-self: start;
+}
+.match-bar-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 6pt;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  text-align: right;
+}
+.match-dots {
+  display: flex;
+  gap: 1.2mm;
+}
+.match-dots .dot {
+  width: 2.6mm;
+  height: 2.6mm;
+  border-radius: 50%;
+  border: 1px solid var(--copper);
+  background: transparent;
+}
+.match-dots .dot.full { background: var(--copper); }
+.match-dots .dot.half {
+  background: linear-gradient(90deg, var(--copper) 50%, transparent 50%);
+}
+.willingness {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-top: 2mm;
+  padding-top: 2mm;
+  border-top: 1px solid var(--rule-soft);
+}
+.willingness-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 6.5pt;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.willingness-range {
+  font-family: 'Playfair Display', serif;
+  font-size: 13pt;
+  font-weight: 600;
+  color: var(--copper);
+  letter-spacing: -0.2px;
+}
+
+/* Anti-fit + source ---------------------------------------------- */
+.anti-fit {
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+  font-size: 10pt;
+  color: var(--text-muted);
+  margin: 2mm 0 4mm;
+  line-height: 1.45;
+}
+.source-line {
+  font-size: 7.5pt;
+  font-style: italic;
+  color: var(--text-muted);
+  letter-spacing: 0.2px;
+  margin-bottom: 4mm;
+  line-height: 1.45;
+}
+
+/* Fields Advantage breakout — same template as 01 ----------------- */
+.fields-advantage {
+  background: var(--grass-deep);
+  color: var(--birch);
+  padding: 5mm 8mm 5mm 9mm;
+  border-radius: 1.5mm;
+  margin: 0;
+  border-left: 3mm solid var(--copper);
+}
+.fields-advantage .fa-label {
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
+  font-size: 7.5pt;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--copper-soft);
+  font-weight: 600;
+  margin-bottom: 3mm;
+  display: block;
+}
+.fields-advantage .fa-body {
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+  font-size: 10.5pt;
+  line-height: 1.55;
+  color: var(--birch);
+  font-weight: 300;
+}
+.fields-advantage .fa-body strong {
+  color: var(--copper);
+  font-weight: 600;
+  font-style: italic;
+}
+
+/* Cover + front matter -------------------------------------------- */
+.cover {
+  width: 210mm;
+  height: 297mm;
+  position: relative;
+  overflow: hidden;
+  background: var(--birch);
+  page-break-after: always;
+}
+@media screen {
+  .cover { box-shadow: 0 12px 40px rgba(0,0,0,0.18); margin: 14px auto; }
+}
+.cover-image {
+  position: absolute; inset: 0;
+  background-size: cover;
+  background-position: center 30%;
+}
+.cover-image::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(0,0,0,0) 50%, rgba(0,0,0,0.25) 100%);
+}
+.cover-mark-tl {
+  position: absolute;
+  top: 16mm; left: 18mm;
+  width: 50mm; height: 60mm;
+  opacity: 0.95;
+  z-index: 2;
+}
+.cover-mark-tr {
+  position: absolute;
+  top: 18mm; right: 18mm;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: white;
+  font-family: 'Playfair Display', serif;
+  font-size: 18pt;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+.cover-mark-tr svg { width: 28px; height: 32px; }
+.cover-card {
+  position: absolute;
+  bottom: 88mm;
+  left: 0;
+  background: var(--copper);
+  color: var(--birch);
+  padding: 10mm 14mm 10mm 20mm;
+  z-index: 3;
+  border-top-right-radius: 3mm;
+  border-bottom-right-radius: 3mm;
+  font-family: 'Playfair Display', serif;
+}
+.cover-card-address {
+  font-size: 38pt;
+  font-weight: 600;
+  line-height: 0.95;
+  letter-spacing: -1px;
+}
+.cover-card-suburb {
+  font-family: 'Poppins', sans-serif;
+  font-size: 9pt;
+  font-weight: 500;
+  letter-spacing: 3px;
+  margin-top: 8mm;
+  color: var(--birch);
+  opacity: 0.9;
+}
+.cover-bottom {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  background: var(--birch);
+  padding: 10mm 22mm 12mm;
+  z-index: 3;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  height: 60mm;
+}
+.cover-meta { color: var(--grass); }
+.cover-doc-type {
+  font-size: 9pt;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: var(--copper);
+  font-weight: 600;
+  margin-bottom: 5mm;
+}
+.cover-doc-rule {
+  width: 30mm; height: 1.5px;
+  background: var(--copper);
+  margin-bottom: 5mm;
+}
+.cover-doc-by {
+  font-family: 'Playfair Display', serif;
+  font-size: 14pt;
+  color: var(--grass);
+  margin-bottom: 2mm;
+  font-weight: 500;
+}
+.cover-doc-url { font-size: 8.5pt; color: var(--text-muted); }
+.cover-date {
+  font-size: 8pt;
+  letter-spacing: 3px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  align-self: flex-end;
+}
+
+/* Inside front cover (philosophy page) ----------------------------- */
+.inside-cover {
+  padding: 60mm 24mm 24mm;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.inside-cover .ic-philosophy {
+  font-family: 'Playfair Display', serif;
+  font-size: 26pt;
+  font-weight: 500;
+  line-height: 1.25;
+  color: var(--grass);
+  letter-spacing: -0.4px;
+  max-width: 155mm;
+}
+.inside-cover .ic-philosophy em {
+  font-style: italic;
+  color: var(--copper);
+}
+.inside-cover .ic-rule {
+  width: 26mm; height: 1.5px;
+  background: var(--copper);
+  margin: 16mm 0 12mm;
+}
+.inside-cover .ic-prepared-label {
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
+  font-size: 7.5pt;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--copper);
+  font-weight: 600;
+  margin-bottom: 4mm;
+}
+.inside-cover .ic-address {
+  font-family: 'Playfair Display', serif;
+  font-size: 14pt;
+  color: var(--grass);
+  font-weight: 500;
+  line-height: 1.35;
+}
+.inside-cover .ic-address .name {
+  display: block;
+  font-style: italic;
+}
+.inside-cover .ic-bottom {
+  margin-top: auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding-top: 12mm;
+  border-top: 1px solid var(--rule-soft);
+}
+.inside-cover .ic-brand {
+  font-family: 'Playfair Display', serif;
+  font-size: 12pt;
+  color: var(--copper);
+  font-weight: 600;
+}
+.inside-cover .ic-tagline {
+  font-size: 8pt;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* Opening thesis page (six forces) -------------------------------- */
+.thesis-page-pad {
+  padding: 24mm 24mm 14mm;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.thesis-eyebrow {
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
+  font-size: 7.5pt;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--copper);
+  font-weight: 600;
+  margin-bottom: 10mm;
+}
+.thesis-h {
+  font-family: 'Playfair Display', serif;
+  font-size: 30pt;
+  font-weight: 500;
+  line-height: 1.1;
+  color: var(--grass);
+  letter-spacing: -0.4px;
+  margin-bottom: 4mm;
+  max-width: 158mm;
+}
+.thesis-sub {
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+  font-size: 16pt;
+  line-height: 1.35;
+  color: var(--copper-deep);
+  margin-bottom: 12mm;
+  max-width: 158mm;
+}
+.thesis-lead {
+  font-family: 'Playfair Display', serif;
+  font-size: 12pt;
+  line-height: 1.6;
+  color: var(--text);
+  margin-bottom: 8mm;
+  max-width: 158mm;
+}
+.thesis-forces {
+  display: flex;
+  flex-direction: column;
+  gap: 4mm;
+  margin-bottom: 10mm;
+}
+.thesis-force {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6mm;
+  align-items: baseline;
+  padding-bottom: 3mm;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.thesis-force:last-child { border-bottom: none; }
+.thesis-force .num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9pt;
+  letter-spacing: 1.5px;
+  color: var(--copper);
+  font-weight: 600;
+  min-width: 8mm;
+}
+.thesis-force .label {
+  font-family: 'Playfair Display', serif;
+  font-size: 12pt;
+  color: var(--grass);
+  font-weight: 600;
+}
+.thesis-force .label .desc {
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+.thesis-close {
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+  font-size: 13pt;
+  line-height: 1.45;
+  color: var(--copper);
+  margin-top: auto;
+  padding-top: 6mm;
+  font-weight: 400;
+}
+
+/* Receipts page — comp-by-comp adjustment breakdown --------------- */
+.receipts { display: flex; flex-direction: column; gap: 3mm; margin: 0 0 3mm 0; }
+.receipt-card {
+  background: rgba(255,255,255,0.5);
+  border: 1px solid var(--rule-soft);
+  border-left: 3mm solid var(--copper);
+  border-radius: 1.5mm;
+  padding: 2.5mm 5mm 2.5mm 5mm;
+}
+.receipt-header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 5mm;
+  align-items: baseline;
+  margin-bottom: 2mm;
+  padding-bottom: 2mm;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.receipt-num { font-family: 'JetBrains Mono', monospace; font-size: 6.5pt; letter-spacing: 1.5px; color: var(--copper); font-weight: 600; }
+.receipt-addr { font-family: 'Playfair Display', serif; font-size: 11pt; font-weight: 600; color: var(--grass); letter-spacing: -0.1px; }
+.receipt-meta { font-family: 'JetBrains Mono', monospace; font-size: 6.5pt; letter-spacing: 1.2px; text-transform: uppercase; color: var(--text-muted); text-align: right; font-weight: 600; }
+.receipt-meta .sold { color: var(--grass); }
+.adjust-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4mm;
+  padding: 0.8mm 0;
+  border-bottom: 1px dotted var(--rule-soft);
+  font-size: 8.5pt;
+  line-height: 1.35;
+  color: var(--text-secondary);
+}
+.adjust-row:last-child { border-bottom: none; }
+.adjust-row .desc { font-family: 'Playfair Display', serif; }
+.adjust-row .delta { font-family: 'JetBrains Mono', monospace; font-size: 8.5pt; font-weight: 600; letter-spacing: 0.2px; text-align: right; min-width: 22mm; }
+.adjust-row .delta.up { color: var(--copper); }
+.adjust-row .delta.down { color: var(--text-muted); }
+.receipt-total {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 5mm;
+  align-items: baseline;
+  margin-top: 2mm;
+  padding-top: 2mm;
+  border-top: 1px solid var(--rule-soft);
+}
+.receipt-total .label { font-family: 'JetBrains Mono', monospace; font-size: 6.5pt; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-muted); font-weight: 600; }
+.receipt-total .adjusted { font-family: 'Playfair Display', serif; font-size: 13pt; font-weight: 600; color: var(--copper); letter-spacing: -0.2px; }
+.receipt-total .weight { font-family: 'JetBrains Mono', monospace; font-size: 6.5pt; letter-spacing: 1.2px; text-transform: uppercase; color: var(--copper-deep); font-weight: 600; background: var(--copper-tint); padding: 0.8mm 2.5mm; border-radius: 1mm; }
+.cohort-summary {
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+  font-size: 9pt;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  padding: 2.5mm 5mm;
+  margin: 0 0 3mm 0;
+  background: rgba(34, 56, 44, 0.04);
+  border-left: 1.5mm solid var(--text-muted);
+  border-radius: 1mm;
+}
+.cohort-summary strong { color: var(--grass); font-weight: 600; font-style: normal; }
+.reconciliation {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 5mm;
+  align-items: baseline;
+  background: var(--grass-deep);
+  color: var(--birch);
+  padding: 3mm 5mm;
+  border-radius: 1.5mm;
+  margin: 0 0 3mm 0;
+}
+.reconciliation .label { font-family: 'JetBrains Mono', monospace; font-size: 7pt; letter-spacing: 2px; text-transform: uppercase; color: var(--copper-soft); font-weight: 600; }
+.reconciliation .range { font-family: 'Playfair Display', serif; font-size: 18pt; font-weight: 600; color: var(--copper); letter-spacing: -0.3px; line-height: 1; }
+.reconciliation .midpoint { font-family: 'JetBrains Mono', monospace; font-size: 7pt; letter-spacing: 1.5px; text-transform: uppercase; color: var(--copper-soft); font-weight: 600; }
+
+/* Pricing recommendation page (alt page 11) ----------------------- */
+.pricing-hero {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  margin: 0 0 6mm 0;
+  border-top: 2px solid var(--copper);
+  border-bottom: 2px solid var(--copper);
+  background: var(--copper-tint);
+}
+.price-cell { padding: 6mm 7mm 6mm 7mm; }
+.price-cell:first-child { border-right: 1px solid var(--rule-soft); }
+.price-cell .pc-label { font-family: 'JetBrains Mono', monospace; font-size: 7pt; letter-spacing: 2px; text-transform: uppercase; color: var(--copper); font-weight: 600; margin-bottom: 3mm; }
+.price-cell .pc-value { font-family: 'Playfair Display', serif; font-size: 32pt; font-weight: 600; color: var(--copper); line-height: 1; letter-spacing: -0.8px; margin-bottom: 4mm; }
+.price-cell .pc-rationale { font-family: 'Playfair Display', serif; font-style: italic; font-size: 9pt; line-height: 1.4; color: var(--text-secondary); }
+.strategy-body { font-family: 'Playfair Display', serif; font-size: 11pt; line-height: 1.55; color: var(--text); margin: 0 0 5mm 0; max-width: 165mm; }
+.strategy-body strong { color: var(--copper); font-weight: 600; }
+.conditions-block { background: rgba(255,255,255,0.5); border: 1px solid var(--rule-soft); border-radius: 1.5mm; padding: 4mm 5mm; margin: 0 0 5mm 0; }
+.conditions-label { font-family: 'JetBrains Mono', monospace; font-size: 6.5pt; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-muted); font-weight: 600; margin-bottom: 3mm; }
+.conditions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2mm 6mm; }
+.condition-item { display: grid; grid-template-columns: auto 1fr; gap: 3mm; align-items: baseline; font-size: 8.5pt; line-height: 1.45; color: var(--text-secondary); }
+.condition-item .check { font-family: 'Playfair Display', serif; font-size: 11pt; color: var(--copper); font-weight: 600; }
+.condition-item .text { font-family: 'Playfair Display', serif; }
+.condition-item .text strong { color: var(--grass); font-weight: 600; }
+.inspection-note { background: var(--grass-deep); color: var(--birch); padding: 4mm 6mm 4mm 7mm; border-radius: 1.5mm; margin: 0 0 5mm 0; border-left: 3mm solid var(--copper); font-family: 'Playfair Display', serif; font-style: italic; font-size: 10pt; line-height: 1.5; }
+.inspection-note .label { display: block; font-family: 'JetBrains Mono', monospace; font-size: 7pt; letter-spacing: 2px; text-transform: uppercase; color: var(--copper-soft); font-weight: 600; margin-bottom: 3mm; font-style: normal; }
+.inspection-note strong { color: var(--copper); font-style: italic; font-weight: 500; }
+
+/* Closing pages — Recommendation + Plan ---------------------------- */
+.section-eyebrow {
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
+  font-size: 7.5pt;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--copper);
+  font-weight: 600;
+  margin-bottom: 6mm;
+}
+.numbers-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  margin: 0 0 8mm 0;
+  border-top: 1.5px solid var(--rule-soft);
+  border-bottom: 1.5px solid var(--rule-soft);
+}
+.number-cell {
+  padding: 6mm 6mm 6mm 0;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.number-cell:nth-child(odd) { padding-right: 6mm; border-right: 1px solid var(--rule-soft); }
+.number-cell:nth-child(even) { padding-left: 8mm; }
+.number-cell:nth-last-child(1),
+.number-cell:nth-last-child(2) { border-bottom: none; }
+.number-cell .nc-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7pt;
+  letter-spacing: 1.8px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin-bottom: 3mm;
+}
+.number-cell .nc-value {
+  font-family: 'Playfair Display', serif;
+  font-size: 26pt;
+  font-weight: 600;
+  color: var(--copper);
+  line-height: 1;
+  letter-spacing: -0.5px;
+  margin-bottom: 2mm;
+}
+.number-cell .nc-sub {
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+  font-size: 9.5pt;
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+
+/* Plan + Next Steps page (two-column) ----------------------------- */
+.plan-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10mm;
+  margin: 0 0 8mm 0;
+}
+.plan-col-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7pt;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--copper);
+  font-weight: 600;
+  margin-bottom: 4mm;
+  padding-bottom: 2mm;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.phase-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4mm;
+}
+.phase-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4mm;
+  align-items: start;
+}
+.phase-row .phase-marker {
+  width: 4mm;
+  height: 4mm;
+  border-radius: 50%;
+  background: var(--copper);
+  margin-top: 2mm;
+  flex-shrink: 0;
+}
+.phase-row .phase-body { display: flex; flex-direction: column; gap: 0.8mm; }
+.phase-row .phase-meta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 6.5pt;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.phase-row .phase-name {
+  font-family: 'Playfair Display', serif;
+  font-size: 12pt;
+  font-weight: 600;
+  color: var(--grass);
+  letter-spacing: -0.1px;
+}
+.phase-row .phase-desc {
+  font-size: 8.5pt;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+.next-step-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5mm;
+}
+.next-step {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4mm;
+  align-items: start;
+}
+.next-step .ns-num {
+  font-family: 'Playfair Display', serif;
+  font-size: 18pt;
+  font-weight: 300;
+  color: var(--copper);
+  line-height: 1;
+  letter-spacing: -0.5px;
+  min-width: 10mm;
+}
+.next-step .ns-body { display: flex; flex-direction: column; gap: 1mm; }
+.next-step .ns-name {
+  font-family: 'Playfair Display', serif;
+  font-size: 11.5pt;
+  font-weight: 600;
+  color: var(--grass);
+  line-height: 1.2;
+}
+.next-step .ns-desc {
+  font-size: 9pt;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+.will-note {
+  margin-top: auto;
+  padding-top: 6mm;
+  border-top: 1px solid var(--rule-soft);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10mm;
+  align-items: end;
+}
+.will-note .note-body {
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+  font-size: 10.5pt;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  max-width: 110mm;
+}
+.will-note .note-sig {
+  font-family: 'Playfair Display', serif;
+  font-size: 13pt;
+  font-weight: 600;
+  color: var(--grass);
+  margin-top: 3mm;
+  font-style: normal;
+}
+.will-note .note-contact {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7pt;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  text-align: right;
+  line-height: 1.7;
+  font-weight: 600;
+}
+.will-note .note-contact .label {
+  display: block;
+  color: var(--copper);
+  margin-bottom: 2mm;
+}
+
+/* Locked pages — full-bleed image rendered from prior PDFs --------- */
+.locked-page {
+  width: 210mm;
+  height: 297mm;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-color: var(--birch);
+  position: relative;
+  overflow: hidden;
+  page-break-after: always;
+}
+@media screen {
+  .locked-page { box-shadow: 0 12px 40px rgba(0,0,0,0.18); margin: 14px auto; }
+}
+
+/* ── Section 03 — Valuation / evidence stack ───────────────────── */
+.spread-headline.long {
+  font-size: 32pt;
+  line-height: 1.1;
+}
+.right-headline.s03 {
+  font-size: 32pt;
+  margin-bottom: 3mm;
+}
+.right-headline.s03 .copper { color: var(--copper); }
+
+.cohort-anchor {
+  margin: 0 0 6mm 0;
+  padding: 4mm 5mm;
+  background: rgba(255,255,255,0.4);
+  border-left: 2.5mm solid var(--copper);
+  border-radius: 1.5mm;
+  font-family: 'Playfair Display', serif;
+  font-size: 10.5pt;
+  line-height: 1.55;
+  color: var(--text);
+}
+.cohort-anchor strong {
+  font-weight: 600;
+  color: var(--grass);
+}
+.cohort-anchor .lift {
+  display: block;
+  margin-top: 1.5mm;
+  font-style: italic;
+  color: var(--text-secondary);
+  font-size: 10pt;
+}
+
+.evidence-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 0 0 4mm 0;
+  border-top: 1px solid var(--rule-soft);
+}
+.evidence-row {
+  display: grid;
+  grid-template-columns: 50mm 30mm 1fr;
+  gap: 5mm;
+  align-items: center;
+  padding: 2.5mm 1mm;
+  border-bottom: 1px solid var(--rule-soft);
+  font-size: 9.5pt;
+  line-height: 1.4;
+}
+.evidence-row .attr {
+  font-family: 'Playfair Display', serif;
+  font-size: 11pt;
+  font-weight: 500;
+  color: var(--grass);
+  letter-spacing: -0.1px;
+}
+.evidence-row .band {
+  display: flex;
+  align-items: center;
+  gap: 1.5mm;
+}
+.evidence-row .band-dots {
+  display: flex;
+  gap: 1.2mm;
+}
+.evidence-row .band-dots .dot {
+  width: 2.6mm;
+  height: 2.6mm;
+  border-radius: 50%;
+  border: 1px solid var(--copper);
+  background: transparent;
+}
+.evidence-row .band-dots .dot.full { background: var(--copper); }
+.evidence-row .band-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 6.5pt;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.evidence-row .signal {
+  font-size: 9pt;
+  color: var(--text-secondary);
+  font-style: italic;
+  line-height: 1.4;
+}
+
+.synthesis {
+  background: var(--grass-deep);
+  color: var(--birch);
+  padding: 5mm 7mm;
+  border-radius: 1.5mm;
+  margin: 0 0 3mm 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6mm;
+}
+.synthesis .label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7.5pt;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--copper-soft);
+}
+.synthesis .range {
+  font-family: 'Playfair Display', serif;
+  font-size: 22pt;
+  font-weight: 600;
+  color: var(--copper);
+  letter-spacing: -0.3px;
+  line-height: 1;
+}
+.synthesis .meta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7.5pt;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--copper-soft);
+}
+
+.method-note {
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+  font-size: 8.5pt;
+  line-height: 1.45;
+  color: var(--text-muted);
+  margin: 0 0 3mm 0;
+  padding: 0 2mm;
+}
+.confidence-row {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7pt;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin: 0 0 2mm 0;
+}
+
+/* ── Section 04 — Active distribution / three-mode reach ────────── */
+.three-modes {
+  display: flex;
+  flex-direction: column;
+  gap: 2.5mm;
+  margin: 0 0 3mm 0;
+}
+.mode-card {
+  background: rgba(255,255,255,0.5);
+  border: 1px solid var(--rule-soft);
+  border-left: 3mm solid var(--copper);
+  border-radius: 1.5mm;
+  padding: 3mm 5mm 3mm 5mm;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4mm;
+  align-items: start;
+}
+.mode-card .mode-num {
+  font-family: 'Playfair Display', serif;
+  font-size: 22pt;
+  font-weight: 300;
+  line-height: 1;
+  color: var(--copper);
+  letter-spacing: -1px;
+  align-self: center;
+}
+.mode-card .mode-body { display: flex; flex-direction: column; gap: 1mm; }
+.mode-card .mode-name {
+  font-family: 'Playfair Display', serif;
+  font-size: 12pt;
+  font-weight: 600;
+  color: var(--grass);
+  letter-spacing: -0.2px;
+  line-height: 1.2;
+}
+.mode-card .mode-desc {
+  font-size: 9pt;
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+.mode-card .mode-channels {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7pt;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--copper-deep);
+  font-weight: 600;
+  margin-top: 0.5mm;
+}
+.three-modes-bite {
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+  font-size: 10.5pt;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  margin: 0 0 5mm 0;
+  padding: 0 2mm;
+}
+
+.competition-callout {
+  background: var(--copper-tint);
+  border-left: 3mm solid var(--copper);
+  border-radius: 1.5mm;
+  padding: 3mm 5mm;
+  margin: 0 0 3mm 0;
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+  font-size: 10pt;
+  line-height: 1.5;
+  color: var(--text);
+}
+.competition-callout strong {
+  color: var(--copper);
+  font-weight: 600;
+  font-style: italic;
+}
+
+/* ── Section 05 — Emotional positioning / contrast & levers ─────── */
+.contrast-table {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin: 0 0 6mm 0;
+  border-top: 1.5px solid var(--rule-soft);
+  border-bottom: 1.5px solid var(--rule-soft);
+  background: rgba(255,255,255,0.4);
+}
+.contrast-table .ct-header {
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
+  font-size: 7pt;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 3mm 6mm;
+  border-bottom: 1px solid var(--rule-soft);
+  background: rgba(34, 56, 44, 0.04);
+}
+.contrast-table .ct-header.fields {
+  color: var(--copper);
+  font-weight: 600;
+}
+.contrast-table .ct-cliche {
+  padding: 5mm 7mm;
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+  font-size: 12pt;
+  color: var(--text-muted);
+  line-height: 1.45;
+  border-right: 1px solid var(--rule-soft);
+  border-bottom: 1px solid var(--rule-soft);
+}
+.contrast-table .ct-fields {
+  padding: 5mm 7mm;
+  font-family: 'Playfair Display', serif;
+  font-size: 12pt;
+  color: var(--grass);
+  line-height: 1.45;
+  border-bottom: 1px solid var(--rule-soft);
+  font-weight: 500;
+}
+.contrast-table .ct-fields .copper { color: var(--copper); }
+.contrast-table > div:nth-last-child(2) { border-bottom: none; }
+.contrast-table > div:last-child { border-bottom: none; }
+
+.levers {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 0 0 4mm 0;
+}
+.lever-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4mm;
+  padding: 2mm 0;
+  border-bottom: 1px solid var(--rule-soft);
+  align-items: start;
+}
+.lever-card:last-child { border-bottom: none; }
+.lever-card .lever-num {
+  font-family: 'Playfair Display', serif;
+  font-size: 14pt;
+  font-weight: 300;
+  color: var(--copper);
+  line-height: 1;
+  letter-spacing: -0.5px;
+  min-width: 10mm;
+  padding-top: 0.5mm;
+}
+.lever-card .lever-body { display: flex; flex-direction: column; gap: 0.5mm; }
+.lever-card .lever-name {
+  font-family: 'Playfair Display', serif;
+  font-size: 10.5pt;
+  font-weight: 600;
+  color: var(--grass);
+  letter-spacing: -0.1px;
+  line-height: 1.2;
+}
+.lever-card .lever-desc {
+  font-size: 8.5pt;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+.lever-card .lever-desc .sample {
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+  color: var(--copper-deep);
+}
+.lever-card .lever-personas {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5mm;
+  margin-top: 1mm;
+  font-size: 8pt;
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+.lever-card .lever-personas strong {
+  color: var(--grass);
+  font-weight: 600;
+}
+
+/* ── Section 05 alt — Image comparison hero (replaces contrast table) ── */
+.image-compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4mm;
+  margin: 0 0 5mm 0;
+}
+.compare-cell { display: flex; flex-direction: column; }
+.compare-label {
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
+  font-size: 7pt;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 2mm;
+  padding: 0 1mm;
+}
+.compare-label.fields { color: var(--copper); font-weight: 600; }
+.compare-img {
+  width: 100%;
+  height: 42mm;
+  object-fit: cover;
+  display: block;
+  border-radius: 1.5mm;
+  border: 1px solid var(--rule-soft);
+}
+.compare-caption {
+  font-family: 'Playfair Display', serif;
+  font-size: 9.5pt;
+  line-height: 1.4;
+  color: var(--text-muted);
+  font-style: italic;
+  margin-top: 2.5mm;
+  padding: 0 1mm;
+}
+.compare-caption.fields {
+  color: var(--grass);
+  font-style: normal;
+  font-weight: 500;
+}
+.compare-caption.fields .copper { color: var(--copper); }
+
+/* ── Section 06 — Trust assets ─────────────────────────────────── */
+.trust-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 3mm;
+  margin: 0 0 5mm 0;
+}
+.trust-card {
+  background: rgba(255,255,255,0.5);
+  border: 1px solid var(--rule-soft);
+  border-left: 3mm solid var(--copper);
+  border-radius: 1.5mm;
+  padding: 3.5mm 5mm 3.5mm 5mm;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4mm;
+  align-items: start;
+}
+.trust-card .trust-num {
+  font-family: 'Playfair Display', serif;
+  font-size: 22pt;
+  font-weight: 300;
+  color: var(--copper);
+  line-height: 1;
+  letter-spacing: -1px;
+  align-self: center;
+  min-width: 9mm;
+}
+.trust-card .trust-body { display: flex; flex-direction: column; gap: 1mm; }
+.trust-card .trust-name {
+  font-family: 'Playfair Display', serif;
+  font-size: 12pt;
+  font-weight: 600;
+  color: var(--grass);
+  letter-spacing: -0.1px;
+  line-height: 1.2;
+}
+.trust-card .trust-desc {
+  font-size: 9pt;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+.trust-card .trust-desc .sample {
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+  color: var(--copper-deep);
+}
+
+/* Reusable stat-callout (matches the +118% photography box) */
+.stat-callout {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6mm;
+  align-items: center;
+  padding: 3.5mm 5mm 3.5mm 5mm;
+  margin: 0 0 5mm 0;
+  background: var(--copper-tint);
+  border-left: 3mm solid var(--copper);
+  border-radius: 1.5mm;
+  max-width: 165mm;
+}
+.stat-callout .stat-num {
+  font-family: 'Playfair Display', serif;
+  font-size: 28pt;
+  font-weight: 600;
+  color: var(--copper);
+  line-height: 1;
+  letter-spacing: -1px;
+}
+.stat-callout .stat-body {
+  font-family: 'Playfair Display', serif;
+  font-size: 10pt;
+  line-height: 1.45;
+  color: var(--text);
+}
+.stat-callout .stat-body em {
+  font-style: italic;
+  color: var(--text-secondary);
+}
+.stat-callout .stat-source {
+  display: block;
+  margin-top: 1.5mm;
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
+  font-size: 6.5pt;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-style: normal;
+  font-weight: 600;
+}
+
+.campaign-math {
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+  font-size: 10pt;
+  line-height: 1.5;
+  color: var(--text);
+  margin: 0 0 3mm 0;
+  padding: 3mm 5mm;
+  background: rgba(255,255,255,0.45);
+  border-radius: 1.5mm;
+  border-top: 1px solid var(--rule-soft);
+  border-bottom: 1px solid var(--rule-soft);
+}
+.campaign-math strong {
+  font-family: 'Playfair Display', serif;
+  font-weight: 600;
+  color: var(--copper);
+  font-style: italic;
+}
+.campaign-math .label {
+  display: block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7pt;
+  font-style: normal;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 2mm;
+  font-weight: 600;
+}
+</style>
+</head>
+<body>
+
+<!-- ============================================================ -->
+<!-- PAGE 01 — OUTER COVER                                          -->
+<!-- ============================================================ -->
+<div class="cover">
+  <div class="cover-image" style="background-image: url('assets/hero_cover.png');"></div>
+
+  <!-- Large copper F mark, top-left, semi-transparent -->
+  <svg class="cover-mark-tl" viewBox="0 0 50 60" xmlns="http://www.w3.org/2000/svg">
+    <path d="M 8 5 L 8 55 L 14 55 L 14 32 L 36 32 Q 44 32 44 24 Q 44 16 36 16 L 14 16 L 14 5 Z M 14 22 L 36 22 Q 38 22 38 24 Q 38 26 36 26 L 14 26 Z" fill="#B76749" opacity="0.85"/>
+  </svg>
+
+  <!-- Top-right Fields wordmark + F -->
+  <div class="cover-mark-tr">
+    <span>Fields</span>
+    <svg viewBox="0 0 28 32" xmlns="http://www.w3.org/2000/svg">
+      <path d="M 4 2 L 4 30 L 8 30 L 8 18 L 21 18 Q 26 18 26 13 Q 26 8 21 8 L 8 8 L 8 2 Z M 8 12 L 21 12 Q 22 12 22 13 Q 22 14 21 14 L 8 14 Z" fill="white"/>
+    </svg>
+  </div>
+
+  <!-- Address card, lower-left -->
+  <div class="cover-card">
+    <div class="cover-card-address">13<br>Terrace<br>Court</div>
+    <div class="cover-card-suburb">MERRIMAC, QLD 4226</div>
+  </div>
+
+  <!-- Cream bottom band -->
+  <div class="cover-bottom">
+    <div class="cover-meta">
+      <div class="cover-doc-type">Property Positioning Report</div>
+      <div class="cover-doc-rule"></div>
+      <div class="cover-doc-by">Prepared for Dee</div>
+      <div class="cover-doc-url">fieldsestate.com.au</div>
+    </div>
+    <div class="cover-date" style="display:flex; align-items:center; gap:14px;">
+      <span>MAY 2026</span>
+      <span class="smarter-mark">
+        <svg viewBox="0 0 14 17" xmlns="http://www.w3.org/2000/svg">
+          <path d="M 2 1 L 2 16 L 4 16 L 4 9 L 11 9 Q 13 9 13 7 Q 13 5 11 5 L 4 5 L 4 1 Z M 4 6.5 L 11 6.5 Q 11.5 6.5 11.5 7 Q 11.5 7.5 11 7.5 L 4 7.5 Z" fill="#B76749"/>
+        </svg>
+        Smarter with data
+      </span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 02 — INSIDE FRONT COVER (philosophy)                       -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="inside-cover">
+    <p class="ic-philosophy">The question is not only what the home is worth.</p>
+    <p class="ic-philosophy" style="margin-top: 5mm;">It is what the right buyer can <em>recognise, trust, and compete for.</em></p>
+
+    <div class="ic-rule"></div>
+
+    <div class="ic-prepared-label">Prepared for</div>
+    <div class="ic-address">
+      <span class="name">Dee</span>
+      13 Terrace Court<br>
+      Merrimac, QLD 4226
+    </div>
+
+    <div class="ic-bottom">
+      <div>
+        <div class="ic-brand">Fields Estate</div>
+        <div class="ic-tagline" style="margin-top: 2mm;">Smarter with data</div>
+      </div>
+      <div class="ic-tagline">May 2026</div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 03 — OPENING THESIS (six forces)                           -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="thesis-page-pad">
+    <div class="thesis-eyebrow">For 13 Terrace Court · Merrimac</div>
+
+    <h1 class="thesis-h" style="font-size:44pt; margin-bottom:14mm;">Six forces shape the sale.</h1>
+
+    <p class="thesis-lead">A premium result is rarely created by one thing. It is created when the right home, the right buyer, the right evidence and the right campaign meet at the same time. For 13 Terrace Court, this report examines six forces:</p>
+
+    <div class="thesis-forces">
+      <div class="thesis-force">
+        <div class="num">01</div>
+        <div class="label">Irreplaceability <span class="desc">— what the right buyer may struggle to find again.</span></div>
+      </div>
+      <div class="thesis-force">
+        <div class="num">02</div>
+        <div class="label">Buyer fit <span class="desc">— who values that combination most.</span></div>
+      </div>
+      <div class="thesis-force">
+        <div class="num">03</div>
+        <div class="label">Valuation <span class="desc">— what the evidence supports.</span></div>
+      </div>
+      <div class="thesis-force">
+        <div class="num">04</div>
+        <div class="label">Campaign reach <span class="desc">— how the buyer is found.</span></div>
+      </div>
+      <div class="thesis-force">
+        <div class="num">05</div>
+        <div class="label">Presentation <span class="desc">— how features become desire.</span></div>
+      </div>
+      <div class="thesis-force">
+        <div class="num">06</div>
+        <div class="label">Trust <span class="desc">— how confidence protects the bid.</span></div>
+      </div>
+    </div>
+
+    <div class="thesis-close">Together, they form the sale strategy. The first force is irreplaceability.</div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 04 — Locked from V3: Section 01 LEFT (Scarcity thesis)     -->
+<!-- ============================================================ -->
+<div class="locked-page" style="background-image: url('assets/locked_p01.png');"></div>
+
+<!-- ============================================================ -->
+<!-- PAGE 05 — SECTION 01 RIGHT — Why this home is hard to replace -->
+<!-- Live HTML (was locked_p02.png). Template-driven from              -->
+<!-- scripts/appraisal_template/data_pull.section_01_right()           -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">For 13 Terrace Court</div>
+      <svg viewBox="0 0 22 26" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 3 2 L 3 24 L 6 24 L 6 14 L 17 14 Q 20 14 20 11 Q 20 8 17 8 L 6 8 L 6 2 Z M 6 10 L 17 10 Q 17.5 10 17.5 11 Q 17.5 12 17 12 L 6 12 Z" fill="#B76749"/>
+      </svg>
+    </div>
+
+    <h2 class="right-headline" style="font-size:30pt; margin-bottom:3mm;">Why this home is <span class="copper">hard to replace</span>.</h2>
+    <div class="right-subhead" style="margin-bottom:5mm; font-size:10.5pt;">Six bedrooms, dual-living, a pool, the head of a cul-de-sac, and a permanent bushland boundary &mdash; five features the right buyer will struggle to find in one home.</div>
+
+    <div style="position:relative; margin: 0 0 5mm; border-radius:1.5mm; overflow:hidden;">
+      <img src="assets/satellite_13_terrace_court.png" alt="13 Terrace Court — aerial view" style="display:block; width:100%; height:auto; border-radius:1.5mm;" />
+    </div>
+
+    <div style="display:grid; grid-template-columns: 1fr 60mm; gap:6mm; align-items:start; margin-bottom:4mm;">
+      <div>
+        <p style="margin:0 0 3mm; font-size:11pt; line-height:1.45;">Of the <strong>458 houses</strong> sold across the southern Gold Coast catchment in the last 12 months, only <strong>six had six bedrooms</strong>.</p>
+        <ul style="margin:0; padding-left:4mm; font-size:10pt; line-height:1.65; list-style:none;">
+          <li style="margin-bottom:1mm;">&mdash; six bedrooms</li>
+          <li style="margin-bottom:1mm;">&mdash; dual-living configuration</li>
+          <li style="margin-bottom:1mm;">&mdash; pool</li>
+          <li style="margin-bottom:1mm;">&mdash; cul-de-sac position</li>
+          <li style="margin-bottom:1mm;">&mdash; permanent bushland boundary</li>
+        </ul>
+      </div>
+      <div style="text-align:right;">
+<svg xmlns="http://www.w3.org/2000/svg" width="58mm" height="51mm" class="cohort-dot-grid" viewBox="0 0 134.50 118.00" role="img" aria-label="6 of 458 dot grid">
+<circle cx="6.75" cy="6.75" r="1.40" fill="#c9b9a0" />
+<circle cx="12.25" cy="6.75" r="1.40" fill="#c9b9a0" />
+<circle cx="17.75" cy="6.75" r="1.40" fill="#c9b9a0" />
+<circle cx="23.25" cy="6.75" r="1.40" fill="#c9b9a0" />
+<circle cx="28.75" cy="6.75" r="1.40" fill="#c9b9a0" />
+<circle cx="34.25" cy="6.75" r="1.40" fill="#c9b9a0" />
+<circle cx="39.75" cy="6.75" r="1.40" fill="#c9b9a0" />
+<circle cx="45.25" cy="6.75" r="1.40" fill="#c9b9a0" />
+<circle cx="50.75" cy="6.75" r="1.40" fill="#c9b9a0" />
+<circle cx="56.25" cy="6.75" r="1.40" fill="#c9b9a0" />
+<circle cx="61.75" cy="6.75" r="1.40" fill="#c9b9a0" />
+<circle cx="67.25" cy="6.75" r="1.40" fill="#c9b9a0" />
+<circle cx="72.75" cy="6.75" r="1.40" fill="#c9b9a0" />
+<circle cx="78.25" cy="6.75" r="1.40" fill="#c9b9a0" />
+<circle cx="83.75" cy="6.75" r="1.40" fill="#c9b9a0" />
+<circle cx="89.25" cy="6.75" r="1.40" fill="#c9b9a0" />
+<circle cx="94.75" cy="6.75" r="1.40" fill="#c9b9a0" />
+<circle cx="100.25" cy="6.75" r="1.40" fill="#c9b9a0" />
+<circle cx="105.75" cy="6.75" r="1.40" fill="#c9b9a0" />
+<circle cx="111.25" cy="6.75" r="1.40" fill="#c9b9a0" />
+<circle cx="116.75" cy="6.75" r="1.40" fill="#c9b9a0" />
+<circle cx="122.25" cy="6.75" r="1.40" fill="#c9b9a0" />
+<circle cx="127.75" cy="6.75" r="1.40" fill="#c9b9a0" />
+<circle cx="6.75" cy="12.25" r="1.40" fill="#c9b9a0" />
+<circle cx="12.25" cy="12.25" r="1.40" fill="#c9b9a0" />
+<circle cx="17.75" cy="12.25" r="1.40" fill="#c9b9a0" />
+<circle cx="23.25" cy="12.25" r="1.40" fill="#c9b9a0" />
+<circle cx="28.75" cy="12.25" r="1.40" fill="#c9b9a0" />
+<circle cx="34.25" cy="12.25" r="1.40" fill="#c9b9a0" />
+<circle cx="39.75" cy="12.25" r="1.40" fill="#c9b9a0" />
+<circle cx="45.25" cy="12.25" r="1.40" fill="#c9b9a0" />
+<circle cx="50.75" cy="12.25" r="1.40" fill="#c9b9a0" />
+<circle cx="56.25" cy="12.25" r="1.40" fill="#c9b9a0" />
+<circle cx="61.75" cy="12.25" r="1.40" fill="#c9b9a0" />
+<circle cx="67.25" cy="12.25" r="1.40" fill="#c9b9a0" />
+<circle cx="72.75" cy="12.25" r="1.40" fill="#c9b9a0" />
+<circle cx="78.25" cy="12.25" r="1.40" fill="#c9b9a0" />
+<circle cx="83.75" cy="12.25" r="1.40" fill="#c9b9a0" />
+<circle cx="89.25" cy="12.25" r="1.40" fill="#c9b9a0" />
+<circle cx="94.75" cy="12.25" r="1.40" fill="#c9b9a0" />
+<circle cx="100.25" cy="12.25" r="1.40" fill="#c9b9a0" />
+<circle cx="105.75" cy="12.25" r="1.40" fill="#c9b9a0" />
+<circle cx="111.25" cy="12.25" r="1.40" fill="#c9b9a0" />
+<circle cx="116.75" cy="12.25" r="1.40" fill="#c9b9a0" />
+<circle cx="122.25" cy="12.25" r="1.40" fill="#c9b9a0" />
+<circle cx="127.75" cy="12.25" r="1.40" fill="#c9b9a0" />
+<circle cx="6.75" cy="17.75" r="1.40" fill="#c9b9a0" />
+<circle cx="12.25" cy="17.75" r="1.40" fill="#c9b9a0" />
+<circle cx="17.75" cy="17.75" r="1.40" fill="#c9b9a0" />
+<circle cx="23.25" cy="17.75" r="1.40" fill="#c9b9a0" />
+<circle cx="28.75" cy="17.75" r="1.40" fill="#c9b9a0" />
+<circle cx="34.25" cy="17.75" r="1.40" fill="#c9b9a0" />
+<circle cx="39.75" cy="17.75" r="1.40" fill="#c9b9a0" />
+<circle cx="45.25" cy="17.75" r="1.40" fill="#c9b9a0" />
+<circle cx="50.75" cy="17.75" r="1.40" fill="#c9b9a0" />
+<circle cx="56.25" cy="17.75" r="2.00" fill="#B76749" />
+<circle cx="61.75" cy="17.75" r="1.40" fill="#c9b9a0" />
+<circle cx="67.25" cy="17.75" r="1.40" fill="#c9b9a0" />
+<circle cx="72.75" cy="17.75" r="1.40" fill="#c9b9a0" />
+<circle cx="78.25" cy="17.75" r="1.40" fill="#c9b9a0" />
+<circle cx="83.75" cy="17.75" r="1.40" fill="#c9b9a0" />
+<circle cx="89.25" cy="17.75" r="1.40" fill="#c9b9a0" />
+<circle cx="94.75" cy="17.75" r="1.40" fill="#c9b9a0" />
+<circle cx="100.25" cy="17.75" r="1.40" fill="#c9b9a0" />
+<circle cx="105.75" cy="17.75" r="1.40" fill="#c9b9a0" />
+<circle cx="111.25" cy="17.75" r="1.40" fill="#c9b9a0" />
+<circle cx="116.75" cy="17.75" r="1.40" fill="#c9b9a0" />
+<circle cx="122.25" cy="17.75" r="1.40" fill="#c9b9a0" />
+<circle cx="127.75" cy="17.75" r="1.40" fill="#c9b9a0" />
+<circle cx="6.75" cy="23.25" r="1.40" fill="#c9b9a0" />
+<circle cx="12.25" cy="23.25" r="1.40" fill="#c9b9a0" />
+<circle cx="17.75" cy="23.25" r="1.40" fill="#c9b9a0" />
+<circle cx="23.25" cy="23.25" r="2.00" fill="#B76749" />
+<circle cx="28.75" cy="23.25" r="1.40" fill="#c9b9a0" />
+<circle cx="34.25" cy="23.25" r="1.40" fill="#c9b9a0" />
+<circle cx="39.75" cy="23.25" r="1.40" fill="#c9b9a0" />
+<circle cx="45.25" cy="23.25" r="1.40" fill="#c9b9a0" />
+<circle cx="50.75" cy="23.25" r="1.40" fill="#c9b9a0" />
+<circle cx="56.25" cy="23.25" r="1.40" fill="#c9b9a0" />
+<circle cx="61.75" cy="23.25" r="1.40" fill="#c9b9a0" />
+<circle cx="67.25" cy="23.25" r="1.40" fill="#c9b9a0" />
+<circle cx="72.75" cy="23.25" r="1.40" fill="#c9b9a0" />
+<circle cx="78.25" cy="23.25" r="1.40" fill="#c9b9a0" />
+<circle cx="83.75" cy="23.25" r="1.40" fill="#c9b9a0" />
+<circle cx="89.25" cy="23.25" r="1.40" fill="#c9b9a0" />
+<circle cx="94.75" cy="23.25" r="1.40" fill="#c9b9a0" />
+<circle cx="100.25" cy="23.25" r="1.40" fill="#c9b9a0" />
+<circle cx="105.75" cy="23.25" r="1.40" fill="#c9b9a0" />
+<circle cx="111.25" cy="23.25" r="1.40" fill="#c9b9a0" />
+<circle cx="116.75" cy="23.25" r="1.40" fill="#c9b9a0" />
+<circle cx="122.25" cy="23.25" r="1.40" fill="#c9b9a0" />
+<circle cx="127.75" cy="23.25" r="1.40" fill="#c9b9a0" />
+<circle cx="6.75" cy="28.75" r="1.40" fill="#c9b9a0" />
+<circle cx="12.25" cy="28.75" r="1.40" fill="#c9b9a0" />
+<circle cx="17.75" cy="28.75" r="1.40" fill="#c9b9a0" />
+<circle cx="23.25" cy="28.75" r="2.00" fill="#B76749" />
+<circle cx="28.75" cy="28.75" r="1.40" fill="#c9b9a0" />
+<circle cx="34.25" cy="28.75" r="1.40" fill="#c9b9a0" />
+<circle cx="39.75" cy="28.75" r="1.40" fill="#c9b9a0" />
+<circle cx="45.25" cy="28.75" r="1.40" fill="#c9b9a0" />
+<circle cx="50.75" cy="28.75" r="1.40" fill="#c9b9a0" />
+<circle cx="56.25" cy="28.75" r="1.40" fill="#c9b9a0" />
+<circle cx="61.75" cy="28.75" r="2.00" fill="#B76749" />
+<circle cx="67.25" cy="28.75" r="1.40" fill="#c9b9a0" />
+<circle cx="72.75" cy="28.75" r="1.40" fill="#c9b9a0" />
+<circle cx="78.25" cy="28.75" r="1.40" fill="#c9b9a0" />
+<circle cx="83.75" cy="28.75" r="1.40" fill="#c9b9a0" />
+<circle cx="89.25" cy="28.75" r="1.40" fill="#c9b9a0" />
+<circle cx="94.75" cy="28.75" r="1.40" fill="#c9b9a0" />
+<circle cx="100.25" cy="28.75" r="1.40" fill="#c9b9a0" />
+<circle cx="105.75" cy="28.75" r="1.40" fill="#c9b9a0" />
+<circle cx="111.25" cy="28.75" r="1.40" fill="#c9b9a0" />
+<circle cx="116.75" cy="28.75" r="1.40" fill="#c9b9a0" />
+<circle cx="122.25" cy="28.75" r="1.40" fill="#c9b9a0" />
+<circle cx="127.75" cy="28.75" r="1.40" fill="#c9b9a0" />
+<circle cx="6.75" cy="34.25" r="1.40" fill="#c9b9a0" />
+<circle cx="12.25" cy="34.25" r="1.40" fill="#c9b9a0" />
+<circle cx="17.75" cy="34.25" r="1.40" fill="#c9b9a0" />
+<circle cx="23.25" cy="34.25" r="1.40" fill="#c9b9a0" />
+<circle cx="28.75" cy="34.25" r="1.40" fill="#c9b9a0" />
+<circle cx="34.25" cy="34.25" r="1.40" fill="#c9b9a0" />
+<circle cx="39.75" cy="34.25" r="1.40" fill="#c9b9a0" />
+<circle cx="45.25" cy="34.25" r="1.40" fill="#c9b9a0" />
+<circle cx="50.75" cy="34.25" r="1.40" fill="#c9b9a0" />
+<circle cx="56.25" cy="34.25" r="1.40" fill="#c9b9a0" />
+<circle cx="61.75" cy="34.25" r="1.40" fill="#c9b9a0" />
+<circle cx="67.25" cy="34.25" r="1.40" fill="#c9b9a0" />
+<circle cx="72.75" cy="34.25" r="1.40" fill="#c9b9a0" />
+<circle cx="78.25" cy="34.25" r="1.40" fill="#c9b9a0" />
+<circle cx="83.75" cy="34.25" r="1.40" fill="#c9b9a0" />
+<circle cx="89.25" cy="34.25" r="1.40" fill="#c9b9a0" />
+<circle cx="94.75" cy="34.25" r="1.40" fill="#c9b9a0" />
+<circle cx="100.25" cy="34.25" r="1.40" fill="#c9b9a0" />
+<circle cx="105.75" cy="34.25" r="1.40" fill="#c9b9a0" />
+<circle cx="111.25" cy="34.25" r="1.40" fill="#c9b9a0" />
+<circle cx="116.75" cy="34.25" r="1.40" fill="#c9b9a0" />
+<circle cx="122.25" cy="34.25" r="1.40" fill="#c9b9a0" />
+<circle cx="127.75" cy="34.25" r="1.40" fill="#c9b9a0" />
+<circle cx="6.75" cy="39.75" r="1.40" fill="#c9b9a0" />
+<circle cx="12.25" cy="39.75" r="1.40" fill="#c9b9a0" />
+<circle cx="17.75" cy="39.75" r="1.40" fill="#c9b9a0" />
+<circle cx="23.25" cy="39.75" r="1.40" fill="#c9b9a0" />
+<circle cx="28.75" cy="39.75" r="1.40" fill="#c9b9a0" />
+<circle cx="34.25" cy="39.75" r="1.40" fill="#c9b9a0" />
+<circle cx="39.75" cy="39.75" r="1.40" fill="#c9b9a0" />
+<circle cx="45.25" cy="39.75" r="1.40" fill="#c9b9a0" />
+<circle cx="50.75" cy="39.75" r="1.40" fill="#c9b9a0" />
+<circle cx="56.25" cy="39.75" r="1.40" fill="#c9b9a0" />
+<circle cx="61.75" cy="39.75" r="1.40" fill="#c9b9a0" />
+<circle cx="67.25" cy="39.75" r="1.40" fill="#c9b9a0" />
+<circle cx="72.75" cy="39.75" r="1.40" fill="#c9b9a0" />
+<circle cx="78.25" cy="39.75" r="1.40" fill="#c9b9a0" />
+<circle cx="83.75" cy="39.75" r="1.40" fill="#c9b9a0" />
+<circle cx="89.25" cy="39.75" r="1.40" fill="#c9b9a0" />
+<circle cx="94.75" cy="39.75" r="1.40" fill="#c9b9a0" />
+<circle cx="100.25" cy="39.75" r="1.40" fill="#c9b9a0" />
+<circle cx="105.75" cy="39.75" r="1.40" fill="#c9b9a0" />
+<circle cx="111.25" cy="39.75" r="1.40" fill="#c9b9a0" />
+<circle cx="116.75" cy="39.75" r="1.40" fill="#c9b9a0" />
+<circle cx="122.25" cy="39.75" r="1.40" fill="#c9b9a0" />
+<circle cx="127.75" cy="39.75" r="1.40" fill="#c9b9a0" />
+<circle cx="6.75" cy="45.25" r="1.40" fill="#c9b9a0" />
+<circle cx="12.25" cy="45.25" r="1.40" fill="#c9b9a0" />
+<circle cx="17.75" cy="45.25" r="1.40" fill="#c9b9a0" />
+<circle cx="23.25" cy="45.25" r="1.40" fill="#c9b9a0" />
+<circle cx="28.75" cy="45.25" r="1.40" fill="#c9b9a0" />
+<circle cx="34.25" cy="45.25" r="1.40" fill="#c9b9a0" />
+<circle cx="39.75" cy="45.25" r="1.40" fill="#c9b9a0" />
+<circle cx="45.25" cy="45.25" r="1.40" fill="#c9b9a0" />
+<circle cx="50.75" cy="45.25" r="1.40" fill="#c9b9a0" />
+<circle cx="56.25" cy="45.25" r="1.40" fill="#c9b9a0" />
+<circle cx="61.75" cy="45.25" r="1.40" fill="#c9b9a0" />
+<circle cx="67.25" cy="45.25" r="1.40" fill="#c9b9a0" />
+<circle cx="72.75" cy="45.25" r="1.40" fill="#c9b9a0" />
+<circle cx="78.25" cy="45.25" r="1.40" fill="#c9b9a0" />
+<circle cx="83.75" cy="45.25" r="1.40" fill="#c9b9a0" />
+<circle cx="89.25" cy="45.25" r="1.40" fill="#c9b9a0" />
+<circle cx="94.75" cy="45.25" r="1.40" fill="#c9b9a0" />
+<circle cx="100.25" cy="45.25" r="1.40" fill="#c9b9a0" />
+<circle cx="105.75" cy="45.25" r="1.40" fill="#c9b9a0" />
+<circle cx="111.25" cy="45.25" r="1.40" fill="#c9b9a0" />
+<circle cx="116.75" cy="45.25" r="1.40" fill="#c9b9a0" />
+<circle cx="122.25" cy="45.25" r="1.40" fill="#c9b9a0" />
+<circle cx="127.75" cy="45.25" r="1.40" fill="#c9b9a0" />
+<circle cx="6.75" cy="50.75" r="1.40" fill="#c9b9a0" />
+<circle cx="12.25" cy="50.75" r="1.40" fill="#c9b9a0" />
+<circle cx="17.75" cy="50.75" r="1.40" fill="#c9b9a0" />
+<circle cx="23.25" cy="50.75" r="1.40" fill="#c9b9a0" />
+<circle cx="28.75" cy="50.75" r="1.40" fill="#c9b9a0" />
+<circle cx="34.25" cy="50.75" r="1.40" fill="#c9b9a0" />
+<circle cx="39.75" cy="50.75" r="1.40" fill="#c9b9a0" />
+<circle cx="45.25" cy="50.75" r="1.40" fill="#c9b9a0" />
+<circle cx="50.75" cy="50.75" r="1.40" fill="#c9b9a0" />
+<circle cx="56.25" cy="50.75" r="1.40" fill="#c9b9a0" />
+<circle cx="61.75" cy="50.75" r="1.40" fill="#c9b9a0" />
+<circle cx="67.25" cy="50.75" r="1.40" fill="#c9b9a0" />
+<circle cx="72.75" cy="50.75" r="1.40" fill="#c9b9a0" />
+<circle cx="78.25" cy="50.75" r="1.40" fill="#c9b9a0" />
+<circle cx="83.75" cy="50.75" r="1.40" fill="#c9b9a0" />
+<circle cx="89.25" cy="50.75" r="1.40" fill="#c9b9a0" />
+<circle cx="94.75" cy="50.75" r="1.40" fill="#c9b9a0" />
+<circle cx="100.25" cy="50.75" r="1.40" fill="#c9b9a0" />
+<circle cx="105.75" cy="50.75" r="1.40" fill="#c9b9a0" />
+<circle cx="111.25" cy="50.75" r="1.40" fill="#c9b9a0" />
+<circle cx="116.75" cy="50.75" r="1.40" fill="#c9b9a0" />
+<circle cx="122.25" cy="50.75" r="1.40" fill="#c9b9a0" />
+<circle cx="127.75" cy="50.75" r="1.40" fill="#c9b9a0" />
+<circle cx="6.75" cy="56.25" r="1.40" fill="#c9b9a0" />
+<circle cx="12.25" cy="56.25" r="1.40" fill="#c9b9a0" />
+<circle cx="17.75" cy="56.25" r="1.40" fill="#c9b9a0" />
+<circle cx="23.25" cy="56.25" r="1.40" fill="#c9b9a0" />
+<circle cx="28.75" cy="56.25" r="2.00" fill="#B76749" />
+<circle cx="34.25" cy="56.25" r="1.40" fill="#c9b9a0" />
+<circle cx="39.75" cy="56.25" r="1.40" fill="#c9b9a0" />
+<circle cx="45.25" cy="56.25" r="1.40" fill="#c9b9a0" />
+<circle cx="50.75" cy="56.25" r="1.40" fill="#c9b9a0" />
+<circle cx="56.25" cy="56.25" r="1.40" fill="#c9b9a0" />
+<circle cx="61.75" cy="56.25" r="1.40" fill="#c9b9a0" />
+<circle cx="67.25" cy="56.25" r="1.40" fill="#c9b9a0" />
+<circle cx="72.75" cy="56.25" r="1.40" fill="#c9b9a0" />
+<circle cx="78.25" cy="56.25" r="1.40" fill="#c9b9a0" />
+<circle cx="83.75" cy="56.25" r="1.40" fill="#c9b9a0" />
+<circle cx="89.25" cy="56.25" r="1.40" fill="#c9b9a0" />
+<circle cx="94.75" cy="56.25" r="1.40" fill="#c9b9a0" />
+<circle cx="100.25" cy="56.25" r="1.40" fill="#c9b9a0" />
+<circle cx="105.75" cy="56.25" r="1.40" fill="#c9b9a0" />
+<circle cx="111.25" cy="56.25" r="1.40" fill="#c9b9a0" />
+<circle cx="116.75" cy="56.25" r="1.40" fill="#c9b9a0" />
+<circle cx="122.25" cy="56.25" r="1.40" fill="#c9b9a0" />
+<circle cx="127.75" cy="56.25" r="1.40" fill="#c9b9a0" />
+<circle cx="6.75" cy="61.75" r="1.40" fill="#c9b9a0" />
+<circle cx="12.25" cy="61.75" r="1.40" fill="#c9b9a0" />
+<circle cx="17.75" cy="61.75" r="1.40" fill="#c9b9a0" />
+<circle cx="23.25" cy="61.75" r="1.40" fill="#c9b9a0" />
+<circle cx="28.75" cy="61.75" r="1.40" fill="#c9b9a0" />
+<circle cx="34.25" cy="61.75" r="1.40" fill="#c9b9a0" />
+<circle cx="39.75" cy="61.75" r="1.40" fill="#c9b9a0" />
+<circle cx="45.25" cy="61.75" r="1.40" fill="#c9b9a0" />
+<circle cx="50.75" cy="61.75" r="1.40" fill="#c9b9a0" />
+<circle cx="56.25" cy="61.75" r="1.40" fill="#c9b9a0" />
+<circle cx="61.75" cy="61.75" r="1.40" fill="#c9b9a0" />
+<circle cx="67.25" cy="61.75" r="1.40" fill="#c9b9a0" />
+<circle cx="72.75" cy="61.75" r="1.40" fill="#c9b9a0" />
+<circle cx="78.25" cy="61.75" r="1.40" fill="#c9b9a0" />
+<circle cx="83.75" cy="61.75" r="1.40" fill="#c9b9a0" />
+<circle cx="89.25" cy="61.75" r="1.40" fill="#c9b9a0" />
+<circle cx="94.75" cy="61.75" r="1.40" fill="#c9b9a0" />
+<circle cx="100.25" cy="61.75" r="1.40" fill="#c9b9a0" />
+<circle cx="105.75" cy="61.75" r="1.40" fill="#c9b9a0" />
+<circle cx="111.25" cy="61.75" r="1.40" fill="#c9b9a0" />
+<circle cx="116.75" cy="61.75" r="1.40" fill="#c9b9a0" />
+<circle cx="122.25" cy="61.75" r="1.40" fill="#c9b9a0" />
+<circle cx="127.75" cy="61.75" r="1.40" fill="#c9b9a0" />
+<circle cx="6.75" cy="67.25" r="1.40" fill="#c9b9a0" />
+<circle cx="12.25" cy="67.25" r="1.40" fill="#c9b9a0" />
+<circle cx="17.75" cy="67.25" r="1.40" fill="#c9b9a0" />
+<circle cx="23.25" cy="67.25" r="1.40" fill="#c9b9a0" />
+<circle cx="28.75" cy="67.25" r="1.40" fill="#c9b9a0" />
+<circle cx="34.25" cy="67.25" r="1.40" fill="#c9b9a0" />
+<circle cx="39.75" cy="67.25" r="1.40" fill="#c9b9a0" />
+<circle cx="45.25" cy="67.25" r="1.40" fill="#c9b9a0" />
+<circle cx="50.75" cy="67.25" r="1.40" fill="#c9b9a0" />
+<circle cx="56.25" cy="67.25" r="1.40" fill="#c9b9a0" />
+<circle cx="61.75" cy="67.25" r="1.40" fill="#c9b9a0" />
+<circle cx="67.25" cy="67.25" r="1.40" fill="#c9b9a0" />
+<circle cx="72.75" cy="67.25" r="1.40" fill="#c9b9a0" />
+<circle cx="78.25" cy="67.25" r="1.40" fill="#c9b9a0" />
+<circle cx="83.75" cy="67.25" r="1.40" fill="#c9b9a0" />
+<circle cx="89.25" cy="67.25" r="1.40" fill="#c9b9a0" />
+<circle cx="94.75" cy="67.25" r="1.40" fill="#c9b9a0" />
+<circle cx="100.25" cy="67.25" r="1.40" fill="#c9b9a0" />
+<circle cx="105.75" cy="67.25" r="1.40" fill="#c9b9a0" />
+<circle cx="111.25" cy="67.25" r="1.40" fill="#c9b9a0" />
+<circle cx="116.75" cy="67.25" r="1.40" fill="#c9b9a0" />
+<circle cx="122.25" cy="67.25" r="1.40" fill="#c9b9a0" />
+<circle cx="127.75" cy="67.25" r="1.40" fill="#c9b9a0" />
+<circle cx="6.75" cy="72.75" r="1.40" fill="#c9b9a0" />
+<circle cx="12.25" cy="72.75" r="1.40" fill="#c9b9a0" />
+<circle cx="17.75" cy="72.75" r="1.40" fill="#c9b9a0" />
+<circle cx="23.25" cy="72.75" r="1.40" fill="#c9b9a0" />
+<circle cx="28.75" cy="72.75" r="1.40" fill="#c9b9a0" />
+<circle cx="34.25" cy="72.75" r="1.40" fill="#c9b9a0" />
+<circle cx="39.75" cy="72.75" r="1.40" fill="#c9b9a0" />
+<circle cx="45.25" cy="72.75" r="1.40" fill="#c9b9a0" />
+<circle cx="50.75" cy="72.75" r="1.40" fill="#c9b9a0" />
+<circle cx="56.25" cy="72.75" r="1.40" fill="#c9b9a0" />
+<circle cx="61.75" cy="72.75" r="1.40" fill="#c9b9a0" />
+<circle cx="67.25" cy="72.75" r="1.40" fill="#c9b9a0" />
+<circle cx="72.75" cy="72.75" r="1.40" fill="#c9b9a0" />
+<circle cx="78.25" cy="72.75" r="1.40" fill="#c9b9a0" />
+<circle cx="83.75" cy="72.75" r="1.40" fill="#c9b9a0" />
+<circle cx="89.25" cy="72.75" r="1.40" fill="#c9b9a0" />
+<circle cx="94.75" cy="72.75" r="1.40" fill="#c9b9a0" />
+<circle cx="100.25" cy="72.75" r="1.40" fill="#c9b9a0" />
+<circle cx="105.75" cy="72.75" r="1.40" fill="#c9b9a0" />
+<circle cx="111.25" cy="72.75" r="1.40" fill="#c9b9a0" />
+<circle cx="116.75" cy="72.75" r="1.40" fill="#c9b9a0" />
+<circle cx="122.25" cy="72.75" r="1.40" fill="#c9b9a0" />
+<circle cx="127.75" cy="72.75" r="1.40" fill="#c9b9a0" />
+<circle cx="6.75" cy="78.25" r="1.40" fill="#c9b9a0" />
+<circle cx="12.25" cy="78.25" r="1.40" fill="#c9b9a0" />
+<circle cx="17.75" cy="78.25" r="1.40" fill="#c9b9a0" />
+<circle cx="23.25" cy="78.25" r="1.40" fill="#c9b9a0" />
+<circle cx="28.75" cy="78.25" r="1.40" fill="#c9b9a0" />
+<circle cx="34.25" cy="78.25" r="1.40" fill="#c9b9a0" />
+<circle cx="39.75" cy="78.25" r="1.40" fill="#c9b9a0" />
+<circle cx="45.25" cy="78.25" r="1.40" fill="#c9b9a0" />
+<circle cx="50.75" cy="78.25" r="1.40" fill="#c9b9a0" />
+<circle cx="56.25" cy="78.25" r="1.40" fill="#c9b9a0" />
+<circle cx="61.75" cy="78.25" r="1.40" fill="#c9b9a0" />
+<circle cx="67.25" cy="78.25" r="1.40" fill="#c9b9a0" />
+<circle cx="72.75" cy="78.25" r="1.40" fill="#c9b9a0" />
+<circle cx="78.25" cy="78.25" r="1.40" fill="#c9b9a0" />
+<circle cx="83.75" cy="78.25" r="1.40" fill="#c9b9a0" />
+<circle cx="89.25" cy="78.25" r="1.40" fill="#c9b9a0" />
+<circle cx="94.75" cy="78.25" r="1.40" fill="#c9b9a0" />
+<circle cx="100.25" cy="78.25" r="1.40" fill="#c9b9a0" />
+<circle cx="105.75" cy="78.25" r="1.40" fill="#c9b9a0" />
+<circle cx="111.25" cy="78.25" r="1.40" fill="#c9b9a0" />
+<circle cx="116.75" cy="78.25" r="1.40" fill="#c9b9a0" />
+<circle cx="122.25" cy="78.25" r="1.40" fill="#c9b9a0" />
+<circle cx="127.75" cy="78.25" r="1.40" fill="#c9b9a0" />
+<circle cx="6.75" cy="83.75" r="1.40" fill="#c9b9a0" />
+<circle cx="12.25" cy="83.75" r="1.40" fill="#c9b9a0" />
+<circle cx="17.75" cy="83.75" r="1.40" fill="#c9b9a0" />
+<circle cx="23.25" cy="83.75" r="1.40" fill="#c9b9a0" />
+<circle cx="28.75" cy="83.75" r="1.40" fill="#c9b9a0" />
+<circle cx="34.25" cy="83.75" r="1.40" fill="#c9b9a0" />
+<circle cx="39.75" cy="83.75" r="1.40" fill="#c9b9a0" />
+<circle cx="45.25" cy="83.75" r="1.40" fill="#c9b9a0" />
+<circle cx="50.75" cy="83.75" r="1.40" fill="#c9b9a0" />
+<circle cx="56.25" cy="83.75" r="1.40" fill="#c9b9a0" />
+<circle cx="61.75" cy="83.75" r="1.40" fill="#c9b9a0" />
+<circle cx="67.25" cy="83.75" r="1.40" fill="#c9b9a0" />
+<circle cx="72.75" cy="83.75" r="1.40" fill="#c9b9a0" />
+<circle cx="78.25" cy="83.75" r="1.40" fill="#c9b9a0" />
+<circle cx="83.75" cy="83.75" r="1.40" fill="#c9b9a0" />
+<circle cx="89.25" cy="83.75" r="1.40" fill="#c9b9a0" />
+<circle cx="94.75" cy="83.75" r="1.40" fill="#c9b9a0" />
+<circle cx="100.25" cy="83.75" r="1.40" fill="#c9b9a0" />
+<circle cx="105.75" cy="83.75" r="1.40" fill="#c9b9a0" />
+<circle cx="111.25" cy="83.75" r="1.40" fill="#c9b9a0" />
+<circle cx="116.75" cy="83.75" r="1.40" fill="#c9b9a0" />
+<circle cx="122.25" cy="83.75" r="1.40" fill="#c9b9a0" />
+<circle cx="127.75" cy="83.75" r="1.40" fill="#c9b9a0" />
+<circle cx="6.75" cy="89.25" r="1.40" fill="#c9b9a0" />
+<circle cx="12.25" cy="89.25" r="1.40" fill="#c9b9a0" />
+<circle cx="17.75" cy="89.25" r="1.40" fill="#c9b9a0" />
+<circle cx="23.25" cy="89.25" r="1.40" fill="#c9b9a0" />
+<circle cx="28.75" cy="89.25" r="1.40" fill="#c9b9a0" />
+<circle cx="34.25" cy="89.25" r="1.40" fill="#c9b9a0" />
+<circle cx="39.75" cy="89.25" r="1.40" fill="#c9b9a0" />
+<circle cx="45.25" cy="89.25" r="1.40" fill="#c9b9a0" />
+<circle cx="50.75" cy="89.25" r="1.40" fill="#c9b9a0" />
+<circle cx="56.25" cy="89.25" r="1.40" fill="#c9b9a0" />
+<circle cx="61.75" cy="89.25" r="1.40" fill="#c9b9a0" />
+<circle cx="67.25" cy="89.25" r="1.40" fill="#c9b9a0" />
+<circle cx="72.75" cy="89.25" r="1.40" fill="#c9b9a0" />
+<circle cx="78.25" cy="89.25" r="2.00" fill="#B76749" />
+<circle cx="83.75" cy="89.25" r="1.40" fill="#c9b9a0" />
+<circle cx="89.25" cy="89.25" r="1.40" fill="#c9b9a0" />
+<circle cx="94.75" cy="89.25" r="1.40" fill="#c9b9a0" />
+<circle cx="100.25" cy="89.25" r="1.40" fill="#c9b9a0" />
+<circle cx="105.75" cy="89.25" r="1.40" fill="#c9b9a0" />
+<circle cx="111.25" cy="89.25" r="1.40" fill="#c9b9a0" />
+<circle cx="116.75" cy="89.25" r="1.40" fill="#c9b9a0" />
+<circle cx="122.25" cy="89.25" r="1.40" fill="#c9b9a0" />
+<circle cx="127.75" cy="89.25" r="1.40" fill="#c9b9a0" />
+<circle cx="6.75" cy="94.75" r="1.40" fill="#c9b9a0" />
+<circle cx="12.25" cy="94.75" r="1.40" fill="#c9b9a0" />
+<circle cx="17.75" cy="94.75" r="1.40" fill="#c9b9a0" />
+<circle cx="23.25" cy="94.75" r="1.40" fill="#c9b9a0" />
+<circle cx="28.75" cy="94.75" r="1.40" fill="#c9b9a0" />
+<circle cx="34.25" cy="94.75" r="1.40" fill="#c9b9a0" />
+<circle cx="39.75" cy="94.75" r="1.40" fill="#c9b9a0" />
+<circle cx="45.25" cy="94.75" r="1.40" fill="#c9b9a0" />
+<circle cx="50.75" cy="94.75" r="1.40" fill="#c9b9a0" />
+<circle cx="56.25" cy="94.75" r="1.40" fill="#c9b9a0" />
+<circle cx="61.75" cy="94.75" r="1.40" fill="#c9b9a0" />
+<circle cx="67.25" cy="94.75" r="1.40" fill="#c9b9a0" />
+<circle cx="72.75" cy="94.75" r="1.40" fill="#c9b9a0" />
+<circle cx="78.25" cy="94.75" r="1.40" fill="#c9b9a0" />
+<circle cx="83.75" cy="94.75" r="1.40" fill="#c9b9a0" />
+<circle cx="89.25" cy="94.75" r="1.40" fill="#c9b9a0" />
+<circle cx="94.75" cy="94.75" r="1.40" fill="#c9b9a0" />
+<circle cx="100.25" cy="94.75" r="1.40" fill="#c9b9a0" />
+<circle cx="105.75" cy="94.75" r="1.40" fill="#c9b9a0" />
+<circle cx="111.25" cy="94.75" r="1.40" fill="#c9b9a0" />
+<circle cx="116.75" cy="94.75" r="1.40" fill="#c9b9a0" />
+<circle cx="122.25" cy="94.75" r="1.40" fill="#c9b9a0" />
+<circle cx="127.75" cy="94.75" r="1.40" fill="#c9b9a0" />
+<circle cx="6.75" cy="100.25" r="1.40" fill="#c9b9a0" />
+<circle cx="12.25" cy="100.25" r="1.40" fill="#c9b9a0" />
+<circle cx="17.75" cy="100.25" r="1.40" fill="#c9b9a0" />
+<circle cx="23.25" cy="100.25" r="1.40" fill="#c9b9a0" />
+<circle cx="28.75" cy="100.25" r="1.40" fill="#c9b9a0" />
+<circle cx="34.25" cy="100.25" r="1.40" fill="#c9b9a0" />
+<circle cx="39.75" cy="100.25" r="1.40" fill="#c9b9a0" />
+<circle cx="45.25" cy="100.25" r="1.40" fill="#c9b9a0" />
+<circle cx="50.75" cy="100.25" r="1.40" fill="#c9b9a0" />
+<circle cx="56.25" cy="100.25" r="1.40" fill="#c9b9a0" />
+<circle cx="61.75" cy="100.25" r="1.40" fill="#c9b9a0" />
+<circle cx="67.25" cy="100.25" r="1.40" fill="#c9b9a0" />
+<circle cx="72.75" cy="100.25" r="1.40" fill="#c9b9a0" />
+<circle cx="78.25" cy="100.25" r="1.40" fill="#c9b9a0" />
+<circle cx="83.75" cy="100.25" r="1.40" fill="#c9b9a0" />
+<circle cx="89.25" cy="100.25" r="1.40" fill="#c9b9a0" />
+<circle cx="94.75" cy="100.25" r="1.40" fill="#c9b9a0" />
+<circle cx="100.25" cy="100.25" r="1.40" fill="#c9b9a0" />
+<circle cx="105.75" cy="100.25" r="1.40" fill="#c9b9a0" />
+<circle cx="111.25" cy="100.25" r="1.40" fill="#c9b9a0" />
+<circle cx="116.75" cy="100.25" r="1.40" fill="#c9b9a0" />
+<circle cx="122.25" cy="100.25" r="1.40" fill="#c9b9a0" />
+<circle cx="127.75" cy="100.25" r="1.40" fill="#c9b9a0" />
+<circle cx="6.75" cy="105.75" r="1.40" fill="#c9b9a0" />
+<circle cx="12.25" cy="105.75" r="1.40" fill="#c9b9a0" />
+<circle cx="17.75" cy="105.75" r="1.40" fill="#c9b9a0" />
+<circle cx="23.25" cy="105.75" r="1.40" fill="#c9b9a0" />
+<circle cx="28.75" cy="105.75" r="1.40" fill="#c9b9a0" />
+<circle cx="34.25" cy="105.75" r="1.40" fill="#c9b9a0" />
+<circle cx="39.75" cy="105.75" r="1.40" fill="#c9b9a0" />
+<circle cx="45.25" cy="105.75" r="1.40" fill="#c9b9a0" />
+<circle cx="50.75" cy="105.75" r="1.40" fill="#c9b9a0" />
+<circle cx="56.25" cy="105.75" r="1.40" fill="#c9b9a0" />
+<circle cx="61.75" cy="105.75" r="1.40" fill="#c9b9a0" />
+<circle cx="67.25" cy="105.75" r="1.40" fill="#c9b9a0" />
+<circle cx="72.75" cy="105.75" r="1.40" fill="#c9b9a0" />
+<circle cx="78.25" cy="105.75" r="1.40" fill="#c9b9a0" />
+<circle cx="83.75" cy="105.75" r="1.40" fill="#c9b9a0" />
+<circle cx="89.25" cy="105.75" r="1.40" fill="#c9b9a0" />
+<circle cx="94.75" cy="105.75" r="1.40" fill="#c9b9a0" />
+<circle cx="100.25" cy="105.75" r="1.40" fill="#c9b9a0" />
+<circle cx="105.75" cy="105.75" r="1.40" fill="#c9b9a0" />
+<circle cx="111.25" cy="105.75" r="1.40" fill="#c9b9a0" />
+<circle cx="116.75" cy="105.75" r="1.40" fill="#c9b9a0" />
+<circle cx="122.25" cy="105.75" r="1.40" fill="#c9b9a0" />
+<circle cx="127.75" cy="105.75" r="1.40" fill="#c9b9a0" />
+<circle cx="6.75" cy="111.25" r="1.40" fill="#c9b9a0" />
+<circle cx="12.25" cy="111.25" r="1.40" fill="#c9b9a0" />
+<circle cx="17.75" cy="111.25" r="1.40" fill="#c9b9a0" />
+<circle cx="23.25" cy="111.25" r="1.40" fill="#c9b9a0" />
+<circle cx="28.75" cy="111.25" r="1.40" fill="#c9b9a0" />
+<circle cx="34.25" cy="111.25" r="1.40" fill="#c9b9a0" />
+<circle cx="39.75" cy="111.25" r="1.40" fill="#c9b9a0" />
+<circle cx="45.25" cy="111.25" r="1.40" fill="#c9b9a0" />
+<circle cx="50.75" cy="111.25" r="1.40" fill="#c9b9a0" />
+<circle cx="56.25" cy="111.25" r="1.40" fill="#c9b9a0" />
+<circle cx="61.75" cy="111.25" r="1.40" fill="#c9b9a0" />
+<circle cx="67.25" cy="111.25" r="1.40" fill="#c9b9a0" />
+<circle cx="72.75" cy="111.25" r="1.40" fill="#c9b9a0" />
+<circle cx="78.25" cy="111.25" r="1.40" fill="#c9b9a0" />
+<circle cx="83.75" cy="111.25" r="1.40" fill="#c9b9a0" />
+<circle cx="89.25" cy="111.25" r="1.40" fill="#c9b9a0" />
+<circle cx="94.75" cy="111.25" r="1.40" fill="#c9b9a0" />
+<circle cx="100.25" cy="111.25" r="1.40" fill="#c9b9a0" />
+<circle cx="105.75" cy="111.25" r="1.40" fill="#c9b9a0" />
+<circle cx="111.25" cy="111.25" r="1.40" fill="#c9b9a0" />
+<circle cx="116.75" cy="111.25" r="1.40" fill="#c9b9a0" />
+</svg>
+        <div style="font-size:8pt; letter-spacing:0.04em; color:#8d4d33; margin-top:2mm; font-weight:600;">458 SOLD &middot; <span class="copper">6 MATCH</span></div>
+      </div>
+    </div>
+
+    <div class="source-line" style="margin-bottom:3mm; font-size:7.5pt;">Source: Fields cohort analysis &middot; 458 houses sold across Merrimac, Robina, Varsity Lakes and Burleigh Waters &middot; 12 months to 15 May 2026 &middot; 6 had six bedrooms &middot; methodology at fieldsestate.com.au/methodology</div>
+
+    <div class="fields-advantage" style="padding:3.5mm 7mm 3.5mm 8mm;">
+      <span class="fa-label" style="margin-bottom:2mm;">FIELDS ADVANTAGE &mdash; 01</span>
+      <p class="fa-body" style="font-size:9.5pt; line-height:1.45;">Fields' data pipeline analyses the ingredients of a home before the campaign is written: floor plan, photography, satellite imagery, land, location, comparable sales, competing stock and buyer demand. The purpose is not to produce a headline claim. The purpose is to identify the strongest buyer argument: which features matter, which buyer values them, what evidence supports the price, what trade-offs should be named, and how the campaign should be built. <strong>That is the difference between describing a home and positioning it.</strong></p>
+    </div>
+
+    <div class="page-footer">
+      <span class="smarter-mark">
+        <svg viewBox="0 0 14 17" xmlns="http://www.w3.org/2000/svg">
+          <path d="M 2 2 L 2 15 L 4 15 L 4 9 L 11 9 Q 13 9 13 7 Q 13 5 11 5 L 4 5 L 4 2 Z M 4 6 L 11 6 Q 11.5 6 11.5 7 Q 11.5 8 11 8 L 4 8 Z" fill="#B76749"/>
+        </svg>
+        Smarter with data
+      </span>
+      <span class="page-num">5</span>
+    </div>
+  </div>
+</div>
+
+<!-- (Locked comps page moves to position 11, after the new receipts page) -->
+<!-- (Blank page removed — parity is now achieved by the 4-page S03)   -->
+
+<!-- ============================================================ -->
+<!-- PAGE 04 — SPREAD 02 LEFT — BUYER (thesis)                     -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">13 Terrace Court</div>
+      <svg viewBox="0 0 22 26" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 3 2 L 3 24 L 6 24 L 6 14 L 17 14 Q 20 14 20 11 Q 20 8 17 8 L 6 8 L 6 2 Z M 6 10 L 17 10 Q 17.5 10 17.5 11 Q 17.5 12 17 12 L 6 12 Z" fill="#B76749"/>
+      </svg>
+    </div>
+
+    <div class="spread-number">02</div>
+
+    <h2 class="spread-headline">The right buyer pays the premium.</h2>
+
+    <div class="spread-body">
+      <p>The premium price for any home is paid by one specific buyer — the buyer for whom every attribute of the home is the answer to a search they have already been running.</p>
+      <p>Generic marketing reaches a generic buyer, who pays a generic price. The price the seller is paid is the price of the buyer who finds the home.</p>
+      <p>Identifying that buyer with precision — by life stage, household, income, geography, and the friction they are trying to escape — is what allows the campaign to find them.</p>
+    </div>
+
+    <div class="thesis-close">For 13 Terrace Court, three buyers carry the price.</div>
+
+    <div class="page-footer">
+      <span class="smarter-mark">
+        <svg viewBox="0 0 14 17" xmlns="http://www.w3.org/2000/svg">
+          <path d="M 2 1 L 2 16 L 4 16 L 4 9 L 11 9 Q 13 9 13 7 Q 13 5 11 5 L 4 5 L 4 1 Z M 4 6.5 L 11 6.5 Q 11.5 6.5 11.5 7 Q 11.5 7.5 11 7.5 L 4 7.5 Z" fill="#B76749"/>
+        </svg>
+        Smarter with data
+      </span>
+      <span class="page-num">— 6 —</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 05 — SPREAD 02 RIGHT — BUYER (applied)                    -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">For 13 Terrace Court</div>
+      <svg viewBox="0 0 22 26" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 3 2 L 3 24 L 6 24 L 6 14 L 17 14 Q 20 14 20 11 Q 20 8 17 8 L 6 8 L 6 2 Z M 6 10 L 17 10 Q 17.5 10 17.5 11 Q 17.5 12 17 12 L 6 12 Z" fill="#B76749"/>
+      </svg>
+    </div>
+
+    <h2 class="right-headline" style="font-size:28pt; margin-bottom:3mm;">Three buyers. One <span class="copper">outbids</span> the field.</h2>
+    <div class="right-subhead" style="margin-bottom:6mm;">Your premium price likely comes from one of these three.</div>
+
+    <div class="personas">
+
+      <!-- Persona 01 — Established Owner-Occupier -->
+      <div class="persona-card primary">
+        <span class="persona-rank">01 · Primary</span>
+        <span class="persona-share">35% share</span>
+
+        <div>
+          <div class="persona-name">Established Owner-Occupier</div>
+          <div class="persona-demo">50–65 yrs · <strong>equity-funded buyer</strong> (retirement income, not income-led) · downsizing within the southern Gold Coast.</div>
+          <div class="persona-evidence">Catchment: 10,366 owned-outright dwellings and 16,190 residents aged 50–65 across POA 4226 + 4227 + 4220.</div>
+        </div>
+
+        <div class="match-bar">
+          <div class="match-bar-label">Six bedrooms</div>
+          <div class="match-dots"><span class="dot"></span><span class="dot"></span><span class="dot half"></span><span class="dot"></span><span class="dot"></span></div>
+          <div class="match-bar-label">Dual-living</div>
+          <div class="match-dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+          <div class="match-bar-label">Pool</div>
+          <div class="match-dots"><span class="dot full"></span><span class="dot full"></span><span class="dot full"></span><span class="dot half"></span><span class="dot"></span></div>
+          <div class="match-bar-label">Cul-de-sac</div>
+          <div class="match-dots"><span class="dot full"></span><span class="dot full"></span><span class="dot full"></span><span class="dot full"></span><span class="dot full"></span></div>
+          <div class="match-bar-label">Bushland</div>
+          <div class="match-dots"><span class="dot full"></span><span class="dot full"></span><span class="dot full"></span><span class="dot full"></span><span class="dot full"></span></div>
+        </div>
+
+        <div class="willingness">
+          <span class="willingness-label">Willingness to pay</span>
+          <span class="willingness-range">$1.85M – $2.05M</span>
+        </div>
+      </div>
+
+      <!-- Persona 02 — Multi-Generational Family -->
+      <div class="persona-card">
+        <span class="persona-rank">02 · Secondary</span>
+        <span class="persona-share">30% share</span>
+
+        <div>
+          <div class="persona-name">Multi-Generational Family</div>
+          <div class="persona-demo">40–55 yrs · <strong>top-quintile combined household income</strong> (≥$156K, top 21% of catchment) · three generations consolidating under one roof.</div>
+          <div class="persona-evidence">Smaller raw catchment, but the only configuration in the market that fits this household — feature-match lifts the share above raw demographics.</div>
+        </div>
+
+        <div class="match-bar">
+          <div class="match-bar-label">Six bedrooms</div>
+          <div class="match-dots"><span class="dot full"></span><span class="dot full"></span><span class="dot full"></span><span class="dot full"></span><span class="dot full"></span></div>
+          <div class="match-bar-label">Dual-living</div>
+          <div class="match-dots"><span class="dot full"></span><span class="dot full"></span><span class="dot full"></span><span class="dot full"></span><span class="dot full"></span></div>
+          <div class="match-bar-label">Pool</div>
+          <div class="match-dots"><span class="dot full"></span><span class="dot full"></span><span class="dot full"></span><span class="dot full"></span><span class="dot"></span></div>
+          <div class="match-bar-label">Cul-de-sac</div>
+          <div class="match-dots"><span class="dot full"></span><span class="dot full"></span><span class="dot full"></span><span class="dot full"></span><span class="dot full"></span></div>
+          <div class="match-bar-label">Bushland</div>
+          <div class="match-dots"><span class="dot full"></span><span class="dot full"></span><span class="dot full"></span><span class="dot half"></span><span class="dot"></span></div>
+        </div>
+
+        <div class="willingness">
+          <span class="willingness-label">Willingness to pay</span>
+          <span class="willingness-range">$1.95M – $2.15M</span>
+        </div>
+      </div>
+
+      <!-- Persona 03 — Relocating High-Income Family -->
+      <div class="persona-card">
+        <span class="persona-rank">03 · Tertiary</span>
+        <span class="persona-share">20% share</span>
+
+        <div>
+          <div class="persona-name">Relocating High-Income Family</div>
+          <div class="persona-demo">35–50 yrs · <strong>top-decile household income</strong> (≥$208K, top 10% of catchment) · moving to the Gold Coast from Sydney or Melbourne.</div>
+          <div class="persona-evidence">Inflow context: ABS Regional Population reports +9,800 interstate movers into Gold Coast LGA 2022-23; ~30% land in the southern GC catchment.</div>
+        </div>
+
+        <div class="match-bar">
+          <div class="match-bar-label">Six bedrooms</div>
+          <div class="match-dots"><span class="dot full"></span><span class="dot full"></span><span class="dot full"></span><span class="dot half"></span><span class="dot"></span></div>
+          <div class="match-bar-label">Dual-living</div>
+          <div class="match-dots"><span class="dot full"></span><span class="dot full"></span><span class="dot half"></span><span class="dot"></span><span class="dot"></span></div>
+          <div class="match-bar-label">Pool</div>
+          <div class="match-dots"><span class="dot full"></span><span class="dot full"></span><span class="dot full"></span><span class="dot full"></span><span class="dot full"></span></div>
+          <div class="match-bar-label">Cul-de-sac</div>
+          <div class="match-dots"><span class="dot full"></span><span class="dot full"></span><span class="dot half"></span><span class="dot"></span><span class="dot"></span></div>
+          <div class="match-bar-label">Bushland</div>
+          <div class="match-dots"><span class="dot full"></span><span class="dot full"></span><span class="dot full"></span><span class="dot full"></span><span class="dot half"></span></div>
+        </div>
+
+        <div class="willingness">
+          <span class="willingness-label">Willingness to pay</span>
+          <span class="willingness-range">$1.80M – $1.95M</span>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="anti-fit" style="margin:1mm 0 2mm; font-size:9.5pt;">Not for this home: investors seeking yield, first-home buyers, new-build seekers.</div>
+
+    <div class="source-line" style="margin-bottom:2mm; font-size:7pt;">Source: ABS Census 2021 Table G33 (household income) — POA 4220 + 4226 + 4227 · ABS Regional Population 2022-23 · Fields sold-cohort premium analysis (n=1,069, last 12 months) · REA / Domain enquiry-mix benchmarks · 2026-05-09</div>
+
+    <div class="fields-advantage" style="padding:3.5mm 7mm 3.5mm 8mm;">
+      <span class="fa-label" style="margin-bottom:2mm;">Fields Advantage — 02</span>
+      <p class="fa-body" style="font-size:9.5pt; line-height:1.45;">Fields' buyer-mapping model is built from <strong>2,075 sold transactions</strong>, demographics for <strong>16,190 qualified residents</strong>, and enquiry-mix benchmarks across every premium listing in the catchment over the last 24 months. Each scarcity attribute is matched to the persona historically willing to pay the most for it — so the campaign reaches the right person, not the largest list. <strong>No agency in the southern Gold Coast operates this analysis on a per-listing basis.</strong></p>
+    </div>
+
+    <div class="page-footer">
+      <span class="smarter-mark">
+        <svg viewBox="0 0 14 17" xmlns="http://www.w3.org/2000/svg">
+          <path d="M 2 1 L 2 16 L 4 16 L 4 9 L 11 9 Q 13 9 13 7 Q 13 5 11 5 L 4 5 L 4 1 Z M 4 6.5 L 11 6.5 Q 11.5 6.5 11.5 7 Q 11.5 7.5 11 7.5 L 4 7.5 Z" fill="#B76749"/>
+        </svg>
+        Smarter with data
+      </span>
+      <span class="page-num">— 7 —</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 06 — SPREAD 03 LEFT — VALUATION (thesis)                  -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">13 Terrace Court</div>
+      <svg viewBox="0 0 22 26" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 3 2 L 3 24 L 6 24 L 6 14 L 17 14 Q 20 14 20 11 Q 20 8 17 8 L 6 8 L 6 2 Z M 6 10 L 17 10 Q 17.5 10 17.5 11 Q 17.5 12 17 12 L 6 12 Z" fill="#B76749"/>
+      </svg>
+    </div>
+
+    <div class="spread-number">03</div>
+
+    <h2 class="spread-headline long">Valuation — The single most important factor in sale outcome.</h2>
+
+    <div class="right-subhead" style="font-size:13pt; margin-bottom:7mm; color:var(--copper-deep); max-width:155mm;">The valuation is the foundation.</div>
+
+    <div class="spread-body" style="font-size:12pt;">
+      <p>If the valuation is wrong, the campaign is built from the wrong starting point.</p>
+      <p>Price too low, and you risk transferring value from the seller to the buyer. Price too high, and you risk weakening competition before it begins: the listing ages, buyers become sceptical, and momentum is lost.</p>
+      <p>The valuation is not the ceiling. It is the foundation from which the premium is earned — through positioning, presentation, campaign reach and negotiation.</p>
+    </div>
+
+    <div class="thesis-close">For 13 Terrace Court, that foundation is derived on the next page.</div>
+
+    <div class="page-footer">
+      <span class="smarter-mark">
+        <svg viewBox="0 0 14 17" xmlns="http://www.w3.org/2000/svg">
+          <path d="M 2 1 L 2 16 L 4 16 L 4 9 L 11 9 Q 13 9 13 7 Q 13 5 11 5 L 4 5 L 4 1 Z M 4 6.5 L 11 6.5 Q 11.5 6.5 11.5 7 Q 11.5 7.5 11 7.5 L 4 7.5 Z" fill="#B76749"/>
+        </svg>
+        Smarter with data
+      </span>
+      <span class="page-num">— 8 —</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 07 — SPREAD 03 RIGHT — VALUATION (applied / evidence)      -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">For 13 Terrace Court</div>
+      <svg viewBox="0 0 22 26" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 3 2 L 3 24 L 6 24 L 6 14 L 17 14 Q 20 14 20 11 Q 20 8 17 8 L 6 8 L 6 2 Z M 6 10 L 17 10 Q 17.5 10 17.5 11 Q 17.5 12 17 12 L 6 12 Z" fill="#B76749"/>
+      </svg>
+    </div>
+
+    <h2 class="right-headline s03"><span class="copper">$1.85M – $2.05M.</span> The range, derived.</h2>
+    <div class="right-subhead" style="margin-bottom:6mm;">Anchored in the cohort. Narrowed to the homes most relevant to yours.</div>
+
+    <div class="cohort-anchor">
+      4-bedroom homes, southern Gold Coast, last 12 months — <strong>median $1,400,000</strong> (n=698).<br>
+      6-bedroom homes, same cohort — <strong>median $1,909,000</strong> (n=54).
+      <span class="lift">A +36% raw lift, before further attribute weighting.</span>
+    </div>
+
+    <div class="evidence-stack">
+      <div class="evidence-row">
+        <div class="attr">Six-bedroom scale</div>
+        <div class="band">
+          <div class="band-dots"><span class="dot full"></span><span class="dot full"></span><span class="dot full"></span><span class="dot full"></span><span class="dot"></span></div>
+        </div>
+        <div class="signal">6+bd cohort sells +36% above 4bd median (n=54 vs n=698)</div>
+      </div>
+      <div class="evidence-row">
+        <div class="attr">Dual-living configuration</div>
+        <div class="band">
+          <div class="band-dots"><span class="dot full"></span><span class="dot full"></span><span class="dot full"></span><span class="dot full"></span><span class="dot"></span></div>
+        </div>
+        <div class="signal">Independent buyer driver for the multi-gen persona; rare paired-cohort evidence (n=42)</div>
+      </div>
+      <div class="evidence-row">
+        <div class="attr">Pool &amp; outdoor lifestyle</div>
+        <div class="band">
+          <div class="band-dots"><span class="dot full"></span><span class="dot full"></span><span class="dot full"></span><span class="dot"></span><span class="dot"></span></div>
+        </div>
+        <div class="signal">Standard premium across southern Gold Coast (cohort n=410)</div>
+      </div>
+      <div class="evidence-row">
+        <div class="attr">Cul-de-sac · no through-traffic</div>
+        <div class="band">
+          <div class="band-dots"><span class="dot full"></span><span class="dot full"></span><span class="dot full"></span><span class="dot"></span><span class="dot"></span></div>
+        </div>
+        <div class="signal">Premium for safety-conscious downsizers (cohort n=215)</div>
+      </div>
+      <div class="evidence-row">
+        <div class="attr">Permanent bushland boundary</div>
+        <div class="band">
+          <div class="band-dots"><span class="dot full"></span><span class="dot full"></span><span class="dot full"></span><span class="dot full"></span><span class="dot"></span></div>
+        </div>
+        <div class="signal">Scarcity-driven premium (cohort n=87)</div>
+      </div>
+      <div class="evidence-row">
+        <div class="attr">Condition (9/10 vs cohort 7/10)</div>
+        <div class="band">
+          <div class="band-dots"><span class="dot full"></span><span class="dot full"></span><span class="dot full"></span><span class="dot full"></span><span class="dot"></span></div>
+        </div>
+        <div class="signal">Move-in-ready buyers pay above cohort median for completed homes</div>
+      </div>
+    </div>
+
+    <div class="synthesis">
+      <span class="label">Derived range</span>
+      <span class="range">$1.85M – $2.05M</span>
+      <span class="meta">midpoint $1.95M · 90% CI</span>
+    </div>
+
+    <div class="method-note">Premium attributes co-vary; the range is derived from the weighted set of comparable transactions, not from arithmetic stacking.</div>
+
+    <div class="confidence-row">n=142 comparable transactions analysed · cohort-weighted with attribute-level adjustment · confidence: high (full attribute coverage in n=68)</div>
+
+    <div class="source-line">Source: Fields valuation engine · cohort POA 4226 + 4227 + 4220 · sold transactions 2025-05 to 2026-04 (n=1,696) · 2026-05-09</div>
+
+    <div class="fields-advantage">
+      <span class="fa-label">Fields Advantage — 03</span>
+      <p class="fa-body">Fields' valuation engine analyses <strong>1,696 sold transactions across the southern Gold Coast</strong>, measuring how individual attributes influence price: bedrooms, pools, land size, floor area, cul-de-sac position, condition, outlook and more. Most appraisals rely on a handful of comparable sales. Fields runs the full cohort, then narrows the evidence to the homes most relevant to yours. <strong>Every major pricing assumption is anchored to observed market evidence.</strong></p>
+    </div>
+
+    <div class="page-footer">
+      <span class="smarter-mark">
+        <svg viewBox="0 0 14 17" xmlns="http://www.w3.org/2000/svg">
+          <path d="M 2 1 L 2 16 L 4 16 L 4 9 L 11 9 Q 13 9 13 7 Q 13 5 11 5 L 4 5 L 4 1 Z M 4 6.5 L 11 6.5 Q 11.5 6.5 11.5 7 Q 11.5 7.5 11 7.5 L 4 7.5 Z" fill="#B76749"/>
+        </svg>
+        Smarter with data
+      </span>
+      <span class="page-num">— 9 —</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 10 — SPREAD 03 RECEIPTS — comp-by-comp adjustments         -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">For 13 Terrace Court</div>
+      <svg viewBox="0 0 22 26" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 3 2 L 3 24 L 6 24 L 6 14 L 17 14 Q 20 14 20 11 Q 20 8 17 8 L 6 8 L 6 2 Z M 6 10 L 17 10 Q 17.5 10 17.5 11 Q 17.5 12 17 12 L 6 12 Z" fill="#B76749"/>
+      </svg>
+    </div>
+
+    <h2 class="right-headline s03" style="font-size:26pt; margin-bottom:2mm;">What went into <span class="copper">your valuation.</span></h2>
+    <div class="right-subhead" style="margin-bottom:5mm; font-size:11pt;">The specific adjustments behind the $1.85M – $2.05M range — comp by comp.</div>
+
+    <div class="receipts">
+      <div class="receipt-card">
+        <div class="receipt-header">
+          <div class="receipt-num">Comp 01</div>
+          <div class="receipt-addr">5 Straite Drive, Robina</div>
+          <div class="receipt-meta">Sold <span class="sold">$1,950,000</span> · 4.25 km</div>
+        </div>
+        <div class="receipt-adjustments">
+          <div class="adjust-row"><div class="desc">Floor area &nbsp;<em>(subject +23 m²)</em></div><div class="delta up">+ $80,500</div></div>
+          <div class="adjust-row"><div class="desc">Land area &nbsp;<em>(subject −142 m²)</em></div><div class="delta down">− $99,400</div></div>
+          <div class="adjust-row"><div class="desc">Bedrooms &nbsp;<em>(subject +1)</em></div><div class="delta up">+ $45,000</div></div>
+          <div class="adjust-row"><div class="desc">Bathrooms &nbsp;<em>(subject +1)</em></div><div class="delta up">+ $22,000</div></div>
+          <div class="adjust-row"><div class="desc">Dual-living configuration &nbsp;<em>(subject only)</em></div><div class="delta up">+ $25,000</div></div>
+          <div class="adjust-row"><div class="desc">Boundary &nbsp;<em>(bushland vs reserve)</em></div><div class="delta up">+ $5,000</div></div>
+        </div>
+        <div class="receipt-total">
+          <div class="label">Adjusted estimate of subject</div>
+          <div class="adjusted">$2,028,000</div>
+          <div class="weight">Weight 28%</div>
+        </div>
+      </div>
+
+      <div class="receipt-card">
+        <div class="receipt-header">
+          <div class="receipt-num">Comp 02</div>
+          <div class="receipt-addr">20 Federal Place, Robina</div>
+          <div class="receipt-meta">Sold <span class="sold">$2,349,000</span> · 3.91 km</div>
+        </div>
+        <div class="receipt-adjustments">
+          <div class="adjust-row"><div class="desc">Floor area &nbsp;<em>(subject −84 m²)</em></div><div class="delta down">− $294,000</div></div>
+          <div class="adjust-row"><div class="desc">Land area &nbsp;<em>(subject −127 m²)</em></div><div class="delta down">− $88,900</div></div>
+          <div class="adjust-row"><div class="desc">Bedrooms &nbsp;<em>(same)</em></div><div class="delta">±  $0</div></div>
+          <div class="adjust-row"><div class="desc">Bathrooms &nbsp;<em>(subject −3)</em></div><div class="delta down">− $66,000</div></div>
+          <div class="adjust-row"><div class="desc">Outlook &nbsp;<em>(golf reserve vs bushland)</em></div><div class="delta down">− $15,000</div></div>
+          <div class="adjust-row"><div class="desc">Dual-living configuration &nbsp;<em>(subject only)</em></div><div class="delta up">+ $25,000</div></div>
+        </div>
+        <div class="receipt-total">
+          <div class="label">Adjusted estimate of subject</div>
+          <div class="adjusted">$1,910,000</div>
+          <div class="weight">Weight 22%</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cohort-summary">
+      <strong>Two comps shown in detail.</strong> Five additional comparable sales — six-bedroom houses across Robina, Varsity Lakes, Merrimac and Burleigh Waters sold in the last 12 months — contribute the remaining <strong>50%</strong> of the weight. Every adjustment is verified against the cohort median before reconciliation.
+    </div>
+
+    <div class="stat-callout" style="margin-bottom:3mm;">
+      <div class="stat-num">11.4%</div>
+      <div class="stat-body">
+        mean absolute error across Fields' last published backtest, against 1,270 actual Gold Coast sales. Domain's equivalent on the same market: <strong>15.0%</strong>. <em>Fields publishes its accuracy. Domain does not.</em>
+        <span class="stat-source">Source: Fields valuation backtest · comparable_sales_v3 · March 2026</span>
+      </div>
+    </div>
+
+    <div class="page-footer">
+      <span class="smarter-mark">
+        <svg viewBox="0 0 14 17" xmlns="http://www.w3.org/2000/svg">
+          <path d="M 2 1 L 2 16 L 4 16 L 4 9 L 11 9 Q 13 9 13 7 Q 13 5 11 5 L 4 5 L 4 1 Z M 4 6.5 L 11 6.5 Q 11.5 6.5 11.5 7 Q 11.5 7.5 11 7.5 L 4 7.5 Z" fill="#B76749"/>
+        </svg>
+        Smarter with data
+      </span>
+      <span class="page-num">— 10 —</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 11 — PRICING RECOMMENDATION (alt — listing + target)       -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">For 13 Terrace Court</div>
+      <svg viewBox="0 0 22 26" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 3 2 L 3 24 L 6 24 L 6 14 L 17 14 Q 20 14 20 11 Q 20 8 17 8 L 6 8 L 6 2 Z M 6 10 L 17 10 Q 17.5 10 17.5 11 Q 17.5 12 17 12 L 6 12 Z" fill="#B76749"/>
+      </svg>
+    </div>
+
+    <div class="section-eyebrow">Recommendation</div>
+
+    <h2 class="right-headline" style="font-size:28pt; margin-bottom:3mm;">Our recommendation for <span class="copper">13 Terrace Court.</span></h2>
+    <div class="right-subhead" style="margin-bottom:7mm;">Built from the derived range. Refined for buyer behaviour.</div>
+
+    <div class="pricing-hero">
+      <div class="price-cell">
+        <div class="pc-label">Recommended listing price</div>
+        <div class="pc-value">$1,915,000</div>
+        <div class="pc-rationale">Lower end of the derived range. Precise, above the $1.9M round number, top of the $1.5M–$2M portal bracket.</div>
+      </div>
+      <div class="price-cell">
+        <div class="pc-label">Target sale price</div>
+        <div class="pc-value" style="font-size:22pt; letter-spacing:-0.4px;">$2,000,000 – $2,050,000</div>
+        <div class="pc-rationale">Upper end of the derived range. Reached through buyer competition — not seller negotiation.</div>
+      </div>
+    </div>
+
+    <p class="strategy-body">The listing price sits in the lower end of the derived $1.85M – $2.05M range. The target sits in the upper end. The <strong>$85,000 – $135,000 gap</strong> between them is intentional — it is the stretch room buyers reach through competitive bidding, not the price the seller hopes to defend through negotiation. <em>Multiple interested buyers move from the listing price toward the target. A single buyer moves the other way.</em></p>
+
+    <div class="conditions-block">
+      <div class="conditions-label">Four conditions of the precise-pricing protocol — all met</div>
+      <div class="conditions-grid">
+        <div class="condition-item">
+          <span class="check">✓</span>
+          <div class="text"><strong>Precise, not round.</strong> $1,915,000 reads as a considered figure; $1,900,000 reads as a guess.</div>
+        </div>
+        <div class="condition-item">
+          <span class="check">✓</span>
+          <div class="text"><strong>Above the round number.</strong> Signals knowledge, not weakness — the seller arrived at $1.9M and added value.</div>
+        </div>
+        <div class="condition-item">
+          <span class="check">✓</span>
+          <div class="text"><strong>Small gap to the round number.</strong> $15,000 above $1.9M reads deliberate; an arbitrary $87K would not.</div>
+        </div>
+        <div class="condition-item">
+          <span class="check">✓</span>
+          <div class="text"><strong>Property presents at the top of its range.</strong> 9/10 condition, full editorial, twilight photography.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="inspection-note">
+      <span class="label">Subject to physical inspection</span>
+      These figures are derived from the 1,696-transaction cohort and the comparable evidence stack on pages 9–10. <strong>They remain subject to a 30-minute physical property inspection by Will Simpson</strong> — the walk-through may refine the recommendation up or down based on observed condition, recent improvements, presentation quality, or features not captured in the data.
+    </div>
+
+    <div class="thesis-close">The strategy is engineered. The next step is yours.</div>
+
+    <div class="page-footer">
+      <span class="smarter-mark">
+        <svg viewBox="0 0 14 17" xmlns="http://www.w3.org/2000/svg">
+          <path d="M 2 1 L 2 16 L 4 16 L 4 9 L 11 9 Q 13 9 13 7 Q 13 5 11 5 L 4 5 L 4 1 Z M 4 6.5 L 11 6.5 Q 11.5 6.5 11.5 7 Q 11.5 7.5 11 7.5 L 4 7.5 Z" fill="#B76749"/>
+        </svg>
+        Smarter with data
+      </span>
+      <span class="page-num">— 11 —</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 12 — SPREAD 04 LEFT — TARGETING (thesis)                  -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">13 Terrace Court</div>
+      <svg viewBox="0 0 22 26" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 3 2 L 3 24 L 6 24 L 6 14 L 17 14 Q 20 14 20 11 Q 20 8 17 8 L 6 8 L 6 2 Z M 6 10 L 17 10 Q 17.5 10 17.5 11 Q 17.5 12 17 12 L 6 12 Z" fill="#B76749"/>
+      </svg>
+    </div>
+
+    <div class="spread-number">04</div>
+
+    <h2 class="spread-headline long">Premium pricing requires reaching the buyer who isn't currently searching.</h2>
+
+    <div class="spread-body" style="font-size:11.5pt;">
+      <p>Most marketing reaches one kind of buyer: the active buyer — those already searching the portals today. That is half the buyer market, at most.</p>
+      <p>The other half is the passive buyer — the buyer who matches the avatar but isn't searching this week. They are bigger in number. They are also the price mechanism: premium prices come from competition, and competition requires two or more passionate buyers in the room. Reaching only the active half of the market reaches only half the possible competition. The cost of the missing passionate buyer is paid by the seller.</p>
+      <p>For 13 Terrace Court, Fields targets the buyer avatars from Section 02 across both states — wherever their attention actually sits, whether they are searching today or not.</p>
+    </div>
+
+    <div class="competition-callout" style="margin-top: auto;">Premium prices come from competition between two or more passionate buyers. Reaching only the <strong>active half of the market</strong> reaches only <strong>half the possible competition</strong>. The passive buyer Fields finds is the second person in the room — and the reason your home sells above the cohort, not at it.</div>
+
+    <div class="thesis-close" style="margin-top: 8mm;">Portals capture demand that already exists. Fields creates and redirects demand.</div>
+
+    <div class="page-footer">
+      <span class="smarter-mark">
+        <svg viewBox="0 0 14 17" xmlns="http://www.w3.org/2000/svg">
+          <path d="M 2 1 L 2 16 L 4 16 L 4 9 L 11 9 Q 13 9 13 7 Q 13 5 11 5 L 4 5 L 4 1 Z M 4 6.5 L 11 6.5 Q 11.5 6.5 11.5 7 Q 11.5 7.5 11 7.5 L 4 7.5 Z" fill="#B76749"/>
+        </svg>
+        Smarter with data
+      </span>
+      <span class="page-num">— 12 —</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 09 — SPREAD 04 RIGHT — TARGETING (applied / 3 modes)       -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">For 13 Terrace Court</div>
+      <svg viewBox="0 0 22 26" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 3 2 L 3 24 L 6 24 L 6 14 L 17 14 Q 20 14 20 11 Q 20 8 17 8 L 6 8 L 6 2 Z M 6 10 L 17 10 Q 17.5 10 17.5 11 Q 17.5 12 17 12 L 6 12 Z" fill="#B76749"/>
+      </svg>
+    </div>
+
+    <h2 class="right-headline s03" style="font-size:24pt; margin-bottom:6mm;">Active buyers find listings. <span class="copper">Passive buyers we find for you.</span></h2>
+
+    <div class="three-modes">
+      <div class="mode-card">
+        <div class="mode-num">01</div>
+        <div class="mode-body">
+          <div class="mode-name">Active buyer</div>
+          <div class="mode-desc">Searching for a home like yours today. They will find your listing on a portal — Fields makes sure your listing competes for their attention there.</div>
+          <div class="mode-channels">realestate.com.au · Domain · Google Search</div>
+        </div>
+      </div>
+      <div class="mode-card">
+        <div class="mode-num">02</div>
+        <div class="mode-body">
+          <div class="mode-name">Passive buyer</div>
+          <div class="mode-desc">Matches your home's buyer avatar — but isn't searching this week. The larger pool, and the source of price competition. Most agents never reach them. Fields specialises in finding them.</div>
+          <div class="mode-channels">Facebook · Instagram · YouTube · Google Display</div>
+        </div>
+      </div>
+      <div class="mode-card">
+        <div class="mode-num">03</div>
+        <div class="mode-body">
+          <div class="mode-name">Retargeting (active and passive, after engagement)</div>
+          <div class="mode-desc">The buyer who has already engaged — visited the listing, watched the video, read the editorial — and needs repeated exposure to convert from interest to inspection.</div>
+          <div class="mode-channels">Across every platform where they continue to spend attention</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="campaign-math">
+      <span class="label">28-day campaign model</span>
+      Based on recent campaign benchmarks, a property like 13 Terrace Court would be marketed toward approximately <strong>40,000–60,000</strong> targeted impressions, with the aim of generating <strong>75–120</strong> deep engagements and <strong>35–50</strong> inspections. The objective is not exposure for its own sake — it is enough targeted reach to find the right buyer, and enough inspection volume to create competition.
+    </div>
+
+    <div class="source-line">Source: Industry campaign benchmarks validated against the last 90 days · ABS Census 2021 catchment (POA 4226 + 4227 + 4220) · 28-day campaign window · 2026-05-09</div>
+
+    <div class="fields-advantage">
+      <span class="fa-label">Fields Advantage — 04</span>
+      <p class="fa-body">Most agents market to buyers already searching on the portals and to contacts in a historical email database. <strong>Fields starts with the buyer most likely to pay the premium</strong>, then builds the campaign to find them across the platforms where their attention actually is — realestate.com.au, Domain, Facebook, Instagram, YouTube and Google. The campaign is built around the buyer avatar from Section 02, not a generic list of channels. <strong>Premium prices come from competition. Fields' job is to find the second passionate buyer in the room — because the cost of missing that buyer is too great to ignore.</strong></p>
+    </div>
+
+    <div class="page-footer">
+      <span class="smarter-mark">
+        <svg viewBox="0 0 14 17" xmlns="http://www.w3.org/2000/svg">
+          <path d="M 2 1 L 2 16 L 4 16 L 4 9 L 11 9 Q 13 9 13 7 Q 13 5 11 5 L 4 5 L 4 1 Z M 4 6.5 L 11 6.5 Q 11.5 6.5 11.5 7 Q 11.5 7.5 11 7.5 L 4 7.5 Z" fill="#B76749"/>
+        </svg>
+        Smarter with data
+      </span>
+      <span class="page-num">— 13 —</span>
+    </div>
+  </div>
+</div>
+
+<!-- (Section 06 markup is appended at end of body) -->
+
+<!-- ============================================================ -->
+<!-- PAGE 10 — SPREAD 05 LEFT — POSITIONING (thesis)                -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">13 Terrace Court</div>
+      <svg viewBox="0 0 22 26" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 3 2 L 3 24 L 6 24 L 6 14 L 17 14 Q 20 14 20 11 Q 20 8 17 8 L 6 8 L 6 2 Z M 6 10 L 17 10 Q 17.5 10 17.5 11 Q 17.5 12 17 12 L 6 12 Z" fill="#B76749"/>
+      </svg>
+    </div>
+
+    <div class="spread-number">05</div>
+
+    <h2 class="spread-headline">Buyers feel the home before they value it.</h2>
+
+    <div class="spread-body">
+      <p>A buyer does not walk through a home as a spreadsheet. They imagine the morning light, the dinner on the deck, the children in the pool, the quiet at the end of the street — the life that might become theirs.</p>
+      <p>The facts matter. The valuation matters. The campaign matters. But the strongest offers usually come after something more basic has happened: the buyer can see themselves living there.</p>
+      <p>Fields' job is to create that moment deliberately — through photography, copy, editorial storytelling and feature emphasis calibrated to the buyer most likely to pay the premium.</p>
+    </div>
+
+    <div class="thesis-close">For 13 Terrace Court, the presentation strategy is built around that moment.</div>
+
+    <div class="page-footer">
+      <span class="smarter-mark">
+        <svg viewBox="0 0 14 17" xmlns="http://www.w3.org/2000/svg">
+          <path d="M 2 1 L 2 16 L 4 16 L 4 9 L 11 9 Q 13 9 13 7 Q 13 5 11 5 L 4 5 L 4 1 Z M 4 6.5 L 11 6.5 Q 11.5 6.5 11.5 7 Q 11.5 7.5 11 7.5 L 4 7.5 Z" fill="#B76749"/>
+        </svg>
+        Smarter with data
+      </span>
+      <span class="page-num">— 14 —</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 11 — SPREAD 05 RIGHT — POSITIONING (applied / contrast)    -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">For 13 Terrace Court</div>
+      <svg viewBox="0 0 22 26" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 3 2 L 3 24 L 6 24 L 6 14 L 17 14 Q 20 14 20 11 Q 20 8 17 8 L 6 8 L 6 2 Z M 6 10 L 17 10 Q 17.5 10 17.5 11 Q 17.5 12 17 12 L 6 12 Z" fill="#B76749"/>
+      </svg>
+    </div>
+
+    <h2 class="right-headline s03" style="font-size:30pt; margin-bottom:3mm;">Presentation turns features into <span class="copper">desire.</span></h2>
+    <div class="right-subhead" style="margin-bottom:6mm; font-size:11pt;">Most agents describe the home. Fields shapes how the right buyer experiences it.</div>
+
+    <div class="image-compare">
+      <div class="compare-cell">
+        <div class="compare-label">Standard real-estate photography</div>
+        <img class="compare-img" src="assets/living_midday.png" alt="Midday white-light interior shot">
+        <div class="compare-caption">Flat. Documentary. The room presented as a list of features.</div>
+      </div>
+      <div class="compare-cell">
+        <div class="compare-label fields">Fields twilight photography</div>
+        <img class="compare-img" src="assets/living_twilight.png" alt="Twilight golden-hour interior with warm lamps">
+        <div class="compare-caption fields">Same room — at dusk. <span class="copper">Warmth, atmosphere, the life that might become theirs.</span></div>
+      </div>
+    </div>
+
+    <div class="stat-callout" style="margin-bottom:4mm;">
+      <div class="stat-num">+118%</div>
+      <div class="stat-body">
+        more online views with professional photography vs phone-grade images. <em>"The midday version is a documentary record. The twilight version invites you in."</em>
+        <span class="stat-source">Source: Before You List · Ch. 4 · Fields research (n=1,475 GC listings)</span>
+      </div>
+    </div>
+
+    <div class="levers">
+      <div class="lever-card">
+        <div class="lever-num">01</div>
+        <div class="lever-body">
+          <div class="lever-name">The story</div>
+          <div class="lever-desc">Listing copy that places the buyer inside the home, not in front of it. Sensory, specific, calm: <span class="sample">mornings on the rear deck, children in the pool, permanent greenery beyond, and no through-traffic in front.</span></div>
+        </div>
+      </div>
+      <div class="lever-card">
+        <div class="lever-num">02</div>
+        <div class="lever-body">
+          <div class="lever-name">The imagery</div>
+          <div class="lever-desc">Twilight and golden-hour photography focused on the rear entertaining zone, pool, bushland boundary, kitchen-to-deck transition and quiet cul-de-sac setting. <span class="sample">No flat midday light. No generic real-estate photography.</span></div>
+        </div>
+      </div>
+      <div class="lever-card">
+        <div class="lever-num">03</div>
+        <div class="lever-body">
+          <div class="lever-name">The buyer emphasis</div>
+          <div class="lever-desc">The same home, three stories — one per persona from Section 02:</div>
+          <div class="lever-personas">
+            <div><strong>Owner-Occupier:</strong> permanence · privacy · no renovation</div>
+            <div><strong>Multi-Generational Family:</strong> space · separation · safety</div>
+            <div><strong>Relocator from Sydney/Melbourne:</strong> Gold Coast lifestyle · school access · move-in-ready certainty</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="fields-advantage">
+      <span class="fa-label">Fields Advantage — 05</span>
+      <p class="fa-body"><strong>Fields builds the presentation around the buyer most likely to pay the premium.</strong> Photography, listing copy, editorial storytelling and feature emphasis are all calibrated to <em>how that buyer will experience the home</em> — not just what the home contains. <strong>Most agents list features. Fields turns them into desire.</strong></p>
+    </div>
+
+    <div class="page-footer">
+      <span class="smarter-mark">
+        <svg viewBox="0 0 14 17" xmlns="http://www.w3.org/2000/svg">
+          <path d="M 2 1 L 2 16 L 4 16 L 4 9 L 11 9 Q 13 9 13 7 Q 13 5 11 5 L 4 5 L 4 1 Z M 4 6.5 L 11 6.5 Q 11.5 6.5 11.5 7 Q 11.5 7.5 11 7.5 L 4 7.5 Z" fill="#B76749"/>
+        </svg>
+        Smarter with data
+      </span>
+      <span class="page-num">— 15 —</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 12 — SPREAD 06 LEFT — TRUST (thesis)                      -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">13 Terrace Court</div>
+      <svg viewBox="0 0 22 26" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 3 2 L 3 24 L 6 24 L 6 14 L 17 14 Q 20 14 20 11 Q 20 8 17 8 L 6 8 L 6 2 Z M 6 10 L 17 10 Q 17.5 10 17.5 11 Q 17.5 12 17 12 L 6 12 Z" fill="#B76749"/>
+      </svg>
+    </div>
+
+    <div class="spread-number">06</div>
+
+    <h2 class="spread-headline" style="font-size:34pt; margin-bottom:4mm;">Buyers discount what they cannot verify.</h2>
+    <div class="right-subhead" style="font-size:13pt; margin-bottom:10mm; color:var(--copper-deep); max-width:155mm;">Transparency builds confidence. Confidence protects the premium.</div>
+
+    <div class="spread-body">
+      <p>A buyer at a Gold Coast inspection is making one of the largest financial decisions of their life. They have four things to work with: the asking price, the agent's word, what they can see, and what they can verify for themselves.</p>
+      <p>When buyers cannot verify the price, the comparable sales or the trade-offs, they protect themselves in the only place they can: the offer. That uncertainty becomes a discount.</p>
+      <p>Fields was built around data, analysis and transparency because confidence is commercial. A buyer who understands the price, the evidence and the trade-offs is less likely to hedge against what they cannot see.</p>
+    </div>
+
+    <div class="stat-callout" style="margin-top: 10mm;">
+      <div class="stat-num">5%</div>
+      <div class="stat-body">
+        of Australians rate real estate agents "high or very high" for ethics and honesty — third-last of thirty professions. <em>Buyers price that in.</em>
+        <span class="stat-source">Source: Roy Morgan Image of Professions · Australia</span>
+      </div>
+    </div>
+
+    <div class="thesis-close">Reducing the asymmetry is the work.</div>
+
+    <div class="page-footer">
+      <span class="smarter-mark">
+        <svg viewBox="0 0 14 17" xmlns="http://www.w3.org/2000/svg">
+          <path d="M 2 1 L 2 16 L 4 16 L 4 9 L 11 9 Q 13 9 13 7 Q 13 5 11 5 L 4 5 L 4 1 Z M 4 6.5 L 11 6.5 Q 11.5 6.5 11.5 7 Q 11.5 7.5 11 7.5 L 4 7.5 Z" fill="#B76749"/>
+        </svg>
+        Smarter with data
+      </span>
+      <span class="page-num">— 16 —</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 13 — SPREAD 06 RIGHT — TRUST (applied / three assets)      -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">For 13 Terrace Court</div>
+      <svg viewBox="0 0 22 26" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 3 2 L 3 24 L 6 24 L 6 14 L 17 14 Q 20 14 20 11 Q 20 8 17 8 L 6 8 L 6 2 Z M 6 10 L 17 10 Q 17.5 10 17.5 11 Q 17.5 12 17 12 L 6 12 Z" fill="#B76749"/>
+      </svg>
+    </div>
+
+    <h2 class="right-headline s03" style="margin-bottom:3mm;">The evidence buyers need, <span class="copper">made visible.</span></h2>
+    <div class="right-subhead" style="margin-bottom:6mm;">Three structural assets that reduce uncertainty — and protect the bid that comes with it.</div>
+
+    <div class="trust-cards">
+      <div class="trust-card">
+        <div class="trust-num">01</div>
+        <div class="trust-body">
+          <div class="trust-name">The price, traceable</div>
+          <div class="trust-desc">Comparable sales named. Adjustments shown. The buyer can see why the price exists, not just where the agent wants it to land. <span class="sample">No vague appeal to "the market." No price built on opinion alone.</span></div>
+        </div>
+      </div>
+      <div class="trust-card">
+        <div class="trust-num">02</div>
+        <div class="trust-body">
+          <div class="trust-name">The trade-offs, named</div>
+          <div class="trust-desc">The strengths are made clear. So are the constraints. <span class="sample">13 Terrace Court has scale, privacy and a permanent bushland boundary — but it is not new-build, and the bushland buys permanence rather than usable land.</span> When Fields names the trade-offs first, the buyer does not have to go looking for hidden problems.</div>
+        </div>
+      </div>
+      <div class="trust-card">
+        <div class="trust-num">03</div>
+        <div class="trust-body">
+          <div class="trust-name">The method, open</div>
+          <div class="trust-desc">Campaign reach, buyer engagement and inspection feedback are tracked and reported clearly. <span class="sample">No invented pressure. No vague claims of interest. The negotiation is grounded in evidence, not theatre.</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stat-callout">
+      <div class="stat-num">+9.6%</div>
+      <div class="stat-body">
+        higher sale prices achieved by agents who invest deeply in buyer relationships — about <strong>$96,000 on a $1M home</strong>. <em>Confidence shows up in the bid.</em>
+        <span class="stat-source">Source: Before You List · Ch. 6 · Fields research (n=1,475 GC sales)</span>
+      </div>
+    </div>
+
+    <div class="fields-advantage">
+      <span class="fa-label">Fields Advantage — 06</span>
+      <p class="fa-body"><strong>Real estate has a trust problem. Fields was built around a different premise:</strong> buyers need evidence they can trust. Our valuation work, property editorial, campaign reporting and buyer-facing analysis are designed to reduce uncertainty at every stage of the sale. <strong>When the price, the strengths and the trade-offs are visible, confidence rises — and confident buyers are more likely to compete.</strong></p>
+    </div>
+
+    <div class="page-footer">
+      <span class="smarter-mark">
+        <svg viewBox="0 0 14 17" xmlns="http://www.w3.org/2000/svg">
+          <path d="M 2 1 L 2 16 L 4 16 L 4 9 L 11 9 Q 13 9 13 7 Q 13 5 11 5 L 4 5 L 4 1 Z M 4 6.5 L 11 6.5 Q 11.5 6.5 11.5 7 Q 11.5 7.5 11 7.5 L 4 7.5 Z" fill="#B76749"/>
+        </svg>
+        Smarter with data
+      </span>
+      <span class="page-num">— 17 —</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 17 — RECOMMENDATION (synthesis)                            -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">For 13 Terrace Court</div>
+      <svg viewBox="0 0 22 26" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 3 2 L 3 24 L 6 24 L 6 14 L 17 14 Q 20 14 20 11 Q 20 8 17 8 L 6 8 L 6 2 Z M 6 10 L 17 10 Q 17.5 10 17.5 11 Q 17.5 12 17 12 L 6 12 Z" fill="#B76749"/>
+      </svg>
+    </div>
+
+    <div class="section-eyebrow">Recommendation</div>
+
+    <h2 class="right-headline" style="font-size:32pt; margin-bottom:4mm;">Our recommendation for <span class="copper">13 Terrace Court.</span></h2>
+    <div class="right-subhead" style="margin-bottom:8mm;">Six forces, one strategy, one specific recommendation.</div>
+
+    <div class="spread-body" style="font-size:11.5pt; margin-bottom:10mm;">
+      <p>Across the six forces examined in this report, the strategy for 13 Terrace Court resolves to one specific recommendation. The home is genuinely rare; the premium buyer is identifiable; the price is defensible from cohort data. A multi-week campaign — engineered around the avatar, delivered across every major digital surface, anchored in transparency — produces the conditions for a premium sale.</p>
+    </div>
+
+    <div class="numbers-grid">
+      <div class="number-cell">
+        <div class="nc-label">Recommended list price</div>
+        <div class="nc-value">$1,915,000</div>
+        <div class="nc-sub">Lower end of the derived range. Precise, above the $1.9M round number, top of the $1.5M–$2M portal bracket.</div>
+      </div>
+      <div class="number-cell">
+        <div class="nc-label">Target sale price</div>
+        <div class="nc-value" style="font-size:18pt; letter-spacing:-0.3px;">$2,000,000 – $2,050,000</div>
+        <div class="nc-sub">Upper end of the derived range. Reached through buyer competition.</div>
+      </div>
+      <div class="number-cell">
+        <div class="nc-label">Campaign duration</div>
+        <div class="nc-value">25 – 45 days</div>
+        <div class="nc-sub">Five engineered phases across active, passive and retargeted buyer states.</div>
+      </div>
+      <div class="number-cell">
+        <div class="nc-label">Estimated inspections</div>
+        <div class="nc-value">30 – 45</div>
+        <div class="nc-sub">The conditions for multi-buyer competition at the offer table.</div>
+      </div>
+    </div>
+
+    <div class="thesis-close">The strategy is engineered. The next step is yours.</div>
+
+    <div class="page-footer">
+      <span class="smarter-mark">
+        <svg viewBox="0 0 14 17" xmlns="http://www.w3.org/2000/svg">
+          <path d="M 2 1 L 2 16 L 4 16 L 4 9 L 11 9 Q 13 9 13 7 Q 13 5 11 5 L 4 5 L 4 1 Z M 4 6.5 L 11 6.5 Q 11.5 6.5 11.5 7 Q 11.5 7.5 11 7.5 L 4 7.5 Z" fill="#B76749"/>
+        </svg>
+        Smarter with data
+      </span>
+      <span class="page-num">— 18 —</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 18 — THE 28-DAY PLAN + NEXT STEPS                          -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">For 13 Terrace Court</div>
+      <svg viewBox="0 0 22 26" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 3 2 L 3 24 L 6 24 L 6 14 L 17 14 Q 20 14 20 11 Q 20 8 17 8 L 6 8 L 6 2 Z M 6 10 L 17 10 Q 17.5 10 17.5 11 Q 17.5 12 17 12 L 6 12 Z" fill="#B76749"/>
+      </svg>
+    </div>
+
+    <div class="section-eyebrow">The plan</div>
+
+    <h2 class="right-headline" style="font-size:30pt; margin-bottom:3mm;">From strategy to <span class="copper">the right buyer.</span></h2>
+    <div class="right-subhead" style="margin-bottom:8mm;">The campaign, and the three steps that begin it.</div>
+
+    <div class="plan-layout">
+      <div>
+        <div class="plan-col-title">The campaign sequence</div>
+        <div class="phase-list">
+          <div class="phase-row">
+            <div class="phase-marker"></div>
+            <div class="phase-body">
+              <div class="phase-meta">Days 0 – 5 · Pre-launch</div>
+              <div class="phase-name">Photography, editorial, audience build.</div>
+              <div class="phase-desc">Twilight imagery captured. Property page drafted. Avatar audiences seeded across the six platforms. Comparable cohort locked.</div>
+            </div>
+          </div>
+          <div class="phase-row">
+            <div class="phase-marker"></div>
+            <div class="phase-body">
+              <div class="phase-meta">Days 1 – 7 · Launch</div>
+              <div class="phase-name">Listing live. First inspections.</div>
+              <div class="phase-desc">The home appears across realestate.com.au, Domain, Facebook, Instagram, YouTube and Google. Peak portal exposure window.</div>
+            </div>
+          </div>
+          <div class="phase-row">
+            <div class="phase-marker"></div>
+            <div class="phase-body">
+              <div class="phase-meta">Days 8 – 14 · Engagement</div>
+              <div class="phase-name">Editorial reads. Returning buyers.</div>
+              <div class="phase-desc">Long-form property page drives deep engagement. Retargeting layer activates against engaged prospects.</div>
+            </div>
+          </div>
+          <div class="phase-row">
+            <div class="phase-marker"></div>
+            <div class="phase-body">
+              <div class="phase-meta">Days 15 – 21 · Conversion</div>
+              <div class="phase-name">Second inspections. Offers begin.</div>
+              <div class="phase-desc">Multi-buyer interest converges. Engagement data refines the negotiation position.</div>
+            </div>
+          </div>
+          <div class="phase-row">
+            <div class="phase-marker"></div>
+            <div class="phase-body">
+              <div class="phase-meta">Days 22 – 28 · Decision</div>
+              <div class="phase-name">Competition. Contract.</div>
+              <div class="phase-desc">Final offer phase managed across competing passionate buyers. Contract signed within range.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="plan-col-title">Three next steps</div>
+        <div class="next-step-list">
+          <div class="next-step">
+            <div class="ns-num">01</div>
+            <div class="ns-body">
+              <div class="ns-name">A 30-minute walk-through.</div>
+              <div class="ns-desc">Will visits the home in person, refines the photography brief, confirms the avatar fit, answers any questions about the strategy.</div>
+            </div>
+          </div>
+          <div class="next-step">
+            <div class="ns-num">02</div>
+            <div class="ns-body">
+              <div class="ns-name">Agency agreement.</div>
+              <div class="ns-desc">A standard exclusive listing agreement, with the recommended list price, campaign budget and timeline locked.</div>
+            </div>
+          </div>
+          <div class="next-step">
+            <div class="ns-num">03</div>
+            <div class="ns-body">
+              <div class="ns-name">Pre-launch begins.</div>
+              <div class="ns-desc">Photography scheduled, editorial drafted, audiences built — five days from agreement to launch-ready.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="will-note">
+      <div class="note-body">
+        This report was built for 13 Terrace Court and for Dee. The strategy in it is genuine — not a template. If any part of it lands differently than expected, that's the conversation to have first.
+        <div class="note-sig">— Will Simpson</div>
+      </div>
+      <div class="note-contact">
+        <span class="label">Will Simpson</span>
+        Fields Estate<br>
+        will@fieldsestate.com.au<br>
+        fieldsestate.com.au
+      </div>
+    </div>
+
+    <div class="page-footer">
+      <span class="smarter-mark">
+        <svg viewBox="0 0 14 17" xmlns="http://www.w3.org/2000/svg">
+          <path d="M 2 1 L 2 16 L 4 16 L 4 9 L 11 9 Q 13 9 13 7 Q 13 5 11 5 L 4 5 L 4 1 Z M 4 6.5 L 11 6.5 Q 11.5 6.5 11.5 7 Q 11.5 7.5 11 7.5 L 4 7.5 Z" fill="#B76749"/>
+        </svg>
+        Smarter with data
+      </span>
+      <span class="page-num">— 19 —</span>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
