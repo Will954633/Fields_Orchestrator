@@ -25,6 +25,286 @@ from jinja2 import Environment, BaseLoader, select_autoescape  # type: ignore
 from scripts.appraisal_template import data_pull, dot_grid, pick_highlight, substantiation
 
 
+SECTION_04_RIGHT_TEMPLATE = """\
+<!-- ============================================================ -->
+<!-- PAGE 13 — SECTION 04 RIGHT — Active/passive buyer reach.       -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">For {{ subject.short_address }}</div>
+      <svg viewBox="0 0 22 26" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 3 2 L 3 24 L 6 24 L 6 14 L 17 14 Q 20 14 20 11 Q 20 8 17 8 L 6 8 L 6 2 Z M 6 10 L 17 10 Q 17.5 10 17.5 11 Q 17.5 12 17 12 L 6 12 Z" fill="#B76749"/>
+      </svg>
+    </div>
+    <h2 class="right-headline s03" style="font-size:24pt; margin-bottom:6mm;">{{ s04.headline_html | safe }}</h2>
+    <div class="reach-modes">
+{% for m in s04.modes %}
+      <div class="reach-mode">
+        <span class="reach-mode-num">{{ m.num }}</span>
+        <div class="reach-mode-body">
+          <div class="reach-mode-label">{{ m.label }}</div>
+          <div class="reach-mode-desc">{{ m.desc }}</div>
+          <div class="reach-mode-channels">{{ m.channels }}</div>
+        </div>
+      </div>
+{% endfor %}
+    </div>
+    <div class="campaign-model" style="background:#fdf3ec; border-radius:6px; padding:14px 18px; margin: 6mm 0 3mm; font-size:9.5pt;">
+      <div style="font-family:'IBM Plex Mono', monospace; font-size:8pt; letter-spacing:0.04em; text-transform:uppercase; color:#8d4d33; margin-bottom:6px;">28-day campaign model</div>
+      Based on recent campaign benchmarks, a property like {{ subject.short_address }} would be marketed toward approximately <strong>{{ s04.campaign_model.impressions_low|int }},000–{{ s04.campaign_model.impressions_high|int }},000 targeted impressions</strong>, with the aim of generating <strong>{{ s04.campaign_model.engagements_low }}–{{ s04.campaign_model.engagements_high }} deep engagements</strong> and <strong>{{ s04.campaign_model.inspections_low }}–{{ s04.campaign_model.inspections_high }} inspections</strong>. The objective is not exposure for its own sake — it is enough targeted reach to find the right buyer, and enough inspection volume to create competition.
+    </div>
+    <div class="source-line">{{ s04.caption }}</div>
+    <div class="fields-advantage" style="padding:3.5mm 7mm;">
+      <span class="fa-label">{{ s04.advantage_label }}</span>
+      <p class="fa-body" style="font-size:9.5pt; line-height:1.45;">{{ s04.advantage_body_html | safe }}</p>
+    </div>
+    <div class="page-footer"><span class="smarter-mark"><svg viewBox="0 0 14 17" xmlns="http://www.w3.org/2000/svg"><path d="M 2 1 L 2 16 L 4 16 L 4 9 L 11 9 Q 13 9 13 7 Q 13 5 11 5 L 4 5 L 4 1 Z M 4 6.5 L 11 6.5 Q 11.5 6.5 11.5 7 Q 11.5 7.5 11 7.5 L 4 7.5 Z" fill="#B76749"/></svg>Smarter with data</span><span class="page-num">— 13 —</span></div>
+  </div>
+</div>"""
+
+
+SECTION_05_RIGHT_TEMPLATE = """\
+<!-- ============================================================ -->
+<!-- PAGE 15 — SECTION 05 RIGHT — Presentation turns features into desire. -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">For {{ subject.short_address }}</div>
+      <svg viewBox="0 0 22 26" xmlns="http://www.w3.org/2000/svg"><path d="M 3 2 L 3 24 L 6 24 L 6 14 L 17 14 Q 20 14 20 11 Q 20 8 17 8 L 6 8 L 6 2 Z M 6 10 L 17 10 Q 17.5 10 17.5 11 Q 17.5 12 17 12 L 6 12 Z" fill="#B76749"/></svg>
+    </div>
+    <h2 class="right-headline" style="font-size:28pt; margin-bottom:3mm;">{{ s05.headline_html | safe }}</h2>
+    <div class="right-subhead" style="margin-bottom:5mm;">{{ s05.subhead }}</div>
+    {% if s05.photo_left and s05.photo_right %}
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:4mm; margin-bottom:4mm;">
+      <div><img src="{{ s05.photo_left }}" style="width:100%; border-radius:1mm;"/><div style="font-size:7.5pt; color:#5a554d; margin-top:1mm; font-family:'IBM Plex Mono', monospace;">STANDARD REAL-ESTATE PHOTOGRAPHY</div></div>
+      <div><img src="{{ s05.photo_right }}" style="width:100%; border-radius:1mm;"/><div style="font-size:7.5pt; color:#B76749; margin-top:1mm; font-family:'IBM Plex Mono', monospace;">FIELDS TWILIGHT PHOTOGRAPHY</div></div>
+    </div>
+    {% endif %}
+    <div class="stat-box" style="background:#fdf3ec; border-left:3px solid #B76749; padding:12px 16px; margin: 4mm 0;">
+      <div style="font-family:'Cormorant Garamond', serif; font-size:30pt; line-height:1; color:#B76749;">+{{ s05.photo_contrast_stat.uplift_pct }}%</div>
+      <div style="font-size:10pt; line-height:1.45; margin-top:4px;">{{ s05.photo_contrast_stat.label }}</div>
+      <div style="font-family:'IBM Plex Mono', monospace; font-size:7.5pt; letter-spacing:0.04em; color:#8d4d33; margin-top:6px; text-transform:uppercase;">Source: {{ s05.photo_contrast_stat.source }}</div>
+    </div>
+{% for row in s05.presentation_rows %}
+    <div style="display:grid; grid-template-columns:30mm 1fr; gap:6mm; align-items:start; padding:6mm 0; border-top:1px solid #e6dfd0;">
+      <div style="font-family:'Cormorant Garamond', serif; font-size:24pt; color:#B76749; line-height:1;">{{ row.num }}</div>
+      <div><div style="font-weight:600; margin-bottom:3px;">{{ row.label }}</div><div style="font-size:10pt; line-height:1.5;">{{ row.desc | safe }}</div></div>
+    </div>
+{% endfor %}
+    <div class="fields-advantage" style="padding:3.5mm 7mm; margin-top:4mm;">
+      <span class="fa-label">{{ s05.advantage_label }}</span>
+      <p class="fa-body" style="font-size:9.5pt; line-height:1.45;">{{ s05.advantage_body_html | safe }}</p>
+    </div>
+    <div class="page-footer"><span class="smarter-mark"><svg viewBox="0 0 14 17" xmlns="http://www.w3.org/2000/svg"><path d="M 2 1 L 2 16 L 4 16 L 4 9 L 11 9 Q 13 9 13 7 Q 13 5 11 5 L 4 5 L 4 1 Z M 4 6.5 L 11 6.5 Q 11.5 6.5 11.5 7 Q 11.5 7.5 11 7.5 L 4 7.5 Z" fill="#B76749"/></svg>Smarter with data</span><span class="page-num">— 15 —</span></div>
+  </div>
+</div>"""
+
+
+SECTION_06_RIGHT_TEMPLATE = """\
+<!-- ============================================================ -->
+<!-- PAGE 17 — SECTION 06 RIGHT — The evidence buyers need.        -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">For {{ subject.short_address }}</div>
+      <svg viewBox="0 0 22 26" xmlns="http://www.w3.org/2000/svg"><path d="M 3 2 L 3 24 L 6 24 L 6 14 L 17 14 Q 20 14 20 11 Q 20 8 17 8 L 6 8 L 6 2 Z M 6 10 L 17 10 Q 17.5 10 17.5 11 Q 17.5 12 17 12 L 6 12 Z" fill="#B76749"/></svg>
+    </div>
+    <h2 class="right-headline" style="font-size:28pt; margin-bottom:3mm;">{{ s06.headline_html | safe }}</h2>
+    <div class="right-subhead" style="margin-bottom:5mm;">{{ s06.subhead }}</div>
+{% for a in s06.assets %}
+    <div style="display:grid; grid-template-columns:30mm 1fr; gap:6mm; align-items:start; padding:6mm 0; border-top:1px solid #e6dfd0;">
+      <div style="font-family:'Cormorant Garamond', serif; font-size:24pt; color:#B76749; line-height:1;">{{ a.num }}</div>
+      <div><div style="font-weight:600; margin-bottom:3px;">{{ a.label }}</div><div style="font-size:10pt; line-height:1.5;">{{ a.desc | safe }}</div></div>
+    </div>
+{% endfor %}
+    <div class="stat-box" style="background:#fdf3ec; border-left:3px solid #B76749; padding:12px 16px; margin: 4mm 0;">
+      <div style="font-family:'Cormorant Garamond', serif; font-size:30pt; line-height:1; color:#B76749;">+{{ s06.relationship_premium_stat.uplift_pct }}%</div>
+      <div style="font-size:10pt; line-height:1.45; margin-top:4px;">{{ s06.relationship_premium_stat.label }}</div>
+      <div style="font-family:'IBM Plex Mono', monospace; font-size:7.5pt; letter-spacing:0.04em; color:#8d4d33; margin-top:6px; text-transform:uppercase;">Source: {{ s06.relationship_premium_stat.source }}</div>
+    </div>
+    <div class="fields-advantage" style="padding:3.5mm 7mm;">
+      <span class="fa-label">{{ s06.advantage_label }}</span>
+      <p class="fa-body" style="font-size:9.5pt; line-height:1.45;">{{ s06.advantage_body_html | safe }}</p>
+    </div>
+    <div class="page-footer"><span class="smarter-mark"><svg viewBox="0 0 14 17" xmlns="http://www.w3.org/2000/svg"><path d="M 2 1 L 2 16 L 4 16 L 4 9 L 11 9 Q 13 9 13 7 Q 13 5 11 5 L 4 5 L 4 1 Z M 4 6.5 L 11 6.5 Q 11.5 6.5 11.5 7 Q 11.5 7.5 11 7.5 L 4 7.5 Z" fill="#B76749"/></svg>Smarter with data</span><span class="page-num">— 17 —</span></div>
+  </div>
+</div>"""
+
+
+def render_section_04_right_html(subject_id: str, *, editorial_overrides: dict | None = None, write_substantiation: bool = True) -> str:
+    overrides = editorial_overrides or {}
+    subject = data_pull.get_subject(subject_id)
+    s04 = data_pull.section_04_right(subject_id)
+    advantage_body_html = overrides.get("advantage_body_html") or s04["advantage_box"]["body"]
+    ctx = {
+        "subject": {"short_address": _short_address(subject)},
+        "s04": {**s04, "advantage_label": s04["advantage_box"]["label"], "advantage_body_html": advantage_body_html},
+    }
+    env = Environment(loader=BaseLoader(), autoescape=select_autoescape(["html"]))
+    html = env.from_string(SECTION_04_RIGHT_TEMPLATE).render(**ctx)
+    if write_substantiation:
+        substantiation.save({**s04["substantiation_record"], "rendered_html_hash": _hash(html)})
+    return html
+
+
+def render_section_05_right_html(subject_id: str, *, editorial_overrides: dict | None = None, write_substantiation: bool = True, photo_left: str | None = None, photo_right: str | None = None) -> str:
+    overrides = editorial_overrides or {}
+    subject = data_pull.get_subject(subject_id)
+    s05 = data_pull.section_05_right(subject_id)
+    s05["photo_left"] = photo_left
+    s05["photo_right"] = photo_right
+    advantage_body_html = overrides.get("advantage_body_html") or s05["advantage_box"]["body"]
+    ctx = {
+        "subject": {"short_address": _short_address(subject)},
+        "s05": {**s05, "advantage_label": s05["advantage_box"]["label"], "advantage_body_html": advantage_body_html},
+    }
+    env = Environment(loader=BaseLoader(), autoescape=select_autoescape(["html"]))
+    html = env.from_string(SECTION_05_RIGHT_TEMPLATE).render(**ctx)
+    if write_substantiation:
+        substantiation.save({**s05["substantiation_record"], "rendered_html_hash": _hash(html)})
+    return html
+
+
+def render_section_06_right_html(subject_id: str, *, editorial_overrides: dict | None = None, write_substantiation: bool = True) -> str:
+    overrides = editorial_overrides or {}
+    subject = data_pull.get_subject(subject_id)
+    s06 = data_pull.section_06_right(subject_id)
+    advantage_body_html = overrides.get("advantage_body_html") or s06["advantage_box"]["body"]
+    ctx = {
+        "subject": {"short_address": _short_address(subject)},
+        "s06": {**s06, "advantage_label": s06["advantage_box"]["label"], "advantage_body_html": advantage_body_html},
+    }
+    env = Environment(loader=BaseLoader(), autoescape=select_autoescape(["html"]))
+    html = env.from_string(SECTION_06_RIGHT_TEMPLATE).render(**ctx)
+    if write_substantiation:
+        substantiation.save({**s06["substantiation_record"], "rendered_html_hash": _hash(html)})
+    return html
+
+
+SECTION_03_RIGHT_TEMPLATE = """\
+<!-- ============================================================ -->
+<!-- PAGE 09 — SECTION 03 RIGHT — The range, derived.              -->
+<!-- Live HTML, template-driven from                                  -->
+<!-- scripts/appraisal_template/render.render_section_03_right_html() -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">For {{ subject.short_address }}</div>
+      <svg viewBox="0 0 22 26" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 3 2 L 3 24 L 6 24 L 6 14 L 17 14 Q 20 14 20 11 Q 20 8 17 8 L 6 8 L 6 2 Z M 6 10 L 17 10 Q 17.5 10 17.5 11 Q 17.5 12 17 12 L 6 12 Z" fill="#B76749"/>
+      </svg>
+    </div>
+
+    <h2 class="right-headline s03"><span class="copper">{{ s03.headline_dollar_range }}.</span> The range, derived.</h2>
+    <div class="right-subhead" style="margin-bottom:6mm;">{{ s03.subhead }}</div>
+
+    <div class="cohort-anchor">
+      {{ s03.cohort_anchor_html | safe }}
+    </div>
+
+    <div class="evidence-stack">
+{% for row in s03.evidence_stack %}      <div class="evidence-row">
+        <div class="attr">{{ row.attr | safe }}</div>
+        <div class="band">
+          <div class="band-dots">{% for d in row.dots %}<span class="dot{% if d == 'full' %} full{% elif d == 'half' %} half{% endif %}"></span>{% endfor %}</div>
+        </div>
+        <div class="signal">{{ row.signal | safe }}</div>
+      </div>
+{% endfor %}    </div>
+
+    <div class="synthesis">
+      <span class="label">Derived range</span>
+      <span class="range">{{ s03.synthesis.low }} – {{ s03.synthesis.high }}</span>
+      <span class="meta">midpoint {{ s03.synthesis.mid }} · 90% CI</span>
+    </div>
+
+    <div class="method-note">{{ s03.method_note }}</div>
+
+    <div class="confidence-row">n={{ s03.n_comps }} comparable transactions analysed · cohort-weighted with attribute-level adjustment · confidence: {{ s03.confidence_label }}</div>
+
+    <div class="source-line">{{ s03.caption }}</div>
+
+    <div class="fields-advantage">
+      <span class="fa-label">{{ s03.advantage_label }}</span>
+      <p class="fa-body">{{ s03.advantage_body_html | safe }}</p>
+    </div>
+
+    <div class="page-footer">
+      <span class="smarter-mark">
+        <svg viewBox="0 0 14 17" xmlns="http://www.w3.org/2000/svg">
+          <path d="M 2 1 L 2 16 L 4 16 L 4 9 L 11 9 Q 13 9 13 7 Q 13 5 11 5 L 4 5 L 4 1 Z M 4 6.5 L 11 6.5 Q 11.5 6.5 11.5 7 Q 11.5 7.5 11 7.5 L 4 7.5 Z" fill="#B76749"/>
+        </svg>
+        Smarter with data
+      </span>
+      <span class="page-num">— 9 —</span>
+    </div>
+  </div>
+</div>"""
+
+
+def render_section_03_right_html(
+    subject_id: str,
+    *,
+    editorial_overrides: dict | None = None,
+    write_substantiation: bool = True,
+) -> str:
+    """Return the §03 right page as a ready-to-insert HTML block."""
+    overrides = editorial_overrides or {}
+    subject = data_pull.get_subject(subject_id)
+    s03 = data_pull.section_03_right(subject_id)
+
+    # Evidence stack — defaults to a sensible 6-row baseline for premium homes,
+    # fully overridable via editorial_overrides.evidence_stack. Each row:
+    # {"attr": str, "dots": [5x 'full'|'half'|'empty'], "signal": str}
+    default_stack = [
+        {"attr": "Bedroom scale", "dots": ["full"]*4 + ["empty"],
+         "signal": f"Bedroom cohort lift documented in the cohort-anchor table above."},
+        {"attr": "Pool &amp; outdoor lifestyle", "dots": ["full"]*3 + ["empty"]*2,
+         "signal": "Standard premium across southern Gold Coast (cohort coverage in valuation engine)."},
+        {"attr": "Condition", "dots": ["full"]*4 + ["empty"],
+         "signal": "Move-in-ready buyers pay above cohort median for completed homes."},
+    ]
+    s03["evidence_stack"] = overrides.get("evidence_stack") or default_stack
+    s03["method_note"] = overrides.get("method_note") or (
+        "Premium attributes co-vary; the range is derived from the weighted set "
+        "of comparable transactions, not from arithmetic stacking."
+    )
+    advantage_body_html = overrides.get("advantage_body_html") or s03["advantage_box"]["body"]
+
+    ctx = {
+        "subject": {"short_address": _short_address(subject), "id": str(subject["_id"])},
+        "s03": {
+            "headline_dollar_range": s03["headline_dollar_range"],
+            "subhead": overrides.get("subhead") or s03["subhead"],
+            "cohort_anchor_html": s03["cohort_anchor_html"],
+            "evidence_stack": s03["evidence_stack"],
+            "synthesis": s03["synthesis"],
+            "method_note": s03["method_note"],
+            "n_comps": s03["n_comps"],
+            "confidence_label": s03["confidence_label"] or "—",
+            "caption": s03["caption"],
+            "advantage_label": s03["advantage_box"]["label"],
+            "advantage_body_html": advantage_body_html,
+        },
+    }
+
+    env = Environment(loader=BaseLoader(), autoescape=select_autoescape(["html"]))
+    template = env.from_string(SECTION_03_RIGHT_TEMPLATE)
+    html = template.render(**ctx)
+
+    if write_substantiation:
+        record = dict(s03["substantiation_record"])
+        record["editorial_overrides_applied"] = {k: True for k in overrides}
+        record["rendered_html_hash"] = _hash(html)
+        substantiation.save(record)
+
+    return html
+
+
 SECTION_02_RIGHT_TEMPLATE = """\
 <!-- ============================================================ -->
 <!-- PAGE 07 — SECTION 02 RIGHT — Three buyers. One outbids.       -->
