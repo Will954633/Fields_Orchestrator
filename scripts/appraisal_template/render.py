@@ -34,8 +34,9 @@ SECTION_01_LEFT_TEMPLATE = """\
   <div class="page-pad">
     <div class="page-header">
       <div class="page-header-title">For {{ subject.short_address }}</div>
-      <svg viewBox="0 0 22 26" xmlns="http://www.w3.org/2000/svg">
-        <path d="M 3 2 L 3 24 L 6 24 L 6 14 L 17 14 Q 20 14 20 11 Q 20 8 17 8 L 6 8 L 6 2 Z M 6 10 L 17 10 Q 17.5 10 17.5 11 Q 17.5 12 17 12 L 6 12 Z" fill="#B76749"/>
+      <svg viewBox="0 0 113.39 113.39" xmlns="http://www.w3.org/2000/svg">
+        <path fill="#B76749" d="M34.47,49.53v44.1h8.87c8.18,0,14.84-6.66,14.84-14.84v-20.39h20.39c8.18,0,14.84-6.66,14.84-14.84v-8.87h-44.1c-8.18,0-14.84,6.66-14.84,14.84"/>
+        <path fill="#B76749" d="M7.83,22.86v82.51h8.87c8.18,0,14.84-6.66,14.84-14.84V31.73h58.77c8.18,0,14.84-6.65,14.84-14.84v-8.87H22.66c-8.18,0-14.84,6.66-14.84,14.84"/>
       </svg>
     </div>
 
@@ -55,8 +56,9 @@ SECTION_01_LEFT_TEMPLATE = """\
 
     <div class="page-footer">
       <span class="smarter-mark">
-        <svg viewBox="0 0 14 17" xmlns="http://www.w3.org/2000/svg">
-          <path d="M 2 2 L 2 15 L 4 15 L 4 9 L 11 9 Q 13 9 13 7 Q 13 5 11 5 L 4 5 L 4 2 Z M 4 6 L 11 6 Q 11.5 6 11.5 7 Q 11.5 8 11 8 L 4 8 Z" fill="#B76749"/>
+        <svg viewBox="0 0 113.39 113.39" xmlns="http://www.w3.org/2000/svg">
+          <path fill="#B76749" d="M34.47,49.53v44.1h8.87c8.18,0,14.84-6.66,14.84-14.84v-20.39h20.39c8.18,0,14.84-6.66,14.84-14.84v-8.87h-44.1c-8.18,0-14.84,6.66-14.84,14.84"/>
+          <path fill="#B76749" d="M7.83,22.86v82.51h8.87c8.18,0,14.84-6.66,14.84-14.84V31.73h58.77c8.18,0,14.84-6.65,14.84-14.84v-8.87H22.66c-8.18,0-14.84,6.66-14.84,14.84"/>
         </svg>
         Smarter with data
       </span>
@@ -233,8 +235,9 @@ SECTION_03_RECEIPTS_TEMPLATE = """\
   <div class="page-pad">
     <div class="page-header">
       <div class="page-header-title">For {{ subject.short_address }}</div>
-      <svg viewBox="0 0 22 26" xmlns="http://www.w3.org/2000/svg">
-        <path d="M 3 2 L 3 24 L 6 24 L 6 14 L 17 14 Q 20 14 20 11 Q 20 8 17 8 L 6 8 L 6 2 Z M 6 10 L 17 10 Q 17.5 10 17.5 11 Q 17.5 12 17 12 L 6 12 Z" fill="#B76749"/>
+      <svg viewBox="0 0 113.39 113.39" xmlns="http://www.w3.org/2000/svg">
+        <path fill="#B76749" d="M34.47,49.53v44.1h8.87c8.18,0,14.84-6.66,14.84-14.84v-20.39h20.39c8.18,0,14.84-6.66,14.84-14.84v-8.87h-44.1c-8.18,0-14.84,6.66-14.84,14.84"/>
+        <path fill="#B76749" d="M7.83,22.86v82.51h8.87c8.18,0,14.84-6.66,14.84-14.84V31.73h58.77c8.18,0,14.84-6.65,14.84-14.84v-8.87H22.66c-8.18,0-14.84,6.66-14.84,14.84"/>
       </svg>
     </div>
 
@@ -300,7 +303,10 @@ SECTION_03_RECEIPTS_TEMPLATE = """\
 {% endif %}
 
     <div class="page-footer">
-      <span class="smarter-mark"><svg viewBox="0 0 14 17" xmlns="http://www.w3.org/2000/svg"><path d="M 2 1 L 2 16 L 4 16 L 4 9 L 11 9 Q 13 9 13 7 Q 13 5 11 5 L 4 5 L 4 1 Z M 4 6.5 L 11 6.5 Q 11.5 6.5 11.5 7 Q 11.5 7.5 11 7.5 L 4 7.5 Z" fill="#B76749"/></svg>Smarter with data</span>
+      <span class="smarter-mark"><svg viewBox="0 0 113.39 113.39" xmlns="http://www.w3.org/2000/svg">
+          <path fill="#B76749" d="M34.47,49.53v44.1h8.87c8.18,0,14.84-6.66,14.84-14.84v-20.39h20.39c8.18,0,14.84-6.66,14.84-14.84v-8.87h-44.1c-8.18,0-14.84,6.66-14.84,14.84"/>
+          <path fill="#B76749" d="M7.83,22.86v82.51h8.87c8.18,0,14.84-6.66,14.84-14.84V31.73h58.77c8.18,0,14.84-6.65,14.84-14.84v-8.87H22.66c-8.18,0-14.84,6.66-14.84,14.84"/>
+        </svg>Smarter with data</span>
       <span class="page-num">— 10 —</span>
     </div>
   </div>
@@ -339,19 +345,20 @@ SECTION_04_RIGHT_TEMPLATE = """\
   <div class="page-pad">
     <div class="page-header">
       <div class="page-header-title">For {{ subject.short_address }}</div>
-      <svg viewBox="0 0 22 26" xmlns="http://www.w3.org/2000/svg">
-        <path d="M 3 2 L 3 24 L 6 24 L 6 14 L 17 14 Q 20 14 20 11 Q 20 8 17 8 L 6 8 L 6 2 Z M 6 10 L 17 10 Q 17.5 10 17.5 11 Q 17.5 12 17 12 L 6 12 Z" fill="#B76749"/>
+      <svg viewBox="0 0 113.39 113.39" xmlns="http://www.w3.org/2000/svg">
+        <path fill="#B76749" d="M34.47,49.53v44.1h8.87c8.18,0,14.84-6.66,14.84-14.84v-20.39h20.39c8.18,0,14.84-6.66,14.84-14.84v-8.87h-44.1c-8.18,0-14.84,6.66-14.84,14.84"/>
+        <path fill="#B76749" d="M7.83,22.86v82.51h8.87c8.18,0,14.84-6.66,14.84-14.84V31.73h58.77c8.18,0,14.84-6.65,14.84-14.84v-8.87H22.66c-8.18,0-14.84,6.66-14.84,14.84"/>
       </svg>
     </div>
     <h2 class="right-headline s03" style="font-size:24pt; margin-bottom:6mm;">{{ s04.headline_html | safe }}</h2>
-    <div class="reach-modes">
+    <div style="display:flex; flex-direction:column; gap:4mm;">
 {% for m in s04.modes %}
-      <div class="reach-mode">
-        <span class="reach-mode-num">{{ m.num }}</span>
-        <div class="reach-mode-body">
-          <div class="reach-mode-label">{{ m.label }}</div>
-          <div class="reach-mode-desc">{{ m.desc }}</div>
-          <div class="reach-mode-channels">{{ m.channels }}</div>
+      <div style="display:grid; grid-template-columns:18mm 1fr; gap:5mm; align-items:center; background:#fdfaf3; border-left:3px solid #B76749; border-radius:2px; padding:5mm 6mm 5mm 5mm;">
+        <div style="font-family:'Cormorant Garamond', serif; font-size:32pt; color:#B76749; line-height:1; text-align:center;">{{ m.num }}</div>
+        <div>
+          <div style="font-weight:600; color:#22382C; font-size:11pt; margin-bottom:2mm;">{{ m.label }}</div>
+          <div style="font-size:10pt; line-height:1.5; color:#2c2924; margin-bottom:2.5mm;">{{ m.desc }}</div>
+          <div style="font-family:'IBM Plex Mono', monospace; font-size:7.5pt; letter-spacing:0.06em; text-transform:uppercase; color:#B76749;">{{ m.channels }}</div>
         </div>
       </div>
 {% endfor %}
@@ -365,7 +372,10 @@ SECTION_04_RIGHT_TEMPLATE = """\
       <span class="fa-label">{{ s04.advantage_label }}</span>
       <p class="fa-body" style="font-size:9.5pt; line-height:1.45;">{{ s04.advantage_body_html | safe }}</p>
     </div>
-    <div class="page-footer"><span class="smarter-mark"><svg viewBox="0 0 14 17" xmlns="http://www.w3.org/2000/svg"><path d="M 2 1 L 2 16 L 4 16 L 4 9 L 11 9 Q 13 9 13 7 Q 13 5 11 5 L 4 5 L 4 1 Z M 4 6.5 L 11 6.5 Q 11.5 6.5 11.5 7 Q 11.5 7.5 11 7.5 L 4 7.5 Z" fill="#B76749"/></svg>Smarter with data</span><span class="page-num">— 13 —</span></div>
+    <div class="page-footer"><span class="smarter-mark"><svg viewBox="0 0 113.39 113.39" xmlns="http://www.w3.org/2000/svg">
+          <path fill="#B76749" d="M34.47,49.53v44.1h8.87c8.18,0,14.84-6.66,14.84-14.84v-20.39h20.39c8.18,0,14.84-6.66,14.84-14.84v-8.87h-44.1c-8.18,0-14.84,6.66-14.84,14.84"/>
+          <path fill="#B76749" d="M7.83,22.86v82.51h8.87c8.18,0,14.84-6.66,14.84-14.84V31.73h58.77c8.18,0,14.84-6.65,14.84-14.84v-8.87H22.66c-8.18,0-14.84,6.66-14.84,14.84"/>
+        </svg>Smarter with data</span><span class="page-num">— 13 —</span></div>
   </div>
 </div>"""
 
@@ -378,7 +388,10 @@ SECTION_05_RIGHT_TEMPLATE = """\
   <div class="page-pad">
     <div class="page-header">
       <div class="page-header-title">For {{ subject.short_address }}</div>
-      <svg viewBox="0 0 22 26" xmlns="http://www.w3.org/2000/svg"><path d="M 3 2 L 3 24 L 6 24 L 6 14 L 17 14 Q 20 14 20 11 Q 20 8 17 8 L 6 8 L 6 2 Z M 6 10 L 17 10 Q 17.5 10 17.5 11 Q 17.5 12 17 12 L 6 12 Z" fill="#B76749"/></svg>
+      <svg viewBox="0 0 113.39 113.39" xmlns="http://www.w3.org/2000/svg">
+        <path fill="#B76749" d="M34.47,49.53v44.1h8.87c8.18,0,14.84-6.66,14.84-14.84v-20.39h20.39c8.18,0,14.84-6.66,14.84-14.84v-8.87h-44.1c-8.18,0-14.84,6.66-14.84,14.84"/>
+        <path fill="#B76749" d="M7.83,22.86v82.51h8.87c8.18,0,14.84-6.66,14.84-14.84V31.73h58.77c8.18,0,14.84-6.65,14.84-14.84v-8.87H22.66c-8.18,0-14.84,6.66-14.84,14.84"/>
+      </svg>
     </div>
     <h2 class="right-headline" style="font-size:28pt; margin-bottom:3mm;">{{ s05.headline_html | safe }}</h2>
     <div class="right-subhead" style="margin-bottom:5mm;">{{ s05.subhead }}</div>
@@ -403,7 +416,10 @@ SECTION_05_RIGHT_TEMPLATE = """\
       <span class="fa-label">{{ s05.advantage_label }}</span>
       <p class="fa-body" style="font-size:9.5pt; line-height:1.45;">{{ s05.advantage_body_html | safe }}</p>
     </div>
-    <div class="page-footer"><span class="smarter-mark"><svg viewBox="0 0 14 17" xmlns="http://www.w3.org/2000/svg"><path d="M 2 1 L 2 16 L 4 16 L 4 9 L 11 9 Q 13 9 13 7 Q 13 5 11 5 L 4 5 L 4 1 Z M 4 6.5 L 11 6.5 Q 11.5 6.5 11.5 7 Q 11.5 7.5 11 7.5 L 4 7.5 Z" fill="#B76749"/></svg>Smarter with data</span><span class="page-num">— 15 —</span></div>
+    <div class="page-footer"><span class="smarter-mark"><svg viewBox="0 0 113.39 113.39" xmlns="http://www.w3.org/2000/svg">
+          <path fill="#B76749" d="M34.47,49.53v44.1h8.87c8.18,0,14.84-6.66,14.84-14.84v-20.39h20.39c8.18,0,14.84-6.66,14.84-14.84v-8.87h-44.1c-8.18,0-14.84,6.66-14.84,14.84"/>
+          <path fill="#B76749" d="M7.83,22.86v82.51h8.87c8.18,0,14.84-6.66,14.84-14.84V31.73h58.77c8.18,0,14.84-6.65,14.84-14.84v-8.87H22.66c-8.18,0-14.84,6.66-14.84,14.84"/>
+        </svg>Smarter with data</span><span class="page-num">— 15 —</span></div>
   </div>
 </div>"""
 
@@ -416,7 +432,10 @@ SECTION_06_RIGHT_TEMPLATE = """\
   <div class="page-pad">
     <div class="page-header">
       <div class="page-header-title">For {{ subject.short_address }}</div>
-      <svg viewBox="0 0 22 26" xmlns="http://www.w3.org/2000/svg"><path d="M 3 2 L 3 24 L 6 24 L 6 14 L 17 14 Q 20 14 20 11 Q 20 8 17 8 L 6 8 L 6 2 Z M 6 10 L 17 10 Q 17.5 10 17.5 11 Q 17.5 12 17 12 L 6 12 Z" fill="#B76749"/></svg>
+      <svg viewBox="0 0 113.39 113.39" xmlns="http://www.w3.org/2000/svg">
+        <path fill="#B76749" d="M34.47,49.53v44.1h8.87c8.18,0,14.84-6.66,14.84-14.84v-20.39h20.39c8.18,0,14.84-6.66,14.84-14.84v-8.87h-44.1c-8.18,0-14.84,6.66-14.84,14.84"/>
+        <path fill="#B76749" d="M7.83,22.86v82.51h8.87c8.18,0,14.84-6.66,14.84-14.84V31.73h58.77c8.18,0,14.84-6.65,14.84-14.84v-8.87H22.66c-8.18,0-14.84,6.66-14.84,14.84"/>
+      </svg>
     </div>
     <h2 class="right-headline" style="font-size:28pt; margin-bottom:3mm;">{{ s06.headline_html | safe }}</h2>
     <div class="right-subhead" style="margin-bottom:5mm;">{{ s06.subhead }}</div>
@@ -435,7 +454,10 @@ SECTION_06_RIGHT_TEMPLATE = """\
       <span class="fa-label">{{ s06.advantage_label }}</span>
       <p class="fa-body" style="font-size:9.5pt; line-height:1.45;">{{ s06.advantage_body_html | safe }}</p>
     </div>
-    <div class="page-footer"><span class="smarter-mark"><svg viewBox="0 0 14 17" xmlns="http://www.w3.org/2000/svg"><path d="M 2 1 L 2 16 L 4 16 L 4 9 L 11 9 Q 13 9 13 7 Q 13 5 11 5 L 4 5 L 4 1 Z M 4 6.5 L 11 6.5 Q 11.5 6.5 11.5 7 Q 11.5 7.5 11 7.5 L 4 7.5 Z" fill="#B76749"/></svg>Smarter with data</span><span class="page-num">— 17 —</span></div>
+    <div class="page-footer"><span class="smarter-mark"><svg viewBox="0 0 113.39 113.39" xmlns="http://www.w3.org/2000/svg">
+          <path fill="#B76749" d="M34.47,49.53v44.1h8.87c8.18,0,14.84-6.66,14.84-14.84v-20.39h20.39c8.18,0,14.84-6.66,14.84-14.84v-8.87h-44.1c-8.18,0-14.84,6.66-14.84,14.84"/>
+          <path fill="#B76749" d="M7.83,22.86v82.51h8.87c8.18,0,14.84-6.66,14.84-14.84V31.73h58.77c8.18,0,14.84-6.65,14.84-14.84v-8.87H22.66c-8.18,0-14.84,6.66-14.84,14.84"/>
+        </svg>Smarter with data</span><span class="page-num">— 17 —</span></div>
   </div>
 </div>"""
 
@@ -500,8 +522,9 @@ SECTION_03_RIGHT_TEMPLATE = """\
   <div class="page-pad">
     <div class="page-header">
       <div class="page-header-title">For {{ subject.short_address }}</div>
-      <svg viewBox="0 0 22 26" xmlns="http://www.w3.org/2000/svg">
-        <path d="M 3 2 L 3 24 L 6 24 L 6 14 L 17 14 Q 20 14 20 11 Q 20 8 17 8 L 6 8 L 6 2 Z M 6 10 L 17 10 Q 17.5 10 17.5 11 Q 17.5 12 17 12 L 6 12 Z" fill="#B76749"/>
+      <svg viewBox="0 0 113.39 113.39" xmlns="http://www.w3.org/2000/svg">
+        <path fill="#B76749" d="M34.47,49.53v44.1h8.87c8.18,0,14.84-6.66,14.84-14.84v-20.39h20.39c8.18,0,14.84-6.66,14.84-14.84v-8.87h-44.1c-8.18,0-14.84,6.66-14.84,14.84"/>
+        <path fill="#B76749" d="M7.83,22.86v82.51h8.87c8.18,0,14.84-6.66,14.84-14.84V31.73h58.77c8.18,0,14.84-6.65,14.84-14.84v-8.87H22.66c-8.18,0-14.84,6.66-14.84,14.84"/>
       </svg>
     </div>
 
@@ -558,8 +581,9 @@ SECTION_03_RIGHT_TEMPLATE = """\
 
     <div class="page-footer">
       <span class="smarter-mark">
-        <svg viewBox="0 0 14 17" xmlns="http://www.w3.org/2000/svg">
-          <path d="M 2 1 L 2 16 L 4 16 L 4 9 L 11 9 Q 13 9 13 7 Q 13 5 11 5 L 4 5 L 4 1 Z M 4 6.5 L 11 6.5 Q 11.5 6.5 11.5 7 Q 11.5 7.5 11 7.5 L 4 7.5 Z" fill="#B76749"/>
+        <svg viewBox="0 0 113.39 113.39" xmlns="http://www.w3.org/2000/svg">
+          <path fill="#B76749" d="M34.47,49.53v44.1h8.87c8.18,0,14.84-6.66,14.84-14.84v-20.39h20.39c8.18,0,14.84-6.66,14.84-14.84v-8.87h-44.1c-8.18,0-14.84,6.66-14.84,14.84"/>
+          <path fill="#B76749" d="M7.83,22.86v82.51h8.87c8.18,0,14.84-6.66,14.84-14.84V31.73h58.77c8.18,0,14.84-6.65,14.84-14.84v-8.87H22.66c-8.18,0-14.84,6.66-14.84,14.84"/>
         </svg>
         Smarter with data
       </span>
@@ -639,8 +663,9 @@ SECTION_02_RIGHT_TEMPLATE = """\
   <div class="page-pad">
     <div class="page-header">
       <div class="page-header-title">For {{ subject.short_address }}</div>
-      <svg viewBox="0 0 22 26" xmlns="http://www.w3.org/2000/svg">
-        <path d="M 3 2 L 3 24 L 6 24 L 6 14 L 17 14 Q 20 14 20 11 Q 20 8 17 8 L 6 8 L 6 2 Z M 6 10 L 17 10 Q 17.5 10 17.5 11 Q 17.5 12 17 12 L 6 12 Z" fill="#B76749"/>
+      <svg viewBox="0 0 113.39 113.39" xmlns="http://www.w3.org/2000/svg">
+        <path fill="#B76749" d="M34.47,49.53v44.1h8.87c8.18,0,14.84-6.66,14.84-14.84v-20.39h20.39c8.18,0,14.84-6.66,14.84-14.84v-8.87h-44.1c-8.18,0-14.84,6.66-14.84,14.84"/>
+        <path fill="#B76749" d="M7.83,22.86v82.51h8.87c8.18,0,14.84-6.66,14.84-14.84V31.73h58.77c8.18,0,14.84-6.65,14.84-14.84v-8.87H22.66c-8.18,0-14.84,6.66-14.84,14.84"/>
       </svg>
     </div>
 
@@ -684,8 +709,9 @@ SECTION_02_RIGHT_TEMPLATE = """\
 
     <div class="page-footer">
       <span class="smarter-mark">
-        <svg viewBox="0 0 14 17" xmlns="http://www.w3.org/2000/svg">
-          <path d="M 2 2 L 2 15 L 4 15 L 4 9 L 11 9 Q 13 9 13 7 Q 13 5 11 5 L 4 5 L 4 2 Z M 4 6 L 11 6 Q 11.5 6 11.5 7 Q 11.5 8 11 8 L 4 8 Z" fill="#B76749"/>
+        <svg viewBox="0 0 113.39 113.39" xmlns="http://www.w3.org/2000/svg">
+          <path fill="#B76749" d="M34.47,49.53v44.1h8.87c8.18,0,14.84-6.66,14.84-14.84v-20.39h20.39c8.18,0,14.84-6.66,14.84-14.84v-8.87h-44.1c-8.18,0-14.84,6.66-14.84,14.84"/>
+          <path fill="#B76749" d="M7.83,22.86v82.51h8.87c8.18,0,14.84-6.66,14.84-14.84V31.73h58.77c8.18,0,14.84-6.65,14.84-14.84v-8.87H22.66c-8.18,0-14.84,6.66-14.84,14.84"/>
         </svg>
         Smarter with data
       </span>
@@ -764,8 +790,9 @@ SECTION_01_RIGHT_TEMPLATE = """\
   <div class="page-pad">
     <div class="page-header">
       <div class="page-header-title">For {{ subject.short_address }}</div>
-      <svg viewBox="0 0 22 26" xmlns="http://www.w3.org/2000/svg">
-        <path d="M 3 2 L 3 24 L 6 24 L 6 14 L 17 14 Q 20 14 20 11 Q 20 8 17 8 L 6 8 L 6 2 Z M 6 10 L 17 10 Q 17.5 10 17.5 11 Q 17.5 12 17 12 L 6 12 Z" fill="#B76749"/>
+      <svg viewBox="0 0 113.39 113.39" xmlns="http://www.w3.org/2000/svg">
+        <path fill="#B76749" d="M34.47,49.53v44.1h8.87c8.18,0,14.84-6.66,14.84-14.84v-20.39h20.39c8.18,0,14.84-6.66,14.84-14.84v-8.87h-44.1c-8.18,0-14.84,6.66-14.84,14.84"/>
+        <path fill="#B76749" d="M7.83,22.86v82.51h8.87c8.18,0,14.84-6.66,14.84-14.84V31.73h58.77c8.18,0,14.84-6.65,14.84-14.84v-8.87H22.66c-8.18,0-14.84,6.66-14.84,14.84"/>
       </svg>
     </div>
 
@@ -798,8 +825,9 @@ SECTION_01_RIGHT_TEMPLATE = """\
 
     <div class="page-footer">
       <span class="smarter-mark">
-        <svg viewBox="0 0 14 17" xmlns="http://www.w3.org/2000/svg">
-          <path d="M 2 2 L 2 15 L 4 15 L 4 9 L 11 9 Q 13 9 13 7 Q 13 5 11 5 L 4 5 L 4 2 Z M 4 6 L 11 6 Q 11.5 6 11.5 7 Q 11.5 8 11 8 L 4 8 Z" fill="#B76749"/>
+        <svg viewBox="0 0 113.39 113.39" xmlns="http://www.w3.org/2000/svg">
+          <path fill="#B76749" d="M34.47,49.53v44.1h8.87c8.18,0,14.84-6.66,14.84-14.84v-20.39h20.39c8.18,0,14.84-6.66,14.84-14.84v-8.87h-44.1c-8.18,0-14.84,6.66-14.84,14.84"/>
+          <path fill="#B76749" d="M7.83,22.86v82.51h8.87c8.18,0,14.84-6.66,14.84-14.84V31.73h58.77c8.18,0,14.84-6.65,14.84-14.84v-8.87H22.66c-8.18,0-14.84,6.66-14.84,14.84"/>
         </svg>
         Smarter with data
       </span>
@@ -995,8 +1023,9 @@ SECTION_RECOMMENDATION_TEMPLATE = '''\
   <div class="page-pad">
     <div class="page-header">
       <div class="page-header-title">For {{ subject.short_address }}</div>
-      <svg viewBox="0 0 22 26" xmlns="http://www.w3.org/2000/svg">
-        <path d="M 3 2 L 3 24 L 6 24 L 6 14 L 17 14 Q 20 14 20 11 Q 20 8 17 8 L 6 8 L 6 2 Z M 6 10 L 17 10 Q 17.5 10 17.5 11 Q 17.5 12 17 12 L 6 12 Z" fill="#B76749"/>
+      <svg viewBox="0 0 113.39 113.39" xmlns="http://www.w3.org/2000/svg">
+        <path fill="#B76749" d="M34.47,49.53v44.1h8.87c8.18,0,14.84-6.66,14.84-14.84v-20.39h20.39c8.18,0,14.84-6.66,14.84-14.84v-8.87h-44.1c-8.18,0-14.84,6.66-14.84,14.84"/>
+        <path fill="#B76749" d="M7.83,22.86v82.51h8.87c8.18,0,14.84-6.66,14.84-14.84V31.73h58.77c8.18,0,14.84-6.65,14.84-14.84v-8.87H22.66c-8.18,0-14.84,6.66-14.84,14.84"/>
       </svg>
     </div>
     <div style="font-family:IBM Plex Mono, monospace; font-size:9pt; letter-spacing:0.15em; text-transform:uppercase; color:#B76749; margin-bottom:3mm;">Recommendation</div>
@@ -1028,7 +1057,10 @@ SECTION_RECOMMENDATION_TEMPLATE = '''\
     </div>
     {% endif %}
     {% endif %}
-    <div class="page-footer"><span class="smarter-mark"><svg viewBox="0 0 14 17" xmlns="http://www.w3.org/2000/svg"><path d="M 2 1 L 2 16 L 4 16 L 4 9 L 11 9 Q 13 9 13 7 Q 13 5 11 5 L 4 5 L 4 1 Z M 4 6.5 L 11 6.5 Q 11.5 6.5 11.5 7 Q 11.5 7.5 11 7.5 L 4 7.5 Z" fill="#B76749"/></svg>Smarter with data</span><span class="page-num">— {{ rec.page_number }} —</span></div>
+    <div class="page-footer"><span class="smarter-mark"><svg viewBox="0 0 113.39 113.39" xmlns="http://www.w3.org/2000/svg">
+          <path fill="#B76749" d="M34.47,49.53v44.1h8.87c8.18,0,14.84-6.66,14.84-14.84v-20.39h20.39c8.18,0,14.84-6.66,14.84-14.84v-8.87h-44.1c-8.18,0-14.84,6.66-14.84,14.84"/>
+          <path fill="#B76749" d="M7.83,22.86v82.51h8.87c8.18,0,14.84-6.66,14.84-14.84V31.73h58.77c8.18,0,14.84-6.65,14.84-14.84v-8.87H22.66c-8.18,0-14.84,6.66-14.84,14.84"/>
+        </svg>Smarter with data</span><span class="page-num">— {{ rec.page_number }} —</span></div>
   </div>
 </div>'''
 
