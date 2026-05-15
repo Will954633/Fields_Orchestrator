@@ -558,6 +558,219 @@ def _n_word(n: int) -> str:
 # ---------------------------------------------------------------------------
 
 
+ADJUSTMENT_LABELS = {
+    "floor_area": "Floor area",
+    "land_size": "Land area",
+    "land_area": "Land area",
+    "bedrooms": "Bedrooms",
+    "bathrooms": "Bathrooms",
+    "car_spaces": "Car spaces",
+    "pool": "Pool",
+    "dual_living": "Dual-living configuration",
+    "cul_de_sac": "Cul-de-sac",
+    "bushland_boundary": "Bushland boundary",
+    "boundary": "Boundary",
+    "outlook": "Outlook",
+    "kitchen": "Kitchen",
+    "renovation": "Renovation level",
+    "build_year": "Build year",
+    "stories": "Stories",
+    "water_views": "Water views",
+    "ac_type": "Air conditioning",
+    "cladding": "Cladding",
+    "beach_distance": "Beach proximity",
+}
+
+
+def section_03_receipts(
+    subject_id: str,
+    top_n: int = 2,
+    catchment: list[str] | None = None,
+) -> dict:
+    """§03 receipts (comp-by-comp adjustments) page payload.
+
+    Pulls the top-N most heavily weighted comparables from
+    `valuation_data.comparables` and assembles per-comp adjustment cards.
+    Each card lists every non-zero adjustment with subject vs comp values
+    and the dollar adjustment.
+
+    The B14-flagged "Domain accuracy" line in the legacy V4 page is
+    removed here — replaced with Fields' own backtest figure plus a
+    methodology link (per framework Rule 4, Rule 8).
+    """
+    subject = get_subject(subject_id)
+    catchment = catchment or catchment_for(subject)
+
+    val = subject.get("valuation_data") or {}
+    raw_comps = val.get("comparables") or []
+    valued = [c for c in raw_comps if c.get("included_in_valuation")]
+
+    def _wnum(c):
+        w = c.get("weight")
+        if isinstance(w, dict):
+            return float(w.get("normalized") or w.get("raw_weight") or 0)
+        try: return float(w or 0)
+        except (TypeError, ValueError): return 0.0
+
+    valued.sort(key=_wnum, reverse=True)
+
+    cards = []
+    rest_weight_pct = 0
+    for i, c in enumerate(valued):
+        if i >= top_n:
+            rest_weight_pct += round(_wnum(c) * 100)
+            continue
+        adj = c.get("adjustment_result") or {}
+        adj_dict = adj.get("adjustments") or {}
+        rows = []
+        for key, payload in adj_dict.items():
+            if not isinstance(payload, dict):
+                continue
+            dollars = payload.get("dollars", 0) or 0
+            diff = payload.get("diff")
+            if dollars == 0 and (diff in (0, None)):
+                continue
+            label = ADJUSTMENT_LABELS.get(key, key.replace("_", " ").title())
+            rows.append({
+                "key": key,
+                "label": label,
+                "diff": diff,
+                "subject_value": payload.get("subject_value"),
+                "comp_value": payload.get("comp_value"),
+                "adjustment_dollars": dollars,
+            })
+        weight = _wnum(c)
+        adjusted_total = adj.get("adjusted_total") or adj.get("adjusted_estimate") or 0
+        sold_price = c.get("sold_price") or c.get("sale_price")
+        if isinstance(sold_price, str):
+            import re
+            m = re.search(r'(\d[\d,\.]+)', sold_price.replace("$", ""))
+            sold_price = float(m.group(1).replace(",", "")) if m else None
+        cards.append({
+            "rank_label": f"Comp {i+1:02d}",
+            "address": c.get("address") or c.get("street_address") or "Unknown",
+            "sold_price": int(sold_price) if sold_price else None,
+            "distance_km": c.get("distance_km") or c.get("distance"),
+            "adjustments": rows,
+            "adjusted_total": int(adjusted_total) if adjusted_total else None,
+            "weight_pct": round(weight * 100),
+            "sold_date": c.get("sold_date") or c.get("sale_date"),
+        })
+
+    rest_count = max(0, len(valued) - top_n)
+    as_at = datetime.now(timezone.utc).strftime("%-d %B %Y")
+    return {
+        "headline_html": 'What went into <span class="copper">your valuation</span>.',
+        "subhead": f"The specific adjustments behind the range — comp by comp.",
+        "cards": cards,
+        "rest_count": rest_count,
+        "rest_weight_pct": rest_weight_pct,
+        "backtest_stat": {
+            # B14 rework: Fields-only figure, no Domain comparison. Link to /methodology
+            "mae_pct": 11.4,
+            "n_sales": 1270,
+            "label": f"mean absolute error across our published backtest, against 1,270 actual Gold Coast sales. The methodology is at fieldsestate.com.au/methodology.",
+        },
+        "caption": (
+            f"Source: Fields valuation engine · subject {_format_suburbs(catchment)} catchment · "
+            f"valuation_data.comparables (n_total={len(valued)}, n_shown={min(top_n, len(valued))}) · "
+            f"{as_at} · methodology at fieldsestate.com.au/methodology"
+        ),
+        "substantiation_record": {
+            "section": "03_receipts",
+            "subject_id": str(subject["_id"]),
+            "subject_address": subject.get("complete_address"),
+            "n_comps_total": len(valued),
+            "n_comps_shown": min(top_n, len(valued)),
+            "rest_weight_pct": rest_weight_pct,
+            "as_at_date": datetime.now(timezone.utc).isoformat(),
+            "valid_until": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+            "framework_version": "2026-05-15",
+        },
+    }
+
+
+def section_recommendation(
+    subject_id: str,
+    pipeline_record: dict | None = None,
+    *,
+    page_number: int = 11,
+) -> dict:
+    """Page 11 (mid-document) and Page 18 (final synthesis) recommendation
+    block. Both pages share the same data shape — listing price, target sale
+    price range, derived range, gap dollars, and the four conditions of the
+    precise-pricing protocol. Page 18 is the synthesis recap.
+
+    Inputs come from either:
+        - pipeline_record.recommendation (preferred — analyst-confirmed values)
+        - subject.valuation_data.confidence.range (fallback — model output)
+    """
+    subject = get_subject(subject_id)
+    pipeline_record = pipeline_record or {}
+    rec = pipeline_record.get("recommendation") or {}
+
+    # Local short-address helper (avoid circular import with render.py)
+    addr = subject.get("street_address") or subject.get("complete_address") or ""
+    short_addr = addr.title() if addr.isupper() else addr
+
+    def _to_int(v):
+        if v is None: return None
+        if isinstance(v, (int, float)): return int(v)
+        if isinstance(v, str):
+            import re
+            m = re.search(r'(\d[\d,]*)', v.replace("$", ""))
+            return int(m.group(1).replace(",", "")) if m else None
+        return None
+
+    listing_price = _to_int(rec.get("listing_price"))
+    target_sale_price = _to_int(rec.get("target_sale_price"))
+    derived_low = _to_int(rec.get("derived_range_low"))
+    derived_high = _to_int(rec.get("derived_range_high"))
+    gap = _to_int(rec.get("gap_dollars"))
+
+    # Fall back to valuation_data if pipeline_record is missing values
+    val = subject.get("valuation_data") or {}
+    conf = val.get("confidence") or {}
+    rng = conf.get("range") or {}
+    if derived_low is None:
+        derived_low = _to_int(rng.get("low"))
+    if derived_high is None:
+        derived_high = _to_int(rng.get("high"))
+
+    # Auto-derive target_sale_price range if only midpoint provided
+    target_low, target_high = None, None
+    if target_sale_price:
+        target_low = target_sale_price
+        # If derived_high > target_sale_price, use derived_high; else add ~3%
+        target_high = derived_high if (derived_high and derived_high > target_sale_price) else int(target_sale_price * 1.025)
+
+    return {
+        "headline_html": f'Our recommendation for <span class="copper">{short_addr or "this home"}</span>.',
+        "subhead": "Built from the derived range. Refined for buyer behaviour." if page_number == 11
+                    else "Six forces, one strategy, one specific recommendation.",
+        "listing_price": listing_price,
+        "target_sale_price_low": target_low,
+        "target_sale_price_high": target_high,
+        "derived_range_low": derived_low,
+        "derived_range_high": derived_high,
+        "gap_dollars": gap,
+        "page_number": page_number,
+        "campaign_duration_days": "25 – 45",
+        "estimated_inspections": "30 – 45",
+        "substantiation_record": {
+            "section": f"recommendation_p{page_number}",
+            "subject_id": str(subject["_id"]),
+            "subject_address": subject.get("complete_address"),
+            "listing_price": listing_price,
+            "target_sale_price": target_sale_price,
+            "derived_range": {"low": derived_low, "high": derived_high},
+            "from_pipeline": bool(rec),
+            "as_at_date": datetime.now(timezone.utc).isoformat(),
+            "framework_version": "2026-05-15",
+        },
+    }
+
+
 def section_04_right(subject_id: str, catchment: list[str] | None = None) -> dict:
     """§04 right — "Active buyers find listings. Passive buyers we find for you."
     Three reach modes + 28-day campaign model stat block."""
