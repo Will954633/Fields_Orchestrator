@@ -106,6 +106,16 @@ SPLICE_POINTS = {
 }
 
 
+def _suburb_key_for(subject_id: str) -> str | None:
+    """Find which suburb collection holds the subject doc by scanning the
+    target catchment. Faster than listing all collections."""
+    db = get_client()["Gold_Coast"]
+    for s in ["merrimac","robina","varsity_lakes","burleigh_waters"]:
+        if db[s].find_one({"_id": ObjectId(subject_id)}, {"_id": 1}):
+            return s
+    return None
+
+
 def splice(text: str, key: str, new_block: str) -> str:
     """Replace the section block bounded by SPLICE_POINTS[key] markers."""
     start_marker, end_marker = SPLICE_POINTS[key]
@@ -254,15 +264,69 @@ def render_appraisal(
     text = splice(text, "s01_left", s01_left)
     text = splice(text, "cover", cover_html)
 
+    # Post-process — replace hardcoded subject references in static thesis pages
+    # (page 2 philosophy, page 3 TOC, §0X left close lines, page headers).
+    # Cleaner than per-page templating because the static-thesis copy is otherwise
+    # generic and reusable across all subjects.
+    db = get_client()["Gold_Coast"]
+    suburb_key = (pipeline_record.get("suburb_key") if pipeline_record
+                  else None) or _suburb_key_for(subject_id)
+    subject_doc = db[suburb_key].find_one({"_id": ObjectId(subject_id)}) if suburb_key else None
+    if subject_doc:
+        raw_addr = subject_doc.get("street_address") or ""
+        title_addr = raw_addr.title() if raw_addr.isupper() else raw_addr
+        upper_addr = (raw_addr or "").upper() if raw_addr else None
+        suburb_name = subject_doc.get("suburb") or ""
+        prepared_for_name = (pipeline_record or {}).get("name") or "the Owner"
+        import re
+        # Subject address substitution (only where original was hardcoded "13 Terrace Court")
+        if title_addr and title_addr != "13 Terrace Court":
+            text = text.replace("13 Terrace Court", title_addr)
+            text = text.replace("13 TERRACE COURT", upper_addr or title_addr.upper())
+        # Prepared-for name substitution — handle BOTH "Prepared for Dee" (cover band)
+        # and the inside-cover <span class="name">Dee</span> pattern.
+        if prepared_for_name:
+            text = text.replace("Prepared for Dee", f"Prepared for {prepared_for_name}")
+            text = text.replace('<span class="name">Dee</span>', f'<span class="name">{prepared_for_name}</span>')
+        # Suburb substitution — handle multiple patterns:
+        #   "· Merrimac" (thesis eyebrow) → "· {suburb}"
+        #   "<street_addr><br>\n      Merrimac, QLD 4226" (inside cover) → use subject's actual suburb+postcode
+        if suburb_name and suburb_name.lower() != "merrimac":
+            sub_title = suburb_name.title() if suburb_name.isupper() else suburb_name
+            text = text.replace("· Merrimac", f"· {sub_title}")
+            # Inside-cover suburb block — anchored to the subject street address
+            postcode = subject_doc.get("postcode") or subject_doc.get("display_postcode") or ""
+            if title_addr and postcode:
+                text = re.sub(
+                    r'(' + re.escape(title_addr) + r'<br>\s*)Merrimac, QLD 4226',
+                    rf'\g<1>{sub_title}, QLD {postcode}',
+                    text,
+                )
+
     # Write HTML
     basename = output_basename or f"{subject_id}_{datetime.now().strftime('%Y%m%dT%H%M%S')}"
     html_path = OUTPUT_DIR / f"{basename}.html"
     html_path.write_text(text)
 
-    # Copy assets next to the HTML so file:// loading works
+    # Copy assets next to the HTML so file:// loading works.
+    # `dirs_exist_ok=True` so re-renders refresh new assets that may have
+    # been added since the last run.
     assets_dst = OUTPUT_DIR / "assets"
-    if not assets_dst.exists():
-        shutil.copytree(V4_DIR / "assets", assets_dst)
+    shutil.copytree(V4_DIR / "assets", assets_dst, dirs_exist_ok=True)
+
+    # Fallback assets — if the per-subject hero/satellite files don't exist,
+    # symlink (or copy) a placeholder so the PDF doesn't render alt text.
+    # The placeholder is the existing 13TC photo for now — analyst should
+    # override via the ops dashboard hero-picker for any real appraisal.
+    fallback_hero = V4_DIR / "assets" / "img" / "cover_hero_13_terrace_court.jpg"
+    fallback_sat = V4_DIR / "assets" / "satellite_13_terrace_court.png"
+    expected_hero = OUTPUT_DIR / "assets" / "img" / f"cover_hero_{subject_id}.jpg"
+    expected_sat = OUTPUT_DIR / "assets" / f"satellite_{subject_id}.png"
+    # Only stand in if the pipeline didn't supply an absolute / pipeline override
+    if not (pipeline_record or {}).get("cover_hero_image_src") and not expected_hero.exists() and fallback_hero.exists():
+        shutil.copy(fallback_hero, expected_hero)
+    if not (pipeline_record or {}).get("satellite_image_src") and not expected_sat.exists() and fallback_sat.exists():
+        shutil.copy(fallback_sat, expected_sat)
 
     # Render PDF
     pdf_path: Path | None = None
