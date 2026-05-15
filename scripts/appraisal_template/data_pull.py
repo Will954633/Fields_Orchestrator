@@ -498,6 +498,13 @@ def section_03_right(
     n_comps = summary.get("n_included_in_valuation") or summary.get("n_comps") or len(val.get("comparables") or [])
     confidence = conf_obj.get("confidence", "")
 
+    # Pending state: valuation engine has not produced a range yet. The page
+    # renders a clear "analyst review required" notice instead of fragments
+    # like " – ." and an empty derived-range banner. Analyst sets the comp
+    # set + confirms valuation via the Appraisal Pipeline panel in the ops
+    # dashboard, after which the valuation engine writes valuation_data.
+    pending_review = not (range_low and range_high)
+
     as_at = datetime.now(timezone.utc).strftime("%-d %B %Y")
 
     sub_record = {
@@ -517,6 +524,7 @@ def section_03_right(
     }
 
     return {
+        "pending_review": pending_review,
         "headline_dollar_range": f"{_format_dollar_compact(range_low)} – {_format_dollar_compact(range_high)}",
         "headline_html_template": '<span class="copper">{range}.</span> The range, derived.',
         "subhead": "Anchored in the cohort. Narrowed to the homes most relevant to yours.",
@@ -660,6 +668,7 @@ def section_03_receipts(
     rest_count = max(0, len(valued) - top_n)
     as_at = datetime.now(timezone.utc).strftime("%-d %B %Y")
     return {
+        "pending_review": len(cards) == 0,
         "headline_html": 'What went into <span class="copper">your valuation</span>.',
         "subhead": f"The specific adjustments behind the range — comp by comp.",
         "cards": cards,
@@ -744,7 +753,14 @@ def section_recommendation(
         # If derived_high > target_sale_price, use derived_high; else add ~3%
         target_high = derived_high if (derived_high and derived_high > target_sale_price) else int(target_sale_price * 1.025)
 
+    # Pending until the analyst sets listing_price + target_sale_price via the
+    # Appraisal Pipeline panel. Both prices are analyst-set (not engine-derived)
+    # because the recommendation reflects market judgement on top of the
+    # valuation range.
+    pending_review = not (listing_price and target_low)
+
     return {
+        "pending_review": pending_review,
         "headline_html": f'Our recommendation for <span class="copper">{short_addr or "this home"}</span>.',
         "subhead": "Built from the derived range. Refined for buyer behaviour." if page_number == 11
                     else "Six forces, one strategy, one specific recommendation.",
