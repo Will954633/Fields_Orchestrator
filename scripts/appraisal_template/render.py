@@ -225,6 +225,96 @@ def render_section_00_cover_html(
     return html
 
 
+SECTION_03_RECEIPTS_TEMPLATE = """\
+<!-- ============================================================ -->
+<!-- PAGE 10 — SECTION 03 RECEIPTS — comp-by-comp adjustments       -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">For {{ subject.short_address }}</div>
+      <svg viewBox="0 0 22 26" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 3 2 L 3 24 L 6 24 L 6 14 L 17 14 Q 20 14 20 11 Q 20 8 17 8 L 6 8 L 6 2 Z M 6 10 L 17 10 Q 17.5 10 17.5 11 Q 17.5 12 17 12 L 6 12 Z" fill="#B76749"/>
+      </svg>
+    </div>
+
+    <h2 class="right-headline s03" style="font-size:26pt; margin-bottom:2mm;">{{ s03r.headline_html | safe }}</h2>
+    <div class="right-subhead" style="margin-bottom:5mm;">{{ s03r.subhead }}</div>
+
+{% for c in s03r.cards %}
+    <div class="comp-card" style="border:1px solid #d8cfc1; border-radius:3px; margin-bottom:4mm; padding:4mm 5mm; background:#fdfaf3;">
+      <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:3mm; border-bottom:1px solid #e6dfd0; padding-bottom:2mm;">
+        <div style="font-family:'IBM Plex Mono', monospace; font-size:9pt; letter-spacing:0.06em; color:#8d4d33; font-weight:600;">{{ c.rank_label }}</div>
+        <div style="font-family:'Cormorant Garamond', serif; font-size:15pt; color:#22382C;"><strong>{{ c.address }}</strong></div>
+        <div style="font-family:'IBM Plex Mono', monospace; font-size:9pt; color:#5a554d;">
+          {% if c.sold_price %}SOLD ${{ '{:,}'.format(c.sold_price) }}{% endif %}{% if c.distance_km %} · {{ '%.2f'|format(c.distance_km) }} km{% endif %}
+        </div>
+      </div>
+
+      <table style="width:100%; font-size:9.5pt; border-collapse:collapse;">
+{% for r in c.adjustments %}        <tr>
+          <td style="padding:3px 0; color:#22382C;">{{ r.label }}{% if r.diff is not none and r.diff != 0 %} <span style="color:#7a8a80; font-style:italic;">(subject {% if r.diff > 0 %}+{% else %}{% endif %}{{ r.diff }}{% if r.key in ('floor_area','land_size','land_area') %} m²{% endif %})</span>{% endif %}</td>
+          <td style="padding:3px 0; text-align:right; color:{% if r.adjustment_dollars >= 0 %}#22382C{% else %}#8d4d33{% endif %}; font-family:'IBM Plex Mono', monospace; font-size:10pt;">
+            {% if r.adjustment_dollars >= 0 %}+{% else %}{% endif %}${{ '{:,}'.format(r.adjustment_dollars) }}
+          </td>
+        </tr>
+{% endfor %}      </table>
+
+      {% if c.adjusted_total %}
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:3mm; padding-top:3mm; border-top:1px solid #e6dfd0;">
+        <div style="font-family:'IBM Plex Mono', monospace; font-size:8pt; letter-spacing:0.06em; text-transform:uppercase; color:#8d4d33;">Adjusted estimate of subject</div>
+        <div style="font-family:'Cormorant Garamond', serif; font-size:18pt; color:#B76749;"><strong>${{ '{:,}'.format(c.adjusted_total) }}</strong></div>
+        <div style="font-family:'IBM Plex Mono', monospace; font-size:8pt; letter-spacing:0.06em; text-transform:uppercase; color:#8d4d33;">Weight {{ c.weight_pct }}%</div>
+      </div>
+      {% endif %}
+    </div>
+{% endfor %}
+
+    {% if s03r.rest_count > 0 %}
+    <div style="background:#f0e6d5; border-left:3px solid #B76749; padding:3mm 5mm; font-size:9.5pt; line-height:1.5; margin-bottom:4mm;">
+      <strong>{{ s03r.cards|length }} comp{% if s03r.cards|length > 1 %}s{% endif %} shown in detail.</strong> {{ s03r.rest_count }} additional comparable sale{% if s03r.rest_count > 1 %}s{% endif %} contribute the remaining {{ s03r.rest_weight_pct }}% of the weight. Every adjustment is verified against the cohort median before reconciliation.
+    </div>
+    {% endif %}
+
+    <div style="background:#fdf3ec; border-left:3px solid #B76749; padding:3mm 5mm; display:flex; align-items:center; gap:4mm; margin-bottom:4mm;">
+      <div style="font-family:'Cormorant Garamond', serif; font-size:24pt; color:#B76749; line-height:1;">{{ s03r.backtest_stat.mae_pct }}%</div>
+      <div style="font-size:9pt; line-height:1.45; color:#2c2924;">{{ s03r.backtest_stat.label | safe }}<br><span style="font-family:'IBM Plex Mono', monospace; font-size:7.5pt; letter-spacing:0.06em; text-transform:uppercase; color:#8d4d33;">Source: Fields valuation backtest · comparable_sales_v3 · 2026-03</span></div>
+    </div>
+
+    <div class="source-line" style="font-size:7.5pt;">{{ s03r.caption }}</div>
+
+    <div class="page-footer">
+      <span class="smarter-mark"><svg viewBox="0 0 14 17" xmlns="http://www.w3.org/2000/svg"><path d="M 2 1 L 2 16 L 4 16 L 4 9 L 11 9 Q 13 9 13 7 Q 13 5 11 5 L 4 5 L 4 1 Z M 4 6.5 L 11 6.5 Q 11.5 6.5 11.5 7 Q 11.5 7.5 11 7.5 L 4 7.5 Z" fill="#B76749"/></svg>Smarter with data</span>
+      <span class="page-num">— 10 —</span>
+    </div>
+  </div>
+</div>"""
+
+
+def render_section_03_receipts_html(
+    subject_id: str,
+    *,
+    top_n: int = 2,
+    editorial_overrides: dict | None = None,
+    write_substantiation: bool = True,
+) -> str:
+    """§03 receipts page — comp-by-comp adjustment cards."""
+    overrides = editorial_overrides or {}
+    subject = data_pull.get_subject(subject_id)
+    s03r = data_pull.section_03_receipts(subject_id, top_n=top_n)
+    if "subhead" in overrides:
+        s03r["subhead"] = overrides["subhead"]
+    ctx = {
+        "subject": {"short_address": _short_address(subject)},
+        "s03r": s03r,
+    }
+    env = Environment(loader=BaseLoader(), autoescape=select_autoescape(["html"]))
+    html = env.from_string(SECTION_03_RECEIPTS_TEMPLATE).render(**ctx)
+    if write_substantiation:
+        substantiation.save({**s03r["substantiation_record"], "rendered_html_hash": _hash(html)})
+    return html
+
+
 SECTION_04_RIGHT_TEMPLATE = """\
 <!-- ============================================================ -->
 <!-- PAGE 13 — SECTION 04 RIGHT — Active/passive buyer reach.       -->
@@ -862,3 +952,58 @@ def _hash(s: str) -> str:
     """Short hash for audit trail."""
     import hashlib
     return hashlib.sha256(s.encode()).hexdigest()[:16]
+
+SECTION_RECOMMENDATION_TEMPLATE = '''\
+<!-- ============================================================ -->
+<!-- PAGE {{ rec.page_number }} — RECOMMENDATION                   -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <div class="page-header-title">For {{ subject.short_address }}</div>
+      <svg viewBox="0 0 22 26" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 3 2 L 3 24 L 6 24 L 6 14 L 17 14 Q 20 14 20 11 Q 20 8 17 8 L 6 8 L 6 2 Z M 6 10 L 17 10 Q 17.5 10 17.5 11 Q 17.5 12 17 12 L 6 12 Z" fill="#B76749"/>
+      </svg>
+    </div>
+    <div style="font-family:IBM Plex Mono, monospace; font-size:9pt; letter-spacing:0.15em; text-transform:uppercase; color:#B76749; margin-bottom:3mm;">Recommendation</div>
+    <h2 class="right-headline" style="font-size:30pt; margin-bottom:3mm;">{{ rec.headline_html | safe }}</h2>
+    <div class="right-subhead" style="margin-bottom:6mm;">{{ rec.subhead }}</div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:6mm; margin-bottom:6mm;">
+      <div style="background:#fdf3ec; border-left:3px solid #B76749; padding:5mm 6mm;">
+        <div style="font-family:IBM Plex Mono, monospace; font-size:8pt; letter-spacing:0.06em; text-transform:uppercase; color:#8d4d33; margin-bottom:3mm;">Recommended listing price</div>
+        <div style="font-family:Cormorant Garamond, serif; font-size:36pt; color:#B76749; line-height:1;">{% if rec.listing_price %}${{ '{:,}'.format(rec.listing_price) }}{% else %}—{% endif %}</div>
+      </div>
+      <div style="background:#fdf3ec; border-left:3px solid #B76749; padding:5mm 6mm;">
+        <div style="font-family:IBM Plex Mono, monospace; font-size:8pt; letter-spacing:0.06em; text-transform:uppercase; color:#8d4d33; margin-bottom:3mm;">Target sale price</div>
+        <div style="font-family:Cormorant Garamond, serif; font-size:26pt; color:#B76749; line-height:1.15;">{% if rec.target_sale_price_low %}${{ '{:,}'.format(rec.target_sale_price_low) }} –<br>${{ '{:,}'.format(rec.target_sale_price_high) }}{% else %}—{% endif %}</div>
+      </div>
+    </div>
+    {% if rec.page_number == 11 %}
+    <p style="font-size:10.5pt; line-height:1.55; color:#2c2924; margin-bottom:5mm;">The listing price sits in the lower end of the derived <strong>${{ '{:,}'.format(rec.derived_range_low or 0) }} – ${{ '{:,}'.format(rec.derived_range_high or 0) }}</strong> range. The target sits in the upper end. <em>Multiple interested buyers move from the listing price toward the target. A single buyer moves the other way.</em></p>
+    {% else %}
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:6mm; margin-top:6mm;">
+      <div><div style="font-family:IBM Plex Mono, monospace; font-size:8pt; letter-spacing:0.06em; text-transform:uppercase; color:#8d4d33;">Campaign duration</div><div style="font-family:Cormorant Garamond, serif; font-size:30pt; color:#B76749;">{{ rec.campaign_duration_days }} days</div></div>
+      <div><div style="font-family:IBM Plex Mono, monospace; font-size:8pt; letter-spacing:0.06em; text-transform:uppercase; color:#8d4d33;">Estimated inspections</div><div style="font-family:Cormorant Garamond, serif; font-size:30pt; color:#B76749;">{{ rec.estimated_inspections }}</div></div>
+    </div>
+    {% endif %}
+    <div class="page-footer"><span class="smarter-mark"><svg viewBox="0 0 14 17" xmlns="http://www.w3.org/2000/svg"><path d="M 2 1 L 2 16 L 4 16 L 4 9 L 11 9 Q 13 9 13 7 Q 13 5 11 5 L 4 5 L 4 1 Z M 4 6.5 L 11 6.5 Q 11.5 6.5 11.5 7 Q 11.5 7.5 11 7.5 L 4 7.5 Z" fill="#B76749"/></svg>Smarter with data</span><span class="page-num">— {{ rec.page_number }} —</span></div>
+  </div>
+</div>'''
+
+
+def render_section_recommendation_html(
+    subject_id: str,
+    *,
+    page_number: int = 11,
+    pipeline_record: dict | None = None,
+    write_substantiation: bool = True,
+) -> str:
+    subject = data_pull.get_subject(subject_id)
+    rec = data_pull.section_recommendation(subject_id, pipeline_record=pipeline_record, page_number=page_number)
+    ctx = {'subject': {'short_address': _short_address(subject)}, 'rec': rec}
+    env = Environment(loader=BaseLoader(), autoescape=select_autoescape(['html']))
+    html = env.from_string(SECTION_RECOMMENDATION_TEMPLATE).render(**ctx)
+    if write_substantiation:
+        substantiation.save({**rec['substantiation_record'], 'rendered_html_hash': _hash(html)})
+    return html
+
