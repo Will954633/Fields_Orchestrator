@@ -1609,10 +1609,28 @@ def _fmt_sat_label(val: str) -> str:
 def render_html(prop, client_name, top_comps, room_assessments, editorial,
                 market_stats, photo_paths, suburb_display: str,
                 sell_timeline: str = "", sell_timeline_label: str = "",
-                rates: dict = None) -> str:
+                rates: dict = None, pipeline_record: dict | None = None) -> str:
     env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)))
     template = env.get_template("seller_report_v2.html")
     rates = rates or {}
+
+    # Phase A appraisal template system — compute Section 01 right HTML.
+    # Graceful fallback: if anything goes wrong, leave it None and the
+    # template falls back to the legacy scarcity-banner.
+    section_01_right_html = None
+    try:
+        if pipeline_record and pipeline_record.get("highlight_chosen_key"):
+            from scripts.appraisal_template import render as _render
+            editorial_overrides = pipeline_record.get("section_01_editorial_overrides") or {}
+            section_01_right_html = _render.render_section_01_right_html(
+                str(prop["_id"]),
+                highlight_key=pipeline_record["highlight_chosen_key"],
+                editorial_overrides=editorial_overrides,
+                write_substantiation=True,
+            )
+    except Exception as e:
+        print(f"[WARN] §01 right template render failed, using legacy banner: {e}")
+        section_01_right_html = None
 
     pvd = prop.get("property_valuation_data", {})
     fpa = prop.get("floor_plan_analysis", {})
@@ -1739,6 +1757,9 @@ def render_html(prop, client_name, top_comps, room_assessments, editorial,
         "sell_timeline_label": sell_timeline_label,
         "sell_window": "",
         "seasonality_section": build_seasonality_section(sell_timeline, suburb_display),
+        # Phase A appraisal template system — new §01 right HTML block, or
+        # None to fall back to the legacy scarcity-banner.
+        "section_01_right_html": section_01_right_html,
     }
 
     return template.render(**context)
@@ -1964,7 +1985,8 @@ def main():
                        market_stats, photo_paths, suburb_display,
                        sell_timeline=sell_timeline,
                        sell_timeline_label=timeline_labels.get(sell_timeline, sell_timeline),
-                       rates=rates)
+                       rates=rates,
+                       pipeline_record=pipeline)
     html_path = work_dir / "report.html"
     html_path.write_text(html)
 
