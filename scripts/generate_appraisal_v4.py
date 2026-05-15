@@ -77,7 +77,19 @@ SPLICE_POINTS = {
     ),
     "s03_right": (
         "<!-- PAGE 09 — SECTION 03 RIGHT",
+        "<!-- PAGE 10 — SECTION 03 RECEIPTS",  # after s03_receipts splice, marker rewrites
+    ),
+    "s03_receipts": (
         "<!-- PAGE 10 — SPREAD 03 RECEIPTS",
+        "<!-- PAGE 11 — RECOMMENDATION",  # after rec_p11 splice the marker rewrites this
+    ),
+    "rec_p11": (
+        "<!-- PAGE 11 — PRICING RECOMMENDATION",
+        "<!-- PAGE 12 — SPREAD 04 LEFT",
+    ),
+    "rec_p18": (
+        "<!-- PAGE 17 — RECOMMENDATION",
+        "<!-- PAGE 18 — THE 28-DAY PLAN",
     ),
     "s04_right": (
         "<!-- PAGE 09 — SPREAD 04 RIGHT",
@@ -89,7 +101,7 @@ SPLICE_POINTS = {
     ),
     "s06_right": (
         "<!-- PAGE 13 — SPREAD 06 RIGHT",
-        "<!-- PAGE 17 — RECOMMENDATION",
+        "<!-- PAGE 18 — RECOMMENDATION",
     ),
 }
 
@@ -191,6 +203,21 @@ def render_appraisal(
     )
     sections_rendered.append("03_right")
 
+    s03r = render.render_section_03_receipts_html(
+        subject_id,
+        editorial_overrides=get_overrides("03_receipts"), write_substantiation=True,
+    )
+    sections_rendered.append("03_receipts")
+
+    rec_p11 = render.render_section_recommendation_html(
+        subject_id, page_number=11, pipeline_record=pipeline_record, write_substantiation=True,
+    )
+    sections_rendered.append("recommendation_p11")
+    rec_p18 = render.render_section_recommendation_html(
+        subject_id, page_number=18, pipeline_record=pipeline_record, write_substantiation=True,
+    )
+    sections_rendered.append("recommendation_p18")
+
     s04 = render.render_section_04_right_html(
         subject_id,
         editorial_overrides=get_overrides("04_right"), write_substantiation=True,
@@ -211,14 +238,21 @@ def render_appraisal(
 
     # Load template + splice
     text = TEMPLATE_FILE.read_text()
-    text = splice(text, "cover", cover_html)
-    text = splice(text, "s01_left", s01_left)
-    text = splice(text, "s01_right", s01)
-    text = splice(text, "s02_right", s02)
-    text = splice(text, "s03_right", s03)
-    text = splice(text, "s04_right", s04)
-    text = splice(text, "s05_right", s05)
+    # Splice bottom-up so earlier-page splices don't invalidate later-page
+    # markers. Each splice replaces text between markers — if we replaced
+    # PAGE 17's marker before splicing PAGE 13's section (which uses PAGE 17
+    # as its end-boundary), PAGE 13's splice would fail.
+    text = splice(text, "rec_p18", rec_p18)
     text = splice(text, "s06_right", s06)
+    text = splice(text, "s05_right", s05)
+    text = splice(text, "s04_right", s04)
+    text = splice(text, "rec_p11", rec_p11)
+    text = splice(text, "s03_receipts", s03r)
+    text = splice(text, "s03_right", s03)
+    text = splice(text, "s02_right", s02)
+    text = splice(text, "s01_right", s01)
+    text = splice(text, "s01_left", s01_left)
+    text = splice(text, "cover", cover_html)
 
     # Write HTML
     basename = output_basename or f"{subject_id}_{datetime.now().strftime('%Y%m%dT%H%M%S')}"
