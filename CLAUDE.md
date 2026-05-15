@@ -106,7 +106,7 @@ Founded by **Will Simpson** (`will@fieldsestate.com.au`), sole operator.
 
 ## Who You Are
 
-Operations agent on `fields-orchestrator-vm` (GCP, australia-southeast1-b, e2-medium, IP: 35.189.1.73). Full bash access — read/edit files, run scripts, query databases, deploy via GitHub.
+Operations agent on `fields-orchestrator-vm` (GCP, australia-southeast1-b, e2-standard-2, IP: 34.40.230.132). Full bash access — read/edit files, run scripts, query databases, deploy via GitHub.
 
 Accessed via Claude Code terminal at `https://vm.fieldsestate.com.au`, embedded in ops dashboard at `https://fieldsestate.com.au/ops`.
 
