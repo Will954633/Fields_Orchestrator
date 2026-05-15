@@ -25,6 +25,137 @@ from jinja2 import Environment, BaseLoader, select_autoescape  # type: ignore
 from scripts.appraisal_template import data_pull, dot_grid, pick_highlight, substantiation
 
 
+SECTION_00_COVER_TEMPLATE = """\
+<!-- ============================================================ -->
+<!-- PAGE 01 — OUTER COVER (Alex-designed system)                  -->
+<!-- Live HTML, template-driven from                                  -->
+<!-- scripts/appraisal_template/render.render_section_00_cover_html() -->
+<!-- ============================================================ -->
+<div class="cover">
+  <div class="cover-image" style="background-image: url('{{ cover.hero_image_src }}');"></div>
+
+  <!-- Large copper F mark, top-left -->
+  <img src="{{ cover.logotype_src }}" class="cover-mark-tl" alt="Fields logotype">
+
+  <!-- Top-right Fields wordmark + F -->
+  <div class="cover-mark-tr">
+    <span>Fields</span>
+    <img src="{{ cover.logotype_white_src }}" alt="Fields white logotype">
+  </div>
+
+  <!-- Address card, lower-left -->
+  <div class="cover-card">
+    <div class="cover-card-address">{{ cover.address_stacked_html | safe }}</div>
+    <div class="cover-card-suburb">{{ cover.suburb_line }}</div>
+  </div>
+
+  <!-- Dark green bottom band with document metadata -->
+  <div class="cover-bottom">
+    <div class="cover-meta">
+      <div class="cover-doc-type cover-doc-title">{{ cover.doc_type }}</div>
+      <div class="cover-doc-text">
+        <div class="cover-doc-by">{{ cover.prepared_for }}</div>
+        <div class="cover-doc-rule"></div>
+        <div class="cover-doc-by-text">{{ cover.author_line }}</div>
+        <div class="cover-doc-url">{{ cover.url }}</div>
+      </div>
+      <div class="cover-doc-type cover-doc-date">{{ cover.date_upper }}</div>
+    </div>
+    <div class="cover-date">
+      <span class="smarter-mark">
+        <img src="{{ cover.logotype_src }}" alt="Fields logotype">
+        Smarter with data
+      </span>
+    </div>
+  </div>
+</div>"""
+
+
+def render_section_00_cover_html(
+    subject_id: str,
+    *,
+    editorial_overrides: dict | None = None,
+    hero_image_src: str | None = None,
+    prepared_for: str | None = None,
+    date_override: str | None = None,
+    author: str = "by Will Simpson, Property Consultant",
+    write_substantiation: bool = True,
+) -> str:
+    """Return Page 1 (outer cover) as a ready-to-insert HTML block.
+
+    Parametric across all subjects — variable inputs are:
+        hero_image_src      relative path to the cover hero photo
+        address_stacked     street components stacked on separate lines
+        suburb_line         e.g. "Merrimac, QLD 4226"
+        prepared_for        e.g. "Prepared for Dee" / "Prepared for the Owner"
+        date_upper          e.g. "10 MAY 2026" — defaults to today
+
+    Brand chrome (Fields F marks, "PROPERTY POSITIONING REPORT" eyebrow,
+    "Smarter with data" tagline) is constant.
+    """
+    from datetime import datetime
+    overrides = editorial_overrides or {}
+    subject = data_pull.get_subject(subject_id)
+
+    # Stacked address — "13 Terrace Court" → "13<br>Terrace<br>Court"
+    street = subject.get("street_address") or _short_address(subject) or ""
+    stacked = "<br>".join(w for w in street.split() if w)
+
+    suburb = subject.get("suburb") or ""
+    postcode = subject.get("postcode") or subject.get("display_postcode") or ""
+    suburb_line = f"{suburb.title() if suburb.isupper() else suburb}, QLD {postcode}".strip(", ")
+
+    prepared_for_final = overrides.get("prepared_for") or prepared_for or "Prepared for the Owner"
+    if not prepared_for_final.lower().startswith("prepared"):
+        prepared_for_final = f"Prepared for {prepared_for_final}"
+
+    date_final = date_override or datetime.now().strftime("%-d %B %Y").upper()
+
+    # Default hero image — per-subject asset by ObjectId; falls back to a
+    # branded placeholder if no per-subject photo exists. Will should curate
+    # the hero per appraisal (single photo selection in the ops UI is a
+    # future Phase D item).
+    hero_final = (
+        hero_image_src
+        or overrides.get("hero_image_src")
+        or f"assets/img/cover_hero_{subject_id}.jpg"
+    )
+
+    ctx = {
+        "cover": {
+            "hero_image_src": hero_final,
+            "logotype_src": "assets/img/fields_logotype.svg",
+            "logotype_white_src": "assets/img/fields_logotype_white.svg",
+            "address_stacked_html": stacked,
+            "suburb_line": suburb_line,
+            "doc_type": overrides.get("doc_type") or "Property Positioning Report",
+            "prepared_for": prepared_for_final,
+            "author_line": overrides.get("author_line") or author,
+            "url": "fieldsestate.com.au",
+            "date_upper": date_final,
+        }
+    }
+
+    env = Environment(loader=BaseLoader(), autoescape=select_autoescape(["html"]))
+    template = env.from_string(SECTION_00_COVER_TEMPLATE)
+    html = template.render(**ctx)
+
+    if write_substantiation:
+        substantiation.save({
+            "section": "00_cover",
+            "subject_id": subject_id,
+            "subject_address": subject.get("complete_address"),
+            "hero_image_src": hero_final,
+            "prepared_for": prepared_for_final,
+            "date": date_final,
+            "as_at_date": datetime.now().isoformat(),
+            "framework_version": "2026-05-15",
+            "rendered_html_hash": _hash(html),
+        })
+
+    return html
+
+
 SECTION_04_RIGHT_TEMPLATE = """\
 <!-- ============================================================ -->
 <!-- PAGE 13 — SECTION 04 RIGHT — Active/passive buyer reach.       -->
