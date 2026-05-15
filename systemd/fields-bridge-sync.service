@@ -1,0 +1,20 @@
+[Unit]
+Description=Fields Bridge Sync — mirrors property_reports into appraisal_pipeline
+After=network.target mongod.service
+Wants=network-online.target
+Requires=mongod.service
+
+[Service]
+Type=simple
+User=projects
+WorkingDirectory=/home/fields/Fields_Orchestrator
+EnvironmentFile=/home/fields/Fields_Orchestrator/.env
+ExecStart=/home/fields/venv/bin/python3 /home/fields/Fields_Orchestrator/scripts/property_reports_to_appraisal_pipeline_bridge.py --watch --refresh --quiet
+Restart=always
+RestartSec=30
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=fields-bridge-sync
+
+[Install]
+WantedBy=multi-user.target
