@@ -71,6 +71,19 @@ def _candidates_for(subject: dict) -> list[dict]:
     solar = _subject_value(subject, "property_valuation_data.property_metadata.solar_visible") or False
     condition = _subject_value(subject, "property_valuation_data.property_overview.overall_condition_score") or 0
 
+    # Satellite-derived signals — only populated once step 117 has run on the
+    # subject. Currently sparse on sold docs (sold-cohort backfill in progress
+    # 2026-05-15). Treated as unknown (None) when absent rather than False
+    # so the ranker doesn't claim "subject has no bushland" when the data
+    # simply hasn't been collected yet.
+    sat_backs = _subject_value(subject, "satellite_analysis.categories.adjacency.backs_onto") or []
+    sat_frontage = _subject_value(subject, "satellite_analysis.categories.adjacency.frontage") or ""
+    sat_green = _subject_value(subject, "satellite_analysis.categories.amenity_premiums.green_space_proximity") or ""
+    bushland_boundary = (
+        isinstance(sat_backs, list) and any("bushland" in str(b).lower() or "reserve" in str(b).lower() for b in sat_backs)
+    ) or "bushland" in str(sat_green).lower()
+    cul_de_sac = "cul_de_sac" in str(sat_frontage).lower()
+
     cands: list[dict] = []
 
     # Single-attribute candidates
@@ -188,6 +201,46 @@ def _candidates_for(subject: dict) -> list[dict]:
                 "property_valuation_data.outdoor.outdoor_entertainment_score": {"$gte": 9},
             },
             "pool+outdoor",
+        ))
+
+    # Satellite-derived candidates — added in Phase B once sold cohort has
+    # satellite_analysis populated. Each matches the same pattern as the
+    # structured fields: only emitted when the subject itself has the signal.
+    if bushland_boundary:
+        cands.append(_cand(
+            "a permanent bushland boundary",
+            {"$or": [
+                {"satellite_analysis.categories.adjacency.backs_onto": {"$regex": "bushland|reserve", "$options": "i"}},
+                {"satellite_analysis.categories.amenity_premiums.green_space_proximity": {"$regex": "bushland", "$options": "i"}},
+            ]},
+            "bushland-boundary",
+        ))
+    if cul_de_sac:
+        cands.append(_cand(
+            "a cul-de-sac head position",
+            {"satellite_analysis.categories.adjacency.frontage": {"$regex": "cul_de_sac", "$options": "i"}},
+            "cul-de-sac",
+        ))
+    if bushland_boundary and beds >= 5:
+        cands.append(_cand(
+            f"{_n(beds)} or more bedrooms with a permanent bushland boundary",
+            {
+                "bedrooms": {"$gte": beds},
+                "$or": [
+                    {"satellite_analysis.categories.adjacency.backs_onto": {"$regex": "bushland|reserve", "$options": "i"}},
+                    {"satellite_analysis.categories.amenity_premiums.green_space_proximity": {"$regex": "bushland", "$options": "i"}},
+                ],
+            },
+            "beds+bushland",
+        ))
+    if cul_de_sac and pool:
+        cands.append(_cand(
+            "a cul-de-sac head position with a pool",
+            {
+                "satellite_analysis.categories.adjacency.frontage": {"$regex": "cul_de_sac", "$options": "i"},
+                "property_valuation_data.outdoor.pool_present": True,
+            },
+            "cul-de-sac+pool",
         ))
 
     return cands
