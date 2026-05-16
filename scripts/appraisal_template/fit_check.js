@@ -124,16 +124,18 @@ async function main() {
         el.style.overflow = prevOverflow;
         pad.style.height = prevPadHeight;
 
-        // Tiered overflow status. Browser layout in print-emulation mode is
-        // consistently more conservative than the actual Chrome PDF render —
-        // small overflows (<50px) are virtually always fine in the rendered
-        // PDF, moderate overflows (50-200px) are worth watching, and large
-        // overflows (>200px) almost certainly clip in the PDF too.
+        // Tiered status — measured against page-edge clearance, not raw
+        // overflow. A page with content reaching within 30px of the bottom
+        // edge is flagged "tight" because the footer mark visually invades
+        // content space (or vice versa) even when no literal overflow occurs.
+        // Verified against §04R regression where content=1120/page=1123 had
+        // zero literal overflow but was visibly touching the footer.
         const overflowPx = Math.max(0, naturalContentHeight - pageClient);
+        const clearancePx = pageClient - naturalContentHeight;
         let status;
-        if (overflowPx <= 50) status = 'ok';
-        else if (overflowPx <= 200) status = 'tight';
-        else status = 'overflow';
+        if (clearancePx >= 30) status = 'ok';            // ≥30px breathing room
+        else if (overflowPx <= 50) status = 'tight';     // close to edge or 1-50px over
+        else status = 'overflow';                        // >50px over the page
 
         return {
           section_key: el.getAttribute('data-section'),
