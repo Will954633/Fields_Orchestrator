@@ -347,6 +347,29 @@ def render_appraisal(
     # SECTION_RULES against real subjects before turning on enforcement.
     audit_records = layout_rules.get_records()
     audit_path = OUTPUT_DIR / f"{basename}.audit.json"
+
+    # Layer 2 Phase 1 — browser-based fit check. Loads the spliced HTML in
+    # headless Chromium at A4 print-media dimensions and measures every
+    # `[data-section]` page for content overflow. Observational only —
+    # generator does not (yet) re-render overflowing sections with compact
+    # layout variants. That cascade is Phase 2.
+    fit_report = None
+    fit_check_script = REPO_ROOT / "scripts" / "appraisal_template" / "fit_check.js"
+    fit_check_out = OUTPUT_DIR / f"{basename}.fit_check.json"
+    if fit_check_script.exists():
+        try:
+            subprocess.run(
+                ["node", str(fit_check_script), str(html_path), str(fit_check_out)],
+                check=True, capture_output=True, text=True, timeout=90,
+            )
+            if fit_check_out.exists():
+                fit_report = json.loads(fit_check_out.read_text())
+        except subprocess.CalledProcessError as exc:
+            # Non-fatal — record the failure in the audit payload but keep going.
+            fit_report = {"error": f"fit_check failed: {exc.stderr[-400:]}"}
+        except subprocess.TimeoutExpired:
+            fit_report = {"error": "fit_check timeout"}
+
     audit_payload = {
         "subject_id": subject_id,
         "pipeline_id": str(pipeline_record.get("_id")) if pipeline_record else None,
@@ -357,6 +380,7 @@ def render_appraisal(
             "soft_warnings": sum(r.n_warn for r in audit_records),
             "hard_failures": sum(r.n_fail for r in audit_records),
         },
+        "fit_check": fit_report,
     }
     audit_path.write_text(json.dumps(audit_payload, indent=2))
 
@@ -379,6 +403,7 @@ def render_appraisal(
         "audit_path": str(audit_path),
         "audit_summary": audit_payload["summary"],
         "audit_records": audit_records,
+        "fit_check": fit_report,
         "subject_id": subject_id,
         "pipeline_id": str(pipeline_record.get("_id")) if pipeline_record else None,
         "sections_rendered": sections_rendered,
@@ -432,6 +457,21 @@ def main() -> None:
             print(f"    FAIL {msg}")
         for msg in record.warnings:
             print(f"    warn {msg}")
+
+    fit = result.get("fit_check")
+    if fit and "summary" in fit:
+        fs = fit["summary"]
+        print(
+            f"  Fit-check: {fs['sections_measured']} pages measured · "
+            f"{fs['overflows']} overflow · {fs['tight']} tight"
+        )
+        for s in fit["sections"]:
+            if s["status"] == "overflow":
+                print(f"    OVERFLOW  {s['section_key']}: content {s['scroll_height_px']}px > page {s['client_height_px']}px (+{s['overflow_px']}px)")
+            elif s["status"] == "tight":
+                print(f"    tight     {s['section_key']}: content {s['scroll_height_px']}px > page {s['client_height_px']}px (+{s['overflow_px']}px)")
+    elif fit and "error" in fit:
+        print(f"  Fit-check: error — {fit['error']}")
 
     if args.update_pipeline and pipe and result["pdf_path"]:
         sm = get_client()["system_monitor"]
