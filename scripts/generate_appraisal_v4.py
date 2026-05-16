@@ -348,27 +348,55 @@ def render_appraisal(
     audit_records = layout_rules.get_records()
     audit_path = OUTPUT_DIR / f"{basename}.audit.json"
 
-    # Layer 2 Phase 1 — browser-based fit check. Loads the spliced HTML in
-    # headless Chromium at A4 print-media dimensions and measures every
-    # `[data-section]` page for content overflow. Observational only —
-    # generator does not (yet) re-render overflowing sections with compact
-    # layout variants. That cascade is Phase 2.
+    # Layer 2 — browser-based fit check + compact-variant cascade. The first
+    # pass measures every `[data-section]` page in headless Chromium at A4
+    # print dimensions. Any section flagged `overflow` has its `data-variant`
+    # swapped from "standard" to "compact" (pure CSS — smaller fonts, tighter
+    # padding) and the HTML is rewritten + re-measured. A second cascade level
+    # (ultra_compact / continuation pages) is left for Phase 2.5 if needed.
     fit_report = None
     fit_check_script = REPO_ROOT / "scripts" / "appraisal_template" / "fit_check.js"
     fit_check_out = OUTPUT_DIR / f"{basename}.fit_check.json"
-    if fit_check_script.exists():
+    variants_applied: dict[str, str] = {}
+    fit_passes: list[dict] = []
+
+    def _run_fit_check() -> dict | None:
         try:
             subprocess.run(
                 ["node", str(fit_check_script), str(html_path), str(fit_check_out)],
                 check=True, capture_output=True, text=True, timeout=90,
             )
-            if fit_check_out.exists():
-                fit_report = json.loads(fit_check_out.read_text())
+            return json.loads(fit_check_out.read_text()) if fit_check_out.exists() else None
         except subprocess.CalledProcessError as exc:
-            # Non-fatal — record the failure in the audit payload but keep going.
-            fit_report = {"error": f"fit_check failed: {exc.stderr[-400:]}"}
+            return {"error": f"fit_check failed: {exc.stderr[-400:]}"}
         except subprocess.TimeoutExpired:
-            fit_report = {"error": "fit_check timeout"}
+            return {"error": "fit_check timeout"}
+
+    if fit_check_script.exists():
+        # Pass 1: measure standard render
+        fit_report = _run_fit_check()
+        fit_passes.append({"variant": "standard", "summary": (fit_report or {}).get("summary")})
+
+        # Find sections needing compact treatment and rewrite their data-variant
+        if fit_report and "sections" in fit_report:
+            overflowing = [s["section_key"] for s in fit_report["sections"]
+                           if s.get("status") == "overflow"]
+            if overflowing:
+                current_html = html_path.read_text()
+                for key in overflowing:
+                    # The data-variant attribute is right after data-section on each .page div.
+                    # We resolved the recommendation_p* keys via jinja so they're concrete here.
+                    old_attr = f'data-section="{key}" data-variant="standard"'
+                    new_attr = f'data-section="{key}" data-variant="compact"'
+                    if old_attr in current_html:
+                        current_html = current_html.replace(old_attr, new_attr, 1)
+                        variants_applied[key] = "compact"
+                html_path.write_text(current_html)
+
+                # Pass 2: re-measure after compact swap
+                fit_report = _run_fit_check()
+                fit_passes.append({"variant": "compact", "summary": (fit_report or {}).get("summary"),
+                                   "applied_to": list(variants_applied.keys())})
 
     audit_payload = {
         "subject_id": subject_id,
@@ -381,6 +409,8 @@ def render_appraisal(
             "hard_failures": sum(r.n_fail for r in audit_records),
         },
         "fit_check": fit_report,
+        "fit_passes": fit_passes,
+        "variants_applied": variants_applied,
     }
     audit_path.write_text(json.dumps(audit_payload, indent=2))
 
@@ -404,6 +434,8 @@ def render_appraisal(
         "audit_summary": audit_payload["summary"],
         "audit_records": audit_records,
         "fit_check": fit_report,
+        "fit_passes": fit_passes,
+        "variants_applied": variants_applied,
         "subject_id": subject_id,
         "pipeline_id": str(pipeline_record.get("_id")) if pipeline_record else None,
         "sections_rendered": sections_rendered,
@@ -459,12 +491,18 @@ def main() -> None:
             print(f"    warn {msg}")
 
     fit = result.get("fit_check")
+    variants = result.get("variants_applied") or {}
     if fit and "summary" in fit:
         fs = fit["summary"]
+        passes = len(result.get("fit_passes") or [])
         print(
             f"  Fit-check: {fs['sections_measured']} pages measured · "
-            f"{fs['overflows']} overflow · {fs['tight']} tight"
+            f"{fs['overflows']} overflow · {fs['tight']} tight · "
+            f"{passes} pass{'es' if passes != 1 else ''}"
         )
+        if variants:
+            for key, variant in variants.items():
+                print(f"    compact-variant applied to {key}")
         for s in fit["sections"]:
             if s["status"] == "overflow":
                 print(f"    OVERFLOW  {s['section_key']}: content {s['scroll_height_px']}px > page {s['client_height_px']}px (+{s['overflow_px']}px)")
