@@ -113,7 +113,11 @@ class UnknownStatusDetector:
             snapshot_data = []
             for suburb in self.target_suburbs:
                 col = self.db[suburb]
-                for prop in col.find({}, {'address': 1, 'last_updated': 1, '_id': 0}):
+                # listing_status filter is required: unified Gold_Coast collections
+                # hold ~40K cadastral records per suburb. Without it, all of them
+                # appear as "unknown status" because none are on Domain.
+                for prop in col.find({'listing_status': 'for_sale'},
+                                     {'address': 1, 'last_updated': 1, '_id': 0}):
                     address = prop.get('address')
                     if address:
                         self.pre_phase2_snapshot.add(address)
@@ -189,7 +193,8 @@ class UnknownStatusDetector:
             current_for_sale_by_address = {}
             for suburb in self.target_suburbs:
                 col = self.db[suburb]
-                for prop in col.find({}, {'address': 1, 'last_updated': 1, '_id': 0}):
+                for prop in col.find({'listing_status': 'for_sale'},
+                                     {'address': 1, 'last_updated': 1, '_id': 0}):
                     address = prop.get('address')
                     if address:
                         current_for_sale_by_address[address] = prop
