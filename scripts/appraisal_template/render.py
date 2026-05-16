@@ -818,7 +818,7 @@ SECTION_01_RIGHT_TEMPLATE = """\
 
     <div class="source-line" style="margin-bottom:3mm; font-size:7.5pt;">{{ s01.caption }}</div>
 
-    <div class="fields-advantage" style="padding:3.5mm 7mm 3.5mm 8mm;">
+    <div class="fields-advantage" style="padding:3.5mm 7mm 3.5mm 8mm; margin-bottom:8mm;">
       <span class="fa-label" style="margin-bottom:2mm;">{{ s01.advantage_label }}</span>
       <p class="fa-body" style="font-size:9.5pt; line-height:1.45;">{{ s01.advantage_body_html | safe }}</p>
     </div>
