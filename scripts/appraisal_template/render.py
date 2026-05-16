@@ -30,7 +30,7 @@ SECTION_01_LEFT_TEMPLATE = """\
 <!-- PAGE 04 — SECTION 01 LEFT — Buyers pay more for what they      -->
 <!-- cannot easily replace. (Live HTML, was locked_p01.png.)        -->
 <!-- ============================================================ -->
-<div class="page">
+<div class="page" data-section="01_left">
   <div class="page-pad">
     <div class="page-header">
       <div class="page-header-title">For {{ subject.short_address }}</div>
@@ -231,7 +231,7 @@ SECTION_03_RECEIPTS_TEMPLATE = """\
 <!-- ============================================================ -->
 <!-- PAGE 10 — SECTION 03 RECEIPTS — comp-by-comp adjustments       -->
 <!-- ============================================================ -->
-<div class="page">
+<div class="page" data-section="03_receipts">
   <div class="page-pad">
     <div class="page-header">
       <div class="page-header-title">For {{ subject.short_address }}</div>
@@ -348,7 +348,7 @@ SECTION_04_RIGHT_TEMPLATE = """\
 <!-- ============================================================ -->
 <!-- PAGE 13 — SECTION 04 RIGHT — Active/passive buyer reach.       -->
 <!-- ============================================================ -->
-<div class="page">
+<div class="page" data-section="04_right">
   <div class="page-pad">
     <div class="page-header">
       <div class="page-header-title">For {{ subject.short_address }}</div>
@@ -391,7 +391,7 @@ SECTION_05_RIGHT_TEMPLATE = """\
 <!-- ============================================================ -->
 <!-- PAGE 15 — SECTION 05 RIGHT — Presentation turns features into desire. -->
 <!-- ============================================================ -->
-<div class="page">
+<div class="page" data-section="05_right">
   <div class="page-pad">
     <div class="page-header">
       <div class="page-header-title">For {{ subject.short_address }}</div>
@@ -435,7 +435,7 @@ SECTION_06_RIGHT_TEMPLATE = """\
 <!-- ============================================================ -->
 <!-- PAGE 17 — SECTION 06 RIGHT — The evidence buyers need.        -->
 <!-- ============================================================ -->
-<div class="page">
+<div class="page" data-section="06_right">
   <div class="page-pad">
     <div class="page-header">
       <div class="page-header-title">For {{ subject.short_address }}</div>
@@ -544,7 +544,7 @@ SECTION_03_RIGHT_TEMPLATE = """\
 <!-- Live HTML, template-driven from                                  -->
 <!-- scripts/appraisal_template/render.render_section_03_right_html() -->
 <!-- ============================================================ -->
-<div class="page">
+<div class="page" data-section="03_right">
   <div class="page-pad">
     <div class="page-header">
       <div class="page-header-title">For {{ subject.short_address }}</div>
@@ -698,7 +698,7 @@ SECTION_02_RIGHT_TEMPLATE = """\
 <!-- Live HTML, template-driven from                                  -->
 <!-- scripts/appraisal_template/render.render_section_02_right_html() -->
 <!-- ============================================================ -->
-<div class="page">
+<div class="page" data-section="02_right">
   <div class="page-pad">
     <div class="page-header">
       <div class="page-header-title">For {{ subject.short_address }}</div>
@@ -827,7 +827,7 @@ SECTION_01_RIGHT_TEMPLATE = """\
 <!-- Live HTML. Template-driven from                                   -->
 <!-- scripts/appraisal_template/render.render_section_01_right_html() -->
 <!-- ============================================================ -->
-<div class="page">
+<div class="page" data-section="01_right">
   <div class="page-pad">
     <div class="page-header">
       <div class="page-header-title">For {{ subject.short_address }}</div>
@@ -840,8 +840,8 @@ SECTION_01_RIGHT_TEMPLATE = """\
     <h2 class="right-headline" style="font-size:30pt; margin-bottom:3mm;">{{ s01.headline_html | safe }}</h2>
     <div class="right-subhead" style="margin-bottom:5mm; font-size:10.5pt;">{{ s01.subhead }}</div>
 
-    <div style="position:relative; margin: 0 0 5mm; border-radius:1.5mm; overflow:hidden;">
-      <img src="{{ s01.satellite_image_src }}" alt="{{ subject.short_address }} — aerial view" style="display:block; width:100%; height:auto; border-radius:1.5mm;" />
+    <div style="position:relative; margin: 0 0 5mm; border-radius:1.5mm; overflow:hidden; max-height:88mm;">
+      <img src="{{ s01.satellite_image_src }}" alt="{{ subject.short_address }} — aerial view" style="display:block; width:100%; height:88mm; object-fit:cover; border-radius:1.5mm;" />
     </div>
 
     <div style="display:grid; grid-template-columns: 1fr 60mm; gap:6mm; align-items:start; margin-bottom:4mm;">
@@ -1068,7 +1068,7 @@ SECTION_RECOMMENDATION_TEMPLATE = '''\
 <!-- ============================================================ -->
 <!-- PAGE {{ rec.page_number }} — RECOMMENDATION                   -->
 <!-- ============================================================ -->
-<div class="page">
+<div class="page" data-section="recommendation_p{{ rec.page_number }}">
   <div class="page-pad">
     <div class="page-header">
       <div class="page-header-title">For {{ subject.short_address }}</div>
