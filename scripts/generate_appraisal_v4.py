@@ -377,10 +377,13 @@ def render_appraisal(
         fit_report = _run_fit_check()
         fit_passes.append({"variant": "standard", "summary": (fit_report or {}).get("summary")})
 
-        # Find sections needing compact treatment and rewrite their data-variant
+        # Find sections needing compact treatment. Trigger on both "overflow"
+        # (literal clip) and "tight" (content within 30px of page bottom — no
+        # footer breathing room). Tight sections visually feel cramped even
+        # though no clipping occurs, so they get compact treatment too.
         if fit_report and "sections" in fit_report:
             overflowing = [s["section_key"] for s in fit_report["sections"]
-                           if s.get("status") == "overflow"]
+                           if s.get("status") in ("overflow", "tight")]
             if overflowing:
                 current_html = html_path.read_text()
                 for key in overflowing:
