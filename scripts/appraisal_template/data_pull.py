@@ -277,18 +277,18 @@ FIELDS_ADVANTAGE_01 = {
     ),
 }
 
-# Fields Advantage — 04. Rewrite removes the universal-claim "Most agents
-# market to buyers already searching on the portals" (Rule 7).
 FIELDS_ADVANTAGE_04 = {
     "label": "FIELDS ADVANTAGE — 04",
     "body": (
-        "The campaign starts with the buyer most likely to pay the premium, "
-        "then builds reach to find them across the platforms where their "
-        "attention actually is — realestate.com.au, Domain, Facebook, "
+        "Most agents market to buyers already searching on the portals and "
+        "to contacts in a historical email database. "
+        "<strong>Fields starts with the buyer most likely to pay the premium</strong>, "
+        "then builds the campaign to find them across the platforms where "
+        "their attention actually is — realestate.com.au, Domain, Facebook, "
         "Instagram, YouTube and Google. The campaign is built around the "
         "buyer avatar from Section 02, not a generic list of channels. "
-        "<strong>Premium prices come from competition — Fields' job is to "
-        "find the second passionate buyer in the room, because the cost of "
+        "<strong>Premium prices come from competition. Fields' job is to "
+        "find the second passionate buyer in the room — because the cost of "
         "missing that buyer is too great to ignore.</strong>"
     ),
 }
@@ -813,7 +813,7 @@ def section_04_right(subject_id: str, catchment: list[str] | None = None) -> dic
         "subhead": "Reach is built from the buyer avatar in Section 02, not a generic channel list.",
         "modes": [
             {"num": "01", "label": "Active buyer", "desc": "Searching for a home like yours today. They will find your listing on a portal — Fields makes sure your listing competes for their attention there.", "channels": "realestate.com.au · Domain · Google Search"},
-            {"num": "02", "label": "Passive buyer", "desc": "Matches your home's buyer avatar — but isn't searching this week. The larger pool, and the source of price competition.", "channels": "Facebook · Instagram · YouTube · Google Display"},
+            {"num": "02", "label": "Passive buyer", "desc": "Matches your home's buyer avatar — but isn't searching this week. The larger pool, and the source of price competition. Most agents never reach them. Fields specialises in finding them.", "channels": "Facebook · Instagram · YouTube · Google Display"},
             {"num": "03", "label": "Retargeting (active and passive, after engagement)", "desc": "The buyer who has already engaged — visited the listing, watched the video, read the editorial — and needs repeated exposure to convert from interest to inspection.", "channels": "Across every platform where they continue to spend attention"},
         ],
         "campaign_model": {
