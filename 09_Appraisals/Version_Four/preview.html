@@ -185,6 +185,43 @@ html, body {
 .smarter-mark svg { width: 14px; height: 14px; }
 .page-num { font-size: 8pt; color: var(--text-muted); letter-spacing: 1px; }
 
+/* ----------------------------------------------------------------- */
+/* Compact variant — applied by fit-cascade when a section overflows  */
+/* the standard layout. Shrinks the most layout-significant levers    */
+/* (page padding, headline sizes, FA box, body line-height) by 8-15%. */
+/* Inline-styled blocks in section templates aren't reached here;     */
+/* if those overflow, the cascade falls back to ultra_compact later.  */
+/* ----------------------------------------------------------------- */
+.page[data-variant="compact"] .page-pad { padding: 13mm 17mm 10mm !important; }
+.page[data-variant="compact"] .page-header { margin-bottom: 6mm !important; }
+.page[data-variant="compact"] .right-headline { font-size: 24pt !important; margin-bottom: 2mm !important; line-height: 1.04 !important; }
+.page[data-variant="compact"] .right-headline.s03 { font-size: 22pt !important; }
+.page[data-variant="compact"] .right-subhead { font-size: 10pt !important; margin-bottom: 4mm !important; line-height: 1.35 !important; }
+.page[data-variant="compact"] .spread-number { font-size: 64pt !important; margin-bottom: 4mm !important; }
+.page[data-variant="compact"] .spread-headline { font-size: 26pt !important; line-height: 1.06 !important; }
+.page[data-variant="compact"] .spread-headline.long { font-size: 24pt !important; }
+.page[data-variant="compact"] .spread-body { font-size: 10.5pt !important; line-height: 1.4 !important; }
+.page[data-variant="compact"] .spread-body p { margin-bottom: 2.5mm !important; }
+.page[data-variant="compact"] .fields-advantage { padding: 3mm 6mm !important; margin-top: 3mm !important; }
+.page[data-variant="compact"] .fa-body { font-size: 8.5pt !important; line-height: 1.35 !important; }
+.page[data-variant="compact"] .fa-label { font-size: 8pt !important; margin-bottom: 1mm !important; }
+.page[data-variant="compact"] .source-line { font-size: 7pt !important; margin-bottom: 1.5mm !important; }
+.page[data-variant="compact"] .cohort-anchor { padding: 4mm 5mm !important; margin-bottom: 3mm !important; font-size: 10pt !important; }
+.page[data-variant="compact"] .evidence-row { padding: 2mm 0 !important; }
+.page[data-variant="compact"] .evidence-row .attr { font-size: 9pt !important; }
+.page[data-variant="compact"] .evidence-row .signal { font-size: 8.5pt !important; }
+.page[data-variant="compact"] .synthesis { padding: 4mm 6mm !important; margin: 3mm 0 !important; }
+.page[data-variant="compact"] .anti-fit { font-size: 8.5pt !important; margin: 0.5mm 0 1.5mm !important; }
+.page[data-variant="compact"] .thesis-close { font-size: 11pt !important; margin-top: 4mm !important; }
+.page[data-variant="compact"] .personas { gap: 2mm !important; }
+.page[data-variant="compact"] .persona-card { padding: 3mm 4mm !important; }
+.page[data-variant="compact"] .persona-name { font-size: 13pt !important; }
+.page[data-variant="compact"] .persona-demo { font-size: 8.5pt !important; line-height: 1.35 !important; }
+.page[data-variant="compact"] .persona-evidence { font-size: 8pt !important; line-height: 1.3 !important; }
+.page[data-variant="compact"] .match-bar-label { font-size: 7.5pt !important; }
+.page[data-variant="compact"] .willingness { padding-top: 1mm !important; }
+.page[data-variant="compact"] .willingness-range { font-size: 11pt !important; }
+
 /* Spread number + headline (left page) ---------------------------- */
 .spread-number {
   font-family: 'Playfair Display', serif;
