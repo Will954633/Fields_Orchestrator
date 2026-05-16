@@ -44,9 +44,11 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
+import json
+
 from bson import ObjectId  # type: ignore
 from shared.db import get_client  # type: ignore
-from scripts.appraisal_template import render  # type: ignore
+from scripts.appraisal_template import render, layout_rules  # type: ignore
 
 
 V4_DIR = REPO_ROOT / "09_Appraisals" / "Version_Four"
@@ -162,6 +164,10 @@ def render_appraisal(
     def get_overrides(section_key: str) -> dict:
         field = f"section_{section_key}_editorial_overrides"
         return pipeline_record.get(field, {}) if pipeline_record else {}
+
+    # Drain any layout-rules audit records from a previous run in this process
+    # so the audit file only reflects this render.
+    layout_rules.clear_records()
 
     # Section render — each returns the HTML block
     sections_rendered = []
@@ -335,6 +341,25 @@ def render_appraisal(
     if not (pipeline_record or {}).get("satellite_image_src") and not expected_sat.exists() and fallback_sat.exists():
         shutil.copy(fallback_sat, expected_sat)
 
+    # Drain layout-rules audit records collected during section renders and
+    # write a structured audit alongside the HTML/PDF. Phase 1: warnings only
+    # (no truncation, no compact-variant fallback). The audit lets us tune
+    # SECTION_RULES against real subjects before turning on enforcement.
+    audit_records = layout_rules.get_records()
+    audit_path = OUTPUT_DIR / f"{basename}.audit.json"
+    audit_payload = {
+        "subject_id": subject_id,
+        "pipeline_id": str(pipeline_record.get("_id")) if pipeline_record else None,
+        "rendered_at": datetime.now(timezone.utc).isoformat(),
+        "sections": [r.to_dict() for r in audit_records],
+        "summary": {
+            "sections_checked": len(audit_records),
+            "soft_warnings": sum(r.n_warn for r in audit_records),
+            "hard_failures": sum(r.n_fail for r in audit_records),
+        },
+    }
+    audit_path.write_text(json.dumps(audit_payload, indent=2))
+
     # Render PDF
     pdf_path: Path | None = None
     if render_pdf:
@@ -351,6 +376,9 @@ def render_appraisal(
     return {
         "html_path": str(html_path),
         "pdf_path": str(pdf_path) if pdf_path else None,
+        "audit_path": str(audit_path),
+        "audit_summary": audit_payload["summary"],
+        "audit_records": audit_records,
         "subject_id": subject_id,
         "pipeline_id": str(pipeline_record.get("_id")) if pipeline_record else None,
         "sections_rendered": sections_rendered,
@@ -392,6 +420,18 @@ def main() -> None:
     if result["pdf_path"]:
         print(f"  PDF:  {result['pdf_path']}")
     print(f"  Sections: {', '.join(result['sections_rendered'])}")
+
+    summary = result["audit_summary"]
+    print(
+        f"  Audit: {summary['sections_checked']} sections checked · "
+        f"{summary['hard_failures']} hard breaches · "
+        f"{summary['soft_warnings']} soft warnings  →  {result['audit_path']}"
+    )
+    for record in result["audit_records"]:
+        for msg in record.errors:
+            print(f"    FAIL {msg}")
+        for msg in record.warnings:
+            print(f"    warn {msg}")
 
     if args.update_pipeline and pipe and result["pdf_path"]:
         sm = get_client()["system_monitor"]
