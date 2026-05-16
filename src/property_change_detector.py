@@ -43,7 +43,7 @@ TRACKED_FIELDS = [
 ]
 
 # The database that holds per-suburb for-sale collections
-FOR_SALE_DATABASE = "Gold_Coast_Currently_For_Sale"
+FOR_SALE_DATABASE = "Gold_Coast"
 
 # Snapshots stored in this collection within the for-sale database
 SNAPSHOT_COLLECTION = "change_detection_snapshots"
@@ -97,11 +97,20 @@ class PropertyChangeDetector:
             self.for_sale_db = None
 
     def _get_suburb_docs(self, suburbs: List[str]) -> Dict[str, List[Dict[str, Any]]]:
-        """Return {suburb: [docs]} for each suburb collection."""
+        """Return {suburb: [docs]} for each suburb collection.
+
+        Filters to active for-sale listings only; pulls only the fields needed
+        for snapshot/diff (TRACKED_FIELDS + address/url). Without this, the
+        unified Gold_Coast.<suburb> collections (~38K cadastral docs at ~200KB
+        each) load ~7.6 GB into RAM and OOM the VM. See 2026-05-16 incident.
+        """
+        projection: Dict[str, int] = {f: 1 for f in TRACKED_FIELDS}
+        projection["address"] = 1
+        projection["url"] = 1
         result: Dict[str, List[Dict[str, Any]]] = {}
         for suburb in suburbs:
             col = self.for_sale_db[suburb]
-            docs = list(col.find({}, {}))
+            docs = list(col.find({"listing_status": "for_sale"}, projection))
             result[suburb] = docs
         return result
 
