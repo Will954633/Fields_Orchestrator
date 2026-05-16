@@ -357,27 +357,27 @@ SECTION_04_RIGHT_TEMPLATE = """\
         <path fill="#B76749" d="M7.83,22.86v82.51h8.87c8.18,0,14.84-6.66,14.84-14.84V31.73h58.77c8.18,0,14.84-6.65,14.84-14.84v-8.87H22.66c-8.18,0-14.84,6.66-14.84,14.84"/>
       </svg>
     </div>
-    <h2 class="right-headline s03" style="font-size:24pt; margin-bottom:6mm;">{{ s04.headline_html | safe }}</h2>
-    <div style="display:flex; flex-direction:column; gap:4mm;">
+    <h2 class="right-headline s03" style="font-size:24pt; margin-bottom:5mm; line-height:1.05;">{{ s04.headline_html | safe }}</h2>
+    <div style="display:flex; flex-direction:column; gap:2.5mm;">
 {% for m in s04.modes %}
-      <div style="display:grid; grid-template-columns:18mm 1fr; gap:5mm; align-items:center; background:#fdfaf3; border-left:3px solid #B76749; border-radius:2px; padding:5mm 6mm 5mm 5mm;">
-        <div style="font-family:'Cormorant Garamond', serif; font-size:32pt; color:#B76749; line-height:1; text-align:center;">{{ m.num }}</div>
+      <div style="display:grid; grid-template-columns:16mm 1fr; gap:4mm; align-items:center; background:#fdfaf3; border-left:3px solid #B76749; border-radius:2px; padding:3mm 5mm 3mm 4mm;">
+        <div style="font-family:'Cormorant Garamond', serif; font-size:28pt; color:#B76749; line-height:1; text-align:center;">{{ m.num }}</div>
         <div>
-          <div style="font-weight:600; color:#22382C; font-size:11pt; margin-bottom:2mm;">{{ m.label }}</div>
-          <div style="font-size:10pt; line-height:1.5; color:#2c2924; margin-bottom:2.5mm;">{{ m.desc }}</div>
+          <div style="font-weight:600; color:#22382C; font-size:10.5pt; margin-bottom:0.5mm;">{{ m.label }}</div>
+          <div style="font-size:9.5pt; line-height:1.4; color:#2c2924; margin-bottom:1.5mm;">{{ m.desc }}</div>
           <div style="font-family:'IBM Plex Mono', monospace; font-size:7.5pt; letter-spacing:0.06em; text-transform:uppercase; color:#B76749;">{{ m.channels }}</div>
         </div>
       </div>
 {% endfor %}
     </div>
-    <div class="campaign-model" style="background:#fdf3ec; border-radius:6px; padding:14px 18px; margin: 6mm 0 3mm; font-size:9.5pt;">
-      <div style="font-family:'IBM Plex Mono', monospace; font-size:8pt; letter-spacing:0.04em; text-transform:uppercase; color:#8d4d33; margin-bottom:6px;">28-day campaign model</div>
-      Based on recent campaign benchmarks, a property like {{ subject.short_address }} would be marketed toward approximately <strong>{{ s04.campaign_model.impressions_low|int }},000–{{ s04.campaign_model.impressions_high|int }},000 targeted impressions</strong>, with the aim of generating <strong>{{ s04.campaign_model.engagements_low }}–{{ s04.campaign_model.engagements_high }} deep engagements</strong> and <strong>{{ s04.campaign_model.inspections_low }}–{{ s04.campaign_model.inspections_high }} inspections</strong>. The objective is not exposure for its own sake — it is enough targeted reach to find the right buyer, and enough inspection volume to create competition.
+    <div class="campaign-model" style="background:#fdf3ec; border-radius:3px; padding:3mm 5mm; margin: 4mm 0 2mm; font-size:9.5pt; line-height:1.45; font-style:italic; color:#2c2924;">
+      <div style="font-family:'IBM Plex Mono', monospace; font-size:8pt; letter-spacing:0.04em; text-transform:uppercase; color:#8d4d33; margin-bottom:1.5mm; font-style:normal;">28-day campaign model</div>
+      Based on recent campaign benchmarks, a property like {{ subject.short_address }} would be marketed toward approximately <strong style="font-style:normal;">{{ '{:,}'.format(s04.campaign_model.impressions_low|int) }}–{{ '{:,}'.format(s04.campaign_model.impressions_high|int) }} targeted impressions</strong>, with the aim of generating <strong style="font-style:normal;">{{ s04.campaign_model.engagements_low }}–{{ s04.campaign_model.engagements_high }} deep engagements</strong> and <strong style="font-style:normal;">{{ s04.campaign_model.inspections_low }}–{{ s04.campaign_model.inspections_high }} inspections</strong>. The objective is not exposure for its own sake — it is enough targeted reach to find the right buyer, and enough inspection volume to create competition.
     </div>
-    <div class="source-line">{{ s04.caption }}</div>
-    <div class="fields-advantage" style="padding:3.5mm 7mm;">
-      <span class="fa-label">{{ s04.advantage_label }}</span>
-      <p class="fa-body" style="font-size:9.5pt; line-height:1.45;">{{ s04.advantage_body_html | safe }}</p>
+    <div class="source-line" style="font-size:7.5pt; margin-bottom:2.5mm;">{{ s04.caption }}</div>
+    <div class="fields-advantage" style="padding:3mm 6mm;">
+      <span class="fa-label" style="margin-bottom:1.5mm;">{{ s04.advantage_label }}</span>
+      <p class="fa-body" style="font-size:9.5pt; line-height:1.4;">{{ s04.advantage_body_html | safe }}</p>
     </div>
     <div class="page-footer"><span class="smarter-mark"><svg viewBox="0 0 113.39 113.39" xmlns="http://www.w3.org/2000/svg">
           <path fill="#B76749" d="M34.47,49.53v44.1h8.87c8.18,0,14.84-6.66,14.84-14.84v-20.39h20.39c8.18,0,14.84-6.66,14.84-14.84v-8.87h-44.1c-8.18,0-14.84,6.66-14.84,14.84"/>
