@@ -22,7 +22,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from jinja2 import Environment, BaseLoader, select_autoescape  # type: ignore
 
-from scripts.appraisal_template import data_pull, dot_grid, pick_highlight, substantiation
+from scripts.appraisal_template import data_pull, dot_grid, pick_highlight, substantiation, layout_rules
 
 
 SECTION_01_LEFT_TEMPLATE = """\
@@ -330,6 +330,13 @@ def render_section_03_receipts_html(
         "subject": {"short_address": _short_address(subject)},
         "s03r": s03r,
     }
+    if not s03r.get("pending_review", False):
+        layout_rules.validate_and_record("03_receipts", {
+            "headline_html": s03r["headline_html"],
+            "subhead": s03r.get("subhead", ""),
+            "cards": s03r.get("cards", []),
+            "caption": s03r.get("caption", ""),
+        })
     env = Environment(loader=BaseLoader(), autoescape=select_autoescape(["html"]))
     html = env.from_string(SECTION_03_RECEIPTS_TEMPLATE).render(**ctx)
     if write_substantiation:
@@ -471,6 +478,13 @@ def render_section_04_right_html(subject_id: str, *, editorial_overrides: dict |
         "subject": {"short_address": _short_address(subject)},
         "s04": {**s04, "advantage_label": s04["advantage_box"]["label"], "advantage_body_html": advantage_body_html},
     }
+    layout_rules.validate_and_record("04_right", {
+        "headline_html": s04["headline_html"],
+        "subhead": s04.get("subhead", ""),
+        "modes": s04.get("modes", []),
+        "caption": s04.get("caption", ""),
+        "advantage_body_html": advantage_body_html,
+    })
     env = Environment(loader=BaseLoader(), autoescape=select_autoescape(["html"]))
     html = env.from_string(SECTION_04_RIGHT_TEMPLATE).render(**ctx)
     if write_substantiation:
@@ -489,6 +503,12 @@ def render_section_05_right_html(subject_id: str, *, editorial_overrides: dict |
         "subject": {"short_address": _short_address(subject)},
         "s05": {**s05, "advantage_label": s05["advantage_box"]["label"], "advantage_body_html": advantage_body_html},
     }
+    layout_rules.validate_and_record("05_right", {
+        "headline_html": s05["headline_html"],
+        "subhead": s05.get("subhead", ""),
+        "presentation_rows": s05.get("presentation_rows", []),
+        "advantage_body_html": advantage_body_html,
+    })
     env = Environment(loader=BaseLoader(), autoescape=select_autoescape(["html"]))
     html = env.from_string(SECTION_05_RIGHT_TEMPLATE).render(**ctx)
     if write_substantiation:
@@ -505,6 +525,12 @@ def render_section_06_right_html(subject_id: str, *, editorial_overrides: dict |
         "subject": {"short_address": _short_address(subject)},
         "s06": {**s06, "advantage_label": s06["advantage_box"]["label"], "advantage_body_html": advantage_body_html},
     }
+    layout_rules.validate_and_record("06_right", {
+        "headline_html": s06["headline_html"],
+        "subhead": s06.get("subhead", ""),
+        "assets": s06.get("assets", []),
+        "advantage_body_html": advantage_body_html,
+    })
     env = Environment(loader=BaseLoader(), autoescape=select_autoescape(["html"]))
     html = env.from_string(SECTION_06_RIGHT_TEMPLATE).render(**ctx)
     if write_substantiation:
@@ -640,6 +666,19 @@ def render_section_03_right_html(
         },
     }
 
+    # Validate only when content is present — pending-review state intentionally
+    # omits cohort+evidence+synthesis so it should not fire budget warnings.
+    if not s03.get("pending_review", False):
+        layout_rules.validate_and_record("03_right", {
+            "headline_html": f'<span class="copper">{s03["headline_dollar_range"]}.</span> The range, derived.',
+            "subhead": overrides.get("subhead") or s03["subhead"],
+            "cohort_anchor_html": s03["cohort_anchor_html"],
+            "evidence_stack": s03["evidence_stack"],
+            "method_note": s03["method_note"],
+            "caption": s03["caption"],
+            "advantage_body_html": advantage_body_html,
+        })
+
     env = Environment(loader=BaseLoader(), autoescape=select_autoescape(["html"]))
     template = env.from_string(SECTION_03_RIGHT_TEMPLATE)
     html = template.render(**ctx)
@@ -766,6 +805,8 @@ def render_section_02_right_html(
             "advantage_body_html": advantage_body_html,
         },
     }
+
+    layout_rules.validate_and_record("02_right", {**ctx["s02"]})
 
     env = Environment(loader=BaseLoader(), autoescape=select_autoescape(["html"]))
     template = env.from_string(SECTION_02_RIGHT_TEMPLATE)
@@ -947,6 +988,14 @@ def render_section_01_right_html(
         },
     }
 
+    layout_rules.validate_and_record("01_right", {
+        "headline_html": headline_html,
+        "subhead": subhead,
+        "feature_bullets": feature_bullets,
+        "cohort_body_html": cohort_body_html,
+        "advantage_body_html": advantage_body_html,
+    })
+
     env = Environment(loader=BaseLoader(), autoescape=select_autoescape(["html"]))
     template = env.from_string(SECTION_01_RIGHT_TEMPLATE)
     html = template.render(**ctx)
@@ -1075,6 +1124,11 @@ def render_section_recommendation_html(
     subject = data_pull.get_subject(subject_id)
     rec = data_pull.section_recommendation(subject_id, pipeline_record=pipeline_record, page_number=page_number)
     ctx = {'subject': {'short_address': _short_address(subject)}, 'rec': rec}
+    if not rec.get("pending_review", False):
+        section_key = "recommendation_p11" if page_number == 11 else "recommendation_p18"
+        layout_rules.validate_and_record(section_key, {
+            "campaign_duration_days": rec.get("campaign_duration_days", ""),
+        })
     env = Environment(loader=BaseLoader(), autoescape=select_autoescape(['html']))
     html = env.from_string(SECTION_RECOMMENDATION_TEMPLATE).render(**ctx)
     if write_substantiation:
