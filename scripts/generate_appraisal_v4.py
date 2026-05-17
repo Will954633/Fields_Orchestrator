@@ -501,6 +501,7 @@ def main() -> None:
         print(
             f"  Fit-check: {fs['sections_measured']} pages measured · "
             f"{fs['overflows']} overflow · {fs['tight']} tight · "
+            f"{fs.get('footer_misaligned', 0)} footer-misaligned · "
             f"{passes} pass{'es' if passes != 1 else ''}"
         )
         if variants:
@@ -511,6 +512,10 @@ def main() -> None:
                 print(f"    OVERFLOW  {s['section_key']}: content {s['scroll_height_px']}px > page {s['client_height_px']}px (+{s['overflow_px']}px)")
             elif s["status"] == "tight":
                 print(f"    tight     {s['section_key']}: content {s['scroll_height_px']}px > page {s['client_height_px']}px (+{s['overflow_px']}px)")
+        for m in (fit.get("footer_alignment") or {}).get("misaligned", []):
+            print(f"    FOOTER-MISALIGNED  {m['section_key']} ({m['variant']}): "
+                  f"footer at {m['footer_bottom_px']}px, expected {fit['footer_alignment']['expected_bottom_px']}px "
+                  f"({m['drift_px']:+d}px drift)")
     elif fit and "error" in fit:
         print(f"  Fit-check: error — {fit['error']}")
 
