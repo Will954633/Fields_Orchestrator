@@ -327,19 +327,100 @@ def render_appraisal(
     assets_dst = OUTPUT_DIR / "assets"
     shutil.copytree(V4_DIR / "assets", assets_dst, dirs_exist_ok=True)
 
-    # Fallback assets — if the per-subject hero/satellite files don't exist,
-    # symlink (or copy) a placeholder so the PDF doesn't render alt text.
-    # The placeholder is the existing 13TC photo for now — analyst should
-    # override via the ops dashboard hero-picker for any real appraisal.
+    # Per-subject photos: auto-fetch from live sources, only fall back to
+    # generic placeholder if every option fails. Tracks which source was used
+    # so the audit + console can warn loudly when a fallback is in play —
+    # critical for production homeowner reports where the wrong photo on a
+    # mailed PDF is unacceptable.
     fallback_hero = V4_DIR / "assets" / "img" / "cover_hero_13_terrace_court.jpg"
     fallback_sat = V4_DIR / "assets" / "satellite_13_terrace_court.png"
     expected_hero = OUTPUT_DIR / "assets" / "img" / f"cover_hero_{subject_id}.jpg"
     expected_sat = OUTPUT_DIR / "assets" / f"satellite_{subject_id}.png"
-    # Only stand in if the pipeline didn't supply an absolute / pipeline override
-    if not (pipeline_record or {}).get("cover_hero_image_src") and not expected_hero.exists() and fallback_hero.exists():
-        shutil.copy(fallback_hero, expected_hero)
-    if not (pipeline_record or {}).get("satellite_image_src") and not expected_sat.exists() and fallback_sat.exists():
-        shutil.copy(fallback_sat, expected_sat)
+    expected_hero.parent.mkdir(parents=True, exist_ok=True)
+    expected_sat.parent.mkdir(parents=True, exist_ok=True)
+
+    hero_source = None     # "pipeline" | "auto_apr01" | "auto_scraped" | "fallback" | "missing"
+    satellite_source = None  # "pipeline" | "auto_static_maps" | "fallback" | "missing"
+
+    if (pipeline_record or {}).get("cover_hero_image_src"):
+        hero_source = "pipeline"  # respected — pipeline supplied an explicit path
+    else:
+        # Try Domain-CDN URLs from apr01-recovered first (live), then scraped_data
+        # (often dead Azure URLs but worth trying). Skip dead Azure blob domains.
+        from shared.db import get_client as _gc
+        _subj = None
+        if suburb_key:
+            _subj = _gc()["Gold_Coast"][suburb_key].find_one({"_id": ObjectId(subject_id)})
+        candidates = []
+        if _subj:
+            for source_key, store_key in [
+                ("scraped_data_apr01_recovered", "auto_apr01"),
+                ("scraped_data", "auto_scraped"),
+            ]:
+                imgs = (_subj.get(source_key) or {}).get("images") or []
+                for img in imgs[:8]:  # try first 8 images max
+                    url = img.get("url") if isinstance(img, dict) else img
+                    if not url or "blob.core.windows.net" in url:
+                        continue
+                    candidates.append((url, store_key))
+        # Attempt download (overwrite any stale fallback file from previous run)
+        if candidates:
+            import urllib.request
+            for url, kind in candidates:
+                try:
+                    req = urllib.request.Request(url, headers={"User-Agent": "Fields-Appraisal/1.0"})
+                    with urllib.request.urlopen(req, timeout=15) as resp:
+                        data = resp.read()
+                    if len(data) > 2000:  # sanity: not an error placeholder
+                        expected_hero.write_bytes(data)
+                        hero_source = kind
+                        break
+                except Exception:
+                    continue
+        if not hero_source:
+            # Auto-fetch failed — use the generic fallback so the PDF isn't broken,
+            # but mark loudly that this is the wrong photo for the subject.
+            if fallback_hero.exists():
+                shutil.copy(fallback_hero, expected_hero)
+                hero_source = "fallback"
+            else:
+                hero_source = "missing"
+
+    # Satellite: use Google Static Maps with the subject's lat/lng. The previous
+    # satellite_analysis pipeline stored images on a defunct Azure account, so
+    # we regenerate fresh per-subject every render (cheap — single Static Maps API call).
+    if (pipeline_record or {}).get("satellite_image_src"):
+        satellite_source = "pipeline"
+    else:
+        import os as _os
+        if not _subj:
+            from shared.db import get_client as _gc
+            if suburb_key:
+                _subj = _gc()["Gold_Coast"][suburb_key].find_one({"_id": ObjectId(subject_id)})
+        lat = _subj.get("LATITUDE") if _subj else None
+        lng = _subj.get("LONGITUDE") if _subj else None
+        api_key = _os.environ.get("GOOGLE_MAPS_STATIC_API_KEY")
+        if lat and lng and api_key:
+            url = (
+                "https://maps.googleapis.com/maps/api/staticmap"
+                f"?center={lat},{lng}&zoom=19&size=640x640&maptype=satellite"
+                f"&markers=color:red%7C{lat},{lng}&key={api_key}"
+            )
+            try:
+                import urllib.request as _ur
+                with _ur.urlopen(url, timeout=15) as resp:
+                    data = resp.read()
+                if len(data) > 2000:
+                    expected_sat.write_bytes(data)
+                    satellite_source = "auto_static_maps"
+            except Exception:
+                pass
+        if not satellite_source:
+            if fallback_sat.exists():
+                shutil.copy(fallback_sat, expected_sat)
+                satellite_source = "fallback"
+            else:
+                satellite_source = "missing"
 
     # Drain layout-rules audit records collected during section renders and
     # write a structured audit alongside the HTML/PDF. Phase 1: warnings only
@@ -414,6 +495,10 @@ def render_appraisal(
         "fit_check": fit_report,
         "fit_passes": fit_passes,
         "variants_applied": variants_applied,
+        "photo_sources": {
+            "cover_hero": hero_source,
+            "satellite": satellite_source,
+        },
     }
     audit_path.write_text(json.dumps(audit_payload, indent=2))
 
@@ -439,6 +524,7 @@ def render_appraisal(
         "fit_check": fit_report,
         "fit_passes": fit_passes,
         "variants_applied": variants_applied,
+        "photo_sources": {"cover_hero": hero_source, "satellite": satellite_source},
         "subject_id": subject_id,
         "pipeline_id": str(pipeline_record.get("_id")) if pipeline_record else None,
         "sections_rendered": sections_rendered,
@@ -480,6 +566,15 @@ def main() -> None:
     if result["pdf_path"]:
         print(f"  PDF:  {result['pdf_path']}")
     print(f"  Sections: {', '.join(result['sections_rendered'])}")
+
+    ps = result.get("photo_sources") or {}
+    hero_src = ps.get("cover_hero")
+    sat_src = ps.get("satellite")
+    hero_warn = "  ⚠  COVER HERO is GENERIC FALLBACK (not the subject's photo)" if hero_src == "fallback" else None
+    sat_warn = "  ⚠  SATELLITE is GENERIC FALLBACK (not the subject's location)" if sat_src == "fallback" else None
+    print(f"  Photos: cover_hero={hero_src} · satellite={sat_src}")
+    if hero_warn: print(hero_warn)
+    if sat_warn: print(sat_warn)
 
     summary = result["audit_summary"]
     print(
