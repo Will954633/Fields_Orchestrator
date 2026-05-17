@@ -390,43 +390,83 @@ SECTION_04_RIGHT_TEMPLATE = """\
 SECTION_05_RIGHT_TEMPLATE = """\
 <!-- ============================================================ -->
 <!-- PAGE 15 — SECTION 05 RIGHT — Presentation turns features into desire. -->
+<!-- Uses .image-compare, .stat-callout, .lever-card CSS already       -->
+<!-- defined in preview.html. Subject address is the only template var.-->
 <!-- ============================================================ -->
 <div class="page" data-section="05_right" data-variant="standard">
   <div class="page-pad">
     <div class="page-header">
       <div class="page-header-title">For {{ subject.short_address }}</div>
-      <svg viewBox="0 0 113.39 113.39" xmlns="http://www.w3.org/2000/svg">
-        <path fill="#B76749" d="M34.47,49.53v44.1h8.87c8.18,0,14.84-6.66,14.84-14.84v-20.39h20.39c8.18,0,14.84-6.66,14.84-14.84v-8.87h-44.1c-8.18,0-14.84,6.66-14.84,14.84"/>
-        <path fill="#B76749" d="M7.83,22.86v82.51h8.87c8.18,0,14.84-6.66,14.84-14.84V31.73h58.77c8.18,0,14.84-6.65,14.84-14.84v-8.87H22.66c-8.18,0-14.84,6.66-14.84,14.84"/>
-      </svg>
     </div>
-    <h2 class="right-headline" style="font-size:28pt; margin-bottom:3mm;">{{ s05.headline_html | safe }}</h2>
-    <div class="right-subhead" style="margin-bottom:5mm;">{{ s05.subhead }}</div>
-    {% if s05.photo_left and s05.photo_right %}
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:4mm; margin-bottom:4mm;">
-      <div><img src="{{ s05.photo_left }}" style="width:100%; border-radius:1mm;"/><div style="font-size:7.5pt; color:#5a554d; margin-top:1mm; font-family:'IBM Plex Mono', monospace;">STANDARD REAL-ESTATE PHOTOGRAPHY</div></div>
-      <div><img src="{{ s05.photo_right }}" style="width:100%; border-radius:1mm;"/><div style="font-size:7.5pt; color:#B76749; margin-top:1mm; font-family:'IBM Plex Mono', monospace;">FIELDS TWILIGHT PHOTOGRAPHY</div></div>
+
+    <h2 class="right-headline s03" style="font-size:30pt; margin-bottom:3mm;">Presentation turns features into <span class="copper">desire.</span></h2>
+    <div class="right-subhead" style="margin-bottom:6mm; font-size:11pt;">Most agents describe the home. Fields shapes how the right buyer experiences it.</div>
+
+    <div class="image-compare">
+      <div class="compare-cell">
+        <div class="compare-label">Standard real-estate photography</div>
+        <img class="compare-img" src="assets/living_midday.png" alt="Midday white-light interior shot">
+        <div class="compare-caption">Flat. Documentary. The room presented as a list of features.</div>
+      </div>
+      <div class="compare-cell">
+        <div class="compare-label fields">Fields twilight photography</div>
+        <img class="compare-img" src="assets/living_twilight.png" alt="Twilight golden-hour interior with warm lamps">
+        <div class="compare-caption fields">Same room — at dusk. <span class="copper">Warmth, atmosphere, the life that might become theirs.</span></div>
+      </div>
     </div>
-    {% endif %}
-    <div class="stat-box" style="background:#fdf3ec; border-left:3px solid #B76749; padding:12px 16px; margin: 4mm 0;">
-      <div style="font-family:'Cormorant Garamond', serif; font-size:30pt; line-height:1; color:#B76749;">+{{ s05.photo_contrast_stat.uplift_pct }}%</div>
-      <div style="font-size:10pt; line-height:1.45; margin-top:4px;">{{ s05.photo_contrast_stat.label }}</div>
-      <div style="font-family:'IBM Plex Mono', monospace; font-size:7.5pt; letter-spacing:0.04em; color:#8d4d33; margin-top:6px; text-transform:uppercase;">Source: {{ s05.photo_contrast_stat.source }}</div>
+
+    <div class="stat-callout" style="margin-bottom:4mm;">
+      <div class="stat-num">+118%</div>
+      <div class="stat-body">
+        more online views with professional photography vs phone-grade images. <em>"The midday version is a documentary record. The twilight version invites you in."</em>
+        <span class="stat-source">Source: Before You List · Ch. 4 · Fields research (n=1,475 GC listings)</span>
+      </div>
     </div>
-{% for row in s05.presentation_rows %}
-    <div style="display:grid; grid-template-columns:30mm 1fr; gap:6mm; align-items:start; padding:6mm 0; border-top:1px solid #e6dfd0;">
-      <div style="font-family:'Cormorant Garamond', serif; font-size:24pt; color:#B76749; line-height:1;">{{ row.num }}</div>
-      <div><div style="font-weight:600; margin-bottom:3px;">{{ row.label }}</div><div style="font-size:10pt; line-height:1.5;">{{ row.desc | safe }}</div></div>
+
+    <div class="levers">
+      <div class="lever-card">
+        <div class="lever-num">01</div>
+        <div class="lever-body">
+          <div class="lever-name">The story</div>
+          <div class="lever-desc">Listing copy that places the buyer inside the home, not in front of it. Sensory, specific, calm: <span class="sample">mornings on the rear deck, children in the pool, permanent greenery beyond, and no through-traffic in front.</span></div>
+        </div>
+      </div>
+      <div class="lever-card">
+        <div class="lever-num">02</div>
+        <div class="lever-body">
+          <div class="lever-name">The imagery</div>
+          <div class="lever-desc">Twilight and golden-hour photography focused on the rear entertaining zone, pool, bushland boundary, kitchen-to-deck transition and quiet cul-de-sac setting. <span class="sample">No flat midday light. No generic real-estate photography.</span></div>
+        </div>
+      </div>
+      <div class="lever-card">
+        <div class="lever-num">03</div>
+        <div class="lever-body">
+          <div class="lever-name">The buyer emphasis</div>
+          <div class="lever-desc">The same home, three stories — one per persona from Section 02:</div>
+          <div class="lever-personas">
+            <div><strong>Owner-Occupier:</strong> permanence · privacy · no renovation</div>
+            <div><strong>Multi-Generational Family:</strong> space · separation · safety</div>
+            <div><strong>Relocator from Sydney/Melbourne:</strong> Gold Coast lifestyle · school access · move-in-ready certainty</div>
+          </div>
+        </div>
+      </div>
     </div>
-{% endfor %}
-    <div class="fields-advantage" style="padding:3.5mm 7mm; margin-top:4mm;">
-      <span class="fa-label">{{ s05.advantage_label }}</span>
-      <p class="fa-body" style="font-size:9.5pt; line-height:1.45;">{{ s05.advantage_body_html | safe }}</p>
+
+    <div class="fields-advantage">
+      <span class="fa-label">Fields Advantage — 05</span>
+      <p class="fa-body"><strong>Fields builds the presentation around the buyer most likely to pay the premium.</strong> Photography, listing copy, editorial storytelling and feature emphasis are all calibrated to <em>how that buyer will experience the home</em> — not just what the home contains. <strong>Most agents list features. Fields turns them into desire.</strong></p>
     </div>
-    <div class="page-footer"><span class="smarter-mark"><svg viewBox="0 0 113.39 113.39" xmlns="http://www.w3.org/2000/svg">
+
+    <div class="page-footer">
+      <span class="smarter-mark">
+        <svg viewBox="0 0 113.39 113.39" xmlns="http://www.w3.org/2000/svg">
           <path fill="#B76749" d="M34.47,49.53v44.1h8.87c8.18,0,14.84-6.66,14.84-14.84v-20.39h20.39c8.18,0,14.84-6.66,14.84-14.84v-8.87h-44.1c-8.18,0-14.84,6.66-14.84,14.84"/>
           <path fill="#B76749" d="M7.83,22.86v82.51h8.87c8.18,0,14.84-6.66,14.84-14.84V31.73h58.77c8.18,0,14.84-6.65,14.84-14.84v-8.87H22.66c-8.18,0-14.84,6.66-14.84,14.84"/>
-        </svg>Smarter with data</span><span class="page-num">— 15 —</span></div>
+        </svg>
+        Smarter with data
+      </span>
+      <span class="page-num">— 15 —</span>
+    </div>
   </div>
 </div>"""
 
