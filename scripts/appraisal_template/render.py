@@ -452,12 +452,14 @@ SECTION_05_RIGHT_TEMPLATE = """\
       </div>
     </div>
 
+    <div style="flex: 1;"></div>
+
     <div class="fields-advantage">
       <span class="fa-label">Fields Advantage — 05</span>
       <p class="fa-body"><strong>Fields builds the presentation around the buyer most likely to pay the premium.</strong> Photography, listing copy, editorial storytelling and feature emphasis are all calibrated to <em>how that buyer will experience the home</em> — not just what the home contains. <strong>Most agents list features. Fields turns them into desire.</strong></p>
     </div>
 
-    <div class="page-footer">
+    <div class="page-footer" style="margin-top: 4mm;">
       <span class="smarter-mark">
         <svg viewBox="0 0 113.39 113.39" xmlns="http://www.w3.org/2000/svg">
           <path fill="#B76749" d="M34.47,49.53v44.1h8.87c8.18,0,14.84-6.66,14.84-14.84v-20.39h20.39c8.18,0,14.84-6.66,14.84-14.84v-8.87h-44.1c-8.18,0-14.84,6.66-14.84,14.84"/>
