@@ -540,6 +540,8 @@ def main() -> None:
     parser.add_argument("--output-basename", help="Override basename for output files")
     parser.add_argument("--update-pipeline", action="store_true",
                         help="Save report_path on the appraisal_pipeline record")
+    parser.add_argument("--strict-photos", action="store_true",
+                        help="Exit non-zero if cover_hero or satellite fell back to the generic 13TC placeholder. Use this before printing/mailing.")
     args = parser.parse_args()
 
     if args.pipeline_id:
@@ -627,6 +629,21 @@ def main() -> None:
             }},
         )
         print(f"  Pipeline record updated: {pipe['_id']}")
+
+    # Strict-photos enforcement — block production/postal rendering when
+    # either the cover hero or satellite is the generic 13TC fallback. The
+    # rendered files exist on disk so the operator can inspect, but the
+    # exit code is non-zero so any wrapping script knows not to send.
+    if args.strict_photos:
+        bad = [k for k, v in (result.get("photo_sources") or {}).items()
+               if v in ("fallback", "missing")]
+        if bad:
+            print(f"\n✗ STRICT-PHOTOS CHECK FAILED — {', '.join(bad)} used the generic fallback.", flush=True)
+            print(f"  The rendered PDF is on disk for inspection but MUST NOT be sent to a homeowner.")
+            print(f"  Resolve by: (a) adding the per-subject asset to assets/, OR")
+            print(f"             (b) setting cover_hero_image_src / satellite_image_src on the pipeline_record, OR")
+            print(f"             (c) ensuring the subject doc has live Domain CDN images / valid LATITUDE/LONGITUDE.")
+            raise SystemExit(2)
 
 
 if __name__ == "__main__":
