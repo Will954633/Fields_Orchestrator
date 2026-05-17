@@ -99,20 +99,32 @@ async function main() {
       // footer stays at margin-top:auto, intermediate content keeps its
       // intended sizing) — we just allow the bottom of the layout to escape
       // the box so we can see how far past the page edge it goes.
+      // We also measure the .page-footer Y position (relative to the page top)
+      // to catch cross-page footer misalignment — e.g. compact-variant changing
+      // bottom padding so the footer sits at a different vertical position
+      // than on standard pages.
       const nodes = Array.from(document.querySelectorAll('[data-section]'));
       return nodes.map((el, idx) => {
         const pad = el.querySelector('.page-pad') || el;
         const pageRect = el.getBoundingClientRect();
         const pageClient = el.clientHeight;
 
+        // Measure footer Y position BEFORE we mutate the page for content
+        // measurement (it depends on the real flex layout).
+        const footerEl = el.querySelector('.page-footer');
+        let footerBottomFromPageTopPx = null;
+        if (footerEl) {
+          const fR = footerEl.getBoundingClientRect();
+          footerBottomFromPageTopPx = Math.round(fR.bottom - pageRect.top);
+        }
+
+        // Toggle overflow:visible + page-pad height:auto so we can measure
+        // the natural content stack size without clipping.
         const prevOverflow = el.style.overflow;
         const prevPadHeight = pad.style.height;
         el.style.overflow = 'visible';
         pad.style.height = 'auto';
 
-        // Measure the bottom of the last visible child of .page-pad — that's
-        // the page-footer in the normal layout. If its bottom exceeds pageRect.bottom,
-        // the content overflowed.
         let lastChildBottom = pageRect.top;
         const children = Array.from(pad.children);
         for (const c of children) {
@@ -124,12 +136,6 @@ async function main() {
         el.style.overflow = prevOverflow;
         pad.style.height = prevPadHeight;
 
-        // Tiered status — measured against page-edge clearance, not raw
-        // overflow. A page with content reaching within 30px of the bottom
-        // edge is flagged "tight" because the footer mark visually invades
-        // content space (or vice versa) even when no literal overflow occurs.
-        // Verified against §04R regression where content=1120/page=1123 had
-        // zero literal overflow but was visibly touching the footer.
         const overflowPx = Math.max(0, naturalContentHeight - pageClient);
         const clearancePx = pageClient - naturalContentHeight;
         let status;
@@ -140,23 +146,58 @@ async function main() {
         return {
           section_key: el.getAttribute('data-section'),
           page_index: idx + 1,
+          variant: el.getAttribute('data-variant') || 'standard',
           client_height_px: pageClient,
           scroll_height_px: Math.round(naturalContentHeight),
           overflow_px: Math.round(overflowPx),
           status,
           overflow: status === 'overflow',
+          footer_bottom_px: footerBottomFromPageTopPx,
         };
       });
     });
+
+    // Cross-page footer alignment check. The footer should sit at the same Y
+    // on every page (page-pad bottom padding is the only thing that moves it).
+    // Determine the expected position from the mode of measured footer-Ys,
+    // then flag any page whose footer drifts by more than `FOOTER_TOLERANCE_PX`.
+    const FOOTER_TOLERANCE_PX = 6;  // ≈ 1.5mm tolerance
+    const footerYs = measurements
+      .map(m => m.footer_bottom_px)
+      .filter(v => v !== null);
+    let footerExpectedPx = null;
+    let footerMisaligned = [];
+    if (footerYs.length) {
+      // Use the most common Y (mode) — handles the case where one page is wrong
+      // and the majority are correct.
+      const counts = new Map();
+      for (const y of footerYs) counts.set(y, (counts.get(y) || 0) + 1);
+      footerExpectedPx = [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+      footerMisaligned = measurements
+        .filter(m => m.footer_bottom_px !== null &&
+                     Math.abs(m.footer_bottom_px - footerExpectedPx) > FOOTER_TOLERANCE_PX)
+        .map(m => ({
+          section_key: m.section_key,
+          variant: m.variant,
+          footer_bottom_px: m.footer_bottom_px,
+          drift_px: m.footer_bottom_px - footerExpectedPx,
+        }));
+    }
 
     const report = {
       html_path: absHtml,
       viewport: VIEWPORT,
       sections: measurements,
+      footer_alignment: {
+        expected_bottom_px: footerExpectedPx,
+        tolerance_px: FOOTER_TOLERANCE_PX,
+        misaligned: footerMisaligned,
+      },
       summary: {
         sections_measured: measurements.length,
         tight: measurements.filter(m => m.status === 'tight').length,
         overflows: measurements.filter(m => m.status === 'overflow').length,
+        footer_misaligned: footerMisaligned.length,
       },
     };
 
@@ -164,7 +205,8 @@ async function main() {
     process.stdout.write(
       `${report.summary.sections_measured} sections measured · ` +
       `${report.summary.tight} tight · ` +
-      `${report.summary.overflows} overflow\n`
+      `${report.summary.overflows} overflow · ` +
+      `${report.summary.footer_misaligned} footer-misaligned\n`
     );
   } finally {
     await browser.close();
