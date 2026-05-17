@@ -93,29 +93,34 @@ async function main() {
     await new Promise(r => setTimeout(r, 600));
 
     const measurements = await page.evaluate(() => {
-      // `.page` clips content with `overflow: hidden`. We toggle to visible
-      // briefly to measure how far below the page's bottom edge the natural
-      // content actually extends. This preserves the flex layout (so the
-      // footer stays at margin-top:auto, intermediate content keeps its
-      // intended sizing) — we just allow the bottom of the layout to escape
-      // the box so we can see how far past the page edge it goes.
-      // We also measure the .page-footer Y position (relative to the page top)
-      // to catch cross-page footer misalignment — e.g. compact-variant changing
-      // bottom padding so the footer sits at a different vertical position
-      // than on standard pages.
-      const nodes = Array.from(document.querySelectorAll('[data-section]'));
+      // Scan every .page div in the document (not just templated [data-section]
+      // ones) so that hard-coded pages like the inside cover and TOC are also
+      // checked. For each: measure content overflow + footer Y position.
+      // The footer baseline is determined by `.page-footer` (standard pages),
+      // `.ic-bottom` (inside cover), or — as a last resort — the bottom of
+      // the page-pad's last child. This catches any page whose bottom block
+      // drifts from the standard baseline.
+      const nodes = Array.from(document.querySelectorAll('.page'));
       return nodes.map((el, idx) => {
-        const pad = el.querySelector('.page-pad') || el;
+        const pad = el.querySelector('.page-pad, .inside-cover, .thesis-page-pad') || el;
         const pageRect = el.getBoundingClientRect();
         const pageClient = el.clientHeight;
 
-        // Measure footer Y position BEFORE we mutate the page for content
-        // measurement (it depends on the real flex layout).
-        const footerEl = el.querySelector('.page-footer');
+        // Identify the bottom "anchor" element used to measure footer Y.
+        // Priority: .page-footer > .ic-bottom > last visible child of pad.
+        let anchorEl = el.querySelector('.page-footer')
+                    || el.querySelector('.ic-bottom');
+        let anchorKind = anchorEl?.classList.contains('page-footer') ? 'page-footer'
+                       : anchorEl?.classList.contains('ic-bottom') ? 'ic-bottom'
+                       : 'last-child-fallback';
+        if (!anchorEl) {
+          const kids = Array.from(pad.children).filter(c => c.getBoundingClientRect().height > 0);
+          anchorEl = kids[kids.length - 1] || null;
+        }
         let footerBottomFromPageTopPx = null;
-        if (footerEl) {
-          const fR = footerEl.getBoundingClientRect();
-          footerBottomFromPageTopPx = Math.round(fR.bottom - pageRect.top);
+        if (anchorEl) {
+          const aR = anchorEl.getBoundingClientRect();
+          footerBottomFromPageTopPx = Math.round(aR.bottom - pageRect.top);
         }
 
         // Toggle overflow:visible + page-pad height:auto so we can measure
@@ -144,7 +149,7 @@ async function main() {
         else status = 'overflow';                        // >50px over the page
 
         return {
-          section_key: el.getAttribute('data-section'),
+          section_key: el.getAttribute('data-section') || `page_${idx + 1}`,
           page_index: idx + 1,
           variant: el.getAttribute('data-variant') || 'standard',
           client_height_px: pageClient,
@@ -153,6 +158,7 @@ async function main() {
           status,
           overflow: status === 'overflow',
           footer_bottom_px: footerBottomFromPageTopPx,
+          footer_anchor: anchorKind,
         };
       });
     });
