@@ -503,24 +503,50 @@ def section_03_right(
     subj_median, subj_n = _cohort_median(catchment, bedrooms=beds, months=months)
     lift_pct = round((subj_median - base_median) / base_median * 100) if (base_median and subj_median) else None
 
-    # Reconciled range — analyst override (pipeline_record.recommendation) wins,
-    # then `valuation_data.confidence`, then `summary` (schema split for
-    # historical reasons).
+    # Reconciled range — resolution order:
+    #   1. Explicit analyst override (pipeline_record.recommendation.derived_range_low/high)
+    #   2. Analyst pricing (pipeline_record.recommendation.listing_price → target_sale_price)
+    #      — when the analyst has set their list+target prices but no explicit
+    #      range, treat the pricing window itself as the derived range. Saves
+    #      the analyst entering 4 numbers when 2 will do.
+    #   3. Engine output (subject.valuation_data.confidence.range or summary)
+    #   4. None → triggers pending_review on §03R
     val = subject.get("valuation_data") or {}
     summary = val.get("summary") or {}
     conf_obj = val.get("confidence") or {}
     range_obj = conf_obj.get("range") or {}
     rec = (pipeline_record or {}).get("recommendation") or {}
-    override_low = rec.get("derived_range_low")
-    override_high = rec.get("derived_range_high")
-    range_low = override_low or range_obj.get("low") or summary.get("reconciled_low")
-    range_high = override_high or range_obj.get("high") or summary.get("reconciled_high")
+
+    def _to_int(v):
+        if v in (None, "", 0): return None
+        if isinstance(v, (int, float)): return int(v) if v > 0 else None
+        if isinstance(v, str):
+            import re as _re
+            m = _re.search(r"(\d[\d,]*)", v.replace("$", ""))
+            return int(m.group(1).replace(",", "")) if m else None
+        return None
+
+    override_low = _to_int(rec.get("derived_range_low"))
+    override_high = _to_int(rec.get("derived_range_high"))
+    listing_price = _to_int(rec.get("listing_price"))
+    target_sale_price = _to_int(rec.get("target_sale_price"))
+
+    # Pricing-derived fallback: listing as low, target (× 1.025 for comfortable
+    # upper bound) as high — only when both prices are set and no explicit
+    # range was given.
+    pricing_low, pricing_high = None, None
+    if listing_price and target_sale_price:
+        pricing_low = listing_price
+        pricing_high = int(target_sale_price * 1.025)
+
+    range_low = override_low or pricing_low or range_obj.get("low") or summary.get("reconciled_low")
+    range_high = override_high or pricing_high or range_obj.get("high") or summary.get("reconciled_high")
     range_mid = (
-        (range_low + range_high) // 2 if (override_low and override_high) else
+        (range_low + range_high) // 2 if (range_low and range_high and (override_low or pricing_low)) else
         conf_obj.get("reconciled_valuation") or summary.get("reconciled_value") or summary.get("reconciled_mid")
     )
     n_comps = summary.get("n_included_in_valuation") or summary.get("n_comps") or len(val.get("comparables") or [])
-    confidence = "analyst" if (override_low or override_high) else conf_obj.get("confidence", "")
+    confidence = "analyst" if (override_low or pricing_low) else conf_obj.get("confidence", "")
 
     # Pending state: valuation engine has not produced a range yet. The page
     # renders a clear "analyst review required" notice instead of fragments
