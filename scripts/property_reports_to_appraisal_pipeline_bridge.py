@@ -72,9 +72,15 @@ def compute_highlight_candidates(subject_doc: dict) -> list[dict]:
     """Run the highlight ranker for this subject and return the top-5 candidate
     list ready to embed on the pipeline record. Pruned for UI display —
     drops the raw filter dict (not useful in the ops UI; preserved in the
-    substantiation file at render time)."""
+    substantiation file at render time).
+
+    When the ranker returns nothing (median home with no distinguishing rarity),
+    always append a bedroom-count fallback so the ops dashboard picker UI
+    surfaces something the analyst can choose. Without this, the picker hides
+    entirely and the analyst can't select a §01R highlight.
+    """
     ranked = pick_highlight.rank(subject_doc, top_n=5)
-    return [
+    out = [
         {
             "key": c["key"],
             "description": c["description"],
@@ -85,6 +91,31 @@ def compute_highlight_candidates(subject_doc: dict) -> list[dict]:
         }
         for c in ranked
     ]
+    if not out:
+        # Bedroom-count fallback — always meaningful, always available.
+        from scripts.appraisal_template import data_pull as _dp
+        from shared.db import get_client as _gc
+        beds = subject_doc.get("bedrooms") or 4
+        catchment = _dp.catchment_for(subject_doc)
+        f_total = _dp.universe_filter()
+        f_match = {**f_total, "bedrooms": beds}
+        _db = _gc()["Gold_Coast"]
+        try:
+            universe_total = sum(_db[s].count_documents(f_total) for s in catchment)
+            match_count = sum(_db[s].count_documents(f_match) for s in catchment)
+        except Exception:
+            universe_total, match_count = 0, 0
+        n_words = ["zero","one","two","three","four","five","six","seven","eight","nine"]
+        beds_word = n_words[beds] if 0 <= beds <= 9 else str(beds)
+        out.append({
+            "key": "bedroom_count_fallback",
+            "description": f"{beds_word} bedrooms",
+            "count": match_count,
+            "universe_total": universe_total,
+            "ratio_str": f"{match_count}/{universe_total}" if universe_total else "—",
+            "share_pct": round(100 * match_count / universe_total, 1) if universe_total else 0,
+        })
+    return out
 
 
 def slug_to_address(slug: str) -> tuple[str, str]:
