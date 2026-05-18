@@ -269,18 +269,36 @@ def sync_once(verbose: bool = True, refresh: bool = False) -> dict:
             result = sm.appraisal_pipeline.insert_one(record)
             counts["newly_bridged"] += 1
 
-            # Fire a process-300 trigger so trigger-poller invokes V4 to
-            # actually render the PDF. Mini-site requests previously stalled
-            # at `report_generating` because no trigger was being fired.
-            # Skip if the record was bridged in already-finalised state
-            # (draft_ready means a prior render exists, no auto-trigger needed).
+            # Fire process-301 (valuation) THEN process-300 (V4 render).
+            # The poller is FIFO so the earlier-timestamped trigger runs first.
+            # 301 populates valuation_data.comparables[] so §03 receipts (p10)
+            # has content; 300 then renders V4 against the now-populated subject.
+            #
+            # Skip both if the record was bridged in already-finalised state
+            # (`draft_ready` means a prior render exists).
             if record["stage"] == "report_generating":
+                now = datetime.now(timezone.utc)
+                # 301: valuation — runs first
+                sm.trigger_requests.insert_one({
+                    "process_id": "301",
+                    "process_name": "Run Subject Valuation — Bridge auto-trigger",
+                    "phase": "appraisal",
+                    "status": "pending",
+                    "created_at": now,
+                    "triggered_by": "bridge_sync",
+                    "note": str(result.inserted_id),
+                    "started_at": None, "finished_at": None,
+                    "exit_code": None, "output_tail": None,
+                })
+                # 300: V4 render — runs after 301 (offset created_at by 1s so
+                # the FIFO ordering is deterministic even with same-second writes).
+                from datetime import timedelta as _td
                 sm.trigger_requests.insert_one({
                     "process_id": "300",
                     "process_name": "Generate Appraisal Report (V4) — Bridge auto-trigger",
                     "phase": "appraisal",
                     "status": "pending",
-                    "created_at": datetime.now(timezone.utc),
+                    "created_at": now + _td(seconds=1),
                     "triggered_by": "bridge_sync",
                     "note": str(result.inserted_id),
                     "started_at": None, "finished_at": None,
