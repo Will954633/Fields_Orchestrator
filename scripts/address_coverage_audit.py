@@ -135,6 +135,7 @@ def floor_plan_counts(doc: Dict[str, Any]) -> Dict[str, int]:
         "floor_plans": len(doc.get("floor_plans") or []),
         "floor_plans_original": len(doc.get("floor_plans_original") or []),
         "scraped_floor_plans": len(doc.get("scraped_floor_plans") or []),
+        "v2_extracted_floor_plans": len(doc.get("floor_plans_v2_extracted") or []),
         "apr01_floor_plans": len(apr01.get("floor_plans") or []),
         "apr01_rs_floor_plans": len(apr01_rs.get("floor_plans") or []),
         "apr01_fs_floor_plans": len(apr01_fs.get("floor_plans") or []),
@@ -210,6 +211,7 @@ PROJECTION = {
     # image arrays — only length is used, but mongo returns full arrays. Acceptable.
     "property_images": 1, "property_images_original": 1, "scraped_property_images": 1,
     "floor_plans": 1, "floor_plans_original": 1, "scraped_floor_plans": 1,
+    "floor_plans_v2_extracted": 1,
     "image_analysis": 1, "ollama_image_analysis": 1,
     "ollama_floor_plan_analysis": 1, "floor_plan_analysis": 1,
     "satellite_analysis": 1,
@@ -265,6 +267,17 @@ def summarise(rows: List[Dict[str, Any]], suburb: str) -> Dict[str, Any]:
             if r.get(k, 0) > 0:
                 src_counts[k] += 1
 
+    # source-specific floor-plan presence
+    fp_src_counts = {key: 0 for key in [
+        "fp_floor_plans", "fp_floor_plans_original", "fp_scraped_floor_plans",
+        "fp_v2_extracted_floor_plans",
+        "fp_apr01_floor_plans", "fp_apr01_rs_floor_plans", "fp_apr01_fs_floor_plans",
+    ]}
+    for r in rows:
+        for k in fp_src_counts:
+            if r.get(k, 0) > 0:
+                fp_src_counts[k] += 1
+
     # records WITH listing history but NO image at all (the real gap)
     listed_no_img = sum(1 for r in rows if r["ever_listed"] and not r["has_any_image"])
 
@@ -287,6 +300,7 @@ def summarise(rows: List[Dict[str, Any]], suburb: str) -> Dict[str, Any]:
         "v2_failed": v2_failed,
         "listed_no_image": listed_no_img,
         "src_counts": src_counts,
+        "fp_src_counts": fp_src_counts,
     }
 
 
@@ -351,6 +365,29 @@ def render_summary_md(summaries: List[Dict[str, Any]]) -> str:
         cells = [s["suburb"]]
         for k in src_labels:
             cells.append(f"{s['src_counts'][k]}")
+        lines.append("| " + " | ".join(cells) + " |")
+    lines.append("")
+
+    # Floor-plan source breakdown
+    lines.append("## Floor-plan source presence (records with >0 floor plans from that source)")
+    lines.append("")
+    fp_labels = {
+        "fp_floor_plans": "floor_plans (legacy)",
+        "fp_floor_plans_original": "floor_plans_original (Domain CDN)",
+        "fp_v2_extracted_floor_plans": "v2-extracted (GPT vision)",
+        "fp_scraped_floor_plans": "scraped_floor_plans",
+        "fp_apr01_floor_plans": "apr01 Phase 1",
+        "fp_apr01_rs_floor_plans": "apr01 Phase 2 (recently_sold)",
+        "fp_apr01_fs_floor_plans": "apr01 Phase 2 (for_sale)",
+    }
+    header = "| Suburb | " + " | ".join(fp_labels.values()) + " |"
+    sep = "|---|" + "---:|" * len(fp_labels)
+    lines.append(header)
+    lines.append(sep)
+    for s in summaries:
+        cells = [s["suburb"]]
+        for k in fp_labels:
+            cells.append(f"{s['fp_src_counts'].get(k, 0)}")
         lines.append("| " + " | ".join(cells) + " |")
     lines.append("")
 
