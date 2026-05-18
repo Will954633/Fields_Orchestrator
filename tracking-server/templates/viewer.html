@@ -244,7 +244,7 @@
             <div class="page-loading-spinner"></div>
         </div>
         <img
-            data-src="/track/page/{{ tracking_id }}/{{ page_num }}"
+            data-src="/track/page/{{ tracking_id }}/{{ page_num }}?v={{ version }}"
             alt="Report page {{ page_num }}"
             style="display:none;"
             onload="this.style.display='block'; this.parentNode.querySelector('.page-loading').style.display='none';"
