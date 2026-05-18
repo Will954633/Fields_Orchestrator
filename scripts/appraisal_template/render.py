@@ -666,11 +666,12 @@ def render_section_03_right_html(
     *,
     editorial_overrides: dict | None = None,
     write_substantiation: bool = True,
+    pipeline_record: dict | None = None,
 ) -> str:
     """Return the §03 right page as a ready-to-insert HTML block."""
     overrides = editorial_overrides or {}
     subject = data_pull.get_subject(subject_id)
-    s03 = data_pull.section_03_right(subject_id)
+    s03 = data_pull.section_03_right(subject_id, pipeline_record=pipeline_record)
 
     # Evidence stack — defaults to a sensible 6-row baseline for premium homes,
     # fully overridable via editorial_overrides.evidence_stack. Each row:
