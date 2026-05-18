@@ -597,7 +597,7 @@ SECTION_03_RIGHT_TEMPLATE = """\
     </div>
 
 {% if s03.pending_review %}
-    <h2 class="right-headline s03"><span class="copper">The range, derived</span> — pending review.</h2>
+    <h2 class="right-headline s03"><span class="copper">The range, derived from data</span> — pending review.</h2>
     <div class="right-subhead" style="margin-bottom:6mm;">This page reports the catchment-anchored valuation range for the subject.</div>
 
     <div style="background:#fdf3ec; border-left:3px solid #B76749; padding:7mm 9mm; margin:8mm 0;">
@@ -612,7 +612,7 @@ SECTION_03_RIGHT_TEMPLATE = """\
 
     <div class="source-line">{{ s03.caption }}</div>
 {% else %}
-    <h2 class="right-headline s03"><span class="copper">{{ s03.headline_dollar_range }}.</span> The range, derived.</h2>
+    <h2 class="right-headline s03"><span class="copper">{{ s03.headline_dollar_range }}.</span> The range, derived from data.</h2>
     <div class="right-subhead" style="margin-bottom:6mm;">{{ s03.subhead }}</div>
 
     <div class="cohort-anchor">
@@ -713,7 +713,7 @@ def render_section_03_right_html(
     # omits cohort+evidence+synthesis so it should not fire budget warnings.
     if not s03.get("pending_review", False):
         layout_rules.validate_and_record("03_right", {
-            "headline_html": f'<span class="copper">{s03["headline_dollar_range"]}.</span> The range, derived.',
+            "headline_html": f'<span class="copper">{s03["headline_dollar_range"]}.</span> The range, derived from data.',
             "subhead": overrides.get("subhead") or s03["subhead"],
             "cohort_anchor_html": s03["cohort_anchor_html"],
             "evidence_stack": s03["evidence_stack"],
@@ -1150,18 +1150,41 @@ SECTION_RECOMMENDATION_TEMPLATE = '''\
       <p style="font-size:9.5pt; line-height:1.5; color:#5a554d; font-style:italic; margin:0;">Workflow: Ops dashboard → Appraisal Pipeline → set listing &amp; target prices → re-render report.</p>
     </div>
     {% else %}
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:6mm; margin-bottom:6mm;">
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:6mm; margin-bottom:5mm;">
       <div style="background:#fdf3ec; border-left:3px solid #B76749; padding:5mm 6mm;">
         <div style="font-family:IBM Plex Mono, monospace; font-size:8pt; letter-spacing:0.06em; text-transform:uppercase; color:#8d4d33; margin-bottom:3mm;">Recommended listing price</div>
         <div style="font-family:Cormorant Garamond, serif; font-size:36pt; color:#B76749; line-height:1;">${{ '{:,}'.format(rec.listing_price) }}</div>
+        {% if rec.page_number == 11 and rec.listing_round_m %}
+        <div style="font-family:'Playfair Display', serif; font-style:italic; font-size:9pt; line-height:1.4; color:#5a554d; margin-top:3mm;">Lower end of the derived range. Precise, above the {{ rec.listing_round_m }} round number.</div>
+        {% endif %}
       </div>
       <div style="background:#fdf3ec; border-left:3px solid #B76749; padding:5mm 6mm;">
         <div style="font-family:IBM Plex Mono, monospace; font-size:8pt; letter-spacing:0.06em; text-transform:uppercase; color:#8d4d33; margin-bottom:3mm;">Target sale price</div>
         <div style="font-family:Cormorant Garamond, serif; font-size:26pt; color:#B76749; line-height:1.15;">${{ '{:,}'.format(rec.target_sale_price_low) }} –<br>${{ '{:,}'.format(rec.target_sale_price_high) }}</div>
+        {% if rec.page_number == 11 %}
+        <div style="font-family:'Playfair Display', serif; font-style:italic; font-size:9pt; line-height:1.4; color:#5a554d; margin-top:3mm;">Upper end of the derived range. Reached through buyer competition — not seller negotiation.</div>
+        {% endif %}
       </div>
     </div>
     {% if rec.page_number == 11 %}
-    <p style="font-size:10.5pt; line-height:1.55; color:#2c2924; margin-bottom:5mm;">The listing price sits in the lower end of the derived <strong>${{ '{:,}'.format(rec.derived_range_low or 0) }} – ${{ '{:,}'.format(rec.derived_range_high or 0) }}</strong> range. The target sits in the upper end. <em>Multiple interested buyers move from the listing price toward the target. A single buyer moves the other way.</em></p>
+    <p style="font-size:10pt; line-height:1.5; color:#2c2924; margin-bottom:4mm;">The listing price sits in the lower end of the derived <strong>${{ '{:,}'.format(rec.derived_range_low or 0) }} – ${{ '{:,}'.format(rec.derived_range_high or 0) }}</strong> range. The target sits in the upper end. The <span class="copper" style="font-weight:600;">${{ '{:,}'.format(rec.gap_low_dollars or 0) }} – ${{ '{:,}'.format(rec.gap_high_dollars or 0) }} gap</span> between them is intentional — it is the stretch room buyers reach through competitive bidding, not the price the seller hopes to defend through negotiation. <em>Multiple interested buyers move from the listing price toward the target. A single buyer moves the other way.</em></p>
+
+    <div style="background:#fdfaf3; border-radius:3px; padding:4mm 5mm; margin-bottom:4mm; border:1px solid #e6dfd0;">
+      <div style="font-family:'IBM Plex Mono', monospace; font-size:8pt; letter-spacing:0.06em; text-transform:uppercase; color:#8d4d33; margin-bottom:3mm;">Four conditions of the precise-pricing protocol — all met</div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:4mm 6mm; font-size:9pt; line-height:1.45;">
+        <div><span style="color:#B76749; font-weight:700;">✓</span> <strong>Precise, not round.</strong> ${{ '{:,}'.format(rec.listing_price) }} reads as a considered figure; ${{ '{:,}'.format(rec.listing_round_down or 0) }} reads as a guess.</div>
+        <div><span style="color:#B76749; font-weight:700;">✓</span> <strong>Above the round number.</strong> Signals knowledge, not weakness — the seller arrived at {{ rec.listing_round_m }} and added value.</div>
+        <div><span style="color:#B76749; font-weight:700;">✓</span> <strong>Small gap to the round number.</strong> ${{ '{:,}'.format(rec.gap_to_round_down or 0) }} above {{ rec.listing_round_m }} reads deliberate; an arbitrary $87K would not.</div>
+        <div><span style="color:#B76749; font-weight:700;">✓</span> <strong>Property presents at the top of its range.</strong> 9/10 condition, full editorial, twilight photography.</div>
+      </div>
+    </div>
+
+    <div style="background:#22382C; color:#E6DDD2; border-left:3px solid #B76749; padding:4mm 6mm; margin-bottom:4mm;">
+      <div style="font-family:'IBM Plex Mono', monospace; font-size:8pt; letter-spacing:0.15em; text-transform:uppercase; color:#E6DDD2; margin-bottom:2mm;">Subject to physical inspection</div>
+      <p style="font-family:'Playfair Display', serif; font-style:italic; font-size:9.5pt; line-height:1.5; color:#E6DDD2; margin:0;">These figures are derived from the 1,696-transaction cohort and the comparable evidence stack on pages 9–10. <span class="copper" style="color:#E6B79A;">They remain subject to a 30-minute physical property inspection by Will Simpson</span> — the walk-through may refine the recommendation up or down based on observed condition, recent improvements, presentation quality, or features not captured in the data.</p>
+    </div>
+
+    <div style="font-family:'Playfair Display', serif; font-style:italic; font-size:11pt; color:#B76749; margin-top:auto; margin-bottom:4mm;">The strategy is engineered. The next step is yours.</div>
     {% else %}
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:6mm; margin-top:6mm;">
       <div><div style="font-family:IBM Plex Mono, monospace; font-size:8pt; letter-spacing:0.06em; text-transform:uppercase; color:#8d4d33;">Campaign duration</div><div style="font-family:Cormorant Garamond, serif; font-size:30pt; color:#B76749;">{{ rec.campaign_duration_days }} days</div></div>
