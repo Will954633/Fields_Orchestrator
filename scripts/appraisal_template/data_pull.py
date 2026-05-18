@@ -648,9 +648,14 @@ def section_03_receipts(
     """§03 receipts (comp-by-comp adjustments) page payload.
 
     Pulls the top-N most heavily weighted comparables from
-    `valuation_data.comparables` and assembles per-comp adjustment cards.
-    Each card lists every non-zero adjustment with subject vs comp values
-    and the dollar adjustment.
+    `valuation_data.recent_sales` (sold transactions) and `valuation_data.comparables`
+    (current listings), filtered to `included_in_valuation=True`, and assembles
+    per-comp adjustment cards. Each card lists every non-zero adjustment with
+    subject vs comp values and the dollar adjustment.
+
+    Engine schema: `comparables[]` holds current listings used as comps (usually
+    empty for residential), `recent_sales[]` holds sold transactions used as
+    comps (the primary driver of the reconciled range). Both are merged here.
 
     The B14-flagged "Domain accuracy" line in the legacy V4 page is
     removed here — replaced with Fields' own backtest figure plus a
@@ -660,7 +665,7 @@ def section_03_receipts(
     catchment = catchment or catchment_for(subject)
 
     val = subject.get("valuation_data") or {}
-    raw_comps = val.get("comparables") or []
+    raw_comps = (val.get("recent_sales") or []) + (val.get("comparables") or [])
     valued = [c for c in raw_comps if c.get("included_in_valuation")]
 
     def _wnum(c):
@@ -680,7 +685,7 @@ def section_03_receipts(
             continue
         adj = c.get("adjustment_result") or {}
         adj_dict = adj.get("adjustments") or {}
-        rows = []
+        all_rows = []
         for key, payload in adj_dict.items():
             if not isinstance(payload, dict):
                 continue
@@ -689,7 +694,7 @@ def section_03_receipts(
             if dollars == 0 and (diff in (0, None)):
                 continue
             label = ADJUSTMENT_LABELS.get(key, key.replace("_", " ").title())
-            rows.append({
+            all_rows.append({
                 "key": key,
                 "label": label,
                 "diff": diff,
@@ -697,16 +702,50 @@ def section_03_receipts(
                 "comp_value": payload.get("comp_value"),
                 "adjustment_dollars": dollars,
             })
+        # Cap at 7 highest-impact rows so the card fits the page. Roll any
+        # remainder into a single summary row by net $ effect.
+        MAX_ROWS = 7
+        all_rows.sort(key=lambda r: abs(r["adjustment_dollars"] or 0), reverse=True)
+        rows = all_rows[:MAX_ROWS]
+        if len(all_rows) > MAX_ROWS:
+            tail = all_rows[MAX_ROWS:]
+            net = sum(r["adjustment_dollars"] or 0 for r in tail)
+            rows.append({
+                "key": "_other",
+                "label": f"{len(tail)} smaller adjustments (net)",
+                "diff": None,
+                "subject_value": None,
+                "comp_value": None,
+                "adjustment_dollars": net,
+            })
         weight = _wnum(c)
-        adjusted_total = adj.get("adjusted_total") or adj.get("adjusted_estimate") or 0
-        sold_price = c.get("sold_price") or c.get("sale_price")
+        # Engine schema: adjustment_result.adjusted_price = comp price adjusted for diffs to subject.
+        # Comp's actual sale price lives at top-level `original_sale_price` (raw) or `price` (time-adjusted).
+        adjusted_total = (
+            adj.get("adjusted_price")
+            or adj.get("adjusted_total")
+            or adj.get("adjusted_estimate")
+            or 0
+        )
+        sold_price = (
+            c.get("original_sale_price")
+            or c.get("sold_price")
+            or c.get("sale_price")
+            or c.get("price")
+        )
         if isinstance(sold_price, str):
             import re
             m = re.search(r'(\d[\d,\.]+)', sold_price.replace("$", ""))
             sold_price = float(m.group(1).replace(",", "")) if m else None
+        # Normalise comp address — strip ", QLD 4220" tail + collapse double spaces
+        # so all comps render the same width (some sources include state+postcode).
+        raw_addr = (c.get("address") or c.get("street_address") or "Unknown").strip()
+        import re as _re
+        raw_addr = _re.sub(r",?\s*(QLD|VIC|NSW|ACT|NT|SA|TAS|WA)\s*\d{4}\s*$", "", raw_addr, flags=_re.IGNORECASE)
+        raw_addr = _re.sub(r"\s{2,}", " ", raw_addr).rstrip(",").strip()
         cards.append({
             "rank_label": f"Comp {i+1:02d}",
-            "address": c.get("address") or c.get("street_address") or "Unknown",
+            "address": raw_addr,
             "sold_price": int(sold_price) if sold_price else None,
             "distance_km": c.get("distance_km") or c.get("distance"),
             "adjustments": rows,
@@ -732,7 +771,7 @@ def section_03_receipts(
         },
         "caption": (
             f"Source: Fields valuation engine · subject {_format_suburbs(catchment)} catchment · "
-            f"valuation_data.comparables (n_total={len(valued)}, n_shown={min(top_n, len(valued))}) · "
+            f"valuation_data.recent_sales (included={len(valued)}, shown={min(top_n, len(valued))}) · "
             f"{as_at} · methodology at fieldsestate.com.au/methodology"
         ),
         "substantiation_record": {
