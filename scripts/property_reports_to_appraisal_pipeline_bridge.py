@@ -237,11 +237,31 @@ def sync_once(verbose: bool = True, refresh: bool = False) -> dict:
             record = build_pipeline_record_from_property_report(pr)
             result = sm.appraisal_pipeline.insert_one(record)
             counts["newly_bridged"] += 1
+
+            # Fire a process-300 trigger so trigger-poller invokes V4 to
+            # actually render the PDF. Mini-site requests previously stalled
+            # at `report_generating` because no trigger was being fired.
+            # Skip if the record was bridged in already-finalised state
+            # (draft_ready means a prior render exists, no auto-trigger needed).
+            if record["stage"] == "report_generating":
+                sm.trigger_requests.insert_one({
+                    "process_id": "300",
+                    "process_name": "Generate Appraisal Report (V4) — Bridge auto-trigger",
+                    "phase": "appraisal",
+                    "status": "pending",
+                    "created_at": datetime.now(timezone.utc),
+                    "triggered_by": "bridge_sync",
+                    "note": str(result.inserted_id),
+                    "started_at": None, "finished_at": None,
+                    "exit_code": None, "output_tail": None,
+                })
+
             if verbose:
+                trigger_note = " · trigger fired" if record["stage"] == "report_generating" else ""
                 print(
                     f"  [+] {slug} → pipeline _id={result.inserted_id} "
                     f"stage={record['stage']} address={record['address']} "
-                    f"({len(record['highlight_candidates'])} candidates)"
+                    f"({len(record['highlight_candidates'])} candidates){trigger_note}"
                 )
         except Exception as e:
             counts["errors"] += 1
