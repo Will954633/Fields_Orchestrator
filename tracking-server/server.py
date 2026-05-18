@@ -281,12 +281,22 @@ def viewer(tracking_id):
     if not doc:
         abort(404)
     record_event(tracking_id, "viewer_opened", request)
+    # Cache-buster derived from the PDF file's mtime — every re-render
+    # produces a new PDF file, so the version string changes, forcing the
+    # browser to fetch fresh page PNGs even if the old ones are cached.
+    import os as _os
+    report_path = doc.get("report_path", "")
+    try:
+        version = str(int(_os.path.getmtime(report_path))) if report_path else "0"
+    except OSError:
+        version = "0"
     return render_template(
         "viewer.html",
         tracking_id=tracking_id,
         property_address=doc.get("property_address", ""),
         recipient_name=doc.get("recipient_name", ""),
         total_pages=doc.get("total_pages", 0),
+        version=version,
     )
 
 
