@@ -313,7 +313,11 @@ def serve_page(tracking_id, page_num):
 
         buf = BytesIO(img_bytes)
         buf.seek(0)
-        return send_file(buf, mimetype="image/png", max_age=3600)
+        # max_age=0 — re-renders during analyst review must show immediately.
+        # Once a report is sent to the homeowner the underlying PDF doesn't
+        # change again, so re-fetching every load is cheap and prevents
+        # serving stale pages from a prior render.
+        return send_file(buf, mimetype="image/png", max_age=0)
     except Exception as e:
         log.error(f"Page render error: {e}")
         abort(500)
