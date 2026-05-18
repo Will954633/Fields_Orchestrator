@@ -40,8 +40,13 @@ OVERPASS_ENDPOINTS = [
     "https://overpass.kumi.systems/api/interpreter",
     "https://overpass.openstreetmap.ru/api/interpreter",
 ]
-OVERPASS_RETRY_BACKOFF = [1, 3, 6]  # seconds — between attempts on 5xx / timeouts
+OVERPASS_RETRY_BACKOFF = [1, 3]  # short backoffs — keep total resolver time under control
 MAPBOX_DIRECTIONS = "https://api.mapbox.com/directions/v5/mapbox/walking"
+
+# Global circuit breaker — if we detect 'network unreachable' or DNS failure,
+# stop trying further endpoints / retries for this resolution. Avoids the
+# 6-minute worst-case where every Overpass query exhausts all mirrors.
+NETWORK_DEAD_PATTERNS = ["network is unreachable", "name or service not known", "temporary failure in name resolution"]
 
 # OSM tag queries per category. The category string in the output matches
 # the frontend Poi.category enum.
@@ -109,15 +114,15 @@ def _http_get(url: str, timeout: float = 12.0) -> Optional[bytes]:
         return None
 
 
-def _http_post_overpass(query: str, timeout: float = 25.0) -> Optional[Dict[str, Any]]:
+def _http_post_overpass(query: str, timeout: float = 12.0) -> Optional[Dict[str, Any]]:
     """POST a query to Overpass. Tries multiple mirrors and retries on 5xx /
-    timeouts. The main `overpass-api.de` endpoint hands out 504s under load,
-    so falling through to `kumi.systems` or `openstreetmap.ru` keeps the
-    resolver usable. Returns None only after exhausting all endpoints."""
+    timeouts. Tighter timeout (12s) + shorter backoff than Day 6 to keep
+    total resolver wall-time under ~90 seconds in the worst case. Network-dead
+    patterns short-circuit the whole retry tree."""
     data = urllib.parse.urlencode({"data": query}).encode("utf-8")
     last_err: Optional[str] = None
 
-    for endpoint_idx, endpoint in enumerate(OVERPASS_ENDPOINTS):
+    for endpoint in OVERPASS_ENDPOINTS:
         for attempt in range(len(OVERPASS_RETRY_BACKOFF) + 1):
             try:
                 req = urllib.request.Request(
@@ -135,20 +140,23 @@ def _http_post_overpass(query: str, timeout: float = 25.0) -> Optional[Dict[str,
                             import time
                             time.sleep(OVERPASS_RETRY_BACKOFF[attempt])
                             continue
-                        break  # move to next endpoint
+                        break
                     if resp.status >= 400:
-                        # 4xx is the query's fault, not the server — don't retry
                         last_err = f"{endpoint} HTTP {resp.status}"
                         return None
                     return json.loads(resp.read().decode("utf-8"))
             except Exception as e:
+                err_str = str(e).lower()
                 last_err = f"{endpoint}: {e}"
+                # Circuit breaker — network is dead, skip all remaining retries
+                if any(pat in err_str for pat in NETWORK_DEAD_PATTERNS):
+                    logger.warning(f"Overpass network unreachable — aborting all retries: {last_err}")
+                    return None
                 if attempt < len(OVERPASS_RETRY_BACKOFF):
                     import time
                     time.sleep(OVERPASS_RETRY_BACKOFF[attempt])
                     continue
-                break  # move to next endpoint
-        # If we fell through the inner loop without returning, log and try next endpoint
+                break
         logger.warning(f"Overpass endpoint exhausted: {last_err}")
 
     logger.warning(f"Overpass all endpoints failed: {last_err}")
