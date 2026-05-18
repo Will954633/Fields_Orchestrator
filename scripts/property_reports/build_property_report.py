@@ -73,17 +73,60 @@ def resolve_one(report_doc: Dict[str, Any], force: bool = False) -> Dict[str, An
         if best_comp and best_comp.get("sale_price")
         else "no recent close comparable yet"
     )
-    activity_item = {
-        "date": now.strftime("%Y-%m-%d"),
-        "kind": "data_resolved",
-        "headline": "We pulled your property's data and the closest comparable sales.",
-        "detail": (
-            f"Reviewed the suburb cohort for {report_doc.get('suburb', 'your suburb')} and "
-            f"selected {n_comps} recent comparable sales — {comp_summary}. "
-            "A property consultant will refine these into the final valuation range."
-        ),
-        "source": None,
-    }
+    activity_items = [
+        {
+            "date": now.strftime("%Y-%m-%d"),
+            "kind": "data_resolved",
+            "headline": "We pulled your property's data and the closest comparable sales.",
+            "detail": (
+                f"Reviewed the suburb cohort for {report_doc.get('suburb', 'your suburb')} and "
+                f"selected {n_comps} recent comparable sales — {comp_summary}. "
+                "A property consultant will refine these into the final valuation range."
+            ),
+            "source": None,
+        },
+    ]
+
+    # Day 3: emit a separate comps_resolved event when the valuation engine has
+    # produced per-comp adjustments (process 301 output). This is the moment
+    # the seller can see line-itemised comp cards in the Valuation tab.
+    engine_comps = updates.get("valuation.comps")
+    if engine_comps:
+        model_range = updates.get("valuation.model_range") or {}
+        low, high = model_range.get("low"), model_range.get("high")
+        range_str = (
+            f"working range ${low:,}–${high:,}"
+            if low and high
+            else "working range pending"
+        )
+        activity_items.append({
+            "date": now.strftime("%Y-%m-%d"),
+            "kind": "valuation",
+            "headline": f"Comparable sales computed — {len(engine_comps)} comps, {range_str}.",
+            "detail": (
+                f"The valuation engine selected {len(engine_comps)} recent comparable sales from "
+                f"{report_doc.get('suburb', 'your suburb')} and adjusted each for land area, "
+                f"floor area, bedrooms, bathrooms, condition, and time-to-today. The line-itemised "
+                f"adjustments are now visible on the Valuation tab. A property consultant will review "
+                f"the comp selection before the final figure is finalised."
+            ),
+            "source": None,
+        })
+
+    # Photos-pulled event when at least 3 photos came through
+    photo_count = len((updates.get("property") or {}).get("photos") or [])
+    if photo_count >= 3:
+        activity_items.append({
+            "date": now.strftime("%Y-%m-%d"),
+            "kind": "market_state",  # reuse a registered kind; "photos" kind not in mini-site enum yet
+            "headline": f"We pulled {photo_count} photos and the satellite view of your home.",
+            "detail": (
+                "Photos and the satellite imagery feed the visual analysis pass — what your home "
+                "shows from the street, the layout the floor plan reveals, the bushland/water/road "
+                "context the aerial confirms."
+            ),
+            "source": None,
+        })
 
     # Transition state to under_review unless we're force-re-resolving
     if state == "stub":
@@ -91,7 +134,8 @@ def resolve_one(report_doc: Dict[str, Any], force: bool = False) -> Dict[str, An
         updates["state_transitioned_at.under_review"] = now
         updates["activity_refreshed_at"] = now
 
-    # Push the activity item using $push, not $set (preserves existing items)
+    # Push activity items using $push, not $set (preserves existing items).
+    # Newest-first by reversing so the most recent event ends up at position 0.
     sm = get_system_monitor_db()
     coll = sm["property_reports"]
 
@@ -102,7 +146,7 @@ def resolve_one(report_doc: Dict[str, Any], force: bool = False) -> Dict[str, An
             {"slug": slug},
             {
                 "$set": {**set_payload, "updated_at": now},
-                "$push": {"activity": {"$each": [activity_item], "$position": 0}},
+                "$push": {"activity": {"$each": list(reversed(activity_items)), "$position": 0}},
             },
         )
 
