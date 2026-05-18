@@ -1150,20 +1150,21 @@ SECTION_RECOMMENDATION_TEMPLATE = '''\
       <p style="font-size:9.5pt; line-height:1.5; color:#5a554d; font-style:italic; margin:0;">Workflow: Ops dashboard → Appraisal Pipeline → set listing &amp; target prices → re-render report.</p>
     </div>
     {% else %}
+    {% if rec.page_number == 18 %}
+    <p style="font-size:10.5pt; line-height:1.55; color:#2c2924; margin-bottom:5mm;">Across the six forces examined in this report, the strategy for <strong>{{ subject.short_address }}</strong> resolves to one specific recommendation. The home is genuinely rare; the premium buyer is identifiable; the price is defensible from cohort data. A multi-week campaign — engineered around the avatar, delivered across every major digital surface, anchored in transparency — produces the conditions for a premium sale.</p>
+    {% endif %}
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:6mm; margin-bottom:5mm;">
       <div style="background:#fdf3ec; border-left:3px solid #B76749; padding:5mm 6mm;">
         <div style="font-family:IBM Plex Mono, monospace; font-size:8pt; letter-spacing:0.06em; text-transform:uppercase; color:#8d4d33; margin-bottom:3mm;">Recommended listing price</div>
         <div style="font-family:Cormorant Garamond, serif; font-size:36pt; color:#B76749; line-height:1;">${{ '{:,}'.format(rec.listing_price) }}</div>
-        {% if rec.page_number == 11 and rec.listing_round_m %}
+        {% if rec.listing_round_m %}
         <div style="font-family:'Playfair Display', serif; font-style:italic; font-size:9pt; line-height:1.4; color:#5a554d; margin-top:3mm;">Lower end of the derived range. Precise, above the {{ rec.listing_round_m }} round number.</div>
         {% endif %}
       </div>
       <div style="background:#fdf3ec; border-left:3px solid #B76749; padding:5mm 6mm;">
         <div style="font-family:IBM Plex Mono, monospace; font-size:8pt; letter-spacing:0.06em; text-transform:uppercase; color:#8d4d33; margin-bottom:3mm;">Target sale price</div>
         <div style="font-family:Cormorant Garamond, serif; font-size:26pt; color:#B76749; line-height:1.15;">${{ '{:,}'.format(rec.target_sale_price_low) }} –<br>${{ '{:,}'.format(rec.target_sale_price_high) }}</div>
-        {% if rec.page_number == 11 %}
         <div style="font-family:'Playfair Display', serif; font-style:italic; font-size:9pt; line-height:1.4; color:#5a554d; margin-top:3mm;">Upper end of the derived range. Reached through buyer competition — not seller negotiation.</div>
-        {% endif %}
       </div>
     </div>
     {% if rec.page_number == 11 %}
@@ -1186,10 +1187,20 @@ SECTION_RECOMMENDATION_TEMPLATE = '''\
 
     <div style="font-family:'Playfair Display', serif; font-style:italic; font-size:11pt; color:#B76749; margin-top:auto; margin-bottom:4mm;">The strategy is engineered. The next step is yours.</div>
     {% else %}
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:6mm; margin-top:6mm;">
-      <div><div style="font-family:IBM Plex Mono, monospace; font-size:8pt; letter-spacing:0.06em; text-transform:uppercase; color:#8d4d33;">Campaign duration</div><div style="font-family:Cormorant Garamond, serif; font-size:30pt; color:#B76749;">{{ rec.campaign_duration_days }} days</div></div>
-      <div><div style="font-family:IBM Plex Mono, monospace; font-size:8pt; letter-spacing:0.06em; text-transform:uppercase; color:#8d4d33;">Estimated inspections</div><div style="font-family:Cormorant Garamond, serif; font-size:30pt; color:#B76749;">{{ rec.estimated_inspections }}</div></div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:6mm; margin-top:2mm; border-top:1px solid #d8cfc1; padding-top:5mm;">
+      <div>
+        <div style="font-family:IBM Plex Mono, monospace; font-size:8pt; letter-spacing:0.06em; text-transform:uppercase; color:#8d4d33; margin-bottom:2mm;">Campaign duration</div>
+        <div style="font-family:Cormorant Garamond, serif; font-size:30pt; color:#B76749; line-height:1;">{{ rec.campaign_duration_days }} days</div>
+        <div style="font-family:'Playfair Display', serif; font-style:italic; font-size:9pt; line-height:1.4; color:#5a554d; margin-top:3mm;">Five engineered phases across active, passive and retargeted buyer states.</div>
+      </div>
+      <div>
+        <div style="font-family:IBM Plex Mono, monospace; font-size:8pt; letter-spacing:0.06em; text-transform:uppercase; color:#8d4d33; margin-bottom:2mm;">Estimated inspections</div>
+        <div style="font-family:Cormorant Garamond, serif; font-size:30pt; color:#B76749; line-height:1;">{{ rec.estimated_inspections }}</div>
+        <div style="font-family:'Playfair Display', serif; font-style:italic; font-size:9pt; line-height:1.4; color:#5a554d; margin-top:3mm;">The conditions for multi-buyer competition at the offer table.</div>
+      </div>
     </div>
+
+    <div style="font-family:'Playfair Display', serif; font-style:italic; font-size:11pt; color:#B76749; margin-top:auto; margin-bottom:4mm;">The strategy is engineered. The next step is yours.</div>
     {% endif %}
     {% endif %}
     <div class="page-footer"><span class="smarter-mark"><svg viewBox="0 0 113.39 113.39" xmlns="http://www.w3.org/2000/svg">
