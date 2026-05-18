@@ -467,6 +467,17 @@ processes:
   # APPRAISAL PIPELINE (on-demand, triggered by form submission)
   # ============================================================================
 
+  - id: 301
+    name: "Run Subject Valuation (Comps + Range)"
+    description: "On-demand wrapper around precompute_property_valuation. Used by the bridge sync when a new pipeline record is created for a subject that has no pre-computed valuation_data (homeowner-submitted leads not on the for-sale list). Writes valuation_data.comparables[] + .confidence.range to the subject doc so the V4 §03 receipts page populates on the next render. PIPELINE_ID in note field is substituted into the command."
+    phase: "appraisal"
+    command: "bash -c 'set -a && source /home/fields/Fields_Orchestrator/.env && set +a && /home/fields/venv/bin/python3 scripts/run_subject_valuation.py --pipeline-id PIPELINE_ID'"
+    working_dir: "/home/fields/Fields_Orchestrator"
+    mongodb_activity: "heavy_read"
+    requires_browser: false
+    estimated_duration_minutes: 1
+    cooldown_seconds: 30
+
   - id: 300
     name: "Generate Appraisal Report (V4)"
     description: "Auto-generates a draft V4 (19-page) seller appraisal for a new lead. Triggered by the analyse-lead form OR an ops-dashboard re-render. PIPELINE_ID in the note field is substituted into the command. The V4 generator runs Layer 1 budgets, Layer 2 fit-cascade, footer-alignment check, auto-fetches per-subject hero (Domain CDN) + satellite (Google Static Maps), and writes report_path + tracking_id + stage transitions back to the appraisal_pipeline record."
