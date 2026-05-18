@@ -34,6 +34,7 @@ from scripts.property_reports.scarcity_narrative import (
     resolve_scarcity_narrative, cohort_premiums_to_sold_cohort_premiums,
 )
 from scripts.property_reports.positioning_narrative import resolve_positioning_narrative
+from scripts.property_reports.personas_narrative import resolve_personas_narrative
 
 logger = logging.getLogger(__name__)
 
@@ -268,23 +269,51 @@ class SlotResolver:
                     valuation_range=updates.get("valuation.model_range"),
                 )
                 if pos and pos.get("frame"):
+                    # Day 11: personas resolver — generates the 3 buyer profiles
+                    # used by both PositioningTab and BuyersTab. Reads the same
+                    # scarcity_struct + features + pois as the positioning
+                    # narrative for context coherence.
+                    personas: List[Dict[str, Any]] = []
+                    try:
+                        personas_result = resolve_personas_narrative(
+                            address=self.address,
+                            suburb=self.suburb_display,
+                            features_basic=features_basic,
+                            notable_features=scarcity_struct.get("notable_features", []),
+                            matching_full_stack=scarcity_struct.get("active_matching_full_stack", 0),
+                            active_listings_total=scarcity_struct.get("active_listings_total", 0),
+                            cohort_premiums=scarcity_struct.get("cohort_premiums", []),
+                            pois=resolved_pois,
+                            valuation_range=updates.get("valuation.model_range"),
+                        )
+                        if personas_result and personas_result.get("personas"):
+                            personas = personas_result["personas"]
+                            logger.info(
+                                f"  personas generated (attempt {personas_result['attempt']}): "
+                                f"{[p['label'] for p in personas]}"
+                            )
+                        elif personas_result and personas_result.get("error"):
+                            updates["personas_narrative_error"] = personas_result
+                            logger.warning(f"  personas failed: {personas_result.get('error')}")
+                    except Exception as e:
+                        logger.warning(f"  personas resolver threw: {e}")
+
                     updates["positioning"] = {
                         "frame": pos["frame"],
                         "vocabulary": pos["vocabulary"],
                         "tradeOffs": pos["tradeOffs"],
                         "photography": pos["photography"],
                         "sampleParagraph": pos["sampleParagraph"],
+                        "personas": personas,
                         "generated_at": pos["generated_at"],
                         "model": pos["model"],
                         "attempt": pos["attempt"],
-                        # `personas` populated by Day 11 resolver; placeholder here
-                        "personas": [],
                     }
                     updates["slot_status.positioning"] = "approved"
                     logger.info(
                         f"  positioning narrative generated (attempt {pos['attempt']}): "
                         f"{len(pos['vocabulary']['use'])} use-terms, {len(pos['tradeOffs'])} trade-offs, "
-                        f"{len(pos['sampleParagraph'].split())} word sample"
+                        f"{len(pos['sampleParagraph'].split())} word sample · {len(personas)} personas"
                     )
                 elif pos and pos.get("error"):
                     updates["positioning_narrative_error"] = pos
