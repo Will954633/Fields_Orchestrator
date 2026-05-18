@@ -29,6 +29,7 @@ from scripts.property_reports.hero_photo import score_and_pick_hero
 from scripts.property_reports.walking_distances import resolve_pois
 from scripts.property_reports.market_narrative import resolve_market_narrative
 from scripts.property_reports.scarcity_features import resolve_scarcity_features
+from scripts.property_reports.cohort_premiums import compute_cohort_premiums
 
 logger = logging.getLogger(__name__)
 
@@ -150,13 +151,29 @@ class SlotResolver:
         # Scarcity features (Day 7) — identifies the subject's notable feature
         # stack from valuation_data.subject_property.features.basic and counts
         # how many other active listings in the catchment carry the same stack.
-        # Write to property_reports.scarcity_features as structured data; the
-        # Day 9 Opus narrative reads from here. Slot doesn't auto-promote yet —
-        # scarcity slot stays pending until the narrative resolver runs.
+        # Day 8 adds cohort_premiums: per-feature median sale-price delta from
+        # the sold cohort. Both write to property_reports.scarcity_features as
+        # structured data; the Day 9 Opus narrative reads from here. Slot
+        # doesn't auto-promote yet — scarcity slot stays pending until the
+        # narrative resolver runs.
         if self._subject:
             try:
                 scarcity = resolve_scarcity_features(self._subject, self.db)
                 if scarcity:
+                    # Day 8: enrich with cohort premiums per notable feature
+                    try:
+                        premiums = compute_cohort_premiums(
+                            scarcity.get("notable_features", []),
+                            self.db,
+                            scarcity.get("catchment_suburbs") or [],
+                        )
+                        if premiums:
+                            scarcity["cohort_premiums"] = premiums
+                            reliable_count = sum(1 for p in premiums if p.get("reliable"))
+                            logger.info(f"  cohort premiums: {len(premiums)} features, {reliable_count} reliable")
+                    except Exception as e:
+                        logger.warning(f"  cohort_premiums failed: {e}")
+
                     updates["scarcity_features"] = scarcity
                     logger.info(
                         f"  scarcity features: {len(scarcity.get('notable_features', []))} notable | "
