@@ -796,6 +796,14 @@ def section_recommendation(
     if derived_high is None:
         derived_high = _to_int(rng.get("high"))
 
+    # Final fallback: derive the range from the analyst's listing/target if
+    # nothing else exists. Mirrors the §03R behaviour so the page-11 body
+    # paragraph + four-conditions block always have a real range to show.
+    if derived_low is None and listing_price:
+        derived_low = listing_price
+    if derived_high is None and target_sale_price:
+        derived_high = int(target_sale_price * 1.025)
+
     # Auto-derive target_sale_price range if only midpoint provided
     target_low, target_high = None, None
     if target_sale_price:
@@ -809,6 +817,17 @@ def section_recommendation(
     # valuation range.
     pending_review = not (listing_price and target_low)
 
+    # Computed values for the precise-pricing protocol checklist + the
+    # "$X – $Y gap" callout in the body paragraph.
+    gap_low_dollars = (target_low - listing_price) if (listing_price and target_low) else None
+    gap_high_dollars = (target_high - listing_price) if (listing_price and target_high) else None
+    # Round-number helpers: the nearest $100K below the listing, used to show
+    # "$X reads as a considered figure; $Y reads as a guess." in the protocol.
+    listing_round_down = (listing_price // 100_000) * 100_000 if listing_price else None
+    gap_to_round_down = (listing_price - listing_round_down) if listing_price else None
+    # Format the round-down as M-string (e.g. $1.9M) for display.
+    listing_round_m = f"${listing_round_down / 1_000_000:.1f}M" if listing_round_down else None
+
     return {
         "pending_review": pending_review,
         "headline_html": f'Our recommendation for <span class="copper">{short_addr or "this home"}</span>.',
@@ -820,6 +839,11 @@ def section_recommendation(
         "derived_range_low": derived_low,
         "derived_range_high": derived_high,
         "gap_dollars": gap,
+        "gap_low_dollars": gap_low_dollars,
+        "gap_high_dollars": gap_high_dollars,
+        "listing_round_down": listing_round_down,
+        "gap_to_round_down": gap_to_round_down,
+        "listing_round_m": listing_round_m,
         "page_number": page_number,
         "campaign_duration_days": "25 – 45",
         "estimated_inspections": "30 – 45",
