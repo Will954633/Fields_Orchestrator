@@ -76,6 +76,25 @@ class SlotResolver:
         if model_range:
             updates["valuation.model_range"] = model_range
 
+        # Valuation comps from the engine output (Path A — produced by
+        # process 301 + the nightly precompute job). When the subject has
+        # `valuation_data.recent_sales[]` we surface the per-comp adjustments
+        # the engine computed. Auto-promote slot_status.comps once the comps
+        # are populated — this is interim until the analyst-review gate
+        # lands on Day 14, at which point the promotion moves to the ops
+        # dashboard sign-off step.
+        eng_comps = self.valuation_comps_from_engine()
+        if eng_comps is not None:
+            updates["valuation.comps"] = eng_comps
+            if eng_comps:
+                # Engine produced usable comps → expose to mini-site
+                updates["slot_status.comps"] = "approved"
+                updates["valuation.comps_resolved_at"] = datetime.utcnow()
+            else:
+                # Engine ran but excluded the subject (no floor_area, etc.)
+                # Leave slot pending — placeholder shows on the page.
+                updates["slot_status.comps"] = "pending"
+
         # Market state for the suburb
         market = self.market_state()
         if market:
@@ -299,6 +318,95 @@ class SlotResolver:
             logger.debug(f"Active count failed: {e}")
 
         return out or None
+
+    def valuation_comps_from_engine(self) -> Optional[List[Dict[str, Any]]]:
+        """
+        Comps from the precompute_valuations engine output, shaped for the
+        mini-site ValuationTab. Reads `valuation_data.recent_sales[]` where
+        `included_in_valuation == True` (the comps the engine actually used
+        to compute the reconciled range) and maps engine field names to the
+        frontend Comp schema.
+
+        Schema produced (each item, matching `homeFixture.ts` `Comp` type):
+          { address, soldPrice, soldDate, land, internal, bedrooms,
+            bathrooms, condition, notes, adjustedToSubject, weight_pct }
+
+        Engine schema mapping:
+          - original_sale_price → soldPrice (raw $)
+          - sale_date (epoch ms or ISO) → soldDate
+          - features.basic.land_size_sqm → land
+          - features.basic.floor_area_sqm → internal
+          - features.basic.bedrooms / bathrooms → bedrooms / bathrooms
+          - adjustment_result.adjusted_price → adjustedToSubject
+          - weight.normalized OR weight.raw_weight * 100 → weight_pct
+          - narrative → notes (one-line summary)
+          - condition: derived from features.basic.condition or left as ""
+
+        Returns None if the subject has no valuation_data yet (engine
+        hasn't run, or engine excluded the subject due to missing data).
+        Returns empty list if the engine ran but no comps were included.
+        """
+        s = self._subject
+        if not s:
+            return None
+        val = s.get("valuation_data") or {}
+        recent_sales = val.get("recent_sales") or []
+        if not recent_sales:
+            # Engine ran but produced no comps (e.g. exclusion_reason).
+            # Return empty list rather than None so the resolver clears any
+            # stale comps from a previous run.
+            return []
+
+        included = [c for c in recent_sales if c.get("included_in_valuation")]
+        # Sort by normalised weight desc so top-N is most-influential first
+        def _w(c: Dict[str, Any]) -> float:
+            w = c.get("weight")
+            if isinstance(w, dict):
+                try:
+                    return float(w.get("normalized") or w.get("raw_weight") or 0)
+                except (TypeError, ValueError):
+                    return 0.0
+            try:
+                return float(w or 0)
+            except (TypeError, ValueError):
+                return 0.0
+        included.sort(key=_w, reverse=True)
+
+        out: List[Dict[str, Any]] = []
+        for c in included:
+            adj = c.get("adjustment_result") or {}
+            features = (c.get("features") or {}).get("basic") or {}
+            sale_date_raw = c.get("sale_date")
+            sale_date_str = None
+            if isinstance(sale_date_raw, (int, float)):
+                try:
+                    sale_date_str = datetime.utcfromtimestamp(sale_date_raw / 1000.0).strftime("%Y-%m-%d")
+                except (OSError, ValueError):
+                    sale_date_str = None
+            elif isinstance(sale_date_raw, str):
+                sale_date_str = sale_date_raw[:10]
+            elif isinstance(sale_date_raw, datetime):
+                sale_date_str = sale_date_raw.strftime("%Y-%m-%d")
+
+            # Normalise address — strip ", QLD 4226" tail + collapse double spaces
+            addr = (c.get("address") or "").strip()
+            addr = re.sub(r",?\s*(QLD|VIC|NSW|ACT|NT|SA|TAS|WA)\s*\d{4}\s*$", "", addr, flags=re.I)
+            addr = re.sub(r"\s{2,}", " ", addr).rstrip(",").strip()
+
+            out.append({
+                "address": addr or "Unknown",
+                "soldPrice": _to_int(c.get("original_sale_price")) or _to_int(c.get("price")),
+                "soldDate": sale_date_str,
+                "land": _to_int(features.get("land_size_sqm")),
+                "internal": _to_int(features.get("floor_area_sqm")),
+                "bedrooms": _to_int(features.get("bedrooms")),
+                "bathrooms": _to_int(features.get("bathrooms")),
+                "condition": features.get("condition_label") or "",
+                "notes": (c.get("narrative") or "")[:280],  # keep notes terse
+                "adjustedToSubject": _to_int(adj.get("adjusted_price")),
+                "weight_pct": round(_w(c) * 100),
+            })
+        return out
 
     def recent_comparable_sales(self, n: int = 6) -> List[Dict[str, Any]]:
         """
