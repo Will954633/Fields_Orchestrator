@@ -27,6 +27,7 @@ from pymongo.database import Database
 
 from scripts.property_reports.hero_photo import score_and_pick_hero
 from scripts.property_reports.walking_distances import resolve_pois
+from scripts.property_reports.market_narrative import resolve_market_narrative
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +103,30 @@ class SlotResolver:
         market = self.market_state()
         if market:
             updates["market"] = market
+
+            # Market narrative — Opus 4.7 explains what the numbers mean for
+            # this seller (Day 5). First narrative LLM in the chain. Retries
+            # 3x with validation guardrails; failures set slot_status.error.
+            bed_band = _to_int((self._subject or {}).get("bedrooms"))
+            try:
+                narrative = resolve_market_narrative(
+                    market, self.suburb_display, bed_band,
+                    address=self.address,
+                )
+                if narrative and narrative.get("text"):
+                    updates["market_narrative"] = narrative
+                    updates["slot_status.market_narrative"] = "approved"
+                    logger.info(f"  market_narrative generated ({len(narrative['text'])} chars)")
+                elif narrative and narrative.get("error"):
+                    updates["market_narrative_error"] = narrative
+                    updates["slot_status.market_narrative"] = "error"
+                    logger.warning(f"  market_narrative failed: {narrative.get('error')}")
+                else:
+                    updates["slot_status.market_narrative"] = "pending"
+            except Exception as e:
+                logger.warning(f"  market_narrative resolver threw: {e}")
+                updates["slot_status.market_narrative"] = "error"
+                updates["market_narrative_error"] = {"error": str(e), "attempts": 0}
 
         # Comps — top-N recent sold matches
         comps = self.recent_comparable_sales(n=6)
