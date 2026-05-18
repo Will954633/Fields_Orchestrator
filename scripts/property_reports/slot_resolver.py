@@ -28,6 +28,7 @@ from pymongo.database import Database
 from scripts.property_reports.hero_photo import score_and_pick_hero
 from scripts.property_reports.walking_distances import resolve_pois
 from scripts.property_reports.market_narrative import resolve_market_narrative
+from scripts.property_reports.scarcity_features import resolve_scarcity_features
 
 logger = logging.getLogger(__name__)
 
@@ -145,6 +146,24 @@ class SlotResolver:
         if latlng:
             updates["lat"] = latlng[0]
             updates["lng"] = latlng[1]
+
+        # Scarcity features (Day 7) — identifies the subject's notable feature
+        # stack from valuation_data.subject_property.features.basic and counts
+        # how many other active listings in the catchment carry the same stack.
+        # Write to property_reports.scarcity_features as structured data; the
+        # Day 9 Opus narrative reads from here. Slot doesn't auto-promote yet —
+        # scarcity slot stays pending until the narrative resolver runs.
+        if self._subject:
+            try:
+                scarcity = resolve_scarcity_features(self._subject, self.db)
+                if scarcity:
+                    updates["scarcity_features"] = scarcity
+                    logger.info(
+                        f"  scarcity features: {len(scarcity.get('notable_features', []))} notable | "
+                        f"{scarcity.get('active_matching_full_stack')}/{scarcity.get('active_listings_total')} active in catchment match full stack"
+                    )
+            except Exception as e:
+                logger.warning(f"  scarcity_features resolver threw: {e}")
 
         # Walking distances to nearest POIs (Day 4). Requires lat/lng — skip
         # for subjects we can't geolocate (vacant cadastral lots etc.).
