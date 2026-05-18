@@ -25,6 +25,9 @@ from typing import Any, Dict, List, Optional
 from bson import ObjectId
 from pymongo.database import Database
 
+from scripts.property_reports.hero_photo import score_and_pick_hero
+from scripts.property_reports.walking_distances import resolve_pois
+
 logger = logging.getLogger(__name__)
 
 
@@ -118,6 +121,21 @@ class SlotResolver:
             updates["lat"] = latlng[0]
             updates["lng"] = latlng[1]
 
+        # Walking distances to nearest POIs (Day 4). Requires lat/lng — skip
+        # for subjects we can't geolocate (vacant cadastral lots etc.).
+        if latlng:
+            try:
+                pois = resolve_pois(latlng[0], latlng[1])
+                if pois:
+                    updates["pois"] = pois
+                    updates["slot_status.walking_distance"] = "approved"
+                    logger.info(f"  walking distances resolved for {len(pois)} POIs")
+                else:
+                    updates["slot_status.walking_distance"] = "pending"
+            except Exception as e:
+                logger.warning(f"  walking distance resolver threw: {e}")
+                updates["slot_status.walking_distance"] = "error"
+
         return updates
 
     # ------------------------------------------------------------------ #
@@ -174,20 +192,68 @@ class SlotResolver:
     # ------------------------------------------------------------------ #
 
     def property_facts(self) -> Optional[Dict[str, Any]]:
-        """Property inventory + photos from the Gold_Coast doc."""
+        """Property inventory + photos from the Gold_Coast doc.
+
+        Photo selection (Day 4 update):
+          1. Collect all candidate URLs from `property_images` / `domain_image_urls`.
+          2. Score with GPT-4o-mini to find the best hero shot.
+          3. Promote the AI-picked photo to role=hero, rest become gallery.
+          4. If AI scoring fails (no key, API error), fall back to the scraper's
+             `domain_hero_image_url` so we always produce *something*.
+        """
         s = self._subject
         if not s:
             return None
 
+        scraper_hero = s.get("domain_hero_image_url")
+        candidates = s.get("property_images") or s.get("domain_image_urls") or []
+        # Deduplicate, keep order
+        seen = set()
+        clean_candidates: List[str] = []
+        if scraper_hero:
+            clean_candidates.append(scraper_hero)
+            seen.add(scraper_hero)
+        for url in candidates:
+            if isinstance(url, str) and url not in seen:
+                clean_candidates.append(url)
+                seen.add(url)
+
+        # AI hero pick (Day 4) — falls back to scraper hero on failure
+        hero_url = scraper_hero
+        hero_pick_meta = None
+        if clean_candidates:
+            try:
+                pick = score_and_pick_hero(clean_candidates[:8])
+                if pick and pick.get("hero_url"):
+                    hero_url = pick["hero_url"]
+                    hero_pick_meta = {
+                        "score": pick.get("hero_score"),
+                        "reason": pick.get("hero_reason"),
+                        "model": pick.get("model"),
+                        "picked_by": "ai",
+                    }
+                    logger.info(
+                        f"  hero AI-picked (score={pick.get('hero_score')}): {hero_url[:80]}"
+                    )
+            except Exception as e:
+                logger.warning(f"  hero photo scoring threw: {e}")
+
+        if not hero_url and clean_candidates:
+            hero_url = clean_candidates[0]
+
         photos = []
-        hero = s.get("domain_hero_image_url")
-        if hero:
-            photos.append({"url": hero, "role": "hero"})
-        # Add a few non-hero photos for the gallery
-        gallery = s.get("property_images") or s.get("domain_image_urls") or []
-        for url in gallery[:6]:
-            if isinstance(url, str) and url != hero:
-                photos.append({"url": url, "role": "gallery"})
+        if hero_url:
+            entry = {"url": hero_url, "role": "hero"}
+            if hero_pick_meta:
+                entry["meta"] = hero_pick_meta
+            photos.append(entry)
+        # Up to 6 gallery photos, excluding the hero
+        for url in clean_candidates:
+            if url == hero_url:
+                continue
+            if len([p for p in photos if p["role"] == "gallery"]) >= 6:
+                break
+            photos.append({"url": url, "role": "gallery"})
 
         return {
             "bed": _to_int(s.get("bedrooms")),
