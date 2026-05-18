@@ -216,6 +216,7 @@ def render_appraisal(
     s03 = render.render_section_03_right_html(
         subject_id,
         editorial_overrides=get_overrides("03_right"), write_substantiation=True,
+        pipeline_record=pipeline_record,
     )
     sections_rendered.append("03_right")
 
