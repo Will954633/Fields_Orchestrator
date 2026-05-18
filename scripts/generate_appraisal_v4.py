@@ -343,15 +343,30 @@ def render_appraisal(
     hero_source = None     # "pipeline" | "auto_apr01" | "auto_scraped" | "fallback" | "missing"
     satellite_source = None  # "pipeline" | "auto_static_maps" | "fallback" | "missing"
 
+    # Look up the subject doc up-front — used by both hero and satellite blocks.
+    from shared.db import get_client as _gc
+    _subj = None
+    if suburb_key:
+        _subj = _gc()["Gold_Coast"][suburb_key].find_one({"_id": ObjectId(subject_id)})
+
     if (pipeline_record or {}).get("cover_hero_image_src"):
         hero_source = "pipeline"  # respected — pipeline supplied an explicit path
+        # When the analyst picked a hero in the ops dashboard, download it into
+        # expected_hero so the PDF render finds it locally (file:// loading).
+        hero_url = pipeline_record["cover_hero_image_src"]
+        if hero_url.startswith("http") and "blob.core.windows.net" not in hero_url:
+            try:
+                import urllib.request
+                req = urllib.request.Request(hero_url, headers={"User-Agent": "Fields-Appraisal/1.0"})
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    data = resp.read()
+                if len(data) > 2000:
+                    expected_hero.write_bytes(data)
+            except Exception as exc:
+                print(f"  [WARN] pipeline cover_hero download failed: {exc} — falling back to existing asset")
     else:
         # Try Domain-CDN URLs from apr01-recovered first (live), then scraped_data
         # (often dead Azure URLs but worth trying). Skip dead Azure blob domains.
-        from shared.db import get_client as _gc
-        _subj = None
-        if suburb_key:
-            _subj = _gc()["Gold_Coast"][suburb_key].find_one({"_id": ObjectId(subject_id)})
         candidates = []
         if _subj:
             for source_key, store_key in [
@@ -394,10 +409,6 @@ def render_appraisal(
         satellite_source = "pipeline"
     else:
         import os as _os
-        if not _subj:
-            from shared.db import get_client as _gc
-            if suburb_key:
-                _subj = _gc()["Gold_Coast"][suburb_key].find_one({"_id": ObjectId(subject_id)})
         lat = _subj.get("LATITUDE") if _subj else None
         lng = _subj.get("LONGITUDE") if _subj else None
         api_key = _os.environ.get("GOOGLE_MAPS_STATIC_API_KEY")
