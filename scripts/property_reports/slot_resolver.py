@@ -35,6 +35,7 @@ from scripts.property_reports.scarcity_narrative import (
 )
 from scripts.property_reports.positioning_narrative import resolve_positioning_narrative
 from scripts.property_reports.personas_narrative import resolve_personas_narrative
+from scripts.property_reports.buyers_narrative import resolve_buyers_narrative
 
 logger = logging.getLogger(__name__)
 
@@ -315,6 +316,48 @@ class SlotResolver:
                         f"{len(pos['vocabulary']['use'])} use-terms, {len(pos['tradeOffs'])} trade-offs, "
                         f"{len(pos['sampleParagraph'].split())} word sample · {len(personas)} personas"
                     )
+
+                    # Buyers narrative (Day 12-13) — thesis + catchment + campaign math.
+                    # Requires the 3 personas we just generated. Catchment locations
+                    # align 1:1 to the personas so the two sections cohere.
+                    if personas and len(personas) >= 3:
+                        try:
+                            buyers_result = resolve_buyers_narrative(
+                                address=self.address,
+                                suburb=self.suburb_display,
+                                features_basic=features_basic,
+                                notable_features=scarcity_struct.get("notable_features", []),
+                                matching_full_stack=scarcity_struct.get("active_matching_full_stack", 0),
+                                active_listings_total=scarcity_struct.get("active_listings_total", 0),
+                                cohort_premiums=scarcity_struct.get("cohort_premiums", []),
+                                personas=personas,
+                                pois=resolved_pois,
+                                valuation_range=updates.get("valuation.model_range"),
+                            )
+                            if buyers_result and buyers_result.get("thesis"):
+                                updates["buyers"] = {
+                                    "thesis": buyers_result["thesis"],
+                                    "catchment": buyers_result["catchment"],
+                                    "campaignMath": buyers_result["campaignMath"],
+                                    "generated_at": buyers_result["generated_at"],
+                                    "model": buyers_result["model"],
+                                    "attempt": buyers_result["attempt"],
+                                }
+                                updates["slot_status.buyers"] = "approved"
+                                logger.info(
+                                    f"  buyers narrative generated (attempt {buyers_result['attempt']}): "
+                                    f"thesis + {len(buyers_result['catchment']['locations'])} catchment + campaign math"
+                                )
+                            elif buyers_result and buyers_result.get("error"):
+                                updates["buyers_narrative_error"] = buyers_result
+                                updates["slot_status.buyers"] = "error"
+                                logger.warning(f"  buyers narrative failed: {buyers_result.get('error')}")
+                            else:
+                                updates["slot_status.buyers"] = "pending"
+                        except Exception as e:
+                            logger.warning(f"  buyers narrative resolver threw: {e}")
+                            updates["slot_status.buyers"] = "error"
+                            updates["buyers_narrative_error"] = {"error": str(e), "attempts": 0}
                 elif pos and pos.get("error"):
                     updates["positioning_narrative_error"] = pos
                     updates["slot_status.positioning"] = "error"
