@@ -947,11 +947,31 @@ def render_section_01_right_html(
     overrides = editorial_overrides or {}
     subject = data_pull.get_subject(subject_id)
 
-    # Resolve highlight (top-ranked unless human picked a different one)
+    # Resolve highlight (top-ranked unless human picked a different one).
+    # Fallback: subjects that don't have a distinguishing rarity (median 4-bed
+    # no-pool homes etc.) get a bedroom-count default so the page still renders
+    # with a meaningful cohort-anchor instead of crashing.
     ranked = pick_highlight.rank(subject)
     if not ranked:
-        raise ValueError(f"No highlight candidates ranked for {subject_id}")
-    if highlight_key:
+        from shared.db import get_client as _gc
+        beds = subject.get("bedrooms") or 4
+        catch = data_pull.catchment_for(subject)
+        f_total = data_pull.universe_filter()
+        f_match = {**f_total, "bedrooms": beds}
+        _db = _gc()["Gold_Coast"]
+        universe_total = sum(_db[s].count_documents(f_total) for s in catch)
+        match_count = sum(_db[s].count_documents(f_match) for s in catch)
+        chosen = {
+            "key": "bedroom_count_fallback",
+            "description": f"{data_pull._n_word(beds)} bedrooms",
+            "short_label": f"{match_count} match",
+            "count": match_count,
+            "universe_total": universe_total,
+            "ratio_str": f"{match_count}/{universe_total}",
+            "share_pct": round(100 * match_count / universe_total, 1) if universe_total else 0,
+            "filter": {"bedrooms": beds},
+        }
+    elif highlight_key:
         chosen = next((c for c in ranked if c["key"] == highlight_key), None)
         if chosen is None:
             raise ValueError(
