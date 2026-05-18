@@ -556,12 +556,38 @@ def main() -> None:
         subject_id = args.subject_id
         pipe = None
 
-    result = render_appraisal(
-        subject_id,
-        pipeline_record=pipe,
-        output_basename=args.output_basename,
-        render_pdf=not args.no_pdf,
-    )
+    # When updating a pipeline record, mark it as in-progress before the
+    # (potentially slow) render so the ops panel reflects current state.
+    if args.update_pipeline and pipe:
+        _now = datetime.now(timezone.utc)
+        get_client()["system_monitor"]["appraisal_pipeline"].update_one(
+            {"_id": pipe["_id"]},
+            {
+                "$set": {"stage": "report_generating", "updated_at": _now},
+                "$push": {"stage_history": {"stage": "report_generating", "at": _now.isoformat()}},
+            },
+        )
+
+    try:
+        result = render_appraisal(
+            subject_id,
+            pipeline_record=pipe,
+            output_basename=args.output_basename,
+            render_pdf=not args.no_pdf,
+        )
+    except Exception as exc:
+        if args.update_pipeline and pipe:
+            _now = datetime.now(timezone.utc)
+            get_client()["system_monitor"]["appraisal_pipeline"].update_one(
+                {"_id": pipe["_id"]},
+                {
+                    "$set": {"stage": "error", "updated_at": _now,
+                             "last_error": f"{type(exc).__name__}: {exc}"[:500]},
+                    "$push": {"stage_history": {"stage": "error", "at": _now.isoformat()}},
+                },
+            )
+            print(f"\n✗ Render failed — pipeline {pipe['_id']} → error: {exc}")
+        raise
 
     print(f"\n✓ V4 appraisal rendered for subject {subject_id}")
     print(f"  HTML: {result['html_path']}")
@@ -618,17 +644,58 @@ def main() -> None:
 
     if args.update_pipeline and pipe and result["pdf_path"]:
         sm = get_client()["system_monitor"]
+        now = datetime.now(timezone.utc)
+
+        # Try to mint a tracking_id so the ops panel's "Preview Report (as client
+        # will see it)" link works. Re-uses the same tracking module the V2
+        # generator uses — falls back gracefully if the module is missing or
+        # the subject's address can't be resolved.
+        tracking_id = pipe.get("tracking_id")  # don't overwrite an existing one
+        if not tracking_id:
+            try:
+                sys.path.insert(0, str(REPO_ROOT / "tracking-server"))
+                from send_report import create_tracking_record, count_pdf_pages  # type: ignore
+                addr = pipe.get("address") or "Property"
+                client_name = pipe.get("name") or "the Owner"
+                total_pages = count_pdf_pages(result["pdf_path"])
+                tracking_id = create_tracking_record(
+                    sm,
+                    pipe.get("email") or "preview@fieldsestate.com.au",
+                    client_name, addr, result["pdf_path"],
+                    f"Your Property Appraisal — {addr}",
+                    total_pages,
+                )
+                print(f"  Tracking ID: {tracking_id}")
+            except Exception as exc:
+                print(f"  [WARN] tracking_id mint failed: {exc}")
+                tracking_id = None
+
+        # Stage advance + legacy field aliases so the ops panel sees the V4
+        # output through the same fields it reads for V2 reports.
+        set_fields = {
+            "stage": "draft_ready",
+            "report_path": result["pdf_path"],          # legacy field — panel reads this
+            "report_path_v4": result["pdf_path"],
+            "report_html_v4": result["html_path"],
+            "report_rendered_at_v4": now,
+            "report_sections_rendered": result["sections_rendered"],
+            "report_audit_path": result.get("audit_path"),
+            "report_photo_sources": result.get("photo_sources") or {},
+            "report_variants_applied": result.get("variants_applied") or {},
+            "updated_at": now,
+        }
+        if tracking_id:
+            set_fields["tracking_id"] = tracking_id
         sm.appraisal_pipeline.update_one(
             {"_id": pipe["_id"]},
-            {"$set": {
-                "report_path_v4": result["pdf_path"],
-                "report_html_v4": result["html_path"],
-                "report_rendered_at_v4": datetime.now(timezone.utc),
-                "report_sections_rendered": result["sections_rendered"],
-                "updated_at": datetime.now(timezone.utc),
-            }},
+            {
+                "$set": set_fields,
+                "$push": {"stage_history": {"stage": "draft_ready", "at": now.isoformat()}},
+            },
         )
-        print(f"  Pipeline record updated: {pipe['_id']}")
+        print(f"  Pipeline {pipe['_id']} → draft_ready")
+        if tracking_id:
+            print(f"  Preview: https://vm.fieldsestate.com.au/track/view/{tracking_id}")
 
     # Strict-photos enforcement — block production/postal rendering when
     # either the cover hero or satellite is the generic 13TC fallback. The
