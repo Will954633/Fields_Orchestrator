@@ -222,6 +222,18 @@ html, body {
 .page[data-variant="compact"] .willingness { padding-top: 1mm !important; }
 .page[data-variant="compact"] .willingness-range { font-size: 11pt !important; }
 
+/* Receipts page (03_receipts) compact overrides — shrink ~80-120px.
+   Template uses inline styles, so these rules need !important AND need
+   to target the inline-style elements. The comp-card is class-driven;
+   inner table/cells are inline-only — so we target via descendant selectors. */
+.page[data-variant="compact"][data-section="03_receipts"] .right-headline.s03 { font-size: 22pt !important; margin-bottom: 1.5mm !important; }
+.page[data-variant="compact"][data-section="03_receipts"] .right-subhead { margin-bottom: 3mm !important; font-size: 9.5pt !important; }
+.page[data-variant="compact"][data-section="03_receipts"] .comp-card { padding: 2.5mm 4mm !important; margin-bottom: 2.5mm !important; }
+.page[data-variant="compact"][data-section="03_receipts"] .comp-card > div:first-child { margin-bottom: 1.5mm !important; padding-bottom: 1.5mm !important; }
+.page[data-variant="compact"][data-section="03_receipts"] .comp-card table tr td { padding: 1px 0 !important; font-size: 8.5pt !important; }
+.page[data-variant="compact"][data-section="03_receipts"] .comp-card table { font-size: 8.5pt !important; }
+.page[data-variant="compact"][data-section="03_receipts"] .comp-card > div:last-child { margin-top: 1.5mm !important; padding-top: 1.5mm !important; }
+
 /* Spread number + headline (left page) ---------------------------- */
 .spread-number {
   font-family: 'Playfair Display', serif;
