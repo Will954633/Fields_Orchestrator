@@ -30,6 +30,9 @@ from scripts.property_reports.walking_distances import resolve_pois
 from scripts.property_reports.market_narrative import resolve_market_narrative
 from scripts.property_reports.scarcity_features import resolve_scarcity_features
 from scripts.property_reports.cohort_premiums import compute_cohort_premiums
+from scripts.property_reports.scarcity_narrative import (
+    resolve_scarcity_narrative, cohort_premiums_to_sold_cohort_premiums,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -184,18 +187,60 @@ class SlotResolver:
 
         # Walking distances to nearest POIs (Day 4). Requires lat/lng — skip
         # for subjects we can't geolocate (vacant cadastral lots etc.).
+        resolved_pois: List[Dict[str, Any]] = []
         if latlng:
             try:
-                pois = resolve_pois(latlng[0], latlng[1])
-                if pois:
-                    updates["pois"] = pois
+                resolved_pois = resolve_pois(latlng[0], latlng[1])
+                if resolved_pois:
+                    updates["pois"] = resolved_pois
                     updates["slot_status.walking_distance"] = "approved"
-                    logger.info(f"  walking distances resolved for {len(pois)} POIs")
+                    logger.info(f"  walking distances resolved for {len(resolved_pois)} POIs")
                 else:
                     updates["slot_status.walking_distance"] = "pending"
             except Exception as e:
                 logger.warning(f"  walking distance resolver threw: {e}")
                 updates["slot_status.walking_distance"] = "error"
+
+        # Scarcity narrative (Day 9) — Opus 4.7 turns scarcity_features +
+        # cohort_premiums + pois into the three user-facing strings the
+        # mini-site renders: headline, combinatorialMatch, walkingDistanceMonopoly.
+        # Deterministic mapping of cohort_premiums → soldCohortPremiums also
+        # happens here (only reliable premiums surface). Auto-promotes slot
+        # on narrative success; analyst review gate lands on Day 14.
+        scarcity_struct = updates.get("scarcity_features")
+        if scarcity_struct and scarcity_struct.get("notable_features"):
+            try:
+                narrative = resolve_scarcity_narrative(
+                    scarcity_struct, resolved_pois, self.suburb_display, self.address,
+                )
+                if narrative and narrative.get("headline"):
+                    sold_cohort_premiums = cohort_premiums_to_sold_cohort_premiums(
+                        scarcity_struct.get("cohort_premiums") or []
+                    )
+                    updates["scarcity"] = {
+                        "headline": narrative["headline"],
+                        "combinatorialMatch": narrative["combinatorialMatch"],
+                        "walkingDistanceMonopoly": narrative["walkingDistanceMonopoly"],
+                        "soldCohortPremiums": sold_cohort_premiums,
+                        "generated_at": narrative["generated_at"],
+                        "model": narrative["model"],
+                        "attempt": narrative["attempt"],
+                    }
+                    updates["slot_status.scarcity"] = "approved"
+                    logger.info(
+                        f"  scarcity narrative generated (attempt {narrative['attempt']}): "
+                        f"{len(narrative['headline'])} chars headline · {len(sold_cohort_premiums)} reliable premiums"
+                    )
+                elif narrative and narrative.get("error"):
+                    updates["scarcity_narrative_error"] = narrative
+                    updates["slot_status.scarcity"] = "error"
+                    logger.warning(f"  scarcity narrative failed: {narrative.get('error')}")
+                else:
+                    updates["slot_status.scarcity"] = "pending"
+            except Exception as e:
+                logger.warning(f"  scarcity narrative resolver threw: {e}")
+                updates["slot_status.scarcity"] = "error"
+                updates["scarcity_narrative_error"] = {"error": str(e), "attempts": 0}
 
         return updates
 
