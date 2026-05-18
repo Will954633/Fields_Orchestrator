@@ -662,14 +662,14 @@ def main() -> None:
         # will see it)" link works. Re-uses the same tracking module the V2
         # generator uses — falls back gracefully if the module is missing or
         # the subject's address can't be resolved.
-        tracking_id = pipe.get("tracking_id")  # don't overwrite an existing one
-        if not tracking_id:
-            try:
-                sys.path.insert(0, str(REPO_ROOT / "tracking-server"))
-                from send_report import create_tracking_record, count_pdf_pages  # type: ignore
-                addr = pipe.get("address") or "Property"
-                client_name = pipe.get("name") or "the Owner"
-                total_pages = count_pdf_pages(result["pdf_path"])
+        tracking_id = pipe.get("tracking_id")  # re-use if it already exists
+        try:
+            sys.path.insert(0, str(REPO_ROOT / "tracking-server"))
+            from send_report import create_tracking_record, count_pdf_pages  # type: ignore
+            addr = pipe.get("address") or "Property"
+            client_name = pipe.get("name") or "the Owner"
+            total_pages = count_pdf_pages(result["pdf_path"])
+            if not tracking_id:
                 tracking_id = create_tracking_record(
                     sm,
                     pipe.get("email") or "preview@fieldsestate.com.au",
@@ -677,9 +677,23 @@ def main() -> None:
                     f"Your Property Appraisal — {addr}",
                     total_pages,
                 )
-                print(f"  Tracking ID: {tracking_id}")
-            except Exception as exc:
-                print(f"  [WARN] tracking_id mint failed: {exc}")
+                print(f"  Tracking ID minted: {tracking_id}")
+            else:
+                # On re-render, point the existing tracking record at the new
+                # PDF — otherwise the Preview link serves stale page PNGs from
+                # the original render before the analyst's tweaks.
+                sm["email_tracking"].update_one(
+                    {"tracking_id": tracking_id},
+                    {"$set": {
+                        "report_path": str(result["pdf_path"]),
+                        "report_filename": Path(result["pdf_path"]).name,
+                        "total_pages": total_pages,
+                    }},
+                )
+                print(f"  Tracking record updated → {Path(result['pdf_path']).name}")
+        except Exception as exc:
+            print(f"  [WARN] tracking record update failed: {exc}")
+            if not tracking_id:
                 tracking_id = None
 
         # Stage advance + legacy field aliases so the ops panel sees the V4
