@@ -106,21 +106,61 @@ def classify_image(url: str) -> tuple[str, str]:
     return result
 
 
+def collect_all_image_urls(doc: dict) -> list[str]:
+    """Union of every image source on the doc, deduped, order-preserving.
+    Reads v2 + apr01 sidecars + legacy fields. Filters obvious junk (Azure
+    blob URLs that 403, non-http entries)."""
+    urls: list[str] = []
+    seen: set[str] = set()
+    DEAD_HOSTS = ("fieldspropertyimages.blob.core.windows.net",)
+
+    def push(items):
+        if not items:
+            return
+        if isinstance(items, str):
+            items = [items]
+        for it in items:
+            if isinstance(it, dict):
+                u = it.get("url") or it.get("image_url") or it.get("src") or ""
+            else:
+                u = it if isinstance(it, str) else ""
+            if not u or not u.startswith("http"):
+                continue
+            if any(h in u for h in DEAD_HOSTS):
+                continue
+            if u in seen:
+                continue
+            seen.add(u)
+            urls.append(u)
+
+    v2 = doc.get("scraped_data_v2") or {}
+    push(v2.get("hero_image_url"))
+    push(v2.get("image_urls"))
+
+    apr01 = doc.get("scraped_data_apr01_recovered") or {}
+    push(apr01.get("images"))
+
+    apr01_rs = doc.get("scraped_data_recently_sold_apr01_recovered") or {}
+    push(apr01_rs.get("images"))
+
+    apr01_fs = doc.get("scraped_data_for_sale_apr01_recovered") or {}
+    push(apr01_fs.get("images"))
+
+    push(doc.get("property_images_original"))
+    push(doc.get("scraped_property_images"))
+    push(doc.get("property_images"))
+
+    return urls
+
+
 def process_record(coll, doc: dict, tail_n: int | None, image_workers: int,
                    download_dir: Path | None) -> dict:
-    """Classify images of one record. If tail_n is None, classify all unique URLs."""
+    """Classify images of one record. If tail_n is None, classify all unique URLs.
+    Reads from a union of all image sources (v2 + apr01 sidecars + legacy)."""
     _id = doc["_id"]
-    urls = (doc.get("scraped_data_v2") or {}).get("image_urls") or []
-    if not urls:
-        return {"_id": str(_id), "status": "NO_V2_IMAGES"}
-
-    # Per-record URL dedup, preserving order
-    seen = set()
-    unique_urls = []
-    for u in urls:
-        if u and u not in seen:
-            seen.add(u)
-            unique_urls.append(u)
+    unique_urls = collect_all_image_urls(doc)
+    if not unique_urls:
+        return {"_id": str(_id), "status": "NO_IMAGES"}
 
     if tail_n is None:
         candidates = unique_urls
@@ -161,7 +201,7 @@ def process_record(coll, doc: dict, tail_n: int | None, image_workers: int,
             "version": CLASSIFIER_VERSION,
             "model": MODEL,
             "tail_n": tail_n if tail_n is not None else "ALL",
-            "total_images": len(urls),
+            "total_images": len(unique_urls),
             "unique_images": len(unique_urls),
             "candidates_classified": len(candidates),
             "candidates": classifications,
@@ -187,7 +227,7 @@ def process_record(coll, doc: dict, tail_n: int | None, image_workers: int,
     return {
         "_id": str(_id),
         "address": addr,
-        "total_images": len(urls),
+        "total_images": len(unique_urls),
         "unique_images": len(unique_urls),
         "candidates_classified": len(candidates),
         "yes_count": len(yes_urls),
@@ -225,18 +265,31 @@ def main() -> int:
     db = get_client()["Gold_Coast"]
     coll = db[args.suburb]
 
-    query: dict[str, Any] = {
-        "scraped_data_v2.image_count": {"$gte": args.min_images},
-    }
+    # Eligible = records with images from ANY source (v2 + apr01 sidecars + legacy)
+    # — not just scraped_data_v2.image_count which is too narrow.
+    HAS_ANY_IMAGE = {"$or": [
+        {"scraped_data_v2.image_urls.0": {"$exists": True}},
+        {"scraped_data_apr01_recovered.images.0": {"$exists": True}},
+        {"scraped_data_recently_sold_apr01_recovered.images.0": {"$exists": True}},
+        {"scraped_data_for_sale_apr01_recovered.images.0": {"$exists": True}},
+        {"property_images_original.0": {"$exists": True}},
+        {"scraped_property_images.0": {"$exists": True}},
+    ]}
+    query: dict[str, Any] = {"$and": [HAS_ANY_IMAGE]}
     if not args.force:
-        query["floor_plans_v2_extracted_at"] = {"$in": [None, ""]}
+        query["$and"].append({"floor_plans_v2_extracted_at": {"$in": [None, ""]}})
 
     total_eligible = coll.count_documents(query)
     print(f"Eligible {args.suburb} records (>= {args.min_images} v2 images, not yet classified): {total_eligible}")
 
     proj = {
         "_id": 1, "address": 1, "STREET_NO_1": 1, "STREET_NAME": 1, "STREET_TYPE": 1,
-        "scraped_data_v2.image_urls": 1, "scraped_data_v2.image_count": 1,
+        "scraped_data_v2.image_urls": 1, "scraped_data_v2.hero_image_url": 1,
+        "scraped_data_v2.image_count": 1,
+        "scraped_data_apr01_recovered.images": 1,
+        "scraped_data_recently_sold_apr01_recovered.images": 1,
+        "scraped_data_for_sale_apr01_recovered.images": 1,
+        "property_images_original": 1, "scraped_property_images": 1, "property_images": 1,
     }
     cursor = coll.find(query, proj)
     if not args.all:
