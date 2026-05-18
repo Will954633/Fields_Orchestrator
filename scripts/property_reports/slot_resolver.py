@@ -33,6 +33,7 @@ from scripts.property_reports.cohort_premiums import compute_cohort_premiums
 from scripts.property_reports.scarcity_narrative import (
     resolve_scarcity_narrative, cohort_premiums_to_sold_cohort_premiums,
 )
+from scripts.property_reports.positioning_narrative import resolve_positioning_narrative
 
 logger = logging.getLogger(__name__)
 
@@ -241,6 +242,60 @@ class SlotResolver:
                 logger.warning(f"  scarcity narrative resolver threw: {e}")
                 updates["slot_status.scarcity"] = "error"
                 updates["scarcity_narrative_error"] = {"error": str(e), "attempts": 0}
+
+        # Positioning narrative (Day 10) — Opus 4.7 produces the five
+        # positioning fields (frame, vocabulary, tradeOffs, photography,
+        # sampleParagraph) grounded in the same structured scarcity + cohort
+        # data the scarcity narrative used. Reads `valuation_data.subject_property
+        # .features.basic` for the property's full engine-feature dict.
+        if scarcity_struct and scarcity_struct.get("notable_features") and self._subject:
+            try:
+                features_basic = (
+                    (self._subject.get("valuation_data") or {})
+                    .get("subject_property", {})
+                    .get("features", {})
+                    .get("basic", {})
+                )
+                pos = resolve_positioning_narrative(
+                    address=self.address,
+                    suburb=self.suburb_display,
+                    features_basic=features_basic,
+                    notable_features=scarcity_struct.get("notable_features", []),
+                    matching_full_stack=scarcity_struct.get("active_matching_full_stack", 0),
+                    active_listings_total=scarcity_struct.get("active_listings_total", 0),
+                    cohort_premiums=scarcity_struct.get("cohort_premiums", []),
+                    pois=resolved_pois,
+                    valuation_range=updates.get("valuation.model_range"),
+                )
+                if pos and pos.get("frame"):
+                    updates["positioning"] = {
+                        "frame": pos["frame"],
+                        "vocabulary": pos["vocabulary"],
+                        "tradeOffs": pos["tradeOffs"],
+                        "photography": pos["photography"],
+                        "sampleParagraph": pos["sampleParagraph"],
+                        "generated_at": pos["generated_at"],
+                        "model": pos["model"],
+                        "attempt": pos["attempt"],
+                        # `personas` populated by Day 11 resolver; placeholder here
+                        "personas": [],
+                    }
+                    updates["slot_status.positioning"] = "approved"
+                    logger.info(
+                        f"  positioning narrative generated (attempt {pos['attempt']}): "
+                        f"{len(pos['vocabulary']['use'])} use-terms, {len(pos['tradeOffs'])} trade-offs, "
+                        f"{len(pos['sampleParagraph'].split())} word sample"
+                    )
+                elif pos and pos.get("error"):
+                    updates["positioning_narrative_error"] = pos
+                    updates["slot_status.positioning"] = "error"
+                    logger.warning(f"  positioning narrative failed: {pos.get('error')}")
+                else:
+                    updates["slot_status.positioning"] = "pending"
+            except Exception as e:
+                logger.warning(f"  positioning narrative resolver threw: {e}")
+                updates["slot_status.positioning"] = "error"
+                updates["positioning_narrative_error"] = {"error": str(e), "attempts": 0}
 
         return updates
 
