@@ -99,13 +99,13 @@ processes:
 
   - id: 113
     name: "Detect Withdrawn Properties (Target Market)"
-    description: "Checks each for_sale property's listing URL on Domain. HTTP 301 redirect to /property-profile/ = withdrawn/off-market. Marks listing_status='withdrawn' with date."
+    description: "Checks each for_sale property's listing URL on Domain via Bright Data Web Unlocker. Content-aware detection: title 'Sold ...' = sold (handled by 103), /property-profile/ URL or body markers = withdrawn. Routes through Akamai-bypassing proxy since 2026-05-13."
     phase: "monitoring_target"
     command: "python3 scripts/detect_withdrawn.py --no-fail"
     working_dir: "/home/fields/Fields_Orchestrator"
     mongodb_activity: "moderate_write"
     requires_browser: false
-    estimated_duration_minutes: 10  # ~100 properties × 1.5s delay each
+    estimated_duration_minutes: 60  # ~150 listings × ~12-25s/req via Web Unlocker (was 10 → caused timeout 2026-05-13)
     cooldown_seconds: 20
     depends_on: [103]  # Run after sold detection so sold properties are already flagged
 
@@ -463,6 +463,21 @@ processes:
   # Note: Backup is not listed here as it's handled by the backup_coordinator module
   # after all processes complete and the final cooldown period.
 
+  # ============================================================================
+  # APPRAISAL PIPELINE (on-demand, triggered by form submission)
+  # ============================================================================
+
+  - id: 300
+    name: "Generate Appraisal Report (V4)"
+    description: "Auto-generates a draft V4 (19-page) seller appraisal for a new lead. Triggered by the analyse-lead form OR an ops-dashboard re-render. PIPELINE_ID in the note field is substituted into the command. The V4 generator runs Layer 1 budgets, Layer 2 fit-cascade, footer-alignment check, auto-fetches per-subject hero (Domain CDN) + satellite (Google Static Maps), and writes report_path + tracking_id + stage transitions back to the appraisal_pipeline record."
+    phase: "appraisal"
+    command: "bash -c 'set -a && source /home/fields/Fields_Orchestrator/.env && set +a && /home/fields/venv/bin/python3 scripts/generate_appraisal_v4.py --pipeline-id PIPELINE_ID --update-pipeline'"
+    working_dir: "/home/fields/Fields_Orchestrator"
+    mongodb_activity: "moderate_read"
+    requires_browser: true
+    estimated_duration_minutes: 3
+    cooldown_seconds: 30
+
 # Execution order (processes will run in this order based on schedule)
 # Note: Schedule manager determines which processes run based on day of week
 # - Monday-Saturday: 101, 103, 111, 113, 114, 115, 116, 112, 105, 106, 108, 6, 11, 12, 13, 14, 16, 15, 17, 19, 18, 109, 107
@@ -525,18 +540,3 @@ phases:
     name: "Daily Backup"
     description: "Create MongoDB backup after all processes complete"
     steps: []  # Handled separately
-
-  # ============================================================================
-  # APPRAISAL PIPELINE
-  # ============================================================================
-
-  - id: 300
-    name: "Generate Appraisal Report"
-    description: "Auto-generates a draft seller appraisal report for a new lead. Triggered by analyse-lead form. PIPELINE_ID in note field is substituted into command."
-    phase: "appraisal"
-    command: "python3 scripts/generate_appraisal_report.py --pipeline-id PIPELINE_ID"
-    working_dir: "/home/fields/Fields_Orchestrator"
-    mongodb_activity: "moderate_read"
-    requires_browser: true
-    estimated_duration_minutes: 5
-    cooldown_seconds: 30
