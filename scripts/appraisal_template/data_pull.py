@@ -482,6 +482,7 @@ def section_03_right(
     subject_id: str,
     catchment: list[str] | None = None,
     months: int = 12,
+    pipeline_record: dict | None = None,
 ) -> dict:
     """Section 03 right page — "The range, derived." (valuation evidence)
 
@@ -489,7 +490,9 @@ def section_03_right(
     evidence_stack (per-attribute weights) defaults to a manual baseline and
     is overridable via editorial_overrides for per-subject tuning. Derived
     range comes from `valuation_data.summary` on the property doc (populated
-    by the comparable-sales engine upstream).
+    by the comparable-sales engine upstream) OR from
+    `pipeline_record.recommendation.derived_range_low/high` if the analyst
+    has set an override via the ops dashboard.
     """
     subject = get_subject(subject_id)
     catchment = catchment or catchment_for(subject)
@@ -500,18 +503,24 @@ def section_03_right(
     subj_median, subj_n = _cohort_median(catchment, bedrooms=beds, months=months)
     lift_pct = round((subj_median - base_median) / base_median * 100) if (base_median and subj_median) else None
 
-    # Reconciled range — `valuation_data.confidence` holds the canonical
-    # range/midpoint; `summary` carries metadata counts. (Schema spans both
-    # nested objects for historical reasons.)
+    # Reconciled range — analyst override (pipeline_record.recommendation) wins,
+    # then `valuation_data.confidence`, then `summary` (schema split for
+    # historical reasons).
     val = subject.get("valuation_data") or {}
     summary = val.get("summary") or {}
     conf_obj = val.get("confidence") or {}
     range_obj = conf_obj.get("range") or {}
-    range_low = range_obj.get("low") or summary.get("reconciled_low")
-    range_high = range_obj.get("high") or summary.get("reconciled_high")
-    range_mid = conf_obj.get("reconciled_valuation") or summary.get("reconciled_value") or summary.get("reconciled_mid")
+    rec = (pipeline_record or {}).get("recommendation") or {}
+    override_low = rec.get("derived_range_low")
+    override_high = rec.get("derived_range_high")
+    range_low = override_low or range_obj.get("low") or summary.get("reconciled_low")
+    range_high = override_high or range_obj.get("high") or summary.get("reconciled_high")
+    range_mid = (
+        (range_low + range_high) // 2 if (override_low and override_high) else
+        conf_obj.get("reconciled_valuation") or summary.get("reconciled_value") or summary.get("reconciled_mid")
+    )
     n_comps = summary.get("n_included_in_valuation") or summary.get("n_comps") or len(val.get("comparables") or [])
-    confidence = conf_obj.get("confidence", "")
+    confidence = "analyst" if (override_low or override_high) else conf_obj.get("confidence", "")
 
     # Pending state: valuation engine has not produced a range yet. The page
     # renders a clear "analyst review required" notice instead of fragments
