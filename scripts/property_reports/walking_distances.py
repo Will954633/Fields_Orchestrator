@@ -35,7 +35,12 @@ from typing import Any, Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 
-OVERPASS_URL = "https://overpass-api.de/api/interpreter"
+OVERPASS_ENDPOINTS = [
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://overpass.openstreetmap.ru/api/interpreter",
+]
+OVERPASS_RETRY_BACKOFF = [1, 3, 6]  # seconds — between attempts on 5xx / timeouts
 MAPBOX_DIRECTIONS = "https://api.mapbox.com/directions/v5/mapbox/walking"
 
 # OSM tag queries per category. The category string in the output matches
@@ -105,21 +110,49 @@ def _http_get(url: str, timeout: float = 12.0) -> Optional[bytes]:
 
 
 def _http_post_overpass(query: str, timeout: float = 25.0) -> Optional[Dict[str, Any]]:
-    try:
-        data = urllib.parse.urlencode({"data": query}).encode("utf-8")
-        req = urllib.request.Request(
-            OVERPASS_URL,
-            data=data,
-            headers={"User-Agent": "Fields-Mini-Site/1.0", "Content-Type": "application/x-www-form-urlencoded"},
-        )
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            if resp.status >= 400:
-                logger.warning(f"Overpass HTTP {resp.status}")
-                return None
-            return json.loads(resp.read().decode("utf-8"))
-    except Exception as e:
-        logger.warning(f"Overpass request failed: {e}")
-        return None
+    """POST a query to Overpass. Tries multiple mirrors and retries on 5xx /
+    timeouts. The main `overpass-api.de` endpoint hands out 504s under load,
+    so falling through to `kumi.systems` or `openstreetmap.ru` keeps the
+    resolver usable. Returns None only after exhausting all endpoints."""
+    data = urllib.parse.urlencode({"data": query}).encode("utf-8")
+    last_err: Optional[str] = None
+
+    for endpoint_idx, endpoint in enumerate(OVERPASS_ENDPOINTS):
+        for attempt in range(len(OVERPASS_RETRY_BACKOFF) + 1):
+            try:
+                req = urllib.request.Request(
+                    endpoint,
+                    data=data,
+                    headers={
+                        "User-Agent": "Fields-Mini-Site/1.0",
+                        "Content-Type": "application/x-www-form-urlencoded",
+                    },
+                )
+                with urllib.request.urlopen(req, timeout=timeout) as resp:
+                    if resp.status >= 500:
+                        last_err = f"{endpoint} HTTP {resp.status}"
+                        if attempt < len(OVERPASS_RETRY_BACKOFF):
+                            import time
+                            time.sleep(OVERPASS_RETRY_BACKOFF[attempt])
+                            continue
+                        break  # move to next endpoint
+                    if resp.status >= 400:
+                        # 4xx is the query's fault, not the server — don't retry
+                        last_err = f"{endpoint} HTTP {resp.status}"
+                        return None
+                    return json.loads(resp.read().decode("utf-8"))
+            except Exception as e:
+                last_err = f"{endpoint}: {e}"
+                if attempt < len(OVERPASS_RETRY_BACKOFF):
+                    import time
+                    time.sleep(OVERPASS_RETRY_BACKOFF[attempt])
+                    continue
+                break  # move to next endpoint
+        # If we fell through the inner loop without returning, log and try next endpoint
+        logger.warning(f"Overpass endpoint exhausted: {last_err}")
+
+    logger.warning(f"Overpass all endpoints failed: {last_err}")
+    return None
 
 
 def _haversine_metres(lat1: float, lng1: float, lat2: float, lng2: float) -> int:
