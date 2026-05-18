@@ -169,10 +169,11 @@ def run_subject_valuation(subject_id: str, *, verbose: bool = True) -> dict:
     summary = valuation_data.get("summary") or {}
     confidence = (valuation_data.get("confidence") or {})
     rng = confidence.get("range") or {}
-    n_total = len(valuation_data.get("comparables") or [])
+    # Engine schema: recent_sales[] = sold comps (primary), comparables[] = current listings used as comps
+    all_comps = (valuation_data.get("recent_sales") or []) + (valuation_data.get("comparables") or [])
+    n_total = len(all_comps)
     n_included = summary.get("n_included_in_valuation") or len([
-        c for c in (valuation_data.get("comparables") or [])
-        if c.get("included_in_valuation")
+        c for c in all_comps if c.get("included_in_valuation")
     ])
     exclusion = summary.get("exclusion_reason")
 
