@@ -40,6 +40,7 @@ from scripts.property_reports.build_events import NullEmitter
 from scripts.property_reports.inline_features import derive_features_basic
 from scripts.property_reports.inline_scrape import needs_refresh, recover_photos
 from scripts.property_reports.inline_floor_plan import resolve_floor_plan
+from scripts.property_reports.inline_satellite import resolve_satellite
 
 logger = logging.getLogger(__name__)
 
@@ -152,6 +153,37 @@ class SlotResolver:
             except Exception as e:
                 logger.warning(f"  floor plan resolver threw: {e}")
                 self.emit.fail("floor_plan", str(e))
+
+            # Satellite / aerial view — same intent as floor_plan but a different
+            # input. Reuses the existing satellite_analysis on the doc when the
+            # nightly batch has visited; otherwise fetches a Google Maps tile and
+            # runs the structured GPT vision pass on-demand. Surface result at
+            # property.satellite so the frontend can render an "Aerial view"
+            # section with the image + the structured findings.
+            self.emit.start("satellite", "Reading the aerial view")
+            try:
+                coll = self.db[self.suburb_key] if self.suburb_key else None
+                sat = resolve_satellite(
+                    self._subject or {},
+                    suburb_key=self.suburb_key,
+                    db_subject_coll=coll,
+                )
+                if sat:
+                    prop["satellite"] = sat
+                    updates["property"] = prop
+                    cats = sat.get("categories") or {}
+                    self.emit.done(
+                        "satellite",
+                        f"Aerial view read — {len(cats)} category buckets",
+                        bucket_count=len(cats),
+                        pool_visible=(cats.get("amenity_premiums") or {}).get("pool_visible"),
+                        url=sat.get("satellite_image_url"),
+                    )
+                else:
+                    self.emit.done("satellite", "Aerial view pending — no coordinates / API unavailable")
+            except Exception as e:
+                logger.warning(f"  satellite resolver threw: {e}")
+                self.emit.fail("satellite", str(e))
         else:
             self.emit.fail("cadastral", "Subject property not found")
 
