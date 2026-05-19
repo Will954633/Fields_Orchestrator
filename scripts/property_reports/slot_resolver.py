@@ -36,6 +36,7 @@ from scripts.property_reports.scarcity_narrative import (
 from scripts.property_reports.positioning_narrative import resolve_positioning_narrative
 from scripts.property_reports.personas_narrative import resolve_personas_narrative
 from scripts.property_reports.buyers_narrative import resolve_buyers_narrative
+from scripts.property_reports.build_events import NullEmitter
 
 logger = logging.getLogger(__name__)
 
@@ -50,13 +51,15 @@ class SlotResolver:
         # → returns a dict ready to $set into property_reports
     """
 
-    def __init__(self, report_doc: Dict[str, Any], db: Database):
+    def __init__(self, report_doc: Dict[str, Any], db: Database, emitter: Any = None):
         self.report = report_doc
         self.db = db
         self.suburb_key = report_doc.get("suburb_key", "").lower()
         self.suburb_display = report_doc.get("suburb", "")
         self.address = report_doc.get("address", "")
         self.property_id = report_doc.get("property_id")
+        # Live progress emitter — defaults to no-op for tests / dry-runs
+        self.emit = emitter or NullEmitter()
 
         # Will be populated by _load_subject_property()
         self._subject: Optional[Dict[str, Any]] = None
@@ -72,6 +75,7 @@ class SlotResolver:
         Schema mirrors property_reports.* — top-level keys: property, valuation,
         market, slots, activity (additive), data_pull_date.
         """
+        self.emit.start("cadastral", "Pulling your land + floor area")
         self._load_subject_property()
 
         updates: Dict[str, Any] = {
@@ -82,11 +86,32 @@ class SlotResolver:
         prop = self.property_facts()
         if prop:
             updates["property"] = prop
+            self.emit.done(
+                "cadastral",
+                "Land + floor area captured",
+                bed=prop.get("bed"),
+                bath=prop.get("bath"),
+                land_area_sqm=prop.get("land_area_sqm"),
+                internal_area_sqm=prop.get("internal_area_sqm"),
+                property_type=prop.get("property_type"),
+            )
+        else:
+            self.emit.fail("cadastral", "Subject property not found")
 
         # Valuation model range (a working range, not the human-reviewed final)
+        self.emit.start("valuation", "Computing your working valuation range")
         model_range = self.valuation_model_range()
         if model_range:
             updates["valuation.model_range"] = model_range
+            self.emit.done(
+                "valuation",
+                f"Working range ${model_range.get('low', 0):,}–${model_range.get('high', 0):,}",
+                low=model_range.get("low"),
+                high=model_range.get("high"),
+                comp_count=model_range.get("comp_count"),
+            )
+        else:
+            self.emit.done("valuation", "Working range pending — consultant will finalise")
 
         # Valuation comps from the engine output (Path A — produced by
         # process 301 + the nightly precompute job). When the subject has
@@ -95,6 +120,7 @@ class SlotResolver:
         # are populated — this is interim until the analyst-review gate
         # lands on Day 14, at which point the promotion moves to the ops
         # dashboard sign-off step.
+        self.emit.start("comps", "Finding comparable sales nearby")
         eng_comps = self.valuation_comps_from_engine()
         if eng_comps is not None:
             updates["valuation.comps"] = eng_comps
@@ -102,12 +128,21 @@ class SlotResolver:
                 # Engine produced usable comps → expose to mini-site
                 updates["slot_status.comps"] = "approved"
                 updates["valuation.comps_resolved_at"] = datetime.utcnow()
+                self.emit.done(
+                    "comps",
+                    f"{len(eng_comps)} comparable sales found",
+                    count=len(eng_comps),
+                )
             else:
                 # Engine ran but excluded the subject (no floor_area, etc.)
                 # Leave slot pending — placeholder shows on the page.
                 updates["slot_status.comps"] = "pending"
+                self.emit.done("comps", "Comparable sales pending — consultant will refine")
+        else:
+            self.emit.done("comps", "Comparable sales pending — consultant will refine")
 
         # Market state for the suburb
+        self.emit.start("market_position", "Writing your market position")
         market = self.market_state()
         if market:
             updates["market"] = market
@@ -125,16 +160,26 @@ class SlotResolver:
                     updates["market_narrative"] = narrative
                     updates["slot_status.market_narrative"] = "approved"
                     logger.info(f"  market_narrative generated ({len(narrative['text'])} chars)")
+                    self.emit.done(
+                        "market_position",
+                        "Market position drafted",
+                        chars=len(narrative["text"]),
+                    )
                 elif narrative and narrative.get("error"):
                     updates["market_narrative_error"] = narrative
                     updates["slot_status.market_narrative"] = "error"
                     logger.warning(f"  market_narrative failed: {narrative.get('error')}")
+                    self.emit.fail("market_position", narrative.get("error") or "narrative failed")
                 else:
                     updates["slot_status.market_narrative"] = "pending"
+                    self.emit.done("market_position", "Market position pending")
             except Exception as e:
                 logger.warning(f"  market_narrative resolver threw: {e}")
                 updates["slot_status.market_narrative"] = "error"
                 updates["market_narrative_error"] = {"error": str(e), "attempts": 0}
+                self.emit.fail("market_position", str(e))
+        else:
+            self.emit.done("market_position", "Market position pending")
 
         # Comps — top-N recent sold matches
         comps = self.recent_comparable_sales(n=6)
@@ -163,6 +208,7 @@ class SlotResolver:
         # doesn't auto-promote yet — scarcity slot stays pending until the
         # narrative resolver runs.
         if self._subject:
+            self.emit.start("scarcity", "Counting how rare your home is")
             try:
                 scarcity = resolve_scarcity_features(self._subject, self.db)
                 if scarcity:
@@ -181,28 +227,49 @@ class SlotResolver:
                         logger.warning(f"  cohort_premiums failed: {e}")
 
                     updates["scarcity_features"] = scarcity
+                    notable_count = len(scarcity.get("notable_features", []))
+                    matching = scarcity.get("active_matching_full_stack")
+                    total = scarcity.get("active_listings_total")
                     logger.info(
-                        f"  scarcity features: {len(scarcity.get('notable_features', []))} notable | "
-                        f"{scarcity.get('active_matching_full_stack')}/{scarcity.get('active_listings_total')} active in catchment match full stack"
+                        f"  scarcity features: {notable_count} notable | "
+                        f"{matching}/{total} active in catchment match full stack"
                     )
+                    self.emit.done(
+                        "scarcity",
+                        f"{notable_count} notable features, {matching} of {total} actives match",
+                        notable_count=notable_count,
+                        matching_full_stack=matching,
+                        active_listings_total=total,
+                    )
+                else:
+                    self.emit.done("scarcity", "Scarcity profile pending")
             except Exception as e:
                 logger.warning(f"  scarcity_features resolver threw: {e}")
+                self.emit.fail("scarcity", str(e))
 
         # Walking distances to nearest POIs (Day 4). Requires lat/lng — skip
         # for subjects we can't geolocate (vacant cadastral lots etc.).
         resolved_pois: List[Dict[str, Any]] = []
         if latlng:
+            self.emit.start("walking_distances", "Measuring walks to schools, parks, the beach")
             try:
                 resolved_pois = resolve_pois(latlng[0], latlng[1])
                 if resolved_pois:
                     updates["pois"] = resolved_pois
                     updates["slot_status.walking_distance"] = "approved"
                     logger.info(f"  walking distances resolved for {len(resolved_pois)} POIs")
+                    self.emit.done(
+                        "walking_distances",
+                        f"{len(resolved_pois)} walks measured",
+                        count=len(resolved_pois),
+                    )
                 else:
                     updates["slot_status.walking_distance"] = "pending"
+                    self.emit.done("walking_distances", "Walks pending")
             except Exception as e:
                 logger.warning(f"  walking distance resolver threw: {e}")
                 updates["slot_status.walking_distance"] = "error"
+                self.emit.fail("walking_distances", str(e))
 
         # Scarcity narrative (Day 9) — Opus 4.7 turns scarcity_features +
         # cohort_premiums + pois into the three user-facing strings the
@@ -212,6 +279,7 @@ class SlotResolver:
         # on narrative success; analyst review gate lands on Day 14.
         scarcity_struct = updates.get("scarcity_features")
         if scarcity_struct and scarcity_struct.get("notable_features"):
+            self.emit.start("scarcity_story", "Writing your scarcity story")
             try:
                 narrative = resolve_scarcity_narrative(
                     scarcity_struct, resolved_pois, self.suburb_display, self.address,
@@ -234,16 +302,24 @@ class SlotResolver:
                         f"  scarcity narrative generated (attempt {narrative['attempt']}): "
                         f"{len(narrative['headline'])} chars headline · {len(sold_cohort_premiums)} reliable premiums"
                     )
+                    self.emit.done(
+                        "scarcity_story",
+                        "Scarcity story drafted",
+                        attempt=narrative["attempt"],
+                    )
                 elif narrative and narrative.get("error"):
                     updates["scarcity_narrative_error"] = narrative
                     updates["slot_status.scarcity"] = "error"
                     logger.warning(f"  scarcity narrative failed: {narrative.get('error')}")
+                    self.emit.fail("scarcity_story", narrative.get("error") or "narrative failed")
                 else:
                     updates["slot_status.scarcity"] = "pending"
+                    self.emit.done("scarcity_story", "Scarcity story pending")
             except Exception as e:
                 logger.warning(f"  scarcity narrative resolver threw: {e}")
                 updates["slot_status.scarcity"] = "error"
                 updates["scarcity_narrative_error"] = {"error": str(e), "attempts": 0}
+                self.emit.fail("scarcity_story", str(e))
 
         # Positioning narrative (Day 10) — Opus 4.7 produces the five
         # positioning fields (frame, vocabulary, tradeOffs, photography,
@@ -251,6 +327,7 @@ class SlotResolver:
         # data the scarcity narrative used. Reads `valuation_data.subject_property
         # .features.basic` for the property's full engine-feature dict.
         if scarcity_struct and scarcity_struct.get("notable_features") and self._subject:
+            self.emit.start("positioning", "Building your positioning frame")
             try:
                 features_basic = (
                     (self._subject.get("valuation_data") or {})
@@ -270,10 +347,16 @@ class SlotResolver:
                     valuation_range=updates.get("valuation.model_range"),
                 )
                 if pos and pos.get("frame"):
+                    self.emit.done(
+                        "positioning",
+                        "Positioning frame drafted",
+                        attempt=pos["attempt"],
+                    )
                     # Day 11: personas resolver — generates the 3 buyer profiles
                     # used by both PositioningTab and BuyersTab. Reads the same
                     # scarcity_struct + features + pois as the positioning
                     # narrative for context coherence.
+                    self.emit.start("personas", "Building your buyer personas")
                     personas: List[Dict[str, Any]] = []
                     try:
                         personas_result = resolve_personas_narrative(
@@ -293,11 +376,21 @@ class SlotResolver:
                                 f"  personas generated (attempt {personas_result['attempt']}): "
                                 f"{[p['label'] for p in personas]}"
                             )
+                            self.emit.done(
+                                "personas",
+                                f"{len(personas)} buyer personas drafted",
+                                count=len(personas),
+                                labels=[p.get("label") for p in personas],
+                            )
                         elif personas_result and personas_result.get("error"):
                             updates["personas_narrative_error"] = personas_result
                             logger.warning(f"  personas failed: {personas_result.get('error')}")
+                            self.emit.fail("personas", personas_result.get("error") or "personas failed")
+                        else:
+                            self.emit.done("personas", "Buyer personas pending")
                     except Exception as e:
                         logger.warning(f"  personas resolver threw: {e}")
+                        self.emit.fail("personas", str(e))
 
                     updates["positioning"] = {
                         "frame": pos["frame"],
@@ -321,6 +414,7 @@ class SlotResolver:
                     # Requires the 3 personas we just generated. Catchment locations
                     # align 1:1 to the personas so the two sections cohere.
                     if personas and len(personas) >= 3:
+                        self.emit.start("buyers", "Drafting your buyer thesis")
                         try:
                             buyers_result = resolve_buyers_narrative(
                                 address=self.address,
@@ -348,26 +442,38 @@ class SlotResolver:
                                     f"  buyers narrative generated (attempt {buyers_result['attempt']}): "
                                     f"thesis + {len(buyers_result['catchment']['locations'])} catchment + campaign math"
                                 )
+                                self.emit.done(
+                                    "buyers",
+                                    "Buyer thesis drafted",
+                                    attempt=buyers_result["attempt"],
+                                    catchment_count=len(buyers_result["catchment"].get("locations") or []),
+                                )
                             elif buyers_result and buyers_result.get("error"):
                                 updates["buyers_narrative_error"] = buyers_result
                                 updates["slot_status.buyers"] = "error"
                                 logger.warning(f"  buyers narrative failed: {buyers_result.get('error')}")
+                                self.emit.fail("buyers", buyers_result.get("error") or "buyers failed")
                             else:
                                 updates["slot_status.buyers"] = "pending"
+                                self.emit.done("buyers", "Buyer thesis pending")
                         except Exception as e:
                             logger.warning(f"  buyers narrative resolver threw: {e}")
                             updates["slot_status.buyers"] = "error"
                             updates["buyers_narrative_error"] = {"error": str(e), "attempts": 0}
+                            self.emit.fail("buyers", str(e))
                 elif pos and pos.get("error"):
                     updates["positioning_narrative_error"] = pos
                     updates["slot_status.positioning"] = "error"
                     logger.warning(f"  positioning narrative failed: {pos.get('error')}")
+                    self.emit.fail("positioning", pos.get("error") or "positioning failed")
                 else:
                     updates["slot_status.positioning"] = "pending"
+                    self.emit.done("positioning", "Positioning frame pending")
             except Exception as e:
                 logger.warning(f"  positioning narrative resolver threw: {e}")
                 updates["slot_status.positioning"] = "error"
                 updates["positioning_narrative_error"] = {"error": str(e), "attempts": 0}
+                self.emit.fail("positioning", str(e))
 
         return updates
 
@@ -470,6 +576,7 @@ class SlotResolver:
         hero_url = scraper_hero
         hero_pick_meta = None
         if clean_candidates:
+            self.emit.start("gallery", f"Selecting your hero shot from {len(clean_candidates)} photos")
             try:
                 pick = score_and_pick_hero(clean_candidates[:8])
                 if pick and pick.get("hero_url"):
@@ -483,8 +590,22 @@ class SlotResolver:
                     logger.info(
                         f"  hero AI-picked (score={pick.get('hero_score')}): {hero_url[:80]}"
                     )
+                self.emit.done(
+                    "gallery",
+                    f"Hero shot picked from {len(clean_candidates)} photos",
+                    photo_count=len(clean_candidates),
+                    hero_url=hero_url,
+                    picked_by="ai" if hero_pick_meta else "scraper",
+                )
             except Exception as e:
                 logger.warning(f"  hero photo scoring threw: {e}")
+                self.emit.done(
+                    "gallery",
+                    f"Photos selected ({len(clean_candidates)})",
+                    photo_count=len(clean_candidates),
+                    hero_url=hero_url,
+                    picked_by="scraper_fallback",
+                )
 
         if not hero_url and clean_candidates:
             hero_url = clean_candidates[0]
