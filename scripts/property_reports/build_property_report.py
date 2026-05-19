@@ -37,6 +37,7 @@ from shared.db import get_client, get_gold_coast_db  # noqa: E402
 from shared.ru_guard import cosmos_retry  # noqa: E402
 
 from scripts.property_reports.slot_resolver import SlotResolver  # noqa: E402
+from scripts.property_reports.build_events import BuildEventEmitter  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,
@@ -59,7 +60,39 @@ def resolve_one(report_doc: Dict[str, Any], force: bool = False) -> Dict[str, An
         return {}
 
     gc_db = get_gold_coast_db()
-    resolver = SlotResolver(report_doc, gc_db)
+    sm = get_system_monitor_db()
+    coll = sm["property_reports"]
+
+    # Reset build_events for this run so a re-resolve doesn't accumulate stale
+    # events from previous attempts. Stamp the start time and live-build state
+    # so the frontend can tell the difference between "not started yet" and
+    # "actively building".
+    now_start = datetime.utcnow()
+    cosmos_retry(
+        lambda: coll.update_one(
+            {"slug": slug},
+            {
+                "$set": {
+                    "build_events": [
+                        {
+                            "step": "address_resolved",
+                            "label": "We've got your address",
+                            "phase": "done",
+                            "at": now_start,
+                        }
+                    ],
+                    "build_state": "building",
+                    "build_started_at": now_start,
+                    "last_build_event_at": now_start,
+                },
+                "$unset": {"build_completed_at": ""},
+            },
+        ),
+        label=f"property_reports.build_start.{slug}",
+    )
+
+    emitter = BuildEventEmitter(coll, slug, cosmos_retry)
+    resolver = SlotResolver(report_doc, gc_db, emitter=emitter)
 
     updates = resolver.resolve_all()
 
@@ -136,10 +169,16 @@ def resolve_one(report_doc: Dict[str, Any], force: bool = False) -> Dict[str, An
 
     # Push activity items using $push, not $set (preserves existing items).
     # Newest-first by reversing so the most recent event ends up at position 0.
-    sm = get_system_monitor_db()
-    coll = sm["property_reports"]
-
     set_payload = {k: v for k, v in updates.items()}
+
+    # Final build event — the house website is ready for review. This is the
+    # signal the frontend polls for to auto-navigate to /your-home/<slug>.
+    emitter.done(
+        "analyst_handoff",
+        "Sent to a property consultant for final review",
+    )
+    set_payload["build_state"] = "complete"
+    set_payload["build_completed_at"] = now
 
     def _apply():
         return coll.update_one(
