@@ -154,13 +154,22 @@ FEATURE_RULES = [
 
 
 def _features_from_subject(subject_doc: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """Pull the features.basic block from the valuation engine output.
-    Returns None if the subject hasn't been valued yet."""
+    """Pull the features.basic block from the valuation engine output, or
+    derive it inline if the precompute job hasn't run.
+
+    The precompute_valuations engine only runs on the for-sale cohort. The
+    product target is off-market homeowners, so the resolver MUST be able
+    to produce a features.basic on its own for the typical submission.
+    See scripts/property_reports/inline_features.py for the derivation."""
     val = (subject_doc or {}).get("valuation_data") or {}
     sp = val.get("subject_property") or {}
     features = sp.get("features") or {}
     basic = features.get("basic")
-    return basic if isinstance(basic, dict) else None
+    if isinstance(basic, dict) and basic:
+        return basic
+    # Fall back to on-demand derivation from whatever the doc has.
+    from scripts.property_reports.inline_features import derive_features_basic
+    return derive_features_basic(subject_doc)
 
 
 def identify_notable_features(features_basic: Dict[str, Any]) -> List[Dict[str, str]]:
