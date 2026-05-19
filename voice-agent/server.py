@@ -1610,7 +1610,7 @@ if __name__ == "__main__":
     log.info("Starting Fields Voice Agent API v2.0...")
     uvicorn.run(
         "server:app",
-        host="0.0.0.0",
+        host="127.0.0.1",
         port=8090,
         log_level="info",
         reload=False,
