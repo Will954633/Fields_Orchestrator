@@ -439,14 +439,18 @@ class SlotResolver:
             return None
 
         scraper_hero = s.get("domain_hero_image_url")
-        # Prefer Domain CDN URLs (`property_images_original` / `scraped_property_images`)
-        # over our Azure Blob mirror (`property_images`). The Blob container has
-        # restrictive ACLs and returns 403 publicly; Domain CDN URLs are public
-        # and are what the V4 PDF renderer also uses.
+        # Photo source priority:
+        #   1. domain_image_urls       — pre-transformed Domain CDN (rimh2.domainstatic.com.au).
+        #                                Direct-load, browser-friendly, what the V4 PDF uses.
+        #   2. property_images_original — raw bucket URLs (bucket-api.domain.com.au).
+        #                                307-redirect to b.domainstatic.com.au; works server-side
+        #                                but fails in browsers (HEAD returns 403 from Akamai cache).
+        #   3. scraped_property_images — same as #2.
+        #   4. property_images         — Azure Blob mirror, returns 403 publicly.
         candidates = (
-            s.get("property_images_original")
+            s.get("domain_image_urls")
+            or s.get("property_images_original")
             or s.get("scraped_property_images")
-            or s.get("domain_image_urls")
             or s.get("property_images")
             or []
         )
