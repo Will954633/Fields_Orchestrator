@@ -187,9 +187,18 @@ def resolve_satellite(
         logger.info("  satellite: existing analysis without annotation — upgrading")
         existing_bytes = _fetch_image_bytes_from_url(sa.get("satellite_image_url") or "")
         if existing_bytes:
+            # Pull db_label from the existing satellite_image_url path so the
+            # annotated tile lands under the same path prefix (sold/.. vs
+            # for_sale/..) — keeps blob layout consistent per property.
+            existing_url = sa.get("satellite_image_url") or ""
+            existing_label = db_label
+            for candidate in ("sold", "for_sale", "active"):
+                if f"/{candidate}/" in existing_url:
+                    existing_label = candidate
+                    break
             anno = _annotate_and_upload(
                 existing_bytes, address=address,
-                suburb_key=suburb_key, property_id=property_id, db_label=db_label,
+                suburb_key=suburb_key, property_id=property_id, db_label=existing_label,
             )
             if anno:
                 sa["annotated_image_url"] = anno["annotated_image_url"]
