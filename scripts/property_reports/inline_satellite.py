@@ -72,6 +72,65 @@ def _has_existing_analysis(doc: Dict[str, Any]) -> bool:
     return bool(cats) and any(cats.values())
 
 
+def _has_annotated_image(doc: Dict[str, Any]) -> bool:
+    sa = doc.get("satellite_analysis") or {}
+    return bool(sa.get("annotated_image_url"))
+
+
+def _fetch_image_bytes_from_url(url: str) -> Optional[bytes]:
+    """Download image bytes from a URL — used when we need to re-annotate
+    an existing satellite tile but only have its URL."""
+    import requests
+    try:
+        r = requests.get(url, timeout=20)
+        if r.status_code == 200 and r.headers.get("content-type", "").startswith("image/"):
+            return r.content
+    except Exception as e:
+        logger.warning(f"  satellite: fetch existing image failed: {e}")
+    return None
+
+
+def _annotate_and_upload(
+    image_bytes: bytes,
+    address: str,
+    suburb_key: str,
+    property_id: str,
+    db_label: str,
+) -> Optional[Dict[str, Any]]:
+    """Run the bbox-detection pass, draw annotations + Fields drop pin,
+    upload the annotated PNG. Returns {'url', 'features'} or None on failure."""
+    s117 = _get_step117()
+    if not s117:
+        return None
+    try:
+        from scripts.property_reports import satellite_annotation as sa_anno
+    except Exception as e:
+        logger.warning(f"  satellite_annotation import failed: {e}")
+        return None
+
+    result = sa_anno.annotate(image_bytes, address=address, suburb=suburb_key)
+    if not result:
+        return None
+
+    annotated_bytes = result["annotated_image_bytes"]
+    blob_name_path = f"{db_label}/{suburb_key or 'unknown'}/{property_id or 'unknown'}/satellite/aerial_z{s117.SATELLITE_ZOOM}_annotated.png"
+    annotated_url = None
+    try:
+        from shared import blob_storage  # type: ignore
+        annotated_url = blob_storage.upload(
+            s117.BLOB_CONTAINER, blob_name_path, annotated_bytes,
+            content_type="image/png",
+            cache_control="public, max-age=31536000",
+        )
+    except Exception as e:
+        logger.warning(f"  satellite_annotation: upload failed: {e}")
+
+    return {
+        "annotated_image_url": annotated_url,
+        "features": result.get("features") or [],
+    }
+
+
 def _subject_latlng(doc: Dict[str, Any]) -> Optional[tuple]:
     """Pull lat/lng from the doc — same logic as the resolver's
     subject_latlng() helper."""
@@ -105,23 +164,52 @@ def resolve_satellite(
     Returns None on hard failures (missing API keys, no coordinates,
     geocoding/network error).
     """
-    if _has_existing_analysis(subject_doc):
-        logger.info("  satellite: existing analysis on doc — reusing")
-        return subject_doc.get("satellite_analysis")
-
     s117 = _get_step117()
     if not s117:
         return None
-
     if not s117.GOOGLE_MAPS_API_KEY:
         logger.info("  satellite: GOOGLE_MAPS_STATIC_API_KEY not set — skipping")
         return None
 
     address = subject_doc.get("address") or ""
-    suburb_display = (subject_doc.get("suburb") or suburb_key or "").replace("_", " ").title()
+    property_id = str(subject_doc.get("_id") or "")
+
+    # ── Path A: doc already has analysis ──────────────────────────────
+    # If annotation is also already cached, return as-is at $0 cost.
+    # Otherwise, re-annotate the existing image without re-running the
+    # structured analysis (cheap upgrade for legacy docs).
+    if _has_existing_analysis(subject_doc):
+        sa = subject_doc.get("satellite_analysis") or {}
+        if _has_annotated_image(subject_doc):
+            logger.info("  satellite: existing analysis + annotation on doc — reusing")
+            return sa
+
+        logger.info("  satellite: existing analysis without annotation — upgrading")
+        existing_bytes = _fetch_image_bytes_from_url(sa.get("satellite_image_url") or "")
+        if existing_bytes:
+            anno = _annotate_and_upload(
+                existing_bytes, address=address,
+                suburb_key=suburb_key, property_id=property_id, db_label=db_label,
+            )
+            if anno:
+                sa["annotated_image_url"] = anno["annotated_image_url"]
+                sa["features"] = anno["features"]
+                if db_subject_coll is not None and subject_doc.get("_id"):
+                    try:
+                        db_subject_coll.update_one(
+                            {"_id": subject_doc["_id"]},
+                            {"$set": {
+                                "satellite_analysis.annotated_image_url": anno["annotated_image_url"],
+                                "satellite_analysis.features": anno["features"],
+                            }},
+                        )
+                    except Exception as e:
+                        logger.warning(f"  satellite: write-back of annotation failed: {e}")
+        return sa
+
+    # ── Path B: no analysis yet — full fresh pass ─────────────────────
     latlng = _subject_latlng(subject_doc)
 
-    # 1) Fetch the satellite tile
     image_bytes = s117.fetch_satellite_image(
         lat=latlng[0] if latlng else None,
         lng=latlng[1] if latlng else None,
@@ -131,8 +219,6 @@ def resolve_satellite(
         logger.warning(f"  satellite: image fetch failed for {address}")
         return None
 
-    # 2) Upload to blob (best-effort — don't block analysis on upload error)
-    property_id = str(subject_doc.get("_id") or "")
     image_url = None
     try:
         image_url = s117.upload_satellite_to_blob(
@@ -142,16 +228,23 @@ def resolve_satellite(
     except Exception as e:
         logger.warning(f"  satellite: blob upload failed (continuing without URL): {e}")
 
-    # 3) GPT vision pass
-    analysis = s117.analyse_satellite_image(image_bytes, address, suburb_key or suburb_display)
+    analysis = s117.analyse_satellite_image(image_bytes, address, suburb_key or "")
     if not analysis:
         logger.warning(f"  satellite: GPT analysis returned nothing for {address}")
         return None
+
+    # Annotation pass — bounding boxes + Fields drop pin on the same image.
+    anno = _annotate_and_upload(
+        image_bytes, address=address,
+        suburb_key=suburb_key, property_id=property_id, db_label=db_label,
+    )
 
     record = {
         "categories": analysis.get("categories") or {},
         "narrative": analysis.get("narrative") or {},
         "satellite_image_url": image_url,
+        "annotated_image_url": (anno or {}).get("annotated_image_url"),
+        "features": (anno or {}).get("features") or [],
         "processed_at": datetime.utcnow(),
         "zoom_level": s117.SATELLITE_ZOOM,
         "image_size": s117.SATELLITE_SIZE,
@@ -159,7 +252,6 @@ def resolve_satellite(
         "source": "inline_resolver",
     }
 
-    # 4) Write back so the next visit doesn't repeat the spend
     if db_subject_coll is not None and subject_doc.get("_id"):
         try:
             db_subject_coll.update_one(
@@ -173,6 +265,7 @@ def resolve_satellite(
         f"  satellite analysis generated for {address}: "
         f"{len(record['categories'])} category buckets, "
         f"{len(record['narrative'])} narrative fields, "
-        f"image_url={'yes' if image_url else 'no'}"
+        f"{len(record['features'])} features bounded, "
+        f"annotated_url={'yes' if record.get('annotated_image_url') else 'no'}"
     )
     return record
