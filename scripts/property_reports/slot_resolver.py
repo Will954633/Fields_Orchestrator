@@ -134,7 +134,11 @@ class SlotResolver:
                     existing_extracted=existing_extracted if existing_extracted else None,
                 )
                 if fp:
-                    updates["property.floor_plan"] = fp
+                    # Embed inside the property dict we already wrote — MongoDB
+                    # rejects $set of both "property" and "property.floor_plan"
+                    # at once.
+                    prop["floor_plan"] = fp
+                    updates["property"] = prop
                     rooms = (fp.get("layout") or {}).get("rooms") or []
                     self.emit.done(
                         "floor_plan",
