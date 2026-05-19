@@ -190,8 +190,8 @@ def _validate_output(parsed: Any) -> Optional[str]:
                 return f"persona {i} whyThisHome[{j}] too short"
 
         where = (p.get("whereFound") or "").strip()
-        if len(where) < 40 or len(where) > 400:
-            return f"persona {i} whereFound length {len(where)} out of 40-400"
+        if len(where) < 40 or len(where) > 600:
+            return f"persona {i} whereFound length {len(where)} out of 40-600"
 
     # Editorial guardrails across all prose
     prose = " ".join(
