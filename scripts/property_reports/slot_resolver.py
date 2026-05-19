@@ -39,6 +39,7 @@ from scripts.property_reports.buyers_narrative import resolve_buyers_narrative
 from scripts.property_reports.build_events import NullEmitter
 from scripts.property_reports.inline_features import derive_features_basic
 from scripts.property_reports.inline_scrape import needs_refresh, recover_photos
+from scripts.property_reports.inline_floor_plan import resolve_floor_plan
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +118,36 @@ class SlotResolver:
                 internal_area_sqm=prop.get("internal_area_sqm"),
                 property_type=prop.get("property_type"),
             )
+
+            # Floor plan — identify + analyse on-demand. Off-market submissions
+            # frequently lack the nightly batch's `floor_plans_v2_extracted`,
+            # so the resolver must classify candidates itself. Once identified,
+            # run GPT-4o vision on the highest-res variant to extract rooms,
+            # dimensions, level count. Surface result at property.floor_plan
+            # so the frontend can render a layout section.
+            self.emit.start("floor_plan", "Reading your floor plan")
+            try:
+                candidate_urls = [p["url"] for p in prop.get("photos") or [] if p.get("url")]
+                existing_extracted = (self._subject or {}).get("floor_plans_v2_extracted") or []
+                fp = resolve_floor_plan(
+                    candidate_urls,
+                    existing_extracted=existing_extracted if existing_extracted else None,
+                )
+                if fp:
+                    updates["property.floor_plan"] = fp
+                    rooms = (fp.get("layout") or {}).get("rooms") or []
+                    self.emit.done(
+                        "floor_plan",
+                        f"Floor plan analysed — {len(rooms)} rooms" if rooms
+                        else "Floor plan identified",
+                        room_count=len(rooms),
+                        url=fp.get("url"),
+                    )
+                else:
+                    self.emit.done("floor_plan", "No floor plan in the photo set")
+            except Exception as e:
+                logger.warning(f"  floor plan resolver threw: {e}")
+                self.emit.fail("floor_plan", str(e))
         else:
             self.emit.fail("cadastral", "Subject property not found")
 
