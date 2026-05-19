@@ -38,6 +38,7 @@ from scripts.property_reports.personas_narrative import resolve_personas_narrati
 from scripts.property_reports.buyers_narrative import resolve_buyers_narrative
 from scripts.property_reports.build_events import NullEmitter
 from scripts.property_reports.inline_features import derive_features_basic
+from scripts.property_reports.inline_scrape import needs_refresh, recover_photos
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +83,26 @@ class SlotResolver:
         updates: Dict[str, Any] = {
             "slots.data_pull_date": datetime.utcnow(),
         }
+
+        # Photo refresh — sold/off-market properties typically have only the
+        # most-recent sale's hero in `property_images_original`. Domain's CDN
+        # still holds full-res copies of the older listing photos under
+        # `b.domainstatic.com.au/<path>`, and the path is embedded in the
+        # rimh2 thumbnail URLs we already scraped. Lift them on-demand.
+        # No HTTP cost — pure URL transformation.
+        if self._subject and needs_refresh(self._subject):
+            try:
+                coll = self.db[self.suburb_key] if self.suburb_key else None
+                recovered = recover_photos(self._subject, coll=coll)
+                if recovered:
+                    # Mirror into the in-memory subject so property_facts uses them
+                    self._subject["property_images_refreshed"] = recovered
+                    logger.info(
+                        f"  photo refresh: recovered {len(recovered)} full-res URLs "
+                        f"for {self.address}"
+                    )
+            except Exception as e:
+                logger.warning(f"  photo refresh threw: {e}")
 
         # Subject property facts
         prop = self.property_facts()
@@ -550,22 +571,47 @@ class SlotResolver:
             return None
 
         scraper_hero = s.get("domain_hero_image_url")
-        # Photo source priority (verified via Puppeteer 2026-05-19):
-        #   1. property_images_original — raw bucket URLs (bucket-api.domain.com.au).
-        #                                 307-redirect to b.domainstatic.com.au, full-res JPEGs
-        #                                 (~2.6 MB at 1800px). Lazy-loaded but render at full size.
-        #   2. scraped_property_images  — same shape as #1.
-        #   3. domain_image_urls        — pre-transformed Domain CDN (rimh2.domainstatic.com.au).
-        #                                 These are signed Thumbor URLs but return TINY 150px
-        #                                 thumbnails (~24 KB PNG). Avoid unless nothing else works.
-        #   4. property_images          — Azure Blob mirror, returns 403 publicly. Last resort.
-        candidates = (
+        # Photo source priority:
+        #   1. property_images_refreshed — full-res `b.domainstatic.com.au` URLs
+        #                                  reconstructed inline from rimh2 thumbnail
+        #                                  paths. Most reliable for off-market
+        #                                  homes where Apollo state only carries
+        #                                  the most-recent sale's hero.
+        #   2. property_images_original  — raw bucket URLs (bucket-api.domain.com.au).
+        #                                  Full-res JPEGs, present for currently-listed homes.
+        #   3. scraped_property_images   — same shape as #2.
+        #   4. domain_image_urls         — signed rimh2 URLs at fixed 150px thumbnail size.
+        #                                  Avoid for display — used by the inline_scrape
+        #                                  module as the URL-path source.
+        #   5. property_images           — Azure Blob mirror, returns 403 publicly. Last resort.
+        #
+        # Merge order: refreshed first, then originals appended (deduped by URL).
+        # An owner whose home is currently-listed will get the bucket-api URLs
+        # appended too — refreshed is a superset for off-market only.
+        refreshed = s.get("property_images_refreshed") or []
+        originals = (
             s.get("property_images_original")
             or s.get("scraped_property_images")
-            or s.get("domain_image_urls")
-            or s.get("property_images")
             or []
         )
+        merged: List[str] = []
+        seen_paths: set = set()
+        for url in list(refreshed) + list(originals):
+            if not isinstance(url, str):
+                continue
+            url = url.rstrip("\\").strip()
+            if not url:
+                continue
+            # Dedupe by image-path stem so a refreshed b.domainstatic URL and the
+            # equivalent bucket-api URL don't both appear.
+            path_stem = url.split("/")[-1].split("?")[0]
+            if path_stem in seen_paths:
+                continue
+            seen_paths.add(path_stem)
+            merged.append(url)
+        if not merged:
+            merged = s.get("domain_image_urls") or s.get("property_images") or []
+        candidates = merged
         # Deduplicate, keep order
         seen = set()
         clean_candidates: List[str] = []
