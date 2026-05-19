@@ -439,7 +439,17 @@ class SlotResolver:
             return None
 
         scraper_hero = s.get("domain_hero_image_url")
-        candidates = s.get("property_images") or s.get("domain_image_urls") or []
+        # Prefer Domain CDN URLs (`property_images_original` / `scraped_property_images`)
+        # over our Azure Blob mirror (`property_images`). The Blob container has
+        # restrictive ACLs and returns 403 publicly; Domain CDN URLs are public
+        # and are what the V4 PDF renderer also uses.
+        candidates = (
+            s.get("property_images_original")
+            or s.get("scraped_property_images")
+            or s.get("domain_image_urls")
+            or s.get("property_images")
+            or []
+        )
         # Deduplicate, keep order
         seen = set()
         clean_candidates: List[str] = []
