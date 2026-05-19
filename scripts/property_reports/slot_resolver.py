@@ -37,6 +37,7 @@ from scripts.property_reports.positioning_narrative import resolve_positioning_n
 from scripts.property_reports.personas_narrative import resolve_personas_narrative
 from scripts.property_reports.buyers_narrative import resolve_buyers_narrative
 from scripts.property_reports.build_events import NullEmitter
+from scripts.property_reports.inline_features import derive_features_basic
 
 logger = logging.getLogger(__name__)
 
@@ -329,12 +330,16 @@ class SlotResolver:
         if scarcity_struct and scarcity_struct.get("notable_features") and self._subject:
             self.emit.start("positioning", "Building your positioning frame")
             try:
+                # Prefer the precompute engine output if present; otherwise
+                # derive features.basic on-demand from the doc's scrape data.
+                # The product target is off-market homes, so most submissions
+                # won't have the precompute_valuations.py output.
                 features_basic = (
                     (self._subject.get("valuation_data") or {})
                     .get("subject_property", {})
                     .get("features", {})
                     .get("basic", {})
-                )
+                ) or (derive_features_basic(self._subject) or {})
                 pos = resolve_positioning_narrative(
                     address=self.address,
                     suburb=self.suburb_display,
