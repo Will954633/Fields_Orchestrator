@@ -142,6 +142,16 @@ def derive_features_basic(doc: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     pool_present = bool(outdoor.get("pool_present")) if outdoor else False
     water_views = bool(outdoor.get("water_views")) if outdoor else False
 
+    # Aerial signals — corroborate / fill in when the photo pass missed them.
+    sa = doc.get("satellite_analysis") or {}
+    sa_cats = sa.get("categories") or {}
+    amenity = sa_cats.get("amenity_premiums") or {}
+    if amenity.get("pool_visible"):
+        pool_present = True
+    water_prox = amenity.get("water_proximity") or "none"
+    if water_prox in ("ocean_view", "canal_front", "lake_front", "river_front"):
+        water_views = True
+
     number_of_stories = overview.get("number_of_stories") if overview else None
     if not number_of_stories:
         # Fallback: floor-plan analysis levels
