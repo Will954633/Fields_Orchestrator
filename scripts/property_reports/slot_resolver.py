@@ -439,18 +439,19 @@ class SlotResolver:
             return None
 
         scraper_hero = s.get("domain_hero_image_url")
-        # Photo source priority:
-        #   1. domain_image_urls       — pre-transformed Domain CDN (rimh2.domainstatic.com.au).
-        #                                Direct-load, browser-friendly, what the V4 PDF uses.
-        #   2. property_images_original — raw bucket URLs (bucket-api.domain.com.au).
-        #                                307-redirect to b.domainstatic.com.au; works server-side
-        #                                but fails in browsers (HEAD returns 403 from Akamai cache).
-        #   3. scraped_property_images — same as #2.
-        #   4. property_images         — Azure Blob mirror, returns 403 publicly.
+        # Photo source priority (verified via Puppeteer 2026-05-19):
+        #   1. property_images_original — raw bucket URLs (bucket-api.domain.com.au).
+        #                                 307-redirect to b.domainstatic.com.au, full-res JPEGs
+        #                                 (~2.6 MB at 1800px). Lazy-loaded but render at full size.
+        #   2. scraped_property_images  — same shape as #1.
+        #   3. domain_image_urls        — pre-transformed Domain CDN (rimh2.domainstatic.com.au).
+        #                                 These are signed Thumbor URLs but return TINY 150px
+        #                                 thumbnails (~24 KB PNG). Avoid unless nothing else works.
+        #   4. property_images          — Azure Blob mirror, returns 403 publicly. Last resort.
         candidates = (
-            s.get("domain_image_urls")
-            or s.get("property_images_original")
+            s.get("property_images_original")
             or s.get("scraped_property_images")
+            or s.get("domain_image_urls")
             or s.get("property_images")
             or []
         )
