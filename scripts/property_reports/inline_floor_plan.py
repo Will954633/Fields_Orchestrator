@@ -34,6 +34,14 @@ from typing import Any, Dict, List, Optional
 
 from openai import OpenAI
 
+# Repo-root import (this file lives at scripts/property_reports/, shared/ at repo root)
+import sys as _sys
+from pathlib import Path as _Path
+_REPO = _Path(__file__).resolve().parents[2]
+if str(_REPO) not in _sys.path:
+    _sys.path.insert(0, str(_REPO))
+from shared.domain_urls import to_bucket_api_url, is_bucket_api  # noqa: E402
+
 logger = logging.getLogger(__name__)
 
 _CLIENT: Optional[OpenAI] = None
@@ -269,15 +277,21 @@ def resolve_floor_plan(
     if not floor_plan_urls:
         return None
 
-    # Pick the highest-resolution floor plan URL for analysis. Domain
-    # serves floor plans at both signed-thumb size and at /fit-in/5760x3240/
-    # (the high-res variant). Prefer fit-in URLs first.
+    # Normalize every Domain CDN URL to its bucket-api equivalent. The CDN
+    # encodes a signed-resize hash that can silently return a thumbnail;
+    # bucket-api bypasses signing and always serves the original full-res
+    # file. No-op for non-Domain URLs.
+    floor_plan_urls = [to_bucket_api_url(u) for u in floor_plan_urls]
+
+    # Pick the best floor plan URL for analysis. Prefer bucket-api (always
+    # full-res), then /fit-in/5760x3240 variants, then longest URL.
     sorted_urls = sorted(
         floor_plan_urls,
         key=lambda u: (
+            is_bucket_api(u),
             "/fit-in/" in u,
             "5760" in u or "3240" in u,
-            len(u),  # longer URL ≈ more detail-rich path
+            len(u),
         ),
         reverse=True,
     )
