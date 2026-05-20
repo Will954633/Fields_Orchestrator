@@ -57,20 +57,43 @@ SYSTEM_PROMPT = (
     "bounding boxes for each. Return only valid JSON matching the provided schema."
 )
 
+# Used when we have a boundary polygon drawn on the image
 USER_PROMPT_TEMPLATE = """\
 Analyse this satellite image of a residential property at {address} in {suburb}, Gold Coast, Australia.
 
-The image is {width}x{height} pixels and the subject property is at the centre.
+The image is {width}x{height} pixels. The subject property boundary is drawn as a YELLOW polygon outline on the image.
+
+Return up to 6 bounding boxes for features actually visible in this image. Use these categories:
+
+- "subject"   → the subject property's lot/structure (exactly ONE — tight box around the building/structure inside the yellow boundary).
+- "amenity"   → pool, outdoor entertaining area, driveway, garage — ONLY if the feature is INSIDE the yellow boundary polygon. Do NOT annotate any feature outside the boundary, even if clearly visible.
+- "detractant"→ busy road, power lines, commercial building, construction (these may be outside the boundary — they affect the property from beyond its edges)
+- "context"   → park, reserve, school, waterway, golf course (NAMED features only)
+
+Rules:
+- CRITICAL: "amenity" boxes must fall INSIDE the yellow boundary polygon. If a pool or any other amenity is on a neighbouring lot (outside the boundary), do NOT include it.
+- One "subject" box maximum. Keep it tight to the building footprint inside the boundary.
+- Skip "context" boxes for generic neighbouring lots — only named destinations.
+- Boxes MUST be tight. Returning 0 amenities is correct if none exist inside the boundary.
+- Labels max 3 words, no trailing period.
+"""
+
+# Fallback prompt when no boundary polygon is available
+USER_PROMPT_TEMPLATE_NO_BOUNDARY = """\
+Analyse this satellite image of a residential property at {address} in {suburb}, Gold Coast, Australia.
+
+The image is {width}x{height} pixels and the subject property is near the centre.
 
 Return up to 6 bounding boxes for features actually visible in this image. Use these categories:
 
 - "subject"   → the subject property's lot/structure (include exactly ONE if identifiable). Tight box around the building/lot, not the whole image.
-- "amenity"   → pool, outdoor entertaining area, mature trees, driveway, garage. Each as its own box.
+- "amenity"   → pool, outdoor entertaining area, mature trees, driveway, garage — ONLY if located on the subject property's lot. Do NOT annotate pools, garages, or other amenities on neighbouring lots.
 - "detractant"→ busy road, power lines, commercial building, construction
 - "context"   → park, reserve, school, waterway, golf course (NAMED features only — do NOT label neighbouring lots or generic surroundings)
 
 Rules:
 - One "subject" box maximum.
+- CRITICAL: "amenity" features must be on the subject property, not a neighbour's lot. If a pool or outdoor area is on a neighbouring property, do NOT create an amenity box for it.
 - Skip "context" boxes that just say "neighbouring lot" — those add no value.
 - Boxes MUST be tight. No oversized boxes around the whole image. No subject box bigger than 30% of the image area.
 - Skip features that aren't clearly visible. Returning 0 amenities is fine.
@@ -120,12 +143,138 @@ class Feature:
     confidence: str
 
 
+# ---------------------------------------------------------------------- #
+# Lot boundary: Mercator projection + drawing
+# ---------------------------------------------------------------------- #
+
+# Google Maps Static API tile at zoom z with scale s:
+#   image size = size_px * s  (e.g. 640*2 = 1280)
+#   world size at zoom z = 256 * 2^z  (logical pixels, scale=1)
+#   tile covers the same geographic area regardless of scale — scale just 2×s pixel density
+
+def _mercator_y(lat_deg: float, world_size: float) -> float:
+    lat_rad = math.radians(lat_deg)
+    return (math.pi - math.log(math.tan(math.pi / 4 + lat_rad / 2))) * world_size / (2 * math.pi)
+
+
+def latlng_to_pixel(
+    lat: float,
+    lng: float,
+    center_lat: float,
+    center_lng: float,
+    zoom: int,
+    img_width: int,
+    img_height: int,
+    tile_scale: int = 2,
+) -> Tuple[int, int]:
+    """Project a lat/lng to pixel coordinates on a Google Maps Static satellite tile.
+
+    tile_scale=2 means the image is twice the logical pixel density (retina).
+    The tile covers the same area as a scale=1 tile; each logical pixel = tile_scale physical pixels.
+    """
+    world_size = 256 * (2 ** zoom)  # logical pixels at this zoom
+    # Logical-pixel world coordinates
+    cx = (center_lng + 180) / 360 * world_size
+    cy = _mercator_y(center_lat, world_size)
+    px = (lng + 180) / 360 * world_size
+    py = _mercator_y(lat, world_size)
+    # Physical pixel offset from image centre
+    x = (px - cx) * tile_scale + img_width / 2
+    y = (py - cy) * tile_scale + img_height / 2
+    return (int(round(x)), int(round(y)))
+
+
+def draw_lot_boundary(
+    image_bytes: bytes,
+    ring: List[Tuple[float, float]],  # (lng, lat) pairs
+    center_lat: float,
+    center_lng: float,
+    zoom: int,
+    tile_scale: int = 2,
+    colour: str = "#FFE000",  # bright yellow — visible on satellite imagery
+    stroke_px: int = 4,
+) -> Tuple[bytes, List[Tuple[int, int]]]:
+    """Draw the lot boundary polygon on the image.
+
+    Returns (annotated_image_bytes, ring_pixels) where ring_pixels is the
+    projected polygon in image-pixel coordinates — used for cropping.
+    """
+    with Image.open(io.BytesIO(image_bytes)) as im:
+        if im.mode not in ("RGB", "RGBA"):
+            im = im.convert("RGB")
+        out = im.copy()
+
+    w, h = out.size
+    ring_pixels = [
+        latlng_to_pixel(lat, lng, center_lat, center_lng, zoom, w, h, tile_scale)
+        for lng, lat in ring
+    ]
+
+    draw = ImageDraw.Draw(out)
+    for i in range(stroke_px):
+        offset_ring = [(x - i, y - i) for x, y in ring_pixels]
+        draw.polygon(offset_ring, outline=colour)
+        offset_ring = [(x + i, y + i) for x, y in ring_pixels]
+        draw.polygon(offset_ring, outline=colour)
+    draw.polygon(ring_pixels, outline=colour)
+
+    buf = io.BytesIO()
+    out.save(buf, format="PNG", optimize=True)
+    return buf.getvalue(), ring_pixels
+
+
+def crop_to_boundary(
+    image_bytes: bytes,
+    ring_pixels: List[Tuple[int, int]],
+    margin_factor: float = 1.5,
+) -> Tuple[bytes, Tuple[int, int, int, int]]:
+    """Crop the image to the polygon bounding box + a margin.
+
+    margin_factor=1.5 adds a margin equal to 150% of the lot's own
+    width/height on each side, keeping enough context for GPT to understand
+    the neighbourhood but filling the frame more with the subject lot.
+
+    Returns (cropped_bytes, crop_box) where crop_box = (x_min, y_min, x_max, y_max)
+    in original image coordinates. The caller uses crop_box to translate
+    GPT bbox coordinates back to the full image space if needed.
+    """
+    with Image.open(io.BytesIO(image_bytes)) as im:
+        img_w, img_h = im.size
+
+    xs = [p[0] for p in ring_pixels]
+    ys = [p[1] for p in ring_pixels]
+    lot_x_min, lot_x_max = min(xs), max(xs)
+    lot_y_min, lot_y_max = min(ys), max(ys)
+    lot_w = lot_x_max - lot_x_min
+    lot_h = lot_y_max - lot_y_min
+
+    margin_x = int(lot_w * margin_factor)
+    margin_y = int(lot_h * margin_factor)
+
+    crop_x_min = max(0, lot_x_min - margin_x)
+    crop_y_min = max(0, lot_y_min - margin_y)
+    crop_x_max = min(img_w, lot_x_max + margin_x)
+    crop_y_max = min(img_h, lot_y_max + margin_y)
+
+    crop_box = (crop_x_min, crop_y_min, crop_x_max, crop_y_max)
+
+    with Image.open(io.BytesIO(image_bytes)) as im:
+        if im.mode not in ("RGB", "RGBA"):
+            im = im.convert("RGB")
+        cropped = im.crop(crop_box)
+
+    buf = io.BytesIO()
+    cropped.save(buf, format="PNG", optimize=True)
+    return buf.getvalue(), crop_box
+
+
 def detect_features(
     image_bytes: bytes,
     address: str,
     suburb: str,
     model: str = "gpt-4o",
     timeout_s: int = 60,
+    has_boundary: bool = False,
 ) -> List[Feature]:
     """Run GPT vision to identify labeled bounding boxes on a satellite tile."""
     api_key = os.environ.get("OPENAI_API_KEY")
@@ -143,6 +292,7 @@ def detect_features(
     b64 = base64.b64encode(image_bytes).decode("utf-8")
     data_url = f"data:image/png;base64,{b64}"
 
+    prompt_template = USER_PROMPT_TEMPLATE if has_boundary else USER_PROMPT_TEMPLATE_NO_BOUNDARY
     payload = {
         "model": model,
         "messages": [
@@ -152,7 +302,7 @@ def detect_features(
                 "content": [
                     {
                         "type": "text",
-                        "text": USER_PROMPT_TEMPLATE.format(
+                        "text": prompt_template.format(
                             address=address,
                             suburb=(suburb or "").replace("_", " ").title(),
                             width=width,
@@ -366,21 +516,80 @@ def annotate(
     address: str,
     suburb: str,
     pin_pixel: Optional[Tuple[int, int]] = None,
+    center_lat: Optional[float] = None,
+    center_lng: Optional[float] = None,
+    zoom: int = 19,
+    tile_scale: int = 2,
 ) -> Optional[Dict[str, Any]]:
-    """Detect features and render an annotated PNG. Returns:
+    """Detect features and render an annotated PNG.
+
+    When center_lat/center_lng are provided, fetches the actual cadastral lot
+    boundary from the GCCC ArcGIS service, draws it as a yellow polygon on the
+    image, crops to the lot + margin, then sends the tighter image to GPT with
+    an explicit instruction to only annotate features inside the boundary.
+    GPT bbox coordinates are translated back to full-image space before return.
+
+    Returns:
         {
-          "annotated_image_bytes": bytes,
+          "annotated_image_bytes": bytes,   # full-size image with all overlays
           "features": [{label, category, confidence, bbox}, ...]
         }
     or None on failure.
     """
-    features = detect_features(image_bytes, address, suburb)
+    ring_pixels: Optional[List[Tuple[int, int]]] = None
+    crop_box: Optional[Tuple[int, int, int, int]] = None
+    image_for_gpt = image_bytes  # may be replaced by boundary-annotated + cropped version
+
+    if center_lat is not None and center_lng is not None:
+        try:
+            from scripts.property_reports.lot_boundary import fetch_boundary
+        except ImportError:
+            try:
+                from lot_boundary import fetch_boundary  # when run from scripts/property_reports/
+            except ImportError:
+                fetch_boundary = None  # type: ignore
+
+        if fetch_boundary is not None:
+            ring = fetch_boundary(center_lat, center_lng)
+            if ring:
+                logger.info("  satellite_annotation: got boundary polygon (%d vertices)", len(ring))
+                # 1. Draw yellow boundary on the full image
+                boundary_bytes, ring_pixels = draw_lot_boundary(
+                    image_bytes, ring, center_lat, center_lng, zoom, tile_scale
+                )
+                # 2. Crop tighter around the lot + context margin
+                cropped_bytes, crop_box = crop_to_boundary(boundary_bytes, ring_pixels, margin_factor=1.5)
+                image_for_gpt = cropped_bytes
+            else:
+                logger.info("  satellite_annotation: boundary fetch returned no polygon — using full tile")
+
+    has_boundary = ring_pixels is not None
+    features = detect_features(image_for_gpt, address, suburb, has_boundary=has_boundary)
     if not features:
-        # Still annotate with just the drop pin — gives the marketing benefit
-        # of "our tech is looking" even when no features were detected.
         logger.info("  satellite_annotation: 0 features detected — drawing pin only")
 
-    annotated_bytes, display_features = draw_annotations(image_bytes, features, pin_pixel=pin_pixel)
+    # If we cropped, translate GPT bbox coordinates back to full-image space
+    if crop_box is not None and features:
+        cx_off, cy_off = crop_box[0], crop_box[1]
+        translated = []
+        for f in features:
+            x0, y0, x1, y1 = f.bbox
+            translated.append(Feature(
+                label=f.label,
+                category=f.category,
+                confidence=f.confidence,
+                bbox=(x0 + cx_off, y0 + cy_off, x1 + cx_off, y1 + cy_off),
+            ))
+        features = translated
+
+    # Draw feature boxes + pin on the full boundary-annotated image (or original if no boundary)
+    base_for_annotation = boundary_bytes if ring_pixels is not None else image_bytes  # type: ignore[possibly-undefined]
+    if ring_pixels is None:
+        base_for_annotation = image_bytes
+
+    annotated_bytes, display_features = draw_annotations(
+        base_for_annotation, features, pin_pixel=pin_pixel
+    )
     return {
         "annotated_image_bytes": annotated_bytes,
         "features": [
