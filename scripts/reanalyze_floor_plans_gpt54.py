@@ -57,36 +57,33 @@ INSTRUCTIONS:
 Return ONLY valid JSON, no additional text."""
 
 
-_DOMAIN_CDN_RE = __import__("re").compile(
-    r"rimh2\.domainstatic\.com\.au/[^/]+(?:/filters:[^/]+)?/(.+)"
-)
-
-
-def _to_bucket_api_url(url: str) -> str:
-    """Convert Domain CDN URL to bucket-api (full resolution, no signed hash)."""
-    m = _DOMAIN_CDN_RE.search(url)
-    if m:
-        return f"https://bucket-api.domain.com.au/v1/bucket/image/{m.group(1)}"
-    return url
-
-
 MIN_FLOOR_PLAN_PIXELS = 500  # shortest side below this → treat as thumbnail
 
 
 def download_and_encode(url: str) -> str | None:
+    # Lazy import so this script keeps working if run from outside the repo tree
+    import sys as _sys
+    from pathlib import Path as _Path
+    _repo = _Path(__file__).resolve().parent.parent
+    if str(_repo) not in _sys.path:
+        _sys.path.insert(0, str(_repo))
+    from shared.domain_urls import to_bucket_api_url  # type: ignore
+
     def _fetch(u):
         resp = requests.get(u, timeout=30, headers={"User-Agent": "Mozilla/5.0"})
         resp.raise_for_status()
         return resp.content
 
     try:
+        # Normalize Domain CDN → bucket-api up front to avoid thumbnail risk
+        url = to_bucket_api_url(url)
         content = _fetch(url)
         img = Image.open(BytesIO(content))
-        # If CDN served a thumbnail, retry with bucket-api full-res URL
+        # Belt-and-braces: if we still somehow got a thumbnail, retry bucket-api
         if min(img.size) < MIN_FLOOR_PLAN_PIXELS:
-            fallback = _to_bucket_api_url(url)
+            fallback = to_bucket_api_url(url)
             if fallback != url:
-                print(f"    CDN thumbnail ({img.size[0]}×{img.size[1]}), retrying bucket-api...")
+                print(f"    Thumbnail detected ({img.size[0]}×{img.size[1]}), retrying bucket-api...")
                 content = _fetch(fallback)
                 img = Image.open(BytesIO(content))
         if img.mode not in ("RGB", "L"):
