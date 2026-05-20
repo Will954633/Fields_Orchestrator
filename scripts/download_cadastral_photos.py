@@ -103,7 +103,7 @@ def download_one(url: str, dest: Path, session: requests.Session) -> int | None:
 
 
 def process_record(suburb: str, doc: dict, db, session: requests.Session,
-                   force: bool) -> dict:
+                   force: bool, photo_delay: float = 0.0) -> dict:
     """Download all photos for one record, write marker to Mongo. Returns stats."""
     oid = str(doc["_id"])
     sv2 = doc.get("scraped_data_v2") or {}
@@ -130,6 +130,8 @@ def process_record(suburb: str, doc: dict, db, session: requests.Session,
             except OSError:
                 pass
             continue
+        if photo_delay > 0 and (n_ok + n_fail) > 0:
+            time.sleep(photo_delay)
         size = download_one(url, dest, session)
         if size is None:
             n_fail += 1
@@ -160,6 +162,9 @@ def main() -> int:
                     help="Concurrent records (default 16; each downloads its own photos sequentially)")
     ap.add_argument("--redownload", action="store_true",
                     help="Force re-download records already marked done")
+    ap.add_argument("--photo-delay", type=float, default=0.0,
+                    help="Seconds to sleep between each photo download within a record (default 0). "
+                         "Use 1.0 to stay under CDN rate-limits (~3600 photos/hour).")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
@@ -203,7 +208,8 @@ def main() -> int:
     def worker(doc):
         s = get_session()
         try:
-            r = process_record(args.suburb, doc, db, s, args.redownload)
+            r = process_record(args.suburb, doc, db, s, args.redownload,
+                               photo_delay=args.photo_delay)
         except Exception as e:
             log.error("EXCEPTION %s: %s", doc.get("_id"), e)
             return None
