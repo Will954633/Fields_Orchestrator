@@ -5,25 +5,31 @@ Fills the coverage gap for properties that exist in the cadastral database
 but where Domain.com.au has no property profile (Domain covers ~70-90% of
 houses; OTH covers close to 100% via CoreLogic's RP Data).
 
-Two API calls per property — no full-page fetch needed:
+Three steps per matched property:
   1. /odin/api/locations?query={address}  → resolve OTH property ID
+                                            (strict street-number validation)
   2. /odin/api/properties/{id}            → beds, baths, floor/land area, year
-  3. /odin/api/properties/{id}/images     → CoreLogic photo URLs (watermarked)
+                                            built, last sale, rental, guesstimate
+  3. Full property page (~124KB gzipped)  → all photos + floor plans from
+                                            inline Redux JSON
 
-Data is written under `scraped_data_oth` (separate namespace from Domain data).
-Image URLs stored as `oth_image_urls` — CoreLogic watermarked, for internal
-use only (do not display publicly without a CoreLogic licence).
+Steps 2 and 3 only happen when step 1 finds a match (~30% hit rate).
 
-Idempotent: skips records with `oth_scraped_at` already set.
-Use --reprocess to force re-scrape.
+Data written to MongoDB:
+  scraped_data_oth        — structured property fields
+  oth_image_urls          — CoreLogic photo URLs (watermarked — internal use)
+  oth_floorplan_urls      — CoreLogic floor plan URLs (watermarked — internal)
+  oth_scraped_at          — timestamp marker (idempotency)
+  oth_not_found           — True if OTH has no record for this address
 
-Cohort: houses (no UNIT_NUMBER) in the named suburb that have neither
-scraped_data_v2 nor scraped_data_apr01_recovered — the pure Domain gap.
+Cohort: houses (no UNIT_NUMBER) with neither scraped_data_v2 nor
+scraped_data_apr01_recovered — the pure Domain coverage gap.
 
 Run:
     python3 scripts/scrape_onthehouse.py --suburb robina --dry-run
     python3 scripts/scrape_onthehouse.py --suburb robina --limit 50
     python3 scripts/scrape_onthehouse.py --suburb burleigh_waters
+    python3 scripts/scrape_onthehouse.py --suburb robina --reprocess
 """
 
 from __future__ import annotations
@@ -31,6 +37,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import logging
+import re
 import sys
 import threading
 import time
@@ -57,16 +64,22 @@ log = logging.getLogger("scrape_onthehouse")
 
 BASE = "https://www.onthehouse.com.au/odin/api"
 UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Fields/1.0"
-REQUEST_TIMEOUT = 20
+REQUEST_TIMEOUT = 25
 MAX_RETRIES = 2
 
+_STREET_TYPE_ABBREV = {
+    "AVENUE": "AVE", "BOULEVARD": "BVD", "CIRCUIT": "CCT", "CLOSE": "CL",
+    "COURT": "CT", "CRESCENT": "CRES", "DRIVE": "DR", "GROVE": "GR",
+    "HIGHWAY": "HWY", "LANE": "LN", "PARADE": "PDE", "PLACE": "PL",
+    "ROAD": "RD", "STREET": "ST", "TERRACE": "TCE", "WAY": "WAY",
+}
+
 
 # ---------------------------------------------------------------------------
-# OTH API helpers
+# Helpers
 # ---------------------------------------------------------------------------
 
-def _get(session: requests.Session, url: str) -> dict | list | None:
-    """GET JSON endpoint with simple retry. Returns parsed body or None."""
+def _json_get(session: requests.Session, url: str) -> dict | list | None:
     for attempt in range(MAX_RETRIES + 1):
         try:
             r = session.get(url, timeout=REQUEST_TIMEOUT,
@@ -77,23 +90,36 @@ def _get(session: requests.Session, url: str) -> dict | list | None:
                 return r.json()
             elif r.status_code == 429:
                 time.sleep(5 + attempt * 5)
-                continue
             else:
                 return None
         except (requests.RequestException, ValueError):
             if attempt < MAX_RETRIES:
                 time.sleep(2 + attempt)
-                continue
-            return None
+            else:
+                return None
     return None
 
 
-_STREET_TYPE_ABBREV = {
-    "AVENUE": "AVE", "BOULEVARD": "BVD", "CIRCUIT": "CCT", "CLOSE": "CL",
-    "COURT": "CT", "CRESCENT": "CRES", "DRIVE": "DR", "GROVE": "GR",
-    "HIGHWAY": "HWY", "LANE": "LN", "PARADE": "PDE", "PLACE": "PL",
-    "ROAD": "RD", "STREET": "ST", "TERRACE": "TCE", "WAY": "WAY",
-}
+def _html_get(session: requests.Session, url: str) -> str | None:
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            r = session.get(url, timeout=REQUEST_TIMEOUT,
+                            headers={"User-Agent": UA,
+                                     "Accept": "text/html",
+                                     "Accept-Encoding": "gzip, deflate, br",
+                                     "Referer": "https://www.onthehouse.com.au/"})
+            if r.status_code == 200:
+                return r.text
+            elif r.status_code == 429:
+                time.sleep(5 + attempt * 5)
+            else:
+                return None
+        except requests.RequestException:
+            if attempt < MAX_RETRIES:
+                time.sleep(2 + attempt)
+            else:
+                return None
+    return None
 
 
 def _normalize_street_type(stype: str) -> str:
@@ -101,15 +127,17 @@ def _normalize_street_type(stype: str) -> str:
 
 
 def _street_number_from_formatted(formatted: str) -> str | None:
-    """Extract street number from '12 LONGUEVILLE CT, ROBINA...'"""
     parts = formatted.split(" ", 1)
     return parts[0].strip() if parts else None
 
 
+# ---------------------------------------------------------------------------
+# OTH API
+# ---------------------------------------------------------------------------
+
 def resolve_property_id(street_no: str, street_name: str, street_type: str,
                         locality: str, session: requests.Session) -> str | None:
-    """Look up OTH property ID; returns None if no exact street-number match."""
-    # Try abbreviated street type first (more reliable), then full name
+    """Resolve OTH property ID from address. Returns None if no exact match."""
     abbrev = _normalize_street_type(street_type)
     queries = [f"{street_no} {street_name} {abbrev} {locality}"]
     if abbrev != street_type.upper():
@@ -117,14 +145,13 @@ def resolve_property_id(street_no: str, street_name: str, street_type: str,
 
     for query in queries:
         url = f"{BASE}/locations?query={requests.utils.quote(query)}"
-        data = _get(session, url)
+        data = _json_get(session, url)
         if not data:
             continue
         content = data.get("content", [])
         if not content:
             continue
         match = content[0]
-        # Strict validation: returned street number must equal our street number
         returned_no = _street_number_from_formatted(
             match.get("formattedAddress", ""))
         if returned_no and returned_no.upper() == str(street_no).upper():
@@ -132,24 +159,55 @@ def resolve_property_id(street_no: str, street_name: str, street_type: str,
     return None
 
 
-def fetch_property(prop_id: str, session: requests.Session) -> dict | None:
-    return _get(session, f"{BASE}/properties/{prop_id}")
+def fetch_property_api(prop_id: str, session: requests.Session) -> dict | None:
+    return _json_get(session, f"{BASE}/properties/{prop_id}")
 
 
-def fetch_images(prop_id: str, session: requests.Session) -> list[str]:
-    data = _get(session, f"{BASE}/properties/{prop_id}/images")
-    if not data:
-        return []
-    return [item["url"] for item in data.get("content", []) if item.get("url")]
+def extract_media_from_page(html: str) -> tuple[list[str], list[str]]:
+    """Extract photo URLs and floor plan URLs from the OTH page inline JSON.
+
+    Returns (image_urls, floorplan_urls).
+    """
+    # The page embeds a large Redux state as inline JS. Find the media section
+    # under propertyDetail.property.media
+    idx = html.find('"propertyDetail":{"status":"success"')
+    if idx == -1:
+        return [], []
+
+    start = html.index('{', idx + len('"propertyDetail":'))
+    depth = 0
+    end = start
+    for i, c in enumerate(html[start:], start):
+        if c == '{':
+            depth += 1
+        elif c == '}':
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+
+    import json
+    try:
+        pd = json.loads(html[start:end])
+    except (json.JSONDecodeError, ValueError):
+        return [], []
+
+    prop = pd.get("property", {})
+    media = prop.get("media") or {}
+
+    image_urls = [item["url"] for item in media.get("images", [])
+                  if item.get("url")]
+    floorplan_urls = [item["url"] for item in media.get("floorplan", [])
+                      if item.get("url")]
+    return image_urls, floorplan_urls
 
 
 # ---------------------------------------------------------------------------
 # Per-record scraper
 # ---------------------------------------------------------------------------
 
-
 def process_record(doc: dict, db, suburb: str, session: requests.Session,
-                   reprocess: bool, fetch_images_flag: bool) -> dict:
+                   reprocess: bool) -> dict:
     oid = str(doc["_id"])
 
     if doc.get("oth_scraped_at") and not reprocess:
@@ -162,9 +220,9 @@ def process_record(doc: dict, db, suburb: str, session: requests.Session,
     if not all([no, name, stype]):
         return {"oid": oid, "status": "no_address"}
 
+    # Step 1: resolve property ID
     prop_id = resolve_property_id(no, name, stype, locality, session)
     if not prop_id:
-        # Write a not-found marker so we don't keep retrying
         db[suburb].update_one(
             {"_id": ObjectId(oid)},
             {"$set": {"oth_scraped_at": dt.datetime.utcnow(),
@@ -172,16 +230,21 @@ def process_record(doc: dict, db, suburb: str, session: requests.Session,
         )
         return {"oid": oid, "status": "not_found"}
 
-    prop = fetch_property(prop_id, session)
+    # Step 2: structured data via API
+    prop = fetch_property_api(prop_id, session)
     if not prop:
         return {"oid": oid, "status": "fetch_fail"}
 
-    # Build structured payload
     g = prop.get("guesstimate") or {}
     ls = prop.get("lastSale") or {}
     lr = prop.get("lastRental") or {}
     la = prop.get("legalAttributes") or {}
     addr = prop.get("address") or {}
+
+    oth_web_url = next(
+        (lk["href"] for lk in prop.get("links", [])
+         if lk.get("rel") == "othWebUrl"), None
+    )
 
     oth_data: dict = {
         "oth_property_id": prop.get("othPropertyId") or prop_id,
@@ -209,17 +272,19 @@ def process_record(doc: dict, db, suburb: str, session: requests.Session,
         "guesstimate_to": g.get("toPrice"),
         "guesstimate_confidence": g.get("confidence"),
         "guesstimate_date": g.get("calculationDate"),
-        "oth_web_url": next(
-            (lk["href"] for lk in prop.get("links", [])
-             if lk.get("rel") == "othWebUrl"), None
-        ),
+        "oth_web_url": oth_web_url,
         "scraped_at": dt.datetime.utcnow().isoformat(),
     }
 
+    # Step 3: fetch full page for photos + floor plans
     image_urls: list[str] = []
-    if fetch_images_flag:
-        image_urls = fetch_images(prop_id, session)
-        oth_data["image_url_count"] = len(image_urls)
+    floorplan_urls: list[str] = []
+    if oth_web_url:
+        html = _html_get(session, oth_web_url)
+        if html:
+            image_urls, floorplan_urls = extract_media_from_page(html)
+    oth_data["image_count"] = len(image_urls)
+    oth_data["floorplan_count"] = len(floorplan_urls)
 
     update: dict = {
         "scraped_data_oth": oth_data,
@@ -228,10 +293,16 @@ def process_record(doc: dict, db, suburb: str, session: requests.Session,
     }
     if image_urls:
         update["oth_image_urls"] = image_urls
+    if floorplan_urls:
+        update["oth_floorplan_urls"] = floorplan_urls
 
     db[suburb].update_one({"_id": ObjectId(oid)}, {"$set": update})
-    return {"oid": oid, "status": "done", "prop_id": prop_id,
-            "beds": oth_data.get("beds"), "images": len(image_urls)}
+    return {
+        "oid": oid, "status": "done", "prop_id": prop_id,
+        "beds": oth_data.get("beds"),
+        "images": len(image_urls),
+        "floorplans": len(floorplan_urls),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -243,14 +314,15 @@ def main() -> int:
     ap.add_argument("--suburb", required=True,
                     help="Collection name (e.g. robina, burleigh_waters, varsity_lakes)")
     ap.add_argument("--limit", type=int, default=None)
-    ap.add_argument("--workers", type=int, default=10,
-                    help="Concurrent workers (default 10)")
+    ap.add_argument("--workers", type=int, default=8,
+                    help="Concurrent workers (default 8)")
     ap.add_argument("--rate", type=float, default=1.0,
                     help="Min seconds between dispatched requests (default 1.0)")
-    ap.add_argument("--fetch-images", action="store_true",
-                    help="Also fetch CoreLogic image URLs (watermarked — internal use only)")
     ap.add_argument("--reprocess", action="store_true",
                     help="Re-scrape records already marked done")
+    ap.add_argument("--matched-only", action="store_true",
+                    help="With --reprocess: only re-process confirmed matches "
+                         "(oth_not_found=False). Skips the not-found majority.")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
@@ -260,7 +332,6 @@ def main() -> int:
 
     locality = args.suburb.replace("_", " ").upper()
 
-    # Cohort: houses with NO Domain data at all
     query: dict = {
         "LOCALITY": locality,
         "UNIT_NUMBER": {"$in": [None, ""]},
@@ -274,6 +345,10 @@ def main() -> int:
     }
     if not args.reprocess:
         query["oth_scraped_at"] = {"$exists": False}
+    elif args.matched_only:
+        # Only re-process records that previously matched OTH
+        query["oth_scraped_at"] = {"$exists": True}
+        query["oth_not_found"] = {"$ne": True}
 
     total = coll.count_documents(query)
     log.info("Suburb: %s — eligible records (no Domain data): %d", args.suburb, total)
@@ -291,19 +366,19 @@ def main() -> int:
         log.info("Dry run — sample 5:")
         for doc in docs[:5]:
             q = (f"{doc.get('STREET_NO_1')} {doc.get('STREET_NAME')} "
-                 f"{_normalize_street_type(doc.get('STREET_TYPE',''))} "
-                 f"{doc.get('LOCALITY','')}")
-            log.info("  %s → query: '%s'", doc["_id"], q.strip())
+                 f"{_normalize_street_type(doc.get('STREET_TYPE', ''))} "
+                 f"{doc.get('LOCALITY', '')}")
+            log.info("  %s → '%s'", doc["_id"], q.strip())
         log.info("(dry run — no API calls)")
         return 0
 
-    counters: dict = {"done": 0, "not_found": 0, "fetch_fail": 0, "no_address": 0,
-                      "already_done": 0, "total": 0}
+    counters: dict = {"done": 0, "not_found": 0, "fetch_fail": 0,
+                      "no_address": 0, "already_done": 0, "total": 0,
+                      "images": 0, "floorplans": 0}
     lock = threading.Lock()
     rate_lock = threading.Lock()
     next_dispatch = [time.time()]
     t0 = time.time()
-
     session_local = threading.local()
 
     def get_session():
@@ -319,24 +394,25 @@ def main() -> int:
             next_dispatch[0] = time.time() + args.rate
         s = get_session()
         try:
-            r = process_record(doc, db, args.suburb, s, args.reprocess,
-                               args.fetch_images)
+            r = process_record(doc, db, args.suburb, s, args.reprocess)
         except Exception as e:
             log.error("EXCEPTION %s: %s", doc.get("_id"), e)
             r = {"status": "fetch_fail"}
         with lock:
             counters["total"] += 1
             counters[r["status"]] = counters.get(r["status"], 0) + 1
-            if r["status"] == "done":
-                log.debug("  done %s → OTH#%s beds=%s images=%s",
-                          r["oid"], r.get("prop_id"), r.get("beds"), r.get("images"))
+            counters["images"] += r.get("images", 0)
+            counters["floorplans"] += r.get("floorplans", 0)
             if counters["total"] % 50 == 0:
                 elapsed = time.time() - t0
                 rate = counters["total"] / max(elapsed, 1)
                 eta = (len(docs) - counters["total"]) / max(rate, 0.01) / 60
-                log.info("progress: %d/%d done=%d not_found=%d fail=%d rate=%.1f/s ETA=%.0fmin",
-                         counters["total"], len(docs), counters["done"],
-                         counters["not_found"], counters["fetch_fail"], rate, eta)
+                log.info(
+                    "progress: %d/%d done=%d not_found=%d fail=%d "
+                    "images=%d floorplans=%d rate=%.1f/s ETA=%.0fmin",
+                    counters["total"], len(docs), counters["done"],
+                    counters["not_found"], counters["fetch_fail"],
+                    counters["images"], counters["floorplans"], rate, eta)
         return r
 
     with ThreadPoolExecutor(max_workers=args.workers) as ex:
@@ -346,14 +422,16 @@ def main() -> int:
 
     elapsed = time.time() - t0
     log.info("DONE in %.0fs", elapsed)
-    log.info("FINAL total=%d done=%d not_found=%d no_address=%d fail=%d already=%d",
-             counters["total"], counters.get("done", 0), counters.get("not_found", 0),
-             counters.get("no_address", 0), counters.get("fetch_fail", 0),
-             counters.get("already_done", 0))
+    log.info(
+        "FINAL total=%d done=%d not_found=%d no_address=%d fail=%d already=%d "
+        "images=%d floorplans=%d",
+        counters["total"], counters.get("done", 0), counters.get("not_found", 0),
+        counters.get("no_address", 0), counters.get("fetch_fail", 0),
+        counters.get("already_done", 0), counters["images"], counters["floorplans"])
     if counters.get("done", 0):
-        hit_rate = 100 * counters["done"] / max(
+        hit_pct = 100 * counters["done"] / max(
             counters["done"] + counters.get("not_found", 0), 1)
-        log.info("OTH hit rate: %.1f%%", hit_rate)
+        log.info("OTH hit rate: %.1f%%", hit_pct)
     return 0
 
 
