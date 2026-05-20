@@ -96,9 +96,17 @@ def _annotate_and_upload(
     suburb_key: str,
     property_id: str,
     db_label: str,
+    center_lat: Optional[float] = None,
+    center_lng: Optional[float] = None,
 ) -> Optional[Dict[str, Any]]:
     """Run the bbox-detection pass, draw annotations + Fields drop pin,
-    upload the annotated PNG. Returns {'url', 'features'} or None on failure."""
+    upload the annotated PNG. Returns {'url', 'features'} or None on failure.
+
+    Passing center_lat/center_lng enables cadastral boundary fetch + crop:
+    the lot boundary is drawn as a yellow polygon, the image is cropped to
+    the lot + context margin, and GPT is instructed to only annotate features
+    inside the boundary.
+    """
     s117 = _get_step117()
     if not s117:
         return None
@@ -108,7 +116,15 @@ def _annotate_and_upload(
         logger.warning(f"  satellite_annotation import failed: {e}")
         return None
 
-    result = sa_anno.annotate(image_bytes, address=address, suburb=suburb_key)
+    result = sa_anno.annotate(
+        image_bytes,
+        address=address,
+        suburb=suburb_key,
+        center_lat=center_lat,
+        center_lng=center_lng,
+        zoom=s117.SATELLITE_ZOOM,
+        tile_scale=s117.SATELLITE_SCALE,
+    )
     if not result:
         return None
 
@@ -196,9 +212,12 @@ def resolve_satellite(
                 if f"/{candidate}/" in existing_url:
                     existing_label = candidate
                     break
+            latlng_existing = _subject_latlng(subject_doc)
             anno = _annotate_and_upload(
                 existing_bytes, address=address,
                 suburb_key=suburb_key, property_id=property_id, db_label=existing_label,
+                center_lat=latlng_existing[0] if latlng_existing else None,
+                center_lng=latlng_existing[1] if latlng_existing else None,
             )
             if anno:
                 sa["annotated_image_url"] = anno["annotated_image_url"]
@@ -243,9 +262,12 @@ def resolve_satellite(
         return None
 
     # Annotation pass — bounding boxes + Fields drop pin on the same image.
+    # Pass lat/lng so the cadastral boundary can be fetched and drawn.
     anno = _annotate_and_upload(
         image_bytes, address=address,
         suburb_key=suburb_key, property_id=property_id, db_label=db_label,
+        center_lat=latlng[0] if latlng else None,
+        center_lng=latlng[1] if latlng else None,
     )
 
     record = {
