@@ -70,6 +70,24 @@ PROMPT = (
 _CACHE: dict[str, tuple[str, str]] = {}
 _CACHE_LOCK = threading.Lock()
 
+_DOMAIN_CDN_RE = __import__("re").compile(
+    r"rimh2\.domainstatic\.com\.au/[^/]+(?:/filters:[^/]+)?/(.+)"
+)
+
+
+def _to_bucket_api_url(url: str) -> str:
+    """Convert a Domain CDN URL to the bucket-api equivalent (full resolution).
+
+    Domain CDN (rimh2.domainstatic.com.au) encodes a signed resize hash that
+    can return thumbnails even when the filename implies full resolution.
+    The bucket-api bypasses signing and always returns the original file.
+    """
+    m = _DOMAIN_CDN_RE.search(url)
+    if m:
+        filename = m.group(1)
+        return f"https://bucket-api.domain.com.au/v1/bucket/image/{filename}"
+    return url
+
 
 def classify_image(url: str) -> tuple[str, str]:
     """Returns (verdict, raw_response). Verdict ∈ {YES, NO, ERROR}.
@@ -192,7 +210,7 @@ def process_record(coll, doc: dict, tail_n: int | None, image_workers: int,
             _, result = _do((i, u))
             classifications[i] = result
 
-    yes_urls = [c["url"] for c in classifications if c["verdict"] == "YES"]
+    yes_urls = [_to_bucket_api_url(c["url"]) for c in classifications if c["verdict"] == "YES"]
 
     set_doc = {
         "floor_plans_v2_extracted": yes_urls,
