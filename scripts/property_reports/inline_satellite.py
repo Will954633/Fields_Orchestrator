@@ -147,6 +147,46 @@ def _annotate_and_upload(
     }
 
 
+def _sync_property_reports(property_id: str, satellite_record: Dict[str, Any]) -> None:
+    """Mirror updated satellite data into system_monitor.property_reports.
+
+    property_reports caches a snapshot of the source doc. When satellite
+    analysis is regenerated inline, that cache goes stale unless we sync it
+    here. Matches on property_id (the source doc _id as a string).
+    """
+    try:
+        from shared.db import get_client
+        client = get_client()
+        sm_coll = client["system_monitor"]["property_reports"]
+        fields = {
+            "satellite.satellite_image_url":  satellite_record.get("satellite_image_url"),
+            "satellite.annotated_image_url":  satellite_record.get("annotated_image_url"),
+            "satellite.features":             satellite_record.get("features") or [],
+            "satellite.categories":           satellite_record.get("categories") or {},
+            "satellite.narrative":            satellite_record.get("narrative") or {},
+            "satellite.processed_at":         satellite_record.get("processed_at"),
+            "property.satellite.satellite_image_url": satellite_record.get("satellite_image_url"),
+            "property.satellite.annotated_image_url": satellite_record.get("annotated_image_url"),
+            "property.satellite.features":    satellite_record.get("features") or [],
+            "property.satellite.categories":  satellite_record.get("categories") or {},
+            "property.satellite.narrative":   satellite_record.get("narrative") or {},
+        }
+        # Drop None values to avoid overwriting good data with nulls
+        fields = {k: v for k, v in fields.items() if v is not None}
+        result = sm_coll.update_many(
+            {"property_id": property_id},
+            {"$set": fields},
+        )
+        if result.modified_count:
+            logger.info(
+                "  satellite: synced to property_reports (%d doc%s)",
+                result.modified_count,
+                "s" if result.modified_count != 1 else "",
+            )
+    except Exception as exc:
+        logger.warning("  satellite: property_reports sync failed: %s", exc)
+
+
 def _subject_latlng(doc: Dict[str, Any]) -> Optional[tuple]:
     """Pull lat/lng from the doc — same logic as the resolver's
     subject_latlng() helper."""
@@ -233,6 +273,7 @@ def resolve_satellite(
                         )
                     except Exception as e:
                         logger.warning(f"  satellite: write-back of annotation failed: {e}")
+                _sync_property_reports(property_id, sa)
         return sa
 
     # ── Path B: no analysis yet — full fresh pass ─────────────────────
@@ -291,6 +332,8 @@ def resolve_satellite(
             )
         except Exception as e:
             logger.warning(f"  satellite: write-back failed: {e}")
+
+    _sync_property_reports(property_id, record)
 
     logger.info(
         f"  satellite analysis generated for {address}: "
