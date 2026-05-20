@@ -75,7 +75,7 @@ def main():
         print("COSMOS_CONNECTION_STRING not set")
         sys.exit(1)
 
-    client = MongoClient(uri, retryWrites=False, tls=True, tlsAllowInvalidCertificates=True)
+    client = MongoClient(uri, retryWrites=False, **({"tls": True, "tlsAllowInvalidCertificates": True} if "cosmos.azure.com" in uri else {}))
     db = client['Gold_Coast']
     print(f"Build Address Index -- {datetime.now().strftime('%Y-%m-%d %H:%M')}", flush=True)
 
@@ -119,12 +119,14 @@ def main():
         is_target = suburb_name in TARGET_MARKET_SUBURBS
 
         projection = {
-            '_id': 1, 'complete_address': 1,
+            '_id': 1, 'complete_address': 1, 'address': 1,
             'STREET_NO_1': 1, 'STREET_NAME': 1, 'STREET_TYPE': 1,
-            'LOCALITY': 1, 'POSTCODE': 1, 'PROPERTY_TYPE': 1,
-            'images': 1, 'lot_size_sqm': 1,
+            'LOCALITY': 1, 'POSTCODE': 1, 'display_postcode': 1, 'PROPERTY_TYPE': 1,
+            'images': 1, 'domain_image_urls': 1, 'lot_size_sqm': 1,
             'scraped_data.bedrooms': 1, 'scraped_data.bathrooms': 1,
             'scraped_data.car_spaces': 1, 'scraped_data.features': 1,
+            'scraped_data_v2.bedrooms': 1, 'scraped_data_v2.bathrooms': 1,
+            'scraped_data_v2.parking_spaces': 1,
             'bedrooms': 1, 'bathrooms': 1,
         }
 
@@ -134,18 +136,23 @@ def main():
         BATCH_SIZE = 50
 
         for doc in cursor:
-            addr = doc.get('complete_address')
+            # Prefer the normalized 'address' field (correct postcode) over complete_address (raw cadastral)
+            addr = doc.get('address') or doc.get('complete_address')
             if not addr:
                 continue
 
             scraped = doc.get('scraped_data', {})
-            images = doc.get('images', [])
+            scraped_v2 = doc.get('scraped_data_v2', {})
+            # Support both old images field and new domain_image_urls field
+            images = doc.get('domain_image_urls') or doc.get('images', [])
             if not isinstance(images, list):
                 images = []
 
-            bedrooms = doc.get('bedrooms') or scraped.get('bedrooms')
-            bathrooms = doc.get('bathrooms') or scraped.get('bathrooms')
-            car_spaces = scraped.get('car_spaces')
+            bedrooms = doc.get('bedrooms') or scraped_v2.get('bedrooms') or scraped.get('bedrooms')
+            bathrooms = doc.get('bathrooms') or scraped_v2.get('bathrooms') or scraped.get('bathrooms')
+            car_spaces = scraped_v2.get('parking_spaces') or scraped.get('car_spaces')
+            # Use normalized postcode (display_postcode) if available, else POSTCODE
+            postcode = doc.get('display_postcode') or doc.get('POSTCODE', '')
 
             index_doc = {
                 'address': addr.upper(),
@@ -156,7 +163,7 @@ def main():
                 'source_id': doc['_id'],
                 'suburb_key': suburb_name,
                 'suburb': suburb_display_name(suburb_name),
-                'postcode': doc.get('POSTCODE', ''),
+                'postcode': postcode,
                 'property_type': doc.get('PROPERTY_TYPE', 'Residential'),
                 'lot_size_sqm': doc.get('lot_size_sqm'),
                 'has_images': len(images) > 0,
