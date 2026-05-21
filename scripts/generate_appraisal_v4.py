@@ -48,6 +48,7 @@ import json
 
 from bson import ObjectId  # type: ignore
 from shared.db import get_client  # type: ignore
+from shared.domain_urls import to_bucket_api_url  # type: ignore
 from scripts.appraisal_template import render, layout_rules  # type: ignore
 
 
@@ -174,7 +175,7 @@ def render_appraisal(
     cover_html = render.render_section_00_cover_html(
         subject_id,
         editorial_overrides=get_overrides("00_cover"),
-        hero_image_src=pipeline_record.get("cover_hero_image_src"),
+        hero_image_src=to_bucket_api_url(pipeline_record.get("cover_hero_image_src")) if pipeline_record.get("cover_hero_image_src") else None,
         prepared_for=pipeline_record.get("name") or "the Owner",
         date_override=pipeline_record.get("cover_date_override"),
         write_substantiation=True,
@@ -353,7 +354,9 @@ def render_appraisal(
         hero_source = "pipeline"  # respected — pipeline supplied an explicit path
         # When the analyst picked a hero in the ops dashboard, download it into
         # expected_hero so the PDF render finds it locally (file:// loading).
-        hero_url = pipeline_record["cover_hero_image_src"]
+        # Domain CDN URLs are rewritten to bucket-api (full-res, no signed-hash
+        # thumbnail trap) — same fix as FP-001 for floor plans.
+        hero_url = to_bucket_api_url(pipeline_record["cover_hero_image_src"])
         if hero_url.startswith("http") and "blob.core.windows.net" not in hero_url:
             try:
                 import urllib.request
@@ -378,7 +381,8 @@ def render_appraisal(
                     url = img.get("url") if isinstance(img, dict) else img
                     if not url or "blob.core.windows.net" in url:
                         continue
-                    candidates.append((url, store_key))
+                    # Rewrite Domain CDN URLs to bucket-api (FP-001 fix)
+                    candidates.append((to_bucket_api_url(url), store_key))
         # Attempt download (overwrite any stale fallback file from previous run)
         if candidates:
             import urllib.request
