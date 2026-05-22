@@ -268,6 +268,81 @@ def crop_to_boundary(
     return buf.getvalue(), crop_box
 
 
+# ---------------------------------------------------------------------- #
+# Point-in-polygon filter — drop features whose bbox falls outside the lot
+# ---------------------------------------------------------------------- #
+
+def _point_in_polygon(x: float, y: float, polygon: List[Tuple[int, int]]) -> bool:
+    """Ray-casting point-in-polygon test. Returns True if (x, y) is inside the
+    closed polygon. Edge cases (point exactly on boundary) → treat as inside."""
+    if not polygon or len(polygon) < 3:
+        return True  # No polygon to filter against — let everything through.
+    inside = False
+    n = len(polygon)
+    j = n - 1
+    for i in range(n):
+        xi, yi = polygon[i]
+        xj, yj = polygon[j]
+        if ((yi > y) != (yj > y)) and (x < (xj - xi) * (y - yi) / ((yj - yi) or 1e-9) + xi):
+            inside = not inside
+        j = i
+    return inside
+
+
+def _bbox_overlap_polygon(box: Tuple[int, int, int, int], polygon: List[Tuple[int, int]]) -> float:
+    """Approximate fraction of the bbox area that falls inside the polygon.
+    Samples a 5x5 grid of points inside the box; returns the fraction inside.
+    Cheap, no shapely dependency, accurate enough to distinguish "inside",
+    "edge-overlap", and "outside" buckets."""
+    if not polygon:
+        return 1.0
+    x_min, y_min, x_max, y_max = box
+    if x_max <= x_min or y_max <= y_min:
+        return 0.0
+    hits = 0
+    total = 0
+    for i in range(1, 6):
+        for j in range(1, 6):
+            x = x_min + (x_max - x_min) * i / 6.0
+            y = y_min + (y_max - y_min) * j / 6.0
+            if _point_in_polygon(x, y, polygon):
+                hits += 1
+            total += 1
+    return hits / total if total else 0.0
+
+
+def filter_features_against_boundary(
+    features: List["Feature"],
+    ring_pixels: List[Tuple[int, int]],
+) -> List["Feature"]:
+    """Drop amenity features whose bbox falls largely outside the cadastral
+    boundary. Subject features are always kept (the GPT identification of
+    "this is the subject lot" is trusted whenever a yellow polygon is on
+    screen). Detractants/context are kept too — they're meant to be off-lot.
+
+    Thresholds:
+      - amenity: ≥30% of bbox area must overlap the polygon. Driveways
+        legitimately straddle the lot edge so a hard "centre inside" test
+        rejects them; 30% area-overlap keeps the edge cases.
+    """
+    if not ring_pixels or len(ring_pixels) < 3:
+        return features
+    out: List[Feature] = []
+    for f in features:
+        if f.category != "amenity":
+            out.append(f)
+            continue
+        overlap = _bbox_overlap_polygon(f.bbox, ring_pixels)
+        if overlap >= 0.30:
+            out.append(f)
+        else:
+            logger.info(
+                f"  satellite_annotation: dropped '{f.label}' ({f.category}) — "
+                f"only {overlap*100:.0f}% of bbox inside lot boundary"
+            )
+    return out
+
+
 def detect_features(
     image_bytes: bytes,
     address: str,
@@ -582,6 +657,19 @@ def annotate(
             ))
         features = translated
 
+    # Programmatic guardrail: drop amenity features whose bbox lands largely
+    # outside the cadastral lot. GPT's spatial accuracy on satellite tiles is
+    # inconsistent — without this filter, "Pool" features for neighbours' pools
+    # and "Driveway" boxes drawn on roads slip through. The yellow polygon is
+    # the source of truth.
+    if ring_pixels is not None:
+        before = len(features)
+        features = filter_features_against_boundary(features, ring_pixels)
+        if len(features) != before:
+            logger.info(
+                f"  satellite_annotation: boundary filter dropped {before - len(features)} feature(s)"
+            )
+
     # Draw feature boxes + pin on the full boundary-annotated image (or original if no boundary)
     base_for_annotation = boundary_bytes if ring_pixels is not None else image_bytes  # type: ignore[possibly-undefined]
     if ring_pixels is None:
@@ -592,6 +680,9 @@ def annotate(
     )
     return {
         "annotated_image_bytes": annotated_bytes,
+        # Persisted on the doc so future runs can detect "annotation generated
+        # before the boundary code existed" and trigger an upgrade.
+        "boundary_polygon": [[int(x), int(y)] for x, y in ring_pixels] if ring_pixels else None,
         "features": [
             {
                 "number": idx,
