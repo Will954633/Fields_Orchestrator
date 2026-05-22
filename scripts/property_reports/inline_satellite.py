@@ -160,6 +160,8 @@ def _annotate_and_upload(
         "annotated_image_url": annotated_url,
         "features": result.get("features") or [],
         "boundary_polygon": result.get("boundary_polygon"),
+        # In-memory only — used by the resolver to send to GPT analysis.
+        "boundary_marked_bytes": result.get("boundary_marked_bytes"),
     }
 
 
@@ -279,15 +281,31 @@ def resolve_satellite(
                 sa["annotated_image_url"] = anno["annotated_image_url"]
                 sa["features"] = anno["features"]
                 sa["boundary_polygon"] = anno.get("boundary_polygon")
+
+                # Re-analyse against the boundary-marked image so the categories +
+                # narrative are constrained to the subject lot. Existing analysis
+                # was generated against the raw tile and may include neighbours'
+                # pools / roads as "the property's".
+                if anno.get("boundary_marked_bytes") and anno.get("boundary_polygon"):
+                    fresh = s117.analyse_satellite_image(
+                        anno["boundary_marked_bytes"], address, suburb_key or "",
+                        boundary_drawn=True,
+                    )
+                    if fresh:
+                        sa["categories"] = fresh.get("categories") or sa.get("categories") or {}
+                        sa["narrative"] = fresh.get("narrative") or sa.get("narrative") or {}
+
                 if db_subject_coll is not None and subject_doc.get("_id"):
                     try:
+                        update_set = {
+                            "satellite_analysis.annotated_image_url": anno["annotated_image_url"],
+                            "satellite_analysis.features": anno["features"],
+                            "satellite_analysis.boundary_polygon": anno.get("boundary_polygon"),
+                            "satellite_analysis.categories": sa.get("categories") or {},
+                            "satellite_analysis.narrative": sa.get("narrative") or {},
+                        }
                         db_subject_coll.update_one(
-                            {"_id": subject_doc["_id"]},
-                            {"$set": {
-                                "satellite_analysis.annotated_image_url": anno["annotated_image_url"],
-                                "satellite_analysis.features": anno["features"],
-                                "satellite_analysis.boundary_polygon": anno.get("boundary_polygon"),
-                            }},
+                            {"_id": subject_doc["_id"]}, {"$set": update_set},
                         )
                     except Exception as e:
                         logger.warning(f"  satellite: write-back of annotation failed: {e}")
@@ -315,19 +333,28 @@ def resolve_satellite(
     except Exception as e:
         logger.warning(f"  satellite: blob upload failed (continuing without URL): {e}")
 
-    analysis = s117.analyse_satellite_image(image_bytes, address, suburb_key or "")
-    if not analysis:
-        logger.warning(f"  satellite: GPT analysis returned nothing for {address}")
-        return None
-
-    # Annotation pass — bounding boxes + Fields drop pin on the same image.
-    # Pass lat/lng so the cadastral boundary can be fetched and drawn.
+    # Annotation pass first — draws the cadastral boundary polygon on the
+    # tile. We need the boundary-marked image to send to GPT so the analysis
+    # prompt can constrain it to inside the polygon.
     anno = _annotate_and_upload(
         image_bytes, address=address,
         suburb_key=suburb_key, property_id=property_id, db_label=db_label,
         center_lat=latlng[0] if latlng else None,
         center_lng=latlng[1] if latlng else None,
     )
+
+    # GPT analysis now sees the boundary-marked tile (when boundary fetch
+    # succeeded). The boundary-aware prompt variant tells GPT to only describe
+    # what's inside the yellow polygon.
+    image_for_analysis = (anno or {}).get("boundary_marked_bytes") or image_bytes
+    boundary_drawn = bool((anno or {}).get("boundary_polygon"))
+    analysis = s117.analyse_satellite_image(
+        image_for_analysis, address, suburb_key or "",
+        boundary_drawn=boundary_drawn,
+    )
+    if not analysis:
+        logger.warning(f"  satellite: GPT analysis returned nothing for {address}")
+        return None
 
     record = {
         "categories": analysis.get("categories") or {},
