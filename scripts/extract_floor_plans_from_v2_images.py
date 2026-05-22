@@ -107,10 +107,21 @@ def classify_image(url: str) -> tuple[str, str]:
     return result
 
 
+OTH_HOSTS = ("images.corelogic.asia",)
+
+
+def url_source(url: str) -> str:
+    """Classify a URL by host.
+    Returns 'oth' for CoreLogic/On-The-House (CoreLogic-watermarked images
+    must NOT be surfaced to the public mini-site; they're internal-analysis
+    only). Everything else → 'domain'."""
+    return "oth" if any(h in url for h in OTH_HOSTS) else "domain"
+
+
 def collect_all_image_urls(doc: dict) -> list[str]:
     """Union of every image source on the doc, deduped, order-preserving.
-    Reads v2 + apr01 sidecars + legacy fields. Filters obvious junk (Azure
-    blob URLs that 403, non-http entries)."""
+    Reads v2 + apr01 sidecars + legacy fields + OTH (CoreLogic) fallback.
+    Filters obvious junk (Azure blob URLs that 403, non-http entries)."""
     urls: list[str] = []
     seen: set[str] = set()
     DEAD_HOSTS = ("fieldspropertyimages.blob.core.windows.net",)
@@ -150,6 +161,15 @@ def collect_all_image_urls(doc: dict) -> list[str]:
     push(doc.get("property_images_original"))
     push(doc.get("scraped_property_images"))
     push(doc.get("property_images"))
+
+    # Legacy: scraped_data.images (pre-v2 Domain scrapes still hold URLs here
+    # for records the v2 scraper missed).
+    legacy = doc.get("scraped_data") or {}
+    push(legacy.get("images"))
+
+    # OTH (CoreLogic / On-The-House) fallback for cadastral records that have
+    # no Domain coverage. Watermarked images — internal classification only.
+    push(doc.get("oth_image_urls"))
 
     return urls
 
@@ -193,10 +213,22 @@ def process_record(coll, doc: dict, tail_n: int | None, image_workers: int,
             _, result = _do((i, u))
             classifications[i] = result
 
-    yes_urls = [to_bucket_api_url(c["url"]) for c in classifications if c["verdict"] == "YES"]
+    # Split YES URLs by source. OTH-sourced (CoreLogic-watermarked) URLs go to
+    # a separate field — they are never surfaced to the public mini-site, only
+    # used for internal floor-plan analysis (room dimensions, level counts).
+    yes_classifications = [c for c in classifications if c["verdict"] == "YES"]
+    domain_yes_urls = [to_bucket_api_url(c["url"]) for c in yes_classifications
+                       if url_source(c["url"]) == "domain"]
+    oth_yes_urls = [c["url"] for c in yes_classifications  # no bucket-api rewrite for OTH
+                    if url_source(c["url"]) == "oth"]
+
+    # Tag each candidate with its source so the classifier metadata can be
+    # introspected later.
+    for c in classifications:
+        c["source"] = url_source(c["url"])
 
     set_doc = {
-        "floor_plans_v2_extracted": yes_urls,
+        "floor_plans_v2_extracted": domain_yes_urls,
         "floor_plans_v2_extracted_at": dt.datetime.utcnow(),
         "floor_plans_v2_classifier": {
             "version": CLASSIFIER_VERSION,
@@ -208,14 +240,20 @@ def process_record(coll, doc: dict, tail_n: int | None, image_workers: int,
             "candidates": classifications,
         },
     }
+    if oth_yes_urls:
+        # Only write the OTH field when we actually have OTH-sourced YESes,
+        # so existing records aren't dirtied with empty arrays.
+        set_doc["floor_plans_oth_extracted"] = oth_yes_urls
+        set_doc["floor_plans_oth_extracted_at"] = dt.datetime.utcnow()
     coll.update_one({"_id": _id}, {"$set": set_doc})
 
     addr = doc.get("address") or f"{doc.get('STREET_NO_1')} {doc.get('STREET_NAME')} {doc.get('STREET_TYPE')}"
 
-    # Optionally download yes-classified images so we can spot-check
-    if download_dir and yes_urls:
+    # Optionally download yes-classified images so we can spot-check (Domain + OTH)
+    all_yes_urls = domain_yes_urls + oth_yes_urls
+    if download_dir and all_yes_urls:
         download_dir.mkdir(parents=True, exist_ok=True)
-        for i, u in enumerate(yes_urls):
+        for i, u in enumerate(all_yes_urls):
             try:
                 r = requests.get(u, timeout=20, headers={"User-Agent": "Mozilla/5.0"})
                 if r.status_code == 200:
@@ -231,7 +269,9 @@ def process_record(coll, doc: dict, tail_n: int | None, image_workers: int,
         "total_images": len(unique_urls),
         "unique_images": len(unique_urls),
         "candidates_classified": len(candidates),
-        "yes_count": len(yes_urls),
+        "yes_count": len(all_yes_urls),
+        "yes_count_domain": len(domain_yes_urls),
+        "yes_count_oth": len(oth_yes_urls),
         "yes_positions": [c["position"] for c in classifications if c["verdict"] == "YES"],
         "errors_count": sum(1 for c in classifications if c["verdict"] == "ERROR"),
         "status": "OK",
@@ -266,15 +306,17 @@ def main() -> int:
     db = get_client()["Gold_Coast"]
     coll = db[args.suburb]
 
-    # Eligible = records with images from ANY source (v2 + apr01 sidecars + legacy)
-    # — not just scraped_data_v2.image_count which is too narrow.
+    # Eligible = records with images from ANY source (v2 + apr01 sidecars +
+    # legacy scraped_data.images + OTH/CoreLogic fallback).
     HAS_ANY_IMAGE = {"$or": [
         {"scraped_data_v2.image_urls.0": {"$exists": True}},
+        {"scraped_data.images.0": {"$exists": True}},
         {"scraped_data_apr01_recovered.images.0": {"$exists": True}},
         {"scraped_data_recently_sold_apr01_recovered.images.0": {"$exists": True}},
         {"scraped_data_for_sale_apr01_recovered.images.0": {"$exists": True}},
         {"property_images_original.0": {"$exists": True}},
         {"scraped_property_images.0": {"$exists": True}},
+        {"oth_image_urls.0": {"$exists": True}},
     ]}
     query: dict[str, Any] = {"$and": [HAS_ANY_IMAGE]}
     if not args.force:
@@ -287,10 +329,12 @@ def main() -> int:
         "_id": 1, "address": 1, "STREET_NO_1": 1, "STREET_NAME": 1, "STREET_TYPE": 1,
         "scraped_data_v2.image_urls": 1, "scraped_data_v2.hero_image_url": 1,
         "scraped_data_v2.image_count": 1,
+        "scraped_data.images": 1,
         "scraped_data_apr01_recovered.images": 1,
         "scraped_data_recently_sold_apr01_recovered.images": 1,
         "scraped_data_for_sale_apr01_recovered.images": 1,
         "property_images_original": 1, "scraped_property_images": 1, "property_images": 1,
+        "oth_image_urls": 1,
     }
     cursor = coll.find(query, proj)
     if not args.all:
