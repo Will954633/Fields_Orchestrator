@@ -1745,8 +1745,13 @@ def render_html(prop, client_name, top_comps, room_assessments, editorial,
         "pool_photo": (f"file://{photo_paths['pool']}" if photo_paths.get('pool') else ""),
         "logo_path": f"file://{TEMPLATE_DIR / 'fields-logo-transparent.png'}",
         "logo_white_path": f"file://{TEMPLATE_DIR / 'fields-logo-white.png'}",
-        # Satellite analysis
-        "satellite_image_url": prop.get("satellite_analysis", {}).get("satellite_image_url", ""),
+        # Satellite analysis — prefer the annotated tile (bounding boxes + Fields
+        # drop pin) when the inline_satellite resolver has produced one. Falls
+        # back to the raw Google Maps tile when annotation hasn't run yet.
+        "satellite_image_url": (
+            prop.get("satellite_analysis", {}).get("annotated_image_url")
+            or prop.get("satellite_analysis", {}).get("satellite_image_url", "")
+        ),
         "sat_green_space": _fmt_sat_label(prop.get("satellite_analysis", {}).get("categories", {}).get("amenity_premiums", {}).get("green_space_proximity", "")),
         "sat_frontage": _fmt_sat_label(prop.get("satellite_analysis", {}).get("categories", {}).get("adjacency", {}).get("frontage", "")),
         "sat_overall_setting": prop.get("satellite_analysis", {}).get("narrative", {}).get("overall_setting", ""),
