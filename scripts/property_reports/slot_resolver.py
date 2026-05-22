@@ -222,6 +222,34 @@ class SlotResolver:
                         style=style,
                         url=sv.get("street_view_image_url"),
                     )
+
+                    # Hero fallback — if the photo gallery's hero is missing or
+                    # is a 150px rimh2 thumbnail (renders blank at hero-section
+                    # width), swap in the Street View image. The Google Street
+                    # View shot is full-resolution and always shows the actual
+                    # home — best fallback we have for sparse-photo addresses.
+                    photos = prop.get("photos") or []
+                    hero = next((p for p in photos if p.get("role") == "hero"), None)
+                    hero_url = (hero or {}).get("url") or ""
+                    hero_is_thumbnail = (
+                        "rimh2.domainstatic.com.au" in hero_url
+                        and "/fit-in/" not in hero_url
+                    )
+                    if not hero or hero_is_thumbnail:
+                        new_hero = {
+                            "url": sv["street_view_image_url"],
+                            "role": "hero",
+                            "meta": {"picked_by": "street_view_fallback"},
+                        }
+                        # Drop any existing hero, prepend the Street View hero.
+                        photos = [p for p in photos if p.get("role") != "hero"]
+                        photos.insert(0, new_hero)
+                        prop["photos"] = photos
+                        updates["property"] = prop
+                        logger.info(
+                            f"  hero fallback: swapped {'thumbnail' if hero_is_thumbnail else 'missing'} "
+                            f"hero for street view image"
+                        )
                 else:
                     self.emit.done("street_view", "No street view imagery available at this address")
             except Exception as e:
