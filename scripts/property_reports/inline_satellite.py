@@ -73,8 +73,16 @@ def _has_existing_analysis(doc: Dict[str, Any]) -> bool:
 
 
 def _has_annotated_image(doc: Dict[str, Any]) -> bool:
+    """An annotation counts as current only if it also carries the cadastral
+    `boundary_polygon`. Annotations generated before the 2026-05-20 boundary
+    code shipped lack that field — when we detect the gap, we re-run so the
+    yellow lot polygon + point-in-polygon filter both apply."""
     sa = doc.get("satellite_analysis") or {}
-    return bool(sa.get("annotated_image_url"))
+    if not sa.get("annotated_image_url"):
+        return False
+    # Older annotations (pre-boundary) don't carry boundary_polygon — treat as
+    # stale so the upgrade pass refreshes them.
+    return bool(sa.get("boundary_polygon"))
 
 
 def _fetch_image_bytes_from_url(url: str) -> Optional[bytes]:
@@ -144,6 +152,7 @@ def _annotate_and_upload(
     return {
         "annotated_image_url": annotated_url,
         "features": result.get("features") or [],
+        "boundary_polygon": result.get("boundary_polygon"),
     }
 
 
@@ -262,6 +271,7 @@ def resolve_satellite(
             if anno:
                 sa["annotated_image_url"] = anno["annotated_image_url"]
                 sa["features"] = anno["features"]
+                sa["boundary_polygon"] = anno.get("boundary_polygon")
                 if db_subject_coll is not None and subject_doc.get("_id"):
                     try:
                         db_subject_coll.update_one(
@@ -269,6 +279,7 @@ def resolve_satellite(
                             {"$set": {
                                 "satellite_analysis.annotated_image_url": anno["annotated_image_url"],
                                 "satellite_analysis.features": anno["features"],
+                                "satellite_analysis.boundary_polygon": anno.get("boundary_polygon"),
                             }},
                         )
                     except Exception as e:
@@ -317,6 +328,7 @@ def resolve_satellite(
         "satellite_image_url": image_url,
         "annotated_image_url": (anno or {}).get("annotated_image_url"),
         "features": (anno or {}).get("features") or [],
+        "boundary_polygon": (anno or {}).get("boundary_polygon"),
         "processed_at": datetime.utcnow(),
         "zoom_level": s117.SATELLITE_ZOOM,
         "image_size": s117.SATELLITE_SIZE,
