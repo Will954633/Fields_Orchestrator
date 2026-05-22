@@ -172,6 +172,12 @@ class SlotResolver:
                 if sat:
                     prop["satellite"] = sat
                     updates["property"] = prop
+                    # Mirror onto the in-memory subject so downstream resolvers
+                    # (inline_features.derive_features_basic, scarcity_features)
+                    # see the new pool_visible / water_proximity signals this
+                    # same run, not on the next visit.
+                    if self._subject is not None:
+                        self._subject["satellite_analysis"] = sat
                     cats = sat.get("categories") or {}
                     self.emit.done(
                         "satellite",
@@ -201,6 +207,11 @@ class SlotResolver:
                 if sv and sv.get("street_view_image_url"):
                     prop["street_view"] = sv
                     updates["property"] = prop
+                    # Mirror onto the in-memory subject so derive_features_basic
+                    # picks up storeys / car_spaces / cladding fallbacks this
+                    # same run.
+                    if self._subject is not None:
+                        self._subject["street_view_analysis"] = sv
                     cats = sv.get("categories") or {}
                     storeys = (cats.get("dwelling") or {}).get("storeys")
                     style = (cats.get("dwelling") or {}).get("style")
