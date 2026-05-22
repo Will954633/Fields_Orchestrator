@@ -1026,7 +1026,11 @@ def render_section_01_right_html(
     # Filter dead Azure blob URLs — the migration left these as stale refs
     # on subject docs but the blob account is shut down. Same filter pattern
     # the Netlify functions use in their image-fallback chain.
-    _stored = (subject.get("satellite_analysis") or {}).get("satellite_image_url") or ""
+    # Prefer the annotated tile (bounding boxes + Fields drop pin) over the
+    # raw Google Maps tile — both live under `satellite_analysis` on the
+    # subject doc, populated by the inline_satellite resolver.
+    _sa = subject.get("satellite_analysis") or {}
+    _stored = _sa.get("annotated_image_url") or _sa.get("satellite_image_url") or ""
     if "blob.core.windows.net" in _stored:
         _stored = ""
     sat_src = satellite_image_src or _stored or _default_satellite_src(subject_id)
