@@ -679,10 +679,18 @@ class SlotResolver:
         if not merged:
             merged = s.get("domain_image_urls") or s.get("property_images") or []
         candidates = merged
-        # Deduplicate, keep order
+        # Deduplicate, keep order. Only prepend the scraper_hero when we have
+        # nothing else — `domain_hero_image_url` is a signed rimh2 URL that
+        # serves a 150px thumbnail, so it's only a usable hero when there's
+        # genuinely no full-res alternative.
         seen = set()
         clean_candidates: List[str] = []
-        if scraper_hero:
+        scraper_hero_is_thumbnail = (
+            isinstance(scraper_hero, str)
+            and "rimh2.domainstatic.com.au" in scraper_hero
+            and "/fit-in/" not in scraper_hero
+        )
+        if scraper_hero and (not merged or not scraper_hero_is_thumbnail):
             clean_candidates.append(scraper_hero)
             seen.add(scraper_hero)
         for url in candidates:
@@ -690,8 +698,13 @@ class SlotResolver:
                 clean_candidates.append(url)
                 seen.add(url)
 
-        # AI hero pick (Day 4) — falls back to scraper hero on failure
-        hero_url = scraper_hero
+        # AI hero pick (Day 4) — falls back to the first clean candidate on
+        # failure. Don't default back to the scraper_hero when it's the known
+        # 150px rimh2 thumbnail — that just produces a broken hero image.
+        hero_url = (
+            scraper_hero if (scraper_hero and not scraper_hero_is_thumbnail)
+            else (clean_candidates[0] if clean_candidates else scraper_hero)
+        )
         hero_pick_meta = None
         if clean_candidates:
             self.emit.start("gallery", f"Selecting your hero shot from {len(clean_candidates)} photos")
