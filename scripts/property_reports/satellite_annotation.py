@@ -596,24 +596,31 @@ def annotate(
     zoom: int = 19,
     tile_scale: int = 2,
 ) -> Optional[Dict[str, Any]]:
-    """Detect features and render an annotated PNG.
+    """Render an annotated satellite PNG with the cadastral lot boundary
+    (yellow polygon) and the Fields drop pin on the subject home.
 
-    When center_lat/center_lng are provided, fetches the actual cadastral lot
-    boundary from the GCCC ArcGIS service, draws it as a yellow polygon on the
-    image, crops to the lot + margin, then sends the tighter image to GPT with
-    an explicit instruction to only annotate features inside the boundary.
-    GPT bbox coordinates are translated back to full-image space before return.
+    GPT-based feature detection (pool/driveway/garage bboxes) was removed —
+    the model's spatial accuracy on satellite tiles was unreliable enough that
+    boxes regularly landed on the wrong pixel region (pool on a tree, driveway
+    on grass). The honest visual is the cadastral lot itself plus the pin.
+
+    The categorical + narrative analysis still runs over this same image via
+    `step117_satellite_analysis.analyse_satellite_image()` — that call now
+    receives the boundary-marked image so the prompt can constrain GPT to
+    "only describe features INSIDE the yellow polygon".
 
     Returns:
         {
-          "annotated_image_bytes": bytes,   # full-size image with all overlays
-          "features": [{label, category, confidence, bbox}, ...]
+          "annotated_image_bytes": bytes,   # tile + yellow boundary + drop pin
+          "boundary_marked_bytes": bytes,   # tile + yellow boundary (no pin) —
+                                            # the version passed to GPT for analysis
+          "boundary_polygon": [[x,y], ...] | None,  # pixel-space ring
+          "features": [],                   # empty — kept for back-compat
         }
     or None on failure.
     """
     ring_pixels: Optional[List[Tuple[int, int]]] = None
-    crop_box: Optional[Tuple[int, int, int, int]] = None
-    image_for_gpt = image_bytes  # may be replaced by boundary-annotated + cropped version
+    boundary_bytes: bytes = image_bytes  # tile + boundary (no pin), fed to GPT
 
     if center_lat is not None and center_lng is not None:
         try:
@@ -628,69 +635,23 @@ def annotate(
             ring = fetch_boundary(center_lat, center_lng)
             if ring:
                 logger.info("  satellite_annotation: got boundary polygon (%d vertices)", len(ring))
-                # 1. Draw yellow boundary on the full image
                 boundary_bytes, ring_pixels = draw_lot_boundary(
                     image_bytes, ring, center_lat, center_lng, zoom, tile_scale
                 )
-                # 2. Crop tighter around the lot + context margin
-                cropped_bytes, crop_box = crop_to_boundary(boundary_bytes, ring_pixels, margin_factor=1.5)
-                image_for_gpt = cropped_bytes
             else:
                 logger.info("  satellite_annotation: boundary fetch returned no polygon — using full tile")
 
-    has_boundary = ring_pixels is not None
-    features = detect_features(image_for_gpt, address, suburb, has_boundary=has_boundary)
-    if not features:
-        logger.info("  satellite_annotation: 0 features detected — drawing pin only")
-
-    # If we cropped, translate GPT bbox coordinates back to full-image space
-    if crop_box is not None and features:
-        cx_off, cy_off = crop_box[0], crop_box[1]
-        translated = []
-        for f in features:
-            x0, y0, x1, y1 = f.bbox
-            translated.append(Feature(
-                label=f.label,
-                category=f.category,
-                confidence=f.confidence,
-                bbox=(x0 + cx_off, y0 + cy_off, x1 + cx_off, y1 + cy_off),
-            ))
-        features = translated
-
-    # Programmatic guardrail: drop amenity features whose bbox lands largely
-    # outside the cadastral lot. GPT's spatial accuracy on satellite tiles is
-    # inconsistent — without this filter, "Pool" features for neighbours' pools
-    # and "Driveway" boxes drawn on roads slip through. The yellow polygon is
-    # the source of truth.
-    if ring_pixels is not None:
-        before = len(features)
-        features = filter_features_against_boundary(features, ring_pixels)
-        if len(features) != before:
-            logger.info(
-                f"  satellite_annotation: boundary filter dropped {before - len(features)} feature(s)"
-            )
-
-    # Draw feature boxes + pin on the full boundary-annotated image (or original if no boundary)
-    base_for_annotation = boundary_bytes if ring_pixels is not None else image_bytes  # type: ignore[possibly-undefined]
-    if ring_pixels is None:
-        base_for_annotation = image_bytes
-
+    # Draw the drop pin on top of the boundary-marked image. No feature boxes.
     annotated_bytes, display_features = draw_annotations(
-        base_for_annotation, features, pin_pixel=pin_pixel
+        boundary_bytes, [], pin_pixel=pin_pixel,
     )
     return {
         "annotated_image_bytes": annotated_bytes,
+        # Boundary-only version (no pin) — passed to step117 GPT analysis so the
+        # categorical/narrative prompt can constrain GPT to inside the polygon.
+        "boundary_marked_bytes": boundary_bytes,
         # Persisted on the doc so future runs can detect "annotation generated
         # before the boundary code existed" and trigger an upgrade.
         "boundary_polygon": [[int(x), int(y)] for x, y in ring_pixels] if ring_pixels else None,
-        "features": [
-            {
-                "number": idx,
-                "label": f.label,
-                "category": f.category,
-                "confidence": f.confidence,
-                "bbox": list(f.bbox),
-            }
-            for idx, f in enumerate(display_features, start=1)
-        ],
+        "features": [],  # kept for back-compat; box-bounding removed
     }
