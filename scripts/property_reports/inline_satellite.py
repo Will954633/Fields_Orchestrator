@@ -81,15 +81,19 @@ def _has_existing_analysis(doc: Dict[str, Any]) -> bool:
 
 def _has_annotated_image(doc: Dict[str, Any]) -> bool:
     """An annotation counts as current only if it also carries the cadastral
-    `boundary_polygon`. Annotations generated before the 2026-05-20 boundary
-    code shipped lack that field — when we detect the gap, we re-run so the
-    yellow lot polygon + point-in-polygon filter both apply."""
+    `boundary_polygon` AND has no `features` array (box-bounding was removed
+    on 2026-05-22 — annotations with feature boxes are stale visuals)."""
     sa = doc.get("satellite_analysis") or {}
     if not sa.get("annotated_image_url"):
         return False
-    # Older annotations (pre-boundary) don't carry boundary_polygon — treat as
-    # stale so the upgrade pass refreshes them.
-    return bool(sa.get("boundary_polygon"))
+    if not sa.get("boundary_polygon"):
+        # Pre-boundary annotation — needs refresh.
+        return False
+    # Box-bounding era annotations had non-empty features — re-annotate so the
+    # image no longer has the rectangles drawn on it.
+    if sa.get("features"):
+        return False
+    return True
 
 
 def _fetch_image_bytes_from_url(url: str) -> Optional[bytes]:
