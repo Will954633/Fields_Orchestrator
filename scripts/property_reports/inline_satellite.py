@@ -64,9 +64,16 @@ def _get_step117():
 
 def _has_existing_analysis(doc: Dict[str, Any]) -> bool:
     """True if the nightly batch already produced a usable result for this
-    doc. Quick check: must have an image_url + at least one category bucket."""
+    doc. Quick check: must have an image_url + at least one category bucket.
+    URLs pointing at the disabled legacy Azure blob host don't count — those
+    images return 403, so we treat the analysis as needing a full re-run."""
     sa = doc.get("satellite_analysis") or {}
-    if not sa.get("satellite_image_url"):
+    url = sa.get("satellite_image_url") or ""
+    if not url:
+        return False
+    if "blob.core.windows.net" in url:
+        # Dead Azure host — the categories may still be valid but we can't
+        # serve the image. Re-fetch fresh.
         return False
     cats = sa.get("categories") or {}
     return bool(cats) and any(cats.values())
