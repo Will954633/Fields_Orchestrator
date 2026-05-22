@@ -169,7 +169,15 @@ def section_01_right(
     return {
         "headline": "Why this home is hard to replace.",
         "subhead": _generate_subhead(subject),
-        "satellite_image_url": (subject.get("satellite_analysis") or {}).get("satellite_image_url"),
+        # Prefer the annotated tile (bounding boxes + Fields drop pin) when the
+        # resolver has produced one — falls back to the raw Google Maps tile.
+        # Auto-callouts continue to work either way; the annotation just adds
+        # visible proof of analysis on top of the same image.
+        "satellite_image_url": (
+            (subject.get("satellite_analysis") or {}).get("annotated_image_url")
+            or (subject.get("satellite_analysis") or {}).get("satellite_image_url")
+        ),
+        "satellite_features": (subject.get("satellite_analysis") or {}).get("features") or [],
         "satellite_callouts": _auto_callouts(subject),
         "dot_grid": {
             "total": total,
