@@ -342,7 +342,7 @@ def render_appraisal(
     expected_sat.parent.mkdir(parents=True, exist_ok=True)
 
     hero_source = None     # "pipeline" | "auto_apr01" | "auto_scraped" | "fallback" | "missing"
-    satellite_source = None  # "pipeline" | "auto_static_maps" | "fallback" | "missing"
+    satellite_source = None  # "pipeline" | "annotated" | "satellite_analysis" | "auto_static_maps" | "fallback" | "missing"
 
     # Look up the subject doc up-front — used by both hero and satellite blocks.
     from shared.db import get_client as _gc
@@ -406,31 +406,58 @@ def render_appraisal(
             else:
                 hero_source = "missing"
 
-    # Satellite: use Google Static Maps with the subject's lat/lng. The previous
-    # satellite_analysis pipeline stored images on a defunct Azure account, so
-    # we regenerate fresh per-subject every render (cheap — single Static Maps API call).
+    # Satellite source priority:
+    #   1. pipeline_record.satellite_image_src  — analyst override
+    #   2. satellite_analysis.annotated_image_url — bounding boxes + Fields drop pin,
+    #      produced by the inline_satellite resolver. This is the version that
+    #      visibly demonstrates the analysis tech and matches what the seller
+    #      mini-site renders. Use it whenever it's available.
+    #   3. satellite_analysis.satellite_image_url — raw Google Maps tile from
+    #      the inline_satellite resolver (or the nightly step 117 batch).
+    #   4. Fresh Google Static Maps call — fallback when nothing is cached.
+    #   5. Local fallback asset.
     if (pipeline_record or {}).get("satellite_image_src"):
         satellite_source = "pipeline"
     else:
         import os as _os
-        lat = _subj.get("LATITUDE") if _subj else None
-        lng = _subj.get("LONGITUDE") if _subj else None
-        api_key = _os.environ.get("GOOGLE_MAPS_STATIC_API_KEY")
-        if lat and lng and api_key:
-            url = (
-                "https://maps.googleapis.com/maps/api/staticmap"
-                f"?center={lat},{lng}&zoom=19&size=640x640&maptype=satellite"
-                f"&markers=color:red%7C{lat},{lng}&key={api_key}"
-            )
+        _sa = (_subj or {}).get("satellite_analysis") or {}
+        cached_url = _sa.get("annotated_image_url") or _sa.get("satellite_image_url")
+        # Skip dead Azure URLs left over from the legacy blob account.
+        if cached_url and "blob.core.windows.net" in cached_url:
+            cached_url = None
+        if cached_url:
             try:
                 import urllib.request as _ur
-                with _ur.urlopen(url, timeout=15) as resp:
+                req = _ur.Request(cached_url, headers={"User-Agent": "Fields-Appraisal/1.0"})
+                with _ur.urlopen(req, timeout=15) as resp:
                     data = resp.read()
                 if len(data) > 2000:
                     expected_sat.write_bytes(data)
-                    satellite_source = "auto_static_maps"
-            except Exception:
-                pass
+                    satellite_source = "annotated" if _sa.get("annotated_image_url") else "satellite_analysis"
+            except Exception as exc:
+                print(f"  [WARN] cached satellite fetch failed ({cached_url[:80]}…): {exc}")
+
+        # Fall back to a fresh Google Static Maps fetch only when nothing
+        # cached worked. This is the path Will's old reports went through.
+        if not satellite_source:
+            lat = _subj.get("LATITUDE") if _subj else None
+            lng = _subj.get("LONGITUDE") if _subj else None
+            api_key = _os.environ.get("GOOGLE_MAPS_STATIC_API_KEY")
+            if lat and lng and api_key:
+                url = (
+                    "https://maps.googleapis.com/maps/api/staticmap"
+                    f"?center={lat},{lng}&zoom=19&size=640x640&maptype=satellite"
+                    f"&markers=color:red%7C{lat},{lng}&key={api_key}"
+                )
+                try:
+                    import urllib.request as _ur
+                    with _ur.urlopen(url, timeout=15) as resp:
+                        data = resp.read()
+                    if len(data) > 2000:
+                        expected_sat.write_bytes(data)
+                        satellite_source = "auto_static_maps"
+                except Exception:
+                    pass
         if not satellite_source:
             if fallback_sat.exists():
                 shutil.copy(fallback_sat, expected_sat)
