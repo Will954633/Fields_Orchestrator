@@ -191,6 +191,23 @@ IMPORTANT: The subject property is marked with a RED PIN/MARKER on the image. On
 Provide your buyer-perspective analysis as a JSON object."""
 
 
+# Variant used when the satellite tile has the cadastral lot polygon drawn on
+# it (bright yellow outline). Removes any ambiguity about where the subject
+# boundary is — the polygon is the source of truth.
+USER_PROMPT_BOUNDARY = """Analyse this satellite image of a property at: {address}
+
+The property is in the suburb of {suburb}, Gold Coast, Queensland, Australia.
+
+CRITICAL: The subject property's lot boundary is marked with a BRIGHT YELLOW POLYGON drawn directly on the image. The yellow polygon outlines the legal cadastral boundary of the subject lot — it is the source of truth for what belongs to this property.
+
+- For every "categories" field: describe ONLY what falls INSIDE the yellow polygon. A pool on a neighbouring lot does NOT count as "pool_visible: true". A driveway on the road does NOT count as the subject's parking provision.
+- For "narrative.pool_and_outdoor", "lot_assessment", "neighbour_density": describe only the subject's lot (inside the yellow polygon) — surrounding lots are context, not subject.
+- For "backs_onto", "road_proximity", "surrounding_land_use": these are about what is BEYOND the yellow polygon (parks, roads, neighbours, etc.) — that's the expected scope of those fields.
+- The drop pin on the image marks the subject home within the polygon — it's an additional cue, but the polygon is the authoritative boundary.
+
+Provide your buyer-perspective analysis as a JSON object."""
+
+
 # ---------------------------------------------------------------------------
 # Stats
 # ---------------------------------------------------------------------------
@@ -294,11 +311,24 @@ def upload_satellite_to_blob(
     )
 
 
-def analyse_satellite_image(image_bytes: bytes, address: str, suburb: str) -> Optional[Dict[str, Any]]:
-    """Send satellite image to GPT-5.4 for buyer-perspective analysis."""
+def analyse_satellite_image(
+    image_bytes: bytes,
+    address: str,
+    suburb: str,
+    boundary_drawn: bool = False,
+) -> Optional[Dict[str, Any]]:
+    """Send satellite image to GPT for buyer-perspective analysis.
+
+    When `boundary_drawn=True`, the caller has overlaid the cadastral lot
+    polygon (bright yellow) onto the image — we switch to a stricter prompt
+    that constrains GPT to only describe features inside the polygon.
+    """
     client = OpenAI(api_key=OPENAI_API_KEY)
 
     b64_image = base64.b64encode(image_bytes).decode("utf-8")
+    user_prompt = (USER_PROMPT_BOUNDARY if boundary_drawn else USER_PROMPT).format(
+        address=address, suburb=suburb.replace("_", " ").title()
+    )
 
     try:
         response = client.chat.completions.create(
@@ -310,7 +340,7 @@ def analyse_satellite_image(image_bytes: bytes, address: str, suburb: str) -> Op
                     "content": [
                         {
                             "type": "text",
-                            "text": USER_PROMPT.format(address=address, suburb=suburb.replace("_", " ").title()),
+                            "text": user_prompt,
                         },
                         {
                             "type": "image_url",
