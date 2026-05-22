@@ -41,6 +41,7 @@ from scripts.property_reports.inline_features import derive_features_basic
 from scripts.property_reports.inline_scrape import needs_refresh, recover_photos
 from scripts.property_reports.inline_floor_plan import resolve_floor_plan
 from scripts.property_reports.inline_satellite import resolve_satellite
+from scripts.property_reports.inline_street_view import resolve_street_view
 
 logger = logging.getLogger(__name__)
 
@@ -184,6 +185,37 @@ class SlotResolver:
             except Exception as e:
                 logger.warning(f"  satellite resolver threw: {e}")
                 self.emit.fail("satellite", str(e))
+
+            # Street View — kerb-level companion to the satellite. Fetches a
+            # Google Static Street View image at the lat/lng and runs GPT-4o
+            # vision for storeys / style / cladding / garage / front-yard
+            # signals. Universal baseline asset for every address.
+            self.emit.start("street_view", "Capturing the street-level view")
+            try:
+                coll = self.db[self.suburb_key] if self.suburb_key else None
+                sv = resolve_street_view(
+                    self._subject or {},
+                    suburb_key=self.suburb_key,
+                    db_subject_coll=coll,
+                )
+                if sv and sv.get("street_view_image_url"):
+                    prop["street_view"] = sv
+                    updates["property"] = prop
+                    cats = sv.get("categories") or {}
+                    storeys = (cats.get("dwelling") or {}).get("storeys")
+                    style = (cats.get("dwelling") or {}).get("style")
+                    self.emit.done(
+                        "street_view",
+                        f"Street view read — {style or 'home'}, {storeys or '?'} storey",
+                        storeys=storeys,
+                        style=style,
+                        url=sv.get("street_view_image_url"),
+                    )
+                else:
+                    self.emit.done("street_view", "No street view imagery available at this address")
+            except Exception as e:
+                logger.warning(f"  street_view resolver threw: {e}")
+                self.emit.fail("street_view", str(e))
         else:
             self.emit.fail("cadastral", "Subject property not found")
 
