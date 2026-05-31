@@ -16,8 +16,38 @@ Usage:
 """
 
 import os
+import time as _time
 from pymongo import MongoClient
+from pymongo.errors import OperationFailure
 from datetime import datetime
+
+
+def _cosmos_retry(func, *args, max_retries=5, **kwargs):
+    """Execute a MongoDB operation with Cosmos DB 429 retry logic.
+    Matches shared/ru_guard.py: 5 attempts, broad error detection, exponential backoff.
+    """
+    import re as _re
+    _RETRY_AFTER_RE = _re.compile(r"RetryAfterMs[\":]?\s*(\d+)", _re.IGNORECASE)
+    for attempt in range(max_retries):
+        try:
+            return func(*args, **kwargs)
+        except OperationFailure as e:
+            msg = str(e).lower()
+            is_throttled = (
+                getattr(e, 'code', None) == 16500
+                or "toomanyrequests" in msg
+                or "requestratetoolarge" in msg
+                or "429" in msg
+            )
+            if is_throttled and attempt < max_retries - 1:
+                # Parse RetryAfterMs from error details
+                details_str = str(getattr(e, 'details', ''))
+                match = _RETRY_AFTER_RE.search(details_str) or _RETRY_AFTER_RE.search(str(e))
+                wait_ms = int(match.group(1)) if match else 500
+                sleep_s = min(max(0.3, wait_ms / 1000.0 + 0.25), 5.0)
+                _time.sleep(sleep_s)
+                continue
+            raise
 import sys
 import re
 import time
@@ -212,8 +242,11 @@ def _run_pass3_profile_scrape(for_sale_db, gc_db, for_sale_suburbs, exclude):
     for suburb in for_sale_suburbs:
         if suburb in exclude:
             continue
+        # CRITICAL: filter to active listings only. Without listing_status the
+        # query scans the ~40K cadastral records in each Gold_Coast suburb
+        # collection (it scanned ~15,900 nightly and timed out for weeks).
         docs = list(for_sale_db[suburb].find(
-            {'transactions': {'$exists': False}},
+            {'transactions': {'$exists': False}, 'listing_status': 'for_sale'},
             {'address': 1, 'listing_url': 1}
         ))
         valid = []
@@ -347,23 +380,25 @@ def enrich_property_timeline():
 
     try:
         mongo_uri = os.getenv('MONGODB_URI', 'mongodb://localhost:27017/')
-        client = MongoClient(mongo_uri, retryWrites=False, tls=True, tlsAllowInvalidCertificates=True)
+        client = MongoClient(mongo_uri, retryWrites=False, **({"tls": True, "tlsAllowInvalidCertificates": True} if "cosmos.azure.com" in mongo_uri else {}))
         # Source: Gold_Coast has scraped_data.property_timeline
         gc_db = client['Gold_Coast']
-        # Target: Gold_Coast_Currently_For_Sale per-suburb collections
-        for_sale_db = client['Gold_Coast_Currently_For_Sale']
+        # Target: Gold_Coast per-suburb collections
+        for_sale_db = client['Gold_Coast']
         print("✓ Connected to MongoDB")
         print(f"✓ Source: Gold_Coast database")
-        print(f"✓ Target: Gold_Coast_Currently_For_Sale database\n")
+        print(f"✓ Target: Gold_Coast database\n")
     except Exception as e:
         print(f"✗ Failed to connect to MongoDB: {e}")
         sys.exit(1)
 
-    # Get for-sale suburbs (exclude metadata collections)
+    # Target suburbs only (not all 94 cadastral collections)
     exclude = {'suburb_statistics', 'suburb_median_prices', 'change_detection_snapshots'}
+    TARGET_SUBURBS = ['robina', 'varsity_lakes', 'burleigh_waters']
     try:
-        for_sale_suburbs = [c for c in for_sale_db.list_collection_names() if c not in exclude]
-        print(f"Found {len(for_sale_suburbs)} for-sale suburb collections\n")
+        all_collections = set(for_sale_db.list_collection_names()) - exclude
+        for_sale_suburbs = [s for s in TARGET_SUBURBS if s in all_collections]
+        print(f"Processing {len(for_sale_suburbs)} target suburb collections: {', '.join(for_sale_suburbs)}\n")
         print("-" * 80)
     except Exception as e:
         print(f"✗ Failed to list for-sale collections: {e}")
@@ -373,6 +408,9 @@ def enrich_property_timeline():
     total_with_timeline = 0
     total_updated = 0
     total_errors = 0
+
+    # Cache Gold_Coast collection names once (avoids repeated RU-expensive list_collection_names per suburb)
+    _gc_collection_names = set(gc_db.list_collection_names())
 
     for suburb_idx, suburb in enumerate(for_sale_suburbs, 1):
         print(f"\n[{suburb_idx}/{len(for_sale_suburbs)}] Processing suburb: {suburb}")
@@ -385,7 +423,7 @@ def enrich_property_timeline():
             # Fallback: URL slug from listing_url -> _id
             for_sale_lookup = {}
             for_sale_slug_lookup = {}
-            for doc in for_sale_collection.find({}, {'address': 1, 'listing_url': 1}):
+            for doc in for_sale_collection.find({'listing_status': 'for_sale'}, {'address': 1, 'listing_url': 1}):
                 addr = doc.get('address', '')
                 if addr:
                     norm = normalize_address_no_postcode(addr)
@@ -400,8 +438,8 @@ def enrich_property_timeline():
                 print(f"  - {suburb}: No for-sale properties, skipping")
                 continue
 
-            # Check if Gold_Coast has this suburb
-            if suburb not in gc_db.list_collection_names():
+            # Check if Gold_Coast has this suburb (use cached names to avoid repeated RU-expensive calls)
+            if suburb not in _gc_collection_names:
                 print(f"  - {suburb}: Not in Gold_Coast database, skipping")
                 continue
 
@@ -411,7 +449,10 @@ def enrich_property_timeline():
 
             suburb_slug_matched = 0
 
-            for gc_property in gc_collection.find({}, {'complete_address': 1, 'scraped_data': 1}):
+            for gc_property in gc_collection.find(
+                {'scraped_data.property_timeline': {'$exists': True, '$ne': []}},
+                {'complete_address': 1, 'scraped_data': 1}
+            ):
                 total_properties_checked += 1
 
                 try:
@@ -463,7 +504,8 @@ def enrich_property_timeline():
                     if for_sale_id is None:
                         continue
 
-                    result = for_sale_collection.update_one(
+                    result = _cosmos_retry(
+                        for_sale_collection.update_one,
                         {'_id': for_sale_id},
                         {'$set': {'transactions': transactions, 'transactions_updated': datetime.now()}}
                     )
