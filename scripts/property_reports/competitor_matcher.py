@@ -641,6 +641,12 @@ def resolve_competitor_map(
             "lat": subj_latlng[0],
             "lng": subj_latlng[1],
             "address": subject["address"],
+            # Real subject specs for the map popup (no hardcoded values).
+            "bedrooms": subject["bedrooms"],
+            "bathrooms": subject["bathrooms"],
+            "carSpaces": subject["car"],
+            "landSqm": int(subject["land"]) if subject["land"] else None,
+            "features": sorted(subject["features"]),
         },
         "competitors": competitors,
         "aperture_ring": chosen_ring,
