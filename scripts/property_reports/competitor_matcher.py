@@ -94,14 +94,44 @@ APERTURE_RINGS = [
 # Similarity score weights. Lower score = closer substitute. Weights are
 # renormalised at runtime over whichever factors both homes actually carry,
 # so a missing floor area neither helps nor unfairly hurts a candidate.
+#
+# Price is deliberately the dominant axis (budget is the hardest constraint).
+# Distance is a SECONDARY factor — a nearer home outranks a farther one all
+# else equal, so "closer ranks first" holds in practice, but a same-price
+# near-twin one suburb over still beats a pricier local home. This is the
+# honest version of "local first": proximity by straight-line distance, not
+# by suburb name (which mis-ranks homes near a boundary).
 SCORE_WEIGHTS = {
-    "price": 0.35,
-    "bedrooms": 0.20,
-    "floor": 0.10,
-    "land": 0.10,
-    "bathrooms": 0.10,
-    "features": 0.10,
-    "car": 0.05,
+    "price": 0.32,
+    "bedrooms": 0.16,
+    "distance": 0.15,
+    "floor": 0.09,
+    "land": 0.09,
+    "bathrooms": 0.08,
+    "features": 0.07,
+    "car": 0.04,
+}
+
+# Distance term reaches full penalty at this straight-line distance (km) from
+# the subject. The southern-GC catchment spans ~15-20km; 8km cleanly separates
+# "same suburb / next door" from "across the catchment" without flattening the
+# near tail. Beyond it, every candidate is equally "far".
+DISTANCE_FULL_PENALTY_KM = 8.0
+
+# Suburb centroids (median of geocoded listings) — the cheap ranking proxy for
+# candidates that aren't individually geocoded yet (~28%). Avoids adding a
+# Nominatim call per candidate to every build; exact coords are used for the
+# final picks' display distance. Regenerate if the catchment list changes.
+CATCHMENT_CENTROIDS = {
+    "robina": (-28.07251, 153.39525),
+    "varsity_lakes": (-28.08250, 153.40787),
+    "clear_island_waters": (-28.03986, 153.40086),
+    "merrimac": (-28.04707, 153.36040),
+    "mudgeeraba": (-28.08741, 153.36523),
+    "reedy_creek": (-28.11016, 153.39886),
+    "worongary": (-28.04128, 153.33947),
+    "burleigh_waters": (-28.08920, 153.42811),
+    "carrara": (-28.02123, 153.37140),
 }
 
 # A candidate is shown in the prominent "closest match" tier (yellow marker +
@@ -193,6 +223,25 @@ def _doc_latlng(doc: Dict[str, Any]) -> Optional[Tuple[float, float]]:
     if lat is not None and lng is not None:
         return (lat, lng)
     return None
+
+
+def _haversine_km(a: Tuple[float, float], b: Tuple[float, float]) -> float:
+    """Great-circle distance in km between two (lat, lng) points."""
+    import math
+    lat1, lng1 = math.radians(a[0]), math.radians(a[1])
+    lat2, lng2 = math.radians(b[0]), math.radians(b[1])
+    dlat, dlng = lat2 - lat1, lng2 - lng1
+    h = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlng / 2) ** 2
+    return 2 * 6371.0 * math.asin(math.sqrt(h))
+
+
+def _candidate_point(doc: Dict[str, Any]) -> Optional[Tuple[float, float]]:
+    """Best available (lat, lng) for ranking — the doc's own coordinates if it
+    has them, else its suburb centroid (the cheap proxy). None if neither."""
+    exact = _doc_latlng(doc)
+    if exact:
+        return exact
+    return CATCHMENT_CENTROIDS.get(doc.get("_suburb_key", ""))
 
 
 def _property_type_group(doc: Dict[str, Any]) -> Optional[str]:
@@ -400,6 +449,15 @@ def _score(subject: Dict[str, Any], cand: Dict[str, Any]) -> float:
             jaccard = len(subject["features"] & cf) / len(union)
             parts.append((SCORE_WEIGHTS["features"], 1.0 - jaccard))
 
+    # Distance — secondary "closer ranks first" term. Full penalty at
+    # DISTANCE_FULL_PENALTY_KM. Uses exact coords where available, suburb
+    # centroid otherwise; skipped entirely if neither point is resolvable.
+    subj_pt = subject.get("point")
+    cand_pt = _candidate_point(cand)
+    if subj_pt and cand_pt:
+        dist = _haversine_km(subj_pt, cand_pt)
+        parts.append((SCORE_WEIGHTS["distance"], min(dist / DISTANCE_FULL_PENALTY_KM, 1.0)))
+
     if not parts:
         return 1.0
     total_w = sum(w for w, _ in parts)
@@ -545,6 +603,11 @@ def resolve_competitor_map(
            or (subject_doc.get("suburb") or "").lower().replace(" ", "_"))
     catch = catchment or DEFAULT_CATCHMENT
 
+    # Origin point for the distance term — the subject's own coordinates if it
+    # has them, else its suburb centroid. Set before scoring so "closer ranks
+    # first" applies even for off-market subjects not yet individually geocoded.
+    subject["point"] = subject["latlng"] or CATCHMENT_CENTROIDS.get(own)
+
     # Walk the aperture rings until one yields TARGET_MIN survivors.
     chosen_ring = None
     candidates: List[Dict[str, Any]] = []
@@ -579,10 +642,20 @@ def resolve_competitor_map(
     active_in_band = len(candidates)
     chosen = candidates[:TARGET_MAX]
 
+    # Resolve the subject's display coordinates up-front so the per-competitor
+    # distance is measured from the real home, not a centroid. Falls back to
+    # the centroid only if the subject can't be geocoded at all.
+    subj_latlng = subject["latlng"]
+    if subj_latlng is None and geocode_missing and subject["address"]:
+        subj_latlng = _geocode(subject["address"])
+    if subj_latlng is None:
+        logger.info("  competitor_matcher: subject has no coordinates — cannot anchor map")
+        return None
+    subject["point"] = subj_latlng  # exact origin for display distances
+
     # Resolve coordinates for the chosen few — reuse what's on the doc,
     # geocode the rest (rate-limited; final set is <=6 so cost is trivial).
     competitors: List[Dict[str, Any]] = []
-    best_score = chosen[0]["_score"] if chosen else 1.0
     for i, c in enumerate(chosen):
         latlng = _doc_latlng(c)
         if latlng is None and geocode_missing:
@@ -604,6 +677,7 @@ def resolve_competitor_map(
                       else (f"${price_int:,}" if price_int else "Contact agent"))
         suburb_disp = (c.get("suburb") or c.get("_suburb_key", "").replace("_", " ")).title()
         slug = c.get("url_slug") or str(c.get("_id"))
+        distance_km = round(_haversine_km(subj_latlng, latlng), 1)
 
         competitors.append({
             "id": f"{c['_suburb_key']}-{slug}",
@@ -611,6 +685,7 @@ def resolve_competitor_map(
             "suburb": suburb_disp,
             "lat": latlng[0],
             "lng": latlng[1],
+            "distanceKm": distance_km,
             "priceText": price_text,
             "priceLow": price_int,
             "bedrooms": _to_int(c.get("bedrooms")),
@@ -626,13 +701,6 @@ def resolve_competitor_map(
         })
 
     if not competitors:
-        return None
-
-    subj_latlng = subject["latlng"]
-    if subj_latlng is None and geocode_missing and subject["address"]:
-        subj_latlng = _geocode(subject["address"])
-    if subj_latlng is None:
-        logger.info("  competitor_matcher: subject has no coordinates — cannot anchor map")
         return None
 
     ring_meta = APERTURE_RINGS[chosen_ring]
