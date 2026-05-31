@@ -29,6 +29,7 @@ from scripts.property_reports.hero_photo import score_and_pick_hero
 from scripts.property_reports.walking_distances import resolve_pois
 from scripts.property_reports.market_narrative import resolve_market_narrative
 from scripts.property_reports.scarcity_features import resolve_scarcity_features
+from scripts.property_reports.competitor_matcher import resolve_competitor_map
 from scripts.property_reports.cohort_premiums import compute_cohort_premiums
 from scripts.property_reports.scarcity_narrative import (
     resolve_scarcity_narrative, cohort_premiums_to_sold_cohort_premiums,
@@ -406,6 +407,54 @@ class SlotResolver:
             except Exception as e:
                 logger.warning(f"  scarcity_features resolver threw: {e}")
                 self.emit.fail("scarcity", str(e))
+
+        # Competitor map — the live "substitute homes" set for the Market tab.
+        # Substitutes = homes a buyer actually chooses between (budget + beds +
+        # type), NOT feature-twins (that's the scarcity count above). Uses an
+        # adaptive aperture: a common home finds a tight same-suburb set; a
+        # unique home widens the price/bedroom/suburb net until the floor is
+        # met — and the ring it lands on becomes a scarcity narrative asset.
+        # Auto-approves on resolve so the map is live the moment the seller's
+        # mini-site first loads (no nightly wait, no manual gate).
+        if self._subject:
+            self.emit.start("competitor_map", "Finding the homes yours competes with")
+            try:
+                # Price anchor: prefer the valuation working-range midpoint
+                # (right for off-market submissions with no listing price),
+                # fall back to the subject's own price string.
+                model_range = self.valuation_model_range()
+                price_anchor = None
+                if model_range and model_range.get("low") and model_range.get("high"):
+                    price_anchor = int((model_range["low"] + model_range["high"]) / 2)
+
+                features_basic = derive_features_basic(self._subject)
+                comp_map = resolve_competitor_map(
+                    self._subject, self.db, features_basic, price_anchor=price_anchor,
+                )
+                if comp_map and comp_map.get("competitors"):
+                    updates["slots.competitor_map"] = comp_map
+                    updates["slot_status.competitor_matches"] = "approved"
+                    n = len(comp_map["competitors"])
+                    n_close = sum(1 for c in comp_map["competitors"] if c.get("combinatorialMatch"))
+                    logger.info(
+                        f"  competitor map: {n} substitutes ({n_close} closest tier), "
+                        f"ring {comp_map['aperture_ring']}, {comp_map['active_in_band']} in band"
+                    )
+                    self.emit.done(
+                        "competitor_map",
+                        f"{n} competing homes mapped ({n_close} direct matches)",
+                        n_competitors=n,
+                        n_close=n_close,
+                        aperture_ring=comp_map["aperture_ring"],
+                    )
+                else:
+                    # No substitutes anywhere — leave the slot pending so the
+                    # frontend shows the placeholder rather than an empty map.
+                    self.emit.done("competitor_map", "No close competitors on the market")
+            except Exception as e:
+                logger.warning(f"  competitor_matcher resolver threw: {e}")
+                updates["slot_status.competitor_matches"] = "error"
+                self.emit.fail("competitor_map", str(e))
 
         # Walking distances to nearest POIs (Day 4). Requires lat/lng — skip
         # for subjects we can't geolocate (vacant cadastral lots etc.).
