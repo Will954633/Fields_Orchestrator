@@ -202,13 +202,14 @@ def infer_sale_method(price: Any) -> tuple[str, str]:
 # Comparability scoring + concentric aperture rings
 # ---------------------------------------------------------------------------
 
-# Ring labels. Ring 2 is suburb-aware (filled at call time).
 def ring_label(ring: int, subject: dict[str, Any]) -> str:
     if ring == 0:
         return "your closest comparables"
     if ring == 1:
         return "nearby comparable homes"
-    return f"the wider {subject.get('suburb', 'Gold Coast')} market"
+    # Ring 2 spans suburbs (cross-suburb 6-bed pooled homes are rare), so a
+    # subject-suburb label would misread on a Robina/Varsity address.
+    return "the wider Gold Coast market"
 
 
 def _normalized_features(raw: Any) -> set[str]:
