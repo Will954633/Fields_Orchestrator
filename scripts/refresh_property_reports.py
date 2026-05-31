@@ -157,6 +157,189 @@ def is_named_comp(address: str, comps: list[str]) -> bool:
     return any(normalize_address(c) == target for c in comps)
 
 
+# ---------------------------------------------------------------------------
+# Sale method (inferred from the Domain price string — there is no dedicated
+# method field). The string carries the method: "Auction", "Offers over $X",
+# "Best offer by …", "Price guide $X", "$1,695,000", "Contact agent".
+# ---------------------------------------------------------------------------
+
+_SALE_METHOD_LABELS = {
+    "auction": "Auction",
+    "eoi": "Expressions of interest",
+    "offers_over": "Offers over",
+    "price_guide": "Price guide",
+    "fixed": "Fixed price",
+    "contact_agent": "Contact agent",
+}
+
+
+def infer_sale_method(price: Any) -> tuple[str, str]:
+    """Classify a listing's sale method from its price string.
+
+    Returns (key, label). Order matters — auction/EOI phrasing is checked
+    before plain dollar amounts, because "Auction — price guide $1.5m" is an
+    auction, not a price-guide private treaty.
+    """
+    if not price or not isinstance(price, str):
+        return "contact_agent", _SALE_METHOD_LABELS["contact_agent"]
+    s = price.lower()
+    if "auction" in s:
+        key = "auction"
+    elif "eoi" in s or "expression" in s or "best offer" in s or "best and final" in s:
+        key = "eoi"
+    elif "offers over" in s or "offers above" in s or "o/o" in s:
+        key = "offers_over"
+    elif "guide" in s:
+        key = "price_guide"
+    elif re.search(r"\$\s*[\d,]", s):
+        key = "fixed"
+    else:
+        key = "contact_agent"
+    return key, _SALE_METHOD_LABELS[key]
+
+
+# ---------------------------------------------------------------------------
+# Comparability scoring + concentric aperture rings
+# ---------------------------------------------------------------------------
+
+# Ring labels. Ring 2 is suburb-aware (filled at call time).
+def ring_label(ring: int, subject: dict[str, Any]) -> str:
+    if ring == 0:
+        return "your closest comparables"
+    if ring == 1:
+        return "nearby comparable homes"
+    return f"the wider {subject.get('suburb', 'Gold Coast')} market"
+
+
+def _normalized_features(raw: Any) -> set[str]:
+    """Lower-case, underscore-collapsed feature tokens for overlap scoring.
+
+    Domain's `features` is reliable for 'Pool' but loose elsewhere — overlap
+    is therefore a partial signal, weighted accordingly in comparability_score.
+    """
+    out: set[str] = set()
+    for f in raw or []:
+        t = str(f).strip().lower()
+        out.add(t)
+        out.add(t.replace(" ", "_"))
+        out.add(t.replace("-", "_"))
+    return out
+
+
+def _haversine_km(a: dict[str, Any] | None, b: dict[str, Any] | None) -> float | None:
+    """Straight-line km between two {latitude, longitude} dicts, or None."""
+    import math
+    if not a or not b:
+        return None
+    try:
+        lat1, lon1 = float(a["latitude"]), float(a["longitude"])
+        lat2, lon2 = float(b["latitude"]), float(b["longitude"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    r = 6371.0
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlmb = math.radians(lon2 - lon1)
+    h = math.sin(dphi / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dlmb / 2) ** 2
+    return 2 * r * math.asin(min(1.0, math.sqrt(h)))
+
+
+def comparability_score(
+    doc: dict[str, Any], price_mid: float | None, subject: dict[str, Any]
+) -> float:
+    """Score a listing's similarity to the subject home, 0..1.
+
+    Distance is deliberately NOT a component (active listings are sparsely
+    geocoded). It is used only as a sort tiebreaker by the caller. Weights:
+    bedrooms 0.30, price 0.30, feature overlap 0.20, land 0.10, type 0.10.
+    """
+    # Bedrooms
+    subj_bd = subject.get("bedrooms") or 0
+    bd = doc.get("bedrooms") or 0
+    diff = abs(subj_bd - bd)
+    bd_score = {0: 1.0, 1: 0.6, 2: 0.3}.get(diff, 0.1)
+
+    # Price proximity to the working valuation band
+    val_low = subject.get("valuation_low")
+    val_high = subject.get("valuation_high")
+    if price_mid is None or val_low is None or val_high is None:
+        price_score = 0.5
+    elif val_low <= price_mid <= val_high:
+        price_score = 1.0
+    else:
+        midpoint = (val_low + val_high) / 2
+        edge = val_low if price_mid < val_low else val_high
+        price_score = max(0.0, 1.0 - abs(price_mid - edge) / max(midpoint, 1))
+
+    # Feature overlap (subject feature slugs present in the listing's features)
+    subj_feats = {str(f).lower() for f in subject.get("features", [])}
+    listing_feats = _normalized_features(doc.get("features"))
+    if subj_feats:
+        hits = sum(1 for f in subj_feats if f in listing_feats)
+        feat_score = hits / len(subj_feats)
+    else:
+        feat_score = 0.5
+
+    # Land area proximity
+    subj_land = subject.get("land_area")
+    land = doc.get("land_area")
+    if subj_land and land:
+        land_score = max(0.0, 1.0 - abs(land - subj_land) / subj_land)
+    else:
+        land_score = 0.5
+
+    # Property type
+    type_score = 1.0 if doc.get("property_type") in (None, "House", "Acreage / Semi-Rural") else 0.4
+
+    return round(
+        0.30 * bd_score + 0.30 * price_score + 0.20 * feat_score
+        + 0.10 * land_score + 0.10 * type_score,
+        4,
+    )
+
+
+def listing_ring(
+    doc: dict[str, Any], price_mid: float | None, subject: dict[str, Any],
+    config: dict[str, Any], suburb: str, subj_suburb: str,
+) -> int | None:
+    """Tightest concentric aperture ring a listing qualifies for, or None.
+
+    Ring 0 (tight)   — subject suburb, bedrooms within 1, price within ±15% of mid.
+    Ring 1 (nearby)  — competition suburbs, price ±25%, cross-suburb feature gate.
+    Ring 2 (wide)    — full configured competition band + min bedrooms (fallback).
+    """
+    val_low = subject.get("valuation_low")
+    val_high = subject.get("valuation_high")
+    subj_bd = subject.get("bedrooms") or 0
+    bd = doc.get("bedrooms") or 0
+
+    if price_mid is not None and val_low and val_high:
+        midpoint = (val_low + val_high) / 2
+        in_15 = abs(price_mid - midpoint) <= 0.15 * midpoint
+        in_25 = abs(price_mid - midpoint) <= 0.25 * midpoint
+    else:
+        in_15 = in_25 = False
+
+    # Ring 0
+    if suburb == subj_suburb and abs(bd - subj_bd) <= 1 and in_15:
+        return 0
+
+    # Ring 1
+    if in_25:
+        in_subj_suburb = suburb == subj_suburb
+        if in_subj_suburb or _cross_suburb_feature_match(doc, subject):
+            return 1
+
+    # Ring 2 — the wide net used as the curiosity-guarantee fallback
+    if price_mid is not None:
+        if (
+            config["competition_price_min"] <= price_mid <= config["competition_price_max"]
+            and bd >= config["competition_min_bedrooms"]
+        ):
+            return 2
+    return None
+
+
 def days_since(d: dt.datetime | None) -> int | None:
     if not d:
         return None
@@ -814,6 +997,327 @@ def pick_first_image(images: Any) -> str | None:
 
 
 # ---------------------------------------------------------------------------
+# Comparable set + durable change log (first-visit baseline + "what changed")
+# ---------------------------------------------------------------------------
+
+COMPARABLE_PROJECTION = {
+    "_id": 0, "address": 1, "price": 1, "first_seen": 1, "bedrooms": 1,
+    "bathrooms": 1, "property_type": 1, "listing_url": 1, "property_images": 1,
+    "features": 1, "land_area": 1, "geocoded_coordinates": 1, "listing_status": 1,
+    "sold_price": 1, "sale_date": 1, "days_on_market": 1,
+}
+
+# How far back a freshly-seen listing or sale still counts as "new activity".
+COMPARABLE_WINDOW_DAYS = 30
+# Sold comparables are sparse — the first-visit "closest recent sale" baseline
+# looks back further than the new-activity window so the slot is rarely empty.
+SOLD_BASELINE_DAYS = 180
+# The curiosity-drive guarantee window — we try to surface ≥1 update per N days.
+GUARANTEE_DAYS = 7
+# Rolling caps on the durable event log.
+EVENT_LOG_MAX = 250
+EVENT_LOG_MAX_DAYS = 120
+
+
+def _listing_identity(doc: dict[str, Any]) -> str:
+    return doc.get("listing_url") or normalize_address(doc.get("address", ""))
+
+
+def _neg_datestr(s: Any) -> int:
+    """Map an ISO date string to a negative int so an ascending sort puts the
+    most recent date first. Missing/blank dates sort last."""
+    if not s or not isinstance(s, str):
+        return 0
+    digits = re.sub(r"\D", "", s)[:8]
+    return -int(digits) if digits else 0
+
+
+def _comparable_card(
+    doc: dict[str, Any], price_mid: float | None, ring: int, subject: dict[str, Any]
+) -> dict[str, Any]:
+    """Common card shape shared by the comparables block and event items."""
+    method_key, method_label = infer_sale_method(doc.get("price"))
+    return {
+        "identity": _listing_identity(doc),
+        "address": short_address(doc.get("address", "")),
+        "suburb": (doc.get("address", "").split(",")[1].strip() if "," in doc.get("address", "") else None),
+        "price": doc.get("price"),
+        "price_mid": int(price_mid) if price_mid else None,
+        "sale_method": method_key,
+        "sale_method_label": method_label,
+        "bedrooms": doc.get("bedrooms"),
+        "bathrooms": doc.get("bathrooms"),
+        "land_area": doc.get("land_area"),
+        "comparability": comparability_score(doc, price_mid, subject),
+        "ring": ring,
+        "ring_label": ring_label(ring, subject),
+        "image_src": pick_first_image(doc.get("property_images")),
+        "href": doc.get("listing_url"),
+    }
+
+
+def scan_comparables(db_gc, config: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    """Scan active + recently-sold listings across the watch suburbs, score each
+    against the subject, and assign the tightest aperture ring.
+
+    Returns {"active": [card+meta…], "sold": [card+meta…]} sorted by closeness.
+    Distance (when both subject and listing are geocoded) is a sort tiebreaker
+    only — never part of the comparability score.
+    """
+    subject = config["subject"]
+    subj_suburb = subject["suburb"].lower().replace(" ", "_")
+    subj_geo = subject.get("geocoded_coordinates")
+    sold_cutoff = (dt.datetime.utcnow() - dt.timedelta(days=SOLD_BASELINE_DAYS)).date().isoformat()
+
+    active: list[dict[str, Any]] = []
+    sold: list[dict[str, Any]] = []
+
+    for suburb in config["competition_suburbs"]:
+        col = db_gc[suburb]
+
+        # Active listings
+        for d in col.find(
+            {"listing_status": "for_sale", "bedrooms": {"$gte": config["competition_min_bedrooms"] - 1}},
+            COMPARABLE_PROJECTION,
+        ).limit(60):
+            price_mid = parse_price(d.get("price"))
+            ring = listing_ring(d, price_mid, subject, config, suburb, subj_suburb)
+            if ring is None:
+                continue
+            card = _comparable_card(d, price_mid, ring, subject)
+            card["status"] = "for_sale"
+            card["first_seen"] = d.get("first_seen").date().isoformat() if isinstance(d.get("first_seen"), dt.datetime) else None
+            card["_suburb"] = suburb
+            card["_distance_km"] = _haversine_km(subj_geo, d.get("geocoded_coordinates"))
+            active.append(card)
+
+        # Recently sold
+        for d in col.find(
+            {"listing_status": "sold", "sale_date": {"$gte": sold_cutoff},
+             "bedrooms": {"$gte": config["competition_min_bedrooms"] - 1}},
+            COMPARABLE_PROJECTION,
+        ).sort("sale_date", -1).limit(30):
+            sold_price = coerce_price(d.get("sold_price")) or coerce_price(d.get("price"))
+            ring = listing_ring(d, sold_price, subject, config, suburb, subj_suburb)
+            if ring is None:
+                continue
+            card = _comparable_card(d, sold_price, ring, subject)
+            card["status"] = "sold"
+            sd = d.get("sale_date")
+            card["sale_date"] = sd if isinstance(sd, str) else (sd.isoformat()[:10] if sd else None)
+            card["sold_price"] = int(sold_price) if sold_price else None
+            card["days_on_market"] = d.get("days_on_market")
+            card["_suburb"] = suburb
+            card["_distance_km"] = _haversine_km(subj_geo, d.get("geocoded_coordinates"))
+            sold.append(card)
+
+    # Closeness ordering: ring asc, comparability desc, distance asc (None last).
+    active.sort(key=lambda c: (c["ring"], -c["comparability"], c["_distance_km"] if c["_distance_km"] is not None else 9e9))
+    # Sold: closeness first (ring, comparability), recency as final tiebreaker.
+    sold.sort(key=lambda c: (c["ring"], -c["comparability"], _neg_datestr(c.get("sale_date"))))
+    return {"active": active, "sold": sold}
+
+
+def _public_card(card: dict[str, Any]) -> dict[str, Any]:
+    """Strip the private sort-only fields (leading underscore) for persistence."""
+    return {k: v for k, v in card.items() if not k.startswith("_")}
+
+
+def build_comparables_block(scan: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
+    """First-visit baseline: top 6 closest active + top 3 closest sold."""
+    return {
+        "closest_active": [_public_card(c) for c in scan["active"][:6]],
+        "closest_sold": [_public_card(c) for c in scan["sold"][:3]],
+        "generated_at": dt.datetime.utcnow().isoformat(),
+    }
+
+
+def _event_from_card(card: dict[str, Any], etype: str, subject: dict[str, Any], **extra) -> dict[str, Any]:
+    """Build a durable event from a comparable card. headline/body/effect are
+    editorial-rule-compliant: data only, no advice, suburbs capitalised."""
+    addr = card["address"]
+    today = dt.date.today().isoformat()
+    method_label = card.get("sale_method_label", "")
+    base = {
+        "type": etype,
+        "ring": card["ring"],
+        "ring_label": card["ring_label"],
+        "comparability": card["comparability"],
+        "address": addr,
+        "image_src": card.get("image_src"),
+        "href": card.get("href"),
+        "sale_method": card.get("sale_method"),
+        "ts": dt.datetime.utcnow().isoformat(),
+    }
+    base.update(extra)
+
+    if etype == "new_listing":
+        base["id"] = f"new_listing:{card['identity']}:{card.get('first_seen') or today}"
+        base["date"] = card.get("first_seen") or today
+        base["kind"] = "new_listing"
+        base["price"] = card.get("price_mid")
+        base["headline"] = f"{addr} just listed at {fmt_aud(card['price_mid']) if card.get('price_mid') else card.get('price')}"
+        base["body"] = f"A comparable home came to market — {card.get('bedrooms') or '?'}-bed, {card.get('bathrooms') or '?'}-bath, by {method_label.lower()}."
+        base["effect_on_your_home"] = "Another home now competing for the same buyer pool. How it is priced and how long it sits become live reference points for yours."
+    elif etype == "sold":
+        base["id"] = f"sold:{card['identity']}:{card.get('sale_date') or today}"
+        base["date"] = card.get("sale_date") or today
+        base["kind"] = "comp_sold"
+        base["price"] = card.get("sold_price")
+        dom = card.get("days_on_market")
+        dom_phrase = f" after {dom} days on market" if dom else ""
+        base["headline"] = f"{addr} sold for {fmt_aud(card['sold_price']) if card.get('sold_price') else 'an undisclosed price'}{dom_phrase}"
+        base["body"] = f"A comparable home transacted — {card.get('bedrooms') or '?'}-bed, {card.get('bathrooms') or '?'}-bath. The valuation engine re-weights to actual sale prices as they land."
+        base["effect_on_your_home"] = "A completed sale is the cleanest evidence of what buyers actually paid for a home like yours — stronger signal than any asking price."
+    return base
+
+
+def comparable_events_activity(
+    db_gc, config: dict[str, Any], existing: dict[str, Any] | None,
+    scan: dict[str, list[dict[str, Any]]],
+) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
+    """Diff the comparable set against the persisted snapshot, append new change
+    events to the durable log, and enforce the 7-day curiosity guarantee.
+
+    Returns (event_log, new_state) — caller persists both. event_log is the
+    full rolling log (deduped, capped); new_state is the identity→state map.
+    """
+    subject = config["subject"]
+    today = dt.date.today().isoformat()
+    prior_state: dict[str, dict[str, Any]] = dict((existing or {}).get("comparable_state") or {})
+    prior_log: list[dict[str, Any]] = list((existing or {}).get("comparable_events") or [])
+    seen_ids = {e.get("id") for e in prior_log}
+
+    # Current state map (for_sale from active, sold from sold scan).
+    new_state: dict[str, dict[str, Any]] = {}
+    for c in scan["active"]:
+        new_state[c["identity"]] = {
+            "status": "for_sale", "price": c.get("price_mid"),
+            "sale_method": c.get("sale_method"), "ring": c["ring"], "last_seen": today,
+        }
+    for c in scan["sold"]:
+        new_state.setdefault(c["identity"], {
+            "status": "sold", "price": c.get("sold_price"),
+            "sale_method": c.get("sale_method"), "ring": c["ring"], "last_seen": today,
+        })
+
+    new_events: list[dict[str, Any]] = []
+
+    def _add(ev: dict[str, Any]) -> None:
+        if ev.get("id") and ev["id"] not in seen_ids:
+            seen_ids.add(ev["id"])
+            new_events.append(ev)
+
+    cutoff = (dt.datetime.utcnow() - dt.timedelta(days=COMPARABLE_WINDOW_DAYS)).date().isoformat()
+
+    # 1) new_listing + price/method changes.
+    #    A home NEW to us only surfaces as a new_listing for the tight rings
+    #    (0/1); ring-2 new listings come in via the curiosity guarantee below,
+    #    to keep the wide-market firehose off the feed. But changes to a home we
+    #    ALREADY track (price/method) are high-signal at any ring, so they fire
+    #    regardless of ring — important for high-end homes whose only comparables
+    #    sit in the wide ring.
+    for c in scan["active"]:
+        ident = c["identity"]
+        prior = prior_state.get(ident)
+        if prior is None:
+            if c["ring"] <= 1 and (c.get("first_seen") or today) >= cutoff:
+                _add(_event_from_card(c, "new_listing", subject))
+            continue
+
+        # Known comparable — detect asking-price and sale-method changes (any ring).
+        cur_price = c.get("price_mid")
+        pri_price = prior.get("price")
+        if cur_price and pri_price and abs(cur_price - pri_price) >= 5_000:
+            direction = "lifted" if cur_price > pri_price else "reduced"
+            _add({
+                "id": f"price_change:{ident}:{cur_price}", "date": today, "ts": dt.datetime.utcnow().isoformat(),
+                "type": "price_change", "kind": "comp_price_change", "ring": c["ring"], "ring_label": c["ring_label"],
+                "comparability": c["comparability"], "address": c["address"], "image_src": c.get("image_src"),
+                "href": c.get("href"), "price": cur_price, "prior_price": pri_price,
+                "headline": f"{c['address']} {direction} its asking price by {fmt_aud(abs(cur_price - pri_price))} to {fmt_aud(cur_price)}",
+                "body": f"A comparable home moved its asking price. Previous: {fmt_aud(pri_price)}. Current: {fmt_aud(cur_price)}.",
+                "effect_on_your_home": ("A reduction signals the original ask was above where buyers are — a downside reference for your pricing."
+                                        if direction == "reduced" else
+                                        "A lift signals a seller testing higher — an upside reference, but watch days-on-market for confirmation."),
+            })
+        cur_method = c.get("sale_method")
+        pri_method = prior.get("sale_method")
+        if cur_method and pri_method and cur_method != pri_method:
+            _add({
+                "id": f"method_change:{ident}:{cur_method}", "date": today, "ts": dt.datetime.utcnow().isoformat(),
+                "type": "method_change", "kind": "method_change", "ring": c["ring"], "ring_label": c["ring_label"],
+                "comparability": c["comparability"], "address": c["address"], "image_src": c.get("image_src"),
+                "href": c.get("href"), "sale_method": cur_method, "prior_sale_method": pri_method,
+                "headline": f"{c['address']} switched to {c.get('sale_method_label', cur_method).lower()}",
+                "body": f"A comparable home changed how it is being sold — from {_SALE_METHOD_LABELS.get(pri_method, pri_method).lower()} to {c.get('sale_method_label', cur_method).lower()}.",
+                "effect_on_your_home": "A change in method often signals a change in strategy — a switch to auction or offers-over can mean the fixed price wasn't drawing buyers.",
+            })
+
+    # 2) sold (ring 0/1, recent sale_date)
+    for c in scan["sold"]:
+        if c["ring"] > 1:
+            continue
+        if (c.get("sale_date") or "") >= cutoff:
+            _add(_event_from_card(c, "sold", subject))
+
+    # 3) withdrawn — was for_sale in prior, now absent entirely
+    for ident, prior in prior_state.items():
+        if prior.get("status") == "for_sale" and ident not in new_state:
+            _add({
+                "id": f"withdrawn:{ident}:{today}", "date": today, "ts": dt.datetime.utcnow().isoformat(),
+                "type": "withdrawn", "kind": "comp_withdrawn", "ring": prior.get("ring", 1),
+                "ring_label": ring_label(prior.get("ring", 1), subject), "comparability": 0.0,
+                "address": ident if not ident.startswith("http") else ident,
+                "headline": "A comparable listing was withdrawn from market",
+                "body": "A home that was competing with yours is no longer listed — withdrawal, off-market sale, or a refresh.",
+                "effect_on_your_home": "Withdrawn stock tightens visible supply at your bed + price band.",
+            })
+
+    log_combined = prior_log + new_events
+
+    # 4) Curiosity guarantee — ensure a new_listing/sold inside the trailing 7 days.
+    g_cutoff = (dt.datetime.utcnow() - dt.timedelta(days=GUARANTEE_DAYS)).date().isoformat()
+    has_recent = any(
+        e.get("type") in ("new_listing", "sold") and (e.get("date") or "") >= g_cutoff
+        for e in log_combined
+    )
+    if not has_recent:
+        # Nothing tight in the last 7 days — widen the aperture. Search the full
+        # 30-day activity window for the most-comparable, most-recent listing or
+        # sale we can honestly surface as "the nearest activity".
+        wide_cutoff = (dt.datetime.utcnow() - dt.timedelta(days=COMPARABLE_WINDOW_DAYS)).date().isoformat()
+        ring2_active = [c for c in scan["active"] if (c.get("first_seen") or "") >= wide_cutoff]
+        ring2_sold = [c for c in scan["sold"] if (c.get("sale_date") or "") >= wide_cutoff]
+        candidate = None
+        pool = sorted(
+            ring2_active + ring2_sold,
+            key=lambda c: (_neg_datestr(c.get("first_seen") or c.get("sale_date")), -c["comparability"]),
+        )
+        if pool:
+            candidate = pool[0]
+        if candidate is not None:
+            etype = "sold" if candidate.get("status") == "sold" else "new_listing"
+            ev = _event_from_card(candidate, etype, subject)
+            ev["ring_widened"] = True
+            ev["ring_label"] = ring_label(2, subject)
+            if ev.get("id") not in seen_ids:
+                seen_ids.add(ev["id"])
+                new_events.append(ev)
+                log_combined = prior_log + new_events
+            log.info("Curiosity guarantee: widened to ring-2, surfaced %s", ev.get("headline"))
+        else:
+            log.info("Curiosity guarantee: no ring-2 activity in last %dd either", GUARANTEE_DAYS)
+
+    # Sort + cap the durable log (date desc, then ts desc).
+    log_combined.sort(key=lambda e: (e.get("date") or "", e.get("ts") or ""), reverse=True)
+    keep_cutoff = (dt.datetime.utcnow() - dt.timedelta(days=EVENT_LOG_MAX_DAYS)).date().isoformat()
+    log_combined = [e for e in log_combined if (e.get("date") or "") >= keep_cutoff][:EVENT_LOG_MAX]
+
+    return log_combined, new_state
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -844,6 +1348,12 @@ def build_activity_for_slug(
 
     val_delta_items, val_history_entry = valuation_delta_activity(config, existing)
     comp_lifecycle_items, comp_snapshots = comp_lifecycle_activity(db_gc, config, existing)
+
+    # Comparable set + durable change log (powers the first-visit baseline and
+    # the "what changed since you last logged in" deltas on the Your Home tab).
+    scan = scan_comparables(db_gc, config)
+    comparables_block = build_comparables_block(scan)
+    comparable_events, comparable_state = comparable_events_activity(db_gc, config, existing, scan)
 
     def _generate(window_days: int) -> dict[str, list[dict[str, Any]]]:
         listings_raw = new_listings_activity(db_gc, config, window_days)
@@ -907,6 +1417,9 @@ def build_activity_for_slug(
     side_state = {
         "valuation_history_append": val_history_entry,
         "comp_state_snapshots": comp_snapshots,
+        "comparables": comparables_block,
+        "comparable_events": comparable_events,
+        "comparable_state": comparable_state,
     }
     return final[:10], side_state
 
@@ -923,6 +1436,15 @@ def upsert_report(
         "activity_refreshed_at": now,
         "comp_state_snapshots": side_state.get("comp_state_snapshots") or {},
     }
+    # First-visit baseline + durable change log (Your Home tab). comparables and
+    # comparable_state are full snapshots; comparable_events is the rolling log
+    # already merged + capped in comparable_events_activity().
+    if side_state.get("comparables") is not None:
+        set_fields["comparables"] = side_state["comparables"]
+    if side_state.get("comparable_state") is not None:
+        set_fields["comparable_state"] = side_state["comparable_state"]
+    if side_state.get("comparable_events") is not None:
+        set_fields["comparable_events"] = side_state["comparable_events"]
     update_doc: dict[str, Any] = {
         "$set": set_fields,
         "$setOnInsert": {"created_at": now},
@@ -958,6 +1480,20 @@ def main() -> int:
                 "  valuation_history += %s (low=%s high=%s)",
                 entry.get("date"), entry.get("low"), entry.get("high"),
             )
+        comparables = side_state.get("comparables") or {}
+        events = side_state.get("comparable_events") or []
+        log.info(
+            "  comparables: %d closest_active, %d closest_sold; %d events in log",
+            len(comparables.get("closest_active", [])),
+            len(comparables.get("closest_sold", [])),
+            len(events),
+        )
+        for c in comparables.get("closest_active", [])[:3]:
+            log.info("    active  r%s cmp=%.2f %s — %s", c.get("ring"), c.get("comparability", 0), c.get("price"), c.get("address"))
+        for c in comparables.get("closest_sold", [])[:1]:
+            log.info("    sold    r%s cmp=%.2f %s — %s", c.get("ring"), c.get("comparability", 0), c.get("sold_price"), c.get("address"))
+        for e in events[:5]:
+            log.info("    event   [%s] r%s %s — %s", e.get("type"), e.get("ring"), e.get("date"), e.get("headline"))
         if args.dry_run:
             log.info("DRY RUN — skipping write")
         else:
