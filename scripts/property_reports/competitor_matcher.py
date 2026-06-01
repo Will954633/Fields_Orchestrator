@@ -401,45 +401,85 @@ def _gather_candidates(
 
 
 def _score(subject: Dict[str, Any], cand: Dict[str, Any]) -> float:
-    """Weighted, renormalised similarity distance in [0, 1]. 0 = identical."""
-    parts: List[Tuple[float, float]] = []  # (weight, normalised_distance)
+    """Weighted, renormalised similarity distance in [0, 1]. 0 = identical.
+
+    Thin wrapper over `_score_with_breakdown` for the hot ranking path where
+    only the float is needed."""
+    return _score_with_breakdown(subject, cand)[0]
+
+
+# Plain-language labels for each scoring axis — used in the "show our working"
+# per-home breakdown. Kept here so the model is documented in one place.
+SCORE_FACTOR_LABELS = {
+    "price": "Price guide",
+    "bedrooms": "Bedrooms",
+    "bathrooms": "Bathrooms",
+    "car": "Car spaces",
+    "floor": "Internal floor area",
+    "land": "Land size",
+    "features": "Signature features",
+    "distance": "Proximity",
+}
+
+
+def _score_with_breakdown(
+    subject: Dict[str, Any], cand: Dict[str, Any]
+) -> Tuple[float, List[Dict[str, Any]]]:
+    """Weighted, renormalised similarity distance in [0, 1] PLUS a per-axis
+    breakdown for the transparency panel. 0 = identical.
+
+    The breakdown is the literal "why this ranks here": one row per factor we
+    could actually compare (a factor is skipped, not penalised, when either
+    home lacks the data — and the remaining weights renormalise). Each row:
+        {factor, label, weight, subjectValue, candidateValue,
+         normalisedDistance, contribution}
+    where contribution is the renormalised weight*distance (sums to `score`).
+    """
+    # (weight, normalised_distance, factor_key, subject_value, candidate_value)
+    parts: List[Tuple[float, float, str, Any, Any]] = []
 
     # Price — full penalty at 30% off the anchor.
     if subject["price"] and cand.get("_price"):
         rel = abs(cand["_price"] - subject["price"]) / subject["price"]
-        parts.append((SCORE_WEIGHTS["price"], min(rel / 0.30, 1.0)))
+        parts.append((SCORE_WEIGHTS["price"], min(rel / 0.30, 1.0),
+                      "price", subject["price"], cand["_price"]))
 
     # Bedrooms — full penalty at 2 apart.
     if subject["bedrooms"]:
         cb = _to_int(cand.get("bedrooms"))
         if cb is not None:
-            parts.append((SCORE_WEIGHTS["bedrooms"], min(abs(cb - subject["bedrooms"]) / 2.0, 1.0)))
+            parts.append((SCORE_WEIGHTS["bedrooms"], min(abs(cb - subject["bedrooms"]) / 2.0, 1.0),
+                          "bedrooms", subject["bedrooms"], cb))
 
     # Bathrooms — full penalty at 2 apart.
     if subject["bathrooms"]:
         cv = _to_int(cand.get("bathrooms"))
         if cv is not None:
-            parts.append((SCORE_WEIGHTS["bathrooms"], min(abs(cv - subject["bathrooms"]) / 2.0, 1.0)))
+            parts.append((SCORE_WEIGHTS["bathrooms"], min(abs(cv - subject["bathrooms"]) / 2.0, 1.0),
+                          "bathrooms", subject["bathrooms"], cv))
 
     # Car — full penalty at 2 apart.
     if subject["car"]:
         cv = _to_int(cand.get("carspaces") or cand.get("car_spaces"))
         if cv is not None:
-            parts.append((SCORE_WEIGHTS["car"], min(abs(cv - subject["car"]) / 2.0, 1.0)))
+            parts.append((SCORE_WEIGHTS["car"], min(abs(cv - subject["car"]) / 2.0, 1.0),
+                          "car", subject["car"], cv))
 
     # Floor area — full penalty at 40% off.
     if subject["floor"]:
         cv = _to_float(cand.get("total_floor_area"))
         if cv:
             rel = abs(cv - subject["floor"]) / subject["floor"]
-            parts.append((SCORE_WEIGHTS["floor"], min(rel / 0.40, 1.0)))
+            parts.append((SCORE_WEIGHTS["floor"], min(rel / 0.40, 1.0),
+                          "floor", subject["floor"], cv))
 
     # Land size — full penalty at 40% off.
     if subject["land"]:
         cv = _to_float(cand.get("lot_size_sqm") or cand.get("land_size_sqm"))
         if cv:
             rel = abs(cv - subject["land"]) / subject["land"]
-            parts.append((SCORE_WEIGHTS["land"], min(rel / 0.40, 1.0)))
+            parts.append((SCORE_WEIGHTS["land"], min(rel / 0.40, 1.0),
+                          "land", subject["land"], cv))
 
     # Signature-feature overlap (Jaccard distance).
     if subject["features"]:
@@ -447,7 +487,8 @@ def _score(subject: Dict[str, Any], cand: Dict[str, Any]) -> float:
         union = subject["features"] | cf
         if union:
             jaccard = len(subject["features"] & cf) / len(union)
-            parts.append((SCORE_WEIGHTS["features"], 1.0 - jaccard))
+            parts.append((SCORE_WEIGHTS["features"], 1.0 - jaccard,
+                          "features", sorted(subject["features"]), sorted(cf)))
 
     # Distance — secondary "closer ranks first" term. Full penalty at
     # DISTANCE_FULL_PENALTY_KM. Uses exact coords where available, suburb
@@ -456,12 +497,28 @@ def _score(subject: Dict[str, Any], cand: Dict[str, Any]) -> float:
     cand_pt = _candidate_point(cand)
     if subj_pt and cand_pt:
         dist = _haversine_km(subj_pt, cand_pt)
-        parts.append((SCORE_WEIGHTS["distance"], min(dist / DISTANCE_FULL_PENALTY_KM, 1.0)))
+        parts.append((SCORE_WEIGHTS["distance"], min(dist / DISTANCE_FULL_PENALTY_KM, 1.0),
+                      "distance", None, round(dist, 1)))
 
     if not parts:
-        return 1.0
-    total_w = sum(w for w, _ in parts)
-    return sum(w * d for w, d in parts) / total_w
+        return 1.0, []
+
+    total_w = sum(w for w, _, _, _, _ in parts)
+    score = sum(w * d for w, d, _, _, _ in parts) / total_w
+
+    breakdown = [
+        {
+            "factor": key,
+            "label": SCORE_FACTOR_LABELS.get(key, key),
+            "weight": round(w / total_w, 4),          # renormalised share
+            "subjectValue": sv,
+            "candidateValue": cv,
+            "normalisedDistance": round(d, 4),         # 0 = identical, 1 = full penalty
+            "contribution": round((w * d) / total_w, 4),
+        }
+        for w, d, key, sv, cv in parts
+    ]
+    return score, breakdown
 
 
 # ---------------------------------------------------------------------- #
@@ -574,6 +631,48 @@ def _hero_image(doc: Dict[str, Any]) -> Optional[str]:
 # Public entry point
 # ---------------------------------------------------------------------- #
 
+# How many ranked rows to persist for the "show our working" panel. Enough to
+# show the similarity cliff after the close tier without dumping the whole
+# catchment (which would bury the proof). The map still plots only TARGET_MAX.
+RANKED_COMPARISON_KEEP = 20
+
+
+def _ranked_home_row(subject: Dict[str, Any], cand: Dict[str, Any], rank: int) -> Dict[str, Any]:
+    """One row of the transparency ranked list. matchPct is the model's
+    closeness as a percentage (100 = identical) — a documented heuristic
+    output, NOT a valuation or a guarantee. Carries the per-axis breakdown
+    and a live listing link so the seller can verify every home themselves."""
+    score = cand["_score"]
+    price_int = cand.get("_price")
+    price_text = (cand.get("price") if isinstance(cand.get("price"), str) and "$" in (cand.get("price") or "")
+                  else (f"${price_int:,}" if price_int else "Contact agent"))
+    suburb_disp = (cand.get("suburb") or cand.get("_suburb_key", "").replace("_", " ")).title()
+    cand_pt = _candidate_point(cand)
+    subj_pt = subject.get("point")
+    distance_km = (round(_haversine_km(subj_pt, cand_pt), 1)
+                   if subj_pt and cand_pt else None)
+    return {
+        "rank": rank,
+        "matchPct": round((1.0 - score) * 100),
+        "score": round(score, 4),
+        "address": cand.get("address") or cand.get("street_address"),
+        "suburb": suburb_disp,
+        "priceText": price_text,
+        "priceLow": price_int,
+        "bedrooms": _to_int(cand.get("bedrooms")),
+        "bathrooms": _to_int(cand.get("bathrooms")),
+        "carSpaces": _to_int(cand.get("carspaces") or cand.get("car_spaces")),
+        "landSqm": _to_int(cand.get("lot_size_sqm") or cand.get("land_size_sqm")),
+        "floorSqm": _to_int(cand.get("total_floor_area")),
+        "distanceKm": distance_km,
+        "features": sorted(_signature_features(cand)),
+        "listingUrl": cand.get("listing_url"),
+        "imageSrc": _hero_image(cand),
+        "isClose": cand["_score"] <= CLOSE_MATCH_THRESHOLD or rank == 1,
+        "breakdown": cand.get("_breakdown", []),
+    }
+
+
 def resolve_competitor_map(
     subject_doc: Dict[str, Any],
     db: Database,
@@ -582,6 +681,7 @@ def resolve_competitor_map(
     price_anchor: Optional[int] = None,
     catchment: Optional[List[str]] = None,
     geocode_missing: bool = True,
+    active_listings_total: Optional[int] = None,
 ) -> Optional[Dict[str, Any]]:
     """Build the CompetitorMapData for one subject. Returns None when the
     subject lacks the minimum data to define substitutes (no bedrooms / no
@@ -589,6 +689,11 @@ def resolve_competitor_map(
 
     price_anchor: the subject's valuation working-range midpoint (preferred
     for off-market submissions). Falls back to the subject's own price string.
+
+    active_listings_total: the catchment-wide active count (from
+    scarcity_features) used as the TOP of the transparency funnel — so the
+    panel's "174 active → N substitutes → ranked" story reconciles with the
+    Market-tab headline. Omitted → funnel top falls back to in-band count.
     """
     subject = _subject_profile(subject_doc, features_basic, price_anchor)
     if not subject["bedrooms"] or not subject["price"]:
@@ -635,9 +740,11 @@ def resolve_competitor_map(
         logger.info("  competitor_matcher: no substitutes found at any aperture")
         return None
 
-    # Rank by similarity, keep the closest TARGET_MAX.
+    # Rank by similarity, keep the closest TARGET_MAX. Capture each candidate's
+    # per-axis breakdown here so the transparency panel can show the working
+    # for the whole ranked tail, not just the plotted few.
     for c in candidates:
-        c["_score"] = _score(subject, c)
+        c["_score"], c["_breakdown"] = _score_with_breakdown(subject, c)
     candidates.sort(key=lambda c: c["_score"])
     active_in_band = len(candidates)
     chosen = candidates[:TARGET_MAX]
@@ -704,6 +811,32 @@ def resolve_competitor_map(
         return None
 
     ring_meta = APERTURE_RINGS[chosen_ring]
+
+    # "Show our working" — the ranked comparison the headline rests on. The
+    # whole sorted set is in `candidates`; we persist the top RANKED_COMPARISON_KEEP
+    # (each with its per-axis breakdown) plus the funnel counts that bridge the
+    # broad catchment count to the substitute set. n_close is computed over the
+    # full ranked set, not just the plotted few, so "only N truly compete"
+    # matches what the seller counts in the list.
+    n_close = sum(1 for c in candidates if c["_score"] <= CLOSE_MATCH_THRESHOLD) or 1
+    ranked_homes = [
+        _ranked_home_row(subject, c, i + 1)
+        for i, c in enumerate(candidates[:RANKED_COMPARISON_KEEP])
+    ]
+    funnel_top = active_listings_total if (active_listings_total and active_listings_total > 0) else active_in_band
+    ranked_comparison = {
+        "funnel": {
+            "active_total": funnel_top,
+            "in_band": active_in_band,
+            "ranked_shown": len(ranked_homes),
+            "close_tier": n_close,
+        },
+        "weights": dict(SCORE_WEIGHTS),
+        "aperture_label": ring_meta["label"],
+        "close_match_threshold_pct": round((1.0 - CLOSE_MATCH_THRESHOLD) * 100),
+        "homes": ranked_homes,
+    }
+
     return {
         "subject": {
             "lat": subj_latlng[0],
@@ -721,6 +854,7 @@ def resolve_competitor_map(
         "aperture_label": ring_meta["label"],
         "catchment": _geo_for_ring(ring_meta["geo"], own, catch),
         "active_in_band": active_in_band,
+        "ranked_comparison": ranked_comparison,
         "resolved_at": datetime.now(timezone.utc).isoformat(),
     }
 
