@@ -29,10 +29,7 @@ from dotenv import load_dotenv  # noqa: E402
 load_dotenv("/home/fields/Fields_Orchestrator/.env")
 
 from shared.db import get_client  # noqa: E402
-from scripts.property_reports.comparable_feed import (  # noqa: E402
-    comparables_from_slots,
-    comparable_events_from_slots,
-)
+from scripts.property_reports.slot_resolver import SlotResolver  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("refresh_property_reports")
@@ -955,42 +952,25 @@ def upsert_report(
     log.info("Upserted %d legacy activity items for %s", len(activity), slug)
 
 
-def upsert_comparables(
-    col, slug: str, comparables: dict[str, Any],
-    events: list[dict[str, Any]], state: dict[str, dict[str, Any]],
-) -> None:
-    """Persist the first-visit baseline + durable change log onto an existing
-    report doc. Never creates a doc (these ride on resolver-built reports)."""
-    col.update_one(
-        {"slug": slug},
-        {"$set": {
-            "comparables": comparables,
-            "comparable_events": events,
-            "comparable_state": state,
-            "comparables_refreshed_at": dt.datetime.utcnow(),
-        }},
-        upsert=False,
-    )
-
-
-# Fields needed to compute/diff comparables, plus the prior snapshot to diff against.
-_COMPARABLES_PROJECTION = {
-    "_id": 0, "slug": 1, "slots": 1,
-    "comparable_state": 1, "comparable_events": 1,
-}
-
-
-def refresh_comparables_for_doc(col, doc: dict[str, Any], dry_run: bool) -> bool:
-    """Build the first-visit baseline + change log for one report from the
-    competitor_matcher engine output already on the doc (`slots.*`). Returns
-    True if comparables were produced."""
+def refresh_comparables_for_doc(col, gc_db, doc: dict[str, Any], dry_run: bool) -> bool:
+    """Re-run the competitor matcher (cheap, DB-only — no vision / Opus /
+    scraping) for one report against tonight's freshly-scraped listings, then
+    diff into the durable change log + first-visit baseline. Re-running the
+    matcher is what makes the "what changed" stream actually accumulate over
+    time: it picks up price drops, method switches, withdrawals, and sales since
+    the prior snapshot. Returns True if a competitor map was produced."""
     slug = doc.get("slug")
-    slots = doc.get("slots") or {}
-    comparables = comparables_from_slots(slots)
-    if comparables is None:
-        log.info("· %s — no competitor_map yet (resolver not run); skipping", slug)
+    try:
+        updates = SlotResolver(doc, gc_db).refresh_competitor_slots()
+    except Exception as e:
+        log.warning("· %s — competitor refresh failed: %s", slug, e)
         return False
-    events, state = comparable_events_from_slots(slots, doc)
+
+    comparables = updates.get("comparables")
+    if not comparables:
+        log.info("· %s — no competitor map produced (no subject / no substitutes); skipping", slug)
+        return False
+    events = updates.get("comparable_events", [])
     log.info(
         "· %s — %d active, %d sold, %d events (aperture r%s: %s)",
         slug, len(comparables["closest_active"]), len(comparables["closest_sold"]),
@@ -999,12 +979,14 @@ def refresh_comparables_for_doc(col, doc: dict[str, Any], dry_run: bool) -> bool
     for c in comparables["closest_active"][:3]:
         log.info("    active  %s — %s (%.1f km)", c.get("price"), c.get("address"),
                  c.get("distance_km") if isinstance(c.get("distance_km"), (int, float)) else -1)
-    for c in comparables["closest_sold"][:1]:
-        log.info("    sold    %s — %s", c.get("price"), c.get("address"))
     for e in events[:4]:
         log.info("    event   [%s] %s — %s", e.get("type"), e.get("date"), e.get("headline"))
     if not dry_run:
-        upsert_comparables(col, slug, comparables, events, state)
+        col.update_one(
+            {"slug": slug},
+            {"$set": {**updates, "updated_at": dt.datetime.utcnow()}},
+            upsert=False,
+        )
     return True
 
 
@@ -1017,16 +999,18 @@ def main() -> int:
 
     client = get_client()
     col = client["system_monitor"]["property_reports"]
+    gc_db = client["Gold_Coast"]
 
-    # 1) Comparables + durable change log — config-free, EVERY report. Reads the
-    #    competitor_matcher engine output (slots.competitor_map / best_comp /
-    #    recent_comps) the slot resolver already stored on each report doc.
+    # 1) Comparables + durable change log — config-free, EVERY report. Re-runs
+    #    the competitor matcher against tonight's listings (cheap, DB-only) and
+    #    diffs into the durable change log, so the "what changed since you last
+    #    logged in" stream keeps growing while a seller deliberates.
     query = {"slug": args.slug} if args.slug else {}
-    docs = list(col.find(query, _COMPARABLES_PROJECTION))
+    docs = list(col.find(query))  # full docs — the resolver needs the subject fields
     log.info("=== Comparables: %d report doc(s) ===", len(docs))
     produced = 0
     for doc in docs:
-        if refresh_comparables_for_doc(col, doc, args.dry_run):
+        if refresh_comparables_for_doc(col, gc_db, doc, args.dry_run):
             produced += 1
     log.info("Comparables produced for %d/%d report(s)%s",
              produced, len(docs), " (DRY RUN)" if args.dry_run else "")

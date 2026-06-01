@@ -725,6 +725,56 @@ class SlotResolver:
         except Exception as e:
             logger.warning(f"  comparable feed resolver threw: {e}")
 
+    def refresh_competitor_slots(self) -> Dict[str, Any]:
+        """Lightweight nightly refresh: re-run ONLY the competitor matcher +
+        recent comps against the current listing data (NO vision / Opus /
+        scraping), then recompute the comparable feed. Returns a dict of $set
+        updates (dotted keys, ready to apply to property_reports).
+
+        Cheap — pure DB work — so it runs for every active report each night to
+        keep the "what changed since you last logged in" change log growing:
+        the matcher sees that night's freshly-scraped prices / methods / sales
+        and `_resolve_comparable_feed` diffs them against last night's snapshot.
+        """
+        self._load_subject_property()
+        if not self._subject:
+            return {}
+
+        updates: Dict[str, Any] = {"slots.data_pull_date": datetime.utcnow()}
+
+        comps = self.recent_comparable_sales(n=6)
+        if comps:
+            updates["slots.recent_comps"] = comps
+            updates["slots.best_comp"] = comps[0]
+
+        competition = self.competition_count()
+        if competition is not None:
+            updates["slots.n_competitors"] = competition
+
+        latlng = self.subject_latlng()
+        if latlng:
+            updates["lat"] = latlng[0]
+            updates["lng"] = latlng[1]
+
+        try:
+            model_range = self.valuation_model_range()
+            price_anchor = None
+            if model_range and model_range.get("low") and model_range.get("high"):
+                price_anchor = int((model_range["low"] + model_range["high"]) / 2)
+            features_basic = derive_features_basic(self._subject)
+            comp_map = resolve_competitor_map(
+                self._subject, self.db, features_basic, price_anchor=price_anchor,
+            )
+            if comp_map and comp_map.get("competitors"):
+                updates["slots.competitor_map"] = comp_map
+                updates["slot_status.competitor_matches"] = "approved"
+        except Exception as e:
+            logger.warning(f"  competitor refresh threw: {e}")
+
+        # Diff the freshly-recomputed slots against the doc's prior snapshot.
+        self._resolve_comparable_feed(updates)
+        return updates
+
     # ------------------------------------------------------------------ #
     # Subject lookup
     # ------------------------------------------------------------------ #

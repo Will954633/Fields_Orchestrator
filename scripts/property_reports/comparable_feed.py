@@ -366,18 +366,13 @@ def comparable_events_from_slots(
         if (c.get("sale_date") or "") >= cutoff:
             _add(_sold_event(c))
 
-    # Withdrawn — was for_sale in prior, now absent from the current set.
-    cur_idents = {c["identity"] for c in active} | {c["identity"] for c in sold}
-    for ident, prior in prior_state.items():
-        if prior.get("status") == "for_sale" and ident not in cur_idents:
-            _add({
-                "id": f"withdrawn:{ident}:{today}", "date": today, "ts": now_iso,
-                "type": "withdrawn", "kind": "comp_withdrawn", "ring": None, "ring_label": None,
-                "address": ident if not str(ident).startswith("http") else "A comparable listing",
-                "headline": "A comparable listing was withdrawn from market",
-                "body": "A home that was competing with yours is no longer listed — withdrawal, off-market sale, or a refresh.",
-                "effect_on_your_home": "Withdrawn stock tightens visible supply at your bed + price band.",
-            })
+    # NOTE: no "withdrawn" event. We re-run the matcher's ADAPTIVE aperture each
+    # night and persist only its trimmed top-N, so a home leaving that set is
+    # usually ranking churn (it dropped out of the top-N, or the aperture moved),
+    # NOT a genuine market withdrawal — emitting "X was withdrawn" off that would
+    # be misleading. The four robust signals (new_listing, price_change,
+    # method_change, sold) cover the §1.4 spec; a verified-withdrawal event would
+    # need a per-comp live-status lookup, deferred.
 
     log_combined = prior_log + new_events
 
