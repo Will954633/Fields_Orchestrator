@@ -209,9 +209,10 @@ def extract_listing_id(url: str) -> Optional[str]:
 # ---------------------------------------------------------------------------
 
 class RecentSoldScraper:
-    def __init__(self, dry_run: bool = False, verbose: bool = False):
+    def __init__(self, dry_run: bool = False, verbose: bool = False, max_pages: int = MAX_PAGES):
         self.dry_run = dry_run
         self.verbose = verbose
+        self.max_pages = max_pages
         self.session = None
         self.db = None
 
@@ -325,14 +326,24 @@ class RecentSoldScraper:
         page_num = 1
         hit_cutoff = False
 
-        while page_num <= MAX_PAGES and not hit_cutoff:
+        while page_num <= self.max_pages and not hit_cutoff:
             url = base_url if page_num == 1 else f"{base_url}&page={page_num}"
             print(f"  Page {page_num}: {url}")
 
             try:
-                html = self.fetch_page(url)
+                # A blank fetch is usually a transient Bright Data/Akamai block,
+                # not the end of results. Retry the same page a few times with
+                # backoff before treating it as the end — otherwise a single
+                # flaky page aborts the whole suburb mid-history (deep backfills).
+                html = ""
+                for fetch_attempt in range(3):
+                    html = self.fetch_page(url)
+                    if html:
+                        break
+                    print(f"    Blank page {page_num} (attempt {fetch_attempt + 1}/3) — retrying after backoff")
+                    time.sleep(BETWEEN_PAGE_DELAY * (fetch_attempt + 2))
                 if not html:
-                    print(f"    Empty response — stopping pagination")
+                    print(f"    Empty response after retries — stopping pagination")
                     break
 
                 records = self.parse_listing_cards(html, suburb_info)
@@ -352,7 +363,7 @@ class RecentSoldScraper:
                     all_records.append(rec)
 
                 page_num += 1
-                if not hit_cutoff and page_num <= MAX_PAGES:
+                if not hit_cutoff and page_num <= self.max_pages:
                     time.sleep(BETWEEN_PAGE_DELAY)
 
             except Exception as e:
@@ -559,6 +570,9 @@ def main():
     parser.add_argument("--suburb", type=str, help="Single suburb to scrape (robina, varsity_lakes, burleigh_waters)")
     parser.add_argument("--dry-run", action="store_true", help="Preview only — no database writes")
     parser.add_argument("--verbose", action="store_true", help="Extra logging")
+    parser.add_argument("--max-pages", type=int, default=MAX_PAGES,
+                        help=f"Max search-result pages per suburb (default: {MAX_PAGES}). "
+                             "Raise for one-time deep historical backfills (e.g. --days 365 --max-pages 40).")
     args = parser.parse_args()
 
     suburbs = TARGET_SUBURBS
@@ -569,7 +583,7 @@ def main():
             print(f"ERROR: Unknown suburb '{args.suburb}'. Options: robina, varsity_lakes, burleigh_waters")
             sys.exit(1)
 
-    scraper = RecentSoldScraper(dry_run=args.dry_run, verbose=args.verbose)
+    scraper = RecentSoldScraper(dry_run=args.dry_run, verbose=args.verbose, max_pages=args.max_pages)
     scraper.run(suburbs, args.days)
 
 
