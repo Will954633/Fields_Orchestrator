@@ -36,15 +36,15 @@ METHOD (matched cohort, annual-average baseline)
     weight = number of sales in that (stratum, month).
 
 OUTPUTS  (written to 08_Seller-Book/Market_Data/seasonality_v2/)
-    sales_dataset_<window>.csv     row-level publishable dataset
-    monthly_summary_<window>.csv   12-row month -> premium table
-    strata_detail_<window>.csv     per-(stratum,month) deviations
-    RUN_SUMMARY_<window>.md        human-readable summary + article delta
+    seasonality_sales_dataset.csv    row-level publishable dataset (the data used)
+    seasonality_monthly_summary.csv  12-row month -> premium table (the result)
+    seasonality_strata_detail.csv    per-(stratum,month) deviations (the working)
+    RUN_SUMMARY.md                   hand-maintained methodology + verdict (not auto-written)
 
 USAGE
-    python3 scripts/seasonality_analysis.py                 # 2020-2025 (primary)
-    python3 scripts/seasonality_analysis.py --start 2010    # custom window
-    python3 scripts/seasonality_analysis.py --suburb robina # single suburb
+    python3 scripts/seasonality_analysis.py                 # CANONICAL: 2010-2025 excl COVID 2019-2020
+    python3 scripts/seasonality_analysis.py --start 2020 --exclude-years ""   # a different window
+    python3 scripts/seasonality_analysis.py --suburb robina # single-suburb diagnostic (suffixed output)
 """
 
 from __future__ import annotations
@@ -78,7 +78,7 @@ PRICE_MIN, PRICE_MAX = 100_000, 30_000_000
 
 OUT_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "08_Seller-Book", "Market_Data", "seasonality_v2",
+    "08_Seller-Book", "Market_Data", "seasonality",
 )
 
 # Article figures (annual-average baseline) for the delta report.
@@ -222,11 +222,14 @@ def run(rows, start, end, exclude_years=()):
     return summary, strata_detail, used_strata, used_sales, len(rows)
 
 
-def write_outputs(window, rows, summary, strata_detail, totals):
+def write_outputs(tag, rows, summary, strata_detail, totals):
+    # `tag` is "" for the canonical catchment run (fixed source-of-truth
+    # filenames that a no-arg re-run overwrites) or "_<suburb>" for a
+    # single-suburb diagnostic run (so it never clobbers the canonical files).
     os.makedirs(OUT_DIR, exist_ok=True)
     used_strata, used_sales, n_rows = totals
 
-    ds = os.path.join(OUT_DIR, f"sales_dataset_{window}.csv")
+    ds = os.path.join(OUT_DIR, f"seasonality_sales_dataset{tag}.csv")
     with open(ds, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=["suburb", "address", "year", "month",
                                           "month_name", "price", "property_type",
@@ -235,7 +238,7 @@ def write_outputs(window, rows, summary, strata_detail, totals):
         for r in sorted(rows, key=lambda x: (x["suburb"], x["year"], x["month"])):
             w.writerow(r)
 
-    ms = os.path.join(OUT_DIR, f"monthly_summary_{window}.csv")
+    ms = os.path.join(OUT_DIR, f"seasonality_monthly_summary{tag}.csv")
     with open(ms, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=["month", "premium_pct", "strata",
                                           "comparisons", "article_pct", "delta_pp"])
@@ -246,7 +249,7 @@ def write_outputs(window, rows, summary, strata_detail, totals):
                       delta_pp=round(s["premium_pct"] - art, 2))
             w.writerow(s2)
 
-    sd = os.path.join(OUT_DIR, f"strata_detail_{window}.csv")
+    sd = os.path.join(OUT_DIR, f"seasonality_strata_detail{tag}.csv")
     with open(sd, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=["suburb", "property_type", "bedrooms",
                                           "year", "month", "n_sales",
@@ -259,18 +262,22 @@ def write_outputs(window, rows, summary, strata_detail, totals):
 
 
 def main():
+    # Defaults reproduce the CANONICAL source of truth: 2010–2025 with the
+    # COVID-disrupted years 2019–2020 excluded. A no-arg run overwrites the
+    # committed source-of-truth CSVs in 08_Seller-Book/Market_Data/seasonality/.
     ap = argparse.ArgumentParser()
-    ap.add_argument("--start", type=int, default=2020)
+    ap.add_argument("--start", type=int, default=2010)
     ap.add_argument("--end", type=int, default=2025)
-    ap.add_argument("--exclude-years", default="",
-                    help="comma-separated years to drop, e.g. 2019,2020 (COVID)")
+    ap.add_argument("--exclude-years", default="2019,2020",
+                    help="comma-separated years to drop (default: 2019,2020 COVID)")
     ap.add_argument("--suburb", default=None, help="single suburb (default: all 8)")
     args = ap.parse_args()
 
     exclude_years = {int(y) for y in args.exclude_years.split(",") if y.strip()}
     suburbs = [args.suburb] if args.suburb else SUBURBS
-    excl_tag = ("_excl" + "-".join(str(y) for y in sorted(exclude_years))) if exclude_years else ""
-    window = f"{args.start}_{args.end}{excl_tag}" + (f"_{args.suburb}" if args.suburb else "")
+    # Canonical run → fixed filenames; single-suburb diagnostic → suffixed so it
+    # never clobbers the source of truth.
+    tag = f"_{args.suburb}" if args.suburb else ""
 
     c = get_mongo_client()
     db = c["Gold_Coast"]
@@ -299,7 +306,7 @@ def main():
     # The publishable dataset = rows inside the window, excluded years removed.
     pub_rows = [r for r in all_rows if args.start <= r["year"] <= args.end
                 and r["year"] not in exclude_years and r["bedrooms"] is not None]
-    ds, ms, sd = write_outputs(window, pub_rows, summary, strata_detail,
+    ds, ms, sd = write_outputs(tag, pub_rows, summary, strata_detail,
                                (used_strata, used_sales, len(pub_rows)))
 
     print(f"\n=== MATCHED-COHORT SEASONALITY ({args.start}-{args.end}) ===")
