@@ -181,58 +181,49 @@ def chart_ch1_4():
 # CH2-1  Monthly Sale Price Heatmap
 # ===================================================================
 def chart_ch2_1():
-    print("Generating CH2-1: Monthly Sale Price Heatmap")
+    print("Generating CH2-1: Monthly Seasonal Premium (catchment)")
     months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-    suburbs = ['Robina', 'Varsity Lakes', 'Burleigh Waters']
 
-    # Plausible seasonal data: relative % above/below suburb average
-    # Spring/autumn stronger, winter weaker, peaks as specified
-    data = np.array([
-        # Robina — peak Nov
-        [ 1.2, 0.8, 2.1, 3.0, 1.5, -2.1, -3.5, -1.8, 1.0, 2.5, 4.2, 0.5],
-        # Varsity Lakes — peak Apr
-        [ 0.5, 1.2, 2.8, 4.5, 2.0, -1.5, -3.2, -2.0, 0.8, 1.8, 3.0, 0.2],
-        # Burleigh Waters — peak Mar
-        [-0.3, 2.5, 5.1, 3.2, 1.0, -2.8, -4.0, -2.5, 0.5, 2.0, 3.5, 1.5],
-    ])
+    # SOURCE OF TRUTH: scripts/seasonality_analysis.py -- matched-cohort analysis
+    # (annual-average baseline, +/-30% winsorization) over 18,978 southern Gold
+    # Coast sales, 2010-2025 EXCLUDING the COVID years 2019-2020. Catchment-level
+    # (per-suburb monthly cells are too thin to publish). Reconciled with the
+    # website article (december-listing-paradox) and the mini-site strip.
+    # See 08_Seller-Book/Market_Data/seasonality_v2/RUN_SUMMARY.md.
+    data = np.array([-1.37, -1.36, 0.85, -0.30, -0.47, 1.60,
+                     -0.04, 2.30, 2.50, 2.61, 3.29, 2.81])
+    peak_idx = int(np.argmax(data))  # November
 
-    cmap = LinearSegmentedColormap.from_list('fields', [SKY, WHITE, COPPER])
-    fig, ax = plt.subplots(figsize=(14, 6))
+    fig, ax = plt.subplots(figsize=(14, 6.5))
+    colours = [COPPER if v >= 0 else SKY for v in data]
+    bars = ax.bar(range(12), data, color=colours, width=0.74, edgecolor='none', zorder=3)
+    bars[peak_idx].set_edgecolor(GRASS)
+    bars[peak_idx].set_linewidth(2.5)
 
-    im = ax.imshow(data, cmap=cmap, aspect='auto', vmin=-5, vmax=6)
-
-    ax.set_xticks(np.arange(12))
+    ax.axhline(0, color=GRASS, linewidth=1.1, zorder=2)
+    ax.set_xticks(range(12))
     ax.set_xticklabels(months, fontsize=10)
-    ax.set_yticks(np.arange(3))
-    ax.set_yticklabels(suburbs, fontsize=11)
+    ax.set_ylabel('% above / below the annual average', fontsize=10, color=TEXT_SECONDARY)
+    ax.set_ylim(-3.0, 4.2)
     ax.tick_params(length=0)
+    for spine in ['top', 'right', 'left']:
+        ax.spines[spine].set_visible(False)
 
-    # Annotate each cell
-    for i in range(3):
-        for j in range(12):
-            v = data[i, j]
-            sign = '+' if v > 0 else ''
-            colour = GRASS if abs(v) > 2 else TEXT_SECONDARY
-            ax.text(j, i, f'{sign}{v:.1f}%', ha='center', va='center',
-                    fontsize=8.5, color=colour, fontweight='bold' if abs(v) > 3 else 'normal')
+    for j, v in enumerate(data):
+        off = 0.18 if v >= 0 else -0.18
+        va = 'bottom' if v >= 0 else 'top'
+        sign = '+' if v > 0 else ''
+        ax.text(j, v + off, f'{sign}{v:.1f}%', ha='center', va=va,
+                fontsize=8.8, color=GRASS,
+                fontweight='bold' if j == peak_idx else 'normal')
 
-    # Highlight peak months with border
-    peaks = [(0, 10), (1, 3), (2, 2)]  # (suburb_idx, month_idx)
-    for si, mi in peaks:
-        rect = plt.Rectangle((mi - 0.5, si - 0.5), 1, 1,
-                              linewidth=2.5, edgecolor=GRASS, facecolor='none', zorder=5)
-        ax.add_patch(rect)
-
-    ax.grid(False)
-    ax.set_title("When do properties sell for the most?", pad=30)
-    ax.text(0.5, 1.03, "Monthly price performance by suburb \u2014 historical averages",
+    ax.set_title("When does the southern Gold Coast sell for the most?", pad=30)
+    ax.text(0.5, 1.03,
+            "Median sale price by month vs the annual average — 18,978 matched "
+            "sales, 2010–2025 (excl. 2019–20)",
             transform=ax.transAxes, ha='center', fontsize=9, color=TEXT_MUTED)
-
-    # Colour bar
-    cbar = fig.colorbar(im, ax=ax, orientation='horizontal', fraction=0.05, pad=0.12, aspect=40)
-    cbar.set_label('% above/below suburb average', fontsize=9, color=TEXT_MUTED)
-    cbar.ax.tick_params(labelsize=8, colors=TEXT_MUTED)
-    cbar.outline.set_visible(False)
+    ax.grid(axis='y', color=BIRCH, linewidth=0.8, zorder=0)
+    ax.set_axisbelow(True)
 
     _source_line(ax)
     fig.tight_layout(pad=2)
@@ -791,86 +782,94 @@ def chart_ch3_2():
 
 
 # ===================================================================
-# CH6-2  Commission Comparison
+# CH6-2  Agent Effect Range (replaces fabricated commission table)
 # ===================================================================
 def chart_ch6_2():
-    print("Generating CH6-2: Commission Comparison")
-    fig, ax = plt.subplots(figsize=(14, 6))
-    ax.axis('off')
-    ax.grid(False)
+    """The possible span of agent effect on a $1.2M sale.
 
+    Three horizontal floating bars centred on $0 (market valuation):
+      • Poor agent/process effect: −5% to −8%   (−$60k to −$96k)
+      • Commission spread (1.5–2.75%): −1.25%   (−$15k, one-sided)
+      • Strong agent/process effect: +3% to +5% (+$36k to +$60k)
+
+    Visual point: commission is the smallest bar by a wide margin.
+    Sources cited in caption (handled in HTML figcaption).
+    """
+    print("Generating CH6-2: Agent Effect Range")
+
+    PROPERTY_VALUE = 1_200_000
+
+    # Categories defined as (label, low_pct, high_pct, colour)
     rows = [
-        ('1.5%', '$18,000', '+0%', '$1,200,000', '$1,182,000', ''),
-        ('2.0%', '$24,000', '+3%', '$1,236,000', '$1,212,000', '+$30,000'),
-        ('2.5%', '$30,000', '+5%', '$1,260,000', '$1,230,000', '+$48,000'),
-        ('2.75%', '$33,000', '+7%', '$1,284,000', '$1,251,000', '+$69,000'),
+        ('Strong agent / process effect',  +3.0,  +5.0, GRASS),
+        ('Commission spread (1.5% to 2.75%)',  -1.25, 0.0, TEXT_MUTED),
+        ('Poor agent / process effect',   -8.0, -5.0, COPPER),
     ]
-    headers = ['Commission', 'Fee', 'Premium', 'Sale Price', 'Net Proceeds', 'Net Gain']
 
-    n_cols = len(headers)
-    n_rows = len(rows)
-    col_widths = [0.13, 0.14, 0.12, 0.18, 0.18, 0.16]
-    col_x = [0.05]
-    for w in col_widths[:-1]:
-        col_x.append(col_x[-1] + w)
+    fig, ax = plt.subplots(figsize=(14, 6.5))
 
-    table_top = 0.75
-    row_h = 0.14
-    header_h = 0.10
+    y_positions = np.arange(len(rows))
+    bar_height = 0.45
 
-    # Header row background
-    header_rect = mpatches.FancyBboxPatch(
-        (0.03, table_top), 0.92, header_h,
-        boxstyle='round,pad=0.01', facecolor=GRASS, edgecolor='none',
-        transform=ax.transAxes, zorder=2,
-    )
-    ax.add_patch(header_rect)
+    # Plot floating range bars
+    for i, (label, lo_pct, hi_pct, colour) in enumerate(rows):
+        lo = lo_pct / 100 * PROPERTY_VALUE
+        hi = hi_pct / 100 * PROPERTY_VALUE
+        width = hi - lo
+        ax.barh(i, width, left=lo, height=bar_height, color=colour,
+                edgecolor='none', zorder=3, alpha=0.92)
 
-    for j, hdr in enumerate(headers):
-        ax.text(col_x[j] + col_widths[j] / 2, table_top + header_h / 2, hdr,
-                transform=ax.transAxes, ha='center', va='center',
-                fontsize=10, fontweight='bold', color=WHITE, zorder=3)
+        # Dollar annotations at each end of the bar
+        if lo_pct < 0:
+            # Negative side — label far end with dollar amount
+            ax.text(lo - 2500, i, f"−${abs(int(lo)):,}", va='center', ha='right',
+                    fontsize=11, fontweight='bold', color=colour, zorder=4)
+            if hi_pct < 0:
+                ax.text(hi + 2500, i, f"−${abs(int(hi)):,}", va='center', ha='left',
+                        fontsize=10, color=TEXT_SECONDARY, zorder=4)
+        if hi_pct > 0:
+            ax.text(hi + 2500, i, f"+${int(hi):,}", va='center', ha='left',
+                    fontsize=11, fontweight='bold', color=colour, zorder=4)
+            if lo_pct > 0:
+                ax.text(lo - 2500, i, f"+${int(lo):,}", va='center', ha='right',
+                        fontsize=10, color=TEXT_SECONDARY, zorder=4)
 
-    for i, row in enumerate(rows):
-        y_top = table_top - (i + 1) * row_h
-        is_highlight = (i == n_rows - 1)
+        # Percentage range label centred on bar
+        if lo_pct < 0 and hi_pct == 0:
+            pct_label = f"{lo_pct:+.2f}%"
+        elif lo_pct < 0 and hi_pct < 0:
+            pct_label = f"{lo_pct:+.0f}% to {hi_pct:+.0f}%"
+        else:
+            pct_label = f"{lo_pct:+.0f}% to {hi_pct:+.0f}%"
+        ax.text((lo + hi) / 2, i, pct_label, va='center', ha='center',
+                fontsize=11, fontweight='bold', color=WHITE, zorder=5)
 
-        # Row background
-        bg_colour = GRASS if is_highlight else (BIRCH if i % 2 == 0 else WHITE)
-        bg_alpha = 0.15 if is_highlight else 0.5
-        if is_highlight:
-            bg_alpha = 0.2
-        row_rect = mpatches.FancyBboxPatch(
-            (0.03, y_top), 0.92, row_h * 0.95,
-            boxstyle='round,pad=0.01',
-            facecolor=bg_colour, alpha=bg_alpha if not is_highlight else 0.2,
-            edgecolor=GRASS if is_highlight else 'none',
-            linewidth=2 if is_highlight else 0,
-            transform=ax.transAxes, zorder=2,
-        )
-        ax.add_patch(row_rect)
+    # Zero line (market valuation = $1,200,000)
+    ax.axvline(x=0, color=GRASS, linewidth=1.5, zorder=2)
 
-        for j, val in enumerate(row):
-            text_colour = GRASS
-            fw = 'normal'
-            fs = 11
-            if j == len(row) - 1 and val:  # Net gain column
-                text_colour = GRASS
-                fw = 'bold'
-                fs = 12
-            if is_highlight:
-                fw = 'bold'
+    # Y axis
+    ax.set_yticks(y_positions)
+    ax.set_yticklabels([r[0] for r in rows], fontsize=12, color=GRASS)
+    ax.invert_yaxis()
 
-            ax.text(col_x[j] + col_widths[j] / 2, y_top + row_h * 0.45, val,
-                    transform=ax.transAxes, ha='center', va='center',
-                    fontsize=fs, fontweight=fw, color=text_colour, zorder=3)
+    # X axis — dollar formatting
+    x_min = -110_000
+    x_max = +75_000
+    ax.set_xlim(x_min, x_max)
+    ax.xaxis.set_major_formatter(mticker.FuncFormatter(
+        lambda x, _: f"−${int(abs(x)/1000)}k" if x < 0 else (f"+${int(x/1000)}k" if x > 0 else "$0")))
+    ax.set_xticks([-100_000, -75_000, -50_000, -25_000, 0, 25_000, 50_000, 75_000])
 
-    ax.set_title("Commission is a cost. But it's not the biggest cost.", fontsize=16,
-                 fontweight='bold', color=GRASS, pad=20, y=0.98)
-    ax.text(0.5, 0.95, "Net proceeds on a $1,200,000 property by agent commission rate",
-            transform=ax.transAxes, ha='center', fontsize=9, color=TEXT_MUTED)
-    _source_line(ax, "Fields Estate, 2026")
-    fig.tight_layout(pad=1.5)
+    ax.grid(axis='y', visible=False)
+    ax.grid(axis='x', visible=True, alpha=0.35, zorder=1)
+    ax.set_axisbelow(True)
+
+    ax.set_title("The possible span of agent effect", pad=30)
+    ax.text(0.5, 1.02,
+            r"Effect on net proceeds for a \$1,200,000 sale (\$0 = market valuation)",
+            transform=ax.transAxes, ha='center', fontsize=10, color=TEXT_MUTED)
+
+    fig.tight_layout(pad=2)
     _save(fig, 'ch6-2-commission-comparison.png')
 
 
@@ -938,6 +937,70 @@ def chart_ch7_2():
 
 
 # ===================================================================
+# CH7-4  Portal Traffic — REA vs Domain
+# ===================================================================
+def chart_ch7_4():
+    """Monthly Australian web traffic for the two major listing portals.
+
+    Visual point: realestate.com.au receives roughly 4.5× more monthly visits
+    than domain.com.au. The marketing reach of a campaign depends primarily
+    on which portal the listing is on and how prominently — the gap between
+    the two portals dwarfs the gap between listing tiers within each.
+
+    Source: web traffic analytics, March 2026.
+    """
+    print("Generating CH7-4: Portal Traffic — REA vs Domain")
+
+    REA_VISITS = 47_372_557
+    DOMAIN_VISITS = 10_513_191
+    ratio = REA_VISITS / DOMAIN_VISITS
+
+    fig, ax = plt.subplots(figsize=(14, 6.5))
+
+    sites = ['realestate.com.au', 'domain.com.au']
+    visits = [REA_VISITS, DOMAIN_VISITS]
+    colours = [GRASS, COPPER]
+
+    y = [0, 1]
+    bars = ax.barh(y, visits, color=colours, height=0.55, zorder=3)
+
+    ax.set_yticks(y)
+    ax.set_yticklabels(sites, fontsize=14, fontweight='bold', color=GRASS)
+    ax.invert_yaxis()
+
+    ax.set_xlim(0, 52_000_000)
+    ax.xaxis.set_major_formatter(mticker.FuncFormatter(
+        lambda x, _: f"{int(x/1_000_000)}M" if x > 0 else "0"))
+    ax.set_xticks([0, 10_000_000, 20_000_000, 30_000_000, 40_000_000, 50_000_000])
+    ax.grid(axis='y', visible=False)
+    ax.grid(axis='x', alpha=0.4, zorder=1)
+    ax.set_axisbelow(True)
+
+    for bar, v in zip(bars, visits):
+        ax.text(bar.get_width() + 600_000, bar.get_y() + bar.get_height() / 2,
+                f"{v:,}",
+                va='center', ha='left', fontsize=13, fontweight='bold',
+                color=GRASS, zorder=4)
+
+    ax.annotate(
+        f"{ratio:.1f}× more visits",
+        xy=(REA_VISITS * 0.55, 0.5), xytext=(REA_VISITS * 0.55, 0.5),
+        fontsize=16, fontweight='bold', color=COPPER,
+        ha='center', va='center',
+        bbox=dict(boxstyle='round,pad=0.5', facecolor=BIRCH,
+                  edgecolor=COPPER, linewidth=1.5),
+        zorder=5,
+    )
+
+    ax.set_title("Australia's most-visited real estate websites", pad=30)
+    ax.text(0.5, 1.02, "Monthly website visits, March 2026",
+            transform=ax.transAxes, ha='center', fontsize=10, color=TEXT_MUTED)
+
+    fig.tight_layout(pad=2)
+    _save(fig, 'ch7-4-portal-traffic.png')
+
+
+# ===================================================================
 # Run all
 # ===================================================================
 if __name__ == '__main__':
@@ -958,4 +1021,5 @@ if __name__ == '__main__':
     chart_ch3_2()
     chart_ch6_2()
     chart_ch7_2()
-    print(f"\nDone — 16 charts generated in {OUTPUT_DIR}")
+    chart_ch7_4()
+    print(f"\nDone — 17 charts generated in {OUTPUT_DIR}")
