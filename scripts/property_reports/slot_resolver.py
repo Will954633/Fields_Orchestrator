@@ -432,8 +432,16 @@ class SlotResolver:
                     price_anchor = int((model_range["low"] + model_range["high"]) / 2)
 
                 features_basic = derive_features_basic(self._subject)
+                # Bridge the transparency funnel to the Market-tab headline:
+                # feed the catchment-wide active total (from scarcity_features,
+                # resolved just above) as the top of the funnel.
+                scarcity_total = None
+                _sf = updates.get("scarcity_features")
+                if isinstance(_sf, dict):
+                    scarcity_total = _sf.get("active_listings_total")
                 comp_map = resolve_competitor_map(
                     self._subject, self.db, features_basic, price_anchor=price_anchor,
+                    active_listings_total=scarcity_total,
                 )
                 if comp_map and comp_map.get("competitors"):
                     updates["slots.competitor_map"] = comp_map
@@ -762,8 +770,17 @@ class SlotResolver:
             if model_range and model_range.get("low") and model_range.get("high"):
                 price_anchor = int((model_range["low"] + model_range["high"]) / 2)
             features_basic = derive_features_basic(self._subject)
+            # Reuse the catchment total already on the doc (scarcity_features is
+            # resolved by the full build, not this lightweight refresh) so the
+            # transparency funnel's top number stays consistent with the
+            # Market-tab headline night to night.
+            scarcity_total = None
+            _sf = self.report.get("scarcity_features")
+            if isinstance(_sf, dict):
+                scarcity_total = _sf.get("active_listings_total")
             comp_map = resolve_competitor_map(
                 self._subject, self.db, features_basic, price_anchor=price_anchor,
+                active_listings_total=scarcity_total,
             )
             if comp_map and comp_map.get("competitors"):
                 updates["slots.competitor_map"] = comp_map
