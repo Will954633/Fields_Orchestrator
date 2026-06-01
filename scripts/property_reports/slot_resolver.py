@@ -30,6 +30,10 @@ from scripts.property_reports.walking_distances import resolve_pois
 from scripts.property_reports.market_narrative import resolve_market_narrative
 from scripts.property_reports.scarcity_features import resolve_scarcity_features
 from scripts.property_reports.competitor_matcher import resolve_competitor_map
+from scripts.property_reports.comparable_feed import (
+    comparables_from_slots,
+    comparable_events_from_slots,
+)
 from scripts.property_reports.cohort_premiums import compute_cohort_premiums
 from scripts.property_reports.scarcity_narrative import (
     resolve_scarcity_narrative, cohort_premiums_to_sold_cohort_premiums,
@@ -687,6 +691,31 @@ class SlotResolver:
                 updates["slot_status.positioning"] = "error"
                 updates["positioning_narrative_error"] = {"error": str(e), "attempts": 0}
                 self.emit.fail("positioning", str(e))
+
+        # "Your Home" activity feed — first-visit comparable baseline + the
+        # durable "what changed since you last logged in" change log. Computed
+        # inline (not only by the nightly refresh) from the competitor map +
+        # comps we just resolved above, so the feed is live within seconds of
+        # submission. Reads the freshly-built slots from `updates`, overlaid on
+        # any prior slots, and diffs against the doc's previous snapshot.
+        try:
+            slots_now = dict(self.report.get("slots") or {})
+            for key in ("slots.competitor_map", "slots.best_comp", "slots.recent_comps"):
+                if key in updates:
+                    slots_now[key.split(".", 1)[1]] = updates[key]
+            comparables = comparables_from_slots(slots_now)
+            if comparables:
+                events, state = comparable_events_from_slots(slots_now, self.report)
+                updates["comparables"] = comparables
+                updates["comparable_events"] = events
+                updates["comparable_state"] = state
+                updates["comparables_refreshed_at"] = datetime.utcnow()
+                logger.info(
+                    f"  comparable feed: {len(comparables['closest_active'])} active, "
+                    f"{len(comparables['closest_sold'])} sold, {len(events)} events"
+                )
+        except Exception as e:
+            logger.warning(f"  comparable feed resolver threw: {e}")
 
         return updates
 
