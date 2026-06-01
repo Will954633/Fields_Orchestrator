@@ -30,6 +30,7 @@ from scripts.property_reports.walking_distances import resolve_pois
 from scripts.property_reports.market_narrative import resolve_market_narrative
 from scripts.property_reports.scarcity_features import resolve_scarcity_features
 from scripts.property_reports.competitor_matcher import resolve_competitor_map
+from scripts.property_reports.case_study_dynamic import resolve_dynamic_case_study
 from scripts.property_reports.comparable_feed import (
     comparables_from_slots,
     comparable_events_from_slots,
@@ -467,6 +468,42 @@ class SlotResolver:
                 logger.warning(f"  competitor_matcher resolver threw: {e}")
                 updates["slot_status.competitor_matches"] = "error"
                 self.emit.fail("competitor_map", str(e))
+
+            # CS0 — the dynamic "a home like yours, recently sold" case study.
+            # Same subject profile + price anchor as the competitor map, but
+            # queries SOLD homes and applies two hard gates: relevance (close
+            # tier, ring<=2) and fact-verification (Domain timeline). Returns
+            # None → slot stays pending → frontend hides the dynamic card and
+            # leads with the static library. Auto-approves on a verified pick:
+            # every fact it prints has already passed the timeline cross-check.
+            self.emit.start("case_study", "Finding a sold home like yours")
+            try:
+                model_range = self.valuation_model_range()
+                cs_anchor = None
+                if model_range and model_range.get("low") and model_range.get("high"):
+                    cs_anchor = int((model_range["low"] + model_range["high"]) / 2)
+                cs_features = derive_features_basic(self._subject)
+                dynamic = resolve_dynamic_case_study(
+                    self._subject, self.db, cs_features, price_anchor=cs_anchor,
+                )
+                if dynamic:
+                    updates["case_studies.dynamic"] = dynamic
+                    updates["slot_status.case_studies"] = "approved"
+                    self.emit.done(
+                        "case_study",
+                        f"Matched {dynamic.get('address')} "
+                        f"({'DOM ' + str(dynamic['days_on_market']) if dynamic.get('days_on_market') else 'sold'})",
+                        address=dynamic.get("address"),
+                        dom=dynamic.get("days_on_market"),
+                        ring=dynamic.get("aperture_ring"),
+                    )
+                else:
+                    updates["slot_status.case_studies"] = "pending"
+                    self.emit.done("case_study", "No close, verifiable sold comparable — showing learning library only")
+            except Exception as e:
+                logger.warning(f"  case_study_dynamic resolver threw: {e}")
+                updates["slot_status.case_studies"] = "error"
+                self.emit.fail("case_study", str(e))
 
         # Walking distances to nearest POIs (Day 4). Requires lat/lng — skip
         # for subjects we can't geolocate (vacant cadastral lots etc.).
