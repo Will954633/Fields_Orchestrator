@@ -1030,6 +1030,11 @@ class SlotResolver:
             },
             "is_sold_record": s.get("listing_status") == "sold",
             "is_for_sale_record": s.get("listing_status") == "for_sale",
+            # Structured photo analysis (step 106 GPT vision pass) — interior /
+            # exterior / outdoor / structural / renovation condition + quality
+            # scores and unique/negative features read off the listing photos.
+            # Surfaced on the Your Home tab + data record drawer.
+            "photo_analysis": _photo_analysis_from(s),
         }
 
     def subject_latlng(self) -> Optional[tuple]:
@@ -1335,6 +1340,44 @@ def _to_int(v: Any) -> Optional[int]:
         return int(float(v))
     except (TypeError, ValueError):
         return None
+
+
+def _photo_analysis_from(s: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Curate the photo-derived analysis (step 106) for the report.
+
+    Keeps the category buckets that carry at least one populated field, plus a
+    small metadata block (images analysed, image quality, pro photography). The
+    frontend flattens each bucket and shows only non-null fields, so the raw
+    nulls in a sparse analysis disappear cleanly. Returns None when no photo
+    analysis exists.
+    """
+    pvd = (s or {}).get("property_valuation_data") or {}
+    if not isinstance(pvd, dict) or not pvd:
+        return None
+
+    def _has_value(d: Any) -> bool:
+        return isinstance(d, dict) and any(
+            v not in (None, "", [], {}) for v in d.values()
+        )
+
+    categories: Dict[str, Any] = {}
+    for key in ("overall", "interior", "exterior", "outdoor", "structural", "renovation", "layout"):
+        bucket = pvd.get(key)
+        if _has_value(bucket):
+            categories[key] = bucket
+
+    if not categories:
+        return None
+
+    meta = pvd.get("metadata") or {}
+    return {
+        "categories": categories,
+        "metadata": {
+            "total_images_analyzed": meta.get("total_images_analyzed"),
+            "image_quality": meta.get("image_quality"),
+            "has_professional_photography": meta.get("has_professional_photography"),
+        },
+    }
 
 
 def _parse_price(v: Any) -> Optional[int]:
