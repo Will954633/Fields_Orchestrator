@@ -86,6 +86,7 @@ Return ONLY valid JSON in this exact shape — no markdown, no preamble, no trai
   "photography": [
     {"slot": "string — short label, e.g. 'HERO — front elevation'", "brief": "string — what to shoot, lighting, time of day", "proves": "string — the specific claim this image substantiates"}
   ],
+  "genericParagraph": "string — 50-90 words. The OPPOSITE of the Fields voice: how an ordinary agent would write this home's opener — generic adjectives, no evidence, no named buyer. This is a deliberate BAD example shown side-by-side with sampleParagraph to make the Fields skill visible. It SHOULD use the hype words (stunning, nestled, boasting, rare opportunity, etc.) — that is its purpose. Do NOT include any real figures here.",
   "sampleParagraph": "string — 100-130 words. A worked example of the listing opener in this voice, using the angle, addressing the trade-offs, employing the vocabulary palette. Read it back: every phrase should be defensible from the input data."
 }
 
@@ -190,7 +191,7 @@ def _validate_output(parsed: Dict[str, Any]) -> Optional[str]:
         return "not a dict"
 
     # Required top-level keys
-    for key in ("frame", "vocabulary", "tradeOffs", "photography", "sampleParagraph"):
+    for key in ("frame", "vocabulary", "tradeOffs", "photography", "sampleParagraph", "genericParagraph"):
         if key not in parsed:
             return f"missing key: {key}"
 
@@ -237,7 +238,15 @@ def _validate_output(parsed: Dict[str, Any]) -> Optional[str]:
     if word_count < 80 or word_count > 160:
         return f"sampleParagraph word count {word_count} out of 80-160 range"
 
-    # Editorial guardrails on the prose fields (not vocabulary.avoid)
+    # genericParagraph is the deliberate "ordinary agent" example — it MUST exist
+    # and read as generic, but it is intentionally exempt from the forbidden-word
+    # guardrail below (hype words are the point of the contrast).
+    gp = parsed.get("genericParagraph") or ""
+    gp_words = len(gp.split())
+    if gp_words < 35 or gp_words > 120:
+        return f"genericParagraph word count {gp_words} out of 35-120 range"
+
+    # Editorial guardrails on the prose fields (not vocabulary.avoid, not genericParagraph)
     prose = " ".join([
         frame["angle"], frame["reasoning"], vocab.get("avoidNote", ""),
         " ".join(t["apparent"] + " " + t["reframe"] + " " + t["evidence"] for t in trade),
