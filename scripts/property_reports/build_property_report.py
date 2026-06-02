@@ -190,6 +190,16 @@ def resolve_one(report_doc: Dict[str, Any], force: bool = False) -> Dict[str, An
         )
 
     cosmos_retry(_apply, label=f"property_reports.resolve.{slug}")
+
+    # Messages tab (Phase 3.1) — rebuild the advisory timeline from the now-current
+    # doc (welcome + valuation state + market-change events), preserving any human
+    # notes a consultant posted. Best-effort: a failure here must not fail the build.
+    try:
+        from scripts.property_reports.messages import refresh_messages
+        refresh_messages(slug, sm)
+    except Exception as e:
+        logger.warning(f"  {slug}: messages refresh failed: {e}")
+
     return updates
 
 
