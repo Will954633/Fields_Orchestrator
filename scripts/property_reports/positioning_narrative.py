@@ -353,6 +353,7 @@ def resolve_positioning_narrative(
             "tradeOffs": parsed["tradeOffs"],
             "photography": parsed["photography"],
             "sampleParagraph": parsed["sampleParagraph"],
+            "genericParagraph": parsed["genericParagraph"],
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "model": MODEL,
             "attempt": attempt,

@@ -660,6 +660,10 @@ class SlotResolver:
                         "tradeOffs": pos["tradeOffs"],
                         "photography": pos["photography"],
                         "sampleParagraph": pos["sampleParagraph"],
+                        # Consultant rebuild §4.2.3 / [C9] — the generic "ordinary
+                        # agent" opener for the side-by-side contrast. .get() so a
+                        # resolver that predates the field doesn't KeyError.
+                        "genericParagraph": pos.get("genericParagraph"),
                         "personas": personas,
                         "generated_at": pos["generated_at"],
                         "model": pos["model"],
