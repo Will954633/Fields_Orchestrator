@@ -74,6 +74,7 @@ def build_system_messages(doc: Dict[str, Any]) -> List[Dict[str, Any]]:
     msgs.append({
         "id": "sys-welcome",
         "type": "welcome",
+        "sender": "system",
         "from": "Fields",
         "headline": "Your report is live — and it keeps watching the market",
         "body": (
@@ -92,6 +93,7 @@ def build_system_messages(doc: Dict[str, Any]) -> List[Dict[str, Any]]:
         msgs.append({
             "id": "sys-valuation",
             "type": "valuation_review",
+            "sender": "agent",
             "from": "Will",
             "headline": "I've reviewed the comparable sales behind your valuation",
             "body": (
@@ -111,6 +113,7 @@ def build_system_messages(doc: Dict[str, Any]) -> List[Dict[str, Any]]:
         msgs.append({
             "id": "sys-valuation",
             "type": "valuation_review",
+            "sender": "agent",
             "from": "Will",
             "headline": "I'm reviewing your valuation personally",
             "body": body,
@@ -141,6 +144,7 @@ def build_system_messages(doc: Dict[str, Any]) -> List[Dict[str, Any]]:
         msgs.append({
             "id": f"evt-{e.get('id') or _event_dt(e).strftime('%Y%m%d%H%M%S')}",
             "type": "market_change",
+            "sender": "system",
             "from": "Fields",
             "headline": headline,
             "body": body,
@@ -152,6 +156,7 @@ def build_system_messages(doc: Dict[str, Any]) -> List[Dict[str, Any]]:
         msgs.append({
             "id": "sys-preparation",
             "type": "preparation",
+            "sender": "agent",
             "from": "Will",
             "headline": "Your selling-decision plan is ready to walk through",
             "body": (
@@ -166,9 +171,14 @@ def build_system_messages(doc: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 
 def merge_messages(existing: List[Dict[str, Any]], system: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Preserve human notes; replace system messages by id; sort newest-first."""
-    human = [m for m in (existing or []) if m.get("type") == "human_note"]
-    merged = human + system
+    """Preserve the human conversation (agent notes + seller messages); replace
+    system-generated messages. Without this, a nightly re-resolve would wipe the
+    seller's chat. Sort newest-first."""
+    keep = [
+        m for m in (existing or [])
+        if m.get("type") in ("human_note", "seller_message") or m.get("sender") in ("agent", "seller")
+    ]
+    merged = keep + system
     merged.sort(key=lambda m: m.get("created_at") or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
     return merged
 
