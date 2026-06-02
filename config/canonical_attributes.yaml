@@ -1,0 +1,157 @@
+# canonical_attributes.yaml — the single, versioned source of truth for the
+# standardised property-attribute layer that powers scarcity / positioning /
+# trade-off statements (appraisal report + house mini-site).
+#
+# WHY THIS FILE EXISTS
+#   The same fact (e.g. floor area) lives in 4+ fields across a property doc,
+#   none authoritative and values disagree. This file declares, for each
+#   canonical attribute, the ORDERED list of source paths (best/most-measured
+#   first). The resolver (scripts/property_reports/canonical_resolver.py) walks
+#   them, takes the first present value, and records WHICH source produced it
+#   (provenance) so any client-facing statement can be reproduced on request.
+#
+# KEEP IN SYNC
+#   - source_priority paths mirror scripts/property_reports/inline_features.py
+#     (derive_features_basic). If you change a source map there, change it here.
+#   - scarcity thresholds are ported verbatim from
+#     scripts/property_reports/scarcity_features.py FEATURE_RULES.
+#
+# Bump schema_version on any change to definitions, paths, or thresholds —
+# the version is stamped onto every golden record for reproducibility.
+
+schema_version: 1
+
+# Confidence assigned to a resolved value based on HOW it was derived.
+# measured floor-plan > listed-by-agent > photo-inferred > aerial-inferred > derived.
+method_confidence:
+  scraped: 0.95              # directly listed on Domain (beds/baths/cars)
+  cadastral: 0.97            # government cadastral parcel record (land)
+  gpt_floorplan_measured: 0.90
+  gpt_floorplan: 0.80
+  gpt_photo: 0.85
+  gpt_satellite: 0.70
+  derived: 0.60
+  unavailable: 0.0
+
+attributes:
+
+  bedrooms:
+    definition: Number of bedrooms as listed on Domain.
+    unit: count
+    type: int
+    source_priority:
+      - {path: bedrooms, method: scraped}
+
+  bathrooms:
+    definition: Number of bathrooms as listed on Domain.
+    unit: count
+    type: int
+    source_priority:
+      - {path: bathrooms, method: scraped}
+
+  car_spaces:
+    definition: Covered/uncovered car spaces as listed on Domain.
+    unit: count
+    type: int
+    source_priority:
+      - {path: car_spaces, method: scraped}
+      - {path: carspaces, method: scraped}
+      - {path: parking, method: scraped}
+
+  floor_area_sqm:
+    definition: >
+      Internal floor area in square metres. Measured from the floor plan where
+      a plan was extracted; otherwise the agent-listed or derived figure.
+    unit: sqm
+    type: float
+    # A scraped floor_area > 500 with no land is a known Domain anomaly (land
+    # captured into floor_area) — the resolver applies a sanity flip.
+    sanity: floor_area_land_flip
+    source_priority:
+      - {path: house_plan.floor_area_sqm,                 method: gpt_floorplan_measured}
+      - {path: processing_status.total_floor_area_sqm,    method: gpt_floorplan}
+      - {path: floor_plan_analysis.internal_floor_area,   method: gpt_floorplan}
+      - {path: property_valuation_data.layout.floor_area_sqm, method: gpt_photo}
+      - {path: total_floor_area,                          method: scraped}
+      - {path: enriched_data.floor_area_sqm,              method: derived}
+    scarcity_thresholds:
+      - {key: floor_large, label: "Large internal (250m²+)", gte: 250}
+
+  land_size_sqm:
+    definition: Land parcel area in square metres (cadastral where available).
+    unit: sqm
+    type: float
+    source_priority:
+      - {path: lot_size_sqm,                              method: cadastral}
+      - {path: land_size_sqm,                             method: scraped}
+      - {path: property_valuation_data.layout.land_size_sqm, method: gpt_photo}
+      - {path: enriched_data.lot_size_sqm,                method: derived}
+    scarcity_thresholds:
+      - {key: land_large,       label: "Large block (900m²+)",        gte: 900}
+      - {key: land_extra_large, label: "Extra-large block (1500m²+)", gte: 1500, supersedes: land_large}
+
+  pool_present:
+    definition: Whether a pool is present (photo analysis, corroborated by aerial).
+    unit: bool
+    type: bool
+    source_priority:
+      - {path: property_valuation_data.outdoor.pool_present, method: gpt_photo}
+      - {path: satellite_analysis.categories.amenity_premiums.pool_visible, method: gpt_satellite}
+    scarcity_thresholds:
+      - {key: pool, label: "Pool", truthy: true}
+
+  water_views:
+    definition: Whether the property has water views (photo analysis / aerial proximity).
+    unit: bool
+    type: bool
+    source_priority:
+      - {path: property_valuation_data.outdoor.water_views, method: gpt_photo}
+    scarcity_thresholds:
+      - {key: water_views, label: "Water views", truthy: true}
+
+  number_of_stories:
+    definition: Number of building levels (photo overview, then floor plan).
+    unit: count
+    type: int
+    source_priority:
+      - {path: property_valuation_data.property_overview.number_of_stories, method: gpt_photo}
+      - {path: floor_plan_analysis.levels.total_levels, method: gpt_floorplan}
+      - {path: house_plan.number_of_levels, method: gpt_floorplan}
+    scarcity_thresholds:
+      - {key: two_storey, label: "Two-storey", gte: 2}
+
+  condition_score:
+    definition: >
+      Overall condition score (1-10) from GPT photo analysis. The source field
+      may be a dict {overall_score: N} or a bare int — the resolver coerces both.
+    unit: score_1_10
+    type: float
+    source_priority:
+      - {path: property_valuation_data.condition_summary.overall_score, method: gpt_photo}
+
+  kitchen_score:
+    definition: Kitchen quality score (1-10) from GPT photo analysis.
+    unit: score_1_10
+    type: float
+    source_priority:
+      - {path: property_valuation_data.condition_summary.kitchen_score, method: gpt_photo}
+
+  beach_distance_km:
+    definition: Straight-line distance to nearest beach (km), from georeference enrichment.
+    unit: km
+    type: float
+    source_priority:
+      - {path: georeference_data.summary_stats.closest_beach_km, method: derived}
+      - {path: enriched_data.beach_distance_km, method: derived}
+    scarcity_thresholds:
+      - {key: near_beach_2km, label: "Within 2km of a beach", lte: 2.0, gt: 0}
+      - {key: near_beach_1km, label: "Within 1km of a beach", lte: 1.0, gt: 0, supersedes: near_beach_2km}
+
+# Composite scarcity rules that depend on more than one attribute. Evaluated by
+# the resolver/scarcity engine after individual attributes are resolved.
+composite_thresholds:
+  - key: high_quality_finish
+    label: "High-quality finish"
+    requires:
+      condition_score: {gte: 9}
+      kitchen_score: {gte: 9}
