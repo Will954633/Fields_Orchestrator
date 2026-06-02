@@ -1343,12 +1343,18 @@ def _to_int(v: Any) -> Optional[int]:
 
 
 def _photo_analysis_from(s: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """Curate the photo-derived analysis (step 106) for the report.
+    """Curate the photo-derived analysis (step 105 GPT vision pass) for the report.
 
-    Keeps the category buckets that carry at least one populated field, plus a
-    small metadata block (images analysed, image quality, pro photography). The
-    frontend flattens each bucket and shows only non-null fields, so the raw
-    nulls in a sparse analysis disappear cleanly. Returns None when no photo
+    Reads the real `property_valuation_data` schema written by the photo-analysis
+    step: dict buckets `property_overview / condition_summary / exterior / kitchen
+    / outdoor / renovation`, plus the `property_metadata` bucket that carries the
+    standout / negative feature lists and the image-quality metadata. The
+    per-room list buckets (`bathrooms / bedrooms / living_areas`) are intentionally
+    skipped — they are verbose and repetitive, and their headline numbers are
+    already rolled up into `condition_summary`.
+
+    The frontend flattens each category bucket and shows only non-null fields, so
+    raw nulls in a sparse analysis disappear cleanly. Returns None when no photo
     analysis exists.
     """
     pvd = (s or {}).get("property_valuation_data") or {}
@@ -1361,21 +1367,29 @@ def _photo_analysis_from(s: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         )
 
     categories: Dict[str, Any] = {}
-    for key in ("overall", "interior", "exterior", "outdoor", "structural", "renovation", "layout"):
+    for key in ("property_overview", "condition_summary", "exterior", "kitchen", "outdoor", "renovation"):
         bucket = pvd.get(key)
         if _has_value(bucket):
             categories[key] = bucket
 
-    if not categories:
+    meta = pvd.get("property_metadata") or {}
+    standout = [f for f in (meta.get("unique_features") or []) if f]
+    noted = [f for f in (meta.get("negative_features") or []) if f]
+
+    if not categories and not standout and not noted:
         return None
 
-    meta = pvd.get("metadata") or {}
     return {
         "categories": categories,
+        "standout": standout,
+        "noted": noted,
         "metadata": {
             "total_images_analyzed": meta.get("total_images_analyzed"),
             "image_quality": meta.get("image_quality"),
             "has_professional_photography": meta.get("has_professional_photography"),
+            "prestige_tier": meta.get("prestige_tier"),
+            "property_presentation_score": meta.get("property_presentation_score"),
+            "market_appeal_score": meta.get("market_appeal_score"),
         },
     }
 
