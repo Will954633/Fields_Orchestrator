@@ -65,6 +65,7 @@ Return ONLY a valid JSON array of exactly 3 objects. No markdown, no preamble:
     "whyThisHome": ["string", "string", "string"],
     "paysMoreFor": "string — 1 sentence (15-35 words): the SPECIFIC value lever this buyer pays a premium for in THIS home (not a generic 'space/location'). Conditional language only.",
     "hesitation": "string — 1 sentence (15-35 words): this buyer's most likely objection, and the fact/feature the campaign would answer it with. Honest, not dismissive.",
+    "campaignImplication": "string — 1 sentence (20-45 words): the PRACTICAL campaign move this persona implies, in the form 'lead with X; target Y'. X = the value drivers to foreground; Y = where/how to reach this cohort. Concrete, not generic.",
     "whereFound": "string — 2-3 sentences (40-80 words) on outreach channels"
   },
   ...
@@ -169,7 +170,7 @@ def _validate_output(parsed: Any) -> Optional[str]:
     for i, p in enumerate(parsed):
         if not isinstance(p, dict):
             return f"persona {i} not a dict"
-        for key in ("label", "brief", "whyThisHome", "paysMoreFor", "hesitation", "whereFound"):
+        for key in ("label", "brief", "whyThisHome", "paysMoreFor", "hesitation", "campaignImplication", "whereFound"):
             if key not in p:
                 return f"persona {i} missing key: {key}"
 
