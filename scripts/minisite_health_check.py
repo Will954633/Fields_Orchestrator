@@ -386,14 +386,8 @@ def _field_result(f, value, status, detail, fresh_ts, fresh_src, now_utc, prev_f
     }
 
 
-# ---- main ---------------------------------------------------------------------
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--slug")
-    ap.add_argument("--json")
-    ap.add_argument("--no-snapshot", action="store_true")
-    args = ap.parse_args()
-
+# ---- reusable audit entry point ----------------------------------------------
+def get_mongo_client():
     conn = os.environ.get("COSMOS_CONNECTION_STRING")
     if not conn:
         env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
@@ -402,15 +396,24 @@ def main():
                 if line.startswith("COSMOS_CONNECTION_STRING="):
                     conn = line.split("=", 1)[1].strip().strip('"')
                     break
-    client = MongoClient(conn)
+    return MongoClient(conn)
+
+
+def run_audit(client=None, slug=None, persist=True):
+    """Audit every (or one) report. Returns (all_results, now_utc).
+
+    all_results: list of per-report dicts sorted worst-first, each with `fields`.
+    Shared by the CLI and the Google Sheet builder.
+    """
+    own = client is None
+    if own:
+        client = get_mongo_client()
     reports = client["system_monitor"]["property_reports"]
     snaps = client["system_monitor"]["minisite_health_snapshots"]
-
     now_utc = datetime.now(timezone.utc)
 
-    query = {"slug": args.slug} if args.slug else {"state": {"$ne": None}}
-    docs = list(reports.find(query))
-    docs = [d for d in docs if d.get("address")]  # skip the template stub
+    query = {"slug": slug} if slug else {"state": {"$ne": None}}
+    docs = [d for d in reports.find(query) if d.get("address")]  # skip template stub
 
     suburb_keys = {(d.get("suburb_key") or d.get("suburb") or "").strip().lower().replace(" ", "_")
                    for d in docs} - {""}
@@ -418,8 +421,8 @@ def main():
 
     all_results = []
     for doc in docs:
-        slug = doc.get("slug")
-        prev = snaps.find_one({"slug": slug}, sort=[("run_at", -1)])
+        rslug = doc.get("slug")
+        prev = snaps.find_one({"slug": rslug}, sort=[("run_at", -1)])
         prev_fields = (prev or {}).get("fields", {})
         prev_map = {fr["path"]: fr for fr in prev_fields} if isinstance(prev_fields, list) else prev_fields
         fields = evaluate(doc, up, client, now_utc, prev_map)
@@ -430,24 +433,37 @@ def main():
         health = round(100 * counts.get(OK, 0) / max(1, len(fields)))
         worst = max((SEVERITY[fr["status"]] for fr in fields), default=0)
 
-        rec = {
-            "slug": slug, "address": doc.get("address"), "suburb": doc.get("suburb"),
+        all_results.append({
+            "slug": rslug, "address": doc.get("address"), "suburb": doc.get("suburb"),
             "state": doc.get("state"), "health_pct": health, "worst_severity": worst,
             "counts": counts, "data_pull_date": value_summary(get_path(doc, "slots.data_pull_date")),
             "fields": fields,
-        }
-        all_results.append(rec)
+        })
 
-        if not args.no_snapshot:
+        if persist:
             snaps.insert_one({
-                "slug": slug, "run_at": now_utc, "health_pct": health,
+                "slug": rslug, "run_at": now_utc, "health_pct": health,
                 "counts": counts, "fields": {fr["path"]: {
                     "value_hash": fr["value_hash"], "status": fr["status"],
                     "last_changed": fr["last_changed"]} for fr in fields},
             })
 
-    # ---- output ----
     all_results.sort(key=lambda r: (-r["worst_severity"], r["health_pct"]))
+    if own:
+        client.close()
+    return all_results, now_utc
+
+
+# ---- main ---------------------------------------------------------------------
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--slug")
+    ap.add_argument("--json")
+    ap.add_argument("--no-snapshot", action="store_true")
+    args = ap.parse_args()
+
+    client = get_mongo_client()
+    all_results, now_utc = run_audit(client, slug=args.slug, persist=not args.no_snapshot)
     print(f"\nMini-site health — {len(all_results)} reports — {now_utc.astimezone(AEST):%Y-%m-%d %H:%M AEST}")
     print(f"Expected last nightly run: {expected_last_run(now_utc).astimezone(AEST):%Y-%m-%d %H:%M AEST}\n")
     print(f"{'HEALTH':>6}  {'ERR':>3} {'MIS':>3} {'STA':>3} {'PND':>3} {'UNK':>3}  SLUG")
