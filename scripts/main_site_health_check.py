@@ -299,15 +299,22 @@ def collect(client, now_utc, prev_map):
     PG = "Articles"
     pub_total = sm["content_articles"].count_documents({"status": "published"})
     draft_total = sm["content_articles"].count_documents({"status": "draft"})
-    np = list(sm["content_articles"].find({"status": "published"}, {"published_at": 1}).sort("published_at", -1).limit(1))
-    ts = as_dt(np[0].get("published_at")) if np else None
-    if not np:
-        add(PG, "Published-article cadence", "all", "0 published", MISSING, "published_at", None, "none published")
+    # Generation cadence (newest created_at, any status) is the health signal: articles
+    # are created as drafts behind an editorial review gate, so "generation working"
+    # — not "publishing" — is what catches CI breakage. Publishing is a manual step.
+    ng = list(sm["content_articles"].find({}, {"created_at": 1}).sort("created_at", -1).limit(1))
+    ts = as_dt(ng[0].get("created_at")) if ng else None
+    if not ng:
+        add(PG, "Article generation cadence", "all", "no articles", MISSING, "created_at", None, "empty collection")
     else:
         st, dt = judge(ts, "weekly", now_utc, last_run)
-        add(PG, "Published-article cadence", "all", f"newest {ts.date() if ts else '—'}", st, "published_at", ts, dt)
+        add(PG, "Article generation cadence", "all", f"newest {ts.date() if ts else '—'}", st, "created_at", ts, dt)
+    npb = list(sm["content_articles"].find({"status": "published"}, {"published_at": 1}).sort("published_at", -1).limit(1))
+    pts = as_dt(npb[0].get("published_at")) if npb else None
+    add(PG, "Newest published", "all", str(pts.date()) if pts else "—", OK, "published_at", pts,
+        "manual editorial publish step (info)", info=True)
     add(PG, "Published / draft counts", "all", f"{pub_total} published / {draft_total} draft", OK, "", None,
-        "draft backlog context", info=True)
+        "draft backlog awaiting review (info)", info=True)
 
     # ----- Valuation Accuracy -----
     PG = "Valuation Accuracy"
