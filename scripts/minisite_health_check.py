@@ -43,6 +43,11 @@ OK, STALE, MISSING, PENDING, ERROR, UNKNOWN, GAP = (
     "OK", "STALE", "MISSING", "PENDING-EXPECTED", "ERROR", "UNKNOWN-FRESHNESS", "KNOWN-GAP")
 SEVERITY = {ERROR: 4, MISSING: 3, STALE: 2, UNKNOWN: 1, GAP: 0, PENDING: 0, OK: 0}
 
+# Per-upstream staleness: None = nightly (judge vs expected last nightly run);
+# a number = monthly/slow source judged on clock age in days.
+UPSTREAM_STALE_DAYS = {"prices": None, "charts": None, "active": None,
+                       "valuation": 3, "seasonality": 35, "library": None}
+
 
 # ---- field spec (mirrors the data dictionary) ---------------------------------
 # kind: always | tier1 | tier2          (tier1=nightly-refreshed, tier2=build-time)
@@ -87,11 +92,11 @@ SPEC = [
     F("Home", "POI walking distances", "pois", "tier2", slot="walking_distance", rule=("list_min", 1)),
 
     # --- Valuation ---
-    F("Valuation", "Working range low", "valuation.model_range.low", "tier2", slot="comps", fresh={"self": "valuation.comps_resolved_at"}, rule=("number_gt", 0), note="build-time; drift check is v2"),
-    F("Valuation", "Working range high", "valuation.model_range.high", "tier2", slot="comps", fresh={"self": "valuation.comps_resolved_at"}, rule=("gt_field", "valuation.model_range.low")),
+    F("Valuation", "Working range low", "valuation.model_range.low", "tier2", slot="comps", fresh={"drift": "valuation"}, rule=("number_gt", 0)),
+    F("Valuation", "Working range high", "valuation.model_range.high", "tier2", slot="comps", rule=("gt_field", "valuation.model_range.low")),
     F("Valuation", "Range method", "valuation.model_range.method", "tier2", slot="comps", rule=("nonempty_str", None)),
     F("Valuation", "Range comp count", "valuation.model_range.comp_count", "tier2", slot="comps", rule=("int_ge", 3)),
-    F("Valuation", "Comparable rows", "valuation.comps", "tier2", slot="comps", fresh={"self": "valuation.comps_resolved_at"}, rule=("list_items_have", ["soldPrice", "soldDate", "address"]), note="min 3"),
+    F("Valuation", "Comparable rows", "valuation.comps", "tier2", slot="comps", fresh={"drift": "valuation"}, rule=("list_items_have", ["soldPrice", "soldDate", "address"]), note="min 3"),
     F("Valuation", "Reconciled valuation", "valuation.reconciled", "tier2", slot="comps", rule=("nullable", None), note="null until analyst sign-off"),
 
     # --- The Market ---
@@ -113,7 +118,7 @@ SPEC = [
     F("Market", "Sold-cohort premiums", "scarcity.soldCohortPremiums", "tier2", slot="scarcity", rule=("list_min", 1)),
     F("Market", "Active listings (scarcity)", "scarcity_features.active_listings_total", "tier1", slot="scarcity", fresh={"upstream": "active"}, rule=("int_ge", 1)),
     F("Market", "Cohort premium stats", "scarcity_features.cohort_premiums", "tier2", slot="scarcity", rule=("list_min", 1)),
-    F("Market", "Market narrative", "market_narrative.text", "tier2", slot="market_narrative", fresh={"self": "market_narrative.generated_at"}, rule=("str_len_between", [40, 600])),
+    F("Market", "Market narrative", "market_narrative.text", "tier2", slot="market_narrative", fresh={"drift": "market"}, rule=("str_len_between", [40, 600])),
     F("Market", "Dynamic case study", "case_studies.dynamic.address", "tier2", slot="case_studies", fresh={"self": "case_studies.dynamic.resolved_at"}, stale_days=30, rule=("nonempty_str", None)),
 
     # --- The Buyers ---
@@ -134,7 +139,8 @@ SPEC = [
     F("Positioning", "Buyer personas", "positioning.personas", "tier2", slot="positioning", rule=("list_min", 3)),
 
     # --- The Process ---
-    F("Process", "Seasonality calendar", "seasonality.months", "tier2", slot="seasonality", rule=("known_gap", None), note="fixture only — not implemented"),
+    F("Process", "Seasonality calendar", "seasonality.months", "tier1", slot="seasonality", fresh={"upstream": "seasonality"}, rule=("list_min", 12)),
+    F("Process", "Seasonality peak/trough", "seasonality.peakMonthIndex", "tier1", slot="seasonality", rule=("int_ge", 0)),
 
     # --- Messages / living ---
     F("Messages", "Activity feed", "activity", "tier1", fresh={"nightly": "activity_refreshed_at"}, stale_days=1.5, rule=("list_min", 1)),
@@ -251,11 +257,37 @@ def load_upstreams(client, suburb_keys):
     suburb and metric may contain underscores (e.g. "burleigh_waters_days_on_market").
     """
     gc = client["Gold_Coast"]
-    up = {"prices": {}, "charts": {}, "active": {}, "library": {}, "sold": {}}
+    up = {"prices": {}, "charts": {}, "active": {}, "library": {}, "sold": {}, "seasonality": {}}
     for d in gc["precomputed_indexed_prices"].find({}, {"last_updated": 1}):
         up["prices"][str(d["_id"])] = as_dt(d.get("last_updated"))
     for d in gc["precomputed_active_listings"].find({}, {"last_updated": 1}):
         up["active"][str(d["_id"])] = as_dt(d.get("last_updated"))
+    for d in gc["precomputed_seasonality"].find({}, {"last_updated": 1}):
+        up["seasonality"][str(d["_id"])] = as_dt(d.get("last_updated"))
+
+    # --- live current values for DRIFT detection (build-time slots vs moved market) ---
+    up["market_live"] = {}   # suburb -> {latest_price, rolling_12m_yoy_pct, median_dom}
+    up["sold_newest"] = {}   # suburb -> newest sold_date (datetime)
+    for d in gc["precomputed_indexed_prices"].find(
+            {}, {"latest_price": 1, "rolling_12m_yoy_pct": 1}):
+        up["market_live"][str(d["_id"])] = {
+            "latest_price": d.get("latest_price"),
+            "rolling_12m_yoy_pct": d.get("rolling_12m_yoy_pct"),
+        }
+    keys_by_len = sorted(suburb_keys, key=len, reverse=True)
+    for d in gc["precomputed_market_charts"].find(
+            {"chart_type": "days_on_market"}, {"latest_quarter_median": 1}):
+        _id = str(d["_id"])
+        sub = next((k for k in keys_by_len if _id == k or _id.startswith(k + "_")), None)
+        if sub and sub in up["market_live"]:
+            up["market_live"][sub]["median_dom"] = d.get("latest_quarter_median")
+    for sub in suburb_keys:
+        if sub not in gc.list_collection_names():
+            continue
+        row = list(gc[sub].find({"listing_status": "sold", "sold_date": {"$exists": True}},
+                                {"sold_date": 1}).sort("sold_date", -1).limit(1))
+        if row:
+            up["sold_newest"][sub] = as_dt(row[0].get("sold_date"))
     # market_charts: bucket each doc to the longest matching suburb_key prefix.
     keys_by_len = sorted(suburb_keys, key=len, reverse=True)
     for d in gc["precomputed_market_charts"].find({}, {"last_updated": 1}):
@@ -273,6 +305,41 @@ def load_upstreams(client, suburb_keys):
         if ts and (sub not in up["library"] or ts > up["library"][sub]):
             up["library"][sub] = ts
     return up
+
+
+def check_drift(kind, doc, up, suburb_key):
+    """Detect whether a build-time slot has DRIFTED — i.e. the market data it was
+    generated from has since moved materially. Returns (is_drifted, detail, ref_ts).
+    ref_ts is the slot's own generated/resolved timestamp (for display)."""
+    if kind == "market":
+        snap = get_path(doc, "market_narrative.inputs_snapshot.market") or {}
+        live = up.get("market_live", {}).get(suburb_key)
+        gen = as_dt(get_path(doc, "market_narrative.generated_at"))
+        if not snap or not live:
+            return False, "", gen
+        issues = []
+        sp, lp = snap.get("latest_median_price"), live.get("latest_price")
+        if sp and lp and abs(lp - sp) / sp > 0.03:
+            issues.append(f"price {sp:,.0f}→{lp:,.0f}")
+        sd, ld = snap.get("median_dom"), live.get("median_dom")
+        if sd and ld and abs(ld - sd) > 7:
+            issues.append(f"DOM {sd}→{ld}")
+        sy, ly = snap.get("rolling_12m_yoy_pct"), live.get("rolling_12m_yoy_pct")
+        if sy is not None and ly is not None and abs(ly - sy) > 2.0:
+            issues.append(f"YoY {sy}→{ly}pp")
+        return (bool(issues), "market moved since narrative: " + ", ".join(issues) if issues else "", gen)
+
+    if kind == "valuation":
+        cra = as_dt(get_path(doc, "valuation.comps_resolved_at"))
+        newest = up.get("sold_newest", {}).get(suburb_key)
+        if not cra or not newest:
+            return False, "", cra
+        gap = (newest - cra).days
+        if gap > 30:
+            return True, f"comps resolved {cra.date()} but sales run to {newest.date()} (+{gap}d)", cra
+        return False, "", cra
+
+    return False, "", None
 
 
 def upstream_ts(up, key, suburb_key, client, doc):
@@ -347,10 +414,19 @@ def evaluate(doc, up, client, now_utc, prev_fields):
                 key = fr["upstream"]
                 fresh_ts, known = upstream_ts(up, key, suburb_key, client, doc)
                 fresh_src = f"upstream:{key}"
+                sd = UPSTREAM_STALE_DAYS.get(key)
                 if not known or fresh_ts is None:
                     status, detail = UNKNOWN, f"no upstream {key} for {suburb_key}"
-                elif fresh_ts < last_run:
-                    status, detail = STALE, f"upstream {key} stale ({fresh_ts.date()})"
+                elif sd is None and fresh_ts < last_run:
+                    status, detail = STALE, f"upstream {key} missed nightly run ({fresh_ts.date()})"
+                elif sd is not None and (now_utc - fresh_ts) > timedelta(days=sd):
+                    status, detail = STALE, f"upstream {key} >{sd}d old ({fresh_ts.date()})"
+            elif "drift" in fr:
+                is_drift, ddetail, ref_ts = check_drift(fr["drift"], doc, up, suburb_key)
+                fresh_src = f"drift:{fr['drift']}"
+                fresh_ts = ref_ts
+                if is_drift:
+                    status, detail = STALE, ddetail
             elif "self" in fr:
                 fresh_src = fr["self"]
                 fresh_ts = as_dt(get_path(doc, fresh_src))
