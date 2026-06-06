@@ -36,6 +36,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -47,6 +48,22 @@ MAX_RETRIES = 3
 RETRY_BACKOFF_SECONDS = [2, 5, 12]
 MODEL = "claude-opus-4-7"
 MAX_TOKENS = 2800
+
+# Channels Fields does NOT operate + claims of data Fields does NOT have. The
+# catchment section used to assert a back-test against an "open-home register"
+# and "buyer-origin data" that don't exist; the model also borrowed legacy
+# agent tactics. Any of these in the generated prose triggers regeneration.
+# Allowed (our real method): "direct approach", "letterbox", "direct mail".
+# Only terms that are NEVER legitimate on this page. (The catchment disclaimer
+# legitimately needs to SAY it's "not a buyer register / not back-tested", so
+# those words are policed by the prompt — told to avoid them — not hard-banned
+# here, which would also reject the honest negation.)
+FORBIDDEN_CHANNELS = [
+    "newsletter", "noticeboard", "flyer", "school gate", "school-gate",
+    "word of mouth", "word-of-mouth", "mailer", "mailing list", "newspaper",
+    "real-estate-section", "real estate section", "linkedin",
+    "custom audience", "open-home register", "open home register",
+]
 
 
 SYSTEM_PROMPT = """You write the three sections of a seller-facing "Buyers" tab on a southern Gold Coast property mini-site: a scarcity thesis, a buyer catchment breakdown, and a campaign-math passive/active pool model.
@@ -61,16 +78,28 @@ This property has already been analysed:
 
 Your three sections need to COHERE with the personas (their geographies become the catchment rows) and the scarcity/positioning numbers (re-use the same active-listing counts and feature stack).
 
+# HOW FIELDS REACHES BUYERS — catchment.reasoning and campaignMath MUST use ONLY these
+
+Fields finds buyers in more ways than a portal listing does. Describe reach using ONLY the channels Fields actually operates:
+  - Conversion-optimised paid campaigns on Facebook and Instagram — BROAD prospecting (Fields' own performance data shows broad targeting outperforms narrow / "custom" audiences), plus retargeting people who have already engaged with Fields content or the listing.
+  - YouTube video reach into the local market.
+  - Google Ads on active search intent (e.g. "<suburb> family home", school-catchment queries).
+  - Fields' own buyer audience — people who follow Fields market data and subscribe — reached and re-engaged directly.
+  - DIRECT APPROACH (the point of difference): Fields identifies the nearby homes whose owners typically move up into a home like this and contacts them directly, reaching buyers not searching the portals yet. Describe as METHOD, conditionally. NEVER state a count.
+  - The major portals (Domain, realestate.com.au) are table stakes; the point of difference is reaching BEYOND them.
+
+NEVER mention these — Fields does NOT do them: school newsletters, noticeboards, school-gate word-of-mouth, print mailers, flyers, newspaper / real-estate-section ads, LinkedIn outreach, "Will's network", mailing lists, "custom audiences" as a prospecting lever, or any open-home register or buyer-origin dataset. Fields has NO measured buyer-origin data and has held NO open homes — never claim a back-test against either.
+
 # SECTION RULES
 
 ## 1. thesis
 The scarcity thesis: WHY this property reaches a smaller, more motivated buyer pool than a generic listing in the same bracket. Lead with the combinatorial-match count from the input. Cite features from the stack. Two short paragraphs (60-100 words each). StatBlocks: 2-3 cards (e.g. "2 of 178" + "3 personas weighted" + "$1.88M–$2.40M working range") that data-receipt the thesis.
 
 ## 2. catchment
-Where the three personas geographically live RIGHT NOW. Headline names the catchment ("Where the buyers for this home are right now"). Body: 1-2 paragraphs (50-90 words each) explaining that origin is back-tested against the agent's recent open-home register and 24-month sold buyer-origin data. Locations: exactly 3 rows aligning to the 3 personas — `label` is the geographic origin (e.g. "Southern Gold Coast upgraders", "Sydney/Melbourne returner families", "Tallebudgera/Currumbin acreage downsizers"), `share` is a verbal share estimate (e.g. "around half", "around a quarter", "the remainder"), `reasoning` is 30-60 words tying the persona to the specific outreach channel.
+This is NOT a measured buyer-origin breakdown — Fields has no buyer register or open-home data. It is the set of buyer pools we'd TARGET and where we'd weight the campaign, informed by how households typically move up within the southern Gold Coast, the suburb's 24-month sold cohort, and school / commute catchment logic. Headline frames it as targeting/strategy (e.g. "The buyer pools we'd target — and where we'd weight the search"). Body: 1-2 paragraphs (50-90 words each) making clear the cohorts are INFORMED BY move-up patterns and the suburb's sold market, and are a targeting strategy rather than measured data. Convey that in plain language — do NOT use the words "back-test", "register", or "buyer-origin" (say e.g. "a targeting strategy, not a measured count of where past buyers came from"). Locations: exactly 3 rows aligning to the 3 personas — `label` is the cohort/geography, `share` is where we'd WEIGHT the campaign as a SHORT verbal label ("Primary focus", "Secondary focus", "Supporting") — a strategy choice, NEVER a measured proportion or percentage — `reasoning` (30-60 words) ties the cohort to the real Fields channel that reaches it (see HOW FIELDS REACHES BUYERS).
 
 ## 3. campaignMath
-The active-vs-passive reach model. Standard premium-real-estate math: active buyers (currently on Domain/REA browsing for this bracket) typically make up 25-35% of the qualified pool; the remaining 65-75% are passive (would buy if shown but not currently searching). Headline: "The reach we'd build" or similar. Body: 1 paragraph (60-100 words) explaining the math for THIS property's bracket — name the bracket from the working valuation range. StatBlocks: exactly 2 cards (active% + passive%).
+Reach framed as general market structure — NO invented precision. In this price bracket a large share of qualified buyers are not actively searching the portals at any one time; present this as a normal market dynamic, NOT as a Fields measurement, and do NOT state any active/passive percentage or number. Headline: "The reach we'd build" or similar. Body: 1 paragraph (60-100 words) naming the bracket from the working valuation range and explaining the campaign reaches beyond active portal searchers to the passive pool, through Fields' real channels. StatBlocks: exactly 2 qualitative cards about reach with NO numbers or percentages (e.g. {"value":"Beyond the portals","label":"…"}, {"value":"Five channels","label":"…"}).
 
 # OUTPUT FORMAT
 
@@ -103,6 +132,9 @@ Return ONLY valid JSON in this exact shape — no markdown, no preamble:
 5. EXACT FIGURES from input. Re-use the combinatorial match count, the working valuation range, the active-listing total.
 6. thesis.statBlocks 2-3 items, campaignMath.statBlocks EXACTLY 2 items.
 7. thesis.body 2-3 paragraphs, catchment.body 1-2 paragraphs.
+8. catchment.share is a SHORT campaign-weight label (e.g. "Primary focus"), NEVER a measured proportion or percentage. catchment must NOT claim a measured buyer origin, an open-home register, a back-test, or origin percentages.
+9. campaignMath contains NO percentages or invented active/passive numbers.
+10. CHANNELS in catchment.reasoning and campaignMath may reference ONLY the channels in HOW FIELDS REACHES BUYERS. Forbidden channels trigger regeneration.
 
 # VOICE
 
@@ -219,6 +251,9 @@ def _validate_output(parsed: Any) -> Optional[str]:
                 return f"catchment.locations[{i}] missing {key}"
         if len(l["reasoning"]) < 40:
             return f"catchment.locations[{i}].reasoning too short"
+        # share is a campaign-weight label, not a measured proportion.
+        if len(l["share"]) > 24 or "%" in l["share"]:
+            return f"catchment.locations[{i}].share must be a short weight label, no percentage"
 
     cm = parsed.get("campaignMath") or {}
     if not isinstance(cm.get("headline"), str) or len(cm["headline"]) < 15:
@@ -254,6 +289,16 @@ def _validate_output(parsed: Any) -> Optional[str]:
     advice_hit = [p for p in advice if p in prose]
     if advice_hit:
         return f"advice pattern(s): {advice_hit}"
+
+    # Fabricated channels / claims of buyer-origin data Fields does not have.
+    ch_hit = [w for w in FORBIDDEN_CHANNELS if w in prose]
+    if ch_hit:
+        return f"forbidden channel/claim in prose: {ch_hit}"
+
+    # campaignMath must carry NO invented active/passive precision.
+    cm_prose = " ".join([cm.get("body", "")] + [str(s.get("value", "")) + " " + str(s.get("label", "")) for s in cm_sb])
+    if re.search(r"\d\s*%", cm_prose):
+        return "campaignMath must not contain a percentage (no invented active/passive precision)"
 
     return None
 

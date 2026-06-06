@@ -36,6 +36,19 @@ RETRY_BACKOFF_SECONDS = [2, 5, 12]
 MODEL = "claude-opus-4-7"
 MAX_TOKENS = 2200
 
+# Reach channels Fields does NOT operate. The model used to be handed these as a
+# menu ("best reached via school newsletters / custom audiences / LinkedIn / print
+# mailers…") and dutifully repeated them on live seller-facing pages. They are now
+# banned: any of these strings in the generated prose triggers regeneration.
+# Allowed (our real direct-approach method): "direct approach", "letterbox",
+# "direct mail", "approach them directly" — none appear below.
+FORBIDDEN_CHANNELS = [
+    "newsletter", "noticeboard", "flyer", "school gate", "school-gate",
+    "word of mouth", "word-of-mouth", "mailer", "mailing list", "newspaper",
+    "real-estate-section", "real estate section", "linkedin",
+    "custom audience", "open-home register", "open home register",
+]
+
 
 SYSTEM_PROMPT = """You identify the three buyer personas most likely to pay top of the range for a specific southern Gold Coast property.
 
@@ -43,12 +56,24 @@ SYSTEM_PROMPT = """You identify the three buyer personas most likely to pay top 
 
 The southern Gold Coast premium market (Robina, Burleigh Waters, Varsity Lakes, Mudgeeraba, Reedy Creek, Worongary, Merrimac, Burleigh Heads, Carrara) draws from these buyer cohorts:
 
-  - LOCAL UPGRADERS: families currently in a 3-4 bed within 5km, growing into more bedrooms / dual living / pool / school catchment. Best reached via: open homes, local Facebook custom audiences, school newsletters.
-  - CAPITAL CITY RETURNERS: ex-locals who left for Sydney/Melbourne work 5-15 years ago, moving home with capital-city deposit. Cash-strong, time-poor, prefer turnkey. Best reached via: Google geo-targeted search, LinkedIn outreach, premium-property mailing lists.
-  - SCHOOL-CATCHMENT FAMILIES: enrolment already confirmed at a specific local school (All Saints Anglican, Star of the Sea Catholic, Marymount, King's Christian). Walk-to-school is decisive. Best reached via: school newsletters, school parent Facebook groups, word-of-mouth at the school gate.
-  - DOWNSIZERS: empty-nesters from larger 5-6 bed homes elsewhere in the Gold Coast wanting a low-maintenance single-storey premium home. Best reached via: print mailers in target suburbs, Facebook age-targeted, premium-property database direct outreach.
+  - LOCAL UPGRADERS: families currently in a 3-4 bed within ~5km, growing into more bedrooms / dual living / pool / school catchment.
+  - CAPITAL CITY RETURNERS: ex-locals who left for Sydney/Melbourne work 5-15 years ago, moving home with a capital-city deposit. Cash-strong, time-poor, prefer turnkey.
+  - SCHOOL-CATCHMENT FAMILIES: enrolment already confirmed at a specific local school (All Saints Anglican, Star of the Sea Catholic, Marymount, King's Christian). Walk-to-school is decisive.
+  - DOWNSIZERS: empty-nesters from larger 5-6 bed homes elsewhere in the Gold Coast wanting a low-maintenance single-storey premium home.
+  - LIFESTYLE MOVERS: pre-retirees from inland QLD / interstate seeking coastal lifestyle. Pool, low maintenance, beach proximity matter.
   - INVESTMENT BUYERS: less relevant for owner-occupier-priced premium homes; typically below $1.5M for the southern GC market.
-  - LIFESTYLE MOVERS: pre-retirees from inland QLD / interstate seeking coastal lifestyle. Pool, low maintenance, beach proximity matter. Best reached via: targeted lifestyle media, real-estate-section ads in inland-QLD papers.
+
+# HOW FIELDS REACHES BUYERS — the `whereFound` and `campaignImplication` fields MUST use ONLY these
+
+Fields finds buyers in more ways than a portal listing does. Describe reach using ONLY the channels Fields actually operates:
+  - Conversion-optimised paid campaigns on Facebook and Instagram — BROAD prospecting (Fields' own performance data shows broad targeting outperforms narrow / "custom" audiences), plus retargeting people who have already engaged with Fields content or the listing.
+  - YouTube video reach into the local market.
+  - Google Ads on active search intent (e.g. "<suburb> family home", school-catchment queries).
+  - Fields' own buyer audience — people who follow Fields market data and subscribe — reached and re-engaged directly.
+  - DIRECT APPROACH (the point of difference): Fields identifies the nearby homes whose owners typically move up into a home like this — by house type, ownership tenure and life-stage pattern — and contacts them directly, reaching buyers who are not searching the portals yet. Describe this as METHOD, conditionally ("homes whose owners typically move into a home like this"). Do NOT state a count of homes or buyers — that model is not yet quantified.
+  - The major portals (Domain, realestate.com.au) are table stakes; the point of difference is reaching BEYOND them.
+
+NEVER mention these — Fields does NOT do them: school newsletters, school noticeboards, school-gate word-of-mouth, print mailers, flyers, newspaper or real-estate-section ads, LinkedIn outreach, "Will's network", premium-property mailing lists, "custom audiences" as a prospecting lever, or any open-home register or buyer-origin dataset (we do not have one).
 
 # YOUR TASK
 
@@ -65,8 +90,8 @@ Return ONLY a valid JSON array of exactly 3 objects. No markdown, no preamble:
     "whyThisHome": ["string", "string", "string"],
     "paysMoreFor": "string — 1 sentence (15-35 words): the SPECIFIC value lever this buyer pays a premium for in THIS home (not a generic 'space/location'). Conditional language only.",
     "hesitation": "string — 1 sentence (15-35 words): this buyer's most likely objection, and the fact/feature the campaign would answer it with. Honest, not dismissive.",
-    "campaignImplication": "string — 1 sentence (20-45 words): the PRACTICAL campaign move this persona implies, in the form 'lead with X; target Y'. X = the value drivers to foreground; Y = where/how to reach this cohort. Concrete, not generic.",
-    "whereFound": "string — 2-3 sentences (40-80 words) on outreach channels"
+    "campaignImplication": "string — 1 sentence (20-45 words): the PRACTICAL campaign move this persona implies, in the form 'lead with X; reach via Y'. X = the value drivers to foreground; Y = one or more of Fields' REAL channels (HOW FIELDS REACHES BUYERS), never a forbidden channel.",
+    "whereFound": "string — 2-3 sentences (40-80 words): how Fields would reach THIS cohort, using ONLY the channels in HOW FIELDS REACHES BUYERS, tied to the persona. Frame the direct-approach method conditionally, with no invented numbers."
   },
   ...
 ]
@@ -81,6 +106,7 @@ Return ONLY a valid JSON array of exactly 3 objects. No markdown, no preamble:
 6. PERSONAS MUST BE DISTINCT. No overlap. Each one reaches the home for a different reason — not three flavours of the same buyer.
 7. label MUST identify a real demographic / life-stage, not a generic descriptor like "Premium buyers".
 8. If the property's feature stack is COMMON in the cohort, say so honestly in at least one persona's reasoning — premium-buyer talk doesn't fit a 4-bed/2-bath home with no special features.
+9. CHANNELS: whereFound and campaignImplication may reference ONLY the channels in HOW FIELDS REACHES BUYERS. Any forbidden channel — or any claimed buyer-origin dataset, register, or reach percentage — triggers regeneration. Never invent a count for the direct-approach method.
 
 # VOICE
 
@@ -198,7 +224,11 @@ def _validate_output(parsed: Any) -> Optional[str]:
 
     # Editorial guardrails across all prose
     prose = " ".join(
-        " ".join([p["label"], p["brief"], " ".join(p["whyThisHome"]), p["whereFound"]])
+        " ".join([
+            p["label"], p["brief"], " ".join(p["whyThisHome"]),
+            p.get("paysMoreFor") or "", p.get("hesitation") or "",
+            p.get("campaignImplication") or "", p["whereFound"],
+        ])
         for p in parsed
     ).lower()
 
@@ -214,6 +244,13 @@ def _validate_output(parsed: Any) -> Optional[str]:
     advice_hit = [p for p in advice if p in prose]
     if advice_hit:
         return f"advice pattern(s): {advice_hit}"
+
+    # Channels Fields does NOT operate — fabricating them is the bug this guard exists for.
+    # NB: "direct approach" / "letterbox" / "direct mail" are allowed (our real method);
+    # only the borrowed-tactic terms below are banned.
+    ch_hit = [w for w in FORBIDDEN_CHANNELS if w in prose]
+    if ch_hit:
+        return f"forbidden channel(s) in prose: {ch_hit}"
 
     return None
 
