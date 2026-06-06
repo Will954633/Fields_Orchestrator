@@ -30,12 +30,20 @@ local testing or when the block lifts).
 """
 
 import os
+import re
 import time
 from typing import Optional, Dict
 
 from curl_cffi import requests as cffi_requests
 
 BRIGHTDATA_ENDPOINT = 'https://api.brightdata.com/request'
+
+# Recover the resolved URL from the page itself — Bright Data's raw mode doesn't
+# expose the final (post-redirect) URL, and its json mode returns url=null. Domain's
+# canonical/og:url tag carries the resolved address, including the `/property-profile/`
+# slug it redirects withdrawn listings to.
+_CANONICAL_RE = re.compile(r'<link[^>]+rel=["\']canonical["\'][^>]+href=["\']([^"\']+)["\']', re.I)
+_OG_URL_RE = re.compile(r'<meta[^>]+property=["\']og:url["\'][^>]+content=["\']([^"\']+)["\']', re.I)
 
 DEFAULT_TIMEOUT = 90
 DEFAULT_RETRIES = 3
@@ -57,12 +65,19 @@ BRIGHTDATA_ZONE = property(lambda self: _zone())  # type: ignore
 
 def _post_unlocker(url: str, return_json: bool = False, timeout: int = DEFAULT_TIMEOUT) -> Optional[Dict]:
     """POST to Bright Data Web Unlocker. Returns dict with 'body' (always) plus
-    'status' and 'url' when return_json=True. None on failure."""
+    'status' and 'url' when return_json=True. None on failure.
+
+    Always uses Bright Data's `raw` format — the `json` envelope is markedly
+    flakier for Domain (frequent 502 `min_size` empties) and returns url=null,
+    which broke `/property-profile/` redirect detection. We take the upstream HTTP
+    status from the `x-brd-status-code` header and recover the resolved URL from the
+    page's canonical/og:url tag.
+    """
     api_key = _api_key()
     if not api_key:
         return None
 
-    payload = {'zone': _zone(), 'url': url, 'format': 'json' if return_json else 'raw'}
+    payload = {'zone': _zone(), 'url': url, 'format': 'raw'}
     headers = {
         'Content-Type': 'application/json',
         'Authorization': f'Bearer {api_key}',
@@ -71,17 +86,28 @@ def _post_unlocker(url: str, return_json: bool = False, timeout: int = DEFAULT_T
         resp = cffi_requests.post(BRIGHTDATA_ENDPOINT, headers=headers, json=payload, timeout=timeout)
         if resp.status_code != 200:
             return None
-        if return_json:
-            data = resp.json()
-            return {
-                'status': data.get('status_code', 0),
-                'body': data.get('body', ''),
-                'url': data.get('url', url),
-                'headers': data.get('headers', {}),
-            }
-        if len(resp.text) < 200:  # very small response = likely error/challenge
+
+        brd_status_raw = resp.headers.get('x-brd-status-code', '')
+        brd_status = int(brd_status_raw) if brd_status_raw.isdigit() else 0
+        body = resp.text or ''
+
+        # Unlocker failure (min_size 502, challenge, empty) — signal retry. A real
+        # Domain 404 still returns a full body, so size is a safe discriminator.
+        if brd_status in (502, 0) and len(body) < 200:
             return None
-        return {'body': resp.text}
+        if not return_json and len(body) < 200:
+            return None
+        if not return_json:
+            return {'body': body}
+
+        m = _CANONICAL_RE.search(body) or _OG_URL_RE.search(body)
+        final_url = m.group(1) if m else url
+        return {
+            'status': brd_status or 200,
+            'body': body,
+            'url': final_url,
+            'headers': dict(resp.headers),
+        }
     except Exception:
         return None
 
