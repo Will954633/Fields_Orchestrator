@@ -260,7 +260,10 @@ def _is_scarce(matching: int, total: int, n_differentiators: int = 0) -> bool:
         return False
     if matching <= 0:
         return True
-    threshold = min(SCARCE_SHARE + 0.06 * min(n_differentiators, 3), 0.33)
+    # Each differentiator relaxes the bar, but the top is capped at 0.25 — even
+    # with several differentiators, a home matched by more than 1-in-4 actives
+    # on its anchors is not "compete for it" territory.
+    threshold = min(SCARCE_SHARE + 0.05 * min(n_differentiators, 2), 0.25)
     return (matching / total) <= threshold
 
 
@@ -293,6 +296,17 @@ def resolve_scarcity_narrative(
 
     walk_phrases = _walkable_differentiators(pois or [])
     n_diff = len(differentiators) + len(walk_phrases)
+
+    # The "not just X — it is the combination" framing needs at least two
+    # elements in the stack. A home with a single feature would produce a
+    # tautological line ("not just X. It is the combination: X."), so leave the
+    # slot pending rather than emit a degraded hero. Most house submissions
+    # clear this easily; it mainly filters thin unit/villa stacks.
+    stack_size = len(anchors) + len(differentiators) + len(walk_phrases)
+    if stack_size < 2:
+        logger.info(f"  scarcity narrative skipped — stack too thin ({stack_size} feature) for combination framing")
+        return None
+
     is_scarce = _is_scarce(matching, total, n_diff)
     close = CLOSE_SCARCE if is_scarce else CLOSE_COMMON
 
