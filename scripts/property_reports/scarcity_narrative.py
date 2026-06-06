@@ -369,11 +369,12 @@ def resolve_scarcity_narrative(
             continue
 
         # Deterministic close — the brand promise is identical every time and
-        # adapts to whether the combination is genuinely uncommon.
-        headline = parsed["combinationSentence"].strip().rstrip() + " " + close
-
+        # adapts to whether the combination is genuinely uncommon. Returned as a
+        # SEPARATE field so the frontend can render it on its own line, bold,
+        # below the combination sentence.
         return {
-            "headline": headline,
+            "headline": parsed["combinationSentence"].strip(),
+            "closingLine": close,
             "combinatorialMatch": parsed["combinatorialMatch"].strip(),
             "walkingDistanceMonopoly": parsed["walkingDistanceMonopoly"].strip(),
             "generated_at": datetime.now(timezone.utc).isoformat(),
