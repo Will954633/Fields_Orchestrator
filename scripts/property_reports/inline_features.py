@@ -73,6 +73,97 @@ def _resolve_numeric(val: Any) -> Optional[float]:
     return None
 
 
+# Minimum believable internal area (m²) for a dwelling. Below this, a value is
+# almost certainly a single room dimension scraped by mistake, not floor area.
+_MIN_FLOOR_AREA = 40
+
+
+def resolve_floor_areas(doc: Dict[str, Any]):
+    """Resolve a property's floor areas on ONE consistent definition.
+
+    Returns (internal_living_sqm, building_area_sqm, source).
+
+    The two are physically different and MUST NOT be conflated:
+      • internal_living — habitable internal area, EXCLUDING garage / covered
+        outdoor. This is what the cohort/scarcity comparison and the seller-facing
+        "internal" figure should use.
+      • building_area   — Domain `total_floor_area` / `house_plan.floor_area_sqm`,
+        which is internal + garage (sometimes + covered patio). A DIFFERENT metric.
+
+    Internal-living priority (most authoritative first):
+      1. stated internal read off the floor plan's printed summary box
+         (`internal_living_area_sqm` / `floor_plan.stated_internal_area_sqm`)
+      2. floor_plan_analysis.internal_floor_area  (vision, internal-tagged)
+      3. ollama_floor_plan_analysis ... internal_floor_area
+      4. enriched_data.floor_area_sqm  (internal-living enrichment)
+      5. legacy doc.floor_area_sqm / pvd.layout.floor_area_sqm (ambiguous, but
+         historically internal more often than not)
+    Building-area (`total_floor_area` then `house_plan.floor_area_sqm`) is used
+    for `internal` ONLY as a last resort, tagged `building_fallback`, so a property
+    is never dropped for missing floor area — but cohort math can exclude the tag.
+
+    IMPORTANT: this logic is mirrored verbatim in
+    Feilds_Website/07_Valuation_Comps/precompute_valuations.py::resolve_floor_area —
+    keep the two in sync or the subject and its cohort diverge.
+    """
+    pvd = doc.get("property_valuation_data") or {}
+    layout = pvd.get("layout") if isinstance(pvd.get("layout"), dict) else {}
+    fpa = doc.get("floor_plan_analysis") if isinstance(doc.get("floor_plan_analysis"), dict) else {}
+    enriched = doc.get("enriched_data") if isinstance(doc.get("enriched_data"), dict) else {}
+    house_plan = doc.get("house_plan") if isinstance(doc.get("house_plan"), dict) else {}
+    fp = doc.get("floor_plan") if isinstance(doc.get("floor_plan"), dict) else {}
+    ofpa = doc.get("ollama_floor_plan_analysis") if isinstance(doc.get("ollama_floor_plan_analysis"), dict) else {}
+    ofpa_data = ofpa.get("floor_plan_data") if isinstance(ofpa.get("floor_plan_data"), dict) else {}
+
+    def _ofpa_internal():
+        v = ofpa_data.get("internal_floor_area")
+        return _resolve_numeric(v.get("value") if isinstance(v, dict) else v)
+
+    stated = (
+        _resolve_numeric(doc.get("internal_living_area_sqm"))
+        or _resolve_numeric(fp.get("stated_internal_area_sqm"))
+    )
+    internal_candidates = [
+        (stated, "stated_plan_label"),
+        (_resolve_numeric(fpa.get("internal_floor_area")), "floor_plan_vision"),
+        (_resolve_numeric(enriched.get("floor_area_sqm")), "enriched_internal"),
+        # ollama is an OLDER vision pass and has been seen to misread the plan
+        # total (e.g. 204 m² where the plan states 173) — kept as a signal but
+        # ranked below the enrichment figure.
+        (_ofpa_internal(), "ollama_vision"),
+        (_resolve_numeric(doc.get("floor_area_sqm")), "legacy_floor_area"),
+        (_resolve_numeric(layout.get("floor_area_sqm")), "legacy_layout"),
+    ]
+    internal_living, source = None, None
+    for val, src in internal_candidates:
+        if val and val >= _MIN_FLOOR_AREA:
+            internal_living, source = val, src
+            break
+
+    building_area = (
+        _resolve_numeric(doc.get("total_floor_area"))
+        or _resolve_numeric(house_plan.get("floor_area_sqm"))
+    )
+    if building_area and building_area < _MIN_FLOOR_AREA:
+        building_area = None
+
+    # Physical sanity: internal-living CANNOT exceed building area (building =
+    # internal + garage + covered outdoor). When a vision/enrichment figure
+    # exceeds the measured building area beyond rounding tolerance, that source
+    # is unreliable for THIS home — distrust it and use the building area.
+    if (internal_living and building_area
+            and source != "building_fallback"
+            and internal_living > building_area * 1.02):
+        internal_living, source = building_area, "building_fallback"
+
+    if internal_living is None and building_area:
+        # No internal-living source at all — fall back to building area so the
+        # property keeps a floor-area value, but tag it so cohort math can tell.
+        internal_living, source = building_area, "building_fallback"
+
+    return internal_living, building_area, source
+
+
 def derive_features_basic(doc: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """
     Build a features.basic dict from whatever the source doc has. Returns
@@ -99,24 +190,8 @@ def derive_features_basic(doc: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     bathrooms = doc.get("bathrooms")
     car_spaces = doc.get("car_spaces") or doc.get("carspaces") or doc.get("parking")
 
-    # Floor area — try several locations, weighted toward measured values
-    domain_fa = _resolve_numeric(doc.get("total_floor_area"))
-    floor_area = (
-        _resolve_numeric(doc.get("floor_area_sqm"))
-        or _resolve_numeric((pvd.get("layout") or {}).get("floor_area_sqm"))
-        or _resolve_numeric(fpa.get("internal_floor_area"))
-        or _resolve_numeric(house_plan.get("floor_area_sqm"))
-        or _resolve_numeric(enriched.get("floor_area_sqm"))
-        or domain_fa
-    )
-
-    # Cross-check against Domain's reported building area (`total_floor_area`), a
-    # measured, reliable field. A floor-plan-derived figure (house_plan /
-    # floor_plan_analysis) can be a bad parse — e.g. 313 m² read off a plan when
-    # Domain reports 209 m². When the chosen value diverges from Domain's by more
-    # than 25%, trust the measured Domain figure. (25-Huntingdale-Crescent, Jun 2026.)
-    if floor_area and domain_fa and abs(floor_area - domain_fa) / domain_fa > 0.25:
-        floor_area = domain_fa
+    # Floor area — resolve INTERNAL LIVING area on one consistent definition.
+    floor_area, building_area, floor_area_source = resolve_floor_areas(doc)
 
     fpa_land = fpa.get("total_land_area")
     if isinstance(fpa_land, dict):
@@ -253,6 +328,8 @@ def derive_features_basic(doc: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         "bathrooms": bathrooms,
         "car_spaces": car_spaces,
         "floor_area_sqm": floor_area,
+        "building_area_sqm": building_area,
+        "floor_area_source": floor_area_source,
         "land_size_sqm": land_size,
         "pool_present": pool_present,
         "number_of_stories": number_of_stories,
