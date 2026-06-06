@@ -100,14 +100,23 @@ def derive_features_basic(doc: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     car_spaces = doc.get("car_spaces") or doc.get("carspaces") or doc.get("parking")
 
     # Floor area — try several locations, weighted toward measured values
+    domain_fa = _resolve_numeric(doc.get("total_floor_area"))
     floor_area = (
         _resolve_numeric(doc.get("floor_area_sqm"))
         or _resolve_numeric((pvd.get("layout") or {}).get("floor_area_sqm"))
         or _resolve_numeric(fpa.get("internal_floor_area"))
         or _resolve_numeric(house_plan.get("floor_area_sqm"))
         or _resolve_numeric(enriched.get("floor_area_sqm"))
-        or _resolve_numeric(doc.get("total_floor_area"))
+        or domain_fa
     )
+
+    # Cross-check against Domain's reported building area (`total_floor_area`), a
+    # measured, reliable field. A floor-plan-derived figure (house_plan /
+    # floor_plan_analysis) can be a bad parse — e.g. 313 m² read off a plan when
+    # Domain reports 209 m². When the chosen value diverges from Domain's by more
+    # than 25%, trust the measured Domain figure. (25-Huntingdale-Crescent, Jun 2026.)
+    if floor_area and domain_fa and abs(floor_area - domain_fa) / domain_fa > 0.25:
+        floor_area = domain_fa
 
     fpa_land = fpa.get("total_land_area")
     if isinstance(fpa_land, dict):
