@@ -566,6 +566,7 @@ class SlotResolver:
                     )
                     updates["scarcity"] = {
                         "headline": narrative["headline"],
+                        "closingLine": narrative.get("closingLine", ""),
                         "combinatorialMatch": narrative["combinatorialMatch"],
                         "walkingDistanceMonopoly": narrative["walkingDistanceMonopoly"],
                         "soldCohortPremiums": sold_cohort_premiums,
