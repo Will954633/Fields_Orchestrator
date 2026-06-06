@@ -88,6 +88,29 @@ POI_CATEGORIES = [
         "limit": 1,
     },
     {
+        "key": "childcare",
+        "category": "childcare",
+        "label": "Nearest childcare / kindergarten",
+        # OSM tags childcare under amenity=childcare; kindergartens vary
+        # (amenity=kindergarten, sometimes school with isced:level 0).
+        "filter": '["amenity"="childcare"]',
+        "fallback_filter": '["amenity"~"^(kindergarten|childcare)$"]',
+        "radius_m": 2000,
+        "limit": 1,
+    },
+    {
+        "key": "train_station",
+        "category": "station",
+        "label": "Nearest train station",
+        # Heavy-rail stations only (railway=station). The southern Gold Coast
+        # line serves Robina and Varsity Lakes; exclude tram_stop/halt which
+        # aren't relevant to these suburbs and would add noise.
+        "filter": '["railway"="station"]["station"!="subway"]',
+        "fallback_filter": '["railway"="station"]',
+        "radius_m": 4000,
+        "limit": 1,
+    },
+    {
         "key": "beach",
         "category": "beach",
         "label": "Nearest beach",
