@@ -173,6 +173,11 @@ def collect(client, now_utc, prev_map):
             else:
                 ts = as_dt(d.get("last_updated"))
                 st, dt = judge(ts, "nightly", now_utc, last_run)
+                # market_cycle needs ~2yr of House sales; thin non-core suburbs
+                # legitimately can't recompute it (producer returns None, leaves the
+                # prior doc). Per coverage policy, treat that as a known gap, not STALE.
+                if ct == "market_cycle" and s not in CORE3 and st == STALE:
+                    st, dt = GAP, "thin-data non-core suburb (market_cycle needs ~2yr House sales)"
                 add(PG, f"Chart: {label}", suburb_label(s), str(ts.date()) if ts else "—", st, "last_updated", ts, dt)
 
     for s in SUBS:
