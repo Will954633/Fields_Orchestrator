@@ -228,6 +228,17 @@ Columns: **Field** (UI) · **Doc path** (in `property_reports`) · **Slot** · *
 | Owner visits | `owner.visit_count`, `owner.last_visit_at` | engagement context (not health) |
 | Print appraisal | `print_appraisal.*` | dispatch tracking (separate workflow) |
 
+### 5.1 Build provenance (info-only — shown, excluded from health %)
+
+The checker emits three `info` fields (they appear on the Dashboard as **Entered / Built / Gap**
+columns and as rows on each home tab, but do NOT count toward the health % or severity):
+
+| Field | Source | Meaning |
+|-------|--------|---------|
+| Address entered | `created_at` | When the address was entered on `/analyse-your-home` (= stub creation). Reliable on all reports. |
+| Build completed | `build_completed_at` | When the build pipeline last completed (the moment `build_state→complete`, which the frontend polls to auto-load `/your-home/<slug>`). `MISSING` for reports never built by the pipeline. Note: reset on rebuild, so it tracks the *latest* build. |
+| Entry→build gap | derived | `build_completed_at − created_at`. Flagged `STALE` if > 1 hour — catches a stub that didn't build promptly (e.g. waited for a poller restart) or a late rebuild. `UNKNOWN` if no build timestamp. |
+
 ---
 
 ## 6. Known gaps (decided handling)
