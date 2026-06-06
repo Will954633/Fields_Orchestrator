@@ -61,7 +61,7 @@ DATABASE_NAME = 'Gold_Coast'
 TARGET_SUBURBS = ["robina", "varsity_lakes", "burleigh_waters"]
 REQUEST_DELAY = 0.3          # seconds between requests (Web Unlocker has its own rate-limiting; was 1.5)
 REQUEST_TIMEOUT = 60         # seconds per request (Web Unlocker can be slow under load; was 15)
-MAX_RETRIES = 2              # retry failed requests
+MAX_RETRIES = 5              # retry failed requests (Bright Data unlocker ~30% min_size flakiness on Domain)
 RETRY_DELAY = 3              # seconds between retries
 COSMOS_RETRY_ATTEMPTS = 3    # DB write retries
 
