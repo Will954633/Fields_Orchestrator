@@ -147,6 +147,24 @@ class SlotResolver:
                     # at once.
                     prop["floor_plan"] = fp
                     updates["property"] = prop
+                    # Persist the stated internal-living area (read off the plan's
+                    # printed summary box) back to the SUBJECT doc, so the cohort
+                    # resolver (precompute_valuations) and any later re-resolve use
+                    # the SAME authoritative figure — not Domain's building area.
+                    _layout = fp.get("layout") or {}
+                    _stated = _layout.get("stated_internal_area_sqm")
+                    if not _stated and _layout.get("area_source") == "printed_summary":
+                        _stated = _layout.get("total_internal_area_sqm")
+                    if _stated and self._subject is not None and self.suburb_key:
+                        try:
+                            self._subject["internal_living_area_sqm"] = _stated
+                            self.db[self.suburb_key].update_one(
+                                {"_id": self._subject.get("_id")},
+                                {"$set": {"internal_living_area_sqm": _stated}},
+                            )
+                            logger.info(f"  internal_living_area_sqm <- {_stated} (stated on plan)")
+                        except Exception as _e:
+                            logger.warning(f"  internal_living write-back failed: {_e}")
                     rooms = (fp.get("layout") or {}).get("rooms") or []
                     self.emit.done(
                         "floor_plan",
@@ -1018,12 +1036,21 @@ class SlotResolver:
                 break
             photos.append({"url": url, "role": "gallery"})
 
+        # Internal LIVING area (excludes garage/covered outdoor), on the same
+        # canonical definition the cohort uses — NOT Domain's total_floor_area,
+        # which is building area (internal + garage). building_area_sqm is kept
+        # separately for "house size" context.
+        from scripts.property_reports.inline_features import resolve_floor_areas
+        _internal, _building, _fa_source = resolve_floor_areas(s)
+
         return {
             "bed": _to_int(s.get("bedrooms")),
             "bath": _to_int(s.get("bathrooms")),
             "car": _to_int(s.get("carspaces") or s.get("car_spaces")),
             "land_area_sqm": _to_int(s.get("land_size_sqm") or s.get("lot_size_sqm")),
-            "internal_area_sqm": _to_int(s.get("total_floor_area")),
+            "internal_area_sqm": _to_int(_internal),
+            "building_area_sqm": _to_int(_building),
+            "floor_area_source": _fa_source,
             "property_type": s.get("property_type"),
             "year_built": _to_int(s.get("year_built")),
             "photos": photos,
