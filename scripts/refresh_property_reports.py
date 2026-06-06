@@ -952,6 +952,50 @@ def upsert_report(
     log.info("Upserted %d legacy activity items for %s", len(activity), slug)
 
 
+def rebuild_activity_feed(doc: dict[str, Any], updates: dict[str, Any]) -> list[dict[str, Any]] | None:
+    """Regenerate the Home-tab `activity[]` feed from tonight's comparable_events
+    so it stays live for ALL reports, not just the hardcoded legacy configs.
+
+    Merges the freshest market-change events (mapped to activity items) on top of
+    the preserved build-narrative items (the "we pulled your data" story, which
+    have source=None). Deduped by headline, newest-first, capped. Returns None if
+    there is nothing to show (don't overwrite)."""
+    events = updates.get("comparable_events")
+    if events is None:
+        events = doc.get("comparable_events") or []
+    KIND_OK = {"new_listing", "comp_sold", "comp_price_change", "comp_withdrawn",
+               "sold", "comp_on_market"}
+    mapped: list[dict[str, Any]] = []
+    for e in events:
+        if not e.get("headline"):
+            continue
+        kind = e.get("kind") or e.get("type")
+        mapped.append({
+            "date": e.get("date"),
+            "kind": kind if kind in KIND_OK else "market_state",
+            "headline": e.get("headline"),
+            "detail": e.get("body") or e.get("effect_on_your_home") or "",
+            "source": e.get("href"),
+            "ts": e.get("ts"),
+        })
+    mapped.sort(key=lambda x: (x.get("date") or "", x.get("ts") or ""), reverse=True)
+
+    build_items = [a for a in (doc.get("activity") or []) if not a.get("source")]
+    combined = mapped[:6] + build_items
+    if not combined:
+        return None
+
+    seen: set[str] = set()
+    out: list[dict[str, Any]] = []
+    for a in combined:
+        key = (a.get("headline") or "")[:60]
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(a)
+    return out[:12]
+
+
 def refresh_comparables_for_doc(col, gc_db, doc: dict[str, Any], dry_run: bool) -> bool:
     """Re-run the competitor matcher (cheap, DB-only — no vision / Opus /
     scraping) for one report against tonight's freshly-scraped listings, then
@@ -981,6 +1025,14 @@ def refresh_comparables_for_doc(col, gc_db, doc: dict[str, Any], dry_run: bool) 
                  c.get("distance_km") if isinstance(c.get("distance_km"), (int, float)) else -1)
     for e in events[:4]:
         log.info("    event   [%s] %s — %s", e.get("type"), e.get("date"), e.get("headline"))
+    # Keep the Home-tab activity feed live: fold tonight's events into activity[]
+    # and stamp activity_refreshed_at (previously only the legacy Merrimac path
+    # did this, so real reports' feeds were frozen at build time).
+    new_activity = rebuild_activity_feed(doc, updates)
+    if new_activity is not None:
+        updates["activity"] = new_activity
+        updates["activity_refreshed_at"] = dt.datetime.utcnow()
+
     if not dry_run:
         col.update_one(
             {"slug": slug},
