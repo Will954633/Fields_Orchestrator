@@ -47,6 +47,7 @@ FORBIDDEN_CHANNELS = [
     "word of mouth", "word-of-mouth", "mailer", "mailing list", "newspaper",
     "real-estate-section", "real estate section", "linkedin",
     "custom audience", "open-home register", "open home register",
+    "subscriber",  # Fields has NO subscriber/newsletter list (owned audience = retargeting only)
 ]
 
 
@@ -69,11 +70,10 @@ Fields finds buyers in more ways than a portal listing does. Describe reach usin
   - Conversion-optimised paid campaigns on Facebook and Instagram — BROAD prospecting (Fields' own performance data shows broad targeting outperforms narrow / "custom" audiences), plus retargeting people who have already engaged with Fields content or the listing.
   - YouTube video reach into the local market.
   - Google Ads on active search intent (e.g. "<suburb> family home", school-catchment queries).
-  - Fields' own buyer audience — people who follow Fields market data and subscribe — reached and re-engaged directly.
   - DIRECT APPROACH (the point of difference): Fields identifies the nearby homes whose owners typically move up into a home like this — by house type, ownership tenure and life-stage pattern — and contacts them directly, reaching buyers who are not searching the portals yet. Describe this as METHOD, conditionally ("homes whose owners typically move into a home like this"). Do NOT state a count of homes or buyers — that model is not yet quantified.
   - The major portals (Domain, realestate.com.au) are table stakes; the point of difference is reaching BEYOND them.
 
-NEVER mention these — Fields does NOT do them: school newsletters, school noticeboards, school-gate word-of-mouth, print mailers, flyers, newspaper or real-estate-section ads, LinkedIn outreach, "Will's network", premium-property mailing lists, "custom audiences" as a prospecting lever, or any open-home register or buyer-origin dataset (we do not have one).
+NEVER mention these — Fields does NOT have/do them: an email subscriber base, newsletter list, or "subscribers" (Fields has NONE — the only owned audience is Meta retargeting of site visitors / ad engagers, already covered above); school newsletters, school noticeboards, school-gate word-of-mouth, print mailers, flyers, newspaper or real-estate-section ads, LinkedIn outreach, "Will's network", premium-property mailing lists, "custom audiences" as a prospecting lever, or any open-home register or buyer-origin dataset.
 
 # YOUR TASK
 

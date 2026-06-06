@@ -63,6 +63,7 @@ FORBIDDEN_CHANNELS = [
     "word of mouth", "word-of-mouth", "mailer", "mailing list", "newspaper",
     "real-estate-section", "real estate section", "linkedin",
     "custom audience", "open-home register", "open home register",
+    "subscriber",  # Fields has NO subscriber/newsletter list (owned audience = retargeting only)
 ]
 
 
@@ -84,11 +85,10 @@ Fields finds buyers in more ways than a portal listing does. Describe reach usin
   - Conversion-optimised paid campaigns on Facebook and Instagram — BROAD prospecting (Fields' own performance data shows broad targeting outperforms narrow / "custom" audiences), plus retargeting people who have already engaged with Fields content or the listing.
   - YouTube video reach into the local market.
   - Google Ads on active search intent (e.g. "<suburb> family home", school-catchment queries).
-  - Fields' own buyer audience — people who follow Fields market data and subscribe — reached and re-engaged directly.
   - DIRECT APPROACH (the point of difference): Fields identifies the nearby homes whose owners typically move up into a home like this and contacts them directly, reaching buyers not searching the portals yet. Describe as METHOD, conditionally. NEVER state a count.
   - The major portals (Domain, realestate.com.au) are table stakes; the point of difference is reaching BEYOND them.
 
-NEVER mention these — Fields does NOT do them: school newsletters, noticeboards, school-gate word-of-mouth, print mailers, flyers, newspaper / real-estate-section ads, LinkedIn outreach, "Will's network", mailing lists, "custom audiences" as a prospecting lever, or any open-home register or buyer-origin dataset. Fields has NO measured buyer-origin data and has held NO open homes — never claim a back-test against either.
+NEVER mention these — Fields does NOT have/do them: an email subscriber base, newsletter list, or "subscribers" (Fields has NONE — the only owned audience is Meta retargeting of site visitors / ad engagers, already covered above); school newsletters, noticeboards, school-gate word-of-mouth, print mailers, flyers, newspaper / real-estate-section ads, LinkedIn outreach, "Will's network", mailing lists, "custom audiences" as a prospecting lever, or any open-home register or buyer-origin dataset. Fields has NO measured buyer-origin data and has held NO open homes — never claim a back-test against either.
 
 # SECTION RULES
 
@@ -99,7 +99,7 @@ The scarcity thesis: WHY this property reaches a smaller, more motivated buyer p
 This is NOT a measured buyer-origin breakdown — Fields has no buyer register or open-home data. It is the set of buyer pools we'd TARGET and where we'd weight the campaign, informed by how households typically move up within the southern Gold Coast, the suburb's 24-month sold cohort, and school / commute catchment logic. Headline frames it as targeting/strategy (e.g. "The buyer pools we'd target — and where we'd weight the search"). Body: 1-2 paragraphs (50-90 words each) making clear the cohorts are INFORMED BY move-up patterns and the suburb's sold market, and are a targeting strategy rather than measured data. Convey that in plain language — do NOT use the words "back-test", "register", or "buyer-origin" (say e.g. "a targeting strategy, not a measured count of where past buyers came from"). Locations: exactly 3 rows aligning to the 3 personas — `label` is the cohort/geography, `share` is where we'd WEIGHT the campaign as a SHORT verbal label ("Primary focus", "Secondary focus", "Supporting") — a strategy choice, NEVER a measured proportion or percentage — `reasoning` (30-60 words) ties the cohort to the real Fields channel that reaches it (see HOW FIELDS REACHES BUYERS).
 
 ## 3. campaignMath
-Reach framed as general market structure — NO invented precision. In this price bracket a large share of qualified buyers are not actively searching the portals at any one time; present this as a normal market dynamic, NOT as a Fields measurement, and do NOT state any active/passive percentage or number. Headline: "The reach we'd build" or similar. Body: 1 paragraph (60-100 words) naming the bracket from the working valuation range and explaining the campaign reaches beyond active portal searchers to the passive pool, through Fields' real channels. StatBlocks: exactly 2 qualitative cards about reach with NO numbers or percentages (e.g. {"value":"Beyond the portals","label":"…"}, {"value":"Five channels","label":"…"}).
+Reach framed as general market structure — NO invented precision. In this price bracket a large share of qualified buyers are not actively searching the portals at any one time; present this as a normal market dynamic, NOT as a Fields measurement, and do NOT state any active/passive percentage or number. Headline: "The reach we'd build" or similar. Body: 1 paragraph (60-100 words) naming the bracket from the working valuation range and explaining the campaign reaches beyond active portal searchers to the passive pool, through Fields' real channels. StatBlocks: exactly 2 qualitative cards about reach with NO numbers or percentages and NO brittle channel COUNT (e.g. {"value":"Beyond the portals","label":"…"}, {"value":"Search, social, video & direct","label":"…"}).
 
 # OUTPUT FORMAT
 
