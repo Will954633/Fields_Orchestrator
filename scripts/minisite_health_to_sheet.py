@@ -53,8 +53,8 @@ HEADER_FILL = PatternFill("solid", fgColor="33414D")
 HEADER_FONT = Font(bold=True, color="FFFFFF")
 TITLE_FONT = Font(bold=True, size=12)
 
-DASH_HEADERS = ["Address", "Suburb", "State", "Health %", "Errors", "Missing",
-                "Stale", "Pending", "Unknown", "Last data pull", "Slug"]
+DASH_HEADERS = ["Address", "Suburb", "State", "Entered", "Built", "Gap", "Health %",
+                "Errors", "Missing", "Stale", "Pending", "Unknown", "Last data pull", "Slug"]
 HOME_HEADERS = ["Tab", "Field", "Value", "Status", "Freshness source",
                 "Last updated", "Last changed", "Detail / error", "Note"]
 
@@ -130,18 +130,23 @@ def build_workbook(results, now_utc):
     for r in results:
         cc = r["counts"]
         ws.append([
-            r["address"], r["suburb"], r["state"] or "", r["health_pct"],
+            r["address"], r["suburb"], r["state"] or "",
+            r.get("entered") or "—", r.get("built") or "—", r.get("gap") or "—",
+            r["health_pct"],
             cc.get("ERROR", 0), cc.get("MISSING", 0), cc.get("STALE", 0),
             cc.get("PENDING-EXPECTED", 0), cc.get("UNKNOWN-FRESHNESS", 0),
             fmt_ts(str(r["data_pull_date"])), r["slug"],
         ])
-    # colour Health % cell by threshold
+    # colour Gap cell (col 6) by gap_status, Health % cell (col 7) by threshold
     for i, r in enumerate(results, start=3):
+        gfill = STATUS_FILL.get(r.get("gap_status"))
+        if gfill:
+            ws.cell(row=i, column=6).fill = PatternFill("solid", fgColor=gfill)
         hp = r["health_pct"]
         colour = "D9EFD4" if hp >= 90 else "FFE699" if hp >= 70 else "F5CCCC"
-        ws.cell(row=i, column=4).fill = PatternFill("solid", fgColor=colour)
+        ws.cell(row=i, column=7).fill = PatternFill("solid", fgColor=colour)
     style_header_block(ws, 2, len(DASH_HEADERS))
-    autofit(ws, [42, 16, 13, 9, 7, 8, 7, 9, 9, 19, 34])
+    autofit(ws, [42, 16, 13, 16, 16, 9, 9, 7, 8, 7, 9, 9, 19, 34])
 
     # Per-home tabs
     title_map = {}
