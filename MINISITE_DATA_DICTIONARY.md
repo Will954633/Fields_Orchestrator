@@ -89,6 +89,7 @@ field that depends on them.
 | Per-property valuation | `Gold_Coast.<suburb>` doc `valuation_data` | `valuation_data.metadata.computed_at` | proc 6 + 18 | nightly | 3 days |
 | Sold comps | `Gold_Coast_Recently_Sold.<suburb>`, `Target_Market_Sold_Last_12_Months.<suburb>` | `sold_date` (newest) | proc 103/104/111 | nightly | 14 days* |
 | Case study library | `system_monitor.case_study_library` (per `case_id`) | `built_at` ✅ | `build_case_study.py` / `draft_case_analysis.py` | ad-hoc | evergreen (track age) |
+| Seasonality | `Gold_Coast.precomputed_seasonality` (`_id`=suburb) | `last_updated` | `precompute_seasonality.py` | monthly (1st) | 35 days |
 | Market pulse | `system_monitor.market_pulse` | `generated_at` | `generate_market_pulse.py` | monthly (25-day guard) | 35 days |
 
 *Sold "stale-after" measures the newest sale ingested for the suburb, not individual comps.
@@ -200,7 +201,8 @@ Columns: **Field** (UI) · **Doc path** (in `property_reports`) · **Slot** · *
 
 | Field | Doc path | Slot | Upstream | Freshness signal | Completeness rule | Stale-after |
 |-------|----------|------|----------|------------------|-------------------|-------------|
-| Seasonality calendar | `seasonality.months[]` | `seasonality` | ⚠️ **not implemented** | — | n/a — fixture placeholder | KNOWN-GAP |
+| Seasonality calendar | `seasonality.months[]` | `seasonality` | `precomputed_seasonality` | `seasonality.source_updated_at` | 12 months present | 35 days |
+| Seasonality peak/trough | `seasonality.peakMonthIndex` / `troughMonthIndex` | `seasonality` | ↑ | ↑ | 0–11 integers | 35 days |
 | Seller saved answers | `selling_plan.answers.*` | — | seller form (`property-plan-submit.mjs`) | `answers.*.updatedAt` | per-report, optional | — |
 
 ### 4.8 "Messages" tab + activity (living)
@@ -230,13 +232,18 @@ Columns: **Field** (UI) · **Doc path** (in `property_reports`) · **Slot** · *
 
 ## 6. Known gaps (decided handling)
 
-1. **`seasonality` slot** — designed but not implemented in live reports; Process-tab calendar
-   is illustrative placeholder. Checker reports `KNOWN-GAP`, not an error. Revisit when a real
-   `seasonality_analysis` resolver ships.
-2. **`property.year_built` frequently null** — informational only; warn, don't fail.
-3. **Tier-2 narrative slots don't regenerate nightly** — `generated_at` will naturally age.
-   The checker does NOT flag these as STALE on clock age alone; it flags only if the upstream
-   market/valuation data moved materially after the narrative was generated (drift check, v2).
+1. **`property.year_built` frequently null** — informational only; warn, don't fail.
+2. **Tier-2 build-time slots don't regenerate nightly** — `generated_at` will naturally age, so
+   the checker does NOT flag them on clock age alone. **Drift detection (implemented):**
+   - **Market narrative** — `market_narrative.inputs_snapshot.market` (what it was written from)
+     is compared to live `precomputed_indexed_prices` / `precomputed_market_charts`. STALE if
+     price moved >3%, median DOM >7 days, or rolling-12m YoY >2.0pp. Detail names the move,
+     e.g. "YoY 6.8→15.0pp".
+   - **Valuation working range + comps** — `valuation.comps_resolved_at` vs the suburb's newest
+     `sold_date`. STALE if comps predate sales by >30 days (comp set not refreshed while the
+     market kept transacting).
+   - Qualitative slots (positioning / buyers / scarcity) have no input snapshot to diff and are
+     left to completeness + slot status (drift for these is a future refinement).
 
 > **Resolved during build:** `precomputed_active_listings` (`last_updated` ✅) and
 > `case_study_library` (`built_at` ✅) both carry timestamps — they are fully tracked, not
