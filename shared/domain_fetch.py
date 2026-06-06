@@ -45,8 +45,8 @@ BRIGHTDATA_ENDPOINT = 'https://api.brightdata.com/request'
 _CANONICAL_RE = re.compile(r'<link[^>]+rel=["\']canonical["\'][^>]+href=["\']([^"\']+)["\']', re.I)
 _OG_URL_RE = re.compile(r'<meta[^>]+property=["\']og:url["\'][^>]+content=["\']([^"\']+)["\']', re.I)
 
-DEFAULT_TIMEOUT = 90
-DEFAULT_RETRIES = 3
+DEFAULT_TIMEOUT = 150   # Web Unlocker cold-start can exceed 90s (was 90 → caused timeouts)
+DEFAULT_RETRIES = 5     # Web Unlocker is reliable but flaky per-request (was 3)
 
 
 def _api_key() -> Optional[str]:
@@ -134,7 +134,7 @@ def fetch_html(url: str, retries: int = DEFAULT_RETRIES, timeout: int = DEFAULT_
             except Exception:
                 pass
         if attempt < retries - 1:
-            time.sleep(3)
+            time.sleep(min(3 * (attempt + 1), 15))
     return None
 
 
@@ -167,5 +167,5 @@ def fetch_with_status(url: str, retries: int = DEFAULT_RETRIES, timeout: int = D
             except Exception:
                 pass
         if attempt < retries - 1:
-            time.sleep(3)
+            time.sleep(min(3 * (attempt + 1), 15))
     return None
