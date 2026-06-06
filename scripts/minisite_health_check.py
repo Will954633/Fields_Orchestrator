@@ -58,9 +58,9 @@ UPSTREAM_STALE_DAYS = {"prices": None, "charts": None, "active": None,
 #   None                                   -> no freshness dimension
 # rule: completeness check name + optional arg (see RULES)
 def F(tab, field, path, kind, slot=None, fresh=None, rule=("present", None),
-      stale_days=None, note=None):
+      stale_days=None, note=None, info=False):
     return dict(tab=tab, field=field, path=path, kind=kind, slot=slot,
-                fresh=fresh, rule=rule, stale_days=stale_days, note=note)
+                fresh=fresh, rule=rule, stale_days=stale_days, note=note, info=info)
 
 
 SPEC = [
@@ -440,6 +440,7 @@ def evaluate(doc, up, client, now_utc, prev_fields):
 
         results.append(_field_result(f, value, status, detail, fresh_ts, fresh_src, now_utc, prev_fields))
 
+    results.extend(provenance_results(doc, now_utc, prev_fields))
     return results
 
 
@@ -459,7 +460,58 @@ def _field_result(f, value, status, detail, fresh_ts, fresh_src, now_utc, prev_f
         "freshness_src": fresh_src,
         "last_changed": last_changed,
         "note": f.get("note"),
+        "info": f.get("info", False),
     }
+
+
+def fmt_short(iso):
+    if not iso or iso == "—":
+        return "—"
+    return str(iso)[:16].replace("T", " ")
+
+
+def humanize_delta(seconds):
+    if seconds < 90:
+        return f"{int(seconds)}s"
+    if seconds < 5400:
+        return f"{int(seconds / 60)} min"
+    if seconds < 172800:
+        return f"{seconds / 3600:.1f} h"
+    return f"{seconds / 86400:.1f} days"
+
+
+def provenance_results(doc, now_utc, prev_map):
+    """Build-provenance metadata (info-only: shown but excluded from health %):
+    when the address was entered, when the build completed, and the gap between."""
+    created = as_dt(get_path(doc, "created_at"))
+    built = as_dt(get_path(doc, "build_completed_at"))
+
+    def meta(field, path, value, status, detail, ts):
+        vh = value_hash(value)
+        prev = prev_map.get(path) if prev_map else None
+        last_changed = (prev.get("last_changed") if prev and prev.get("value_hash") == vh
+                        else now_utc.isoformat())
+        return {"tab": "Provenance", "field": field, "path": path, "kind": "meta",
+                "slot": None, "value": value, "value_hash": vh, "status": status,
+                "detail": detail, "freshness_ts": ts.isoformat() if ts else None,
+                "freshness_src": "provenance", "last_changed": last_changed,
+                "note": None, "info": True}
+
+    res = [
+        meta("Address entered", "created_at", created.isoformat() if created else "—",
+             OK if created else MISSING, "" if created else "no created_at", created),
+        meta("Build completed", "build_completed_at", built.isoformat() if built else "—",
+             OK if built else MISSING, "" if built else "no pipeline build timestamp", built),
+    ]
+    if created and built:
+        secs = (built - created).total_seconds()
+        human = humanize_delta(abs(secs))
+        gap_ok = abs(secs) <= 3600
+        res.append(meta("Entry→build gap", "_gap", human, OK if gap_ok else STALE,
+                        "" if gap_ok else f"gap {human} — stub built late / rebuilt", None))
+    else:
+        res.append(meta("Entry→build gap", "_gap", "—", UNKNOWN, "no build timestamp", None))
+    return res
 
 
 # ---- reusable audit entry point ----------------------------------------------
@@ -503,16 +555,22 @@ def run_audit(client=None, slug=None, persist=True):
         prev_map = {fr["path"]: fr for fr in prev_fields} if isinstance(prev_fields, list) else prev_fields
         fields = evaluate(doc, up, client, now_utc, prev_map)
 
+        core = [fr for fr in fields if not fr.get("info")]
         counts = {}
-        for fr in fields:
+        for fr in core:
             counts[fr["status"]] = counts.get(fr["status"], 0) + 1
-        health = round(100 * counts.get(OK, 0) / max(1, len(fields)))
-        worst = max((SEVERITY[fr["status"]] for fr in fields), default=0)
+        health = round(100 * counts.get(OK, 0) / max(1, len(core)))
+        worst = max((SEVERITY[fr["status"]] for fr in core), default=0)
+        prov = {fr["field"]: fr for fr in fields if fr.get("info")}
 
         all_results.append({
             "slug": rslug, "address": doc.get("address"), "suburb": doc.get("suburb"),
             "state": doc.get("state"), "health_pct": health, "worst_severity": worst,
             "counts": counts, "data_pull_date": value_summary(get_path(doc, "slots.data_pull_date")),
+            "entered": fmt_short(prov.get("Address entered", {}).get("value")),
+            "built": fmt_short(prov.get("Build completed", {}).get("value")),
+            "gap": prov.get("Entry→build gap", {}).get("value"),
+            "gap_status": prov.get("Entry→build gap", {}).get("status"),
             "fields": fields,
         })
 
