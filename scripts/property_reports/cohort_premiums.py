@@ -96,6 +96,21 @@ def _has_feature(key: str, sold_doc: Dict[str, Any]) -> Optional[bool]:
     if key == "two_storey":
         s = basic.get("number_of_stories")
         return None if s is None else s >= 2
+    if key == "single_level":
+        s = basic.get("number_of_stories")
+        return None if s is None else s == 1
+    # Relative-anchor keys (scarcity_features 2026-06-07). The subject qualifies
+    # by cohort percentile, but the sold-cohort premium split uses a fixed bar
+    # so the comparison is a stable "homes with vs without" partition.
+    if key == "land_anchor":
+        land = basic.get("land_size_sqm")
+        return None if land is None else land >= 700
+    if key == "floor_anchor":
+        floor = basic.get("floor_area_sqm")
+        return None if floor is None else floor >= 200
+    if key == "bedrooms_anchor":
+        bed = basic.get("bedrooms")
+        return None if bed is None else bed >= 4
     if key == "high_quality_finish":
         rq = basic.get("renovation_quality_score")
         ks = basic.get("kitchen_score")
@@ -153,6 +168,33 @@ def _load_cohort(db: Database, catchment_suburbs: List[str]) -> List[Dict[str, A
     return out
 
 
+# Clean, table-ready labels for the premium UI. The prose labels carried on
+# the feature dicts ("a pool", "813 m² block") read oddly in a table, so the
+# premium table uses these noun forms keyed by feature_key.
+PREMIUM_LABELS = {
+    "bedrooms_anchor": "4+ bedrooms",
+    "bedrooms_5plus": "5+ bedrooms",
+    "bedrooms_6plus": "6+ bedrooms",
+    "bathrooms_3plus": "3+ bathrooms",
+    "land_anchor": "Large block",
+    "land_large": "Large block (900m²+)",
+    "land_extra_large": "Extra-large block",
+    "floor_anchor": "Large internal",
+    "floor_large": "Large internal (250m²+)",
+    "pool": "Pool",
+    "water_views": "Water views",
+    "near_beach_2km": "Within 2km of a beach",
+    "near_beach_1km": "Within 1km of a beach",
+    "single_level": "Single-level",
+    "two_storey": "Two-storey",
+    "high_quality_finish": "Premium finish",
+}
+
+
+def _premium_label(key: str, fallback: str) -> str:
+    return PREMIUM_LABELS.get(key, fallback)
+
+
 def compute_cohort_premiums(
     notable_features: List[Dict[str, str]],
     db: Database,
@@ -169,7 +211,7 @@ def compute_cohort_premiums(
         return [
             {
                 "feature_key": n["key"],
-                "feature_label": n["label"],
+                "feature_label": _premium_label(n["key"], n["label"]),
                 "premium_pct": None,
                 "n_with": 0,
                 "n_without": 0,
@@ -198,7 +240,7 @@ def compute_cohort_premiums(
         if not with_prices or not without_prices:
             results.append({
                 "feature_key": key,
-                "feature_label": n["label"],
+                "feature_label": _premium_label(n["key"], n["label"]),
                 "premium_pct": None,
                 "n_with": len(with_prices),
                 "n_without": len(without_prices),
@@ -221,7 +263,7 @@ def compute_cohort_premiums(
 
         results.append({
             "feature_key": key,
-            "feature_label": n["label"],
+            "feature_label": _premium_label(n["key"], n["label"]),
             "premium_pct": round(premium, 1),
             "n_with": len(with_prices),
             "n_without": len(without_prices),
