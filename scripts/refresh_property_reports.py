@@ -996,6 +996,33 @@ def rebuild_activity_feed(doc: dict[str, Any], updates: dict[str, Any]) -> list[
     return out[:12]
 
 
+def seasonality_updates(gc_db, doc: dict[str, Any]) -> dict[str, Any]:
+    """Apply the suburb's precomputed sale-price seasonality to the report and
+    approve the `seasonality` slot. Suburb-level + slow-moving, so it's read from
+    Gold_Coast.precomputed_seasonality (refreshed monthly) rather than recomputed
+    per report. Returns {} if the suburb has no (sufficient-sample) seasonality."""
+    sub = (doc.get("suburb_key") or "").strip().lower().replace(" ", "_")
+    if not sub:
+        return {}
+    s = gc_db["precomputed_seasonality"].find_one({"_id": sub})
+    if not s or not s.get("months"):
+        return {}
+    suburb_name = doc.get("suburb") or sub.replace("_", " ").title()
+    return {
+        "seasonality": {
+            "months": s["months"],
+            "peakMonthIndex": s["peakMonthIndex"],
+            "troughMonthIndex": s["troughMonthIndex"],
+            "scopeLabel": suburb_name,
+            "windowLabel": f"{s['windowLabel']}, houses",
+            "totalSales": s["totalSales"],
+            "method": s.get("method"),
+            "source_updated_at": s.get("last_updated"),
+        },
+        "slot_status.seasonality": "approved",
+    }
+
+
 def refresh_comparables_for_doc(col, gc_db, doc: dict[str, Any], dry_run: bool) -> bool:
     """Re-run the competitor matcher (cheap, DB-only — no vision / Opus /
     scraping) for one report against tonight's freshly-scraped listings, then
@@ -1032,6 +1059,9 @@ def refresh_comparables_for_doc(col, gc_db, doc: dict[str, Any], dry_run: bool) 
     if new_activity is not None:
         updates["activity"] = new_activity
         updates["activity_refreshed_at"] = dt.datetime.utcnow()
+
+    # Apply suburb seasonality (Process tab) + approve its slot.
+    updates.update(seasonality_updates(gc_db, doc))
 
     if not dry_run:
         col.update_one(
