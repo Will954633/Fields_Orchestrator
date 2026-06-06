@@ -134,7 +134,12 @@ Return JSON ONLY, matching this exact schema:
       "area_sqm": 15.96                     // computed or printed area in m² (or null)
     }
   ],
-  "total_internal_area_sqm": 228,           // sum or as printed on the plan, m²
+  "stated_internal_area_sqm": 173,          // the INTERNAL / LIVING area PRINTED in the plan's area summary box (null if not printed)
+  "stated_garage_area_sqm": 33,             // the GARAGE area printed in the summary box (null if not printed)
+  "stated_external_area_sqm": 107,          // the EXTERNAL / COVERED / PORCH / ALFRESCO area printed (null if not printed)
+  "stated_total_area_sqm": 313,             // the TOTAL / APPROX TOTAL area printed in the summary box (null if not printed)
+  "total_internal_area_sqm": 173,           // best internal-living figure: prefer stated_internal; else sum of room areas
+  "area_source": "printed_summary",         // "printed_summary" if read from a printed box, "room_sum" if you summed rooms, "none" if unknown
   "number_of_levels": 1,                    // 1, 2, or 3
   "has_garage": true,                       // boolean
   "has_pool_in_plan": false,                // boolean — is a pool drawn on the plan?
@@ -142,6 +147,9 @@ Return JSON ONLY, matching this exact schema:
 }
 
 Rules:
+- FIRST look for a printed area summary box on the plan (often a table or list reading "Internal", "Living", "Garage", "Porch/Alfresco/External", "Total" or "Approx Total" with m² figures). Transcribe those EXACTLY into the stated_* fields. These printed figures are authoritative — do NOT compute them.
+- "Internal" / "Living" area is habitable internal space EXCLUDING garage and covered outdoor. Put that in stated_internal_area_sqm and in total_internal_area_sqm, and set area_source to "printed_summary".
+- Only if there is NO printed summary box, sum the room areas into total_internal_area_sqm and set area_source to "room_sum".
 - Use ONLY values that are visible or explicitly readable from the plan.
 - If a value isn't in the plan, use null (for numbers) or an empty string (for text).
 - Room labels MUST come from the plan — don't invent rooms not shown.
