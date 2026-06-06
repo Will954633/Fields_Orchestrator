@@ -188,12 +188,17 @@ FEATURE_RULES: List[Dict[str, Any]] = [
     },
     # ---- Differentiators (buyer-specific tippers, NOT counted) ----
     {
+        # Single-level is only a differentiator for a detached house on its own
+        # land. A ground-floor unit/duplex being single-level is meaningless, so
+        # require real land (units/duplexes carry land_size_sqm = None). 200 m²
+        # is a low bar that admits villas but excludes apartments.
         "key": "single_level",
         "tier": "differentiator",
         "label": "Single-level",
         "value": lambda b: "1 storey",
         "phrase": lambda b: "single-level living",
-        "applies": lambda b, ctx: (b.get("number_of_stories") or 0) == 1,
+        "applies": lambda b, ctx: (b.get("number_of_stories") or 0) == 1
+                                  and (b.get("land_size_sqm") or 0) >= 200,
         "count_clause": lambda b: None,
     },
     {
