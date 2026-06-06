@@ -15,6 +15,7 @@ Usage:
     python3 scripts/fetch_macro_indicators.py --dry-run # fetch + print
 """
 
+import time
 import argparse
 import csv
 import io
@@ -30,10 +31,43 @@ from pymongo import MongoClient
 
 
 def fetch_csv(url: str) -> str:
-    """Fetch CSV content from a URL."""
-    resp = requests.get(url, timeout=30)
-    resp.raise_for_status()
-    return resp.text
+    """Fetch CSV content from a URL.
+
+    Tries a direct request first; on failure falls back to the Bright Data Web
+    Unlocker (some sources, e.g. FRED, IP-block this VM's GCP egress). Requires
+    BRIGHTDATA_API_KEY for the fallback.
+    """
+    try:
+        resp = requests.get(url, timeout=30)
+        resp.raise_for_status()
+        if resp.text and len(resp.text) > 50:
+            return resp.text
+    except Exception as direct_err:
+        last_err = direct_err
+    else:
+        last_err = RuntimeError("empty response")
+
+    api_key = os.environ.get("BRIGHTDATA_API_KEY")
+    if api_key:
+        zone = os.environ.get("BRIGHTDATA_ZONE", "web_unlocker2")
+        # Web Unlocker is reliable but flaky/slow per request — retry a few times.
+        for attempt in range(3):
+            try:
+                r = requests.post(
+                    "https://api.brightdata.com/request",
+                    headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
+                    json={"zone": zone, "url": url, "format": "raw"},
+                    timeout=150,
+                )
+                if r.status_code == 200 and r.text and len(r.text) > 50:
+                    return r.text
+                last_err = RuntimeError(f"Bright Data http={r.status_code} len={len(r.text or '')}")
+            except Exception as e:
+                last_err = e
+            if attempt < 2:
+                time.sleep(5)
+        raise RuntimeError(f"Bright Data fallback failed after retries for {url}: {last_err}")
+    raise RuntimeError(f"direct fetch failed ({last_err}) and no BRIGHTDATA_API_KEY for fallback: {url}")
 
 
 def fetch_brent_crude() -> tuple[list[dict], list[dict]]:
@@ -299,13 +333,40 @@ def main():
 
     print("Fetching macro indicators...\n")
 
-    oil_quarterly, oil_daily = fetch_brent_crude()
-    cash_rate = fetch_rba_cash_rate()
-    mortgage_rate = fetch_rba_mortgage_rates()
-    national_prices = fetch_national_house_prices()
-    mortgage_impact = build_mortgage_impact(cash_rate, mortgage_rate)
+    # Connect first so we can preserve previous values for any source that fails
+    # (one IP-blocked source must not wipe the rest, or fields written by other
+    # scripts such as national_asking_prices).
+    conn_str = os.environ.get("COSMOS_CONNECTION_STRING")
+    if not conn_str:
+        cfg_path = os.path.join(os.path.dirname(__file__), "..", "config", "settings.yaml")
+        with open(cfg_path) as f:
+            cfg = yaml.safe_load(f)
+        conn_str = cfg["mongodb"]["uri"]
+    client = MongoClient(conn_str)
+    db = client["Gold_Coast"]
+    prev = db["precomputed_macro_indicators"].find_one({"_id": "macro_indicators"}) or {}
 
-    doc = {
+    failed = []
+
+    def _try(label, fn):
+        try:
+            return fn()
+        except Exception as e:
+            failed.append(label)
+            print(f"  ! {label} failed ({type(e).__name__}: {e}); keeping previous value", file=sys.stderr)
+            return None
+
+    oil = _try("brent_crude", fetch_brent_crude)
+    oil_quarterly, oil_daily = oil if oil else (prev.get("brent_crude_quarterly", []), prev.get("brent_crude_daily", []))
+    cash_rate = _try("rba_cash_rate", fetch_rba_cash_rate) or prev.get("rba_cash_rate_quarterly", [])
+    mortgage_rate = _try("rba_mortgage_rates", fetch_rba_mortgage_rates) or prev.get("rba_mortgage_rate_quarterly", [])
+    national_prices = _try("national_house_prices", fetch_national_house_prices) or prev.get("national_house_price_index", [])
+    mortgage_impact = _try("mortgage_impact", lambda: build_mortgage_impact(cash_rate, mortgage_rate)) or prev.get("mortgage_impact", {})
+
+    # Start from the previous doc to preserve fields written by other scripts
+    # (e.g. national_asking_prices / national_asking_prices_updated), then override.
+    doc = {k: v for k, v in prev.items() if k != "_id"}
+    doc.update({
         "_id": "macro_indicators",
         "updated_at": datetime.now(timezone.utc),
         "brent_crude_quarterly": oil_quarterly,
@@ -314,7 +375,7 @@ def main():
         "rba_mortgage_rate_quarterly": mortgage_rate,
         "national_house_price_index": national_prices,
         "mortgage_impact": mortgage_impact,
-    }
+    })
 
     if args.dry_run:
         print("\n=== DRY RUN ===")
@@ -325,23 +386,17 @@ def main():
         print(f"\nMortgage impact summary:")
         for i in mortgage_impact.get("impact_summary", []):
             print(f"  {i['label']}: ${i['current_monthly']:,.0f}/month at {i['current_rate']}% (was ${i['year_ago_monthly']:,.0f} at {i['year_ago_rate']}%)")
+        if failed:
+            print(f"\n(failed sources kept at previous values: {', '.join(failed)})")
+        client.close()
         return
 
-    # Write to MongoDB
+    # Write to MongoDB (connection opened above)
     print("\nWriting to MongoDB (Gold_Coast.precomputed_macro_indicators)...")
-    conn_str = os.environ.get("COSMOS_CONNECTION_STRING")
-    if not conn_str:
-        cfg_path = os.path.join(os.path.dirname(__file__), "..", "config", "settings.yaml")
-        with open(cfg_path) as f:
-            cfg = yaml.safe_load(f)
-        conn_str = cfg["mongodb"]["uri"]
-
-    client = MongoClient(conn_str)
-    db = client["Gold_Coast"]
     db["precomputed_macro_indicators"].replace_one(
         {"_id": "macro_indicators"}, doc, upsert=True
     )
-    print("  Written successfully.")
+    print(f"  Written successfully. Failed sources (kept previous): {', '.join(failed) if failed else 'none'}")
     client.close()
 
 
