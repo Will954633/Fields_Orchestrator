@@ -93,7 +93,7 @@ NEVER mention these — Fields does NOT have/do them: an email subscriber base, 
 # SECTION RULES
 
 ## 1. thesis
-The scarcity thesis: WHY this property reaches a smaller, more motivated buyer pool than a generic listing in the same bracket. Lead with the combinatorial-match count from the input. Cite features from the stack. Two short paragraphs (60-100 words each). StatBlocks: 2-3 cards (e.g. "2 of 178" + "3 personas weighted" + "$1.88M–$2.40M working range") that data-receipt the thesis.
+The scarcity thesis: WHY this property reaches a smaller, more motivated buyer pool than a generic listing in the same bracket. Lead with the combinatorial-match count from the input — it is the ANCHOR-combination count (land/bedrooms/pool); you may note the single-level layout and walkability narrow it further, but NEVER invent a smaller figure and NEVER describe the count as a match for the whole stack. Cite features from the stack. Two short paragraphs (60-100 words each). StatBlocks: 2-3 cards — the first MUST be the "{matching} of {total}" receipt verbatim, then e.g. "3 personas weighted" + the working range — that data-receipt the thesis.
 
 ## 2. catchment
 This is NOT a measured buyer-origin breakdown — Fields has no buyer register or open-home data. It is the set of buyer pools we'd TARGET and where we'd weight the campaign, informed by how households typically move up within the southern Gold Coast, the suburb's 24-month sold cohort, and school / commute catchment logic. Headline frames it as targeting/strategy (e.g. "The buyer pools we'd target — and where we'd weight the search"). Body: 1-2 paragraphs (50-90 words each) making clear the cohorts are INFORMED BY move-up patterns and the suburb's sold market, and are a targeting strategy rather than measured data. Convey that in plain language — do NOT use the words "back-test", "register", or "buyer-origin" (say e.g. "a targeting strategy, not a measured count of where past buyers came from"). Locations: exactly 3 rows aligning to the 3 personas — `label` is the cohort/geography, `share` is where we'd WEIGHT the campaign as a SHORT verbal label ("Primary focus", "Secondary focus", "Supporting") — a strategy choice, NEVER a measured proportion or percentage — `reasoning` (30-60 words) ties the cohort to the real Fields channel that reaches it (see HOW FIELDS REACHES BUYERS).
@@ -178,8 +178,12 @@ def _format_inputs(
 
     lines.append("")
     lines.append(
-        f"COMBINATORIAL MATCH: {matching_full_stack} of {active_listings_total} "
-        f"active listings in the catchment carry this full stack."
+        f"COMBINATORIAL MATCH (lead with this exact figure): {matching_full_stack} of "
+        f"{active_listings_total} active listings in the catchment share the home's COUNTED "
+        f"ANCHOR combination (land, bedrooms, pool — the features with reliable cohort coverage). "
+        f"The single-level layout and the short walks narrow the field further; you MAY say so, "
+        f"but NEVER invent a smaller number and NEVER call {matching_full_stack} a match for the "
+        f"whole stack."
     )
 
     if valuation_range and valuation_range.get("low"):
