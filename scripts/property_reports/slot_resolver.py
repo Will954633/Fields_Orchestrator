@@ -598,6 +598,31 @@ class SlotResolver:
                 updates["scarcity_narrative_error"] = {"error": str(e), "attempts": 0}
                 self.emit.fail("scarcity_story", str(e))
 
+        # Positioning object — the single deterministic source of truth that the
+        # thesis surface (and, progressively, the other positioning surfaces)
+        # render slices of. Reuses the SAME scarcity verdict the hero used, so
+        # the surfaces can no longer contradict each other. Deterministic — no
+        # LLM call. See scripts/property_reports/positioning_object.py.
+        if scarcity_struct and self._subject:
+            try:
+                from scripts.property_reports.positioning_object import resolve_positioning_object
+                pobj = resolve_positioning_object(
+                    self._subject, self.db, self.suburb_display,
+                    scarcity=scarcity_struct, pois=resolved_pois,
+                )
+                if pobj:
+                    updates["positioning_object"] = pobj
+                    updates["slot_status.positioning_thesis"] = "approved"
+                    logger.info(
+                        f"  positioning object: primary={pobj['primary_frame']} "
+                        f"verdict={pobj['scarcity_verdict']} anti={len(pobj['anti_frames'])}"
+                    )
+                else:
+                    updates["slot_status.positioning_thesis"] = "pending"
+            except Exception as e:
+                logger.warning(f"  positioning_object resolver threw: {e}")
+                updates["slot_status.positioning_thesis"] = "error"
+
         # Positioning narrative (Day 10) — Opus 4.7 produces the five
         # positioning fields (frame, vocabulary, tradeOffs, photography,
         # sampleParagraph) grounded in the same structured scarcity + cohort
