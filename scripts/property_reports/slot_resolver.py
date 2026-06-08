@@ -142,6 +142,24 @@ class SlotResolver:
                     existing_extracted=existing_extracted if existing_extracted else None,
                 )
                 if fp:
+                    # De-brand the chosen floor-plan image so the mini-site only ever
+                    # shows a cleaned plan — agency logos, watermarks, agent contact
+                    # details and provider credits removed; room labels, dimensions and
+                    # the address preserved. Fails safe: on any error the original image
+                    # URL is kept (we never show a blank plan) and a Telegram alert with
+                    # the failing stage + error fires for fault-finding. Room/area analysis
+                    # already ran on the ORIGINAL image inside resolve_floor_plan, so
+                    # cleaning only affects the displayed picture, never the data.
+                    if fp.get("url"):
+                        try:
+                            from scripts.property_reports.floor_plan_debrand import apply_debrand
+                            fp = apply_debrand(
+                                fp,
+                                slug=self.report.get("slug") or self.property_id or "",
+                                address=self.report.get("address") or "",
+                            )
+                        except Exception as _de:
+                            logger.warning(f"  floor plan debrand wiring error: {_de}")
                     # Embed inside the property dict we already wrote — MongoDB
                     # rejects $set of both "property" and "property.floor_plan"
                     # at once.
