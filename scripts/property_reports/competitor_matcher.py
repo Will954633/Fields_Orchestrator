@@ -5,13 +5,16 @@ Market tab competitor map.
 A *substitute* is a home a buyer is actually choosing between, not a home
 that merely shares the subject's signature features (that feature-twin count
 is a separate claim, owned by scarcity_features.py). Substitutability is
-driven by budget, bedroom band, and property type — the portal-search
-reality. So the matcher:
+defined by the stable, observable attributes both homes carry — property type,
+bedroom band, bathrooms, land, floor area, features and proximity — NOT by a
+price the analyst hasn't set yet. So the matcher:
 
   1. Hard-filters candidates to genuine substitutes: same property-type GROUP
      (House+Duplex never mixes in a Unit), within the catchment, for_sale,
-     within a price band, within a bedroom band.
-  2. Ranks survivors by a weighted similarity score (price-led).
+     within a bedroom band. Price is NOT a gather filter, so auction / EOI /
+     price-withheld listings are tracked like any other competitor.
+  2. Ranks survivors by a weighted, PHYSICAL-LED similarity score; price enters
+     only as a soft, low-weight term plus a wide guardrail on the close tier.
   3. Uses an ADAPTIVE APERTURE — expanding tolerance rings — so a common home
      finds a tight set and a unique home still surfaces at least the floor,
      by progressively widening the suburb net, price band, and bedroom band.
@@ -33,8 +36,10 @@ already renders:
     }
 
 The aperture ring is load-bearing narrative: a home that only matched at the
-loosest ring has literally proven its scarcity ("we widened the search to ±2
-bedrooms and 30% on price before comparable homes appeared").
+loosest ring has literally proven its scarcity ("we widened the search to the
+whole catchment and ±2 bedrooms before comparable homes appeared"). Rings widen
+on geography and bedroom band only — price is never a gather gate, so auction
+and price-withheld listings are always in scope.
 """
 from __future__ import annotations
 
@@ -74,42 +79,52 @@ PROPERTY_TYPE_GROUPS = {
 }
 
 # Expanding tolerance rings. Index 0 = tightest. The matcher walks down the
-# list until a ring yields >= TARGET_MIN survivors (or the list is exhausted).
+# list until a ring yields >= TARGET_MIN candidates (or the list is exhausted).
+# Rings widen on geography and bedroom band ONLY — price is never a gather gate
+# (see SCORE_WEIGHTS / PRICE_GUARD_BAND), so auction and price-withheld homes
+# are always in scope.
 #   geo:  "own"      = subject's suburb only
 #         "adjacent" = own + first 4 catchment suburbs
 #         "full"     = whole catchment
-#   price: fractional band around the anchor (±)
 #   beds:  absolute bedroom tolerance (±)
 APERTURE_RINGS = [
-    {"geo": "own",      "price": 0.10, "beds": 0,
-     "label": "homes in your own suburb within 10% of your price guide"},
-    {"geo": "adjacent", "price": 0.15, "beds": 1,
-     "label": "homes in your suburb and its neighbours within 15% on price and one bedroom either way"},
-    {"geo": "adjacent", "price": 0.20, "beds": 1,
-     "label": "the wider neighbourhood within 20% on price"},
-    {"geo": "full",     "price": 0.30, "beds": 2,
-     "label": "the whole southern-Gold-Coast premium market within 30% on price and two bedrooms either way"},
+    {"geo": "own",      "beds": 1,
+     "label": "houses in your own suburb within one bedroom of yours"},
+    {"geo": "adjacent", "beds": 1,
+     "label": "houses in your suburb and its neighbours within one bedroom of yours"},
+    {"geo": "full",     "beds": 1,
+     "label": "houses across the southern-Gold-Coast catchment within one bedroom of yours"},
+    {"geo": "full",     "beds": 2,
+     "label": "houses across the whole southern-Gold-Coast catchment within two bedrooms either way"},
 ]
 
 # Similarity score weights. Lower score = closer substitute. Weights are
 # renormalised at runtime over whichever factors both homes actually carry,
 # so a missing floor area neither helps nor unfairly hurts a candidate.
 #
-# Price is deliberately the dominant axis (budget is the hardest constraint).
-# Distance is a SECONDARY factor — a nearer home outranks a farther one all
-# else equal, so "closer ranks first" holds in practice, but a same-price
-# near-twin one suburb over still beats a pricier local home. This is the
-# honest version of "local first": proximity by straight-line distance, not
-# by suburb name (which mis-ranks homes near a boundary).
+# Ranking is PHYSICAL-LED, not price-led, and deliberately so. At report-build
+# time the analyst has not yet set the subject's price, so we only have a model
+# working range — ranking on closeness to a number we invented is circular. And
+# the page's job is to track every competitor a buyer sees, including auction /
+# EOI / "contact agent" listings that publish no figure at all. So substitut-
+# ability is defined by the stable, observable attributes both homes actually
+# carry: bedroom band, bathrooms, land, floor area, signature features, and
+# proximity. Price is a SOFT, low-weight term (used only when both homes quote
+# one) plus a wide guardrail on the "close" tier (see PRICE_GUARD_BAND) — never
+# a ranking lead and never a gate that deletes listings.
+#
+# Distance is a meaningful secondary factor — a nearer home outranks a farther
+# one all else equal ("local first") — by straight-line distance, not suburb
+# name (which mis-ranks homes near a boundary).
 SCORE_WEIGHTS = {
-    "price": 0.32,
-    "bedrooms": 0.16,
-    "distance": 0.15,
-    "floor": 0.09,
-    "land": 0.09,
-    "bathrooms": 0.08,
-    "features": 0.07,
-    "car": 0.04,
+    "bedrooms": 0.20,
+    "distance": 0.18,
+    "land": 0.16,
+    "bathrooms": 0.12,
+    "floor": 0.12,
+    "features": 0.11,
+    "car": 0.06,
+    "price": 0.05,
 }
 
 # Distance term reaches full penalty at this straight-line distance (km) from
@@ -135,9 +150,22 @@ CATCHMENT_CENTROIDS = {
 }
 
 # A candidate is shown in the prominent "closest match" tier (yellow marker +
-# match card) when its normalised score is at or below this. The single best
-# match is always promoted regardless, so the map never shows zero close tier.
-CLOSE_MATCH_THRESHOLD = 0.22
+# match card) when its PHYSICAL similarity score is at or below this AND it
+# clears the price guardrail below. This is the honest "truly compete" count —
+# there is no floor: if nothing clears the bar, the close tier is genuinely 0
+# (a strong scarcity signal), and the map still plots the nearest homes, just
+# without the close-match styling.
+CLOSE_MATCH_THRESHOLD = 0.20
+
+# Price guardrail for the "close" tier ONLY (never a gather filter). A home that
+# quotes a price more than this fraction away from the subject's working-range
+# anchor is in a different budget bracket, so it is tracked and ranked on
+# physical merit but kept OUT of the "competes closely" tier — a $2.4M home is
+# not direct competition for a ~$1.3M one even if the bedrooms match. Listings
+# with no published price (auction / EOI / contact agent) are NEVER excluded by
+# this: they pass the guard and rank purely on physical similarity. When the
+# subject has no price anchor at all (pre-valuation), the guard is inactive.
+PRICE_GUARD_BAND = 0.50
 
 # Geocoding (only ever runs for the final <=6 picks that lack coordinates).
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
@@ -183,13 +211,44 @@ def _to_float(v: Any) -> Optional[float]:
         return None
 
 
-_PRICE_RE = re.compile(r"\$?\s*([\d][\d,]{4,})")
+# Long comma/long-form numbers ($1,190,000 / 1450000). Needs a 5+ digit run so
+# bed/bath counts and street numbers don't read as prices.
+_FULL_NUM_RE = re.compile(r"\$?\s*([\d][\d,]{4,})")
+# Abbreviated millions/thousands ($1.3M, $1.9m+, $1.695m, $950k). Agents quote
+# guides this way constantly — the long-form regex above can't see them.
+_ABBR_RE = re.compile(r"\$\s*(\d+(?:\.\d+)?)\s*([mMkK])")
+
+
+def _money_tokens(s: str) -> List[int]:
+    """Every dollar figure in a string, in whole dollars, in order of
+    appearance. Handles '$1.3M', '$950k' and '$1,190,000' forms together, so a
+    range like 'Price Guide $1.3M - $1.4M' yields [1300000, 1400000]."""
+    out: List[Tuple[int, int]] = []
+    abbr_spans: List[Tuple[int, int]] = []
+    for m in _ABBR_RE.finditer(s):
+        mult = 1_000_000 if m.group(2).lower() == "m" else 1_000
+        out.append((m.start(), int(float(m.group(1)) * mult)))
+        abbr_spans.append((m.start(), m.end()))
+    for m in _FULL_NUM_RE.finditer(s):
+        # Skip digits already consumed by an abbreviated match (e.g. the "1" in "$1.3M").
+        if any(a <= m.start() < b for a, b in abbr_spans):
+            continue
+        try:
+            iv = int(m.group(1).replace(",", ""))
+        except ValueError:
+            continue
+        if iv >= 50_000:
+            out.append((m.start(), iv))
+    out.sort()
+    return [v for _, v in out]
 
 
 def _parse_price(*vals: Any) -> Optional[int]:
     """Best-effort price in whole dollars from any of the supplied values.
-    Accepts ints, floats, and strings like '$1,365,000' or
-    'Offers over $2,450,000'. Ignores small numbers (bed/bath counts)."""
+    Accepts ints, floats, and strings like '$1,365,000', 'Offers over
+    $2,450,000', '$1.3M', '$1.9m+', and ranges like '$1.3M - $1.4M' (returns
+    the range midpoint). Ignores small numbers (bed/bath counts). Returns None
+    only when there is genuinely no figure (e.g. 'Auction', 'Contact Agent')."""
     for v in vals:
         if v is None:
             continue
@@ -199,15 +258,10 @@ def _parse_price(*vals: Any) -> Optional[int]:
                 return iv
             continue
         if isinstance(v, str):
-            m = _PRICE_RE.search(v)
-            if m:
-                digits = m.group(1).replace(",", "")
-                try:
-                    iv = int(digits)
-                    if iv >= 50_000:
-                        return iv
-                except ValueError:
-                    pass
+            toks = _money_tokens(v)
+            if toks:
+                # Range -> midpoint; single figure -> itself.
+                return int((min(toks) + max(toks)) / 2)
     return None
 
 
@@ -353,13 +407,17 @@ def _gather_candidates(
     db: Database,
     subject: Dict[str, Any],
     suburbs: List[str],
-    price_band: float,
     bed_band: int,
 ) -> List[Dict[str, Any]]:
     """All for_sale substitutes across `suburbs` that clear the hard filters
-    for this ring. Returns enriched candidate dicts (raw doc + parsed price)."""
+    for this ring — same property-type GROUP and within the bedroom band.
+
+    Price is deliberately NOT a hard filter: a listing with no published price
+    (auction / EOI / contact agent) is still a home the buyer is choosing
+    between, and the page's job is to track every competitor. Price, where
+    quoted, is captured for the soft scoring term and the close-tier guardrail.
+    Returns enriched candidate dicts (raw doc + parsed price, or None price)."""
     out: List[Dict[str, Any]] = []
-    anchor = subject["price"]
     bed = subject["bedrooms"]
     group_members = PROPERTY_TYPE_GROUPS.get(subject["group"], set())
 
@@ -383,19 +441,11 @@ def _gather_candidates(
             if grp is None and group_members:
                 # Unknown type — only keep it if it has no type at all to judge
                 continue
-            cprice = _parse_price(
+            doc["_suburb_key"] = suburb
+            doc["_price"] = _parse_price(
                 doc.get("price"), doc.get("price_numeric"), doc.get("listing_price"),
                 ((doc.get("valuation_data") or {}).get("reconciled_valuation")),
             )
-            # Price band hard filter (only when we have both numbers)
-            if anchor and cprice:
-                if abs(cprice - anchor) / anchor > price_band:
-                    continue
-            elif anchor and not cprice:
-                # No usable price — can't confirm it's a budget substitute. Skip.
-                continue
-            doc["_suburb_key"] = suburb
-            doc["_price"] = cprice
             out.append(doc)
     return out
 
@@ -614,6 +664,21 @@ def _persist_geocode(db: Database, suburb_key: str, doc_id: Any, lat: float, lng
         logger.debug(f"  geocode persist failed: {e}")
 
 
+def _within_price_guard(subject: Dict[str, Any], cand: Dict[str, Any]) -> bool:
+    """True if `cand` may sit in the close ("truly compete") tier on price.
+
+    Listings with no published price (auction / EOI / contact agent) always
+    pass — they are tracked competitors and rank on physical merit. A home that
+    DOES quote a price more than PRICE_GUARD_BAND away from the subject's anchor
+    is a different budget bracket and is held out of the close tier. When the
+    subject has no anchor yet (pre-valuation), the guard is inactive."""
+    anchor = subject.get("price")
+    cprice = cand.get("_price")
+    if not anchor or not cprice:
+        return True
+    return abs(cprice - anchor) / anchor <= PRICE_GUARD_BAND
+
+
 def _hero_image(doc: Dict[str, Any]) -> Optional[str]:
     if doc.get("domain_hero_image_url"):
         return doc["domain_hero_image_url"]
@@ -668,7 +733,7 @@ def _ranked_home_row(subject: Dict[str, Any], cand: Dict[str, Any], rank: int) -
         "features": sorted(_signature_features(cand)),
         "listingUrl": cand.get("listing_url"),
         "imageSrc": _hero_image(cand),
-        "isClose": cand["_score"] <= CLOSE_MATCH_THRESHOLD or rank == 1,
+        "isClose": cand["_score"] <= CLOSE_MATCH_THRESHOLD and _within_price_guard(subject, cand),
         "breakdown": cand.get("_breakdown", []),
     }
 
@@ -696,12 +761,17 @@ def resolve_competitor_map(
     Market-tab headline. Omitted → funnel top falls back to in-band count.
     """
     subject = _subject_profile(subject_doc, features_basic, price_anchor)
-    if not subject["bedrooms"] or not subject["price"]:
+    if not subject["bedrooms"]:
         logger.info(
-            "  competitor_matcher: subject missing bedrooms or price anchor "
-            f"(beds={subject['bedrooms']}, price={subject['price']}) — skipping"
+            "  competitor_matcher: subject missing bedroom count — cannot define "
+            "a substitute set, skipping"
         )
         return None
+    if not subject["price"]:
+        # No price anchor yet (analyst hasn't valued the home) — ranking is
+        # purely physical and the price guardrail is inactive. This is expected
+        # for fresh off-market submissions, not an error.
+        logger.info("  competitor_matcher: no price anchor — ranking on physical attributes only")
 
     own = (subject_doc.get("suburb_key")
            or subject_doc.get("_suburb_key")
@@ -718,7 +788,7 @@ def resolve_competitor_map(
     candidates: List[Dict[str, Any]] = []
     for idx, ring in enumerate(APERTURE_RINGS):
         suburbs = _geo_for_ring(ring["geo"], own, catch)
-        found = _gather_candidates(db, subject, suburbs, ring["price"], ring["beds"])
+        found = _gather_candidates(db, subject, suburbs, ring["beds"])
         # De-dupe by _id (adjacent rings re-scan suburbs)
         seen = set()
         deduped = []
@@ -730,8 +800,8 @@ def resolve_competitor_map(
         candidates = deduped
         chosen_ring = idx
         logger.info(
-            f"  competitor_matcher ring {idx} ({ring['geo']}, ±{int(ring['price']*100)}%, "
-            f"±{ring['beds']}bd): {len(candidates)} substitutes"
+            f"  competitor_matcher ring {idx} ({ring['geo']}, ±{ring['beds']}bd): "
+            f"{len(candidates)} substitutes"
         )
         if len(candidates) >= TARGET_MIN:
             break
@@ -777,8 +847,11 @@ def resolve_competitor_map(
             logger.debug(f"  dropping {c.get('address')} — no coordinates")
             continue
 
-        # Closest tier: at/under threshold, plus the single best is always in.
-        is_close = c["_score"] <= CLOSE_MATCH_THRESHOLD or (i == 0)
+        # Closest tier: physical similarity at/under threshold AND within the
+        # price guardrail (price-withheld homes always clear the guard). No
+        # auto-promotion of the top home — if nothing qualifies, the close tier
+        # is honestly empty.
+        is_close = c["_score"] <= CLOSE_MATCH_THRESHOLD and _within_price_guard(subject, c)
         price_int = c.get("_price")
         price_text = (c.get("price") if isinstance(c.get("price"), str) and "$" in (c.get("price") or "")
                       else (f"${price_int:,}" if price_int else "Contact agent"))
@@ -818,7 +891,10 @@ def resolve_competitor_map(
     # broad catchment count to the substitute set. n_close is computed over the
     # full ranked set, not just the plotted few, so "only N truly compete"
     # matches what the seller counts in the list.
-    n_close = sum(1 for c in candidates if c["_score"] <= CLOSE_MATCH_THRESHOLD) or 1
+    n_close = sum(
+        1 for c in candidates
+        if c["_score"] <= CLOSE_MATCH_THRESHOLD and _within_price_guard(subject, c)
+    )
     ranked_homes = [
         _ranked_home_row(subject, c, i + 1)
         for i, c in enumerate(candidates[:RANKED_COMPARISON_KEEP])
