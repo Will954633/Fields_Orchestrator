@@ -16,9 +16,11 @@ Pipeline (per image):
      coloured/grey ROOM fills always preserved.
 
 Auth:
-  * Google Vision: a fresh user-account access token is minted per call via
-    `gcloud auth print-access-token` (the VM's gcloud creds), with X-Goog-User-Project =
-    VISION_QUOTA_PROJECT (default "fields-estate"). VISION_ACCESS_TOKEN env overrides.
+  * Google Vision: a token minted from the dedicated `floor-plan-processor` service
+    account key (GOOGLE_VISION_SA_KEY, default /home/fields/.gcp-floor-plan-vision.json) —
+    durable, no dependency on any personal login. Falls back to VISION_ACCESS_TOKEN env or
+    `gcloud auth print-access-token` if the key is missing. Quota project is the SA's own
+    project (fields-estate); X-Goog-User-Project = VISION_QUOTA_PROJECT is also sent.
   * Claude: ANTHROPIC_API_KEY env.
 
 Public API:
@@ -146,20 +148,49 @@ def _vertices(poly):
 # ---------------------------------------------------------------------------
 # Google Vision
 # ---------------------------------------------------------------------------
+_SA_CREDS = None  # cached service-account Credentials (token auto-refreshes)
+_VISION_SA_KEY_DEFAULT = "/home/fields/.gcp-floor-plan-vision.json"
+
+
 def _vision_token() -> str:
-    """Fresh Vision access token. VISION_ACCESS_TOKEN env wins; else mint via gcloud."""
+    """Fresh Vision access token.
+
+    Priority: VISION_ACCESS_TOKEN env (testing) > dedicated service-account key
+    (durable, no dependency on any personal login — this is the production path) >
+    `gcloud auth print-access-token` (last-resort fallback).
+    """
     tok = os.environ.get("VISION_ACCESS_TOKEN", "").strip()
     if tok:
         return tok
+
+    # Preferred: the floor-plan-processor service account key.
+    key_path = os.environ.get("GOOGLE_VISION_SA_KEY", _VISION_SA_KEY_DEFAULT)
+    if key_path and os.path.exists(key_path):
+        try:
+            global _SA_CREDS
+            if _SA_CREDS is None:
+                from google.oauth2 import service_account
+                _SA_CREDS = service_account.Credentials.from_service_account_file(
+                    key_path, scopes=["https://www.googleapis.com/auth/cloud-platform"])
+            if not _SA_CREDS.valid:
+                from google.auth.transport.requests import Request
+                _SA_CREDS.refresh(Request())
+            if _SA_CREDS.token:
+                return _SA_CREDS.token
+        except Exception as e:
+            logger.warning(f"  floor_plan debrand: SA-key auth failed ({e}); trying gcloud")
+
+    # Last resort: a user gcloud login on the VM.
     try:
         out = subprocess.run(
             ["gcloud", "auth", "print-access-token"],
             capture_output=True, text=True, timeout=30,
         )
     except Exception as e:
-        raise DebrandError(f"vision: gcloud token mint errored: {e}")
+        raise DebrandError(f"vision: no usable SA key and gcloud token mint errored: {e}")
     if out.returncode != 0 or not out.stdout.strip():
-        raise DebrandError(f"vision: gcloud token mint failed: {(out.stderr or '').strip()[:200]}")
+        raise DebrandError(f"vision: no usable SA key and gcloud token failed: "
+                           f"{(out.stderr or '').strip()[:200]}")
     return out.stdout.strip()
 
 
