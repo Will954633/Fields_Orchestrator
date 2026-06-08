@@ -42,6 +42,7 @@ OVERPASS_ENDPOINTS = [
 ]
 OVERPASS_RETRY_BACKOFF = [1, 3]  # short backoffs — keep total resolver time under control
 MAPBOX_DIRECTIONS = "https://api.mapbox.com/directions/v5/mapbox/walking"
+MAPBOX_DRIVING = "https://api.mapbox.com/directions/v5/mapbox/driving"
 
 # Global circuit breaker — if we detect 'network unreachable' or DNS failure,
 # stop trying further endpoints / retries for this resolution. Avoids the
@@ -122,6 +123,7 @@ POI_CATEGORIES = [
 ]
 
 MAX_WALK_METRES = 8000  # cap walking distance — anything further isn't really "walkable"
+WALKABLE_THRESHOLD_M = 1000  # at/under this is a genuine walk (~12 min); beyond is a "short drive"
 
 
 def _http_get(url: str, timeout: float = 12.0) -> Optional[bytes]:
@@ -248,6 +250,28 @@ def _walking_metres(from_lat: float, from_lng: float, to_lat: float, to_lng: flo
         return None
 
 
+def _driving_seconds(from_lat: float, from_lng: float, to_lat: float, to_lng: float, token: str) -> Optional[int]:
+    """Typical drive time in seconds along the Mapbox driving route. Used for
+    the "short drive" tier (POIs beyond WALKABLE_THRESHOLD_M) so we never label
+    a multi-kilometre route a 'walk'."""
+    url = (
+        f"{MAPBOX_DRIVING}/"
+        f"{from_lng},{from_lat};{to_lng},{to_lat}"
+        f"?overview=false&access_token={token}"
+    )
+    raw = _http_get(url)
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+        routes = data.get("routes") or []
+        if not routes:
+            return None
+        return int(routes[0].get("duration") or 0)
+    except (json.JSONDecodeError, KeyError, TypeError):
+        return None
+
+
 def resolve_pois(lat: float, lng: float, *, mapbox_token: Optional[str] = None) -> List[Dict[str, Any]]:
     """Return per-category nearest-POI list with walking distances.
 
@@ -289,19 +313,24 @@ def resolve_pois(lat: float, lng: float, *, mapbox_token: Optional[str] = None) 
 
         if not chosen or chosen_walk is None:
             continue
-        if chosen_walk > MAX_WALK_METRES:
-            # Still emit — useful for "nearest beach: 4.2km" even if not strictly walkable
-            pass
 
         seen_names.add(chosen["name"].lower().strip())
-        out.append({
+        entry = {
             "key": cat["key"],
             "name": chosen["name"],
             "category": cat["category"],
             "walkMetres": chosen_walk,
             "lat": chosen["lat"],
             "lng": chosen["lng"],
-        })
+        }
+        # Beyond a genuine walk (~1km), a metres-of-walking figure is misleading.
+        # Attach a real drive time so the frontend can render the "short drive"
+        # tier honestly ("Miami Beach — 9 min drive") rather than "6,250 m walk".
+        if chosen_walk > WALKABLE_THRESHOLD_M:
+            drive_s = _driving_seconds(lat, lng, chosen["lat"], chosen["lng"], token)
+            if drive_s:
+                entry["driveSeconds"] = drive_s
+        out.append(entry)
 
     out.sort(key=lambda p: p["walkMetres"])
     return out
