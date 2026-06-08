@@ -1,0 +1,49 @@
+# Gold Coast real-estate agency / brand tokens — one phrase per line, lowercased.
+# Matched as whole-phrase substring against OCR'd lines. Multi-word phrases are
+# matched as a sequence; single tokens match any word. Extend freely.
+kollosche
+ray white
+raywhite
+harcourts
+lj hooker
+ljhooker
+mcgrath
+professionals
+century 21
+re/max
+remax
+amir prestige
+lucy cole
+john henderson
+prd
+coronis
+@realty
+ngu real estate
+ngu
+belle property
+first national
+coastal
+tate brokers
+property now
+ivy realty
+harris property
+edge realty
+surf real estate
+lacey west
+gold coast floor plans
+queensland sotheby's
+sotheby's
+place
+ed cherry
+john reid
+ash and stone
+ashstone
+oceanview realty
+robina realty
+mermaid realty
+the agency
+ray white surfers
+exp realty
+exp
+realway
+century21
