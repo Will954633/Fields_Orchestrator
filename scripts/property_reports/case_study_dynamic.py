@@ -42,6 +42,11 @@ logger = logging.getLogger(__name__)
 WINDOW_MONTHS = 12
 MAX_RELEVANT_RING = 2          # ring 0-2 only; ring 3 is too loose to be "like yours"
 DATE_TOLERANCE_DAYS = 21       # contract vs settlement gap we accept as "same sale"
+# Per-ring price tolerance for the SOLD case-study match. competitor_matcher's
+# APERTURE_RINGS went physical-led and dropped its "price" key (it has no anchor
+# at map-build time); CS0 DOES have a price anchor (the valuation working range),
+# so it keeps a price gate that widens with each ring. Indexed by ring index.
+RING_PRICE_BANDS = [0.15, 0.20, 0.25, 0.30]
 # CS0 relevance band. The matcher's CLOSE_MATCH_THRESHOLD (0.22) is its display
 # threshold for the active-listing map; for a rare home (e.g. a 6-bedroom) the
 # genuinely tellable comp can sit just outside it. 0.33 ≈ ring-2's "wider
@@ -230,7 +235,8 @@ def resolve_dynamic_case_study(
         if idx > MAX_RELEVANT_RING:
             break
         suburbs = cm._geo_for_ring(ring["geo"], own, catch)
-        found = _gather_sold(db, subject, suburbs, ring["price"], ring["beds"], cutoff)
+        price_band = RING_PRICE_BANDS[min(idx, len(RING_PRICE_BANDS) - 1)]
+        found = _gather_sold(db, subject, suburbs, price_band, ring["beds"], cutoff)
         scored: List[Tuple[float, Dict[str, Any]]] = []
         for c in found:
             if c["_id"] == subj_id or c["_id"] in seen:
