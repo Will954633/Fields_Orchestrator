@@ -1364,8 +1364,8 @@ class SlotResolver:
 
         scored.sort(key=lambda x: x["weight"], reverse=True)
         top = scored[:8]
-        wsum = sum(x["weight"] for x in top) or 1.0
-        point = sum(x["implied"] * x["weight"] for x in top) / wsum
+        # Weighted MEDIAN point — robust to comps whose adjustment hit the cap.
+        point = _weighted_median([(x["implied"], x["weight"]) for x in top])
 
         implieds = sorted(x["implied"] for x in top)
         low0 = _percentile(implieds, 20)
@@ -1802,4 +1802,23 @@ _FALLBACK_FLOOR_RATE = {"robina": 2500, "burleigh_waters": 3000, "varsity_lakes"
 _FALLBACK_LAND_RATE = {"robina": 500, "burleigh_waters": 1000, "varsity_lakes": 550}
 _DEFAULT_FLOOR_RATE = 2500
 _DEFAULT_LAND_RATE = 450
-_ADJ_CAP_PCT = 0.25
+# Tight per-comp cap: when the subject is larger than most comps, most
+# adjustments are positive — a generous cap would let many comps hit it and bias
+# the centre high. ±15% keeps each comp's adjusted price anchored to its actual
+# sale. The point uses a weighted MEDIAN (not mean) for the same robustness.
+_ADJ_CAP_PCT = 0.15
+
+
+def _weighted_median(pairs: List[tuple]) -> float:
+    """Weighted median of (value, weight) pairs. Robust to capped-high comps in
+    a way the weighted mean is not."""
+    if not pairs:
+        return 0.0
+    pairs = sorted(pairs, key=lambda x: x[0])
+    total = sum(w for _, w in pairs) or 1.0
+    acc = 0.0
+    for val, w in pairs:
+        acc += w
+        if acc >= total / 2.0:
+            return val
+    return pairs[-1][0]
