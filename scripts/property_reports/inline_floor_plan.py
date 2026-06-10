@@ -105,8 +105,19 @@ def _claude_vision_text(url: str, prompt: str, max_tokens: int = 1200) -> Option
         r = requests.get(url, timeout=30)
         r.raise_for_status()
         ctype = (r.headers.get("content-type") or "").split(";")[0].strip().lower()
-        media = ctype if ctype in _CLAUDE_MEDIA_TYPES else "image/jpeg"
-        b64 = base64.standard_b64encode(r.content).decode()
+        c = r.content
+        # Magic-byte sniff — CDN sometimes mislabels (e.g. GIF as image/jpeg), which 400s.
+        if c[:3] == b"\xff\xd8\xff":
+            media = "image/jpeg"
+        elif c[:8] == b"\x89PNG\r\n\x1a\n":
+            media = "image/png"
+        elif c[:6] in (b"GIF87a", b"GIF89a"):
+            media = "image/gif"
+        elif c[:4] == b"RIFF" and c[8:12] == b"WEBP":
+            media = "image/webp"
+        else:
+            media = ctype if ctype in _CLAUDE_MEDIA_TYPES else "image/jpeg"
+        b64 = base64.standard_b64encode(c).decode()
         resp = client.messages.create(
             model=_CLAUDE_VISION_MODEL,
             max_tokens=max_tokens,

@@ -34,6 +34,21 @@ MODEL_SPATIAL = os.environ.get("CLAUDE_VISION_SPATIAL_MODEL", "claude-opus-4-8")
 _MEDIA_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
 _CLIENT = None
 
+
+def _sniff_media(content: bytes, header_ctype: str = "") -> str:
+    """Detect image media type from magic bytes — Domain/CDN responses sometimes
+    mislabel the content-type (e.g. a GIF served as image/jpeg), which Anthropic
+    rejects with a 400. Magic bytes are authoritative; fall back to the header."""
+    if content[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if content[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if content[:6] in (b"GIF87a", b"GIF89a"):
+        return "image/gif"
+    if content[:4] == b"RIFF" and content[8:12] == b"WEBP":
+        return "image/webp"
+    return header_ctype if header_ctype in _MEDIA_TYPES else "image/jpeg"
+
 ImageSource = Union[str, dict, Tuple[str, str]]  # url | data-uri | {"url":..} | (media_type, b64)
 
 
@@ -66,7 +81,7 @@ def _image_block(src: ImageSource) -> dict:
     r = requests.get(src, timeout=30)
     r.raise_for_status()
     ctype = (r.headers.get("content-type") or "").split(";")[0].strip().lower()
-    media = ctype if ctype in _MEDIA_TYPES else "image/jpeg"
+    media = _sniff_media(r.content, ctype)
     return {"type": "image", "source": {"type": "base64", "media_type": media,
                                         "data": base64.standard_b64encode(r.content).decode()}}
 
