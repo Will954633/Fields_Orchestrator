@@ -36,7 +36,7 @@ _IMAGE_SIZE = "640x640"  # max for free tier
 _FOV = 80                # field of view (degrees) — wide enough to show whole house
 _PITCH = 0               # slight downward tilt → -5 to -10 for tighter framing
 _HEADING = None          # let Google pick (auto-aimed at the address)
-_GPT_MODEL = "gpt-4o"
+_GPT_MODEL = os.environ.get("CLAUDE_VISION_MODEL", "claude-sonnet-4-6")  # migrated gpt-4o → Claude
 _BLOB_CONTAINER = "property-images"
 
 
@@ -208,11 +208,13 @@ def analyse_street_view(
     model: str = _GPT_MODEL,
     timeout_s: int = 60,
 ) -> Optional[Dict[str, Any]]:
-    """Send the Street View image to GPT-4o for buyer-perspective analysis."""
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        logger.warning("  street_view: OPENAI_API_KEY missing")
-        return None
+    """Send the Street View image to Claude for buyer-perspective analysis."""
+    import sys as _sys
+    from pathlib import Path as _Path
+    _repo = str(_Path(__file__).resolve().parents[2])
+    if _repo not in _sys.path:
+        _sys.path.insert(0, _repo)
+    from shared.claude_vision import vision_text
 
     b64 = base64.b64encode(image_bytes).decode("utf-8")
     user_text = USER_PROMPT_TEMPLATE.format(
@@ -220,45 +222,33 @@ def analyse_street_view(
         suburb=(suburb or "").replace("_", " ").title(),
     )
 
-    payload = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": user_text},
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:image/jpeg;base64,{b64}", "detail": "high"},
-                    },
-                ],
-            },
-        ],
-        "max_completion_tokens": 1500,
-        "temperature": 0.2,
-        "response_format": {"type": "json_object"},
-    }
-
     try:
-        resp = requests.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json=payload, timeout=timeout_s,
+        content = vision_text(
+            user_text,
+            [("image/jpeg", b64)],
+            model=model,
+            max_tokens=1500,
+            system=SYSTEM_PROMPT,
         )
     except Exception as e:
-        logger.warning(f"  street_view: POST failed: {e}")
+        logger.warning(f"  street_view: vision call failed: {e}")
         return None
-    if resp.status_code != 200:
-        logger.warning(f"  street_view: HTTP {resp.status_code} — {resp.text[:200]}")
+    if not content:
         return None
     try:
-        body = resp.json()
-        content = body["choices"][0]["message"]["content"]
-        parsed = json.loads(content)
-    except (KeyError, json.JSONDecodeError) as e:
-        logger.warning(f"  street_view: parse failed: {e}")
-        return None
+        import re as _re
+        text = content.strip()
+        if text.startswith("```"):
+            text = _re.sub(r"^```(?:json)?\s*", "", text)
+            text = _re.sub(r"\s*```$", "", text).strip()
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        import re as _re
+        m = _re.search(r"\{[\s\S]*\}", content)
+        if not m:
+            logger.warning("  street_view: no JSON in response")
+            return None
+        parsed = json.loads(m.group(0))
 
     if not isinstance(parsed, dict):
         return None

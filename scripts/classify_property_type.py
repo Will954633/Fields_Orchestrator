@@ -22,18 +22,27 @@ import time
 from datetime import datetime, timezone
 
 import requests
-from dotenv import load_dotenv
-from pymongo import MongoClient
 from pymongo.errors import OperationFailure
 
-load_dotenv("/home/fields/Fields_Orchestrator/.env")
-load_dotenv("/home/fields/Property_Data_Scraping/03_Gold_Coast/Gold_Coast_Wide_Currently_For_Sale_AND_Recently_Sold/Ollama_Property_Analysis/.env")
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, REPO_ROOT)
 
-COSMOS_URI = os.environ["COSMOS_CONNECTION_STRING"]
-OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
-OPENAI_MODEL = "gpt-4o-mini"  # Cheapest vision model, sufficient for classification
+from shared.env import load_env  # type: ignore
+from shared.db import get_client, get_db, FEATURED_SUBURBS  # type: ignore
+from shared.claude_vision import vision_text, MODEL_CLASSIFY  # type: ignore
 
-TARGET_SUBURBS = ["robina", "burleigh_waters", "varsity_lakes"]
+load_env()
+# Also load Ollama env for any additional keys
+try:
+    from dotenv import load_dotenv
+    load_dotenv("/home/fields/Property_Data_Scraping/03_Gold_Coast/Gold_Coast_Wide_Currently_For_Sale_AND_Recently_Sold/Ollama_Property_Analysis/.env")
+except ImportError:
+    pass
+
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")  # retained for reference; classification now uses Claude
+CLASSIFY_MODEL = MODEL_CLASSIFY  # migrated gpt-4o-mini → Claude Haiku for property-type classification
+
+TARGET_SUBURBS = FEATURED_SUBURBS
 
 VALID_TYPES = [
     "House",
@@ -106,33 +115,15 @@ def classify_image(image_url, address=""):
         return None, 0, f"Could not download image: {image_url[:80]}"
 
     try:
-        resp = requests.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {OPENAI_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": OPENAI_MODEL,
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": prompt},
-                            {
-                                "type": "image_url",
-                                "image_url": {"url": data_uri, "detail": "low"},
-                            },
-                        ],
-                    }
-                ],
-                "max_tokens": 200,
-                "temperature": 0.1,
-            },
-            timeout=30,
+        content = vision_text(
+            prompt,
+            [data_uri],
+            model=CLASSIFY_MODEL,
+            max_tokens=300,
         )
-        resp.raise_for_status()
-        content = resp.json()["choices"][0]["message"]["content"].strip()
+        if not content:
+            return None, 0, "Empty classification response"
+        content = content.strip()
 
         # Parse JSON from response (handle markdown wrapping)
         if content.startswith("```"):
@@ -179,8 +170,8 @@ def main():
     parser.add_argument("--no-fail", action="store_true", help="Exit 0 even on errors (for pipeline use)")
     args = parser.parse_args()
 
-    client = MongoClient(COSMOS_URI)
-    db = client["Gold_Coast"]
+    client = get_client()
+    db = get_db("Gold_Coast")
 
     total_processed = 0
     total_classified = 0

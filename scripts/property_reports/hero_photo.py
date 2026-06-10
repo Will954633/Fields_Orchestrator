@@ -131,43 +131,38 @@ def score_and_pick_hero(photo_urls: List[str], *, max_photos: int = MAX_CANDIDAT
         )
 
     try:
-        # Defer import so the module loads even without openai installed
-        from openai import OpenAI
+        # Defer import so the module loads even if shared libs aren't on the path yet
+        import sys as _sys
+        from pathlib import Path as _Path
+        _repo = str(_Path(__file__).resolve().parents[2])
+        if _repo not in _sys.path:
+            _sys.path.insert(0, _repo)
+        from shared.claude_vision import vision_text, MODEL_ANALYZE
     except ImportError:
-        logger.warning("openai package not installed — skipping AI hero selection")
+        logger.warning("claude_vision helper unavailable — skipping AI hero selection")
         return None
 
-    client = OpenAI(api_key=api_key)
-
-    # Build the user content with base64 data URLs in the same order as `downloaded`
-    user_content: List[Dict[str, Any]] = [
-        {"type": "text", "text": f"Score these {len(downloaded)} photos. Index 0..{len(downloaded)-1}."}
-    ]
-    candidates = [url for url, _ in downloaded]  # rebind so index→url stays consistent
-    for _, data_url in downloaded:
-        user_content.append({
-            "type": "image_url",
-            "image_url": {"url": data_url, "detail": DETAIL_LEVEL},
-        })
+    # Images in the same order as `downloaded`; index → url stays consistent.
+    candidates = [url for url, _ in downloaded]
+    images = [data_url for _, data_url in downloaded]
+    user_prompt = (
+        f"Score these {len(downloaded)} photos, numbered by the order they are shown "
+        f"(index 0 to {len(downloaded) - 1}). Return JSON only."
+    )
 
     try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_content},
-            ],
-            response_format={"type": "json_object"},
-            temperature=0.1,
-            max_tokens=600,
-        )
+        raw = vision_text(user_prompt, images, model=MODEL_ANALYZE, max_tokens=800, system=SYSTEM_PROMPT)
     except Exception as e:
         logger.warning(f"Hero photo scoring API call failed: {e}")
         return None
 
     try:
-        raw = response.choices[0].message.content
-        parsed = json.loads(raw)
+        import re as _re
+        text = (raw or "").strip()
+        if text.startswith("```"):
+            text = _re.sub(r"^```(?:json)?\s*", "", text)
+            text = _re.sub(r"\s*```$", "", text).strip()
+        parsed = json.loads(text)
         scores = parsed.get("scores") or []
     except (json.JSONDecodeError, KeyError, AttributeError) as e:
         logger.warning(f"Hero photo scoring JSON parse failed: {e}")
@@ -201,5 +196,5 @@ def score_and_pick_hero(photo_urls: List[str], *, max_photos: int = MAX_CANDIDAT
         "hero_score": top["score"],
         "hero_reason": top["reason"],
         "scores": valid,
-        "model": "gpt-4o-mini",
+        "model": MODEL_ANALYZE,
     }

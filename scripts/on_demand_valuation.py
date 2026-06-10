@@ -78,7 +78,7 @@ logger = logging.getLogger(__name__)
 # GPT VISION ENRICHMENT (photo + floor plan analysis)
 # ---------------------------------------------------------------------------
 
-GPT_MODEL = "gpt-5-nano-2025-08-07"
+GPT_MODEL = os.environ.get("CLAUDE_VISION_MODEL", "claude-sonnet-4-6")  # migrated gpt-5-nano → Claude
 GPT_MAX_TOKENS = 16000
 GPT_MAX_PHOTOS = 20
 GPT_IMAGE_TIMEOUT = 15
@@ -137,35 +137,43 @@ def _url_to_base64(url):
 
 
 def _build_image_content(urls):
+    """Return base64 data-URIs (Claude vision helper accepts these directly)."""
     blocks = []
     for url in urls:
         data_uri = _url_to_base64(url)
         if data_uri:
-            blocks.append({
-                "type": "image_url",
-                "image_url": {"url": data_uri, "detail": "high"}
-            })
+            blocks.append(data_uri)
     return blocks
 
 
 def _call_gpt(system_prompt, user_prompt, image_content):
     import json as _json
-    client = _get_openai_client()
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": [{"type": "text", "text": user_prompt}] + image_content}
-    ]
-    response = client.chat.completions.create(
+    import re as _re
+    from pathlib import Path as _Path
+    _repo = str(_Path(__file__).resolve().parent.parent)
+    if _repo not in sys.path:
+        sys.path.insert(0, _repo)
+    from shared.claude_vision import vision_text
+    content = vision_text(
+        user_prompt,
+        image_content,
         model=GPT_MODEL,
-        messages=messages,
-        max_completion_tokens=GPT_MAX_TOKENS,
-        response_format={"type": "json_object"},
-        timeout=GPT_REQUEST_TIMEOUT,
+        max_tokens=GPT_MAX_TOKENS,
+        system=system_prompt,
     )
-    content = response.choices[0].message.content
     if not content or not content.strip():
-        raise ValueError("Empty response from GPT")
-    return _json.loads(content)
+        raise ValueError("Empty response from vision model")
+    text = content.strip()
+    if text.startswith("```"):
+        text = _re.sub(r"^```(?:json)?\s*", "", text)
+        text = _re.sub(r"\s*```$", "", text).strip()
+    try:
+        return _json.loads(text)
+    except _json.JSONDecodeError:
+        m = _re.search(r"\{[\s\S]*\}", text)
+        if not m:
+            raise
+        return _json.loads(m.group(0))
 
 
 # Import prompts from the enrichment script directory

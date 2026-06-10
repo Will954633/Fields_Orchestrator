@@ -31,12 +31,12 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import requests
-from openai import OpenAI
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 from shared.env import load_env  # type: ignore
+from shared.claude_vision import vision_text, MODEL_SPATIAL  # type: ignore
 from shared.db import get_client, get_db, cosmos_retry, EmptyWorkSetError, sleep_with_jitter  # type: ignore
 from shared import blob_storage  # type: ignore
 from shared.monitor_client import MonitorClient  # type: ignore
@@ -60,7 +60,7 @@ SATELLITE_MAPTYPE = "satellite"
 SATELLITE_SCALE = 2          # 1280x1280 actual pixels (retina)
 
 # GPT model for vision analysis
-GPT_MODEL = "gpt-5.4"
+GPT_MODEL = MODEL_SPATIAL  # migrated GPT-5.4 → Claude (Opus) for satellite spatial analysis
 
 # Azure Blob Storage
 AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING", "")
@@ -323,48 +323,35 @@ def analyse_satellite_image(
     polygon (bright yellow) onto the image — we switch to a stricter prompt
     that constrains GPT to only describe features inside the polygon.
     """
-    client = OpenAI(api_key=OPENAI_API_KEY)
-
     b64_image = base64.b64encode(image_bytes).decode("utf-8")
     user_prompt = (USER_PROMPT_BOUNDARY if boundary_drawn else USER_PROMPT).format(
         address=address, suburb=suburb.replace("_", " ").title()
     )
 
     try:
-        response = client.chat.completions.create(
+        content = vision_text(
+            user_prompt,
+            [("image/png", b64_image)],
             model=GPT_MODEL,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": user_prompt,
-                        },
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/png;base64,{b64_image}",
-                                "detail": "high",
-                            },
-                        },
-                    ],
-                },
-            ],
-            max_completion_tokens=2500,
-            temperature=0.2,
-            response_format={"type": "json_object"},
+            max_tokens=2500,
+            system=SYSTEM_PROMPT,
         )
-
-        content = response.choices[0].message.content
         if content:
             import json
-            return json.loads(content)
+            import re
+            text = content.strip()
+            if text.startswith("```"):
+                text = re.sub(r"^```(?:json)?\s*", "", text)
+                text = re.sub(r"\s*```$", "", text).strip()
+            try:
+                return json.loads(text)
+            except json.JSONDecodeError:
+                m = re.search(r"\{[\s\S]*\}", text)
+                return json.loads(m.group(0)) if m else None
         return None
 
     except Exception as exc:
-        print(f"  ✗ GPT analysis failed: {exc}")
+        print(f"  ✗ satellite analysis failed: {exc}")
         return None
 
 
@@ -518,8 +505,8 @@ def main() -> None:
 
         if not GOOGLE_MAPS_API_KEY:
             raise RuntimeError("GOOGLE_MAPS_STATIC_API_KEY not set in environment")
-        if not OPENAI_API_KEY:
-            raise RuntimeError("OPENAI_API_KEY not set in environment")
+        if not os.getenv("ANTHROPIC_API_KEY"):
+            raise RuntimeError("ANTHROPIC_API_KEY not set in environment")
 
         blob_service = object()  # legacy positional; shared.blob_storage handles backend selection
         print(f"Blob backend: {os.getenv('BLOB_BACKEND', 'local')} (container '{BLOB_CONTAINER}')")

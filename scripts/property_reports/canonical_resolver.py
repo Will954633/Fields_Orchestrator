@@ -119,7 +119,7 @@ def _model_for(doc: Dict[str, Any], method: str) -> Optional[str]:
         return ps.get("model_used")
     if method == "gpt_satellite":
         return ((doc.get("satellite_analysis") or {}).get("model")
-                or "gpt-5.4")
+                or "claude-opus-4-8")
     return None
 
 

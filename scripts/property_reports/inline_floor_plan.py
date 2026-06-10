@@ -138,7 +138,14 @@ CLASSIFY_PROMPT = (
 
 
 def _classify_one(url: str, model: str = "gpt-4o-mini") -> bool:
-    """Return True iff the URL is a floor plan. Safe to call on any URL."""
+    """Return True iff the URL is a floor plan. Safe to call on any URL.
+
+    Claude is the primary engine; the OpenAI path is retained only as a dormant
+    fallback for the (unlikely) case Claude is unavailable but an OpenAI key is.
+    """
+    txt = _claude_vision_text(url, CLASSIFY_PROMPT, max_tokens=8)
+    if txt is not None:
+        return "YES" in txt.strip().upper()
     client = _client()
     if client:
         try:
@@ -154,25 +161,20 @@ def _classify_one(url: str, model: str = "gpt-4o-mini") -> bool:
                 max_tokens=4,
                 temperature=0,
             )
-            raw = (resp.choices[0].message.content or "").strip().upper()
-            return "YES" in raw
+            return "YES" in (resp.choices[0].message.content or "").strip().upper()
         except Exception as e:
-            logger.debug(f"  classify_one (openai) threw on {url[:80]}: {e} — trying Claude")
-    # OpenAI unavailable or failed — Claude vision fallback.
-    txt = _claude_vision_text(url, CLASSIFY_PROMPT, max_tokens=8)
-    if txt is not None:
-        return "YES" in txt.strip().upper()
+            logger.debug(f"  classify_one (openai fallback) threw on {url[:80]}: {e}")
     return False
 
 
 def classify_photos_for_floor_plan(urls: List[str], max_workers: int = 6) -> List[str]:
     """Run classifier across a photo list in parallel. Returns the URLs
-    flagged YES, preserving original order. Quietly returns [] if no
-    OPENAI_API_KEY is set."""
+    flagged YES, preserving original order. Uses Claude vision (primary);
+    returns [] only if no vision provider (Claude or OpenAI) is configured."""
     if not urls:
         return []
-    if not _client():
-        logger.info("  floor_plan classifier: OPENAI_API_KEY missing — skipping")
+    if not _anthropic_client() and not _client():
+        logger.info("  floor_plan classifier: no vision provider configured — skipping")
         return []
 
     results: Dict[int, bool] = {}
@@ -285,33 +287,32 @@ def analyse_floor_plan(url: str, model: str = "gpt-4o") -> Optional[Dict[str, An
     """Run vision analysis against a floor-plan image. Returns the
     structured layout dict or None on failure.
 
-    Use the higher-detail model (gpt-4o, not mini) — room labels and small
-    printed dimensions on a floor plan need careful reading.
+    Claude is the primary engine (lower hallucination on diagrams, and it reads
+    the printed area-summary box reliably). The OpenAI path is a dormant
+    fallback only — used if Claude is unavailable but an OpenAI key is set.
     """
     if not url:
         return None
-    raw = ""
-    client = _client()
-    if client:
-        try:
-            resp = client.chat.completions.create(
-                model=model,
-                messages=[{
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": ANALYSE_PROMPT},
-                        {"type": "image_url", "image_url": {"url": url, "detail": "high"}},
-                    ],
-                }],
-                max_tokens=900,
-                temperature=0,
-            )
-            raw = resp.choices[0].message.content or ""
-        except Exception as e:
-            logger.warning(f"  analyse_floor_plan (openai) threw: {e} — trying Claude fallback")
+    raw = _claude_vision_text(url, ANALYSE_PROMPT, max_tokens=1200) or ""
     if not raw:
-        # OpenAI unavailable or failed (e.g. quota-exhausted) — Claude vision.
-        raw = _claude_vision_text(url, ANALYSE_PROMPT, max_tokens=1200) or ""
+        client = _client()
+        if client:
+            try:
+                resp = client.chat.completions.create(
+                    model=model,
+                    messages=[{
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": ANALYSE_PROMPT},
+                            {"type": "image_url", "image_url": {"url": url, "detail": "high"}},
+                        ],
+                    }],
+                    max_tokens=900,
+                    temperature=0,
+                )
+                raw = resp.choices[0].message.content or ""
+            except Exception as e:
+                logger.warning(f"  analyse_floor_plan (openai fallback) threw: {e}")
     if not raw:
         return None
     parsed = _extract_json(raw)

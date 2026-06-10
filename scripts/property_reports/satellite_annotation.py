@@ -347,15 +347,17 @@ def detect_features(
     image_bytes: bytes,
     address: str,
     suburb: str,
-    model: str = "gpt-4o",
+    model: str = os.environ.get("CLAUDE_VISION_SPATIAL_MODEL", "claude-opus-4-8"),
     timeout_s: int = 60,
     has_boundary: bool = False,
 ) -> List[Feature]:
-    """Run GPT vision to identify labeled bounding boxes on a satellite tile."""
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        logger.warning("  satellite_annotation: OPENAI_API_KEY missing")
-        return []
+    """Run Claude vision to identify labeled bounding boxes on a satellite tile."""
+    import sys as _sys
+    from pathlib import Path as _Path
+    _repo = str(_Path(__file__).resolve().parents[2])
+    if _repo not in _sys.path:
+        _sys.path.insert(0, _repo)
+    from shared.claude_vision import vision_text
 
     try:
         with Image.open(io.BytesIO(image_bytes)) as im:
@@ -365,55 +367,41 @@ def detect_features(
         return []
 
     b64 = base64.b64encode(image_bytes).decode("utf-8")
-    data_url = f"data:image/png;base64,{b64}"
 
     prompt_template = USER_PROMPT_TEMPLATE if has_boundary else USER_PROMPT_TEMPLATE_NO_BOUNDARY
-    payload = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": prompt_template.format(
-                            address=address,
-                            suburb=(suburb or "").replace("_", " ").title(),
-                            width=width,
-                            height=height,
-                        ),
-                    },
-                    {"type": "image_url", "image_url": {"url": data_url, "detail": "high"}},
-                ],
-            },
-        ],
-        "response_format": {
-            "type": "json_schema",
-            "json_schema": {"name": "satellite_features", "schema": _SCHEMA, "strict": True},
-        },
-        "max_completion_tokens": 900,
-    }
+    user_text = prompt_template.format(
+        address=address,
+        suburb=(suburb or "").replace("_", " ").title(),
+        width=width,
+        height=height,
+    ) + "\n\nReturn ONLY a JSON object matching the schema described above. No prose, no markdown fences."
 
     try:
-        resp = requests.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json=payload,
-            timeout=timeout_s,
+        content = vision_text(
+            user_text,
+            [("image/png", b64)],
+            model=model,
+            max_tokens=900,
+            system=SYSTEM_PROMPT,
         )
     except Exception as e:
-        logger.warning(f"  satellite_annotation: POST failed: {e}")
+        logger.warning(f"  satellite_annotation: vision call failed: {e}")
         return []
-
-    if resp.status_code != 200:
-        logger.warning(f"  satellite_annotation: HTTP {resp.status_code} — {resp.text[:200]}")
+    if not content:
         return []
 
     try:
-        body = resp.json()
-        content = body["choices"][0]["message"]["content"]
-        parsed = json.loads(content)
+        text = content.strip()
+        if text.startswith("```"):
+            text = re.sub(r"^```(?:json)?\s*", "", text)
+            text = re.sub(r"\s*```$", "", text).strip()
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError:
+            m = re.search(r"\{[\s\S]*\}", text)
+            if not m:
+                raise
+            parsed = json.loads(m.group(0))
     except (KeyError, json.JSONDecodeError) as e:
         logger.warning(f"  satellite_annotation: parse failed: {e}")
         return []
