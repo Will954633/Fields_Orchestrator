@@ -134,9 +134,17 @@ FEATURE_RULES: List[Dict[str, Any]] = [
     {
         "key": "floor_anchor",
         "tier": "anchor",
-        "label": "Internal area",
+        # Only call it "internal living" when we actually have an internal-living
+        # figure. When the resolver fell back to the building/under-roof total
+        # (source == "building_fallback", e.g. a plan that prints only a Total),
+        # label it honestly as floor area under roof — never as internal living.
+        "label": lambda b: ("Floor area (under roof)"
+                            if b.get("floor_area_source") == "building_fallback"
+                            else "Internal area"),
         "value": lambda b: f"{int(b['floor_area_sqm'])} m²",
-        "phrase": lambda b: f"{int(b['floor_area_sqm'])} m² of internal living",
+        "phrase": lambda b: (f"{int(b['floor_area_sqm'])} m² of floor area under roof"
+                             if b.get("floor_area_source") == "building_fallback"
+                             else f"{int(b['floor_area_sqm'])} m² of internal living"),
         "applies": lambda b, ctx: _anchor_above(b.get("floor_area_sqm"), "floor_area_sqm", ctx),
         "count_clause": lambda b: {f"{_F}.floor_area_sqm": {"$gte": _round_to(b["floor_area_sqm"] * 0.9, 10)}},
     },
@@ -316,9 +324,15 @@ def identify_features(
             phrase = rule["phrase"](features_basic)
         except Exception:
             phrase = value
+        label = rule["label"]
+        if callable(label):
+            try:
+                label = label(features_basic)
+            except Exception:
+                label = "Floor area"
         entry = {
             "key": rule["key"], "tier": rule["tier"],
-            "label": rule["label"], "value": value, "phrase": phrase,
+            "label": label, "value": value, "phrase": phrase,
         }
         (anchors if rule["tier"] == "anchor" else diffs).append(entry)
     return anchors, diffs
