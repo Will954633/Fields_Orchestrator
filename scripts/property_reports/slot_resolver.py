@@ -520,7 +520,10 @@ class SlotResolver:
             # every fact it prints has already passed the timeline cross-check.
             self.emit.start("case_study", "Finding a sold home like yours")
             try:
-                model_range = self.valuation_model_range()
+                # Reuse the working range already computed this run (engine tier
+                # when available) rather than recomputing the thin median band —
+                # a better price anchor for the sold-comp gate, and one query less.
+                model_range = updates.get("valuation.model_range")
                 cs_anchor = None
                 if model_range and model_range.get("low") and model_range.get("high"):
                     cs_anchor = int((model_range["low"] + model_range["high"]) / 2)
