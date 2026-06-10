@@ -117,13 +117,13 @@ APERTURE_RINGS = [
 # one all else equal ("local first") — by straight-line distance, not suburb
 # name (which mis-ranks homes near a boundary).
 SCORE_WEIGHTS = {
-    "bedrooms": 0.20,
+    "bedrooms": 0.22,
+    "land": 0.20,
     "distance": 0.18,
-    "land": 0.16,
-    "bathrooms": 0.12,
-    "floor": 0.12,
+    "bathrooms": 0.13,
     "features": 0.11,
     "car": 0.06,
+    "floor": 0.05,
     "price": 0.05,
 }
 
@@ -515,12 +515,16 @@ def _score_with_breakdown(
             parts.append((SCORE_WEIGHTS["car"], min(abs(cv - subject["car"]) / 2.0, 1.0),
                           "car", subject["car"], cv))
 
-    # Floor area — full penalty at 40% off.
+    # Floor area — full penalty at 60% off. Scraped internal-area figures are
+    # noisy and inconsistently defined (garage in/out, "legacy_layout"
+    # estimates), so floor is a low-weight, wide-tolerance signal — land size is
+    # the reliable size axis. A modest internal-area gap must not disqualify an
+    # otherwise direct competitor.
     if subject["floor"]:
         cv = _to_float(cand.get("total_floor_area"))
         if cv:
             rel = abs(cv - subject["floor"]) / subject["floor"]
-            parts.append((SCORE_WEIGHTS["floor"], min(rel / 0.40, 1.0),
+            parts.append((SCORE_WEIGHTS["floor"], min(rel / 0.60, 1.0),
                           "floor", subject["floor"], cv))
 
     # Land size — full penalty at 40% off.
@@ -531,14 +535,16 @@ def _score_with_breakdown(
             parts.append((SCORE_WEIGHTS["land"], min(rel / 0.40, 1.0),
                           "land", subject["land"], cv))
 
-    # Signature-feature overlap (Jaccard distance).
+    # Signature-feature coverage — asymmetric, anchored on the SUBJECT's
+    # features. We ask "does this competitor carry what makes the subject
+    # desirable?" (e.g. its pool), NOT symmetric Jaccard — a candidate must
+    # never be penalised for offering MORE than the subject (an extra ensuite
+    # doesn't make it less of a competitor).
     if subject["features"]:
         cf = _signature_features(cand)
-        union = subject["features"] | cf
-        if union:
-            jaccard = len(subject["features"] & cf) / len(union)
-            parts.append((SCORE_WEIGHTS["features"], 1.0 - jaccard,
-                          "features", sorted(subject["features"]), sorted(cf)))
+        covered = len(subject["features"] & cf) / len(subject["features"])
+        parts.append((SCORE_WEIGHTS["features"], 1.0 - covered,
+                      "features", sorted(subject["features"]), sorted(cf)))
 
     # Distance — secondary "closer ranks first" term. Full penalty at
     # DISTANCE_FULL_PENALTY_KM. Uses exact coords where available, suburb
