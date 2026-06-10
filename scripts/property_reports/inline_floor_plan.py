@@ -60,6 +60,72 @@ def _client() -> Optional[OpenAI]:
 
 
 # ---------------------------------------------------------------------- #
+# Claude (Anthropic) vision — fallback when OpenAI is unavailable
+# ---------------------------------------------------------------------- #
+# OpenAI vision is the primary path, but when its key is missing or the account
+# is quota-exhausted (429 insufficient_quota) the whole floor-area methodology
+# stalls — extraction silently returns nothing and downstream falls back to
+# noisy/legacy figures. Claude vision reads the same printed area-summary boxes
+# reliably (verified on real Domain plans), so it is a drop-in second source.
+# It is tried ONLY after the OpenAI path is unavailable or throws, so behaviour
+# is identical whenever OpenAI is healthy.
+_ANTHROPIC_CLIENT = None
+_CLAUDE_VISION_MODEL = os.environ.get("FLOORPLAN_CLAUDE_MODEL", "claude-opus-4-6")
+_CLAUDE_MEDIA_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+
+
+def _anthropic_client():
+    """Lazy singleton for the Claude fallback. None if SDK or key missing."""
+    global _ANTHROPIC_CLIENT
+    if _ANTHROPIC_CLIENT is not None:
+        return _ANTHROPIC_CLIENT
+    key = os.environ.get("ANTHROPIC_API_KEY")
+    if not key:
+        return None
+    try:
+        import anthropic
+    except ImportError:
+        logger.debug("  anthropic SDK not installed — no Claude vision fallback")
+        return None
+    _ANTHROPIC_CLIENT = anthropic.Anthropic(api_key=key)
+    return _ANTHROPIC_CLIENT
+
+
+def _claude_vision_text(url: str, prompt: str, max_tokens: int = 1200) -> Optional[str]:
+    """Run a single vision prompt through Claude, returning the raw text (or
+    None if the fallback is unavailable / the call fails). Fetches the image and
+    sends it base64 — Domain bucket URLs aren't reliably fetchable by the
+    provider, so we proxy the bytes ourselves."""
+    client = _anthropic_client()
+    if not client or not url:
+        return None
+    try:
+        import base64
+        import requests
+        r = requests.get(url, timeout=30)
+        r.raise_for_status()
+        ctype = (r.headers.get("content-type") or "").split(";")[0].strip().lower()
+        media = ctype if ctype in _CLAUDE_MEDIA_TYPES else "image/jpeg"
+        b64 = base64.standard_b64encode(r.content).decode()
+        resp = client.messages.create(
+            model=_CLAUDE_VISION_MODEL,
+            max_tokens=max_tokens,
+            temperature=0,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "image", "source": {"type": "base64", "media_type": media, "data": b64}},
+                    {"type": "text", "text": prompt},
+                ],
+            }],
+        )
+        return (resp.content[0].text if resp.content else "") or ""
+    except Exception as e:
+        logger.warning(f"  claude vision fallback threw on {url[:80]}: {e}")
+        return None
+
+
+# ---------------------------------------------------------------------- #
 # Classification (a) — pick floor plans out of a photo list
 # ---------------------------------------------------------------------- #
 
@@ -74,26 +140,29 @@ CLASSIFY_PROMPT = (
 def _classify_one(url: str, model: str = "gpt-4o-mini") -> bool:
     """Return True iff the URL is a floor plan. Safe to call on any URL."""
     client = _client()
-    if not client:
-        return False
-    try:
-        resp = client.chat.completions.create(
-            model=model,
-            messages=[{
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": CLASSIFY_PROMPT},
-                    {"type": "image_url", "image_url": {"url": url, "detail": "low"}},
-                ],
-            }],
-            max_tokens=4,
-            temperature=0,
-        )
-        raw = (resp.choices[0].message.content or "").strip().upper()
-        return "YES" in raw
-    except Exception as e:
-        logger.debug(f"  classify_one threw on {url[:80]}: {e}")
-        return False
+    if client:
+        try:
+            resp = client.chat.completions.create(
+                model=model,
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": CLASSIFY_PROMPT},
+                        {"type": "image_url", "image_url": {"url": url, "detail": "low"}},
+                    ],
+                }],
+                max_tokens=4,
+                temperature=0,
+            )
+            raw = (resp.choices[0].message.content or "").strip().upper()
+            return "YES" in raw
+        except Exception as e:
+            logger.debug(f"  classify_one (openai) threw on {url[:80]}: {e} — trying Claude")
+    # OpenAI unavailable or failed — Claude vision fallback.
+    txt = _claude_vision_text(url, CLASSIFY_PROMPT, max_tokens=8)
+    if txt is not None:
+        return "YES" in txt.strip().upper()
+    return False
 
 
 def classify_photos_for_floor_plan(urls: List[str], max_workers: int = 6) -> List[str]:
@@ -219,31 +288,37 @@ def analyse_floor_plan(url: str, model: str = "gpt-4o") -> Optional[Dict[str, An
     Use the higher-detail model (gpt-4o, not mini) — room labels and small
     printed dimensions on a floor plan need careful reading.
     """
+    if not url:
+        return None
+    raw = ""
     client = _client()
-    if not client or not url:
+    if client:
+        try:
+            resp = client.chat.completions.create(
+                model=model,
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": ANALYSE_PROMPT},
+                        {"type": "image_url", "image_url": {"url": url, "detail": "high"}},
+                    ],
+                }],
+                max_tokens=900,
+                temperature=0,
+            )
+            raw = resp.choices[0].message.content or ""
+        except Exception as e:
+            logger.warning(f"  analyse_floor_plan (openai) threw: {e} — trying Claude fallback")
+    if not raw:
+        # OpenAI unavailable or failed (e.g. quota-exhausted) — Claude vision.
+        raw = _claude_vision_text(url, ANALYSE_PROMPT, max_tokens=1200) or ""
+    if not raw:
         return None
-    try:
-        resp = client.chat.completions.create(
-            model=model,
-            messages=[{
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": ANALYSE_PROMPT},
-                    {"type": "image_url", "image_url": {"url": url, "detail": "high"}},
-                ],
-            }],
-            max_tokens=900,
-            temperature=0,
-        )
-        raw = resp.choices[0].message.content or ""
-        parsed = _extract_json(raw)
-        if not parsed or not isinstance(parsed, dict):
-            logger.warning(f"  analyse_floor_plan: bad JSON response: {raw[:140]}")
-            return None
-        return _enrich_room_areas(parsed)
-    except Exception as e:
-        logger.warning(f"  analyse_floor_plan threw: {e}")
+    parsed = _extract_json(raw)
+    if not parsed or not isinstance(parsed, dict):
+        logger.warning(f"  analyse_floor_plan: bad JSON response: {raw[:140]}")
         return None
+    return _enrich_room_areas(parsed)
 
 
 # ---------------------------------------------------------------------- #
