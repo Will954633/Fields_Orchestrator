@@ -18,6 +18,7 @@ without it, queries hit ~40K cadastral records).
 from __future__ import annotations
 
 import logging
+import math
 import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -43,7 +44,7 @@ from scripts.property_reports.positioning_narrative import resolve_positioning_n
 from scripts.property_reports.personas_narrative import resolve_personas_narrative
 from scripts.property_reports.buyers_narrative import resolve_buyers_narrative
 from scripts.property_reports.build_events import NullEmitter
-from scripts.property_reports.inline_features import derive_features_basic
+from scripts.property_reports.inline_features import derive_features_basic, resolve_floor_areas
 from scripts.property_reports.inline_scrape import needs_refresh, recover_photos
 from scripts.property_reports.inline_floor_plan import resolve_floor_plan
 from scripts.property_reports.inline_satellite import resolve_satellite
@@ -300,17 +301,22 @@ class SlotResolver:
         else:
             self.emit.fail("cadastral", "Subject property not found")
 
-        # Valuation model range (a working range, not the human-reviewed final)
+        # Valuation model range (a working range, not the human-reviewed final).
+        # Tiered: engine output if listed, else exterior-evidence fallback for
+        # off-market homes, else an indicative suburb-level band.
         self.emit.start("valuation", "Computing your working valuation range")
-        model_range = self.valuation_model_range()
+        model_range = self.working_valuation_range()
         if model_range:
             updates["valuation.model_range"] = model_range
             self.emit.done(
                 "valuation",
-                f"Working range ${model_range.get('low', 0):,}–${model_range.get('high', 0):,}",
+                f"Working range ${model_range.get('low', 0):,}–${model_range.get('high', 0):,}"
+                f" ({model_range.get('method', 'thin')})",
                 low=model_range.get("low"),
                 high=model_range.get("high"),
                 comp_count=model_range.get("comp_count"),
+                method=model_range.get("method"),
+                confidence=model_range.get("confidence"),
             )
         else:
             self.emit.done("valuation", "Working range pending — consultant will finalise")
@@ -1175,6 +1181,216 @@ class SlotResolver:
             "note": "Working range only — final figure follows the consultant review.",
         }
 
+    # Public-facing copy for the lower-confidence tiers. The frontend renders a
+    # dedicated disclaimer card whenever `method != "engine"`, keyed off these.
+    # NB: the in-person sentence is rendered separately (and always) by the
+    # frontend disclaimer card — keep these strings to the "why wide" reasoning.
+    _EXTERIOR_REASON = (
+        "This home isn't currently listed, so we have no interior photography to "
+        "assess. We've built the range from what we can verify — land size, floor "
+        "area, bedroom and bathroom count, position, and recent comparable sales "
+        "nearby, supported by aerial and street-level imagery of the exterior. "
+        "What a desk can't see is the inside: renovation quality, interior "
+        "condition, and layout — among the largest factors in a final figure. "
+        "That's why this range is deliberately wide and the confidence is marked lower."
+    )
+    _THIN_REASON = (
+        "We have limited verified data on this specific home, so this is an "
+        "indicative suburb-level band rather than a property-specific range."
+    )
+
+    def working_valuation_range(self) -> Optional[Dict[str, Any]]:
+        """Best available working range for the headline, by tier:
+
+          Tier 1 "engine"            — subject was/is listed and has the full
+                                       comparable-sales engine output (interior
+                                       condition scored). Surface its ±12%
+                                       backtested band directly.
+          Tier 2 "exterior_evidence" — off-market home, no interior data, but we
+                                       have cadastral facts + satellite + street
+                                       view. Size-normalised comp dispersion,
+                                       widened for the unseen interior.
+          Tier 3 "thin"              — not even a size anchor / too few comps.
+                                       Indicative suburb-level median band.
+
+        Always writes to `valuation.model_range` (the key the frontend already
+        reads); the added `method` / `confidence` / `confidence_reason` keys are
+        ignored by older consumers and drive the new disclaimer card."""
+        return (
+            self._engine_valuation_range()
+            or self.valuation_exterior_range()
+            or self._thin_valuation_range()
+        )
+
+    def _engine_valuation_range(self) -> Optional[Dict[str, Any]]:
+        """Tier 1 — reuse the precompute engine's reconciled range when present."""
+        s = self._subject
+        if not s:
+            return None
+        conf = (s.get("valuation_data") or {}).get("confidence") or {}
+        rng = conf.get("range") or {}
+        low, high = _to_int(rng.get("low")), _to_int(rng.get("high"))
+        if not (low and high):
+            return None
+        level = (conf.get("confidence") or "").lower()
+        label = {
+            "high": "High", "medium": "Medium",
+            "low": "Lower", "very_low": "Lower",
+        }.get(level, "Medium")
+        return {
+            "low": low,
+            "high": high,
+            "point": _to_int(conf.get("reconciled_valuation")),
+            "method": "engine",
+            "comp_count": _to_int(conf.get("n_total")),
+            "confidence": label,
+            "confidence_reason": None,  # standard under-review copy, no disclaimer card
+        }
+
+    def _thin_valuation_range(self) -> Optional[Dict[str, Any]]:
+        """Tier 3 — the legacy median band, tagged as indicative-only."""
+        med = self.valuation_model_range()
+        if not med:
+            return None
+        med["method"] = "thin"
+        med["confidence"] = "Indicative only"
+        med["confidence_reason"] = self._THIN_REASON
+        return med
+
+    def valuation_exterior_range(self) -> Optional[Dict[str, Any]]:
+        """Tier 2 — 'exterior evidence' working range for off-market homes that
+        have no interior condition data (never listed → no property_valuation_data).
+
+        Selects the most-similar recent SOLD comps on the hard facts we CAN
+        verify (floor area, land, bathrooms, proximity, recency), size-normalises
+        each sale to the subject's floor area (the single biggest price driver),
+        and derives a deliberately WIDE band from the dispersion of those comps —
+        because the interior, the largest swing factor, is unseen.
+
+        Condition-neutral point estimate (Option A): exterior impressions widen
+        confidence but never move the midpoint. Returns None (→ Tier 3) when
+        there is no size anchor or fewer than 3 usable comps."""
+        s = self._subject
+        if not s:
+            return None
+
+        subj_floor = _resolved_floor(s)
+        if not subj_floor or subj_floor <= 0:
+            return None  # no size anchor → fall through to the thin median band
+
+        bed = _to_int(s.get("bedrooms"))
+        bath = _to_int(s.get("bathrooms"))
+        subj_land = _to_int(s.get("land_size_sqm") or s.get("lot_size_sqm"))
+        prop_type = s.get("property_type")
+        subj_ll = self.subject_latlng()
+
+        query: Dict[str, Any] = {
+            "listing_status": "sold",
+            "sale_price": {"$exists": True, "$ne": None},
+        }
+        if bed:
+            query["bedrooms"] = {"$in": [bed - 1, bed, bed + 1]}
+        if prop_type:
+            query["property_type"] = prop_type
+
+        # Exclusion projection drops the heavy image arrays but keeps every field
+        # resolve_floor_areas() needs (floor_plan_analysis, property_valuation_data,
+        # house_plan, enriched_data, total_floor_area, etc.).
+        try:
+            cursor = self.db[self.suburb_key].find(
+                query,
+                {
+                    "property_images": 0, "property_images_original": 0,
+                    "property_images_refreshed": 0, "scraped_property_images": 0,
+                    "domain_image_urls": 0,
+                },
+            ).sort("sale_date", -1).limit(60)
+            candidates = list(cursor)
+        except Exception as e:
+            logger.warning(f"valuation_exterior_range query failed: {e}")
+            return None
+
+        floor_rate = _FALLBACK_FLOOR_RATE.get(self.suburb_key, _DEFAULT_FLOOR_RATE)
+        land_rate = _FALLBACK_LAND_RATE.get(self.suburb_key, _DEFAULT_LAND_RATE)
+
+        subj_id = s.get("_id")
+        now = datetime.utcnow()
+        scored: List[Dict[str, Any]] = []
+        for c in candidates:
+            if c.get("_id") == subj_id:
+                continue
+            price = _parse_price(c.get("sale_price") or c.get("sold_price"))
+            if not price:
+                continue
+            c_floor = _resolved_floor(c)
+            if not c_floor or c_floor <= 0:
+                continue
+            ratio = subj_floor / c_floor
+            if ratio < 0.5 or ratio > 2.0:
+                continue  # guard against bad floor-area data
+            months = _months_since(c.get("sale_date"), now)
+            if months is None or months > 18:
+                continue
+
+            # Marginal adjustment to the subject on the facts we can verify —
+            # floor area + land only (no condition; that's why the band is wide).
+            c_land = _to_int(c.get("land_size_sqm") or c.get("lot_size_sqm"))
+            adj = (subj_floor - c_floor) * floor_rate
+            if subj_land and c_land:
+                adj += (subj_land - c_land) * land_rate
+            cap = price * _ADJ_CAP_PCT
+            adj = max(-cap, min(cap, adj))  # one dissimilar comp can't dominate
+            implied = price + adj
+
+            # Similarity (higher = closer match) — multiplicative so a bad miss on
+            # any dimension genuinely demotes the comp.
+            sim = _closeness(subj_floor, c_floor, scale=0.5)
+            if subj_land and c_land:
+                sim *= _closeness(subj_land, c_land, scale=0.6)
+            c_bath = _to_int(c.get("bathrooms"))
+            if bath and c_bath is not None:
+                sim *= 1.0 if c_bath == bath else 0.8
+            if subj_ll:
+                c_ll = _doc_latlng(c)
+                if c_ll:
+                    dist = _haversine_km(subj_ll, c_ll)
+                    sim *= max(0.4, 1.0 - dist / 5.0)
+
+            recency_w = max(0.3, 1.0 - months / 18.0)
+            scored.append({"implied": implied, "weight": sim * recency_w})
+
+        if len(scored) < 3:
+            return None  # too thin → fall through to the median band
+
+        scored.sort(key=lambda x: x["weight"], reverse=True)
+        top = scored[:8]
+        wsum = sum(x["weight"] for x in top) or 1.0
+        point = sum(x["implied"] * x["weight"] for x in top) / wsum
+
+        implieds = sorted(x["implied"] for x in top)
+        low0 = _percentile(implieds, 20)
+        high0 = _percentile(implieds, 80)
+
+        # Widen for the unseen interior: at least ±UNSEEN around the point, or the
+        # comp dispersion if that's wider. Then cap the half-width at ±30% so the
+        # band never becomes meaningless.
+        UNSEEN = 0.17
+        low = min(low0, point * (1 - UNSEEN))
+        high = max(high0, point * (1 + UNSEEN))
+        low = max(low, point * 0.70)
+        high = min(high, point * 1.30)
+
+        return {
+            "low": int(round(low)),
+            "high": int(round(high)),
+            "point": int(round(point)),
+            "method": "exterior_evidence",
+            "comp_count": len(scored),
+            "confidence": "Lower — exterior evidence only",
+            "confidence_reason": self._EXTERIOR_REASON,
+            "note": "Working range only — interior unseen; completed by in-person inspection.",
+        }
+
     def market_state(self) -> Optional[Dict[str, Any]]:
         """Per-suburb market state from precomputed collections."""
         if not self.suburb_display:
@@ -1493,3 +1709,97 @@ def _stringify_date(v: Any) -> Optional[str]:
     if isinstance(v, str):
         return v[:10]
     return None
+
+
+# ── Tier-2 exterior-evidence valuation helpers ───────────────────────────────
+# Small numeric utilities for the off-market fallback range. Kept module-level
+# (not methods) so they're trivially unit-testable in isolation.
+
+def _to_datetime(v: Any) -> Optional[datetime]:
+    """Coerce a sale_date (epoch ms, ISO string, or datetime) to datetime."""
+    if v is None:
+        return None
+    if isinstance(v, datetime):
+        return v
+    if isinstance(v, (int, float)):
+        # Heuristic: > 1e12 ⇒ epoch milliseconds, else epoch seconds.
+        try:
+            ts = float(v)
+            return datetime.utcfromtimestamp(ts / 1000.0 if ts > 1e12 else ts)
+        except (OSError, ValueError, OverflowError):
+            return None
+    if isinstance(v, str):
+        m = re.match(r"(\d{4})-(\d{2})-(\d{2})", v)
+        if m:
+            try:
+                return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+            except ValueError:
+                return None
+    return None
+
+
+def _months_since(sale_date: Any, now: datetime) -> Optional[float]:
+    dt = _to_datetime(sale_date)
+    if not dt:
+        return None
+    return (now - dt).days / 30.44
+
+
+def _doc_latlng(doc: Dict[str, Any]) -> Optional[tuple]:
+    lat = doc.get("LATITUDE") or doc.get("latitude") or doc.get("lat")
+    lng = doc.get("LONGITUDE") or doc.get("longitude") or doc.get("lng")
+    if lat is None or lng is None:
+        return None
+    try:
+        return (float(lat), float(lng))
+    except (TypeError, ValueError):
+        return None
+
+
+def _haversine_km(a: tuple, b: tuple) -> float:
+    lat1, lon1, lat2, lon2 = map(math.radians, [a[0], a[1], b[0], b[1]])
+    dlat, dlon = lat2 - lat1, lon2 - lon1
+    h = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
+    return 6371.0 * 2 * math.asin(math.sqrt(h))
+
+
+def _closeness(a: Optional[float], b: Optional[float], scale: float = 0.5) -> float:
+    """1.0 when a≈b, decaying to a 0.2 floor as the relative gap reaches `scale`.
+    Returns a neutral 0.6 when either side is unknown (don't reward or punish)."""
+    if not a or not b:
+        return 0.6
+    rel = abs(a - b) / float(max(a, b))
+    return max(0.2, min(1.0, 1.0 - rel / scale))
+
+
+def _percentile(sorted_vals: List[float], p: float) -> float:
+    """Linear-interpolated percentile of an already-sorted list (p in 0–100)."""
+    if not sorted_vals:
+        return 0.0
+    if len(sorted_vals) == 1:
+        return sorted_vals[0]
+    k = (len(sorted_vals) - 1) * (p / 100.0)
+    lo = math.floor(k)
+    hi = math.ceil(k)
+    if lo == hi:
+        return sorted_vals[int(k)]
+    return sorted_vals[lo] * (hi - k) + sorted_vals[hi] * (k - lo)
+
+
+def _resolved_floor(doc: Dict[str, Any]) -> Optional[int]:
+    """Internal living area on the cohort definition, falling back to building
+    area. Used for BOTH subject and comps so the size delta is apples-to-apples."""
+    internal, building, _ = resolve_floor_areas(doc)
+    return _to_int(internal) or _to_int(building)
+
+
+# Marginal $/sqm adjustment rates for the exterior fallback — a floor+land-only
+# subset of the engine's SUBURB_ADJUSTMENT_RATES (the fallback has no condition
+# data). We adjust the DIFFERENCE in floor/land at a marginal rate, NOT the whole
+# price by a ratio: a home 1.5× the size isn't worth 1.5×. Total adjustment per
+# comp is capped at ±_ADJ_CAP_PCT so one dissimilar comp can't dominate.
+_FALLBACK_FLOOR_RATE = {"robina": 2500, "burleigh_waters": 3000, "varsity_lakes": 2500}
+_FALLBACK_LAND_RATE = {"robina": 500, "burleigh_waters": 1000, "varsity_lakes": 550}
+_DEFAULT_FLOOR_RATE = 2500
+_DEFAULT_LAND_RATE = 450
+_ADJ_CAP_PCT = 0.25
