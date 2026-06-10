@@ -70,7 +70,10 @@ def _client() -> Optional[OpenAI]:
 # It is tried ONLY after the OpenAI path is unavailable or throws, so behaviour
 # is identical whenever OpenAI is healthy.
 _ANTHROPIC_CLIENT = None
-_CLAUDE_VISION_MODEL = os.environ.get("FLOORPLAN_CLAUDE_MODEL", "claude-opus-4-6")
+# Sonnet, not Opus: floor-plan reading is structured OCR, where Sonnet leads on
+# extraction accuracy at ~40% of Opus's cost. Opus-tier was burning credits fast
+# on the cohort backfill (~1,200 plans/run). Override via FLOORPLAN_CLAUDE_MODEL.
+_CLAUDE_VISION_MODEL = os.environ.get("FLOORPLAN_CLAUDE_MODEL", "claude-sonnet-4-6")
 _CLAUDE_MEDIA_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
 
 
