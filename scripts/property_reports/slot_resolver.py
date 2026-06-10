@@ -1216,11 +1216,75 @@ class SlotResolver:
         Always writes to `valuation.model_range` (the key the frontend already
         reads); the added `method` / `confidence` / `confidence_reason` keys are
         ignored by older consumers and drive the new disclaimer card."""
-        return (
-            self._engine_valuation_range()
-            or self.valuation_exterior_range()
-            or self._thin_valuation_range()
-        )
+        # Tier 1 — precomputed engine output already on the doc.
+        eng = self._engine_valuation_range()
+        if eng:
+            return eng
+        # Tier 1b — we HAVE interior evidence (listing photos / condition
+        # analysis) but the nightly engine never ran on this off-market record.
+        # Run the comparable-sales engine on-demand, then use its reconciled
+        # range. This keeps the "exterior evidence only" framing strictly for
+        # homes we genuinely cannot see inside — never for a home we have photos
+        # for (which would be a false claim).
+        if self._has_interior_evidence() and self._ensure_engine_valuation():
+            eng = self._engine_valuation_range()
+            if eng:
+                return eng
+        # Tier 2 — exterior-evidence fallback (no interior data), then Tier 3.
+        return self.valuation_exterior_range() or self._thin_valuation_range()
+
+    def _has_interior_evidence(self) -> bool:
+        """True when we have anything that lets us assess the interior — the
+        photo-analysis condition scores (`property_valuation_data`) or a real set
+        of listing photos. Gates whether we run the engine on-demand vs fall back
+        to the exterior-only band (and its 'no interior photography' copy)."""
+        s = self._subject or {}
+        pvd = s.get("property_valuation_data")
+        if isinstance(pvd, dict) and pvd:
+            return True
+        for f in ("property_images_refreshed", "property_images_original",
+                  "scraped_property_images", "property_images"):
+            v = s.get(f)
+            if isinstance(v, list) and len(v) >= 3:  # ≥3 ⇒ more than a kerb shot
+                return True
+        return False
+
+    def _ensure_engine_valuation(self) -> bool:
+        """Run the on-demand comparable-sales engine for this subject (uses its
+        existing photo analysis; runs GPT only if photos exist but were never
+        analysed), persist `valuation_data`, and refresh `self._subject` so the
+        later comps slot sees it too. Returns True if `valuation_data` is now
+        present. Fully guarded — any failure returns False and the caller falls
+        back to the exterior-evidence band."""
+        s = self._subject
+        if not s:
+            return False
+        sid = s.get("_id")
+        if not sid or not self.suburb_key:
+            return False
+        if (s.get("valuation_data") or {}).get("confidence", {}).get("range"):
+            return True  # already has engine output — nothing to do
+        try:
+            import os as _os
+            import sys as _sys
+            _scripts = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), ".."))
+            if _scripts not in _sys.path:
+                _sys.path.insert(0, _scripts)
+            from on_demand_valuation import valuate_single_property
+            logger.info(f"  running on-demand engine valuation for {sid} ({self.suburb_key})")
+            ok = valuate_single_property(self.suburb_key, str(sid))
+        except Exception as e:
+            logger.warning(f"  on-demand engine valuation failed: {e}")
+            return False
+        if not ok:
+            return False
+        try:
+            fresh = self.db[self.suburb_key].find_one({"_id": sid})
+            if fresh:
+                self._subject = fresh
+        except Exception as e:
+            logger.warning(f"  re-read after engine valuation failed: {e}")
+        return bool((self._subject or {}).get("valuation_data"))
 
     def _engine_valuation_range(self) -> Optional[Dict[str, Any]]:
         """Tier 1 — reuse the precompute engine's reconciled range when present."""
