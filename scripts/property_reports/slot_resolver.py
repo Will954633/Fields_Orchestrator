@@ -466,10 +466,12 @@ class SlotResolver:
         if self._subject:
             self.emit.start("competitor_map", "Finding the homes yours competes with")
             try:
-                # Price anchor: prefer the valuation working-range midpoint
-                # (right for off-market submissions with no listing price),
-                # fall back to the subject's own price string.
-                model_range = self.valuation_model_range()
+                # Price anchor: reuse THE working range already computed this run
+                # (engine tier when available) — the same one the Valuation tab
+                # shows — so the "listed X% above/below your guide" difference
+                # lines never contradict the displayed range. Falls back to the
+                # subject's own price string inside the matcher when absent.
+                model_range = updates.get("valuation.model_range")
                 price_anchor = None
                 if model_range and model_range.get("low") and model_range.get("high"):
                     price_anchor = int((model_range["low"] + model_range["high"]) / 2)
@@ -877,7 +879,10 @@ class SlotResolver:
             updates["lng"] = latlng[1]
 
         try:
-            model_range = self.valuation_model_range()
+            # Reuse the persisted working range (engine tier when available) so
+            # the competitor difference lines stay consistent with the Valuation
+            # tab; this lightweight refresh doesn't recompute the range itself.
+            model_range = (self.report.get("valuation") or {}).get("model_range")
             price_anchor = None
             if model_range and model_range.get("low") and model_range.get("high"):
                 price_anchor = int((model_range["low"] + model_range["high"]) / 2)
