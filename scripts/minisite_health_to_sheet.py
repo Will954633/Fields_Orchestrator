@@ -60,7 +60,27 @@ HOME_HEADERS = ["Tab", "Field", "Value", "Status", "Freshness source",
 
 
 # ---- auth ---------------------------------------------------------------------
+# Service account first (sheet shared with it 2026-06-11) — the user OAuth
+# refresh token expires every 7 days while the app is in Testing mode and
+# silently killed the sync. Legacy OAuth kept as fallback.
+SA_KEY_DEFAULT = "/home/fields/.gcp-floor-plan-vision.json"
+KNOWN_SHEET_ID = "1afRguQmChK1Wa-_VM66xl1RjKYK1ytwcmas4soQhUzA"
+
+
 def get_drive():
+    sa_key = os.environ.get("GOOGLE_VISION_SA_KEY", SA_KEY_DEFAULT)
+    if os.path.exists(sa_key):
+        try:
+            from google.oauth2 import service_account
+            creds = service_account.Credentials.from_service_account_file(
+                sa_key, scopes=["https://www.googleapis.com/auth/drive"])
+            return build("drive", "v3", credentials=creds)
+        except Exception as e:
+            print(f"(service-account auth failed: {e} — falling back to OAuth token)")
+    return _get_drive_oauth()
+
+
+def _get_drive_oauth():
     tok = json.load(open(TOKEN_FILE))
     keys = json.load(open(KEYS_FILE))
     k = keys.get("installed") or keys.get("web")
@@ -179,6 +199,15 @@ def build_workbook(results, now_utc):
 
 # ---- drive upload -------------------------------------------------------------
 def find_existing(drive):
+    # Known sheet first — folder queries can miss under the service account,
+    # which only sees files explicitly shared with it.
+    try:
+        f = drive.files().get(fileId=KNOWN_SHEET_ID,
+                              fields="id,trashed,capabilities(canEdit)").execute()
+        if not f.get("trashed") and f.get("capabilities", {}).get("canEdit"):
+            return KNOWN_SHEET_ID
+    except Exception:
+        pass
     q = (f"name='{SHEET_NAME}' and '{FOLDER_ID}' in parents "
          f"and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false")
     hits = drive.files().list(q=q, fields="files(id,name)", supportsAllDrives=True,
