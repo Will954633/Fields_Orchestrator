@@ -83,7 +83,7 @@ def _format_market_for_prompt(market: Dict[str, Any], suburb: str, bedroom_band:
     lines.append("CURRENT MARKET DATA:")
     fields = [
         ("active_listings_count", "Active listings (all bands)"),
-        ("sold_transaction_count", "Sold transactions (24-month cohort)"),
+        ("sold_transaction_count", "Sold transactions (24-month house cohort, houses only)"),
         ("rolling_12m_median", "Rolling 12-month median sale price"),
         ("rolling_12m_yoy_pct", "Rolling 12-month median YoY change (%)"),
         ("median_dom", "Median days-on-market (current quarter)"),
