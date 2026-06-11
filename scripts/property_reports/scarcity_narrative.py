@@ -48,6 +48,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from scripts.property_reports.scarcity_features import SCARCE_SHARE, SCARCE_MIN_COHORT
+from scripts.property_reports.cohort_premiums import premium_prompt_lines
 
 logger = logging.getLogger(__name__)
 
@@ -177,17 +178,7 @@ def _format_inputs(
     lines.append("  " + " ; ".join(full) if full else "  (none)")
 
     lines.append("")
-    lines.append("SOLD COHORT PREMIUMS (last 24 months in catchment):")
-    for p in cohort_premiums:
-        rel = "RELIABLE" if p.get("reliable") else "small-sample"
-        pct = p.get("premium_pct")
-        if pct is None:
-            continue
-        sign = "+" if pct >= 0 else ""
-        lines.append(
-            f"  - {p['feature_label']}: {sign}{pct:.1f}% premium "
-            f"(n_with={p['n_with']}, n_without={p['n_without']}, {rel})"
-        )
+    lines.extend(premium_prompt_lines(cohort_premiums))
 
     lines.append("")
     lines.append("WALKING DISTANCES (Mapbox routes):")
@@ -397,13 +388,19 @@ def resolve_scarcity_narrative(
 
 def cohort_premiums_to_sold_cohort_premiums(cohort_premiums: List[Dict[str, Any]]) -> List[Dict[str, str]]:
     """Deterministic mapping: turn the structured cohort_premiums into the
-    mini-site's `soldCohortPremiums` array shape. Only include reliable
-    premiums to avoid surfacing noise."""
+    mini-site's legacy `soldCohortPremiums` array shape (kept so any cached
+    frontend keeps rendering). HONESTY RULE (2026-06-11): the figure shown
+    is the like-for-like premium, never the raw median split — the raw gap
+    bundles the feature with the bigger homes it comes with. Features whose
+    controlled story is 'not a price lever' (demand_feature / bundled) are
+    excluded here; they are carried by featureEvidence instead."""
     out: List[Dict[str, str]] = []
     for p in cohort_premiums or []:
         if not p.get("reliable"):
             continue
-        pct = p.get("premium_pct")
+        if p.get("classification") != "price_driver":
+            continue
+        pct = p.get("like_for_like_pct")
         if pct is None:
             continue
         sign = "+" if pct >= 0 else ""
@@ -412,3 +409,168 @@ def cohort_premiums_to_sold_cohort_premiums(cohort_premiums: List[Dict[str, Any]
             "premium": f"{sign}{pct:.1f}%",
         })
     return out
+
+
+def _fmt_pct(pct: float) -> str:
+    sign = "+" if pct >= 0 else ""
+    return f"{sign}{pct:.1f}%"
+
+
+def _composition_sentence(comp: Dict[str, Any], label: str) -> Optional[str]:
+    """One sentence of evidence that the with-feature homes are different
+    homes. Only pairs that actually differ by 5%+ are cited."""
+    if not comp:
+        return None
+    bits: List[str] = []
+    fw, fo = comp.get("floor_with"), comp.get("floor_without")
+    if fw and fo and abs(fw - fo) / fo >= 0.05:
+        bits.append(f"a median {fw:.0f} m² internally against {fo:.0f} m²")
+    lw, lo = comp.get("land_with"), comp.get("land_without")
+    if lw and lo and abs(lw - lo) / lo >= 0.05:
+        bits.append(f"{lw:.0f} m² of land against {lo:.0f} m²")
+    bw, bo = comp.get("beds_with"), comp.get("beds_without")
+    if bw and bo and bw != bo:
+        bits.append(f"{bw:.0f} bedrooms against {bo:.0f}")
+    if not bits:
+        return None
+    joined = ", ".join(bits[:-1]) + (" and " + bits[-1] if len(bits) > 1 else bits[0])
+    if len(bits) == 1:
+        joined = bits[0]
+    return (
+        f"The homes that sold with this feature are different homes: {joined}."
+    )
+
+
+def cohort_premiums_to_feature_evidence(
+    cohort_premiums: List[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    """Deterministic builder for the mini-site's `featureEvidence` object —
+    the honest, three-layer 'what did buyers actually pay for' section.
+
+    Every number is computed from the sold cohort (or quoted from the
+    verified Fields controlled research); no model writes any of this.
+    Each feature carries a 'ladder' of the same gap measured under
+    progressively stricter comparison, plus the composition evidence that
+    explains any shrink."""
+    features: List[Dict[str, Any]] = []
+    cohort_n = 0
+    for p in cohort_premiums or []:
+        raw = p.get("premium_pct")
+        n_with, n_without = p.get("n_with", 0), p.get("n_without", 0)
+        if raw is None or n_with < 20 or n_without < 20:
+            continue
+        cohort_n = max(cohort_n, n_with + n_without)
+
+        ladder: List[Dict[str, Any]] = [{
+            "label": "Headline gap",
+            "detail": (
+                f"Median of the {n_with} sales with this feature vs the "
+                f"{n_without} without — no adjustment for anything else"
+            ),
+            "pct": raw,
+            "pctLabel": _fmt_pct(raw),
+        }]
+
+        lfl = p.get("like_for_like_pct")
+        basis = p.get("like_for_like_basis")
+        if lfl is not None and basis == "bedroom-stratified":
+            strata = p.get("strata") or []
+            beds = ", ".join(str(int(s["bedrooms"])) for s in strata)
+            ladder.append({
+                "label": "Same bedroom count",
+                "detail": (
+                    f"Homes compared only against homes with the same number "
+                    f"of bedrooms ({beds}-bedroom groups), then weighted by "
+                    f"group size"
+                ),
+                "pct": lfl,
+                "pctLabel": _fmt_pct(lfl),
+            })
+        per_sqm = p.get("per_sqm_pct")
+        if per_sqm is not None:
+            ladder.append({
+                "label": "Per square metre of home",
+                "detail": (
+                    f"Price divided by internal floor area — removes the "
+                    f"effect of home size ({p.get('per_sqm_n_with')} vs "
+                    f"{p.get('per_sqm_n_without')} sales with floor area on record)"
+                ),
+                "pct": per_sqm,
+                "pctLabel": _fmt_pct(per_sqm),
+            })
+        if lfl is not None and basis == "per-sqm" and per_sqm is None:
+            ladder.append({
+                "label": "Per square metre of home",
+                "detail": "Price divided by internal floor area — removes the effect of home size",
+                "pct": lfl,
+                "pctLabel": _fmt_pct(lfl),
+            })
+
+        research = p.get("research")
+        if research:
+            sig = "" if research.get("significant") else " — not statistically significant"
+            ladder.append({
+                "label": "Fields controlled analysis",
+                "detail": (
+                    "2,153 sales across Robina, Burleigh Waters and Varsity "
+                    "Lakes, with size, land, condition and location held constant"
+                ),
+                "pct": None,
+                "pctLabel": f"{research['range']}{sig}",
+                "significant": bool(research.get("significant")),
+            })
+
+        feature: Dict[str, Any] = {
+            "feature": p["feature_label"],
+            "classification": p.get("classification", "headline_only"),
+            "verdict": p.get("verdict", ""),
+            "ladder": ladder,
+            "nWith": n_with,
+            "nWithout": n_without,
+        }
+        comp_sentence = _composition_sentence(p.get("composition") or {}, p["feature_label"])
+        if comp_sentence:
+            feature["composition"] = comp_sentence
+        if p.get("classification") == "demand_feature":
+            prevalence = p.get("prevalence_pct")
+            demand_bits = []
+            if prevalence is not None:
+                demand_bits.append(
+                    f"{prevalence:.0f}% of the catchment's last-24-month sales "
+                    f"included this feature"
+                )
+            demand_bits.append(
+                "buyers on the major portals can filter their search to "
+                "feature-only results, so a home with it stays inside those "
+                "filtered searches"
+            )
+            feature["demandNote"] = (
+                demand_bits[0][0].upper() + demand_bits[0][1:] + ", and " + demand_bits[1] + "."
+                if len(demand_bits) > 1
+                else demand_bits[0] + "."
+            )
+        dom_with, dom_without = p.get("dom_with"), p.get("dom_without")
+        if dom_with is not None and dom_without is not None:
+            feature["domNote"] = (
+                f"Median days on market: {dom_with} with the feature, "
+                f"{dom_without} without."
+            )
+        features.append(feature)
+
+    if not features:
+        return None
+    # Price drivers first, then demand features, then bundled — the reader
+    # meets the strongest claims before the myth-busts.
+    order = {"price_driver": 0, "demand_feature": 1, "bundled": 2, "headline_only": 3}
+    features.sort(key=lambda f: order.get(f["classification"], 9))
+    return {
+        "windowMonths": 24,
+        "cohortN": cohort_n,
+        "features": features,
+        "method": (
+            "Each gap is the median sale price of homes with the feature "
+            "against homes without it, in the same sold cohort, shown "
+            "unadjusted and then under progressively stricter like-for-like "
+            "comparison. Small samples (under 20 sales a side) are not shown."
+        ),
+    }

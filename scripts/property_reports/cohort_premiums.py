@@ -1,37 +1,64 @@
 """
-Cohort premium computation — for each notable feature on a subject, compute
-the median sale-price premium that feature commanded in recent sold cohort.
+Cohort premium computation — for each notable feature on a subject, measure
+what the sold cohort actually paid for it, at three levels of scrutiny:
 
-Method:
-  - Pull sold cohort from Gold_Coast.<catchment_suburbs> with sale_price and
-    valuation_data.subject_property.features.basic (last 24 months by default).
-  - For each notable feature, partition the cohort into "has feature" vs
-    "doesn't have feature".
-  - Compute median sale price of each partition.
-  - Premium % = (median_with - median_without) / median_without * 100.
-  - Report sample sizes so the seller can judge reliability.
+  1. Headline gap   — raw median of homes WITH the feature vs WITHOUT.
+                      This is the number a portal or listing agent quotes.
+                      It bundles the feature with everything it comes with.
+  2. Like-for-like  — the same comparison inside matched bedroom strata
+                      (or on a price-per-square-metre basis for features
+                      where bedroom strata are the feature itself).
+  3. Controlled     — where the Fields controlled research (2,153 sales,
+                      hedonic $/sqm analysis across the three target
+                      suburbs) has a verified finding, it is the final word.
 
-This is descriptive, not predictive. The output reads as "homes with X
-sold for a median Y% above homes without it in the same cohort" — past
-tense, exact figures, sample size cited.
+The point of the three layers is honesty: most headline gaps shrink under
+scrutiny because features travel together — pool homes are bigger homes on
+bigger blocks. We show the shrink instead of hiding it. A feature is then
+classified:
 
-Output schema:
-    [
-      {
-        "feature_key": "pool",
-        "feature_label": "Pool",
-        "premium_pct": 6.8,
-        "n_with": 142,
-        "n_without": 318,
-        "median_with": 1485000,
-        "median_without": 1390000,
-        "reliable": True,
-      },
-      ...
-    ]
+  price_driver   — the gap survives like-for-like comparison; buyers in
+                   this cohort paid for the feature itself.
+  bundled        — the headline gap mostly reflects the homes the feature
+                   comes with (size, beds, land), not the feature.
+  demand_feature — controlled research found no significant price effect,
+                   but the feature changes WHO searches for the home
+                   (e.g. pool: portal buyers filter to pool-only).
+  headline_only  — sample too small to control; raw gap reported with an
+                   explicit "uncontrolled" flag, never as a value claim.
 
-A premium is flagged `reliable: False` if either partition has < 20 sales
-or the premium magnitude is < 2% (within noise threshold).
+Everything here is deterministic and reproducible from the sold cohort —
+no model in the loop. Narrative modules receive the controlled framing via
+premium_prompt_lines() so generated prose cannot quote a headline gap as
+the feature's standalone value.
+
+Output schema (per feature):
+    {
+      "feature_key": "pool",
+      "feature_label": "Pool",
+      # layer 1 — headline gap (legacy fields, kept for compatibility)
+      "premium_pct": 29.0,
+      "n_with": 113, "n_without": 91,
+      "median_with": 1600000, "median_without": 1240000,
+      "reliable": True,
+      # layer 2 — like-for-like
+      "like_for_like_pct": 13.0,        # None if no qualifying strata
+      "like_for_like_basis": "bedroom-stratified",  # or "per-sqm"
+      "strata": [{"bedrooms": 3, "n_with": 22, "n_without": 44, "premium_pct": 11.9}, ...],
+      "per_sqm_pct": 7.5,               # None where not meaningful
+      "per_sqm_n_with": 108, "per_sqm_n_without": 75,
+      # context
+      "composition": {"floor_with": 185, "floor_without": 149,
+                       "land_with": 671, "land_without": 500,
+                       "beds_with": 4, "beds_without": 3},
+      "dom_with": 29, "dom_without": 26,    # None if sample thin
+      "prevalence_pct": 55.4,               # share of cohort sales WITH it
+      # layer 3 + verdict
+      "research": {"range": "+0.6% to +3.7%", "significant": False,
+                    "note": "..."},          # only where verified research exists
+      "classification": "demand_feature",
+      "verdict": "one-sentence, data-only",
+    }
 """
 from __future__ import annotations
 
@@ -47,12 +74,55 @@ logger = logging.getLogger(__name__)
 # Engine feature path (same as scarcity_features.py)
 _F = "valuation_data.subject_property.features.basic"
 
-# Min sample size per partition before we trust the premium
+# Min sample size per partition before we trust the headline gap
 MIN_SAMPLE_SIZE = 20
-# Premium within ±2% counts as noise — drop reliability flag
+# Min sample per side inside a bedroom stratum before the stratum counts
+MIN_STRATUM_SIZE = 8
+# Premium within ±2% counts as noise
 NOISE_THRESHOLD_PCT = 2.0
 # Cohort time window
 COHORT_MONTHS = 24
+# DOM medians only reported when both sides have at least this many
+MIN_DOM_SAMPLE = 15
+
+
+# ---------------------------------------------------------------------------
+# Verified findings from the Fields controlled research (2,153 sales, hedonic
+# price-per-sqm analysis across Robina, Burleigh Waters, Varsity Lakes —
+# the same analysis quoted in Before You List, p19 and ch.6). Only features
+# with a finding we can stand behind appear here. Do NOT add entries without
+# a verifiable source — this map overrides the cohort arithmetic.
+# ---------------------------------------------------------------------------
+RESEARCH_FINDINGS: Dict[str, Dict[str, Any]] = {
+    "pool": {
+        "range": "+0.6% to +3.7%",
+        "significant": False,
+        "classification": "demand_feature",
+        "note": (
+            "Across 2,153 sales in the three target suburbs, the relationship "
+            "between having a pool and price per square metre is between 0.6% "
+            "and 3.7% — not statistically significant. The pool correlates "
+            "with larger, newer homes; it is along for the ride, not driving "
+            "the price."
+        ),
+    },
+    "high_quality_finish": {
+        "range": "near zero",
+        "significant": False,
+        "classification": "bundled",
+        "note": (
+            "Renovation and finish-quality scores showed near-zero "
+            "correlation with price per square metre in the Fields "
+            "controlled analysis (p > 0.1)."
+        ),
+    },
+}
+
+# How each feature is controlled. Bedroom features can't be stratified by
+# bedrooms (the stratum IS the feature); floor-size features can't use
+# per-sqm (it mechanically erases the feature being measured).
+_NO_BEDROOM_STRATA = {"bedrooms_anchor", "bedrooms_5plus", "bedrooms_6plus"}
+_NO_PER_SQM = {"floor_anchor", "floor_large"}
 
 
 # Feature key → predicate that returns True if a sold doc has the feature.
@@ -135,12 +205,19 @@ def _parse_price(v: Any) -> Optional[float]:
     return None
 
 
+def _basic(doc: Dict[str, Any]) -> Dict[str, Any]:
+    return (
+        ((doc.get("valuation_data") or {}).get("subject_property") or {}).get("features") or {}
+    ).get("basic") or {}
+
+
 def _load_cohort(db: Database, catchment_suburbs: List[str]) -> List[Dict[str, Any]]:
     """Load sold properties from the catchment with sale_price + engine features."""
     out: List[Dict[str, Any]] = []
     projection = {
         "sale_price": 1, "sold_price": 1, "last_sold_price": 1,
-        "sale_date": 1, "valuation_data.subject_property.features.basic": 1,
+        "sale_date": 1, "days_on_market": 1,
+        "valuation_data.subject_property.features.basic": 1,
     }
     for suburb in catchment_suburbs:
         try:
@@ -195,12 +272,165 @@ def _premium_label(key: str, fallback: str) -> str:
     return PREMIUM_LABELS.get(key, fallback)
 
 
+def _median(values: List[float]) -> Optional[float]:
+    return statistics.median(values) if values else None
+
+
+def _pct_gap(m_with: Optional[float], m_without: Optional[float]) -> Optional[float]:
+    if m_with is None or m_without is None or not m_without:
+        return None
+    return (m_with - m_without) / m_without * 100
+
+
+def _stratified_premium(
+    with_docs: List[Dict[str, Any]], without_docs: List[Dict[str, Any]]
+) -> tuple:
+    """Bedroom-stratified premium: compare medians inside each bedroom count
+    where both sides have MIN_STRATUM_SIZE+ sales, weight by stratum size.
+    Returns (weighted_pct or None, strata detail list)."""
+    strata: List[Dict[str, Any]] = []
+    weighted_sum = 0.0
+    weight_total = 0
+    beds_present = sorted({
+        _basic(d).get("bedrooms") for d in with_docs + without_docs
+        if _basic(d).get("bedrooms") is not None
+    })
+    for bed in beds_present:
+        wp = [d["_parsed_price"] for d in with_docs if _basic(d).get("bedrooms") == bed]
+        np_ = [d["_parsed_price"] for d in without_docs if _basic(d).get("bedrooms") == bed]
+        if len(wp) < MIN_STRATUM_SIZE or len(np_) < MIN_STRATUM_SIZE:
+            continue
+        prem = _pct_gap(_median(wp), _median(np_))
+        if prem is None:
+            continue
+        n = len(wp) + len(np_)
+        weighted_sum += prem * n
+        weight_total += n
+        strata.append({
+            "bedrooms": bed,
+            "n_with": len(wp),
+            "n_without": len(np_),
+            "premium_pct": round(prem, 1),
+        })
+    if not weight_total:
+        return None, strata
+    return round(weighted_sum / weight_total, 1), strata
+
+
+def _per_sqm_premium(
+    with_docs: List[Dict[str, Any]], without_docs: List[Dict[str, Any]]
+) -> tuple:
+    """Price-per-floor-sqm comparison — controls for home size.
+    Returns (pct or None, n_with, n_without)."""
+    wp = [
+        d["_parsed_price"] / _basic(d)["floor_area_sqm"]
+        for d in with_docs
+        if _basic(d).get("floor_area_sqm")
+    ]
+    np_ = [
+        d["_parsed_price"] / _basic(d)["floor_area_sqm"]
+        for d in without_docs
+        if _basic(d).get("floor_area_sqm")
+    ]
+    if len(wp) < MIN_SAMPLE_SIZE or len(np_) < MIN_SAMPLE_SIZE:
+        return None, len(wp), len(np_)
+    pct = _pct_gap(_median(wp), _median(np_))
+    return (round(pct, 1) if pct is not None else None), len(wp), len(np_)
+
+
+def _composition(
+    with_docs: List[Dict[str, Any]], without_docs: List[Dict[str, Any]]
+) -> Dict[str, Optional[float]]:
+    """Median floor / land / bedrooms for each side — the 'what the feature
+    comes bundled with' evidence."""
+    def med_of(docs: List[Dict[str, Any]], field: str) -> Optional[float]:
+        vals = [_basic(d).get(field) for d in docs]
+        vals = [v for v in vals if isinstance(v, (int, float)) and v > 0]
+        return round(statistics.median(vals), 0) if vals else None
+
+    return {
+        "floor_with": med_of(with_docs, "floor_area_sqm"),
+        "floor_without": med_of(without_docs, "floor_area_sqm"),
+        "land_with": med_of(with_docs, "land_size_sqm"),
+        "land_without": med_of(without_docs, "land_size_sqm"),
+        "beds_with": med_of(with_docs, "bedrooms"),
+        "beds_without": med_of(without_docs, "bedrooms"),
+    }
+
+
+def _dom_medians(
+    with_docs: List[Dict[str, Any]], without_docs: List[Dict[str, Any]]
+) -> tuple:
+    def doms(docs):
+        return [
+            d["days_on_market"] for d in docs
+            if isinstance(d.get("days_on_market"), (int, float)) and 0 < d["days_on_market"] < 400
+        ]
+    wd, nd = doms(with_docs), doms(without_docs)
+    if len(wd) < MIN_DOM_SAMPLE or len(nd) < MIN_DOM_SAMPLE:
+        return None, None
+    return round(statistics.median(wd)), round(statistics.median(nd))
+
+
+def _classify(
+    key: str,
+    raw_pct: Optional[float],
+    lfl_pct: Optional[float],
+) -> tuple:
+    """Returns (classification, verdict). Research overrides win; otherwise
+    the like-for-like behaviour decides. Verdicts are data-only — they
+    describe what the cohort shows, never what the reader should do."""
+    research = RESEARCH_FINDINGS.get(key)
+    if research:
+        cls = research["classification"]
+        if cls == "demand_feature":
+            verdict = (
+                "Controlled analysis found no statistically significant price "
+                "lift from this feature itself. Its measurable role is demand: "
+                "it keeps the home inside feature-filtered buyer searches."
+            )
+        else:
+            verdict = (
+                "The headline gap reflects the homes this feature comes with, "
+                "not the feature — controlled analysis found near-zero "
+                "standalone effect."
+            )
+        return cls, verdict
+
+    if lfl_pct is None:
+        return "headline_only", (
+            "The cohort is too small to compare like-for-like, so only the "
+            "uncontrolled gap is shown. Treat it as a description of the "
+            "homes that sold, not the feature's standalone value."
+        )
+    if lfl_pct >= NOISE_THRESHOLD_PCT:
+        if raw_pct is not None and raw_pct > 0 and lfl_pct < raw_pct * 0.6:
+            verdict = (
+                f"Part of the headline gap is the company this feature keeps, "
+                f"but a {lfl_pct:+.1f}% gap survives like-for-like comparison "
+                f"— buyers in this cohort paid for the feature itself."
+            )
+        else:
+            verdict = (
+                f"The gap holds at {lfl_pct:+.1f}% when homes are compared "
+                f"like-for-like — buyers in this cohort paid for the feature "
+                f"itself."
+            )
+        return "price_driver", verdict
+    return "bundled", (
+        "Compared like-for-like, the gap falls inside the noise threshold — "
+        "the headline number mostly reflects the larger homes this feature "
+        "comes with."
+    )
+
+
 def compute_cohort_premiums(
     notable_features: List[Dict[str, str]],
     db: Database,
     catchment_suburbs: List[str],
 ) -> List[Dict[str, Any]]:
-    """For each notable feature, compute the median premium in the sold cohort."""
+    """For each notable feature, compute the premium at every level of
+    scrutiny the cohort supports, plus composition and demand context."""
     if not notable_features:
         return []
 
@@ -218,6 +448,8 @@ def compute_cohort_premiums(
                 "median_with": None,
                 "median_without": None,
                 "reliable": False,
+                "like_for_like_pct": None,
+                "classification": "headline_only",
                 "note": f"Cohort too small ({len(cohort)} sales) for premium analysis",
             }
             for n in notable_features
@@ -226,50 +458,121 @@ def compute_cohort_premiums(
     results: List[Dict[str, Any]] = []
     for n in notable_features:
         key = n["key"]
-        with_prices: List[float] = []
-        without_prices: List[float] = []
+        with_docs: List[Dict[str, Any]] = []
+        without_docs: List[Dict[str, Any]] = []
         for doc in cohort:
             has = _has_feature(key, doc)
             if has is None:
                 continue
-            if has:
-                with_prices.append(doc["_parsed_price"])
-            else:
-                without_prices.append(doc["_parsed_price"])
+            (with_docs if has else without_docs).append(doc)
 
-        if not with_prices or not without_prices:
+        if not with_docs or not without_docs:
             results.append({
                 "feature_key": key,
                 "feature_label": _premium_label(n["key"], n["label"]),
                 "premium_pct": None,
-                "n_with": len(with_prices),
-                "n_without": len(without_prices),
+                "n_with": len(with_docs),
+                "n_without": len(without_docs),
                 "median_with": None,
                 "median_without": None,
                 "reliable": False,
+                "like_for_like_pct": None,
+                "classification": "headline_only",
                 "note": "Empty partition",
             })
             continue
 
+        with_prices = [d["_parsed_price"] for d in with_docs]
+        without_prices = [d["_parsed_price"] for d in without_docs]
         m_with = statistics.median(with_prices)
         m_without = statistics.median(without_prices)
-        premium = (m_with - m_without) / m_without * 100
+        raw_pct = _pct_gap(m_with, m_without)
 
         reliable = (
             len(with_prices) >= MIN_SAMPLE_SIZE
             and len(without_prices) >= MIN_SAMPLE_SIZE
-            and abs(premium) >= NOISE_THRESHOLD_PCT
+            and raw_pct is not None
+            and abs(raw_pct) >= NOISE_THRESHOLD_PCT
         )
 
-        results.append({
+        # Layer 2 — like-for-like
+        strat_pct, strata = (None, [])
+        if key not in _NO_BEDROOM_STRATA:
+            strat_pct, strata = _stratified_premium(with_docs, without_docs)
+        sqm_pct, sqm_n_with, sqm_n_without = (None, 0, 0)
+        if key not in _NO_PER_SQM:
+            sqm_pct, sqm_n_with, sqm_n_without = _per_sqm_premium(with_docs, without_docs)
+
+        if strat_pct is not None:
+            lfl_pct, lfl_basis = strat_pct, "bedroom-stratified"
+        elif sqm_pct is not None:
+            lfl_pct, lfl_basis = sqm_pct, "per-sqm"
+        else:
+            lfl_pct, lfl_basis = None, None
+
+        dom_with, dom_without = _dom_medians(with_docs, without_docs)
+        prevalence = round(len(with_docs) / (len(with_docs) + len(without_docs)) * 100, 1)
+
+        classification, verdict = _classify(key, raw_pct, lfl_pct)
+
+        row: Dict[str, Any] = {
             "feature_key": key,
             "feature_label": _premium_label(n["key"], n["label"]),
-            "premium_pct": round(premium, 1),
+            "premium_pct": round(raw_pct, 1) if raw_pct is not None else None,
             "n_with": len(with_prices),
             "n_without": len(without_prices),
             "median_with": int(m_with),
             "median_without": int(m_without),
             "reliable": reliable,
-        })
+            "like_for_like_pct": lfl_pct,
+            "like_for_like_basis": lfl_basis,
+            "strata": strata,
+            "per_sqm_pct": sqm_pct,
+            "per_sqm_n_with": sqm_n_with,
+            "per_sqm_n_without": sqm_n_without,
+            "composition": _composition(with_docs, without_docs),
+            "dom_with": dom_with,
+            "dom_without": dom_without,
+            "prevalence_pct": prevalence,
+            "classification": classification,
+            "verdict": verdict,
+        }
+        research = RESEARCH_FINDINGS.get(key)
+        if research:
+            row["research"] = {
+                "range": research["range"],
+                "significant": research["significant"],
+                "note": research["note"],
+            }
+        results.append(row)
 
     return results
+
+
+def premium_prompt_lines(cohort_premiums: List[Dict[str, Any]]) -> List[str]:
+    """The honest representation of premiums for narrative model prompts.
+    Replaces the old raw-only feed so generated prose can never quote a
+    headline gap as a feature's standalone value."""
+    lines = [
+        "SOLD COHORT FEATURE EVIDENCE (last 24 months in catchment).",
+        "RULES: never present a 'headline gap' as the feature's standalone value-add.",
+        "Quote only the like-for-like figure or the controlled-research finding as",
+        "the feature's value. Headline gaps may only appear with the explanation",
+        "that they bundle the feature with larger/better homes.",
+    ]
+    for p in cohort_premiums or []:
+        raw = p.get("premium_pct")
+        if raw is None:
+            continue
+        lfl = p.get("like_for_like_pct")
+        cls = p.get("classification", "headline_only")
+        bits = [f"headline gap {raw:+.1f}% (n_with={p['n_with']}, n_without={p['n_without']})"]
+        if lfl is not None:
+            bits.append(f"like-for-like {lfl:+.1f}% ({p.get('like_for_like_basis')})")
+        research = p.get("research")
+        if research:
+            sig = "significant" if research.get("significant") else "NOT statistically significant"
+            bits.append(f"controlled research: {research['range']} ({sig})")
+        bits.append(f"classification: {cls}")
+        lines.append(f"  - {p['feature_label']}: " + " | ".join(bits))
+    return lines

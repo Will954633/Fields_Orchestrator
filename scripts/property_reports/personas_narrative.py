@@ -29,6 +29,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from scripts.property_reports.valuation_format import display_range
+from scripts.property_reports.cohort_premiums import premium_prompt_lines
 
 logger = logging.getLogger(__name__)
 
@@ -162,15 +163,7 @@ def _format_inputs(
     )
 
     lines.append("")
-    lines.append("SOLD COHORT PREMIUMS (last 24 months):")
-    for p in cohort_premiums or []:
-        if p.get("premium_pct") is None:
-            continue
-        rel = "RELIABLE" if p.get("reliable") else "small-sample"
-        sign = "+" if p["premium_pct"] >= 0 else ""
-        lines.append(
-            f"  - {p['feature_label']}: {sign}{p['premium_pct']:.1f}% (n_with={p['n_with']}, {rel})"
-        )
+    lines.extend(premium_prompt_lines(cohort_premiums))
 
     lines.append("")
     lines.append("WALKING DISTANCES:")

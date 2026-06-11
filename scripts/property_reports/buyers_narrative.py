@@ -42,6 +42,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from scripts.property_reports.valuation_format import display_range as _display_range
+from scripts.property_reports.cohort_premiums import premium_prompt_lines
 
 logger = logging.getLogger(__name__)
 
@@ -199,14 +200,7 @@ def _format_inputs(
         )
 
     lines.append("")
-    lines.append("SOLD COHORT PREMIUMS (last 24 months, reliable only):")
-    for p in cohort_premiums or []:
-        if not p.get("reliable") or p.get("premium_pct") is None:
-            continue
-        sign = "+" if p["premium_pct"] >= 0 else ""
-        lines.append(
-            f"  - {p['feature_label']}: {sign}{p['premium_pct']:.1f}% (n_with={p['n_with']})"
-        )
+    lines.extend(premium_prompt_lines(cohort_premiums))
 
     lines.append("")
     lines.append(f"THE 3 PERSONAS (already generated — your catchment.locations must align to these):")
@@ -381,12 +375,17 @@ def _reconcile_numbers(
                     f"'{matching_full_stack} of {active_listings_total}'"
                 )
 
-    # Premiums: every % in the thesis prose must match a reliable cohort premium.
-    allowed = {
-        round(abs(p["premium_pct"]), 1)
-        for p in (cohort_premiums or [])
-        if p.get("reliable") and p.get("premium_pct") is not None
-    }
+    # Premiums: every % in the thesis prose must match a computed cohort
+    # figure — headline gap, like-for-like, or per-sqm (the prompt instructs
+    # which framing each may appear under; this check pins the arithmetic).
+    allowed = set()
+    for p in cohort_premiums or []:
+        if not p.get("reliable"):
+            continue
+        for field in ("premium_pct", "like_for_like_pct", "per_sqm_pct"):
+            v = p.get(field)
+            if v is not None:
+                allowed.add(round(abs(v), 1))
     for m in re.finditer(r"([+-]?\d+(?:\.\d+)?)\s*%", prose):
         val = abs(float(m.group(1)))
         if not any(abs(val - a) <= 0.6 for a in allowed):
