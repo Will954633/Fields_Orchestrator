@@ -267,6 +267,27 @@ def _verification_rank(facts: Dict[str, Any]) -> int:
     return score
 
 
+def _downscale(data: bytes, max_dim: int = 1600, quality: int = 82) -> Tuple[bytes, str]:
+    """Re-encode a listing photo for web delivery. Full-res Domain renders run
+    3-4 MB each — 10 of them is an unacceptable page weight. Returns
+    (jpeg_bytes, ".jpg"); on any failure returns the original bytes untouched."""
+    try:
+        import io
+        from PIL import Image
+        im = Image.open(io.BytesIO(data))
+        im = im.convert("RGB")
+        if max(im.size) > max_dim:
+            im.thumbnail((max_dim, max_dim), Image.LANCZOS)
+        buf = io.BytesIO()
+        im.save(buf, "JPEG", quality=quality, optimize=True)
+        out = buf.getvalue()
+        if out and len(out) < len(data):
+            return out, ".jpg"
+    except Exception:
+        pass
+    return data, ""
+
+
 def _build_exhibits(
     doc: Dict[str, Any], db: Database, suburb_disp: str, sale_date: Optional[str],
 ) -> Dict[str, Any]:
@@ -299,6 +320,10 @@ def _build_exhibits(
         if not data:
             gallery.append({"url": url, "mirrored": False})
             continue
+        data, forced_ext = _downscale(data)
+        if forced_ext:
+            ext = forced_ext
+            blob_name = f"{slug}/{i:02d}{ext}"
         ct = "image/jpeg" if ext == ".jpg" else f"image/{ext.lstrip('.')}"
         public = blob_storage.upload(CONTAINER, blob_name, data, content_type=ct)
         gallery.append({"url": public or url, "mirrored": bool(public)})
