@@ -53,7 +53,7 @@ CORE3 = ["robina", "burleigh_waters", "varsity_lakes"]
 CHART_TYPES = ["days_on_market", "sales_volume", "turnover_rate", "market_cycle"]
 
 # Page order = Google Sheet tab order
-PAGES = ["Market Metrics", "For Sale / Sold", "Property Page",
+PAGES = ["Pipeline Processes", "Market Metrics", "For Sale / Sold", "Property Page",
          "Articles", "Valuation Accuracy", "Known Gaps"]
 
 
@@ -325,6 +325,108 @@ def collect(client, now_utc, prev_map):
     else:
         st, dt = judge(ts, "monthly", now_utc, last_run)
         add(PG, "Backtest summary", "model", f"{d.get('total_tested')} tested", st, "run_date", ts, dt)
+
+    # ----- Pipeline Processes (orchestrator steps, provider credit, coverage) -----
+    # Added 2026-06-11: data-freshness rows alone hid process failures — the
+    # June quota outage (steps 105/106/108/117 down 4 nights) and step timeouts
+    # (101/103/113) never surfaced on the sheet. This page reads the per-step
+    # result.json files from the latest run, probes both vision providers'
+    # credit, and mirrors step 109's Domain-vs-DB coverage verdicts.
+    PG = "Pipeline Processes"
+    runs_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                            "logs", "runs")
+    try:
+        run_dirs = sorted(d for d in os.listdir(runs_dir)
+                          if os.path.isdir(os.path.join(runs_dir, d)) and not d.startswith("."))
+    except OSError:
+        run_dirs = []
+
+    if not run_dirs:
+        add(PG, "Nightly run", "orchestrator", None, MISSING, "", None, "no run logs found")
+    else:
+        latest = run_dirs[-1]
+        run_id, _, run_suffix = latest.rpartition("_")
+        run_id = run_id or latest
+        try:
+            run_start = datetime.strptime(run_id, "%Y-%m-%dT%H-%M-%S").replace(tzinfo=AEST).astimezone(timezone.utc)
+        except ValueError:
+            run_start = None
+
+        # Recency: the newest run must be from the most recent expected 20:30 trigger.
+        if run_start is not None and run_start < last_run - timedelta(minutes=30):
+            add(PG, "Nightly run recency", "orchestrator", run_id, ERROR, "run_start", run_start,
+                f"no run since expected {last_run.astimezone(AEST):%Y-%m-%d %H:%M} AEST — daemon down?")
+
+        run_dir = os.path.join(runs_dir, latest)
+        finished = os.path.exists(os.path.join(run_dir, "run_summary.json"))
+        n_ok, failed_steps = 0, []
+        for step_dir in sorted(os.listdir(run_dir)):
+            rp = os.path.join(run_dir, step_dir, "result.json")
+            if not os.path.exists(rp):
+                continue
+            try:
+                with open(rp) as fh:
+                    j = json.load(fh)
+            except (OSError, json.JSONDecodeError):
+                continue
+            if j.get("success"):
+                n_ok += 1
+            else:
+                failed_steps.append(j)
+
+        run_val = f"{n_ok} ok / {len(failed_steps)} failed" + ("" if finished else " (still running)")
+        if failed_steps or run_suffix == "failed":
+            run_st, run_dt = ERROR, f"run {run_suffix or 'in progress'}"
+        elif not finished:
+            run_st, run_dt = UNKNOWN, "run still in progress at audit time"
+        else:
+            run_st, run_dt = OK, ""
+        add(PG, "Nightly run", run_id, run_val, run_st, "run_start", run_start, run_dt)
+
+        for j in failed_steps:
+            dur = j.get("duration_seconds") or 0
+            err = (j.get("error_message") or "").strip() or "no error message"
+            add(PG, f"Step {j.get('step_id')}", j.get("step_name") or "?",
+                f"{j.get('attempts')} attempts, {int(dur)}s", ERROR, "end_time",
+                as_dt(j.get("end_time")), err[:160])
+
+    # Vision provider credit — Claude is the primary engine for steps
+    # 105/106/108/112/117 since 2026-06; OpenAI is a dormant fallback only,
+    # so it is reported as info (visible, not alarmed).
+    try:
+        import api_health_monitor as ahm
+        a_st, a_det, _ = ahm.probe_anthropic("ANTHROPIC_API_KEY")
+        add(PG, "Vision provider", "Anthropic (primary)", a_st,
+            OK if a_st == "OK" else ERROR, "", None,
+            a_det if a_st != "OK" else "")
+        o_st, o_det, _ = ahm.probe_openai("OPENAI_API_KEY")
+        add(PG, "Vision provider", "OpenAI (fallback only)", o_st, OK, "", None,
+            (o_det or "") + " — fallback only, not alarmed", info=True)
+    except Exception as e:  # probe import/network failure must not kill the audit
+        add(PG, "Vision provider", "probe", None, UNKNOWN, "", None, f"probe failed: {e}")
+
+    # Coverage verdicts (step 109: live Domain count vs our DB count, via
+    # write-scraper-health). critical = Domain shows listings we don't have.
+    latest_check = sm["scraper_health"].find_one(sort=[("checked_at", -1)])
+    if not latest_check:
+        add(PG, "Coverage check", "all", None, MISSING, "checked_at", None, "no scraper_health docs")
+    else:
+        batch_ts = latest_check["checked_at"]
+        cov_map = {"healthy": OK, "warn": STALE, "critical": ERROR}
+        for d in sm["scraper_health"].find({"checked_at": batch_ts}).sort("suburb", 1):
+            ts = as_dt(d.get("checked_at"))
+            age_h = (now_utc - ts).total_seconds() / 3600 if ts else None
+            st = cov_map.get(d.get("status"), UNKNOWN)
+            detail = ""
+            if st == ERROR:
+                detail = "Domain shows listings missing from DB (or scrape stale) — see coverage_check.log"
+            elif st == STALE:
+                detail = "minor count drift vs Domain"
+            if age_h is not None and age_h > 26:
+                st = max((st, STALE), key=lambda x: SEVERITY[x])
+                detail = (detail + "; " if detail else "") + f"check itself stale ({age_h:.0f}h old)"
+            add(PG, "Coverage vs Domain", suburb_label(d.get("suburb", "?")),
+                f"{d.get('total_listings', '—')} listings", st, "checked_at", ts, detail)
 
     # ----- Known Gaps (structural; documented, not alarms) -----
     PG = "Known Gaps"
