@@ -1631,7 +1631,12 @@ class SlotResolver:
             return None
 
         rates = vd.get("adjustment_rates") or {}
-        included = [c for c in (vd.get("recent_sales") or []) if c.get("included_in_valuation")]
+        # The comps that actually produced the reconciled figure — both recent
+        # sales and any weighted current listings (post-dedup, a property is
+        # only ever one or the other). Their normalised weights sum to ~1.0, so
+        # Σ(adjusted × weight) reconciles to the displayed figure.
+        pool = (vd.get("recent_sales") or []) + (vd.get("comparables") or [])
+        included = [c for c in pool if c.get("included_in_valuation")]
 
         def _norm_w(c: Dict[str, Any]) -> float:
             w = c.get("weight")
@@ -1652,11 +1657,13 @@ class SlotResolver:
             comparables.append({
                 "id": str(c.get("id") or c.get("address") or ""),
                 "address": addr or "Unknown",
+                "kind": "listing" if c.get("series") == "current_listing" else "sold",
                 "soldPrice": _to_int(c.get("price")) or _to_int(c.get("original_sale_price")),
                 "adjustedPrice": _to_int(adj.get("adjusted_price")),
                 "saleDate": c.get("sale_date"),
                 "distanceKm": c.get("distance_km"),
                 "weightPct": round(_norm_w(c) * 100),
+                "weight": round(_norm_w(c), 4),  # float — for exact L5 reconciliation
                 "weightFactors": (c.get("weight") or {}).get("factors") or {},
                 "verified": bool(vr.get("is_verified") or vr.get("status") == "verified"),
                 "narrative": c.get("narrative") or "",
