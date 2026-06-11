@@ -26,11 +26,23 @@ Design corrections proven in 11_House_Mini_Site/cs0_prototype.py (2026-06-01):
 Returns a `case_studies.dynamic` dict ready to $set, or None to hide CS0.
 No price-revision claims are ever made — the data has no intra-campaign
 asking-price-cut trail.
+
+CS0 v2 (2026-06-11): once a comp passes both gates, the card is built out into
+a FULL case study — mirrored photo gallery, sale-history timeline, market-at-
+listing, condition read, floor plan (the same exhibit set as the static
+library, reusing build_case_study's helpers) — plus an Opus-drafted analysis
+WRITTEN TO THE SUBJECT OWNER ("your home"), validated against the editorial
+rules. Every enrichment fails soft: if photos can't mirror or the narrative
+fails its audit, the verified data card still ships exactly as before.
 """
 from __future__ import annotations
 
 import datetime as dt
+import json
 import logging
+import os
+import re
+import time
 from typing import Any, Dict, List, Optional, Tuple
 
 from pymongo.database import Database
@@ -55,6 +67,59 @@ RING_PRICE_BANDS = [0.15, 0.20, 0.25, 0.30]
 # states every difference plainly. A home with NO match this close is rare
 # enough that CS0 hides rather than overclaim.
 RELEVANCE_MAX_SCORE = 0.33
+
+# ── CS0 v2 full-case enrichment ──
+CONTAINER = "case-studies"     # same blob container as the static library —
+                               # same comp address → same blob path → photos
+                               # mirror once and are reused across reports
+MAX_PHOTOS = 10
+NARRATIVE_MODEL = "claude-opus-4-8"
+NARRATIVE_MAX_TOKENS = 2200
+NARRATIVE_RETRIES = 3
+NARRATIVE_BACKOFF = [2, 5, 12]
+
+FORBIDDEN_WORDS = [
+    "stunning", "nestled", "boasting", "rare opportunity", "robust market",
+]
+ADVICE_PATTERNS = [
+    r"\byou should\b", r"\byou must\b", r"\bwe recommend\b", r"\bconsider (buying|selling)\b",
+    r"\bnow is a good time\b", r"\bwill (rise|fall|increase|drop|grow)\b",
+    r"\bprices will\b", r"\bis going to\b", r"\bguaranteed\b",
+]
+
+NARRATIVE_KEYS = ["headline", "why_this_home", "the_campaign", "the_result", "what_it_shows"]
+
+NARRATIVE_SYSTEM_PROMPT = """You are writing the lead case study in a private pre-sale property report that Fields Estate — a Gold Coast property-intelligence firm whose entire brand is "every claim is verifiable" — prepared for the OWNER of one specific home.
+
+You will be given two verified data scaffolds:
+1. THE SOLD HOME — a real, recently sold home Fields matched as the closest comparable to the owner's home: its facts, public-record sale outcome, full Domain sale timeline, the suburb market it sold into, and (only when present) a condition read and a Domain estimate-vs-reality exhibit.
+2. THE OWNER'S HOME — the subject property's basic facts, plus a pre-written factual line stating how the two homes differ.
+
+The comparison line ("how_the_sold_home_compares_to_yours") frames THE SOLD HOME against the owner's home: "adds X" means the SOLD home has X and the owner's home does not; "without X" means the owner's home has X and the sold home does not; "listed N% above/below your guide" describes the sold home's price against the owner's guide. Preserve this direction exactly — never invert it.
+
+These are the ONLY facts you may state. Do not invent any number, date, feature, motive, or quote. If you do not have a fact, do not imply it.
+
+Write directly to the owner in second person ("your home"). This is the case study of THE SOLD HOME, told because of what its sale shows about the market the owner's home would enter. Return STRICT JSON with exactly these string keys: "headline", "why_this_home", "the_campaign", "the_result", "what_it_shows". No other keys, no markdown fences.
+
+Section intent:
+- headline: One factual, specific line for the case (under 90 characters). Anchor it in the sold home's concrete outcome — e.g. its time on market, its method, or its sale month. No hype, no advice.
+- why_this_home: Why this particular sale is the most relevant evidence for the owner — name the likeness (beds, type, area, price bracket) AND state the differences plainly, including any that favour the sold home. Honesty about the differences is the point.
+- the_campaign: How the sold home came to market — the method of sale, when it listed/sold, and the market conditions it launched into (suburb median, days-on-market norm) where given. Frame the campaign ONLY from what the data supports. Never claim a specific asking price or price cut unless it is in the scaffold.
+- the_result: The factual outcome — final price, time on market (vs the suburb norm where given), method — stated plainly.
+- what_it_shows: What this sale, as evidence, shows about the market the owner's home would enter — the depth of the buyer pool at this bracket, the pace homes like this transact at, what the method appears to have contributed. Use conditional, data-anchored language ("this sale suggests", "if the pattern holds"). The reader draws their own conclusion.
+
+HARD RULES (a violation means the whole draft is rejected):
+- NEVER state, estimate, or imply a value, price, or price range for the OWNER'S home. The only prices you may print are the sold home's public-record figures and the suburb statistics you were given.
+- No advice: never "you should", "consider selling", "list now", "now is the time".
+- No forecasts: never predict prices or say what "will" happen.
+- Banned words: stunning, nestled, boasting, rare opportunity, robust market.
+- Money as "$1,250,000" (never "$1.25m"). Suburbs capitalised. Exact figures from the scaffold only.
+- Trade-offs are framed as value, not flaws — for both homes.
+- Factual, calm, specific. A document the owner could hand to their accountant.
+- If the scaffold has no Domain estimate exhibit, do NOT mention Domain's estimate at all.
+- If days-on-market is absent, do not state or guess one.
+
+Each section after the headline: 2–5 sentences. Total under 480 words."""
 
 # Candidate projection — the matcher's set plus the sold/timeline fields CS0 needs.
 _SOLD_PROJ = dict(
@@ -202,6 +267,174 @@ def _verification_rank(facts: Dict[str, Any]) -> int:
     return score
 
 
+def _build_exhibits(
+    doc: Dict[str, Any], db: Database, suburb_disp: str, sale_date: Optional[str],
+) -> Dict[str, Any]:
+    """The full exhibit scaffold for the chosen comp — same set as the static
+    library, reusing build_case_study's verified helpers. Photos mirror to our
+    blob under the comp's address slug; a comp already mirrored (by a library
+    build or an earlier report) is reused from disk without re-downloading."""
+    from scripts.property_reports import build_case_study as bcs  # lazy: avoids
+    # bcs's import-time dotenv/basicConfig in the daemon until actually needed
+    from shared import blob_storage
+
+    slug = bcs._slugify(doc.get("address") or doc.get("street_address") or str(doc.get("_id")))
+    urls = bcs._gather_photo_urls(doc, MAX_PHOTOS)
+    gallery: List[Dict[str, Any]] = []
+    for i, url in enumerate(urls):
+        ext = ".jpg"
+        m = re.search(r"\.(jpe?g|png|webp)(\?|$)", url, re.I)
+        if m:
+            ext = "." + m.group(1).lower().replace("jpeg", "jpg")
+        blob_name = f"{slug}/{i:02d}{ext}"
+        try:
+            if (blob_storage._backend() == "local"
+                    and (blob_storage._local_root() / CONTAINER / blob_name).exists()):
+                gallery.append({"url": blob_storage.public_url(CONTAINER, blob_name),
+                                "mirrored": True})
+                continue
+        except Exception:
+            pass
+        data = bcs._download(url)
+        if not data:
+            gallery.append({"url": url, "mirrored": False})
+            continue
+        ct = "image/jpeg" if ext == ".jpg" else f"image/{ext.lstrip('.')}"
+        public = blob_storage.upload(CONTAINER, blob_name, data, content_type=ct)
+        gallery.append({"url": public or url, "mirrored": bool(public)})
+    if gallery:
+        logger.info("  cs0: gallery %d photos (%d mirrored)",
+                    len(gallery), sum(1 for g in gallery if g["mirrored"]))
+
+    fps = doc.get("floor_plans_v2_extracted") or doc.get("floor_plans") or []
+    return {
+        "gallery": gallery,
+        "floor_plan": fps[0] if fps else None,
+        "condition": bcs._condition(doc),
+        "sale_timeline": bcs._sale_timeline(doc),
+        # _market_at_listing has its own 15-month contemporaneity guard — for an
+        # older sale it returns None and the exhibit is simply omitted.
+        "market_at_listing": bcs._market_at_listing(db, suburb_disp, sale_date),
+        "listing_url": doc.get("listing_url"),
+    }
+
+
+def _draft_owner_narrative(
+    subject: Dict[str, Any], subject_doc: Dict[str, Any], case: Dict[str, Any],
+) -> Optional[Dict[str, Any]]:
+    """Opus drafts the owner-addressed analysis from the verified scaffold only.
+    Validated against the editorial rules (no advice, no forecasts, no banned
+    words, no subject-home valuation). Returns the sections dict, or None —
+    the card then ships data-only, never blocked on the LLM."""
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        try:
+            from dotenv import load_dotenv
+            load_dotenv("/home/fields/Fields_Orchestrator/.env")
+            api_key = os.environ.get("ANTHROPIC_API_KEY")
+        except Exception:
+            pass
+    if not api_key:
+        logger.warning("  cs0 narrative: ANTHROPIC_API_KEY not set — shipping data-only")
+        return None
+    from anthropic import Anthropic
+    client = Anthropic(api_key=api_key)
+
+    sold_home = {
+        "address": case.get("address"),
+        "suburb": case.get("suburb"),
+        "facts": {k: case.get(k) for k in
+                  ("bedrooms", "bathrooms", "property_type", "land_size_sqm")
+                  if case.get(k) is not None},
+        "sale_outcome": {k: case.get(k) for k in
+                         ("sale_price", "method", "sale_date", "days_on_market")
+                         if case.get(k) is not None},
+        "full_sale_timeline": case.get("sale_timeline") or None,
+        "market_when_it_sold": case.get("market_at_listing"),
+        "domain_estimate_vs_reality": case.get("domain_vs_reality"),
+        "condition_read": case.get("condition"),
+    }
+    owners_home = {
+        "address": subject_doc.get("address") or subject_doc.get("street_address"),
+        "suburb": (subject_doc.get("suburb") or "").title() or None,
+        "bedrooms": subject.get("bedrooms"),
+        "bathrooms": subject.get("bathrooms"),
+        "car_spaces": subject.get("car"),
+        "land_size_sqm": subject.get("land"),
+        "floor_area_sqm": subject.get("floor"),
+        "property_type": subject_doc.get("property_type"),
+        # Direction matters: this line frames the SOLD home against the owner's
+        # ("adds X" = the sold home has X). The system prompt spells this out.
+        "how_the_sold_home_compares_to_yours": case.get("difference_line"),
+    }
+    payload = {
+        "the_sold_home": {k: v for k, v in sold_home.items() if v is not None},
+        "the_owners_home": {k: v for k, v in owners_home.items() if v is not None},
+    }
+    user_prompt = ("Here are the verified data scaffolds. State only these facts.\n\n"
+                   + json.dumps(payload, indent=1, default=str))
+
+    last_err = None
+    for attempt in range(1, NARRATIVE_RETRIES + 1):
+        try:
+            resp = client.messages.create(
+                model=NARRATIVE_MODEL, max_tokens=NARRATIVE_MAX_TOKENS,
+                system=NARRATIVE_SYSTEM_PROMPT,
+                messages=[{"role": "user", "content": user_prompt}],
+            )
+            text = "".join(getattr(b, "text", "") for b in resp.content
+                           if getattr(b, "type", None) == "text").strip()
+            text = re.sub(r"^```(?:json)?|```$", "", text.strip()).strip()
+            sections = json.loads(text)
+        except Exception as e:
+            last_err = f"attempt {attempt}: {e}"
+            logger.warning(f"  cs0 narrative {last_err}")
+            if attempt < NARRATIVE_RETRIES:
+                time.sleep(NARRATIVE_BACKOFF[min(attempt - 1, len(NARRATIVE_BACKOFF) - 1)])
+            continue
+
+        err = _validate_narrative(sections)
+        if err:
+            last_err = f"attempt {attempt} validation: {err}"
+            logger.warning(f"  cs0 narrative {last_err}")
+            if attempt < NARRATIVE_RETRIES:
+                time.sleep(NARRATIVE_BACKOFF[min(attempt - 1, len(NARRATIVE_BACKOFF) - 1)])
+            continue
+
+        logger.info(f"  cs0 narrative drafted (attempt {attempt})")
+        return {
+            **{k: str(sections[k]).strip() for k in NARRATIVE_KEYS},
+            "model": NARRATIVE_MODEL,
+            "generated_at": dt.datetime.utcnow().isoformat() + "Z",
+            "attempt": attempt,
+        }
+
+    logger.warning(f"  cs0 narrative failed all attempts ({last_err}) — shipping data-only")
+    return None
+
+
+def _validate_narrative(sections: Any) -> Optional[str]:
+    if not isinstance(sections, dict):
+        return "not a dict"
+    if set(sections.keys()) != set(NARRATIVE_KEYS):
+        return f"wrong keys: {sorted(sections.keys())}"
+    blob = " ".join(str(sections[k]) for k in NARRATIVE_KEYS).lower()
+    for w in FORBIDDEN_WORDS:
+        if w in blob:
+            return f"forbidden word: {w}"
+    for pat in ADVICE_PATTERNS:
+        if re.search(pat, blob):
+            return f"advice/forecast pattern: {pat}"
+    if re.search(r"\$\d+(\.\d+)?\s*m\b", blob):
+        return "shorthand money ($1.25m) — must be full format"
+    if len(str(sections["headline"])) > 120:
+        return "headline too long"
+    for k in NARRATIVE_KEYS:
+        if not str(sections[k]).strip():
+            return f"empty section: {k}"
+    return None
+
+
 def resolve_dynamic_case_study(
     subject_doc: Dict[str, Any],
     db: Database,
@@ -312,8 +545,23 @@ def resolve_dynamic_case_study(
         "fact_source": facts.get("_source"),
         "resolved_at": today.isoformat(),
     }
+
+    # ── CS0 v2: build out the full case study. Both steps fail SOFT — the
+    # fact-verified data card above is already complete and ships regardless.
+    try:
+        out.update(_build_exhibits(doc, db, suburb_disp, out.get("sale_date")))
+    except Exception as e:
+        logger.warning(f"  cs0 exhibits failed (card ships data-only): {e}")
+    try:
+        narrative = _draft_owner_narrative(subject, subject_doc, out)
+        if narrative:
+            out["narrative"] = narrative
+    except Exception as e:
+        logger.warning(f"  cs0 narrative threw (card ships without narrative): {e}")
+
     logger.info(
-        "  cs0: rendered %s (score %.3f, ring %d, DOM=%s, source=%s)",
+        "  cs0: rendered %s (score %.3f, ring %d, DOM=%s, source=%s, photos=%d, narrative=%s)",
         out["address"], score, chosen_ring, out["days_on_market"], out["fact_source"],
+        len(out.get("gallery") or []), "yes" if out.get("narrative") else "no",
     )
     return out
