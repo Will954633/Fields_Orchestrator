@@ -332,6 +332,11 @@ class SlotResolver:
         eng_comps = self.valuation_comps_from_engine()
         if eng_comps is not None:
             updates["valuation.comps"] = eng_comps
+            # Rich transparency payload (confidence + per-feature adjustments +
+            # weight factors + rate provenance) for the ValuationTab evidence UI.
+            evidence = self.valuation_evidence_from_engine()
+            if evidence:
+                updates["valuation.evidence"] = evidence
             if eng_comps:
                 # Engine produced usable comps → expose to mini-site
                 updates["slot_status.comps"] = "approved"
@@ -1600,6 +1605,98 @@ class SlotResolver:
                 "weight_pct": round(_w(c) * 100),
             })
         return out
+
+    def valuation_evidence_from_engine(self) -> Optional[Dict[str, Any]]:
+        """Rich transparency payload for the ValuationTab — the SAME numbers the
+        listed-property valuation page renders, read straight off the engine's
+        `valuation_data` (no recomputation, no change to the methodology):
+
+          - `confidence`: reconciled valuation, level, range, CV, n_verified/total.
+          - `rates_source` / `rates_sample_size`: provenance of the adjustment
+            rates (regression-derived from the local sold cohort vs methodology
+            fallback) — a key "assumptions used" disclosure.
+          - `comparables[]`: each included comp with its full per-feature
+            adjustments ({subject_value, comp_value, diff, rate, dollars}), the
+            6 weight factors + normalised weight, verification status, the
+            precomputed narrative, sold price, distance and recency.
+
+        Returns None when the engine hasn't produced a reconciled range for this
+        subject (exterior/thin tiers) — the tab falls back to the lighter view."""
+        s = self._subject
+        if not s:
+            return None
+        vd = s.get("valuation_data") or {}
+        conf = vd.get("confidence") or {}
+        if not (conf.get("range") or {}).get("low"):
+            return None
+
+        rates = vd.get("adjustment_rates") or {}
+        included = [c for c in (vd.get("recent_sales") or []) if c.get("included_in_valuation")]
+
+        def _norm_w(c: Dict[str, Any]) -> float:
+            w = c.get("weight")
+            try:
+                return float((w or {}).get("normalized") or 0)
+            except (TypeError, ValueError):
+                return 0.0
+        included.sort(key=_norm_w, reverse=True)
+
+        comparables: List[Dict[str, Any]] = []
+        for c in included:
+            adj = c.get("adjustment_result") or {}
+            feats = (c.get("features") or {}).get("basic") or {}
+            addr = (c.get("address") or "").strip()
+            addr = re.sub(r",?\s*(QLD|VIC|NSW|ACT|NT|SA|TAS|WA)\s*\d{4}\s*$", "", addr, flags=re.I)
+            addr = re.sub(r"\s{2,}", " ", addr).rstrip(",").strip()
+            vr = c.get("verification") or {}
+            comparables.append({
+                "id": str(c.get("id") or c.get("address") or ""),
+                "address": addr or "Unknown",
+                "soldPrice": _to_int(c.get("price")) or _to_int(c.get("original_sale_price")),
+                "adjustedPrice": _to_int(adj.get("adjusted_price")),
+                "saleDate": c.get("sale_date"),
+                "distanceKm": c.get("distance_km"),
+                "weightPct": round(_norm_w(c) * 100),
+                "weightFactors": (c.get("weight") or {}).get("factors") or {},
+                "verified": bool(vr.get("is_verified") or vr.get("status") == "verified"),
+                "narrative": c.get("narrative") or "",
+                "features": {
+                    "bedrooms": _to_int(feats.get("bedrooms")),
+                    "bathrooms": _to_int(feats.get("bathrooms")),
+                    "carSpaces": _to_int(feats.get("car_spaces") or feats.get("carspaces")),
+                    "landSqm": _to_int(feats.get("land_size_sqm")),
+                    "floorSqm": _to_int(feats.get("floor_area_sqm")),
+                },
+                # Per-feature adjustments, normalised to a list the frontend can
+                # map directly (only the features that actually moved the price).
+                "adjustments": [
+                    {
+                        "feature": k,
+                        "subject": v.get("subject_value"),
+                        "comp": v.get("comp_value"),
+                        "diff": v.get("diff"),
+                        "dollars": _to_int(v.get("dollars")),
+                    }
+                    for k, v in (adj.get("adjustments") or {}).items()
+                    if isinstance(v, dict) and _to_int(v.get("dollars"))
+                ],
+                "netAdjustment": _to_int(adj.get("total_adjustment")),
+            })
+
+        return {
+            "confidence": {
+                "reconciled": _to_int(conf.get("reconciled_valuation")),
+                "level": conf.get("confidence"),
+                "rangeLow": _to_int((conf.get("range") or {}).get("low")),
+                "rangeHigh": _to_int((conf.get("range") or {}).get("high")),
+                "cv": conf.get("cv"),
+                "nVerified": _to_int(conf.get("n_verified")),
+                "nTotal": _to_int(conf.get("n_total")),
+            },
+            "ratesSource": rates.get("source"),
+            "ratesSampleSize": _to_int(rates.get("sample_size")),
+            "comparables": comparables,
+        }
 
     def recent_comparable_sales(self, n: int = 6) -> List[Dict[str, Any]]:
         """
