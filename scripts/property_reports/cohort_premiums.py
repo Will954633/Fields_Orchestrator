@@ -119,13 +119,19 @@ RESEARCH_FINDINGS: Dict[str, Dict[str, Any]] = {
 }
 
 # How each feature is controlled. Bedroom features can't be stratified by
-# bedrooms (the stratum IS the feature); floor-size features can't use
-# per-sqm (it mechanically erases the feature being measured); land features
-# can't either — $/sqm falls with floor size and big-block homes have
-# systematically bigger floors, so the rung would understate land's effect
-# rather than control for anything.
+# bedrooms (the stratum IS the feature). Per-sqm is only meaningful for
+# features plausibly independent of home size (pool, views, beach, finish):
+# for size-linked features (floor, land, bathrooms, storeys) $/sqm falls
+# mechanically with floor area, so the rung would show the size diseconomy,
+# not the feature — it misleads rather than controls. Bedrooms keep per-sqm
+# as their only lens BECAUSE they are a pure size feature: the negative
+# per-sqm rung is the honest "you are buying square metres" evidence.
 _NO_BEDROOM_STRATA = {"bedrooms_anchor", "bedrooms_5plus", "bedrooms_6plus"}
-_NO_PER_SQM = {"floor_anchor", "floor_large", "land_anchor", "land_large", "land_extra_large"}
+_NO_PER_SQM = {
+    "floor_anchor", "floor_large",
+    "land_anchor", "land_large", "land_extra_large",
+    "bathrooms_3plus", "two_storey", "single_level",
+}
 
 
 # Feature key → predicate that returns True if a sold doc has the feature.
