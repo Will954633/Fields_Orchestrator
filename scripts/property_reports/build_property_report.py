@@ -38,6 +38,7 @@ from shared.ru_guard import cosmos_retry  # noqa: E402
 
 from scripts.property_reports.slot_resolver import SlotResolver  # noqa: E402
 from scripts.property_reports.build_events import BuildEventEmitter  # noqa: E402
+from scripts.property_reports.valuation_format import display_range  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,
@@ -126,10 +127,10 @@ def resolve_one(report_doc: Dict[str, Any], force: bool = False) -> Dict[str, An
     engine_comps = updates.get("valuation.comps")
     if engine_comps:
         model_range = updates.get("valuation.model_range") or {}
-        low, high = model_range.get("low"), model_range.get("high")
+        _dr = display_range(model_range)
         range_str = (
-            f"working range ${low:,}–${high:,}"
-            if low and high
+            f"working range ${_dr[0]:,}–${_dr[1]:,}"
+            if _dr
             else "working range pending"
         )
         activity_items.append({

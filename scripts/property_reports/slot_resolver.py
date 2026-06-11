@@ -30,6 +30,7 @@ from scripts.property_reports.hero_photo import score_and_pick_hero
 from scripts.property_reports.walking_distances import resolve_pois
 from scripts.property_reports.market_narrative import resolve_market_narrative
 from scripts.property_reports.scarcity_features import resolve_scarcity_features
+from scripts.property_reports.valuation_format import display_range
 from scripts.property_reports.competitor_matcher import resolve_competitor_map
 from scripts.property_reports.case_study_dynamic import resolve_dynamic_case_study
 from scripts.property_reports.comparable_feed import (
@@ -308,10 +309,14 @@ class SlotResolver:
         model_range = self.working_valuation_range()
         if model_range:
             updates["valuation.model_range"] = model_range
+            _dr = display_range(model_range)
+            _range_label = (
+                f"${_dr[0]:,}–${_dr[1]:,}" if _dr
+                else f"${model_range.get('low', 0):,}–${model_range.get('high', 0):,}"
+            )
             self.emit.done(
                 "valuation",
-                f"Working range ${model_range.get('low', 0):,}–${model_range.get('high', 0):,}"
-                f" ({model_range.get('method', 'thin')})",
+                f"Working range {_range_label} ({model_range.get('method', 'thin')})",
                 low=model_range.get("low"),
                 high=model_range.get("high"),
                 comp_count=model_range.get("comp_count"),

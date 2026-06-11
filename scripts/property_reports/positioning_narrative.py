@@ -26,6 +26,8 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from scripts.property_reports.valuation_format import display_range
+
 logger = logging.getLogger(__name__)
 
 
@@ -176,11 +178,13 @@ def _format_inputs(
     if not pois:
         lines.append("  (none computed)")
 
-    if valuation_range:
-        lo, hi = valuation_range.get("low"), valuation_range.get("high")
-        if lo and hi:
-            lines.append("")
-            lines.append(f"WORKING VALUATION RANGE: ${lo:,} – ${hi:,} (engine pre-consultant)")
+    _dr = display_range(valuation_range)
+    if _dr:
+        lines.append("")
+        lines.append(
+            f"WORKING VALUATION RANGE: ${_dr[0]:,} – ${_dr[1]:,} (engine pre-consultant, "
+            f"rounded to the nearest $100k for display)"
+        )
 
     return "\n".join(lines)
 
