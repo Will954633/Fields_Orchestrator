@@ -40,6 +40,7 @@ from scripts.property_reports.comparable_feed import (
 from scripts.property_reports.cohort_premiums import compute_cohort_premiums
 from scripts.property_reports.scarcity_narrative import (
     resolve_scarcity_narrative, cohort_premiums_to_sold_cohort_premiums,
+    cohort_premiums_to_feature_evidence,
 )
 from scripts.property_reports.positioning_narrative import resolve_positioning_narrative
 from scripts.property_reports.personas_narrative import resolve_personas_narrative
@@ -603,12 +604,20 @@ class SlotResolver:
                     sold_cohort_premiums = cohort_premiums_to_sold_cohort_premiums(
                         scarcity_struct.get("cohort_premiums") or []
                     )
+                    # featureEvidence (2026-06-11) — the honest three-layer
+                    # premium ladder (headline gap → like-for-like → controlled
+                    # research) that replaces the old raw-median premium table
+                    # on the mini-site. Deterministic; no model in the loop.
+                    feature_evidence = cohort_premiums_to_feature_evidence(
+                        scarcity_struct.get("cohort_premiums") or []
+                    )
                     updates["scarcity"] = {
                         "headline": narrative["headline"],
                         "closingLine": narrative.get("closingLine", ""),
                         "combinatorialMatch": narrative["combinatorialMatch"],
                         "walkingDistanceMonopoly": narrative["walkingDistanceMonopoly"],
                         "soldCohortPremiums": sold_cohort_premiums,
+                        "featureEvidence": feature_evidence,
                         "generated_at": narrative["generated_at"],
                         "model": narrative["model"],
                         "attempt": narrative["attempt"],
@@ -1499,7 +1508,7 @@ class SlotResolver:
                 {
                     "_id": 0, "latest_price": 1, "total_growth_pct": 1,
                     "rolling_12m_yoy_pct": 1, "rolling_12m_median_price": 1,
-                    "baseline_period": 1, "transaction_count": 1,
+                    "baseline_period": 1, "indexed_series": 1,
                 },
             )
             if ip:
@@ -1508,7 +1517,15 @@ class SlotResolver:
                 out["rolling_12m_yoy_pct"] = ip.get("rolling_12m_yoy_pct")
                 out["growth_since_baseline_pct"] = ip.get("total_growth_pct")
                 out["baseline_period"] = ip.get("baseline_period")
-                out["sold_transaction_count"] = _to_int(ip.get("transaction_count"))
+                # 24-month house-sale count = last 8 quarters of the index
+                # series. The doc-level transaction_count is cumulative since
+                # the baseline (~2016) and must NOT be shown as a 24m figure.
+                series = ip.get("indexed_series") or []
+                if series:
+                    out["sold_transaction_count"] = sum(
+                        _to_int(q.get("transaction_count")) or 0
+                        for q in series[-8:]
+                    )
         except Exception as e:
             logger.debug(f"Indexed price lookup failed: {e}")
 
