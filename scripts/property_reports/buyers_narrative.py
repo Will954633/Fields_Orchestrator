@@ -95,6 +95,8 @@ NEVER mention these — Fields does NOT have/do them: an email subscriber base, 
 ## 1. thesis
 The scarcity thesis: WHY this property reaches a smaller, more motivated buyer pool than a generic listing in the same bracket. Lead with the combinatorial-match count from the input — it is the ANCHOR-combination count (land/bedrooms/pool); you may note the single-level layout and walkability narrow it further, but NEVER invent a smaller figure and NEVER describe the count as a match for the whole stack. Cite features from the stack. Two short paragraphs (60-100 words each). StatBlocks: 2-3 cards — the first MUST be the "{matching} of {total}" receipt verbatim, then e.g. "3 personas weighted" + the working range — that data-receipt the thesis.
 
+VALUATION FRAMING — the working valuation range is computed independently from COMPARABLE SALES, NOT by arithmetically stacking the cohort premiums. The premiums are supporting market evidence for WHY this feature stack is valued where it is; they are not added together to produce the range. Do NOT write "stacked, those features land the valuation at $X", "the premiums add up to $X", or label the range "from stacked cohort premiums". Use non-causal framing instead, e.g. "the comparable-sales working range is $X – $Y, consistent with these cohort premiums". When you quote any figure (the receipt count, premium %, the range), re-use the EXACT numbers from the input — they are checked against the source data and a mismatch is rejected.
+
 ## 2. catchment
 This is NOT a measured buyer-origin breakdown — Fields has no buyer register or open-home data. It is the set of buyer pools we'd TARGET and where we'd weight the campaign, informed by how households typically move up within the southern Gold Coast, the suburb's 24-month sold cohort, and school / commute catchment logic. Headline frames it as targeting/strategy (e.g. "The buyer pools we'd target — and where we'd weight the search"). Body: 1-2 paragraphs (50-90 words each) making clear the cohorts are INFORMED BY move-up patterns and the suburb's sold market, and are a targeting strategy rather than measured data. Convey that in plain language — do NOT use the words "back-test", "register", or "buyer-origin" (say e.g. "a targeting strategy, not a measured count of where past buyers came from"). Locations: exactly 3 rows aligning to the 3 personas — `label` is the cohort/geography, `share` is where we'd WEIGHT the campaign as a SHORT verbal label ("Primary focus", "Secondary focus", "Supporting") — a strategy choice, NEVER a measured proportion or percentage — `reasoning` (30-60 words) ties the cohort to the real Fields channel that reaches it (see HOW FIELDS REACHES BUYERS).
 
@@ -307,6 +309,108 @@ def _validate_output(parsed: Any) -> Optional[str]:
     return None
 
 
+def _reconcile_numbers(
+    parsed: Dict[str, Any],
+    *,
+    matching_full_stack: int,
+    active_listings_total: int,
+    cohort_premiums: List[Dict[str, Any]],
+    valuation_range: Optional[Dict[str, Any]],
+    n_personas: int,
+) -> Optional[str]:
+    """Make the thesis stat-card figures authoritative and verify the prose
+    doesn't contradict the computed inputs.
+
+    The numbers shown on the Right Buyers tab (the "{matching} of {total}"
+    receipt, the working range, the persona count) are computed deterministically
+    upstream (scarcity_features + valuation.model_range) and only *narrated* by
+    the model. `_validate_output` checks structure but not the digits, so a
+    transcription slip would ship a stat-card that disagrees with the Market tab
+    (which renders the same counts from the raw numeric fields).
+
+    This pass (a) overwrites each stat-card VALUE from the computed figure — the
+    model owns only the labels — so the cards can never drift, and (b) scans the
+    thesis prose: any "{a} of {b}" receipt, premium %, or property-scale $ figure
+    it quotes must match the source data, else returns an error string that
+    triggers regeneration. Scope is the thesis section, where these figures live.
+    """
+    thesis = parsed.get("thesis") or {}
+    blocks = thesis.get("statBlocks") or []
+
+    has_receipt = (
+        active_listings_total > 0 and 0 <= matching_full_stack <= active_listings_total
+    )
+    receipt = f"{matching_full_stack} of {active_listings_total}" if has_receipt else None
+
+    low = high = None
+    range_str = None
+    if valuation_range and valuation_range.get("low") and valuation_range.get("high"):
+        low = int(valuation_range["low"])
+        high = int(valuation_range["high"])
+        range_str = f"${low:,} – ${high:,}"
+
+    # (a) Authoritative stat-card values — overwrite the digits, keep the labels.
+    for s in blocks:
+        if not isinstance(s, dict):
+            continue
+        v = str(s.get("value", ""))
+        if receipt and re.match(r"^\s*\d[\d,]*\s+of\s+\d[\d,]*\s*$", v):
+            s["value"] = receipt
+        elif range_str and "$" in v and re.search(r"[–—-]|\bto\b", v):
+            s["value"] = range_str
+        elif n_personas and re.search(r"persona", v, re.I) and re.search(r"\d", v):
+            s["value"] = f"{n_personas} personas"
+
+    # (b) Verify the prose doesn't contradict the computed figures.
+    prose = " ".join(
+        [str(thesis.get("headline", ""))]
+        + [str(p) for p in (thesis.get("body") or [])]
+    )
+
+    # Receipt: every "{a} of {b}" must be the computed receipt.
+    if has_receipt:
+        for m in re.finditer(r"(\d[\d,]*)\s+of\s+(\d[\d,]*)", prose):
+            a = int(m.group(1).replace(",", ""))
+            b = int(m.group(2).replace(",", ""))
+            if (a, b) != (matching_full_stack, active_listings_total):
+                return (
+                    f"prose receipt '{a} of {b}' contradicts computed "
+                    f"'{matching_full_stack} of {active_listings_total}'"
+                )
+
+    # Premiums: every % in the thesis prose must match a reliable cohort premium.
+    allowed = {
+        round(abs(p["premium_pct"]), 1)
+        for p in (cohort_premiums or [])
+        if p.get("reliable") and p.get("premium_pct") is not None
+    }
+    for m in re.finditer(r"([+-]?\d+(?:\.\d+)?)\s*%", prose):
+        val = abs(float(m.group(1)))
+        if not any(abs(val - a) <= 0.6 for a in allowed):
+            return f"prose premium '{val}%' not in computed reliable set {sorted(allowed)}"
+
+    # Range: every property-scale $ figure must sit near the computed low/high.
+    if low and high:
+        for m in re.finditer(r"\$\s?([\d,]+(?:\.\d+)?)\s*([MmKk]?)", prose):
+            num = float(m.group(1).replace(",", ""))
+            suf = m.group(2).lower()
+            if suf == "m":
+                num *= 1_000_000
+            elif suf == "k":
+                num *= 1_000
+            if num < 100_000:  # not a property price — skip
+                continue
+            tol_low = max(0.02 * low, 10_000)
+            tol_high = max(0.02 * high, 10_000)
+            if not (abs(num - low) <= tol_low or abs(num - high) <= tol_high):
+                return (
+                    f"prose $ figure '{num:,.0f}' not near working range "
+                    f"{low:,}–{high:,}"
+                )
+
+    return None
+
+
 def resolve_buyers_narrative(
     address: str,
     suburb: str,
@@ -380,6 +484,23 @@ def resolve_buyers_narrative(
         validation_err = _validate_output(parsed)
         if validation_err:
             last_error = f"validation failed attempt {attempt}: {validation_err}"
+            logger.warning(f"  {last_error}")
+            if attempt < MAX_RETRIES:
+                time.sleep(RETRY_BACKOFF_SECONDS[min(attempt - 1, len(RETRY_BACKOFF_SECONDS) - 1)])
+            continue
+
+        # Make stat-card figures authoritative + reject prose that quotes a
+        # number contradicting the computed source data (scarcity/valuation).
+        reconcile_err = _reconcile_numbers(
+            parsed,
+            matching_full_stack=matching_full_stack or 0,
+            active_listings_total=active_listings_total or 0,
+            cohort_premiums=cohort_premiums or [],
+            valuation_range=valuation_range,
+            n_personas=len(personas) if personas else 0,
+        )
+        if reconcile_err:
+            last_error = f"reconcile failed attempt {attempt}: {reconcile_err}"
             logger.warning(f"  {last_error}")
             if attempt < MAX_RETRIES:
                 time.sleep(RETRY_BACKOFF_SECONDS[min(attempt - 1, len(RETRY_BACKOFF_SECONDS) - 1)])
