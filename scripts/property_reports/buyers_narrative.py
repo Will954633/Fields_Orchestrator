@@ -35,13 +35,38 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import re
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
+
+
+def _round_to_100k(v: int) -> int:
+    """Normal rounding (half up) to the nearest $100,000."""
+    return int(math.floor(v / 100_000 + 0.5)) * 100_000
+
+
+def _display_range(
+    valuation_range: Optional[Dict[str, Any]]
+) -> Optional[Tuple[int, int, str]]:
+    """Return (low, high, range_str) for the working range, each rounded to the
+    nearest $100k for display, or None when there is no usable range.
+
+    Rounding is PRESENTATION ONLY — the precise valuation.model_range stored on
+    the report doc is unchanged; this just controls what the buyers tab shows.
+    Falls back to the exact figures if rounding would collapse the band.
+    """
+    if not (valuation_range and valuation_range.get("low") and valuation_range.get("high")):
+        return None
+    low = _round_to_100k(int(valuation_range["low"]))
+    high = _round_to_100k(int(valuation_range["high"]))
+    if low >= high:  # degenerate after rounding — keep the exact band
+        low, high = int(valuation_range["low"]), int(valuation_range["high"])
+    return low, high, f"${low:,} – ${high:,}"
 
 
 MAX_RETRIES = 3
@@ -188,10 +213,12 @@ def _format_inputs(
         f"whole stack."
     )
 
-    if valuation_range and valuation_range.get("low"):
+    dr = _display_range(valuation_range)
+    if dr:
         lines.append("")
         lines.append(
-            f"WORKING VALUATION RANGE: ${valuation_range['low']:,} – ${valuation_range['high']:,}"
+            f"WORKING VALUATION RANGE (use these exact figures — already rounded "
+            f"to the nearest $100k for display): ${dr[0]:,} – ${dr[1]:,}"
         )
 
     lines.append("")
@@ -344,10 +371,9 @@ def _reconcile_numbers(
 
     low = high = None
     range_str = None
-    if valuation_range and valuation_range.get("low") and valuation_range.get("high"):
-        low = int(valuation_range["low"])
-        high = int(valuation_range["high"])
-        range_str = f"${low:,} – ${high:,}"
+    dr = _display_range(valuation_range)
+    if dr:
+        low, high, range_str = dr
 
     # (a) Authoritative stat-card values — overwrite the digits, keep the labels.
     for s in blocks:
