@@ -1695,6 +1695,14 @@ class SlotResolver:
             },
             "ratesSource": rates.get("source"),
             "ratesSampleSize": _to_int(rates.get("sample_size")),
+            # The actual marginal rates applied (for the "assumptions" panel) —
+            # the curated subset that matters most to a homeowner.
+            "rates": {
+                k: _to_int((rates.get("rates") or {}).get(k))
+                for k in ("land_per_sqm", "floor_per_sqm", "per_bedroom",
+                          "per_bathroom", "per_car_space", "per_pool")
+                if (rates.get("rates") or {}).get(k) is not None
+            },
             "comparables": comparables,
         }
 
