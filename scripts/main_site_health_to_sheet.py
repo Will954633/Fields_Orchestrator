@@ -63,8 +63,29 @@ PAGE_HEADERS = ["Data point", "Scope", "Value", "Status", "Freshness field",
 SEV_LABEL = {4: "ERROR", 3: "MISSING", 2: "STALE", 1: "UNKNOWN-FRESHNESS", 0: "OK"}
 
 
-# ---- auth (same OAuth flow as minisite_health_to_sheet.py) --------------------
+# ---- auth ----------------------------------------------------------------------
+# Service account first (same SA api_health_monitor.py uses; the sheet is shared
+# with it as editor). The user OAuth refresh token was revoked 2026-06 and broke
+# the nightly sync silently for 4 days — SA keys don't expire that way. The
+# legacy OAuth path is kept as a fallback only.
+SA_KEY_DEFAULT = "/home/fields/.gcp-floor-plan-vision.json"
+KNOWN_SHEET_ID = "1Oa7uZv0shzsxftDYJJ3WErxhr7OZMf_SOxRFawbSgTk"
+
+
 def get_drive():
+    sa_key = os.environ.get("GOOGLE_VISION_SA_KEY", SA_KEY_DEFAULT)
+    if os.path.exists(sa_key):
+        try:
+            from google.oauth2 import service_account
+            creds = service_account.Credentials.from_service_account_file(
+                sa_key, scopes=["https://www.googleapis.com/auth/drive"])
+            return build("drive", "v3", credentials=creds)
+        except Exception as e:
+            print(f"(service-account auth failed: {e} — falling back to OAuth token)")
+    return _get_drive_oauth()
+
+
+def _get_drive_oauth():
     tok = json.load(open(TOKEN_FILE))
     keys = json.load(open(KEYS_FILE))
     k = keys.get("installed") or keys.get("web")
@@ -179,6 +200,15 @@ def build_workbook(pages, now_utc, totals):
 
 # ---- drive upload -------------------------------------------------------------
 def find_existing(drive):
+    # Known sheet first — folder queries can miss under the service account,
+    # which only sees files explicitly shared with it.
+    try:
+        f = drive.files().get(fileId=KNOWN_SHEET_ID,
+                              fields="id,trashed,capabilities(canEdit)").execute()
+        if not f.get("trashed") and f.get("capabilities", {}).get("canEdit"):
+            return KNOWN_SHEET_ID
+    except Exception:
+        pass
     q = (f"name='{SHEET_NAME}' and '{FOLDER_ID}' in parents "
          f"and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false")
     hits = drive.files().list(q=q, fields="files(id,name)", supportsAllDrives=True,
