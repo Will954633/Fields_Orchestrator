@@ -60,15 +60,13 @@ def _client() -> Optional[OpenAI]:
 
 
 # ---------------------------------------------------------------------- #
-# Claude (Anthropic) vision — fallback when OpenAI is unavailable
+# Claude (Anthropic) vision — PRIMARY engine
 # ---------------------------------------------------------------------- #
-# OpenAI vision is the primary path, but when its key is missing or the account
-# is quota-exhausted (429 insufficient_quota) the whole floor-area methodology
-# stalls — extraction silently returns nothing and downstream falls back to
-# noisy/legacy figures. Claude vision reads the same printed area-summary boxes
-# reliably (verified on real Domain plans), so it is a drop-in second source.
-# It is tried ONLY after the OpenAI path is unavailable or throws, so behaviour
-# is identical whenever OpenAI is healthy.
+# Claude is tried first for both classification and analysis (see
+# _classify_one / analyse_floor_plan). The OpenAI client below it is a dormant
+# fallback only, used when Claude is unavailable but an OpenAI key is set —
+# kept because the 2026-06 OpenAI quota exhaustion showed the value of a
+# second vision source.
 _ANTHROPIC_CLIENT = None
 # Sonnet, not Opus: floor-plan reading is structured OCR, where Sonnet leads on
 # extraction accuracy at ~40% of Opus's cost. Opus-tier was burning credits fast
