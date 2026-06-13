@@ -47,10 +47,13 @@ SA_KEY = os.environ.get("GOOGLE_VISION_SA_KEY", "/home/fields/.gcp-floor-plan-vi
 DB_NAME = "Gold_Coast"
 
 # collection in Gold_Coast  ->  tab title in the sheet
+# Tabs renamed 2026-06-14 ("Robina" -> "Robina_Sold") for symmetry with the new
+# "*_Listed" tabs populated by listed_homes_to_sheet.py. The sold_sheet_ledger tab
+# keys were migrated to match in the same change.
 SUBURB_TABS = {
-    "robina":          "Robina",
-    "varsity_lakes":   "Varsity Lakes",
-    "burleigh_waters": "Burleigh Waters",
+    "robina":          "Robina_Sold",
+    "varsity_lakes":   "Varsity Lakes_Sold",
+    "burleigh_waters": "Burleigh Waters_Sold",
 }
 
 HEADERS = ["Address", "Sale Date", "Sale Price", "Bed/Bath", "Floor Area",
