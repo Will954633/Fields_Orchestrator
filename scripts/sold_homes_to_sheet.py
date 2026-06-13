@@ -110,10 +110,12 @@ def parse_sold_date(sold_date):
 
 
 def price_str(doc) -> str:
-    """A realised sale price ONLY — a clean number like '1,350,000'. Guide/asking text
-    ('Offers above $1.47m', 'Contact Agent', 'Auction') is rejected so it never lands in
-    the Sale Price column; that home is skipped rather than recorded with a fake price."""
-    for key in ("sale_price", "sold_price", "price"):
+    """The CONFIRMED realised sale price ONLY — a clean number like '1,350,000', taken
+    strictly from `sale_price`/`sold_price`. We never fall back to `price`: that field is
+    the last *advertised/asking* price, so when the sale price is withheld it would put an
+    asking figure in the Sale Price column. If there is no confirmed sale price, return ''
+    and the home is skipped (a withheld sale is not invented)."""
+    for key in ("sale_price", "sold_price"):
         v = doc.get(key)
         if not v:
             continue
@@ -177,15 +179,17 @@ def bed_bath(doc) -> str:
     return f"{b if b is not None else ''}/{ba if ba is not None else ''}"
 
 
+WITHHELD = "Withheld"
+
+
 def build_row(doc):
-    """Return the 7 auto-filled cells (A–G), or None if there's no usable price."""
-    price = price_str(doc)
-    if not price:
-        return None
+    """The 7 auto-filled cells (A–G). When Domain withholds the sale price, the Sale
+    Price cell is 'Withheld' (never an asking price) and the home is still listed so the
+    sale can be tracked and the price filled in by hand later."""
     return [
         doc.get("address", ""),
         fmt_date(doc.get("sold_date")),
-        price,
+        price_str(doc) or WITHHELD,
         bed_bath(doc),
         floor_area(doc) or "",
         lot_size(doc) or "",
@@ -228,6 +232,26 @@ def existing_addresses(svc, ssid, title):
     return {norm_addr(r[0]) for r in vals if r and r[0].strip()}
 
 
+# A home is added to a tab at most ONCE, ever — tracked in this ledger so that a row the
+# user deletes by hand is NOT resurrected on the next run. Dedupe = sheet ∪ ledger.
+LEDGER_DB = "system_monitor"
+LEDGER_COLL = "sold_sheet_ledger"
+
+
+def load_ledger(client, tab):
+    return {d["norm_addr"] for d in
+            client[LEDGER_DB][LEDGER_COLL].find({"tab": tab}, {"norm_addr": 1})}
+
+
+def record_ledger(client, tab, address, ts):
+    na = norm_addr(address)
+    client[LEDGER_DB][LEDGER_COLL].update_one(
+        {"_id": f"{tab}|{na}"},
+        {"$set": {"tab": tab, "norm_addr": na, "address": address},
+         "$setOnInsert": {"first_added": ts}},
+        upsert=True)
+
+
 # ---- main ---------------------------------------------------------------------
 def set_env_from_file():
     """Load COSMOS_CONNECTION_STRING etc. from .env so the script runs standalone
@@ -268,9 +292,9 @@ def main():
             if ensure_header(svc, args.spreadsheet_id, tab):
                 print(f"[{tab}] wrote header row (tab was empty)")
 
-        seen = existing_addresses(svc, args.spreadsheet_id, tab)
+        seen = existing_addresses(svc, args.spreadsheet_id, tab) | load_ledger(client, tab)
         candidates = []
-        skipped_unit = skipped_price = 0
+        skipped_unit = 0
         for doc in db[coll].find({"listing_status": "sold"}):
             addr = doc.get("address", "")
             sd = parse_sold_date(doc.get("sold_date"))
@@ -286,24 +310,24 @@ def main():
         # newest first -> ends up at the very top after insert
         candidates.sort(key=lambda x: x[0], reverse=True)
         rows, links, used = [], [], set()
+        withheld = 0
         for sd, doc in candidates:
             na = norm_addr(doc.get("address", ""))
             if na in used:
                 continue
-            row = build_row(doc)   # None when there's no clean realised price
-            if row is None:
-                skipped_price += 1
-                continue
+            row = build_row(doc)
+            if row[2] == "Withheld":
+                withheld += 1
             rows.append(row)
             links.append(doc.get("listing_url") or "")
             used.add(na)
 
         extra = []
+        if withheld:
+            extra.append(f"{withheld} price withheld")
         if skipped_unit:
-            extra.append(f"{skipped_unit} unit/townhouse")
-        if skipped_price:
-            extra.append(f"{skipped_price} no firm price")
-        skip_note = f"  (skipped: {', '.join(extra)})" if extra else ""
+            extra.append(f"{skipped_unit} unit/townhouse skipped")
+        skip_note = f"  ({', '.join(extra)})" if extra else ""
 
         if not rows:
             print(f"[{tab}] nothing new{skip_note}")
@@ -335,6 +359,9 @@ def main():
         svc.spreadsheets().values().update(
             spreadsheetId=args.spreadsheet_id, range=f"'{tab}'!B2",
             valueInputOption="RAW", body={"values": [r[1:] for r in rows]}).execute()
+        ts = datetime.now(AEST).isoformat()
+        for r in rows:
+            record_ledger(client, tab, r[0], ts)
         total_added += n
         per_tab[tab] = n
 
