@@ -360,6 +360,37 @@ class SlotResolver:
         else:
             self.emit.done("comps", "Comparable sales pending — consultant will refine")
 
+        # "Your Street" (deterministic) — reader-facing street-level narrative for
+        # the bottom of the Your Home's Data tab. Reads the engine's
+        # street_evidence / micro_location_evidence off valuation_data (written by
+        # precompute_valuations.py); no LLM. Approves only when we have a real
+        # street or pocket signal — a bare "not enough data" stays pending so the
+        # page shows a placeholder instead.
+        try:
+            from scripts.property_reports.your_street_narrative import (
+                resolve_your_street_narrative,
+            )
+            _vd_subj = (
+                ((self._subject or {}).get("valuation_data") or {})
+                .get("subject_property") or {}
+            )
+            ys = resolve_your_street_narrative(
+                street_evidence=_vd_subj.get("street_evidence"),
+                micro_evidence=_vd_subj.get("micro_location_evidence"),
+                street_view=(prop or {}).get("street_view"),
+                suburb=self.suburb_display,
+                address=self.address,
+            )
+            if ys and ys.get("variant") and ys["variant"] != "neutral":
+                updates["your_street"] = ys
+                updates["slot_status.your_street"] = "approved"
+                logger.info(f"  your_street narrative: variant={ys['variant']}")
+            else:
+                updates["slot_status.your_street"] = "pending"
+        except Exception as e:
+            logger.warning(f"  your_street resolver threw: {e}")
+            updates["slot_status.your_street"] = "error"
+
         # Market state for the suburb
         self.emit.start("market_position", "Writing your market position")
         market = self.market_state()
@@ -1712,6 +1743,13 @@ class SlotResolver:
                 "netAdjustment": _to_int(adj.get("total_adjustment")),
             })
 
+        # Street-level evidence written by the engine onto subject_property:
+        # the supporting sales + raw vs applied premium that drive the
+        # "Street-Level Impact" methodology box on the Valuation tab.
+        subj = vd.get("subject_property") or {}
+        street_evidence = subj.get("street_evidence")
+        micro_location_evidence = subj.get("micro_location_evidence")
+
         return {
             "confidence": {
                 "reconciled": _to_int(conf.get("reconciled_valuation")),
@@ -1724,6 +1762,8 @@ class SlotResolver:
             },
             "ratesSource": rates.get("source"),
             "ratesSampleSize": _to_int(rates.get("sample_size")),
+            "streetEvidence": street_evidence,
+            "microLocationEvidence": micro_location_evidence,
             # The actual marginal rates applied (for the "assumptions" panel) —
             # the curated subset that matters most to a homeowner.
             "rates": {
