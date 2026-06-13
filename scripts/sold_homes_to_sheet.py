@@ -193,6 +193,14 @@ def build_row(doc):
     ]
 
 
+def hyperlink(url: str, label: str) -> str:
+    """A1-cell value that links the address text to its Domain page. Falls back to plain
+    text when there's no URL. Read back via the API it still returns the address label,
+    so address dedupe keeps working."""
+    lab = (label or "").replace('"', '""')
+    return f'=HYPERLINK("{url}","{lab}")' if url else (label or "")
+
+
 # ---- sheet ops ----------------------------------------------------------------
 def tab_id(svc, ssid, title):
     meta = svc.spreadsheets().get(spreadsheetId=ssid).execute()
@@ -277,7 +285,7 @@ def main():
 
         # newest first -> ends up at the very top after insert
         candidates.sort(key=lambda x: x[0], reverse=True)
-        rows, used = [], set()
+        rows, links, used = [], [], set()
         for sd, doc in candidates:
             na = norm_addr(doc.get("address", ""))
             if na in used:
@@ -287,6 +295,7 @@ def main():
                 skipped_price += 1
                 continue
             rows.append(row)
+            links.append(doc.get("listing_url") or "")
             used.add(na)
 
         extra = []
@@ -307,7 +316,7 @@ def main():
         if args.dry_run:
             continue
 
-        # insert + write (range must be tab-qualified)
+        # insert blank rows under the header
         n = len(rows)
         svc.spreadsheets().batchUpdate(spreadsheetId=args.spreadsheet_id, body={"requests": [{
             "insertDimension": {
@@ -316,9 +325,16 @@ def main():
                 "inheritFromBefore": False,
             }
         }]}).execute()
+        # column A: address hyperlinked to its Domain page (USER_ENTERED so the
+        # formula is parsed); columns B–G: plain text (RAW so "08/06" / "1,350,000"
+        # are not coerced into dates/numbers)
+        col_a = [[hyperlink(links[i], rows[i][0])] for i in range(n)]
         svc.spreadsheets().values().update(
             spreadsheetId=args.spreadsheet_id, range=f"'{tab}'!A2",
-            valueInputOption="RAW", body={"values": rows}).execute()
+            valueInputOption="USER_ENTERED", body={"values": col_a}).execute()
+        svc.spreadsheets().values().update(
+            spreadsheetId=args.spreadsheet_id, range=f"'{tab}'!B2",
+            valueInputOption="RAW", body={"values": [r[1:] for r in rows]}).execute()
         total_added += n
         per_tab[tab] = n
 
