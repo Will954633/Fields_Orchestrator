@@ -134,7 +134,10 @@ def _pocket_variant(micro, street_ev, suburb, char):
     return {
         "variant": "pocket",
         "body": body,
-        "stat": {"streetName": name, "nSales": n, "pct": pct, "direction": direction},
+        # No stat tiles for the pocket variant: the figures (n sales, radius, % vs
+        # median) are area-level, not street-level, and the body states them in
+        # full — a "Your street / Recorded sales" tile row would mislabel them.
+        "stat": None,
         "streetCharacter": char,
         "source": f"Fields analysis · {n} sales within {radius_txt} of your home vs {suburb} median.",
         "generated_at": datetime.utcnow().isoformat(),
