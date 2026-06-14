@@ -370,13 +370,10 @@ class SlotResolver:
             from scripts.property_reports.your_street_narrative import (
                 resolve_your_street_narrative,
             )
-            _vd_subj = (
-                ((self._subject or {}).get("valuation_data") or {})
-                .get("subject_property") or {}
-            )
+            _street_ev, _micro_ev = self._resolve_street_evidence()
             ys = resolve_your_street_narrative(
-                street_evidence=_vd_subj.get("street_evidence"),
-                micro_evidence=_vd_subj.get("micro_location_evidence"),
+                street_evidence=_street_ev,
+                micro_evidence=_micro_ev,
                 street_view=(prop or {}).get("street_view"),
                 suburb=self.suburb_display,
                 address=self.address,
@@ -1659,6 +1656,46 @@ class SlotResolver:
             })
         return out
 
+    # Where precompute_valuations.py lives (mirrors valuation_backtest.py).
+    _VALUATION_DIR = "/home/fields/Feilds_Website/07_Valuation_Comps"
+
+    def _resolve_street_evidence(self):
+        """(street_evidence, micro_location_evidence) for the subject.
+
+        Prefers the values the nightly precompute wrote onto the property doc.
+        For homes that batch never processed — chiefly OFF-MARKET submissions
+        (listing_status != 'for_sale'), the core of the seller-direct flow — it
+        computes them on demand from the suburb's sold cohort, using the SAME
+        engine function (build_subject_street_evidence). So every address gets the
+        street section, not just currently-listed ones. Cached for the resolve."""
+        if hasattr(self, "_street_ev_cached"):
+            return self._street_ev_cached, self._micro_ev_cached
+
+        s = self._subject or {}
+        sp = ((s.get("valuation_data") or {}).get("subject_property") or {})
+        street_ev = sp.get("street_evidence")
+        micro_ev = sp.get("micro_location_evidence")
+
+        if not street_ev and not micro_ev and s and self.suburb_key:
+            try:
+                import sys
+                if self._VALUATION_DIR not in sys.path:
+                    sys.path.insert(0, self._VALUATION_DIR)
+                from precompute_valuations import compute_street_evidence_on_demand
+                street_ev, micro_ev = compute_street_evidence_on_demand(
+                    self.db.client, s, self.suburb_key)
+                if street_ev or micro_ev:
+                    logger.info(
+                        "  street evidence computed on-demand "
+                        "(subject not in nightly precompute)"
+                    )
+            except Exception as e:
+                logger.warning(f"  on-demand street evidence failed: {e}")
+
+        self._street_ev_cached = street_ev
+        self._micro_ev_cached = micro_ev
+        return street_ev, micro_ev
+
     def valuation_evidence_from_engine(self) -> Optional[Dict[str, Any]]:
         """Rich transparency payload for the ValuationTab — the SAME numbers the
         listed-property valuation page renders, read straight off the engine's
@@ -1743,12 +1780,11 @@ class SlotResolver:
                 "netAdjustment": _to_int(adj.get("total_adjustment")),
             })
 
-        # Street-level evidence written by the engine onto subject_property:
-        # the supporting sales + raw vs applied premium that drive the
-        # "Street-Level Impact" methodology box on the Valuation tab.
-        subj = vd.get("subject_property") or {}
-        street_evidence = subj.get("street_evidence")
-        micro_location_evidence = subj.get("micro_location_evidence")
+        # Street-level evidence (supporting sales + raw vs applied premium) that
+        # drives the "Street-Level Impact" box. Prefers the precomputed values on
+        # the doc; falls back to an on-demand computation for off-market homes —
+        # see _resolve_street_evidence().
+        street_evidence, micro_location_evidence = self._resolve_street_evidence()
 
         return {
             "confidence": {
