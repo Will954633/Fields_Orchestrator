@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Classify property dwelling type from photos using GPT nano vision.
+Classify property dwelling type from photos using Claude vision (Haiku tier).
 
 Writes `classified_property_type` and `classification_confidence` fields
 to each property document. Downstream systems (FB posts, website, articles)
@@ -104,7 +104,7 @@ def download_and_encode_image(url):
 
 
 def classify_image(image_url, address=""):
-    """Send image to GPT vision and get classification."""
+    """Send image to Claude vision and get classification."""
     prompt = CLASSIFICATION_PROMPT
     if address:
         prompt += f"\n\nThe property address is: {address}"
@@ -263,7 +263,7 @@ def main():
                             "classified_property_type": prop_type,
                             "classification_confidence": confidence,
                             "classification_reasoning": reasoning,
-                            "classification_model": OPENAI_MODEL,
+                            "classification_model": CLASSIFY_MODEL,
                             "classified_at": datetime.now(timezone.utc),
                         }},
                     )
@@ -276,7 +276,7 @@ def main():
                                 "classified_property_type": prop_type,
                                 "classification_confidence": confidence,
                                 "classification_reasoning": reasoning,
-                                "classification_model": OPENAI_MODEL,
+                                "classification_model": CLASSIFY_MODEL,
                                 "classified_at": datetime.now(timezone.utc),
                             }},
                         )
@@ -286,7 +286,7 @@ def main():
             total_classified += 1
             total_processed += 1
 
-            # Rate limit: ~2 requests/sec to stay within OpenAI limits
+            # Gentle pacing between Claude vision calls
             time.sleep(0.5)
 
             if args.limit and total_processed >= args.limit:
