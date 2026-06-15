@@ -162,8 +162,8 @@ processes:
   # ============================================================================
 
   - id: 112
-    name: "Classify Property Type (GPT Vision)"
-    description: "Uses GPT-4o-mini vision to classify each property's dwelling type from photos. Writes classified_property_type field. Catches misclassified Domain listings (e.g. units labelled as houses)."
+    name: "Classify Property Type (Claude Vision)"
+    description: "Uses Claude vision (Haiku tier) to classify each property's dwelling type from photos. Writes classified_property_type field. Catches misclassified Domain listings (e.g. units labelled as houses)."
     phase: "property_classification"
     command: "python3 scripts/classify_property_type.py --no-fail"
     working_dir: "/home/fields/Fields_Orchestrator"
