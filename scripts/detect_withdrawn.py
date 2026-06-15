@@ -65,6 +65,12 @@ MAX_RETRIES = 5              # retry failed requests (Bright Data unlocker ~30% 
 RETRY_DELAY = 3              # seconds between retries
 COSMOS_RETRY_ATTEMPTS = 3    # DB write retries
 
+# Step-level safety limits (2026-06-15): BrightData Web Unlocker is reliable but
+# flaky/slow per-request on Domain. Without a ceiling, a degraded BD night made this
+# step grind ~6h (retries x 60s x ~150 listings) before the orchestrator killed it.
+MAX_RUNTIME_MIN = int(os.environ.get("WITHDRAWN_MAX_RUNTIME_MIN", "40"))      # global wall-clock budget
+CIRCUIT_BREAKER_ERRORS = int(os.environ.get("WITHDRAWN_CIRCUIT_BREAKER", "15"))  # consecutive errors -> abort
+
 
 def get_aest_now():
     """Get current time in AEST (UTC+10)."""
@@ -153,8 +159,14 @@ def run_withdrawn_detection(suburbs, dry_run=False):
 
     totals = {"checked": 0, "withdrawn": 0, "active": 0, "errors": 0, "skipped": 0}
 
+    deadline = time.monotonic() + MAX_RUNTIME_MIN * 60
+    consecutive_errors = 0
+    aborted = None  # reason string if we stop early (deadline or circuit breaker)
+
     try:
         for suburb in suburbs:
+            if aborted:
+                break
             collection = db[suburb]
 
             # Get all for_sale properties with a listing_url
@@ -166,6 +178,11 @@ def run_withdrawn_detection(suburbs, dry_run=False):
             print(f"\n--- {suburb} ({len(props)} for_sale properties) ---")
 
             for prop in props:
+                # Global wall-clock budget — never let BrightData slowness eat the pipeline window
+                if time.monotonic() > deadline:
+                    aborted = f"runtime budget exceeded ({MAX_RUNTIME_MIN} min)"
+                    break
+
                 listing_url = prop.get("listing_url", "")
                 address = prop.get("address", "unknown")
 
@@ -211,11 +228,19 @@ def run_withdrawn_detection(suburbs, dry_run=False):
                             {"_id": prop["_id"]},
                             {"$set": update_fields}
                         ))
+                    consecutive_errors = 0
                 elif status == "active":
                     totals["active"] += 1
+                    consecutive_errors = 0
                 else:
                     totals["errors"] += 1
+                    consecutive_errors += 1
                     print(f"  ERROR: {address} — could not determine status")
+                    # Circuit breaker — BrightData clearly degraded; stop instead of grinding for hours
+                    if consecutive_errors >= CIRCUIT_BREAKER_ERRORS:
+                        aborted = (f"circuit breaker tripped after {consecutive_errors} consecutive "
+                                   f"fetch errors (BrightData Web Unlocker degraded)")
+                        break
 
                 time.sleep(REQUEST_DELAY)
 
@@ -230,6 +255,9 @@ def run_withdrawn_detection(suburbs, dry_run=False):
     print(f"  Withdrawn: {totals['withdrawn']}")
     print(f"  Errors:    {totals['errors']}")
     print(f"  Skipped:   {totals['skipped']} (no listing URL)")
+    if aborted:
+        print(f"  ⚠ ABORTED EARLY: {aborted}")
+        print(f"     Remaining for_sale listings left unchecked — will retry next run.")
     if dry_run:
         print(f"  (DRY RUN — no DB changes made)")
     print(f"{'='*60}")
