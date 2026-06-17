@@ -139,7 +139,7 @@ const TOOLS = [
   {
     name: "create_file",
     description:
-      "Create a new file in Google Drive. For Google Docs, set mimeType to 'application/vnd.google-apps.document' and pass plain text content.",
+      "Create a new file in Google Drive. For a formatted Google Doc, set mimeType to 'application/vnd.google-apps.document' and pass sourceMimeType 'text/html' (or 'text/markdown') so headings/bold/tables are preserved; otherwise content is inserted as plain text.",
     inputSchema: {
       type: "object",
       properties: {
@@ -150,6 +150,11 @@ const TOOLS = [
           description:
             "Target mimeType. Use 'application/vnd.google-apps.document' for Google Docs. Defaults to text/plain.",
         },
+        sourceMimeType: {
+          type: "string",
+          description:
+            "Source format of `content` for conversion into a Google Workspace target (e.g. 'text/html' or 'text/markdown'). Defaults to text/plain (literal text, no formatting).",
+        },
         folderId: { type: "string", description: "Parent folder ID (default: root)" },
       },
       required: ["name"],
@@ -157,13 +162,13 @@ const TOOLS = [
   },
   {
     name: "update_file",
-    description: "Update the text content of an existing file. Works with Google Docs (provide plain text or markdown).",
+    description: "Update the content of an existing file. For a Google Doc, pass mimeType 'text/html' (or 'text/markdown') to replace its content with real formatting (headings/bold/tables); the default text/plain inserts literal text.",
     inputSchema: {
       type: "object",
       properties: {
         fileId: { type: "string", description: "The file ID" },
         content: { type: "string", description: "New text content" },
-        mimeType: { type: "string", description: "Media mimeType for upload (default: text/plain)" },
+        mimeType: { type: "string", description: "Media mimeType for upload. For Google Docs, 'text/html' or 'text/markdown' triggers conversion to formatted content (default: text/plain)." },
       },
       required: ["fileId", "content"],
     },
@@ -322,14 +327,22 @@ async function handleReadFileMetadata({ fileId }) {
   return textResult(res.data);
 }
 
-async function handleCreateFile({ name, content, mimeType, folderId }) {
+// Source formats Drive can convert into a Google Workspace document.
+const CONVERTIBLE_SOURCE_MIMES = ["text/html", "text/markdown"];
+
+async function handleCreateFile({ name, content, mimeType, sourceMimeType, folderId }) {
   const targetMime = mimeType || "text/plain";
   const requestBody = { name, parents: folderId ? [folderId] : undefined };
 
   let media;
   if (content) {
-    // For Google Docs, upload as plain text and let Drive convert
-    const uploadMime = isGoogleWorkspace(targetMime) ? "text/plain" : targetMime;
+    // For a Workspace target, Drive converts the uploaded media based on its
+    // mimeType: text/plain inserts literal text, while text/html and text/markdown
+    // are converted to real headings/bold/tables. Honor a convertible sourceMimeType
+    // when given, otherwise fall back to plain text.
+    const uploadMime = isGoogleWorkspace(targetMime)
+      ? (sourceMimeType && CONVERTIBLE_SOURCE_MIMES.includes(sourceMimeType) ? sourceMimeType : "text/plain")
+      : targetMime;
     requestBody.mimeType = targetMime;
     media = { mimeType: uploadMime, body: Readable.from([content]) };
   } else {
@@ -345,9 +358,14 @@ async function handleCreateFile({ name, content, mimeType, folderId }) {
 }
 
 async function handleUpdateFile({ fileId, content, mimeType }) {
-  // Check if target is a Google Doc — if so, upload as plain text
+  // For a Google Doc, Drive converts the uploaded media into Doc format based on
+  // its mimeType. text/plain inserts literal text; text/html and text/markdown are
+  // converted to real headings/bold/tables. Honor a convertible mimeType when the
+  // caller supplies one, otherwise fall back to plain text.
   const meta = await drive.files.get({ fileId, fields: "mimeType" });
-  const uploadMime = isGoogleWorkspace(meta.data.mimeType) ? "text/plain" : (mimeType || "text/plain");
+  const uploadMime = isGoogleWorkspace(meta.data.mimeType)
+    ? (mimeType && CONVERTIBLE_SOURCE_MIMES.includes(mimeType) ? mimeType : "text/plain")
+    : (mimeType || "text/plain");
 
   const res = await drive.files.update({
     fileId,
