@@ -360,6 +360,35 @@ class SlotResolver:
         else:
             self.emit.done("comps", "Comparable sales pending — consultant will refine")
 
+        # Statutory CMA (PO Act 2014 (Qld) s 215 / Sch 2) — the legally-required
+        # comparative market analysis: at least 3 sales within the previous 6
+        # months and within 5 km, of similar type/size. Suburb-first; the 5 km
+        # cross-suburb ring only rescues thin suburbs that lack 3 recent local
+        # sales. DISPLAY + LIGHT SUPPORT ONLY — this does NOT re-base the engine
+        # math (which stays suburb-keyed + time-adjusted). The payload carries its
+        # own `compliant` flag + s 215 written-explanation fallback, so the slot
+        # is "approved" whenever a payload was produced; the component branches on
+        # the payload. See statutory_cma.py + the 2026-06-21 compliance audit.
+        if self._subject:
+            self.emit.start("statutory_cma", "Building your comparative market analysis")
+            try:
+                from scripts.property_reports.statutory_cma import build_statutory_cma
+                cma = build_statutory_cma(self.db, self._subject, self.suburb_key)
+                updates["valuation.statutory_cma"] = cma
+                updates["slot_status.statutory_cma"] = "approved"
+                self.emit.done(
+                    "statutory_cma",
+                    (f"{cma['n_total']} sales within 6 months / 5 km"
+                     if cma["compliant"]
+                     else "Too few recent local sales — s 215 written explanation"),
+                    count=cma["n_total"],
+                )
+            except Exception as e:
+                logger.warning(f"  statutory_cma resolver threw: {e}")
+                updates["slot_status.statutory_cma"] = "error"
+        else:
+            updates["slot_status.statutory_cma"] = "pending"
+
         # "Your Street" (deterministic) — reader-facing street-level narrative for
         # the bottom of the Your Home's Data tab. Reads the engine's
         # street_evidence / micro_location_evidence off valuation_data (written by
