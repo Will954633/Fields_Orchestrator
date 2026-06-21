@@ -49,3 +49,5 @@ proposals/
 
 # Local Netlify folder
 .netlify
+node_modules
+compliance_exports/
