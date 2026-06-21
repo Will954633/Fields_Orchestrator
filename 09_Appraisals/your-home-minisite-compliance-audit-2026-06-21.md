@@ -30,6 +30,24 @@ However, because it **is** an appraisal delivered in response to a seller's requ
 
 The remaining findings (G–N) are medium/low severity and are detailed in §5.
 
+> ### IMPLEMENTATION STATUS — all items actioned 2026-06-21
+> | Item | Status | What shipped |
+> |------|--------|--------------|
+> | A | ✅ Done | Statutory CMA layer (`statutory_cma.py` + `StatutoryCMA` component); see §4.A. |
+> | B | ✅ Done | Removed the Domain head-to-head accuracy comparison + "Domain does not publish" line from the valuation; kept Fields' own MAE without superiority framing; removed "1,683 Domain valuations" references from `methodNotes` + `ValuationEvidence`. |
+> | C | ✅ Done | "This is a market appraisal … not a sworn or formal valuation by a registered valuer" stated under the valuation headline + in the report footer. (Did NOT wholesale-rename "valuation"→"appraisal" — added the clarifying statement instead, to avoid churn/regression; flag if a full rename is wanted.) |
+> | D | ✅ Done | Appraisal-specific disclaimer block in `ReportFooter` (estimate-not-valuation, third-party data, limitation of liability, link to /disclaimer). |
+> | E | ✅ Done | "Prepared as at / valid until (90 days)" on the statutory CMA **and** the footer. |
+> | F | ✅ Done | Licensee identity + **QLD Licence No. 4832972** in `ReportFooter`. Also corrected a wrong licence number (4832971→4832972) on Disclaimer/About/Editorial pages. |
+> | G | ✅ Done | Buyer catchment shares + campaign reach explicitly labelled "modelled … not measured / not a guarantee" (BuyersTab). |
+> | H | ✅ Done | "What this appraisal assumes — and what to verify" block (title/encumbrances, flood + GCCC FloodWise pointer, zoning/approvals) on the Valuation tab. |
+> | I | ✅ Done | Ownership/authority acknowledgement line at the address-entry step (non-blocking, preserves zero-friction flow). |
+> | J | ✅ Done | Costs + Form 6 reference on the Next tab (no published fee figures). |
+> | M | ✅ Done | "General information, not financial/legal/tax advice" caveat in the FAQ editorial footer. |
+> | K | ◐ Partial | Statutory CMA is now snapshotted on the report doc (reproducible as-at). Broader per-version snapshot retention still recommended. |
+> | L, N | ▢ Process | Non-code: keep credential evidence (L); treat the editorial fact-check gate as the licensee check of record before marketing copy ships (N). |
+> | ValuationAccuracyPage | ▢ Noted | The public /valuation-accuracy page references Domain methodologically (not a superiority claim on an appraisal) — left in place; revisit if any superiority phrasing is added.
+
 ---
 
 ## 2. The Obligations — What the Law and Best Practice Require
