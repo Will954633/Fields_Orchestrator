@@ -49,8 +49,12 @@ We do NOT re-select these. They are sourced from the SAME competitor matcher tha
 powers the Competition map (`comparables.closest_active`) — single source of truth —
 mapped to a compact CMA shape by `current_listings_from_comparables()` and injected
 into this payload by the resolver (so the archived CMA of record carries both limbs).
-These are ASKING-PRICE GUIDES, display-only — never fed into the valuation figure
-(asking prices are not transaction prices).
+These are ASKING-PRICE GUIDES shown for the CMA competition disclosure. This payload
+is NOT what the engine reads for the figure — but note the engine SEPARATELY includes
+priced, naturally-qualifying current listings in the reconciled figure via its own
+comparable pool (see precompute_valuations.py); those are surfaced, clearly labelled
+"Listed (asking)", in the weighted evidence. So current listings can carry weight in
+the figure on their own merits — this CMA table is the broader competition view.
 
 See: 09_Appraisals/your-home-minisite-compliance-audit-2026-06-21.md
      00_Run_Commands/Industry_Governance/Sales and Marketing - Part 1 (1).pdf (§3.5)
