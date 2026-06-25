@@ -1807,6 +1807,12 @@ class SlotResolver:
                     if isinstance(v, dict) and _to_int(v.get("dollars"))
                 ],
                 "netAdjustment": _to_int(adj.get("total_adjustment")),
+                # Publicly-displayable photos of this comparable so a homeowner
+                # can SEE each home their property is being compared to (mini-site
+                # Valuation tab). The engine attaches only Azure-blob URLs (403
+                # publicly), so we look up the comp's source doc and lift its
+                # Domain CDN URLs — same source the for-sale gallery serves from.
+                "photos": self._comp_display_photos(self._comp_source_doc(c)),
             })
 
         # Street-level evidence (supporting sales + raw vs applied premium) that
@@ -1839,6 +1845,158 @@ class SlotResolver:
             },
             "comparables": comparables,
         }
+
+    # Fields we project when looking up a comparable's source doc for photos.
+    # Deliberately excludes the Azure-blob mirrors (`property_images`/`images`),
+    # which return 403 publicly — only the Domain CDN URLs are displayable.
+    _COMP_PHOTO_PROJECTION = {
+        "domain_hero_image_url": 1,
+        "property_images_refreshed": 1,
+        "property_images_original": 1,
+        "scraped_property_images": 1,
+        "domain_image_urls": 1,
+    }
+
+    def _comp_source_doc(self, comp: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Find the Gold_Coast document behind an engine comparable so we can lift
+        its photos. The comp carries an `_id` string and a full address; we resolve
+        the suburb → collection from the address (comps can be cross-suburb),
+        then look up by `_id`, falling back to a street-address match. Returns just
+        the photo fields (see `_COMP_PHOTO_PROJECTION`) or None."""
+        addr = (comp.get("address") or "").strip()
+        # Candidate collections: the comp's own suburb first, then the subject's.
+        colls: List[str] = []
+        ck = self._collection_key_from_address(addr)
+        if ck:
+            colls.append(ck)
+        if self.suburb_key and self.suburb_key not in colls:
+            colls.append(self.suburb_key)
+        if not colls:
+            return None
+
+        oid = None
+        try:
+            oid = ObjectId(str(comp.get("id")))
+        except Exception:
+            oid = None
+
+        for cn in colls:
+            try:
+                coll = self.db[cn]
+            except Exception:
+                continue
+            if oid is not None:
+                try:
+                    doc = coll.find_one({"_id": oid}, self._COMP_PHOTO_PROJECTION)
+                    if doc:
+                        return doc
+                except Exception:
+                    pass
+        # Fallback: match on the street line (everything before the first comma).
+        street = addr.split(",")[0].strip()
+        if street:
+            for cn in colls:
+                try:
+                    doc = self.db[cn].find_one(
+                        {"address": {"$regex": "^" + re.escape(street), "$options": "i"}},
+                        self._COMP_PHOTO_PROJECTION,
+                    )
+                    if doc:
+                        return doc
+                except Exception:
+                    pass
+        return None
+
+    @staticmethod
+    def _collection_key_from_address(addr: str) -> Optional[str]:
+        """Suburb collection key (lowercase_with_underscores) parsed from a comp
+        address like '4 Springvale Street, Robina QLD 4226'."""
+        if not addr:
+            return None
+        m = re.search(
+            r",\s*([A-Za-z'’\-. ]+?)\s+(?:QLD|NSW|VIC|ACT|NT|SA|TAS|WA)\b",
+            addr, flags=re.I,
+        )
+        suburb = ""
+        if m:
+            suburb = m.group(1)
+        else:
+            parts = [p.strip() for p in addr.split(",") if p.strip()]
+            if parts:
+                suburb = re.sub(r"\s+(?:QLD|NSW|VIC|ACT|NT|SA|TAS|WA)\b.*$", "", parts[-1], flags=re.I)
+        suburb = suburb.strip().lower().replace(" ", "_").replace("-", "_")
+        return suburb or None
+
+    @staticmethod
+    def _domain_image_stem(url: str) -> Optional[str]:
+        """The Domain image id shared by every CDN size variant of one photo
+        (e.g. '2020242297_1_1_250903_011326'), so a small rimh2 thumbnail and the
+        full-res bucket-api URL of the same shot can be paired."""
+        if not isinstance(url, str):
+            return None
+        m = re.search(r"/([0-9]{6,}_\d+_\d+_\d+_\d+)", url)
+        return m.group(1) if m else None
+
+    def _comp_display_photos(
+        self, source_doc: Optional[Dict[str, Any]], cap: int = 15
+    ) -> List[Dict[str, str]]:
+        """Up to `cap` publicly-displayable photos of a comparable, as
+        {thumb, full} pairs the mini-site renders directly:
+
+          - `full`  — full-resolution (refreshed b.domainstatic / bucket-api),
+                      used in the lightbox.
+          - `thumb` — small signed rimh2 URL when available (fast card
+                      thumbnails); falls back to `full`.
+
+        Pairs the two size variants by Domain image stem so thumb and full refer
+        to the same shot. Returns [] when the doc carries no public URL."""
+        if not source_doc:
+            return []
+
+        def _clean(seq: Any) -> List[str]:
+            out: List[str] = []
+            for u in seq or []:
+                if isinstance(u, str):
+                    u = u.rstrip("\\").strip()
+                    if u:
+                        out.append(u)
+            return out
+
+        full_sources = (
+            _clean(source_doc.get("property_images_refreshed"))
+            + _clean(source_doc.get("property_images_original"))
+            + _clean(source_doc.get("scraped_property_images"))
+        )
+        thumb_sources = _clean(source_doc.get("domain_image_urls"))
+
+        full_by_stem: Dict[str, str] = {}
+        order: List[str] = []
+        for u in full_sources:
+            stem = self._domain_image_stem(u) or u
+            if stem not in full_by_stem:
+                full_by_stem[stem] = u
+                order.append(stem)
+        thumb_by_stem: Dict[str, str] = {}
+        for u in thumb_sources:
+            stem = self._domain_image_stem(u) or u
+            if stem not in thumb_by_stem:
+                thumb_by_stem[stem] = u
+
+        photos: List[Dict[str, str]] = []
+        if order:
+            for stem in order:
+                full = full_by_stem[stem]
+                photos.append({"thumb": thumb_by_stem.get(stem, full), "full": full})
+        elif thumb_sources:
+            # Only thumbnails available — use them for both.
+            for u in thumb_sources:
+                photos.append({"thumb": u, "full": u})
+        else:
+            hero = source_doc.get("domain_hero_image_url")
+            if isinstance(hero, str) and hero.strip():
+                photos.append({"thumb": hero.strip(), "full": hero.strip()})
+
+        return photos[:cap]
 
     def recent_comparable_sales(self, n: int = 6) -> List[Dict[str, Any]]:
         """
