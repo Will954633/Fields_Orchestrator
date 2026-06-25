@@ -25,8 +25,8 @@ full location-adjustment + a backtest before they may feed the figure. So:
     engine already used; and
   * thin suburbs reach into the 5 km ring purely to satisfy the statutory minimum.
 
-SELECTION RULE
---------------
+SELECTION RULE (sold limb)
+--------------------------
 A comparable QUALIFIES when it is: listing_status == "sold"; sold within the last
 `window_months`; same property-type group as the subject; bedrooms within ±1;
 HAS coordinates; and is within `radius_km` of the subject. Suburb-first — only
@@ -37,7 +37,23 @@ Source: ONLY the fresh, coordinate-bearing Gold_Coast sold collections. The lega
 Target_Market_Sold_Last_12_Months source is stale (Feb 2026) and carries no
 coordinates, so it cannot support a 6-month / 5 km test and is never used here.
 
+CURRENT-ON-MARKET LIMB (industry standard)
+------------------------------------------
+The OFT/REIQ "Sales and Marketing" training manual (the industry articulation of
+the s 215 CMA duty) adds that the CMA "should also include information on at least
+three properties currently on the market that are comparable". Note: NO radius and
+NO time window attach to this limb — Schedule 2's 6-month / 5 km qualifiers apply
+ONLY to the sold limb. Current listings just have to be "comparable".
+
+We do NOT re-select these. They are sourced from the SAME competitor matcher that
+powers the Competition map (`comparables.closest_active`) — single source of truth —
+mapped to a compact CMA shape by `current_listings_from_comparables()` and injected
+into this payload by the resolver (so the archived CMA of record carries both limbs).
+These are ASKING-PRICE GUIDES, display-only — never fed into the valuation figure
+(asking prices are not transaction prices).
+
 See: 09_Appraisals/your-home-minisite-compliance-audit-2026-06-21.md
+     00_Run_Commands/Industry_Governance/Sales and Marketing - Part 1 (1).pdf (§3.5)
 """
 
 from __future__ import annotations
@@ -69,6 +85,8 @@ MIN_COMPS = 3
 TARGET_COMPS = 8
 BED_BAND = 1          # "similar standard" proxy — bedrooms within ±1
 VALIDITY_DAYS = 90    # how long the CMA is presented as current (audit item E)
+MIN_CURRENT = 3       # industry standard: "at least three" current-on-market comps
+TARGET_CURRENT = 6    # how many current listings to surface (matches the competitor feed)
 
 _PROJECTION = {
     "address": 1, "street_address": 1, "suburb": 1,
@@ -192,6 +210,45 @@ def _rank_key(subj_beds: Optional[int]):
     return key
 
 
+def current_listings_from_comparables(
+    comparables: Optional[Dict[str, Any]],
+    limit: int = TARGET_CURRENT,
+) -> List[Dict[str, Any]]:
+    """Map the competitor matcher's `closest_active` feed onto the compact CMA
+    current-on-market shape. Single source of truth: these are the SAME ranked
+    listings shown on the Competition map — no re-selection, no divergence.
+
+    Asking-price guides are kept verbatim (e.g. "Offers Over $1,595,000",
+    "Contact agent", "Auction") — never coerced into a single number for the
+    figure. `price_mid` carries the matcher's numeric midpoint where one exists,
+    for display ordering only.
+    """
+    if not isinstance(comparables, dict):
+        return []
+    rows = comparables.get("closest_active") or []
+    out: List[Dict[str, Any]] = []
+    for r in rows:
+        if not isinstance(r, dict):
+            continue
+        addr = (r.get("address") or "").strip()
+        if not addr:
+            continue
+        out.append({
+            "address": addr,
+            "suburb": (r.get("suburb") or "").strip(),
+            "price_guide": r.get("price"),            # raw agent guide, verbatim
+            "price_mid": r.get("price_mid"),          # numeric midpoint or None (display only)
+            "sale_method": r.get("sale_method_label") or r.get("sale_method"),
+            "bedrooms": r.get("bedrooms"),
+            "bathrooms": r.get("bathrooms"),
+            "distance_km": r.get("distance_km"),
+            "days_on_market": r.get("days_on_market"),
+        })
+        if len(out) >= limit:
+            break
+    return out
+
+
 def build_statutory_cma(
     db: Database,
     subject_doc: Dict[str, Any],
@@ -294,6 +351,11 @@ def build_statutory_cma(
         "n_within_suburb": n_suburb,
         "n_total": n_total,
         "comparables": display,
+        # Current-on-market limb — injected by the resolver from the competitor
+        # feed (single source of truth). Seeded empty so the field always exists
+        # and the archived payload is self-describing even before the feed runs.
+        "current_listings": [],
+        "n_current": 0,
         "fallback": None if compliant else "written_explanation",
         "statement": statement,
         "source": "Fields sold-sales record (Gold_Coast), exact unrounded prices.",
