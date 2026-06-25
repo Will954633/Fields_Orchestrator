@@ -33,6 +33,7 @@ from scripts.property_reports.market_narrative import resolve_market_narrative
 from scripts.property_reports.scarcity_features import resolve_scarcity_features
 from scripts.property_reports.valuation_format import display_range
 from scripts.property_reports.competitor_matcher import resolve_competitor_map
+from scripts.property_reports.statutory_cma import current_listings_from_comparables
 from scripts.property_reports.case_study_dynamic import resolve_dynamic_case_study
 from scripts.property_reports.comparable_feed import (
     comparables_from_slots,
@@ -921,6 +922,26 @@ class SlotResolver:
                 f"  comparable feed: {len(comparables['closest_active'])} active, "
                 f"{len(comparables['closest_sold'])} sold, {len(events)} events"
             )
+
+            # Industry-standard CMA current-on-market limb: surface the SAME
+            # ranked active listings from the competitor feed inside the statutory
+            # CMA payload (so the archived CMA of record carries both the sold and
+            # the current limb). No 5 km / 6-month qualifiers apply to current
+            # listings — they only have to be "comparable". Display-only guides.
+            current = current_listings_from_comparables(comparables)
+            cma_obj = updates.get("valuation.statutory_cma")
+            if isinstance(cma_obj, dict):
+                # Full build: the CMA object is in this same $set — mutate it in
+                # place (setting a dotted sub-path alongside the whole object
+                # would be a Mongo update conflict).
+                cma_obj["current_listings"] = current
+                cma_obj["n_current"] = len(current)
+            elif (self.report.get("valuation") or {}).get("statutory_cma"):
+                # Nightly refresh: the sold limb already exists on the doc — merge
+                # the refreshed current limb via dotted sub-paths. Skip entirely
+                # when no CMA exists yet (a full build will populate it properly).
+                updates["valuation.statutory_cma.current_listings"] = current
+                updates["valuation.statutory_cma.n_current"] = len(current)
         except Exception as e:
             logger.warning(f"  comparable feed resolver threw: {e}")
 
@@ -1993,32 +2014,37 @@ class SlotResolver:
         Permanent and under our control — no dependence on Domain rotating URLs."""
         if not doc_id or not suburb_key:
             return []
-        bucket = "for_sale" if kind == "listing" else "sold"
-        try:
-            base = blob_storage._local_root() / "property-images" / bucket / suburb_key / doc_id
-            photos_dir = base / "photos"
-            thumbs_dir = base / "thumbs"
-            # Both sizes must exist — otherwise serving full-res as a thumbnail
-            # would bloat the card strip. (for_sale galleries have no thumbs/ yet,
-            # so active comps fall through to the Domain CDN path below.)
-            if not (photos_dir.is_dir() and thumbs_dir.is_dir()):
-                return []
-            names = sorted(p.name for p in photos_dir.iterdir() if p.is_file())
-            if not names:
-                return []
-            pub = blob_storage._public_base()
-            prefix = f"{pub}/property-images/{bucket}/{suburb_key}/{doc_id}"
-            out: List[Dict[str, str]] = []
-            for name in names[:cap]:
-                thumb = (
-                    f"{prefix}/thumbs/{name}" if (thumbs_dir / name).is_file()
-                    else f"{prefix}/photos/{name}"
-                )
-                out.append({"thumb": thumb, "full": f"{prefix}/photos/{name}"})
-            return out
-        except Exception as e:
-            logger.debug(f"  local comp photos lookup failed for {doc_id}: {e}")
-            return []
+        # The comp's stored `kind` can be stale — an active listing may have sold
+        # since the report was generated, in which case its gallery now lives under
+        # `sold/` not `for_sale/`. So check BOTH buckets, preferring the one the
+        # kind implies.
+        buckets = ["for_sale", "sold"] if kind == "listing" else ["sold", "for_sale"]
+        for bucket in buckets:
+            try:
+                base = blob_storage._local_root() / "property-images" / bucket / suburb_key / doc_id
+                photos_dir = base / "photos"
+                thumbs_dir = base / "thumbs"
+                # Both sizes must exist — otherwise serving full-res as a thumbnail
+                # would bloat the card strip. A home not yet backfilled in this
+                # bucket is skipped (caller falls back to Domain CDN).
+                if not (photos_dir.is_dir() and thumbs_dir.is_dir()):
+                    continue
+                names = sorted(p.name for p in photos_dir.iterdir() if p.is_file())
+                if not names:
+                    continue
+                pub = blob_storage._public_base()
+                prefix = f"{pub}/property-images/{bucket}/{suburb_key}/{doc_id}"
+                out: List[Dict[str, str]] = []
+                for name in names[:cap]:
+                    thumb = (
+                        f"{prefix}/thumbs/{name}" if (thumbs_dir / name).is_file()
+                        else f"{prefix}/photos/{name}"
+                    )
+                    out.append({"thumb": thumb, "full": f"{prefix}/photos/{name}"})
+                return out
+            except Exception as e:
+                logger.debug(f"  local comp photos lookup failed for {doc_id} ({bucket}): {e}")
+        return []
 
     def _comp_display_photos(
         self, source_doc: Optional[Dict[str, Any]], cap: int = 15
