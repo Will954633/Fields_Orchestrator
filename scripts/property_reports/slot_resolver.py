@@ -26,6 +26,7 @@ from typing import Any, Dict, List, Optional
 from bson import ObjectId
 from pymongo.database import Database
 
+from shared import blob_storage
 from scripts.property_reports.hero_photo import score_and_pick_hero
 from scripts.property_reports.walking_distances import resolve_pois
 from scripts.property_reports.market_narrative import resolve_market_narrative
@@ -1773,6 +1774,12 @@ class SlotResolver:
             addr = re.sub(r",?\s*(QLD|VIC|NSW|ACT|NT|SA|TAS|WA)\s*\d{4}\s*$", "", addr, flags=re.I)
             addr = re.sub(r"\s{2,}", " ", addr).rstrip(",").strip()
             vr = c.get("verification") or {}
+            # One lookup of the comp's source doc serves both its photos and its
+            # coordinates (for the evidence map). lat/lng fall back to None when
+            # the comp can't be resolved or the doc isn't geocoded — that comp
+            # simply isn't plotted, but still appears in the cards/table.
+            src_doc = self._comp_source_doc(c)
+            comp_latlng = _doc_latlng(src_doc or {})
             comparables.append({
                 "id": str(c.get("id") or c.get("address") or ""),
                 "address": addr or "Unknown",
@@ -1781,6 +1788,9 @@ class SlotResolver:
                 "adjustedPrice": _to_int(adj.get("adjusted_price")),
                 "saleDate": c.get("sale_date"),
                 "distanceKm": c.get("distance_km"),
+                # Coordinates for the evidence map (None when not geocoded).
+                "lat": comp_latlng[0] if comp_latlng else None,
+                "lng": comp_latlng[1] if comp_latlng else None,
                 "weightPct": round(_norm_w(c) * 100),
                 "weight": round(_norm_w(c), 4),  # float — for exact L5 reconciliation
                 "weightFactors": (c.get("weight") or {}).get("factors") or {},
@@ -1807,12 +1817,21 @@ class SlotResolver:
                     if isinstance(v, dict) and _to_int(v.get("dollars"))
                 ],
                 "netAdjustment": _to_int(adj.get("total_adjustment")),
-                # Publicly-displayable photos of this comparable so a homeowner
-                # can SEE each home their property is being compared to (mini-site
-                # Valuation tab). The engine attaches only Azure-blob URLs (403
-                # publicly), so we look up the comp's source doc and lift its
-                # Domain CDN URLs — same source the for-sale gallery serves from.
-                "photos": self._comp_display_photos(self._comp_source_doc(c)),
+                # Photos of this comparable so a homeowner can SEE each home their
+                # property is being compared to (mini-site Valuation tab). Prefer
+                # our OWN blob store (blobs.fieldsestate.com.au) — permanent,
+                # self-hosted, with pre-sized thumbnails — for any home backfilled
+                # by scripts/backfill_sold_fullres_photos.py. Fall back to Domain
+                # CDN for homes not yet localised (the engine's own Azure-blob URLs
+                # are 403 publicly, so they're never used).
+                "photos": (
+                    self._comp_local_photos(
+                        str(c.get("id") or ""),
+                        self._collection_key_from_address(addr) or self.suburb_key,
+                        "listing" if c.get("series") == "current_listing" else "sold",
+                    )
+                    or self._comp_display_photos(src_doc)
+                ),
             })
 
         # Street-level evidence (supporting sales + raw vs applied premium) that
@@ -1821,7 +1840,24 @@ class SlotResolver:
         # see _resolve_street_evidence().
         street_evidence, micro_location_evidence = self._resolve_street_evidence()
 
+        # Subject coordinates so the evidence map can anchor "your home" and frame
+        # the bounds around it. None when the subject isn't geocoded — the map
+        # then simply doesn't render (the cards/table still do).
+        subj_latlng = self.subject_latlng()
+        subject_block = None
+        if subj_latlng:
+            subj_addr = re.sub(
+                r",?\s*(QLD|VIC|NSW|ACT|NT|SA|TAS|WA)\s*\d{4}\s*$", "",
+                (self.address or "").strip(), flags=re.I,
+            ).rstrip(",").strip()
+            subject_block = {
+                "lat": subj_latlng[0],
+                "lng": subj_latlng[1],
+                "address": subj_addr or None,
+            }
+
         return {
+            "subject": subject_block,
             "confidence": {
                 "reconciled": _to_int(conf.get("reconciled_valuation")),
                 "level": conf.get("confidence"),
@@ -1846,15 +1882,23 @@ class SlotResolver:
             "comparables": comparables,
         }
 
-    # Fields we project when looking up a comparable's source doc for photos.
-    # Deliberately excludes the Azure-blob mirrors (`property_images`/`images`),
-    # which return 403 publicly — only the Domain CDN URLs are displayable.
+    # Fields we project when looking up a comparable's source doc — its photos
+    # (for the card strip) and its coordinates (for the Valuation-tab evidence
+    # map). Deliberately excludes the Azure-blob mirrors (`property_images`/
+    # `images`), which return 403 publicly — only the Domain CDN URLs display.
     _COMP_PHOTO_PROJECTION = {
         "domain_hero_image_url": 1,
         "property_images_refreshed": 1,
         "property_images_original": 1,
         "scraped_property_images": 1,
         "domain_image_urls": 1,
+        # Coordinates — so each comparable can be plotted on the evidence map.
+        "LATITUDE": 1,
+        "LONGITUDE": 1,
+        "latitude": 1,
+        "longitude": 1,
+        "lat": 1,
+        "lng": 1,
     }
 
     def _comp_source_doc(self, comp: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -1936,6 +1980,45 @@ class SlotResolver:
             return None
         m = re.search(r"/([0-9]{6,}_\d+_\d+_\d+_\d+)", url)
         return m.group(1) if m else None
+
+    def _comp_local_photos(
+        self, doc_id: str, suburb_key: Optional[str], kind: str, cap: int = 15
+    ) -> List[Dict[str, str]]:
+        """Self-hosted photos for a comparable from our OWN blob store
+        (blobs.fieldsestate.com.au), as {thumb, full} pairs. Requires a backfilled
+        gallery with BOTH `photos/` (full-res) and `thumbs/` (~320px) — produced by
+        scripts/backfill_sold_fullres_photos.py for sold homes. Returns [] when the
+        home hasn't been localised yet, so the caller falls back to Domain CDN.
+
+        Permanent and under our control — no dependence on Domain rotating URLs."""
+        if not doc_id or not suburb_key:
+            return []
+        bucket = "for_sale" if kind == "listing" else "sold"
+        try:
+            base = blob_storage._local_root() / "property-images" / bucket / suburb_key / doc_id
+            photos_dir = base / "photos"
+            thumbs_dir = base / "thumbs"
+            # Both sizes must exist — otherwise serving full-res as a thumbnail
+            # would bloat the card strip. (for_sale galleries have no thumbs/ yet,
+            # so active comps fall through to the Domain CDN path below.)
+            if not (photos_dir.is_dir() and thumbs_dir.is_dir()):
+                return []
+            names = sorted(p.name for p in photos_dir.iterdir() if p.is_file())
+            if not names:
+                return []
+            pub = blob_storage._public_base()
+            prefix = f"{pub}/property-images/{bucket}/{suburb_key}/{doc_id}"
+            out: List[Dict[str, str]] = []
+            for name in names[:cap]:
+                thumb = (
+                    f"{prefix}/thumbs/{name}" if (thumbs_dir / name).is_file()
+                    else f"{prefix}/photos/{name}"
+                )
+                out.append({"thumb": thumb, "full": f"{prefix}/photos/{name}"})
+            return out
+        except Exception as e:
+            logger.debug(f"  local comp photos lookup failed for {doc_id}: {e}")
+            return []
 
     def _comp_display_photos(
         self, source_doc: Optional[Dict[str, Any]], cap: int = 15
