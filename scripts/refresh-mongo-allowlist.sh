@@ -68,10 +68,12 @@ PY
 # during a transient billing outage), treat current as empty so the diff below
 # registers a change and the rule gets created fresh (self-heal).
 if CUR_JSON=$(gcloud compute firewall-rules describe "$RULE_NAME" --format=json 2>/dev/null); then
+    RULE_EXISTS=true
     printf '%s' "$CUR_JSON" \
         | /usr/bin/python3 -c "import json,sys; print('\n'.join(sorted(json.load(sys.stdin).get('sourceRanges', []))))" \
         > "$TMP_CUR"
 else
+    RULE_EXISTS=false
     log "Rule $RULE_NAME not found — self-heal: will create it fresh."
     : > "$TMP_CUR"
 fi
@@ -91,16 +93,30 @@ REMOVED=$(comm -23 "$TMP_CUR" "$TMP_NEW" | wc -l)
 log "Change detected: +$ADDED ranges, -$REMOVED ranges"
 
 NEW_RANGES_CSV=$(tr '\n' ',' < "$TMP_NEW" | sed 's/,$//')
+DESCRIPTION="mongod allowlist (auto-refreshed). AWS us-east-1 EC2 + extras. syncToken=$SYNC_TOKEN updated $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-log "Recreating firewall rule $RULE_NAME..."
-gcloud compute firewall-rules delete "$RULE_NAME" --quiet 2>&1 | tail -2 || true
-gcloud compute firewall-rules create "$RULE_NAME" \
-    --direction=INGRESS \
-    --action=ALLOW \
-    --rules=tcp:27017 \
-    --target-tags="$TARGET_TAG" \
-    --source-ranges="$NEW_RANGES_CSV" \
-    --description="mongod allowlist (auto-refreshed). AWS us-east-1 EC2 + extras. syncToken=$SYNC_TOKEN updated $(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-    2>&1 | tail -3
+if [ "$RULE_EXISTS" = "true" ]; then
+    # Update in place — NEVER delete first. An in-place update is atomic, so a
+    # failed apply (billing lapse, transient API error) leaves the existing rule
+    # intact instead of leaving mongod firewalled off. This is the durable fix
+    # for the 2026-07-11 outage where delete succeeded but recreate failed.
+    log "Updating firewall rule $RULE_NAME in place..."
+    gcloud compute firewall-rules update "$RULE_NAME" \
+        --rules=tcp:27017 \
+        --source-ranges="$NEW_RANGES_CSV" \
+        --description="$DESCRIPTION" \
+        2>&1 | tail -3
+else
+    # Rule genuinely absent (first run, or a prior failure deleted it) — create it.
+    log "Creating firewall rule $RULE_NAME..."
+    gcloud compute firewall-rules create "$RULE_NAME" \
+        --direction=INGRESS \
+        --action=ALLOW \
+        --rules=tcp:27017 \
+        --target-tags="$TARGET_TAG" \
+        --source-ranges="$NEW_RANGES_CSV" \
+        --description="$DESCRIPTION" \
+        2>&1 | tail -3
+fi
 
 log "Done."
