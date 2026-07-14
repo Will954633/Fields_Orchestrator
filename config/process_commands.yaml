@@ -65,7 +65,7 @@ processes:
     working_dir: "/home/fields/Fields_Orchestrator"
     mongodb_activity: "moderate_write"
     requires_browser: false  # Migrated from Selenium to curl_cffi (2026-03-11)
-    estimated_duration_minutes: 10  # 3 suburbs × ~3 pages each = ~2 min scraping + DB ops
+    estimated_duration_minutes: 90  # 6 suburbs × ~20-25 min each (per-listing cross-ref) → ~150 min; timeout = 2× = 180 min. Was 10 (stale "3 suburbs" est) → 20-min timeout → chronic mid-run timeout + 3× retries (fixed 2026-07-14)
     cooldown_seconds: 20
     depends_on: [101]
 
