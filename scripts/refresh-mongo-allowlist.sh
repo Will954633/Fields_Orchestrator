@@ -63,10 +63,18 @@ with open(out_path, 'w') as f:
 print(f"New rule would have {len(combined)} source ranges")
 PY
 
-# Read current rule's sourceRanges
-gcloud compute firewall-rules describe "$RULE_NAME" --format=json \
-    | /usr/bin/python3 -c "import json,sys; print('\n'.join(sorted(json.load(sys.stdin).get('sourceRanges', []))))" \
-    > "$TMP_CUR"
+# Read current rule's sourceRanges. If the rule is missing (e.g. a prior
+# delete+recreate deleted it but the create failed — as happened 2026-07-11
+# during a transient billing outage), treat current as empty so the diff below
+# registers a change and the rule gets created fresh (self-heal).
+if CUR_JSON=$(gcloud compute firewall-rules describe "$RULE_NAME" --format=json 2>/dev/null); then
+    printf '%s' "$CUR_JSON" \
+        | /usr/bin/python3 -c "import json,sys; print('\n'.join(sorted(json.load(sys.stdin).get('sourceRanges', []))))" \
+        > "$TMP_CUR"
+else
+    log "Rule $RULE_NAME not found — self-heal: will create it fresh."
+    : > "$TMP_CUR"
+fi
 
 NEW_COUNT=$(wc -l < "$TMP_NEW")
 CUR_COUNT=$(wc -l < "$TMP_CUR")
