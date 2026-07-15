@@ -163,86 +163,102 @@ def run_withdrawn_detection(suburbs, dry_run=False):
     consecutive_errors = 0
     aborted = None  # reason string if we stop early (deadline or circuit breaker)
 
+    # ---- Round-robin ordering across suburbs (2026-07-16) ----
+    # Previously we processed suburbs strictly sequentially. Combined with the 40-min
+    # runtime budget, the first suburb (robina, ~98 listings) consumed the entire window,
+    # so burleigh_waters — and often varsity_lakes — were never reached. Their withdrawals
+    # went undetected indefinitely (e.g. 12 Beaconsfield Drive sat as for_sale for weeks).
+    # Interleaving listings round-robin spreads a tight budget evenly across every suburb.
+    per_suburb = []          # list of (suburb, collection, [props])
+    for suburb in suburbs:
+        collection = db[suburb]
+        props = list(retry_db(lambda collection=collection: list(collection.find(
+            {"listing_status": "for_sale", "listing_url": {"$exists": True, "$ne": None}},
+            {"address": 1, "listing_url": 1, "listing_status": 1}
+        ))))
+        per_suburb.append((suburb, collection, props))
+        print(f"  {suburb}: {len(props)} for_sale properties")
+
+    # Interleave: suburb0[0], suburb1[0], suburb2[0], suburb0[1], ... so if the budget
+    # runs out early, coverage is proportional across suburbs rather than front-loaded.
+    worklist = []
+    maxlen = max((len(p) for _, _, p in per_suburb), default=0)
+    for i in range(maxlen):
+        for suburb, collection, props in per_suburb:
+            if i < len(props):
+                worklist.append((suburb, collection, props[i]))
+
+    per_suburb_checked = {s: 0 for s, _, _ in per_suburb}
+    print(f"\n--- checking {len(worklist)} listings round-robin across {len(per_suburb)} suburb(s) ---")
+
     try:
-        for suburb in suburbs:
-            if aborted:
+        for suburb, collection, prop in worklist:
+            # Global wall-clock budget — never let BrightData slowness eat the pipeline window
+            if time.monotonic() > deadline:
+                aborted = f"runtime budget exceeded ({MAX_RUNTIME_MIN} min)"
                 break
-            collection = db[suburb]
 
-            # Get all for_sale properties with a listing_url
-            props = list(retry_db(lambda: list(collection.find(
-                {"listing_status": "for_sale", "listing_url": {"$exists": True, "$ne": None}},
-                {"address": 1, "listing_url": 1, "listing_status": 1}
-            ))))
+            listing_url = prop.get("listing_url", "")
+            address = prop.get("address", "unknown")
 
-            print(f"\n--- {suburb} ({len(props)} for_sale properties) ---")
+            if not listing_url or not listing_url.startswith("http"):
+                totals["skipped"] += 1
+                continue
 
-            for prop in props:
-                # Global wall-clock budget — never let BrightData slowness eat the pipeline window
-                if time.monotonic() > deadline:
-                    aborted = f"runtime budget exceeded ({MAX_RUNTIME_MIN} min)"
+            totals["checked"] += 1
+            per_suburb_checked[suburb] += 1
+            status = check_listing_status(session, listing_url)
+
+            if status == "withdrawn":
+                totals["withdrawn"] += 1
+                print(f"  WITHDRAWN: {address}")
+                if not dry_run:
+                    # Fetch full doc to capture asking price before status change
+                    full_doc = retry_db(lambda collection=collection, prop=prop: collection.find_one({"_id": prop["_id"]}))
+                    listing_price = full_doc.get("price") if full_doc else None
+                    price_history = full_doc.get("price_history", []) if full_doc else []
+
+                    update_fields = {
+                        "listing_status": "withdrawn",
+                        "withdrawn_date": today_aest,
+                        "withdrawn_detected_at": now_iso,
+                        "detection_method": "listing_url_redirect_check",
+                        "last_updated": now_iso,
+                        "listing_price": listing_price,
+                    }
+
+                    # Append final "withdrawn" entry to price_history
+                    if listing_price:
+                        sys.path.insert(0, '/home/fields/Fields_Orchestrator/scripts')
+                        from track_price_changes import parse_price_numeric
+                        price_history.append({
+                            "price_text": listing_price,
+                            "price_numeric": parse_price_numeric(listing_price),
+                            "recorded_at": now_iso,
+                            "run_id": today_aest,
+                            "event": "withdrawn"
+                        })
+                        update_fields["price_history"] = price_history
+
+                    retry_db(lambda collection=collection, prop=prop, update_fields=update_fields: collection.update_one(
+                        {"_id": prop["_id"]},
+                        {"$set": update_fields}
+                    ))
+                consecutive_errors = 0
+            elif status == "active":
+                totals["active"] += 1
+                consecutive_errors = 0
+            else:
+                totals["errors"] += 1
+                consecutive_errors += 1
+                print(f"  ERROR: {address} — could not determine status")
+                # Circuit breaker — BrightData clearly degraded; stop instead of grinding for hours
+                if consecutive_errors >= CIRCUIT_BREAKER_ERRORS:
+                    aborted = (f"circuit breaker tripped after {consecutive_errors} consecutive "
+                               f"fetch errors (BrightData Web Unlocker degraded)")
                     break
 
-                listing_url = prop.get("listing_url", "")
-                address = prop.get("address", "unknown")
-
-                if not listing_url or not listing_url.startswith("http"):
-                    totals["skipped"] += 1
-                    continue
-
-                totals["checked"] += 1
-                status = check_listing_status(session, listing_url)
-
-                if status == "withdrawn":
-                    totals["withdrawn"] += 1
-                    print(f"  WITHDRAWN: {address}")
-                    if not dry_run:
-                        # Fetch full doc to capture asking price before status change
-                        full_doc = retry_db(lambda: collection.find_one({"_id": prop["_id"]}))
-                        listing_price = full_doc.get("price") if full_doc else None
-                        price_history = full_doc.get("price_history", []) if full_doc else []
-
-                        update_fields = {
-                            "listing_status": "withdrawn",
-                            "withdrawn_date": today_aest,
-                            "withdrawn_detected_at": now_iso,
-                            "detection_method": "listing_url_redirect_check",
-                            "last_updated": now_iso,
-                            "listing_price": listing_price,
-                        }
-
-                        # Append final "withdrawn" entry to price_history
-                        if listing_price:
-                            sys.path.insert(0, '/home/fields/Fields_Orchestrator/scripts')
-                            from track_price_changes import parse_price_numeric
-                            price_history.append({
-                                "price_text": listing_price,
-                                "price_numeric": parse_price_numeric(listing_price),
-                                "recorded_at": now_iso,
-                                "run_id": today_aest,
-                                "event": "withdrawn"
-                            })
-                            update_fields["price_history"] = price_history
-
-                        retry_db(lambda: collection.update_one(
-                            {"_id": prop["_id"]},
-                            {"$set": update_fields}
-                        ))
-                    consecutive_errors = 0
-                elif status == "active":
-                    totals["active"] += 1
-                    consecutive_errors = 0
-                else:
-                    totals["errors"] += 1
-                    consecutive_errors += 1
-                    print(f"  ERROR: {address} — could not determine status")
-                    # Circuit breaker — BrightData clearly degraded; stop instead of grinding for hours
-                    if consecutive_errors >= CIRCUIT_BREAKER_ERRORS:
-                        aborted = (f"circuit breaker tripped after {consecutive_errors} consecutive "
-                                   f"fetch errors (BrightData Web Unlocker degraded)")
-                        break
-
-                time.sleep(REQUEST_DELAY)
+            time.sleep(REQUEST_DELAY)
 
     finally:
         session.close()
@@ -255,9 +271,27 @@ def run_withdrawn_detection(suburbs, dry_run=False):
     print(f"  Withdrawn: {totals['withdrawn']}")
     print(f"  Errors:    {totals['errors']}")
     print(f"  Skipped:   {totals['skipped']} (no listing URL)")
+    print(f"  Per-suburb checked: " + ", ".join(
+        f"{s}={per_suburb_checked.get(s, 0)}/{len(p)}" for s, _, p in per_suburb))
     if aborted:
+        # Report which suburbs were left short so a silent budget-abort can't rot again.
+        unfinished = [f"{s} ({per_suburb_checked.get(s, 0)}/{len(p)})"
+                      for s, _, p in per_suburb if per_suburb_checked.get(s, 0) < len(p)]
         print(f"  ⚠ ABORTED EARLY: {aborted}")
+        print(f"     Suburbs left incomplete: {', '.join(unfinished) if unfinished else 'none'}")
         print(f"     Remaining for_sale listings left unchecked — will retry next run.")
+        if not dry_run:
+            try:
+                sys.path.insert(0, '/home/fields/Fields_Orchestrator/scripts')
+                from telegram_notify import send_message
+                send_message(
+                    f"⚠️ *Withdrawn detection (step 113) aborted early*\n"
+                    f"{aborted}\n"
+                    f"Suburbs left incomplete: {', '.join(unfinished) if unfinished else 'none'}\n"
+                    f"Checked {totals['checked']}, withdrawn {totals['withdrawn']}, errors {totals['errors']}."
+                )
+            except Exception as e:
+                print(f"     (telegram alert failed: {e})")
     if dry_run:
         print(f"  (DRY RUN — no DB changes made)")
     print(f"{'='*60}")
