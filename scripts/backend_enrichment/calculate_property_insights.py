@@ -24,15 +24,16 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List
 
-from pymongo import MongoClient
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
+from shared.env import load_env  # type: ignore
+from shared.db import get_client, get_db, cosmos_retry, EmptyWorkSetError, sleep_with_jitter, FEATURED_SUBURBS  # type: ignore
 from shared.monitor_client import MonitorClient  # type: ignore
-from shared.ru_guard import cosmos_retry, EmptyWorkSetError, sleep_with_jitter  # type: ignore
 
-TARGET_SUBURBS = ["robina", "varsity_lakes", "burleigh_waters"]
+load_env()
+
+TARGET_SUBURBS = FEATURED_SUBURBS
 
 
 def get_ordinal_suffix(n):
@@ -388,13 +389,8 @@ def calculate_property_insights() -> None:
     )
     monitor.start()
 
-    mongo_uri = os.getenv("COSMOS_CONNECTION_STRING") or os.getenv(
-        "MONGODB_URI", "mongodb://localhost:27017/"
-    )
-    client = MongoClient(
-        mongo_uri, retryWrites=False, tls=True, tlsAllowInvalidCertificates=True
-    )
-    db = client["Gold_Coast"]
+    client = get_client()
+    db = get_db("Gold_Coast")
     stats_collection = db["suburb_statistics"]
 
     processed = with_insights = errors = 0

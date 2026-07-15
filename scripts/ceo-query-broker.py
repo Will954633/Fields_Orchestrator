@@ -1038,6 +1038,66 @@ def fetch_search_console(days: int) -> dict[str, Any]:
         return {"source": "google_search_console", "error": error, "queries": [], "pages": []}
 
 
+def fetch_screenshot(url_path: str) -> dict[str, Any]:
+    """Take a screenshot of a fieldsestate.com.au page and return base64 PNG + page text."""
+    import subprocess as _sp
+    import glob
+
+    result: dict[str, Any] = {"url": f"https://fieldsestate.com.au{url_path}", "page_text": "", "screenshot_b64": ""}
+
+    try:
+        r = _sp.run(
+            ["node", "scripts/site-inspector.js", "--url", url_path],
+            capture_output=True, text=True, timeout=60,
+            cwd="/home/fields/Fields_Orchestrator",
+        )
+
+        # Find output directory from stdout
+        output_dir = None
+        for line in r.stdout.splitlines():
+            if "Output:" in line:
+                output_dir = line.split("Output:")[-1].strip()
+                break
+
+        if not output_dir:
+            artifacts = "/home/fields/Fields_Orchestrator/artifacts/browser_artifacts"
+            dirs = sorted(glob.glob(f"{artifacts}/*/"), reverse=True)
+            if dirs:
+                output_dir = dirs[0].rstrip("/")
+
+        if output_dir:
+            import os
+            for root, _dirs, files in os.walk(output_dir):
+                for f in files:
+                    fpath = os.path.join(root, f)
+                    if f == "screenshot.png":
+                        import base64 as _b64
+                        with open(fpath, "rb") as img:
+                            result["screenshot_b64"] = _b64.b64encode(img.read()).decode("utf-8")
+                    elif f == "page-text.txt":
+                        with open(fpath) as txt:
+                            result["page_text"] = txt.read()[:10000]
+                    elif f == "console.log":
+                        with open(fpath) as cl:
+                            result["console_log"] = cl.read()[:2000]
+                    elif f == "network-errors.log":
+                        with open(fpath) as ne:
+                            content = ne.read().strip()
+                            if content:
+                                result["network_errors"] = content[:2000]
+
+            result["success"] = True
+        else:
+            result["success"] = False
+            result["error"] = "Could not find output directory"
+
+    except Exception as exc:
+        result["success"] = False
+        result["error"] = str(exc)[:300]
+
+    return result
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Read-only query broker for CEO tools")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -1079,6 +1139,9 @@ def main() -> None:
     df_p = sub.add_parser("decision-feed-metrics")
     df_p.add_argument("--days", type=int, default=7)
 
+    ss_p = sub.add_parser("screenshot")
+    ss_p.add_argument("--url", type=str, required=True, help="URL path e.g. /for-sale-v2")
+
     args = parser.parse_args()
 
     if args.command == "founder-truths":
@@ -1092,6 +1155,9 @@ def main() -> None:
         return
     if args.command == "decision-feed-metrics":
         print(dumps_json(fetch_decision_feed_metrics(args.days)))
+        return
+    if args.command == "screenshot":
+        print(dumps_json(fetch_screenshot(args.url)))
         return
 
     client = get_client()

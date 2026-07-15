@@ -246,9 +246,11 @@ def main():
             if r.get("key_concepts"):
                 print(f"   Concepts: {', '.join(r['key_concepts'][:3])}")
             if r.get("key_initiatives"):
-                print(f"   Initiatives: {', '.join(r['key_initiatives'][:3])}")
+                inits = [str(x) if isinstance(x, str) else (x.get('title', str(x)) if isinstance(x, dict) else str(x)) for x in r['key_initiatives'][:3]]
+                print(f"   Initiatives: {', '.join(inits)}")
             if r.get("actionable_insights"):
-                print(f"   Insights: {', '.join(r['actionable_insights'][:2])}")
+                insights = [str(x) if isinstance(x, str) else (x.get('title', str(x)) if isinstance(x, dict) else str(x)) for x in r['actionable_insights'][:2]]
+                print(f"   Insights: {', '.join(insights)}")
             print()
 
 

@@ -275,10 +275,48 @@ def enrich_property_zoning(prop: Dict) -> Optional[Dict]:
         result["flood_depth_code"] = gridcode
         result["flood_depth_description"] = FLOOD_DEPTH_LEGEND.get(gridcode, f"Unknown ({gridcode})")
 
-    # 6d. Historical flood events (insurance)
-    time.sleep(0.3)
-    flood_events = query_by_point(SERVICES["flood_insurance"], lat, lng)
-    result["flood_historical_events"] = len(flood_events)
+    # 6d. ICA Insurance Flood Probability Zones
+    # These are modelled flood probability zones provided TO the Insurance Council of Australia
+    # for insurance pricing. 5 layers representing different annual exceedance probabilities.
+    # A property NOT in any layer suggests insurers assess it as lower risk than the council overlay.
+    ICA_LAYERS = {
+        1: {"name": "frequent", "aep": "20%", "return_period": "1-in-5 year"},
+        2: {"name": "infrequent_5pct", "aep": "5%", "return_period": "1-in-20 year"},
+        3: {"name": "infrequent_1pct", "aep": "1%", "return_period": "1-in-100 year"},
+        4: {"name": "rare", "aep": "0.2%", "return_period": "1-in-500 year"},
+        5: {"name": "extremely_rare", "aep": "0.05%", "return_period": "1-in-2000 year"},
+    }
+    ica_base = f"{ARCGIS_BASE}/Insurance_Flood_Event/FeatureServer"
+    ica_results = {}
+    in_any_ica_zone = False
+    for layer_id, layer_info in ICA_LAYERS.items():
+        time.sleep(0.3)
+        try:
+            geometry = f'{{"x":{lng},"y":{lat},"spatialReference":{{"wkid":4326}}}}'
+            resp = requests.post(f"{ica_base}/{layer_id}/query", data={
+                "geometry": geometry,
+                "geometryType": "esriGeometryPoint",
+                "spatialRel": "esriSpatialRelIntersects",
+                "returnCountOnly": "true",
+                "f": "json",
+            }, timeout=TIMEOUT)
+            resp.raise_for_status()
+            count = resp.json().get("count", 0)
+            ica_results[layer_info["name"]] = count > 0
+            if count > 0:
+                in_any_ica_zone = True
+        except Exception:
+            ica_results[layer_info["name"]] = None  # query failed
+
+    result["ica_flood_zones"] = ica_results
+    result["in_any_ica_zone"] = in_any_ica_zone
+    if result.get("flood_overlay") and not in_any_ica_zone:
+        result["ica_note"] = (
+            "This property has a City Plan flood overlay but does NOT fall within any of the "
+            "five ICA insurance flood probability zones (1-in-5-year through 1-in-2000-year). "
+            "The insurance industry's flood model assesses this location as lower risk than "
+            "the council planning overlay implies."
+        )
 
     # 7. Heritage (spatial)
     time.sleep(0.3)

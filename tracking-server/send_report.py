@@ -100,12 +100,36 @@ def create_tracking_record(db, recipient_email, recipient_name, property_address
     return tracking_id
 
 
-def generate_email_html(tracking_id, recipient_name, property_address, subject):
-    """Generate the email HTML with tracking pixel and viewer link."""
+def generate_email_html(tracking_id, recipient_name, property_address, subject,
+                        custom_body=None):
+    """Generate the email HTML with tracking pixel and viewer link.
+
+    If custom_body is provided, it replaces the default body paragraphs.
+    custom_body can be plain text (paragraphs split by double newline) or HTML.
+    """
     viewer_url = f"{BASE_URL}/view/{tracking_id}"
     pixel_url = f"{BASE_URL}/pixel/{tracking_id}.gif"
 
     first_name = recipient_name.split()[0] if recipient_name else ""
+    p_style = 'style="font-size:15px; color:#22382C; line-height:1.7; margin-bottom:20px; font-family:Verdana,sans-serif;"'
+
+    if custom_body:
+        # Convert plain text paragraphs to HTML paragraphs
+        if "<p" not in custom_body and "<br" not in custom_body:
+            paragraphs = [p.strip() for p in custom_body.split("\n\n") if p.strip()]
+            body_html = "\n".join([f'            <p {p_style}>\n                {p}\n            </p>' for p in paragraphs])
+        else:
+            body_html = custom_body
+    else:
+        body_html = f"""            <p {p_style}>
+                Hi {first_name},
+            </p>
+            <p {p_style}>
+                Your property appraisal for <strong>{property_address}</strong> is ready. Please find the full report below.
+            </p>
+            <p {p_style}>
+                If you have any questions, reply to this email and I'll be happy to walk you through the findings.
+            </p>"""
 
     html = f"""<!DOCTYPE html>
 <html>
@@ -129,24 +153,10 @@ def generate_email_html(tracking_id, recipient_name, property_address, subject):
     <!-- Body -->
     <tr>
         <td style="padding:40px 32px;">
-            <p style="font-size:15px; color:#22382C; line-height:1.7; margin-bottom:20px; font-family:Verdana,sans-serif;">
-                Hi {first_name},
-            </p>
-            <p style="font-size:15px; color:#22382C; line-height:1.7; margin-bottom:20px; font-family:Verdana,sans-serif;">
-                It's Will here, I'm a property analyst at Fields Real Estate. First of all, thank you so much for giving me the opportunity to appraise your property. You have a fantastic asset here that will attract strong demand in the market.
-            </p>
-            <p style="font-size:15px; color:#22382C; line-height:1.7; margin-bottom:20px; font-family:Verdana,sans-serif;">
-                A few factors in particular work in your favour. A 3&#8211;6 month selling window puts your sale in some of the best selling months of the year for Merrimac, particularly toward the later end. Secondly, your home's proximity to All Saints is a standout feature &#8212; many families dream of being able to walk their children to school. Thirdly, scarcity &#8212; there are really very few homes with 5 bedrooms plus a study in a dual living zone arrangement. Those factors will work strongly for you.
-            </p>
-            <p style="font-size:15px; color:#22382C; line-height:1.7; margin-bottom:20px; font-family:Verdana,sans-serif;">
-                I've included a number of suggestions in the report of how the unique attributes of your home should drive selling strategy as a guide, and I'd welcome the opportunity to discuss these in person.
-            </p>
-            <p style="font-size:15px; color:#22382C; line-height:1.7; margin-bottom:32px; font-family:Verdana,sans-serif;">
-                Please take your time to read the report, I'm here to answer your questions any time.
-            </p>
+{body_html}
 
             <!-- CTA Button -->
-            <table width="100%" cellpadding="0" cellspacing="0">
+            <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:32px;">
             <tr><td align="center">
                 <a href="{viewer_url}"
                    style="display:inline-block; background:#B76749; color:#ffffff; padding:14px 40px;

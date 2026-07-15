@@ -4,12 +4,11 @@ Add display_postcode to all Gold_Coast suburb collections.
 ==========================================================
 
 Problem: Australia Post postcode boundaries don't align with suburb boundaries.
-Robina (suburb) spans postcodes 4226, 4227, 4218, 4213, 4220. The GNAF
-cadastral POSTCODE field is the correct mail delivery postcode. Domain.com.au
-uses the primary suburb postcode for all listings (e.g. 4226 for all of Robina).
+The GNAF cadastral POSTCODE field is the correct mail delivery postcode but
+Domain.com.au uses the primary suburb postcode for all listings.
 
-Solution: Add a `display_postcode` field set to the primary/recognised postcode
-for the suburb collection. Keep the original POSTCODE untouched.
+Solution: Add a `display_postcode` field set to the primary postcode for the
+suburb. Keep the original POSTCODE untouched.
 
 Usage:
     python add_display_postcode.py                   # all suburbs
@@ -24,8 +23,6 @@ import time
 from pymongo import MongoClient
 from pymongo.errors import OperationFailure, WriteError
 
-# Primary display postcode for each suburb collection
-# Source: Australia Post + Domain.com.au conventions
 SUBURB_POSTCODES = {
     "advancetown": "4211",
     "alberton": "4207",
@@ -108,75 +105,39 @@ SUBURB_POSTCODES = {
 
 
 def add_display_postcode(db, suburb: str, postcode: str, dry_run: bool = False) -> dict:
-    """Add display_postcode to all docs in a suburb collection."""
+    """Add display_postcode to all docs in a suburb collection using paginated updates."""
     coll = db[suburb]
 
-    # Count docs that need updating (don't already have correct display_postcode)
-    needs_update_query = {
-        "$or": [
-            {"display_postcode": {"$exists": False}},
-            {"display_postcode": {"$ne": postcode}},
-        ]
-    }
-
-    # Count with retry
-    count = 0
-    for attempt in range(5):
-        try:
-            count = coll.count_documents(needs_update_query)
-            break
-        except OperationFailure as e:
-            if e.code == 16500 and attempt < 4:
-                time.sleep(2 * (attempt + 1))
-            else:
-                raise
-
-    already_correct = 0
-    for attempt in range(5):
-        try:
-            already_correct = coll.count_documents({"display_postcode": postcode})
-            break
-        except OperationFailure as e:
-            if e.code == 16500 and attempt < 4:
-                time.sleep(2 * (attempt + 1))
-            else:
-                raise
+    query = {"display_postcode": {"$ne": postcode}}
 
     if dry_run:
-        return {
-            "suburb": suburb,
-            "postcode": postcode,
-            "needs_update": count,
-            "already_correct": already_correct,
-            "updated": 0,
-        }
+        # Just check if any docs need updating
+        for attempt in range(5):
+            try:
+                sample = coll.find_one(query, {"_id": 1})
+                needs = "yes" if sample else "no"
+                break
+            except OperationFailure as e:
+                if e.code == 16500 and attempt < 4:
+                    time.sleep(2 * (attempt + 1))
+                else:
+                    raise
+        return {"suburb": suburb, "postcode": postcode, "needs_update": needs, "updated": 0}
 
-    if count == 0:
-        return {
-            "suburb": suburb,
-            "postcode": postcode,
-            "needs_update": 0,
-            "already_correct": already_correct,
-            "updated": 0,
-        }
-
-    # Paginated update — fetch small batches of IDs, update one at a time
-    # Cosmos serverless can't handle large finds or batch writes
+    # Paginated update: fetch 500 IDs at a time, update one-by-one
     updated = 0
     errors = 0
-    total_to_process = count
-    page_size = 500
+    page = 0
 
     while True:
-        # Fetch a page of IDs that still need updating
+        page += 1
         batch_ids = []
         for attempt in range(5):
             try:
-                batch_ids = [d["_id"] for d in coll.find(needs_update_query, {"_id": 1}).limit(page_size)]
+                batch_ids = [d["_id"] for d in coll.find(query, {"_id": 1}).limit(500)]
                 break
-            except (OperationFailure, WriteError) as e:
-                code = getattr(e, 'code', None)
-                if code == 16500 and attempt < 4:
+            except OperationFailure as e:
+                if e.code == 16500 and attempt < 4:
                     time.sleep(3 * (attempt + 1))
                 else:
                     raise
@@ -187,10 +148,7 @@ def add_display_postcode(db, suburb: str, postcode: str, dry_run: bool = False) 
         for doc_id in batch_ids:
             for attempt in range(6):
                 try:
-                    coll.update_one(
-                        {"_id": doc_id},
-                        {"$set": {"display_postcode": postcode}},
-                    )
+                    coll.update_one({"_id": doc_id}, {"$set": {"display_postcode": postcode}})
                     updated += 1
                     break
                 except (OperationFailure, WriteError) as e:
@@ -201,18 +159,10 @@ def add_display_postcode(db, suburb: str, postcode: str, dry_run: bool = False) 
                         errors += 1
                         break
 
-        print(f"    {suburb}: {updated}/{total_to_process} updated ({errors} errors)")
-        time.sleep(2)  # breathe between pages
+        print(f"    {suburb}: page {page}, {updated} updated ({errors} errors)")
+        time.sleep(2)
 
-    print(f"    {suburb}: {updated}/{total_to_process} DONE ({errors} errors)")
-
-    return {
-        "suburb": suburb,
-        "postcode": postcode,
-        "needs_update": total_to_process,
-        "already_correct": already_correct,
-        "updated": updated,
-    }
+    return {"suburb": suburb, "postcode": postcode, "needs_update": updated + errors, "updated": updated, "errors": errors}
 
 
 def main():
@@ -229,39 +179,37 @@ def main():
     client = MongoClient(conn)
     db = client["Gold_Coast"]
 
-    # Determine which suburbs to process
     if args.suburb:
         if args.suburb not in SUBURB_POSTCODES:
-            print(f"ERROR: Unknown suburb '{args.suburb}'. Known: {', '.join(sorted(SUBURB_POSTCODES.keys()))}")
+            print(f"ERROR: Unknown suburb '{args.suburb}'")
             sys.exit(1)
         suburbs = {args.suburb: SUBURB_POSTCODES[args.suburb]}
     else:
-        # Only process collections that actually exist
         existing = set(db.list_collection_names())
         suburbs = {s: pc for s, pc in SUBURB_POSTCODES.items() if s in existing}
 
     mode = "DRY RUN" if args.dry_run else "LIVE"
     print(f"=== Add display_postcode ({mode}) ===")
-    print(f"Suburbs to process: {len(suburbs)}\n")
+    print(f"Suburbs: {len(suburbs)}\n")
 
     total_updated = 0
-    total_needed = 0
+    total_errors = 0
 
     for suburb, postcode in sorted(suburbs.items()):
-        time.sleep(1)  # rate limit between suburbs
+        time.sleep(1)
+        print(f"  {suburb} → {postcode}")
         result = add_display_postcode(db, suburb, postcode, dry_run=args.dry_run)
-        total_needed += result["needs_update"]
         total_updated += result["updated"]
+        total_errors += result.get("errors", 0)
 
         if args.dry_run:
-            status = f"needs {result['needs_update']}, already done {result['already_correct']}"
+            print(f"    needs update: {result['needs_update']}")
         else:
-            status = f"updated {result['updated']}"
-        print(f"  {suburb} → {postcode}: {status}")
+            print(f"    DONE: {result['updated']} updated, {result.get('errors', 0)} errors")
 
     print(f"\n=== COMPLETE ===")
-    print(f"Total needed: {total_needed}")
     print(f"Total updated: {total_updated}")
+    print(f"Total errors: {total_errors}")
 
     client.close()
 

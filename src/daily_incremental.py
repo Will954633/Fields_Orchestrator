@@ -63,7 +63,7 @@ def write_for_sale_snapshot(
     snapshot_file = state_dir / "for_sale_snapshot.json"
 
     client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000,
-                         retryWrites=False, tls=True, tlsAllowInvalidCertificates=True)
+                         retryWrites=False, **({"tls": True, "tlsAllowInvalidCertificates": True} if "cosmos.azure.com" in uri else {}))
 
     address_list: List[str] = []
     if target_suburbs:
@@ -107,7 +107,7 @@ def compute_candidate_sets(
     prev_addresses = _load_snapshot_addresses(snapshot_file)
 
     client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000,
-                         retryWrites=False, tls=True, tlsAllowInvalidCertificates=True)
+                         retryWrites=False, **({"tls": True, "tlsAllowInvalidCertificates": True} if "cosmos.azure.com" in uri else {}))
 
     current: List[Dict] = []
     if target_suburbs:

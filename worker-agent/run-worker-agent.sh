@@ -31,6 +31,9 @@ echo "[$TIME] Worker Agent starting — date: $DATE, max turns: $MAX_TURNS" | te
 source /home/fields/venv/bin/activate
 set -a && source "$ORCHESTRATOR_DIR/.env" && set +a
 
+# Allow running from within another Claude Code session (cron or manual trigger)
+unset CLAUDECODE 2>/dev/null || true
+
 # Send Telegram notification — session starting
 python3 "$ORCHESTRATOR_DIR/scripts/telegram_notify.py" --message "🤖 Worker Agent session starting ($TIME AEST). Reading sprint and backlog..." 2>/dev/null || true
 

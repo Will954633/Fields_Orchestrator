@@ -47,13 +47,15 @@ def get_client():
     if not uri:
         raise RuntimeError("No MongoDB URI found in environment")
     from pymongo import MongoClient
-    return MongoClient(
-        uri,
-        tls=True,
-        tlsAllowInvalidCertificates=True,
+    is_cosmos = "cosmos.azure.com" in uri
+    opts = dict(
         serverSelectionTimeoutMS=8000,
         socketTimeoutMS=10000,
     )
+    if is_cosmos:
+        opts["tls"] = True
+        opts["tlsAllowInvalidCertificates"] = True
+    return MongoClient(uri, **opts)
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 

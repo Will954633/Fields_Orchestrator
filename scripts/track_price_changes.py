@@ -30,10 +30,15 @@ import sys
 import time
 import argparse
 from datetime import datetime, timezone, timedelta
-from pymongo import MongoClient
+
+sys.path.insert(0, '/home/fields/Fields_Orchestrator')
+
+from shared.env import load_env  # type: ignore
+from shared.db import get_client, get_db  # type: ignore
+
+load_env()
 
 try:
-    sys.path.insert(0, '/home/fields/Fields_Orchestrator')
     from shared.monitor_client import MonitorClient
     _MONITOR_AVAILABLE = True
 except ImportError:
@@ -242,14 +247,9 @@ def track_suburb(db, monitor_db, suburb, run_id, dry_run=False):
 
 def run_tracking(suburbs, dry_run=False):
     """Main tracking loop across all suburbs."""
-    conn_str = os.environ.get("COSMOS_CONNECTION_STRING") or os.environ.get("MONGODB_URI")
-    if not conn_str:
-        print("ERROR: No COSMOS_CONNECTION_STRING or MONGODB_URI set")
-        sys.exit(1)
-
-    client = MongoClient(conn_str)
-    db = client[DATABASE_NAME]
-    monitor_db = client[SYSTEM_MONITOR_DB]
+    client = get_client()
+    db = get_db(DATABASE_NAME)
+    monitor_db = get_db(SYSTEM_MONITOR_DB)
     client.admin.command("ping")
     print(f"  MongoDB connected — {DATABASE_NAME}")
 
@@ -285,9 +285,8 @@ def run_tracking(suburbs, dry_run=False):
 
 def show_report(days=30):
     """Show recent price change events."""
-    conn_str = os.environ.get("COSMOS_CONNECTION_STRING") or os.environ.get("MONGODB_URI")
-    client = MongoClient(conn_str)
-    monitor_db = client[SYSTEM_MONITOR_DB]
+    client = get_client()
+    monitor_db = get_db(SYSTEM_MONITOR_DB)
 
     cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
 
@@ -353,13 +352,10 @@ def main():
     if args.suburbs:
         suburbs = args.suburbs
     elif args.all:
-        conn_str = os.environ.get("COSMOS_CONNECTION_STRING") or os.environ.get("MONGODB_URI")
-        client = MongoClient(conn_str)
-        db = client[DATABASE_NAME]
+        db = get_db(DATABASE_NAME)
         suburbs = [c for c in db.list_collection_names()
                    if not any(c.startswith(ex) for ex in EXCLUDE_COLLECTIONS)
                    and c not in EXCLUDE_COLLECTIONS]
-        client.close()
     else:
         suburbs = TARGET_SUBURBS
 

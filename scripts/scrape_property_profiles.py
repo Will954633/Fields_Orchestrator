@@ -340,14 +340,20 @@ def build_queue(
     limit: int | None,
     force: bool,
     only_missing_images: bool,
+    include_units: bool = False,
+    retry_failed: bool = False,
 ) -> list[tuple[str, str, dict[str, Any], str]]:
     """Build the work queue of (suburb, _id, doc, url) tuples.
 
     Filters:
-      - Cadastral docs (no listing_status) with usable address components
+      - Cadastral docs with usable address components
+      - Skips strata units (UNIT_NUMBER set) by default — Domain doesn't
+        have per-unit profile pages, so these always 404. Use --include-units
+        to override (~4296 records in Robina alone are units).
       - Skips if scraped_at_v2 within RESCRAPE_AFTER_DAYS (unless --force)
-      - If --only-missing-images: skip docs that already have a working
-        Domain CDN hero image set
+      - Skips if scraped_v2_failed_at exists (unless --retry-failed) so we
+        don't keep burning Bright Data calls on URLs known not to exist
+      - If --only-missing-images: skip docs that already have a Domain hero
     """
     cutoff = dt.datetime.utcnow() - dt.timedelta(days=RESCRAPE_AFTER_DAYS)
     queue: list[tuple[str, str, dict[str, Any], str]] = []
@@ -359,11 +365,17 @@ def build_queue(
             "STREET_TYPE": {"$exists": True, "$ne": None},
             "LOCALITY": {"$exists": True, "$ne": None},
         }
+        if not include_units:
+            query["UNIT_NUMBER"] = {"$in": [None, ""]}
         if not force:
             query["$or"] = [
                 {"scraped_at_v2": {"$exists": False}},
                 {"scraped_at_v2": {"$lt": cutoff}},
             ]
+        if not retry_failed:
+            # Failed URLs (known 404 / structural issues) stay out unless
+            # explicitly asked to retry. Saves Bright Data calls.
+            query["scraped_v2_failed_at"] = {"$in": [None, ""]}
         if only_missing_images:
             query["domain_hero_image_url"] = {"$in": [None, ""]}
 
@@ -404,12 +416,22 @@ def scrape_one(
     from bson import ObjectId
     short = _short_addr_for_log(doc)
 
+    from bson import ObjectId as _OID  # safe re-import inside fn scope
     html = fetch_html(url, timeout=DEFAULT_TIMEOUT)
     if not html:
         with counters.lock:
             counters.attempted += 1
             counters.failed_fetch += 1
         log.warning("FETCH_FAIL %s — %s", url, short)
+        if not dry_run:
+            try:
+                db[suburb].update_one(
+                    {"_id": _OID(doc_id_str)},
+                    {"$set": {"scraped_v2_failed_at": dt.datetime.utcnow(),
+                              "scraped_v2_failed_reason": "fetch"}},
+                )
+            except Exception:
+                pass
         return
 
     parsed = parse_property_profile(html)
@@ -418,6 +440,15 @@ def scrape_one(
             counters.attempted += 1
             counters.failed_parse += 1
         log.warning("PARSE_FAIL %s — %s", url, short)
+        if not dry_run:
+            try:
+                db[suburb].update_one(
+                    {"_id": _OID(doc_id_str)},
+                    {"$set": {"scraped_v2_failed_at": dt.datetime.utcnow(),
+                              "scraped_v2_failed_reason": "parse"}},
+                )
+            except Exception:
+                pass
         return
 
     now = dt.datetime.utcnow()
@@ -478,6 +509,13 @@ def main() -> int:
                     help="Re-scrape even if scraped_at_v2 is fresh")
     ap.add_argument("--only-missing-images", action="store_true",
                     help="Only target docs missing a Domain hero image")
+    ap.add_argument("--include-units", action="store_true",
+                    help="Include strata units (UNIT_NUMBER set) in queue. "
+                         "Domain doesn't have per-unit profile pages so these "
+                         "almost always 404 — off by default")
+    ap.add_argument("--retry-failed", action="store_true",
+                    help="Retry URLs previously marked scraped_v2_failed_at. "
+                         "Off by default to save Bright Data calls on known-bad URLs")
     ap.add_argument("--dry-run", action="store_true",
                     help="Build queue + fetch + parse but don't write to DB")
     ap.add_argument("--log-file", default=None,
@@ -500,7 +538,10 @@ def main() -> int:
              suburbs, args.limit, args.force, args.only_missing_images,
              args.rate, args.workers, args.dry_run)
 
-    queue = build_queue(db, suburbs, args.limit, args.force, args.only_missing_images)
+    queue = build_queue(
+        db, suburbs, args.limit, args.force, args.only_missing_images,
+        include_units=args.include_units, retry_failed=args.retry_failed,
+    )
     log.info("Queue size: %d properties", len(queue))
     if not queue:
         log.info("Nothing to do.")

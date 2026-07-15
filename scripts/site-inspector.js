@@ -19,14 +19,18 @@
  */
 
 const puppeteer = require('puppeteer-core');
+const { execFile } = require('child_process');
 const dns = require('dns').promises;
 const fs = require('fs');
 const https = require('https');
+const os = require('os');
 const path = require('path');
 
 const DEFAULT_BASE_URL = process.env.SITE_INSPECTOR_BASE_URL || 'https://fieldsestate.com.au';
 const DEFAULT_CHROME_PATH = process.env.SITE_INSPECTOR_CHROME_PATH || '/usr/bin/google-chrome';
-const DEFAULT_OUTPUT_DIR = process.env.SITE_INSPECTOR_OUTPUT_DIR || '/tmp/site-inspect';
+const DEFAULT_OUTPUT_ROOT =
+  process.env.SITE_INSPECTOR_OUTPUT_DIR ||
+  path.join(process.cwd(), 'artifacts', 'browser_artifacts');
 const IGNORED_ERROR_HOSTS = [
   'google-analytics.com',
   'googletagmanager.com',
@@ -44,6 +48,36 @@ const VIEWPORTS = {
   mobile: { width: 375, height: 812 },
 };
 
+const CHROME_LAUNCH_ARGS = [
+  '--no-sandbox',
+  '--disable-setuid-sandbox',
+  '--disable-dev-shm-usage',
+  '--disable-gpu',
+  '--disable-extensions',
+  '--disable-crash-reporter',
+  '--disable-breakpad',
+  '--disable-crashpad',
+  '--disable-features=Crashpad,OptimizationHints,OptimizationGuideModelDownloading,MediaRouter,DialMediaRouteProvider',
+  '--disable-background-networking',
+  '--disable-component-update',
+  '--disable-sync',
+  '--metrics-recording-only',
+  '--mute-audio',
+  '--no-crash-upload',
+  '--no-first-run',
+  '--password-store=basic',
+  '--use-mock-keychain',
+  '--window-size=1440,900',
+];
+
+function timestampToken() {
+  return new Date().toISOString().replace(/[:.]/g, '-');
+}
+
+function defaultOutputDir() {
+  return path.join(DEFAULT_OUTPUT_ROOT, timestampToken());
+}
+
 function parseArgs() {
   const args = process.argv.slice(2);
   const opts = {
@@ -57,8 +91,9 @@ function parseArgs() {
     actionsFile: null,
     baseUrl: DEFAULT_BASE_URL,
     chromePath: DEFAULT_CHROME_PATH,
-    outputDir: DEFAULT_OUTPUT_DIR,
+    outputDir: defaultOutputDir(),
     preflightOnly: false,
+    diagnostic: false,
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -96,6 +131,13 @@ function parseArgs() {
       case '--preflight-only':
         opts.preflightOnly = true;
         break;
+      case '--diagnostic':
+        opts.diagnostic = true;
+        break;
+      case '--diagnostic-only':
+        opts.diagnostic = true;
+        opts.preflightOnly = true;
+        break;
       case '--help':
         console.log(`
 site-inspector.js — Visual inspection for fieldsestate.com.au
@@ -104,13 +146,15 @@ Options:
   --url <url[,url2,...]>  Page(s) to inspect. Paths like /for-sale are expanded.
   --base-url <url>        Base URL for relative paths (default: ${DEFAULT_BASE_URL})
   --chrome-path <path>    Chrome executable path (default: ${DEFAULT_CHROME_PATH})
-  --output-dir <path>     Output directory (default: ${DEFAULT_OUTPUT_DIR})
+  --output-dir <path>     Output directory (default: ${defaultOutputDir()})
   --mobile                Use mobile viewport (375x812)
   --tablet                Use tablet viewport (768x1024)
   --element <selector>    Screenshot a specific CSS element
   --wait <ms>             Extra wait after load (default: 2000)
   --actions-file <path>   JSON file with scripted interactions to run after load
+  --diagnostic            Print preflight diagnostics to stdout before launch
   --preflight-only        Run browser/network diagnostics without launching a page
+  --diagnostic-only       Diagnostic mode without page inspection
   --no-screenshot         Skip screenshot, capture text + console only
   --no-full-page          Viewport-only screenshot (not full scrollable page)
   --help                  Show this help
@@ -215,6 +259,52 @@ function httpsHead(url, timeoutMs = 8000) {
   });
 }
 
+function execFileAsync(file, args, timeoutMs = 10000) {
+  return new Promise(resolve => {
+    execFile(file, args, { timeout: timeoutMs }, (error, stdout, stderr) => {
+      resolve({
+        ok: !error,
+        exitCode: error && Number.isInteger(error.code) ? error.code : 0,
+        error: error ? error.message : null,
+        stdout: String(stdout || '').trim(),
+        stderr: String(stderr || '').trim(),
+      });
+    });
+  });
+}
+
+async function probeChrome(chromePath) {
+  if (!fs.existsSync(chromePath)) {
+    return { ok: false, error: 'Chrome executable not found' };
+  }
+
+  const version = await execFileAsync(chromePath, ['--version'], 5000);
+  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'site-inspector-chrome-'));
+  try {
+    const launch = await execFileAsync(
+      chromePath,
+      [
+        '--headless=new',
+        ...CHROME_LAUNCH_ARGS,
+        `--user-data-dir=${userDataDir}`,
+        '--dump-dom',
+        'about:blank',
+      ],
+      12000
+    );
+    return {
+      ok: launch.ok,
+      version: version.stdout || null,
+      exitCode: launch.exitCode,
+      stdoutPreview: launch.stdout.slice(0, 200) || null,
+      stderrPreview: launch.stderr.slice(0, 500) || null,
+      error: launch.error,
+    };
+  } finally {
+    fs.rmSync(userDataDir, { recursive: true, force: true });
+  }
+}
+
 async function runPreflight(opts) {
   const startedAt = new Date().toISOString();
   const chromePath = opts.chromePath;
@@ -240,13 +330,59 @@ async function runPreflight(opts) {
     urlChecks.push({ url, dns: dnsCheck, https: httpsCheck });
   }
 
+  const chromeProbe = await probeChrome(chromePath);
+
   return {
     startedAt,
     completedAt: new Date().toISOString(),
     chromePath,
     chromeExists,
+    chromeProbe,
     urls: urlChecks,
   };
+}
+
+function printPreflight(preflight, outputDir) {
+  console.log('Preflight diagnostics:');
+  console.log(`  Output: ${outputDir}/`);
+  console.log(`  Chrome: ${preflight.chromePath} (${preflight.chromeExists ? 'found' : 'missing'})`);
+  if (preflight.chromeProbe) {
+    const probe = preflight.chromeProbe;
+    const probeState = probe.ok ? 'ok' : 'failed';
+    const probeDetail = probe.error || probe.stderrPreview || probe.stdoutPreview || 'no detail';
+    console.log(`  Chrome probe: ${probeState} ${probeDetail}`);
+  }
+  for (const check of preflight.urls) {
+    const dnsState = check.dns.ok ? `${check.dns.address}` : `failed: ${check.dns.error}`;
+    const httpsState = check.https.ok
+      ? `${check.https.statusCode || 'no-status'} ${check.https.statusMessage || ''}`.trim()
+      : `failed: ${check.https.error}`;
+    console.log(`  ${check.url}`);
+    console.log(`    DNS: ${dnsState}`);
+    console.log(`    HTTPS: ${httpsState}`);
+  }
+}
+
+function detectEnvironmentIssues(preflight, browserLaunchError = null) {
+  const issues = [];
+
+  if (!preflight.chromeExists) {
+    issues.push('chrome_missing');
+  }
+  if (preflight.chromeProbe && !preflight.chromeProbe.ok) {
+    issues.push('chrome_probe_failed');
+  }
+  if (preflight.urls.some(check => !check.dns.ok)) {
+    issues.push('dns_failed');
+  }
+  if (preflight.urls.some(check => !check.https.ok)) {
+    issues.push('https_failed');
+  }
+  if (browserLaunchError) {
+    issues.push('browser_launch_failed');
+  }
+
+  return Array.from(new Set(issues));
 }
 
 function writeSummary(outputDir, summary) {
@@ -532,6 +668,10 @@ async function main() {
 
   const preflight = await runPreflight(opts);
   fs.writeFileSync(path.join(opts.outputDir, 'preflight.json'), JSON.stringify(preflight, null, 2));
+  printPreflight(preflight, opts.outputDir);
+  if (opts.diagnostic) {
+    console.log(JSON.stringify(preflight, null, 2));
+  }
 
   if (opts.preflightOnly) {
     writeSummary(opts.outputDir, {
@@ -549,25 +689,13 @@ async function main() {
 
   const results = [];
   let browser;
+  let browserLaunchError = null;
   try {
     browser = await puppeteer.launch({
       executablePath: opts.chromePath,
       headless: 'new',
       ignoreDefaultArgs: ['--enable-crash-reporter'],
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--disable-extensions',
-        '--disable-crash-reporter',
-        '--disable-breakpad',
-        '--disable-crashpad',
-        '--no-crash-upload',
-        '--disable-background-networking',
-        '--disable-component-update',
-        '--window-size=1440,900',
-      ],
+      args: CHROME_LAUNCH_ARGS,
     });
 
     for (const url of opts.urls) {
@@ -585,6 +713,7 @@ async function main() {
       }
     }
   } catch (err) {
+    browserLaunchError = err.message;
     results.push({
       stage: 'browser_launch',
       error: err.message,
@@ -596,19 +725,27 @@ async function main() {
     }
   }
 
-  const status = results.some(item => item.error) ? 'failed' : 'passed';
+  const environmentIssues = detectEnvironmentIssues(preflight, browserLaunchError);
+  let status = results.some(item => item.error) ? 'failed' : 'passed';
+  if (results.some(item => item.stage === 'browser_launch') && environmentIssues.length > 0) {
+    status = 'environment_blocked';
+  }
   const summary = {
     inspectedAt: new Date().toISOString(),
     viewport: opts.viewport,
     baseUrl: opts.baseUrl,
     outputDir: opts.outputDir,
     preflight,
+    environmentIssues,
     pages: results,
     status,
   };
   writeSummary(opts.outputDir, summary);
   console.log(`\nDone. Output: ${opts.outputDir}/`);
   console.log(`Summary: ${opts.outputDir}/summary.json`);
+  if (status !== 'passed') {
+    process.exitCode = 1;
+  }
 }
 
 main().catch(err => {

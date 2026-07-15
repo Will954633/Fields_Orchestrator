@@ -14,14 +14,15 @@ import os
 import re
 import sys
 import time
-from pymongo import MongoClient
-from pymongo.errors import WriteError
+from pymongo.errors import WriteError, OperationFailure
 
-TARGET_SUBURBS = [
-    "robina", "burleigh_waters", "varsity_lakes",
-    "burleigh_heads", "mudgeeraba", "reedy_creek",
-    "merrimac", "worongary", "carrara",
-]
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, REPO_ROOT)
+
+from shared.env import load_env  # type: ignore
+from shared.db import get_client, get_db, TARGET_SUBURBS  # type: ignore
+
+load_env()
 
 
 def clean_address(address):
@@ -47,13 +48,8 @@ def generate_slug(address, suburb):
 
 
 def main():
-    uri = os.environ.get("COSMOS_CONNECTION_STRING")
-    if not uri:
-        print("ERROR: COSMOS_CONNECTION_STRING not set")
-        sys.exit(1)
-
-    client = MongoClient(uri)
-    db = client["Gold_Coast"]
+    client = get_client()
+    db = get_db("Gold_Coast")
     total = 0
 
     for suburb in TARGET_SUBURBS:
@@ -71,20 +67,29 @@ def main():
             slug = generate_slug(address, doc_suburb)
             if not slug:
                 continue
-            # Check for duplicate slug
-            existing = coll.find_one({"url_slug": slug, "_id": {"$ne": doc["_id"]}})
+            # Check for duplicate slug (with Cosmos retry)
+            existing = None
+            for attempt in range(5):
+                try:
+                    existing = coll.find_one({"url_slug": slug, "_id": {"$ne": doc["_id"]}})
+                    break
+                except OperationFailure as e:
+                    if e.code == 16500:
+                        time.sleep(3 * (attempt + 1))
+                    else:
+                        raise
             if existing:
                 slug = f"{slug}-{str(doc['_id'])[-4:]}"
             for attempt in range(5):
                 try:
                     coll.update_one({"_id": doc["_id"]}, {"$set": {"url_slug": slug}})
                     break
-                except WriteError as e:
-                    if e.code == 16500:
+                except (WriteError, OperationFailure) as e:
+                    if getattr(e, 'code', None) == 16500:
                         time.sleep(3 * (attempt + 1))
                     else:
                         raise
-            time.sleep(0.2)
+            time.sleep(0.3)
             total += 1
 
     if total > 0:

@@ -44,32 +44,35 @@ AEST = timezone(timedelta(hours=10))
 HEADERS = ["Agent Name", "Mobile", "Agency", "Area found", "Email",
            "Agency phone", "Profile URL", "Date added"]
 
-# Preference order: southern Gold Coast (QLD) first, then northern NSW (Tweed).
+# Preference: southern Gold Coast (QLD) AND northern NSW (Tweed), interleaved so
+# both regions get represented rather than the target filling from the first
+# suburb alone. Palm Beach + Burleigh Heads are listed LAST because they were
+# already mined in the first batch (their agents dedupe out).
 SUBURBS = [
-    # --- Southern Gold Coast, QLD ---
+    # --- interleaved southern GC (QLD) + Tweed (NSW) ---
+    ("Currumbin",         "currumbin-qld-4223"),
+    ("Tweed Heads",       "tweed-heads-nsw-2485"),
+    ("Tugun",             "tugun-qld-4224"),
+    ("Kingscliff",        "kingscliff-nsw-2487"),
+    ("Mermaid Beach",     "mermaid-beach-qld-4218"),
+    ("Banora Point",      "banora-point-nsw-2486"),
+    ("Coolangatta",       "coolangatta-qld-4225"),
+    ("Casuarina",         "casuarina-nsw-2487"),
+    ("Robina",            "robina-qld-4226"),
+    ("Pottsville",        "pottsville-nsw-2489"),
+    ("Varsity Lakes",     "varsity-lakes-qld-4227"),
+    ("Murwillumbah",      "murwillumbah-nsw-2484"),
+    ("Currumbin Waters",  "currumbin-waters-qld-4223"),
+    ("Tweed Heads South", "tweed-heads-south-nsw-2486"),
+    ("Elanora",           "elanora-qld-4221"),
+    ("Cabarita Beach",    "cabarita-beach-nsw-2488"),
+    ("Tallebudgera",      "tallebudgera-qld-4228"),
+    ("Bilinga",           "bilinga-qld-4225"),
+    ("Miami",             "miami-qld-4220"),
+    ("Burleigh Waters",   "burleigh-waters-qld-4220"),
+    # --- already mined in batch 1 (kept last; agents dedupe out) ---
     ("Palm Beach",        "palm-beach-qld-4221"),
     ("Burleigh Heads",    "burleigh-heads-qld-4220"),
-    ("Burleigh Waters",   "burleigh-waters-qld-4220"),
-    ("Currumbin",         "currumbin-qld-4223"),
-    ("Currumbin Waters",  "currumbin-waters-qld-4223"),
-    ("Elanora",           "elanora-qld-4221"),
-    ("Tugun",             "tugun-qld-4224"),
-    ("Bilinga",           "bilinga-qld-4225"),
-    ("Coolangatta",       "coolangatta-qld-4225"),
-    ("Tallebudgera",      "tallebudgera-qld-4228"),
-    ("Mermaid Beach",     "mermaid-beach-qld-4218"),
-    ("Miami",             "miami-qld-4220"),
-    ("Robina",            "robina-qld-4226"),
-    ("Varsity Lakes",     "varsity-lakes-qld-4227"),
-    # --- Northern NSW (Tweed) ---
-    ("Tweed Heads",       "tweed-heads-nsw-2485"),
-    ("Tweed Heads South", "tweed-heads-south-nsw-2486"),
-    ("Banora Point",      "banora-point-nsw-2486"),
-    ("Kingscliff",        "kingscliff-nsw-2487"),
-    ("Casuarina",         "casuarina-nsw-2487"),
-    ("Cabarita Beach",    "cabarita-beach-nsw-2488"),
-    ("Pottsville",        "pottsville-nsw-2489"),
-    ("Murwillumbah",      "murwillumbah-nsw-2484"),
 ]
 
 
@@ -287,7 +290,18 @@ def main():
                 results[slug] = []
                 print(f"  ! {slug} search error: {e}")
             print(f"  {area:<18} {len(results.get(slug, []))} listings")
-    # flatten in preference order (southern GC first), dedupe listing URLs
+    # Retry suburbs whose single concurrent search fetch failed (captcha under
+    # load) — sequentially, so the explicitly-wanted Tweed suburbs aren't lost.
+    failed = [(area, slug) for area, slug in SUBURBS if not results.get(slug)]
+    if failed:
+        print(f"  retrying {len(failed)} failed search pages sequentially...")
+        for area, slug in failed:
+            try:
+                results[slug] = listing_urls_for_suburb(slug)
+            except Exception:
+                results[slug] = []
+            print(f"    retry {area:<18} {len(results.get(slug, []))} listings")
+    # flatten in preference order, dedupe listing URLs
     ordered = []
     seen_urls = set()
     for area, slug in SUBURBS:

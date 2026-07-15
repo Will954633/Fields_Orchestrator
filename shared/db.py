@@ -96,9 +96,10 @@ def get_client(uri: Optional[str] = None, fresh: bool = False) -> MongoClient:
         return _cached_client
 
     resolved = _resolve_uri(uri)
+    is_cosmos = "cosmos.azure.com" in resolved
     client = MongoClient(
         resolved,
-        retryWrites=False,              # Cosmos DB does not support retryable writes
+        retryWrites=not is_cosmos,      # Local MongoDB supports retryable writes
         maxIdleTimeMS=120000,
         serverSelectionTimeoutMS=30000,
         socketTimeoutMS=60000,

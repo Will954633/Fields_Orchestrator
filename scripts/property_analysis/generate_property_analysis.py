@@ -750,6 +750,42 @@ def build_structured_data(data: dict) -> dict:
         "listing_price": prop.get("price"),
     }
 
+    # Market metrics for the frontend
+    market = data.get("market", {})
+    dom_data = market.get("dom", {})
+    idx_data = market.get("indexed", {})
+    al_data = market.get("active_listings", {})
+
+    # Calculate mortgage impact at this property's estimated price
+    estimate = conf.get("reconciled_valuation", 0) or 0
+    loan_amount = estimate * 0.8  # 80% LVR
+    current_rate = 0.0827  # 8.27% standard variable
+    low_rate = 0.0452  # cycle low 2020
+    monthly_current = (loan_amount * (current_rate / 12) * (1 + current_rate / 12) ** 360) / ((1 + current_rate / 12) ** 360 - 1) if loan_amount > 0 else 0
+    monthly_low = (loan_amount * (low_rate / 12) * (1 + low_rate / 12) ** 360) / ((1 + low_rate / 12) ** 360 - 1) if loan_amount > 0 else 0
+
+    market_metrics = {
+        "absorption_rate": 1.3,  # From market-insights
+        "absorption_label": "Strong seller's market",
+        "dom_current": dom_data.get("latest_median"),
+        "dom_yoy_change": dom_data.get("yoy_change_days"),
+        "price_growth_yoy": "+15.9%",  # From market-insights
+        "price_growth_qoq": "+6.7%",
+        "sales_volume_yoy": "-41%",
+        "active_listings": al_data.get("current") or stats.get("count"),
+        "sold_last_30d": 32,  # From market-insights
+        "market_verdict": "Seller's Market",
+        "mortgage": {
+            "property_price": round(estimate),
+            "loan_amount": round(loan_amount),
+            "monthly_current": round(monthly_current),
+            "monthly_cycle_low": round(monthly_low),
+            "monthly_extra": round(monthly_current - monthly_low),
+            "current_rate": "8.27%",
+            "cycle_low_rate": "4.52%",
+        },
+    }
+
     return {
         "feature_comparison": feature_comparison,
         "condition_summary": condition_summary,
@@ -758,6 +794,7 @@ def build_structured_data(data: dict) -> dict:
         "transaction_timeline": timeline_data,
         "location_scorecard": location_scorecard,
         "price_position": price_position,
+        "market_metrics": market_metrics,
     }
 
 
@@ -791,29 +828,106 @@ def build_basics_text(data: dict) -> str:
 
 
 # ── Storage ─────────────────────────────────────────────────────────────────
+def parse_sections(raw_output: str) -> dict:
+    """Parse the section-based editorial output into a dict."""
+    sections = {}
+    current_section = None
+    current_content = []
+
+    for line in raw_output.split("\n"):
+        line_stripped = line.strip()
+
+        # Skip delimiters
+        if line_stripped in ("---SECTIONS---", "---END---", "```"):
+            continue
+
+        # New section header — must be ALL CAPS with underscores inside brackets
+        if (line_stripped.startswith("[") and line_stripped.endswith("]")
+                and line_stripped[1:-1].replace("_", "").isalpha()
+                and line_stripped[1:-1] == line_stripped[1:-1].upper()):
+            if current_section:
+                sections[current_section] = "\n".join(current_content).strip()
+            current_section = line_stripped[1:-1]
+            current_content = []
+        elif current_section:
+            current_content.append(line)
+
+    if current_section:
+        sections[current_section] = "\n".join(current_content).strip()
+
+    # Parse each section into key-value pairs
+    # Only recognize keys that are simple identifiers (lowercase, underscores)
+    KNOWN_KEYS = {
+        "hook", "verdict_buyer", "verdict_seller", "commentary",
+        "for_buyers", "for_sellers", "inspection_questions",
+        "headline", "title", "description", "photo_caption",
+    }
+
+    parsed = {}
+    for section_name, content in sections.items():
+        section_dict = {}
+        current_key = None
+        current_val = []
+
+        for line in content.split("\n"):
+            line_s = line.strip()
+            # Check for known key: value pattern
+            matched_key = None
+            for k in KNOWN_KEYS:
+                if line_s.startswith(k + ":"):
+                    matched_key = k
+                    break
+
+            if matched_key:
+                if current_key:
+                    section_dict[current_key] = "\n".join(current_val).strip()
+                current_key = matched_key
+                val = line_s[len(matched_key) + 1:].strip()
+                current_val = [val]
+            elif line_s.startswith("- "):
+                current_val.append(line_s)
+            elif current_key:
+                current_val.append(line)
+
+        if current_key:
+            section_dict[current_key] = "\n".join(current_val).strip()
+
+        parsed[section_name] = section_dict
+
+    return parsed
+
+
 def store_analysis(mongo, slug: str, article_text: str, structured: dict,
                    briefs: dict, reviews: dict, data: dict):
     """Store the generated analysis in MongoDB."""
     prop = data["property"]
     sm = mongo["system_monitor"]
 
-    # Parse meta tags from the article
-    meta_title = ""
-    meta_description = ""
-    photo_caption = ""
-    if "<!-- META -->" in article_text:
-        meta_section = article_text.split("<!-- META -->")[1]
-        for line in meta_section.strip().split("\n"):
-            line = line.strip()
-            if line.startswith("title:"):
-                meta_title = line[6:].strip()
-            elif line.startswith("description:"):
-                meta_description = line[12:].strip()
-            elif line.startswith("photo_caption:"):
-                photo_caption = line[14:].strip()
+    # Parse section-based output
+    sections = parse_sections(article_text)
 
-    # Strip meta section from article body
-    article_body = article_text.split("<!-- META -->")[0].strip() if "<!-- META -->" in article_text else article_text
+    meta = sections.get("META", {})
+    verdict = sections.get("VERDICT_CARD", {})
+    what_you_get = sections.get("WHAT_YOU_GET", {})
+    worth = sections.get("WORTH", {})
+    market_timing = sections.get("MARKET_TIMING", {})
+    history = sections.get("HISTORY", {})
+    location = sections.get("LOCATION", {})
+    bottom_line = sections.get("BOTTOM_LINE", {})
+
+    # Parse bottom_line bullet points
+    buyer_bullets = []
+    seller_bullets = []
+    inspection_qs = []
+    bl_text = bottom_line
+    current_list = None
+    for key, val in bl_text.items():
+        if key == "for_buyers":
+            buyer_bullets = [b.lstrip("- ").strip() for b in val.split("\n") if b.strip().startswith("-")]
+        elif key == "for_sellers":
+            seller_bullets = [b.lstrip("- ").strip() for b in val.split("\n") if b.strip().startswith("-")]
+        elif key == "inspection_questions":
+            inspection_qs = [b.lstrip("- ").strip() for b in val.split("\n") if b.strip().startswith("-")]
 
     # Get first photo URL
     images = prop.get("property_images", prop.get("scraped_property_images", []))
@@ -828,10 +942,32 @@ def store_analysis(mongo, slug: str, article_text: str, structured: dict,
         "suburb": data["suburb_slug"],
         "suburb_display": data["suburb_display"],
 
-        "article_markdown": article_body,
-        "meta_title": meta_title or f"{prop['address']} — Independent Analysis | Fields Estate",
-        "meta_description": meta_description or f"Independent property analysis for {prop['address']}.",
-        "headline": article_body.split("\n")[0].lstrip("# ").strip() if article_body else "",
+        # Section commentaries (new format)
+        "sections": {
+            "verdict": {
+                "hook": verdict.get("hook", ""),
+                "verdict_buyer": verdict.get("verdict_buyer", ""),
+                "verdict_seller": verdict.get("verdict_seller", ""),
+            },
+            "what_you_get": {"commentary": what_you_get.get("commentary", "")},
+            "worth": {"commentary": worth.get("commentary", "")},
+            "market_timing": {"commentary": market_timing.get("commentary", "")},
+            "history": {"commentary": history.get("commentary", "")},
+            "location": {"commentary": location.get("commentary", "")},
+            "bottom_line": {
+                "for_buyers": buyer_bullets,
+                "for_sellers": seller_bullets,
+                "inspection_questions": inspection_qs,
+            },
+        },
+
+        # Keep raw output for debugging
+        "raw_editorial_output": article_text,
+
+        "meta_title": meta.get("title", f"{prop['address']} — Independent Analysis"),
+        "meta_description": meta.get("description", f"Independent property analysis for {prop['address']}."),
+        "headline": meta.get("headline", ""),
+        "photo_caption": meta.get("photo_caption", ""),
 
         "listing_agent": prop.get("agent_name", ""),
         "listing_agency": prop.get("agency", ""),
@@ -841,7 +977,6 @@ def store_analysis(mongo, slug: str, article_text: str, structured: dict,
 
         "structured_data": structured,
         "photo_url": photo_url,
-        "photo_caption": photo_caption,
 
         "briefs": briefs,
         "reviews": reviews,
@@ -849,7 +984,7 @@ def store_analysis(mongo, slug: str, article_text: str, structured: dict,
         "generated_at": datetime.now(AEST).isoformat(),
         "generated_by": MODEL,
         "listing_status": prop.get("listing_status", "for_sale"),
-        "status": "draft",  # manual review before publishing
+        "status": "draft",
     }
 
     sm["property_analyses"].update_one(

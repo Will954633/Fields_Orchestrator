@@ -48,10 +48,10 @@ def micros_to_aud(micros):
 # Geo target constant IDs for our target suburbs and region
 # These are Google's canonical location IDs
 GEO_TARGETS = {
-    "gold_coast": 9069131,       # Gold Coast city
-    "robina": 9069131,           # Falls under Gold Coast
-    "burleigh_waters": 9069131,
-    "varsity_lakes": 9069131,
+    "gold_coast": 1000665,       # Gold Coast city
+    "robina": 9194775,           # Robina, Queensland
+    "burleigh_waters": 9194168,  # Burleigh Waters, Queensland
+    "varsity_lakes": 9192129,    # Varsity Lakes, Queensland
     "queensland": 20362,         # State level
 }
 

@@ -269,6 +269,51 @@ def _build_forbidden(f: Dict[str, Any]) -> List[str]:
     return forbidden
 
 
+_NUM_WORDS = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five", 6: "six", 7: "seven", 8: "eight"}
+
+# Order price drivers read best in a lead line (land first, then space, then beds).
+_PRICE_LEAD_ORDER = ["land", "internal floor area", "bedroom count", "bathroom count",
+                     "beach proximity", "the water outlook"]
+
+
+def _soft_lead_phrases(
+    primary: str, drivers: Dict[str, List[str]], fb: Dict[str, Any],
+    pois: List[Dict[str, Any]],
+) -> List[str]:
+    """Warm, abstracted lead phrases for the thesis (the precise figures live in
+    the hero, so the thesis names the drivers softly): e.g. 'the land, the
+    four-bedroom layout and the walk to school'."""
+    beds = fb.get("bedrooms")
+    bed_word = _NUM_WORDS.get(int(beds), str(int(beds))) if isinstance(beds, (int, float)) else None
+    soft = {
+        "land": "the land",
+        "internal floor area": "the internal space",
+        "bedroom count": f"the {bed_word}-bedroom layout" if bed_word else "the bedroom count",
+        "bathroom count": "the bathroom count",
+        "beach proximity": "the beach proximity",
+        "the water outlook": "the water outlook",
+    }
+    # top two price drivers, in reading order
+    price = sorted(drivers.get("price", []), key=lambda d: _PRICE_LEAD_ORDER.index(d)
+                   if d in _PRICE_LEAD_ORDER else 99)
+    lead = [soft.get(d, d) for d in price[:2]]
+
+    # the frame's signature buyer driver, abstracted
+    sig = None
+    if primary == "school_walk_family":
+        if any(str(p.get("category", "")).lower() == "school" for p in pois or []):
+            sig = "the walk to school"
+    elif primary == "turnkey_downsizer":
+        sig = "single-level living"
+    elif primary == "land_lifestyle_family":
+        sig = "the pool" if "the pool" in drivers.get("buyer", []) else "the outdoor space"
+    elif primary == "beachside_lifestyle":
+        sig = "the beach proximity"
+    if sig and sig not in lead:
+        lead.append(sig)
+    return lead or [soft.get(d, d) for d in price[:1]]
+
+
 def _join(items: List[str]) -> str:
     items = [i for i in items if i]
     if not items:
@@ -344,11 +389,10 @@ def resolve_positioning_object(
     # ---- deterministic render ----
     frame_noun = FRAMES[primary]["noun"]
     frame_line = f"A {suburb_display} {frame_noun}."
-    # lead with the primary frame's lead phrase + the price-carrying drivers
-    lead_drivers = drivers["price"][:3] or drivers["buyer"][:2]
+    lead_phrases = _soft_lead_phrases(primary, drivers, fb, pois)
     lead_line = (
-        f"We'd lead the campaign on {_join(lead_drivers)} — and let the right "
-        f"buyer see themselves in it."
+        f"We'd lead on {_join(lead_phrases)} — and let the right buyer "
+        f"see themselves in it."
     )
     anti_items = [{"noun": a["noun"], "reason": a["reason"]} for a in anti]
 

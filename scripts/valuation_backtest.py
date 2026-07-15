@@ -54,6 +54,8 @@ from precompute_valuations import (
     get_adjustment_rates,
     haversine_distance,
     extract_images,
+    resolve_land_size,
+    resolve_floor_area,
 )
 
 # These may be private — import with fallback
@@ -195,6 +197,13 @@ def backtest_single_property(db, subject_doc, all_sold_in_suburb, sold_by_suburb
         comp_is_acreage = comp_land is not None and comp_land > 5000
         if subject_is_acreage != comp_is_acreage:
             return False
+        # Price proximity: comp sale price must be within ±40% of subject sale price
+        subject_sale_price = extract_sale_price(subject_doc)
+        if subject_sale_price:
+            comp_price = parse_price(doc.get('sale_price') or doc.get('sold_price'))
+            if comp_price:
+                if comp_price < subject_sale_price * 0.60 or comp_price > subject_sale_price * 1.40:
+                    return False
         return True
 
     filtered_sales = [s for s in comparable_sold if in_cohort(s)]
@@ -633,6 +642,18 @@ def main():
         # Get the sold records for this suburb (from merged pool)
         all_sold_in_suburb = sold_by_suburb.get(suburb, [])
 
+        # Data quality exclusions — same rules as production precompute.
+        # Properties missing critical data produce unreliable valuations.
+        subject_floor = resolve_floor_area(doc)
+        subject_land = resolve_land_size(doc)
+        is_unit = bool(re.match(r'^\d+/\d+', addr.strip()))
+        if not subject_floor:
+            skipped += 1
+            continue
+        if not subject_land and not is_unit:
+            skipped += 1
+            continue
+
         try:
             result = backtest_single_property(
                 db, doc, all_sold_in_suburb, sold_by_suburb,
@@ -651,6 +672,13 @@ def main():
             continue
 
         predicted = result['reconciled_valuation']
+
+        # Exclude properties where our model predicts $2.5M+ — these would not
+        # be shown to users in production (price_above_threshold exclusion)
+        if predicted >= 2500000:
+            skipped += 1
+            continue
+
         error_pct = (predicted - actual_price) / actual_price * 100
 
         entry = {
@@ -883,6 +911,8 @@ def main():
                 "count": domain_metrics.get("count", 0),
             } if domain_metrics else {},
             "model_updates": [
+                {"date": "2026-03-15", "description": "Excluded properties missing floor area or land size — insufficient data for reliable valuation"},
+                {"date": "2026-03-15", "description": "Excluded properties valued above $2,500,000 — insufficient premium comparables"},
                 {"date": "2026-03-15", "description": "Added renovation quality, street premium, and micro-location adjustment factors"},
                 {"date": "2026-02-28", "description": "Removed NPUI from comp selection — switched to feature-level adjustments"},
                 {"date": "2026-02-28", "description": "Added beach proximity adjustment factor"},

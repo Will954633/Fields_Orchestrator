@@ -23,13 +23,16 @@ import sys
 import argparse
 import traceback
 from datetime import datetime, timezone, timedelta
-from dotenv import load_dotenv
-from pymongo import MongoClient, UpdateOne
+from pymongo import UpdateOne
 from google.ads.googleads.client import GoogleAdsClient
 
-load_dotenv("/home/fields/Fields_Orchestrator/.env")
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, REPO_ROOT)
 
-COSMOS_URI = os.environ["COSMOS_CONNECTION_STRING"]
+from shared.env import load_env  # type: ignore
+from shared.db import get_client, get_db  # type: ignore
+
+load_env()
 RETENTION_DAYS = 90
 
 def get_google_client():
@@ -242,8 +245,8 @@ def save_to_mongodb(daily_metrics, profiles, keywords, conversions, dry_run=Fals
         print(f"  [DRY RUN] Would write {len(conversions)} conversion records")
         return
 
-    client = MongoClient(COSMOS_URI)
-    db = client["system_monitor"]
+    client = get_client()
+    db = get_db("system_monitor")
 
     # 1. Daily metrics (upsert by campaign_id + date)
     if daily_metrics:

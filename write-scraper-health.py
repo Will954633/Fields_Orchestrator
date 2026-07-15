@@ -16,31 +16,24 @@ import sys
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-import yaml
+
+REPO_ROOT = str(Path(__file__).resolve().parent)
+sys.path.insert(0, REPO_ROOT)
+
+from shared.env import load_env  # type: ignore
+from shared.db import get_client, get_db, TARGET_SUBURBS  # type: ignore
+
+load_env()
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [scraper-health] %(levelname)s %(message)s")
 log = logging.getLogger("scraper-health")
 
-TARGET_SUBURBS = [
-    "robina", "mudgeeraba", "varsity_lakes", "carrara",
-    "reedy_creek", "burleigh_waters", "merrimac", "worongary",
-]
-
-
-def get_mongo_uri():
-    settings_path = Path("/home/fields/Fields_Orchestrator/config/settings.yaml")
-    with open(settings_path) as f:
-        settings = yaml.safe_load(f)
-    return settings["mongodb"]["uri"]
-
 
 def main():
     try:
-        from pymongo import MongoClient
-        uri = get_mongo_uri()
-        client = MongoClient(uri, serverSelectionTimeoutMS=15000, retryWrites=False)
-        data_db = client["Gold_Coast"]
-        monitor_db = client["system_monitor"]
+        client = get_client()
+        data_db = get_db("Gold_Coast")
+        monitor_db = get_db("system_monitor")
     except Exception as e:
         log.error(f"Failed to connect to MongoDB: {e}")
         sys.exit(1)

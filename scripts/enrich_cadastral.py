@@ -408,7 +408,7 @@ def main():
         print("ERROR: COSMOS_CONNECTION_STRING not set")
         sys.exit(1)
 
-    client = MongoClient(uri, retryWrites=False, tls=True, tlsAllowInvalidCertificates=True)
+    client = MongoClient(uri, retryWrites=False, **({"tls": True, "tlsAllowInvalidCertificates": True} if "cosmos.azure.com" in uri else {}))
     db = client['Gold_Coast']
     stats_coll = db['suburb_statistics']
     medians_coll = db['suburb_median_prices']

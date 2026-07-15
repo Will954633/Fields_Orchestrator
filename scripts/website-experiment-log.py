@@ -1,3 +1,7 @@
+# ⚠️ DEPRECATED 2026-03-19: Replaced by PostHog analytics.
+# This script is no longer called by any cron job or pipeline.
+# Kept for historical reference only.
+
 #!/usr/bin/env python3
 """
 Website Experiment Log — tracks A/B tests on website changes.

@@ -34,11 +34,17 @@ import re
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 from collections import defaultdict
-from pymongo import MongoClient
 from bson import ObjectId
 
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, REPO_ROOT)
+
+from shared.env import load_env  # type: ignore
+from shared.db import get_client, get_db  # type: ignore
+
+load_env()
+
 # MongoDB configuration
-MONGODB_URI = os.getenv('MONGODB_URI', 'mongodb://127.0.0.1:27017/')
 DATABASE_NAME = 'Gold_Coast'
 
 # Australian states for address parsing
@@ -47,7 +53,7 @@ AUSTRALIAN_STATES = ['QLD', 'NSW', 'VIC', 'SA', 'WA', 'TAS', 'NT', 'ACT']
 class DatabaseAuditor:
     """Audits database for properties stored in incorrect collections"""
 
-    def __init__(self, mongodb_uri: str = MONGODB_URI, database_name: str = DATABASE_NAME):
+    def __init__(self, mongodb_uri: str = None, database_name: str = DATABASE_NAME):
         """Initialize auditor"""
         self.mongodb_uri = mongodb_uri
         self.database_name = database_name
@@ -66,13 +72,13 @@ class DatabaseAuditor:
     def connect(self):
         """Connect to MongoDB"""
         try:
-            self.client = MongoClient(self.mongodb_uri, serverSelectionTimeoutMS=5000)
+            self.client = get_client(uri=self.mongodb_uri) if self.mongodb_uri else get_client()
             self.db = self.client[self.database_name]
             # Test connection
             self.client.admin.command('ping')
             return True
         except Exception as e:
-            print(f"❌ MongoDB connection failed: {e}")
+            print(f"MongoDB connection failed: {e}")
             return False
 
     def extract_suburb_from_address(self, address: str) -> Optional[str]:
