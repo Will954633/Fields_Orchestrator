@@ -16,5 +16,7 @@ cron, so this is cosmetic — but the collector should be the single source of t
 - [x] Layer 1 — ingestion fix + full creative capture (ad_creative_enrich.py)
 - [ ] Layer 2 — Opus high-effort semantic annotation (in progress)
 - [x] Layer 3 — attribution refresh (32 exact + 18 campaign = 50/92; 42 untagged/unattributable)
-- [ ] Layer 4 — PostHog granular behaviour store (recordings, AI summaries, heatmaps)
+- [x] Layer 4a — granular session behaviour store (ad_behaviour_build.py): articles+scroll depth, sections, properties, cards, rageclicks, dwell per session
+- [x] Layer 4b — Opus session summaries (ad_session_summarize.py): our own, since PostHog's summarize endpoint rejects personal-API-key access
+- [ ] Layer 4c (NOT AVAILABLE via API): PostHog AI summaries (personal-key rejected) + heatmaps (empty). Would need browser-cookie auth — deferred, our Opus summaries supersede.
 - [ ] Query layer — Opus reads whole joined package in-context
