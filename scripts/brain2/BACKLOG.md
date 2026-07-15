@@ -15,6 +15,6 @@ cron, so this is cosmetic — but the collector should be the single source of t
 ## Layer status
 - [x] Layer 1 — ingestion fix + full creative capture (ad_creative_enrich.py)
 - [ ] Layer 2 — Opus high-effort semantic annotation (in progress)
-- [ ] Layer 3 — attribution refresh across ALL ads (join PostHog downstream)
+- [x] Layer 3 — attribution refresh (32 exact + 18 campaign = 50/92; 42 untagged/unattributable)
 - [ ] Layer 4 — PostHog granular behaviour store (recordings, AI summaries, heatmaps)
 - [ ] Query layer — Opus reads whole joined package in-context
