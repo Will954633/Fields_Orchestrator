@@ -33,6 +33,7 @@ SECRET_ALLOW = re.compile(r"os\.environ|getenv|process\.env|load_dotenv|placehol
 
 PUSH = "--push" in sys.argv
 QUIET = "--quiet" in sys.argv
+NOTIFY = "--notify" in sys.argv        # Telegram-alert on real (non-scratch) gaps — for cron
 
 ENV = dict(os.environ)
 ENV.pop("GITHUB_TOKEN", None)                      # invalid token overrides gh auth
@@ -122,8 +123,18 @@ def push_repo(repo, remote, files, message):
     return commit
 
 
+def telegram(text):
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from telegram_notify import send_message
+        send_message(text)
+    except Exception as e:
+        print(f"(telegram alert failed: {e})", file=sys.stderr)
+
+
 def main():
     any_gap = False
+    real_gaps = []          # non-scratch gaps worth a human alert
     lines = []
     for r in REPOS:
         repo, remote = r["path"], r["remote"]
@@ -139,9 +150,15 @@ def main():
         any_gap = True
         lines.append(f"✗ {remote}: {len(new)} only-on-VM, {len(mod)} modified-unpushed")
         for f in new:
-            lines.append(f"    NEW  {f}" + ("   [scratch]" if SCRATCH_RE.search(f) else ""))
+            scratch = bool(SCRATCH_RE.search(f))
+            lines.append(f"    NEW  {f}" + ("   [scratch]" if scratch else ""))
+            if not scratch:
+                real_gaps.append(f"{remote}: NEW {f}")
         for f in mod:
-            lines.append(f"    MOD  {f}" + ("   [scratch]" if SCRATCH_RE.search(f) else ""))
+            scratch = bool(SCRATCH_RE.search(f))
+            lines.append(f"    MOD  {f}" + ("   [scratch]" if scratch else ""))
+            if not scratch:
+                real_gaps.append(f"{remote}: MOD {f}")
 
         if PUSH:
             pushable = [f for f in (new + mod) if not SCRATCH_RE.search(f)]
@@ -161,6 +178,12 @@ def main():
     report = "\n".join(lines)
     if any_gap or not QUIET:
         print(report)
+    if NOTIFY and real_gaps and not PUSH:
+        msg = ("⚠️ *Unpushed code detected* — files on the VM not backed up to GitHub:\n\n"
+               + "\n".join(f"• `{g}`" for g in real_gaps[:30])
+               + (f"\n…and {len(real_gaps) - 30} more" if len(real_gaps) > 30 else "")
+               + "\n\nRun `python3 scripts/check_unpushed_code.py --push` on the VM to sync.")
+        telegram(msg)
     sys.exit(1 if any_gap and not PUSH else 0)
 
 
