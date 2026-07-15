@@ -84,6 +84,12 @@ def posthog_query(query_str: str) -> list[list]:
         return []
 
 
+# Meta/AWS datacenter cities — their crawlers hit tagged ad URLs and pollute attribution (not real users)
+BOT_CITIES = ["Boardman", "Prineville", "Forest City", "Clonee", "Luleå", "Altoona",
+              "Gallatin", "Fort Worth", "Des Moines", "Ashburn", "Council Bluffs", "The Dalles"]
+_BOT_FILTER = "  AND properties.$geoip_city_name NOT IN (" + ", ".join("'" + c + "'" for c in BOT_CITIES) + ")"
+
+
 def fetch_visitor_data(cutoff_iso: str) -> dict[str, dict]:
     """Fetch pageview and event data, grouped by distinct_id."""
     visitors: dict[str, dict] = defaultdict(lambda: {
@@ -113,6 +119,7 @@ FROM events
 WHERE event = '$pageview'
   AND timestamp > toDateTime('{cutoff_iso}')
   AND properties.is_internal != true
+{_BOT_FILTER}
 GROUP BY distinct_id
 HAVING visit_days >= {MIN_VISIT_DAYS} OR distinct_id IN (
     SELECT distinct distinct_id FROM events
@@ -155,6 +162,7 @@ FROM events
 WHERE event IN ('{event_list}')
   AND timestamp > toDateTime('{cutoff_iso}')
   AND properties.is_internal != true
+{_BOT_FILTER}
 ORDER BY timestamp ASC
 """)
     for did, event, ts, search_q, address, path in rows:
@@ -180,6 +188,7 @@ WHERE event = '$pageview'
   AND properties.$pathname LIKE '/property/%'
   AND timestamp > toDateTime('{cutoff_iso}')
   AND properties.is_internal != true
+{_BOT_FILTER}
 GROUP BY distinct_id, path
 ORDER BY views DESC
 """)
@@ -193,6 +202,30 @@ ORDER BY views DESC
                 "path": path,
                 "count": views,
             })
+
+    # Query 4: ordered page journey — the actual visit sequence, in time order
+    print("  Fetching ordered journeys...")
+    if visitors:
+        id_list = "', '".join(str(k).replace("'", "") for k in visitors.keys())
+        try:
+            rows = posthog_query(f"""
+SELECT distinct_id, timestamp, properties.$pathname as path, event
+FROM events
+WHERE distinct_id IN ('{id_list}')
+  AND event IN ('$pageview', 'address_search', 'analyse_home_submit_start', 'property_view')
+  AND timestamp > toDateTime('{cutoff_iso}')
+{_BOT_FILTER}
+ORDER BY distinct_id, timestamp ASC
+LIMIT 50000
+""")
+            for did, ts, path, event in rows:
+                if did in INTERNAL_IDS:
+                    continue
+                seq = visitors[did].setdefault("page_sequence", [])
+                if len(seq) < 200:
+                    seq.append({"ts": str(ts), "path": path, "event": event})
+        except Exception as e:
+            print(f"  (page-sequence query skipped: {e})")
 
     return dict(visitors)
 
@@ -356,6 +389,7 @@ def build_contact_doc(distinct_id: str, v: dict, existing: dict | None = None) -
             "visit_days": len(v["visit_dates"]),
             "visit_dates": visit_dates,
             "pages_visited": [{"path": p, "count": c} for p, c in top_pages],
+            "page_sequence": v.get("page_sequence", [])[:60],
             "key_events": key_events[:30],
             "entry_referrers": sorted(v["referrers"]),
             "utm_sources": sorted(v["utm_sources"]),
