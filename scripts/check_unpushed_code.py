@@ -175,16 +175,19 @@ def main():
                 commit = push_repo(repo, remote, pushable, msg)
                 lines.append(f"    ⬆ pushed {len(pushable)} files as {commit[:8]}")
 
+    # "Healthy" = no REAL gaps. Files matching SCRATCH_RE are intentionally
+    # unpushed, so they don't count toward alerts, the exit code, or --quiet output.
+    real = bool(real_gaps)
     report = "\n".join(lines)
-    if any_gap or not QUIET:
+    if real or not QUIET:
         print(report)
-    if NOTIFY and real_gaps and not PUSH:
+    if NOTIFY and real and not PUSH:
         msg = ("⚠️ *Unpushed code detected* — files on the VM not backed up to GitHub:\n\n"
                + "\n".join(f"• `{g}`" for g in real_gaps[:30])
                + (f"\n…and {len(real_gaps) - 30} more" if len(real_gaps) > 30 else "")
                + "\n\nRun `python3 scripts/check_unpushed_code.py --push` on the VM to sync.")
         telegram(msg)
-    sys.exit(1 if any_gap and not PUSH else 0)
+    sys.exit(1 if real and not PUSH else 0)
 
 
 if __name__ == "__main__":
