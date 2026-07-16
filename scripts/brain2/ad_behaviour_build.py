@@ -141,6 +141,25 @@ def main():
             "channel_type": row[5], "pageview_count": row[6],
         }
 
+    # replay metadata from session_replay_events (activity_score, real click/
+    # keypress/active-time). Survives longer than the rrweb snapshot blobs, so
+    # this is the reliably-available richer engagement signal.
+    replaymeta = {}
+    try:
+        rm = hog(f"""SELECT session_id, surfacing_score, click_count, keypress_count,
+            mouse_activity_count, active_milliseconds, console_error_count
+            FROM session_replay_events
+            WHERE session_id IN ({sid_list}) LIMIT 1000000""")
+        for row in rm:
+            replaymeta[row[0]] = {
+                "surfacing_score": row[1], "click_count": row[2],
+                "keypress_count": row[3], "mouse_activity_count": row[4],
+                "active_seconds": round((row[5] or 0) / 1000, 1),
+                "console_errors": row[6],
+            }
+    except Exception as e:
+        print(f"replay metadata pull skipped: {str(e)[:100]}")
+
     # write per-session docs + accumulate per-ad affinity
     now = datetime.now(timezone.utc).isoformat()
     beh = db.ad_session_behaviour
@@ -167,6 +186,7 @@ def main():
             "n_searches": s["searches"], "rageclicks": s["rageclicks"],
             "dwell_seconds": round(s["dwell_total"], 1),  # event-derived (active reading)
             "session": smeta.get(sid, {}),  # authoritative: duration/bounce/entry-exit/channel
+            "replay": replaymeta.get(sid, {}),  # activity_score/clicks/active-time from replay
             "converted": s["converted"], "conversion_events": sorted(s["conv_events"]),
             "computed_at": now,
         }
