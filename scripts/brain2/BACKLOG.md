@@ -19,4 +19,6 @@ cron, so this is cosmetic — but the collector should be the single source of t
 - [x] Layer 4a — granular session behaviour store (ad_behaviour_build.py): articles+scroll depth, sections, properties, cards, rageclicks, dwell per session
 - [x] Layer 4b — Opus session summaries (ad_session_summarize.py): our own, since PostHog's summarize endpoint rejects personal-API-key access
 - [ ] Layer 4c (NOT AVAILABLE via API): PostHog AI summaries (personal-key rejected) + heatmaps (empty). Would need browser-cookie auth — deferred, our Opus summaries supersede.
+- [x] #6 Brain 2 deepening — native sessions table (duration/bounce/entry-exit/channel) + replay metadata (active-time/clicks) merged into ad_session_behaviour/affinity; server-side funnel+paths (ad_journey.py)
+- [ ] #6 forward-only: rrweb snapshot archiver (DOM replay) — blobs expire faster than metadata; build as a rolling nightly job if full replay wanted
 - [ ] Query layer — Opus reads whole joined package in-context
