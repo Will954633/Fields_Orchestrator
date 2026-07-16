@@ -57,7 +57,23 @@ def load(path):
     return units, bad
 
 
-def build(units):
+def load_canonical(outdir):
+    """Optional concept->canonical map from brain1_normalize.py --consolidate.
+
+    When present, raw concept strings are collapsed to their canonical form BEFORE the
+    graph is built, so typed + co-occurrence edge endpoints actually connect. Returns a
+    dict keyed by normalized raw concept (norm()) -> canonical label, or {} if absent.
+    """
+    p = Path(outdir) / "concept_canonical.json"
+    if not p.exists():
+        return {}
+    raw = json.loads(p.read_text(encoding="utf-8"))
+    return {norm(k): norm(v) for k, v in raw.items()}
+
+
+def build(units, canon=None):
+    canon = canon or {}
+    cn = lambda c: canon.get(c, c)  # collapse a normalized concept to its canonical form
     out_units = []
     concept_index = defaultdict(list)      # norm concept -> [unit_id]
     question_index = defaultdict(list)     # norm question -> [unit_id]
@@ -73,7 +89,7 @@ def build(units):
             "course": prov.get("course", ""),
             "module": prov.get("module", ""),
         }
-        concepts = [c for c in (norm(x) for x in u.get("concepts", []) or []) if c]
+        concepts = [cn(c) for c in (norm(x) for x in u.get("concepts", []) or []) if c]
         topics = [t for t in (norm(x) for x in u.get("topic_tags", []) or []) if t]
         asks = [q.strip() for q in (u.get("answers_questions", []) or []) if isinstance(q, str) and q.strip()]
         quotes = [q.strip() for q in (u.get("key_quotes", []) or []) if isinstance(q, str) and q.strip()]
@@ -102,7 +118,9 @@ def build(units):
         for r in u.get("relationships", []) or []:
             if not isinstance(r, dict):
                 continue
-            f, t, ty = norm(r.get("from", "")), norm(r.get("to", "")), (r.get("type") or "").strip().lower()
+            f = cn(norm(r.get("from", "")))
+            t = cn(norm(r.get("to", "")))
+            ty = (r.get("type") or "").strip().lower()
             if not f or not t or not ty:
                 continue
             key = (f, ty, t)
@@ -177,7 +195,12 @@ def main():
 
     units, bad = load(inp)
     print(f"Loaded {len(units)} annotation records ({bad} unparseable lines skipped)")
-    package = build(units)
+    canon = load_canonical(outdir)
+    if canon:
+        print(f"Applying canonical concept map: {len(canon)} raw -> {len(set(canon.values()))} canonical")
+    else:
+        print("No concept_canonical.json — building on raw concepts (run brain1_normalize.py to densify edges)")
+    package = build(units, canon)
     st = stats(package)
 
     pkg_path = outdir / "package.json"
