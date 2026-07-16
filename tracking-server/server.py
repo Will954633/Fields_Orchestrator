@@ -15,7 +15,8 @@ from pathlib import Path
 
 from io import BytesIO
 
-from flask import Flask, request, send_file, render_template, jsonify, abort
+from flask import Flask, request, send_file, render_template, jsonify, abort, redirect
+from urllib.parse import urlencode, urlsplit, urlunsplit, parse_qsl
 from flask_cors import CORS
 from pymongo import MongoClient
 import requests
@@ -101,6 +102,77 @@ def notify_telegram(message):
 
 
 # ---------------------------------------------------------------------------
+# PostHog server-side capture (public project key — same key the site JS ships)
+# ---------------------------------------------------------------------------
+POSTHOG_HOST = "https://us.i.posthog.com"
+_POSTHOG_KEY = None
+
+
+def _posthog_key():
+    global _POSTHOG_KEY
+    if _POSTHOG_KEY is None:
+        _POSTHOG_KEY = (_load_env_var("POSTHOG_PUBLIC_KEY")
+                        or "phc_RQ68rG9adv6NYtoZS4JzmJVzVyOWUfprV9ceHb0nLEs")
+    return _POSTHOG_KEY
+
+
+def posthog_capture(distinct_id, event, properties=None):
+    """Fire a server-side PostHog event. Guaranteed capture (independent of the
+    homeowner's browser loading JS), so a physical QR scan always lands in
+    PostHog even if they never reach the page."""
+    try:
+        requests.post(
+            f"{POSTHOG_HOST}/capture/",
+            json={
+                "api_key": _posthog_key(),
+                "event": event,
+                "distinct_id": distinct_id,
+                "properties": {"$lib": "fields-tracking-server", **(properties or {})},
+            },
+            timeout=8,
+        )
+    except Exception as e:
+        log.error(f"PostHog capture failed: {e}")
+
+
+# ---------------------------------------------------------------------------
+# Brain 2 — physical-material attribution (what WE've tested; printed collateral)
+# ---------------------------------------------------------------------------
+def record_physical_attribution(tracking_id, tracking_doc, req, extra=None):
+    """Log a physical-material touch to Brain 2 so printed appraisals sit in the
+    same attribution surface as ads/PostHog. One rolling doc per tracking_id."""
+    try:
+        now = datetime.now(timezone.utc)
+        touch = {
+            "at": now,
+            "channel": "physical_appraisal_qr",
+            "ip": req.headers.get("X-Real-IP", req.remote_addr),
+            "user_agent": req.headers.get("User-Agent", ""),
+            **(extra or {}),
+        }
+        get_db()["physical_attribution"].update_one(
+            {"tracking_id": tracking_id},
+            {
+                "$setOnInsert": {
+                    "tracking_id": tracking_id,
+                    "medium": "printed_appraisal",
+                    "recipient_email": tracking_doc.get("recipient_email"),
+                    "recipient_name": tracking_doc.get("recipient_name"),
+                    "property_address": tracking_doc.get("property_address"),
+                    "minisite_slug": tracking_doc.get("minisite_slug"),
+                    "created_at": now,
+                },
+                "$inc": {"scan_count": 1},
+                "$set": {"last_scan_at": now},
+                "$push": {"touches": touch},
+            },
+            upsert=True,
+        )
+    except Exception as e:
+        log.error(f"Brain 2 physical attribution write failed: {e}")
+
+
+# ---------------------------------------------------------------------------
 # Event recording
 # ---------------------------------------------------------------------------
 def record_event(tracking_id, event_type, req, extra_data=None):
@@ -165,6 +237,11 @@ def record_event(tracking_id, event_type, req, extra_data=None):
             {"tracking_id": tracking_id},
             {"$set": {"summary.last_session_duration": total}},
         )
+    elif event_type == "qr_scan":
+        tracking_col().update_one(
+            {"tracking_id": tracking_id},
+            {"$inc": {"summary.total_qr_scans": 1}, "$set": {"summary.qr_scanned": True}},
+        )
 
     # Sync engagement data to CRM contact
     sync_crm_engagement(tracking_id, doc, event_type, extra_data)
@@ -187,6 +264,7 @@ def record_event(tracking_id, event_type, req, extra_data=None):
                 f"*Session ended* — {name} spent {(extra_data or {}).get('total_time_seconds', 0):.0f}s "
                 f"on report{scroll_suffix}\n{addr}"
             ),
+            "qr_scan": f"*QR scanned* (printed report) by {name}\n{addr}\n{aest_now}",
             "conversation_requested": f"*Conversation requested* by {name}\n{addr}\n{aest_now}",
             "feedback_submitted": (
                 f"*Feedback submitted* by {name}\n{addr}\n\"{feedback_text[:200]}\"\n{aest_now}"
@@ -231,6 +309,18 @@ def sync_crm_engagement(tracking_id, tracking_doc, event_type, extra_data):
             if page is not None:
                 update.setdefault("$inc", {})[f"engagement.time_per_page.{page}"] = time_delta
             update["$set"]["engagement.last_interaction"] = now
+        elif event_type == "qr_scan":
+            update["$set"]["engagement.qr_scanned"] = True
+            update["$set"]["engagement.last_interaction"] = now
+            get_db()["crm_contacts"].update_one(
+                {"email": email},
+                {"$push": {"communications": {
+                    "type": "physical_qr_scan",
+                    "date": now.astimezone(AEST).isoformat(),
+                    "tracking_id": tracking_id,
+                    "channel": "printed_appraisal",
+                }}},
+            )
         elif event_type == "pdf_downloaded":
             update["$set"]["engagement.pdf_downloaded"] = True
         elif event_type == "session_end":
@@ -260,6 +350,55 @@ def sync_crm_engagement(tracking_id, tracking_doc, event_type, extra_data):
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
+
+# QR scan from a printed appraisal → log attribution, then 302 to the mini-site.
+# Server-side logging guarantees the scan is recorded (PostHog + CRM + Brain 2)
+# even if the homeowner never reaches the page; the redirect also carries UTM
+# params so client-side PostHog attributes the on-site session to print.
+@app.route("/scan/<tracking_id>")
+def scan(tracking_id):
+    doc = tracking_col().find_one({"tracking_id": tracking_id})
+
+    # Resolve the redirect target. Prefer the stamped mini-site URL; fall back
+    # to deriving from the property_reports slug on the pipeline record.
+    target = (doc or {}).get("minisite_url")
+    if not target and doc:
+        slug = doc.get("minisite_slug")
+        if not slug:
+            pipe = get_db()["appraisal_pipeline"].find_one({"tracking_id": tracking_id})
+            slug = (pipe or {}).get("property_reports_slug")
+        if slug:
+            target = f"https://fieldsestate.com.au/your-home/{slug}#home"
+    if not target:
+        target = "https://fieldsestate.com.au"
+
+    # Add print-attribution UTM params (preserve any existing query + #fragment).
+    parts = urlsplit(target)
+    q = dict(parse_qsl(parts.query))
+    q.update({
+        "utm_source": "printed_appraisal",
+        "utm_medium": "qr",
+        "utm_campaign": "physical_material",
+        "utm_content": tracking_id,
+    })
+    target_final = urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(q), parts.fragment))
+
+    if doc:
+        record_event(tracking_id, "qr_scan", request, {"source": "printed_appraisal"})
+        record_physical_attribution(tracking_id, doc, request, {"redirect_to": target_final})
+        did = doc.get("recipient_email") or f"scan_{tracking_id}"
+        posthog_capture(did, "physical_qr_scan", {
+            "tracking_id": tracking_id,
+            "channel": "printed_appraisal",
+            "property_address": doc.get("property_address"),
+            "minisite_slug": doc.get("minisite_slug"),
+            "$set": {"physical_qr_scanned": True},
+        })
+    else:
+        log.warning(f"/scan for unknown tracking_id {tracking_id} — redirecting anyway")
+
+    return redirect(target_final, code=302)
+
 
 # 1x1 transparent tracking pixel
 @app.route("/pixel/<tracking_id>.gif")
