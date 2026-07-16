@@ -82,6 +82,21 @@ def main():
     since = f"now() - INTERVAL {args.days} DAY"
     db = get_client()["system_monitor"]
 
+    # internal identities (Will + anyone who ever hit /ops) — excluded from leads.
+    # Seeded list + auto-detect over a wide window (an /ops visit = internal).
+    internal = set(db.internal_identities.distinct("distinct_id"))
+    stamp = datetime.now(timezone.utc).isoformat()
+    for r in hog("""SELECT DISTINCT properties.distinct_id FROM events
+        WHERE properties.$pathname = '/ops' AND timestamp > now() - INTERVAL 365 DAY
+          AND properties.distinct_id IS NOT NULL LIMIT 100000"""):
+        did = r[0]
+        if did and did not in internal:
+            internal.add(did)
+            db.internal_identities.update_one({"distinct_id": did},
+                {"$setOnInsert": {"distinct_id": did, "who": "unknown",
+                                  "source": "auto_ops_visit", "added_at": stamp}}, upsert=True)
+    print(f"internal identities excluded: {len(internal)}")
+
     # 1) all NON-PAID sessions (native sessions table — channel + entry + referrer)
     paid_list = ",".join("'" + p + "'" for p in PAID)
     srows = hog(f"""SELECT session_id, $channel_type, $entry_pathname,
@@ -197,6 +212,8 @@ def main():
         # organic_journeys = non-paid only (paid conversions already in ad store)
         if sid not in sess_meta:
             continue
+        if j.get("person") in internal:
+            continue
         flag, flag_addr = neighbour_flag(m.get("entry_path"), j.get("submits", []))
         engaged = (m.get("pageviews") or 0) >= 2 or (m.get("duration_s") or 0) > 60
         doc = {
@@ -243,6 +260,8 @@ def main():
     conv_docs = []
     for sid in conv_sids:
         j = J.get(sid, {})
+        if j.get("person") in internal:  # drop Will / internal from the leads register
+            continue
         m = sess_meta.get(sid)  # None => paid (not in non-paid pull)
         channel = m.get("channel") if m else "Paid (see ad store)"
         entry = m.get("entry_path") if m else (j.get("pages", ["?"])[0] if j.get("pages") else "?")
