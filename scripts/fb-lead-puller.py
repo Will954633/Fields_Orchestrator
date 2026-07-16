@@ -29,6 +29,10 @@ PAGE_ID = "889412530933297"
 API = "https://graph.facebook.com/v18.0"
 TOKEN = os.environ["FACEBOOK_ADS_TOKEN"]
 
+# AYH forms are fulfilled (address -> mini-site -> email) via a Netlify function.
+AYH_FORM_IDS = {"1735418400974915"}
+FULFIL_URL = "https://fieldsestate.com.au/.netlify/functions/ayh-lead-fulfil"
+
 
 def page_token():
     r = requests.get(f"{API}/{PAGE_ID}", params={"fields": "access_token", "access_token": TOKEN}, timeout=20)
@@ -87,6 +91,42 @@ def notify(fields, form_name, created):
         print(f"  telegram notify failed: {e}", file=sys.stderr)
 
 
+def fulfil_ayh(fields):
+    """Resolve address -> mini-site -> email via the Netlify fulfilment function."""
+    payload = {"address": fields.get("property_address", ""),
+               "suburb": fields.get("suburb", ""),
+               "email": fields.get("email", "")}
+    try:
+        r = requests.post(FULFIL_URL, json=payload, timeout=45)
+        return r.json()
+    except Exception as e:
+        return {"ok": False, "reason": f"call_failed:{e}"}
+
+
+def notify_ayh(fields, form_name, created, result):
+    token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    chat = os.environ.get("TELEGRAM_CHAT_ID")
+    if not (token and chat):
+        return
+    addr = fields.get("property_address", "?")
+    email = fields.get("email", "?")
+    if result.get("ok"):
+        head = "🏡 *New AYH lead — report emailed*"
+        tail = f"Report: fieldsestate.com.au/your-home/{result.get('slug')}"
+    else:
+        head = "⚠️ *New AYH lead — NEEDS MANUAL HANDLING*"
+        tail = f"Reason: `{result.get('reason')}` — resolve/send by hand."
+    lines = [head, f"_{form_name}_", "",
+             f"• *Address:* {addr}", f"• *Suburb:* {fields.get('suburb','?')}",
+             f"• *Selling?:* {fields.get('selling_timeframe','?')}", f"• *Email:* {email}",
+             "", tail, f"_{created}_"]
+    try:
+        requests.post(f"https://api.telegram.org/bot{token}/sendMessage",
+                      json={"chat_id": chat, "text": "\n".join(lines), "parse_mode": "Markdown"}, timeout=20)
+    except Exception as e:
+        print(f"  telegram notify failed: {e}", file=sys.stderr)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--dry-run", action="store_true")
@@ -114,11 +154,19 @@ def main():
             doc = {"_id": lid, "form_id": form["id"], "form_name": form["name"],
                    "created_time": lead.get("created_time"), "fields": fields,
                    "raw": lead, "pulled_at": datetime.now(timezone.utc).isoformat()}
-            coll.insert_one(doc)
             new_count += 1
             print(f"  NEW lead {lid}: {fields.get('email')}")
-            if not args.no_notify:
-                notify(fields, form["name"], lead.get("created_time"))
+            if form["id"] in AYH_FORM_IDS:
+                result = fulfil_ayh(fields)
+                doc["fulfilment"] = result
+                print(f"    AYH fulfil -> {result}")
+                coll.insert_one(doc)
+                if not args.no_notify:
+                    notify_ayh(fields, form["name"], lead.get("created_time"), result)
+            else:
+                coll.insert_one(doc)
+                if not args.no_notify:
+                    notify(fields, form["name"], lead.get("created_time"))
 
     print(f"done — {new_count} new lead(s)")
 
