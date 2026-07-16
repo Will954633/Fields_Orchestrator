@@ -8,6 +8,13 @@
         "GDRIVE_OAUTH_PATH": "/home/fields/.gdrive-oauth.keys.json",
         "GDRIVE_CREDENTIALS_PATH": "/home/fields/.gdrive-server-credentials.json"
       }
+    },
+    "posthog": {
+      "type": "http",
+      "url": "https://mcp.posthog.com/mcp?readonly=true&features=flags,insights,dashboards,error_tracking,experiments",
+      "headers": {
+        "Authorization": "Bearer ${POSTHOG_ALL_ACCESS_KEY}"
+      }
     }
   }
 }
