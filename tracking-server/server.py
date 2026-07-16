@@ -309,18 +309,11 @@ def sync_crm_engagement(tracking_id, tracking_doc, event_type, extra_data):
             if page is not None:
                 update.setdefault("$inc", {})[f"engagement.time_per_page.{page}"] = time_delta
             update["$set"]["engagement.last_interaction"] = now
-        elif event_type == "qr_scan":
-            update["$set"]["engagement.qr_scanned"] = True
-            update["$set"]["engagement.last_interaction"] = now
-            get_db()["crm_contacts"].update_one(
-                {"email": email},
-                {"$push": {"communications": {
-                    "type": "physical_qr_scan",
-                    "date": now.astimezone(AEST).isoformat(),
-                    "tracking_id": tracking_id,
-                    "channel": "printed_appraisal",
-                }}},
-            )
+        # NOTE: qr_scan is deliberately NOT synced to the CRM here. A physical
+        # scan has no PostHog person id server-side (it lives in the browser),
+        # and the CRM is keyed on person id, not email. Person attribution for
+        # scans happens on the mini-site landing via /api/minisite-visit, which
+        # reconciles the scan (utm_content=tracking_id) to the real person id.
         elif event_type == "pdf_downloaded":
             update["$set"]["engagement.pdf_downloaded"] = True
         elif event_type == "session_end":
