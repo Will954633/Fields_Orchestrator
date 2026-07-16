@@ -49,7 +49,10 @@ INTERNAL_IDS = {
 # Qualification thresholds
 MIN_VISIT_DAYS = 2
 INTENT_EVENTS = ["address_search", "analyse_home_submit_start", "analyse_lead_submitted",
-                 "lead_cta_click", "signup_gate_complete", "feed_email_submit"]
+                 "lead_cta_click", "signup_gate_complete", "feed_email_submit",
+                 # A mini-site view or a printed-appraisal QR scan is a real
+                 # signal — the visitor engaged with a specific property.
+                 "minisite_view", "physical_qr_scan"]
 
 # Suburbs for auto-tagging
 SUBURBS = ["robina", "burleigh-waters", "varsity-lakes", "burleigh_waters", "varsity_lakes"]
@@ -402,6 +405,24 @@ def build_contact_doc(distinct_id: str, v: dict, existing: dict | None = None) -
         "status": (existing or {}).get("status", "lead"),
         "tags": sorted(set((existing or {}).get("tags", []) + tags)),
         "notes": (existing or {}).get("notes", []),
+        # Person-attribute fields written by the real-time endpoints
+        # (analyse-lead-address, minisite-visit) and the tracking server. This
+        # daily job REPLACES the whole doc, so it MUST carry these forward or it
+        # would wipe the probable-address provenance, viewed addresses, scan
+        # reconciliation and communications timeline.
+        "property_address": (existing or {}).get("property_address"),
+        "addresses_searched": (existing or {}).get("addresses_searched", []),
+        "addresses_viewed": (existing or {}).get("addresses_viewed", []),
+        "probable_address": (existing or {}).get("probable_address"),
+        "probable_address_slug": (existing or {}).get("probable_address_slug"),
+        "probable_address_slugs": (existing or {}).get("probable_address_slugs", []),
+        "probable_address_source": (existing or {}).get("probable_address_source"),
+        "probable_address_label": (existing or {}).get("probable_address_label"),
+        "probable_address_at": (existing or {}).get("probable_address_at"),
+        "physical_scan": (existing or {}).get("physical_scan"),
+        "communications": (existing or {}).get("communications", []),
+        "owner": (existing or {}).get("owner", "will"),
+        "lead_quality": (existing or {}).get("lead_quality"),
         # Linked records
         "linked_records": (existing or {}).get("linked_records", {}),
         # Metadata
