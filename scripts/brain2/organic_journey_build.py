@@ -147,11 +147,19 @@ def main():
 
     J = defaultdict(lambda: {"pages": [], "properties": {}, "submits": [], "searches": 0,
                              "converted": False, "conv_events": set(), "person": None,
-                             "first_referrer": None, "t_first": None, "t_last": None})
+                             "first_referrer": None, "t_first": None, "t_last": None,
+                             "timeline": []})
     for sid, ts, event, path, prop_id, suburb, address, referrer, person in ev:
         j = J[sid]
         if person and not j["person"]:
             j["person"] = person
+        # permanent timestamped timeline (survives PostHog retention)
+        te = {"t": ts, "e": event}
+        for k, v in (("path", path), ("property_id", prop_id), ("suburb", suburb),
+                     ("address", address), ("referrer", referrer)):
+            if v is not None and v != "":
+                te[k] = v
+        j["timeline"].append(te)
         if referrer and not j["first_referrer"]:
             j["first_referrer"] = referrer
         j["t_first"] = j["t_first"] or ts
@@ -231,6 +239,7 @@ def main():
             "addresses_submitted": j.get("submits", []),
             "pattern": flag, "pattern_address": flag_addr,
             "t_first": j.get("t_first"), "t_last": j.get("t_last"),
+            "timeline": j.get("timeline", [])[:3000],  # full timestamped event sequence
             "computed_at": now,
         }
         docs.append(doc)
@@ -252,6 +261,28 @@ def main():
                        "channels": dict(af["channels"]),
                        "top_referrers": dict(af["referrers"].most_common(5)),
                        "computed_at": now})
+
+    # full cross-session person timeline (all sessions, not just the converting one)
+    # — the entry point is often in an earlier session, and it's the key signal.
+    def person_timeline(did):
+        if not did:
+            return []
+        rows = hog(f"""SELECT timestamp, event, properties.$pathname,
+            properties.property_id, properties.suburb, properties.address, properties.$referrer
+            FROM events WHERE properties.distinct_id = '{did}'
+              AND (event = '$pageview' OR event LIKE 'analyse_home_%' OR event LIKE 'analyse_v%'
+                   OR event IN ('property_view','address_search','article_view',
+                                'v3_section_marker_view','scroll_depth','time_on_page'))
+            ORDER BY timestamp LIMIT 5000""")
+        tl = []
+        for ts, event, path, pid, suburb, address, ref in rows:
+            te = {"t": ts, "e": event}
+            for k, v in (("path", path), ("property_id", pid), ("suburb", suburb),
+                         ("address", address), ("referrer", ref)):
+                if v is not None and v != "":
+                    te[k] = v
+            tl.append(te)
+        return tl
 
     # 6) all_conversions — EVERY address submit, EVERY channel (the review register)
     ac = db.all_conversions
@@ -277,6 +308,7 @@ def main():
             "pattern": flag, "pattern_address": flag_addr,
             "contact_captured": contact_captured(addr),
             "submitted_at": j.get("t_first"),
+            "timeline": person_timeline(j.get("person")),  # FULL cross-session person journey
             "computed_at": now,
         })
     conv_docs.sort(key=lambda d: d.get("submitted_at") or "", reverse=True)
