@@ -126,6 +126,21 @@ def main():
             s["converted"] = True
             s["conv_events"].add(event)
 
+    # authoritative session metrics from the native `sessions` table (real
+    # duration/bounce/entry-exit/channel) — beats the event-derived dwell approx.
+    smeta = {}
+    sm = hog(f"""SELECT session_id, $session_duration, $is_bounce, $entry_pathname,
+        $exit_pathname, $channel_type, $pageview_count
+        FROM sessions
+        WHERE session_id IN ({sid_list}) AND $start_timestamp > {since}
+        LIMIT 1000000""")
+    for row in sm:
+        smeta[row[0]] = {
+            "session_duration_s": row[1], "is_bounce": bool(row[2]),
+            "entry_path": row[3], "exit_path": row[4],
+            "channel_type": row[5], "pageview_count": row[6],
+        }
+
     # write per-session docs + accumulate per-ad affinity
     now = datetime.now(timezone.utc).isoformat()
     beh = db.ad_session_behaviour
@@ -135,7 +150,8 @@ def main():
         "sessions": 0, "converters": 0, "articles": Counter(), "article_titles": {},
         "scroll_sum": defaultdict(float), "scroll_n": defaultdict(int),
         "sections": Counter(), "properties": Counter(), "classifications": Counter(),
-        "dwell_sum": 0.0, "rageclick_sessions": 0, "searches": 0})
+        "dwell_sum": 0.0, "rageclick_sessions": 0, "searches": 0,
+        "dur_sum": 0.0, "dur_n": 0, "bounces": 0})
     batch = []
     for sid, s in S.items():
         aid = sess_ad[sid]
@@ -149,7 +165,8 @@ def main():
             "properties_viewed": [{"property_id": k, "suburb": v} for k, v in s["properties"].items()],
             "cards_seen": s["cards"][:40],
             "n_searches": s["searches"], "rageclicks": s["rageclicks"],
-            "dwell_seconds": round(s["dwell_total"], 1),
+            "dwell_seconds": round(s["dwell_total"], 1),  # event-derived (active reading)
+            "session": smeta.get(sid, {}),  # authoritative: duration/bounce/entry-exit/channel
             "converted": s["converted"], "conversion_events": sorted(s["conv_events"]),
             "computed_at": now,
         }
@@ -160,6 +177,12 @@ def main():
         af["dwell_sum"] += s["dwell_total"]
         af["searches"] += s["searches"]
         af["rageclick_sessions"] += 1 if s["rageclicks"] else 0
+        _m = smeta.get(sid)
+        if _m:
+            if _m.get("session_duration_s") is not None:
+                af["dur_sum"] += _m["session_duration_s"]; af["dur_n"] += 1
+            if _m.get("is_bounce"):
+                af["bounces"] += 1
         for k, v in s["articles"].items():
             af["articles"][k] += 1
             if v["title"]:
@@ -189,6 +212,8 @@ def main():
             "_id": aid, "ad_id": aid, "ad_name": (prof or {}).get("name", ""),
             "sessions": af["sessions"], "converters": af["converters"],
             "avg_dwell_seconds": round(af["dwell_sum"] / af["sessions"], 1) if af["sessions"] else 0,
+            "avg_session_duration_s": round(af["dur_sum"] / af["dur_n"], 1) if af["dur_n"] else None,
+            "bounce_rate_pct": round(100 * af["bounces"] / af["sessions"], 1) if af["sessions"] else None,
             "rageclick_session_pct": round(100 * af["rageclick_sessions"] / af["sessions"], 1) if af["sessions"] else 0,
             "total_searches": af["searches"],
             "top_articles_read": top_articles,
