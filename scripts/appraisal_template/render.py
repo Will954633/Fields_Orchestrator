@@ -168,12 +168,18 @@ def render_section_00_cover_html(
     overrides = editorial_overrides or {}
     subject = data_pull.get_subject(subject_id)
 
-    # Stacked address — "13 Terrace Court" → "13<br>Terrace<br>Court"
-    street = subject.get("street_address") or _short_address(subject) or ""
+    # Stacked address — "13 Terrace Court" → "13<br>Terrace<br>Court".
+    # _short_address returns the street portion only (handles cadastral /
+    # analyse-your-home records with no `street_address`), so the stack stays
+    # the street — not the whole "18 Silvabank Drive Varsity Lakes Qld 4227".
+    street = _short_address(subject) or ""
     stacked = "<br>".join(w for w in street.split() if w)
 
-    suburb = subject.get("suburb") or ""
-    postcode = subject.get("postcode") or subject.get("display_postcode") or ""
+    # Suburb / postcode — fall back to cadastral LOCALITY / POSTCODE so the
+    # suburb line reads "Varsity Lakes, QLD 4227" rather than a bare "QLD 4227".
+    suburb = subject.get("suburb") or subject.get("LOCALITY") or ""
+    postcode = (subject.get("postcode") or subject.get("display_postcode")
+                or subject.get("POSTCODE") or "")
     suburb_line = f"{suburb.title() if suburb.isupper() else suburb}, QLD {postcode}".strip(", ")
 
     prepared_for_final = overrides.get("prepared_for") or prepared_for or "Prepared for the Owner"
@@ -1082,7 +1088,23 @@ def render_section_01_right_html(
 
 
 def _short_address(subject: dict) -> str:
-    addr = subject.get("street_address") or subject.get("complete_address") or ""
+    # Street portion only ("18 Silvabank Drive"). Cadastral / analyse-your-home
+    # records have no `street_address`; they carry a comma-joined `address`
+    # ("18 Silvabank Drive, Varsity Lakes QLD 4227") or an ALL-CAPS
+    # `complete_address` with no commas. Deriving the street portion here keeps
+    # every "For {short_address}" header and the cover title tidy instead of
+    # stacking the whole address.
+    addr = subject.get("street_address") or ""
+    if not addr:
+        full = subject.get("address") or ""
+        if "," in full:
+            addr = full.split(",")[0].strip()
+        else:
+            full = full or subject.get("complete_address") or ""
+            addr = full
+            loc = (subject.get("LOCALITY") or subject.get("suburb") or "").strip()
+            if loc and loc.upper() in full.upper():
+                addr = full[: full.upper().index(loc.upper())].strip()
     return addr.title() if addr.isupper() else addr
 
 
