@@ -170,6 +170,17 @@ def render_appraisal(
     # so the audit file only reflects this render.
     layout_rules.clear_records()
 
+    # QR code — encodes the attributable scan-redirect (a homeowner scan logs
+    # to PostHog + CRM + Brain 2 physical attribution, then 302s to the live
+    # mini-site). Falls back to the direct mini-site URL when no tracking_id is
+    # on the pipeline record yet. Rendered onto both the front and back cover.
+    subject_doc_for_qr = get_client()["Gold_Coast"]
+    _sk = (pipeline_record.get("suburb_key")
+           or (pipeline_record.get("suburb") or "").lower().replace(" ", "_")) if pipeline_record else None
+    _subj_for_qr = subject_doc_for_qr[_sk].find_one({"_id": ObjectId(subject_id)}) if _sk else {}
+    scan_url, minisite_url = render._minisite_urls(pipeline_record, _subj_for_qr or {})
+    qr_svg = render._qr_data_uri(scan_url)
+
     # Section render — each returns the HTML block
     sections_rendered = []
     cover_html = render.render_section_00_cover_html(
@@ -179,6 +190,7 @@ def render_appraisal(
         prepared_for=pipeline_record.get("name") or "the Owner",
         date_override=pipeline_record.get("cover_date_override"),
         write_substantiation=True,
+        qr_svg=qr_svg,
     )
     sections_rendered.append("00_cover")
 
@@ -339,6 +351,25 @@ def render_appraisal(
                     rf'\g<1>{sub_title}, QLD {postcode}',
                     text,
                 )
+
+    # Back cover + even-page booklet padding. Count printed page units (front
+    # cover + content pages; `class="page"`/`class="cover"` match exactly, not
+    # `page-pad`/`cover-image`). The booklet must end on the back cover with an
+    # even total, so insert one blank spacer before it when adding it would make
+    # the count odd.
+    page_units = len(re.findall(r'class="(?:page|cover)"', text))
+    back_cover = render.render_back_cover_html(
+        subject_id, qr_svg=qr_svg,
+        prepared_for=(pipeline_record or {}).get("name"),
+    )
+    tail = ""
+    if (page_units + 1) % 2 == 1:  # content even -> back cover alone would make it odd
+        tail += ('\n<div class="page" data-section="spacer" '
+                 'style="background:#ffffff; page-break-before:always;"></div>\n')
+        page_units += 1
+    tail += "\n" + back_cover + "\n"
+    text = text.replace("</body>", tail + "</body>", 1)
+    sections_rendered.append("back_cover")
 
     # Write HTML
     basename = output_basename or f"{subject_id}_{datetime.now().strftime('%Y%m%dT%H%M%S')}"
@@ -650,6 +681,40 @@ def main() -> None:
         subject_id = args.subject_id
         pipe = None
 
+    # Ensure a tracking_id exists BEFORE the render so the cover/back QR encodes
+    # the attributable scan-redirect (/track/scan/<id>) rather than the bare
+    # mini-site URL. Also stamp the mini-site slug/url on the tracking record so
+    # the /scan route knows where to redirect. Best-effort — a QR that falls
+    # back to the direct URL is still fine.
+    if pipe and args.update_pipeline and not pipe.get("tracking_id"):
+        try:
+            sys.path.insert(0, str(REPO_ROOT / "tracking-server"))
+            from send_report import create_tracking_record  # type: ignore
+            sm_pre = get_client()["system_monitor"]
+            slug = pipe.get("property_reports_slug")
+            tid = create_tracking_record(
+                sm_pre,
+                pipe.get("email") or "preview@fieldsestate.com.au",
+                pipe.get("name") or "the Owner",
+                pipe.get("address") or "Property",
+                "(pending render)", subject_id, 0,
+            )
+            sm_pre["email_tracking"].update_one(
+                {"tracking_id": tid},
+                {"$set": {
+                    "minisite_slug": slug,
+                    "minisite_url": (f"https://fieldsestate.com.au/your-home/{slug}#home"
+                                     if slug else None),
+                    "source_channel": "physical_appraisal",
+                }},
+            )
+            sm_pre.appraisal_pipeline.update_one(
+                {"_id": pipe["_id"]}, {"$set": {"tracking_id": tid}})
+            pipe["tracking_id"] = tid
+            print(f"  Tracking ID minted (pre-render, for QR): {tid}")
+        except Exception as exc:
+            print(f"  [WARN] pre-render tracking mint failed: {exc} — QR will use direct URL")
+
     # When updating a pipeline record, mark it as in-progress before the
     # (potentially slow) render so the ops panel reflects current state.
     if args.update_pipeline and pipe:
@@ -764,12 +829,19 @@ def main() -> None:
                 # On re-render, point the existing tracking record at the new
                 # PDF — otherwise the Preview link serves stale page PNGs from
                 # the original render before the analyst's tweaks.
+                _slug = pipe.get("property_reports_slug")
                 sm["email_tracking"].update_one(
                     {"tracking_id": tracking_id},
                     {"$set": {
                         "report_path": str(result["pdf_path"]),
                         "report_filename": Path(result["pdf_path"]).name,
                         "total_pages": total_pages,
+                        # Backfill mini-site target so /track/scan/<id> can redirect
+                        # (existing tracking records pre-date the QR feature).
+                        "minisite_slug": _slug,
+                        "minisite_url": (f"https://fieldsestate.com.au/your-home/{_slug}#home"
+                                         if _slug else None),
+                        "source_channel": "physical_appraisal",
                     }},
                 )
                 print(f"  Tracking record updated → {Path(result['pdf_path']).name}")
