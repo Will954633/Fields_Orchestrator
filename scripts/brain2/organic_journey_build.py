@@ -45,6 +45,57 @@ CONTENT_EVENTS = ["article_view", "v3_section_marker_view", "property_view",
                   "address_search", "v3_card_click", "time_on_page", "scroll_depth"]
 STATE_TOKENS = {"qld", "nsw", "vic", "act", "sa", "wa", "nt", "tas", "australia"}
 
+# --- Funnel-regime labelling (Will, 2026-07-16) ---------------------------------
+# The /analyse-your-home funnel changed product on 1 July 2026 (AEST). Address-entry
+# behaviour BEFORE this date is not comparable to behaviour after it, and drop-off
+# before the cutover must NOT be read as friction in the current product.
+#   contact_required_pdf   (< 2026-07-01 AEST): user had to enter phone and/or email
+#       to receive a PDF report. High friction by design -> drop-off expected.
+#   address_only_minisite  (>= 2026-07-01 AEST): friction removed; address-only entry
+#       generates the automated house mini-site. This is the CURRENT product; drop-off
+#       here is a real conversion signal.
+FUNNEL_REGIME_CUTOVER = datetime(2026, 6, 30, 14, 0, 0, tzinfo=timezone.utc)  # 2026-07-01 00:00 AEST
+
+
+def _parse_ts(ts):
+    """Best-effort parse of an ISO-8601 timestamp (with trailing Z) to aware UTC datetime."""
+    if not ts:
+        return None
+    if isinstance(ts, datetime):
+        return ts if ts.tzinfo else ts.replace(tzinfo=timezone.utc)
+    s = str(ts).strip().replace("Z", "+00:00")
+    try:
+        d = datetime.fromisoformat(s)
+        return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+    except Exception:
+        return None
+
+
+def funnel_regime(ts):
+    """Label an address-entry timestamp by the product regime in force at that time."""
+    d = _parse_ts(ts)
+    if d is None:
+        return "unknown"
+    return "contact_required_pdf" if d < FUNNEL_REGIME_CUTOVER else "address_only_minisite"
+
+# AI-assistant / generative-engine referrers. They tag outbound links with
+# utm_source (ChatGPT) or send a referrer (Copilot) — NOT captured as a normal
+# channel, so PostHog labels them "Direct". This is a first-class signal:
+# which of our pages LLMs cite as authoritative sources ("GEO"/AI-SEO).
+AI_SOURCES = {
+    "chatgpt.com": "ChatGPT", "openai.com": "ChatGPT", "chat.openai.com": "ChatGPT",
+    "copilot.com": "Copilot", "copilot.microsoft.com": "Copilot", "bing.com/chat": "Copilot",
+    "perplexity.ai": "Perplexity", "www.perplexity.ai": "Perplexity",
+    "gemini.google.com": "Gemini", "claude.ai": "Claude",
+}
+
+
+def detect_ai(utm_source, referring_domain):
+    for key, name in AI_SOURCES.items():
+        if (utm_source and key in utm_source) or (referring_domain and key in referring_domain):
+            return name
+    return None
+
 
 def hog(sql):
     body = json.dumps({"query": {"kind": "HogQLQuery", "query": sql}}).encode()
@@ -228,6 +279,8 @@ def main():
             "session_id": sid, "distinct_id": j.get("person"),
             "channel": m.get("channel"), "entry_path": m.get("entry_path"),
             "referring_domain": m.get("referring_domain"),
+            "utm_source": m.get("utm_source"),
+            "ai_source": detect_ai(m.get("utm_source"), m.get("referring_domain")),
             "first_referrer": j.get("first_referrer"),
             "duration_s": m.get("duration_s"), "is_bounce": m.get("is_bounce"),
             "pageviews": m.get("pageviews"),
@@ -238,6 +291,7 @@ def main():
             "conversion_events": sorted(j.get("conv_events", [])),
             "addresses_submitted": j.get("submits", []),
             "pattern": flag, "pattern_address": flag_addr,
+            "funnel_regime": funnel_regime(j.get("t_first")),
             "t_first": j.get("t_first"), "t_last": j.get("t_last"),
             "timeline": j.get("timeline", [])[:3000],  # full timestamped event sequence
             "computed_at": now,
@@ -307,6 +361,7 @@ def main():
             "properties_viewed": [{"property_id": k, "suburb": v} for k, v in j.get("properties", {}).items()],
             "pattern": flag, "pattern_address": flag_addr,
             "contact_captured": contact_captured(addr),
+            "funnel_regime": funnel_regime(j.get("t_first")),
             "submitted_at": j.get("t_first"),
             "timeline": person_timeline(j.get("person")),  # FULL cross-session person journey
             "computed_at": now,
@@ -314,6 +369,48 @@ def main():
     conv_docs.sort(key=lambda d: d.get("submitted_at") or "", reverse=True)
     if conv_docs:
         ac.insert_many(conv_docs)
+
+    # 7) AI-REFERRAL SIGNAL — which of our pages LLM assistants cite (all-time,
+    # since this traffic predates the organic window + is otherwise mislabelled Direct)
+    ai_rows = hog("""SELECT properties.utm_source, properties.$referring_domain,
+        properties.$pathname, properties.$session_id, properties.distinct_id, timestamp
+        FROM events
+        WHERE event = '$pageview' AND timestamp > now() - INTERVAL 400 DAY
+          AND (properties.utm_source IN ('chatgpt.com','openai.com','copilot.com')
+               OR properties.$referring_domain LIKE '%copilot%'
+               OR properties.$referring_domain LIKE '%chatgpt%'
+               OR properties.$referring_domain LIKE '%perplexity%'
+               OR properties.$referring_domain LIKE '%gemini%'
+               OR properties.$referring_domain LIKE '%claude.ai%')
+        LIMIT 100000""")
+    ai_page = defaultdict(lambda: {"sessions": set(), "people": set(), "first": None, "last": None})
+    ai_sess = set()
+    for utm, ref, path, sid, did, ts in ai_rows:
+        name = detect_ai(utm, ref) or "AI"
+        key = (name, path)
+        a = ai_page[key]
+        if sid:
+            a["sessions"].add(sid); ai_sess.add(sid)
+        if did:
+            a["people"].add(did)
+        a["first"] = min(a["first"], ts) if a["first"] else ts
+        a["last"] = max(a["last"], ts) if a["last"] else ts
+    # conversions among AI sessions
+    ai_conv = 0
+    if ai_sess:
+        sl = ",".join("'" + s + "'" for s in ai_sess if s)
+        cr = hog(f"""SELECT count(DISTINCT properties.$session_id) FROM events
+            WHERE event IN ({conv_in}) AND properties.$session_id IN ({sl})""")
+        ai_conv = cr[0][0] if cr else 0
+    ars = db.ai_referral_signal
+    ars.delete_many({})
+    for (name, path), a in ai_page.items():
+        ars.insert_one({"ai_source": name, "page": path,
+                        "sessions": len(a["sessions"]), "people": len(a["people"]),
+                        "first_seen": a["first"], "last_seen": a["last"], "computed_at": now})
+    ars.create_index("ai_source")
+    print(f"AI-referral signal: {len(ai_sess)} sessions, {ai_conv} conversions, "
+          f"{len(ai_page)} (source,page) rows -> ai_referral_signal")
 
     # summary
     print(f"wrote organic_journeys={len(docs)} landing_affinity={len(affinity)} all_conversions={len(conv_docs)}")
