@@ -24,7 +24,9 @@ from dotenv import load_dotenv
 
 load_dotenv("/home/fields/Fields_Orchestrator/.env")
 sys.path.insert(0, "/home/fields/Fields_Orchestrator")
+sys.path.insert(0, "/home/fields/Fields_Orchestrator/scripts/brain2")
 from shared.db import get_client  # noqa: E402
+from organic_journey_build import funnel_regime  # noqa: E402  (single source of truth for the regime cutover)
 
 PID = os.environ["POSTHOG_PROJECT_ID"]
 KEY = os.environ["POSTHOG_PERSONAL_API_KEY"]
@@ -197,6 +199,7 @@ def main():
             "session": smeta.get(sid, {}),  # authoritative: duration/bounce/entry-exit/channel
             "replay": replaymeta.get(sid, {}),  # activity_score/clicks/active-time from replay
             "timeline": s["timeline"][:3000],  # full timestamped event sequence (permanent)
+            "funnel_regime": funnel_regime(s["timeline"][0]["t"] if s["timeline"] else None),
             "converted": s["converted"], "conversion_events": sorted(s["conv_events"]),
             "computed_at": now,
         }
