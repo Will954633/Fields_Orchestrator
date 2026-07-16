@@ -896,15 +896,25 @@ SECTION_01_RIGHT_TEMPLATE = """\
     <div style="display:grid; grid-template-columns: 1fr 60mm; gap:6mm; align-items:start; margin-bottom:4mm;">
       <div>
         <p style="margin:0 0 3mm; font-size:11pt; line-height:1.45;">{{ s01.cohort_body_html | safe }}</p>
+{% if s01.premium_ladder %}
+        <div style="font-size:7.5pt; letter-spacing:0.1em; text-transform:uppercase; color:#8d4d33; font-weight:600; margin:0 0 1.5mm;">{{ s01.premium_ladder_label }}</div>
+        <ul style="margin:0; padding:0; font-size:10pt; line-height:1.5; list-style:none; max-width:56mm;">
+{% for row in s01.premium_ladder %}          <li style="display:flex; justify-content:space-between; gap:4mm; margin-bottom:1mm; border-bottom:0.3pt solid #e6dcd2; padding-bottom:0.8mm;"><span>{{ row.label }}</span><span class="copper" style="font-weight:600; font-variant-numeric:tabular-nums;">+{{ row.pct }}%</span></li>
+{% endfor %}        </ul>
+{% elif s01.feature_bullets %}
         <ul style="margin:0; padding-left:4mm; font-size:10pt; line-height:1.65; list-style:none;">
 {% for f in s01.feature_bullets %}          <li style="margin-bottom:1mm;">&mdash; {{ f }}</li>
 {% endfor %}        </ul>
+{% endif %}
       </div>
       <div style="text-align:right;">
 {{ s01.dot_grid_svg | safe }}
         <div style="font-size:8pt; letter-spacing:0.04em; color:#8d4d33; margin-top:2mm; font-weight:600;">{{ s01.dot_grid_label_total }} &middot; <span class="copper">{{ s01.dot_grid_label_highlighted }}</span></div>
       </div>
     </div>
+{% if s01.proximity_line %}
+    <div style="font-size:9.5pt; line-height:1.4; color:#2c2924; margin:0 0 3mm;">{{ s01.proximity_line }}</div>
+{% endif %}
 
     <div class="source-line" style="margin-bottom:3mm; font-size:7.5pt;">{{ s01.caption }}</div>
 
@@ -934,6 +944,7 @@ def render_section_01_right_html(
     editorial_overrides: Optional[dict] = None,
     write_substantiation: bool = True,
     satellite_image_src: Optional[str] = None,
+    report_slug: Optional[str] = None,
 ) -> str:
     """Return the §01 right page as a ready-to-insert HTML block.
 
@@ -991,12 +1002,26 @@ def render_section_01_right_html(
     # Pull section payload
     s01 = data_pull.section_01_right(subject_id, highlight=chosen)
 
+    # Mini-site intelligence (source of truth for combination scarcity, sold
+    # premiums and proximity). When present, §01 renders a synopsis of it; when
+    # absent (or disabled), it falls back to the pick_highlight cohort claim.
+    report_intel = None
+    if not overrides.get("disable_report_intelligence"):
+        report_intel = _load_report_intelligence(report_slug, subject)
+
+    # Dot grid — combination-match among live listings when we have report
+    # intelligence (a striking minority, e.g. 40 of 202), otherwise the
+    # sold-cohort rarity from the ranker.
+    if report_intel:
+        grid_total, grid_high = report_intel["total"], report_intel["matching"]
+        label_total, label_high = f"{grid_total} FOR SALE", f"{grid_high} MATCH"
+    else:
+        grid_total = s01["dot_grid"]["total"]
+        grid_high = s01["dot_grid"]["highlighted_count"]
+        label_total, label_high = f"{grid_total} SOLD", f"{grid_high} MATCH"
+
     # Render SVG dot grid (deterministic by subject_id)
-    svg = dot_grid.render(
-        total=s01["dot_grid"]["total"],
-        highlighted_count=s01["dot_grid"]["highlighted_count"],
-        seed=subject_id,
-    )
+    svg = dot_grid.render(total=grid_total, highlighted_count=grid_high, seed=subject_id)
     # Constrain rendered width via inline attrs so the SVG fits the column
     svg = svg.replace(
         f'width="{_extract_svg_attr(svg, "width")}" height="{_extract_svg_attr(svg, "height")}"',
@@ -1006,17 +1031,45 @@ def render_section_01_right_html(
 
     # Auto-generated narrative bits (overridable)
     short_addr = _short_address(subject)
-    cohort_count_word = _n_word(s01["dot_grid"]["highlighted_count"])
-    cohort_body_html = overrides.get("cohort_body_html") or (
-        f"Of the <strong>{s01['dot_grid']['total']} houses</strong> sold across "
-        f"the southern Gold Coast catchment in the last 12 months, "
-        f"only <strong>{cohort_count_word} had {chosen['description']}</strong>."
-    )
+    premium_ladder = []
+    proximity_line = ""
+    if report_intel:
+        # Combination scarcity — delivers on the page's "the strongest position
+        # is the combination" promise with a live active-listing receipt.
+        stack_phrase = _join_phrases(report_intel["stack"])
+        cohort_body_html = overrides.get("cohort_body_html") or (
+            f"Of the <strong>{report_intel['total']} comparable homes</strong> for sale across the "
+            f"southern Gold Coast right now, only <strong>{report_intel['matching']}</strong> share this "
+            f"same combination &mdash; {stack_phrase}."
+        )
+        premium_ladder = report_intel["ladder"]
+        if report_intel["proximity"]:
+            p = report_intel["proximity"]
+            segs = [f"a {p[0]['metres']} m walk from {p[0]['name']}"]
+            segs += [f"{x['metres']} m from {x['name']}" for x in p[1:]]
+            line = _join_phrases(segs)
+            proximity_line = (line[0].upper() + line[1:] + ".") if line else ""
+        # The combination sentence + premium ladder replace the bullet list.
+        feature_bullets = []
+    else:
+        cohort_count_word = _n_word(s01["dot_grid"]["highlighted_count"])
+        cohort_body_html = overrides.get("cohort_body_html") or (
+            f"Of the <strong>{s01['dot_grid']['total']} houses</strong> sold across "
+            f"the southern Gold Coast catchment in the last 12 months, "
+            f"only <strong>{cohort_count_word} had {chosen['description']}</strong>."
+        )
+        feature_bullets = overrides.get("feature_bullets") or _default_feature_bullets(subject)
     headline_html = overrides.get("headline_html") or (
         'Why this home is <span class="copper">hard to replace</span>.'
     )
-    subhead = overrides.get("subhead") or s01.get("subhead") or ""
-    feature_bullets = overrides.get("feature_bullets") or _default_feature_bullets(subject)
+    # When rendering report intelligence, lead the subhead with the combination
+    # rather than the auto-generated single-feature line, so it reinforces the
+    # combination proof beneath it.
+    default_subhead = (
+        "Not any single feature — the combination that few comparable homes share."
+        if report_intel else (s01.get("subhead") or "")
+    )
+    subhead = overrides.get("subhead") or default_subhead
     advantage_label = s01["advantage_box"]["label"]
     advantage_body_html = overrides.get("advantage_body_html") or s01["advantage_box"]["body"].replace("\n\n", " ").replace(
         "describing a home and positioning it.",
@@ -1041,6 +1094,20 @@ def render_section_01_right_html(
         _stored = ""
     sat_src = satellite_image_src or _stored or _default_satellite_src(subject_id)
 
+    # Caption / source line — cites the combination + premium basis when we're
+    # rendering report intelligence, otherwise the sold-cohort basis.
+    if report_intel:
+        from datetime import datetime as _dt, timezone as _tz
+        _as_at = _dt.now(_tz.utc).strftime("%-d %B %Y")
+        caption = overrides.get("caption") or (
+            f"Source: Fields analysis · combination measured against "
+            f"{report_intel['total']} comparable homes for sale; feature premiums from sold "
+            f"comparables over 12 months to {_as_at}, like-for-like (bedroom-stratified) · "
+            f"methodology at fieldsestate.com.au/methodology"
+        )
+    else:
+        caption = s01["caption"]
+
     ctx = {
         "subject": {"short_address": short_addr, "id": str(subject["_id"])},
         "s01": {
@@ -1049,13 +1116,16 @@ def render_section_01_right_html(
             "satellite_image_src": sat_src,
             "cohort_body_html": cohort_body_html,
             "feature_bullets": feature_bullets,
+            "premium_ladder": premium_ladder,
+            "premium_ladder_label": "What each has carried in comparable sales",
+            "proximity_line": proximity_line,
             "dot_grid_svg": svg,
             # Compact uppercase tally labels — the body sentence already
-            # carries the descriptive narrative ("six had six bedrooms");
-            # these labels are the visual proof rhythm beat.
-            "dot_grid_label_total": f"{s01['dot_grid']['total']} SOLD",
-            "dot_grid_label_highlighted": f"{s01['dot_grid']['highlighted_count']} MATCH",
-            "caption": s01["caption"],
+            # carries the descriptive narrative; these labels are the visual
+            # proof rhythm beat.
+            "dot_grid_label_total": label_total,
+            "dot_grid_label_highlighted": label_high,
+            "caption": caption,
             "advantage_label": advantage_label,
             "advantage_body_html": advantage_body_html,
         },
@@ -1076,6 +1146,20 @@ def render_section_01_right_html(
     if write_substantiation:
         record = dict(s01["substantiation_record"])
         record["editorial_overrides_applied"] = {k: True for k in overrides}
+        if report_intel:
+            record["claim_source"] = "mini_site_report_intelligence"
+            record["report_intelligence"] = {
+                "slug": report_intel["slug"],
+                "combination_stack": report_intel["stack"],
+                "combination_match": {
+                    "matching": report_intel["matching"],
+                    "total": report_intel["total"],
+                },
+                "premium_ladder": report_intel["ladder"],
+                "proximity": report_intel["proximity"],
+                "scarcity_verdict": report_intel["verdict"],
+                "source_collection": "system_monitor.property_reports",
+            }
         record["rendered_html_hash"] = _hash(html)
         substantiation.save(record)
 
@@ -1125,6 +1209,113 @@ def _default_feature_bullets(subject: dict) -> list[str]:
     # Cul-de-sac + bushland boundary fall to editorial_overrides until
     # satellite_analysis enrichment runs on the subject doc.
     return bullets
+
+
+def _join_phrases(items: list) -> str:
+    """Oxford-less natural join: [a] -> "a"; [a,b] -> "a and b";
+    [a,b,c] -> "a, b and c"."""
+    items = [i for i in items if i]
+    if not items:
+        return ""
+    if len(items) == 1:
+        return items[0]
+    return ", ".join(items[:-1]) + " and " + items[-1]
+
+
+def _load_report_intelligence(report_slug: Optional[str], subject: dict) -> Optional[dict]:
+    """Pull the mini-site `system_monitor.property_reports` doc — the source of
+    truth for the combination-scarcity receipt, per-feature sold premiums and
+    walk-distance POIs — and normalise the bits the appraisal §01 page renders.
+
+    The mini-site was built after the appraisal template and computes far deeper
+    feature intelligence than the standalone `pick_highlight` ranker. When a
+    report exists we render an elegant synopsis of it (the combination, what
+    each feature has carried in comparable sales, and measured proximity); when
+    it doesn't, §01 falls back to the ranker.
+
+    Returns None when no usable report is found (caller falls back).
+    """
+    slug = report_slug
+    if not slug:
+        # Derive the canonical slug from the address as a fallback.
+        import re as _re
+        addr = (subject.get("address") or subject.get("complete_address") or "").split(",")[0]
+        suburb = subject.get("suburb") or subject.get("LOCALITY") or ""
+        raw = f"{addr} {suburb}".strip().lower()
+        slug = _re.sub(r"[^a-z0-9]+", "-", raw).strip("-") or None
+    if not slug:
+        return None
+    try:
+        from shared.db import get_client as _gc
+        doc = _gc()["system_monitor"]["property_reports"].find_one({"slug": slug})
+    except Exception:
+        return None
+    if not doc:
+        return None
+
+    sf = doc.get("scarcity_features") or {}
+    po = doc.get("positioning_object") or {}
+
+    stack = po.get("stack") or [
+        f.get("phrase") for f in sf.get("notable_features", []) if f.get("phrase")
+    ]
+    receipt = po.get("scarcity_receipt") or {}
+    matching = receipt.get("matching")
+    if matching is None:
+        matching = sf.get("active_matching_full_stack")
+    total = receipt.get("total")
+    if total is None:
+        total = sf.get("active_listings_total")
+
+    # Premium ladder — reliable, like-for-like %s only (the honest premium
+    # ladder, not raw headline gaps; no median dollar figures per editorial
+    # rules). Strongest first, top 3 to keep the page uncramped.
+    ladder = []
+    for p in sf.get("cohort_premiums", []):
+        pct = p.get("like_for_like_pct")
+        if p.get("reliable") and isinstance(pct, (int, float)) and pct > 0:
+            ladder.append({
+                "label": p.get("feature_label") or p.get("feature_key") or "",
+                "pct": round(float(pct), 1),
+                "n": p.get("n_with"),
+            })
+    ladder.sort(key=lambda r: r["pct"], reverse=True)
+    ladder = ladder[:3]
+
+    # Proximity — genuinely walkable everyday amenities only. Respect the
+    # report's forbidden-claims list (e.g. never present the beach as walkable)
+    # and cap at a real walking distance.
+    forbidden = {c.lower() for c in (po.get("forbidden_claims") or [])}
+    WALK_MAX_M = 1200
+    USE_CATS = {"childcare", "shops", "supermarket", "park", "school", "primary_school"}
+    prox = []
+    for poi in (doc.get("pois") or []):
+        m = poi.get("walkMetres")
+        cat = (poi.get("category") or poi.get("key") or "").lower()
+        name = poi.get("name") or ""
+        if not (isinstance(m, (int, float)) and name):
+            continue
+        if m > WALK_MAX_M or cat not in USE_CATS:
+            continue
+        if any(fc and fc in name.lower() for fc in forbidden):
+            continue
+        prox.append({"name": name, "metres": int(round(m))})
+    prox.sort(key=lambda r: r["metres"])
+    prox = prox[:2]
+
+    if not (stack and matching and total):
+        return None
+
+    return {
+        "slug": slug,
+        "stack": stack,
+        "matching": int(matching),
+        "total": int(total),
+        "ladder": ladder,
+        "proximity": prox,
+        "verdict": po.get("scarcity_verdict"),
+        "catchment_suburbs": sf.get("catchment_suburbs") or [],
+    }
 
 
 def _default_satellite_src(subject_id: str) -> str:
