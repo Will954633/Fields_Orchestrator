@@ -80,7 +80,7 @@ def main():
         properties.duration, properties.max_depth, properties.article_id,
         properties.article_title, properties.article_category, properties.marker_id,
         properties.property_id, properties.classification, properties.card_type,
-        properties.suburb, properties.distinct_id
+        properties.suburb, properties.distinct_id, properties.address
         FROM events WHERE properties.$session_id IN ({sid_list})
           AND event IN ({ev_in}) AND timestamp > {since}
         ORDER BY properties.$session_id, timestamp LIMIT 5000000""")
@@ -88,12 +88,21 @@ def main():
     S = defaultdict(lambda: {
         "pages": [], "articles": {}, "sections": set(), "properties": {},
         "cards": [], "searches": 0, "rageclicks": 0, "dwell_total": 0.0,
-        "converted": False, "conv_events": set(), "person": None})
+        "converted": False, "conv_events": set(), "person": None, "timeline": []})
     for (sid, ts, event, path, dur, depth, art_id, art_title, art_cat, marker,
-         prop_id, classif, card_type, suburb, person) in ev:
+         prop_id, classif, card_type, suburb, person, address) in ev:
         s = S[sid]
         if person and not s["person"]:
             s["person"] = person
+        # permanent timestamped timeline entry (compact — non-null fields only).
+        # This is the raw time-series that survives PostHog's ~30-90d retention.
+        te = {"t": ts, "e": event}
+        for k, v in (("path", path), ("property_id", prop_id), ("address", address),
+                     ("max_depth", depth), ("dur", dur), ("article_id", art_id),
+                     ("marker", marker), ("classification", classif), ("card_type", card_type)):
+            if v is not None and v != "":
+                te[k] = v
+        s["timeline"].append(te)
         if event == "$pageview":
             s["pages"].append(path or "?")
         elif event == "time_on_page":
@@ -187,6 +196,7 @@ def main():
             "dwell_seconds": round(s["dwell_total"], 1),  # event-derived (active reading)
             "session": smeta.get(sid, {}),  # authoritative: duration/bounce/entry-exit/channel
             "replay": replaymeta.get(sid, {}),  # activity_score/clicks/active-time from replay
+            "timeline": s["timeline"][:3000],  # full timestamped event sequence (permanent)
             "converted": s["converted"], "conversion_events": sorted(s["conv_events"]),
             "computed_at": now,
         }
