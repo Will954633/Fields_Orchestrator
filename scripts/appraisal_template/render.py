@@ -119,6 +119,13 @@ SECTION_00_COVER_TEMPLATE = """\
     <div class="cover-card-address">{{ cover.address_stacked_html | safe }}</div>
     <div class="cover-card-suburb">{{ cover.suburb_line }}</div>
   </div>
+{% if cover.qr_svg %}
+  <!-- Live-report QR (attributable scan) -->
+  <div style="position:absolute; top:30mm; right:14mm; width:27mm; background:#fff; border-radius:2.2mm; padding:2.4mm 2.4mm 1.8mm; box-shadow:0 1mm 4mm rgba(0,0,0,0.22); text-align:center; z-index:6;">
+    <img src="{{ cover.qr_svg }}" alt="Scan for your live report" style="display:block; width:22mm; height:22mm; margin:0 auto; image-rendering:pixelated;" />
+    <div style="font-family:'IBM Plex Mono', monospace; font-size:5pt; letter-spacing:0.06em; text-transform:uppercase; color:#22382C; margin-top:1.4mm; line-height:1.3;">Scan for your<br>live report</div>
+  </div>
+{% endif %}
 
   <!-- Dark green bottom band with document metadata -->
   <div class="cover-bottom">
@@ -151,6 +158,7 @@ def render_section_00_cover_html(
     date_override: str | None = None,
     author: str = "by Will Simpson, Property Consultant",
     write_substantiation: bool = True,
+    qr_svg: str | None = None,
 ) -> str:
     """Return Page 1 (outer cover) as a ready-to-insert HTML block.
 
@@ -210,6 +218,7 @@ def render_section_00_cover_html(
             "author_line": overrides.get("author_line") or author,
             "url": "fieldsestate.com.au",
             "date_upper": date_final,
+            "qr_svg": qr_svg or "",
         }
     }
 
@@ -231,6 +240,111 @@ def render_section_00_cover_html(
         })
 
     return html
+
+
+BACK_COVER_TEMPLATE = """\
+<!-- ============================================================ -->
+<!-- BACK COVER — full-bleed, mirrors the front. Attributable QR.  -->
+<!-- ============================================================ -->
+<div class="cover" data-section="back_cover" style="background:#22382C; page-break-before:always;">
+  <div style="position:absolute; inset:0; display:flex; flex-direction:column; padding:24mm 22mm 13mm;">
+
+    <!-- Wordmark -->
+    <div style="display:flex; align-items:center; gap:3mm;">
+      <span style="font-family:'Playfair Display', serif; font-size:21pt; color:#ffffff; font-weight:600; letter-spacing:0.01em;">Fields</span>
+      <img src="{{ back.logotype_white_src }}" alt="Fields" style="height:8.5mm; display:block;">
+    </div>
+
+    <!-- Closing statement -->
+    <div style="flex:1; display:flex; flex-direction:column; justify-content:center;">
+      <div style="font-family:'IBM Plex Mono', monospace; font-size:8pt; letter-spacing:0.22em; text-transform:uppercase; color:#B76749; margin-bottom:6mm;">The Fields approach</div>
+      <p style="font-family:'Playfair Display', serif; font-size:19pt; line-height:1.42; color:#f4efe6; max-width:118mm; margin:0 0 7mm;">{{ back.closing_html | safe }}</p>
+      <p style="font-size:10.5pt; line-height:1.6; color:#c9d3cb; max-width:116mm; margin:0;">{{ back.sub_closing }}</p>
+    </div>
+
+    <!-- Contact + QR -->
+    <div style="display:grid; grid-template-columns:1fr 36mm; gap:10mm; align-items:end; margin-bottom:6mm;">
+      <div>
+        <div style="font-family:'IBM Plex Mono', monospace; font-size:7.5pt; letter-spacing:0.14em; text-transform:uppercase; color:#8fa596; margin-bottom:3mm;">Continue the conversation</div>
+        <div style="font-size:11pt; color:#f4efe6; line-height:1.65;">
+          <div style="font-weight:600;">{{ back.author_name }}</div>
+          <div style="color:#c9d3cb; font-size:9.5pt;">{{ back.author_role }}</div>
+          <div style="margin-top:2mm;">{{ back.email }}</div>
+          <div>{{ back.url }}</div>
+        </div>
+        <div style="margin-top:7mm;">
+          <span class="smarter-mark" style="color:#B76749;">
+            <img src="{{ back.logotype_src }}" alt="Fields logotype">
+            Smarter with data
+          </span>
+        </div>
+      </div>
+{% if back.qr_svg %}
+      <div style="text-align:center;">
+        <div style="background:#fff; border-radius:2.5mm; padding:3mm;">
+          <img src="{{ back.qr_svg }}" alt="Scan for your live report" style="display:block; width:28mm; height:28mm; margin:0 auto; image-rendering:pixelated;" />
+        </div>
+        <div style="font-family:'IBM Plex Mono', monospace; font-size:5.5pt; letter-spacing:0.05em; text-transform:uppercase; color:#c9d3cb; margin-top:2mm; line-height:1.3;">Scan for your<br>live online report</div>
+      </div>
+{% endif %}
+    </div>
+
+    <!-- Small print -->
+    <div style="border-top:0.4pt solid rgba(255,255,255,0.18); padding-top:3mm; font-size:6.5pt; line-height:1.5; color:#8fa596;">{{ back.small_print }}</div>
+  </div>
+</div>"""
+
+
+def render_back_cover_html(
+    subject_id: str,
+    *,
+    qr_svg: str | None = None,
+    prepared_for: str | None = None,
+) -> str:
+    """Return the back-cover page — mirrors the front, carries the attributable
+    QR, contact block and an editorial-compliant closing + small print.
+
+    Always the final page of the booklet. Purely presentational (no per-subject
+    figures beyond the address/date), so it never needs the data layer.
+    """
+    from datetime import datetime as _dt
+    subject = data_pull.get_subject(subject_id)
+    addr = _short_address(subject)
+    suburb = subject.get("suburb") or subject.get("LOCALITY") or ""
+    suburb = suburb.title() if suburb.isupper() else suburb
+    postcode = (subject.get("postcode") or subject.get("display_postcode")
+                or subject.get("POSTCODE") or "")
+    full_addr = ", ".join(p for p in [addr, f"{suburb} QLD {postcode}".strip()] if p)
+    as_at = _dt.now().strftime("%-d %B %Y")
+
+    ctx = {
+        "back": {
+            "logotype_src": "assets/img/fields_logotype.svg",
+            "logotype_white_src": "assets/img/fields_logotype_white.svg",
+            "closing_html": (
+                "A home is not sold by a listing. It is sold by understanding &mdash; of the "
+                "property, the buyer, the evidence and the market &mdash; assembled before the "
+                "campaign begins."
+            ),
+            "sub_closing": (
+                "This report is one part of that work. The online version stays current as new "
+                "sales settle and listings change."
+            ),
+            "author_name": "Will Simpson",
+            "author_role": "Property Consultant",
+            "email": "will@fieldsestate.com.au",
+            "url": "fieldsestate.com.au",
+            "qr_svg": qr_svg or "",
+            "small_print": (
+                f"Prepared for {full_addr}. Figures derive from Fields analysis of Domain-sourced "
+                f"sales and listing data across the southern Gold Coast catchment, current to {as_at}. "
+                f"Comparable and premium figures are directional market information, not a formal "
+                f"valuation or advice. Methodology at fieldsestate.com.au/methodology."
+            ),
+        }
+    }
+    env = Environment(loader=BaseLoader(), autoescape=select_autoescape(["html"]))
+    return env.from_string(BACK_COVER_TEMPLATE).render(**ctx)
 
 
 SECTION_03_RECEIPTS_TEMPLATE = """\
@@ -1209,6 +1323,52 @@ def _default_feature_bullets(subject: dict) -> list[str]:
     # Cul-de-sac + bushland boundary fall to editorial_overrides until
     # satellite_analysis enrichment runs on the subject doc.
     return bullets
+
+
+def _qr_data_uri(data: str, dark: str = "#22382C", border: int = 3) -> str:
+    """Return an SVG-QR data URI for `data`, or "" if segno is unavailable.
+
+    SVG (vector) so it prints razor-sharp at any DPI — critical for a booklet a
+    homeowner scans off paper. `border` is the quiet zone in modules (QR spec
+    wants >=4; 3 + a white padded container scans reliably). Error level 'm'
+    tolerates ink smudging on physical stock. Fails soft — a missing lib or bad
+    data must never break the render.
+    """
+    if not data:
+        return ""
+    try:
+        import segno  # type: ignore
+        qr = segno.make(data, error="m")
+        return qr.svg_data_uri(dark=dark, light="#ffffff", border=border, scale=1)
+    except Exception as exc:  # pragma: no cover
+        print(f"  [WARN] QR generation failed ({exc}) — omitting QR code")
+        return ""
+
+
+def _minisite_urls(pipeline_record: Optional[dict], subject: dict) -> tuple:
+    """Resolve (scan_url, minisite_url) for the property's live mini-site.
+
+    scan_url is the attributable redirect on the tracking server — a scan logs
+    the event (PostHog + CRM + Brain 2 physical attribution) then 302s to the
+    mini-site. When no tracking_id exists (e.g. a bare --subject-id render) the
+    QR falls back to the mini-site URL directly (still attributable client-side
+    via UTM params baked on the tracking redirect, absent here).
+    """
+    pr = pipeline_record or {}
+    slug = pr.get("property_reports_slug")
+    if not slug:
+        import re as _re
+        addr = (subject.get("address") or subject.get("complete_address") or "").split(",")[0]
+        suburb = subject.get("suburb") or subject.get("LOCALITY") or ""
+        raw = f"{addr} {suburb}".strip().lower()
+        slug = _re.sub(r"[^a-z0-9]+", "-", raw).strip("-") or None
+    minisite_url = f"https://fieldsestate.com.au/your-home/{slug}#home" if slug else "https://fieldsestate.com.au"
+    tracking_id = pr.get("tracking_id")
+    if tracking_id:
+        scan_url = f"https://vm.fieldsestate.com.au/track/scan/{tracking_id}"
+    else:
+        scan_url = minisite_url
+    return scan_url, minisite_url
 
 
 def _join_phrases(items: list) -> str:
