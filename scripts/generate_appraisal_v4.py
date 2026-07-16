@@ -56,6 +56,48 @@ V4_DIR = REPO_ROOT / "09_Appraisals" / "Version_Four"
 TEMPLATE_FILE = V4_DIR / "preview.html"
 OUTPUT_DIR = REPO_ROOT / "artifacts" / "appraisals_v4"
 
+# DPI used to rasterise the cover page during the print-safe flatten step.
+# 300 keeps the cover headline/QR crisp at A4 print size.
+COVER_FLATTEN_DPI = 300
+
+
+def flatten_cover_for_print(pdf_path: Path, dpi: int = COVER_FLATTEN_DPI) -> None:
+    """Rasterise page 1 (the cover) to a flat, opaque DeviceRGB image and
+    write it back in place, leaving all content pages as vector text.
+
+    Why: the cover is the only page with live transparency composited over a
+    photo — the darkening gradient over the hero, plus the QR card shadow.
+    Officeworks' online print pipeline flattens transparency and converts
+    RGB->CMYK on upload; that recomputation over the hero swings its blues
+    toward magenta ("pink haze"). Content-page photos have nothing overlaid,
+    so they are untouched. Baking the cover to a flat image removes the
+    transparency trigger while keeping the rest of the booklet selectable.
+    See logs/fix-history for the 2026-07-16 Officeworks pink-hero diagnosis.
+    """
+    import fitz  # PyMuPDF — lazy import so --no-pdf runs need no dep
+
+    doc = fitz.open(pdf_path)
+    try:
+        if doc.page_count == 0:
+            return
+        cover = doc[0]
+        rect = cover.rect
+        # Render the composited cover to an opaque RGB raster (transparency baked in).
+        pix = cover.get_pixmap(dpi=dpi, colorspace=fitz.csRGB, alpha=False)
+
+        out = fitz.open()
+        new_cover = out.new_page(width=rect.width, height=rect.height)
+        new_cover.insert_image(rect, pixmap=pix)
+        if doc.page_count > 1:
+            out.insert_pdf(doc, from_page=1, to_page=doc.page_count - 1)
+
+        tmp = pdf_path.with_suffix(".flat.tmp.pdf")
+        out.save(tmp, deflate=True, garbage=4)
+        out.close()
+    finally:
+        doc.close()
+    tmp.replace(pdf_path)
+
 
 # Splice points — start/end markers for each section in preview.html.
 # Splicer replaces from the divider above `start_marker` up to (and
@@ -639,6 +681,13 @@ def render_appraisal(
         ], capture_output=True, text=True, timeout=180)
         if not pdf_path.exists() or pdf_path.stat().st_size < 1000:
             raise RuntimeError(f"PDF render failed: {proc.stderr[-500:]}")
+
+        # Print-safe pass: flatten the cover so Officeworks / any CMYK RIP
+        # can't shift the hero to pink via transparency flattening.
+        try:
+            flatten_cover_for_print(pdf_path)
+        except Exception as exc:  # never fail generation over the print-safe pass
+            print(f"WARN: cover flatten skipped ({exc})", file=sys.stderr)
 
     return {
         "html_path": str(html_path),
