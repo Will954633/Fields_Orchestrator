@@ -21,4 +21,6 @@ cron, so this is cosmetic — but the collector should be the single source of t
 - [ ] Layer 4c (NOT AVAILABLE via API): PostHog AI summaries (personal-key rejected) + heatmaps (empty). Would need browser-cookie auth — deferred, our Opus summaries supersede.
 - [x] #6 Brain 2 deepening — native sessions table (duration/bounce/entry-exit/channel) + replay metadata (active-time/clicks) merged into ad_session_behaviour/affinity; server-side funnel+paths (ad_journey.py)
 - [ ] #6 forward-only: rrweb snapshot archiver (DOM replay) — blobs expire faster than metadata; build as a rolling nightly job if full replay wanted
+- [x] Layer 5 — FULL ATTRIBUTION (organic_journey_build.py): all-channel. `organic_journeys` (non-paid sessions), `all_conversions` (EVERY address submit any channel — the review register), `organic_landing_affinity`. Auto-detects neighbour_sale_trigger. Nightly 23:40 refresh chain (attribution+behaviour+organic).
+- [ ] Layer 5b (Half B, GATED on Will) — SEO query/position: Google Search Console + Bing Webmaster APIs → per-URL query/impressions/position/CTR, joined to converting pages. Needs service-account verified as owner of fieldsestate.com.au in GSC + a Bing Webmaster API key.
 - [ ] Query layer — Opus reads whole joined package in-context
