@@ -281,10 +281,30 @@ def render_appraisal(
                   else None) or _suburb_key_for(subject_id)
     subject_doc = db[suburb_key].find_one({"_id": ObjectId(subject_id)}) if suburb_key else None
     if subject_doc:
+        # Street address — cadastral / analyse-your-home records have no
+        # `street_address`; they carry a full `address`
+        # ("18 Silvabank Drive, Varsity Lakes QLD 4227") or `complete_address`
+        # (ALL CAPS). Derive the street portion (before the first comma) so the
+        # 13TC → subject substitution below actually fires for them. Without
+        # this the substitution silently no-ops and "13 Terrace Court" leaks
+        # onto every inherited thesis/recommendation page.
         raw_addr = subject_doc.get("street_address") or ""
+        if not raw_addr:
+            full_addr = subject_doc.get("address") or subject_doc.get("complete_address") or ""
+            street = full_addr.split(",")[0].strip()
+            if "," not in full_addr and street:
+                # complete_address has no commas — cut before the suburb token
+                loc = (subject_doc.get("LOCALITY") or "").strip()
+                if loc and loc.upper() in street.upper():
+                    street = street[: street.upper().index(loc.upper())].strip()
+            raw_addr = street
         title_addr = raw_addr.title() if raw_addr.isupper() else raw_addr
         upper_addr = (raw_addr or "").upper() if raw_addr else None
-        suburb_name = subject_doc.get("suburb") or ""
+        # Suburb — prefer the pipeline record (clean-cased), then the doc's
+        # `suburb`, then the cadastral `LOCALITY` (ALL CAPS).
+        suburb_name = ((pipeline_record or {}).get("suburb")
+                       or subject_doc.get("suburb")
+                       or subject_doc.get("LOCALITY") or "")
         prepared_for_name = (pipeline_record or {}).get("name") or "the Owner"
         import re
         # Subject address substitution (only where original was hardcoded "13 Terrace Court")
@@ -310,7 +330,8 @@ def render_appraisal(
             sub_title = suburb_name.title() if suburb_name.isupper() else suburb_name
             text = text.replace("· Merrimac", f"· {sub_title}")
             # Inside-cover suburb block — anchored to the subject street address
-            postcode = subject_doc.get("postcode") or subject_doc.get("display_postcode") or ""
+            postcode = (subject_doc.get("postcode") or subject_doc.get("display_postcode")
+                        or subject_doc.get("POSTCODE") or "")
             if title_addr and postcode:
                 text = re.sub(
                     r'(' + re.escape(title_addr) + r'<br>\s*)Merrimac, QLD 4226',
@@ -381,18 +402,47 @@ def render_appraisal(
                     url = img.get("url") if isinstance(img, dict) else img
                     if not url or "blob.core.windows.net" in url:
                         continue
-                    # Rewrite Domain CDN URLs to bucket-api (FP-001 fix)
-                    candidates.append((to_bucket_api_url(url), store_key))
-        # Attempt download (overwrite any stale fallback file from previous run)
+                    candidates.append((url, store_key))
+        # Attempt download (overwrite any stale fallback file from previous run).
+        # For each candidate try the bucket-api rewrite first (full-res, FP-001),
+        # then the original URL — the rewrite mangles Domain URLs whose tail is a
+        # nested absolute http://static.domain.com.au/... link (produces
+        # `.../image/http:`), so the original must be tried as a fallback.
         if candidates:
             import urllib.request
             for url, kind in candidates:
+                for try_url in dict.fromkeys([to_bucket_api_url(url), url]):
+                    try:
+                        req = urllib.request.Request(try_url, headers={"User-Agent": "Fields-Appraisal/1.0"})
+                        with urllib.request.urlopen(req, timeout=15) as resp:
+                            data = resp.read()
+                        if len(data) > 2000:  # sanity: not an error placeholder
+                            expected_hero.write_bytes(data)
+                            hero_source = kind
+                            break
+                    except Exception:
+                        continue
+                if hero_source:
+                    break
+        # Local on-disk subject images — survive after Domain CDN URLs expire
+        # (a listing scraped months ago has 404 photos). For a homeowner
+        # appraisal with no live listing photo, the Street View front is the
+        # correct hero: it is the actual subject house. Cadastral photos are a
+        # weaker fallback (sometimes an aerial), but a real image of the subject
+        # still beats the generic 13TC placeholder.
+        if not hero_source and suburb_key:
+            local_candidates = [
+                (Path(f"/data/blobs/property-images/for_sale/{suburb_key}/{subject_id}/street_view/front.jpg"),
+                 "local_street_view"),
+            ]
+            cad_dir = (_subj or {}).get("cadastral_photos_dir")
+            if cad_dir:
+                for jpg in sorted(Path(cad_dir).glob("*.jpg")):
+                    local_candidates.append((jpg, "local_cadastral"))
+            for path, kind in local_candidates:
                 try:
-                    req = urllib.request.Request(url, headers={"User-Agent": "Fields-Appraisal/1.0"})
-                    with urllib.request.urlopen(req, timeout=15) as resp:
-                        data = resp.read()
-                    if len(data) > 2000:  # sanity: not an error placeholder
-                        expected_hero.write_bytes(data)
+                    if path.exists() and path.stat().st_size > 2000:
+                        shutil.copy(path, expected_hero)
                         hero_source = kind
                         break
                 except Exception:
