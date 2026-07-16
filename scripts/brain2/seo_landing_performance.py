@@ -78,21 +78,35 @@ def gsc_pull(days):
     return rows, f"google: {len(rows)} (page,query) rows from {site}"
 
 
-def bing_pull(days):
+def _bing_get(method, **params):
+    params["apikey"] = BING_KEY
+    url = f"https://ssl.bing.com/webmaster/api.svc/json/{method}?" + urllib.parse.urlencode(params)
+    return json.loads(urllib.request.urlopen(url, timeout=60).read()).get("d", [])
+
+
+def bing_pull(days, converting_pages=None):
     if not BING_KEY:
         return None, "no BING_WEBMASTER_API_KEY set — skip Bing (Bing Webmaster → Settings → API access)"
-    url = (f"https://ssl.bing.com/webmaster/api.svc/json/GetQueryStats?apikey={BING_KEY}"
-           f"&siteUrl={urllib.parse.quote(BING_SITE)}")
-    try:
-        d = json.loads(urllib.request.urlopen(url, timeout=60).read())
-    except Exception as e:
-        return None, f"Bing error: {str(e)[:120]}"
     rows = []
-    for r in d.get("d", []):
-        rows.append({"source": "bing", "page": None, "query": r.get("Query"),
-                     "clicks": r.get("Clicks"), "impressions": r.get("Impressions"),
-                     "position": r.get("AvgImpressionPosition")})
-    return rows, f"bing: {len(rows)} query rows"
+    try:
+        # site-wide query stats (Query, Clicks, Impressions, AvgImpressionPosition)
+        for r in _bing_get("GetQueryStats", siteUrl=BING_SITE):
+            rows.append({"source": "bing", "page": None, "query": r.get("Query"),
+                         "clicks": r.get("Clicks"), "impressions": r.get("Impressions"),
+                         "position": r.get("AvgImpressionPosition")})
+        # per-page query stats for our converting pages -> pins query to page
+        for path in sorted(converting_pages or []):
+            page_url = BING_SITE.rstrip("/") + path
+            try:
+                for r in _bing_get("GetPageQueryStats", siteUrl=BING_SITE, page=page_url):
+                    rows.append({"source": "bing", "page": page_url, "query": r.get("Query"),
+                                 "clicks": r.get("Clicks"), "impressions": r.get("Impressions"),
+                                 "position": r.get("AvgImpressionPosition")})
+            except Exception:
+                pass
+    except Exception as e:
+        return None, f"Bing error: {str(e)[:150]}"
+    return rows, f"bing: {len(rows)} rows (site-wide + per converting page)"
 
 
 def main():
@@ -101,8 +115,11 @@ def main():
     args = ap.parse_args()
     db = get_client()["system_monitor"]
 
+    conv_pages = {a["_id"] for a in db.organic_landing_affinity.find({"converters": {"$gt": 0}})}
+
     all_rows = []
-    for name, fn in [("GSC", gsc_pull), ("Bing", bing_pull)]:
+    for name, fn in [("GSC", lambda d: gsc_pull(d)),
+                     ("Bing", lambda d: bing_pull(d, conv_pages))]:
         rows, note = fn(args.days)
         print(f"[{name}] {note}")
         if rows:
