@@ -195,6 +195,7 @@ def render_appraisal(
         editorial_overrides=get_overrides("01_right"),
         satellite_image_src=pipeline_record.get("satellite_image_src"),
         write_substantiation=True,
+        report_slug=pipeline_record.get("property_reports_slug"),
     )
     sections_rendered.append("01_right")
 
