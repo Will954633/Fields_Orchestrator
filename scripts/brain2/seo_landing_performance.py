@@ -34,7 +34,7 @@ from shared.db import get_client  # noqa: E402
 SA = "/home/fields/.gcp-floor-plan-vision.json"
 SITE_CANDIDATES = ["sc-domain:fieldsestate.com.au", "https://fieldsestate.com.au/"]
 BING_KEY = os.environ.get("BING_WEBMASTER_API_KEY", "")
-BING_SITE = "https://fieldsestate.com.au"
+BING_SITE = "https://fieldsestate.com.au/"  # must match the verified form exactly (trailing slash)
 
 
 def gsc_pull(days):
