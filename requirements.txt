@@ -17,3 +17,6 @@ requests>=2.28
 
 # Note: tkinter is included with Python on macOS
 # Note: subprocess, threading, json, etc. are standard library
+
+# QR codes on appraisal covers (attributable mini-site links) — process: generate_appraisal_v4
+segno>=1.6
