@@ -357,6 +357,8 @@ def main():
             "submitted_address": addr, "all_addresses": j.get("submits", []),
             "channel": channel, "entry_path": entry,
             "referring_domain": (m.get("referring_domain") if m else None) or j.get("first_referrer"),
+            "ai_source": detect_ai(m.get("utm_source") if m else None,
+                                   (m.get("referring_domain") if m else None) or j.get("first_referrer")),
             "pages": j.get("pages", [])[:30],
             "properties_viewed": [{"property_id": k, "suburb": v} for k, v in j.get("properties", {}).items()],
             "pattern": flag, "pattern_address": flag_addr,
