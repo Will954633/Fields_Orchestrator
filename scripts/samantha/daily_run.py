@@ -172,6 +172,9 @@ async def _run(prompt: str, timeout_s: int, smoke: bool,
         permission_mode="bypassPermissions",
         setting_sources=["user", "project", "local"],  # load CLAUDE.md + .mcp.json (gdrive, posthog)
         max_turns=8 if smoke else 240,
+        # Big buffer: reading a PDF / large file or a big tool output produces one huge
+        # JSON message; the SDK default (1 MB) crashes the stream decode (run 4, 2026-07-17).
+        max_buffer_size=64 * 1024 * 1024,
         # Max subscription: the 30-min WALL CLOCK is the real limiter, not $ cost.
         # Keep this generous so the time budget (not a cost estimate) ends the run.
         max_budget_usd=1.0 if smoke else 50.0,
