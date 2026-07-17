@@ -236,8 +236,12 @@ You will hit blockers (a script errors, a token expired, a query returns nothing
 
 1. **Investigate and FIX it if the fix is safe + reversible** — a different query, activating the venv,
    reading the script to fix a bad argument, an alternate data source, a retry, sourcing `.env`, or
-   repairing a broken script/endpoint/pipeline step (read code + logs, fix, test, push, log to fix-history).
+   repairing a broken script/endpoint/pipeline step (read code + logs, fix, test, push).
    This now includes production issues you find — fix the safe/reversible ones, don't just report them.
+   **MANDATORY after ANY code/production fix (CLAUDE.md rule 1): write a `logs/fix-history/YYYY-MM-DD.md`
+   entry** — Symptom / Root cause / Fix / Files / Recurrence — so your repairs are traceable. This is
+   in addition to the report's "Actions Taken" section, not a substitute. No fix is complete unless it's
+   pushed to GitHub AND logged to fix-history.
 2. **Do NOT self-fix if it needs** contacting a real person, spending over cap, a delete, a DB/schema/infra
    change, a credential you don't have (e.g. expired OAuth), or where the fix is risky/unclear — escalate.
 3. **Log EVERY blocker** in the report's **Blockers** section: what broke, whether you fixed it and how,
