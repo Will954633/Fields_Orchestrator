@@ -80,6 +80,7 @@ def cmd_log(a) -> int:
         "baseline": {"value": a.baseline, "window": a.baseline_window,
                      "captured_at": _now().isoformat()},
         "hypothesis": a.hypothesis, "commit": a.commit, "revert_commit": a.revert,
+        "hypothesis_id": a.hypothesis_id or None,  # closed-loop P2: link to hypothesis_queue
         "status": "live", "review_dates": reviews, "measurements": [],
         "latest_verdict": "too_early", "reflection": None,
     }
@@ -87,6 +88,12 @@ def cmd_log(a) -> int:
                                                 {"$set": doc}, upsert=True))
     print(f"logged {doc['change_id']} | baseline {a.metric}={a.baseline} "
           f"({a.direction}-is-better) | reviews {reviews}")
+    if a.hypothesis_id:
+        r = cosmos_retry(lambda: _db()["hypothesis_queue"].update_one(
+            {"hypothesis_id": a.hypothesis_id},
+            {"$set": {"status": "live", "ledger_id": doc["change_id"], "launched_at": _now()}}))
+        print(f"hypothesis {a.hypothesis_id} → live (ledger {doc['change_id']})"
+              if r.matched_count else f"⚠ no such hypothesis in queue: {a.hypothesis_id}")
     return 0
 
 
@@ -126,6 +133,15 @@ def cmd_measure(a) -> int:
         upd["$set"]["status"] = a.status  # e.g. 'validated' or 'rolled_back'
     cosmos_retry(lambda: _db()[COLL].update_one({"change_id": a.id}, upd))
     print(f"measured {a.id}: {d['metric']}={a.value} (Δ{delta}% vs baseline) → {verdict}")
+    # closed-loop P2: a terminal status concludes the linked hypothesis with the final verdict
+    if a.status in ("validated", "rolled_back") and d.get("hypothesis_id"):
+        hv = "improved" if a.status == "validated" else "worse"
+        cosmos_retry(lambda: _db()["hypothesis_queue"].update_one(
+            {"hypothesis_id": d["hypothesis_id"]},
+            {"$set": {"status": "concluded", "verdict": hv,
+                      "note": f"auto-concluded from ledger {a.id} ({a.status})",
+                      "concluded_at": _now()}}))
+        print(f"hypothesis {d['hypothesis_id']} → concluded ({hv})")
     if verdict == "worse":
         print(f"  ⚠ WORSE — consider reverting commit {d.get('revert_commit')} "
               f"(then: measure --id {a.id} --status rolled_back)")
@@ -206,6 +222,8 @@ def main() -> int:
     p.add_argument("--review-days", default="3,7")
     p.add_argument("--sources", default="",
                    help="comma-separated data sources that drove this decision (brain1,posthog,fb_ads,kb,...)")
+    p.add_argument("--hypothesis-id", default="",
+                   help="hypothesis_queue id this change tests (auto-marks it live + links back)")
     p.set_defaults(func=cmd_log)
 
     p = sub.add_parser("due"); p.set_defaults(func=cmd_due)
