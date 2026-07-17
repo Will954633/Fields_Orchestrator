@@ -300,19 +300,27 @@ def score(rec: dict) -> tuple[str, str, list]:
     except Exception:
         pass
 
-    # Priority rules
-    high = has_addr and resolved and occ_type == "owner_occupier" and (
-        listing in ("for_sale", "withdrawn") or (yrs is not None and yrs >= 7)
-        or _s(ex.get("sell_timeline")).lower() not in ("", "none", "just_watching"))
+    # Priority rules (2026-07-17: tenure alone is a prior, not an active signal —
+    # HIGH now requires a genuine pre-market signal; already-listed owners drop to
+    # MEDIUM with a changed angle; long tenure alone is MEDIUM.)
+    stated_timeline = _s(ex.get("sell_timeline")).lower() not in ("", "none", "just_watching")
+    already_listed = listing in ("for_sale", "sold")
+    pre_market = (listing == "withdrawn") or (stated_timeline and not already_listed)
+    high = has_addr and resolved and occ_type == "owner_occupier" and pre_market
     med = (has_addr and resolved) or _s(ex.get("timeframe")).lower() in ("now", "asap") \
         or _s(ex.get("owns_gc_home")).lower() == "yes"
 
     if high:
         pr = "high"
-        reason = "Owner-occupier with an active-move signal — likely seller. Review + draft outreach."
+        reason = "Owner-occupier with a genuine pre-market signal (withdrawn / stated timeline) — likely seller. Review + draft outreach."
     elif med:
         pr = "medium"
-        reason = "Real lead with a property or near-term intent — worth a look."
+        if has_addr and resolved and occ_type == "owner_occupier" and listing == "for_sale":
+            reason = "Owner-occupier but ALREADY LISTED — not pre-market. Track their listing / buyer-side angle only."
+        elif has_addr and resolved and occ_type == "owner_occupier" and yrs is not None and yrs >= 7:
+            reason = "Owner-occupier, long-held (tenure prior only — no active-move signal yet)."
+        else:
+            reason = "Real lead with a property or near-term intent — worth a look."
     else:
         pr = "low"
         reason = "Lead captured; low active-intent signal for now."
