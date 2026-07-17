@@ -159,7 +159,10 @@ def main() -> int:
         for f, text in new_docs:
             print(f"\n── {f['name']}  ({f.get('webViewLink')})")
             print(f"   modified {f.get('modifiedTime')}")
-            print("   " + "\n   ".join(text.strip()[:4000].splitlines()))
+            body = text.strip()
+            print("   " + "\n   ".join(body[:12000].splitlines()))
+            if len(body) > 12000:
+                print(f"   …[doc is {len(body)} chars — read the full doc via its link if needed]")
     if new_comments:
         print(f"\n### NEW COMMENTS FROM WILL ({len(new_comments)})")
         for docname, link, fid, c in new_comments:
