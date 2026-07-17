@@ -129,7 +129,36 @@ This is a cheap plumbing test, NOT a real analysis. Do only this, fast:
     return f"{charter}\n\n{tasks}\n\n{runtime}"
 
 
-async def _run(prompt: str, timeout_s: int, smoke: bool) -> str:
+def _serialize_block(block) -> dict | None:
+    """Turn one content block into a compact transcript record."""
+    btype = getattr(block, "type", None) or type(block).__name__
+    text = getattr(block, "text", None)
+    name = getattr(block, "name", None)
+    binp = getattr(block, "input", None)
+    content = getattr(block, "content", None)
+    if text:
+        return {"t": "text", "text": text[:6000]}
+    if name is not None or "ToolUse" in str(btype):
+        return {"t": "tool_use", "name": name, "input": str(binp)[:2000]}
+    if content is not None or "ToolResult" in str(btype):
+        return {"t": "tool_result", "content": str(content)[:2000]}
+    if "Thinking" in str(btype):
+        return {"t": "thinking", "text": str(getattr(block, "thinking", ""))[:2000]}
+    return None
+
+
+async def _run(prompt: str, timeout_s: int, smoke: bool,
+               transcript_path: Path | None = None) -> str:
+    def _log_rec(rec: dict) -> None:
+        if not transcript_path:
+            return
+        rec["ts"] = _now().strftime("%H:%M:%S")
+        try:
+            with transcript_path.open("a") as fh:
+                fh.write(json.dumps(rec, default=str) + "\n")
+        except Exception:  # noqa: BLE001
+            pass
+
     options = ClaudeAgentOptions(
         model="opus",
         effort="high",
@@ -154,17 +183,26 @@ async def _run(prompt: str, timeout_s: int, smoke: bool) -> str:
             content = getattr(msg, "content", None)
             if content:
                 for block in content:
-                    btype = getattr(block, "type", None) or type(block).__name__
-                    text = getattr(block, "text", None)
-                    if text:
-                        transcript_tail = (transcript_tail + text)[-4000:]
-                    if "ToolUse" in str(btype) or btype == "tool_use":
+                    rec = _serialize_block(block)
+                    if not rec:
+                        continue
+                    _log_rec(rec)
+                    if rec["t"] == "text":
+                        transcript_tail = (transcript_tail + rec["text"])[-4000:]
+                    elif rec["t"] == "tool_use":
                         tool_calls += 1
+                        # live progress line so `tail` shows what she's doing
+                        print(f"[samantha] tool #{tool_calls}: {rec.get('name')} "
+                              f"{rec.get('input','')[:120]}", flush=True)
             rtype = type(msg).__name__
             if rtype == "ResultMessage":
-                print(f"[runner] result: {getattr(msg,'subtype','')} "
-                      f"turns={getattr(msg,'num_turns','?')} "
-                      f"cost=${getattr(msg,'total_cost_usd','?')}", flush=True)
+                res = {"t": "result", "subtype": getattr(msg, "subtype", ""),
+                       "num_turns": getattr(msg, "num_turns", None),
+                       "cost": getattr(msg, "total_cost_usd", None),
+                       "tool_calls": tool_calls}
+                _log_rec(res)
+                print(f"[runner] result: {res['subtype']} turns={res['num_turns']} "
+                      f"cost=${res['cost']} tools={tool_calls}", flush=True)
 
     try:
         await asyncio.wait_for(_loop(), timeout=timeout_s)
@@ -221,10 +259,13 @@ def main() -> int:
     deadline = start + timedelta(minutes=run_minutes)
     report_path = LOG_DIR / f"{date_str}-report.md"
     status_path = LOG_DIR / f"{date_str}-status.json"
+    transcript_path = LOG_DIR / f"{date_str}-transcript.jsonl"
 
-    # Clear any stale status from a previous same-day run so fallback logic is correct.
+    # Clear any stale status/transcript from a previous same-day run.
     if status_path.exists():
         status_path.unlink()
+    if transcript_path.exists():
+        transcript_path.unlink()
 
     print(f"[runner] Samantha {'SMOKE' if args.smoke else 'nightly'} run start "
           f"{start.isoformat()} deadline {deadline.strftime('%H:%M')} AEST "
@@ -232,7 +273,8 @@ def main() -> int:
 
     prompt = _build_prompt(date_str, deadline, report_path, status_path, args.smoke)
     timeout_s = run_minutes * 60
-    finished_reason = asyncio.run(_run(prompt, timeout_s, args.smoke))
+    print(f"[runner] transcript → {transcript_path}", flush=True)
+    finished_reason = asyncio.run(_run(prompt, timeout_s, args.smoke, transcript_path))
 
     _fallback_delivery(date_str, report_path, status_path, finished_reason)
 
