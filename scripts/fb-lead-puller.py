@@ -47,10 +47,18 @@ def active_forms(ptoken):
     return [f for f in r.json().get("data", []) if f.get("status") == "ACTIVE"]
 
 
+# Attribution fields on the lead node — present when the lead came from an ad
+# (absent / is_organic=true for leads from an organic form post). Requesting them
+# explicitly is required; the /leads edge returns only id+created_time+field_data
+# by default. This is what lets Brain 2 join a lead back to its ad + spend.
+LEAD_FIELDS = ("id,created_time,field_data,ad_id,ad_name,adset_id,adset_name,"
+               "campaign_id,campaign_name,platform,is_organic")
+
+
 def form_leads(form_id, ptoken):
     """Yield all leads for a form (paginated)."""
     url = f"{API}/{form_id}/leads"
-    params = {"access_token": ptoken, "limit": 100}
+    params = {"access_token": ptoken, "limit": 100, "fields": LEAD_FIELDS}
     while url:
         r = requests.get(url, params=params, timeout=30)
         r.raise_for_status()
@@ -153,6 +161,11 @@ def main():
                 continue  # already processed
             doc = {"_id": lid, "form_id": form["id"], "form_name": form["name"],
                    "created_time": lead.get("created_time"), "fields": fields,
+                   # ad attribution (None when organic form post) — Brain 2 join keys
+                   "ad_id": lead.get("ad_id"), "ad_name": lead.get("ad_name"),
+                   "adset_id": lead.get("adset_id"), "campaign_id": lead.get("campaign_id"),
+                   "campaign_name": lead.get("campaign_name"),
+                   "platform": lead.get("platform"), "is_organic": lead.get("is_organic"),
                    "raw": lead, "pulled_at": datetime.now(timezone.utc).isoformat()}
             new_count += 1
             print(f"  NEW lead {lid}: {fields.get('email')}")
