@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  @page { size: A4; margin: 0; }
+  :root{
+    --green:#22382c;      --green-deep:#1b2d24;
+    --terra:#b76749;      --terra-dark:#8d4d33;
+    --sand:#c9b9a0;       --paper:#fdf3ec;
+    --cream:#efe8de;      --sage:#7a8a80;
+    --ink:#2a2a24;        --line:#d8cfc1;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ font-family:"Liberation Sans","DejaVu Sans",sans-serif; color:var(--ink); }
+  .serif{ font-family:"Liberation Serif","DejaVu Serif",Georgia,serif; }
+  .page{ width:210mm; height:297mm; position:relative; overflow:hidden;
+         background:var(--cream); page-break-after:always; }
+  .page:last-child{ page-break-after:auto; }
+
+  .brandbar{ background:var(--green); color:var(--paper); display:flex;
+             align-items:center; justify-content:space-between; padding:6.5mm 14mm; }
+  .brandbar .logo{ height:11mm; width:auto; display:block; }
+  .tagline{ font-style:italic; color:var(--sand); font-size:11pt; }
+  .pad{ padding:0 14mm; }
+
+  /* recipient / postal block */
+  .mailrow{ display:flex; justify-content:space-between; align-items:flex-start; padding:6mm 14mm 0; }
+  .addressee .to{ font-size:8pt; letter-spacing:2.2pt; text-transform:uppercase; color:var(--sage); font-weight:700; margin-bottom:2mm; }
+  .addressee .name{ font-size:12pt; color:var(--ink); font-weight:700; line-height:1.35; }
+  .addressee .line,.addressee .loc{ font-size:12pt; color:var(--ink); line-height:1.35; }
+  .addressee .loc{ letter-spacing:.4pt; }
+  .conf{ text-align:right; max-width:60mm; }
+  .conf .flag{ font-size:8pt; letter-spacing:2pt; text-transform:uppercase; color:var(--terra-dark); font-weight:700; }
+  .conf .note{ font-size:8pt; color:var(--sage); line-height:1.45; margin-top:2mm; }
+
+  /* front hook */
+  .kicker{ color:var(--terra-dark); font-size:9.5pt; letter-spacing:2.2pt; font-weight:700; text-transform:uppercase; }
+  h1.hook{ font-size:30pt; line-height:1.05; color:var(--green-deep); font-weight:400; margin:3mm 0 3.5mm; letter-spacing:-.3pt; }
+  h1.hook b{ color:var(--terra); font-weight:400; }
+  .lede{ font-size:11pt; line-height:1.46; color:#4a453d; max-width:158mm; }
+
+  /* evidence stat strip */
+  .stats{ display:flex; gap:5mm; margin-top:6mm; }
+  .stat{ flex:1; background:var(--paper); border:1px solid var(--line); border-radius:2.5mm; padding:4.5mm 5mm; }
+  .stat .big{ font-family:"Liberation Serif",serif; font-size:23pt; color:var(--terra); line-height:1; }
+  .stat .lab{ font-size:9pt; color:var(--green-deep); font-weight:700; margin-top:2.5mm; letter-spacing:.2pt; }
+  .stat .sub{ font-size:8.4pt; color:#6b6459; line-height:1.4; margin-top:1mm; }
+
+  /* real property imagery band */
+  .imgband{ display:flex; gap:4mm; margin-top:6mm; }
+  .imgband .ph{ border:1px solid var(--line); border-radius:2.5mm; overflow:hidden; box-shadow:0 2.5mm 6mm rgba(34,56,44,.13); }
+  .imgband .home{ flex:1.7; height:58mm; }
+  .imgband .aer{ flex:1; height:58mm; }
+  .imgband .ph img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .imgcap{ font-size:8.3pt; color:var(--sage); margin-top:2.2mm; letter-spacing:.2pt; }
+  .imgcap b{ color:var(--green); }
+  .also{ margin-top:4.5mm; font-size:10pt; line-height:1.48; color:#4a453d;
+         border-left:2.5pt solid var(--terra); padding-left:5mm; }
+  .also b{ color:var(--terra-dark); }
+
+  /* CTA band */
+  .cta{ position:absolute; left:0; right:0; bottom:0; background:var(--green); color:var(--paper); padding:6.5mm 14mm; display:flex; align-items:center; gap:9mm; }
+  .cta .qrwrap{ background:var(--paper); padding:3mm; border-radius:2.5mm; flex:0 0 auto; }
+  .cta .qrwrap img{ display:block; width:31mm; height:31mm; }
+  .cta .ctatext{ flex:1; }
+  .cta .ctak{ color:var(--sand); font-size:9pt; letter-spacing:2pt; text-transform:uppercase; font-weight:700; }
+  .cta h2{ font-family:"Liberation Serif",serif; font-weight:400; font-size:19pt; line-height:1.08; margin:2mm 0 2mm; }
+  .cta .steps{ font-size:9.2pt; line-height:1.5; color:#dcd3c4; }
+  .cta .steps b{ color:var(--paper); }
+  .cta .status{ margin-top:2.5mm; font-size:8pt; color:var(--sand); line-height:1.4; }
+
+  /* back page */
+  h1.back{ font-size:23pt; line-height:1.12; color:var(--green-deep); font-weight:400; margin:1.5mm 0 2.5mm; letter-spacing:-.2pt; }
+  h1.back b{ color:var(--terra); font-weight:400; }
+  .items{ margin-top:5mm; }
+  .item{ display:flex; gap:5mm; padding:4.5mm 0; border-top:1px solid var(--line); }
+  .item:first-child{ border-top:none; }
+  .item .idx{ font-family:"Liberation Serif",serif; color:var(--terra); font-size:19pt; line-height:1; flex:0 0 12mm; }
+  .item .txt h3{ font-size:12.5pt; color:var(--green-deep); font-weight:700; margin-bottom:1.5mm; }
+  .item .txt p{ font-size:9.6pt; line-height:1.45; color:#4a453d; }
+  .item .txt p b{ color:var(--terra-dark); }
+
+  /* trust row */
+  .trust{ margin-top:6mm; background:var(--paper); border:1px solid var(--line); border-radius:2.5mm; padding:5mm 6mm; display:flex; gap:6mm; }
+  .trust .t{ flex:1; }
+  .trust .t h4{ font-size:8.6pt; color:var(--terra-dark); letter-spacing:1.1pt; text-transform:uppercase; margin-bottom:1.5mm; }
+  .trust .t p{ font-size:8.6pt; line-height:1.4; color:#4a453d; }
+</style>
+</head>
+<body>
+
+<!-- ============ FRONT ============ -->
+<div class="page">
+  <div class="brandbar">
+    <img class="logo" src="assets/fields-logo-white.png" alt="Fields">
+    <span class="tagline">Smarter with data</span>
+  </div>
+
+  <div class="mailrow">
+    <div class="addressee">
+      <div class="to">Prepared for the owner of</div>
+      <div class="name">{{STREET}}</div>
+      <div class="loc">{{LOCALITY}}</div>
+    </div>
+    <div class="conf">
+      <div class="flag">Address-specific report</div>
+      <div class="note">The code on this page opens the report we've prepared for
+        <b>{{STREET}}</b> &mdash; and no other property.</div>
+    </div>
+  </div>
+
+  <div class="pad" style="padding-top:6mm;">
+    <div class="kicker">We've already analysed {{STREET}}</div>
+    <h1 class="hook serif">Only <b>{{TRUE_COMP}}</b> of {{TOTAL_ACTIVE}} homes for sale
+      genuinely compete with yours.</h1>
+    <p class="lede">A buyer won't weigh your home against every listing in {{SUBURB}}. They
+      compare it with the handful that offer a similar price, layout, land and lifestyle.
+      We've identified those homes, mapped their asking prices, and set out exactly where
+      {{STREET}} stands against each &mdash; using {{SUBURB}} sales, not national rules of thumb.</p>
+
+    <div class="stats">
+      <div class="stat">
+        <div class="big serif">{{TRUE_COMP}}</div>
+        <div class="lab">Genuine competitors</div>
+        <div class="sub">from {{TOTAL_ACTIVE}} active listings reviewed across the catchment</div>
+      </div>
+      <div class="stat">
+        <div class="big serif">{{COMPS_REVIEWED}}</div>
+        <div class="lab">Comparable sales</div>
+        <div class="sub">reviewed and adjusted line by line for land, area, condition and timing</div>
+      </div>
+      <div class="stat">
+        <div class="big serif">{{SCHOOL_M}}m</div>
+        <div class="lab">to {{SCHOOL}}</div>
+        <div class="sub">one of the everyday distances buyers weigh &mdash; measured, not estimated</div>
+      </div>
+    </div>
+
+    <div class="imgband">
+      <div class="ph home"><img src="{{HERO_IMG}}" alt=""></div>
+      <div class="ph aer"><img src="{{AERIAL_IMG}}" alt=""></div>
+    </div>
+    <div class="imgcap"><b>{{STREET}}</b> and its parcel &mdash; analysed the way a serious
+      buyer, and their agent, would look at it.</div>
+
+    <div class="also">Your report also names <b>the buyer most likely to pay toward the top
+      of your range</b>, the recent sales behind your value, and the feature combination that
+      should lead the campaign &mdash; not a single number, but the evidence behind it.</div>
+  </div>
+
+  <div class="cta">
+    <div class="qrwrap"><img src="{{QR_IMG}}" alt="Scan to open your report"></div>
+    <div class="ctatext">
+      <div class="ctak">Your private home report is ready</div>
+      <h2>See the homes buyers would compare with yours.</h2>
+      <div class="steps"><b>Scan the code</b> to open the report for {{STREET}}.
+        No form, no email, no phone number.</div>
+      <div class="status">Your competition, buyer and positioning analysis is ready now.
+        The consultant-reviewed valuation and sale recommendation are added within three business days.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ BACK ============ -->
+<div class="page">
+  <div class="brandbar">
+    <img class="logo" src="assets/fields-logo-white.png" alt="Fields">
+    <span class="tagline">Smarter with data</span>
+  </div>
+
+  <div class="pad" style="padding-top:7mm;">
+    <div class="kicker">What you'll find inside</div>
+    <h1 class="back serif">More than an estimate &mdash; <b>the evidence behind your
+      home's position.</b></h1>
+    <p class="lede">Most appraisals arrive as a single number and a verbal pitch. Your
+      report for {{STREET}} is built from four bodies of evidence &mdash; each traceable to
+      real {{SUBURB}} sales and listings.</p>
+
+    <div class="items">
+      <div class="item"><div class="idx serif">01</div><div class="txt">
+        <h3>The homes buyers can choose instead</h3>
+        <p>The <b>{{TRUE_COMP}} active listings</b> a genuine buyer would realistically compare
+          with yours &mdash; named, mapped, and monitored as their prices and status change.
+          {{FULL_STACK}} of {{TOTAL_ACTIVE}} current listings even share your home's full
+          feature combination.</p></div></div>
+      <div class="item"><div class="idx serif">02</div><div class="txt">
+        <h3>The sales supporting the value</h3>
+        <p><b>{{COMPS_REVIEWED}} recent comparable sales</b> reviewed, each adjusted for the
+          differences that matter: land, internal area, condition, accommodation and time.
+          The working range and its confidence are shown &mdash; and reviewed by a consultant
+          before anything becomes a recommendation.</p></div></div>
+      <div class="item"><div class="idx serif">03</div><div class="txt">
+        <h3>The buyer most likely to pay more</h3>
+        <p>The buyer groups most likely to value your particular combination of features &mdash;
+          led by the <b>{{PERSONA}}</b> &mdash; why they value it, and how a campaign would reach
+          them. The selling story isn't a spec list; it's the combination.</p></div></div>
+      <div class="item"><div class="idx serif">04</div><div class="txt">
+        <h3>What buyers see before they inspect</h3>
+        <p>Your block, street position, presentation and aerial surroundings &mdash; analysed
+          together, with strengths <b>and</b> trade-offs named, not glossed over. Everyday
+          proximity is measured &mdash; down to the {{SCHOOL_M}} metres to {{SCHOOL}}.</p></div></div>
+    </div>
+
+    <div class="trust">
+      <div class="t"><h4>Prepared for this address</h4><p>Not a suburb-level template &mdash; built for {{STREET}}.</p></div>
+      <div class="t"><h4>Reviewed by a consultant</h4><p>Analysis is technology-assisted; a person reviews the pricing.</p></div>
+      <div class="t"><h4>Updated as the market moves</h4><p>Return later to see competing listings and new sales change.</p></div>
+      <div class="t"><h4>No sign-up, no obligation</h4><p>Read it whether you'd sell now, later, or not at all.</p></div>
+    </div>
+  </div>
+
+  <div class="cta">
+    <div class="qrwrap"><img src="{{QR_IMG}}" alt="Scan to open your report"></div>
+    <div class="ctatext">
+      <div class="ctak">Prepared for {{STREET}}</div>
+      <h2>Open your report today. Return later to see what's changed.</h2>
+      <div class="steps">Scan the code &mdash; it opens the report for this address directly.
+        No email, phone number or appointment required.</div>
+      <div class="status">Prepared by <b>Will Simpson</b>, Fields Real Estate &mdash;
+        will@fieldsestate.com.au &nbsp;·&nbsp; fieldsestate.com.au</div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
