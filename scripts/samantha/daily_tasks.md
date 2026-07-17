@@ -86,10 +86,18 @@ seller packages**, not on-site tweaks. Every run must produce concrete moves fro
 2. **Seller packages — build them.** For every VERIFIED pre-market seller lead, generate the appraisal PDF
    ([[seller_appraisal_generator]]) + draft cover, staged for Will to post. A staged package is a concrete
    step to an appraisal.
-3. **Distribution — execute it.** Advance the flyer mailout (you built the candidate list — now draft the
-   flyer + define the first batch), and work the SEO roadmap in reversible increments.
+3. **Distribution — advance everything you CAN, escalate the rest.** You CANNOT physically print/post a
+   mailout — but you CAN: research + get quotes from print/mail suppliers (web), prepare + QA the candidate
+   batch, draft the flyer copy, cost it per unit, and lay it all out ready-to-go. Then list the blockers
+   under "WILL (unblock)" (approve budget, pick supplier, hit send) and **ask Will crisp questions**. SEO:
+   work the roadmap yourself in reversible increments.
 4. **Outreach drafts — write them, ready to send** (draft-only) for every hot seller/buyer lead.
 5. **Reversible site improvements** that lift conversion (buyer-side CTA you keep flagging — SHIP it).
+
+**When a move needs a real-world / physical / spend / human action you CAN'T take yourself** (posting mail,
+paying a supplier, contacting a person, a decision only Will can make): do ALL the prep you can, then state
+the exact blocker + precisely what Will must do under **"WILL (unblock)"**, and ask him. "I can't fully
+execute it" is NEVER "nothing to do" — advance it to the edge of your authority and escalate cleanly.
 
 **Required report section "PATH TO 5 APPRAISALS":** where the count stands, exactly what you did THIS run
 to move it, the single highest-leverage next move, and whether you executed/staged it (and if not, why not).
