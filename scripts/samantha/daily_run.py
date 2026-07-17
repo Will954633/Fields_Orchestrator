@@ -29,8 +29,10 @@ import argparse
 import asyncio
 import json
 import os
+import re
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
@@ -152,7 +154,8 @@ def _serialize_block(block) -> dict | None:
 
 
 async def _run(prompt: str, timeout_s: int, smoke: bool,
-               transcript_path: Path | None = None) -> str:
+               transcript_path: Path | None = None,
+               report_path: Path | None = None, run_minutes: int = 30) -> str:
     def _log_rec(rec: dict) -> None:
         if not transcript_path:
             return
@@ -184,10 +187,15 @@ async def _run(prompt: str, timeout_s: int, smoke: bool,
 
     transcript_tail = ""
     tool_calls = 0
+    session_id = None
 
-    async def _loop():
-        nonlocal transcript_tail, tool_calls
-        async for msg in query(prompt="Begin your scheduled run now.", options=options):
+    async def _segment(seg_prompt: str):
+        """Run ONE query segment (initial or resumed) to the agent's natural stop."""
+        nonlocal transcript_tail, tool_calls, session_id
+        async for msg in query(prompt=seg_prompt, options=options):
+            sid = getattr(msg, "session_id", None) or (getattr(msg, "data", None) or {}).get("session_id")
+            if sid:
+                session_id = sid
             content = getattr(msg, "content", None)
             if content:
                 for block in content:
@@ -199,22 +207,66 @@ async def _run(prompt: str, timeout_s: int, smoke: bool,
                         transcript_tail = (transcript_tail + rec["text"])[-4000:]
                     elif rec["t"] == "tool_use":
                         tool_calls += 1
-                        # live progress line so `tail` shows what she's doing
                         print(f"[samantha] tool #{tool_calls}: {rec.get('name')} "
                               f"{rec.get('input','')[:120]}", flush=True)
-            rtype = type(msg).__name__
-            if rtype == "ResultMessage":
+            if type(msg).__name__ == "ResultMessage":
                 res = {"t": "result", "subtype": getattr(msg, "subtype", ""),
                        "num_turns": getattr(msg, "num_turns", None),
-                       "cost": getattr(msg, "total_cost_usd", None),
-                       "tool_calls": tool_calls}
+                       "cost": getattr(msg, "total_cost_usd", None), "tool_calls": tool_calls}
                 _log_rec(res)
-                print(f"[runner] result: {res['subtype']} turns={res['num_turns']} "
+                print(f"[runner] segment: {res['subtype']} turns={res['num_turns']} "
                       f"cost=${res['cost']} tools={tool_calls}", flush=True)
 
+    def _actions_synopsis() -> str:
+        if report_path and report_path.exists():
+            m = re.search(r"##\s*Actions Taken.*?(?=\n##\s|\Z)", report_path.read_text(), re.S | re.I)
+            if m:
+                return m.group(0).strip()[:1500]
+        return "(no Actions-Taken section written yet)"
+
+    def _reflection_prompt(elapsed_m: float, remaining_m: float) -> str:
+        return (
+            "⏸ REFLECTION CHECKPOINT — you just stopped, but your run is NOT over.\n"
+            f"You have used {elapsed_m:.0f} of your {run_minutes}-min budget; **{remaining_m:.0f} MINUTES "
+            f"REMAIN**. Tool calls so far: {tool_calls}.\n\n"
+            f"What you've done so far:\n{_actions_synopsis()}\n\n"
+            "Goal: **5 in-person seller appraisals — currently 0/5.** Stopping now wastes "
+            f"~{remaining_m:.0f} minutes. Per your PRIME DIRECTIVE you may NOT finish with >15% of budget "
+            "left.\n\nSo now, DO — don't summarise:\n"
+            " • Name the single highest-value move toward an appraisal you have NOT yet done — a campaign to "
+            "CREATE (within caps), a seller package to build, outreach to draft, a distribution move — and "
+            "EXECUTE it, then keep going.\n"
+            " • Only if you have genuinely exhausted every safe, high-value move (a very high bar at 0/5) may "
+            "you finish — and then state explicitly WHY nothing remains.\n"
+            "Keep your report file + Google Doc current as you go; save the final Telegram + status file for "
+            "when you are truly done."
+        )
+
+    start = time.monotonic()
+    floor_s = timeout_s * 0.15
+    max_reflections = 0 if smoke else 5
+    reflections = 0
+    seg_prompt = "Begin your scheduled run now."
     try:
-        await asyncio.wait_for(_loop(), timeout=timeout_s)
-        return "complete"
+        while True:
+            remaining = timeout_s - (time.monotonic() - start)
+            if remaining <= 20:
+                return "complete"
+            if session_id:
+                options.resume = session_id  # continue the SAME conversation on reflections
+            await asyncio.wait_for(_segment(seg_prompt), timeout=remaining)
+            # segment ended = she stopped on her own
+            elapsed = time.monotonic() - start
+            remaining = timeout_s - elapsed
+            # Only reflect if we can actually resume her context; else finish (no context-less re-run)
+            if reflections >= max_reflections or remaining <= floor_s or not session_id:
+                return "complete"
+            reflections += 1
+            print(f"[runner] ⏸ REFLECTION #{reflections}: she stopped at {elapsed/60:.0f}min with "
+                  f"{remaining/60:.0f}min left — re-prompting to use the budget.", flush=True)
+            _log_rec({"t": "reflection", "n": reflections,
+                      "elapsed_min": round(elapsed / 60, 1), "remaining_min": round(remaining / 60, 1)})
+            seg_prompt = _reflection_prompt(elapsed / 60, remaining / 60)
     except asyncio.TimeoutError:
         print(f"[runner] hard timeout at {timeout_s}s — cancelling.", flush=True)
         return "timeout"
@@ -282,7 +334,8 @@ def main() -> int:
     prompt = _build_prompt(date_str, deadline, report_path, status_path, args.smoke)
     timeout_s = run_minutes * 60
     print(f"[runner] transcript → {transcript_path}", flush=True)
-    finished_reason = asyncio.run(_run(prompt, timeout_s, args.smoke, transcript_path))
+    finished_reason = asyncio.run(_run(prompt, timeout_s, args.smoke, transcript_path,
+                                       report_path, run_minutes))
 
     _fallback_delivery(date_str, report_path, status_path, finished_reason)
 
