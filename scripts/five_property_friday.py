@@ -76,6 +76,7 @@ def gather(brief):
             gap = ((ask - recon) / recon * 100) if (ask and recon) else None
             out.append({
                 "address": d.get("address") or d.get("display_address"),
+                "url_slug": d.get("url_slug"),
                 "suburb": sub, "beds": d.get("bedrooms"), "baths": d.get("bathrooms"),
                 "price_text": d.get("price") or d.get("display_price"),
                 "ask": ask, "recon": recon,
