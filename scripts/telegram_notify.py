@@ -29,12 +29,15 @@ def send_message(text: str, chat_id: str = None, parse_mode: str = "Markdown"):
         sys.exit(1)
 
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    resp = requests.post(url, json={
-        "chat_id": cid,
-        "text": text,
-        "parse_mode": parse_mode,
-    }, timeout=10)
+    payload = {"chat_id": cid, "text": text}
+    if parse_mode:
+        payload["parse_mode"] = parse_mode
+    resp = requests.post(url, json=payload, timeout=10)
     data = resp.json()
+    if not data.get("ok") and parse_mode and data.get("error_code") == 400:
+        # Markdown entity-parse failures (e.g. URLs containing "_") — retry as plain text
+        resp = requests.post(url, json={"chat_id": cid, "text": text}, timeout=10)
+        data = resp.json()
     if not data.get("ok"):
         print(f"ERROR: {data}")
         sys.exit(1)
