@@ -3087,7 +3087,16 @@ def process_property(db, suburb: str, prop: Dict, api_key: str, force: bool = Fa
     missing_alerts = []
     if has_floor_plans and not has_floor_plan_data:
         missing_alerts.append("Floor plans exist but floor plan analysis has not been processed — run step 106 first")
-    if not prop.get("image_analysis") and not prop.get("photo_analysis"):
+    # Photo analysis (GPT-4 Vision) is stored in `property_valuation_data` — that is
+    # the field the editorial generator actually consumes (see build_property_context).
+    # `image_analysis`/`photo_analysis` are legacy fields that are never populated, so
+    # gating on them raised a false "not processed" alert on every listing.
+    has_photo_analysis = bool(
+        prop.get("property_valuation_data")
+        or prop.get("image_analysis")
+        or prop.get("photo_analysis")
+    )
+    if not has_photo_analysis:
         missing_alerts.append("Photo analysis has not been processed — run step 105 first")
 
     if missing_alerts and not force:
