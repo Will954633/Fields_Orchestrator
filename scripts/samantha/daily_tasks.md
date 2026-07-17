@@ -109,8 +109,11 @@ Will talks to you through your Drive folder: he adds **notes/instructions as doc
 "From Will" subfolder) and **comments on your past daily-report docs**. Before anything else, read ALL
 new content from him since your last pass:
 ```
-python3 scripts/samantha/from_will.py      # prints new docs + new comments, then advances the pointer
+python3 scripts/samantha/from_will.py      # shows new docs + comments since last COMMITTED pass
 ```
+This records a *pending* mark but does NOT mark the content seen. **Only AFTER you've delivered and
+actioned everything, run `python3 scripts/samantha/from_will.py --commit`** (do this in Phase C / finalise).
+That way if the run crashes, the content re-shows next run and nothing Will drops is ever lost.
 **Treat every item as priority direction.** For each note or comment: action it (or answer it) THIS run,
 reflect your answer in the report (a "From Will — actioned" section), and **capture any durable direction
 to memory immediately** (`…/memory/*.md` + a one-line pointer in MEMORY.md) — Will says it once, you
