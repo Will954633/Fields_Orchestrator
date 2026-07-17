@@ -71,8 +71,10 @@ def _verdict(baseline: float, value: float, direction: str, min_pct: float = 5.0
 def cmd_log(a) -> int:
     review_days = [int(x) for x in (a.review_days or "3,7").split(",") if x.strip()]
     reviews = [( _now() + timedelta(days=d)).strftime("%Y-%m-%d") for d in review_days]
+    sources = [s.strip() for s in (a.sources or "").split(",") if s.strip()]
     doc = {
         "change_id": _new_id(a.title), "created_at": _now(), "type": a.type,
+        "sources": sources,  # data sources that drove this decision (brain1, posthog, fb_ads, kb, ...)
         "title": a.title, "url": a.url, "metric": a.metric, "metric_how": a.metric_how,
         "direction": a.direction,  # 'down' = lower is better, 'up' = higher is better
         "baseline": {"value": a.baseline, "window": a.baseline_window,
@@ -157,6 +159,33 @@ def cmd_report(a) -> int:
     return 0
 
 
+def cmd_sources(a) -> int:
+    """Score data-source usefulness: which sources drive changes that end up validated/improved."""
+    from collections import defaultdict
+    stats = defaultdict(lambda: {"cited": 0, "improved": 0, "validated": 0, "worse": 0})
+    for d in _db()[COLL].find({}):
+        for s in d.get("sources", []) or ["(untagged)"]:
+            st = stats[s]
+            st["cited"] += 1
+            v = d.get("latest_verdict")
+            if v == "improved":
+                st["improved"] += 1
+            elif v == "worse":
+                st["worse"] += 1
+            if d.get("status") == "validated":
+                st["validated"] += 1
+    if not stats:
+        print("_No tracked changes yet._")
+        return 0
+    print("| Source | Cited | Improved | Validated | Worse | Hit rate |")
+    print("|---|---|---|---|---|---|")
+    for s, st in sorted(stats.items(), key=lambda kv: -(kv[1]["improved"] + kv[1]["validated"])):
+        wins = st["improved"] + st["validated"]
+        rate = f"{wins / st['cited'] * 100:.0f}%" if st["cited"] else "—"
+        print(f"| {s} | {st['cited']} | {st['improved']} | {st['validated']} | {st['worse']} | {rate} |")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -175,6 +204,8 @@ def main() -> int:
     p.add_argument("--commit", default="")
     p.add_argument("--revert", default="")
     p.add_argument("--review-days", default="3,7")
+    p.add_argument("--sources", default="",
+                   help="comma-separated data sources that drove this decision (brain1,posthog,fb_ads,kb,...)")
     p.set_defaults(func=cmd_log)
 
     p = sub.add_parser("due"); p.set_defaults(func=cmd_due)
@@ -191,6 +222,7 @@ def main() -> int:
 
     p = sub.add_parser("list"); p.add_argument("--status", default=""); p.set_defaults(func=cmd_list)
     p = sub.add_parser("report"); p.set_defaults(func=cmd_report)
+    p = sub.add_parser("sources"); p.set_defaults(func=cmd_sources)
 
     a = ap.parse_args()
     return a.func(a)
