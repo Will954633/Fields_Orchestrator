@@ -53,6 +53,37 @@ served — chase it to a specific, actionable opportunity. Don't stop at "traffi
 
 ---
 
+## Task 0 — Lead worklist review (do this FIRST — highest value)
+
+A pipeline (`scripts/samantha/lead_intelligence.py`) runs at 02:00, before you. It unifies EVERY
+lead (Analyse Your Home, launch form, price alerts, FB lead-gen ads, mini-site reports, CRM),
+enriches each address (listing_status, last sold, years held, **owner-occupier vs investor**), scores
+a priority, and writes `system_monitor.lead_worklist`. This is your **guarantee that no lead is missed** —
+review it before you go hunting for new signals.
+
+```python
+from src.mongo_client_factory import get_mongo_client
+wl = get_mongo_client()["system_monitor"]["lead_worklist"]
+for d in wl.find({"is_test": False, "priority": {"$in": ["high","medium"]}}).sort("priority", 1):
+    ...  # person, address, occupancy, years_held, listing_status, signals, reason
+```
+
+For each **high** (and notable **medium**) lead:
+- Confirm the signal (owner-occupier + active-move / long-held = likely seller; investor = different pitch;
+  buyer-brief = match to inventory). Cross-check the person's engagement + attribution.
+- **Recommend the next action** (draft-only — you never contact a real lead; Will sends): e.g. a posted
+  appraisal, a tailored mini-site/report to build, a specific message to draft, a data gap to fill.
+- Flag anything the pipeline mis-scored so we can tune it. Note leads with `occupancy.needs_fresh_pull`
+  (a fresh Bright Data pull, capped, would raise confidence) if the lead is worth the spend.
+- Put your recommendations in the report's "Leads to act on" section, highest-value first, and (if the
+  lead has an email + isn't test) they already carry a `worklist_priority` flag on their `crm_contacts` record.
+
+Honest note: the two live FB ads capture BUYER briefs (suburb/beds/baths), not addresses — those leads
+won't have property enrichment; score them on buyer intent. Anonymous CRM contacts (no email) are traffic,
+not actionable leads — they belong in Task 1's aggregate view, not here.
+
+---
+
 ## Task 1 — Marketing direction signals (PostHog + CRM + Brain 2)
 
 Read our own data and surface **clear, evidence-backed signals on marketing direction**: ad
