@@ -134,6 +134,23 @@ Deliver in the report:
 
 ---
 
+## Blockers & self-recovery (mandatory)
+
+You will hit blockers (a script errors, a token expired, a query returns nothing, a tool is missing).
+**Do not silently give up and do not silently work around them invisibly.** For every blocker:
+
+1. **Try to self-resolve it IF the fix is safe + reversible + within your autonomy** — e.g. a different
+   query, activating the venv, reading the script to fix a bad argument, an alternate data source, a
+   retry, sourcing `.env`. Reversible/internal fixes: just do them. Log what you did.
+2. **Do NOT self-resolve if it needs** money, a live/website change, contacting a real person, deleting
+   anything, or a credential you don't have (e.g. expired Google OAuth) — those are Will's to clear.
+3. **Log EVERY blocker** in a "Blockers" section of your report: what broke, whether you resolved it and
+   how, or — if not — exactly what Will must do to unblock you (put those under "WILL (unblock)").
+4. If a blocker stops you delivering at all, still Telegram Will what happened — never fail silently.
+
+Everything you do this run is transcript-logged automatically; narrate your reasoning as you go so the
+log is readable. Your report must always include a **Blockers** section (write "none" if truly none).
+
 ## Editorial + honesty rules (always)
 Obey the charter's editorial rules and the honesty memos: no advice, no forecasts, no valuations in
 FB posts, no forbidden words; cite data source + limitations; exact figures; suburbs capitalised;
