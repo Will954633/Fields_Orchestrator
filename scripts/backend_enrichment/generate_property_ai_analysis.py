@@ -45,6 +45,16 @@ from typing import Any, Dict, List, Optional, Tuple
 import anthropic
 from pymongo import MongoClient
 
+# Route Claude text generation through the Claude Max subscription (`claude -p`
+# CLI) instead of the pay-as-you-go Anthropic API, so editorial generation no
+# longer dies when the console API balance runs dry. Max is the DEFAULT for this
+# generator; set USE_CLAUDE_MAX=0 to force the real API. Image/vision calls
+# (satellite verify) can't be shimmed and transparently fall back to the API.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from claude_max_client import make_client  # noqa: E402
+
+_USE_MAX = os.environ.get("USE_CLAUDE_MAX", "1").strip().lower() in {"1", "true", "yes", "on"}
+
 # Gemini (optional — used for data-gathering agents when --gemini-gather flag is set)
 try:
     import google.generativeai as genai
@@ -333,7 +343,10 @@ OUTPUT as JSON only — no markdown, no code fences:
     "verification_notes": "Brief explanation of what you verified and what you corrected."
 }}"""
 
-    client = anthropic.Anthropic(api_key=api_key)
+    # Vision call — the Max CLI shim can't express image content, so make_client
+    # transparently falls back to the real API here (needs a funded key). Wrapped
+    # in try/except by the caller, so a dry key degrades to a [WARN], not a crash.
+    client = make_client(api_key=api_key, use_max=_USE_MAX)
     try:
         response = client.messages.create(
             model=PIPELINE_CONFIG["models"]["satellite_verify"],
@@ -1924,7 +1937,7 @@ def call_openai(prompt: str, api_key: str, max_tokens: int = 1500, parse_json: b
 
 def call_claude(prompt: str, api_key: str, max_tokens: int = 1500, parse_json: bool = True, model: str = "claude-sonnet-4-6", required_keys: set = None) -> Any:
     """Call Claude. Returns parsed JSON if parse_json=True, else raw text."""
-    client = anthropic.Anthropic(api_key=api_key)
+    client = make_client(api_key=api_key, use_max=_USE_MAX)
 
     message = client.messages.create(
         model=model,
