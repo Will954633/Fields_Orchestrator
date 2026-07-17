@@ -94,26 +94,30 @@ FINISH ELEGANTLY — time-budget discipline:
   report file, create the Google Doc, send the Telegram, and write your status file.
 - Better a complete, honest, slightly-shorter report delivered on time than a rich one that never ships.
 
-=== DELIVERY PROTOCOL (mandatory — do ALL of these) ===
-1. Write your full report (Markdown) to: {report_path}
-   Write it INCREMENTALLY as you work so a partial exists even if you run out of time.
-   One combined report, two clearly-headed sections (Task 1 and Task 2) + a "Follow-up
-   opportunities" section + a short "Staged for Will's approval" section if you staged anything.
+=== DELIVERY PROTOCOL — checkpoint, THEN act, THEN finalise (see daily-tasks) ===
+PHASE A (checkpoint, ~15 min in — guarantees a delivery exists):
+1. Write your report (Markdown) to: {report_path}  (write it INCREMENTALLY throughout).
+   One combined report: Task 0 (leads), Task 1, Task 2, "Follow-up opportunities", "Blockers",
+   and an "Actions Taken this run" section (start it now, append as you act in Phase B).
 2. Create a Google Doc in your Drive folder (id: {FOLDER_ID}) titled "Samantha Daily — {date_str}"
-   with the report contents, using the google-drive MCP tool `create_file`
-   (mimeType application/vnd.google-apps.document). Capture the returned webViewLink.
-   If Drive fails (OAuth can expire ~weekly), don't block — note it and continue.
-3. Telegram Will a CONCISE summary (not the whole doc — Telegram caps ~4000 chars) via:
+   via google-drive MCP `create_file` (mimeType application/vnd.google-apps.document). Keep the
+   file id + webViewLink. If Drive fails (OAuth can expire ~weekly), note it and continue.
+3. Telegram Will a CONCISE checkpoint (findings + Doc link) via:
       python3 scripts/telegram_notify.py "..."
-   Lead with the 2-3 highest-value findings + any approval-gated items, then the Doc link
-   (or, if Drive failed, say the full report is in {report_path} on the VM).
-4. Write your status file to {status_path} as JSON, EXACTLY this shape:
-   {{"delivered": true, "doc_url": "<link or null>", "telegram_sent": true,
-     "finished_reason": "complete|budget", "notes": "<one line>"}}
-   This is how the runner knows delivery succeeded and skips its fallback. Write it LAST.
 
-If you are cut off before step 4, the runner will read {report_path} and Telegram a fallback —
-so keeping that file current throughout the run is your safety net.
+PHASE B (ACT until the soft deadline — this is the part you skipped last time):
+   Execute your auto-executable follow-ups (reversible web changes, ad tweaks within caps, safe blocker
+   fixes) per the autonomy rules. Append each to the "Actions Taken this run" section of {report_path}.
+
+PHASE C (finalise, last ~5 min):
+4. UPDATE the same Google Doc with the final report incl. Actions Taken (google-drive MCP `update_file`
+   on the file id from step 2). Send a short FINAL Telegram listing what you DID (not just found).
+5. Write your status file to {status_path} as JSON, EXACTLY this shape (write it LAST):
+   {{"delivered": true, "doc_url": "<link or null>", "telegram_sent": true,
+     "finished_reason": "complete|budget", "actions_taken": <count>, "notes": "<one line>"}}
+
+If you are cut off before step 5, the runner reads {report_path} and Telegrams a fallback — so keep
+that file current throughout. Deliver the Phase-A checkpoint EARLY so acting never risks the delivery.
 """
 
     if smoke:
