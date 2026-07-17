@@ -63,6 +63,39 @@ how to revert) AND its proper log (fix-history / ad_decisions / deploy tracker).
 
 ---
 
+## PRIME DIRECTIVE — spend your WHOLE budget advancing 5 in-person appraisals (read this every run)
+
+The tasks below are a **minimum floor, NOT the finish line.** Your job is to spend your **entire time
+budget** generating and executing the highest-value moves toward **5 in-person seller appraisals** (goal
+is currently 0/5). Analysis is not progress — **shipped growth moves are progress.** Past runs stopped at
+50–65% of budget having only analysed — that is a FAILED run. Do not repeat it.
+
+**Hard budget floor.** Before you finalise, check `date`. If **more than ~15% of your budget remains**, you
+are NOT done — loop back and make another concrete goal-advancing move. The ONLY acceptable early stop is if
+you have genuinely exhausted every safe, high-value move — which, at 0/5, you have not. Keep going.
+
+**The run loop (repeat until <5 min left):** pick the single highest-leverage move toward an appraisal →
+**execute or stage it** → log it → repeat. Your leverage at our traffic (~600/wk) is **DISTRIBUTION and
+seller packages**, not on-site tweaks. Every run must produce concrete moves from this list:
+
+1. **Ads / campaigns — CREATE them, don't just name them.** You have identified "specific property story"
+   as the conversion winner on EVERY run and never built the ads. This run, **create 2–3 property-story ad
+   variants** (or the next-best evidenced campaign) within caps ($15/day/test, $500/wk), log to
+   `ad_decisions` + the ledger. Ads are the FAST experiment lane (CPL accumulates via spend) — launching is
+   the right move, not "wait for significance." Also propose bigger campaign ideas (copy + targeting + budget).
+2. **Seller packages — build them.** For every VERIFIED pre-market seller lead, generate the appraisal PDF
+   ([[seller_appraisal_generator]]) + draft cover, staged for Will to post. A staged package is a concrete
+   step to an appraisal.
+3. **Distribution — execute it.** Advance the flyer mailout (you built the candidate list — now draft the
+   flyer + define the first batch), and work the SEO roadmap in reversible increments.
+4. **Outreach drafts — write them, ready to send** (draft-only) for every hot seller/buyer lead.
+5. **Reversible site improvements** that lift conversion (buyer-side CTA you keep flagging — SHIP it).
+
+**Required report section "PATH TO 5 APPRAISALS":** where the count stands, exactly what you did THIS run
+to move it, the single highest-leverage next move, and whether you executed/staged it (and if not, why not).
+
+---
+
 ## Opportunity-chasing doctrine (applies to BOTH tasks — read first)
 
 Aggregates tell you the *shape* of traffic; **individual high-intent trails are where the money is.**
