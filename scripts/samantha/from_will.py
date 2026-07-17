@@ -146,7 +146,7 @@ def main() -> int:
             comments = []
         for c in comments:
             if c.get("createdTime", "") > since:
-                new_comments.append((name, f.get("webViewLink"), c))
+                new_comments.append((name, f.get("webViewLink"), f["id"], c))
 
     # Digest
     print("=" * 70)
@@ -162,14 +162,16 @@ def main() -> int:
             print("   " + "\n   ".join(text.strip()[:4000].splitlines()))
     if new_comments:
         print(f"\n### NEW COMMENTS FROM WILL ({len(new_comments)})")
-        for docname, link, c in new_comments:
+        for docname, link, fid, c in new_comments:
             q = (c.get("quotedFileContent") or {}).get("value", "")
             who = (c.get("author") or {}).get("displayName", "?")
             resolved = " [resolved]" if c.get("resolved") else ""
             print(f"\n── on \"{docname}\"{resolved}  ({link})")
             if q:
-                print(f'   re: "{q[:200]}"')
+                print(f'   re section: "{q[:200]}"')
             print(f"   {who} @ {c.get('createdTime')}: {c.get('content','').strip()}")
+            print(f"   ↳ REPLY in-thread: python3 scripts/samantha/drive_comment.py reply "
+                  f"--file {fid} --comment {c.get('id')} --text \"Samantha: ...\"")
 
     print("\n" + "=" * 70)
     print("ACTION EVERY item above: do it or answer it in your report + capture durable direction to memory.")
