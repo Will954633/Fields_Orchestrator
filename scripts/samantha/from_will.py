@@ -77,6 +77,19 @@ def _export_text(svc, f) -> str:
     mt = f.get("mimeType", "")
     try:
         if mt == "application/vnd.google-apps.document":
+            # Google Doc = a RUNNING doc: read ACTIVE text only, skipping ORANGE (= done)
+            # so completed/irrelevant items are never re-read or re-actioned.
+            try:
+                from running_doc import active_text  # same dir
+                return active_text(f["id"])
+            except Exception:
+                import importlib.util
+                spec = importlib.util.spec_from_file_location(
+                    "running_doc", "/home/fields/Fields_Orchestrator/scripts/samantha/running_doc.py")
+                if spec and spec.loader:
+                    mod = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(mod)
+                    return mod.active_text(f["id"])
             return svc.files().export(fileId=f["id"], mimeType="text/plain").execute().decode("utf-8", "replace")
         if mt.startswith("text/"):
             return svc.files().get_media(fileId=f["id"]).execute().decode("utf-8", "replace")
