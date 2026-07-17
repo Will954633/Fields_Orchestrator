@@ -7,4 +7,4 @@ set -a
 source ./.env
 set +a
 export GH_CONFIG_DIR=/home/projects/.config/gh
-exec /usr/bin/python3 scripts/samantha/lead_intelligence.py "$@"
+exec /home/fields/venv/bin/python3 scripts/samantha/lead_intelligence.py "$@"
