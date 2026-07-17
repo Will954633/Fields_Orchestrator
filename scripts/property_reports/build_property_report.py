@@ -51,6 +51,54 @@ def get_system_monitor_db():
     return get_client()["system_monitor"]
 
 
+def _notify_new_lead(report_doc: Dict[str, Any], occ: Optional[Dict[str, Any]]) -> None:
+    """Telegram alert for a new Analyse Your Home lead, with occupancy verdict."""
+    import os
+    import requests
+
+    token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    chat = os.environ.get("TELEGRAM_CHAT_ID")
+    if not (token and chat):
+        return
+
+    slug = report_doc.get("slug")
+    address = report_doc.get("address", slug)
+    attribution = (report_doc.get("owner") or {}).get("attribution") or {}
+    channel = attribution.get("channel_type") or "unknown"
+    campaign = (attribution.get("first_touch") or {}).get("utm_campaign")
+
+    occ = occ or {}
+    otype = occ.get("type", "unknown")
+    icon = {"investor": "🚫", "owner_occupier": "🏠", "unknown": "❔"}.get(otype, "❔")
+    hold = occ.get("owner_occupier") is not True
+    occ_line = f"{icon} *Occupancy:* {otype.replace('_', '-')}"
+    if occ.get("confidence"):
+        occ_line += f" ({occ['confidence']})"
+    signals = occ.get("signals") or []
+
+    lines = [
+        "📩 *New Analyse Your Home lead*",
+        f"*{address}*",
+        "",
+        f"📈 *Source:* {channel}" + (f" — {campaign}" if campaign else ""),
+        occ_line,
+    ]
+    if signals:
+        lines.append(f"_{signals[0]}_")
+    if hold:
+        lines.append("")
+        lines.append("⛔ *Postal dispatch HELD* — do not post appraisal to this address until occupancy is confirmed owner-occupier.")
+    lines.append("")
+    lines.append(f"https://fieldsestate.com.au/your-home/{slug}")
+
+    requests.post(
+        f"https://api.telegram.org/bot{token}/sendMessage",
+        json={"chat_id": chat, "text": "\n".join(lines), "parse_mode": "Markdown",
+              "disable_web_page_preview": True},
+        timeout=20,
+    )
+
+
 def resolve_one(report_doc: Dict[str, Any], force: bool = False) -> Dict[str, Any]:
     """Resolve slots for one doc. Returns the update dict that was applied."""
     slug = report_doc["slug"]
@@ -172,6 +220,36 @@ def resolve_one(report_doc: Dict[str, Any], force: bool = False) -> Dict[str, An
     # Newest-first by reversing so the most recent event ends up at position 0.
     set_payload = {k: v for k, v in updates.items()}
 
+    # Occupancy classification — pull a fresh Domain timeline (Bright Data) and
+    # decide owner-occupier vs investor. This GATES physical dispatch: an
+    # investor/tenanted property must never be posted appraisal material (it
+    # would reach the tenant, not the owner). Default-safe — any non-confirmed
+    # result keeps print_appraisal.dispatch_hold ON. Best-effort: a failure here
+    # must leave the hold ON, never release it, and must not fail the build.
+    occ = None
+    try:
+        from scripts.property_reports.occupancy_classifier import (
+            refresh_and_classify,
+            occupancy_updates,
+        )
+        occ = refresh_and_classify(report_doc, gc_db, fetch_fresh=True)
+        set_payload.update(occupancy_updates(occ))
+        logger.info(
+            f"  {slug}: occupancy={occ.get('type')} "
+            f"(owner_occupier={occ.get('owner_occupier')}, {occ.get('confidence')}, "
+            f"src={occ.get('timeline_source')})"
+        )
+        if occ.get("type") == "investor":
+            emitter.done(
+                "occupancy_check",
+                "Ownership check: investment property — held from postal dispatch",
+            )
+    except Exception as e:  # noqa: BLE001
+        # Fail closed: ensure the hold stays on even if classification errored.
+        logger.warning(f"  {slug}: occupancy classification failed: {e}")
+        set_payload["print_appraisal.dispatch_hold"] = True
+        set_payload["print_appraisal.dispatch_hold_reason"] = "occupancy_classification_error"
+
     # Final build event — the house website is ready for review. This is the
     # signal the frontend polls for to auto-navigate to /your-home/<slug>.
     emitter.done(
@@ -191,6 +269,16 @@ def resolve_one(report_doc: Dict[str, Any], force: bool = False) -> Dict[str, An
         )
 
     cosmos_retry(_apply, label=f"property_reports.resolve.{slug}")
+
+    # Telegram alert on a newly-built Analyse Your Home lead. Fires once, on the
+    # stub -> under_review transition, so a lead never lands silently again. The
+    # occupancy verdict is included so an investor/tenanted property is flagged
+    # up front. Best-effort: never fails the build.
+    if state == "stub":
+        try:
+            _notify_new_lead(report_doc, occ)
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"  {slug}: lead telegram notify failed: {e}")
 
     # Messages tab (Phase 3.1) — rebuild the advisory timeline from the now-current
     # doc (welcome + valuation state + market-change events), preserving any human
