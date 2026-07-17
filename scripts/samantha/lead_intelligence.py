@@ -97,12 +97,29 @@ def _resolve_gc_doc(lead: dict, gc_db):
         return None
 
 
+STALE_STATUS_DAYS = 14
+
+
+def _status_age_days(gc_doc: dict) -> float | None:
+    """Days since the Gold_Coast doc was last updated (proxy for listing_status freshness)."""
+    lu = gc_doc.get("last_updated")
+    if not isinstance(lu, datetime):
+        return None
+    lu = lu.replace(tzinfo=None)
+    return round((NOW.replace(tzinfo=None) - lu).days + 0.0, 1)
+
+
 def _property_summary(gc_doc: dict) -> dict:
     if not gc_doc:
         return {}
+    age = _status_age_days(gc_doc)
     return {
         "resolved_property_id": str(gc_doc.get("_id")),
         "listing_status": gc_doc.get("listing_status"),
+        # Staleness guard (Dee lesson): listing_status older than STALE_STATUS_DAYS —
+        # or of unknown age — must be re-verified with a FRESH pull before anyone acts.
+        "status_age_days": age,
+        "status_stale": age is None or age > STALE_STATUS_DAYS,
         "price": gc_doc.get("price"),
         "bedrooms": gc_doc.get("bedrooms") or gc_doc.get("BEDROOMS"),
         "bathrooms": gc_doc.get("bathrooms") or gc_doc.get("BATHROOMS"),
@@ -371,6 +388,12 @@ def main() -> int:
     # First-pass score to find high-priority + stale for the capped fresh pulls.
     for r in recs:
         r["priority"], r["reason"], r["signals"] = score(r)
+        # Staleness guard (Dee lesson): actionable leads whose listing_status is old or of
+        # unknown age get an explicit VERIFY-FIRST signal so nobody calls a "pre-market
+        # seller" who has already listed.
+        if r["priority"] in ("high", "medium") and (r.get("property") or {}).get("status_stale"):
+            r["signals"].append("STALE_STATUS_verify_fresh_before_acting")
+            r["reason"] = f"{r['reason']} [status stale >{STALE_STATUS_DAYS}d — verify fresh first]"
 
     if not args.no_fresh:
         fresh_budget = args.max_fresh
