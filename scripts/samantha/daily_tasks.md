@@ -13,6 +13,46 @@ Money caps if you stage anything: **$10/day per test, $500/week cumulative**, al
 
 ---
 
+## Opportunity-chasing doctrine (applies to BOTH tasks — read first)
+
+Aggregates tell you the *shape* of traffic; **individual high-intent trails are where the money is.**
+The single most valuable thing you can find on any run is one real person whose behaviour signals
+intent, whom we then served badly or failed to give a next step. Do NOT let these hide inside averages.
+
+**Follow the trail to the end — every run, chase at least a handful of individual high-intent sessions
+end-to-end**, regardless of how little traffic that page got (the best signals are n=1, not top-of-list):
+
+1. **Find high-intent sessions in PostHog** (HogQL over `$pageview` / `events`), not just top pages:
+   - Someone searching / landing on a **specific `/property/<address>`** page (esp. via Google/Bing organic
+     or an AI referrer) — a person looking up *one* address is usually the owner or a serious buyer.
+   - Long dwell, deep scroll, repeat visits, or a session that hit `/analyse-your-home` or a property page
+     then left without converting.
+   - **Volume is not the filter — intent is.** A single visit to one address page outranks 500 homepage hits.
+2. **Join the address to our own data** (`Gold_Coast.<suburb>` by `address`): `listing_status`
+   (for_sale / withdrawn / sold), price, **sale recency**, and any data gaps (e.g. missing floor area that
+   suppresses the valuation). A **recently withdrawn or long-held** home + an owner-looking session = a
+   likely seller weighing their next move. Say what the signal is and how confident you are.
+3. **Screenshot the exact page they landed on** and READ it: did it give this specific person what they
+   needed, and — critically — **is there a next step for them?** Audit the conversion path: is there a
+   "build your property report" CTA / lead capture, or does the page **dead-end** (e.g. a "Not Available"
+   message with nowhere to go)? A high-intent visitor + a page with no path forward = a named opportunity.
+4. **Name the concrete opportunity + fix**, laddered to the north star: e.g. "add a build-report CTA to
+   thin `/property` pages", "owner-intent follow-up on address X", "fill the data gap blocking valuation".
+   If CRM has a matching lead (`owner.attribution`, `posthog_distinct_id` join), pull it; if the visitor
+   only *viewed* (no lead action), there is **no CRM row** — PostHog is your only trail, that's expected.
+
+**Worked example (the pattern to generalise):** an organic visitor searches `47 Tullamarine Drive, Robina`
+→ lands on our `/property/47-tullamarine-drive-robina` page. DB join shows it's a $2.75M waterfront home,
+for_sale, **floor area missing** → so the page shows "Valuation Guide Not Available" and offers only passive
+"track this property" — **no build-report CTA, no path forward**. That's a high-intent likely-owner served a
+dead-end. The opportunity: a report-build CTA on thin property pages (which would also capture the missing
+floor area). **This is exactly the kind of trail you must surface — do it for whatever arises this run.**
+
+This doctrine is general: any run, if you see a mismatch between what someone clearly needed and what we
+served — chase it to a specific, actionable opportunity. Don't stop at "traffic looks fine."
+
+---
+
 ## Task 1 — Marketing direction signals (PostHog + CRM + Brain 2)
 
 Read our own data and surface **clear, evidence-backed signals on marketing direction**: ad
@@ -47,10 +87,14 @@ Sources:
 
 **Screenshot the pages they actually viewed** (multimodal — you can SEE the PNGs):
 - `node scripts/site-inspector.js --url /PAGE` then Read the output PNG.
-- Take a **representative sample** if there's a lot of traffic (e.g. top 5–8 organic entry pages by
-  sessions) — do NOT try to screenshot everything. Note the sample size and how you chose it.
-- For each sampled page: what did the visitor likely NEED, did the page serve it well, what's the
-  gap, and is there a follow-up opportunity (better content, an SEO fix, a data product, a CTA)?
+- Sample TWO ways (per the Opportunity-chasing doctrine above): (a) the top ~5 organic entry pages **by
+  volume**, AND (b) a handful of **high-intent individual sessions** even at n=1 — especially specific
+  `/property/<address>` landings from organic/AI referrers (likely owners/serious buyers). Do NOT
+  screenshot everything; note your sample size and how you chose it.
+- For each page: what did the visitor likely NEED, did the page serve it well, what's the gap, **is there
+  a next step / CTA or does it dead-end**, and what's the follow-up opportunity (content, SEO fix, data
+  gap to fill, a build-report CTA, an owner-intent follow-up). For `/property` pages, **join the address
+  to `Gold_Coast` first** (listing_status + recency + data gaps) to read the intent before you judge the page.
 
 Deliver in the report:
 - Where organic + AI-referral traffic is coming from and how engaged it is (with the numbers).
