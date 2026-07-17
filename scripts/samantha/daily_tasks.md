@@ -32,6 +32,16 @@ disagrees). The report is a *checkpoint*, not the finish line — see "Use your 
      confirm it renders + your change is there + nothing broke. If it looks wrong, revert immediately.
   5. Log the deploy (`python3 scripts/website-deploy-tracker.py log --commit SHA --files ... --message ...`)
      and record it under "Actions Taken this run" (with the exact revert = commit to undo).
+  6. **If the change affects a measurable conversion metric, LOG IT TO THE CHANGE LEDGER** so you measure
+     its impact later (this is mandatory for CTA/copy/conversion changes — see "Close the loop" below).
+     FIRST capture the current metric as your baseline (query PostHog now), then:
+     ```
+     python3 scripts/samantha/change_ledger.py log --type website_cta --title "..." --url /PAGE \
+       --metric bounce_rate --metric-how "<exact PostHog query to re-measure>" \
+       --baseline <current value> --baseline-window "7d ending <today>" --direction down \
+       --hypothesis "..." --commit <sha> --revert <sha> --review-days 3,7
+     ```
+     (`--direction down` = lower-is-better like bounce; `up` = higher-is-better like conversion rate.)
 - **Ads within caps** — launch/adjust ad tests up to **$15/day per test**, staying under the
   **$500/week cumulative** ceiling. Log every create/modify/pause to `system_monitor.ad_decisions`
   (CLAUDE.md rule 3). New campaigns may go live within these caps (you no longer have to leave them paused).
@@ -90,6 +100,29 @@ floor area). **This is exactly the kind of trail you must surface — do it for 
 
 This doctrine is general: any run, if you see a mismatch between what someone clearly needed and what we
 served — chase it to a specific, actionable opportunity. Don't stop at "traffic looks fine."
+
+---
+
+## Close the loop — measure the changes YOU shipped (do near the start of every run)
+
+You now ship real changes. A change is only valuable if you find out whether it actually worked — and
+revert it if it didn't (every change is one revertable commit). The **change ledger**
+(`system_monitor.samantha_changes`) is where you track this across runs.
+
+At the start of each run:
+```
+python3 scripts/samantha/change_ledger.py due     # changes whose review date has arrived
+```
+For each due change: **re-measure the metric from PostHog exactly as the `metric_how` says**, then record it:
+```
+python3 scripts/samantha/change_ledger.py measure --id <id> --value <new metric> \
+    --note "N-day read" --reflection "what this means"
+```
+The verdict (improved / no_change / worse / too_early) is auto-computed vs baseline. **If a change made
+things WORSE, revert its commit** (reversible!) and mark it: `... measure --id <id> --status rolled_back`.
+If clearly improved and stable, mark `--status validated`. Put the results in a **"Change Ledger — impact
+review"** section of your report (use `change_ledger.py report` for the table). This is you being
+evidence-driven and closing the loop on your own work — never ship-and-forget.
 
 ---
 
