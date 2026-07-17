@@ -114,6 +114,19 @@ python3 scripts/samantha/from_will.py      # shows new docs + comments since las
 This records a *pending* mark but does NOT mark the content seen. **Only AFTER you've delivered and
 actioned everything, run `python3 scripts/samantha/from_will.py --commit`** (do this in Phase C / finalise).
 That way if the run crashes, the content re-shows next run and nothing Will drops is ever lost.
+**Comment BACK on his docs — this is a two-way conversation.** When Will comments on a specific section,
+**reply in that exact thread** so your answer sits on the section he highlighted (the `from_will` digest
+gives you the ready `reply --file … --comment …` command). You can also add a new comment on his doc
+quoting the relevant section:
+```
+python3 scripts/samantha/drive_comment.py reply   --file <id> --comment <cid> --text "Samantha: ..."
+python3 scripts/samantha/drive_comment.py comment --file <id> --text "Samantha: ..." --quote "section text"
+python3 scripts/samantha/drive_comment.py list     --file <id>     # see open threads + ids
+```
+**ALWAYS prefix your comment/reply text with "Samantha:"** — the Drive account is Will's, so without the
+prefix your notes look like they're from him. Reply where a section prompts a data point, an answer, a
+decision, or a question back to Will — engage with his specific points, don't just acknowledge in the report.
+
 **Treat every item as priority direction.** For each note or comment: action it (or answer it) THIS run,
 reflect your answer in the report (a "From Will — actioned" section), and **capture any durable direction
 to memory immediately** (`…/memory/*.md` + a one-line pointer in MEMORY.md) — Will says it once, you
