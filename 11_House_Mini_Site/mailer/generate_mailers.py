@@ -83,6 +83,35 @@ def fmt_date(dt):
     return ""
 
 
+def fmt_distance(m):
+    """(display, verb) — '425 m'/'walk' for genuine walks, '1.64 km'/'route' beyond ~900 m."""
+    m = int(m)
+    if m < 1000:
+        return f"{m} m", ("walk" if m <= 900 else "route")
+    return f"{m / 1000:.2f} km", "route"
+
+
+def humanise_persona(personas):
+    """First sentence of the top persona's plain-English brief, not the machine label."""
+    if not personas:
+        return None
+    p = personas[0]
+    brief = (p.get("brief") or "").strip()
+    if not brief:
+        return None
+    # first sentence; if long, cut at the last clause boundary (comma) so it reads whole
+    first = re.split(r"(?<=[.!?])\s", brief)[0].strip()
+    if len(first) > 175:
+        head = first[:175]
+        cut = head.rfind(", ")             # clause break only (not a numeric "4,010" comma)
+        if cut < 90:                       # no sensible clause break — fall back to word
+            cut = head.rfind(" ")
+        first = head[:cut].rstrip(" ,")
+    if first and first[-1] not in ".!?":
+        first += "."
+    return first
+
+
 # ---------- extraction ----------
 def extract(doc):
     """Pull every dynamic value the mailer needs. Raises if a headline field is missing."""
@@ -108,9 +137,10 @@ def extract(doc):
     school_name = school.get("name") if school else None
     school_m = school.get("walkMetres") if school else None
 
-    # buyer persona (first labelled)
+    # buyer persona — humanised description (plain-English brief), not the machine label
     personas = pos.get("personas") or []
     persona = next((p.get("label") for p in personas if isinstance(p, dict) and p.get("label")), None)
+    buyer_desc = humanise_persona(personas)
 
     # imagery
     photos = (doc.get("property") or {}).get("photos") or []
@@ -123,19 +153,25 @@ def extract(doc):
     # ---- readiness gate ----
     missing = [n for n, v in [
         ("total_active", total_active), ("true_competitors", true_comp or None),
-        ("comps_reviewed", comps_reviewed), ("school", school_name),
-        ("persona", persona), ("hero_photo", hero), ("aerial", aerial),
+        ("comps_reviewed", comps_reviewed), ("school", school_name), ("school_m", school_m),
+        ("buyer_desc", buyer_desc), ("hero_photo", hero), ("aerial", aerial),
     ] if not v]
     if slot.get("scarcity") != "approved" or slot.get("competitor_matches") != "approved":
         missing.append("scarcity/competitor slot not approved")
     if missing:
         raise ValueError("not ready — missing: " + ", ".join(missing))
 
+    school_fmt, school_verb = fmt_distance(school_m)
+    school_label = f"Walk to {school_name}" if school_verb == "walk" else f"To {school_name}"
+    school_phrase = f"{school_fmt} {school_verb} to {school_name}"
+
     return {
         "slug": slug, "street": street, "locality": locality, "suburb": suburb,
         "total_active": total_active, "true_comp": true_comp, "full_stack": full_stack,
         "comps_reviewed": comps_reviewed, "school": school_name, "school_m": school_m,
-        "persona": persona, "hero": hero, "aerial": aerial, "updated": updated,
+        "school_fmt": school_fmt, "school_label": school_label, "school_phrase": school_phrase,
+        "persona": persona, "buyer_desc": buyer_desc,
+        "hero": hero, "aerial": aerial, "updated": updated,
     }
 
 
@@ -152,18 +188,20 @@ def render(ctx, dry=False):
     repl = {
         "{{STREET}}": ctx["street"], "{{LOCALITY}}": ctx["locality"], "{{SUBURB}}": ctx["suburb"],
         "{{TRUE_COMP}}": str(ctx["true_comp"]), "{{TOTAL_ACTIVE}}": str(ctx["total_active"]),
-        "{{FULL_STACK}}": str(ctx["full_stack"]), "{{COMPS_REVIEWED}}": str(ctx["comps_reviewed"]),
-        "{{SCHOOL}}": ctx["school"], "{{SCHOOL_M}}": str(ctx["school_m"]),
-        "{{PERSONA}}": ctx["persona"], "{{HERO_IMG}}": hero_rel, "{{AERIAL_IMG}}": aer_rel,
-        "{{QR_IMG}}": qr_rel,
+        "{{COMPS_REVIEWED}}": str(ctx["comps_reviewed"]),
+        "{{SCHOOL}}": ctx["school"], "{{SCHOOL_FMT}}": ctx["school_fmt"],
+        "{{SCHOOL_LABEL}}": ctx["school_label"], "{{SCHOOL_PHRASE}}": ctx["school_phrase"],
+        "{{BUYER_DESC}}": ctx["buyer_desc"],
+        "{{HERO_IMG}}": hero_rel, "{{AERIAL_IMG}}": aer_rel, "{{QR_IMG}}": qr_rel,
     }
     html = open(TEMPLATE, encoding="utf-8").read()
     for k, v in repl.items():
         html = html.replace(k, v)
 
     print(f"  ✓ {ctx['street']}, {ctx['locality']}")
-    print(f"      hook: Only {ctx['true_comp']} of {ctx['total_active']} homes compete · "
-          f"{ctx['comps_reviewed']} comps · {ctx['school_m']}m to {ctx['school']} · buyer: {ctx['persona']}")
+    print(f"      hook: Only {ctx['true_comp']} of {ctx['total_active']} reviewed compete · "
+          f"{ctx['comps_reviewed']} comps · {ctx['school_phrase']}")
+    print(f"      buyer: {ctx['buyer_desc']}")
     print(f"      QR → {url}")
     if dry:
         return None
