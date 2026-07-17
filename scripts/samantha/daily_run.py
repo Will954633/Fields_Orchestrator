@@ -164,7 +164,8 @@ async def _run(prompt: str, timeout_s: int, smoke: bool,
             pass
 
     options = ClaudeAgentOptions(
-        model="opus",
+        model="claude-fable-5",   # Fable 5 — stronger at long-running, deeper-thinking runs (Will, 2026-07-17)
+        fallback_model="opus",    # fall back to Opus if Fable is unavailable on the subscription
         effort="high",
         cwd=ORCH,
         env=_sdk_env(),
