@@ -21,7 +21,9 @@
   .brandbar{ background:var(--green); color:var(--paper); display:flex;
              align-items:center; justify-content:space-between; padding:6.5mm 14mm; }
   .brandbar .logo{ height:11mm; width:auto; display:block; }
-  .tagline{ font-style:italic; color:var(--sand); font-size:11pt; }
+  .tagline{ font-family:"Liberation Sans","DejaVu Sans",sans-serif; font-style:normal;
+            font-weight:400; font-size:12pt; letter-spacing:-.02em; color:var(--sand); }
+  .taglineDot{ color:#b87333; font-weight:700; }
   .pad{ padding:0 14mm; }
 
   /* recipient / postal block */
@@ -94,7 +96,7 @@
 <div class="page">
   <div class="brandbar">
     <img class="logo" src="assets/fields-logo-white.png" alt="Fields">
-    <span class="tagline">Smarter with data</span>
+    <span class="tagline">Smarter with data<span class="taglineDot">.</span></span>
   </div>
 
   <div class="mailrow">
@@ -167,7 +169,7 @@
 <div class="page">
   <div class="brandbar">
     <img class="logo" src="assets/fields-logo-white.png" alt="Fields">
-    <span class="tagline">Smarter with data</span>
+    <span class="tagline">Smarter with data<span class="taglineDot">.</span></span>
   </div>
 
   <div class="pad" style="padding-top:7mm;">
