@@ -26,6 +26,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 load_dotenv("/home/fields/Fields_Orchestrator/.env")
 from shared.db import get_client  # noqa: E402
 import crm_lead_sync  # noqa: E402
+import fpf_send  # noqa: E402
 
 PAGE_ID = "889412530933297"
 API = "https://graph.facebook.com/v18.0"
@@ -182,6 +183,12 @@ def main():
                 coll.insert_one(doc)
                 if not args.no_notify:
                     notify(fields, form["name"], lead.get("created_time"))
+                # Five Property Friday: welcome (+ same-day 5 if Friday) via tracked path
+                if form["id"] in fpf_send.BUYER_BRIEF_FORMS:
+                    try:
+                        fpf_send.handle_lead(doc)
+                    except Exception as e:
+                        print(f"    FPF send failed: {e}", file=sys.stderr)
             # sync into the CRM (email-keyed contact with brief + attribution)
             try:
                 crm_lead_sync.upsert_lead(coll.database, doc)
