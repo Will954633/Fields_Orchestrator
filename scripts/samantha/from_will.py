@@ -11,9 +11,15 @@ State: system_monitor.samantha_state doc _id="from_will" holds last_check (ISO).
 Auth: reuses the gdrive MCP OAuth creds (auto-refresh). Needs the drive scope to read comments.
 
 Usage:
-  python3 scripts/samantha/from_will.py            # digest of new-since-last-pass, THEN advance pointer
-  python3 scripts/samantha/from_will.py --peek     # same digest but DON'T advance the pointer
+  python3 scripts/samantha/from_will.py            # show new-since-last-COMMITTED-pass (records a pending mark)
+  python3 scripts/samantha/from_will.py --commit   # AFTER you've delivered + actioned: mark it all seen
+  python3 scripts/samantha/from_will.py --peek     # show only, record nothing
   python3 scripts/samantha/from_will.py --since 2026-07-01T00:00:00Z
+
+Robustness: reading does NOT advance the "seen" pointer — it only records a *pending* mark. You run
+`--commit` at the END of the run, after delivery. So if a run crashes mid-way, the pointer stays put and
+the next run RE-READS the same content — nothing Will drops is ever silently lost. In practice an item
+keeps showing every run until you've actually processed it and committed.
 """
 from __future__ import annotations
 
@@ -81,9 +87,24 @@ def _export_text(svc, f) -> str:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--peek", action="store_true", help="don't advance the last-check pointer")
+    ap.add_argument("--peek", action="store_true", help="show only, record nothing")
+    ap.add_argument("--commit", action="store_true",
+                    help="mark all previously-read content as seen (run AFTER delivery)")
     ap.add_argument("--since", default="")
     args = ap.parse_args()
+
+    # --commit: promote the pending mark to the committed pointer, then exit.
+    if args.commit:
+        d = _state().find_one({"_id": "from_will"})
+        pending = (d or {}).get("pending_check")
+        if pending:
+            _set_last_check(pending)
+            cosmos_retry(lambda: _state().update_one({"_id": "from_will"},
+                                                     {"$unset": {"pending_check": ""}}))
+            print(f"committed — content up to {pending} marked seen")
+        else:
+            print("nothing pending to commit")
+        return 0
 
     since = args.since or _last_check()
     now_iso = datetime.now(timezone.utc).isoformat()
@@ -154,10 +175,12 @@ def main() -> int:
     print("ACTION EVERY item above: do it or answer it in your report + capture durable direction to memory.")
 
     if not args.peek:
-        _set_last_check(now_iso)
-        print(f"(pointer advanced to {now_iso})")
+        cosmos_retry(lambda: _state().update_one(
+            {"_id": "from_will"}, {"$set": {"pending_check": now_iso}}, upsert=True))
+        print(f"(recorded pending={now_iso}; run `from_will.py --commit` AFTER you deliver to mark seen.\n"
+              " until then this content re-shows next run — nothing is lost if this run crashes.)")
     else:
-        print("(--peek: pointer NOT advanced)")
+        print("(--peek: recorded nothing)")
     return 0
 
 
