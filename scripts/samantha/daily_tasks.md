@@ -13,10 +13,25 @@ DO IT** — don't just propose it. Then log exactly what you did so he can revie
 disagrees). The report is a *checkpoint*, not the finish line — see "Use your full time budget" below.
 
 **AUTO-EXECUTE (do it + log it) — reversible, low-risk, high-value:**
-- **Reversible website content changes** — e.g. add a cross-link/CTA, replace a dead-end state with a
-  useful CTA, fix copy. Rules: obey the editorial rules; make it ONE git commit per change (so it's a
-  clean revert); push via `gh api` (see CLAUDE.md); then **visually verify** with `site-inspector.js` +
-  read the screenshot (CLAUDE.md rule 4); log the deploy. Max **5 executed web changes per run**.
+- **Reversible website content changes** — add a cross-link/CTA, replace a dead-end state with a useful
+  CTA, fix copy. **These are PRE-APPROVED — ship them live, don't defer them.** Max 5 per run.
+  **The recipe (follow it — this is why you don't need to be uncertain):**
+  1. Find the component. Website code is at `/home/fields/Feilds_Website/01_Website/src/...`. Routes are
+     in `src/routes.ts` + `src/routes/` (NOT App.tsx). Known targets: crash-risk = `MarketMetricsPage` /
+     `CrashRiskSection.tsx`; `/analyse-your-home` = `AnalyseYourHomePage`. `grep -rl` for the page text.
+  2. Edit locally. Keep it small + obey editorial rules (no advice/forecast/valuation, no forbidden words).
+  3. Push ONE file = ONE commit (clean revert). GitHub path maps `01_Website/src/...` → repo `src/...`:
+     ```
+     SHA=$(gh api 'repos/Will954633/Website_Version_Feb_2026/contents/src/PATH' --jq '.sha')
+     CONTENT=$(base64 -w0 < /home/fields/Feilds_Website/01_Website/src/PATH)
+     gh api 'repos/Will954633/Website_Version_Feb_2026/contents/src/PATH' --method PUT \
+       --field message="samantha: <what+why>" --field content="$CONTENT" --field sha="$SHA"
+     ```
+     (Netlify auto-deploys; wait ~60-90s.) Remember: `unset GITHUB_TOKEN` after sourcing `.env`.
+  4. **Visually verify:** `node scripts/site-inspector.js --url /PAGE`, then READ the screenshot PNG —
+     confirm it renders + your change is there + nothing broke. If it looks wrong, revert immediately.
+  5. Log the deploy (`python3 scripts/website-deploy-tracker.py log --commit SHA --files ... --message ...`)
+     and record it under "Actions Taken this run" (with the exact revert = commit to undo).
 - **Ads within caps** — launch/adjust ad tests up to **$15/day per test**, staying under the
   **$500/week cumulative** ceiling. Log every create/modify/pause to `system_monitor.ad_decisions`
   (CLAUDE.md rule 3). New campaigns may go live within these caps (you no longer have to leave them paused).
@@ -174,6 +189,12 @@ Last run you delivered the report and stopped with 20 minutes unused. **Don't do
 **Do not stop early.** Genuine idle — nothing safe, valuable, and reversible left to do — is rare. If you
 truly have nothing left, say so explicitly in the report and stop; otherwise keep advancing until the
 soft deadline. Check `date` periodically; reserve the last 5 minutes to finalise cleanly.
+
+**NO DEFERRING TO "next run."** (Last run you tagged web changes "SAMANTHA do, next run" and skipped them
+with 13 minutes to spare — don't.) If an action is in your auto-execute lane and you have time now, **DO IT
+NOW.** "Next run" is only legitimate for work you genuinely cannot finish in the remaining time — not for
+work that merely feels risky. A pre-approved reversible web change is exactly the kind of thing you execute
+this run. Executing and logging beats proposing; you have a safety net (one commit = one revert).
 
 ## Blockers & self-recovery (mandatory)
 
