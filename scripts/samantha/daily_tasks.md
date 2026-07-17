@@ -240,26 +240,43 @@ Deliver in the report:
 
 ---
 
-## Task 3 — Proactively run experiments & build new funnels (don't just observe)
+## Task 3 — Run a DISCIPLINED experiment programme (Amazon-style, adapted to our tiny traffic)
 
-You are graduated to a DOER; a competent manager doesn't only monitor, they RUN a portfolio of experiments.
-Every run, **actively generate and launch new evidenced tests** toward 5 listings — don't wait to be asked.
+Experiment like Amazon's Weblab, but honestly sized to our traffic. Amazon's discipline: every change is a
+**hypothesis-driven experiment — ONE variable, a guardrail metric, run to STATISTICAL SIGNIFICANCE, NO
+peeking / early-stopping, then ship the winner or kill it, pulling the next test from a prioritised backlog
+only when capacity frees.** Amazon runs thousands at once ONLY because they have enormous traffic. **We do
+not** (~600 visitors/wk, ~46 organic) — so copy the discipline, NOT the volume.
 
-- **Pull the levers you find.** If Brain 2 shows a winner, ACT on it. (Example you already surfaced:
-  "specific property story" drives ~78% of conversions at $0.18/LPV but only 12 of 93 ads use it — so
-  **create 3–5 new property-story ads** for current listings within caps ($15/day/test, $500/wk), log to
-  `ad_decisions`, and add them to the change ledger. Finding a lever and not pulling it is the failure mode.)
-- **Generate hypotheses from Brain 1** (the coaching-corpus graph: `scripts/samantha/brain1_query.py`) and
-  from Brain 3 / the KB (`scripts/search-kb.py`). Turn an evidenced concept into a concrete A/B test or a
-  new funnel, cite the evidence, launch within caps, and track it in the ledger. Concepts flow Brain 1→2.
-- **Design new funnels / conversion tests**, not just tweaks — e.g. the buyer-side capture gap you found on
-  property pages (no "notify me / book a viewing"), or the AYH above-the-fold bounce. Ship a reversible
-  test, capture the baseline, measure it.
-- **SEO is your #1 organic demand lever and it's underworked.** Organic is small (~46 Google/wk). Check
-  `scripts/brain2/seo_indexation_check.py` + the SEO roadmap; act on the documented plan (e.g. the sold-page
-  slug surface) in safe, reversible increments — do NOT bulk-dump thousands of pages; move deliberately.
+**Hard rules (this corrects the earlier "launch a new test every run" mistake):**
+- **Do NOT launch a new A/B test every run.** On any given surface run **ONE test at a time**, and start the
+  next only when the current one has **concluded and you've decided** (ship / kill / iterate). Check what's
+  already running first: `python3 scripts/samantha/change_ledger.py list --status live`. If a surface has a
+  live test, leave it — adding a second contaminates both.
+- **Only launch a test the traffic can actually READ.** With our volume most on-site conversion tests will
+  not reach significance for weeks — so prefer **few, high-leverage tests with large expected effects**
+  (big swings are detectable with less traffic). If a surface can't be powered, don't A/B it — either ship
+  a clear improvement outright (see one-way doors) or take a **directional/qualitative** read and SAY it's
+  directional, not significant. Never fake significance.
+- **Don't peek.** When a ledger item's review date arrives, only call it if it has enough data; if
+  underpowered, keep it running (extend) rather than deciding on noise.
+- **Maintain a prioritised experiment BACKLOG** in your task board (hypothesis + expected effect + surface +
+  how you'll measure it). Each run you **pull the top backlog item into a free slot** — you don't invent-and-
+  launch on the spot. This is the "new test only when a slot frees" rule.
 
-Run MANY small evidenced experiments, measure them in the ledger, kill losers to free budget, keep winners.
+**What you SHOULD do most runs (not gated by A/B capacity):**
+- **One-way-door improvements** — a clearly-broken thing or an obviously-missing element (a fixed endpoint,
+  a genuinely absent CTA) — just SHIP it (reversible, logged). These aren't experiments; don't queue them.
+- **Ad experiments accumulate faster** (CPL via spend), managed as a **portfolio within $15/day/test,
+  $500/wk**. Pull the levers Brain 2 proves — e.g. "specific property story" drives ~78% of conversions at
+  $0.18/LPV but only 12 of 93 ads use it → stage more property-story creatives — but still one clean read
+  per hypothesis, kill losers to free budget, log to `ad_decisions` + the ledger.
+- **Feed the backlog from Brain 1** (`scripts/samantha/brain1_query.py`) + the KB (`scripts/search-kb.py`):
+  turn an evidenced concept into a *queued* hypothesis, cite the evidence. Concepts flow Brain 1 → test → Brain 2.
+- **SEO** (our underworked #1 organic lever): act on the documented roadmap in safe reversible increments
+  (`scripts/brain2/seo_indexation_check.py`); never bulk-dump thousands of pages.
+
+Fewer, well-powered, well-measured experiments beat many noisy ones. Learning velocity WITH rigour, not volume.
 
 ---
 
