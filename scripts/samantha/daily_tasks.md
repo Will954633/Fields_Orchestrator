@@ -155,6 +155,24 @@ python3 scripts/samantha/from_will.py      # shows new docs + comments since las
 This records a *pending* mark but does NOT mark the content seen. **Only AFTER you've delivered and
 actioned everything, run `python3 scripts/samantha/from_will.py --commit`** (do this in Phase C / finalise).
 That way if the run crashes, the content re-shows next run and nothing Will drops is ever lost.
+### Will's RUNNING DOC — newest at top, ORANGE = done (rules you must follow)
+
+Will's notes docs are **living running documents that hold HIS COMMENTS**. Therefore:
+- **NEVER delete, rebuild, overwrite or re-create the doc.** That would destroy his comments. Only ever
+  edit it IN PLACE with `running_doc.py` (Docs API). No exceptions.
+- **NEW ENTRIES GO AT THE TOP** (newest first), never appended at the bottom:
+  ```
+  python3 scripts/samantha/running_doc.py add --doc <docId> --text "### 18 Jul — Samantha: <entry>"
+  ```
+- **ORANGE = DONE.** The moment you complete an item — or it becomes irrelevant — highlight it orange:
+  ```
+  python3 scripts/samantha/running_doc.py complete --doc <docId> --match "<unique text of that item>"
+  ```
+- **Orange text is finished — DO NOT READ IT AGAIN.** `from_will.py` and
+  `running_doc.py read` automatically SKIP orange text, so anything you've marked done will never come back
+  to you. Only ever re-mark; never un-mark unless Will asks.
+Keep the doc a clean, current worklist: active items on top un-highlighted, everything you've handled orange.
+
 **Comment BACK on his docs — this is a two-way conversation.** When Will comments on a specific section,
 **reply in that exact thread** so your answer sits on the section he highlighted (the `from_will` digest
 gives you the ready `reply --file … --comment …` command). You can also add a new comment on his doc
