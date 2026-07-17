@@ -33,7 +33,35 @@ from scripts.property_reports.occupancy_classifier import (
 
 SUBURBS = ["robina", "burleigh_waters", "varsity_lakes"]
 FIELDS = ["address", "suburb", "years_held", "last_sale_date",
-          "last_sale_price", "confidence", "listing_status"]
+          "last_sale_price", "confidence", "listing_status", "intent_signal"]
+
+
+def worklist_rows() -> list[dict]:
+    """No-contact high/medium lead_worklist addresses — behavioural intent beats tenure prior,
+    so these rank at the TOP of the flyer list (Will-approved 2026-07-17)."""
+    sm = get_mongo_client()["system_monitor"]
+    rows = []
+    for d in sm["lead_worklist"].find(
+            {"is_test": False, "priority": {"$in": ["high", "medium"]},
+             "address": {"$nin": [None, ""]}},
+            {"address": 1, "priority": 1, "property": 1, "occupancy": 1,
+             "years_held": 1, "last_sold_date": 1, "last_sold_price": 1, "email": 1}):
+        if d.get("email"):
+            continue  # contactable leads get outreach drafts, not flyers
+        prop = d.get("property") or {}
+        if prop.get("listing_status") in ("for_sale", "sold"):
+            continue
+        if (d.get("occupancy") or {}).get("type") == "investor":
+            continue  # never mail tenanted addresses
+        rows.append({"address": d["address"],
+                     "suburb": prop.get("suburb") or "",
+                     "years_held": d.get("years_held") or "",
+                     "last_sale_date": d.get("last_sold_date") or "",
+                     "last_sale_price": d.get("last_sold_price") or "",
+                     "confidence": (d.get("occupancy") or {}).get("confidence") or "",
+                     "listing_status": prop.get("listing_status") or "not_listed",
+                     "intent_signal": f"worklist_{d.get('priority')}"})
+    return rows
 
 
 def _norm(a: str) -> str:
@@ -100,9 +128,18 @@ def main():
     ap.add_argument("--min-years", type=float, default=7)
     ap.add_argument("--out", default=None,
                     help="output CSV path (default: output/flyer_candidates_extended_<date>.csv)")
+    ap.add_argument("--include-worklist", action="store_true",
+                    help="prepend no-contact high/medium lead_worklist addresses (intent > tenure)")
     args = ap.parse_args()
 
     rows = build(args.min_years)
+    for r in rows:
+        r.setdefault("intent_signal", "")
+    if args.include_worklist:
+        wl = worklist_rows()
+        have = {_norm(r["address"]) for r in wl}
+        rows = wl + [r for r in rows if _norm(r["address"]) not in have]
+        print(f"worklist intent addresses prepended: {len(wl)}", file=sys.stderr)
     out = args.out or f"output/flyer_candidates_extended_{datetime.now().date()}.csv"
     with open(out, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=FIELDS)
