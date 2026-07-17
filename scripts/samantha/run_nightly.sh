@@ -8,4 +8,4 @@ set -a
 source ./.env
 set +a
 export GH_CONFIG_DIR=/home/projects/.config/gh
-exec /usr/bin/python3 scripts/samantha/daily_run.py "$@"
+exec /home/fields/venv/bin/python3 scripts/samantha/daily_run.py "$@"
