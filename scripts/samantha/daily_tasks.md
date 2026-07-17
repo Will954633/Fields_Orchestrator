@@ -103,6 +103,23 @@ served — chase it to a specific, actionable opportunity. Don't stop at "traffi
 
 ---
 
+## FIRST every run — read everything new from Will
+
+Will talks to you through your Drive folder: he adds **notes/instructions as docs** (incl. in the
+"From Will" subfolder) and **comments on your past daily-report docs**. Before anything else, read ALL
+new content from him since your last pass:
+```
+python3 scripts/samantha/from_will.py      # prints new docs + new comments, then advances the pointer
+```
+**Treat every item as priority direction.** For each note or comment: action it (or answer it) THIS run,
+reflect your answer in the report (a "From Will — actioned" section), and **capture any durable direction
+to memory immediately** (`…/memory/*.md` + a one-line pointer in MEMORY.md) — Will says it once, you
+remember it forever. Also still check the **"From Will" tab of the Task Board sheet** (the older channel).
+If `from_will.py` errors (e.g. Drive OAuth expired), say so in Blockers and fall back to the MCP
+`google-drive` tools to read the folder manually — don't skip his input.
+
+---
+
 ## Close the loop — measure the changes YOU shipped (do near the start of every run)
 
 You now ship real changes. A change is only valuable if you find out whether it actually worked — and
@@ -140,6 +157,22 @@ wl = get_mongo_client()["system_monitor"]["lead_worklist"]
 for d in wl.find({"is_test": False, "priority": {"$in": ["high","medium"]}}).sort("priority", 1):
     ...  # person, address, occupancy, years_held, listing_status, signals, reason
 ```
+
+**ALWAYS verify current listing status with FRESH data FIRST (intuition rule).** Our mongo
+`listing_status` is STALE for non-core suburbs (Merrimac, Reedy Creek, etc. — coverage-critical). Before
+you call anyone a "pre-market seller," pull a **fresh property record via Bright Data / current Domain
+listing** and check whether they've **already listed**. (Real example: lead "Dee" at 13 Terrace Court,
+Merrimac showed `not_listed` in mongo but had already listed — recommending "contact this pre-market
+seller" was wrong.) An already-listed owner is NOT a pre-market seller — they don't need us to suggest
+selling; adjust the angle (track their listing, buyer-side, or drop). Think to check this every time.
+
+**Convert genuine hot seller leads into a READY-TO-SEND appraisal package** (this advances 5 listings
+directly). We have a seller-appraisal generator: `scripts/generate_appraisal_report.py` (11-page branded
+PDF from comps + AI editorial) driven by the `system_monitor.appraisal_pipeline` collection (stage →
+report_path → Will prints + posts to the address). For a verified pre-market owner-occupier seller:
+create/advance their `appraisal_pipeline` entry and generate the PDF (`--pipeline-id <id>`, or manual
+`--address X --client Y --suburb Z --sell-timeline T`), draft the cover note, and stage it so Will's only
+step is print + post. Build the package — don't just flag the lead. (Contacting the person stays Will's.)
 
 For each **high** (and notable **medium**) lead:
 - Confirm the signal (owner-occupier + active-move / long-held = likely seller; investor = different pitch;
@@ -204,6 +237,29 @@ Deliver in the report:
 - Where organic + AI-referral traffic is coming from and how engaged it is (with the numbers).
 - Page-quality read from the screenshots: served-well vs gaps, ranked by traffic × opportunity.
 - Concrete follow-up opportunities, each laddering to the north star where possible.
+
+---
+
+## Task 3 — Proactively run experiments & build new funnels (don't just observe)
+
+You are graduated to a DOER; a competent manager doesn't only monitor, they RUN a portfolio of experiments.
+Every run, **actively generate and launch new evidenced tests** toward 5 listings — don't wait to be asked.
+
+- **Pull the levers you find.** If Brain 2 shows a winner, ACT on it. (Example you already surfaced:
+  "specific property story" drives ~78% of conversions at $0.18/LPV but only 12 of 93 ads use it — so
+  **create 3–5 new property-story ads** for current listings within caps ($15/day/test, $500/wk), log to
+  `ad_decisions`, and add them to the change ledger. Finding a lever and not pulling it is the failure mode.)
+- **Generate hypotheses from Brain 1** (the coaching-corpus graph: `scripts/samantha/brain1_query.py`) and
+  from Brain 3 / the KB (`scripts/search-kb.py`). Turn an evidenced concept into a concrete A/B test or a
+  new funnel, cite the evidence, launch within caps, and track it in the ledger. Concepts flow Brain 1→2.
+- **Design new funnels / conversion tests**, not just tweaks — e.g. the buyer-side capture gap you found on
+  property pages (no "notify me / book a viewing"), or the AYH above-the-fold bounce. Ship a reversible
+  test, capture the baseline, measure it.
+- **SEO is your #1 organic demand lever and it's underworked.** Organic is small (~46 Google/wk). Check
+  `scripts/brain2/seo_indexation_check.py` + the SEO roadmap; act on the documented plan (e.g. the sold-page
+  slug surface) in safe, reversible increments — do NOT bulk-dump thousands of pages; move deliberately.
+
+Run MANY small evidenced experiments, measure them in the ledger, kill losers to free budget, keep winners.
 
 ---
 
