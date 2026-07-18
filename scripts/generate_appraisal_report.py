@@ -1785,6 +1785,7 @@ def main():
     else:
         if not args.address or not args.client or not args.suburb:
             sys.exit("[ERROR] Provide --pipeline-id OR --address + --client + --suburb")
+        pipeline = None  # manual mode has no pipeline record (fixes UnboundLocalError in render_html call)
         address = args.address
         client_name = args.client
         suburb_key = args.suburb
