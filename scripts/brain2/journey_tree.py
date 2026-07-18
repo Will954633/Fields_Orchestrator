@@ -122,6 +122,34 @@ def sankey_svg(links, chan_tot, cat_out, W=900, H=460, pad=10, nodew=13, gap=10,
             + "".join(ribbons) + "".join(lnodes) + "".join(rnodes) + "</svg>")
 
 
+def refresh_badge(db):
+    """'Last refreshed' badge from the builder's completion marker (fresh <26h)."""
+    from datetime import datetime, timezone, timedelta
+    st = db.brain2_run_status.find_one({"_id": "organic_journey_build"})
+    if not st or not st.get("run_completed_at"):
+        return ('<div class="refresh unknown"><span class="r-lab">Last refreshed</span>'
+                '<b class="r-date">never recorded</b>'
+                '<span class="r-ago">builder has not reported a run</span></div>')
+    s = str(st["run_completed_at"]).replace("Z", "+00:00")
+    done = datetime.fromisoformat(s)
+    if not done.tzinfo:
+        done = done.replace(tzinfo=timezone.utc)
+    hrs = (datetime.now(timezone.utc) - done).total_seconds() / 3600
+    state = "fresh" if hrs <= 26 else "stale"
+    aest = done + timedelta(hours=10)
+    date_str = aest.strftime("%-d %b, %-I:%M %p")
+    if hrs < 1:
+        ago = f"{max(1, round(hrs*60))} min ago"
+    elif hrs < 48:
+        ago = f"{round(hrs)}h ago"
+    else:
+        ago = f"{round(hrs/24)}d ago"
+    warn = " · nightly run may have failed" if state == "stale" else ""
+    return (f'<div class="refresh {state}"><span class="r-lab">Last refreshed</span>'
+            f'<b class="r-date">{html.escape(date_str)} AEST</b>'
+            f'<span class="r-ago">{html.escape(ago + warn)}</span></div>')
+
+
 def render(db, generated):
     rows, links, cat_out, chan_tot, conv_by_cat = aggregate(db)
     total = len(rows)
@@ -160,31 +188,47 @@ def render(db, generated):
                   f'<td class="num">{c["eng"]}</td><td class="num">{c["bounce"]}</td>'
                   f'<td class="chans">{html.escape(chans)}</td></tr>')
 
-    return TEMPLATE.format(stats=stats, svg=svg, trows=trows, generated=html.escape(generated))
+    return TEMPLATE.format(stats=stats, svg=svg, trows=trows, badge=refresh_badge(db),
+                           generated=html.escape(generated))
 
 
 TEMPLATE = """<title>User Journey Tree — Fields</title>
 <style>
 :root{{
   --bg:#f4f6f8; --panel:#ffffff; --ink:#1a2230; --ink-soft:#6b7688;
-  --line:#e2e7ee; --accent:#2f9e8f; --shadow:0 1px 2px rgba(20,30,45,.06),0 8px 24px rgba(20,30,45,.05);
+  --line:#e2e7ee; --accent:#2f9e8f; --good:#2f9e8f; --good-bg:#e7f4f2; --warn:#c0556a;
+  --warn-bg:#f9e9ec; --mut-bg:#eef1f5; --shadow:0 1px 2px rgba(20,30,45,.06),0 8px 24px rgba(20,30,45,.05);
 }}
 @media (prefers-color-scheme:dark){{
   :root{{ --bg:#0f141b; --panel:#171e28; --ink:#e6ebf2; --ink-soft:#8b98ab;
-    --line:#242e3b; --accent:#3bb3a2; --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 28px rgba(0,0,0,.35); }}
+    --line:#242e3b; --accent:#3bb3a2; --good:#3bb3a2; --good-bg:#123029; --warn:#e08497;
+    --warn-bg:#3a1f26; --mut-bg:#20272f; --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 28px rgba(0,0,0,.35); }}
 }}
 :root[data-theme="dark"]{{ --bg:#0f141b; --panel:#171e28; --ink:#e6ebf2; --ink-soft:#8b98ab;
-  --line:#242e3b; --accent:#3bb3a2; --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 28px rgba(0,0,0,.35); }}
+  --line:#242e3b; --accent:#3bb3a2; --good:#3bb3a2; --good-bg:#123029; --warn:#e08497;
+  --warn-bg:#3a1f26; --mut-bg:#20272f; --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 28px rgba(0,0,0,.35); }}
 :root[data-theme="light"]{{ --bg:#f4f6f8; --panel:#ffffff; --ink:#1a2230; --ink-soft:#6b7688;
-  --line:#e2e7ee; --accent:#2f9e8f; --shadow:0 1px 2px rgba(20,30,45,.06),0 8px 24px rgba(20,30,45,.05); }}
+  --line:#e2e7ee; --accent:#2f9e8f; --good:#2f9e8f; --good-bg:#e7f4f2; --warn:#c0556a;
+  --warn-bg:#f9e9ec; --mut-bg:#eef1f5; --shadow:0 1px 2px rgba(20,30,45,.06),0 8px 24px rgba(20,30,45,.05); }}
 *{{box-sizing:border-box}}
 body{{margin:0;background:var(--bg);color:var(--ink);
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
   line-height:1.5;-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums;}}
 .wrap{{max-width:920px;margin:0 auto;padding:40px 24px 64px;}}
+.hd{{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap;margin-bottom:8px;}}
 .eyebrow{{text-transform:uppercase;letter-spacing:.14em;font-size:12px;font-weight:600;color:var(--accent);margin:0 0 6px;}}
 h1{{font-size:29px;line-height:1.15;margin:0 0 6px;font-weight:750;letter-spacing:-.01em;text-wrap:balance;}}
 .sub{{color:var(--ink-soft);margin:0 0 28px;font-size:15px;max-width:60ch;}}
+.refresh{{flex:0 0 auto;text-align:right;border:1px solid var(--line);border-radius:10px;
+  padding:9px 14px;background:var(--panel);box-shadow:var(--shadow);min-width:150px;}}
+.refresh .r-lab{{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-soft);font-weight:600;}}
+.refresh .r-date{{display:block;font-size:14px;font-weight:700;margin-top:2px;}}
+.refresh .r-ago{{display:block;font-size:11.5px;color:var(--ink-soft);margin-top:1px;}}
+.refresh.fresh{{border-color:var(--good);background:var(--good-bg);}}
+.refresh.fresh .r-lab{{color:var(--good);}}
+.refresh.stale{{border-color:var(--warn);background:var(--warn-bg);}}
+.refresh.stale .r-lab,.refresh.stale .r-ago{{color:var(--warn);}}
+.refresh.unknown{{background:var(--mut-bg);}}
 .stats{{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:28px;}}
 .stat{{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;box-shadow:var(--shadow);}}
 .s-num{{font-size:30px;font-weight:750;letter-spacing:-.02em;line-height:1;}}
@@ -210,8 +254,13 @@ td.num{{text-align:right;font-weight:600;}}
 .foot code{{background:var(--panel);border:1px solid var(--line);padding:1px 6px;border-radius:5px;font-size:12px;}}
 </style>
 <div class="wrap">
-  <p class="eyebrow">Brain 2 · Journey Intelligence</p>
-  <h1>Who's searching, and whose house are they looking at?</h1>
+  <div class="hd">
+    <div>
+      <p class="eyebrow">Brain 2 · Journey Intelligence</p>
+      <h1>Who's searching, and whose house are they looking at?</h1>
+    </div>
+    {badge}
+  </div>
   <p class="sub">Every non-paid visitor journey, tagged by the listing state of the address they
   searched or valued — turning a page view into an owner-vs-buyer signal.</p>
   <div class="stats">{stats}</div>
@@ -232,8 +281,8 @@ td.num{{text-align:right;font-weight:600;}}
     </div>
   </div>
   <p class="foot">Live data from <code>organic_journeys</code> + <code>all_conversions</code>.
-  Regenerate with <code>python3 scripts/brain2/journey_tree.py</code>. Generated {generated}.
-  "Home owner" is an inference (no sale in 12mo), not confirmed ownership.</p>
+  Regenerate with <code>python3 scripts/brain2/journey_tree.py</code>. Page built {generated}
+  (data freshness shown top-right). "Home owner" is an inference (no sale in 12mo), not confirmed ownership.</p>
 </div>
 """
 
