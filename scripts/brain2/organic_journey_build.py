@@ -31,7 +31,9 @@ from dotenv import load_dotenv
 
 load_dotenv("/home/fields/Fields_Orchestrator/.env")
 sys.path.insert(0, "/home/fields/Fields_Orchestrator")
+sys.path.insert(0, "/home/fields/Fields_Orchestrator/scripts/brain2")
 from shared.db import get_client  # noqa: E402
+from address_category import AddressClassifier, LABELS as ADDR_LABELS  # noqa: E402
 
 PID = os.environ["POSTHOG_PROJECT_ID"]
 KEY = os.environ.get("POSTHOG_ALL_ACCESS_KEY") or os.environ["POSTHOG_PERSONAL_API_KEY"]
@@ -132,6 +134,24 @@ def main():
     args = ap.parse_args()
     since = f"now() - INTERVAL {args.days} DAY"
     db = get_client()["system_monitor"]
+
+    # searched-address classifier (Will 2026-07-19): tag each journey by the listing
+    # state of the address they searched/valued -> owner-vs-buyer intent.
+    addr_clf = AddressClassifier()
+
+    def classify_searched(submits, entry_path):
+        """Pick the most intent-bearing address (valued home > listing landed on)
+        and classify it. Returns (category, label, detail)."""
+        target = None
+        if submits:
+            target = submits[0]
+        elif entry_path and str(entry_path).startswith("/property/"):
+            target = entry_path
+        if not target:
+            return "out_of_coverage", ADDR_LABELS["out_of_coverage"], {"matched": False}
+        cat, detail = addr_clf.classify(target)
+        detail["classified_address"] = target
+        return cat, ADDR_LABELS[cat], detail
 
     # internal identities (Will + anyone who ever hit /ops) — excluded from leads.
     # Seeded list + auto-detect over a wide window (an /ops visit = internal).
@@ -275,6 +295,7 @@ def main():
             continue
         flag, flag_addr = neighbour_flag(m.get("entry_path"), j.get("submits", []))
         engaged = (m.get("pageviews") or 0) >= 2 or (m.get("duration_s") or 0) > 60
+        sa_cat, sa_label, sa_detail = classify_searched(j.get("submits", []), m.get("entry_path"))
         doc = {
             "session_id": sid, "distinct_id": j.get("person"),
             "channel": m.get("channel"), "entry_path": m.get("entry_path"),
@@ -291,6 +312,9 @@ def main():
             "conversion_events": sorted(j.get("conv_events", [])),
             "addresses_submitted": j.get("submits", []),
             "pattern": flag, "pattern_address": flag_addr,
+            "searched_address_category": sa_cat,
+            "searched_address_label": sa_label,
+            "searched_address_detail": sa_detail,
             "funnel_regime": funnel_regime(j.get("t_first")),
             "t_first": j.get("t_first"), "t_last": j.get("t_last"),
             "timeline": j.get("timeline", [])[:3000],  # full timestamped event sequence
@@ -352,6 +376,7 @@ def main():
         entry = m.get("entry_path") if m else (j.get("pages", ["?"])[0] if j.get("pages") else "?")
         flag, flag_addr = neighbour_flag(entry, j.get("submits", []))
         addr = j["submits"][0] if j.get("submits") else None
+        sa_cat, sa_label, sa_detail = classify_searched(j.get("submits", []), entry)
         conv_docs.append({
             "session_id": sid, "distinct_id": j.get("person"),
             "submitted_address": addr, "all_addresses": j.get("submits", []),
@@ -362,6 +387,9 @@ def main():
             "pages": j.get("pages", [])[:30],
             "properties_viewed": [{"property_id": k, "suburb": v} for k, v in j.get("properties", {}).items()],
             "pattern": flag, "pattern_address": flag_addr,
+            "searched_address_category": sa_cat,
+            "searched_address_label": sa_label,
+            "searched_address_detail": sa_detail,
             "contact_captured": contact_captured(addr),
             "funnel_regime": funnel_regime(j.get("t_first")),
             "submitted_at": j.get("t_first"),
@@ -371,6 +399,11 @@ def main():
     conv_docs.sort(key=lambda d: d.get("submitted_at") or "", reverse=True)
     if conv_docs:
         ac.insert_many(conv_docs)
+    ac.create_index("searched_address_category")
+    oj.create_index("searched_address_category")
+    cat_counts = Counter(d["searched_address_category"] for d in conv_docs)
+    print("searched_address_category (all_conversions): " +
+          ", ".join(f"{k}={v}" for k, v in cat_counts.most_common()))
 
     # 7) AI-REFERRAL SIGNAL — which of our pages LLM assistants cite (all-time,
     # since this traffic predates the organic window + is otherwise mislabelled Direct)
