@@ -451,6 +451,19 @@ def main():
     print(f"wrote organic_journeys={len(docs)} landing_affinity={len(affinity)} all_conversions={len(conv_docs)}")
     triggers = [d for d in docs if d["pattern"]]
     print(f"neighbour/listing-trigger sessions: {len(triggers)}")
+
+    # run-completion marker — written ONLY after all collection writes above
+    # succeeded, so its timestamp confirms a clean refresh (the ops journey-tree
+    # page reads this to show "last refreshed" + a fresh/stale badge).
+    db.brain2_run_status.update_one(
+        {"_id": "organic_journey_build"},
+        {"$set": {"_id": "organic_journey_build", "run_completed_at": now,
+                  "window_days": args.days, "status": "ok",
+                  "counts": {"organic_journeys": len(docs),
+                             "all_conversions": len(conv_docs),
+                             "categories": dict(cat_counts)}}},
+        upsert=True)
+    print(f"run status recorded: run_completed_at={now}")
     print("\nALL CONVERSIONS (every channel, newest first):")
     for d in conv_docs[:15]:
         reach = "REACHABLE" if d["contact_captured"] else "no-contact"
