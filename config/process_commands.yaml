@@ -39,7 +39,7 @@ processes:
     working_dir: "/home/fields/Property_Data_Scraping/03_Gold_Coast/Gold_Coast_Wide_Currently_For_Sale_AND_Recently_Sold"
     mongodb_activity: "heavy_write"
     requires_browser: false  # Migrated from Selenium to curl_cffi (2026-03-13)
-    estimated_duration_minutes: 30  # ~120 listings × ~5s each with curl_cffi (much faster than Chrome)
+    estimated_duration_minutes: 75  # Was 30 (→60-min timeout): 2026-07-18 run exceeded it mid-scrape (Reedy Creek in flight) then burned 3 retries (10,921s). Scrape runs longer now; 75 → 150-min timeout headroom. (samantha 2026-07-19)
     cooldown_seconds: 20
 
   - id: 102
