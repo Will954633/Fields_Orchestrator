@@ -63,7 +63,10 @@ def aggregate(db):
 
 
 # ---- Sankey geometry (2 columns: channels left, categories right) --------------
-def sankey_svg(links, chan_tot, cat_out, W=760, H=460, pad=8, nodew=13, gap=10):
+# LGUT/RGUT reserve horizontal room for the node labels so text never clips the
+# viewBox edge; nodes live in the band between them.
+def sankey_svg(links, chan_tot, cat_out, W=900, H=460, pad=10, nodew=13, gap=10,
+               LGUT=104, RGUT=168):
     channels = [c for c, _ in chan_tot.most_common()]
     cats = [c for c in CATS if cat_out.get(c, {}).get("n")]
     total = sum(links.values()) or 1
@@ -83,8 +86,8 @@ def sankey_svg(links, chan_tot, cat_out, W=760, H=460, pad=8, nodew=13, gap=10):
     lpos, _ = layout(channels, chan_tot)
     cat_tot = {c: cat_out[c]["n"] for c in cats}
     rpos, _ = layout(cats, Counter(cat_tot))
-    lx = pad + 40
-    rx = W - pad - 40 - nodew
+    lx = pad + LGUT
+    rx = W - pad - RGUT - nodew
     ribbons, lnodes, rnodes = [], [], []
     # ribbons ordered biggest first for nicer stacking
     for (ch, cat), v in sorted(links.items(), key=lambda kv: -kv[1]):
@@ -112,7 +115,9 @@ def sankey_svg(links, chan_tot, cat_out, W=760, H=460, pad=8, nodew=13, gap=10):
         rnodes.append(f'<rect x="{rx:.1f}" y="{t:.1f}" width="{nodew}" height="{h:.1f}" rx="2" fill="{CAT_HUE[cat]}"/>')
         rnodes.append(f'<text x="{rx+nodew+6:.1f}" y="{t+h/2+1:.1f}" class="nlabel">{html.escape(CAT_LABEL[cat])}</text>')
         rnodes.append(f'<text x="{rx+nodew+6:.1f}" y="{t+h/2+13:.1f}" class="nsub">{cat_out[cat]["n"]} sessions</text>')
-    return (f'<svg viewBox="0 0 {W} {H}" width="100%" role="img" '
+    return (f'<svg viewBox="0 0 {W} {H}" width="{W}" height="{H}" '
+            f'preserveAspectRatio="xMinYMin meet" role="img" '
+            f'style="width:100%;min-width:{W}px;height:auto;display:block" '
             f'aria-label="Channel to intent-category flow">'
             + "".join(ribbons) + "".join(lnodes) + "".join(rnodes) + "</svg>")
 
