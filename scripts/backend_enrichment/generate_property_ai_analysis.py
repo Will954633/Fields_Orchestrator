@@ -230,6 +230,16 @@ PIPELINE_CONFIG = {
     },
 }
 
+# Optional global model override: set EDITORIAL_MODEL to run EVERY Claude agent on
+# one model (e.g. claude-sonnet-5 for a cheaper run). Leaves the Gemini/OpenAI
+# gather models alone. Unset = per-agent defaults above (claude-opus-4-6).
+_EDITORIAL_MODEL = os.environ.get("EDITORIAL_MODEL", "").strip()
+if _EDITORIAL_MODEL:
+    for _k, _v in list(PIPELINE_CONFIG["models"].items()):
+        if "claude" in _v or "opus" in _v:
+            PIPELINE_CONFIG["models"][_k] = _EDITORIAL_MODEL
+    print(f"[CONFIG] EDITORIAL_MODEL override → all Claude agents on {_EDITORIAL_MODEL}")
+
 # ---------------------------------------------------------------------------
 # Data pipeline helpers — each gathers one slice of context for the prompt
 # ---------------------------------------------------------------------------
