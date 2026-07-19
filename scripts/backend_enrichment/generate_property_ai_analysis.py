@@ -59,6 +59,80 @@ os.environ.setdefault("CLAUDE_MAX_CLI_TIMEOUT", "600")
 from claude_max_client import make_client  # noqa: E402
 
 _USE_MAX = os.environ.get("USE_CLAUDE_MAX", "1").strip().lower() in {"1", "true", "yes", "on"}
+# Lever 1: compact the comparable-sales pool in the serialised doc. Default on;
+# set COMPACT_COMPARABLES=0 to send the full untrimmed document (A/B / escape hatch).
+_COMPACT_COMPARABLES = os.environ.get("COMPACT_COMPARABLES", "1").strip().lower() in {"1", "true", "yes", "on"}
+
+# Prompt caching (API path only). When on, the 3 gather agents share one
+# cache-controlled data prefix so agents 2 & 3 read the ~28k-token document at
+# ~10% cost. Requires reordering the gather prompt (data first, task after), so
+# it's OFF by default — the validated default path is unchanged — and opted into
+# for the API batch, then eyeballed on property #1. No effect on the Max path
+# (the CLI can't express cache_control).
+_PROMPT_CACHE = os.environ.get("PROMPT_CACHE", "0").strip().lower() in {"1", "true", "yes", "on"}
+
+_DATA_REF = ("All PROPERTY DATA (full JSON document), SUBURB MEDIAN HOUSE PRICES, COMPETING "
+             "LISTINGS and RECENT SALES for this property and suburb are provided in the message "
+             "ABOVE. Treat them as your sole source. CRITICAL: \"visible\": false and null scores "
+             "mean our analysis system did not capture that room, NOT that the seller excluded it — "
+             "do not draw conclusions from missing data.")
+
+
+def _gather_data_block(prop_summary: str, medians: str, competing: str, sales: str, suburb: str) -> str:
+    """The shared, byte-identical data prefix cached across the 3 gather agents."""
+    return f"""PROPERTY DATA (full JSON document — CRITICAL: "visible": false and null scores mean our analysis system did not capture that room, NOT that the seller deliberately excluded it. Do NOT draw conclusions from missing data. Only describe what the data actually shows):
+{prop_summary}
+
+SUBURB MEDIAN HOUSE PRICES ({suburb}, quarterly):
+{medians}
+
+COMPETING LISTINGS IN {suburb.upper()}:
+{competing}
+
+RECENT SALES IN {suburb.upper()}:
+{sales}"""
+
+
+# ── Token metering (per property) ───────────────────────────────────────────
+# Accumulates input/output tokens across every Claude call so a run can report
+# the exact API cost of one property. Input is taken from usage when the API
+# reports it (incl. cache_creation/cache_read); the Max CLI hides cached tokens
+# in its usage, so we fall back to a char/4 estimate of what we actually sent.
+_METER = {"calls": [], "input": 0, "output": 0, "cache_create": 0, "cache_read": 0}
+# Opus 4.x public rates ($/token). CONFIRM against the live claude-opus-4-6 card.
+_RATE = {"in": 15.0 / 1e6, "out": 75.0 / 1e6, "cache_write": 18.75 / 1e6, "cache_read": 1.50 / 1e6}
+
+
+def _meter_record(model: str, in_text: str, message) -> None:
+    u = getattr(message, "usage", None)
+    it = int(getattr(u, "input_tokens", 0) or 0)
+    ot = int(getattr(u, "output_tokens", 0) or 0)
+    cc = int(getattr(u, "cache_creation_input_tokens", 0) or 0)
+    cr = int(getattr(u, "cache_read_input_tokens", 0) or 0)
+    est = len(in_text) // 4
+    total_in = it + cc + cr
+    if total_in < est * 0.5:  # CLI/shim under-reports cached input → use char estimate
+        total_in, it = est, est
+    _METER["calls"].append({"model": model, "input": total_in, "output": ot,
+                            "cache_create": cc, "cache_read": cr, "est": est})
+    _METER["input"] += total_in
+    _METER["output"] += ot
+    _METER["cache_create"] += cc
+    _METER["cache_read"] += cr
+
+
+def print_meter(label: str = "") -> None:
+    m = _METER
+    if not m["calls"]:
+        return
+    base_in = sum(c["input"] - c["cache_create"] - c["cache_read"] for c in m["calls"])
+    cost = (base_in * _RATE["in"] + m["cache_create"] * _RATE["cache_write"]
+            + m["cache_read"] * _RATE["cache_read"] + m["output"] * _RATE["out"])
+    print(f"\n[METER] {label} calls={len(m['calls'])} "
+          f"input={m['input']:,} (uncached={base_in:,}, cache_read={m['cache_read']:,}, "
+          f"cache_create={m['cache_create']:,}) output={m['output']:,}")
+    print(f"[METER] estimated API cost for this property: ${cost:.3f} "
+          f"(Opus $15/$75 per M; cache 1.25x write / 0.1x read)")
 
 # Gemini (optional — used for data-gathering agents when --gemini-gather flag is set)
 try:
@@ -1104,7 +1178,18 @@ NOTE: You do NOT write headlines. A separate specialist handles that. Focus on s
 """
 
 
-def build_price_agent_prompt(prop_summary: str, medians: str, competing: str, sales: str, suburb: str) -> str:
+def build_price_agent_prompt(prop_summary: str, medians: str, competing: str, sales: str, suburb: str, include_data: bool = True) -> str:
+    data_section = (f"""PROPERTY DATA (full JSON document — CRITICAL: "visible": false and null scores mean our analysis system did not capture that room, NOT that the seller deliberately excluded it. Do NOT draw conclusions from missing data. Do NOT claim rooms are "unrenovated" or "poor" based on missing scores. Only describe what the data actually shows):
+{prop_summary}
+
+SUBURB MEDIAN HOUSE PRICES ({suburb}, quarterly):
+{medians}
+
+COMPETING LISTINGS IN {suburb.upper()}:
+{competing}
+
+RECENT SALES IN {suburb.upper()}:
+{sales}""" if include_data else _DATA_REF)
     return f"""You are the PRICE & VALUE ANALYST for Fields Estate.
 
 {SHARED_MISSION}
@@ -1115,17 +1200,7 @@ YOUR SELLING PRINCIPLES FOCUS:
 
 YOUR DOMAIN: Price data — transaction history, asking price, suburb medians, comparable sales, adjustment rates, listing method.
 
-PROPERTY DATA (full JSON document — CRITICAL: "visible": false and null scores mean our analysis system did not capture that room, NOT that the seller deliberately excluded it. Do NOT draw conclusions from missing data. Do NOT claim rooms are "unrenovated" or "poor" based on missing scores. Only describe what the data actually shows):
-{prop_summary}
-
-SUBURB MEDIAN HOUSE PRICES ({suburb}, quarterly):
-{medians}
-
-COMPETING LISTINGS IN {suburb.upper()}:
-{competing}
-
-RECENT SALES IN {suburb.upper()}:
-{sales}
+{data_section}
 
 ---
 
@@ -1163,7 +1238,15 @@ Then give the full price briefing. TAG each major point with the selling princip
 **PRINCIPLE #11 (Price Is Discovered):** [how you framed the valuation as a range, not a number]"""
 
 
-def build_property_agent_prompt(prop_summary: str, competing: str, sales: str, suburb: str) -> str:
+def build_property_agent_prompt(prop_summary: str, competing: str, sales: str, suburb: str, include_data: bool = True) -> str:
+    data_section = (f"""FULL PROPERTY DATA (raw JSON — CRITICAL: "visible": false and null scores mean our analysis system did not capture that room, NOT that the seller deliberately excluded it. Do NOT draw conclusions from missing data. Do NOT claim rooms are "unrenovated" or "poor" based on missing scores. Only describe what the data actually shows):
+{prop_summary}
+
+COMPETING LISTINGS IN {suburb.upper()}:
+{competing}
+
+RECENT SALES IN {suburb.upper()}:
+{sales}""" if include_data else _DATA_REF)
     return f"""You are the PROPERTY & TRADE-OFFS ANALYST for Fields Estate.
 
 {SHARED_MISSION}
@@ -1174,14 +1257,7 @@ YOUR SELLING PRINCIPLES FOCUS:
 
 YOUR DOMAIN: The physical property — condition, build quality, floor plan, room dimensions, features, renovation. AND how each attribute compares to competing listings and recent sales.
 
-FULL PROPERTY DATA (raw JSON — CRITICAL: "visible": false and null scores mean our analysis system did not capture that room, NOT that the seller deliberately excluded it. Do NOT draw conclusions from missing data. Do NOT claim rooms are "unrenovated" or "poor" based on missing scores. Only describe what the data actually shows):
-{prop_summary}
-
-COMPETING LISTINGS IN {suburb.upper()}:
-{competing}
-
-RECENT SALES IN {suburb.upper()}:
-{sales}
+{data_section}
 
 ---
 
@@ -1222,7 +1298,18 @@ CRITICAL DATA RULES:
 - Every claim must be traceable to a specific field in the data."""
 
 
-def build_market_agent_prompt(prop_summary: str, medians: str, competing: str, sales: str, suburb: str) -> str:
+def build_market_agent_prompt(prop_summary: str, medians: str, competing: str, sales: str, suburb: str, include_data: bool = True) -> str:
+    data_section = (f"""PROPERTY DATA (full JSON document — CRITICAL: "visible": false and null scores mean our analysis system did not capture that room, NOT that the seller deliberately excluded it. Do NOT draw conclusions from missing data. Only describe what the data actually shows):
+{prop_summary}
+
+SUBURB MEDIAN HOUSE PRICES ({suburb}, quarterly):
+{medians}
+
+COMPETING LISTINGS IN {suburb.upper()}:
+{competing}
+
+RECENT SALES IN {suburb.upper()}:
+{sales}""" if include_data else _DATA_REF)
     return f"""You are the MARKET POSITION ANALYST for Fields Estate.
 
 {SHARED_MISSION}
@@ -1233,17 +1320,7 @@ YOUR SELLING PRINCIPLES FOCUS:
 
 YOUR DOMAIN: Market position — days on market, supply, suburb trends, competitive landscape, buyer leverage.
 
-PROPERTY DATA (full JSON document — CRITICAL: "visible": false and null scores mean our analysis system did not capture that room, NOT that the seller deliberately excluded it. Do NOT draw conclusions from missing data. Only describe what the data actually shows):
-{prop_summary}
-
-SUBURB MEDIAN HOUSE PRICES ({suburb}, quarterly):
-{medians}
-
-COMPETING LISTINGS IN {suburb.upper()}:
-{competing}
-
-RECENT SALES IN {suburb.upper()}:
-{sales}
+{data_section}
 
 ---
 
@@ -1940,15 +2017,36 @@ def call_openai(prompt: str, api_key: str, max_tokens: int = 1500, parse_json: b
     return raw
 
 
-def call_claude(prompt: str, api_key: str, max_tokens: int = 1500, parse_json: bool = True, model: str = "claude-sonnet-4-6", required_keys: set = None) -> Any:
-    """Call Claude. Returns parsed JSON if parse_json=True, else raw text."""
+def call_claude(prompt: str, api_key: str, max_tokens: int = 1500, parse_json: bool = True, model: str = "claude-sonnet-4-6", required_keys: set = None, cache_prefix: str = None) -> Any:
+    """Call Claude. Returns parsed JSON if parse_json=True, else raw text.
+
+    cache_prefix: shared text placed as a cache-controlled leading block on the
+    API path so repeat agents read it at ~10% cost. On the Max CLI path (which
+    can't express cache_control) it is concatenated ahead of the prompt — same
+    content, no caching. The prefix must be byte-identical across the calls that
+    are meant to share the cache.
+    """
     client = make_client(api_key=api_key, use_max=_USE_MAX)
+
+    if cache_prefix and not _USE_MAX:
+        content = [
+            {"type": "text", "text": cache_prefix, "cache_control": {"type": "ephemeral"}},
+            {"type": "text", "text": prompt},
+        ]
+        _in_text = cache_prefix + prompt
+    elif cache_prefix:
+        content = cache_prefix + "\n\n" + prompt
+        _in_text = content
+    else:
+        content = prompt
+        _in_text = prompt
 
     message = client.messages.create(
         model=model,
         max_tokens=max_tokens,
-        messages=[{"role": "user", "content": prompt}],
+        messages=[{"role": "user", "content": content}],
     )
+    _meter_record(model, _in_text, message)
 
     raw = message.content[0].text.strip()
 
@@ -2051,6 +2149,13 @@ def _run_gathering_agents(
     use_hybrid = gather_cfg["use_hybrid_gather"]
     hybrid_openai_call = gather_cfg["hybrid_openai_call"]
 
+    # Prompt caching (API path, pure-Claude gather only): share the ~28k-token
+    # data block as one cache-controlled prefix so agents 2 & 3 read it at ~10%.
+    cache_on = _PROMPT_CACHE and not _USE_MAX and not use_hybrid and gather_label.startswith("Claude")
+    shared_prefix = _gather_data_block(prop_summary, medians_str, competing_str, sales_str, suburb_display) if cache_on else None
+    if cache_on:
+        print(f"    (prompt caching ON — shared data prefix ~{len(shared_prefix)//4:,} tok)")
+
     # Agent 1: Price & Value Analyst
     agent1_label = f"OpenAI ({PIPELINE_CONFIG['models']['gather_openai']})" if use_hybrid else gather_label
     print(f"  [Agent 1/4] Price & Value Analyst ({agent1_label})...")
@@ -2059,6 +2164,11 @@ def _run_gathering_agents(
         price_brief = hybrid_openai_call(
             build_price_agent_prompt(prop_summary, medians_str, competing_str, sales_str, suburb_display),
             max_tokens=gather_tokens,
+        )
+    elif cache_on:
+        price_brief = call_claude(
+            build_price_agent_prompt(prop_summary, medians_str, competing_str, sales_str, suburb_display, include_data=False),
+            api_key, max_tokens=gather_tokens, parse_json=False, model=agent_model, cache_prefix=shared_prefix,
         )
     else:
         price_brief = gather_call(
@@ -2076,6 +2186,11 @@ def _run_gathering_agents(
             build_property_agent_prompt(prop_summary, competing_str, sales_str, suburb_display),
             api_key, max_tokens=PIPELINE_CONFIG["token_limits"]["sabri"], parse_json=False, model=agent_model,
         )
+    elif cache_on:
+        property_brief = call_claude(
+            build_property_agent_prompt(prop_summary, competing_str, sales_str, suburb_display, include_data=False),
+            api_key, max_tokens=gather_tokens + 200, parse_json=False, model=agent_model, cache_prefix=shared_prefix,
+        )
     else:
         property_brief = gather_call(
             build_property_agent_prompt(prop_summary, competing_str, sales_str, suburb_display),
@@ -2091,6 +2206,11 @@ def _run_gathering_agents(
         market_brief = hybrid_openai_call(
             build_market_agent_prompt(prop_summary, medians_str, competing_str, sales_str, suburb_display),
             max_tokens=gather_tokens,
+        )
+    elif cache_on:
+        market_brief = call_claude(
+            build_market_agent_prompt(prop_summary, medians_str, competing_str, sales_str, suburb_display, include_data=False),
+            api_key, max_tokens=gather_tokens, parse_json=False, model=agent_model, cache_prefix=shared_prefix,
         )
     else:
         market_brief = gather_call(
@@ -3296,7 +3416,8 @@ def process_property(db, suburb: str, prop: Dict, api_key: str, force: bool = Fa
     # every value an agent cites, drops blob URLs / model internals. Does NOT
     # touch property_valuation_data (the photo/condition analysis).
     _bytes_before = len(_json.dumps(_prop_clean, default=str))
-    _compact_valuation_data(_prop_clean)
+    if _COMPACT_COMPARABLES:
+        _compact_valuation_data(_prop_clean)
     _bytes_after = len(_json.dumps(_prop_clean, default=str))
 
     # Annotate renovation booleans that are unreliable due to invisible rooms
@@ -3577,6 +3698,7 @@ def main():
                     print(f"[ERROR] Failed on {prop.get('address', '?')}: {e}")
         print(f"\nDone. Processed {total} properties.")
 
+    print_meter("run total —")
     client.close()
 
 
