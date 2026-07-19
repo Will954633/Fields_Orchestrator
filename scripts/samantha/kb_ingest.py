@@ -120,11 +120,57 @@ def haiku_classify(batch):
         return {i: "private" for i, _ in batch}  # fail to the SAFE side (firewall)
 
 
+def emit_batches(prov):
+    """Kept (public/private) chunks -> Brain-1-format batch files in brain3_build/batches_<pool>/,
+    + units_manifest.json (unit_id -> file/chunk/provenance) for citation + quote-verify."""
+    kept = sorted((f, v) for f, v in prov.items() if v["class"] in ("public", "private"))
+    manifest, uid = {}, 0
+    for pool in ("public", "private"):
+        bdir = f"{OUT}/batches_{pool}"
+        os.makedirs(bdir, exist_ok=True)
+        for old in glob.glob(f"{bdir}/b_*.txt"):
+            os.remove(old)
+        units = []
+        for f, v in kept:
+            if v["class"] != pool:
+                continue
+            try:
+                d = json.load(open(f, encoding="utf-8"))
+            except Exception:
+                continue
+            m = d.get("metadata", {})
+            fname = os.path.basename(str(m.get("original_file", "") or m.get("filename", "") or f))
+            for c in d.get("chunks", []):
+                content = " ".join(str(c.get("content", "")).split()[:1200]).strip()
+                if len(content) < 40:
+                    continue  # skip empty/tiny chunks
+                u = f"k{uid:05d}"; uid += 1
+                desc = " ".join(str(c.get("description", "")).split())[:140]
+                units.append({"unit_id": u, "lib": f"{pool}:{v['cat']}",
+                              "header": f"{fname} | {desc}", "text": content})
+                manifest[u] = {"file": f, "chunk_id": c.get("chunk_id"), "pool": pool,
+                               "category": v["cat"], "filename": fname}
+        for i in range(0, len(units), 10):
+            with open(f"{bdir}/b_{i//10:04d}.txt", "w", encoding="utf-8") as fh:
+                for u in units[i:i + 10]:
+                    fh.write(f"===== UNIT {u['unit_id']} | LIB: {u['lib']} =====\n")
+                    fh.write(f"HEADER: {u['header']}\nTEXT: {u['text']}\n\n")
+        sys.stderr.write(f"[emit] {pool}: {len(units)} units -> {(len(units)+9)//10} batches in {bdir}\n")
+    json.dump(manifest, open(f"{OUT}/units_manifest.json", "w"), indent=0)
+    sys.stderr.write(f"[emit] manifest: {len(manifest)} units -> {OUT}/units_manifest.json\n")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--classify-only", action="store_true")
+    ap.add_argument("--emit-only", action="store_true", help="skip classify; emit batches from existing provenance.json")
     ap.add_argument("--batch", type=int, default=20)
     args = ap.parse_args()
+
+    if args.emit_only:
+        prov = json.load(open(f"{OUT}/provenance.json"))["provenance"]
+        emit_batches(prov)
+        return
 
     os.makedirs(OUT, exist_ok=True)
     docs = load_docs()
@@ -174,7 +220,7 @@ def main():
     print(f"\n  saved -> {OUT}/provenance.json")
 
     if not args.classify_only:
-        sys.stderr.write("[ingest] unit emission not built yet — validate the split first.\n")
+        emit_batches(prov)
 
 
 if __name__ == "__main__":
