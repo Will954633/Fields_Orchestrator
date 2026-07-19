@@ -20,7 +20,7 @@ Writes system_monitor.ad_downstream keyed by ad_id.
 Usage: python3 scripts/brain2/ad_attribution_build.py [--days 200]
 Env: POSTHOG_PROJECT_ID, POSTHOG_PERSONAL_API_KEY, COSMOS_CONNECTION_STRING
 """
-import os, sys, json, argparse, urllib.request
+import os, sys, json, time, argparse, urllib.request, urllib.error
 from collections import defaultdict, Counter
 from datetime import datetime, timezone
 from dotenv import load_dotenv
@@ -28,6 +28,7 @@ from dotenv import load_dotenv
 load_dotenv("/home/fields/Fields_Orchestrator/.env")
 sys.path.insert(0, "/home/fields/Fields_Orchestrator")
 from shared.db import get_client  # noqa: E402
+from brain2_util import hog_retry, alert_failure  # noqa: E402
 
 PID = os.environ["POSTHOG_PROJECT_ID"]
 KEY = os.environ["POSTHOG_PERSONAL_API_KEY"]
@@ -41,11 +42,7 @@ CONTENT_EVENTS = ["article_view", "v3_section_marker_view", "property_view",
 
 
 def hog(sql):
-    body = json.dumps({"query": {"kind": "HogQLQuery", "query": sql}}).encode()
-    req = urllib.request.Request(
-        f"https://us.posthog.com/api/projects/{PID}/query/", data=body,
-        headers={"Authorization": f"Bearer {KEY}", "Content-Type": "application/json"})
-    return json.loads(urllib.request.urlopen(req, timeout=120).read())["results"]
+    return hog_retry(PID, KEY, sql)
 
 
 def main():
@@ -264,4 +261,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        alert_failure("ad_attribution_build", e)
+        raise
