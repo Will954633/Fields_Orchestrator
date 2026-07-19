@@ -1,29 +1,46 @@
 #!/usr/bin/env python3
 """
-Brain 1 — Tier-3 DEEP query tool.
+Brain 1 — COMPLETENESS-FIRST deep query tool.
 
-Single keyword net (brain1_query.py) caps at ~45 units and is hostage to one phrasing.
-This tool does the higher-quality process:
-  1. DECOMPOSE the question into ~8 retrieval facets (Haiku on Max) so recall isn't
-     tied to one keyword net.
-  2. MULTI-RETRIEVE — score units per facet (reuses brain1_query.score_units), union+dedupe.
-  3. GRAPH-EXPAND once over the whole chosen set (1-hop typed edges -> indirect neighbours).
-  4. SYNTHESISE — one deep Opus-on-Max call over the merged shortlist.
-  5. VERIFY — every unit id Opus cites is checked: does it exist, was it actually in the
-     shortlist we sent (invented ids = hallucination flag), and is it in the requested library.
+Design principle (Will, 2026-07-18): surface ALL relevant data from ALL sources, even a
+single mention (n=1). Never rank-out or crowd-out a smaller corpus by size — corpus size is
+an accident of what footage exists, not a signal of relevance. The user applies judgement;
+the system guarantees recall. See memory: brain-retrieval-completeness-principle.
+
+Pipeline:
+  1. DECOMPOSE the question into ~8 retrieval facets (Haiku on Max) — broadens vocabulary so
+     recall isn't hostage to one phrasing.
+  2. PER-SOURCE CANDIDATE GATHER — for EACH library independently: lexical candidates over all
+     facets (reuses brain1_query.score_units) + 1-hop graph neighbours. Each source competes
+     only against itself -> no crowd-out. Generous caps, not a tight top-N.
+  3. RELEVANCE JUDGE (Haiku, batched, stateless) — keep every candidate judged relevant to the
+     ORIGINAL question. This is a THRESHOLD, not a fixed count. Biased to INCLUDE (rarity is
+     valuable); fail-OPEN on any error (keep the batch) so we never silently drop.
+  4. SYNTHESISE — if the relevant set fits one context, single Opus-on-Max call (best: it can
+     bridge any unit to any other). On overflow: MAP-REDUCE with citation-preserving extraction
+     (Haiku map keeps ids+quotes) -> Opus reduce -> tree-reduce if the findings still overflow.
+  5. VERIFY — every unit id cited is checked against the shortlist (invented ids = hallucination).
+  6. COVERAGE — logs relevant-unit counts PER SOURCE so crowd-out is visible if it recurs.
 
 100% Anthropic on Max — no embeddings, no vector DB, no paid API (Will directive).
 
 Usage:
   env -u CLAUDECODE python3 scripts/samantha/brain1_deep.py "your question" \
-      [--library "Sell It"] [--mode general|insight] [--per-facet 22] [--neigh 30] \
-      [--out /path/answer.md] [--dry] [--no-verify]
+      [--library "Sell It"] [--mode general|insight] [--out answer.md] [--dry] [--no-verify] \
+      [--cand-per-facet 40] [--judge-batch 18] [--token-budget 500000]
 """
 import os, re, sys, json, argparse, subprocess
+from concurrent.futures import ThreadPoolExecutor
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import brain1_query as bq
 
 UID_RE = re.compile(r"\bu\d{4}\b")
+HAIKU = "claude-haiku-4-5-20251001"
+JUDGE_WORKERS = 6      # bounded concurrency for I/O-bound claude calls (judge + map)
+MAX_SINGLE_UNITS = 150 # fidelity ceiling: above this, single-context synthesis stops citing real
+                       # unit ids and confabulates (empirically ~1000 units -> 0 real citations).
+                       # Force map-reduce past this REGARDLESS of token budget — fidelity breaks
+                       # before the token window does.
 
 
 def claude(prompt, model, timeout=900):
@@ -36,16 +53,19 @@ def claude(prompt, model, timeout=900):
     return r.stdout.strip()
 
 
+def tok(s):
+    return len(s) // 4
+
+
 def decompose(question, n=8):
-    """Ask Haiku to split the question into n distinct retrieval facets. Falls back to [question]."""
     p = (f"Break this research question into {n} DISTINCT search facets for retrieving passages "
          f"from a real-estate coaching corpus. Each facet = a short keyword-rich phrase covering a "
-         f"different angle (methods, obstacles, objections, psychology, principles, etc.). "
-         f"Return ONLY a JSON array of {n} strings, nothing else.\n\nQUESTION: {question}")
+         f"different angle (methods, obstacles, objections, psychology, principles, etc.). Vary the "
+         f"VOCABULARY deliberately (synonyms, related jargon) so different phrasings are covered. "
+         f"Return ONLY a JSON array of {n} strings.\n\nQUESTION: {question}")
     try:
-        out = claude(p, "claude-haiku-4-5-20251001", timeout=120)
-        m = re.search(r"\[.*\]", out, re.S)
-        facets = json.loads(m.group(0))
+        out = claude(p, HAIKU, timeout=120)
+        facets = json.loads(re.search(r"\[.*\]", out, re.S).group(0))
         facets = [f.strip() for f in facets if isinstance(f, str) and f.strip()]
         return facets or [question]
     except Exception as e:
@@ -53,98 +73,180 @@ def decompose(question, n=8):
         return [question]
 
 
+def compact(u, nq=2, na=3, nc=8):
+    return {"id": u["id"],
+            "src": f"{u['src']['lib']} / {u['src'].get('course','')} / {u['src'].get('module','')}",
+            "concepts": u["concepts"][:nc], "asks": u["asks"][:na], "quotes": u["quotes"][:nq]}
+
+
+def gather_candidates(pkg, facets, libs, cand_per_facet):
+    """Per-library candidate pool: lexical union over facets + 1-hop graph neighbours in-library.
+    Returns {lib: [units]}. Casts a WIDE net (this is the recall layer; the judge does precision)."""
+    by_id = {u["id"]: u for u in pkg["units"]}
+    out = {}
+    for lib in libs:
+        scan = {**pkg, "units": [u for u in pkg["units"] if u["src"].get("lib") == lib]}
+        picked, ids = [], set()
+        for f in facets:
+            for _, u in bq.score_units(scan, f)[:cand_per_facet]:
+                if u["id"] not in ids:
+                    ids.add(u["id"]); picked.append(u)
+        # graph neighbours (vocabulary-mismatched but concept-linked), kept in-library
+        neigh_ids, _ = bq.expand(pkg, picked, set(ids))
+        for i in neigh_ids:
+            u = by_id.get(i)
+            if u and u["src"].get("lib") == lib and i not in ids:
+                ids.add(i); picked.append(u)
+        out[lib] = picked
+    return out
+
+
+def _judge_chunk(question, chunk):
+    listing = "\n".join(json.dumps(compact(u)) for u in chunk)
+    p = ("You are filtering real-estate coaching units for RELEVANCE to a question. KEEP a unit "
+         "if it contains ANY information, method, example, principle, objection, quote or angle "
+         "that could help answer the question — even a single relevant mention counts. Do NOT "
+         "filter by how common or popular an idea is; a rare or one-off relevant point is "
+         "valuable and MUST be kept. Only DROP units with nothing relevant at all.\n\n"
+         f"QUESTION: {question}\n\nUNITS (one JSON per line):\n{listing}\n\n"
+         "Return ONLY a JSON array of the unit ids to KEEP.")
+    try:
+        out = claude(p, HAIKU, timeout=120)
+        ids = set(json.loads(re.search(r"\[.*\]", out, re.S).group(0)))
+        return [u for u in chunk if u["id"] in ids]
+    except Exception as e:
+        sys.stderr.write(f"[judge] FAIL-OPEN (kept all {len(chunk)}): {e}\n")
+        return list(chunk)  # fail-open: never silently drop relevant data
+
+
+def judge_relevant(question, units, batch):
+    """Haiku relevance filter. Keep any unit with ANY info that could help answer the question —
+    rarity is valuable, bias to INCLUDE. Batched, STATELESS (order-independent), run concurrently.
+    Fail-OPEN on any error."""
+    chunks = [units[i:i + batch] for i in range(0, len(units), batch)]
+    if not chunks:
+        return []
+    with ThreadPoolExecutor(max_workers=JUDGE_WORKERS) as ex:
+        results = list(ex.map(lambda c: _judge_chunk(question, c), chunks))
+    return [u for r in results for u in r]
+
+
+PROMPTS = {
+    "general": ("Answer the QUESTION with a DEEP, well-structured brief. Synthesise ACROSS units into "
+                "method families; surface the difficulties/obstacles; then an INSIGHT LAYER extracting "
+                "core principles and extending them into new/sharpened methods (flag which are "
+                "un-copyable given Fields' data platform). "),
+    "insight": ("Do NOT just summarise. Bridge DISTANT concepts across different units to generate NEW, "
+                "non-obvious client-acquisition plays for Fields (a Gold Coast data-first agency). Name "
+                "each play, cite the unit ids it bridges, state the mechanism. "),
+}
+HEADER = ("You are Brain 1 — an intelligence layer over a real-estate coaching corpus (Tom Panos/"
+          "RealEstate Gym, Ryan Serhant/Sell It, Mat Steinwede & Josh Tesolin/Agent School). ")
+RULES = ("RULES: cite unit ids (e.g. u0452) for every substantive claim; include DIRECT VERBATIM "
+         "QUOTES throughout; give EQUAL consideration to material from every source regardless of how "
+         "many units it has — a point made once is as admissible as one made often; if the corpus does "
+         "not cover something, say so plainly — do NOT invent. Structure with clear headings.\n\n")
+
+
+def synth_prompt(question, mode, payload_json, is_findings=False):
+    src = "PRE-EXTRACTED FINDINGS (already citation-tagged)" if is_findings else "CORPUS SHORTLIST (JSON)"
+    return (HEADER + PROMPTS[mode] + RULES + f"=== QUESTION ===\n{question}\n\n=== {src} ===\n" + payload_json)
+
+
+def map_extract(question, units):
+    """MAP step: Haiku pulls citation-preserving findings from a shard (keeps ids + verbatim quotes)."""
+    listing = "\n".join(json.dumps(compact(u, nq=3, na=4)) for u in units)
+    p = ("Extract every point RELEVANT to the question from these coaching units. For each, write a "
+         "one-line finding that PRESERVES the unit id and at least one VERBATIM quote. Keep rare/one-off "
+         "points. Do not synthesise or drop anything relevant.\n\n"
+         f"QUESTION: {question}\n\nUNITS:\n{listing}\n\nReturn a plain bulleted list of findings.")
+    return claude(p, HAIKU, timeout=300)
+
+
+def synthesise(question, mode, relevant, budget):
+    ctx = {"units": [compact(u, nq=4, na=5, nc=10) for u in relevant]}
+    payload = json.dumps(ctx, ensure_ascii=False)
+    # Single-context ONLY when small enough to cite faithfully AND under token budget.
+    if len(relevant) <= MAX_SINGLE_UNITS and tok(payload) <= budget:
+        sys.stderr.write(f"[synth] single-context ({tok(payload):,} tok, {len(relevant)} units)\n")
+        return claude(synth_prompt(question, mode, payload), bq.MODEL, timeout=900), {u["id"] for u in relevant}
+    # OVERFLOW (unit-count fidelity limit OR token budget) -> map-reduce, citation-preserving extraction
+    shard_n = 60
+    shards = [relevant[i:i + shard_n] for i in range(0, len(relevant), shard_n)]
+    sys.stderr.write(f"[synth] overflow ({tok(payload):,} tok) -> map-reduce over {len(shards)} shards\n")
+    with ThreadPoolExecutor(max_workers=JUDGE_WORKERS) as ex:
+        findings = list(ex.map(lambda s: map_extract(question, s), shards))
+    blob = "\n".join(findings)
+    # tree-reduce if the concatenated findings still overflow
+    while tok(blob) > budget:
+        groups = [findings[i:i + 4] for i in range(0, len(findings), 4)]
+        sys.stderr.write(f"[synth] findings still {tok(blob):,} tok -> tree-reduce {len(groups)} groups\n")
+        findings = [claude("Merge these findings, preserving every unit id and verbatim quote, dropping "
+                           "nothing relevant:\n\n" + "\n".join(g), HAIKU, timeout=300) for g in groups]
+        blob = "\n".join(findings)
+    return claude(synth_prompt(question, mode, blob, is_findings=True), bq.MODEL, timeout=900), {u["id"] for u in relevant}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("question")
-    ap.add_argument("--library", help="restrict primary + neighbour units to one library "
-                                       "(e.g. 'Sell It', 'RealEstate_Gym', 'Agent School')")
-    ap.add_argument("--mode", choices=["general", "insight"], default="general")
-    ap.add_argument("--per-facet", type=int, default=22)
-    ap.add_argument("--neigh", type=int, default=30)
+    ap.add_argument("--library", help="restrict to ONE library (default: all, per-source)")
+    ap.add_argument("--mode", choices=list(PROMPTS), default="general")
     ap.add_argument("--facets", type=int, default=8)
+    ap.add_argument("--cand-per-facet", type=int, default=40)
+    ap.add_argument("--judge-batch", type=int, default=18)
+    ap.add_argument("--token-budget", type=int, default=500000)
     ap.add_argument("--out")
-    ap.add_argument("--dry", action="store_true")
+    ap.add_argument("--dry", action="store_true", help="stop after the relevance judge; print coverage")
+    ap.add_argument("--no-judge", action="store_true", help="skip Haiku judge (keep all candidates)")
     ap.add_argument("--no-verify", action="store_true")
     args = ap.parse_args()
 
     pkg = bq.load()
-    lib = args.library
-
-    def in_lib(u):
-        return (not lib) or u["src"].get("lib") == lib
-
-    # a scoring package whose units are restricted to the library (expand still uses full graph)
-    scan_pkg = {**pkg, "units": [u for u in pkg["units"] if in_lib(u)]}
-    if lib:
-        sys.stderr.write(f"[library] restricted to '{lib}' -> {len(scan_pkg['units'])} units in scope\n")
+    all_libs = sorted({u["src"].get("lib") for u in pkg["units"]})
+    libs = [args.library] if args.library else all_libs
+    by_id = {u["id"]: u for u in pkg["units"]}
 
     facets = decompose(args.question, args.facets)
     sys.stderr.write(f"[facets] {len(facets)}:\n" + "".join(f"   - {f}\n" for f in facets))
 
-    seen, chosen = set(), []
-    for f in facets:
-        for _, u in bq.score_units(scan_pkg, f)[:args.per_facet]:
-            if u["id"] not in seen:
-                seen.add(u["id"]); chosen.append(u)
+    cand = gather_candidates(pkg, facets, libs, args.cand_per_facet)
+    sys.stderr.write("[candidates] per source: " +
+                     " | ".join(f"{l}={len(cand[l])}" for l in libs) + "\n")
 
-    by_id = {u["id"]: u for u in pkg["units"]}
-    neigh_ids, bridging = bq.expand(pkg, chosen, set(seen))
-    neigh = [by_id[i] for i in neigh_ids if i in by_id and in_lib(by_id[i])][:args.neigh]
-
-    ctx = bq.build_context(chosen, neigh, bridging)
-    shortlist_ids = {u["id"] for u in chosen} | {u["id"] for u in neigh}
-
-    base = (
-        "You are Brain 1 — an intelligence layer over a real-estate coaching corpus "
-        "(Tom Panos/RealEstate Gym, Ryan Serhant/Sell It, Mat Steinwede & Josh Tesolin/Agent School). "
-        "Below is a broad multi-facet shortlist of annotated coaching units + typed concept-edges among them.\n\n"
-    )
-    task = (
-        "Answer the QUESTION with a DEEP, well-structured brief. Synthesise ACROSS units into method families; "
-        "surface the difficulties/obstacles; then an INSIGHT LAYER that extracts the core principles and extends "
-        "them into new/sharpened methods (flag which are un-copyable given Fields' data platform). "
-        if args.mode == "general" else
-        "Do NOT just summarise. Bridge DISTANT concepts across different units to generate NEW, non-obvious "
-        "client-acquisition plays for Fields (a Gold Coast data-first agency). Name each play, cite the unit ids "
-        "it bridges, state the mechanism. "
-    )
-    rules = (
-        "RULES: cite unit ids (e.g. u0452) for every substantive claim; include DIRECT VERBATIM QUOTES throughout; "
-        "if the corpus does not cover something, say so plainly — do NOT invent. Structure with clear headings.\n\n"
-        f"=== QUESTION ===\n{args.question}\n\n=== CORPUS SHORTLIST (JSON) ===\n"
-        + json.dumps(ctx, ensure_ascii=False)
-    )
-    prompt = base + task + rules
-    approx = len(prompt) // 4
-    sys.stderr.write(f"[shortlist] {len(chosen)} primary + {len(neigh)} neighbour units, "
-                     f"{len(bridging)} edges | ~{approx:,} tokens\n")
+    # relevance judge per source (keeps sources independent end-to-end)
+    relevant, coverage = [], {}
+    for l in libs:
+        rel = cand[l] if args.no_judge else judge_relevant(args.question, cand[l], args.judge_batch)
+        coverage[l] = (len(cand[l]), len(rel))
+        relevant.extend(rel)
+    sys.stderr.write("[COVERAGE] relevant / candidates per source:\n" +
+                     "".join(f"   {l:15s}: {r:3d} relevant / {c:3d} judged\n"
+                             for l, (c, r) in coverage.items()) +
+                     f"   {'TOTAL':15s}: {sum(r for _, r in coverage.values())} relevant units carried\n")
 
     if args.dry:
-        print(json.dumps({"facets": facets, "n_primary": len(chosen), "n_neigh": len(neigh),
-                          "approx_tokens": approx}, indent=2))
+        print(json.dumps({"facets": facets,
+                          "coverage": {l: {"candidates": c, "relevant": r} for l, (c, r) in coverage.items()},
+                          "total_relevant": len(relevant)}, indent=2))
         return
 
     sys.stderr.write("[opus] deep synthesis…\n")
-    answer = claude(prompt, bq.MODEL, timeout=900)
+    answer, shortlist_ids = synthesise(args.question, args.mode, relevant, args.token_budget)
     print(answer)
 
     if not args.no_verify:
         cited = sorted(set(UID_RE.findall(answer)))
-        exists = [c for c in cited if c in by_id]
-        in_shortlist = [c for c in cited if c in shortlist_ids]
+        in_short = [c for c in cited if c in shortlist_ids]
         invented = [c for c in cited if c not in by_id]
-        out_of_scope = [c for c in cited if c in by_id and c not in shortlist_ids]
-        sys.stderr.write(
-            f"\n[verify] {len(cited)} unit ids cited | {len(in_shortlist)} in shortlist ✓ | "
-            f"{len(out_of_scope)} exist-but-not-in-shortlist | {len(invented)} INVENTED\n")
+        oos = [c for c in cited if c in by_id and c not in shortlist_ids]
+        sys.stderr.write(f"\n[verify] {len(cited)} cited | {len(in_short)} in shortlist ✓ | "
+                         f"{len(oos)} exist-not-in-shortlist | {len(invented)} INVENTED\n")
         if invented:
-            sys.stderr.write(f"[verify] ⚠ INVENTED ids (hallucination): {invented}\n")
-        if out_of_scope:
-            sys.stderr.write(f"[verify] note out-of-shortlist ids: {out_of_scope[:20]}\n")
+            sys.stderr.write(f"[verify] ⚠ INVENTED ids: {invented}\n")
 
     if args.out:
-        with open(args.out, "w", encoding="utf-8") as fh:
-            fh.write(answer)
+        open(args.out, "w", encoding="utf-8").write(answer)
         sys.stderr.write(f"[saved] {args.out}\n")
 
 
