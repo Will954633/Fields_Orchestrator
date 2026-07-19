@@ -15,7 +15,23 @@ _2026-07-18. Next step after Brain 1 completion. Applies the proven Brain-1 pipe
 - `brain1_deep.py` — per-source retrieve + Haiku relevance judge + map-reduce + id-verify. Already generalises: pass KB **categories** as the source list → no crowd-out (meeting_notes 426 can't bury financial 6).
 - `brain1_verify.py` — quote-level verify + `--fix-citations`. Works on any (quote, id) brief.
 
-## ⚠ CRITICAL: the KB is MIXED internal + external — provenance is PER-DOCUMENT, not per-category
+## ⚠⚠ AXIS CORRECTION (2026-07-18, after first classify run): firewall = CONFIDENTIALITY, not authorship
+First pass classified on authorship (internal-we-wrote vs external-third-party). WRONG axis: it put
+96 PRIVATE docs (bank statements — "Combined_Statement_Commonwealth Bank_William_Simpson", client
+invoices — "Invoice - 0029_Alice Wright") into the "public-safe" pool, because an invoice is
+third-party-authored → "external". Authorship and confidentiality are ORTHOGONAL: an invoice is
+external-authored but PRIVATE; a book we publish is internal-authored but PUBLIC.
+**The firewall MUST key off confidentiality: PUBLIC-SAFE (published books, academic papers, external
+articles) vs PRIVATE (invoices, statements, bank, meeting notes, strategy, financials, PII).** Rules:
+- **HARD-PRIVATE regex overrides the LLM** (never overridable into public, fail CLOSED to private):
+  `invoice|statement|bank|tax|receipt|payslip|payment|acc[:_ ]|_FY\d|PII`. ~275 KB docs match.
+- Classifier question becomes "is this PUBLIC-SAFE or PRIVATE?", default PRIVATE on any doubt.
+- **CURATED ALLOWLIST, not ingest-everything:** the `general/` folder (773) is largely a document
+  DUMP (bank statements, receipts, tax PDFs — high-sensitivity, zero knowledge value). Ingest only
+  actual knowledge (books, papers, articles, business strategy/meeting notes); EXCLUDE the storage
+  junk. This removes ~275 sensitive PDFs AND raises signal. Do NOT annotate until reclassified.
+
+## (superseded framing) the KB is MIXED internal + external — provenance is PER-DOCUMENT, not per-category
 The category names are misleading for provenance (confirmed by sampling `metadata.original_file`):
 - **EXTERNAL published/research** (public-safe, same class as Brain 1 coaching): `book` (ABX Blueprint, Kindle scrapes), most of `financial` (academic papers — "Cooling auction fever", "Real Estate Economics 2008 textbook"), most of `marketing` (external articles — "OverpricingAdvertising", "3 Types of Prices"), and part of `strategy`/`general` (external research).
 - **INTERNAL (firewalled):** `meeting_notes` (Business Partners docs, listing-presentation guides), `internal_projects`, `operational`, `code`, and the Fields-specific parts of `strategy`/`project` ("1% Agent Fee Brand.docx").
