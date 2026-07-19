@@ -93,18 +93,52 @@ def verify_text(text, blobs=None, cover=0.85, true_cover=0.90):
     return len(pairs), verified, misattr, notfound
 
 
+def fix_citations(text, misattr):
+    """Auto-correct MISATTRIBUTED quotes: swap the wrong cited id for the verified true source,
+    anchored to the id token immediately AFTER each quote occurrence (handles multi-quote lines).
+    Returns (fixed_text, n_fixed). NOT_FOUND is never touched — a fabricated quote has no true id."""
+    fixed = 0
+    for r in misattr:
+        actual = r["actual"]
+        # match the exact quote, then up to 60 chars, then the FIRST uXXXX -> replace that id
+        pat = re.compile(r"(" + re.escape(r["quote"]) + r".{0,60}?)(u\d{4})", re.S)
+        new, n = pat.subn(lambda m: m.group(1) + actual, text, count=1)
+        if n:
+            text, fixed = new, fixed + n
+    return text, fixed
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--file", required=True)
     ap.add_argument("--cover", type=float, default=0.85, help="coverage to count a quote as present")
     ap.add_argument("--true-cover", type=float, default=0.90, help="stricter bar to claim the TRUE source")
+    ap.add_argument("--fix-citations", action="store_true", help="auto-correct misattributed ids -> --out")
+    ap.add_argument("--out", help="where to write the fixed brief (default: <file>.fixed.md)")
     ap.add_argument("--show-ok", action="store_true")
     args = ap.parse_args()
 
+    text = open(args.file, encoding="utf-8").read()
+    blobs = unit_texts()
     total, verified, misattr, notfound = verify_text(
-        open(args.file, encoding="utf-8").read(), cover=args.cover, true_cover=args.true_cover)
+        text, blobs=blobs, cover=args.cover, true_cover=args.true_cover)
     if not total:
         print("No (quote, id) pairs found — nothing to verify."); return
+
+    if args.fix_citations:
+        fixed_text, n = fix_citations(text, misattr)
+        out = args.out or (args.file.rsplit(".", 1)[0] + ".fixed.md")
+        open(out, "w", encoding="utf-8").write(fixed_text)
+        print(f"[fix] corrected {n} misattributed citation(s) -> {out}")
+        if notfound:
+            print(f"[fix] ⚠ {len(notfound)} NOT_FOUND (fabricated) quotes left untouched — need manual review:")
+            for r in notfound:
+                print(f"      \"{r['quote'][:70]}\" (cited {','.join(r['cited'])})")
+        # re-verify the fixed file to confirm
+        t2, v2, m2, nf2 = verify_text(fixed_text, blobs=blobs, cover=args.cover, true_cover=args.true_cover)
+        print(f"[fix] re-verify: {v2}/{t2} verified | {len(m2)} MISATTRIBUTED | {len(nf2)} NOT_FOUND")
+        sys.exit(0 if (not m2 and not nf2) else 1)
+
     for r in misattr:
         print(f"  ✗ MISATTRIBUTED: cited {','.join(r['cited'])} but quote is actually {r['actual']} "
               f"(cov {r['cov']}) — \"{r['quote'][:70]}\"")
