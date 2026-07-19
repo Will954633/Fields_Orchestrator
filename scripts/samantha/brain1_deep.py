@@ -236,6 +236,7 @@ def main():
     print(answer)
 
     if not args.no_verify:
+        # (1) id-level: invented / out-of-shortlist ids
         cited = sorted(set(UID_RE.findall(answer)))
         in_short = [c for c in cited if c in shortlist_ids]
         invented = [c for c in cited if c not in by_id]
@@ -244,6 +245,23 @@ def main():
                          f"{len(oos)} exist-not-in-shortlist | {len(invented)} INVENTED\n")
         if invented:
             sys.stderr.write(f"[verify] ⚠ INVENTED ids: {invented}\n")
+        # (2) quote-level: misattribution (real quote -> wrong unit) + fabrication
+        try:
+            import brain1_verify as bv
+            total, ok, misattr, notfound = bv.verify_text(answer)
+            if total:
+                sys.stderr.write(f"[quote-verify] {total} quotes | {ok} verified | {len(misattr)} "
+                                 f"MISATTRIBUTED | {len(notfound)} NOT_FOUND | {100*ok/total:.1f}% fidelity\n")
+                for r in misattr:
+                    sys.stderr.write(f"   ✗ MISATTR cited {','.join(r['cited'])} -> actually "
+                                     f"{r['actual']} (cov {r['cov']}): \"{r['quote'][:60]}\"\n")
+                for r in notfound:
+                    sys.stderr.write(f"   ✗ FABRICATED (best {r['actual']} {r['cov']}): "
+                                     f"\"{r['quote'][:60]}\"\n")
+                if misattr or notfound:
+                    sys.stderr.write("[quote-verify] ⚠ NOT publication-ready — fix flagged quotes before public use.\n")
+        except Exception as e:
+            sys.stderr.write(f"[quote-verify] skipped ({e})\n")
 
     if args.out:
         open(args.out, "w", encoding="utf-8").write(answer)
