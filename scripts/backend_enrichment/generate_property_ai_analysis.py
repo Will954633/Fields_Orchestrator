@@ -131,6 +131,9 @@ def print_meter(label: str = "") -> None:
     print(f"\n[METER] {label} calls={len(m['calls'])} "
           f"input={m['input']:,} (uncached={base_in:,}, cache_read={m['cache_read']:,}, "
           f"cache_create={m['cache_create']:,}) output={m['output']:,}")
+    for i, c in enumerate(m["calls"], 1):
+        tag = f" cr={c['cache_read']:,}" if c["cache_read"] else ""
+        print(f"[METER]   call {i:>2}: in={c['input']:>7,} out={c['output']:>6,}{tag}  {c['model']}")
     print(f"[METER] estimated API cost for this property: ${cost:.3f} "
           f"(Opus $15/$75 per M; cache 1.25x write / 0.1x read)")
 
@@ -2017,7 +2020,7 @@ def call_openai(prompt: str, api_key: str, max_tokens: int = 1500, parse_json: b
     return raw
 
 
-def call_claude(prompt: str, api_key: str, max_tokens: int = 1500, parse_json: bool = True, model: str = "claude-sonnet-4-6", required_keys: set = None, cache_prefix: str = None) -> Any:
+def call_claude(prompt: str, api_key: str, max_tokens: int = 1500, parse_json: bool = True, model: str = "claude-sonnet-4-6", required_keys: set = None, cache_prefix: str = None, doc_for_cache: str = None) -> Any:
     """Call Claude. Returns parsed JSON if parse_json=True, else raw text.
 
     cache_prefix: shared text placed as a cache-controlled leading block on the
@@ -2025,8 +2028,18 @@ def call_claude(prompt: str, api_key: str, max_tokens: int = 1500, parse_json: b
     can't express cache_control) it is concatenated ahead of the prompt — same
     content, no caching. The prefix must be byte-identical across the calls that
     are meant to share the cache.
+
+    doc_for_cache (Lever 2): the property document, which the pipeline re-sends to
+    7 agents. When caching is on (API path) and this exact string appears in the
+    prompt, it is hoisted out to the shared cache prefix and replaced in place by
+    a pointer — so every agent still receives identical content, but the ~27k-token
+    document is written once and read at ~10% by the other six. Lossless.
     """
     client = make_client(api_key=api_key, use_max=_USE_MAX)
+
+    if doc_for_cache and _PROMPT_CACHE and not _USE_MAX and cache_prefix is None and doc_for_cache in prompt:
+        cache_prefix = doc_for_cache
+        prompt = prompt.replace(doc_for_cache, "\n[PROPERTY DATA — see the full JSON document at the top of this message]\n", 1)
 
     if cache_prefix and not _USE_MAX:
         content = [
@@ -2103,17 +2116,17 @@ def _build_gather_config(
         gather_model = PIPELINE_CONFIG["models"]["gather_gemini"]
         gather_label = f"Gemini ({gather_model})"
         gather_tokens = PIPELINE_CONFIG["token_limits"]["gather_gemini"]
-        def gather_call(prompt, max_tokens=gather_tokens):
+        def gather_call(prompt, max_tokens=gather_tokens, doc_for_cache=None):
             return call_gemini(prompt, gemini_api_key, max_tokens=max_tokens, parse_json=False, model=gather_model)
     elif use_openai_gather and openai_api_key:
         gather_model = PIPELINE_CONFIG["models"]["gather_openai"]
         gather_label = f"OpenAI ({gather_model})"
-        def gather_call(prompt, max_tokens=gather_tokens):
+        def gather_call(prompt, max_tokens=gather_tokens, doc_for_cache=None):
             return call_openai(prompt, openai_api_key, max_tokens=max_tokens, parse_json=False, model=gather_model)
     else:
         gather_label = f"Claude ({agent_model})"
-        def gather_call(prompt, max_tokens=gather_tokens):
-            return call_claude(prompt, api_key, max_tokens=max_tokens, parse_json=False, model=agent_model)
+        def gather_call(prompt, max_tokens=gather_tokens, doc_for_cache=None):
+            return call_claude(prompt, api_key, max_tokens=max_tokens, parse_json=False, model=agent_model, doc_for_cache=doc_for_cache)
 
     def hybrid_openai_call(prompt, max_tokens=gather_tokens):
         return call_openai(prompt, openai_api_key, max_tokens=max_tokens, parse_json=False, model=PIPELINE_CONFIG["models"]["gather_openai"])
@@ -2149,12 +2162,11 @@ def _run_gathering_agents(
     use_hybrid = gather_cfg["use_hybrid_gather"]
     hybrid_openai_call = gather_cfg["hybrid_openai_call"]
 
-    # Prompt caching (API path, pure-Claude gather only): share the ~28k-token
-    # data block as one cache-controlled prefix so agents 2 & 3 read it at ~10%.
-    cache_on = _PROMPT_CACHE and not _USE_MAX and not use_hybrid and gather_label.startswith("Claude")
-    shared_prefix = _gather_data_block(prop_summary, medians_str, competing_str, sales_str, suburb_display) if cache_on else None
-    if cache_on:
-        print(f"    (prompt caching ON — shared data prefix ~{len(shared_prefix)//4:,} tok)")
+    # Prompt caching (Lever 2, API path): the property document is re-sent to 8
+    # agents. doc_for_cache hoists it to a shared cache prefix so it is written
+    # once and read at ~10% by the rest — lossless. (Gemini/OpenAI gather ignore it.)
+    if _PROMPT_CACHE and not _USE_MAX and not use_hybrid and gather_label.startswith("Claude"):
+        print("    (prompt caching ON — document shared across agents)")
 
     # Agent 1: Price & Value Analyst
     agent1_label = f"OpenAI ({PIPELINE_CONFIG['models']['gather_openai']})" if use_hybrid else gather_label
@@ -2165,15 +2177,10 @@ def _run_gathering_agents(
             build_price_agent_prompt(prop_summary, medians_str, competing_str, sales_str, suburb_display),
             max_tokens=gather_tokens,
         )
-    elif cache_on:
-        price_brief = call_claude(
-            build_price_agent_prompt(prop_summary, medians_str, competing_str, sales_str, suburb_display, include_data=False),
-            api_key, max_tokens=gather_tokens, parse_json=False, model=agent_model, cache_prefix=shared_prefix,
-        )
     else:
         price_brief = gather_call(
             build_price_agent_prompt(prop_summary, medians_str, competing_str, sales_str, suburb_display),
-            max_tokens=gather_tokens,
+            max_tokens=gather_tokens, doc_for_cache=prop_summary,
         )
     print(f"    Done ({time.time()-t0:.1f}s, {len(price_brief)} chars)")
 
@@ -2186,15 +2193,10 @@ def _run_gathering_agents(
             build_property_agent_prompt(prop_summary, competing_str, sales_str, suburb_display),
             api_key, max_tokens=PIPELINE_CONFIG["token_limits"]["sabri"], parse_json=False, model=agent_model,
         )
-    elif cache_on:
-        property_brief = call_claude(
-            build_property_agent_prompt(prop_summary, competing_str, sales_str, suburb_display, include_data=False),
-            api_key, max_tokens=gather_tokens + 200, parse_json=False, model=agent_model, cache_prefix=shared_prefix,
-        )
     else:
         property_brief = gather_call(
             build_property_agent_prompt(prop_summary, competing_str, sales_str, suburb_display),
-            max_tokens=gather_tokens + 200,
+            max_tokens=gather_tokens + 200, doc_for_cache=prop_summary,
         )
     print(f"    Done ({time.time()-t0:.1f}s, {len(property_brief)} chars)")
 
@@ -2207,15 +2209,10 @@ def _run_gathering_agents(
             build_market_agent_prompt(prop_summary, medians_str, competing_str, sales_str, suburb_display),
             max_tokens=gather_tokens,
         )
-    elif cache_on:
-        market_brief = call_claude(
-            build_market_agent_prompt(prop_summary, medians_str, competing_str, sales_str, suburb_display, include_data=False),
-            api_key, max_tokens=gather_tokens, parse_json=False, model=agent_model, cache_prefix=shared_prefix,
-        )
     else:
         market_brief = gather_call(
             build_market_agent_prompt(prop_summary, medians_str, competing_str, sales_str, suburb_display),
-            max_tokens=gather_tokens,
+            max_tokens=gather_tokens, doc_for_cache=prop_summary,
         )
     print(f"    Done ({time.time()-t0:.1f}s, {len(market_brief)} chars)")
 
@@ -2363,6 +2360,7 @@ Do NOT suggest headlines. Do NOT reference flood in suggested content. Max 400 w
             max_tokens=PIPELINE_CONFIG["token_limits"]["reflection"],
             parse_json=False,
             model=PIPELINE_CONFIG["models"]["reflection"],
+            doc_for_cache=prop_summary,
         )
         print(f"    Done ({time.time()-t0:.1f}s)")
 
@@ -2464,6 +2462,7 @@ Write your findings as plain text. Be specific. Every claim must reference the d
         max_tokens=PIPELINE_CONFIG["token_limits"]["backfill"],
         parse_json=False,
         model=PIPELINE_CONFIG["models"]["backfill"],
+        doc_for_cache=prop_summary,
     )
     print(f"    Done ({time.time()-t0:.1f}s, {len(backfill_data)} chars)")
     return backfill_data
@@ -2589,6 +2588,7 @@ Be exhaustive on factual claims. Be lenient on rounding and approximations."""
             max_tokens=PIPELINE_CONFIG["token_limits"]["fact_check"],
             parse_json=False,
             model=PIPELINE_CONFIG["models"]["fact_check"],
+            doc_for_cache=prop_summary,
         )
         print(f"    Done ({time.time()-t0:.1f}s)")
 
@@ -2722,6 +2722,7 @@ OUTPUT BODY JSON — use v2 structured insight format (no headline, no meta, no 
                 parse_json=True,
                 model=PIPELINE_CONFIG["models"]["draft2"],
                 required_keys={"insights", "verdict"},
+                doc_for_cache=prop_summary,
             )
             print(f"    Done ({time.time()-t0:.1f}s)")
             print(f"\n  --- DRAFT {attempt + 1} VERDICT: \"{current_draft.get('verdict', '')[:80]}\"")
@@ -2760,6 +2761,7 @@ If ALL claims are verified, output: ✅ ALL CLAIMS VERIFIED"""
                     max_tokens=PIPELINE_CONFIG["token_limits"]["verify"],
                     parse_json=False,
                     model=PIPELINE_CONFIG["models"]["fact_check"],
+                    doc_for_cache=prop_summary,
                 )
                 verify_failures = verify_text.count("❌ FAILED")
                 print(f"    {time.time()-t0:.1f}s — {verify_failures} failures found")
