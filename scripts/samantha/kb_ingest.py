@@ -24,13 +24,25 @@ OUT = "/home/fields/brain3_build"
 HAIKU = "claude-haiku-4-5-20251001"
 WORKERS = 6
 
-# strong deterministic signals ---------------------------------------------------
-EXT_PATH = re.compile(r"kindle_scraper|/books/|/book/", re.I)
-EXT_TITLE = re.compile(r"\bevidence from\b|\bjournal\b|\b- 20\d\d - ch\b|\bproceedings\b|"
-                       r"\bquarterly\b|\breview of\b|\bhandbook\b|blueprint", re.I)
-INT_CATS = {"meeting_notes", "internal_projects", "code", "operational", "conversations"}
-INT_TITLE = re.compile(r"working doc|business partner|1% agent|listing presentation g|"
-                       r"\bfields\b|our (strategy|plan)|internal|standup|stand-up|roadmap", re.I)
+# --- CURATION + CONFIDENTIALITY signals -----------------------------------------
+# The firewall axis is CONFIDENTIALITY (public-safe vs private), NOT authorship. Two filters:
+#   (A) CURATION  — is this genuine KNOWLEDGE, or storage junk / sensitive records to DROP?
+#   (B) CONFIDENTIALITY — of what's kept: PUBLIC-SAFE vs PRIVATE.
+# HARD_PRIVATE = sensitive records (invoices, statements, bank, tax): DROPPED entirely (never
+# ingested — both sensitive and worthless as knowledge). Overrides the LLM. Fail CLOSED.
+HARD_PRIVATE = re.compile(r"\binvoice\b|\bstatement\b|\bbank\b|\btax\b|\breceipt\b|payslip|"
+                          r"\bpayment\b|acc[:_ ]\d|_fy\d|\bpaid\b|remittance|payroll", re.I)
+# storage junk: scanned files with no real words (all-digits / date-range / opaque codes)
+JUNK_NAME = re.compile(r"^[\d _\-\.]+$|^\w{0,4}_?\d{6,}|_\d{8}_\d{8}|^[a-f0-9]{6,}\.", re.I)
+# public-safe published knowledge
+PUB_PATH = re.compile(r"kindle_scraper|/books?/", re.I)
+PUB_TITLE = re.compile(r"\bevidence from\b|\bjournal\b|\b- 20\d\d - ch\b|\bproceedings\b|"
+                       r"\bquarterly\b|\breview of\b|\bhandbook\b|blueprint|\bact 20\d\d\b|"
+                       r"effects of|impact of|analysis of|\bstudy\b", re.I)
+# clearly-internal (private) business knowledge worth KEEPING behind the firewall
+PRIV_CATS = {"meeting_notes", "internal_projects", "operational", "strategy", "project", "code"}
+PRIV_TITLE = re.compile(r"working doc|business partner|1% agent|listing presentation g|"
+                        r"\bfields\b|our (strategy|plan)|standup|stand-up|roadmap|slackthread|session_", re.I)
 
 
 def load_docs():
@@ -54,17 +66,22 @@ def load_docs():
 
 
 def deterministic(d):
-    """Return 'external' | 'internal' | None (ambiguous)."""
+    """Return one of: 'drop_private' | 'drop_junk' | 'public' | 'private' | None (ambiguous)."""
     blob = f"{d['orig']} {d['fname']} {d['doc_type']}"
-    if d["cat"] == "book" or d["doc_type"].upper() == "BOOK" or EXT_PATH.search(blob):
-        return "external"
-    if d["cat"] in INT_CATS:
-        return "internal"
-    if EXT_TITLE.search(blob):
-        return "external"
-    if INT_TITLE.search(blob):
-        return "internal"
-    return None
+    base = os.path.basename(d["orig"] or d["fname"])
+    # (A) CURATION first — drop sensitive records + storage junk before anything else
+    if HARD_PRIVATE.search(blob):
+        return "drop_private"
+    if JUNK_NAME.search(base):
+        return "drop_junk"
+    # (B) CONFIDENTIALITY of the remaining knowledge
+    if d["cat"] == "book" or d["doc_type"].upper() == "BOOK" or PUB_PATH.search(blob):
+        return "public"
+    if PUB_TITLE.search(blob):
+        return "public"
+    if d["cat"] in PRIV_CATS or PRIV_TITLE.search(blob):
+        return "private"
+    return None  # ambiguous -> Haiku (public-safe vs private, default private)
 
 
 def claude(prompt, timeout=120):
@@ -79,27 +96,28 @@ def claude(prompt, timeout=120):
 
 
 def haiku_classify(batch):
-    """Classify a batch of ambiguous docs. Returns {idx: 'external'|'internal'}."""
+    """Confidentiality classify ambiguous knowledge docs. Returns {idx: 'public'|'private'}."""
     listing = "\n".join(
         json.dumps({"i": i, "file": d["orig"] or d["fname"], "type": d["doc_type"],
                     "desc": d["desc"], "snippet": d["snip"][:180]})
         for i, d in batch)
-    p = ("Classify each real-estate knowledge-base document as EXTERNAL or INTERNAL.\n"
-         "EXTERNAL = published/third-party material NOT created by this company: books, academic "
-         "papers, journal articles, industry reports, external blog posts, market research.\n"
-         "INTERNAL = created by/for THIS company (Fields, a Gold Coast agency): meeting notes, our "
-         "strategy/plans, working docs, financials, code, internal projects, partner discussions.\n"
-         "When genuinely unsure, default to INTERNAL (safer for the confidentiality firewall).\n\n"
+    p = ("For each real-estate knowledge-base document decide PUBLIC_SAFE vs PRIVATE — this gates a "
+         "confidentiality firewall, so err toward PRIVATE.\n"
+         "PUBLIC_SAFE = already-published, non-confidential material safe to quote in public content: "
+         "books, academic papers, journal articles, legislation, public industry reports/news.\n"
+         "PRIVATE = anything confidential to this company (Fields, a Gold Coast agency): internal "
+         "strategy/plans, meeting/partner notes, financial records, client data, unpublished drafts, "
+         "code, operational docs. If there is ANY doubt it could be confidential, choose PRIVATE.\n\n"
          f"DOCUMENTS:\n{listing}\n\n"
-         'Return ONLY a JSON object mapping index -> "external" or "internal", e.g. {"0":"external"}.')
+         'Return ONLY a JSON object mapping index -> "public" or "private", e.g. {"0":"public"}.')
     try:
         out = claude(p)
         m = json.loads(re.search(r"\{.*\}", out, re.S).group(0))
-        return {int(k): ("external" if str(v).lower().startswith("e") else "internal")
+        return {int(k): ("public" if str(v).lower().startswith("pub") else "private")
                 for k, v in m.items()}
     except Exception as e:
-        sys.stderr.write(f"[haiku] FAIL-CLOSED (batch->internal): {e}\n")
-        return {i: "internal" for i, _ in batch}  # fail to the SAFE side (firewall)
+        sys.stderr.write(f"[haiku] FAIL-CLOSED (batch->private): {e}\n")
+        return {i: "private" for i, _ in batch}  # fail to the SAFE side (firewall)
 
 
 def main():
@@ -119,42 +137,44 @@ def main():
             prov[d["file"]] = {"class": c, "how": "deterministic", "cat": d["cat"]}
         else:
             ambiguous.append((i, d))
-    det_ext = sum(1 for v in prov.values() if v["class"] == "external")
-    det_int = sum(1 for v in prov.values() if v["class"] == "internal")
-    sys.stderr.write(f"[deterministic] external={det_ext} internal={det_int} | ambiguous={len(ambiguous)} -> Haiku\n")
+    dc = lambda k: sum(1 for v in prov.values() if v["class"] == k)
+    sys.stderr.write(f"[deterministic] drop_private={dc('drop_private')} drop_junk={dc('drop_junk')} "
+                     f"public={dc('public')} private={dc('private')} | ambiguous={len(ambiguous)} -> Haiku\n")
 
-    # Haiku-classify the ambiguous remainder, batched + parallel
+    # Haiku confidentiality-classify the ambiguous remainder, batched + parallel
     batches = [ambiguous[i:i + args.batch] for i in range(0, len(ambiguous), args.batch)]
     with ThreadPoolExecutor(max_workers=WORKERS) as ex:
         results = list(ex.map(haiku_classify, batches))
-    # haiku_classify keys results by each doc's GLOBAL index i (the "i" field in the listing)
     for batch, res in zip(batches, results):
         for i, d in batch:
-            prov[d["file"]] = {"class": res.get(i, "internal"), "how": "haiku", "cat": d["cat"]}
+            prov[d["file"]] = {"class": res.get(i, "private"), "how": "haiku", "cat": d["cat"]}
 
-    # summary
-    ext = [f for f, v in prov.items() if v["class"] == "external"]
-    intr = [f for f, v in prov.items() if v["class"] == "internal"]
+    CLASSES = ["public", "private", "drop_private", "drop_junk"]
+    counts = {c: dc(c) for c in CLASSES}
+    kept = counts["public"] + counts["private"]
     by_cat = {}
     for f, v in prov.items():
-        by_cat.setdefault(v["cat"], {"external": 0, "internal": 0})[v["class"]] += 1
+        by_cat.setdefault(v["cat"], {c: 0 for c in CLASSES})[v["class"]] += 1
 
-    json.dump({"provenance": prov,
-               "summary": {"total": len(prov), "external": len(ext), "internal": len(intr),
-                           "by_category": by_cat}},
+    json.dump({"provenance": prov, "summary": {"total": len(prov), "kept": kept, **counts,
+                                               "by_category": by_cat}},
               open(f"{OUT}/provenance.json", "w"), indent=2)
 
-    print(f"\n=== PROVENANCE SPLIT ({len(prov)} docs) ===")
-    print(f"  EXTERNAL (public-safe): {len(ext)}")
-    print(f"  INTERNAL (firewalled) : {len(intr)}")
-    print(f"\n  per category  (external / internal):")
+    print(f"\n=== CURATED CONFIDENTIALITY SPLIT ({len(prov)} docs) ===")
+    print(f"  KEPT (knowledge): {kept}")
+    print(f"    • PUBLIC-SAFE : {counts['public']}   (books/papers/articles — can inform public content)")
+    print(f"    • PRIVATE     : {counts['private']}   (internal knowledge — firewalled, Samantha-only)")
+    print(f"  DROPPED: {counts['drop_private'] + counts['drop_junk']}")
+    print(f"    • sensitive records (invoices/statements/bank/tax): {counts['drop_private']}")
+    print(f"    • storage junk (scanned/opaque, no knowledge)     : {counts['drop_junk']}")
+    print(f"\n  per category  (public / private / drop_priv / drop_junk):")
     for cat in sorted(by_cat):
         b = by_cat[cat]
-        print(f"    {cat:16s}: {b['external']:4d} ext / {b['internal']:4d} int")
+        print(f"    {cat:16s}: {b['public']:4d} / {b['private']:4d} / {b['drop_private']:4d} / {b['drop_junk']:4d}")
     print(f"\n  saved -> {OUT}/provenance.json")
 
     if not args.classify_only:
-        sys.stderr.write("[ingest] unit emission not built yet — run --classify-only for now.\n")
+        sys.stderr.write("[ingest] unit emission not built yet — validate the split first.\n")
 
 
 if __name__ == "__main__":
