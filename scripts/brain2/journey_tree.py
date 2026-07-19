@@ -216,6 +216,7 @@ body{{margin:0;background:var(--bg);color:var(--ink);
   line-height:1.5;-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums;}}
 .wrap{{max-width:920px;margin:0 auto;padding:40px 24px 64px;}}
 .hd{{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap;margin-bottom:8px;}}
+.hd>div:first-child{{flex:1 1 300px;min-width:0;}}
 .eyebrow{{text-transform:uppercase;letter-spacing:.14em;font-size:12px;font-weight:600;color:var(--accent);margin:0 0 6px;}}
 h1{{font-size:29px;line-height:1.15;margin:0 0 6px;font-weight:750;letter-spacing:-.01em;text-wrap:balance;}}
 .sub{{color:var(--ink-soft);margin:0 0 28px;font-size:15px;max-width:60ch;}}
