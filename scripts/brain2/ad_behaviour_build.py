@@ -30,7 +30,8 @@ from organic_journey_build import funnel_regime  # noqa: E402  (single source of
 
 PID = os.environ["POSTHOG_PROJECT_ID"]
 KEY = os.environ["POSTHOG_PERSONAL_API_KEY"]
-import urllib.request
+import urllib.request  # noqa: E402
+from brain2_util import hog_retry, alert_failure  # noqa: E402
 
 CONV_EVENTS = ["analyse_home_submit_start", "analyse_home_submit_success",
                "analyse_home_address_submit", "analyse_v3_address_selected",
@@ -38,11 +39,7 @@ CONV_EVENTS = ["analyse_home_submit_start", "analyse_home_submit_success",
 
 
 def hog(sql):
-    body = json.dumps({"query": {"kind": "HogQLQuery", "query": sql}}).encode()
-    req = urllib.request.Request(
-        f"https://us.posthog.com/api/projects/{PID}/query/", data=body,
-        headers={"Authorization": f"Bearer {KEY}", "Content-Type": "application/json"})
-    return json.loads(urllib.request.urlopen(req, timeout=120).read())["results"]
+    return hog_retry(PID, KEY, sql)
 
 
 def num(x):
@@ -268,4 +265,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        alert_failure("ad_behaviour_build", e)
+        raise
