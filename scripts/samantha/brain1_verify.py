@@ -1,0 +1,121 @@
+#!/usr/bin/env python3
+"""
+Brain 1 — QUOTE-LEVEL verifier.
+
+The id-in-shortlist check in brain1_deep.py catches invented ids, but NOT misattribution:
+a real quote tagged to the wrong (but in-shortlist) unit passes it. This closes that gap.
+
+For every "quoted passage" (uXXXX) pair in a brief:
+  1. Fuzzy-match the quote against the CITED unit's own annotation text (tolerates light
+     transcription normalization, e.g. "curl"->"cull", and "..." elision joins).
+  2. VERIFIED    — quote found in a cited unit.
+  3. MISATTRIBUTED — not in any cited unit, but found elsewhere in the corpus -> report the
+     unit it ACTUALLY belongs to (this is the u2520-vs-u2774 class of bug).
+  4. NOT_FOUND   — not in any unit at all -> fabricated / paraphrased beyond recognition.
+
+Exits nonzero if any MISATTRIBUTED or NOT_FOUND -> use as a publish gate.
+
+Usage:
+  python3 scripts/samantha/brain1_verify.py --file brief.md [--cover 0.85 --min-len 12 --show-ok]
+"""
+import re, sys, json, argparse
+from difflib import SequenceMatcher
+
+PACKAGE = "/home/fields/brain1_build/package.json"
+ANN = "/home/fields/brain1_build/annotations.jsonl"
+_norm_re = re.compile(r"[^a-z0-9 ]+")
+_ws = re.compile(r"\s+")
+
+
+def norm(s):
+    return _ws.sub(" ", _norm_re.sub(" ", (s or "").lower())).strip()
+
+
+def unit_texts():
+    """unit_id -> normalized blob of its key_quotes + concepts + claims (from raw annotations)."""
+    out = {}
+    for line in open(ANN, encoding="utf-8"):
+        d = json.loads(line)
+        blob = " ".join(d.get("key_quotes", []) + d.get("concepts", []) + d.get("claims", []))
+        out[d["unit_id"]] = norm(blob)
+    return out
+
+
+def coverage(fragment, unit_blob):
+    """Fraction of the (normalized) fragment's chars found in-order in unit_blob. Robust to a
+    substring-with-small-edits (single-char transcription slips barely dent the score)."""
+    a, b = norm(fragment), unit_blob
+    if not a:
+        return 0.0
+    if len(a) < 12:
+        return 1.0 if a in b else 0.0
+    sm = SequenceMatcher(None, a, b, autojunk=False)
+    return sum(bl.size for bl in sm.get_matching_blocks()) / len(a)
+
+
+def fragments(quote):
+    """Split a brief quote on ellipsis elisions; keep substantial pieces."""
+    parts = re.split(r"\s*(?:\.\.\.|…)\s*", quote)
+    return [p.strip() for p in parts if len(p.strip()) >= 8] or [quote.strip()]
+
+
+def parse_pairs(text):
+    """Every quote paired with the uXXXX ids that appear on the same line/bullet."""
+    pairs = []
+    for line in text.splitlines():
+        quotes = re.findall(r'[\"“]([^\"”]{8,})[\"”]', line)
+        ids = re.findall(r"u\d{4}", line)
+        for q in quotes:
+            if ids:
+                pairs.append((q, ids))
+    return pairs
+
+
+def verify_text(text, blobs=None, cover=0.85, true_cover=0.90):
+    """Core: returns (total, verified, [misattr], [notfound]). Reusable by brain1_deep.
+    misattr/notfound entries = {quote, cited, actual, cov}."""
+    if blobs is None:
+        blobs = unit_texts()
+    pairs = parse_pairs(text)
+    verified, misattr, notfound = 0, [], []
+    for q, ids in pairs:
+        frs = fragments(q)
+        if all(any(coverage(fr, blobs.get(i, "")) >= cover for i in ids) for fr in frs):
+            verified += 1
+            continue
+        best_id, best = None, 0.0
+        for uid, blob in blobs.items():
+            c = min(coverage(fr, blob) for fr in frs)  # all fragments in the SAME unit
+            if c > best:
+                best, best_id = c, uid
+        rec = {"quote": q, "cited": ids, "actual": best_id, "cov": round(best, 2)}
+        (misattr if best >= true_cover else notfound).append(rec)
+    return len(pairs), verified, misattr, notfound
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--file", required=True)
+    ap.add_argument("--cover", type=float, default=0.85, help="coverage to count a quote as present")
+    ap.add_argument("--true-cover", type=float, default=0.90, help="stricter bar to claim the TRUE source")
+    ap.add_argument("--show-ok", action="store_true")
+    args = ap.parse_args()
+
+    total, verified, misattr, notfound = verify_text(
+        open(args.file, encoding="utf-8").read(), cover=args.cover, true_cover=args.true_cover)
+    if not total:
+        print("No (quote, id) pairs found — nothing to verify."); return
+    for r in misattr:
+        print(f"  ✗ MISATTRIBUTED: cited {','.join(r['cited'])} but quote is actually {r['actual']} "
+              f"(cov {r['cov']}) — \"{r['quote'][:70]}\"")
+    for r in notfound:
+        print(f"  ✗ NOT_FOUND (best {r['actual']} cov {r['cov']}): cited {','.join(r['cited'])} — "
+              f"\"{r['quote'][:70]}\"")
+    print(f"\n[quote-verify] {total} quotes | {verified} verified | {len(misattr)} MISATTRIBUTED | "
+          f"{len(notfound)} NOT_FOUND")
+    print(f"[quote-verify] fidelity {100*verified/total:.1f}%")
+    sys.exit(0 if (not misattr and not notfound) else 1)
+
+
+if __name__ == "__main__":
+    main()
