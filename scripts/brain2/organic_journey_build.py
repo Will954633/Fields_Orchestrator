@@ -24,7 +24,7 @@ street (or on the listing itself). The strongest seller-intent flag we have.
 Usage: python3 scripts/brain2/organic_journey_build.py [--days 60]
 Env: POSTHOG_ALL_ACCESS_KEY (or POSTHOG_PERSONAL_API_KEY), POSTHOG_PROJECT_ID
 """
-import os, sys, re, json, argparse, urllib.request
+import os, sys, re, json, argparse, urllib.request, urllib.error
 from collections import defaultdict, Counter
 from datetime import datetime, timezone
 from dotenv import load_dotenv
@@ -34,6 +34,7 @@ sys.path.insert(0, "/home/fields/Fields_Orchestrator")
 sys.path.insert(0, "/home/fields/Fields_Orchestrator/scripts/brain2")
 from shared.db import get_client  # noqa: E402
 from address_category import AddressClassifier, LABELS as ADDR_LABELS  # noqa: E402
+from brain2_util import hog_retry, alert_failure  # noqa: E402
 
 PID = os.environ["POSTHOG_PROJECT_ID"]
 KEY = os.environ.get("POSTHOG_ALL_ACCESS_KEY") or os.environ["POSTHOG_PERSONAL_API_KEY"]
@@ -100,11 +101,7 @@ def detect_ai(utm_source, referring_domain):
 
 
 def hog(sql):
-    body = json.dumps({"query": {"kind": "HogQLQuery", "query": sql}}).encode()
-    r = urllib.request.Request(f"https://us.posthog.com/api/projects/{PID}/query/",
-                               data=body, headers={"Authorization": f"Bearer {KEY}",
-                                                   "Content-Type": "application/json"})
-    return json.loads(urllib.request.urlopen(r, timeout=120).read())["results"]
+    return hog_retry(PID, KEY, sql)
 
 
 def parse_addr(text):
@@ -473,4 +470,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        alert_failure("organic_journey_build", e)
+        raise
