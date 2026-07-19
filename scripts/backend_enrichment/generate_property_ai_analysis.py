@@ -51,6 +51,11 @@ from pymongo import MongoClient
 # generator; set USE_CLAUDE_MAX=0 to force the real API. Image/vision calls
 # (satellite verify) can't be shimmed and transparently fall back to the API.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+# The shim reads these at import time. The heavy Opus calls (Editor, Draft 2) can
+# exceed the 300s default when Max is under concurrent load — a timeout falls back
+# to the API, which fails if the key is dry. Give the CLI more headroom so it
+# completes on Max instead of falling through. Respect any explicit override.
+os.environ.setdefault("CLAUDE_MAX_CLI_TIMEOUT", "600")
 from claude_max_client import make_client  # noqa: E402
 
 _USE_MAX = os.environ.get("USE_CLAUDE_MAX", "1").strip().lower() in {"1", "true", "yes", "on"}
@@ -3076,6 +3081,89 @@ def process_cadastral_property(
     return analysis
 
 
+def _compact_recent_sale(r: Dict, included: bool) -> Dict:
+    """Project one `valuation_data.recent_sales` comp down to the fields the
+    editorial agents actually consume — a lossless FIELD PROJECTION, not an LLM
+    summary. Field NAMES and semantics are preserved EXACTLY as the agents saw
+    them in the full document (no renaming), so agent/fact-check behaviour on the
+    comps is unchanged; only pure bloat is removed.
+
+    Dropped for every comp (no agent prompt references them — verified by grep of
+    the prompt builders): `images` (blob URLs), `features.npui_breakdown` (model
+    internals), `weight.factors`, `verification` internals (keep is_verified +
+    status), and the internal ids `id`/`series`/`valuation_price`/`time_adjustment`.
+
+    Kept for every comp: `address`, `price`, `original_sale_price`, `sale_date`,
+    `distance_km`, `utility_index`, `features.basic`, `narrative`,
+    `included_in_valuation`. Included comps (the ones that drive the valuation and
+    that fact-check anchors against) additionally keep the FULL `adjustment_result`,
+    `independent_valuation` and `_data_quality_pct`; pool comps keep only the
+    `adjustment_result` summary (the per-line math is already restated verbatim in
+    their `narrative`).
+    """
+    feats = r.get("features") or {}
+    basic = feats.get("basic") or {}
+    out = {
+        "address": r.get("address"),
+        "price": r.get("price"),
+        "original_sale_price": r.get("original_sale_price"),
+        "sale_date": r.get("sale_date"),
+        "distance_km": r.get("distance_km"),
+        "utility_index": r.get("utility_index"),
+        "included_in_valuation": included,
+        "features": {"basic": basic},
+        "narrative": r.get("narrative"),
+    }
+    ar = r.get("adjustment_result") or {}
+    if ar:
+        if included:
+            # Preserve the full adjustment_result verbatim (line-item math + summary)
+            out["adjustment_result"] = ar
+        else:
+            # Pool comp: summary only — the line-items are restated in `narrative`
+            out["adjustment_result"] = {
+                k: ar.get(k) for k in
+                ("total_adjustment", "total_adjustment_pct", "adjusted_price", "rates_source")
+                if ar.get(k) is not None
+            }
+    w = r.get("weight") or {}
+    if w:
+        out["weight"] = {k: w.get(k) for k in ("raw_weight", "normalized") if w.get(k) is not None}
+    v = r.get("verification") or {}
+    if v:
+        out["verification"] = {k: v.get(k) for k in ("is_verified", "status") if v.get(k) is not None}
+    if included:
+        out["independent_valuation"] = r.get("independent_valuation")
+        out["_data_quality_pct"] = r.get("_data_quality_pct")
+    return {k: v for k, v in out.items() if v is not None}
+
+
+def _compact_valuation_data(prop_clean: Dict) -> None:
+    """In-place: replace the bulky `valuation_data` block on a *copy* of the
+    property doc with a compacted equivalent. `valuation_data.recent_sales` (48
+    full comp records) is ~54% of the whole document and is re-sent to 4 agents;
+    projecting each record and dropping `chart_points` (chart-render data no agent
+    reads) cuts the doc ~45% with zero loss of any value an agent cites.
+
+    NOTE: operates only on `valuation_data` (the comparable-sales model output).
+    It never touches `property_valuation_data` (the step-105 photo/condition
+    analysis of the subject home) — a distinct, small field the editorial's
+    visual claims depend on.
+    """
+    vd = prop_clean.get("valuation_data")
+    if not isinstance(vd, dict):
+        return
+    vd = dict(vd)  # shallow copy so we never mutate the caller's DB document
+    rs = vd.get("recent_sales")
+    if isinstance(rs, list) and rs:
+        vd["recent_sales"] = [
+            _compact_recent_sale(r, bool(r.get("included_in_valuation")))
+            for r in rs if isinstance(r, dict)
+        ]
+    vd.pop("chart_points", None)  # 50-point scatter render data — never cited
+    prop_clean["valuation_data"] = vd
+
+
 def process_property(db, suburb: str, prop: Dict, api_key: str, force: bool = False, use_gemini_gather: bool = False, gemini_api_key: str = None, use_openai_gather: bool = False, openai_api_key: str = None, use_hybrid_gather: bool = False) -> Dict:
     """Run the full pipeline for one property."""
     address = prop.get("address", "Unknown")
@@ -3203,6 +3291,13 @@ def process_property(db, suburb: str, prop: Dict, api_key: str, force: bool = Fa
     # Strip satellite image URL (large, not needed for text analysis) but keep categories/narrative
     if 'satellite_analysis' in _prop_clean and isinstance(_prop_clean['satellite_analysis'], dict):
         _prop_clean['satellite_analysis'] = {k: v for k, v in _prop_clean['satellite_analysis'].items() if k != 'satellite_image_url'}
+    # Compact the comparable-sales pool (valuation_data.recent_sales dominates the
+    # doc at ~54% and is re-sent to 4 agents). Lossless field projection — keeps
+    # every value an agent cites, drops blob URLs / model internals. Does NOT
+    # touch property_valuation_data (the photo/condition analysis).
+    _bytes_before = len(_json.dumps(_prop_clean, default=str))
+    _compact_valuation_data(_prop_clean)
+    _bytes_after = len(_json.dumps(_prop_clean, default=str))
 
     # Annotate renovation booleans that are unreliable due to invisible rooms
     # If bathrooms have visible:false + null scores, bathrooms_renovated is UNRELIABLE
@@ -3235,6 +3330,8 @@ def process_property(db, suburb: str, prop: Dict, api_key: str, force: bool = Fa
 
     summary = _json.dumps(_prop_clean, indent=2, default=str)
     print(f"  Property document: {len(summary):,} chars (~{len(summary)//4:,} tokens)")
+    print(f"  Comparables compaction: {_bytes_before:,} -> {_bytes_after:,} chars "
+          f"(-{(_bytes_before-_bytes_after)//4:,} tokens, -{100*(_bytes_before-_bytes_after)//max(_bytes_before,1)}%)")
 
     # Pipeline 2: suburb medians
     print("[2/5] Fetching suburb medians...")
