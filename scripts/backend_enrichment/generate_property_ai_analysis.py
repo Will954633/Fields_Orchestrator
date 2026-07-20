@@ -2086,9 +2086,20 @@ def call_claude(prompt: str, api_key: str, max_tokens: int = 1500, parse_json: b
     try:
         result = json.loads(raw)
     except json.JSONDecodeError as e:
-        print(f"[ERROR] Failed to parse Claude response as JSON: {e}")
-        print(f"[DEBUG] Raw response:\n{raw[:500]}")
-        raise
+        # Robustness: Sonnet occasionally emits valid JSON followed by trailing
+        # prose ("Extra data") or a preamble before the object. Recover by decoding
+        # the first complete JSON object from the first '{'. Only raise if that fails.
+        result = None
+        start = raw.find("{")
+        if start != -1:
+            try:
+                result, _ = json.JSONDecoder().raw_decode(raw[start:])
+            except json.JSONDecodeError:
+                result = None
+        if result is None:
+            print(f"[ERROR] Failed to parse Claude response as JSON: {e}")
+            print(f"[DEBUG] Raw response:\n{raw[:500]}")
+            raise
 
     # Validate required keys
     required = required_keys if required_keys is not None else {"headline", "sub_headline", "insights", "verdict"}
