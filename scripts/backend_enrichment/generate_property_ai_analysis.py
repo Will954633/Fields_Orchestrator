@@ -256,6 +256,19 @@ _THINKING_MODE = os.environ.get("THINKING_MODE", "disabled").strip().lower()
 # token-budget widening still fully exhausted on thinking with zero room for
 # the answer. "medium" trades a bit of reasoning depth for reliability.
 _THINKING_EFFORT = os.environ.get("THINKING_EFFORT", "medium").strip().lower()
+
+# Property-type gate. The editorial prompts and the photo/condition data schema
+# (outdoor/exterior/garage/floor-plan scores) were built and validated against
+# detached houses. --backfill and --new-listings already restrict their own
+# query to property_type=="House", but --slug and --address (which is what the
+# demand-ranked runner and any manual/ops invocation use) had NO such check —
+# confirmed 2026-07-20 when 22 of 56 Tranche A properties turned out to be
+# Townhouse/Apartment/Villa/Duplex/Semi-Detached/Retirement. This is the
+# defense-in-depth version, enforced in process_property() itself so every
+# caller is covered regardless of how the property was selected. Override with
+# EDITORIAL_PROPERTY_TYPES (comma-separated) for a deliberate one-off widening.
+_ALLOWED_PROPERTY_TYPES = {t.strip() for t in
+                          os.environ.get("EDITORIAL_PROPERTY_TYPES", "House").split(",") if t.strip()}
 if _THINKING_MODE == "adaptive":
     # Widening max_tokens costs nothing unless actually used — it's a hard cap,
     # not a spend target — so be generous. BUT the anthropic SDK itself refuses
@@ -3385,6 +3398,12 @@ def process_property(db, suburb: str, prop: Dict, api_key: str, force: bool = Fa
     if not force and prop.get("ai_analysis") and prop["ai_analysis"].get("headline"):
         print(f"[SKIP] {address} — already has ai_analysis (use --force to regenerate)")
         return prop["ai_analysis"]
+
+    ptype = prop.get("property_type")
+    if ptype not in _ALLOWED_PROPERTY_TYPES:
+        print(f"[SKIP] {address} — property_type={ptype!r} not in {sorted(_ALLOWED_PROPERTY_TYPES)} "
+              f"(editorial pipeline scoped to houses; set EDITORIAL_PROPERTY_TYPES to widen)")
+        return None
 
     print(f"\n{'='*60}")
     print(f"Processing: {address}")
