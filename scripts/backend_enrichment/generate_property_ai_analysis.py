@@ -238,6 +238,33 @@ if _EDITORIAL_MODEL:
     for _k, _v in list(PIPELINE_CONFIG["models"].items()):
         if "claude" in _v or "opus" in _v:
             PIPELINE_CONFIG["models"][_k] = _EDITORIAL_MODEL
+
+# Adaptive-thinking toggle. Claude Sonnet 5 defaults adaptive thinking ON (a
+# behavior change from every other model this pipeline targets); thinking tokens
+# count against max_tokens AND bill as output even when hidden. Default here is
+# "disabled" (matches Opus/Sonnet-4.6's no-thinking default, cheap, verified
+# non-crashing). Set THINKING_MODE=adaptive to leave it on — matching what the
+# Max CLI path implicitly does (it can't override Sonnet 5's default) — at the
+# cost of materially more output tokens. When adaptive, token budgets are widened
+# so thinking doesn't consume the whole response budget and starve the answer.
+_THINKING_MODE = os.environ.get("THINKING_MODE", "disabled").strip().lower()
+# Soft guidance on how much Claude thinks (low/medium/high/max/xhigh); only
+# meaningful when THINKING_MODE=adaptive. "high" is the API default (what the
+# Max CLI path implicitly used, since it can't override it) but at high/max
+# effort Claude "may think more extensively and can be more likely to exhaust
+# the max_tokens budget" per Anthropic's own docs — confirmed here: even a 4x
+# token-budget widening still fully exhausted on thinking with zero room for
+# the answer. "medium" trades a bit of reasoning depth for reliability.
+_THINKING_EFFORT = os.environ.get("THINKING_EFFORT", "medium").strip().lower()
+if _THINKING_MODE == "adaptive":
+    # Widening max_tokens costs nothing unless actually used — it's a hard cap,
+    # not a spend target — so be generous. BUT the anthropic SDK itself refuses
+    # non-streaming calls above ~21,333 tokens (its own worst-case-duration guard:
+    # 60min * max_tokens/128k must stay under the 10min default timeout) — confirmed
+    # by hitting it directly. Clamp under that ceiling.
+    for _k in PIPELINE_CONFIG["token_limits"]:
+        PIPELINE_CONFIG["token_limits"][_k] = min(max(PIPELINE_CONFIG["token_limits"][_k] * 5, 5000), 20000)
+    print(f"[CONFIG] THINKING_MODE=adaptive (effort={_THINKING_EFFORT}) — token budgets widened 5x (5000-20000 range)")
     print(f"[CONFIG] EDITORIAL_MODEL override → all Claude agents on {_EDITORIAL_MODEL}")
 
 # ---------------------------------------------------------------------------
@@ -460,7 +487,8 @@ OUTPUT as JSON only — no markdown, no code fences:
                     },
                 ],
             }],
-            thinking={"type": "disabled"},  # see call_claude — Sonnet 5 adaptive-thinking note
+            thinking=_thinking_param(),  # see THINKING_MODE toggle near PIPELINE_CONFIG
+            **_output_config_kwargs(),
         )
 
         result_text = _extract_text(response).strip()
@@ -2031,6 +2059,22 @@ def call_openai(prompt: str, api_key: str, max_tokens: int = 1500, parse_json: b
     return raw
 
 
+def _thinking_param() -> dict:
+    """Thinking config for messages.create(), driven by THINKING_MODE (see toggle
+    near PIPELINE_CONFIG). "adaptive" is passed explicitly rather than omitted —
+    Anthropic's docs recommend the explicit form over relying on the implicit
+    per-model default."""
+    return {"type": "adaptive"} if _THINKING_MODE == "adaptive" else {"type": "disabled"}
+
+
+def _output_config_kwargs() -> dict:
+    """output_config={'effort': ...} kwarg, only when thinking is adaptive —
+    the effort field is meaningless (and best omitted) with thinking disabled."""
+    if _THINKING_MODE == "adaptive":
+        return {"output_config": {"effort": _THINKING_EFFORT}}
+    return {}
+
+
 def _extract_text(message) -> str:
     """Return the first TEXT block's text from a Messages response.
 
@@ -2092,7 +2136,8 @@ def call_claude(prompt: str, api_key: str, max_tokens: int = 1500, parse_json: b
         # Explicitly disabled to match the validated (non-thinking) behavior this
         # prompt suite was tuned and fact-check-approved against. No-op on models
         # that don't support the field expecting a value (accepted harmlessly).
-        thinking={"type": "disabled"},
+        thinking=_thinking_param(),
+        **_output_config_kwargs(),
     )
     _meter_record(model, _in_text, message)
 
