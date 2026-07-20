@@ -110,11 +110,18 @@ def _backend_env(mode):
         # OpenRouter model ids are namespaced "anthropic/<model>".
         env["EDITORIAL_MODEL"] = env.get("EDITORIAL_MODEL", "anthropic/claude-sonnet-5")
         env["PROMPT_CACHE"] = "1"
+        # Will's decision (2026-07-20, after reading the OFF-vs-ON comparison):
+        # thinking ON at effort=medium — the fact-check/rewrite loop converges
+        # cleanly (vs "max retries reached" with disabled) for ~23% more cost.
+        env["THINKING_MODE"] = env.get("THINKING_MODE", "adaptive")
+        env["THINKING_EFFORT"] = env.get("THINKING_EFFORT", "medium")
     elif mode == "vertex":
         env["ANTHROPIC_BACKEND"] = "vertex"
         env["USE_CLAUDE_MAX"] = "0"
         env["EDITORIAL_MODEL"] = env.get("EDITORIAL_MODEL", "claude-sonnet-5")
         env["PROMPT_CACHE"] = "1"
+        env["THINKING_MODE"] = env.get("THINKING_MODE", "adaptive")
+        env["THINKING_EFFORT"] = env.get("THINKING_EFFORT", "medium")
         env["VERTEX_PROJECT_ID"] = env.get("VERTEX_PROJECT_ID", "fields-estate")
         env["VERTEX_REGION"] = env.get("VERTEX_REGION", "global")
         env.setdefault("GOOGLE_APPLICATION_CREDENTIALS", VERTEX_KEY)
