@@ -218,11 +218,17 @@ PIPELINE_CONFIG = {
         "gather_gemini": 2000,
         "editor": 6000,
         "reflection": 1000,
-        "fact_check": 1500,
+        # fact_check and verify read a full draft AND the whole property document
+        # and must reason through every claim — at least as demanding as editor/
+        # draft2, not the smallest budget in the pipeline. Raised 2026-07-20 after
+        # verify's old 800 (-> widened floor 5000 under THINKING_MODE=adaptive,
+        # vs editor/draft2's 20000) let Sonnet 5's adaptive thinking exhaust the
+        # entire budget on one call — zero tokens left for the verdict text.
+        "fact_check": 6000,
         "backfill": 600,
         "sabri": 800,
         "draft2": 8000,
-        "verify": 800,
+        "verify": 6000,
     },
     "retry": {
         "max_draft2_attempts": 3,
@@ -2154,7 +2160,27 @@ def call_claude(prompt: str, api_key: str, max_tokens: int = 1500, parse_json: b
     )
     _meter_record(model, _in_text, message)
 
-    raw = _extract_text(message).strip()
+    try:
+        raw = _extract_text(message).strip()
+    except ValueError:
+        # Thinking consumed the ENTIRE max_tokens budget, leaving zero room for
+        # the actual answer — confirmed happening even at widened budgets (see
+        # token_limits comment above). A bigger cap only lowers the odds, it can't
+        # guarantee it won't happen again. Disabling thinking for one retry is a
+        # hard guarantee: with no reasoning tokens to spend, the full budget goes
+        # to the answer, so this exact failure cannot recur on the retry.
+        if _THINKING_MODE == "adaptive":
+            print(f"    [RETRY] {model}: thinking exhausted the budget with no text — retrying with thinking disabled")
+            message = client.messages.create(
+                model=model,
+                max_tokens=max_tokens,
+                messages=[{"role": "user", "content": content}],
+                thinking={"type": "disabled"},
+            )
+            _meter_record(model, _in_text, message)
+            raw = _extract_text(message).strip()
+        else:
+            raise
 
     if not parse_json:
         return raw
