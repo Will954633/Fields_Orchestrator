@@ -274,6 +274,18 @@ def make_client(api_key: str = "", use_max: Optional[bool] = None):
     Enable the Max path with env USE_CLAUDE_MAX=1 (or pass use_max=True). When
     disabled this is a transparent drop-in for anthropic.Anthropic(api_key=...).
     """
+    # Google Vertex (Gemini Enterprise Agent Platform) backend — bills to GCP,
+    # bypasses the direct-Anthropic card issue. Auth via Application Default
+    # Credentials (GOOGLE_APPLICATION_CREDENTIALS service-account key). Sonnet 5
+    # uses the "global" endpoint. Drop-in: same .messages.create, cache_control
+    # (Lever 2) supported. Set ANTHROPIC_BACKEND=vertex + USE_CLAUDE_MAX=0.
+    if os.environ.get("ANTHROPIC_BACKEND", "").strip().lower() == "vertex":
+        from anthropic import AnthropicVertex
+        return AnthropicVertex(
+            project_id=os.environ.get("VERTEX_PROJECT_ID", "fields-estate"),
+            region=os.environ.get("VERTEX_REGION", "global"),
+        )
+
     enabled = _use_max() if use_max is None else use_max
     if enabled:
         return MaxClient(api_key=api_key)
