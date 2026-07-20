@@ -460,9 +460,10 @@ OUTPUT as JSON only — no markdown, no code fences:
                     },
                 ],
             }],
+            thinking={"type": "disabled"},  # see call_claude — Sonnet 5 adaptive-thinking note
         )
 
-        result_text = response.content[0].text.strip()
+        result_text = _extract_text(response).strip()
         # Strip markdown fences if present
         if result_text.startswith("```"):
             result_text = result_text.split("\n", 1)[1]
@@ -2030,6 +2031,21 @@ def call_openai(prompt: str, api_key: str, max_tokens: int = 1500, parse_json: b
     return raw
 
 
+def _extract_text(message) -> str:
+    """Return the first TEXT block's text from a Messages response.
+
+    content[0] is not reliably the text block: Claude Sonnet 5's adaptive
+    thinking can return a leading ThinkingBlock (no .text attr) ahead of the
+    TextBlock, on both the direct API and passthrough backends (Vertex,
+    OpenRouter). Scan for the first block with type=="text" instead of
+    assuming position 0.
+    """
+    for block in message.content:
+        if getattr(block, "type", None) == "text":
+            return block.text
+    raise ValueError(f"No text block in response content: {[getattr(b,'type',None) for b in message.content]}")
+
+
 def call_claude(prompt: str, api_key: str, max_tokens: int = 1500, parse_json: bool = True, model: str = "claude-sonnet-4-6", required_keys: set = None, cache_prefix: str = None, doc_for_cache: str = None) -> Any:
     """Call Claude. Returns parsed JSON if parse_json=True, else raw text.
 
@@ -2068,10 +2084,19 @@ def call_claude(prompt: str, api_key: str, max_tokens: int = 1500, parse_json: b
         model=model,
         max_tokens=max_tokens,
         messages=[{"role": "user", "content": content}],
+        # Claude Sonnet 5 defaults adaptive thinking ON (unlike every model this
+        # pipeline was validated against). Thinking tokens count against max_tokens
+        # AND are billed as output — silently inflating cost ~4x and, at our small
+        # per-agent max_tokens, can exhaust the budget with zero room left for the
+        # actual answer (content = [ThinkingBlock, RedactedThinkingBlock], no text).
+        # Explicitly disabled to match the validated (non-thinking) behavior this
+        # prompt suite was tuned and fact-check-approved against. No-op on models
+        # that don't support the field expecting a value (accepted harmlessly).
+        thinking={"type": "disabled"},
     )
     _meter_record(model, _in_text, message)
 
-    raw = message.content[0].text.strip()
+    raw = _extract_text(message).strip()
 
     if not parse_json:
         return raw
