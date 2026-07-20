@@ -339,6 +339,12 @@ def refresh_and_classify(
     occ["timeline_source"] = "fresh_brightdata" if fresh_ok else "stored_fallback"
     occ["timeline_event_count"] = len(events)
 
+    occ["currently_for_sale"] = gc_doc.get("listing_status") == "for_sale"
+    if occ["currently_for_sale"]:
+        occ["signals"] = list(occ.get("signals") or []) + [
+            "Property is currently listed for sale — actively on the market now."
+        ]
+
     # Write the refreshed timeline back to the Gold_Coast doc (best-effort).
     if fresh_ok:
         now = datetime.utcnow()
