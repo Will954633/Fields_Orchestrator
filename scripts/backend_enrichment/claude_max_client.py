@@ -286,6 +286,20 @@ def make_client(api_key: str = "", use_max: Optional[bool] = None):
             region=os.environ.get("VERTEX_REGION", "global"),
         )
 
+    # OpenRouter backend — bills to OpenRouter credit, sidesteps both the direct-
+    # Anthropic card decline and the Vertex quota-approval wait. OpenRouter exposes
+    # a genuine Anthropic-Messages-format endpoint (/v1/messages, same request/
+    # response shape, cache_control honoured, usage.cache_read/creation_input_tokens
+    # populated) — so the REAL anthropic SDK works unmodified, just pointed at a
+    # different base_url. No shim needed. Model ids must be "anthropic/<model>".
+    # Set ANTHROPIC_BACKEND=openrouter + USE_CLAUDE_MAX=0.
+    if os.environ.get("ANTHROPIC_BACKEND", "").strip().lower() == "openrouter":
+        import anthropic
+        return anthropic.Anthropic(
+            api_key=os.environ["OPENROUTER_API_KEY"],
+            base_url="https://openrouter.ai/api",
+        )
+
     enabled = _use_max() if use_max is None else use_max
     if enabled:
         return MaxClient(api_key=api_key)
