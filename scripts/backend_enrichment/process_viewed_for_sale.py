@@ -75,12 +75,24 @@ def build_slug_index(db):
 
 NEEDS = {"needs_review", "failed_factcheck", None, "NONE"}
 
+# The editorial prompts and property_valuation_data schema (outdoor/exterior/
+# garage/floor-plan scores) were built and validated against detached houses —
+# the same restriction generate_property_ai_analysis.py's --backfill mode
+# enforces (property_type: "House"). This runner had no such filter until
+# 2026-07-20, when Will caught a Duplex ("28/244 Ron Penhaligon Way") in
+# Tranche A output — 22 of that batch's 56 turned out non-House (9 Townhouse,
+# 7 Apartment, 2 Villa, 2 Duplex, 1 Semi-Detached, 1 Retirement). Default to
+# House-only, matching the established scope; pass --types to widen it.
+DEFAULT_TYPES = {"House"}
 
-def worklist(days):
+
+def worklist(days, allowed_types=None):
+    allowed = allowed_types or DEFAULT_TYPES
     db = get_gold_coast_db()
     idx = build_slug_index(db)
     rows = []
     seen = set()
+    skipped_type = []
     for slug, views, persons in viewed_slugs(days):
         hit = idx.get(slug)
         if not hit or slug in seen:
@@ -88,10 +100,17 @@ def worklist(days):
         seen.add(slug)
         coll, d = hit
         ai = (d.get("ai_analysis") or {}).get("status")
-        if ai in NEEDS:
-            rows.append({"slug": slug, "views": views, "persons": persons, "suburb": coll,
-                         "address": d.get("address"), "ai_status": ai or "none",
-                         "ptype": d.get("property_type")})
+        if ai not in NEEDS:
+            continue
+        ptype = d.get("property_type")
+        if allowed and ptype not in allowed:
+            skipped_type.append((d.get("address"), ptype))
+            continue
+        rows.append({"slug": slug, "views": views, "persons": persons, "suburb": coll,
+                     "address": d.get("address"), "ai_status": ai or "none", "ptype": ptype})
+    if skipped_type:
+        print(f"(skipped {len(skipped_type)} non-{'/'.join(sorted(allowed))} listings — "
+              f"pass --types to widen, e.g. --types House,Townhouse,Duplex)")
     return rows
 
 
@@ -168,9 +187,13 @@ def main():
     ap.add_argument("--vertex", action="store_true", help="run Sonnet 5 via Google Vertex (GCP billing)")
     ap.add_argument("--api", action="store_true", help="run on the funded direct Anthropic API")
     ap.add_argument("--preflight", action="store_true", help="just test the backend is live (quota landed) and exit")
+    ap.add_argument("--types", default="House",
+                    help="comma-separated property_type values to include (default: House only — "
+                         "matches the scope the editorial prompts/schema were built for)")
     A = ap.parse_args()
 
     mode = "openrouter" if A.openrouter else "vertex" if A.vertex else "api" if A.api else "max"
+    allowed_types = {t.strip() for t in A.types.split(",") if t.strip()}
 
     if A.preflight:
         ok, detail = preflight(mode)
@@ -178,7 +201,7 @@ def main():
         print(detail)
         return
 
-    wl = worklist(A.days)
+    wl = worklist(A.days, allowed_types=allowed_types)
     print(f"\n=== Viewed for-sale listings needing editorial (last {A.days}d) — {len(wl)} total ===")
     print(f"{'views':>5} {'ppl':>4} {'ai_status':>15}  {'type':>6}  address")
     for r in wl:
