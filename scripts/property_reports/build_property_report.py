@@ -85,6 +85,8 @@ def _notify_new_lead(report_doc: Dict[str, Any], occ: Optional[Dict[str, Any]]) 
     ]
     if signals:
         lines.append(f"_{signals[0]}_")
+    if occ.get("currently_for_sale"):
+        lines.append("🏷️ *Currently listed for sale* — actively on the market now.")
     if hold:
         lines.append("")
         lines.append("⛔ *Postal dispatch HELD* — do not post appraisal to this address until occupancy is confirmed owner-occupier.")
