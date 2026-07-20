@@ -99,11 +99,18 @@ VERTEX_KEY = "/home/fields/.gcp-vertex-key.json"
 
 
 def _backend_env(mode):
-    """mode: 'vertex' (Sonnet 5 via GCP), 'api' (direct Anthropic), or 'max'."""
+    """mode: 'openrouter' (Sonnet 5, bills OpenRouter credit), 'vertex' (Sonnet 5
+    via GCP), 'api' (direct Anthropic), or 'max'."""
     env = dict(os.environ)
     env["COMPACT_COMPARABLES"] = env.get("COMPACT_COMPARABLES", "1")
     env["CLAUDE_MAX_CLI_TIMEOUT"] = env.get("CLAUDE_MAX_CLI_TIMEOUT", "600")
-    if mode == "vertex":
+    if mode == "openrouter":
+        env["ANTHROPIC_BACKEND"] = "openrouter"
+        env["USE_CLAUDE_MAX"] = "0"
+        # OpenRouter model ids are namespaced "anthropic/<model>".
+        env["EDITORIAL_MODEL"] = env.get("EDITORIAL_MODEL", "anthropic/claude-sonnet-5")
+        env["PROMPT_CACHE"] = "1"
+    elif mode == "vertex":
         env["ANTHROPIC_BACKEND"] = "vertex"
         env["USE_CLAUDE_MAX"] = "0"
         env["EDITORIAL_MODEL"] = env.get("EDITORIAL_MODEL", "claude-sonnet-5")
@@ -127,7 +134,7 @@ def preflight(mode):
             "sys.path.insert(0,os.path.dirname(%r))\n"
             "from claude_max_client import make_client\n"
             "c=make_client(api_key=os.environ.get('ANTHROPIC_API_KEY',''), use_max=False)\n"
-            "m=c.messages.create(model=os.environ.get('EDITORIAL_MODEL','claude-sonnet-5'),max_tokens=20,"
+            "m=c.messages.create(model=os.environ.get('EDITORIAL_MODEL') or 'claude-sonnet-5',max_tokens=20,"
             "messages=[{'role':'user','content':'Reply with exactly: READY'}])\n"
             "print('PREFLIGHT:', m.content[0].text.strip())\n" % GEN)
     p = subprocess.run(["python3", "-c", code], env=env, capture_output=True, text=True, timeout=120)
@@ -150,12 +157,13 @@ def main():
     ap.add_argument("--days", type=int, default=120)
     ap.add_argument("--process", action="store_true", help="actually generate (else just list)")
     ap.add_argument("--limit", type=int, default=1, help="max properties to process")
+    ap.add_argument("--openrouter", action="store_true", help="run Sonnet 5 via OpenRouter (bills OpenRouter credit)")
     ap.add_argument("--vertex", action="store_true", help="run Sonnet 5 via Google Vertex (GCP billing)")
     ap.add_argument("--api", action="store_true", help="run on the funded direct Anthropic API")
     ap.add_argument("--preflight", action="store_true", help="just test the backend is live (quota landed) and exit")
     A = ap.parse_args()
 
-    mode = "vertex" if A.vertex else "api" if A.api else "max"
+    mode = "openrouter" if A.openrouter else "vertex" if A.vertex else "api" if A.api else "max"
 
     if A.preflight:
         ok, detail = preflight(mode)
