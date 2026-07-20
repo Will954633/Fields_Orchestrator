@@ -95,11 +95,48 @@ def worklist(days):
     return rows
 
 
-def run_one(slug, use_api):
+VERTEX_KEY = "/home/fields/.gcp-vertex-key.json"
+
+
+def _backend_env(mode):
+    """mode: 'vertex' (Sonnet 5 via GCP), 'api' (direct Anthropic), or 'max'."""
     env = dict(os.environ)
-    env["USE_CLAUDE_MAX"] = "0" if use_api else "1"
     env["COMPACT_COMPARABLES"] = env.get("COMPACT_COMPARABLES", "1")
     env["CLAUDE_MAX_CLI_TIMEOUT"] = env.get("CLAUDE_MAX_CLI_TIMEOUT", "600")
+    if mode == "vertex":
+        env["ANTHROPIC_BACKEND"] = "vertex"
+        env["USE_CLAUDE_MAX"] = "0"
+        env["EDITORIAL_MODEL"] = env.get("EDITORIAL_MODEL", "claude-sonnet-5")
+        env["PROMPT_CACHE"] = "1"
+        env["VERTEX_PROJECT_ID"] = env.get("VERTEX_PROJECT_ID", "fields-estate")
+        env["VERTEX_REGION"] = env.get("VERTEX_REGION", "global")
+        env.setdefault("GOOGLE_APPLICATION_CREDENTIALS", VERTEX_KEY)
+    elif mode == "api":
+        env["ANTHROPIC_BACKEND"] = ""
+        env["USE_CLAUDE_MAX"] = "0"
+        env["PROMPT_CACHE"] = "1"
+    else:  # max
+        env["USE_CLAUDE_MAX"] = "1"
+    return env
+
+
+def preflight(mode):
+    """One tiny call to confirm the backend is live (e.g. Vertex quota landed)."""
+    env = _backend_env(mode)
+    code = ("import os,sys\n"
+            "sys.path.insert(0,os.path.dirname(%r))\n"
+            "from claude_max_client import make_client\n"
+            "c=make_client(api_key=os.environ.get('ANTHROPIC_API_KEY',''), use_max=False)\n"
+            "m=c.messages.create(model=os.environ.get('EDITORIAL_MODEL','claude-sonnet-5'),max_tokens=20,"
+            "messages=[{'role':'user','content':'Reply with exactly: READY'}])\n"
+            "print('PREFLIGHT:', m.content[0].text.strip())\n" % GEN)
+    p = subprocess.run(["python3", "-c", code], env=env, capture_output=True, text=True, timeout=120)
+    ok = "READY" in (p.stdout or "")
+    return ok, (p.stdout + p.stderr).strip()[-400:]
+
+
+def run_one(slug, mode):
+    env = _backend_env(mode)
     p = subprocess.run(["python3", GEN, "--slug", slug, "--force"],
                        env=env, capture_output=True, text=True, timeout=3600)
     out = p.stdout + "\n" + p.stderr
@@ -113,8 +150,18 @@ def main():
     ap.add_argument("--days", type=int, default=120)
     ap.add_argument("--process", action="store_true", help="actually generate (else just list)")
     ap.add_argument("--limit", type=int, default=1, help="max properties to process")
-    ap.add_argument("--api", action="store_true", help="run on the funded Anthropic API (else Max)")
+    ap.add_argument("--vertex", action="store_true", help="run Sonnet 5 via Google Vertex (GCP billing)")
+    ap.add_argument("--api", action="store_true", help="run on the funded direct Anthropic API")
+    ap.add_argument("--preflight", action="store_true", help="just test the backend is live (quota landed) and exit")
     A = ap.parse_args()
+
+    mode = "vertex" if A.vertex else "api" if A.api else "max"
+
+    if A.preflight:
+        ok, detail = preflight(mode)
+        print(f"[{mode}] preflight: {'✅ READY' if ok else '❌ not ready'}")
+        print(detail)
+        return
 
     wl = worklist(A.days)
     print(f"\n=== Viewed for-sale listings needing editorial (last {A.days}d) — {len(wl)} total ===")
@@ -127,10 +174,10 @@ def main():
         return
 
     todo = wl[:A.limit]
-    print(f"\n=== Processing top {len(todo)} on {'API' if A.api else 'Max'} ===")
+    print(f"\n=== Processing top {len(todo)} on {mode.upper()} ===")
     for i, r in enumerate(todo, 1):
         print(f"\n[{i}/{len(todo)}] {r['address']} ({r['views']} views) ...")
-        rc, meter, status, _ = run_one(r["slug"], A.api)
+        rc, meter, status, _ = run_one(r["slug"], mode)
         for ln in status:
             print("   ", ln)
         for ln in meter:
