@@ -275,15 +275,21 @@ _THINKING_EFFORT = os.environ.get("THINKING_EFFORT", "medium").strip().lower()
 # EDITORIAL_PROPERTY_TYPES (comma-separated) for a deliberate one-off widening.
 _ALLOWED_PROPERTY_TYPES = {t.strip() for t in
                           os.environ.get("EDITORIAL_PROPERTY_TYPES", "House").split(",") if t.strip()}
+_TOKEN_LIMIT_CEILING = 40_000
 if _THINKING_MODE == "adaptive":
     # Widening max_tokens costs nothing unless actually used — it's a hard cap,
-    # not a spend target — so be generous. BUT the anthropic SDK itself refuses
-    # non-streaming calls above ~21,333 tokens (its own worst-case-duration guard:
-    # 60min * max_tokens/128k must stay under the 10min default timeout) — confirmed
-    # by hitting it directly. Clamp under that ceiling.
+    # not a spend target — so be generous. The anthropic SDK's own worst-case-
+    # duration guard (60min * max_tokens/128k must stay under its 10min default
+    # timeout) would otherwise refuse non-streaming calls above ~21,333 tokens —
+    # confirmed by hitting it directly. That guard only fires when no explicit
+    # `timeout` is passed (anthropic/resources/messages/messages.py: `if not
+    # stream and not is_given(timeout) and ...`), so call_claude() passes an
+    # explicit timeout sized to max_tokens on every call — see
+    # _nonstreaming_timeout_for() — which bypasses the guard entirely and lets
+    # the ceiling go well past 21,333 without hitting it.
     for _k in PIPELINE_CONFIG["token_limits"]:
-        PIPELINE_CONFIG["token_limits"][_k] = min(max(PIPELINE_CONFIG["token_limits"][_k] * 5, 5000), 20000)
-    print(f"[CONFIG] THINKING_MODE=adaptive (effort={_THINKING_EFFORT}) — token budgets widened 5x (5000-20000 range)")
+        PIPELINE_CONFIG["token_limits"][_k] = min(max(PIPELINE_CONFIG["token_limits"][_k] * 5, 5000), _TOKEN_LIMIT_CEILING)
+    print(f"[CONFIG] THINKING_MODE=adaptive (effort={_THINKING_EFFORT}) — token budgets widened 5x (5000-{_TOKEN_LIMIT_CEILING} range)")
     print(f"[CONFIG] EDITORIAL_MODEL override → all Claude agents on {_EDITORIAL_MODEL}")
 
 # ---------------------------------------------------------------------------
@@ -507,6 +513,7 @@ OUTPUT as JSON only — no markdown, no code fences:
                 ],
             }],
             thinking=_thinking_param(),  # see THINKING_MODE toggle near PIPELINE_CONFIG
+            timeout=_nonstreaming_timeout_for(PIPELINE_CONFIG["token_limits"]["fact_check"]),
             **_output_config_kwargs(),
         )
 
@@ -2094,6 +2101,21 @@ def _output_config_kwargs() -> dict:
     return {}
 
 
+def _nonstreaming_timeout_for(max_tokens: int) -> float:
+    """Explicit per-call timeout, sized to max_tokens with margin.
+
+    The anthropic SDK auto-calculates a timeout ONLY when the caller passes
+    none (`if not stream and not is_given(timeout) and ...` in
+    resources/messages/messages.py) — and that auto-calc REFUSES the request
+    outright above ~21,333 max_tokens (60min * max_tokens/128k must stay under
+    its 10min default). Passing an explicit timeout skips that calculation
+    entirely, so a widened max_tokens ceiling (see _TOKEN_LIMIT_CEILING) never
+    hits it. Mirrors the SDK's own worst-case-duration formula with 20% margin,
+    floored at its 600s default so small, non-widened calls are unaffected.
+    """
+    return max(600.0, 3600.0 * max_tokens / 128_000 * 1.2)
+
+
 def _extract_text(message) -> str:
     """Return the first TEXT block's text from a Messages response.
 
@@ -2156,6 +2178,7 @@ def call_claude(prompt: str, api_key: str, max_tokens: int = 1500, parse_json: b
         # prompt suite was tuned and fact-check-approved against. No-op on models
         # that don't support the field expecting a value (accepted harmlessly).
         thinking=_thinking_param(),
+        timeout=_nonstreaming_timeout_for(max_tokens),
         **_output_config_kwargs(),
     )
     _meter_record(model, _in_text, message)
@@ -2175,6 +2198,7 @@ def call_claude(prompt: str, api_key: str, max_tokens: int = 1500, parse_json: b
                 model=model,
                 max_tokens=max_tokens,
                 messages=[{"role": "user", "content": content}],
+                timeout=_nonstreaming_timeout_for(max_tokens),
                 thinking={"type": "disabled"},
             )
             _meter_record(model, _in_text, message)
