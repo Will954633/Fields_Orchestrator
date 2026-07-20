@@ -56,8 +56,27 @@ def _client():
     global _CLIENT
     if _CLIENT is None:
         import anthropic
-        _CLIENT = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+        # Direct ANTHROPIC_API_KEY billing has been dead since 2026-07 (AU Visa
+        # intl decline on top-up) — any call on that path 400s with "credit
+        # balance too low". OpenRouter exposes a genuine native Anthropic
+        # /v1/messages passthrough (same request/response shape, images
+        # supported), so the real anthropic SDK works unmodified just pointed
+        # at a different base_url. Set ANTHROPIC_BACKEND=openrouter to use it.
+        if os.environ.get("ANTHROPIC_BACKEND", "").strip().lower() == "openrouter":
+            _CLIENT = anthropic.Anthropic(
+                api_key=os.environ["OPENROUTER_API_KEY"],
+                base_url="https://openrouter.ai/api",
+            )
+        else:
+            _CLIENT = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
     return _CLIENT
+
+
+def _resolve_model(model: str) -> str:
+    """OpenRouter model ids are namespaced 'anthropic/<model>'."""
+    if os.environ.get("ANTHROPIC_BACKEND", "").strip().lower() == "openrouter" and not model.startswith("anthropic/"):
+        return f"anthropic/{model}"
+    return model
 
 
 def _image_block(src: ImageSource) -> dict:
@@ -118,7 +137,7 @@ def vision_text(
             logger.warning(f"claude_vision: image fetch/encode failed: {e}")
     content.append({"type": "text", "text": prompt})
     kwargs = {
-        "model": model or MODEL_ANALYZE,
+        "model": _resolve_model(model or MODEL_ANALYZE),
         "max_tokens": max_tokens,
         "messages": [{"role": "user", "content": content}],
     }
