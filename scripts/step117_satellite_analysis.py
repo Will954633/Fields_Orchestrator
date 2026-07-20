@@ -117,13 +117,17 @@ SYSTEM_PROMPT = """You are a property analyst reviewing a satellite / aerial ima
 
 Analyse the image from the perspective of a potential buyer. Be specific and factual — describe what you can actually see, not what you assume.
 
-Return your analysis as a JSON object with TWO sections:
+Return your analysis as a JSON object with THREE sections:
 
-1. **"categories"** — structured categorical data used as machine-readable inputs for valuation models and filters. Every field MUST use ONLY the allowed values listed below.
-2. **"narrative"** — free-form text analysis where you describe everything you observe in detail.
+1. **"pin_confirmed"** — boolean. See the CRITICAL rule below before anything else.
+2. **"categories"** — structured categorical data used as machine-readable inputs for valuation models and filters. Every field MUST use ONLY the allowed values listed below.
+3. **"narrative"** — free-form text analysis where you describe everything you observe in detail.
+
+CRITICAL — "pin_confirmed": Set this to `true` only if you can clearly see the RED PIN/MARKER (or, on boundary-mode images, the YELLOW POLYGON) and it unambiguously identifies ONE specific lot. Set it to `false` if the marker is missing, unclear, off-frame, or you are inferring the subject's location from the general area/address context rather than a visible marker. This is not optional or cosmetic: every downstream system (valuation model, editorial content) treats `categories` as ground truth for the SUBJECT lot specifically — a wrong or unconfirmed pin means those fields would silently describe the wrong lot. When `pin_confirmed` is `false`, every field in "categories" MUST use the neutral/unknown option (e.g. "unknown", "none", "average") — do NOT describe the general area's features as if they belonged to the subject lot, even if you can see something notable nearby (e.g. a golf course elsewhere in frame). The "narrative" section may still describe the general area for buyer context, but must say plainly that the subject lot could not be confirmed.
 
 ```json
 {
+  "pin_confirmed": true,
   "categories": {
     "adjacency": {
       "backs_onto": ["One or more of: busy_road, quiet_street, cul_de_sac, park, reserve, golf_course, waterway, canal, lake, bushland, commercial, shopping_centre, school, railway, power_lines, industrial, vacant_land, residential_only, highway, sports_field, church, medical_facility"],
@@ -176,7 +180,8 @@ Return your analysis as a JSON object with TWO sections:
 ```
 
 RULES:
-- **categories**: Use ONLY the allowed values listed above. If you cannot determine a value from the image, use the most conservative/neutral option (e.g. "none", "standard", "average", "unknown").
+- **pin_confirmed**: See the CRITICAL rule above. Default to `false` whenever you're not certain which lot is the subject — a wrong guess is worse than an honest "unknown".
+- **categories**: Use ONLY the allowed values listed above. If you cannot determine a value from the image, use the most conservative/neutral option (e.g. "none", "standard", "average", "unknown"). This is MANDATORY, not optional, when `pin_confirmed` is `false`.
 - **backs_onto**: This is an ARRAY — a property can back onto multiple things (e.g. ["park", "quiet_street"]).
 - **pool_visible** and **flight_path**: These are booleans (true/false).
 - **narrative**: Write freely and in detail. Describe everything you observe. This is your unrestricted analysis.
@@ -187,6 +192,8 @@ USER_PROMPT = """Analyse this satellite image of a property at: {address}
 The property is in the suburb of {suburb}, Gold Coast, Queensland, Australia.
 
 IMPORTANT: The subject property is marked with a RED PIN/MARKER on the image. Only analyse the specific lot where the RED PIN sits. When assessing "backs_onto", look at what is DIRECTLY behind the rear boundary of the pinned lot — not what is nearby but separated by other lots. A park 2-3 lots away is NOT "backs_onto: park".
+
+If you cannot see a red pin/marker anywhere on the image, or it is unclear which lot it marks, set "pin_confirmed": false and use neutral/unknown values for every "categories" field — do not guess based on the general area.
 
 Provide your buyer-perspective analysis as a JSON object."""
 
@@ -256,9 +263,13 @@ def fetch_satellite_image(
     """
     url = "https://maps.googleapis.com/maps/api/staticmap"
 
-    # Prefer geocoded address for rooftop accuracy
+    # Prefer already-known coordinates; only geocode when we don't have them.
+    # Previously this ALWAYS re-geocoded whenever an address was present, even
+    # with good lat/lng already in hand — an unnecessary extra network call and
+    # failure point that could silently replace a solid pin with a fresh (or
+    # failed) geocode result for no benefit.
     pin_lat, pin_lng = lat, lng
-    if address:
+    if not (pin_lat and pin_lng) and address:
         geocoded = _geocode_address(address)
         if geocoded:
             pin_lat, pin_lng = geocoded
@@ -543,6 +554,17 @@ def main() -> None:
             geo = prop.get("geocoded_coordinates") or {}
             lat = geo.get("latitude")
             lng = geo.get("longitude")
+
+            # Fallback: many properties store rooftop coordinates under
+            # LATITUDE/LONGITUDE (a different enrichment source) rather than
+            # geocoded_coordinates. Confirmed 2026-07-20: 92 of 95 for-sale Houses
+            # missing geocoded_coordinates across the 3 target suburbs HAD this
+            # fallback available but unused — forcing a live re-geocode of the
+            # address at capture time, which silently produces a pin-less image
+            # (no marker at all) if that re-geocode call fails or mis-resolves.
+            if not lat or not lng:
+                lat = prop.get("LATITUDE")
+                lng = prop.get("LONGITUDE")
 
             if not lat or not lng:
                 if not address:
