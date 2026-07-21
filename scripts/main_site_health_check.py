@@ -53,8 +53,18 @@ CORE3 = ["robina", "burleigh_waters", "varsity_lakes"]
 CHART_TYPES = ["days_on_market", "sales_volume", "turnover_rate", "market_cycle"]
 
 # Page order = Google Sheet tab order
-PAGES = ["Pipeline Processes", "Market Metrics", "For Sale / Sold", "Property Page",
+PAGES = ["Pipeline Processes", "Sitemap", "Market Metrics", "For Sale / Sold", "Property Page",
          "Articles", "Valuation Accuracy", "Known Gaps"]
+
+# Files the VM's daily sitemap cron (06:15 AEST, regenerate-sitemap.sh) pushes.
+# 2026-07-22: that push silently failed every day 07-20 through 07-22
+# ("Argument list too long" on the 3.9MB file, gh CLI --field content= arg
+# limit) while the script still printed "Done." and exited 0 — Google kept
+# crawling a 2-day-stale sitemap and nobody noticed until Will caught a
+# published property not showing up in search. This check is the fix for
+# that specific silence: track each file's actual last-pushed commit age.
+SITEMAP_REPO = "Will954633/Website_Version_Feb_2026"
+SITEMAP_FILES = ["public/sitemap.xml", "public/news-sitemap.xml"]
 
 
 # ---- helpers (mirror minisite_health_check.py) --------------------------------
@@ -106,6 +116,35 @@ def value_hash(v):
 
 def suburb_label(s):
     return s.replace("_", " ").title()
+
+
+def last_commit_for_path(repo, path):
+    """Timestamp + SHA of the most recent commit touching `path` on `repo`'s
+    default branch, via `gh api` (subprocess — the .env GITHUB_TOKEN is known
+    to override/break `gh`'s own auth, so unset it first, matching every other
+    gh-api call in this codebase). Returns (datetime|None, sha|None, error|None)."""
+    import subprocess
+    env = dict(os.environ)
+    env.pop("GITHUB_TOKEN", None)
+    env.setdefault("GH_CONFIG_DIR", "/home/projects/.config/gh")
+    try:
+        # NOTE: `gh api` defaults to POST once any -f/-F flag is present unless
+        # --method GET is explicit — bit us during testing (silent 404 on this
+        # exact call). Query-string form sidesteps the footgun entirely.
+        p = subprocess.run(
+            ["gh", "api", f"repos/{repo}/commits?path={path}&per_page=1"],
+            env=env, capture_output=True, text=True, timeout=20,
+        )
+        if p.returncode != 0:
+            return None, None, (p.stderr or p.stdout or "gh api failed")[:200]
+        commits = json.loads(p.stdout)
+        if not commits:
+            return None, None, "no commits found for this path"
+        c = commits[0]
+        ts = as_dt(c["commit"]["committer"]["date"])
+        return ts, c["sha"][:12], None
+    except Exception as e:
+        return None, None, f"{type(e).__name__}: {e}"[:200]
 
 
 # ---- freshness judging --------------------------------------------------------
@@ -427,6 +466,20 @@ def collect(client, now_utc, prev_map):
                 detail = (detail + "; " if detail else "") + f"check itself stale ({age_h:.0f}h old)"
             add(PG, "Coverage vs Domain", suburb_label(d.get("suburb", "?")),
                 f"{d.get('total_listings', '—')} listings", st, "checked_at", ts, detail)
+
+    # ----- Sitemap: daily VM-cron push actually landing on GitHub -----
+    # (regenerate-sitemap.sh runs 06:15 AEST; this only checks the push
+    # SUCCEEDED, not whether Google has crawled it — see seo_indexation_check.py
+    # for the GSC-side readout, which is a separate weekly job.)
+    PG = "Sitemap"
+    for path in SITEMAP_FILES:
+        ts, sha, err = last_commit_for_path(SITEMAP_REPO, path)
+        if err:
+            add(PG, "Daily push (VM cron)", path, None, ERROR, "commit date", None,
+                f"could not check GitHub: {err}")
+            continue
+        st, dt = judge(ts, "scrape", now_utc, last_run)
+        add(PG, "Daily push (VM cron)", path, f"commit {sha}", st, "commit date", ts, dt)
 
     # ----- Known Gaps (structural; documented, not alarms) -----
     PG = "Known Gaps"
