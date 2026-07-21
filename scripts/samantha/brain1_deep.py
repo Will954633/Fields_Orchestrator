@@ -35,7 +35,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import brain1_query as bq
 import openrouter_client as orc
 
-UID_RE = re.compile(r"\bu\d{4}\b")
+UID_RE = re.compile(r"\b[uk]\d{4,5}\b")  # u#### coaching + k##### KB units
 HAIKU = orc.HAIKU  # decompose / judge / map — Haiku via OpenRouter
 JUDGE_WORKERS = 6      # bounded concurrency for I/O-bound claude calls (judge + map)
 MAX_SINGLE_UNITS = 150 # fidelity ceiling: above this, single-context synthesis stops citing real
