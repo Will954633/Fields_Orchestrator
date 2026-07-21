@@ -13,11 +13,13 @@ Batches produced by kb_ingest.py (--emit-only) in /home/fields/brain3_build/batc
 Run:  env -u CLAUDECODE python3 scripts/samantha/brain3_annotate.py --pool public
 Cron auto-resume: */10 * * * * /home/fields/brain3_build/run_<pool>.sh
 """
-import os, re, sys, json, glob, time, fcntl, argparse, subprocess
+import os, re, sys, json, glob, time, fcntl, argparse
 from datetime import datetime, timezone
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import openrouter_client as orc
 
 BASE = "/home/fields/brain3_build"
-MODEL = "claude-haiku-4-5-20251001"
+MODEL = orc.HAIKU  # annotation stays Haiku, now via OpenRouter (off Max budget)
 MAX_WORDS_PER_UNIT = 1200
 
 PROMPT_HEADER = """You are annotating UNITS from a real-estate company's internal knowledge base (books, papers, articles, strategy docs, meeting notes) to build a queryable knowledge graph.
@@ -74,13 +76,7 @@ def build_prompt(units):
 
 
 def call_haiku(prompt, timeout=300):
-    env = {k: v for k, v in os.environ.items()
-           if k not in ("CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SSE_PORT")}
-    r = subprocess.run(["claude", "-p", "--model", MODEL],
-                       input=prompt, capture_output=True, text=True, timeout=timeout, env=env)
-    if r.returncode != 0:
-        raise RuntimeError(f"claude exit {r.returncode}: {r.stderr[:200]}")
-    return r.stdout.strip()
+    return orc.call(prompt, MODEL, timeout=timeout, max_tokens=16000)
 
 
 def extract_json_array(s):
