@@ -148,4 +148,4 @@ def vision_text(
     except Exception as e:
         logger.warning(f"claude_vision: messages.create failed: {e}")
         return None
-    return "".join(b.text for b in resp.content if getattr(b, "type", None) == "text") or ""
+    return "".join(b.text for b in (resp.content or []) if getattr(b, "type", None) == "text") or ""
