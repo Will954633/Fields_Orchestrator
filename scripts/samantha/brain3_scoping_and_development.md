@@ -3,6 +3,21 @@
 **Scoping + Development document**
 Author: Samantha (drafted for Will Simpson) · 2026-07-15 · Status: DRAFT for decision
 
+> **⚠ REFRAME 2026-07-21 (Will) — SUPERSEDES the "upgrade the KB into Brain 3" recommendation below.**
+> Brain 3 is now a **NEW brain built from our internal OPERATIONAL data — NOT the KB.** The KB
+> (`/home/fields/knowledge-base/`) is **EXCLUDED entirely at this stage** — it holds personal/financial
+> data (invoices, bank statements, PII) we are deliberately keeping out. So this is TWO changes vs the
+> doc below: (1) we are building a **new brain, not extending the KB**; (2) **no KB data enters Brain 3.**
+> Sources for Brain 3 = the NON-KB inventory in §2.2/2.3/2.4/2.6: curated VM knowledge files
+> (`07_Focus/`, `08_Seller-Book/`, `001_Our_Competitive_Advantages/`, `config/*.md`, `00_Run_Commands/*.md`),
+> the `system_monitor` NARRATIVE collections (excluding PII: crm_contacts/leads/analyse_leads), the
+> fix-history logs, and GitHub commit/CEO-sandbox history.
+> Architecture uses the **proven Brain-1 pipeline** (Haiku annotate → deterministic graph → per-source
+> completeness deep-query → quote-verify, all on OpenRouter) — NOT the embeddings/vector-store design in
+> Part 2 below. Brain 3 is its own firewalled package (`brain3_ops/`), separate from Brain 1.
+> The KB public-safe books/papers already folded into **Brain 1** (external pool); the KB private pool is
+> **abandoned** for now. See `brain3_ops_ingest.py`.
+
 ---
 
 ## Executive summary
