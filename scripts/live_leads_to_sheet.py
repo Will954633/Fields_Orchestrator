@@ -8,8 +8,17 @@ Three sources, unified into one row schema:
                          by design -- see memory ayh_conversions_no_contact -- so name/
                          email/phone are blank but the address + engagement signals are
                          real, e.g. visit_count, PostHog attribution channel)
-  - Off-Market Report   (system_monitor.offmarket_orders, the $15 unlock -- requires
-                         consent + a real payment, so contact info there IS reliable)
+  - Off-Market Report   Two flavours, merged: (1) system_monitor.offmarket_orders, the
+                         $15 unlock -- requires consent + a real payment, contact info IS
+                         reliable; (2) PostHog `offmarket_report_view` -- every distinct
+                         visitor who OPENED an /off-market/:slug page, whether or not they
+                         paid. (1) started empty (the only order on record is Will's own
+                         test) so (2) is the real signal for this channel today -- see
+                         memory offmarket_paid_report ("no FB ads, organic traffic only").
+                         No contact info for (2) (anonymous page view), filtered to
+                         genuine AU visitors only (see City/Country below); a visitor who
+                         later buys is upgraded from a "viewed" row to an "orders" row
+                         (never both, keyed off posthog_distinct_id).
 
 Internal/test noise is excluded: is_test docs, will@fieldsestate.com.au / test@tester.com.au
 contacts, is_internal-flagged AYH visits, and known diagnostic-test slugs.
@@ -46,7 +55,7 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
 from shared.db import get_client
-from crm_sync import posthog_query
+from crm_sync import posthog_query, INTERNAL_IDS, BOT_CITIES
 
 # ---- config ---------------------------------------------------------------
 LIVE_SPREADSHEET_ID = "1mRjT_PmjTepF1rDajJlM553Umy47dKa4fHOclrzAKFs"
@@ -169,13 +178,24 @@ def ayh_rows(db):
         }
 
 
+def _slug_to_address(slug: str) -> str:
+    return slug.replace("-", " ").title()
+
+
 def offmarket_rows(db):
+    """Off-market leads = anyone who opened an /off-market/:slug page. Paid orders are
+    the reliable-contact subset; PostHog `offmarket_report_view` covers everyone else who
+    merely viewed (the channel's only real signal today -- see module docstring)."""
+    purchased_by_distinct_id = {}
     for d in db.offmarket_orders.find({}):
         buyer = d.get("buyer") or {}
         if (buyer.get("email") or "").lower() in TEST_EMAILS:
             continue
         if not d.get("consent"):
             continue
+        did = d.get("posthog_distinct_id")
+        if did:
+            purchased_by_distinct_id[did] = True
         details_parts = [
             f"amount=${(d.get('amount') or 0) / 100:.2f}",
             f"confidence={d.get('confidence', '')}",
@@ -188,15 +208,57 @@ def offmarket_rows(db):
         yield {
             "lead_id": f"offmarket_orders:{d['order_id']}",
             "date": created.strftime("%Y-%m-%d") if created else "",
-            "source": "Off-Market Report ($15 unlock)",
+            "source": "Off-Market Report",
             "name": name,
             "email": buyer.get("email") or "",
             "phone": buyer.get("phone") or "",
-            "posthog_distinct_id": d.get("posthog_distinct_id"),
+            "posthog_distinct_id": did,
             "suburb_address": d.get("subject_address") or d.get("suburb") or "",
             "details": "; ".join(details_parts),
             "campaign": d.get("arm", ""),
-            "status": d.get("status", ""),
+            "status": f"purchased — {d.get('status', '')}",
+        }
+
+    rows = posthog_query("""
+SELECT distinct_id,
+       min(timestamp) as first_seen,
+       count() as views,
+       groupUniqArray(properties.$pathname) as paths,
+       argMax(properties.$geoip_city_name, timestamp) as city,
+       argMax(properties.$geoip_country_name, timestamp) as country,
+       argMax(properties.$device_type, timestamp) as device,
+       argMax(properties.$browser, timestamp) as browser,
+       argMax(properties.$referring_domain, timestamp) as referrer
+FROM events
+WHERE event = 'offmarket_report_view' AND timestamp > now() - INTERVAL 180 DAY
+GROUP BY distinct_id
+""")
+    for did, first_seen, views, paths, city, country, device, browser, referrer in rows:
+        if did in purchased_by_distinct_id:
+            continue  # already emitted above as a purchase row
+        if did in INTERNAL_IDS:
+            continue
+        if country != "Australia":
+            continue
+        if city and city in BOT_CITIES:
+            continue
+        slugs = [p.rsplit("/", 1)[-1] for p in (paths or []) if p]
+        addresses = [_slug_to_address(s) for s in slugs]
+        details_parts = [f"views={views}", f"device={device or ''}", f"browser={browser or ''}"]
+        if len(addresses) > 1:
+            details_parts.append(f"also_viewed={'; '.join(addresses[1:])}")
+        yield {
+            "lead_id": f"offmarket_view:{did}",
+            "date": first_seen[:10] if first_seen else "",
+            "source": "Off-Market Report",
+            "name": "",
+            "email": "",
+            "phone": "",
+            "posthog_distinct_id": did,
+            "suburb_address": addresses[0] if addresses else "",
+            "details": "; ".join(details_parts),
+            "campaign": referrer or "",
+            "status": "viewed — no purchase",
         }
 
 
