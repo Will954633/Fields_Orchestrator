@@ -16,11 +16,13 @@ Usage:
   env -u CLAUDECODE python3 scripts/samantha/brain1_query.py "your question" [--k 50] [--mode general|insight]
   --dry   : print the shortlist + prompt size, skip the Opus call (for tuning / cost check)
 """
-import os, re, sys, json, argparse, subprocess
+import os, re, sys, json, argparse
 from collections import defaultdict
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import openrouter_client as orc
 
 PACKAGE = "/home/fields/brain1_build/package.json"
-MODEL = "opus"  # CLI alias -> Opus on Max
+MODEL = orc.SONNET5  # was Opus on Max -> now claude-sonnet-5 via OpenRouter (Will 2026-07-19)
 _ws = re.compile(r"\s+")
 STOP = set("the a an and or of to in for on with your you it is are be as at by from this that "
            "how why what when who do does can will if into over out up not no more most your their "
@@ -113,13 +115,7 @@ PROMPTS = {
 
 
 def call_opus(prompt, timeout=600):
-    env = {k: v for k, v in os.environ.items()
-           if k not in ("CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SSE_PORT")}
-    r = subprocess.run(["claude", "-p", "--model", MODEL],
-                       input=prompt, capture_output=True, text=True, timeout=timeout, env=env)
-    if r.returncode != 0:
-        raise RuntimeError(f"claude exit {r.returncode}: {r.stderr[:300]}")
-    return r.stdout.strip()
+    return orc.call(prompt, MODEL, timeout=timeout, max_tokens=16000)
 
 
 def main():
