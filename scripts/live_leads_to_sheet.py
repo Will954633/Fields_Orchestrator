@@ -56,11 +56,14 @@ from googleapiclient.discovery import build
 
 from shared.db import get_client
 from crm_sync import posthog_query, INTERNAL_IDS, BOT_CITIES
+from scripts.property_reports import occupancy_classifier as occ
 
 # ---- config ---------------------------------------------------------------
 LIVE_SPREADSHEET_ID = "1mRjT_PmjTepF1rDajJlM553Umy47dKa4fHOclrzAKFs"
 TAB = "All Leads"
 SA_KEY = os.environ.get("GOOGLE_VISION_SA_KEY", "/home/fields/.gcp-floor-plan-vision.json")
+GC_DB = "Gold_Coast"
+CORE_SUBURBS = ["robina", "varsity_lakes", "burleigh_waters"]
 
 TEST_EMAILS = {"will@fieldsestate.com.au", "test@tester.com.au"}
 TEST_SLUGS = {"7-huntingdale-crescent-robina", "5-fulham-place-robina"}
@@ -182,10 +185,66 @@ def _slug_to_address(slug: str) -> str:
     return slug.replace("-", " ").title()
 
 
-def offmarket_rows(db):
+def resolve_gc_doc(gc_db, slug: str):
+    """Find the Gold_Coast property doc for an off-market slug -- tries each of the
+    3 core suburb collections by url_slug (same convention as backfill_offmarket_slugs.py)."""
+    for suburb in CORE_SUBURBS:
+        d = gc_db[suburb].find_one({"url_slug": slug})
+        if d:
+            return d
+    return None
+
+
+def years_since(date_str):
+    if not date_str:
+        return None
+    try:
+        d = datetime.strptime(date_str, "%Y-%m-%d")
+        return round((datetime.now() - d).days / 365.25, 1)
+    except (ValueError, TypeError):
+        return None
+
+
+def occupancy_for_slug(gc_db, slug: str) -> dict:
+    """Free path only (stored timeline, no Bright Data cost) -- this runs nightly over
+    every off-market view, so a paid fresh pull per lead is not justified here. Returns
+    the occupancy_classifier result dict, or an 'unknown'/no-data result if the address
+    can't be resolved. Gold_Coast has no 'for_rent' listing_status (only for_sale/sold/
+    under_contract/withdrawn) -- tenancy is only visible via the Domain Rental-listing
+    events inside the timeline, which is exactly what classify_from_timeline reads."""
+    gc_doc = resolve_gc_doc(gc_db, slug)
+    if not gc_doc:
+        return occ.classify_from_timeline([])
+    events = occ.normalise_stored_timeline(gc_doc)
+    result = occ.classify_from_timeline(events)
+    result["currently_for_sale"] = gc_doc.get("listing_status") == "for_sale"
+    return result
+
+
+def occupancy_details(o: dict) -> str:
+    parts = [f"occupancy={o.get('type', 'unknown')}"]
+    ev = o.get("evidence") or {}
+    if ev.get("last_sale_date"):
+        yrs = years_since(ev["last_sale_date"])
+        parts.append(f"last_sale={ev['last_sale_date']}" + (f" ({yrs}y held)" if yrs is not None else ""))
+        if ev.get("last_sale_price"):
+            parts.append(f"last_sale_price=${ev['last_sale_price']:,}")
+    if o.get("currently_for_sale"):
+        parts.append("currently_for_sale=True")
+    return "; ".join(parts)
+
+
+def offmarket_rows(db, gc_db):
     """Off-market leads = anyone who opened an /off-market/:slug page. Paid orders are
     the reliable-contact subset; PostHog `offmarket_report_view` covers everyone else who
-    merely viewed (the channel's only real signal today -- see module docstring)."""
+    merely viewed (the channel's only real signal today -- see module docstring).
+
+    Every address is run through occupancy_classifier (free stored-timeline path) so the
+    list only contains genuine off-market OWNER properties -- not a rental someone was
+    searching as a prospective tenant. A property whose latest timeline event is a Rental
+    listing after its last sale (occupancy type == 'investor', i.e. currently tenanted) is
+    filtered out of view-leads entirely. Purchase rows are never filtered on occupancy (a
+    real payment is its own strong signal) but are enriched with the same detail."""
     purchased_by_distinct_id = {}
     for d in db.offmarket_orders.find({}):
         buyer = d.get("buyer") or {}
@@ -203,6 +262,8 @@ def offmarket_rows(db):
             f"refund_status={d.get('refund_status', '')}",
             f"owner_match={d.get('owner_match')}",
         ]
+        if d.get("slug"):
+            details_parts.append(occupancy_details(occupancy_for_slug(gc_db, d["slug"])))
         created = d.get("created_at")
         name = f"{buyer.get('first_name', '')} {buyer.get('last_name', '')}".strip()
         yield {
@@ -243,8 +304,17 @@ GROUP BY distinct_id
         if city and city in BOT_CITIES:
             continue
         slugs = [p.rsplit("/", 1)[-1] for p in (paths or []) if p]
+        if not slugs:
+            continue
         addresses = [_slug_to_address(s) for s in slugs]
-        details_parts = [f"views={views}", f"device={device or ''}", f"browser={browser or ''}"]
+        # Occupancy on the primary (first-viewed) address -- a currently-tenanted
+        # property (rental listed after its last sale) means this was most likely a
+        # prospective renter, not a genuine off-market/seller lead. Filter it out.
+        primary_occ = occupancy_for_slug(gc_db, slugs[0])
+        if primary_occ.get("type") == "investor":
+            continue
+        details_parts = [f"views={views}", f"device={device or ''}", f"browser={browser or ''}",
+                          occupancy_details(primary_occ)]
         if len(addresses) > 1:
             details_parts.append(f"also_viewed={'; '.join(addresses[1:])}")
         yield {
@@ -334,13 +404,14 @@ def main():
     svc = get_sheets()
     client = get_client()
     db = client["system_monitor"]
+    gc_db = client[GC_DB]
 
     sheet_id = tab_id(svc, args.spreadsheet_id, TAB)
     if sheet_id is None:
         print(f"Tab '{TAB}' not found in spreadsheet {args.spreadsheet_id}")
         sys.exit(1)
 
-    all_leads = list(fb_lead_rows(db)) + list(ayh_rows(db)) + list(offmarket_rows(db))
+    all_leads = list(fb_lead_rows(db)) + list(ayh_rows(db)) + list(offmarket_rows(db, gc_db))
 
     if args.rebuild:
         candidates = sorted(all_leads, key=lambda l: l["date"], reverse=True)
