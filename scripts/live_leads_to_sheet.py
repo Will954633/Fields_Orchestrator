@@ -132,6 +132,32 @@ def fb_lead_rows(db):
         }
 
 
+def selling_plan_details(d: dict) -> str:
+    """Format a property_reports doc's selling_plan.activity_log (added 2026-07-21,
+    see fix-history SELLING-PLAN-CRM-LOGGING) into a single readable string for the
+    sheet's Details column -- the exact question + the seller's exact answer, so
+    Will has the specific data on hand for follow-up (e.g. "list-month: September;
+    settlement-days: 45 days; staging: Yes - full styling"). Uses the question text
+    + answerLabel already stored per-entry (no need to duplicate the question/option
+    text tables that live in property-plan-submit.mjs). Last answer per question wins
+    (a seller can change their mind -- the sheet should show where they landed, not
+    every intermediate edit); the full history remains in Mongo if ever needed."""
+    log = ((d.get("selling_plan") or {}).get("activity_log")) or []
+    if not log:
+        return ""
+    latest_by_question = {}
+    for entry in log:
+        latest_by_question[entry.get("questionId")] = entry
+    parts = []
+    for entry in latest_by_question.values():
+        label = entry.get("answerLabel")
+        if isinstance(label, list):
+            label = ", ".join(label)
+        answer = label or entry.get("freeText") or "(free text only)"
+        parts.append(f"{entry.get('question', entry.get('questionId'))} → {answer}")
+    return "SELLING PLAN — " + "; ".join(parts)
+
+
 def ayh_rows(db):
     for d in db.property_reports.find({}):
         owner = d.get("owner") or {}
@@ -156,6 +182,9 @@ def ayh_rows(db):
             details_parts.append(f"landing={ft['landing_page']}")
         if ft.get("utm_campaign"):
             details_parts.append(f"utm_campaign={ft['utm_campaign']}")
+        plan = selling_plan_details(d)
+        if plan:
+            details_parts.append(plan)
         address = d.get("address") or d.get("suburb")
         if not address and d.get("slug"):
             address = d["slug"].replace("-", " ").title()
@@ -264,6 +293,11 @@ def offmarket_rows(db, gc_db):
         ]
         if d.get("slug"):
             details_parts.append(occupancy_details(occupancy_for_slug(gc_db, d["slug"])))
+            pr_doc = db.property_reports.find_one({"slug": d["slug"]}, {"selling_plan": 1})
+            if pr_doc:
+                plan = selling_plan_details(pr_doc)
+                if plan:
+                    details_parts.append(plan)
         created = d.get("created_at")
         name = f"{buyer.get('first_name', '')} {buyer.get('last_name', '')}".strip()
         yield {
