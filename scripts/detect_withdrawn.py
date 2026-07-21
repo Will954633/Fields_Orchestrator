@@ -169,13 +169,23 @@ def run_withdrawn_detection(suburbs, dry_run=False):
     # so burleigh_waters — and often varsity_lakes — were never reached. Their withdrawals
     # went undetected indefinitely (e.g. 12 Beaconsfield Drive sat as for_sale for weeks).
     # Interleaving listings round-robin spreads a tight budget evenly across every suburb.
+    # ---- Persisted rotation cursor (2026-07-21) ----
+    # The round-robin interleaving above only fixed cross-suburb fairness. Within
+    # each suburb, the query had no sort order and nothing recorded which
+    # properties were actually checked last time — so with ~235 for_sale listings
+    # and a ~36/run budget, the same front-of-query subset won every single run
+    # while the rest (e.g. 14 Julatten Drive, withdrawn since 2025) could go
+    # unchecked indefinitely. Sorting oldest-checked-first (never-checked treated
+    # as oldest of all, via the "" sentinel) guarantees full rotation over time —
+    # whatever a night's budget covers, next night starts from where it left off.
     per_suburb = []          # list of (suburb, collection, [props])
     for suburb in suburbs:
         collection = db[suburb]
         props = list(retry_db(lambda collection=collection: list(collection.find(
             {"listing_status": "for_sale", "listing_url": {"$exists": True, "$ne": None}},
-            {"address": 1, "listing_url": 1, "listing_status": 1}
+            {"address": 1, "listing_url": 1, "listing_status": 1, "withdrawn_last_checked_at": 1}
         ))))
+        props.sort(key=lambda p: p.get("withdrawn_last_checked_at") or "")
         per_suburb.append((suburb, collection, props))
         print(f"  {suburb}: {len(props)} for_sale properties")
 
@@ -225,6 +235,7 @@ def run_withdrawn_detection(suburbs, dry_run=False):
                         "detection_method": "listing_url_redirect_check",
                         "last_updated": now_iso,
                         "listing_price": listing_price,
+                        "withdrawn_last_checked_at": now_iso,
                     }
 
                     # Append final "withdrawn" entry to price_history
@@ -248,6 +259,15 @@ def run_withdrawn_detection(suburbs, dry_run=False):
             elif status == "active":
                 totals["active"] += 1
                 consecutive_errors = 0
+                if not dry_run:
+                    # Stamp so this property moves to the back of next run's
+                    # rotation — without this, a confirmed-active property with
+                    # an old/missing timestamp would keep winning the sort every
+                    # night, starving properties that have never been checked.
+                    retry_db(lambda collection=collection, prop=prop: collection.update_one(
+                        {"_id": prop["_id"]},
+                        {"$set": {"withdrawn_last_checked_at": now_iso}}
+                    ))
             else:
                 totals["errors"] += 1
                 consecutive_errors += 1
