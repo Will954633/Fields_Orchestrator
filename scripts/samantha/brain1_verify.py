@@ -18,11 +18,17 @@ Exits nonzero if any MISATTRIBUTED or NOT_FOUND -> use as a publish gate.
 Usage:
   python3 scripts/samantha/brain1_verify.py --file brief.md [--cover 0.85 --min-len 12 --show-ok]
 """
-import re, sys, json, argparse
+import os, re, sys, json, argparse
 from difflib import SequenceMatcher
 
 PACKAGE = "/home/fields/brain1_build/package.json"
-ANN = "/home/fields/brain1_build/annotations.jsonl"
+# All annotation sources feeding the unified external brain — coaching (u####) + KB (k####).
+# Without the KB files, KB-quote citations would falsely verify as fabricated.
+ANN_FILES = [
+    "/home/fields/brain1_build/annotations.jsonl",
+    "/home/fields/brain3_build/annotations_public.jsonl",
+    "/home/fields/brain3_build/annotations_private.jsonl",
+]
 _norm_re = re.compile(r"[^a-z0-9 ]+")
 _ws = re.compile(r"\s+")
 
@@ -31,13 +37,23 @@ def norm(s):
     return _ws.sub(" ", _norm_re.sub(" ", (s or "").lower())).strip()
 
 
-def unit_texts():
-    """unit_id -> normalized blob of its key_quotes + concepts + claims (from raw annotations)."""
+def unit_texts(ann_files=None):
+    """unit_id -> normalized blob of its key_quotes + concepts + claims, across ALL annotation
+    sources that exist (coaching + KB public/private)."""
     out = {}
-    for line in open(ANN, encoding="utf-8"):
-        d = json.loads(line)
-        blob = " ".join(d.get("key_quotes", []) + d.get("concepts", []) + d.get("claims", []))
-        out[d["unit_id"]] = norm(blob)
+    for path in (ann_files or ANN_FILES):
+        if not os.path.exists(path):
+            continue
+        for line in open(path, encoding="utf-8"):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                d = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            blob = " ".join(d.get("key_quotes", []) + d.get("concepts", []) + d.get("claims", []))
+            out[d["unit_id"]] = norm(blob)
     return out
 
 
@@ -64,7 +80,7 @@ def parse_pairs(text):
     pairs = []
     for line in text.splitlines():
         quotes = re.findall(r'[\"“]([^\"”]{8,})[\"”]', line)
-        ids = re.findall(r"u\d{4}", line)
+        ids = re.findall(r"[uk]\d{4,5}", line)  # u#### coaching + k##### KB
         for q in quotes:
             if ids:
                 pairs.append((q, ids))
@@ -101,7 +117,7 @@ def fix_citations(text, misattr):
     for r in misattr:
         actual = r["actual"]
         # match the exact quote, then up to 60 chars, then the FIRST uXXXX -> replace that id
-        pat = re.compile(r"(" + re.escape(r["quote"]) + r".{0,60}?)(u\d{4})", re.S)
+        pat = re.compile(r"(" + re.escape(r["quote"]) + r".{0,60}?)([uk]\d{4,5})", re.S)
         new, n = pat.subn(lambda m: m.group(1) + actual, text, count=1)
         if n:
             text, fixed = new, fixed + n
