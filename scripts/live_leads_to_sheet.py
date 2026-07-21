@@ -14,6 +14,12 @@ Three sources, unified into one row schema:
 Internal/test noise is excluded: is_test docs, will@fieldsestate.com.au / test@tester.com.au
 contacts, is_internal-flagged AYH visits, and known diagnostic-test slugs.
 
+City/Country columns confirm genuine (Australian) traffic: AYH and off-market leads carry
+a PostHog distinct_id, looked up via HogQL against $geoip_city_name/$geoip_country_name
+(same mechanism as crm_sync.py's bot filtering). Facebook Lead Ads have no on-site session
+so there's no per-lead geoip -- those rows are labelled as inferred from the ad account's
+Australia-geo-targeted campaigns, not measured, so it's never confused with a real hit.
+
 New leads are inserted as rows at the TOP (row 2, under the header) via insertDimension +
 values.update -- exactly the pattern used by sold_homes_to_sheet.py -- so existing rows,
 any manual notes/status edits, and formatting all shift down intact; the sheet is never
@@ -34,11 +40,13 @@ from datetime import datetime, timedelta, timezone
 
 warnings.filterwarnings("ignore")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
 from shared.db import get_client
+from crm_sync import posthog_query
 
 # ---- config ---------------------------------------------------------------
 LIVE_SPREADSHEET_ID = "1mRjT_PmjTepF1rDajJlM553Umy47dKa4fHOclrzAKFs"
@@ -48,8 +56,14 @@ SA_KEY = os.environ.get("GOOGLE_VISION_SA_KEY", "/home/fields/.gcp-floor-plan-vi
 TEST_EMAILS = {"will@fieldsestate.com.au", "test@tester.com.au"}
 TEST_SLUGS = {"7-huntingdale-crescent-robina", "5-fulham-place-robina"}
 
-HEADERS = ["Date", "Source", "Name", "Email", "Phone", "Suburb / Address",
-           "Details", "Campaign / Channel", "Status"]
+# Facebook Lead Ads have no on-site PostHog session, so there is no per-lead geoip.
+# The ad account only runs Australia-geo-targeted campaigns (see memory ads_reference:
+# HOUSING neighbourhood targeting on Robina/Varsity Lakes/Burleigh Waters) -- flagged as
+# inferred, not measured, so it's never confused with a verified PostHog geoip hit.
+FB_LOCATION_NOTE = "AU (inferred — geo-targeted FB campaign, no on-site session)"
+
+HEADERS = ["Date", "Source", "Name", "Email", "Phone", "City", "Country",
+           "Suburb / Address", "Details", "Campaign / Channel", "Status"]
 AEST = timezone(timedelta(hours=10))
 
 LEDGER_DB = "system_monitor"
@@ -97,6 +111,7 @@ def fb_lead_rows(db):
             "name": fields.get("full_name", ""),
             "email": fields.get("email", ""),
             "phone": fields.get("phone_number", ""),
+            "posthog_distinct_id": None,
             "suburb_address": fields.get("area") or fields.get("suburb")
                 or fields.get("property_address", ""),
             "details": "; ".join(details_parts),
@@ -146,6 +161,7 @@ def ayh_rows(db):
             "name": "",
             "email": owner.get("email") or "",
             "phone": owner.get("phone") or "",
+            "posthog_distinct_id": attribution.get("posthog_distinct_id") or owner.get("posthog_distinct_id"),
             "suburb_address": address or "",
             "details": "; ".join(details_parts),
             "campaign": ft.get("utm_campaign", "") or ft.get("referrer", "") or "",
@@ -176,11 +192,42 @@ def offmarket_rows(db):
             "name": name,
             "email": buyer.get("email") or "",
             "phone": buyer.get("phone") or "",
+            "posthog_distinct_id": d.get("posthog_distinct_id"),
             "suburb_address": d.get("subject_address") or d.get("suburb") or "",
             "details": "; ".join(details_parts),
             "campaign": d.get("arm", ""),
             "status": d.get("status", ""),
         }
+
+
+# ---- geoip (PostHog $geoip_city_name / $geoip_country_name by distinct_id) -----
+def lookup_geoip(distinct_ids: set[str]) -> dict[str, tuple[str, str]]:
+    """Batch HogQL lookup of the most recent city/country PostHog recorded for each
+    distinct_id. Only AYH / off-market leads carry a distinct_id (an on-site session);
+    Facebook Lead Ads never do (see FB_LOCATION_NOTE)."""
+    ids = [i for i in distinct_ids if i]
+    if not ids:
+        return {}
+    id_list = ", ".join("'" + i.replace("'", "") + "'" for i in ids)
+    rows = posthog_query(f"""
+SELECT distinct_id,
+       argMax(properties.$geoip_city_name, timestamp) as city,
+       argMax(properties.$geoip_country_name, timestamp) as country
+FROM events
+WHERE distinct_id IN ({id_list})
+GROUP BY distinct_id
+""")
+    return {r[0]: (r[1] or "", r[2] or "") for r in rows}
+
+
+def city_country_for(lead, geoip: dict[str, tuple[str, str]]) -> tuple[str, str]:
+    if lead["source"] == "Facebook Lead Ad":
+        return "", FB_LOCATION_NOTE
+    did = lead.get("posthog_distinct_id")
+    if did and did in geoip:
+        city, country = geoip[did]
+        return city, country or "Unknown"
+    return "", "Unknown (no PostHog session recorded)"
 
 
 # ---- sheet ops ----------------------------------------------------------------
@@ -192,9 +239,10 @@ def tab_id(svc, ssid, title):
     return None
 
 
-def row_values(lead):
+def row_values(lead, city, country):
     return [lead["date"], lead["source"], lead["name"], lead["email"], lead["phone"],
-            lead["suburb_address"], lead["details"], lead["campaign"], lead["status"]]
+            city, country, lead["suburb_address"], lead["details"], lead["campaign"],
+            lead["status"]]
 
 
 # ---- main -----------------------------------------------------------------
@@ -214,6 +262,10 @@ def main():
     ap.add_argument("--spreadsheet-id", default=LIVE_SPREADSHEET_ID)
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--no-alert", action="store_true")
+    ap.add_argument("--rebuild", action="store_true",
+                     help="wipe the tab and rewrite every genuine lead from scratch "
+                          "(e.g. after a schema/column change) instead of the normal "
+                          "insert-only-new behaviour; re-seeds the ledger too")
     args = ap.parse_args()
 
     set_env_from_file()
@@ -226,9 +278,29 @@ def main():
         print(f"Tab '{TAB}' not found in spreadsheet {args.spreadsheet_id}")
         sys.exit(1)
 
-    seen = load_ledger(client)
-
     all_leads = list(fb_lead_rows(db)) + list(ayh_rows(db)) + list(offmarket_rows(db))
+
+    if args.rebuild:
+        candidates = sorted(all_leads, key=lambda l: l["date"], reverse=True)
+        if args.dry_run:
+            print(f"[rebuild] would rewrite {len(candidates)} lead(s)")
+            client.close()
+            return
+        geoip = lookup_geoip({l.get("posthog_distinct_id") for l in candidates})
+        values = [HEADERS] + [row_values(l, *city_country_for(l, geoip)) for l in candidates]
+        svc.spreadsheets().values().clear(spreadsheetId=args.spreadsheet_id, range=f"'{TAB}'!A1:Z10000").execute()
+        svc.spreadsheets().values().update(
+            spreadsheetId=args.spreadsheet_id, range=f"'{TAB}'!A1",
+            valueInputOption="RAW", body={"values": values}).execute()
+        ts = datetime.now(AEST).isoformat()
+        client[LEDGER_DB][LEDGER_COLL].delete_many({})
+        for l in candidates:
+            record_ledger(client, l["lead_id"], ts)
+        client.close()
+        print(f"[rebuild] wrote {len(candidates)} lead(s), ledger re-seeded.")
+        return
+
+    seen = load_ledger(client)
     candidates = [l for l in all_leads if l["lead_id"] not in seen]
     # newest first -> ends up at the very top after insert
     candidates.sort(key=lambda l: l["date"], reverse=True)
@@ -246,6 +318,8 @@ def main():
         client.close()
         return
 
+    geoip = lookup_geoip({l.get("posthog_distinct_id") for l in candidates})
+
     n = len(candidates)
     svc.spreadsheets().batchUpdate(spreadsheetId=args.spreadsheet_id, body={"requests": [{
         "insertDimension": {
@@ -254,9 +328,13 @@ def main():
             "inheritFromBefore": False,
         }
     }]}).execute()
+    values = []
+    for l in candidates:
+        city, country = city_country_for(l, geoip)
+        values.append(row_values(l, city, country))
     svc.spreadsheets().values().update(
         spreadsheetId=args.spreadsheet_id, range=f"'{TAB}'!A2",
-        valueInputOption="RAW", body={"values": [row_values(l) for l in candidates]}).execute()
+        valueInputOption="RAW", body={"values": values}).execute()
 
     ts = datetime.now(AEST).isoformat()
     for l in candidates:
