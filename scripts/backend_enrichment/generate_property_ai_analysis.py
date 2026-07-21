@@ -2935,11 +2935,17 @@ OUTPUT BODY JSON — use v2 structured insight format (no headline, no meta, no 
             print(f"    Done ({time.time()-t0:.1f}s)")
             print(f"\n  --- DRAFT {attempt + 1} VERDICT: \"{current_draft.get('verdict', '')[:80]}\"")
 
-            # Re-run fact-check on the new draft (attempts 1+)
-            if attempt < MAX_RETRIES:
-                print(f"  [Verify] Fact-checking Draft {attempt + 1}...")
-                t0 = time.time()
-                verify_prompt = f"""You are a FACT-CHECKER. Verify every factual claim in this draft against the raw data. Output ONLY lines marked ❌ FAILED — skip verified claims.
+            # Re-run fact-check on the new draft — ALWAYS, including the last
+            # attempt. Previously the last attempt skipped straight to
+            # acceptance with no verify pass at all (see fix-history
+            # 2026-07-21): the attempt count should only gate whether we get
+            # another REWRITE cycle, not whether we CHECK the result. This means
+            # a last-attempt draft that happens to be clean is now correctly
+            # tagged "clean" (and can auto-publish) instead of being lumped in
+            # with genuinely-still-wrong drafts under a vague "unverified" label.
+            print(f"  [Verify] Fact-checking Draft {attempt + 1}...")
+            t0 = time.time()
+            verify_prompt = f"""You are a FACT-CHECKER. Verify every factual claim in this draft against the raw data. Output ONLY lines marked ❌ FAILED — skip verified claims.
 
 DRAFT:
 {json.dumps(current_draft, indent=2, default=str)}
@@ -2964,31 +2970,36 @@ Output ONLY failed claims as:
 
 If ALL claims are verified, output: ✅ ALL CLAIMS VERIFIED"""
 
-                verify_text = call_claude(
-                    verify_prompt, api_key,
-                    max_tokens=PIPELINE_CONFIG["token_limits"]["verify"],
-                    parse_json=False,
-                    model=PIPELINE_CONFIG["models"]["fact_check"],
-                    doc_for_cache=prop_summary,
-                )
-                verify_failures = verify_text.count("❌ FAILED")
-                print(f"    {time.time()-t0:.1f}s — {verify_failures} failures found")
+            verify_text = call_claude(
+                verify_prompt, api_key,
+                max_tokens=PIPELINE_CONFIG["token_limits"]["verify"],
+                parse_json=False,
+                model=PIPELINE_CONFIG["models"]["fact_check"],
+                doc_for_cache=prop_summary,
+            )
+            verify_failures = verify_text.count("❌ FAILED")
+            print(f"    {time.time()-t0:.1f}s — {verify_failures} failures found")
 
-                if verify_failures > 0:
-                    for line in verify_text.split("\n"):
-                        if "FAILED" in line:
-                            print(f"    {line.strip()[:120]}")
+            if verify_failures == 0:
+                print(f"    ✅ All claims verified — accepting Draft {attempt + 1}")
+                final_draft = current_draft
+                final_draft["_verify_outcome"] = "clean"
+                break
 
-                    if verify_failures <= PIPELINE_CONFIG["retry"]["fact_check_accept_threshold"]:
-                        # Minor issues — accept with note
-                        print(f"    Minor issues — accepting Draft {attempt + 1} with {verify_failures} flag(s)")
-                        final_draft = current_draft
-                        final_draft["_verify_outcome"] = "minor_flags"
-                        break
-                    else:
-                        # Major issues — retry with corrections
-                        print(f"    {verify_failures} failures — retrying (attempt {attempt + 1}/{MAX_RETRIES})...")
-                        draft2_prompt = f"""Fix EVERY failed claim below. Output the corrected BODY JSON (no headline/meta — those are handled separately).
+            for line in verify_text.split("\n"):
+                if "FAILED" in line:
+                    print(f"    {line.strip()[:120]}")
+
+            if verify_failures <= PIPELINE_CONFIG["retry"]["fact_check_accept_threshold"]:
+                # Minor issues — accept with note
+                print(f"    Minor issues — accepting Draft {attempt + 1} with {verify_failures} flag(s)")
+                final_draft = current_draft
+                final_draft["_verify_outcome"] = "minor_flags"
+                break
+            elif attempt < MAX_RETRIES:
+                # Major issues, budget remains — retry with corrections
+                print(f"    {verify_failures} failures — retrying (attempt {attempt + 1}/{MAX_RETRIES})...")
+                draft2_prompt = f"""Fix EVERY failed claim below. Output the corrected BODY JSON (no headline/meta — those are handled separately).
 
 CRITICAL: The output must read as FRESH content for a buyer. NEVER reference previous drafts, corrections, internal processes, or what was "initially suggested". Just write the correct version as if it's the only version.
 
@@ -3028,23 +3039,17 @@ OUTPUT BODY JSON — use v2 structured format (no markdown, no code fences):
   "flood_section": {{"title": "...", "body": "...", "source": "Gold Coast City Council ArcGIS flood mapping"}},
   "faqs": [{{"question": "...", "answer": "..."}}, ...]
 }}"""
-                        t0 = time.time()
-                        continue
-                else:
-                    print(f"    ✅ All claims verified — accepting Draft {attempt + 1}")
-                    final_draft = current_draft
-                    final_draft["_verify_outcome"] = "clean"
-                    break
+                t0 = time.time()
+                continue
             else:
-                # Last attempt — NOTE: no verify pass runs here at all (this branch
-                # is the "attempt == MAX_RETRIES" case, which skips straight to
-                # acceptance). This draft's claims were never independently
-                # checked, unlike every earlier attempt. Tagged distinctly so
-                # callers (e.g. auto-publish gating) can tell "genuinely verified
-                # clean" apart from "accepted because we ran out of attempts."
-                print(f"    Max retries reached — accepting Draft {attempt + 1} as final (unverified)")
+                # Out of retries AND genuinely still has failures — unlike the
+                # old behavior, we KNOW this for a fact (just verified it),
+                # rather than assuming the worst on an unchecked draft. Held
+                # back from auto-publish the same as before, but now for a
+                # confirmed reason instead of a guess.
+                print(f"    Max retries reached with {verify_failures} unresolved failure(s) — needs manual review")
                 final_draft = current_draft
-                final_draft["_verify_outcome"] = "unverified_max_retries"
+                final_draft["_verify_outcome"] = "max_retries_with_failures"
                 break
 
         except Exception as e:
@@ -3283,11 +3288,11 @@ def store_analysis(db, suburb: str, property_id, analysis: Dict) -> None:
     # Auto-publish (opt-in, env AUTO_PUBLISH=1): only when the FINAL draft was
     # genuinely fact-checked and came back clean or with minor flags within the
     # accept threshold (_verify_outcome "clean"/"minor_flags" — see
-    # _run_draft2_loop). Deliberately excludes "unverified_max_retries" (the
-    # last-attempt draft is accepted WITHOUT a verify pass at all — see that
-    # branch's comment) and "failed_factcheck" — those still need a human look,
-    # matching the exact bar Will applied when manually reviewing Tranche A
-    # ("published most, no material issues... happy with the content").
+    # _run_draft2_loop, which as of 2026-07-21 ALWAYS verifies, including the
+    # last attempt). Deliberately excludes "max_retries_with_failures" (verified,
+    # genuinely still wrong, out of budget to fix) and "failed_factcheck" —
+    # those still need a human look, matching the exact bar Will applied
+    # reviewing Tranche A by hand ("published most, happy with the content").
     if _AUTO_PUBLISH and analysis["status"] != "failed_factcheck" \
             and analysis.get("_verify_outcome") in ("clean", "minor_flags"):
         analysis["status"] = "published"
