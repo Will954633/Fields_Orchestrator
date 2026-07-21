@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import openrouter_client as orc
 
-BASE = "/home/fields/brain3_build"
+DEFAULT_BASE = "/home/fields/brain3_build"
 MODEL = orc.HAIKU  # annotation stays Haiku, now via OpenRouter (off Max budget)
 MAX_WORDS_PER_UNIT = 1200
 
@@ -55,7 +55,7 @@ def log(logpath, msg):
 
 def parse_batch(path):
     content = open(path, encoding="utf-8", errors="ignore").read()
-    parts = re.split(r"===== UNIT (k\d+) \| LIB: (.*?) =====", content)
+    parts = re.split(r"===== UNIT ([a-z]\d+) \| LIB: (.*?) =====", content)  # k#### KB / i##### ops
     units = []
     for i in range(1, len(parts), 3):
         uid = parts[i].strip()
@@ -88,9 +88,11 @@ def extract_json_array(s):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--pool", choices=["public", "private"], required=True)
+    ap.add_argument("--pool", required=True, help="batch pool name (public|private for KB; ops for Brain 3)")
+    ap.add_argument("--base", default=DEFAULT_BASE, help="build dir (default brain3_build; brain3_ops for Brain 3)")
     args = ap.parse_args()
     pool = args.pool
+    BASE = args.base
 
     batch_dir = f"{BASE}/batches_{pool}"
     OUT = f"{BASE}/annotations_{pool}.jsonl"
@@ -130,8 +132,16 @@ def main():
             open(FAIL, "a").write(name + "\n")
             log(LOG, f"  {name} SKIPPED after retries")
             continue
+        # Provenance is DETERMINISTIC from the batch (the model mis-copies the prompt's KB example).
+        # LIB is "<pool>:<category>" (e.g. "internal:fix-history", "public:book"); carry it verbatim.
+        umap = {u["unit_id"]: u for u in units}
         with open(OUT, "a") as f:
             for rec in recs:
+                u = umap.get(rec.get("unit_id"))
+                if u:
+                    pool, _, cat = u["lib"].partition(":")
+                    rec["provenance"] = {"lib": u["lib"], "source": pool,
+                                         "category": cat, "doc": u["header"]}
                 rec["_batch"] = name
                 f.write(json.dumps(rec, ensure_ascii=False) + "\n")
         open(DONE, "a").write(name + "\n")
