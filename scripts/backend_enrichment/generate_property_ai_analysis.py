@@ -216,7 +216,16 @@ PIPELINE_CONFIG = {
     "token_limits": {
         "gather": 600,
         "gather_gemini": 2000,
-        "editor": 6000,
+        # editor/draft2 write the FULL structured v2 insight body (4 insights x
+        # h2 + lifestyle_hook + key_points + what_this_means + comparables, plus
+        # quick_take/best_for/next_steps/CTAs/flood_section/faqs) — a genuinely
+        # long JSON payload. 6000/8000 were too small even WITHOUT adaptive
+        # thinking: confirmed 2026-07-20 — a full-document (no compaction), Opus,
+        # THINKING_MODE=disabled run truncated mid-string ("Unterminated string")
+        # because the editor ran out of budget partway through writing valid
+        # JSON. Raised unconditionally (not just under the adaptive-thinking
+        # widening) since this was never a thinking problem — plain output length.
+        "editor": 10000,
         "reflection": 1000,
         # fact_check and verify read a full draft AND the whole property document
         # and must reason through every claim — at least as demanding as editor/
@@ -227,7 +236,7 @@ PIPELINE_CONFIG = {
         "fact_check": 6000,
         "backfill": 600,
         "sabri": 800,
-        "draft2": 8000,
+        "draft2": 12000,
         "verify": 6000,
     },
     "retry": {
@@ -2844,15 +2853,17 @@ MOST IMPORTANT RULE: Draft 2 must read as FRESH, STANDALONE content written for 
 
 9. VERDICT: One or two sentences. Short enough that someone repeats it to their partner at dinner or to their friends at a BBQ.
 
+10. LIFESTYLE HOOK COMES FIRST. Every insight has a `lifestyle_hook` field sitting ABOVE the key points — 1-3 sentences painting a specific moment (a Saturday morning, the school run, an evening on the deck) that connects that life to the price. It is NOT a feature description — it's the FEELING of living here tied to the FINANCIAL reality. Do not drop this field just because you're rewriting — every insight in Draft 2 must have one, freshly written to match the corrected content.
+
 SUBURB SLUG: {suburb_display.replace(' ', '_')}
 
 OUTPUT BODY JSON — use v2 structured insight format (no headline, no meta, no markdown, no code fences):
 {{
   "insights": [
-    {{"h2": "...", "key_points": ["...", "..."], "key_points_label": "Key points", "what_this_means": ["..."], "comparables": null}},
-    {{"h2": "...", "key_points": ["...", "..."], "key_points_label": "Key points", "what_this_means": ["..."], "comparables": null}},
-    {{"h2": "...", "key_points": ["...", "..."], "key_points_label": "Comparable sales", "what_this_means": ["..."], "comparables": [{{"address":"...","distance":"...","sold_price":0,"adjusted_price":0,"summary":"...","delta_label":"..."}}]}},
-    {{"h2": "...", "key_points": ["...", "..."], "key_points_label": "Key points", "what_this_means": ["..."], "comparables": null}}
+    {{"h2": "...", "lifestyle_hook": "...", "key_points": ["...", "..."], "key_points_label": "Key points", "what_this_means": ["..."], "comparables": null}},
+    {{"h2": "...", "lifestyle_hook": "...", "key_points": ["...", "..."], "key_points_label": "Key points", "what_this_means": ["..."], "comparables": null}},
+    {{"h2": "...", "lifestyle_hook": "...", "key_points": ["...", "..."], "key_points_label": "Comparable sales", "what_this_means": ["..."], "comparables": [{{"address":"...","distance":"...","sold_price":0,"adjusted_price":0,"summary":"...","delta_label":"..."}}]}},
+    {{"h2": "...", "lifestyle_hook": "...", "key_points": ["...", "..."], "key_points_label": "Key points", "what_this_means": ["..."], "comparables": null}}
   ],
   "verdict": "... uses listing DATE not day count ...",
   "quick_take": {{"strengths": ["...", "..."], "trade_off": "..."}},
@@ -2941,7 +2952,7 @@ FAILED CLAIMS:
 {verify_text}
 
 PREVIOUS DRAFT:
-{json.dumps(current_draft, indent=2, default=str)[:2500]}
+{json.dumps(current_draft, indent=2, default=str)[:6000]}
 
 RAW DATA (use ONLY these numbers — includes flood data for flood_section):
 {prop_summary}
@@ -2952,14 +2963,15 @@ RULES:
 - The flood_section MUST use the specific flood data from RAW DATA above (overlay status, ground vs DFL, depth classification, ICA zones). Do NOT write generic "check the council" advice when specific data is available.
 - Use listing DATE not day counts in verdict, next_steps, CTA hooks, FAQ answers
 - Keep the same JSON structure but do NOT include headline, sub_headline, meta_title, meta_description
+- Every insight MUST keep its `lifestyle_hook` field (sits above key_points — 1-3 sentences painting a specific lifestyle moment tied to the price). Do not drop it while fixing failed claims — rewrite it fresh if the claim it was built on failed.
 
 OUTPUT BODY JSON — use v2 structured format (no markdown, no code fences):
 {{
   "insights": [
-    {{"h2": "...", "key_points": ["...", "..."], "key_points_label": "Key points", "what_this_means": ["..."], "comparables": null}},
-    {{"h2": "...", "key_points": ["...", "..."], "key_points_label": "Key points", "what_this_means": ["..."], "comparables": null}},
-    {{"h2": "...", "key_points": ["...", "..."], "key_points_label": "Comparable sales", "what_this_means": ["..."], "comparables": [{{"address": "...", "distance": "...", "sold_price": 0, "adjusted_price": 0, "summary": "...", "delta_label": "..."}}]}},
-    {{"h2": "...", "key_points": ["...", "..."], "key_points_label": "Key points", "what_this_means": ["..."], "comparables": null}}
+    {{"h2": "...", "lifestyle_hook": "...", "key_points": ["...", "..."], "key_points_label": "Key points", "what_this_means": ["..."], "comparables": null}},
+    {{"h2": "...", "lifestyle_hook": "...", "key_points": ["...", "..."], "key_points_label": "Key points", "what_this_means": ["..."], "comparables": null}},
+    {{"h2": "...", "lifestyle_hook": "...", "key_points": ["...", "..."], "key_points_label": "Comparable sales", "what_this_means": ["..."], "comparables": [{{"address": "...", "distance": "...", "sold_price": 0, "adjusted_price": 0, "summary": "...", "delta_label": "..."}}]}},
+    {{"h2": "...", "lifestyle_hook": "...", "key_points": ["...", "..."], "key_points_label": "Key points", "what_this_means": ["..."], "comparables": null}}
   ],
   "verdict": "...",
   "quick_take": {{"strengths": ["...", "..."], "trade_off": "..."}},
