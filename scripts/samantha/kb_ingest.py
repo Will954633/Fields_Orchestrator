@@ -19,9 +19,10 @@ Two phases:
 import os, re, sys, json, glob, argparse
 from concurrent.futures import ThreadPoolExecutor
 
+import openrouter_client as orc
 KB = "/home/fields/knowledge-base"
 OUT = "/home/fields/brain3_build"
-HAIKU = "claude-haiku-4-5-20251001"
+HAIKU = orc.HAIKU
 WORKERS = 6
 
 # --- CURATION + CONFIDENTIALITY signals -----------------------------------------
@@ -85,14 +86,7 @@ def deterministic(d):
 
 
 def claude(prompt, timeout=120):
-    env = {k: v for k, v in os.environ.items()
-           if k not in ("CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SSE_PORT")}
-    import subprocess
-    r = subprocess.run(["claude", "-p", "--model", HAIKU],
-                       input=prompt, capture_output=True, text=True, timeout=timeout, env=env)
-    if r.returncode != 0:
-        raise RuntimeError(f"claude exit {r.returncode}: {r.stderr[:200]}")
-    return r.stdout.strip()
+    return orc.call(prompt, HAIKU, timeout=timeout, max_tokens=4000)
 
 
 def haiku_classify(batch):
