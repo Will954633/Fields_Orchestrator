@@ -84,17 +84,19 @@ def build(units, canon=None):
     for u in units:
         uid = u.get("unit_id") or f"u{len(out_units):04d}"
         prov = u.get("provenance", {}) or {}
-        # schema-aware provenance: coaching (library/course/module) vs KB (source/category/doc).
-        # KB units become a distinct per-source "lib" so per-source retrieval can't crowd them out,
-        # and their decisions/initiatives/metrics fold into concepts so they're retrievable.
-        if prov.get("source") == "KB":
+        # schema-aware provenance. Priority: explicit prov.lib (Brain 3 ops / new records) ->
+        # KB (source==KB) -> coaching (library/course/module). Each maps to a distinct per-source
+        # "lib" so per-source retrieval can't crowd it out.
+        if prov.get("lib"):
+            src = {"lib": prov["lib"], "course": prov.get("doc", ""), "module": ""}
+        elif prov.get("source") == "KB":
             src = {"lib": "KB:" + (prov.get("category") or "?"),
                    "course": prov.get("doc", ""), "module": prov.get("chunk_id", "")}
-            extra = (u.get("decisions") or []) + (u.get("initiatives") or []) + (u.get("metrics") or [])
         else:
             src = {"lib": prov.get("library", ""), "course": prov.get("course", ""),
                    "module": prov.get("module", "")}
-            extra = []
+        # decisions/initiatives/metrics (KB + ops facets) fold into concepts so they're retrievable
+        extra = (u.get("decisions") or []) + (u.get("initiatives") or []) + (u.get("metrics") or [])
         concepts = [cn(c) for c in (norm(x) for x in (u.get("concepts", []) or []) + extra) if c]
         topics = [t for t in (norm(x) for x in u.get("topic_tags", []) or []) if t]
         asks = [q.strip() for q in (u.get("answers_questions", []) or []) if isinstance(q, str) and q.strip()]
