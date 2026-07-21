@@ -29,7 +29,8 @@ MAP = BUILD / "concept_norm_map.jsonl"       # raw_concept -> canonical (pass 1,
 DONE = BUILD / "norm_done_batches.txt"
 LOCK = BUILD / ".norm_lock"
 FINAL = BUILD / "concept_canonical.json"      # final raw -> canonical (after consolidate)
-MODEL = "sonnet"
+import openrouter_client as orc
+MODEL = orc.SONNET5  # was "sonnet" on Max -> OpenRouter
 BATCH = 120
 
 PROMPT_HEAD = (
@@ -43,13 +44,7 @@ PROMPT_HEAD = (
 
 
 def call(prompt, timeout=420):
-    env = {k: v for k, v in os.environ.items()
-           if k not in ("CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SSE_PORT")}
-    r = subprocess.run(["claude", "-p", "--model", MODEL],
-                       input=prompt, capture_output=True, text=True, timeout=timeout, env=env)
-    if r.returncode != 0:
-        raise RuntimeError(f"claude exit {r.returncode}: {r.stderr[:200]}")
-    out = r.stdout.strip()
+    out = orc.call(prompt, MODEL, timeout=timeout, max_tokens=8000)
     if out.startswith("```"):
         out = out.split("```")[1]
         out = out[4:].strip() if out.lower().startswith("json") else out.strip()
