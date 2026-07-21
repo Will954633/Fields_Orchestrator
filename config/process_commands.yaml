@@ -369,6 +369,17 @@ processes:
     cooldown_seconds: 20
     depends_on: [120]  # Run after new-listing editorial auto-publish
 
+  - id: 122
+    name: "Live Leads Sheet — Selling Plan Refresh"
+    description: "On-demand sync of the Live Leads Tracker Google Sheet, triggered in near-real-time (via trigger_requests, polled every 30s) whenever a seller saves a Process Decisions / selling-plan answer on their mini-site. Adds any brand-new lead rows and, for leads already in the sheet, updates their dedicated Selling Plan column in place with the latest answers (2026-07-21 fix — see fix-history LIVE-LEADS-SHEET-AUTOUPDATE) without touching Name/Status/Details, which Will may have edited by hand."
+    phase: "data_quality"
+    command: "bash -c 'source /home/fields/venv/bin/activate && set -a && source /home/fields/Fields_Orchestrator/.env && set +a && python3 scripts/live_leads_to_sheet.py'"
+    working_dir: "/home/fields/Fields_Orchestrator"
+    mongodb_activity: "light_write"
+    requires_browser: false
+    estimated_duration_minutes: 2
+    cooldown_seconds: 20
+
   # ============================================================================
   # PHASE 3.5: SATELLITE IMAGE ANALYSIS (Google Maps Static + GPT-5.4 Vision)
   # ============================================================================
