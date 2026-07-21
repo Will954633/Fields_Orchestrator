@@ -99,8 +99,29 @@ RECENT SALES IN {suburb.upper()}:
 # reports it (incl. cache_creation/cache_read); the Max CLI hides cached tokens
 # in its usage, so we fall back to a char/4 estimate of what we actually sent.
 _METER = {"calls": [], "input": 0, "output": 0, "cache_create": 0, "cache_read": 0}
-# Opus 4.x public rates ($/token). CONFIRM against the live claude-opus-4-6 card.
-_RATE = {"in": 15.0 / 1e6, "out": 75.0 / 1e6, "cache_write": 18.75 / 1e6, "cache_read": 1.50 / 1e6}
+# Per-model $/MTok rates. The meter previously hardcoded a single Opus rate
+# regardless of which model actually ran — accurate when the run really was
+# Opus, but silently 5x-inflated the printed cost on every Sonnet-5 run (a
+# mislabeled $10.07 was reported as real cost for a run that actually cost
+# $2.01). Fixed 2026-07-21: matched per-call by model substring. Cache write is
+# 1.25x input, cache read is 0.1x input (Anthropic's standard multipliers,
+# uniform across models). Unknown models fall back to the expensive Opus tier
+# and are flagged in the printed warning rather than silently assumed correct.
+_MODEL_RATES = [
+    ("opus", {"in": 15.0, "out": 75.0}),
+    ("sonnet-5", {"in": 3.0, "out": 15.0}),
+    ("sonnet-4", {"in": 3.0, "out": 15.0}),
+    ("haiku", {"in": 0.80, "out": 4.0}),
+]
+_DEFAULT_RATE = {"in": 15.0, "out": 75.0}
+
+
+def _rate_for(model: str):
+    ml = (model or "").lower()
+    for key, rate in _MODEL_RATES:
+        if key in ml:
+            return rate, True
+    return _DEFAULT_RATE, False
 
 
 def _meter_record(model: str, in_text: str, message) -> None:
@@ -125,17 +146,25 @@ def print_meter(label: str = "") -> None:
     m = _METER
     if not m["calls"]:
         return
-    base_in = sum(c["input"] - c["cache_create"] - c["cache_read"] for c in m["calls"])
-    cost = (base_in * _RATE["in"] + m["cache_create"] * _RATE["cache_write"]
-            + m["cache_read"] * _RATE["cache_read"] + m["output"] * _RATE["out"])
+    base_in_total = sum(c["input"] - c["cache_create"] - c["cache_read"] for c in m["calls"])
+    total_cost = 0.0
+    unknown_models = set()
+    for c in m["calls"]:
+        rate, known = _rate_for(c["model"])
+        if not known:
+            unknown_models.add(c["model"])
+        base_in = c["input"] - c["cache_create"] - c["cache_read"]
+        total_cost += (base_in * rate["in"] + c["cache_create"] * rate["in"] * 1.25
+                       + c["cache_read"] * rate["in"] * 0.1 + c["output"] * rate["out"]) / 1e6
     print(f"\n[METER] {label} calls={len(m['calls'])} "
-          f"input={m['input']:,} (uncached={base_in:,}, cache_read={m['cache_read']:,}, "
+          f"input={m['input']:,} (uncached={base_in_total:,}, cache_read={m['cache_read']:,}, "
           f"cache_create={m['cache_create']:,}) output={m['output']:,}")
     for i, c in enumerate(m["calls"], 1):
         tag = f" cr={c['cache_read']:,}" if c["cache_read"] else ""
         print(f"[METER]   call {i:>2}: in={c['input']:>7,} out={c['output']:>6,}{tag}  {c['model']}")
-    print(f"[METER] estimated API cost for this property: ${cost:.3f} "
-          f"(Opus $15/$75 per M; cache 1.25x write / 0.1x read)")
+    warn = f" [WARNING: rate unknown/assumed for: {', '.join(sorted(unknown_models))}]" if unknown_models else ""
+    print(f"[METER] estimated API cost for this property: ${total_cost:.3f} "
+          f"(per-model rates matched by call; cache 1.25x write / 0.1x read){warn}")
 
 # Gemini (optional — used for data-gathering agents when --gemini-gather flag is set)
 try:
