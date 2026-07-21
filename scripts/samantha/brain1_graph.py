@@ -84,12 +84,18 @@ def build(units, canon=None):
     for u in units:
         uid = u.get("unit_id") or f"u{len(out_units):04d}"
         prov = u.get("provenance", {}) or {}
-        src = {
-            "lib": prov.get("library", ""),
-            "course": prov.get("course", ""),
-            "module": prov.get("module", ""),
-        }
-        concepts = [cn(c) for c in (norm(x) for x in u.get("concepts", []) or []) if c]
+        # schema-aware provenance: coaching (library/course/module) vs KB (source/category/doc).
+        # KB units become a distinct per-source "lib" so per-source retrieval can't crowd them out,
+        # and their decisions/initiatives/metrics fold into concepts so they're retrievable.
+        if prov.get("source") == "KB":
+            src = {"lib": "KB:" + (prov.get("category") or "?"),
+                   "course": prov.get("doc", ""), "module": prov.get("chunk_id", "")}
+            extra = (u.get("decisions") or []) + (u.get("initiatives") or []) + (u.get("metrics") or [])
+        else:
+            src = {"lib": prov.get("library", ""), "course": prov.get("course", ""),
+                   "module": prov.get("module", "")}
+            extra = []
+        concepts = [cn(c) for c in (norm(x) for x in (u.get("concepts", []) or []) + extra) if c]
         topics = [t for t in (norm(x) for x in u.get("topic_tags", []) or []) if t]
         asks = [q.strip() for q in (u.get("answers_questions", []) or []) if isinstance(q, str) and q.strip()]
         quotes = [q.strip() for q in (u.get("key_quotes", []) or []) if isinstance(q, str) and q.strip()]
@@ -187,14 +193,23 @@ def stats(package):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--in", dest="inp", default="/home/fields/brain1_build/annotations.jsonl")
+    ap.add_argument("--merge", nargs="*", default=[],
+                    help="additional annotation files to fold into ONE unified package "
+                         "(e.g. KB public annotations -> unified external pool)")
     ap.add_argument("--outdir", default=None)
     args = ap.parse_args()
 
     inp = Path(args.inp)
     outdir = Path(args.outdir) if args.outdir else inp.parent
+    outdir.mkdir(parents=True, exist_ok=True)
 
     units, bad = load(inp)
-    print(f"Loaded {len(units)} annotation records ({bad} unparseable lines skipped)")
+    print(f"Loaded {len(units)} records from {inp.name} ({bad} bad lines)")
+    for extra in args.merge:
+        eu, eb = load(Path(extra))
+        units += eu
+        print(f"Merged {len(eu)} records from {Path(extra).name} ({eb} bad lines)")
+    print(f"Total {len(units)} annotation records")
     canon = load_canonical(outdir)
     if canon:
         print(f"Applying canonical concept map: {len(canon)} raw -> {len(set(canon.values()))} canonical")
