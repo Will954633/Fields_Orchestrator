@@ -35,7 +35,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import brain1_query as bq
 import openrouter_client as orc
 
-UID_RE = re.compile(r"\b[uk]\d{4,5}\b")  # u#### coaching + k##### KB units
+UID_RE = re.compile(r"\b[uki]\d{4,5}\b")  # u#### coaching + k##### KB units
 HAIKU = orc.HAIKU  # decompose / judge / map — Haiku via OpenRouter
 JUDGE_WORKERS = 6      # bounded concurrency for I/O-bound claude calls (judge + map)
 MAX_SINGLE_UNITS = 150 # fidelity ceiling: above this, single-context synthesis stops citing real
@@ -192,11 +192,14 @@ def main():
     ap.add_argument("--judge-batch", type=int, default=18)
     ap.add_argument("--token-budget", type=int, default=500000)
     ap.add_argument("--out")
+    ap.add_argument("--package", help="graph package to query (default Brain 1; e.g. brain3_ops/package.json)")
     ap.add_argument("--dry", action="store_true", help="stop after the relevance judge; print coverage")
     ap.add_argument("--no-judge", action="store_true", help="skip Haiku judge (keep all candidates)")
     ap.add_argument("--no-verify", action="store_true")
     args = ap.parse_args()
 
+    if args.package:
+        bq.PACKAGE = args.package
     pkg = bq.load()
     all_libs = sorted({u["src"].get("lib") for u in pkg["units"]})
     libs = [args.library] if args.library else all_libs
