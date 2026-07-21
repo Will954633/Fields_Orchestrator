@@ -28,6 +28,7 @@ ANN_FILES = [
     "/home/fields/brain1_build/annotations.jsonl",
     "/home/fields/brain3_build/annotations_public.jsonl",
     "/home/fields/brain3_build/annotations_private.jsonl",
+    "/home/fields/brain3_ops/annotations_ops.jsonl",  # Brain 3 internal ops (i##### units)
 ]
 _norm_re = re.compile(r"[^a-z0-9 ]+")
 _ws = re.compile(r"\s+")
@@ -80,7 +81,7 @@ def parse_pairs(text):
     pairs = []
     for line in text.splitlines():
         quotes = re.findall(r'[\"“]([^\"”]{8,})[\"”]', line)
-        ids = re.findall(r"[uk]\d{4,5}", line)  # u#### coaching + k##### KB
+        ids = re.findall(r"[uki]\d{4,5}", line)  # u#### coaching + k##### KB
         for q in quotes:
             if ids:
                 pairs.append((q, ids))
@@ -117,7 +118,7 @@ def fix_citations(text, misattr):
     for r in misattr:
         actual = r["actual"]
         # match the exact quote, then up to 60 chars, then the FIRST uXXXX -> replace that id
-        pat = re.compile(r"(" + re.escape(r["quote"]) + r".{0,60}?)([uk]\d{4,5})", re.S)
+        pat = re.compile(r"(" + re.escape(r["quote"]) + r".{0,60}?)([uki]\d{4,5})", re.S)
         new, n = pat.subn(lambda m: m.group(1) + actual, text, count=1)
         if n:
             text, fixed = new, fixed + n
