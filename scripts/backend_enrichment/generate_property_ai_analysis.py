@@ -108,7 +108,15 @@ _METER = {"calls": [], "input": 0, "output": 0, "cache_create": 0, "cache_read":
 # uniform across models). Unknown models fall back to the expensive Opus tier
 # and are flagged in the printed warning rather than silently assumed correct.
 _MODEL_RATES = [
-    ("opus", {"in": 15.0, "out": 75.0}),
+    # Opus 4.8 is NOT $15/$75 like earlier Opus tiers — confirmed 2026-07-21 by
+    # measuring an actual OpenRouter balance draw ($26.20->$15.68, $10.52) against
+    # a real full-document run (1,919,397 in / 35,680 out, no caching): $5/$25
+    # predicts $10.489 — a 3-cent match. Must be checked before the generic
+    # "opus" fallback below (it's a substring match and would otherwise catch
+    # 4.8 too and silently apply the wrong, 3x-too-high rate).
+    ("opus-4-8", {"in": 5.0, "out": 25.0}),
+    ("opus-4.8", {"in": 5.0, "out": 25.0}),
+    ("opus", {"in": 15.0, "out": 75.0}),  # 4.6/4.7 and earlier — NOT re-verified for each tier
     ("sonnet-5", {"in": 3.0, "out": 15.0}),
     ("sonnet-4", {"in": 3.0, "out": 15.0}),
     ("haiku", {"in": 0.80, "out": 4.0}),
