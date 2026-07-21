@@ -356,13 +356,23 @@ def resolve_satellite(
         image_for_analysis, address, suburb_key or "",
         boundary_drawn=boundary_drawn,
     )
+    # The image itself (tile fetch + blob upload + annotation) already
+    # succeeded by this point — that's the part the hero photo and gallery
+    # actually need. Vision analysis (categories/narrative) is a nice-to-have
+    # on top; a failure there (e.g. Anthropic credit exhaustion) must not
+    # discard the image we already have, or the property is left with no
+    # imagery at all despite one being available. Persist the image now and
+    # leave analysis fields empty + unmarked-as-final so a later run retries
+    # the vision pass without re-fetching the tile.
     if not analysis:
-        logger.warning(f"  satellite: GPT analysis returned nothing for {address}")
-        return None
+        logger.warning(
+            f"  satellite: GPT analysis failed for {address} — "
+            f"persisting image anyway, will retry analysis next run"
+        )
 
     record = {
-        "categories": analysis.get("categories") or {},
-        "narrative": analysis.get("narrative") or {},
+        "categories": (analysis or {}).get("categories") or {},
+        "narrative": (analysis or {}).get("narrative") or {},
         "satellite_image_url": image_url,
         "annotated_image_url": (anno or {}).get("annotated_image_url"),
         "features": (anno or {}).get("features") or [],
@@ -370,8 +380,9 @@ def resolve_satellite(
         "processed_at": datetime.utcnow(),
         "zoom_level": s117.SATELLITE_ZOOM,
         "image_size": s117.SATELLITE_SIZE,
-        "model": s117.GPT_MODEL,
+        "model": s117.GPT_MODEL if analysis else None,
         "source": "inline_resolver",
+        "analysis_pending": not bool(analysis),
     }
 
     if db_subject_coll is not None and subject_doc.get("_id"):
@@ -386,7 +397,8 @@ def resolve_satellite(
     _sync_property_reports(property_id, record)
 
     logger.info(
-        f"  satellite analysis generated for {address}: "
+        f"  satellite {'analysis generated' if analysis else 'image persisted (analysis pending)'} "
+        f"for {address}: "
         f"{len(record['categories'])} category buckets, "
         f"{len(record['narrative'])} narrative fields, "
         f"{len(record['features'])} features bounded, "
