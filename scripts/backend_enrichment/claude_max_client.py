@@ -266,6 +266,27 @@ class MaxClient:
         return self._fallback_client.messages.create(**kwargs)
 
 
+# ── OpenRouter model-id shim ────────────────────────────────────────────────────
+# OpenRouter's Anthropic passthrough requires model ids namespaced
+# "anthropic/<model>". Callers here (property_reports narrative scripts, etc.)
+# pass bare Anthropic ids like "claude-opus-4-7" — this thin wrapper adds the
+# prefix transparently so call sites don't need per-backend model handling
+# (mirrors shared/claude_vision.py's own _resolve_model()).
+class _OpenRouterMessages:
+    def __init__(self, inner):
+        self._inner = inner
+
+    def create(self, *, model: str, **kwargs: Any):
+        if model and not model.startswith("anthropic/"):
+            model = f"anthropic/{model}"
+        return self._inner.create(model=model, **kwargs)
+
+
+class _OpenRouterAnthropic:
+    def __init__(self, client):
+        self.messages = _OpenRouterMessages(client.messages)
+
+
 # ── Factory ────────────────────────────────────────────────────────────────────
 
 def make_client(api_key: str = "", use_max: Optional[bool] = None):
@@ -295,10 +316,11 @@ def make_client(api_key: str = "", use_max: Optional[bool] = None):
     # Set ANTHROPIC_BACKEND=openrouter + USE_CLAUDE_MAX=0.
     if os.environ.get("ANTHROPIC_BACKEND", "").strip().lower() == "openrouter":
         import anthropic
-        return anthropic.Anthropic(
+        raw = anthropic.Anthropic(
             api_key=os.environ["OPENROUTER_API_KEY"],
             base_url="https://openrouter.ai/api",
         )
+        return _OpenRouterAnthropic(raw)
 
     enabled = _use_max() if use_max is None else use_max
     if enabled:
