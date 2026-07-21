@@ -321,6 +321,12 @@ _THINKING_EFFORT = os.environ.get("THINKING_EFFORT", "medium").strip().lower()
 # EDITORIAL_PROPERTY_TYPES (comma-separated) for a deliberate one-off widening.
 _ALLOWED_PROPERTY_TYPES = {t.strip() for t in
                           os.environ.get("EDITORIAL_PROPERTY_TYPES", "House").split(",") if t.strip()}
+
+# Auto-publish gate (default OFF — every prior run this session left content as
+# draft/needs_review for Will's manual review in the ops panel). See
+# store_analysis() for the exact clean/minor_flags-only gating logic.
+_AUTO_PUBLISH = os.environ.get("AUTO_PUBLISH", "0").strip().lower() in {"1", "true", "yes", "on"}
+
 _TOKEN_LIMIT_CEILING = 40_000
 if _THINKING_MODE == "adaptive":
     # Widening max_tokens costs nothing unless actually used — it's a hard cap,
@@ -2977,6 +2983,7 @@ If ALL claims are verified, output: ✅ ALL CLAIMS VERIFIED"""
                         # Minor issues — accept with note
                         print(f"    Minor issues — accepting Draft {attempt + 1} with {verify_failures} flag(s)")
                         final_draft = current_draft
+                        final_draft["_verify_outcome"] = "minor_flags"
                         break
                     else:
                         # Major issues — retry with corrections
@@ -3026,11 +3033,18 @@ OUTPUT BODY JSON — use v2 structured format (no markdown, no code fences):
                 else:
                     print(f"    ✅ All claims verified — accepting Draft {attempt + 1}")
                     final_draft = current_draft
+                    final_draft["_verify_outcome"] = "clean"
                     break
             else:
-                # Last attempt — accept whatever we have
-                print(f"    Max retries reached — accepting Draft {attempt + 1} as final")
+                # Last attempt — NOTE: no verify pass runs here at all (this branch
+                # is the "attempt == MAX_RETRIES" case, which skips straight to
+                # acceptance). This draft's claims were never independently
+                # checked, unlike every earlier attempt. Tagged distinctly so
+                # callers (e.g. auto-publish gating) can tell "genuinely verified
+                # clean" apart from "accepted because we ran out of attempts."
+                print(f"    Max retries reached — accepting Draft {attempt + 1} as final (unverified)")
                 final_draft = current_draft
+                final_draft["_verify_outcome"] = "unverified_max_retries"
                 break
 
         except Exception as e:
@@ -3135,6 +3149,7 @@ def run_multi_agent_pipeline(
         result["_backfill_data"] = backfill_data if backfill_data else None
         result["_factcheck_failures"] = failed
         result["_accepted_draft"] = 1
+        result["_verify_outcome"] = "clean" if failed == 0 else "minor_flags"
         result["_agent_briefings"] = agent_briefings
         return result
 
@@ -3162,6 +3177,7 @@ def run_multi_agent_pipeline(
         # Merge body content from final draft
         result["insights"] = final_draft["insights"]
         result["verdict"] = final_draft["verdict"]
+        result["_verify_outcome"] = final_draft.get("_verify_outcome", "unknown")
         if final_draft.get("next_steps"):
             result["next_steps"] = final_draft["next_steps"]
         if final_draft.get("faqs"):
@@ -3263,6 +3279,23 @@ def store_analysis(db, suburb: str, property_id, analysis: Dict) -> None:
     analysis["model"] = PIPELINE_CONFIG["models"]["editor"]
     # Draft 1 content is always usable — even if Draft 2 rewrite failed, show in ops review
     analysis["status"] = analysis.get("status", "draft")
+
+    # Auto-publish (opt-in, env AUTO_PUBLISH=1): only when the FINAL draft was
+    # genuinely fact-checked and came back clean or with minor flags within the
+    # accept threshold (_verify_outcome "clean"/"minor_flags" — see
+    # _run_draft2_loop). Deliberately excludes "unverified_max_retries" (the
+    # last-attempt draft is accepted WITHOUT a verify pass at all — see that
+    # branch's comment) and "failed_factcheck" — those still need a human look,
+    # matching the exact bar Will applied when manually reviewing Tranche A
+    # ("published most, no material issues... happy with the content").
+    if _AUTO_PUBLISH and analysis["status"] != "failed_factcheck" \
+            and analysis.get("_verify_outcome") in ("clean", "minor_flags"):
+        analysis["status"] = "published"
+        analysis["published_at"] = datetime.now(timezone.utc).isoformat()
+        print(f"  [AUTO-PUBLISH] verify_outcome={analysis.get('_verify_outcome')} -> published")
+    elif _AUTO_PUBLISH:
+        print(f"  [AUTO-PUBLISH] held for review (verify_outcome={analysis.get('_verify_outcome')!r}, "
+              f"status={analysis['status']!r})")
 
     cosmos_retry(lambda: db[suburb].update_one(
         {"_id": property_id},
