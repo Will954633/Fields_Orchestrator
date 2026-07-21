@@ -165,7 +165,7 @@ processes:
     name: "Classify Property Type (Claude Vision)"
     description: "Uses Claude vision (Haiku tier) to classify each property's dwelling type from photos. Writes classified_property_type field. Catches misclassified Domain listings (e.g. units labelled as houses)."
     phase: "property_classification"
-    command: "python3 scripts/classify_property_type.py --no-fail"
+    command: "bash -c 'set -a && source /home/fields/Fields_Orchestrator/.env && set +a && export ANTHROPIC_BACKEND=openrouter && python3 scripts/classify_property_type.py --no-fail'"
     working_dir: "/home/fields/Fields_Orchestrator"
     mongodb_activity: "moderate_write"
     requires_browser: false
@@ -347,15 +347,27 @@ processes:
 
   - id: 120
     name: "AI Property Editorial (New Listings)"
-    description: "Generates editorial content for new listings (<=7 days) missing ai_analysis. Uses multi-agent pipeline: 3 specialist analysts + editor + reflection + fact-check. Creates drafts for review in ops dashboard."
+    description: "Generates editorial content for new listings (<=7 days) missing ai_analysis. Uses multi-agent pipeline: 3 specialist analysts + editor + reflection + fact-check. Auto-publishes when the verify pass comes back clean/minor_flags (2026-07-21 always-verify fix); anything worse is held in needs_review/failed_factcheck for manual review in ops dashboard. Production config confirmed 2026-07-20/21: OpenRouter + Sonnet 5 + comparables compaction + prompt caching + adaptive/medium thinking."
     phase: "backend_enrichment"
-    command: "bash -c 'source /home/fields/venv/bin/activate && set -a && source /home/fields/Fields_Orchestrator/.env && set +a && python3 scripts/backend_enrichment/generate_property_ai_analysis.py --new-listings --days 7'"
+    command: "bash -c 'source /home/fields/venv/bin/activate && set -a && source /home/fields/Fields_Orchestrator/.env && set +a && export ANTHROPIC_BACKEND=openrouter USE_CLAUDE_MAX=0 EDITORIAL_MODEL=anthropic/claude-sonnet-5 COMPACT_COMPARABLES=1 PROMPT_CACHE=1 THINKING_MODE=adaptive THINKING_EFFORT=medium AUTO_PUBLISH=1 && python3 scripts/backend_enrichment/generate_property_ai_analysis.py --new-listings --days 7'"
     working_dir: "/home/fields/Fields_Orchestrator"
     mongodb_activity: "moderate_write"
     requires_browser: false
     estimated_duration_minutes: 60  # ~5 min per new listing × up to 10 new listings
     cooldown_seconds: 60
     depends_on: [18, 117]  # Needs valuation precompute + satellite analysis
+
+  - id: 121
+    name: "SEO Sitemap Resubmit (Nightly)"
+    description: "Asks Google to re-fetch sitemap.xml right after nightly editorial auto-publish, instead of waiting for the Monday 07:00 cron. Newly-published property pages already carry real content by the time Google re-crawls (SSR body), so this just removes the up-to-7-day submission lag. Resubmit-only, no URL Inspection sample (that stays weekly to conserve GSC quota) — does not affect whether Google actually indexes a page (crawl-budget/domain-authority constraint tracked separately, see seo_indexation_check.py)."
+    phase: "data_quality"
+    command: "bash -c 'source /home/fields/venv/bin/activate && set -a && source /home/fields/Fields_Orchestrator/.env && set +a && python3 scripts/brain2/seo_indexation_check.py --resubmit --sample 0 --no-snapshot'"
+    working_dir: "/home/fields/Fields_Orchestrator"
+    mongodb_activity: "none"
+    requires_browser: false
+    estimated_duration_minutes: 2
+    cooldown_seconds: 20
+    depends_on: [120]  # Run after new-listing editorial auto-publish
 
   # ============================================================================
   # PHASE 3.5: SATELLITE IMAGE ANALYSIS (Google Maps Static + GPT-5.4 Vision)
@@ -365,7 +377,7 @@ processes:
     name: "Satellite Image Analysis (GPT-5.4 Vision)"
     description: "Fetches Google Maps satellite imagery for each target-market property and sends to GPT-5.4 for buyer-perspective surroundings analysis. Writes satellite_analysis field with land use, road proximity, green cover, flood risk, neighbour density, and buyer highlights."
     phase: "enrichment_target"
-    command: "bash -c 'source /home/fields/venv/bin/activate && set -a && source /home/fields/Fields_Orchestrator/.env && set +a && python3 scripts/step117_satellite_analysis.py'"
+    command: "bash -c 'source /home/fields/venv/bin/activate && set -a && source /home/fields/Fields_Orchestrator/.env && set +a && export ANTHROPIC_BACKEND=openrouter && python3 scripts/step117_satellite_analysis.py'"
     working_dir: "/home/fields/Fields_Orchestrator"
     mongodb_activity: "moderate_write"
     requires_browser: false
