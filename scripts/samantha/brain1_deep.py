@@ -29,13 +29,14 @@ Usage:
       [--library "Sell It"] [--mode general|insight] [--out answer.md] [--dry] [--no-verify] \
       [--cand-per-facet 40] [--judge-batch 18] [--token-budget 500000]
 """
-import os, re, sys, json, argparse, subprocess
+import os, re, sys, json, argparse
 from concurrent.futures import ThreadPoolExecutor
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import brain1_query as bq
+import openrouter_client as orc
 
 UID_RE = re.compile(r"\bu\d{4}\b")
-HAIKU = "claude-haiku-4-5-20251001"
+HAIKU = orc.HAIKU  # decompose / judge / map — Haiku via OpenRouter
 JUDGE_WORKERS = 6      # bounded concurrency for I/O-bound claude calls (judge + map)
 MAX_SINGLE_UNITS = 150 # fidelity ceiling: above this, single-context synthesis stops citing real
                        # unit ids and confabulates (empirically ~1000 units -> 0 real citations).
@@ -44,13 +45,7 @@ MAX_SINGLE_UNITS = 150 # fidelity ceiling: above this, single-context synthesis 
 
 
 def claude(prompt, model, timeout=900):
-    env = {k: v for k, v in os.environ.items()
-           if k not in ("CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SSE_PORT")}
-    r = subprocess.run(["claude", "-p", "--model", model],
-                       input=prompt, capture_output=True, text=True, timeout=timeout, env=env)
-    if r.returncode != 0:
-        raise RuntimeError(f"claude({model}) exit {r.returncode}: {r.stderr[:300]}")
-    return r.stdout.strip()
+    return orc.call(prompt, model, timeout=timeout, max_tokens=16000)
 
 
 def tok(s):
