@@ -27,7 +27,7 @@ import requests
 import yaml
 from pymongo import MongoClient
 
-ABS_BASE = "https://api.data.abs.gov.au/data"
+ABS_BASE = "https://data.api.abs.gov.au/rest/data"
 
 # --- ABS API query definitions ---
 
@@ -198,7 +198,8 @@ def fetch_abs_data(dataflow: str, key: str, start_period: str = "2022-Q1") -> di
     """Fetch data from ABS SDMX JSON API (v2 format)."""
     url = f"{ABS_BASE}/{dataflow}/{key}"
     params = {"startPeriod": start_period, "format": "jsondata"}
-    resp = requests.get(url, params=params, timeout=30)
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"}
+    resp = requests.get(url, params=params, headers=headers, timeout=30)
     resp.raise_for_status()
     return resp.json()
 
