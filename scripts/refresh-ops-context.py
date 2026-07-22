@@ -27,16 +27,10 @@ from pathlib import Path
 # ── Connection ──────────────────────────────────────────────────────────────
 
 def load_env():
-    """Load .env from orchestrator directory."""
+    """Load .env from orchestrator directory (python-dotenv, standardised 2026-07-23)."""
+    from dotenv import load_dotenv
     env_path = Path(__file__).parent.parent / ".env"
-    if env_path.exists():
-        with open(env_path) as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith("#") and "=" in line:
-                    k, _, v = line.partition("=")
-                    v = v.strip().strip("'\"")
-                    os.environ.setdefault(k.strip(), v)
+    load_dotenv(str(env_path), override=False)
 
 def get_client():
     load_env()
