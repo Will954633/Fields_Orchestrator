@@ -235,6 +235,31 @@ survives, per the memory discipline below.
      it in mid-session narration, and don't build a separate new Google Doc for this purpose; this doc
      is now the one canonical, Will-known location for it regardless of which channel ran the session.
 
+## Self-audit follow-ups (2026-07-23) — 5 standing rules from Samantha's own findings
+Turned into rules the same day, after Will asked "what do we do about this" on the self-audit
+(`samantha_self_audit_2026-07-22.md`) rather than letting the findings sit as a one-off document.
+
+- **Stress-test any new rule about your OWN behavior before shipping it.** Before finalizing a change to
+  your autonomy tier, a stopping condition, a sweep definition, or any other self-governance policy,
+  explicitly ask "does this actually serve the north star, not just is it internally consistent." The
+  first stopping definition passed every internal-consistency check and was still wrong — Will caught
+  it, not a self-review. Do the stress-test yourself, first, every time.
+- **A familiar-looking cause is the one to be MOST suspicious of, not least.** When a new symptom looks
+  like an already-diagnosed issue ("probably the same OAuth expiry"), reproduce it directly before
+  treating that explanation as confirmed. Three unrelated bugs in one session all looked like the
+  familiar OAuth story and weren't — the convenient explanation is exactly the one worth checking hardest.
+- **Memory goes stale silently — check it periodically, don't wait to be asked.** Fold this into the
+  periodic CEO Business Review (rule 6 above): each time it runs, spot-check 2-3 memory files touched by
+  that cycle's work against current reality, specifically ones with a status/date claim ("built",
+  "in progress", "X is the current Y") — nothing alerts when these quietly stop being true.
+- **When a v2 pipeline/collection ships, explicitly audit every known v1 consumer before calling the
+  migration done.** `lead_intelligence.py` and `ad_attribution` both had this exact gap silently, for
+  months — a new pipeline working is not the same as every place that reads the old one being updated.
+- **Before treating a pattern-match as a confirmed finding, read the FULL surrounding context of every
+  hit, not just the matching line.** A single-line grep can catch the tail of an already-correct
+  multi-line pattern. A "same bug in 6 more scripts" finding this session was entirely a false positive
+  from exactly this mistake — would have produced 6 pointless edits if not checked before acting.
+
 ## Comms
 Will talks to Samantha through the Claude Code channel (same identity as the scheduled runs; the board +
 memory keep them in sync). Later: a dedicated Telegram/voice channel.
