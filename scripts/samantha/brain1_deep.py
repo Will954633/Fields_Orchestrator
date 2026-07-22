@@ -30,12 +30,13 @@ Usage:
       [--cand-per-facet 40] [--judge-batch 18] [--token-budget 500000]
 """
 import os, re, sys, json, argparse
+from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import brain1_query as bq
 import openrouter_client as orc
 
-UID_RE = re.compile(r"\b[uki]\d{4,5}\b")  # u#### coaching + k##### KB units
+UID_RE = re.compile(r"\b[uki]\d{4,10}\b")  # u#### coaching + k##### KB units
 HAIKU = orc.HAIKU  # decompose / judge / map — Haiku via OpenRouter
 JUDGE_WORKERS = 6      # bounded concurrency for I/O-bound claude calls (judge + map)
 MAX_SINGLE_UNITS = 150 # fidelity ceiling: above this, single-context synthesis stops citing real
@@ -69,9 +70,12 @@ def decompose(question, n=8):
 
 
 def compact(u, nq=2, na=3, nc=8):
-    return {"id": u["id"],
-            "src": f"{u['src']['lib']} / {u['src'].get('course','')} / {u['src'].get('module','')}",
-            "concepts": u["concepts"][:nc], "asks": u["asks"][:na], "quotes": u["quotes"][:nq]}
+    d = {"id": u["id"],
+         "src": f"{u['src']['lib']} / {u['src'].get('course','')} / {u['src'].get('module','')}",
+         "concepts": u["concepts"][:nc], "asks": u["asks"][:na], "quotes": u["quotes"][:nq]}
+    if u.get("date"):
+        d["date"] = u["date"]  # structured, recency-aware synthesis reasons over this
+    return d
 
 
 def gather_candidates(pkg, facets, libs, cand_per_facet):
@@ -135,36 +139,67 @@ PROMPTS = {
                 "non-obvious client-acquisition plays for Fields (a Gold Coast data-first agency). Name "
                 "each play, cite the unit ids it bridges, state the mechanism. "),
 }
-HEADER = ("You are Brain 1 — an intelligence layer over a real-estate coaching corpus (Tom Panos/"
-          "RealEstate Gym, Ryan Serhant/Sell It, Mat Steinwede & Josh Tesolin/Agent School). ")
-RULES = ("RULES: cite unit ids (e.g. u0452) for every substantive claim; include DIRECT VERBATIM "
-         "QUOTES throughout; give EQUAL consideration to material from every source regardless of how "
-         "many units it has — a point made once is as admissible as one made often; if the corpus does "
-         "not cover something, say so plainly — do NOT invent. Structure with clear headings.\n\n")
+DEFAULT_HEADER = ("You are Brain 1 — an intelligence layer over a real-estate coaching corpus (Tom Panos/"
+                  "RealEstate Gym, Ryan Serhant/Sell It, Mat Steinwede & Josh Tesolin/Agent School). ")
 
 
-def synth_prompt(question, mode, payload_json, is_findings=False):
+def header_for(pkg):
+    """Generic header for non-default packages (e.g. Brain 3 ops) — the coaching-specific framing
+    above is wrong when the loaded package is a different brain entirely."""
+    libs = sorted({u["src"].get("lib", "") for u in pkg.get("units", [])})
+    coaching_libs = {"RealEstate_Gym", "Sell It", "Agent School"}
+    if any(l in coaching_libs or l.startswith("KB:") for l in libs):
+        return DEFAULT_HEADER
+    return (f"You are an intelligence layer over a knowledge graph. The corpus's sources are: "
+            f"{', '.join(l.replace('internal:', '') for l in libs)}. ")
+
+
+def rules_for(pkg):
+    example_id = pkg["units"][0]["id"] if pkg.get("units") else "u0452"
+    return ("RULES: cite unit ids EXACTLY as given in the shortlist's \"id\" field (e.g. "
+            f"{example_id}) for every substantive claim — copy the id character-for-character, "
+            "never invent or alter its prefix letter or digits; include DIRECT VERBATIM QUOTES "
+            "throughout; give EQUAL consideration to material from every source regardless of how "
+            "many units it has — a point made once is as admissible as one made often; if the corpus "
+            "does not cover something, say so plainly — do NOT invent. Structure with clear headings.\n"
+            "TEMPORAL RULE: some units carry a 'date' field. Do not treat retrieval score as recency — a "
+            "unit can rank highly and still be OLD. When units on the same topic carry different dates, "
+            "or a topic could plausibly have changed since a unit's date, state the chronology explicitly: "
+            "cite the date, say what was true then, and — if a later unit shows it changed — say what is "
+            "CURRENT now and flag the earlier claim as SUPERSEDED. Never present dated information as "
+            "current without checking whether a more recent unit contradicts it.\n\n")
+
+
+def synth_prompt(question, mode, payload_json, pkg, is_findings=False):
     src = "PRE-EXTRACTED FINDINGS (already citation-tagged)" if is_findings else "CORPUS SHORTLIST (JSON)"
-    return (HEADER + PROMPTS[mode] + RULES + f"=== QUESTION ===\n{question}\n\n=== {src} ===\n" + payload_json)
+    today = datetime.now().strftime("%Y-%m-%d")
+    return (header_for(pkg) + PROMPTS[mode] + rules_for(pkg) + f"TODAY'S DATE: {today}\n\n"
+            f"=== QUESTION ===\n{question}\n\n=== {src} ===\n" + payload_json)
 
 
 def map_extract(question, units):
     """MAP step: Haiku pulls citation-preserving findings from a shard (keeps ids + verbatim quotes)."""
     listing = "\n".join(json.dumps(compact(u, nq=3, na=4)) for u in units)
-    p = ("Extract every point RELEVANT to the question from these coaching units. For each, write a "
-         "one-line finding that PRESERVES the unit id and at least one VERBATIM quote. Keep rare/one-off "
-         "points. Do not synthesise or drop anything relevant.\n\n"
-         f"QUESTION: {question}\n\nUNITS:\n{listing}\n\nReturn a plain bulleted list of findings.")
+    p = ("Extract every point RELEVANT to the question from these knowledge-graph units. For each, "
+         "write a one-line finding that copies the unit's \"id\" field EXACTLY as given (character "
+         "for character — never alter its prefix letter or digits), its 'date' if present, and at "
+         "least one VERBATIM quote. Keep rare/one-off points. Do not synthesise or drop anything "
+         "relevant.\n\nQUESTION: {question}\n\nUNITS:\n{listing}\n\nReturn a plain bulleted list of "
+         "findings.").format(question=question, listing=listing)
     return claude(p, HAIKU, timeout=300)
 
 
-def synthesise(question, mode, relevant, budget):
+def synthesise(question, mode, relevant, budget, pkg):
+    # Sort most-recent-first (missing dates last) so recency is salient in reading order — this
+    # does NOT drop or deprioritise anything (completeness principle intact), it only orders what
+    # the LLM sees so a later, possibly-superseding unit isn't buried behind an older one.
+    relevant = sorted(relevant, key=lambda u: u.get("date") or "0000-00-00", reverse=True)
     ctx = {"units": [compact(u, nq=4, na=5, nc=10) for u in relevant]}
     payload = json.dumps(ctx, ensure_ascii=False)
     # Single-context ONLY when small enough to cite faithfully AND under token budget.
     if len(relevant) <= MAX_SINGLE_UNITS and tok(payload) <= budget:
         sys.stderr.write(f"[synth] single-context ({tok(payload):,} tok, {len(relevant)} units)\n")
-        return claude(synth_prompt(question, mode, payload), bq.MODEL, timeout=900), {u["id"] for u in relevant}
+        return claude(synth_prompt(question, mode, payload, pkg), bq.MODEL, timeout=900), {u["id"] for u in relevant}
     # OVERFLOW (unit-count fidelity limit OR token budget) -> map-reduce, citation-preserving extraction
     shard_n = 60
     shards = [relevant[i:i + shard_n] for i in range(0, len(relevant), shard_n)]
@@ -179,7 +214,7 @@ def synthesise(question, mode, relevant, budget):
         findings = [claude("Merge these findings, preserving every unit id and verbatim quote, dropping "
                            "nothing relevant:\n\n" + "\n".join(g), HAIKU, timeout=300) for g in groups]
         blob = "\n".join(findings)
-    return claude(synth_prompt(question, mode, blob, is_findings=True), bq.MODEL, timeout=900), {u["id"] for u in relevant}
+    return claude(synth_prompt(question, mode, blob, pkg, is_findings=True), bq.MODEL, timeout=900), {u["id"] for u in relevant}
 
 
 def main():
@@ -230,7 +265,7 @@ def main():
         return
 
     sys.stderr.write("[opus] deep synthesis…\n")
-    answer, shortlist_ids = synthesise(args.question, args.mode, relevant, args.token_budget)
+    answer, shortlist_ids = synthesise(args.question, args.mode, relevant, args.token_budget, pkg)
     print(answer)
 
     if not args.no_verify:
