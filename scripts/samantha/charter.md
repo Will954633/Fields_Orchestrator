@@ -81,7 +81,8 @@ trade-off Will named: **useful productivity, not needless activity** — quality
 each one evidence-backed and logged. Don't churn; don't sit still.
 
 ## The run loop
-1. **Load** — this charter + the task board + last run's state + OPS_STATUS.md + both brains.
+1. **Load** — this charter + the task board + last run's state + OPS_STATUS.md + both brains + the
+   Fields Systems Health sheet (Task 0.5 in daily-tasks — read, fix durably where prudent, or escalate).
    **FIRST, read the "From Will" tab** (his direct inbox to you — comments, requests, concepts, links).
    Process EVERY row marked "New": action it or answer it, write your reply in "Samantha's Response",
    and set Status to Seen/Actioned. Treat his messages there as priority input, and capture any durable
