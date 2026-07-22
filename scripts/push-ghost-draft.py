@@ -55,17 +55,12 @@ NETLIFY_BUILD_HOOK = "https://api.netlify.com/build_hooks/699faf0aa7c588800d79f9
 
 
 def load_env():
-    """Load .env file into os.environ."""
+    """Load .env file into os.environ (python-dotenv, standardised 2026-07-23)."""
     if not os.path.exists(ENV_PATH):
         print(f"ERROR: {ENV_PATH} not found")
         sys.exit(1)
-    with open(ENV_PATH) as f:
-        for line in f:
-            line = line.strip()
-            if line and not line.startswith("#") and "=" in line:
-                key, _, val = line.partition("=")
-                val = val.strip().strip('"').strip("'")
-                os.environ.setdefault(key.strip(), val)
+    from dotenv import load_dotenv
+    load_dotenv(ENV_PATH, override=False)
 
 
 def get_db():
