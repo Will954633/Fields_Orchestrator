@@ -27,6 +27,9 @@ import requests
 import yaml
 from pymongo import MongoClient
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from job_status import record_job_result
+
 ABS_BASE = "https://data.api.abs.gov.au/rest/data"
 
 # --- ABS API query definitions ---
@@ -632,4 +635,22 @@ if __name__ == "__main__":
     parser.add_argument("--dry-run", action="store_true", help="Fetch and print without writing to DB")
     args = parser.parse_args()
 
-    build_market_signals(dry_run=args.dry_run)
+    try:
+        doc = build_market_signals(dry_run=args.dry_run)
+        # ABS-sourced indicators only (5) — ASX is a separate, non-ABS source and
+        # historically the only one that kept working while ABS was DNS-broken,
+        # so it's excluded from this count to avoid masking a fully-dead ABS fetch.
+        raw = doc.get("raw_indicators", {})
+        written = sum(1 for k, v in raw.items() if k != "asx_all_ords" and v.get("currentRaw") is not None)
+        total = sum(1 for k in raw if k != "asx_all_ords")
+        if not args.dry_run:
+            record_job_result(
+                "fetch_abs_market_signals",
+                "success" if written > 0 else "error",
+                detail=f"{written}/{total} ABS indicators resolved",
+                indicators_written=written, indicators_total=total,
+            )
+    except Exception as e:
+        if not args.dry_run:
+            record_job_result("fetch_abs_market_signals", "error", detail=str(e))
+        raise
