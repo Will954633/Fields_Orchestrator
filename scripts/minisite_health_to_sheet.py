@@ -134,13 +134,20 @@ def autofit(ws, widths):
 
 
 # ---- workbook -----------------------------------------------------------------
-def build_workbook(results, now_utc):
-    wb = Workbook()
-    used = set()
-
-    # Dashboard
-    ws = wb.active
-    ws.title = "Dashboard"
+def build_workbook(results, now_utc, wb=None):
+    """Build the Mini-Site Dashboard + per-home tabs. Pass an existing `wb`
+    (e.g. from main_site_health_to_sheet.py) to append onto a shared workbook
+    instead of creating a standalone one — this is how the two sheets were
+    merged into one (2026-07-22): same file, same upload, same Telegram digest."""
+    standalone = wb is None
+    if standalone:
+        wb = Workbook()
+        ws = wb.active
+    else:
+        ws = wb.create_sheet()
+    used = set(wb.sheetnames) - {ws.title}
+    ws.title = excel_title("Mini-Site Dashboard", used) if not standalone else "Dashboard"
+    used.add(ws.title)
     ws["A1"] = (f"Mini-Site Health — generated "
                 f"{now_utc.astimezone(hc.AEST):%Y-%m-%d %H:%M AEST}  ·  "
                 f"expected last nightly run "
@@ -193,7 +200,8 @@ def build_workbook(results, now_utc):
         style_header_block(ws, 2, len(HOME_HEADERS))
         autofit(ws, [12, 26, 40, 18, 20, 19, 19, 44, 30])
 
-    wb.save(XLSX_PATH)
+    if standalone:
+        wb.save(XLSX_PATH)
     return title_map
 
 
