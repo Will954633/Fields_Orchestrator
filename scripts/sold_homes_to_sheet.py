@@ -258,15 +258,11 @@ def record_ledger(client, tab, address, ts):
 # ---- main ---------------------------------------------------------------------
 def set_env_from_file():
     """Load COSMOS_CONNECTION_STRING etc. from .env so the script runs standalone
-    (e.g. under cron) without needing the env pre-sourced."""
-    if os.environ.get("COSMOS_CONNECTION_STRING"):
-        return
+    (e.g. under cron) without needing the env pre-sourced. python-dotenv, not a
+    hand-rolled parser (standardised 2026-07-23)."""
+    from dotenv import load_dotenv
     env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
-    if os.path.exists(env_path):
-        for line in open(env_path):
-            if "=" in line and not line.lstrip().startswith("#"):
-                key, _, val = line.partition("=")
-                os.environ.setdefault(key.strip(), val.strip().strip('"'))
+    load_dotenv(env_path, override=False)
 
 
 def main():
