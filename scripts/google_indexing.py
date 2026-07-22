@@ -40,7 +40,7 @@ from datetime import datetime, timezone
 SITE_URL = "https://fieldsestate.com.au"
 SCOPES = [
     "https://www.googleapis.com/auth/indexing",
-    "https://www.googleapis.com/auth/webmasters.readonly",
+    "https://www.googleapis.com/auth/webmasters",
 ]
 TARGET_SUBURBS = ["robina", "varsity_lakes", "burleigh_waters"]
 
@@ -58,7 +58,7 @@ def load_env():
                 line = line.strip()
                 if line and not line.startswith("#") and "=" in line:
                     key, _, value = line.partition("=")
-                    os.environ.setdefault(key.strip(), value.strip())
+                    os.environ.setdefault(key.strip(), value.strip().strip('"'))
 
 
 def get_credentials():
