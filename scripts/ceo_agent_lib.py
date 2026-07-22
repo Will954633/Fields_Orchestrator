@@ -26,14 +26,11 @@ AEST = ZoneInfo("Australia/Brisbane")
 
 
 def load_env_file(path: Path = ENV_PATH) -> None:
-    if not path.exists():
-        return
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+    # python-dotenv, not a hand-rolled parser (standardised 2026-07-23 — see
+    # samantha_self_audit_2026-07-22.md point 8). override=False matches the
+    # old os.environ.setdefault semantics: an already-exported var always wins.
+    from dotenv import load_dotenv
+    load_dotenv(str(path), override=False)
 
 
 def require_env(name: str) -> str:
