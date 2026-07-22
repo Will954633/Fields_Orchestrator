@@ -88,9 +88,12 @@ def parse_pairs(text):
     return pairs
 
 
-def verify_text(text, blobs=None, cover=0.85, true_cover=0.90):
+def verify_text(text, blobs=None, cover=0.85, true_cover=0.90, scope_ids=None):
     """Core: returns (total, verified, [misattr], [notfound]). Reusable by brain1_deep.
-    misattr/notfound entries = {quote, cited, actual, cov}."""
+    misattr/notfound entries = {quote, cited, actual, cov}.
+    scope_ids: if given, the "true source" search is limited to these unit ids (the queried
+    brain). Without it, a single-brain query would falsely attribute a paraphrased quote to a
+    verbatim match in ANOTHER brain that was never in context — cross-brain false positive."""
     if blobs is None:
         blobs = unit_texts()
     pairs = parse_pairs(text)
@@ -102,6 +105,8 @@ def verify_text(text, blobs=None, cover=0.85, true_cover=0.90):
             continue
         best_id, best = None, 0.0
         for uid, blob in blobs.items():
+            if scope_ids is not None and uid not in scope_ids:
+                continue
             c = min(coverage(fr, blob) for fr in frs)  # all fragments in the SAME unit
             if c > best:
                 best, best_id = c, uid
