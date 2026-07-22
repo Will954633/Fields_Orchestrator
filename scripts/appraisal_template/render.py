@@ -1106,10 +1106,14 @@ def render_section_01_right_html(
     elif highlight_key:
         chosen = next((c for c in ranked if c["key"] == highlight_key), None)
         if chosen is None:
-            raise ValueError(
-                f"Highlight key {highlight_key!r} not in top-ranked candidates for {subject_id}. "
-                f"Available keys: {[c['key'] for c in ranked]}"
-            )
+            # A stored/human-picked highlight_key can go stale between runs (e.g. new sold
+            # comparables reshuffle the rarity ranking) — degrade to the current top-ranked
+            # candidate instead of hard-failing the whole report (found 2026-07-22: 7 real
+            # Robina properties stuck in appraisal_pipeline stage=error on exactly this).
+            print(f"[WARN] highlight_key {highlight_key!r} no longer in top-ranked candidates "
+                  f"for {subject_id} (available: {[c['key'] for c in ranked]}) — "
+                  f"falling back to top-ranked {ranked[0]['key']!r}")
+            chosen = ranked[0]
     else:
         chosen = ranked[0]
 
