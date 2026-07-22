@@ -75,7 +75,16 @@ TEST_SLUGS = {"7-huntingdale-crescent-robina", "5-fulham-place-robina"}
 FB_LOCATION_NOTE = "AU (inferred — geo-targeted FB campaign, no on-site session)"
 
 HEADERS = ["Date", "Source", "Name", "Email", "Phone", "City", "Country",
-           "Suburb / Address", "Details", "Campaign / Channel", "Status"]
+           "Suburb / Address", "Details", "Campaign / Channel", "Status",
+           "Selling Plan", "Lead ID"]
+# Selling Plan (col L, 0-indexed 11) and Lead ID (col M, 0-indexed 12) are the
+# only two auto-refreshed-in-place columns (see LIVE-LEADS-SHEET-AUTOUPDATE
+# fix-history, 2026-07-21) -- everything else is written once, at first add,
+# and never touched again so Will's manual edits (Status, notes, etc.) are
+# never clobbered. Lead ID is hidden -- it exists purely so a later run can
+# find "this exact row" again to refresh its Selling Plan cell.
+SELLING_PLAN_COL = 11  # 0-indexed -> column L
+LEAD_ID_COL = 12       # 0-indexed -> column M
 AEST = timezone(timedelta(hours=10))
 
 LEDGER_DB = "system_monitor"
@@ -155,7 +164,7 @@ def selling_plan_details(d: dict) -> str:
             label = ", ".join(label)
         answer = label or entry.get("freeText") or "(free text only)"
         parts.append(f"{entry.get('question', entry.get('questionId'))} → {answer}")
-    return "SELLING PLAN — " + "; ".join(parts)
+    return "; ".join(parts)
 
 
 def ayh_rows(db):
@@ -182,9 +191,6 @@ def ayh_rows(db):
             details_parts.append(f"landing={ft['landing_page']}")
         if ft.get("utm_campaign"):
             details_parts.append(f"utm_campaign={ft['utm_campaign']}")
-        plan = selling_plan_details(d)
-        if plan:
-            details_parts.append(plan)
         address = d.get("address") or d.get("suburb")
         if not address and d.get("slug"):
             address = d["slug"].replace("-", " ").title()
@@ -207,6 +213,7 @@ def ayh_rows(db):
             "details": "; ".join(details_parts),
             "campaign": ft.get("utm_campaign", "") or ft.get("referrer", "") or "",
             "status": status,
+            "selling_plan": selling_plan_details(d),
         }
 
 
@@ -291,13 +298,12 @@ def offmarket_rows(db, gc_db):
             f"refund_status={d.get('refund_status', '')}",
             f"owner_match={d.get('owner_match')}",
         ]
+        plan = ""
         if d.get("slug"):
             details_parts.append(occupancy_details(occupancy_for_slug(gc_db, d["slug"])))
             pr_doc = db.property_reports.find_one({"slug": d["slug"]}, {"selling_plan": 1})
             if pr_doc:
                 plan = selling_plan_details(pr_doc)
-                if plan:
-                    details_parts.append(plan)
         created = d.get("created_at")
         name = f"{buyer.get('first_name', '')} {buyer.get('last_name', '')}".strip()
         yield {
@@ -312,6 +318,7 @@ def offmarket_rows(db, gc_db):
             "details": "; ".join(details_parts),
             "campaign": d.get("arm", ""),
             "status": f"purchased — {d.get('status', '')}",
+            "selling_plan": plan,
         }
 
     rows = posthog_query("""
@@ -408,19 +415,77 @@ def tab_id(svc, ssid, title):
 def row_values(lead, city, country):
     return [lead["date"], lead["source"], lead["name"], lead["email"], lead["phone"],
             city, country, lead["suburb_address"], lead["details"], lead["campaign"],
-            lead["status"]]
+            lead["status"], lead.get("selling_plan", ""), lead["lead_id"]]
+
+
+def hide_lead_id_column(svc, ssid, sheet_id):
+    """Idempotent -- hides column M (Lead ID). Harmless to call every run."""
+    try:
+        svc.spreadsheets().batchUpdate(spreadsheetId=ssid, body={"requests": [{
+            "updateDimensionProperties": {
+                "range": {"sheetId": sheet_id, "dimension": "COLUMNS",
+                          "startIndex": LEAD_ID_COL, "endIndex": LEAD_ID_COL + 1},
+                "properties": {"hiddenByUser": True},
+                "fields": "hiddenByUser",
+            }
+        }]}).execute()
+    except Exception as e:
+        print(f"(could not hide Lead ID column: {e})")
+
+
+def refresh_selling_plans(svc, ssid, all_leads, already_ledgered: set[str], dry_run=False):
+    """Update-in-place: for leads ALREADY in the sheet (added on a previous run),
+    re-check whether their computed Selling Plan text has changed (new answer, or
+    an existing answer changed) and, if so, overwrite ONLY that lead's Selling Plan
+    cell -- never touches Name/Email/Status/Details, so any manual edit Will has
+    made elsewhere on the row is untouched. Brand-new leads being inserted this same
+    run already get their current Selling Plan written as part of the normal insert,
+    so this only needs to consider leads NOT in this run's insert batch.
+
+    Added 2026-07-21 (LIVE-LEADS-SHEET-AUTOUPDATE) so a seller's plan answers stay
+    current on the sheet automatically as they come in, not just at first-add."""
+    current = svc.spreadsheets().values().get(
+        spreadsheetId=ssid, range=f"'{TAB}'!L2:M10000").execute().get("values", [])
+    # row 2 in the sheet == index 0 here
+    row_by_lead_id = {}
+    for i, row in enumerate(current):
+        plan_cell = row[0] if len(row) > 0 else ""
+        lead_id_cell = row[1] if len(row) > 1 else ""
+        if lead_id_cell:
+            row_by_lead_id[lead_id_cell] = (i + 2, plan_cell)
+
+    updates = []
+    for lead in all_leads:
+        if lead["lead_id"] not in already_ledgered:
+            continue  # being freshly inserted this run (or truly new) -- not this function's job
+        new_plan = lead.get("selling_plan", "")
+        if not new_plan:
+            continue  # nothing to say -- never overwrite a populated cell with blank
+        hit = row_by_lead_id.get(lead["lead_id"])
+        if hit is None:
+            continue  # lead predates the Lead ID column (never rebuilt) -- can't locate it
+        row_num, existing_plan = hit
+        if existing_plan == new_plan:
+            continue
+        updates.append({"range": f"'{TAB}'!L{row_num}", "values": [[new_plan]]})
+
+    if not updates:
+        return 0
+    print(f"{len(updates)} existing lead(s) have new/changed selling-plan data.")
+    if dry_run:
+        return len(updates)
+    svc.spreadsheets().values().batchUpdate(spreadsheetId=ssid, body={
+        "valueInputOption": "RAW", "data": updates,
+    }).execute()
+    return len(updates)
 
 
 # ---- main -----------------------------------------------------------------
 def set_env_from_file():
-    if os.environ.get("COSMOS_CONNECTION_STRING"):
-        return
+    # python-dotenv, not a hand-rolled parser (standardised 2026-07-23).
+    from dotenv import load_dotenv
     env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
-    if os.path.exists(env_path):
-        for line in open(env_path):
-            if "=" in line and not line.lstrip().startswith("#"):
-                key, _, val = line.partition("=")
-                os.environ.setdefault(key.strip(), val.strip().strip('"'))
+    load_dotenv(env_path, override=False)
 
 
 def main():
@@ -463,6 +528,7 @@ def main():
         client[LEDGER_DB][LEDGER_COLL].delete_many({})
         for l in candidates:
             record_ledger(client, l["lead_id"], ts)
+        hide_lead_id_column(svc, args.spreadsheet_id, sheet_id)
         client.close()
         print(f"[rebuild] wrote {len(candidates)} lead(s), ledger re-seeded.")
         return
@@ -472,8 +538,10 @@ def main():
     # newest first -> ends up at the very top after insert
     candidates.sort(key=lambda l: l["date"], reverse=True)
 
+    refreshed = refresh_selling_plans(svc, args.spreadsheet_id, all_leads, seen, dry_run=args.dry_run)
+
     if not candidates:
-        print("Nothing new.")
+        print("Nothing new." if not refreshed else f"No new leads; {refreshed} selling-plan update(s) applied.")
         client.close()
         return
 
