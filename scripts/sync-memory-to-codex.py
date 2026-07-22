@@ -110,15 +110,9 @@ def render_memories(memories: dict[str, list[dict]]) -> list[str]:
 # ── CEO proposals ──────────────────────────────────────────────────────────────
 
 def load_env():
-    """Load .env file into os.environ."""
-    if not ENV_FILE.exists():
-        return
-    for line in ENV_FILE.read_text().splitlines():
-        line = line.strip()
-        if line and not line.startswith("#") and "=" in line:
-            key, _, val = line.partition("=")
-            val = val.strip().strip('"').strip("'")
-            os.environ.setdefault(key.strip(), val)
+    """Load .env file into os.environ (python-dotenv, standardised 2026-07-23)."""
+    from dotenv import load_dotenv
+    load_dotenv(str(ENV_FILE), override=False)
 
 
 def load_ceo_proposals() -> list[dict]:
