@@ -286,6 +286,47 @@ not actionable leads — they belong in Task 1's aggregate view, not here.
 
 ---
 
+## Task 0.5 — Fields Systems Health check (read, fix or escalate — every run)
+
+Check the **Fields Systems Health** sheet — the single source of truth for every business process
+(website data freshness/correctness, the orchestrator pipeline, the cron/systemd fleet, off-VM GitHub
+Actions, leads/CRM sync, ad-decision-logging compliance, the mini-site). It rebuilds nightly at 01:00 AEST,
+before your run, so it's fresh when you read it.
+
+```
+# Live sheet (Dashboard tab = one row per page/category; per-page tabs = every data point + Detail):
+https://docs.google.com/spreadsheets/d/1Oa7uZv0shzsxftDYJJ3WErxhr7OZMf_SOxRFawbSgTk/edit
+# Or re-run the underlying check yourself for the freshest read, or if Drive OAuth is down
+# (known weekly expiry, see memory — google-drive MCP reads will raise invalid_grant when this happens):
+python3 scripts/main_site_health_check.py --json /tmp/systems_health.json
+```
+
+**Triage each row — don't chase everything:**
+- `OK` / `KNOWN-GAP` — skip, nothing to do.
+- `UNKNOWN-FRESHNESS` — informational only; chase it only if something else makes it suspicious.
+- `ERROR` / `STALE` / `MISSING` — a real gap. Read the `Detail` column and trace to the actual script/log
+  (`logs/`, `logs/runs/<latest>/`, `journalctl` for a systemd unit) to find the root cause. Several rows
+  can share one upstream cause — fix the cause once, not each symptom separately.
+
+**Fix it durably where it's prudent and within your existing autonomy tier** (see Blockers & self-recovery
+below): a safe, reversible, root-cause fix to the actual script/config/cron entry — not a patch that quiets
+the symptom without resolving why it broke, and not anything hard-to-undo or outside your authority (a
+credential you don't hold, a DB/infra/schema change, contacting a person). Test it, push it, and **write
+the fix-history entry** (mandatory, CLAUDE.md rule 1) so the fix is durable and traceable, not a one-off
+manual save that regresses next time something touches that code.
+
+**If you can't fix it, or you're unsure whether a fix is safe** — don't guess, and don't leave it silent:
+1. **Telegram Will now** (`python3 scripts/telegram_notify.py "..."`) — say exactly what's broken, the root
+   cause if you found it, what you tried, and precisely what he needs to decide or do.
+2. **Note it in this run's report / Google Doc** under a "Systems Health" section: what you checked, what
+   you fixed (with how to revert), and what you escalated and why — a durable record beyond the Telegram
+   ping, even if he doesn't see that right away.
+
+Every row you touch still goes through the normal Blockers-section discipline below — this task doesn't
+replace that; it's the trigger that surfaces the gaps to look for every run instead of stumbling onto them.
+
+---
+
 ## Task 1 — Marketing direction signals (PostHog + CRM + Brain 2)
 
 Read our own data and surface **clear, evidence-backed signals on marketing direction**: ad
