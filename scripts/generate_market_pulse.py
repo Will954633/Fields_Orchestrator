@@ -177,7 +177,7 @@ def fetch_all_data(gc_db, sm_db, suburb):
 
     # 7. Price Change Events
     events = list(sm_db["price_change_events"].find(
-        {"suburb": {"$regex": suburb.replace("_", " "), "$options": "i"}},
+        {"suburb": {"$regex": suburb, "$options": "i"}},
         {"direction": 1, "change_pct": 1, "days_on_market": 1, "_id": 0}
     ).limit(100))
     if events:
