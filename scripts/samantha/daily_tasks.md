@@ -178,6 +178,14 @@ actioned everything, run `python3 scripts/samantha/from_will.py --commit`** (do 
 That way if the run crashes, the content re-shows next run and nothing Will drops is ever lost.
 ### Will's RUNNING DOC — newest at top, ORANGE = done (rules you must follow)
 
+**BEFORE answering any item, check `drive_comment.py list --file <docId>` for an existing reply — not
+just what `from_will.py` shows as new.** `from_will.py`'s "new since last commit" pointer can miss
+comment threads from BEFORE that pointer that already answered the same body-text item (found
+2026-07-23: two questions got re-answered from scratch because a session six days earlier had already
+replied, but never marked the paragraph orange — see charter.md's "Gaps found" section for the full
+incident and the rest of the fixes from it, all mandatory). If a reply already exists, don't redo the
+work — confirm it still holds, then mark the paragraph orange.
+
 Will's notes docs are **living running documents that hold HIS COMMENTS**. Therefore:
 - **NEVER delete, rebuild, overwrite or re-create the doc.** That would destroy his comments. Only ever
   edit it IN PLACE with `running_doc.py` (Docs API). No exceptions.
@@ -423,6 +431,10 @@ not** (~600 visitors/wk, ~46 organic) — so copy the discipline, NOT the volume
   per hypothesis, kill losers to free budget, log to `ad_decisions` + the ledger.
 - **Feed the backlog from Brain 1** (`scripts/samantha/brain1_query.py`) + the KB (`scripts/search-kb.py`):
   turn an evidenced concept into a *queued* hypothesis, cite the evidence. Concepts flow Brain 1 → test → Brain 2.
+  **This isn't optional or occasional** — found 2026-07-23: `brain_search.py` got used once in an entire
+  3-hour session despite multiple concepts being drafted afterward with zero brain queries. Before
+  drafting or deciding on ANY substantive work item, run `brain_search.py "<question>" --brain all` and
+  cite what it finds (or explicitly note nothing relevant turned up) — see charter.md's "Gaps found" #7.
 - **SEO** (our underworked #1 organic lever): act on the documented roadmap in safe reversible increments
   (`scripts/brain2/seo_indexation_check.py`); never bulk-dump thousands of pages.
 
