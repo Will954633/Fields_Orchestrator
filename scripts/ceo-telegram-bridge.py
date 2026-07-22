@@ -66,16 +66,9 @@ DEFAULT_CEO_MODEL = "gpt-5.4"
 
 
 def load_env_file(path: Path) -> None:
-    if not path.exists():
-        return
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        key = key.strip()
-        value = value.strip().strip('"').strip("'")
-        os.environ.setdefault(key, value)
+    # python-dotenv, not a hand-rolled parser (standardised 2026-07-23).
+    from dotenv import load_dotenv
+    load_dotenv(str(path), override=False)
 
 
 load_env_file(ENV_PATH)
