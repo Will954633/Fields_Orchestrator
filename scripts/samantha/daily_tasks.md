@@ -262,6 +262,16 @@ Merrimac showed `not_listed` in mongo but had already listed — recommending "c
 seller" was wrong.) An already-listed owner is NOT a pre-market seller — they don't need us to suggest
 selling; adjust the angle (track their listing, buyer-side, or drop). Think to check this every time.
 
+**Once a lead is confirmed resolved (already listed, dead, wrong number, etc. — whether you verified it
+fresh or Will tells you directly), DISMISS it durably** — don't just leave the worklist row as-is, it
+will get silently re-scored back to a live priority next time `lead_intelligence.py` runs. Set on the
+`system_monitor.lead_worklist` doc: `dismissed: true`, `dismissed_reason`, `dismissed_by` (e.g.
+`"will_direct_confirmation"` or `"samantha_fresh_verify"`), `dismissed_at`. `lead_intelligence.py`
+respects this (fixed 2026-07-22) — it keeps enrichment fresh but leaves `priority`/`reason`/`signals`
+alone for any `dismissed: true` row, so it stays out of the high/medium view until a human explicitly
+un-dismisses it. This is the durable equivalent of "note it and move on" — a dismissal that only lives
+in your report/memory will not stop the lead resurfacing.
+
 **Convert genuine hot seller leads into a READY-TO-SEND appraisal package** (this advances 5 listings
 directly). We have a seller-appraisal generator: `scripts/generate_appraisal_report.py` (11-page branded
 PDF from comps + AI editorial) driven by the `system_monitor.appraisal_pipeline` collection (stage →
