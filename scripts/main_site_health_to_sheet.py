@@ -1,23 +1,32 @@
 #!/usr/bin/env python3
 """
-Sync the main-site health audit to a Google Sheet (in a target Drive folder).
+Sync the business-wide "Fields Systems Health" audit to a Google Sheet (in a
+target Drive folder) — the single source of truth for every process the
+business runs: website data freshness/correctness, the orchestrator pipeline,
+the cron/systemd fleet, off-VM GitHub Actions, leads/CRM syncs, ad-decision
+logging compliance, and the mini-site (merged in 2026-07-22, was a separate
+sheet — see minisite_health_to_sheet.py).
 
-  Tab 1 "Dashboard"  — one row per page (health %, status counts, oldest freshness, worst status).
-  Tabs 2..N          — one per page, every dynamic data point with value / status /
-                       collection / freshness field / last updated / last changed / detail.
+  Tab "Dashboard"          — one row per main-site page (health %, status counts, worst status).
+  Tabs (main-site pages)   — one per page, every dynamic data point with value / status /
+                             collection / freshness field / last updated / last changed / detail.
+  Tab "Mini-Site Dashboard" + one tab per home — same shape, appended from
+                             minisite_health_check.py via minisite_health_to_sheet.build_workbook(wb=...).
 
 Mechanism: build a multi-tab .xlsx with openpyxl (status cells colour-coded), then import
-it into Drive as a Google Sheet. Reuses one file ("Main Site Health") in the folder so the
-URL is stable across daily syncs. Uses Drive API only (the Sheets API is disabled on the
-OAuth project; the full auth/drive scope covers Drive import).
+it into Drive as a Google Sheet. Reuses one file (id KNOWN_SHEET_ID below) in the folder so
+the URL is stable across daily syncs regardless of the display name. Uses Drive API only
+(the Sheets API is disabled on the OAuth project; the full auth/drive scope covers Drive import).
 
-Telegram one-liner is pushed only when something is in breach (ERROR/STALE/MISSING > 0);
-silent on healthy runs. The Sheet itself is the primary daily signal.
+Telegram one-liner is pushed only when something is in breach (ERROR/STALE/MISSING > 0)
+across EITHER the main-site or mini-site rows; silent on healthy runs. The Sheet itself
+is the primary daily signal.
 
 Usage:
   python3 scripts/main_site_health_to_sheet.py            # build/refresh + alert on breach
   python3 scripts/main_site_health_to_sheet.py --no-snapshot
   python3 scripts/main_site_health_to_sheet.py --no-alert
+  python3 scripts/main_site_health_to_sheet.py --no-minisite  # debugging only
 """
 from __future__ import annotations
 import argparse
@@ -38,7 +47,11 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
 FOLDER_ID = "1x6GGEubGPhsPMUhaN8mKUpLBTHEVZs11"
-SHEET_NAME = "Main Site Health"
+# Renamed 2026-07-22 from "Main Site Health" — this sheet grew from a
+# website-only freshness audit into the single business-wide status board
+# (Process Registry, GitHub Actions, Market Signals Fetch, Leads & CRM, Ads &
+# Compliance, and the mini-site tabs merged in below). Same file id/URL.
+SHEET_NAME = "Fields Systems Health"
 TOKEN_FILE = "/home/fields/.gdrive-server-credentials.json"
 KEYS_FILE = "/home/fields/.gdrive-oauth.keys.json"
 XLSX_PATH = "/tmp/main_site_health.xlsx"
@@ -141,6 +154,9 @@ def excel_title(name, used):
 
 # ---- workbook -----------------------------------------------------------------
 def build_workbook(pages, now_utc, totals):
+    """Builds the main-site tabs into a new Workbook and returns it (unsaved) —
+    main() appends the mini-site tabs onto this same `wb` before saving once,
+    so both sheets live in one file/one upload/one Telegram digest."""
     wb = Workbook()
     used = set()
     C = hc
@@ -150,7 +166,7 @@ def build_workbook(pages, now_utc, totals):
     ws.title = "Dashboard"
     overall = round(100 * totals.get("OK", 0) /
                     max(1, sum(v for k, v in totals.items() if k != "KNOWN-GAP")))
-    ws["A1"] = (f"Main Site Health — generated "
+    ws["A1"] = (f"Fields Systems Health — generated "
                 f"{now_utc.astimezone(C.AEST):%Y-%m-%d %H:%M AEST}  ·  overall {overall}%  ·  "
                 f"expected last nightly run "
                 f"{C.expected_last_run(now_utc).astimezone(C.AEST):%Y-%m-%d %H:%M}")
@@ -195,7 +211,7 @@ def build_workbook(pages, now_utc, totals):
         style_header_block(ws, 2, len(PAGE_HEADERS))
         autofit(ws, [30, 16, 26, 18, 26, 19, 19, 50])
 
-    wb.save(XLSX_PATH)
+    return wb
 
 
 # ---- drive upload -------------------------------------------------------------
@@ -220,7 +236,10 @@ def upload(drive):
     media = MediaFileUpload(XLSX_PATH, mimetype=XLSX_MIME, resumable=False)
     ssid = find_existing(drive)
     if ssid:
-        drive.files().update(fileId=ssid, media_body=media, supportsAllDrives=True).execute()
+        # Also carries the 2026-07-22 rename (was "Main Site Health") onto the
+        # existing file — cheap metadata update, same call as the content sync.
+        drive.files().update(fileId=ssid, body={"name": SHEET_NAME}, media_body=media,
+                             supportsAllDrives=True).execute()
     else:
         body = {"name": SHEET_NAME, "parents": [FOLDER_ID],
                 "mimeType": "application/vnd.google-apps.spreadsheet"}
@@ -230,16 +249,26 @@ def upload(drive):
 
 
 # ---- alert --------------------------------------------------------------------
-def maybe_alert(pages, totals, url, now_utc):
+def maybe_alert(pages, totals, url, now_utc, minisite_results=None):
+    """Mini-site had zero Telegram alerting before this merge (2026-07-22) —
+    its breaches are folded into the same digest here rather than a second,
+    separate message, so one breach-worthy night produces one alert."""
     breaches = totals.get("ERROR", 0) + totals.get("STALE", 0) + totals.get("MISSING", 0)
-    if breaches == 0:
+    mini_breaches = []
+    for r in (minisite_results or []):
+        c = r["counts"]
+        b = c.get("ERROR", 0) + c.get("MISSING", 0) + c.get("STALE", 0)
+        if b:
+            mini_breaches.append((r, b))
+    if breaches == 0 and not mini_breaches:
         return
     try:
-        from telegram_notify import send_message
+        from telegram_notify import send_message, TelegramSendError
     except Exception as e:
         print(f"(telegram unavailable: {e})")
         return
-    lines = [f"⚠️ Main Site Health — {breaches} data point(s) need attention "
+    total_breaches = breaches + sum(b for _, b in mini_breaches)
+    lines = [f"⚠️ Fields Systems Health — {total_breaches} data point(s) need attention "
              f"({now_utc.astimezone(hc.AEST):%Y-%m-%d %H:%M AEST})"]
     for p in pages:
         c = p["counts"]
@@ -247,11 +276,17 @@ def maybe_alert(pages, totals, url, now_utc):
         if b:
             lines.append(f"• {p['page']}: {p['health_pct']}% "
                          f"(err {c.get('ERROR',0)} / stale {c.get('STALE',0)} / miss {c.get('MISSING',0)})")
+    if mini_breaches:
+        lines.append(f"• Mini-Site: {len(mini_breaches)} home(s) with breaches")
+        for r, b in sorted(mini_breaches, key=lambda x: -x[1])[:5]:
+            lines.append(f"   – {r['address']} ({r['suburb']}): {r['health_pct']}%, {b} breach(es)")
+        if len(mini_breaches) > 5:
+            lines.append(f"   – …and {len(mini_breaches) - 5} more (see Mini-Site Dashboard tab)")
     lines.append(url)
     try:
         send_message("\n".join(lines), parse_mode="")
-    except SystemExit:
-        print("(telegram send failed — check TELEGRAM_BOT_TOKEN/CHAT_ID)")
+    except TelegramSendError as e:
+        print(f"(telegram send failed: {e} — check TELEGRAM_BOT_TOKEN/CHAT_ID)")
 
 
 # ---- main ---------------------------------------------------------------------
@@ -270,17 +305,31 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--no-snapshot", action="store_true")
     ap.add_argument("--no-alert", action="store_true")
+    ap.add_argument("--no-minisite", action="store_true",
+                    help="skip mini-site tabs (debugging only)")
     args = ap.parse_args()
 
     set_env_from_file()
     pages, now_utc, totals = hc.run_audit(persist=not args.no_snapshot)
-    build_workbook(pages, now_utc, totals)
+    wb = build_workbook(pages, now_utc, totals)
+
+    minisite_results = []
+    if not args.no_minisite:
+        try:
+            import minisite_health_check as mhc
+            import minisite_health_to_sheet as mhs
+            minisite_results, _ = mhc.run_audit(persist=not args.no_snapshot)
+            mhs.build_workbook(minisite_results, now_utc, wb=wb)
+        except Exception as e:
+            print(f"(mini-site tabs skipped: {e})")
+
+    wb.save(XLSX_PATH)
     drive = get_drive()
     ssid = upload(drive)
     url = f"https://docs.google.com/spreadsheets/d/{ssid}/edit"
-    print(f"Synced {len(pages)} pages → {url}")
+    print(f"Synced {len(pages)} main-site pages + {len(minisite_results)} mini-site homes → {url}")
     if not args.no_alert:
-        maybe_alert(pages, totals, url, now_utc)
+        maybe_alert(pages, totals, url, now_utc, minisite_results=minisite_results)
 
 
 if __name__ == "__main__":
