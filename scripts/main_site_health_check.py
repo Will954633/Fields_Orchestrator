@@ -60,7 +60,8 @@ CHART_TYPES = ["days_on_market", "sales_volume", "turnover_rate", "market_cycle"
 # sheet is one source of truth, not a website-only view.
 PAGES = ["Process Registry", "Pipeline Processes", "Sitemap", "GitHub Actions",
          "Market Metrics", "Market Signals Fetch", "For Sale / Sold", "Property Page",
-         "Articles", "Leads & CRM", "Ads & Compliance", "Valuation Accuracy", "Known Gaps"]
+         "Articles", "New Listings: Editorial & SEO", "Leads & CRM", "Ads & Compliance",
+         "Valuation Accuracy", "Known Gaps"]
 
 FIELDS_AUTOMATION_REPO = "Will954633/fields-automation"
 
@@ -368,6 +369,99 @@ def collect_ads_compliance(add, sm, now_utc):
         error_patterns=("Traceback (most recent call last)", "hash mismatch", "verify failed"))
     add(PG, "Compliance nightly (PO Act K/L/N)", "archive + offsite backup",
         mtime.date().isoformat() if mtime else None, st, "log mtime", mtime, dt)
+
+
+# ---- New Listings: Editorial & SEO ---------------------------------------------
+# Matches generate_property_ai_analysis.py's own TARGET_SUBURBS exactly — nightly
+# step 120 only ever processes these 4, and House-only (units/townhouses excluded
+# by the generator's own _ALLOWED_PROPERTY_TYPES gate).
+NEW_LISTING_SUBURBS = ["robina", "varsity_lakes", "burleigh_waters", "merrimac"]
+NEW_LISTING_WINDOW_DAYS = 14   # nightly window is 7 days; watch a bit longer for stragglers
+NEEDS_REVIEW_STALE_DOM = 10    # 7 + 3 days' grace — the pre-gate (missing steps 105/106) should clear within a night or two
+INDEX_GRACE_DAYS = 4           # don't GSC-check until published this long — Google needs time to crawl; checking sooner is just noise
+MAX_GSC_CALLS_PER_RUN = 30     # shares seo_indexation_check.py's ~2000/day quota; safety valve, expected nightly volume is far below this
+
+
+def collect_new_listings_editorial(add, gc, sm, now_utc):
+    """Confirms two things Will asked for directly (2026-07-22): (1) every new
+    listing actually gets editorial processing — including anything stuck in
+    the needs_review pre-gate that a human would otherwise only notice by
+    happening to check the ops dashboard — and (2) whether Google has
+    actually indexed the published articles, via new_listing_indexation.py
+    (reuses the proven-working GSC URL Inspection credential already used by
+    the weekly seo_indexation_check.py). Anything flagged here is meant to be
+    handed to Samantha to investigate, not just logged."""
+    PG = "New Listings: Editorial & SEO"
+    svc = None
+    try:
+        import new_listing_indexation as nli
+        svc = nli.gsc_svc()
+    except Exception as e:
+        add(PG, "GSC credential", "all", None, ERROR, "", None,
+            f"could not init GSC service — indexation checks skipped this run: {e}")
+
+    gsc_calls = 0
+    for s in NEW_LISTING_SUBURBS:
+        listings = list(gc[s].find(
+            {"listing_status": "for_sale", "property_type": "House",
+             "days_on_domain": {"$lte": NEW_LISTING_WINDOW_DAYS}},
+            {"address": 1, "url_slug": 1, "days_on_domain": 1, "ai_analysis": 1}))
+
+        counts = {"none": 0, "draft": 0, "needs_review": 0, "published": 0,
+                  "rejected": 0, "failed_factcheck": 0}
+        flagged = []
+        indexed_ok = indexed_pending = indexed_bad = 0
+
+        for doc in listings:
+            aa = doc.get("ai_analysis") or {}
+            status = aa.get("status") or "none"
+            counts[status] = counts.get(status, 0) + 1
+            dom, addr, slug = doc.get("days_on_domain"), doc.get("address", "?"), doc.get("url_slug")
+
+            if status == "none" and dom is not None and dom > 7:
+                flagged.append((addr, f"{dom}d on Domain, no ai_analysis at all — should have been "
+                                      f"picked up by nightly step 120"))
+            elif status == "needs_review" and dom is not None and dom > NEEDS_REVIEW_STALE_DOM:
+                flagged.append((addr, f"{dom}d on Domain, still stuck in needs_review — the pre-gate "
+                                      f"(missing photo/floor-plan analysis) should clear within a night "
+                                      f"or two, not {dom} days"))
+            elif status == "published" and slug:
+                published_at = as_dt(aa.get("published_at") or aa.get("generated_at"))
+                age_days = (now_utc - published_at).total_seconds() / 86400 if published_at else None
+                if age_days is None or age_days < INDEX_GRACE_DAYS or svc is None:
+                    indexed_pending += 1
+                    continue
+                cached = nli.get_cached(sm, slug)
+                if cached and cached.get("confirmed_indexed"):
+                    indexed_ok += 1
+                    continue
+                if gsc_calls >= MAX_GSC_CALLS_PER_RUN:
+                    indexed_pending += 1
+                    continue
+                try:
+                    result = nli.check_and_cache(sm, svc, slug)
+                    gsc_calls += 1
+                except Exception as e:
+                    flagged.append((addr, f"GSC indexation check failed: {type(e).__name__}: {e}"))
+                    continue
+                if result.get("confirmed_indexed"):
+                    indexed_ok += 1
+                else:
+                    indexed_bad += 1
+                    flagged.append((addr,
+                        f"published {age_days:.0f}d ago, Google still shows "
+                        f"'{result.get('coverage_state')}' (checked {result.get('checks', 1)}x) — "
+                        f"for Samantha to investigate"))
+
+        val = (f"none {counts['none']} / draft {counts['draft']} / review {counts['needs_review']} / "
+               f"published {counts['published']} (indexed {indexed_ok}, pending {indexed_pending}, "
+               f"NOT indexed {indexed_bad}) / rejected {counts['rejected']}")
+        st = ERROR if flagged else OK
+        add(PG, "New listings status", suburb_label(s), val, st, "", None,
+            f"{len(flagged)} flagged" if flagged else "")
+
+        for addr, detail in flagged:
+            add(PG, "Flagged listing", f"{suburb_label(s)}: {addr}", detail[:70], ERROR, "", None, detail)
 
 
 # ---- Process Registry (every cron job / systemd daemon / off-VM runner) -------
@@ -947,6 +1041,7 @@ def collect(client, now_utc, prev_map):
         ("Process Registry", collect_process_registry, (add,)),
         ("GitHub Actions", collect_github_actions, (add,)),
         ("Market Signals Fetch", collect_market_signals_fetch, (add, sm, now_utc)),
+        ("New Listings: Editorial & SEO", collect_new_listings_editorial, (add, gc, sm, now_utc)),
         ("Leads & CRM", collect_leads_crm, (add, sm, now_utc, last_run)),
         ("Ads & Compliance", collect_ads_compliance, (add, sm, now_utc)),
     ]:
