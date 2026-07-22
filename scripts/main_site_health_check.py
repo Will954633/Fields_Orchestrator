@@ -698,7 +698,21 @@ def collect(client, now_utc, prev_map):
                     {"listing_status": "sold", "sold_date": {"$gte": q_start_s, "$lte": q_end_s}})
             except Exception:
                 raw_cnt = None
-            if raw_cnt is not None and raw_cnt >= 3 and latest_complete_period != expected_label:
+            def _q_tuple(label):
+                # "Q1 2026" -> (2026, 1), for chronological comparison — plain
+                # string inequality was wrong: it flagged the series being AHEAD
+                # of the grace window (e.g. Q2 when Q1 was expected — exactly
+                # what a working refresh looks like) the same as being behind.
+                if not label:
+                    return None
+                try:
+                    q, y = label.split()
+                    return (int(y), int(q.lstrip("Q")))
+                except Exception:
+                    return None
+            is_behind = (raw_cnt is not None and raw_cnt >= 3
+                        and (_q_tuple(latest_complete_period) or (0, 0)) < _q_tuple(expected_label))
+            if is_behind:
                 add(PG, "Indexed prices — quarter completeness", suburb_label(s),
                     latest_complete_period or "none", ERROR, "indexed_series[-1].period", ts,
                     f"raw sold data has {raw_cnt} sales in {expected_label} but the precomputed "
