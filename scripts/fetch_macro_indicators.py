@@ -6,6 +6,8 @@ Data sources (all free, no auth):
   - Brent crude oil (FRED DCOILBRENTEU) — daily, resampled to quarterly
   - RBA cash rate (RBA F1 table) — daily, resampled to quarterly
   - RBA mortgage rates (RBA F5 table) — monthly
+  - RBA 1-year term deposit rate (RBA F4 table) — monthly, back to 1981
+  - QLD CPI, all groups (ABS Data API, dataflow CPI) — quarterly, back to 1948
   - Australian national house price index (FRED QAUN628BIS) — quarterly
 
 Writes to: Gold_Coast.precomputed_macro_indicators
@@ -153,9 +155,10 @@ def fetch_rba_cash_rate() -> list[dict]:
         except (ValueError, IndexError):
             continue
 
+    # No lower-bound filter — the RBA's daily F1 CSV itself only extends back to
+    # ~2011 (a source limit, not a filter we impose), so this already captures
+    # everything available.
     result = sorted(quarters.values(), key=lambda x: x["period"])
-    # Filter to 2015+
-    result = [r for r in result if r["period"] >= "2015-Q1"]
 
     # Cross-check: scrape the RBA cash rate page for the authoritative current rate
     # The F1 CSV can lag by days after a rate decision
@@ -226,6 +229,93 @@ def fetch_rba_mortgage_rates() -> list[dict]:
     if result:
         print(f"    {len(result)} quarters, latest: {result[-1]['period']} = {result[-1]['rate']}%")
     return result
+
+
+def fetch_rba_term_deposit_1y() -> list[dict]:
+    """Fetch the RBA's 1-year term deposit rate ($10,000) from the F4 table.
+
+    Feeds the off-market mini-site's capital-gain "vs. the bank" benchmark —
+    real monthly data back to Dec-1981, long enough to cover any purchase date
+    we'll ever see. Column position is verified against the Series ID row each
+    run rather than hardcoded, so an RBA column reorder fails loudly instead of
+    silently reading the wrong series.
+    """
+    print("  Fetching RBA 1-year term deposit rate (F4)...")
+    csv_text = fetch_csv("https://www.rba.gov.au/statistics/tables/csv/f4-data.csv")
+    lines = [l for l in csv_text.split("\n") if l.strip()]
+
+    header_idx = next((i for i, l in enumerate(lines) if l.startswith("Series ID")), None)
+    if header_idx is None:
+        raise RuntimeError("F4 CSV: 'Series ID' row not found")
+    header = [p.strip() for p in lines[header_idx].split(",")]
+    try:
+        col = header.index("FRDIRBTD10K1Y")
+    except ValueError:
+        raise RuntimeError("F4 CSV: 1-year term deposit series (FRDIRBTD10K1Y) not found in header")
+
+    quarters = {}
+    for line in lines[header_idx + 1:]:
+        parts = [p.strip() for p in line.split(",")]
+        if len(parts) <= col or not parts[0]:
+            continue
+        try:
+            dt = datetime.strptime(parts[0], "%d/%m/%Y")
+            rate_str = parts[col]
+            if not rate_str:
+                continue
+            rate = float(rate_str)
+            q = (dt.month - 1) // 3 + 1
+            q_key = f"{dt.year}-Q{q}"
+            quarters[q_key] = {"period": q_key, "rate": rate}  # last month in the quarter wins
+        except (ValueError, IndexError):
+            continue
+
+    result = sorted(quarters.values(), key=lambda x: x["period"])
+    if result:
+        print(f"    {len(result)} quarters, {result[0]['period']}–{result[-1]['period']}, "
+              f"latest: {result[-1]['rate']}%")
+    return result
+
+
+def fetch_cpi_qld() -> list[dict]:
+    """Fetch the QLD All-Groups CPI index (quarterly) from the ABS Data API.
+
+    Same dataflow + key already live in fetch_abs_market_signals.py
+    (1=Index Number, 10001=All Groups, 10=Original, 3=QLD, Q=Quarterly) — reused
+    here rather than duplicated with a different key, so both scripts stay
+    trivially consistent. Real quarterly data back to 1948-Q3.
+    """
+    print("  Fetching ABS CPI (QLD, All Groups)...")
+    resp = requests.get(
+        "https://data.api.abs.gov.au/rest/data/CPI/1.10001.10.3.Q",
+        params={"format": "jsondata"},
+        timeout=30,
+    )
+    resp.raise_for_status()
+    payload = resp.json()
+
+    structures = payload.get("data", {}).get("structures") or []
+    datasets = payload.get("data", {}).get("dataSets") or []
+    if not structures or not datasets:
+        raise RuntimeError("ABS CPI response missing structures/dataSets")
+
+    obs_dim = structures[0]["dimensions"]["observation"][0]["values"]
+    series = datasets[0]["series"]
+    series_key = next(iter(series))
+    observations = series[series_key]["observations"]
+
+    pairs = []
+    for idx_str, arr in observations.items():
+        idx = int(idx_str)
+        if idx >= len(obs_dim) or not arr or arr[0] is None:
+            continue
+        pairs.append({"period": obs_dim[idx]["id"], "index": float(arr[0])})
+    pairs.sort(key=lambda p: p["period"])
+
+    if pairs:
+        print(f"    {len(pairs)} quarters, {pairs[0]['period']}–{pairs[-1]['period']}, "
+              f"latest index: {pairs[-1]['index']}")
+    return pairs
 
 
 def fetch_national_house_prices() -> list[dict]:
@@ -360,6 +450,8 @@ def main():
     oil_quarterly, oil_daily = oil if oil else (prev.get("brent_crude_quarterly", []), prev.get("brent_crude_daily", []))
     cash_rate = _try("rba_cash_rate", fetch_rba_cash_rate) or prev.get("rba_cash_rate_quarterly", [])
     mortgage_rate = _try("rba_mortgage_rates", fetch_rba_mortgage_rates) or prev.get("rba_mortgage_rate_quarterly", [])
+    term_deposit_1y = _try("rba_term_deposit_1y", fetch_rba_term_deposit_1y) or prev.get("rba_term_deposit_1y_quarterly", [])
+    cpi_qld = _try("cpi_qld", fetch_cpi_qld) or prev.get("cpi_qld_quarterly", [])
     national_prices = _try("national_house_prices", fetch_national_house_prices) or prev.get("national_house_price_index", [])
     mortgage_impact = _try("mortgage_impact", lambda: build_mortgage_impact(cash_rate, mortgage_rate)) or prev.get("mortgage_impact", {})
 
@@ -373,6 +465,8 @@ def main():
         "brent_crude_daily": oil_daily,
         "rba_cash_rate_quarterly": cash_rate,
         "rba_mortgage_rate_quarterly": mortgage_rate,
+        "rba_term_deposit_1y_quarterly": term_deposit_1y,
+        "cpi_qld_quarterly": cpi_qld,
         "national_house_price_index": national_prices,
         "mortgage_impact": mortgage_impact,
     })
@@ -382,6 +476,8 @@ def main():
         print(f"Oil: {len(oil_quarterly)} quarters, {len(oil_daily)} daily")
         print(f"Cash rate: {len(cash_rate)} quarters")
         print(f"Mortgage rate: {len(mortgage_rate)} quarters")
+        print(f"Term deposit (1yr): {len(term_deposit_1y)} quarters")
+        print(f"CPI (QLD): {len(cpi_qld)} quarters")
         print(f"National prices: {len(national_prices)} quarters")
         print(f"\nMortgage impact summary:")
         for i in mortgage_impact.get("impact_summary", []):
