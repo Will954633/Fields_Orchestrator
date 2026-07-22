@@ -427,7 +427,6 @@ _REGISTRY_ALREADY_COVERED = [
     ("Brain2: lead attribution build", "Leads/CRM", "Leads & CRM tab (adjacent)"),
     ("Compliance nightly", "Compliance", "Ads & Compliance tab"),
     ("API resource health probe", "Infra", "API Health tab (separate, this same sheet)"),
-    ("Main Site Health → Sheet (this script)", "Meta", "this sheet, self-evidently running"),
 ]
 _REGISTRY_DISABLED = [
     ("Marketing advisor", "human review required"),
@@ -484,6 +483,23 @@ def collect_process_registry(add):
             add(PG, unit, "Daemon (systemd)", state, ERROR, "", None,
                 f"expected always-on, systemctl reports '{state}'")
 
+    # Meta: this checker's own run + the independent watchdog that verifies it.
+    # Deliberately NOT a self-referential "this sheet, self-evidently running"
+    # row (that was a no-op — if this script crashes before writing anything,
+    # that row never gets written either, so it can never actually fire).
+    # This reads check_systems_health_ran.py's own log — a SEPARATE script,
+    # on a SEPARATE cron (07:00 AEST, 6h after this one), that checks both
+    # this job's log AND the Sheet's own Drive modifiedTime, and Telegrams
+    # directly on failure without importing anything from this file. If this
+    # script itself crashes before reaching this point, THAT alert path is
+    # what tells Will — not this row (added 2026-07-22, flagged as a real
+    # gap: "does the checker check itself?").
+    st, dt, mtime = log_freshness_check(
+        os.path.join(orch_dir, "logs", "systems-health-runcheck.log"), 1.5,
+        error_patterns=("Traceback (most recent call last)", "FAIL", "FATAL"))
+    add(PG, "Fields Systems Health run-check (watchdog)", "Meta",
+        mtime.date().isoformat() if mtime else None, st, "log mtime", mtime, dt)
+
     runner_data, err = gh_api("repos/Will954633/fields-automation/actions/runners")
     if err or runner_data is None:
         add(PG, "GitHub Actions self-hosted runner", "Off-VM automation", None, UNKNOWN, "", None,
@@ -537,13 +553,21 @@ def collect(client, now_utc, prev_map):
             series = d.get("indexed_series") or []
             latest_complete_period = series[-1]["period"] if series else None
             # Two quarters back, not one: precompute_indexed_price_data.py sources
-            # from Domain's property_timeline, which a 2026-07-22 investigation
-            # (see fix-history [INDEXED-PRICE-Q2-LAG]) confirmed runs ~6-10 weeks
-            # behind the faster sold_date field by design/Domain's own publishing
-            # lag — checking the immediately-preceding quarter would flag that
-            # normal lag as an error every single month. Two quarters back gives
-            # ~3-4 months' grace, past the observed lag, so this only fires on a
-            # genuine multi-quarter stall like the incident it was added to catch.
+            # from property_timeline, which is refreshed by a SEPARATE weekly
+            # job (refresh_property_timelines.py). A 2026-07-22 investigation
+            # ([INDEXED-PRICE-Q2-LAG]) first assumed this gap was normal Domain
+            # publishing lag — WRONG, corrected same day in fix-history
+            # [PROPERTY-TIMELINE-REFRESH-DEAD]: the real cause was our own
+            # refresh cron never having run once (a crontab `cd` bug) plus the
+            # scraper being bot-blocked, both now fixed. Keeping a 2-quarter
+            # grace window anyway, for now: property_timeline is only weekly-
+            # refreshed and indexed_prices only monthly-precomputed, so a
+            # 1-quarter gap can still be legitimate pipeline cadence, not a
+            # stall — and the refresh fix above hasn't yet run a full cycle to
+            # prove it stays caught up. Revisit narrowing this to 1 quarter
+            # once refresh_property_timelines.py has run cleanly for a few
+            # weeks (check Process Registry's "Property timeline refresh"
+            # row — it was MISSING/never-run until 2026-07-22's fix).
             cy, cq = now_utc.year, (now_utc.month - 1) // 3 + 1
             py, pq = (cy - 1, cq + 2) if cq <= 2 else (cy, cq - 2)
             expected_label = f"Q{pq} {py}"
@@ -913,11 +937,24 @@ def collect(client, now_utc, prev_map):
         add(PG, name, scope, "structural gap", GAP, "", None, note, note=note)
 
     # ----- Business-wide additions (2026-07-22) -----
-    collect_process_registry(add)
-    collect_github_actions(add)
-    collect_market_signals_fetch(add, sm, now_utc)
-    collect_leads_crm(add, sm, now_utc, last_run)
-    collect_ads_compliance(add, sm, now_utc)
+    # Each wrapped individually: these are the newest, least-battle-tested
+    # collectors in this file (gh api subprocess calls, systemctl calls, new
+    # Mongo queries) — a bug in any ONE of them must not take down the entire
+    # audit and silently produce zero rows for every other page. That would be
+    # exactly the failure class this whole system exists to catch, just moved
+    # one level up into the checker itself.
+    for page_name, fn, fn_args in [
+        ("Process Registry", collect_process_registry, (add,)),
+        ("GitHub Actions", collect_github_actions, (add,)),
+        ("Market Signals Fetch", collect_market_signals_fetch, (add, sm, now_utc)),
+        ("Leads & CRM", collect_leads_crm, (add, sm, now_utc, last_run)),
+        ("Ads & Compliance", collect_ads_compliance, (add, sm, now_utc)),
+    ]:
+        try:
+            fn(*fn_args)
+        except Exception as e:
+            add(page_name, "collector crashed", "", None, ERROR, "", None,
+                f"{type(e).__name__}: {e}"[:200])
 
     return rows
 
