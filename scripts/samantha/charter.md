@@ -202,16 +202,38 @@ survives, per the memory discipline below.
 8. **Compile and clearly deliver a prioritized action-item list for Will at every natural checkpoint,
    and MANDATORILY before stopping/concluding a loop — don't leave it implicit across scattered Backlog
    rows.** Found 2026-07-23: 8 Backlog rows ended the session marked "Needs Will" but were never
-   compiled into one list; the "Questions for Will" tab (present in the sheet since 2026-07-15) was
-   never written to; Will's own words: "I wasn't given a list of action items." Before stopping: pull
-   every Backlog row with `Needs Will? = YES`, write them to the "Questions for Will" tab, and state them
-   explicitly in the final chat message as a clear "here's what I need from you" list — not folded into
-   a narrative summary.
-9. **Make the self-audit/session record impossible to miss.** When one exists, name its exact file path
-   in a dedicated line when concluding — don't bury it in mid-session narration. Consider producing the
-   same "Samantha Daily — {date}" Google Doc the headless run already makes (`daily_run.py`) even from
-   the interactive channel, so there is ONE canonical, Will-known location regardless of which channel
-   ran the session.
+   compiled into one list; Will's own words: "I wasn't given a list of action items." Before stopping:
+   pull every Backlog row with `Needs Will? = YES` and deliver them per rule 9 below (the running doc is
+   now the primary delivery channel — decided same day, see rule 9) — still also write them to the
+   "Questions for Will" tab as the structured/filterable copy, and state them explicitly in the final
+   chat message too when running interactively.
+9. **Will's running doc IS the end-of-session summary + task-list channel — decided 2026-07-23, refines
+   rule 8 and supersedes the "maybe a separate Doc" idea from earlier the same day.** Will: "That
+   document can be used for Samantha to send me end of session summaries and tasks for me to do... a
+   shared two-way communication flow." Concretely, at the end of every session (headless run finishing,
+   or an interactive loop stopping — not every single 20-min cycle, that would flood the doc):
+   - Write ONE entry via `running_doc.py add` (inserts at the top, newest-first, same mechanism already
+     used for everything else in this doc) in this shape:
+     ```
+     ### <DATE> <HH:MM> AEST — Samantha Session Summary
+     **Session:** interactive loop (N cycles) | headless run — <duration>
+     **Done this session:** <short paragraph or bullets — the real work, not a task-count>
+     **Action items for Will:**
+     1. <highest priority Needs-Will item>
+     2. ...
+     **Details:** fix-history logs/<date>.md, Backlog rows <range>, self-audit at <exact path if one
+     exists this session>
+     ```
+   - **Immediately mark that same entry ORANGE** (`running_doc.py complete --match "<unique text from
+     what you just added>"`) right after adding it. This is NOT hiding it — orange text still displays,
+     still sits at the top, Will can always read it. It only excludes it from `from_will.py`'s
+     "active/needs action" view, which matters because otherwise a FUTURE Samantha session would read
+     her own past summary as if it were new pending content from Will and try to action it — a
+     duplicate-work loop, the exact failure class rule 1 above exists to prevent, just self-inflicted
+     this time instead of doc-hygiene-inflicted.
+   - Name the self-audit's exact file path inside this entry when one exists this session — don't bury
+     it in mid-session narration, and don't build a separate new Google Doc for this purpose; this doc
+     is now the one canonical, Will-known location for it regardless of which channel ran the session.
 
 ## Comms
 Will talks to Samantha through the Claude Code channel (same identity as the scheduled runs; the board +
