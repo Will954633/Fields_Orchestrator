@@ -41,9 +41,11 @@ sys.path.insert(0, "/home/fields")
 
 from src.mongo_client_factory import get_mongo_client, cosmos_retry  # noqa: E402
 from scripts.property_reports import occupancy_classifier as occ  # noqa: E402
+from scripts.crm_sync import posthog_query, INTERNAL_IDS, BOT_CITIES  # noqa: E402
 
 NOW = datetime.now(timezone.utc)
 FRESH_STALE_DAYS = 45  # re-pull fresh only if stored timeline older than this / missing
+CORE_SUBURBS = ["robina", "varsity_lakes", "burleigh_waters"]  # off-market slug lookup scope
 
 # Internal / test markers — never surface these as real leads.
 TEST_EMAIL_BITS = ("will@fieldsestate", "@blueoceans", "test@", "example.com")
@@ -176,14 +178,26 @@ def _enrich_occupancy(lead: dict, gc_doc: dict, gc_db, allow_fresh: bool) -> dic
 # ---------------------------------------------------------------------------- #
 # Collect
 # ---------------------------------------------------------------------------- #
-def collect_leads(sm) -> dict:
+def _offmarket_gc_doc_by_slug(gc_db, slug: str):
+    for suburb in CORE_SUBURBS:
+        d = gc_db[suburb].find_one({"url_slug": slug})
+        if d:
+            return d
+    return None
+
+
+def collect_leads(sm, gc_db) -> dict:
     """Return {lead_key: normalised_lead} merged across all lead sources."""
     leads: dict = {}
 
-    def add(email, name, phone, address, source, origin, ts, extra=None):
+    def add(email, name, phone, address, source, origin, ts, extra=None, key_override=None):
         email = _email(email)
         name, phone, address, source = _s(name), _s(phone), _s(address), _s(source)
-        key = email or ("addr:" + re.sub(r"[^a-z0-9]+", "", address.lower())) or f"{origin[0]}:{origin[1]}"
+        # key_override: for anonymous per-VISITOR leads (e.g. an off-market page view) where
+        # address-based keying would wrongly merge two different visitors of the same property
+        # into one lead. Every other source keeps the default person/address dedup.
+        key = key_override or email or ("addr:" + re.sub(r"[^a-z0-9]+", "", address.lower())) \
+            or f"{origin[0]}:{origin[1]}"
         rec = leads.get(key)
         if not rec:
             rec = {"lead_key": key, "email": email, "name": name, "phone": phone,
@@ -244,6 +258,62 @@ def collect_leads(sm) -> dict:
             _s(d.get("created_at")),
             {"report_slug": d.get("slug"), "report_state": d.get("state"),
              "report_occupancy": d.get("occupancy")})
+
+    # Off-market report leads (added 2026-07-22 — previously ENTIRELY missing from this
+    # worklist; only surfaced in the separate Live Leads Tracker sheet, live_leads_to_sheet.py).
+    # Paid $15 unlocks are the reliable-contact subset; PostHog `offmarket_report_view` covers
+    # everyone else who merely viewed — including the exact "owner googles their own address"
+    # signal the opportunity-chasing doctrine calls out. Occupancy/investor filtering is NOT
+    # duplicated here (unlike live_leads_to_sheet.py's bespoke filter) — it's handled uniformly
+    # downstream by this pipeline's own _enrich_occupancy step for every lead type.
+    purchased_distinct_ids = set()
+    for d in sm["offmarket_orders"].find({}):
+        buyer = d.get("buyer") or {}
+        email = _email(buyer.get("email"))
+        if not d.get("consent"):
+            continue
+        did = d.get("posthog_distinct_id")
+        if did:
+            purchased_distinct_ids.add(did)
+        name = f"{buyer.get('first_name', '')} {buyer.get('last_name', '')}".strip()
+        add(email, name, buyer.get("phone"),
+            d.get("subject_address") or d.get("suburb"),
+            "offmarket_report_purchase", ("offmarket_orders", d["_id"]),
+            _s(d.get("created_at")),
+            {"posthog_distinct_id": did, "arm": d.get("arm"),
+             "payment_status": d.get("payment_status"), "confidence": d.get("confidence")})
+
+    try:
+        view_rows = posthog_query("""
+SELECT distinct_id,
+       min(timestamp) as first_seen,
+       count() as views,
+       groupUniqArray(properties.$pathname) as paths,
+       argMax(properties.$geoip_country_name, timestamp) as country,
+       argMax(properties.$geoip_city_name, timestamp) as city
+FROM events
+WHERE event = 'offmarket_report_view' AND timestamp > now() - INTERVAL 180 DAY
+GROUP BY distinct_id
+""")
+    except Exception as e:  # noqa: BLE001 — PostHog outage shouldn't break the whole run
+        print(f"WARNING: offmarket_report_view PostHog query failed, skipping: {e}")
+        view_rows = []
+
+    for did, first_seen, views, paths, country, city in view_rows:
+        if did in purchased_distinct_ids or did in INTERNAL_IDS:
+            continue
+        if country != "Australia" or (city and city in BOT_CITIES):
+            continue
+        slugs = [p.rsplit("/", 1)[-1] for p in (paths or []) if p]
+        if not slugs:
+            continue
+        gc_doc = _offmarket_gc_doc_by_slug(gc_db, slugs[0])
+        address = gc_doc.get("address") if gc_doc else slugs[0].replace("-", " ").title()
+        add(None, None, None, address, "offmarket_report_view",
+            ("offmarket_view", did), first_seen[:19] if first_seen else "",
+            {"posthog_distinct_id": did, "views": views,
+             "also_viewed": len(slugs) - 1 if len(slugs) > 1 else None},
+            key_override=f"offmarket_view:{did}")
 
     return leads
 
@@ -361,7 +431,7 @@ def main() -> int:
     sm = c["system_monitor"]
     gc_db = c["Gold_Coast"]
 
-    leads = collect_leads(sm)
+    leads = collect_leads(sm, gc_db)
     merge_crm(leads, sm)
     recs = list(leads.values())
     if args.limit:
