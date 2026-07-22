@@ -39,8 +39,11 @@ def norm(s):
 
 
 def unit_texts(ann_files=None):
-    """unit_id -> normalized blob of its key_quotes + concepts + claims, across ALL annotation
-    sources that exist (coaching + KB public/private)."""
+    """unit_id -> normalized blob of everything the graph actually exposes to the LLM: key_quotes +
+    concepts + claims, PLUS decisions/initiatives/metrics (Brain-3-style facets) — brain1_graph.py
+    folds those into the graph unit's "concepts" list at BUILD time, not in the raw annotation file,
+    so a verifier reading only the raw file's "concepts" would falsely flag a verbatim-quoted
+    decision/metric as fabricated. Across ALL annotation sources that exist (coaching + KB + ops)."""
     out = {}
     for path in (ann_files or ANN_FILES):
         if not os.path.exists(path):
@@ -53,7 +56,8 @@ def unit_texts(ann_files=None):
                 d = json.loads(line)
             except json.JSONDecodeError:
                 continue
-            blob = " ".join(d.get("key_quotes", []) + d.get("concepts", []) + d.get("claims", []))
+            fields = ["key_quotes", "concepts", "claims", "decisions", "initiatives", "metrics"]
+            blob = " ".join(x for f in fields for x in (d.get(f) or []) if isinstance(x, str))
             out[d["unit_id"]] = norm(blob)
     return out
 
@@ -81,7 +85,7 @@ def parse_pairs(text):
     pairs = []
     for line in text.splitlines():
         quotes = re.findall(r'[\"“]([^\"”]{8,})[\"”]', line)
-        ids = re.findall(r"[uki]\d{4,5}", line)  # u#### coaching + k##### KB
+        ids = re.findall(r"[uki]\d{4,10}", line)  # u#### coaching + k##### KB
         for q in quotes:
             if ids:
                 pairs.append((q, ids))
@@ -123,7 +127,7 @@ def fix_citations(text, misattr):
     for r in misattr:
         actual = r["actual"]
         # match the exact quote, then up to 60 chars, then the FIRST uXXXX -> replace that id
-        pat = re.compile(r"(" + re.escape(r["quote"]) + r".{0,60}?)([uki]\d{4,5})", re.S)
+        pat = re.compile(r"(" + re.escape(r["quote"]) + r".{0,60}?)([uki]\d{4,10})", re.S)
         new, n = pat.subn(lambda m: m.group(1) + actual, text, count=1)
         if n:
             text, fixed = new, fixed + n
