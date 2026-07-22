@@ -370,6 +370,24 @@ def collect_ads_compliance(add, sm, now_utc):
     add(PG, "Compliance nightly (PO Act K/L/N)", "archive + offsite backup",
         mtime.date().isoformat() if mtime else None, st, "log mtime", mtime, dt)
 
+    # Ad attribution freshness (added 2026-07-22, after fb-attribution-builder.py / ad_attribution
+    # was found dead since ~Mar 18 with no alert anywhere — its cron had been silently commented
+    # out. Brain 2's ad_attribution_build.py -> ad_downstream is the current replacement; this
+    # check exists so THAT pipeline can't silently die the same way unnoticed.
+    n_ds = sm["ad_downstream"].count_documents({})
+    if not n_ds:
+        add(PG, "Ad attribution (ad_downstream)", "all", "0 docs", MISSING, "computed_at", None,
+            "ad_attribution_build.py (cron 23:40 AEST) has never written ad_downstream")
+    else:
+        newest = sm["ad_downstream"].find_one(sort=[("computed_at", -1)])
+        ts = as_dt(newest.get("computed_at")) if newest else None
+        # "scrape" cadence (2-day tolerance) not "nightly" — expected_last_run() assumes the
+        # 20:30 AEST orchestrator checkpoint, but this job runs at 23:40, so "nightly" would
+        # false-STALE every evening between 20:30 and 23:40 (the exact class of cadence-mismatch
+        # bug already fixed elsewhere in this file for "Indexed prices").
+        st, dt = judge(ts, "scrape", now_utc, None)
+        add(PG, "Ad attribution (ad_downstream)", "all", f"{n_ds} ads", st, "computed_at", ts, dt)
+
 
 # ---- New Listings: Editorial & SEO ---------------------------------------------
 # Matches generate_property_ai_analysis.py's own TARGET_SUBURBS exactly — nightly
