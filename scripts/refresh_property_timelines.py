@@ -14,6 +14,7 @@ Usage:
     python3 scripts/refresh_property_timelines.py --limit 50          # process max N properties
     python3 scripts/refresh_property_timelines.py --dry-run           # fetch but don't write
     python3 scripts/refresh_property_timelines.py --stale-only        # only refresh if timeline is >30 days old
+    python3 scripts/refresh_property_timelines.py --sold-since-days 120  # targeted: only recently-sold properties
 """
 
 import argparse
@@ -24,7 +25,9 @@ import sys
 import time
 from datetime import datetime, timedelta
 from pymongo import MongoClient
-from curl_cffi import requests as cffi_requests
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+from shared.domain_fetch import fetch_html
 
 TARGET_SUBURBS = ["robina", "burleigh_waters", "varsity_lakes"]
 DOMAIN_PROFILE_BASE = "https://www.domain.com.au/property-profile"
@@ -54,15 +57,22 @@ def build_profile_url(address: str) -> str | None:
 
 
 def fetch_timeline(url: str) -> list[dict] | None:
-    """Fetch property timeline from Domain property profile page."""
+    """Fetch property timeline from Domain property profile page.
+
+    Uses shared.domain_fetch (Bright Data Web Unlocker) — raw curl_cffi
+    impersonation gets served an anti-bot challenge page on property-profile
+    URLs (confirmed 2026-07-22: 3/3 requests returned a 2.5KB behavioral-
+    challenge stub with no __NEXT_DATA__, while the same URL through
+    domain_fetch.fetch_html returned the full page immediately).
+    """
     try:
-        resp = cffi_requests.get(url, impersonate="chrome120", timeout=30)
-        if resp.status_code != 200:
+        html = fetch_html(url)
+        if not html:
             return None
 
         match = re.search(
             r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>',
-            resp.text,
+            html,
         )
         if not match:
             return None
@@ -129,14 +139,21 @@ def fetch_timeline(url: str) -> list[dict] | None:
         return None
 
 
-def refresh_suburb(gc_db, suburb, limit=None, dry_run=False, stale_only=False):
+def refresh_suburb(gc_db, suburb, limit=None, dry_run=False, stale_only=False, sold_since_days=None):
     """Refresh property timelines for all properties in a suburb."""
     coll = gc_db[suburb]
 
     # Build query — all properties that have an address
     query = {"address": {"$exists": True, "$ne": None}}
 
-    if stale_only:
+    if sold_since_days is not None:
+        # Target only recently-sold properties — much smaller set than the full
+        # suburb stock, for quickly unblocking quarterly median/volume calcs
+        # that read scraped_data.property_timeline.
+        cutoff_str = (datetime.now() - timedelta(days=sold_since_days)).strftime("%Y-%m-%d")
+        query["listing_status"] = "sold"
+        query["sold_date"] = {"$gte": cutoff_str}
+    elif stale_only:
         # Only refresh if timeline_updated_at is missing or >30 days old
         stale_cutoff = datetime.now() - timedelta(days=30)
         query["$or"] = [
@@ -218,6 +235,7 @@ def main():
     parser.add_argument("--limit", type=int, help="Max properties per suburb")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--stale-only", action="store_true", help="Only refresh stale (>30 days) timelines")
+    parser.add_argument("--sold-since-days", type=int, help="Only refresh properties sold within N days (targeted catch-up)")
     args = parser.parse_args()
 
     client = get_db()
@@ -232,6 +250,7 @@ def main():
             limit=args.limit,
             dry_run=args.dry_run,
             stale_only=args.stale_only,
+            sold_since_days=args.sold_since_days,
         )
         total_updated += updated
         time.sleep(5)  # Pause between suburbs
