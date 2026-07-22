@@ -86,13 +86,46 @@ def extract_json_array(s):
     return json.loads(s[a:b + 1])
 
 
+def backfill_dates(base, pool):
+    """Stamp `date` from the ingest manifest onto EVERY annotation record, not just ones
+    processed in the current run. Needed because records annotated before the date-stamping
+    feature existed (or by a run that predates a manifest update) never got the field written —
+    without this, only newly-touched units carry a date, leaving most of an existing corpus
+    date-blind. Cheap (pure Python, no LLM), safe to run every time."""
+    manifest_path = f"{base}/units_manifest.json"
+    out_path = f"{base}/annotations_{pool}.jsonl"
+    if not (os.path.exists(manifest_path) and os.path.exists(out_path)):
+        return 0
+    date_by_id = {uid: meta.get("date", "") for uid, meta in json.load(open(manifest_path)).items()}
+    lines, n = [], 0
+    for line in open(out_path, encoding="utf-8"):
+        line = line.strip()
+        if not line:
+            continue
+        rec = json.loads(line)
+        d = date_by_id.get(rec.get("unit_id"), "")
+        if d and rec.get("date") != d:
+            rec["date"] = d
+            n += 1
+        lines.append(json.dumps(rec, ensure_ascii=False))
+    open(out_path, "w", encoding="utf-8").write("\n".join(lines) + "\n")
+    return n
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--pool", required=True, help="batch pool name (public|private for KB; ops for Brain 3)")
     ap.add_argument("--base", default=DEFAULT_BASE, help="build dir (default brain3_build; brain3_ops for Brain 3)")
+    ap.add_argument("--backfill-dates", action="store_true",
+                    help="only backfill date on existing annotation records from the manifest; no annotation")
     args = ap.parse_args()
     pool = args.pool
     BASE = args.base
+
+    if args.backfill_dates:
+        n = backfill_dates(BASE, pool)
+        print(f"[backfill] stamped/updated date on {n} record(s)")
+        return
 
     batch_dir = f"{BASE}/batches_{pool}"
     OUT = f"{BASE}/annotations_{pool}.jsonl"
@@ -109,6 +142,15 @@ def main():
         print(f"already running ({pool}) — exiting")
         return
     lockf.write(str(os.getpid())); lockf.flush()
+
+    # Structured DATE is stamped deterministically from the ingest manifest (unit_id -> date),
+    # never left to the model — same reasoning as forcing unit_id/provenance below: dates matter
+    # for recency-aware synthesis and must not drift.
+    manifest_path = f"{BASE}/units_manifest.json"
+    date_by_id = {}
+    if os.path.exists(manifest_path):
+        for uid, meta in json.load(open(manifest_path)).items():
+            date_by_id[uid] = meta.get("date", "")
 
     batches = sorted(glob.glob(f"{batch_dir}/b_*.txt"))
     done = set(l.strip() for l in open(DONE)) if os.path.exists(DONE) else set()
@@ -146,6 +188,7 @@ def main():
                     pool, _, cat = u["lib"].partition(":")
                     rec["provenance"] = {"lib": u["lib"], "source": pool,
                                          "category": cat, "doc": u["header"]}
+                    rec["date"] = date_by_id.get(u["unit_id"], "")  # structured, from manifest
                 rec["_batch"] = name
                 f.write(json.dumps(rec, ensure_ascii=False) + "\n")
         open(DONE, "a").write(name + "\n")
