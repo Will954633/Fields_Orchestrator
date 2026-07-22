@@ -99,8 +99,9 @@ FINISH ELEGANTLY — time-budget discipline:
 === DELIVERY PROTOCOL — checkpoint, THEN act, THEN finalise (see daily-tasks) ===
 PHASE A (checkpoint, ~15 min in — guarantees a delivery exists):
 1. Write your report (Markdown) to: {report_path}  (write it INCREMENTALLY throughout).
-   One combined report: Task 0 (leads), Task 1, Task 2, "Follow-up opportunities", "Blockers",
-   and an "Actions Taken this run" section (start it now, append as you act in Phase B).
+   One combined report: Task 0 (leads), Task 0.5 (Systems Health — checked/fixed/escalated), Task 1,
+   Task 2, "Follow-up opportunities", "Blockers", and an "Actions Taken this run" section (start it now,
+   append as you act in Phase B).
 2. Create a Google Doc in your Drive folder (id: {FOLDER_ID}) titled "Samantha Daily — {date_str}"
    via google-drive MCP `create_file` (mimeType application/vnd.google-apps.document). Keep the
    file id + webViewLink. If Drive fails (OAuth can expire ~weekly), note it and continue.
