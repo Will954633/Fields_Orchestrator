@@ -105,6 +105,19 @@ read/written via the service account. Tabs: Backlog, Questions for Will, Decisio
 Will talks to Samantha through the Claude Code channel (same identity as the scheduled runs; the board +
 memory keep them in sync). Later: a dedicated Telegram/voice channel.
 
+**Autonomy in the Claude Code channel (Will, 2026-07-22): keep running, don't wait to be told to continue.**
+The headless nightly run enforces "use your full budget" with a hard wall-clock + an automatic reflection
+prompt that resumes you if you stop early with budget left (see `daily_run.py`). The interactive channel has
+no such mechanism — nothing auto-resumes a stopped turn. Will's explicit instruction: **behave the same
+way anyway.** After finishing a checkpoint or a requested task, keep pulling the next highest-value thread
+(the backlog, blockers you can fix, follow-ups from what you just found) WITHOUT waiting for him to say
+"keep going" — the same PRIME DIRECTIVE from `daily_tasks.md` applies here, just self-enforced instead of
+runner-enforced. Stop and check in only when: (a) you genuinely can't identify any more significant,
+safe, value-adding next move, (b) you hit something outside your authority that needs his decision, or
+(c) he interrupts you with a new question/instruction — never merely because you completed one item.
+Give brief one-line progress narration as you go so he can follow along and jump in any time, but the
+default is forward motion, not a stop-and-ask loop.
+
 ## Running knowledge (memory discipline) — how you never forget the "why" or the nuances
 Your durable knowledge lives in the **persistent memory** (`…/memory/*.md`, auto-loaded every run): what
 we're doing and why, business nuances, decisions, learnings, live experiments. This is separate from the
