@@ -132,13 +132,17 @@ def main():
             open(FAIL, "a").write(name + "\n")
             log(LOG, f"  {name} SKIPPED after retries")
             continue
-        # Provenance is DETERMINISTIC from the batch (the model mis-copies the prompt's KB example).
-        # LIB is "<pool>:<category>" (e.g. "internal:fix-history", "public:book"); carry it verbatim.
+        # Unit_id + provenance are DETERMINISTIC from the batch. The model sometimes renumbers ids
+        # (or mis-copies the prompt's KB example as source:"KB"), so when the record count matches
+        # the batch we bind by POSITION and FORCE the correct unit_id + provenance. LIB is
+        # "<pool>:<category>" (e.g. "internal:fix-history"); carried verbatim.
         umap = {u["unit_id"]: u for u in units}
+        aligned = len(recs) == len(units)
         with open(OUT, "a") as f:
-            for rec in recs:
-                u = umap.get(rec.get("unit_id"))
+            for idx, rec in enumerate(recs):
+                u = units[idx] if aligned else umap.get(rec.get("unit_id"))
                 if u:
+                    rec["unit_id"] = u["unit_id"]  # force batch-truth id (model drifts it)
                     pool, _, cat = u["lib"].partition(":")
                     rec["provenance"] = {"lib": u["lib"], "source": pool,
                                          "category": cat, "doc": u["header"]}
