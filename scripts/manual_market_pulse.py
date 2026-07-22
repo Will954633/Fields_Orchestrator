@@ -164,7 +164,7 @@ def show_data(suburb=None, category=None):
 
         # --- Price Events ---
         events = list(sm["price_change_events"].find(
-            {"suburb": {"$regex": s.replace("_", " "), "$options": "i"}},
+            {"suburb": {"$regex": s, "$options": "i"}},
             {"direction": 1, "change_pct": 1, "_id": 0}
         ).limit(50))
         reductions = len([e for e in events if e.get("direction") == "reduction"])
