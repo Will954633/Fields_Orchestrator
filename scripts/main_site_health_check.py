@@ -53,8 +53,16 @@ CORE3 = ["robina", "burleigh_waters", "varsity_lakes"]
 CHART_TYPES = ["days_on_market", "sales_volume", "turnover_rate", "market_cycle"]
 
 # Page order = Google Sheet tab order
-PAGES = ["Pipeline Processes", "Sitemap", "Market Metrics", "For Sale / Sold", "Property Page",
-         "Articles", "Valuation Accuracy", "Known Gaps"]
+# Business-wide scope added 2026-07-22: this sheet started as "main website
+# freshness" only. Process Registry / GitHub Actions / Market Signals Fetch /
+# Leads & CRM / Ads & Compliance cover the rest of the business (orchestrator
+# cron fleet, off-VM automation, leads pipeline, ad-decision logging) so the
+# sheet is one source of truth, not a website-only view.
+PAGES = ["Process Registry", "Pipeline Processes", "Sitemap", "GitHub Actions",
+         "Market Metrics", "Market Signals Fetch", "For Sale / Sold", "Property Page",
+         "Articles", "Leads & CRM", "Ads & Compliance", "Valuation Accuracy", "Known Gaps"]
+
+FIELDS_AUTOMATION_REPO = "Will954633/fields-automation"
 
 # Files the VM's daily sitemap cron (06:15 AEST, regenerate-sitemap.sh) pushes.
 # 2026-07-22: that push silently failed every day 07-20 through 07-22
@@ -147,6 +155,68 @@ def last_commit_for_path(repo, path):
         return None, None, f"{type(e).__name__}: {e}"[:200]
 
 
+def gh_api(path):
+    """Generic `gh api <path>` -> (parsed_json|None, error|None). Same env
+    handling as last_commit_for_path (GITHUB_TOKEN in .env breaks gh's own
+    auth; GH_CONFIG_DIR points at the fine-grained PAT for Will954633)."""
+    import subprocess
+    env = dict(os.environ)
+    env.pop("GITHUB_TOKEN", None)
+    env.setdefault("GH_CONFIG_DIR", "/home/projects/.config/gh")
+    try:
+        p = subprocess.run(["gh", "api", path], env=env, capture_output=True, text=True, timeout=25)
+        if p.returncode != 0:
+            return None, (p.stderr or p.stdout or "gh api failed")[:200]
+        return json.loads(p.stdout), None
+    except Exception as e:
+        return None, f"{type(e).__name__}: {e}"[:200]
+
+
+def systemctl_is_active(unit):
+    """('active'|'failed'|'inactive'|..., error|None) for a systemd unit."""
+    import subprocess
+    try:
+        p = subprocess.run(["systemctl", "is-active", unit], capture_output=True, text=True, timeout=10)
+        return p.stdout.strip() or p.stderr.strip(), None
+    except Exception as e:
+        return None, f"{type(e).__name__}: {e}"[:200]
+
+
+def log_freshness_check(log_path, cadence_days, error_patterns=("Traceback (most recent call last)",)):
+    """For cron scripts whose only observable trace is their redirected log
+    file (no DB/Drive/GCS side effect to check instead): mtime vs. cadence,
+    plus a tail-grep for failure patterns. Returns (status, detail, mtime).
+    Supports a glob pattern (e.g. logs with a date in the filename) — picks
+    the newest match."""
+    import glob as _glob
+    matches = sorted(_glob.glob(log_path), key=os.path.getmtime) if any(c in log_path for c in "*?[") else (
+        [log_path] if os.path.exists(log_path) else [])
+    if not matches:
+        return MISSING, "log file not found", None
+    path = matches[-1]
+    mtime = datetime.fromtimestamp(os.path.getmtime(path), tz=timezone.utc)
+    age_days = (datetime.now(timezone.utc) - mtime).total_seconds() / 86400
+    try:
+        with open(path, "rb") as f:
+            f.seek(max(0, os.path.getsize(path) - 20000), os.SEEK_SET)
+            chunk = f.read().decode("utf-8", errors="ignore")
+        # Only the last ~60 lines, not the whole 20KB window — these logs are
+        # appended to run after run, so a byte-window alone can still contain
+        # an old, since-resolved failure from a prior run and misreport it as
+        # current (caught in testing: mongo-allowlist-refresh.log and
+        # brain2-nightly-refresh.log both had an old Traceback earlier in the
+        # window despite their most recent run completing cleanly).
+        tail = "\n".join(chunk.splitlines()[-60:])
+    except OSError:
+        tail = ""
+    hit = next((pat for pat in error_patterns if pat in tail), None)
+    if hit:
+        return ERROR, f"'{hit}' found in last run's log tail", mtime
+    if age_days > cadence_days:
+        return STALE, f"log not updated in {age_days:.1f}d (expected every {cadence_days}d)", mtime
+    return OK, "", mtime
+
+
 # ---- freshness judging --------------------------------------------------------
 def judge(fresh_ts, cadence, now_utc, last_run):
     """Return (status, detail) for a present source given its freshness ts + cadence."""
@@ -182,6 +252,257 @@ def mk_row(page, name, scope, value, status, fresh_field, fresh_ts, detail,
     }
 
 
+# ---- GitHub Actions (off-VM automation, fields-automation repo) ---------------
+def collect_github_actions(add):
+    """14 scheduled article-generation workflows run on GitHub Actions via a
+    self-hosted runner, entirely outside VM cron/systemd — invisible to every
+    other check in this file. None of them have a failure-notification step;
+    they rely on GitHub's default owner-email, which is easy to miss (a
+    2026-07-22 audit found 3 failing silently — one for 5 straight weeks)."""
+    PG = "GitHub Actions"
+    wf_data, err = gh_api(f"repos/{FIELDS_AUTOMATION_REPO}/actions/workflows?per_page=100")
+    if err or not wf_data:
+        add(PG, "Workflow list", FIELDS_AUTOMATION_REPO, None, ERROR, "", None,
+            f"could not list workflows: {err}")
+        return
+    runs_data, err2 = gh_api(f"repos/{FIELDS_AUTOMATION_REPO}/actions/runs?per_page=100")
+    runs_by_wf = {}
+    if runs_data and not err2:
+        for r in runs_data.get("workflow_runs", []):
+            runs_by_wf.setdefault(r["workflow_id"], r)  # runs are newest-first
+    for wf in wf_data.get("workflows", []):
+        if wf.get("state") != "active":
+            add(PG, wf["name"], "schedule", "disabled", GAP, "", None, "workflow disabled in GitHub", info=True)
+            continue
+        r = runs_by_wf.get(wf["id"])
+        if not r:
+            add(PG, wf["name"], "latest run", "no runs yet", UNKNOWN, "", None, "never triggered")
+            continue
+        ts = as_dt(r.get("run_started_at") or r.get("created_at"))
+        if r.get("status") != "completed":
+            add(PG, wf["name"], "latest run", r.get("status"), UNKNOWN, "run_started_at", ts, "still running")
+            continue
+        conclusion = r.get("conclusion")
+        st = OK if conclusion == "success" else ERROR
+        detail = "" if st == OK else (
+            f"last run {conclusion} — no failure-notification step on this workflow, "
+            f"relies on GitHub's default owner-email only")
+        add(PG, wf["name"], "latest run", conclusion, st, "run_started_at", ts, detail)
+
+
+# ---- Market Signals Fetch (job-success, not just data-staleness) --------------
+def collect_market_signals_fetch(add, sm, now_utc):
+    """fetch_abs_market_signals.py / fetch_macro_indicators.py can "succeed"
+    (exit 0, write a doc) while every indicator silently defaulted to
+    null/NEUTRAL — e.g. the 2026-07-22 DNS failure that ran undetected for
+    weeks because the Market Metrics page only checks data staleness, not
+    whether the fetch actually resolved real values. These two scripts now
+    self-report via job_status.record_job_result(); this reads that record."""
+    PG = "Market Signals Fetch"
+    for job, cadence_days, min_written in [("fetch_abs_market_signals", 8, 5),
+                                            ("fetch_macro_indicators", 8, 5)]:
+        d = sm["job_runs"].find_one({"job": job})
+        if not d:
+            add(PG, job, "job outcome", None, MISSING, "run_at", None,
+                "no run recorded yet — instrumentation just added; populates after next weekly run")
+            continue
+        ts = as_dt(d.get("run_at"))
+        age_days = (now_utc - ts).total_seconds() / 86400 if ts else None
+        written, total = d.get("indicators_written"), d.get("indicators_total")
+        val = f"{written}/{total}" if written is not None else d.get("status")
+        if d.get("status") == "error":
+            add(PG, job, "job outcome", val, ERROR, "run_at", ts, d.get("detail", "job reported error"))
+        elif age_days is not None and age_days > cadence_days:
+            add(PG, job, "job outcome", val, STALE, "run_at", ts, f"last run {age_days:.1f}d ago (expected weekly)")
+        elif written is not None and written < min_written:
+            add(PG, job, "job outcome", val, ERROR, "run_at", ts,
+                f"only {written}/{total} indicators resolved — {d.get('detail', '')}")
+        else:
+            add(PG, job, "job outcome", val, OK, "run_at", ts, d.get("detail", ""))
+
+
+# ---- Leads & CRM ---------------------------------------------------------------
+def collect_leads_crm(add, sm, now_utc, last_run):
+    """Nightly leads-tracker syncs write straight to a Google Sheet with no
+    health check anywhere today — a failed sync would only be noticed if Will
+    happened to open the sheet. Reads each script's own log for a run marker;
+    these three already Telegram a summary line, so success/failure text is
+    typically in the log tail even though the alert itself isn't breach-gated."""
+    PG = "Leads & CRM"
+    orch_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    for name, log_name, cadence_days in [
+        ("Live Leads Tracker", "live-leads-sheet.log", 2),
+        ("Sold Homes → Sheet", "sold-homes-sheet.log", 2),
+        ("Listed Homes → Sheet", "listed-homes-sheet.log", 2),
+    ]:
+        st, dt, mtime = log_freshness_check(
+            os.path.join(orch_dir, "logs", log_name), cadence_days,
+            error_patterns=("Traceback (most recent call last)", "pymongo.errors"))
+        add(PG, name, "nightly sync", mtime.date().isoformat() if mtime else None, st, "log mtime", mtime, dt)
+
+
+# ---- Ads & Compliance -----------------------------------------------------------
+def collect_ads_compliance(add, sm, now_utc):
+    """(a) ad_decisions is CLAUDE.md's mandatory Rule 3 log for every FB/Google
+    campaign create/pause/enable/budget-change — enforced by convention only,
+    never checked. This is a best-effort freshness signal, not proof every ad
+    change got logged (that needs comparing against actual FB/Google campaign
+    state, which this doesn't do). (b) Nightly compliance archive/backup
+    (PO Act record-keeping) has zero alerting of any kind today."""
+    PG = "Ads & Compliance"
+    d = sm["ad_decisions"].find_one(sort=[("created_at", -1)])
+    n = sm["ad_decisions"].count_documents({})
+    if not d:
+        add(PG, "Ad decision logging", "all", "0 entries", MISSING, "created_at", None,
+            "no ad_decisions ever recorded — best-effort check only, see docstring", info=True)
+    else:
+        ts = as_dt(d.get("created_at"))
+        age_days = (now_utc - ts).total_seconds() / 86400 if ts else None
+        st = STALE if (age_days is not None and age_days > 30) else OK
+        add(PG, "Ad decision logging", "all", f"{n} entries, newest {ts.date() if ts else '—'}", st,
+            "created_at", ts, "best-effort freshness only — doesn't verify every change was logged (Rule 3)")
+
+    orch_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    st, dt, mtime = log_freshness_check(
+        os.path.join(orch_dir, "logs", "compliance-nightly.log"), 2,
+        error_patterns=("Traceback (most recent call last)", "hash mismatch", "verify failed"))
+    add(PG, "Compliance nightly (PO Act K/L/N)", "archive + offsite backup",
+        mtime.date().isoformat() if mtime else None, st, "log mtime", mtime, dt)
+
+
+# ---- Process Registry (every cron job / systemd daemon / off-VM runner) -------
+# Declarative inventory from the 2026-07-22 crontab/systemd audit. Most rows
+# use the log-freshness fallback (their only observable trace); anything with
+# a real DB/Sheet/API side effect checked in detail elsewhere in this file
+# just gets a pointer to that tab instead of a second, shallower check.
+_REGISTRY_LOG_JOBS = [
+    # (name, category, log filename or glob, cadence_days)
+    ("Ops context refresh", "Website/Infra", "ops-refresh.log", 1),
+    ("Property insights (nightly)", "Website", "/home/fields/logs/insights_*.log", 1),
+    ("Schema snapshot", "Infra", "schema_snapshot.log", 1),
+    ("Article index builder", "Content", "article-index.log", 1),
+    ("Market intelligence extractor", "Content", "market-insights.log", 1),
+    ("Search Intent Collector", "SEO", "search-intent.log", 3),
+    ("Search Intent Analyser", "SEO", "search-intent-analyser.log", 3),
+    ("Google Indexing API submit", "SEO", "google-indexing.log", 1),
+    ("FB metrics collector", "Ads", "fb-metrics.log", 1),
+    ("Google Ads metrics collector", "Ads", "google-ads-metrics.log", 1),
+    ("Marketing stage tracker", "Ads", "marketing-stage.log", 1),
+    ("Post performance tracker", "Ads", "performance-tracker.log", 1),
+    ("Cost collector", "Ads/Finance", "cost-collector.log", 1),
+    ("Brain2: ad creative enrich", "Ads", "brain2-ad-enrich.log", 1),
+    ("Brain2: attribution/behaviour/journey", "Ads", "brain2-nightly-refresh.log", 1),
+    ("Brain2: SEO landing performance", "SEO", "brain2-seo.log", 1),
+    ("Photo inventory sync", "Content", "photo-sync.log", 1),
+    ("Five Property Friday batch", "Content", "fpf-send.log", 8),
+    ("DOM backfill", "Market Intelligence", "dom-backfill.log", 35),
+    ("Market charts precompute (dom/cycle)", "Market Intelligence", "precompute-market-charts.log", 35),
+    ("Market charts precompute (volume/turnover)", "Market Intelligence", "precompute-market-charts.log", 35),
+    ("Precompute seasonality", "Market Intelligence", "precompute-seasonality.log", 35),
+    ("Property timeline refresh (weekly)", "Market Intelligence", "refresh-timelines.log", 9),
+    ("Valuation backtest (weekly)", "Valuation", "backtest-weekly.log", 9),
+    ("CRM sync (hourly)", "Leads/CRM", "crm-sync.log", 1),
+    ("Property report activity feed", "Leads/CRM", "property-reports-refresh.log", 1),
+    ("MongoDB backup", "Infra/Backup", "mongodb-backup.log", 1),
+    ("Mongo allowlist refresh", "Infra", "mongo-allowlist-refresh.log", 1),
+    ("Ops state push", "Infra", "/var/log/blob-backup/ops-state.log", 1),
+    ("GCS blob backup (gsutil rsync)", "Infra/Backup", "/var/log/blob-backup/daily-sync.log", 1),
+    ("KB Lite ingest (Brain 3)", "Knowledge Base", "kb-lite-ingest.log", 1),
+    ("VM resource metrics writer", "Infra", "/tmp/vm_metrics.log", 1),
+]
+_REGISTRY_ALREADY_COVERED = [
+    ("Sitemap regen (daily push)", "Website/SEO", "Sitemap tab"),
+    ("SEO indexation readout (weekly)", "SEO", "already Telegram-alerts on breach"),
+    ("Weekly SEO pilot review", "SEO", "already Telegram-alerts on breach"),
+    ("Precompute indexed price data (monthly)", "Market Intelligence", "Market Metrics tab"),
+    ("SQM asking prices (monthly)", "Market Intelligence", "Market Metrics tab (Asking $/sqm)"),
+    ("Absorption rate snapshot refresh (monthly)", "Market Intelligence", "Market Metrics tab"),
+    ("ABS market signals fetch (weekly)", "Market Intelligence", "Market Signals Fetch tab"),
+    ("Macro indicators fetch (weekly)", "Market Intelligence", "Market Signals Fetch tab"),
+    ("FB lead ad puller (every 15min)", "Leads/CRM", "already Telegram-alerts always"),
+    ("Hot lead responder (every 10min)", "Leads/CRM", "already Telegram-alerts always"),
+    ("Live Leads / Sold / Listed → Sheet", "Leads/CRM", "Leads & CRM tab"),
+    ("Vertex quota watcher", "Infra", "already Telegram-alerts by design"),
+    ("Unpushed-code DR-gap check", "Infra/Backup", "already Telegram-alerts on breach"),
+    ("Brain2: lead attribution build", "Leads/CRM", "Leads & CRM tab (adjacent)"),
+    ("Compliance nightly", "Compliance", "Ads & Compliance tab"),
+    ("API resource health probe", "Infra", "API Health tab (separate, this same sheet)"),
+    ("Main Site Health → Sheet (this script)", "Meta", "this sheet, self-evidently running"),
+]
+_REGISTRY_DISABLED = [
+    ("Marketing advisor", "human review required"),
+    ("Marketing executor", "human review required"),
+    ("FB Content Scheduler (morning/evening)", "2026-04-09 — manual posting now (see facebook_organic_strategy_shift)"),
+    ("FB Attribution Builder", "2026-03-19 — replaced by PostHog"),
+    ("Website daily metrics collector", "2026-03-19 — replaced by PostHog"),
+    ("CEO context export", "2026-04-09 — autonomous agent cleanup"),
+    ("CEO Agent launcher", "2026-03-31 — replaced by Worker Agent, then retired"),
+    ("Sync-memory-to-codex", "2026-03-31 — Codex agents stopped"),
+    ("Todo reminder digest", "2026-04-09 — autonomous agent cleanup"),
+    ("Email triage check", "2026-04-09 — autonomous agent cleanup"),
+    ("Worker Agent", "2026-04-27 — autonomous Worker Agent retired"),
+    ("Samantha nightly", "2026-07-19 — on-demand only"),
+    ("Lead-intelligence pipeline", "2026-07-19 — on-demand only, feeds Samantha"),
+    ("Mini-Site Health → Sheet (standalone cron)", "merged into Main Site Health's 01:00 run — see Mini-Site tabs"),
+]
+_REGISTRY_SYSTEMD_UNITS = [
+    "fields-orchestrator", "fields-watchdog", "fields-trigger-poller", "fields-valuation-api",
+    "fields-valuation-poller", "fields-ceo-telegram", "fields-builder-telegram",
+    "fields-ai-analysis-poller", "fields-appraisal-poller", "fields-bridge-sync",
+    "fields-offmarket-intel-poller", "fields-offmarket-processor", "fields-property-report-poller",
+    "fields-tracking", "fields-voice-agent",
+]
+
+
+def collect_process_registry(add):
+    """One row per every cron job / systemd daemon found in the 2026-07-22
+    fleet-wide audit — the master 'is every business process accounted for'
+    view. Jobs with a real DB/Sheet/API side effect are checked in detail on
+    their own tab; this either points there or, for the ~30 log-only jobs
+    with no other check anywhere, falls back to log-freshness."""
+    PG = "Process Registry"
+    orch_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    for name, category, log_name, cadence_days in _REGISTRY_LOG_JOBS:
+        log_path = log_name if log_name.startswith("/") else os.path.join(orch_dir, "logs", log_name)
+        st, dt, mtime = log_freshness_check(log_path, cadence_days)
+        add(PG, name, category, mtime.date().isoformat() if mtime else None, st, "log mtime", mtime, dt)
+
+    for name, category, note in _REGISTRY_ALREADY_COVERED:
+        add(PG, name, category, "see referenced tab", OK, "", None, note, info=True)
+
+    for name, reason in _REGISTRY_DISABLED:
+        add(PG, name, "Disabled", "disabled", GAP, "", None, reason, info=True)
+
+    for unit in _REGISTRY_SYSTEMD_UNITS:
+        state, err = systemctl_is_active(unit)
+        if err:
+            add(PG, unit, "Daemon (systemd)", None, UNKNOWN, "", None, f"could not query systemctl: {err}")
+        elif state == "active":
+            add(PG, unit, "Daemon (systemd)", "active", OK, "", None, "")
+        else:
+            add(PG, unit, "Daemon (systemd)", state, ERROR, "", None,
+                f"expected always-on, systemctl reports '{state}'")
+
+    runner_data, err = gh_api("repos/Will954633/fields-automation/actions/runners")
+    if err or runner_data is None:
+        add(PG, "GitHub Actions self-hosted runner", "Off-VM automation", None, UNKNOWN, "", None,
+            f"could not query runner status: {err}")
+    else:
+        runners = runner_data.get("runners", [])
+        online = [r for r in runners if r.get("status") == "online"]
+        if not runners:
+            add(PG, "GitHub Actions self-hosted runner", "Off-VM automation", "no runner registered",
+                ERROR, "", None, "all 14 GitHub Actions workflows depend on this runner")
+        elif not online:
+            add(PG, "GitHub Actions self-hosted runner", "Off-VM automation",
+                f"{len(runners)} registered, 0 online", ERROR, "", None,
+                "all 14 GitHub Actions workflows depend on this runner")
+        else:
+            add(PG, "GitHub Actions self-hosted runner", "Off-VM automation",
+                f"{len(online)}/{len(runners)} online", OK, "", None, "")
+
+
 # ---- collectors (one per data-point group) ------------------------------------
 def collect(client, now_utc, prev_map):
     gc = client["Gold_Coast"]
@@ -195,17 +516,67 @@ def collect(client, now_utc, prev_map):
     # ----- Market Metrics: per-suburb precomputed (nightly) -----
     PG = "Market Metrics"
     for s in SUBS:
-        d = gc["precomputed_indexed_prices"].find_one({"_id": s}, {"last_updated": 1, "latest_price": 1})
+        # precompute_indexed_price_data.py runs monthly (1st @ 05:00 AEST), not
+        # nightly — judging it against a nightly cadence made this row cry STALE
+        # almost every day of the month and couldn't distinguish "ran on
+        # schedule" from "actually stuck a quarter behind" (2026-07-22 audit).
+        d = gc["precomputed_indexed_prices"].find_one(
+            {"_id": s}, {"last_updated": 1, "latest_price": 1, "indexed_series": 1})
         if not d:
             add(PG, "Indexed prices", suburb_label(s), None, MISSING, "last_updated", None, "doc absent")
         else:
             ts = as_dt(d.get("last_updated"))
-            st, dt = judge(ts, "nightly", now_utc, last_run)
+            st, dt = judge(ts, "monthly", now_utc, last_run)
             add(PG, "Indexed prices", suburb_label(s), f"median ${d.get('latest_price')}", st, "last_updated", ts, dt)
+
+            # Quarter-completeness: does the precomputed series actually contain
+            # the latest quarter that raw sold data can support? Catches the
+            # exact "stuck at Q1 2026 despite running nightly/monthly" failure
+            # mode — a freshness-only check can't tell "ran fine" apart from
+            # "ran, but its own quarter-selection logic silently didn't advance."
+            series = d.get("indexed_series") or []
+            latest_complete_period = series[-1]["period"] if series else None
+            # Two quarters back, not one: precompute_indexed_price_data.py sources
+            # from Domain's property_timeline, which a 2026-07-22 investigation
+            # (see fix-history [INDEXED-PRICE-Q2-LAG]) confirmed runs ~6-10 weeks
+            # behind the faster sold_date field by design/Domain's own publishing
+            # lag — checking the immediately-preceding quarter would flag that
+            # normal lag as an error every single month. Two quarters back gives
+            # ~3-4 months' grace, past the observed lag, so this only fires on a
+            # genuine multi-quarter stall like the incident it was added to catch.
+            cy, cq = now_utc.year, (now_utc.month - 1) // 3 + 1
+            py, pq = (cy - 1, cq + 2) if cq <= 2 else (cy, cq - 2)
+            expected_label = f"Q{pq} {py}"
+            q_end_month = pq * 3
+            q_end_day = 31 if q_end_month in (3, 12) else 30
+            # sold_date is stored as a plain "YYYY-MM-DD" string, not a BSON
+            # date (confirmed by direct query — a datetime-range query here
+            # silently matched zero documents, which would have made this
+            # check permanently unable to detect the exact bug it exists for).
+            # ISO-format strings sort lexicographically same as chronologically,
+            # so plain string comparison is correct.
+            q_start_s = f"{py:04d}-{(pq - 1) * 3 + 1:02d}-01"
+            q_end_s = f"{py:04d}-{q_end_month:02d}-{q_end_day:02d}"
+            try:
+                raw_cnt = gc[s].count_documents(
+                    {"listing_status": "sold", "sold_date": {"$gte": q_start_s, "$lte": q_end_s}})
+            except Exception:
+                raw_cnt = None
+            if raw_cnt is not None and raw_cnt >= 3 and latest_complete_period != expected_label:
+                add(PG, "Indexed prices — quarter completeness", suburb_label(s),
+                    latest_complete_period or "none", ERROR, "indexed_series[-1].period", ts,
+                    f"raw sold data has {raw_cnt} sales in {expected_label} but the precomputed "
+                    f"series' latest complete quarter is {latest_complete_period or 'none'}")
+            elif raw_cnt is not None:
+                add(PG, "Indexed prices — quarter completeness", suburb_label(s),
+                    latest_complete_period or "none", OK, "indexed_series[-1].period", ts, "")
 
     for s in SUBS:
         for ct in CHART_TYPES:
-            d = gc["precomputed_market_charts"].find_one({"_id": f"{s}_{ct}"}, {"last_updated": 1})
+            proj = {"last_updated": 1}
+            if ct == "sales_volume":
+                proj["timeline"] = 1
+            d = gc["precomputed_market_charts"].find_one({"_id": f"{s}_{ct}"}, proj)
             label = ct.replace("_", " ")
             if not d:
                 add(PG, f"Chart: {label}", suburb_label(s), None, MISSING, "last_updated", None, "doc absent")
@@ -218,6 +589,30 @@ def collect(client, now_utc, prev_map):
                 if ct == "market_cycle" and s not in CORE3 and st == STALE:
                     st, dt = GAP, "thin-data non-core suburb (market_cycle needs ~2yr House sales)"
                 add(PG, f"Chart: {label}", suburb_label(s), str(ts.date()) if ts else "—", st, "last_updated", ts, dt)
+
+            # In-progress-quarter YoY correctness: comparing a 3-week-old partial
+            # quarter's sales count to a full prior-year quarter produces a fake
+            # "-90% collapse" (the exact failure the 2026-07-22 audit flagged on
+            # Q3 2026) unless the current quarter's point is flagged in_progress
+            # with yoy_change suppressed. This verifies the flag on the CURRENT
+            # stored doc, independent of whether the producer script's own logic
+            # (which already looks correct in source) was in place when it ran.
+            if ct == "sales_volume" and d:
+                cq_key = f"{now_utc.year}-Q{(now_utc.month - 1) // 3 + 1}"
+                timeline = d.get("timeline") or []
+                cur_point = next((p for p in timeline if p.get("period") == cq_key), None)
+                if cur_point is None:
+                    add(PG, "Sales volume — in-progress quarter flag", suburb_label(s), "no current-quarter point",
+                        GAP, "", None, f"{cq_key} not yet in timeline (expected once any sale lands)")
+                elif not cur_point.get("is_in_progress") or cur_point.get("yoy_change") is not None:
+                    add(PG, "Sales volume — in-progress quarter flag", suburb_label(s),
+                        f"is_in_progress={cur_point.get('is_in_progress')}, yoy={cur_point.get('yoy_change')}",
+                        ERROR, "", None,
+                        f"{cq_key} should be flagged in-progress with YoY suppressed — as stored it would "
+                        f"render a misleading partial-quarter YoY collapse/spike")
+                else:
+                    add(PG, "Sales volume — in-progress quarter flag", suburb_label(s), "suppressed correctly",
+                        OK, "", None, "")
 
     for s in SUBS:
         d = gc["precomputed_active_listings"].find_one({"_id": s}, {"last_updated": 1, "snapshots": 1})
@@ -252,14 +647,38 @@ def collect(client, now_utc, prev_map):
     add(PG, "Market signals (wage/retail)", "all", d.get("latest_quarter_label") if d else "—", st, "updated_at", ts, dt)
 
     for s in CORE3:
-        cur = list(sm["market_pulse"].find({"suburb": s}, {"generated_at": 1}).sort("generated_at", -1).limit(1))
+        cur = list(sm["market_pulse"].find({"suburb": s}, {"generated_at": 1, "source": 1})
+                   .sort("generated_at", -1).limit(1))
         n = sm["market_pulse"].count_documents({"suburb": s})
         if not cur:
             add(PG, "Market pulse narratives", suburb_label(s), None, MISSING, "generated_at", None, "no docs")
         else:
             ts = as_dt(cur[0].get("generated_at"))
             st, dt = judge(ts, "monthly", now_utc, last_run)
-            add(PG, "Market pulse narratives", suburb_label(s), f"{n} categories", st, "generated_at", ts, dt)
+            src = cur[0].get("source", "unknown")
+            detail = (dt + "; " if dt else "") + f"source={src}"
+            add(PG, "Market pulse narratives", suburb_label(s), f"{n} categories ({src})", st,
+                "generated_at", ts, detail)
+
+    # Price-reductions correctness: track_price_changes.py writes both the
+    # per-listing price_history array (raw) and a system_monitor.price_change_events
+    # summary doc (what generate_market_pulse.py's price_reductions_count reads)
+    # in the same run. A 2026-07-22 audit found Burleigh Waters/Varsity Lakes
+    # showing 0 reduction events in the pulse despite 148/164 raw listings
+    # carrying price_history — existence-only checks never caught this because
+    # the summary collection still "existed" and was "fresh", just empty for
+    # those two suburbs. This compares raw vs. summary directly.
+    for s in CORE3:
+        ev_cnt = sm["price_change_events"].count_documents(
+            {"suburb": {"$regex": s, "$options": "i"}, "direction": "reduction"})
+        raw_with_history = gc[s].count_documents({"price_history.1": {"$exists": True}})
+        val = f"{ev_cnt} events / {raw_with_history} listings w/ history"
+        if raw_with_history > 0 and ev_cnt == 0:
+            add(PG, "Price reductions correctness", suburb_label(s), val, ERROR, "", None,
+                f"{raw_with_history} listings have price_history entries but 0 reduction events "
+                f"recorded — likely a suburb-name mismatch between price_history and price_change_events")
+        else:
+            add(PG, "Price reductions correctness", suburb_label(s), val, OK, "", None, "")
 
     for s in CORE3:
         cur = list(sm["absorption_rate_snapshots"].find({"suburb": s}, {"computed_at": 1, "absorption_rate_months": 1})
@@ -492,6 +911,13 @@ def collect(client, now_utc, prev_map):
         ("Crash-risk narrative", "CrashRiskSection.tsx", "hardcoded claims; manual update (CLAUDE.md monthly check)"),
     ]:
         add(PG, name, scope, "structural gap", GAP, "", None, note, note=note)
+
+    # ----- Business-wide additions (2026-07-22) -----
+    collect_process_registry(add)
+    collect_github_actions(add)
+    collect_market_signals_fetch(add, sm, now_utc)
+    collect_leads_crm(add, sm, now_utc, last_run)
+    collect_ads_compliance(add, sm, now_utc)
 
     return rows
 
