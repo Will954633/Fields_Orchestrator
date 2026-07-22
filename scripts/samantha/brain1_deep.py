@@ -246,7 +246,9 @@ def main():
         # (2) quote-level: misattribution (real quote -> wrong unit) + fabrication
         try:
             import brain1_verify as bv
-            total, ok, misattr, notfound = bv.verify_text(answer)
+            # scope the true-source search to THIS package's units — otherwise a paraphrased quote
+            # gets falsely attributed to a verbatim match in another brain not in context.
+            total, ok, misattr, notfound = bv.verify_text(answer, scope_ids=set(by_id))
             if total:
                 sys.stderr.write(f"[quote-verify] {total} quotes | {ok} verified | {len(misattr)} "
                                  f"MISATTRIBUTED | {len(notfound)} NOT_FOUND | {100*ok/total:.1f}% fidelity\n")
