@@ -90,14 +90,9 @@ def check_sheet_modified():
 
 
 def set_env_from_file():
-    if os.environ.get("COSMOS_CONNECTION_STRING"):
-        return
-    env_path = os.path.join(ORCH_DIR, ".env")
-    if os.path.exists(env_path):
-        for line in open(env_path):
-            if "=" in line and not line.startswith("#"):
-                key, _, val = line.partition("=")
-                os.environ.setdefault(key.strip(), val.strip().strip('"'))
+    # python-dotenv, not a hand-rolled parser (standardised 2026-07-23).
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(ORCH_DIR, ".env"), override=False)
 
 
 def main():
