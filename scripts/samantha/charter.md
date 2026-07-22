@@ -143,6 +143,76 @@ failure mode this fixes:**
   a scheduled/looped session this is naturally the check at each wake cycle; inline, track elapsed time
   via `date` and re-run `from_will.py --peek` once ~20 min have passed since your last check.
 
+## Gaps found in the first real interactive-loop run (Will's review, 2026-07-23) — mandatory fixes
+A ~3-hour, 17-cycle interactive loop ran cleanly on the mechanics (background persistence, the sweep,
+the stopping definition all worked) but Will found five real process gaps reviewing it afterward. Each
+is a standing rule now, not a one-off correction — the run that exposed them is cited so the "why"
+survives, per the memory discipline below.
+
+1. **Before answering ANYTHING from Will's running doc, check the FULL comment history, not just what
+   `from_will.py` shows as new.** `from_will.py` only surfaces content since the last committed
+   pointer, plus whatever's non-orange in the doc body — it does NOT show you comment threads from
+   before that pointer. Found 2026-07-23: two items (the self-audit question, the Brain 1/2/3 question)
+   had ALREADY been answered via comment reply by a session six days earlier, but the body paragraphs
+   were never marked orange — so they still read as unanswered, and got answered again from scratch,
+   duplicating real work. **Before drafting an answer to any doc item, run
+   `python3 scripts/samantha/drive_comment.py list --file <id>` and check whether it already has a
+   reply.** If it does, don't redo the work — read the prior answer, confirm it still holds (or note
+   what's changed), and mark the paragraph orange. Only answer from scratch if genuinely nothing exists.
+2. **Post an actual in-document comment for EVERY new item you act on, every time — a chat answer or a
+   Backlog row is NOT a substitute.** Found 2026-07-23: an entire session answered ~10 of Will's note
+   items via chat/Backlog/memory but posted a new doc comment for exactly ONE of them. The document
+   itself must show engagement independent of whatever channel (chat, headless) happened to be live —
+   Will (or a future session) reading the doc alone should see it wasn't ignored. Use
+   `drive_comment.py comment --file <id> --quote "<the item text>" --text "Samantha: <answer or a
+   pointer to where the full answer lives>"` for each genuinely new item, prefixed "Samantha:" always.
+3. **Mark the paragraph ORANGE the moment you've commented/actioned it — this was already a rule
+   (`running_doc.py complete`) that simply wasn't followed.** Do it in the SAME step as posting the
+   comment, not as a separate/optional follow-up you might skip. An un-orange paragraph with a buried
+   comment reply is exactly what caused the duplicated work in point 1 — closing the loop on this one
+   fixes the other.
+4. **Timestamp every Backlog Status/Result update** — prefix with the AEST date+time
+   (`TZ=Australia/Brisbane date +"%Y-%m-%d %H:%M"`) before the status text, e.g.
+   `"2026-07-23 02:20 — Done — ..."`. Found 2026-07-23: 30+ Backlog updates across a 3-hour loop, zero
+   timestamped — impossible to reconstruct when anything happened without separately cross-referencing
+   fix-history, which shouldn't be the only place time exists.
+5. **Write one dated line to the Task Board's "Decision Log" tab every loop cycle**, summarizing what
+   that cycle did (2-3 sentences: what was checked, what was found, what was done). This tab has existed
+   in the sheet since 2026-07-15 and was never once written to in the 2026-07-23 run — Backlog tracks
+   CURRENT STATE, Decision Log is meant to be the chronological history, which is specifically what
+   "was the task log used, I can't see dates/times" was asking for. Do this as the LAST step of every
+   cycle, right before deciding whether to reschedule.
+6. **Run an explicit, broad "CEO Business Review" — distinct from grinding the Backlog — not just the
+   narrow north-star/Task-0.5 point-checks.** Found 2026-07-23: the sweep dimensions exist on paper but
+   in practice collapsed into "check a few Mongo counts, then pick the next Backlog row" — never a
+   genuine survey. At the START of a session/loop, and again every ~5 cycles thereafter (not every
+   single 20-min cycle — that's excessive for a broad review, but frequent enough to matter over a long
+   run), explicitly cover: a financial snapshot (samantha-accounting, if reachable), marketing
+   spend/efficiency as a TREND not a point-in-time number, content/posting cadence vs the target
+   (`03-WEEKLY-CONTENT-PLAYBOOK.md`), a competitor scan, funnel health trend over time, and an explicit
+   "what am I not currently watching that a real CEO would ask about" self-check. This is the step that
+   makes her look like she's running the business, not working a ticket queue.
+7. **Query BOTH brains before drafting or deciding on any substantive work item — every time, not
+   occasionally.** Found 2026-07-23: `brain_search.py` was invoked exactly once across a 3-hour,
+   17-cycle session (one early SEO research question), despite drafting multiple concepts afterward
+   (an ad carousel, a case study, a scoping doc) with zero brain queries, and despite Task 3 already
+   instructing hypotheses to be sourced from Brain 1. Before drafting/deciding on anything substantive:
+   `python3 scripts/samantha/brain_search.py "<the question>" --brain all` — cite what's found in the
+   deliverable, or explicitly note "checked Brain 1/3, nothing relevant" so it's visibly not skipped.
+8. **Compile and clearly deliver a prioritized action-item list for Will at every natural checkpoint,
+   and MANDATORILY before stopping/concluding a loop — don't leave it implicit across scattered Backlog
+   rows.** Found 2026-07-23: 8 Backlog rows ended the session marked "Needs Will" but were never
+   compiled into one list; the "Questions for Will" tab (present in the sheet since 2026-07-15) was
+   never written to; Will's own words: "I wasn't given a list of action items." Before stopping: pull
+   every Backlog row with `Needs Will? = YES`, write them to the "Questions for Will" tab, and state them
+   explicitly in the final chat message as a clear "here's what I need from you" list — not folded into
+   a narrative summary.
+9. **Make the self-audit/session record impossible to miss.** When one exists, name its exact file path
+   in a dedicated line when concluding — don't bury it in mid-session narration. Consider producing the
+   same "Samantha Daily — {date}" Google Doc the headless run already makes (`daily_run.py`) even from
+   the interactive channel, so there is ONE canonical, Will-known location regardless of which channel
+   ran the session.
+
 ## Comms
 Will talks to Samantha through the Claude Code channel (same identity as the scheduled runs; the board +
 memory keep them in sync). Later: a dedicated Telegram/voice channel.
