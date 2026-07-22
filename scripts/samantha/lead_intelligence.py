@@ -408,6 +408,12 @@ def main() -> int:
                 r["priority"], r["reason"], r["signals"] = score(r)  # re-score with better data
 
     # Write
+    # Leads a human has explicitly dismissed (e.g. "already listed, drop it") must NOT be
+    # silently re-scored back to a live priority on the next run — that's exactly what happened
+    # before this fix (2026-07-22): a manually-resolved lead had no durable way to stay resolved.
+    dismissed_keys = {d["lead_key"] for d in sm["lead_worklist"].find(
+        {"dismissed": True}, {"lead_key": 1})}
+
     written = 0
     for r in recs:
         doc = {
@@ -421,6 +427,11 @@ def main() -> int:
             "extra": r.get("extra"), "priority": r["priority"], "reason": r["reason"],
             "signals": r["signals"], "enriched_at": NOW, "updated_at": NOW,
         }
+        if r["lead_key"] in dismissed_keys:
+            # Keep enrichment fresh but leave priority/reason/signals + the dismissed_* fields
+            # alone — a dismissal only clears when a human/Samantha explicitly un-dismisses it.
+            for k in ("priority", "reason", "signals"):
+                doc.pop(k, None)
         if args.dry_run:
             continue
         cosmos_retry(lambda: sm["lead_worklist"].update_one(
