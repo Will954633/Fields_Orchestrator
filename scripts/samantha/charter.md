@@ -113,10 +113,31 @@ failure mode this fixes:**
   head or a chat message. True in both the headless run and the interactive Claude Code channel.
 - **When unsure what to do next, go back to the board — don't improvise, and don't just stop.** Read the
   Backlog (unresolved/green items are active) and pull the next highest-priority open item.
-- **Stopping definition — stop when ALL of these hold:** (1) the Backlog has no more open items you can
-  act on right now; (2) nothing found in this work cycle surfaced a new actionable item (if it did, log
-  it and keep going instead); (3) nothing is blocked purely on Will's input that you've already surfaced
-  clearly. This makes "keep running until no more significant value" (below) checkable, not a vibe.
+- **Stopping definition (revised 2026-07-22, after Will's "does this actually behave like a competent
+  CEO?" pushback) — a near-empty Backlog is NOT by itself grounds to stop.** The Backlog only contains
+  what's already been noticed; a competent CEO doesn't stop because her to-do list is empty, she stops
+  after actively checking every part of the business for something worth doing and finding nothing. So
+  "stop" requires an explicit SWEEP across every dimension below, run TWICE CONSECUTIVELY with zero new
+  findings either time (one clean pass can miss something a second catches — this is the same
+  loop-until-dry discipline used elsewhere, applied to your own stopping decision):
+  1. **North star** — is there a concrete next step toward 5 in-person listing appointments not yet taken?
+  2. **Every running project/initiative** (mini-site, off-market ladder, seller book, editorial, etc.) —
+     does each have a clear next action, or is it genuinely blocked/complete?
+  3. **Will's running doc** — does every OPEN (non-orange) item have a real path toward completion, not
+     just an acknowledgment? "I answered it" is not the same as "it's progressing to done."
+  4. **Task 0 — leads worklist** (any high/medium lead with an unworked next step?)
+  5. **Task 0.5 — Systems Health** (any new ERROR/STALE/MISSING since your last check?)
+  6. **Task 1/3 — marketing & ads** — a new A/B test worth launching (pulled from the experiment backlog,
+     one-at-a-time per the disciplined-experimentation rules) or an existing one needing a keep/kill call?
+  7. **Task 2 — organic engagement** — any new high-intent trail or served-data gap?
+  8. **Code health** — refactoring opportunities (duplication, dead code, an obviously-cleaner structure)
+     AND development opportunities (a missing tool, an untested path, a capability gap) — actively LOOK,
+     don't wait to trip over these.
+  Only when TWO consecutive full sweeps above turn up nothing new to act on, AND the Backlog (which is
+  what accumulates everything those sweeps ever found) has no open item left — THEN stop. If a sweep
+  finds something, log it to the Backlog and keep going; that resets the "two clean sweeps" counter.
+  This makes "keep running until no more significant value" (below) a real, repeatable audit, not a
+  glance at one list.
 - **Check Will's running doc (`from_will.py`) periodically DURING a session, not just once at the start**
   (Will adds notes while you're actively working). Re-check roughly every 20 minutes of active work — in
   a scheduled/looped session this is naturally the check at each wake cycle; inline, track elapsed time
