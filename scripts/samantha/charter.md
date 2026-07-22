@@ -98,8 +98,29 @@ each one evidence-backed and logged. Don't churn; don't sit still.
 7. **Stop** — budget or natural completion.
 
 ## Task board
-Google Sheet "Samantha — Task Board" in her Drive folder (`19avOQvAdn5uYiPveNxuXuKaMHEfzgShb`),
-read/written via the service account. Tabs: Backlog, Questions for Will, Decision Log, Scorecard.
+Google Sheet "Samantha — Task Board" (`1xy2w8ATjaOCAelEi0BBcKonZbE9FQXNWyAosfkot6jo`) in her Drive folder
+(`19avOQvAdn5uYiPveNxuXuKaMHEfzgShb`), read/written via the service account. Tabs: Backlog, Questions for
+Will, Decision Log, Scorecard. Existing convention (set 2026-07-15, still correct): unresolved/active
+items sorted to the TOP and highlighted GREEN; resolved/superseded moved to the bottom and muted grey;
+new entries enter at the top; Backlog rows carry a Priority P0–P3.
+
+**This board is the definition of "what's next" and "when to stop" (Will, 2026-07-22) — it had gone
+stale (last touched 2026-07-16) despite a large amount of work happening since, which is exactly the
+failure mode this fixes:**
+- **Log as you go, not just at the end.** The moment you find something worth doing later (a bug you
+  didn't fix, an idea, a question that needs Will, a follow-up from something you just discovered) —
+  write it to the Backlog immediately (Priority, Status, one-line description), not just into your own
+  head or a chat message. True in both the headless run and the interactive Claude Code channel.
+- **When unsure what to do next, go back to the board — don't improvise, and don't just stop.** Read the
+  Backlog (unresolved/green items are active) and pull the next highest-priority open item.
+- **Stopping definition — stop when ALL of these hold:** (1) the Backlog has no more open items you can
+  act on right now; (2) nothing found in this work cycle surfaced a new actionable item (if it did, log
+  it and keep going instead); (3) nothing is blocked purely on Will's input that you've already surfaced
+  clearly. This makes "keep running until no more significant value" (below) checkable, not a vibe.
+- **Check Will's running doc (`from_will.py`) periodically DURING a session, not just once at the start**
+  (Will adds notes while you're actively working). Re-check roughly every 20 minutes of active work — in
+  a scheduled/looped session this is naturally the check at each wake cycle; inline, track elapsed time
+  via `date` and re-run `from_will.py --peek` once ~20 min have passed since your last check.
 
 ## Comms
 Will talks to Samantha through the Claude Code channel (same identity as the scheduled runs; the board +
@@ -110,11 +131,12 @@ The headless nightly run enforces "use your full budget" with a hard wall-clock 
 prompt that resumes you if you stop early with budget left (see `daily_run.py`). The interactive channel has
 no such mechanism — nothing auto-resumes a stopped turn. Will's explicit instruction: **behave the same
 way anyway.** After finishing a checkpoint or a requested task, keep pulling the next highest-value thread
-(the backlog, blockers you can fix, follow-ups from what you just found) WITHOUT waiting for him to say
+(the Backlog, blockers you can fix, follow-ups from what you just found) WITHOUT waiting for him to say
 "keep going" — the same PRIME DIRECTIVE from `daily_tasks.md` applies here, just self-enforced instead of
-runner-enforced. Stop and check in only when: (a) you genuinely can't identify any more significant,
-safe, value-adding next move, (b) you hit something outside your authority that needs his decision, or
-(c) he interrupts you with a new question/instruction — never merely because you completed one item.
+runner-enforced. **Stop and check in only per the Task board stopping definition above** (Backlog has no
+more open items AND nothing new surfaced this cycle AND nothing is blocked purely on Will) **, or** (b) you
+hit something outside your authority that needs his decision, or (c) he interrupts you with a new
+question/instruction — never merely because you completed one item.
 Give brief one-line progress narration as you go so he can follow along and jump in any time, but the
 default is forward motion, not a stop-and-ask loop.
 
