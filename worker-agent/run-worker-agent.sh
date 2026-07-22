@@ -35,7 +35,7 @@ set -a && source "$ORCHESTRATOR_DIR/.env" && set +a
 unset CLAUDECODE 2>/dev/null || true
 
 # Send Telegram notification — session starting
-python3 "$ORCHESTRATOR_DIR/scripts/telegram_notify.py" --message "🤖 Worker Agent session starting ($TIME AEST). Reading sprint and backlog..." 2>/dev/null || true
+python3 "$ORCHESTRATOR_DIR/scripts/telegram_notify.py" "🤖 Worker Agent session starting ($TIME AEST). Reading sprint and backlog..." 2>/dev/null || true
 
 cd "$ORCHESTRATOR_DIR"
 
@@ -84,10 +84,10 @@ SUMMARY_FILE="$DELIVERABLES_DIR/session-summary.md"
 if [ -f "$SUMMARY_FILE" ]; then
     # Send first 500 chars of summary
     MSG=$(head -c 500 "$SUMMARY_FILE")
-    python3 "$ORCHESTRATOR_DIR/scripts/telegram_notify.py" --message "✅ Worker Agent done ($TIME AEST):
+    python3 "$ORCHESTRATOR_DIR/scripts/telegram_notify.py" "✅ Worker Agent done ($TIME AEST):
 $MSG" 2>/dev/null || true
 else
-    python3 "$ORCHESTRATOR_DIR/scripts/telegram_notify.py" --message "✅ Worker Agent session complete ($TIME AEST). Check worker-agent/deliverables/$DATE/" 2>/dev/null || true
+    python3 "$ORCHESTRATOR_DIR/scripts/telegram_notify.py" "✅ Worker Agent session complete ($TIME AEST). Check worker-agent/deliverables/$DATE/" 2>/dev/null || true
 fi
 
 echo "[$(TZ=Australia/Brisbane date +%H:%M)] Worker Agent session ended" | tee -a "$LOG_FILE"
