@@ -50,15 +50,12 @@ BATCH_DELAY = 1.0  # seconds between requests
 
 
 def load_env():
-    """Load .env file."""
+    """Load .env file (python-dotenv, standardised 2026-07-23 — this script's own
+    hand-rolled quote-stripping bug is exactly why: see fix-history 2026-07-22
+    [GOOGLE-INDEXING-INVALIDURI])."""
+    from dotenv import load_dotenv
     env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
-    if os.path.exists(env_path):
-        with open(env_path) as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith("#") and "=" in line:
-                    key, _, value = line.partition("=")
-                    os.environ.setdefault(key.strip(), value.strip().strip('"'))
+    load_dotenv(env_path, override=False)
 
 
 def get_credentials():
