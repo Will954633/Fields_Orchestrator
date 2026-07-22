@@ -37,7 +37,7 @@ def search_one(pkg_path, query, k):
     by_id = {u["id"]: u for u in pkg["units"]}
     neigh = [by_id[i] for i in list(neigh_ids)[:max(0, k // 2)] if i in by_id]
     return [
-        {"id": u["id"], "source": u["src"].get("lib", ""),
+        {"id": u["id"], "source": u["src"].get("lib", ""), "date": u.get("date", ""),
          "doc": u["src"].get("course", ""),
          "concepts": u.get("concepts", [])[:4],
          "quote": (u.get("quotes") or [""])[0][:220],
@@ -80,7 +80,8 @@ def main():
         print(f"\n=== {d['brain']} — {d['matched']} units matched, top {len(d['results'])} ===")
         for r in d["results"]:
             src = r["source"].replace("internal:", "").replace("KB:", "KB/")
-            print(f"  [{src}] {r['id']}  {r['doc'][:60]}")
+            datestr = f" ({r['date']})" if r.get("date") else ""
+            print(f"  [{src}] {r['id']}{datestr}  {r['doc'][:60]}")
             if r["quote"]:
                 print(f"     “{r['quote']}”")
             if r["concepts"]:
