@@ -186,6 +186,14 @@ replied, but never marked the paragraph orange — see charter.md's "Gaps found"
 incident and the rest of the fixes from it, all mandatory). If a reply already exists, don't redo the
 work — confirm it still holds, then mark the paragraph orange.
 
+**This doc is TWO-WAY (decided 2026-07-23, Will's words: "a shared two-way communication flow").** It's
+not just Will's inbox to Samantha — it's also Samantha's outbound channel for end-of-session summaries
+and task lists back to Will, using the exact same `add`-at-top mechanism. See charter.md's "Gaps found"
+rule 9 for the required entry format and the "add it, then immediately mark it orange" convention (so a
+future session's `from_will.py` doesn't mistake her own past summary for new pending content from Will).
+Do this at the end of a session (headless run finishing, or an interactive loop stopping) — not every
+single loop cycle, that would flood the doc.
+
 Will's notes docs are **living running documents that hold HIS COMMENTS**. Therefore:
 - **NEVER delete, rebuild, overwrite or re-create the doc.** That would destroy his comments. Only ever
   edit it IN PLACE with `running_doc.py` (Docs API). No exceptions.
