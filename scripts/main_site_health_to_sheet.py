@@ -332,5 +332,34 @@ def main():
         maybe_alert(pages, totals, url, now_utc, minisite_results=minisite_results)
 
 
+def _alert_own_crash(exc):
+    """Last-resort direct alert if main() itself dies before reaching
+    maybe_alert() — e.g. a Mongo timeout, an unhandled bug in a new collector,
+    a Drive API auth failure. Without this, a crash here means the sheet
+    silently stops updating and NOTHING says so — the exact failure class
+    this whole system was built to catch, one level up in the checker itself
+    (flagged 2026-07-22: the only thing checking this job before was a
+    self-referential Process Registry row that just said "this sheet,
+    self-evidently running" — a no-op that assumes what it should verify).
+    Deliberately does not import anything from hc/mhc/build_workbook — those
+    are exactly what might have just crashed."""
+    try:
+        from telegram_notify import send_message, TelegramSendError
+        try:
+            send_message(
+                f"🔴 Fields Systems Health FAILED to complete — sheet may not have updated.\n"
+                f"{type(exc).__name__}: {exc}\n"
+                f"Check logs/main-site-health.log on the VM.",
+                parse_mode="")
+        except TelegramSendError as e:
+            print(f"(crash alert also failed to send: {e})")
+    except Exception as e:
+        print(f"(could not even attempt a crash alert: {e})")
+
+
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        _alert_own_crash(e)
+        raise
