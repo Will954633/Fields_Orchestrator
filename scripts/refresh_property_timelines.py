@@ -73,6 +73,7 @@ def fetch_timeline(url: str) -> list[dict] | None:
         match = re.search(
             r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>',
             html,
+            re.DOTALL,
         )
         if not match:
             return None
