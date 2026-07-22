@@ -74,6 +74,11 @@ class SlotResolver:
         self.suburb_display = report_doc.get("suburb", "")
         self.address = report_doc.get("address", "")
         self.property_id = report_doc.get("property_id")
+        # build_mode == "no_llm": fast, data-first report — skip every vision +
+        # narrative (LLM) stage; keep all deterministic ones (valuation, comps,
+        # scarcity evidence, competition, market, walking distances). Default
+        # "full" => byte-identical to the previous behaviour.
+        self.no_llm = report_doc.get("build_mode") == "no_llm"
         # Live progress emitter — defaults to no-op for tests / dry-runs
         self.emit = emitter or NullEmitter()
 
@@ -142,7 +147,7 @@ class SlotResolver:
             try:
                 candidate_urls = [p["url"] for p in prop.get("photos") or [] if p.get("url")]
                 existing_extracted = (self._subject or {}).get("floor_plans_v2_extracted") or []
-                fp = resolve_floor_plan(
+                fp = None if self.no_llm else resolve_floor_plan(
                     candidate_urls,
                     existing_extracted=existing_extracted if existing_extracted else None,
                 )
@@ -211,7 +216,7 @@ class SlotResolver:
             self.emit.start("satellite", "Reading the aerial view")
             try:
                 coll = self.db[self.suburb_key] if self.suburb_key else None
-                sat = resolve_satellite(
+                sat = None if self.no_llm else resolve_satellite(
                     self._subject or {},
                     suburb_key=self.suburb_key,
                     db_subject_coll=coll,
@@ -246,7 +251,7 @@ class SlotResolver:
             self.emit.start("street_view", "Capturing the street-level view")
             try:
                 coll = self.db[self.suburb_key] if self.suburb_key else None
-                sv = resolve_street_view(
+                sv = None if self.no_llm else resolve_street_view(
                     self._subject or {},
                     suburb_key=self.suburb_key,
                     db_subject_coll=coll,
@@ -430,7 +435,7 @@ class SlotResolver:
             # 3x with validation guardrails; failures set slot_status.error.
             bed_band = _to_int((self._subject or {}).get("bedrooms"))
             try:
-                narrative = resolve_market_narrative(
+                narrative = None if self.no_llm else resolve_market_narrative(
                     market, self.suburb_display, bed_band,
                     address=self.address,
                 )
@@ -600,7 +605,7 @@ class SlotResolver:
                 if model_range and model_range.get("low") and model_range.get("high"):
                     cs_anchor = int((model_range["low"] + model_range["high"]) / 2)
                 cs_features = derive_features_basic(self._subject)
-                dynamic = resolve_dynamic_case_study(
+                dynamic = None if self.no_llm else resolve_dynamic_case_study(
                     self._subject, self.db, cs_features, price_anchor=cs_anchor,
                 )
                 if dynamic:
@@ -656,10 +661,25 @@ class SlotResolver:
         if scarcity_struct and scarcity_struct.get("notable_features"):
             self.emit.start("scarcity_story", "Writing your scarcity story")
             try:
-                narrative = resolve_scarcity_narrative(
+                narrative = None if self.no_llm else resolve_scarcity_narrative(
                     scarcity_struct, resolved_pois, self.suburb_display, self.address,
                 )
-                if narrative and narrative.get("headline"):
+                if self.no_llm:
+                    # Data-first build: surface the deterministic scarcity EVIDENCE
+                    # (feature-evidence ladder + reliable sold-cohort premiums)
+                    # without the Opus prose hero (headline/combinatorial/walking
+                    # monopoly are intentionally absent in this mode).
+                    updates["scarcity"] = {
+                        "soldCohortPremiums": cohort_premiums_to_sold_cohort_premiums(
+                            scarcity_struct.get("cohort_premiums") or []
+                        ),
+                        "featureEvidence": cohort_premiums_to_feature_evidence(
+                            scarcity_struct.get("cohort_premiums") or []
+                        ),
+                    }
+                    updates["slot_status.scarcity"] = "approved"
+                    self.emit.done("scarcity_story", "Scarcity evidence ready")
+                elif narrative and narrative.get("headline"):
                     sold_cohort_premiums = cohort_premiums_to_sold_cohort_premiums(
                         scarcity_struct.get("cohort_premiums") or []
                     )
@@ -735,7 +755,8 @@ class SlotResolver:
         # sampleParagraph) grounded in the same structured scarcity + cohort
         # data the scarcity narrative used. Reads `valuation_data.subject_property
         # .features.basic` for the property's full engine-feature dict.
-        if scarcity_struct and scarcity_struct.get("notable_features") and self._subject:
+        # no_llm build: skip the whole positioning/personas/buyers LLM chain.
+        if scarcity_struct and scarcity_struct.get("notable_features") and self._subject and not self.no_llm:
             self.emit.start("positioning", "Building your positioning frame")
             try:
                 # Prefer the precompute engine output if present; otherwise
