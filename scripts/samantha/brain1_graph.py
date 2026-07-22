@@ -42,18 +42,34 @@ def norm(s):
     return s
 
 
-def load(path):
-    units = []
-    bad = 0
+def load(path, dedupe=False, exclude_ids=None):
+    """dedupe=True: keep only the LAST occurrence of each unit_id (nightly delta appends a fresh
+    annotation for changed content under the SAME id — later in the file supersedes earlier).
+    exclude_ids: tombstoned ids (source removed since last ingest) are dropped entirely."""
+    exclude_ids = exclude_ids or set()
+    by_id = {} if dedupe else None
+    units, bad, order = [], 0, []
     with open(path, "r", encoding="utf-8") as fh:
         for line in fh:
             line = line.strip()
             if not line:
                 continue
             try:
-                units.append(json.loads(line))
+                rec = json.loads(line)
             except json.JSONDecodeError:
                 bad += 1
+                continue
+            uid = rec.get("unit_id")
+            if uid in exclude_ids:
+                continue
+            if dedupe and uid:
+                if uid not in by_id:
+                    order.append(uid)
+                by_id[uid] = rec  # later occurrence overwrites -> supersedes
+            else:
+                units.append(rec)
+    if dedupe:
+        units = [by_id[u] for u in order]
     return units, bad
 
 
@@ -105,6 +121,7 @@ def build(units, canon=None):
         out_units.append({
             "id": uid,
             "src": src,
+            "date": u.get("date", ""),  # structured (from ingest manifest); "" if unknown/n-a
             "topics": topics,
             "channels": u.get("channels", []) or [],
             "concepts": concepts,
@@ -199,13 +216,24 @@ def main():
                     help="additional annotation files to fold into ONE unified package "
                          "(e.g. KB public annotations -> unified external pool)")
     ap.add_argument("--outdir", default=None)
+    ap.add_argument("--dedupe", action="store_true",
+                     help="keep only the LAST annotation per unit_id (nightly delta re-annotates "
+                          "changed content under the same id; the later record supersedes)")
+    ap.add_argument("--tombstones", default=None,
+                     help="JSON file of unit_ids to exclude entirely (sources removed since last ingest)")
     args = ap.parse_args()
 
     inp = Path(args.inp)
     outdir = Path(args.outdir) if args.outdir else inp.parent
     outdir.mkdir(parents=True, exist_ok=True)
 
-    units, bad = load(inp)
+    exclude_ids = set()
+    if args.tombstones and Path(args.tombstones).exists():
+        exclude_ids = set(json.loads(Path(args.tombstones).read_text()))
+        if exclude_ids:
+            print(f"Excluding {len(exclude_ids)} tombstoned unit(s)")
+
+    units, bad = load(inp, dedupe=args.dedupe, exclude_ids=exclude_ids)
     print(f"Loaded {len(units)} records from {inp.name} ({bad} bad lines)")
     for extra in args.merge:
         eu, eb = load(Path(extra))
