@@ -18,15 +18,27 @@ BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 # Will's chat ID — set after first interaction with bot
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
+
+class TelegramSendError(Exception):
+    """Raised when a Telegram notification could not be sent.
+
+    Deliberately a normal Exception (not SystemExit via sys.exit) so that the
+    `except Exception` blocks used by nearly every caller in the fleet actually
+    catch it — sys.exit(1) raises SystemExit, a BaseException, which those
+    callers were silently NOT catching, turning "the alert failed to send"
+    into "the whole calling script crashed uncaught."
+    """
+
+
 def send_message(text: str, chat_id: str = None, parse_mode: str = "Markdown"):
-    """Send a message via the Telegram bot."""
+    """Send a message via the Telegram bot. Raises TelegramSendError on failure."""
     cid = chat_id or CHAT_ID
     if not cid:
         print("ERROR: No TELEGRAM_CHAT_ID set. Send a message to @WillFieldsBot first.")
-        sys.exit(1)
+        raise TelegramSendError("missing TELEGRAM_CHAT_ID")
     if not BOT_TOKEN:
         print("ERROR: No TELEGRAM_BOT_TOKEN set.")
-        sys.exit(1)
+        raise TelegramSendError("missing TELEGRAM_BOT_TOKEN")
 
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     payload = {"chat_id": cid, "text": text}
@@ -40,7 +52,7 @@ def send_message(text: str, chat_id: str = None, parse_mode: str = "Markdown"):
         data = resp.json()
     if not data.get("ok"):
         print(f"ERROR: {data}")
-        sys.exit(1)
+        raise TelegramSendError(str(data))
     print(f"Message sent to {cid}")
     return data
 
@@ -88,11 +100,15 @@ if __name__ == "__main__":
     parser.add_argument("--check-chat-id", action="store_true", help="Check for chat ID from recent messages")
     args = parser.parse_args()
 
-    if args.check_chat_id:
-        check_chat_id()
-    elif args.market_pulse_reminder:
-        market_pulse_reminder()
-    elif args.message:
-        send_message(args.message)
-    else:
-        parser.print_help()
+    try:
+        if args.check_chat_id:
+            check_chat_id()
+        elif args.market_pulse_reminder:
+            market_pulse_reminder()
+        elif args.message:
+            send_message(args.message)
+        else:
+            parser.print_help()
+    except TelegramSendError as e:
+        print(f"FATAL: notification not sent — {e}")
+        sys.exit(1)
