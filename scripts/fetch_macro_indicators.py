@@ -31,6 +31,9 @@ import requests
 import yaml
 from pymongo import MongoClient
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from job_status import record_job_result
+
 
 def fetch_csv(url: str) -> str:
     """Fetch CSV content from a URL.
@@ -495,6 +498,19 @@ def main():
     print(f"  Written successfully. Failed sources (kept previous): {', '.join(failed) if failed else 'none'}")
     client.close()
 
+    total_sources = 7  # oil, cash_rate, mortgage_rate, term_deposit, cpi_qld, national_prices, mortgage_impact
+    written = total_sources - len(failed)
+    record_job_result(
+        "fetch_macro_indicators",
+        "success" if written > 0 else "error",
+        detail=f"{written}/{total_sources} sources fresh" + (f"; failed: {', '.join(failed)}" if failed else ""),
+        indicators_written=written, indicators_total=total_sources,
+    )
+
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        record_job_result("fetch_macro_indicators", "error", detail=f"crashed: {e}")
+        raise
