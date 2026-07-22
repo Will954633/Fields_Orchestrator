@@ -82,7 +82,12 @@ def extract_transactions(doc):
     for ev in timeline:
         if not isinstance(ev, dict):
             continue
-        is_sale = ev.get('is_major_event') or ev.get('category') == 'Sale'
+        # category is the authoritative signal ('Sale' vs 'Rental') — is_major_event
+        # is true for BOTH, so ORing it in previously let weekly-rent listings
+        # (e.g. "$695 PER WEEK") get stored as sale transactions whenever a rental
+        # was a property's most recent major timeline event (~22% of docs with a
+        # timeline, measured 2026-07-22). Require the explicit Sale category.
+        is_sale = ev.get('category') == 'Sale'
         if not is_sale or not ev.get('date') or ev.get('price') is None:
             continue
         try:
