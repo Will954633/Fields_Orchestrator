@@ -840,6 +840,25 @@ def collect(client, now_utc, prev_map):
             st, dt = judge(ts, "weekly", now_utc, last_run)
             add(PG, "Absorption rate", suburb_label(s), f"{cur[0].get('absorption_rate_months')} mo", st, "computed_at", ts, dt)
 
+    # Off-market deck's "value_liquidity_play" positioning frame (added
+    # 2026-07-23) — per-suburb affordable-sells-faster evidence. Manual
+    # one-off run today, not yet cronned; Will asked this never be allowed to
+    # fail silently, so it gets a row here from day one even before a
+    # schedule exists (a MISSING/STALE row is exactly what should show until
+    # the cron is wired up).
+    for s in CORE3:
+        d = gc["precomputed_price_tier_liquidity"].find_one(
+            {"_id": f"{s}_House"}, {"computed_at": 1, "qualifies": 1, "n_total": 1, "gap_pct": 1})
+        if not d:
+            add(PG, "Off-market price-tier liquidity", suburb_label(s), None, MISSING, "computed_at", None,
+                "doc absent — run scripts/precompute_price_tier_liquidity.py")
+        else:
+            ts = as_dt(d.get("computed_at"))
+            st, dt = judge(ts, "monthly", now_utc, last_run)
+            val = f"qualifies={d.get('qualifies')} n={d.get('n_total')}" + (
+                f" gap={d.get('gap_pct')}%" if d.get("qualifies") else "")
+            add(PG, "Off-market price-tier liquidity", suburb_label(s), val, st, "computed_at", ts, dt)
+
     # ----- For Sale / Sold -----
     PG = "For Sale / Sold"
     for s in SUBS:
