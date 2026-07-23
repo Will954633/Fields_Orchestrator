@@ -54,6 +54,20 @@ TARGET_SUBURBS = [
 POLL_SECONDS = 3
 FRESH_DAYS = 14
 
+# Schema versions — bump whenever compute_intel()'s or compute_positioning()'s
+# OUTPUT SHAPE OR LOGIC changes (new/removed fields, different frame-scoring
+# behaviour, etc.), not for unrelated changes elsewhere in this file. The
+# matching Netlify endpoint (offmarket-intel.mjs / offmarket-positioning.mjs)
+# compares its own hardcoded CURRENT_SCHEMA_VERSION against each cached doc's
+# stamped version and re-queues on mismatch — so a stale doc self-heals on
+# its next real pageview instead of silently serving old content until
+# someone happens to notice and manually resets it (bit twice in one day,
+# 2026-07-23, before this existed). Bump BOTH sides together — there is no
+# shared constant between Python and JS in this codebase, so this is a
+# manual-discipline contract, not an enforced one.
+INTEL_SCHEMA_VERSION = 1
+POSITIONING_SCHEMA_VERSION = 1
+
 
 def _now():
     return datetime.now(timezone.utc).isoformat()
@@ -371,11 +385,13 @@ def run_once(client):
             result, err = compute_intel(gc, suburb, slug)
             if err:
                 col.update_one({"_id": doc["_id"]},
-                               {"$set": {"status": "error", "error": err, "computed_at": _now()}})
+                               {"$set": {"status": "error", "error": err, "computed_at": _now(),
+                                         "schema_version": INTEL_SCHEMA_VERSION}})
                 print(f"[intel] {slug}: ERROR {err}")
             else:
                 col.update_one({"_id": doc["_id"]},
-                               {"$set": {"status": "done", "result": result, "computed_at": _now()},
+                               {"$set": {"status": "done", "result": result, "computed_at": _now(),
+                                         "schema_version": INTEL_SCHEMA_VERSION},
                                 "$unset": {"error": ""}})
                 sc = result["scarcity"]; cp = result["competition"]
                 print(f"[intel] {slug}: active_match={sc['active_matching']}/{sc['active_total']} "
@@ -383,7 +399,8 @@ def run_once(client):
         except Exception as e:
             traceback.print_exc()
             col.update_one({"_id": doc["_id"]},
-                           {"$set": {"status": "error", "error": str(e)[:300], "computed_at": _now()}})
+                           {"$set": {"status": "error", "error": str(e)[:300], "computed_at": _now(),
+                                     "schema_version": INTEL_SCHEMA_VERSION}})
     return len(pending)
 
 
@@ -404,11 +421,13 @@ def run_once_positioning(client):
             result, err = compute_positioning(gc, suburb, slug)
             if err:
                 col.update_one({"_id": doc["_id"]},
-                               {"$set": {"status": "error", "error": err, "computed_at": _now()}})
+                               {"$set": {"status": "error", "error": err, "computed_at": _now(),
+                                         "schema_version": POSITIONING_SCHEMA_VERSION}})
                 print(f"[positioning] {slug}: ERROR {err}")
             else:
                 col.update_one({"_id": doc["_id"]},
-                               {"$set": {"status": "done", "result": result, "computed_at": _now()},
+                               {"$set": {"status": "done", "result": result, "computed_at": _now(),
+                                         "schema_version": POSITIONING_SCHEMA_VERSION},
                                 "$unset": {"error": ""}})
                 has_narrative = bool(result.get("narrative"))
                 has_positioning = bool(result.get("positioning"))
@@ -416,7 +435,8 @@ def run_once_positioning(client):
         except Exception as e:
             traceback.print_exc()
             col.update_one({"_id": doc["_id"]},
-                           {"$set": {"status": "error", "error": str(e)[:300], "computed_at": _now()}})
+                           {"$set": {"status": "error", "error": str(e)[:300], "computed_at": _now(),
+                                     "schema_version": POSITIONING_SCHEMA_VERSION}})
     return len(pending)
 
 
