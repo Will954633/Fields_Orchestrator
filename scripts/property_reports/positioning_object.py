@@ -88,11 +88,6 @@ FRAMES: Dict[str, Dict[str, Any]] = {
         "lead": "a combination the market rarely offers",
         "assumable": True,
     },
-    "value_liquidity_play": {
-        "noun": "well-priced, fast-moving home",
-        "lead": "the price point and how quickly homes like it move",
-        "assumable": False,
-    },
 }
 
 # Anti-frames are their OWN catalogue (not reused archetype nouns) so the
@@ -249,8 +244,13 @@ def _score_archetypes(f: Dict[str, Any]) -> Dict[str, int]:
             _score(f["largeLand"], 2) + _score(f["turnkey"], 1) + _score(f["waterViews"], 1),
         "scarcity_play":
             _score(f["scarce"], 4) - _score(f["common"], 3) + _score(f["waterViews"], 1),
-        "value_liquidity_play":
-            _score(f["affordableFastMover"], 4),
+        # value_liquidity_play deliberately excluded from the frame competition
+        # (2026-07-23, Will's feedback): "sells fast because it's affordably
+        # priced" is a market-DEMAND fact, not a seller-positioning STRATEGY —
+        # it was winning "primary_frame" and producing a "how we'd position
+        # it" headline that wasn't actually about positioning. affordableFastMover
+        # and its evidence are still computed and exposed (see `evidence.liquidity`
+        # below) for use as a comfort/demand note elsewhere, just never as a frame.
     }
 
 
@@ -352,8 +352,6 @@ def _soft_lead_phrases(
         sig = "the pool" if "the pool" in drivers.get("buyer", []) else "the outdoor space"
     elif primary == "beachside_lifestyle":
         sig = "the beach proximity"
-    elif primary == "value_liquidity_play":
-        sig = "the price point"
     if sig and sig not in lead:
         lead.append(sig)
     # Frames without a signature case above (scarcity_play, renovator_valueadd,
