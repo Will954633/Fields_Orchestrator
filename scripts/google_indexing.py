@@ -172,22 +172,46 @@ def get_property_urls():
 
     client = MongoClient(uri, serverSelectionTimeoutMS=10000)
     db = client["Gold_Coast"]
-    urls = []
 
+    # Order matters: the caller (cmd_submit_all) caps submissions at DAILY_QUOTA
+    # (200/day). The OLD ordering appended every suburb's listings in _id-ascending
+    # (oldest-first) order, robina first — so the 200/day quota was consumed by
+    # static pages + the oldest robina URLs, and (a) genuinely NEW editorial pages
+    # sorted LAST and were never submitted, and (b) varsity_lakes / burleigh_waters
+    # were never reached at all (robina alone has >200 URLs). That is the root cause
+    # of "we publish ~100 new editorial pages and they get no organic traffic":
+    # they were never submitted to Google's Indexing API. Fix: sort NEWEST-first by
+    # last_updated (falling back to the ObjectId's own timestamp), and put for-sale
+    # ahead of sold, so freshly-published listing pages are submitted first.
+    def _recency(doc):
+        v = doc.get("last_updated")
+        if isinstance(v, datetime):
+            return v if v.tzinfo else v.replace(tzinfo=timezone.utc)
+        if isinstance(v, str):
+            try:
+                dtv = datetime.fromisoformat(v.replace("Z", "+00:00"))
+                return dtv if dtv.tzinfo else dtv.replace(tzinfo=timezone.utc)
+            except ValueError:
+                pass
+        return doc["_id"].generation_time  # ObjectId embeds creation time (tz-aware)
+
+    for_sale, sold = [], []
     for suburb in TARGET_SUBURBS:
         try:
             coll = db[suburb]
-            # For-sale properties
-            for doc in coll.find({"listing_status": "for_sale"}, {"_id": 1}):
-                urls.append(f"{SITE_URL}/property/{doc['_id']}")
-            # Sold properties
-            for doc in coll.find({"listing_status": "sold"}, {"_id": 1}):
-                urls.append(f"{SITE_URL}/sold/{doc['_id']}")
+            for doc in coll.find({"listing_status": "for_sale"}, {"_id": 1, "last_updated": 1}):
+                for_sale.append((_recency(doc), f"{SITE_URL}/property/{doc['_id']}"))
+            for doc in coll.find({"listing_status": "sold"}, {"_id": 1, "last_updated": 1}):
+                sold.append((_recency(doc), f"{SITE_URL}/sold/{doc['_id']}"))
         except Exception as e:
             print(f"  Warning: error querying {suburb}: {e}")
 
     client.close()
-    return urls
+
+    # Newest-first within each group; for-sale (live listings) ahead of sold.
+    for_sale.sort(key=lambda t: t[0], reverse=True)
+    sold.sort(key=lambda t: t[0], reverse=True)
+    return [u for _, u in for_sale] + [u for _, u in sold]
 
 
 def cmd_submit_all():
