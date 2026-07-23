@@ -31,6 +31,27 @@ from shared.domain_fetch import fetch_html
 
 TARGET_SUBURBS = ["robina", "burleigh_waters", "varsity_lakes"]
 DOMAIN_PROFILE_BASE = "https://www.domain.com.au/property-profile"
+
+# Domain's URL slugs spell out street types in full — an abbreviated address
+# ("8 Duxton Dr") 404s / hits a thin fallback page instead of the real one
+# (confirmed 2026-07-23: "-dr-" returned a 1KB stub, "-drive-" returned 74KB
+# of real data for the same property). Kept in sync with the equivalent map
+# in 03_For_Sale_Coverage/enrich_property_timeline.py.
+STREET_ABBREVS = {
+    'crt': 'court', 'ct': 'court',
+    'st': 'street',
+    'tce': 'terrace', 'ter': 'terrace',
+    'dr': 'drive',
+    'ave': 'avenue', 'av': 'avenue',
+    'rd': 'road',
+    'pl': 'place',
+    'cres': 'crescent', 'cr': 'crescent',
+    'cir': 'circuit', 'cct': 'circuit',
+    'blvd': 'boulevard',
+    'pde': 'parade',
+    'hwy': 'highway',
+    'ln': 'lane',
+}
 RATE_LIMIT_DELAY = 6.0  # seconds between Domain requests — 2.0s let per-request failure
                          # rate climb steadily over a run (25%->50% within one suburb,
                          # confirmed 2026-07-23), consistent with Bright Data account-level
@@ -62,6 +83,8 @@ def build_profile_url(address: str) -> str | None:
     slug = re.sub(r"\s+", "-", slug)
     slug = re.sub(r"[^a-z0-9\-]", "", slug)
     slug = re.sub(r"-+", "-", slug).strip("-")
+    parts = [STREET_ABBREVS.get(p, p) for p in slug.split("-")]
+    slug = "-".join(parts)
     return f"{DOMAIN_PROFILE_BASE}/{slug}"
 
 
