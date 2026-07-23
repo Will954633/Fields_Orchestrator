@@ -16,9 +16,37 @@ import os
 import sys
 import json
 import argparse
+import subprocess
 from datetime import datetime, timedelta
 from pymongo import MongoClient
 import anthropic
+
+CLI_BIN = os.environ.get("CLAUDE_BIN", "claude")
+CLI_TIMEOUT_S = 120
+
+
+def _child_env() -> dict:
+    # Force Max billing instead of the pay-as-you-go API — same pattern as
+    # fetch_policy_research.py's _child_env() (2026-07-23), adopted here after
+    # the API key's credit balance ran dry mid-session.
+    env = dict(os.environ)
+    env.pop("ANTHROPIC_API_KEY", None)
+    env.pop("ANTHROPIC_AUTH_TOKEN", None)
+    env.pop("CLAUDECODE", None)
+    env.setdefault("CI", "true")
+    return env
+
+
+def _call_claude_max(system_prompt: str, user_prompt: str) -> str:
+    """Invoke the claude CLI (billed to Max, not API credits) and return the raw text response."""
+    cmd = [CLI_BIN, "-p", user_prompt, "--system-prompt", system_prompt, "--output-format", "json"]
+    proc = subprocess.run(cmd, text=True, capture_output=True, timeout=CLI_TIMEOUT_S, env=_child_env())
+    if proc.returncode != 0:
+        raise RuntimeError(f"claude CLI exited {proc.returncode}: {(proc.stderr or '')[:500]}")
+    data = json.loads(proc.stdout)
+    if data.get("is_error") or data.get("subtype") != "success":
+        raise RuntimeError(f"CLI returned error: {data.get('subtype')}: {str(data.get('result'))[:500]}")
+    return data.get("result", "")
 
 # ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -474,14 +502,20 @@ def generate_summary(client, category_id, suburb_display, data_dict, dry_run=Fal
         print(f"Data keys: {list(data_dict.keys())}")
         return None
 
-    response = client.messages.create(
-        model=MODEL,
-        max_tokens=800,
-        system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": prompt}],
-    )
-
-    text = response.content[0].text.strip()
+    input_tokens = None
+    output_tokens = None
+    if client == "max_cli":
+        text = _call_claude_max(SYSTEM_PROMPT, prompt).strip()
+    else:
+        response = client.messages.create(
+            model=MODEL,
+            max_tokens=800,
+            system=SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = response.content[0].text.strip()
+        input_tokens = response.usage.input_tokens
+        output_tokens = response.usage.output_tokens
 
     # Parse JSON response (handle truncation and code fences)
     try:
@@ -503,9 +537,9 @@ def generate_summary(client, category_id, suburb_display, data_dict, dry_run=Fal
         "summary": result.get("summary", ""),
         "verdict": result.get("verdict", "unknown"),
         "key_signals": result.get("key_signals", []),
-        "model": MODEL,
-        "input_tokens": response.usage.input_tokens,
-        "output_tokens": response.usage.output_tokens,
+        "model": MODEL if client != "max_cli" else f"{MODEL}-via-max-cli",
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
     }
 
 
@@ -517,6 +551,7 @@ def main():
     parser.add_argument("--suburb", type=str, help="Single suburb (e.g. robina)")
     parser.add_argument("--dry-run", action="store_true", help="Print prompts without calling API")
     parser.add_argument("--category", type=str, help="Single category (e.g. sell-now)")
+    parser.add_argument("--use-api", action="store_true", help="Use the pay-as-you-go Anthropic API instead of the Claude Max CLI (default)")
     args = parser.parse_args()
 
     # Connect to MongoDB
@@ -545,15 +580,20 @@ def main():
                 print(f"Last pulse generated {days_ago} days ago (guard: {MONTHLY_GUARD_DAYS} days). Use --force to override.")
                 sys.exit(0)
 
-    # Init Claude client
-    api_key = os.environ.get("ANTHROPIC_SONNET_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key and not args.dry_run:
-        print("ERROR: No Anthropic API key found")
-        sys.exit(1)
-
+    # Init Claude client — Max CLI by default (zero API-credit cost); --use-api
+    # falls back to the pay-as-you-go SDK client (kept for dry-run parity / if
+    # Max is ever unavailable). Switched to Max default 2026-07-23 after the
+    # API key's credit balance ran dry mid-regeneration.
     claude_client = None
     if not args.dry_run:
-        claude_client = anthropic.Anthropic(api_key=api_key)
+        if args.use_api:
+            api_key = os.environ.get("ANTHROPIC_SONNET_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")
+            if not api_key:
+                print("ERROR: No Anthropic API key found")
+                sys.exit(1)
+            claude_client = anthropic.Anthropic(api_key=api_key)
+        else:
+            claude_client = "max_cli"
 
     # Determine suburbs
     suburbs = [args.suburb] if args.suburb else TARGET_SUBURBS
@@ -618,20 +658,24 @@ def main():
                 upsert=True,
             )
 
-            total_input_tokens += result["input_tokens"]
-            total_output_tokens += result["output_tokens"]
+            total_input_tokens += result["input_tokens"] or 0
+            total_output_tokens += result["output_tokens"] or 0
             generated_count += 1
 
-            print(f"    ✅ {result['verdict']} ({result['input_tokens']}+{result['output_tokens']} tokens)")
+            token_note = f"{result['input_tokens']}+{result['output_tokens']} tokens" if result["input_tokens"] is not None else "billed to Claude Max"
+            print(f"    ✅ {result['verdict']} ({token_note})")
             print(f"    {result['summary'][:120]}...")
 
     if not args.dry_run:
-        # Rough cost estimate (Sonnet pricing: $3/M input, $15/M output)
-        cost = (total_input_tokens * 3 + total_output_tokens * 15) / 1_000_000
         print(f"\n{'='*60}")
         print(f"Done. Generated {generated_count} summaries.")
-        print(f"Tokens: {total_input_tokens} input + {total_output_tokens} output")
-        print(f"Estimated cost: ${cost:.3f}")
+        if total_input_tokens or total_output_tokens:
+            # Rough cost estimate (Sonnet pricing: $3/M input, $15/M output) — API-billed calls only
+            cost = (total_input_tokens * 3 + total_output_tokens * 15) / 1_000_000
+            print(f"Tokens: {total_input_tokens} input + {total_output_tokens} output")
+            print(f"Estimated cost: ${cost:.3f}")
+        else:
+            print("All generations billed to Claude Max (no API credit consumed).")
 
 
 if __name__ == "__main__":
