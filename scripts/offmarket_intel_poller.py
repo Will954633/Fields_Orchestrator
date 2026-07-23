@@ -31,20 +31,22 @@ from scripts.property_reports.positioning_object import resolve_positioning_obje
 from scripts.property_reports import scarcity_narrative  # noqa: E402
 from scripts.property_reports import personas_narrative  # noqa: E402
 
-# The mini-site's narrative pipeline uses Opus (higher latency/cost, fine for
-# a one-time build). This poller's positioning queue is a lighter, decoupled
-# tier — cached forever per property once computed, but each NEW property's
-# first computation should still be reasonably fast. Sonnet 5 measured ~11s
-# for this exact prompt/output shape on 2026-07-23 (see fix-history) — good
-# enough for a background, patiently-polled queue, not the fast intel path.
-scarcity_narrative.MODEL = "claude-sonnet-5"
-# personas_narrative is left on its own default (Opus 4.7, MAX_TOKENS=2200) —
-# measured 2026-07-23: Sonnet 5 reliably produced MALFORMED JSON (unterminated
-# strings, not just truncation) on this schema's 3-persona x 7-field
-# complexity, even with MAX_TOKENS raised to 3600. Opus is the proven,
-# already-in-production model for this exact prompt (used on 23 live
-# mini-site reports) — one-time cached-forever cost per property, so
-# reliability here matters more than the marginal cost saving.
+# BOTH resolvers now run on their own Opus default — no model override here.
+# Sonnet 5 was tried for scarcity_narrative (measured ~11s vs Opus, attractive
+# for a queue that computes per new property) but proved unreliable at
+# producing valid JSON: it silently failed all 3 retries on 5 Glenferrie Drive
+# and the Combination card just vanished from that property's deck, which the
+# honesty-gating renders as nothing rather than something broken. Measured
+# 2026-07-23 across cached properties: personas on Opus 2/2 succeeded,
+# narrative on Sonnet 1/2. Same failure mode that already forced
+# personas_narrative to Opus earlier the same day (malformed/unterminated
+# JSON, not truncation — raising MAX_TOKENS didn't help). This queue is
+# decoupled, patiently polled and cached forever per property, so paying Opus
+# latency/cost once buys reliability on content that otherwise disappears
+# without any error surfacing to the reader. (personas_narrative hit the same
+# wall first: Sonnet produced unterminated strings on its 3-persona x 7-field
+# schema even at MAX_TOKENS=3600, so it was moved to Opus — the model already
+# proven on this exact prompt across 23 live mini-site reports.)
 
 # Gold_Coast suburb collections a slug might live in (mirrors db.server TARGET_SUBURBS).
 TARGET_SUBURBS = [
@@ -66,7 +68,7 @@ FRESH_DAYS = 14
 # shared constant between Python and JS in this codebase, so this is a
 # manual-discipline contract, not an enforced one.
 INTEL_SCHEMA_VERSION = 1
-POSITIONING_SCHEMA_VERSION = 3  # bumped 2026-07-23: personas array (2-3 brief personas) + frame-coordinated persona 1
+POSITIONING_SCHEMA_VERSION = 4  # bumped 2026-07-23: scarcity_narrative moved Sonnet 5 -> Opus (JSON reliability)
 
 
 def _now():
