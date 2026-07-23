@@ -298,7 +298,17 @@ def cmd_submit_new():
     else:
         print("No previous run found. Submitting all URLs (use submit-all for first run).")
         client.close()
-        return cmd_submit_all()
+        cmd_submit_all()
+        # Without this, last_run never persists (indexing-last-run.json is never
+        # created), so every nightly run re-hits this branch forever, re-submitting
+        # the ENTIRE property catalog (1700+ URLs) and burning the 200/day quota on
+        # mostly-already-indexed pages instead of genuinely new listings. Confirmed
+        # via logs/google-indexing.log: this branch fired on every run observed,
+        # indexing-last-run.json never existed on disk. See fix-history 2026-07-23.
+        os.makedirs(os.path.dirname(state_file), exist_ok=True)
+        with open(state_file, "w") as f:
+            json.dump({"last_run": datetime.now(timezone.utc).isoformat()}, f)
+        return
 
     for suburb in TARGET_SUBURBS:
         try:
