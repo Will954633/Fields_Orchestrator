@@ -19,6 +19,17 @@ Time budget / elegant finish:
     if she hasn't confirmed delivery in her status file, delivers a fallback Telegram from
     whatever she wrote to her working report file.
 
+Usage budget (added 2026-07-23, Will's request): the Claude Max subscription's 5-hour rolling
+and 7-day (weekly) usage limits are shared across ALL usage on this account — this headless run
+AND any interactive Claude Code session. Read from ~/.claude.json's cachedUsageUtilization (the
+same undocumented cache /usage displays from, refreshed periodically by the CLI itself — not a
+stable public API). Belt-and-braces, same pattern as the time budget: (1) a runner-level
+pre-flight gate SKIPS the run entirely before spending anything if already over threshold
+(80% weekly / 70% five-hour, both env-overridable), and (2) the agent is also told to
+self-check periodically during the run and finish elegantly if she crosses the threshold
+mid-run. Generous by design — "if she has ample credits she should keep working through a
+full session," this is a guard against running into the wall, not an early cutoff.
+
 Usage:
   python3 scripts/samantha/daily_run.py            # full nightly run
   python3 scripts/samantha/daily_run.py --smoke    # cheap plumbing test (~2 min, low turns)
@@ -49,6 +60,40 @@ LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 RUN_MINUTES = int(os.environ.get("SAMANTHA_RUN_MINUTES", "30"))
 RESERVE_MINUTES = int(os.environ.get("SAMANTHA_RESERVE_MINUTES", "5"))  # finish-elegantly buffer
+
+# Claude Max subscription usage budget (added 2026-07-23, Will's request) — she must stop
+# gracefully rather than burn into a hard rate-limit wall. Thresholds intentionally generous
+# ("if she has ample credits she should keep working through a full session") — this is a
+# guard against running INTO the wall, not a conservative early cutoff.
+USAGE_WEEKLY_STOP_PCT = int(os.environ.get("SAMANTHA_USAGE_WEEKLY_STOP_PCT", "80"))
+USAGE_FIVE_HOUR_STOP_PCT = int(os.environ.get("SAMANTHA_USAGE_FIVE_HOUR_STOP_PCT", "70"))
+CLAUDE_JSON_PATH = Path(os.environ.get("HOME", "/home/projects")) / ".claude.json"
+
+
+def _usage_status() -> dict:
+    """Read the CLI's own cached Max-subscription usage utilization (5-hour rolling session
+    + 7-day weekly), the same numbers /usage shows interactively. This is UNDOCUMENTED
+    internal CLI state (~/.claude.json's cachedUsageUtilization), refreshed periodically by
+    the Claude Code client itself — not a stable public API, and not guaranteed real-time
+    (found empirically ~5min old in practice; could be staler if no CLI activity recently).
+    Fails soft: returns ok=False + a reason string rather than raising, so a missing/changed
+    file structure never blocks a run — usage-awareness is a nice-to-have, not a hard
+    dependency the way the wall-clock kill is.
+    """
+    try:
+        data = json.loads(CLAUDE_JSON_PATH.read_text())
+        u = data["cachedUsageUtilization"]["utilization"]
+        five_hour = u["five_hour"]["utilization"]
+        seven_day = u["seven_day"]["utilization"]
+        fetched_age_min = (time.time() * 1000 - data["cachedUsageUtilization"]["fetchedAtMs"]) / 60000
+        return {
+            "ok": True, "five_hour_pct": five_hour, "seven_day_pct": seven_day,
+            "cache_age_min": round(fetched_age_min, 1),
+            "over_budget": (seven_day >= USAGE_WEEKLY_STOP_PCT
+                             or five_hour >= USAGE_FIVE_HOUR_STOP_PCT),
+        }
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "reason": f"{type(e).__name__}: {e}"}
 
 
 def _now() -> datetime:
@@ -95,6 +140,19 @@ FINISH ELEGANTLY — time-budget discipline:
 - Reserve the final {RESERVE_MINUTES} minutes (from the soft deadline) to finalise: write your
   report file, create the Google Doc, send the Telegram, and write your status file.
 - Better a complete, honest, slightly-shorter report delivered on time than a rich one that never ships.
+
+FINISH ELEGANTLY — Claude usage budget (checked once already before this run started; also self-check
+periodically, roughly every 30-45 min of active work, the same cadence as the wall-clock check):
+```
+python3 -c 'import json; u=json.load(open("/home/projects/.claude.json"))["cachedUsageUtilization"]["utilization"]; print("5h=" + str(u["five_hour"]["utilization"]) + "% 7d=" + str(u["seven_day"]["utilization"]) + "%")'
+```
+- If 5-hour utilization reaches {USAGE_FIVE_HOUR_STOP_PCT}% OR 7-day (weekly) reaches {USAGE_WEEKLY_STOP_PCT}%,
+  treat it exactly like hitting the soft wall-clock deadline: stop new analysis, finalise (report, Doc,
+  Telegram, status file) THIS checkpoint, don't start another expensive step.
+- If usage is comfortably under both thresholds, this is NOT a reason to wrap up early — keep working
+  the full session per the "use your FULL time budget" rule below. Ample headroom means keep going.
+- This file may occasionally be missing or malformed — if the check itself fails, don't let that block
+  you; note it and continue on the wall-clock budget alone.
 
 === DELIVERY PROTOCOL — checkpoint, THEN act, THEN finalise (see daily-tasks) ===
 PHASE A (checkpoint, ~15 min in — guarantees a delivery exists):
@@ -331,6 +389,26 @@ def main() -> int:
     print(f"[runner] Samantha {'SMOKE' if args.smoke else 'nightly'} run start "
           f"{start.isoformat()} deadline {deadline.strftime('%H:%M')} AEST "
           f"({run_minutes} min)", flush=True)
+
+    # Pre-flight usage gate — belt-and-braces, same philosophy as the wall-clock hard-kill
+    # below: don't rely on the agent to self-regulate alone. Skip the run BEFORE spending
+    # anything if we're already over budget (the account's usage pool is shared with the
+    # interactive Claude Code channel, so a heavy day there can push this over threshold
+    # before tonight's run ever starts).
+    usage = _usage_status()
+    if usage.get("ok") and usage.get("over_budget") and not args.smoke:
+        reason = (f"5-hour={usage['five_hour_pct']}% (stop at {USAGE_FIVE_HOUR_STOP_PCT}%), "
+                  f"7-day={usage['seven_day_pct']}% (stop at {USAGE_WEEKLY_STOP_PCT}%)")
+        print(f"[runner] SKIPPING run — usage over budget: {reason}", flush=True)
+        _telegram(f"⏭️ Samantha skipped tonight's run — Claude Max usage already over budget "
+                  f"({reason}). No analysis lost, just deferred to when there's headroom.")
+        return 0
+    elif usage.get("ok"):
+        print(f"[runner] usage OK: 5-hour={usage['five_hour_pct']}% "
+              f"7-day={usage['seven_day_pct']}% (cache {usage['cache_age_min']}min old)", flush=True)
+    else:
+        print(f"[runner] usage check unavailable ({usage.get('reason')}) — proceeding anyway, "
+              f"this is a soft check not a hard dependency", flush=True)
 
     prompt = _build_prompt(date_str, deadline, report_path, status_path, args.smoke)
     timeout_s = run_minutes * 60
