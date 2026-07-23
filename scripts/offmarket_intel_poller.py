@@ -66,7 +66,7 @@ FRESH_DAYS = 14
 # shared constant between Python and JS in this codebase, so this is a
 # manual-discipline contract, not an enforced one.
 INTEL_SCHEMA_VERSION = 1
-POSITIONING_SCHEMA_VERSION = 2  # bumped 2026-07-23: personas_narrative.py's realestate.com.au portal-acknowledgment fix
+POSITIONING_SCHEMA_VERSION = 3  # bumped 2026-07-23: personas array (2-3 brief personas) + frame-coordinated persona 1
 
 
 def _now():
@@ -266,7 +266,7 @@ def compute_positioning(gc, suburb, slug):
     # Honest degrade: no usable feature stack, no story to tell — matches
     # resolve_positioning_object's/resolve_scarcity_narrative's own gates.
     if not scarcity or not scarcity.get("notable_features"):
-        return {"positioning": None, "narrative": None, "feature_combination": None, "persona": None}, None
+        return {"positioning": None, "narrative": None, "feature_combination": None, "personas": []}, None
 
     gc_coords = subject.get("geocoded_coordinates") or {}
     lat = subject.get("LATITUDE", subject.get("latitude", gc_coords.get("latitude")))
@@ -319,23 +319,34 @@ def compute_positioning(gc, suburb, slug):
     except Exception:
         traceback.print_exc()
 
-    # Primary buyer persona — reuses the mini-site's exact, battle-tested
+    # Buyer personas — reuses the mini-site's exact, battle-tested
     # personas_narrative prompt (3-persona output, forbidden-channel guards,
-    # honest-hesitation requirement) rather than writing a new one; the off-
-    # market card only shows persona[0], but generating 3 costs nothing extra
-    # (one call either way) and keeps this in lockstep with the mini-site's
-    # proven quality bar. Sonnet 5 (see MODEL override above), same decoupled/
-    # cached-forever queue as narrative above.
-    persona = None
+    # honest-hesitation requirement) rather than writing a new one. ALL 3 are
+    # now kept (2026-07-23, Will's feedback): showing only persona[0] in depth
+    # bet everything on the model's single top pick — if it read as a poor
+    # fit (his example: "downsizers" for what plausibly reads as a starter-
+    # home profile), the whole section lost credibility. 2-3 brief personas
+    # hedge that bet. Also passes the ALREADY-COMPUTED positioning frame as a
+    # constraint so persona 1 can't contradict it (same feedback: a
+    # "downsizer" persona alongside a "walk to school" positioning frame on
+    # the same property read as two cards arguing different stories). Sonnet
+    # 5 (see MODEL override above), same decoupled/cached-forever queue as
+    # narrative above.
+    personas: list = []
     try:
         valuation_range = {"low": price_range["low"], "high": price_range["high"]} if price_range else None
+        strategic_frame = None
+        if positioning:
+            thesis = ((positioning.get("render") or {}).get("thesis")) or {}
+            frame_bits = [thesis.get("frameLine"), thesis.get("leadLine")]
+            strategic_frame = " ".join(b for b in frame_bits if b) or None
         persona_result = personas_narrative.resolve_personas_narrative(
             address, suburb_display, fb, scarcity.get("notable_features") or [],
             scarcity.get("active_matching_full_stack") or 0, scarcity.get("active_listings_total") or 0,
-            scarcity.get("cohort_premiums") or [], walk_pois, valuation_range,
+            scarcity.get("cohort_premiums") or [], walk_pois, valuation_range, strategic_frame,
         )
         if persona_result and not persona_result.get("error") and persona_result.get("personas"):
-            persona = persona_result["personas"][0]
+            personas = persona_result["personas"]
     except Exception:
         traceback.print_exc()
 
@@ -345,7 +356,7 @@ def compute_positioning(gc, suburb, slug):
         "positioning": positioning,
         "narrative": narrative,
         "feature_combination": feature_combination,
-        "persona": persona,
+        "personas": personas,
     }, None
 
 
