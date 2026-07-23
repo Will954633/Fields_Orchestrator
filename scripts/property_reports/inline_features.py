@@ -260,6 +260,16 @@ def derive_features_basic(doc: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
     number_of_stories = overview.get("number_of_stories") if overview else None
     if not number_of_stories:
+        # Photo-analysis structural section (GPT-4 vision). The editorial /
+        # valuation vision pipeline writes stories to pvd.structural, NOT to
+        # pvd.property_overview — so for most listed properties this is where it
+        # actually lives. Reading only property_overview stranded stories on
+        # ~9,600 core-suburb docs (measured 2026-07-23), which silently
+        # suppressed the single_level differentiator and, for otherwise-average
+        # homes, left the scarcity/positioning cards empty (54 Heights Drive).
+        structural = pvd.get("structural") if isinstance(pvd.get("structural"), dict) else {}
+        number_of_stories = structural.get("number_of_stories")
+    if not number_of_stories:
         # Fallback: floor-plan analysis levels
         fpa_levels = fpa.get("levels") or {}
         if isinstance(fpa_levels, dict):

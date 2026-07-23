@@ -466,6 +466,50 @@ def scrape_one(
     if addr:
         set_doc["address"] = addr  # keeps website queries consistent
 
+    # Promote the physical attributes to the CANONICAL top-level fields the
+    # feature engine (inline_features.derive_features_basic) and the website
+    # off-market loader actually read — land, internal area, parking, type.
+    # Historically these only lived inside scraped_data_v2, so any property
+    # whose v1 scrape missed land but whose v2 scrape caught it had null
+    # top-level fields → the off-market deck's scarcity/positioning cards never
+    # generated (54 Heights Drive, 2026-07-23; ~3,000 land-stranded docs
+    # backfilled by scripts/promote_scraped_v2_attributes.py). $setOnInsert-style
+    # "only when missing" is enforced at the doc level below via $set on a
+    # filtered field set so we never clobber curated/enrichment values.
+    def _pos_num(v):
+        try:
+            f = float(v)
+            return f if f > 0 else None
+        except (TypeError, ValueError):
+            return None
+
+    existing = db[suburb].find_one(
+        {"_id": ObjectId(doc_id_str)},
+        {"lot_size_sqm": 1, "land_size_sqm": 1, "floor_area_sqm": 1,
+         "enriched_data.floor_area_sqm": 1, "car_spaces": 1, "property_type": 1},
+    ) or {}
+
+    def _missing(field):
+        v = existing.get(field)
+        return v is None or v == "" or v == 0
+
+    land = _pos_num(parsed.get("land_area_sqm"))
+    if land and 50 <= land <= 20000 and _missing("lot_size_sqm") and _missing("land_size_sqm"):
+        set_doc["lot_size_sqm"] = land
+
+    enr = existing.get("enriched_data") if isinstance(existing.get("enriched_data"), dict) else {}
+    fa = _pos_num(parsed.get("internal_area_sqm"))
+    if fa and 20 <= fa <= 2000 and _missing("floor_area_sqm") and not _pos_num(enr.get("floor_area_sqm")):
+        set_doc["floor_area_sqm"] = fa
+
+    cs = _pos_num(parsed.get("parking_spaces"))
+    if cs and _missing("car_spaces"):
+        set_doc["car_spaces"] = int(cs)
+
+    pt = parsed.get("property_type")
+    if isinstance(pt, str) and pt.strip() and _missing("property_type"):
+        set_doc["property_type"] = pt.strip()
+
     if dry_run:
         log.info("DRY %s — would update %s", short, list(set_doc.keys())[:6])
     else:
