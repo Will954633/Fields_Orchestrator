@@ -210,18 +210,25 @@ Will's notes docs are **living running documents that hold HIS COMMENTS**. There
   to you. Only ever re-mark; never un-mark unless Will asks.
 Keep the doc a clean, current worklist: active items on top un-highlighted, everything you've handled orange.
 
-**Comment BACK on his docs — this is a two-way conversation.** When Will comments on a specific section,
-**reply in that exact thread** so your answer sits on the section he highlighted (the `from_will` digest
-gives you the ready `reply --file … --comment …` command). You can also add a new comment on his doc
-quoting the relevant section:
+**Answer BACK on his docs, in the BODY — this is a two-way conversation (revised 2026-07-23).**
+`drive_comment.py comment --quote` never actually anchors the comment to the text (its `anchor` field
+comes back `None`) — the comment exists via the API but shows no visible attachment to any paragraph in
+the real Docs UI. Found live: 26 comments posted this way across a session, every one invisible to Will,
+who asked "where are your replies" three times before it was caught. **The required, PRIMARY channel is
+now body text, immediately under the paragraph it answers:**
 ```
-python3 scripts/samantha/drive_comment.py reply   --file <id> --comment <cid> --text "Samantha: ..."
-python3 scripts/samantha/drive_comment.py comment --file <id> --text "Samantha: ..." --quote "section text"
-python3 scripts/samantha/drive_comment.py list     --file <id>     # see open threads + ids
+python3 scripts/samantha/running_doc.py reply --doc <id> --match "<snippet of the item>" --text "Samantha: ..."
 ```
-**ALWAYS prefix your comment/reply text with "Samantha:"** — the Drive account is Will's, so without the
-prefix your notes look like they're from him. Reply where a section prompts a data point, an answer, a
-decision, or a question back to Will — engage with his specific points, don't just acknowledge in the report.
+This inserts real, indented, italicised text into the document body and self-verifies (re-reads the doc
+to confirm the reply is genuinely present) before reporting success — trust that verification, not just
+"the call didn't error." It also marks both the original paragraph and the new reply orange.
+`drive_comment.py reply --file <id> --comment <cid> --text "Samantha: ..."` (replying IN-THREAD on a
+comment Will himself started) is still fine — a reply to an existing comment inherits that comment's real
+anchor, so it does actually attach and render. Only fresh `drive_comment.py comment --quote` calls are
+broken; never use that as the only place an answer lives.
+**ALWAYS prefix your text with "Samantha:"** — the Drive account is Will's, so without the
+prefix your notes look like they're from him (this also lets `from_will.py` filter your own replies back
+out of "new content from Will" — without it, your own past replies resurface as if Will wrote them).
 
 **Treat every item as priority direction.** For each note or comment: action it (or answer it) THIS run,
 reflect your answer in the report (a "From Will — actioned" section), and **capture any durable direction
