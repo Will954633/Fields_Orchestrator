@@ -82,6 +82,15 @@ All public-facing content (articles, Facebook posts, chart narratives, market su
 - **Forbidden words:** "stunning", "nestled", "boasting", "rare opportunity", "robust market"
 - **Number format:** `$1,250,000` not "$1.25m", suburbs always capitalised
 
+### 6. Market Pulse / Market Metrics Content Verification
+
+After writing or editing ANY `system_monitor.market_pulse` content (summaries, `data_snapshot`, or `narrative.pillars`):
+1. Run `python3 scripts/verify_market_metrics_live.py` (or `--suburb X --category Y` for a targeted re-check) — fetches the actual live rendered page via headless browser (client-fetched data included, not just SSR) and saves the full visible text per suburb/category.
+2. **Read every saved file.** Check for internal consistency (the same stat — e.g. absorption rate, median price — shown differently in different sections of the SAME page) and staleness (dates/quarters that don't match the latest data). Do not just check the API response or the fields you personally wrote — a `market_pulse` document has multiple content layers (`summary`, `data_snapshot`, `narrative.pillars`) that can each go stale independently since a partial `$set` write only touches the fields it names.
+3. Fix anything found, re-run the verification, confirm clean before considering the task done.
+
+**Why this is mandatory, not optional:** on 2026-07-23, a full Market Pulse rewrite fixed the narrative text and confirmed it live via the API — but a THIRD content field (`narrative.pillars`, holding separate long-form AI-written paragraphs) was never touched, stayed stale since 2026-07-03, and produced a live page showing three different absorption-rate figures contradicting each other and citing quarters a year out of date. It was only caught because the user manually copy-pasted the entire rendered page back into the session. This step exists so that doesn't have to happen manually again.
+
 ---
 
 ## The Business
