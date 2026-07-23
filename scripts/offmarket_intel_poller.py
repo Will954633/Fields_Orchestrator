@@ -24,7 +24,17 @@ from shared.db import get_client  # noqa: E402
 from scripts.property_reports.inline_features import derive_features_basic  # noqa: E402
 from scripts.property_reports.scarcity_features import resolve_scarcity_features  # noqa: E402
 from scripts.property_reports.competitor_matcher import resolve_competitor_map  # noqa: E402
-from scripts.property_reports.nearby_pois import resolve_nearby_pois  # noqa: E402
+from scripts.property_reports.nearby_pois import resolve_nearby_pois, to_walking_poi_list  # noqa: E402
+from scripts.property_reports.positioning_object import resolve_positioning_object  # noqa: E402
+from scripts.property_reports import scarcity_narrative  # noqa: E402
+
+# The mini-site's narrative pipeline uses Opus (higher latency/cost, fine for
+# a one-time build). This poller's positioning queue is a lighter, decoupled
+# tier — cached forever per property once computed, but each NEW property's
+# first computation should still be reasonably fast. Sonnet 5 measured ~11s
+# for this exact prompt/output shape on 2026-07-23 (see fix-history) — good
+# enough for a background, patiently-polled queue, not the fast intel path.
+scarcity_narrative.MODEL = "claude-sonnet-5"
 
 # Gold_Coast suburb collections a slug might live in (mirrors db.server TARGET_SUBURBS).
 TARGET_SUBURBS = [
@@ -137,6 +147,105 @@ def compute_intel(gc, suburb, slug):
     return result, None
 
 
+def compute_positioning(gc, suburb, slug):
+    """The deck's 'Combination' / 'Right Buyer' / 'How we'd position it' cards.
+    Decoupled from compute_intel() — includes a real Sonnet 5 generation
+    (~11s), so it runs on its own slower, patiently-polled queue and is
+    cached forever once computed (a home's feature combination doesn't
+    change; the LLM call has real per-property cost, so it should never
+    silently regenerate on a later visit).
+    """
+    subject, matched = _find_subject(gc, suburb, slug)
+    if not subject:
+        return None, "subject_not_found"
+
+    try:
+        scarcity = resolve_scarcity_features(subject, gc)
+    except Exception:
+        traceback.print_exc()
+        scarcity = None
+
+    # Honest degrade: no usable feature stack, no story to tell — matches
+    # resolve_positioning_object's/resolve_scarcity_narrative's own gates.
+    if not scarcity or not scarcity.get("notable_features"):
+        return {"positioning": None, "narrative": None, "feature_combination": None}, None
+
+    gc_coords = subject.get("geocoded_coordinates") or {}
+    lat = subject.get("LATITUDE", subject.get("latitude", gc_coords.get("latitude")))
+    lon = subject.get("LONGITUDE", subject.get("longitude", gc_coords.get("longitude")))
+    try:
+        proximity = resolve_nearby_pois(lat, lon, gc)
+        # Real routed walking distance for the handful of walkable candidates
+        # only — never label a straight-line figure "a walk to X" (see
+        # OFFMARKET-RARITY-POI-SOURCE fix-history). Cheap here: a few targeted
+        # Mapbox calls, once per property, on the decoupled/patient queue.
+        walk_pois = to_walking_poi_list(proximity, lat, lon)
+    except Exception:
+        traceback.print_exc()
+        proximity, walk_pois = {}, []
+
+    # Patch beach distance into the features snapshot from our proximity data
+    # when the valuation engine's own figure is missing (~99.8% of docs) —
+    # otherwise positioning_object's beach-related flags are silently blind.
+    fb = dict(scarcity.get("features_basic_snapshot") or {})
+    beach_km = (proximity.get("beach") or {}).get("distance_km")
+    if not fb.get("beach_distance_km") and beach_km is not None:
+        fb["beach_distance_km"] = beach_km
+    scarcity_patched = dict(scarcity)
+    scarcity_patched["features_basic_snapshot"] = fb
+
+    address = subject.get("address") or subject.get("complete_address") or ""
+    suburb_display = (matched or suburb or "").replace("_", " ").title()
+
+    try:
+        positioning = resolve_positioning_object(
+            subject, gc, suburb_display, scarcity=scarcity_patched, pois=walk_pois,
+        )
+    except Exception:
+        traceback.print_exc()
+        positioning = None
+
+    narrative = None
+    try:
+        narrative = scarcity_narrative.resolve_scarcity_narrative(scarcity, walk_pois, suburb_display, address)
+        if narrative and narrative.get("error"):
+            narrative = None  # permanent generation failure — degrade quietly, don't cache an error string as content
+    except Exception:
+        traceback.print_exc()
+
+    feature_combination = _build_feature_combination(scarcity, walk_pois)
+
+    return {
+        "positioning": positioning,
+        "narrative": narrative,
+        "feature_combination": feature_combination,
+    }, None
+
+
+def _build_feature_combination(scarcity, walk_pois):
+    """Same join used on the mini-site's 'Right Buyer' tab hero
+    (YourHomePage.tsx) — the curated scarcity feature phrases, plus the
+    nearest walkable school if no phrase already mentions a walk, Oxford-comma
+    joined. Kept server-side (not reimplemented in TS) so both surfaces build
+    the identical string from the identical inputs."""
+    phrases = [
+        (f.get("phrase") or "").strip()
+        for f in (scarcity.get("notable_features") or [])
+        if (f.get("phrase") or "").strip()
+    ]
+    mentions_walk = any("walk" in p.lower() for p in phrases)
+    if not mentions_walk:
+        schools = [p for p in (walk_pois or []) if p.get("category") == "school"]
+        if schools:
+            nearest = min(schools, key=lambda p: p["walkMetres"])
+            phrases.append(f"a {nearest['walkMetres']}-metre walk to {nearest['name']}")
+    if not phrases:
+        return None
+    if len(phrases) == 1:
+        return phrases[0]
+    return ", ".join(phrases[:-1]) + " and " + phrases[-1]
+
+
 def run_once(client):
     sysdb = client["system_monitor"]
     gc = client["Gold_Coast"]
@@ -165,31 +274,68 @@ def run_once(client):
     return len(pending)
 
 
+def run_once_positioning(client):
+    """Same shape as run_once(), but for the slower/decoupled positioning
+    queue. limit=1 — each request can take ~15s (Sonnet call included), and
+    volume on this dormant-arm feature is near-zero, so there's no need to
+    batch; keeping it to one at a time stops a slow positioning computation
+    from starving the fast intel queue's 3s cadence for long."""
+    sysdb = client["system_monitor"]
+    gc = client["Gold_Coast"]
+    col = sysdb["offmarket_positioning"]
+    pending = list(col.find({"status": "pending"}).sort("requested_at", 1).limit(1))
+    for doc in pending:
+        slug = doc.get("slug") or doc.get("_id")
+        suburb = doc.get("suburb") or ""
+        try:
+            result, err = compute_positioning(gc, suburb, slug)
+            if err:
+                col.update_one({"_id": doc["_id"]},
+                               {"$set": {"status": "error", "error": err, "computed_at": _now()}})
+                print(f"[positioning] {slug}: ERROR {err}")
+            else:
+                col.update_one({"_id": doc["_id"]},
+                               {"$set": {"status": "done", "result": result, "computed_at": _now()},
+                                "$unset": {"error": ""}})
+                has_narrative = bool(result.get("narrative"))
+                has_positioning = bool(result.get("positioning"))
+                print(f"[positioning] {slug}: narrative={has_narrative} positioning={has_positioning}")
+        except Exception as e:
+            traceback.print_exc()
+            col.update_one({"_id": doc["_id"]},
+                           {"$set": {"status": "error", "error": str(e)[:300], "computed_at": _now()}})
+    return len(pending)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--once", action="store_true", help="single pass then exit")
     ap.add_argument("--interval", type=int, default=POLL_SECONDS)
     ap.add_argument("--slug", help="compute a single slug ad-hoc (test) and print")
     ap.add_argument("--suburb", default="", help="suburb hint for --slug")
+    ap.add_argument("--positioning", action="store_true", help="with --slug, compute positioning instead of intel")
     args = ap.parse_args()
 
     client = get_client()
 
     if args.slug:
-        result, err = compute_intel(client["Gold_Coast"], args.suburb, args.slug)
+        fn = compute_positioning if args.positioning else compute_intel
+        result, err = fn(client["Gold_Coast"], args.suburb, args.slug)
         print("ERR:", err) if err else __import__("json").dump(result, sys.stdout, indent=2, default=str)
         print()
         return
 
     if args.once:
         n = run_once(client)
-        print(f"[intel] processed {n} pending")
+        n2 = run_once_positioning(client)
+        print(f"[intel] processed {n} pending, [positioning] processed {n2} pending")
         return
 
     print(f"[intel] poller started (interval={args.interval}s)")
     while True:
         try:
             run_once(client)
+            run_once_positioning(client)
         except Exception:
             traceback.print_exc()
         time.sleep(args.interval)
