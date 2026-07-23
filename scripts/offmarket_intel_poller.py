@@ -66,7 +66,7 @@ FRESH_DAYS = 14
 # shared constant between Python and JS in this codebase, so this is a
 # manual-discipline contract, not an enforced one.
 INTEL_SCHEMA_VERSION = 1
-POSITIONING_SCHEMA_VERSION = 1
+POSITIONING_SCHEMA_VERSION = 2  # bumped 2026-07-23: personas_narrative.py's realestate.com.au portal-acknowledgment fix
 
 
 def _now():
