@@ -60,6 +60,25 @@ def send_message(text: str, chat_id: str = None, parse_mode: str = "Markdown"):
 def market_pulse_reminder():
     """Send the monthly market pulse reminder."""
     month = datetime.now().strftime("%B %Y")
+
+    policy_line = "⚠️ No cached policy research brief found — ask Claude to research it first."
+    try:
+        import os as _os
+        from pymongo import MongoClient as _MC
+        conn = _os.environ.get("COSMOS_CONNECTION_STRING")
+        if conn:
+            _client = _MC(conn)
+            _doc = _client["system_monitor"]["policy_research_briefs"].find_one(sort=[("generated_at", -1)])
+            _client.close()
+            if _doc:
+                age_days = (datetime.now(_doc["generated_at"].tzinfo) - _doc["generated_at"]).days
+                policy_line = (
+                    f"✅ Policy research brief ready ({_doc.get('month_label', '?')}, {age_days}d old) — "
+                    f"`python3 scripts/fetch_policy_research.py --show-latest`"
+                )
+    except Exception:
+        pass  # best-effort — never let this block the core reminder
+
     text = (
         f"📊 *Market Metrics Update — {month}*\n\n"
         f"Time to update the market metrics summaries for this month.\n\n"
@@ -67,6 +86,7 @@ def market_pulse_reminder():
         f"`python3 scripts/manual_market_pulse.py --show-data`\n\n"
         f"This will show you all the current data for each category. "
         f"Then we'll write the summaries together.\n\n"
+        f"{policy_line}\n\n"
         f"⏰ If not done by the 3rd, the AI will auto-generate them."
     )
     send_message(text)
