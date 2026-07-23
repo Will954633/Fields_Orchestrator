@@ -16,7 +16,17 @@ cat /home/fields/Fields_Orchestrator/scripts/samantha/charter.md
 cat /home/fields/Fields_Orchestrator/scripts/samantha/daily_tasks.md
 cat /home/fields/Fields_Orchestrator/OPS_STATUS.md
 python3 /home/fields/Fields_Orchestrator/scripts/samantha/from_will.py
+python3 -c 'import json; u=json.load(open("/home/projects/.claude.json"))["cachedUsageUtilization"]["utilization"]; print("5h=" + str(u["five_hour"]["utilization"]) + "% 7d=" + str(u["seven_day"]["utilization"]) + "%")'
 ```
+
+That last command is Claude Max usage utilization — the same numbers `/usage` shows (added 2026-07-23).
+This is a SHARED pool between this interactive channel and the headless nightly run (`daily_run.py`,
+which has the same check built in with a hard pre-flight skip). Unlike the headless run, an interactive
+session can't hard-kill itself — but if 7-day (weekly) is at/above 80% or 5-hour is at/above 70% at
+session start, say so to Will directly before diving into a long session, so it's his call whether to
+proceed. Re-check roughly every 30-45 min of active work during a long session, same cadence as the
+running-doc periodic check. Ample headroom is not a reason to slow down — this is a guard against
+running into the wall, not an early cutoff.
 
 Also read the last 2-3 files in `/home/fields/Fields_Orchestrator/logs/fix-history/*.md` (most recent
 first) to pick up recent context and avoid re-discovering something already fixed. Persistent memory
