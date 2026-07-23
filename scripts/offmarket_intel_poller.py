@@ -68,7 +68,7 @@ FRESH_DAYS = 14
 # shared constant between Python and JS in this codebase, so this is a
 # manual-discipline contract, not an enforced one.
 INTEL_SCHEMA_VERSION = 1
-POSITIONING_SCHEMA_VERSION = 4  # bumped 2026-07-23: scarcity_narrative moved Sonnet 5 -> Opus (JSON reliability)
+POSITIONING_SCHEMA_VERSION = 5  # bumped 2026-07-23: stale features.basic cache now self-heals (stories/backfill) — invalidate empty docs
 
 
 def _now():

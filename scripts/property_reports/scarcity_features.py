@@ -247,9 +247,27 @@ def _features_from_subject(subject_doc: Dict[str, Any]) -> Optional[Dict[str, An
     sp = val.get("subject_property") or {}
     features = sp.get("features") or {}
     basic = features.get("basic")
-    if isinstance(basic, dict) and basic:
-        return basic
+
     from scripts.property_reports.inline_features import derive_features_basic
+
+    if isinstance(basic, dict) and basic:
+        # The cached basic block can predate a data backfill or a resolver fix
+        # and carry None where a value now exists — e.g. number_of_stories was
+        # historically read from the wrong pvd path and cached as None, which
+        # permanently suppressed the single_level differentiator and left
+        # otherwise-average houses with zero notable features (54 Heights /
+        # 16 Cheltenham Drive Robina, 2026-07-23). Rather than trust a possibly
+        # stale cache, backfill its gaps from a fresh inline derivation: the
+        # cache still WINS wherever it holds a real value (its measured floor
+        # areas etc. are richer), fresh only fills the holes. derive is cheap
+        # (pure doc reads, no DB), so this is safe on the hot path.
+        fresh = derive_features_basic(subject_doc) or {}
+        if fresh:
+            merged = dict(fresh)
+            merged.update({k: v for k, v in basic.items() if v not in (None, "", 0)})
+            return merged
+        return basic
+
     return derive_features_basic(subject_doc)
 
 
