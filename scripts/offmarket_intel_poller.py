@@ -29,6 +29,7 @@ from scripts.property_reports.competitor_matcher import resolve_competitor_map  
 from scripts.property_reports.nearby_pois import resolve_nearby_pois, to_walking_poi_list  # noqa: E402
 from scripts.property_reports.positioning_object import resolve_positioning_object  # noqa: E402
 from scripts.property_reports import scarcity_narrative  # noqa: E402
+from scripts.property_reports import personas_narrative  # noqa: E402
 
 # The mini-site's narrative pipeline uses Opus (higher latency/cost, fine for
 # a one-time build). This poller's positioning queue is a lighter, decoupled
@@ -37,6 +38,13 @@ from scripts.property_reports import scarcity_narrative  # noqa: E402
 # for this exact prompt/output shape on 2026-07-23 (see fix-history) — good
 # enough for a background, patiently-polled queue, not the fast intel path.
 scarcity_narrative.MODEL = "claude-sonnet-5"
+# personas_narrative is left on its own default (Opus 4.7, MAX_TOKENS=2200) —
+# measured 2026-07-23: Sonnet 5 reliably produced MALFORMED JSON (unterminated
+# strings, not just truncation) on this schema's 3-persona x 7-field
+# complexity, even with MAX_TOKENS raised to 3600. Opus is the proven,
+# already-in-production model for this exact prompt (used on 23 live
+# mini-site reports) — one-time cached-forever cost per property, so
+# reliability here matters more than the marginal cost saving.
 
 # Gold_Coast suburb collections a slug might live in (mirrors db.server TARGET_SUBURBS).
 TARGET_SUBURBS = [
@@ -172,15 +180,16 @@ def _haversine_km_local(lat1, lon1, lat2, lon2):
     return r * 2 * math.asin(math.sqrt(a))
 
 
-def estimate_price_anchor(gc, suburb_key, lat, lon, bedrooms, radius_km=2.5, limit=6):
-    """Coarse comps-based price estimate — mirrors the off-market deck's own
+def estimate_price_range(gc, suburb_key, lat, lon, bedrooms, radius_km=2.5, limit=6):
+    """Coarse comps-based price range — mirrors the off-market deck's own
     'wealth reveal' card (getNearbySoldComps + a percentile range, in
-    db.server.ts) so the value_liquidity_play frame's affordable/not read
-    agrees with what the same visitor already saw on an earlier card. Off-
-    market docs almost never carry a cached valuation_data range (that's a
-    client-side calc for this specific deck), so this fills that gap for the
-    positioning path only — not a valuation, not displayed as one, just an
-    anchor for the suburb price-tier comparison."""
+    db.server.ts) so the positioning path's affordable/not read agrees with
+    what the same visitor already saw on an earlier card. Off-market docs
+    almost never carry a cached valuation_data range (that's a client-side
+    calc for this specific deck), so this fills that gap here — not a
+    valuation, not displayed as one, just an anchor for the suburb price-tier
+    comparison and the personas prompt's working range. Returns
+    {"low", "mid", "high"} or None."""
     if lat is None or lon is None or not suburb_key:
         return None
     try:
@@ -219,7 +228,7 @@ def estimate_price_anchor(gc, suburb_key, lat, lon, bedrooms, radius_km=2.5, lim
     n = len(prices)
     lo = prices[max(0, int(n * 0.15))]
     hi = prices[min(n - 1, int(n * 0.85))]
-    return (lo + hi) / 2
+    return {"low": lo, "mid": (lo + hi) / 2, "high": hi}
 
 
 def compute_positioning(gc, suburb, slug):
@@ -243,7 +252,7 @@ def compute_positioning(gc, suburb, slug):
     # Honest degrade: no usable feature stack, no story to tell — matches
     # resolve_positioning_object's/resolve_scarcity_narrative's own gates.
     if not scarcity or not scarcity.get("notable_features"):
-        return {"positioning": None, "narrative": None, "feature_combination": None}, None
+        return {"positioning": None, "narrative": None, "feature_combination": None, "persona": None}, None
 
     gc_coords = subject.get("geocoded_coordinates") or {}
     lat = subject.get("LATITUDE", subject.get("latitude", gc_coords.get("latitude")))
@@ -273,10 +282,11 @@ def compute_positioning(gc, suburb, slug):
     suburb_display = (matched or suburb or "").replace("_", " ").title()
 
     try:
-        price_anchor = estimate_price_anchor(gc, matched, lat, lon, subject.get("bedrooms"))
+        price_range = estimate_price_range(gc, matched, lat, lon, subject.get("bedrooms"))
     except Exception:
         traceback.print_exc()
-        price_anchor = None
+        price_range = None
+    price_anchor = price_range["mid"] if price_range else None
 
     try:
         positioning = resolve_positioning_object(
@@ -295,12 +305,33 @@ def compute_positioning(gc, suburb, slug):
     except Exception:
         traceback.print_exc()
 
+    # Primary buyer persona — reuses the mini-site's exact, battle-tested
+    # personas_narrative prompt (3-persona output, forbidden-channel guards,
+    # honest-hesitation requirement) rather than writing a new one; the off-
+    # market card only shows persona[0], but generating 3 costs nothing extra
+    # (one call either way) and keeps this in lockstep with the mini-site's
+    # proven quality bar. Sonnet 5 (see MODEL override above), same decoupled/
+    # cached-forever queue as narrative above.
+    persona = None
+    try:
+        valuation_range = {"low": price_range["low"], "high": price_range["high"]} if price_range else None
+        persona_result = personas_narrative.resolve_personas_narrative(
+            address, suburb_display, fb, scarcity.get("notable_features") or [],
+            scarcity.get("active_matching_full_stack") or 0, scarcity.get("active_listings_total") or 0,
+            scarcity.get("cohort_premiums") or [], walk_pois, valuation_range,
+        )
+        if persona_result and not persona_result.get("error") and persona_result.get("personas"):
+            persona = persona_result["personas"][0]
+    except Exception:
+        traceback.print_exc()
+
     feature_combination = _build_feature_combination(scarcity, walk_pois)
 
     return {
         "positioning": positioning,
         "narrative": narrative,
         "feature_combination": feature_combination,
+        "persona": persona,
     }, None
 
 
