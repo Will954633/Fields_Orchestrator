@@ -99,9 +99,14 @@ def compute_intel(gc, suburb, slug):
     funnel = ((comp or {}).get("ranked_comparison") or {}).get("funnel") or {}
     notable = []
     for f in (scarcity or {}).get("notable_features", []) or []:
-        lbl = (f or {}).get("label") or (f or {}).get("value")
-        if lbl:
-            notable.append(str(lbl))
+        phrase = (f or {}).get("phrase") or (f or {}).get("label") or (f or {}).get("value")
+        if phrase:
+            notable.append({
+                "key": (f or {}).get("key"),
+                "tier": (f or {}).get("tier"),
+                "label": (f or {}).get("label"),
+                "phrase": str(phrase),
+            })
 
     # Nearest-POI-per-category — local haversine against the pre-harvested
     # Google Places dataset (Gold_Coast_POIs.pois). No external API calls.
