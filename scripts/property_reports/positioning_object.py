@@ -101,10 +101,18 @@ FRAMES: Dict[str, Dict[str, Any]] = {
 # fires only on disqualifying evidence, and `scarcity_play` can NEVER fire when
 # the home is scarce — that's the rule that killed the hero/thesis contradiction.
 # GC buyers default to "beachside" first, so it leads the order.
+# Suburbs close enough to the coast that "beachside lifestyle" is a plausible
+# default assumption worth explicitly disqualifying. Robina/Varsity Lakes and
+# the other inland suburbs were never beachside candidates for ANY property —
+# telling the reader "not beachside" there answers a question nobody asked
+# (Will's feedback, 2026-07-23). Extend this list if a genuinely coastal
+# suburb (Mermaid Beach, Miami, etc.) is ever added to TARGET_SUBURBS.
+COASTAL_ADJACENT_SUBURBS = {"burleigh_waters", "burleigh_heads"}
+
 ANTI_FRAMES: Dict[str, Dict[str, Any]] = {
     "beachside_lifestyle": {
         "noun": "a beachside lifestyle home",
-        "test": lambda f: f["notCoastal"],
+        "test": lambda f: f["notCoastal"] and f["coastalAdjacentSuburb"],
         "reason": lambda f: f"it's {f['_beach_km']:.1f} km from the coast, so the beach isn't the draw",
     },
     "turnkey_renovation": {
@@ -157,6 +165,7 @@ def _nearest_school_walk_m(pois: List[Dict[str, Any]]) -> Optional[int]:
 def _compute_flags(
     fb: Dict[str, Any], scarcity: Dict[str, Any], pois: List[Dict[str, Any]],
     liquidity: Optional[Dict[str, Any]] = None, price_anchor: Optional[float] = None,
+    suburb_key: Optional[str] = None,
 ) -> Dict[str, Any]:
     cohort = scarcity.get("cohort_stats") or {}
     land = _num(fb.get("land_size_sqm"))
@@ -207,6 +216,7 @@ def _compute_flags(
         "scarce": scarce,
         "common": total > 0 and (matching / total) > 0.25,
         "affordableFastMover": affordable_fast_mover,
+        "coastalAdjacentSuburb": (suburb_key or "").lower() in COASTAL_ADJACENT_SUBURBS,
         # raw values for evidence strings
         "_beach_km": beach_km,
         "_school_m": school_m,
@@ -433,7 +443,7 @@ def resolve_positioning_object(
         except Exception:
             liquidity = None
 
-    flags = _compute_flags(fb, scarcity, pois, liquidity=liquidity, price_anchor=price_anchor)
+    flags = _compute_flags(fb, scarcity, pois, liquidity=liquidity, price_anchor=price_anchor, suburb_key=suburb_key)
     scores = _score_archetypes(flags)
     ranked = sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
     primary = ranked[0][0] if ranked and ranked[0][1] > 0 else None
