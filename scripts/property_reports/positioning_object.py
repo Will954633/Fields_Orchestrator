@@ -311,7 +311,13 @@ def _soft_lead_phrases(
         sig = "the beach proximity"
     if sig and sig not in lead:
         lead.append(sig)
-    return lead or [soft.get(d, d) for d in price[:1]]
+    # Frames without a signature case above (scarcity_play, renovator_valueadd,
+    # prestige_privacy) and with zero price drivers would otherwise return an
+    # empty list here — producing "We'd lead on  — and let the right buyer..."
+    # (a real bug found 2026-07-23 building the off-market deck's positioning
+    # card). FRAMES[primary]["lead"] is exactly the archetype's own generic
+    # lead phrase, designed for this fallback.
+    return lead or [soft.get(d, d) for d in price[:1]] or [FRAMES[primary]["lead"]]
 
 
 def _join(items: List[str]) -> str:
