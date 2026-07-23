@@ -73,6 +73,12 @@ def build_profile_url(address: str) -> str | None:
         return None
     # "21 Indooroopilly Court, Robina, QLD 4226" → "21-indooroopilly-court-robina-qld-4226"
     slug = address.lower().strip()
+    # Letter-suffixed street numbers ("17A Sandpiper Drive") drop the letter
+    # on Domain's URL — confirmed 2026-07-23: "17a-sandpiper-drive" hit a 1KB
+    # fallback page, "17-sandpiper-drive" returned 99KB of real data. Scoped
+    # to the leading street-number token only (followed by whitespace, not a
+    # slash) so it doesn't touch unit-style prefixes like "17A/5 X Street".
+    slug = re.sub(r"^(\d+)[a-z](?=\s)", r"\1", slug)
     slug = slug.replace(",", "").replace(".", "")
     # Unit-numbered addresses ("1/18 X St") use a hyphen on Domain, not the
     # slash — without this, "1/18" and "118" collapse to the same slug and
