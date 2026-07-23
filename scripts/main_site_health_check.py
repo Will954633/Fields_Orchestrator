@@ -417,6 +417,42 @@ def collect_ads_compliance(add, sm, now_utc):
         st, dt = judge(ts, "scrape", now_utc, None)
         add(PG, "Ad attribution (ad_downstream)", "all", f"{n_ds} ads", st, "computed_at", ts, dt)
 
+    # FB account billing status (added 2026-07-23, after the account went UNSETTLED for at least a
+    # full day — 2026-07-22 through 07-23 — with nothing anywhere catching it. The existing
+    # ad_downstream/ad_decisions checks above only detect a DEAD PIPELINE; they can't detect
+    # "the pipeline is fine but Meta has throttled delivery account-wide because of an unpaid
+    # balance" — that only shows up as ad performance quietly cratering, which looks like a bad
+    # test result, not an account problem, unless someone thinks to check account_status directly.
+    # See fix-history [FB-ACCOUNT-UNSETTLED-BILLING].
+    try:
+        import requests
+        token = os.environ.get("FACEBOOK_ADS_TOKEN")
+        if not token:
+            add(PG, "FB account billing status", "act_1463563608441065", None, UNKNOWN, "", None,
+                "FACEBOOK_ADS_TOKEN not set in this environment")
+        else:
+            r = requests.get(
+                "https://graph.facebook.com/v20.0/act_1463563608441065",
+                params={"access_token": token, "fields": "account_status,balance"}, timeout=15,
+            )
+            r.raise_for_status()
+            fb = r.json()
+            status = fb.get("account_status")
+            # Meta account_status codes: 1=ACTIVE, 2=DISABLED, 3=UNSETTLED, 7=PENDING_RISK_REVIEW,
+            # 8=PENDING_SETTLEMENT, 9=IN_GRACE_PERIOD, 100=PENDING_CLOSURE, 101=CLOSED.
+            ok_codes = {1}
+            st = OK if status in ok_codes else ERROR
+            balance = fb.get("balance")
+            detail = "" if st == OK else (
+                f"account_status={status} (not ACTIVE) — balance owed {balance} minor units; "
+                f"paid ad delivery is likely throttled or stopped account-wide. Check Meta Ads "
+                f"Manager -> Billing.")
+            add(PG, "FB account billing status", "act_1463563608441065",
+                f"account_status={status}", st, "", None, detail)
+    except Exception as e:
+        add(PG, "FB account billing status", "act_1463563608441065", None, UNKNOWN, "", None,
+            f"could not check: {e}")
+
 
 # ---- New Listings: Editorial & SEO ---------------------------------------------
 # Matches generate_property_ai_analysis.py's own TARGET_SUBURBS exactly — nightly
