@@ -341,6 +341,35 @@ def collect_leads_crm(add, sm, now_utc, last_run):
             error_patterns=("Traceback (most recent call last)", "pymongo.errors"))
         add(PG, name, "nightly sync", mtime.date().isoformat() if mtime else None, st, "log mtime", mtime, dt)
 
+    # High-priority leads with no appraisal package started yet (added 2026-07-23).
+    # Found by accident this session — a HIGH lead's "existing" appraisal turned out
+    # to be a test artifact, and cross-referencing lead_worklist against
+    # appraisal_pipeline by hand then surfaced 39 OTHER real ready-to-post appraisals
+    # nobody had checked against their source leads. This makes that cross-reference
+    # a standing check instead of something found once by luck.
+    high_leads = list(sm["lead_worklist"].find(
+        {"is_test": False, "priority": "high", "dismissed": {"$ne": True}},
+        {"address": 1}))
+    no_pkg = 0
+    for lead in high_leads:
+        addr = (lead.get("address") or "").strip()
+        if not addr:
+            continue
+        if sm["appraisal_pipeline"].count_documents(
+                {"address": {"$regex": addr[:20], "$options": "i"}, "_synthetic_test": {"$ne": True}}) == 0:
+            no_pkg += 1
+    if not high_leads:
+        add(PG, "High leads without an appraisal package", "appraisal_pipeline cross-check", "0 high leads",
+            OK, "", None, "")
+    elif no_pkg == 0:
+        add(PG, "High leads without an appraisal package", "appraisal_pipeline cross-check",
+            f"0/{len(high_leads)}", OK, "", None, "")
+    else:
+        add(PG, "High leads without an appraisal package", "appraisal_pipeline cross-check",
+            f"{no_pkg}/{len(high_leads)}", ERROR, "", None,
+            f"{no_pkg} HIGH-priority lead(s) have no real appraisal_pipeline entry yet — "
+            f"see [APPRAISAL-BACKLOG-DISCOVERY] fix-history 2026-07-23")
+
 
 # ---- Ads & Compliance -----------------------------------------------------------
 def collect_ads_compliance(add, sm, now_utc):
