@@ -69,14 +69,15 @@ The southern Gold Coast premium market (Robina, Burleigh Waters, Varsity Lakes, 
 
 # HOW FIELDS REACHES BUYERS — the `whereFound` and `campaignImplication` fields MUST use ONLY these
 
-Fields finds buyers in more ways than a portal listing does. Describe reach using ONLY the channels Fields actually operates:
-  - Conversion-optimised paid campaigns on Facebook and Instagram — BROAD prospecting (Fields' own performance data shows broad targeting outperforms narrow / "custom" audiences), plus retargeting people who have already engaged with Fields content or the listing.
-  - YouTube video reach into the local market.
-  - Google Ads on active search intent (e.g. "<suburb> family home", school-catchment queries).
-  - DIRECT APPROACH (the point of difference): Fields identifies the nearby homes whose owners typically move up into a home like this — by house type, ownership tenure and life-stage pattern — and contacts them directly, reaching buyers who are not searching the portals yet. Describe this as METHOD, conditionally ("homes whose owners typically move into a home like this"). Do NOT state a count of homes or buyers — that model is not yet quantified.
-  - The major portals (Domain, realestate.com.au) are table stakes; the point of difference is reaching BEYOND them.
+Every buyer search starts with the portals — realestate.com.au is the dominant one, and nearly all ACTIVE buyers (people already searching right now) use it. Fields lists there as standard, the same as any agent — that is table stakes, not a differentiator, and whereFound MUST say so explicitly rather than skip straight to what's different. But active buyers are only part of the market: a meaningful share of buyers are PASSIVE — they intend to move eventually but aren't searching yet (they're scrolling social media, watching video, not setting portal alerts). A portal listing alone never reaches that passive share. Fields' point of difference is reaching BEYOND the portal into that passive pool, using:
+  - Conversion-optimised paid campaigns on Facebook and Instagram — BROAD prospecting (Fields' own performance data shows broad targeting outperforms narrow / "custom" audiences), plus retargeting people who have already engaged with Fields content or the listing. This is what reaches passive buyers who aren't actively searching.
+  - YouTube video reach into the local market — another passive-buyer channel.
+  - Google Ads on active search intent (e.g. "<suburb> family home", school-catchment queries) — captures active searchers beyond the portal itself.
+  - DIRECT APPROACH (the strongest point of difference): Fields identifies the nearby homes whose owners typically move up into a home like this — by house type, ownership tenure and life-stage pattern — and contacts them directly, reaching buyers who are not searching anywhere yet, portal included. Describe this as METHOD, conditionally ("homes whose owners typically move into a home like this"). Do NOT state a count of homes or buyers — that model is not yet quantified.
 
-NEVER mention these — Fields does NOT have/do them: an email subscriber base, newsletter list, or "subscribers" (Fields has NONE — the only owned audience is Meta retargeting of site visitors / ad engagers, already covered above); school newsletters, school noticeboards, school-gate word-of-mouth, print mailers, flyers, newspaper or real-estate-section ads, LinkedIn outreach, "Will's network", premium-property mailing lists, "custom audiences" as a prospecting lever, or any open-home register or buyer-origin dataset.
+STRUCTURE OF whereFound: open by naming realestate.com.au as the baseline every buyer search starts with (one clause is enough — "Fields lists on realestate.com.au as standard" or equivalent), then pivot explicitly to what Fields does BEYOND the portal to reach buyers who aren't actively searching it. Never omit the portal acknowledgment and jump straight to the differentiator channels — the seller should see Fields does what every agent does, then genuinely more, not read it as a replacement for the portal.
+
+NEVER mention these — Fields does NOT have/do them: an email subscriber base, newsletter list, or "subscribers" (Fields has NONE — the only owned audience is Meta retargeting of site visitors / ad engagers, already covered above); school newsletters, school noticeboards, school-gate word-of-mouth, print mailers, flyers, newspaper or real-estate-section ads, LinkedIn outreach, "Will's network", premium-property mailing lists, "custom audiences" as a prospecting lever, or any open-home register or buyer-origin dataset. Domain may be named alongside realestate.com.au as a secondary portal, but never in place of it.
 
 # YOUR TASK
 
@@ -110,6 +111,7 @@ Return ONLY a valid JSON array of exactly 3 objects. No markdown, no preamble:
 7. label MUST identify a real demographic / life-stage, not a generic descriptor like "Premium buyers".
 8. If the property's feature stack is COMMON in the cohort, say so honestly in at least one persona's reasoning — premium-buyer talk doesn't fit a 4-bed/2-bath home with no special features.
 9. CHANNELS: whereFound and campaignImplication may reference ONLY the channels in HOW FIELDS REACHES BUYERS. Any forbidden channel — or any claimed buyer-origin dataset, register, or reach percentage — triggers regeneration. Never invent a count for the direct-approach method.
+10. PORTAL FIRST: whereFound MUST explicitly name realestate.com.au (mentioning "the portal" alone is not enough) before pivoting to the passive-buyer / direct-approach channels. A whereFound that jumps straight to Facebook/YouTube/direct-approach without acknowledging the portal baseline is incomplete and triggers regeneration.
 
 # VOICE
 
@@ -218,6 +220,14 @@ def _validate_output(parsed: Any) -> Optional[str]:
         where = (p.get("whereFound") or "").strip()
         if len(where) < 40 or len(where) > 600:
             return f"persona {i} whereFound length {len(where)} out of 40-600"
+        # Rule 10 (2026-07-23, Will's feedback): whereFound must acknowledge
+        # the realestate.com.au baseline before pivoting to the passive-buyer/
+        # direct-approach channels — a prior prompt version treated the
+        # portal as unstated "table stakes" and the model never mentioned it,
+        # reading as if Fields skipped the portal entirely rather than doing
+        # that AND more.
+        if "realestate.com.au" not in where.lower():
+            return f"persona {i} whereFound missing realestate.com.au portal acknowledgment"
 
     # Editorial guardrails across all prose
     prose = " ".join(
@@ -263,18 +273,11 @@ def resolve_personas_narrative(
     pois: List[Dict[str, Any]],
     valuation_range: Optional[Dict[str, Any]] = None,
 ) -> Optional[Dict[str, Any]]:
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        logger.warning("ANTHROPIC_API_KEY not set — skipping personas")
+    from scripts.property_reports._claude_backend import get_client_and_model
+    client, model = get_client_and_model(MODEL)
+    if not client:
+        logger.warning("No Claude backend available — skipping personas")
         return None
-
-    try:
-        from anthropic import Anthropic
-    except ImportError:
-        logger.warning("anthropic not installed — skipping personas")
-        return None
-
-    client = Anthropic(api_key=api_key)
     user_prompt = _format_inputs(
         address, suburb, features_basic or {}, notable_features or [],
         matching_full_stack or 0, active_listings_total or 0,
@@ -285,7 +288,7 @@ def resolve_personas_narrative(
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             response = client.messages.create(
-                model=MODEL,
+                model=model,
                 max_tokens=MAX_TOKENS,
                 system=SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": user_prompt}],
@@ -325,7 +328,7 @@ def resolve_personas_narrative(
         return {
             "personas": parsed,
             "generated_at": datetime.now(timezone.utc).isoformat(),
-            "model": MODEL,
+            "model": model,
             "attempt": attempt,
         }
 
