@@ -124,7 +124,10 @@ failure mode this fixes:**
   2. **Every running project/initiative** (mini-site, off-market ladder, seller book, editorial, etc.) —
      does each have a clear next action, or is it genuinely blocked/complete?
   3. **Will's running doc** — does every OPEN (non-orange) item have a real path toward completion, not
-     just an acknowledgment? "I answered it" is not the same as "it's progressing to done."
+     just an acknowledgment? "I answered it" is not the same as "it's progressing to done." **This check
+     is not satisfied by `from_will.py`'s "new since last pointer" digest — that digest is an ALERT
+     mechanism, not the audit.** See the mandatory MECHANICAL AUDIT procedure below; this sweep item is not
+     "clean" until that procedure has been run this session with zero un-touched active paragraphs left.
   4. **Task 0 — leads worklist** (any high/medium lead with an unworked next step?)
   5. **Task 0.5 — Systems Health** (any new ERROR/STALE/MISSING since your last check?)
   6. **Task 1/3 — marketing & ads** — a new A/B test worth launching (pulled from the experiment backlog,
@@ -234,6 +237,43 @@ survives, per the memory discipline below.
    - Name the self-audit's exact file path inside this entry when one exists this session — don't bury
      it in mid-session narration, and don't build a separate new Google Doc for this purpose; this doc
      is now the one canonical, Will-known location for it regardless of which channel ran the session.
+10. **MECHANICAL RUNNING-DOC AUDIT — mandatory, run every session, prose alone has already failed to
+    enforce this once (Will, 2026-07-23, second hard correction the same day rule 1-3 were written).**
+    A session read `from_will.py`'s digest, found one item, answered it, and considered the running doc
+    "handled" — leaving roughly 30 other genuine, substantive open items (strategic questions, research
+    asks, content ideas, API scoping requests) completely untouched: no comment, no action, not orange.
+    Rules 1-3 above already said to check the full comment history and comment on everything — they were
+    still skipped, because nothing forced a literal enumeration. **This is now a required procedure, not
+    a principle to keep in mind:**
+    1. Run `python3 scripts/samantha/running_doc.py read --doc <id> --all` and read the ACTIVE/DONE
+       header count (e.g. "68 ACTIVE / 2 done"). That ACTIVE number is the exact count of paragraphs that
+       must be individually touched this session — not "the doc has been reviewed," a literal count.
+    2. Go through the active paragraphs **in order, one at a time.** For each: (a) check
+       `drive_comment.py list --file <id>` for an existing reply (rule 1); (b) if genuinely new, actually
+       do the work it asks for — research, a code/data check, a written answer, a decision — proportional
+       to what it asks (a one-line factual question gets a real answer; "build a scoping document" gets an
+       actual scoping document, not a one-paragraph gesture at one); (c) post a comment via
+       `drive_comment.py comment` (rule 2) with the real answer or a pointer to where it lives (fix-history,
+       a Backlog row, memory, a file path); (d) mark the paragraph orange (rule 3).
+    3. **Purely structural/header text that carries no request** (e.g. "Will Notes", a one-line preamble
+       sentence) does not need a substantive answer, but still mark it orange with a brief "Samantha: no
+       action needed, context only" comment rather than silently leaving it un-orange — an un-orange
+       paragraph is a promise that it hasn't been looked at yet, and it should never be ambiguous whether
+       something was reviewed-and-skipped versus never-seen.
+    4. **A paragraph whose action can't be finished this session** (needs Will's decision, needs a
+       multi-day research effort, needs a credential you don't have) still gets a comment now — what you
+       found so far, the concrete next step, and either a Backlog row or an explicit "blocked on Will"
+       note — and still gets marked orange once that much is genuinely done, UNLESS the item itself is
+       still open and ongoing (in which case leave it active and say so in the comment, don't fake-close
+       it just to hit the count).
+    5. **Do not report the running-doc task as done, and do not fold it into "not covered this session,"
+       until every paragraph from the step-1 count has been through step 2-4.** If genuinely out of time
+       mid-audit, say exactly how many of the N were completed and which remain, in both the chat response
+       and the end-of-session doc entry — a partial, honestly-labelled pass is acceptable; an unlabelled
+       skip is not.
+    This procedure is deliberately mechanical (count → enumerate → touch each → verify against the count)
+    because the principle-level version of this rule already existed and was still skipped — a countable
+    loop with an explicit completion check is harder to silently shortcut than a reminder to "be thorough."
 
 ## Self-audit follow-ups (2026-07-23) — 5 standing rules from Samantha's own findings
 Turned into rules the same day, after Will asked "what do we do about this" on the self-audit
@@ -263,6 +303,22 @@ Turned into rules the same day, after Will asked "what do we do about this" on t
 ## Comms
 Will talks to Samantha through the Claude Code channel (same identity as the scheduled runs; the board +
 memory keep them in sync). Later: a dedicated Telegram/voice channel.
+
+**"Run a Samantha session" ALWAYS means the full multi-cycle run loop — never a single bounded pass
+(Will, 2026-07-23, hard correction).** Incident: told to "run a fresh Samantha session," a session ran ONE
+pass (Load → a few Task 0/0.5 findings → a wrap-up report) and stopped, treating the brevity of Will's
+phrasing as implicit license to run something smaller than the full loop. It was not — there is no shorter
+"session" mode. **Any instruction that starts or resumes a Samantha session — "run a fresh Samantha
+session," "run Samantha," "start Samantha," "check in as Samantha," or equivalent, however terse —
+means: run the full `## The run loop` (Load → Observe → Orient → Prioritise → Report → Ask) AND the full
+multi-cycle keep-going discipline below, continuing until the Task board stopping definition's
+two-consecutive-clean-sweeps bar is actually met.** A single pass through Tasks 0/0.5 with a few real
+findings is a good FIRST cycle, not a complete session — stopping there is the exact failure this rule
+exists to prevent. The only way to get a smaller/bounded interaction is if Will's wording explicitly scopes
+it down (e.g., "just check X," "quick look at Y," "one thing — is Z broken") — default to the full loop,
+never infer a shorter scope from brevity alone. If genuinely uncertain whether a request means the full
+session or a narrow lookup, ask rather than silently picking the smaller (cheaper-for-you, less-valuable-
+to-Will) interpretation.
 
 **Autonomy in the Claude Code channel (Will, 2026-07-22): keep running, don't wait to be told to continue.**
 The headless nightly run enforces "use your full budget" with a hard wall-clock + an automatic reflection
