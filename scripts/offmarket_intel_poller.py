@@ -24,6 +24,7 @@ from shared.db import get_client  # noqa: E402
 from scripts.property_reports.inline_features import derive_features_basic  # noqa: E402
 from scripts.property_reports.scarcity_features import resolve_scarcity_features  # noqa: E402
 from scripts.property_reports.competitor_matcher import resolve_competitor_map  # noqa: E402
+from scripts.property_reports.nearby_pois import resolve_nearby_pois  # noqa: E402
 
 # Gold_Coast suburb collections a slug might live in (mirrors db.server TARGET_SUBURBS).
 TARGET_SUBURBS = [
@@ -102,6 +103,18 @@ def compute_intel(gc, suburb, slug):
         if lbl:
             notable.append(str(lbl))
 
+    # Nearest-POI-per-category — local haversine against the pre-harvested
+    # Google Places dataset (Gold_Coast_POIs.pois). No external API calls.
+    # Coordinate field shape varies by doc vintage (mirrors db.server.ts).
+    gc_coords = subject.get("geocoded_coordinates") or {}
+    lat = subject.get("LATITUDE", subject.get("latitude", gc_coords.get("latitude")))
+    lon = subject.get("LONGITUDE", subject.get("longitude", gc_coords.get("longitude")))
+    try:
+        proximity = resolve_nearby_pois(lat, lon, gc)
+    except Exception:
+        traceback.print_exc()
+        proximity = {}
+
     result = {
         "scarcity": {
             "active_total": (scarcity or {}).get("active_listings_total"),
@@ -113,6 +126,7 @@ def compute_intel(gc, suburb, slug):
             "n_compete": funnel.get("close_tier"),
             "n_total": funnel.get("active_total"),
         },
+        "proximity": proximity,
         "matched_suburb": matched,
     }
     return result, None
