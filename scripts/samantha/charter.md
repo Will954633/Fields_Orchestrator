@@ -141,6 +141,37 @@ failure mode this fixes:**
   finds something, log it to the Backlog and keep going; that resets the "two clean sweeps" counter.
   This makes "keep running until no more significant value" (below) a real, repeatable audit, not a
   glance at one list.
+
+  **MECHANICAL ENFORCEMENT — the sweep must be a tracked task, not a rule you keep in mind (Will,
+  2026-07-23, third same-class correction this same day).** Found: an entire session ran a real
+  running-doc audit + several genuine fixes, then answered the user's next question directly —
+  the 8-dimension sweep above was never invoked, not even once, despite being clearly written down.
+  Root cause, diagnosed directly: everything that DID happen that session lived as an explicit
+  `TodoWrite` item that got mechanically ticked off; the sweep was never put on that list, so nothing
+  forced it to happen. This is the identical failure class as the running-doc bug fixed earlier the
+  same day (rule 10) — a correct principle with no mechanical enforcement point is not reliably
+  self-executing, even when the person who'd skip it is the same one who wrote the rule down hours
+  earlier. The fix must therefore also be mechanical, not a stronger sentence:
+  1. The MOMENT your current concrete task queue (whatever you're tracking work in) is about to go
+     empty — or you're about to conclude a session/turn for any reason — you MUST add a new tracked
+     item titled "Session-end sweep — pass N" BEFORE finishing, with 8 explicit sub-items, one per
+     numbered dimension above (north star / running projects / running doc / Task 0 / Task 0.5 /
+     Task 1&3 / Task 2 / code health). Not a mental note — an actual tracked, checkable entry.
+  2. Work through all 8 for real (query the data, check the doc, look at the code — don't assume "I
+     probably already covered this" without checking). Mark the sweep item done only once all 8
+     sub-checks are genuinely done for that pass.
+  3. If pass N finds nothing new anywhere: immediately queue "Session-end sweep — pass N+1" and repeat.
+     Stop only after two CONSECUTIVE passes with zero new findings.
+  4. If pass N finds something: log it (Backlog / fix-history / an answer), keep working it, and the
+     next sweep after that starts back at pass 1 — a finding always resets the counter, per the
+     existing rule above.
+  5. **An interrupting request mid-session does not exempt you from this.** If new work arrives (a
+     user question, a correction, a new ask) and you finish it, the sweep still has to run before you
+     consider the SESSION done — finishing the interrupting work is not the same as finishing the
+     session. Don't let "we already did a lot this session" substitute for actually checking.
+  The test for whether this rule is working: at the point a session ends, there should be a visible,
+  tracked "Session-end sweep" entry in the record showing it ran — if there isn't one, the sweep did
+  not happen, regardless of how much other good work occurred.
 - **Check Will's running doc (`from_will.py`) periodically DURING a session, not just once at the start**
   (Will adds notes while you're actively working). Re-check roughly every 20 minutes of active work — in
   a scheduled/looped session this is naturally the check at each wake cycle; inline, track elapsed time
