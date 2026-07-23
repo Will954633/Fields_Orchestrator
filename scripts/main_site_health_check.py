@@ -1210,6 +1210,52 @@ def collect(client, now_utc, prev_map):
         st, dt = judge(ts, "nightly", now_utc, last_run)
         add(PG, "Google Indexing submit-new state", "SEO", str(ts.date()), st, "mtime", ts, dt)
 
+    # ----- Google Indexing submit-new MODE (added 2026-07-24) -----
+    # The state-file mtime check above proves the job RAN, but not that it ran in the
+    # efficient INCREMENTAL mode — both the incremental path and the full-catalog
+    # fallback rewrite the state file, so mtime alone can't tell them apart. That gap
+    # is exactly what hid the bug: for weeks submit-new fell back to full-catalog
+    # every night (oldest-first, 200/day cap) so NEW editorial pages — and all of
+    # varsity_lakes/burleigh_waters — were never submitted to the Indexing API,
+    # starving them of organic traffic. This row parses google-indexing.log for the
+    # LAST run's mode so the fallback is visible. See fix-history
+    # [INDEXING-NEW-PAGES-STARVED-BY-ORDERING]. A full-catalog run is EXPECTED exactly
+    # once (the first run after the state file is (re)created); if it persists the
+    # incremental read isn't engaging and new pages keep getting starved.
+    log_path = os.path.join(os.path.dirname(__file__), "..", "logs", "google-indexing.log")
+    if os.path.exists(log_path):
+        try:
+            with open(log_path, errors="replace") as f:
+                lines = f.readlines()[-400:]
+        except OSError:
+            lines = []
+        mode = None            # "incremental" | "full-catalog"
+        quota_hit = False
+        for ln in reversed(lines):
+            if mode is None:
+                if "Finding URLs updated since" in ln or "No new/changed URLs since last run" in ln:
+                    mode = "incremental"
+                elif "No previous run found" in ln or "Submitting all URLs" in ln:
+                    mode = "full-catalog"
+            if "Quota exceeded" in ln or "RATE_LIMIT_EXCEEDED" in ln or "HttpError 429" in ln:
+                quota_hit = True
+            if mode is not None and quota_hit:
+                break
+        if mode == "incremental":
+            detail = "last submit-new run used the efficient incremental path (only new/changed URLs)"
+            add(PG, "Google Indexing submit-new mode", "SEO", "incremental", OK, "log", None, detail)
+        elif mode == "full-catalog":
+            detail = ("last submit-new run was FULL-CATALOG (newest-first, but capped at 200/day) — "
+                      "expected ONCE right after indexing-last-run.json is (re)created; if it recurs, "
+                      "the incremental read isn't engaging and new listing pages are being starved. "
+                      "See [INDEXING-NEW-PAGES-STARVED-BY-ORDERING]")
+            if quota_hit:
+                detail += " — plus a 429 quota-exceeded fired this run (cap reached)"
+            add(PG, "Google Indexing submit-new mode", "SEO", "full-catalog", ERROR, "log", None, detail)
+        else:
+            add(PG, "Google Indexing submit-new mode", "SEO", None, UNKNOWN, "log", None,
+                "could not determine last submit-new mode from google-indexing.log")
+
     # ----- Known Gaps (structural; documented, not alarms) -----
     PG = "Known Gaps"
     for name, scope, note in [
