@@ -1069,6 +1069,29 @@ def collect(client, now_utc, prev_map):
         st, dt = judge(ts, "scrape", now_utc, last_run)
         add(PG, "Daily push (VM cron)", path, f"commit {sha}", st, "commit date", ts, dt)
 
+    # ----- Google Indexing submit-new state (added 2026-07-23) -----
+    # indexing-last-run.json is submit-new's only way to know it already ran — if it
+    # goes missing or stale again, the job silently reverts to full-catalog-resubmit
+    # every night (burns the 200/day quota on old URLs, starves new listings of a
+    # proactive submit). The existing "Google Indexing API submit" Process Registry
+    # row only checks google-indexing.log's mtime, which gets touched every night
+    # REGARDLESS of whether the run actually succeeded at incremental submission —
+    # that weaker signal is exactly why this bug went undetected; this row is the
+    # stronger complementary check. See fix-history
+    # [GOOGLE-INDEXING-SUBMIT-NEW-NEVER-PERSISTS-STATE]. Filed under "Process
+    # Registry" (not a new PAGES entry) to sit next to the existing related row.
+    PG = "Process Registry"
+    state_path = os.path.join(os.path.dirname(__file__), "..", "logs", "indexing-last-run.json")
+    if not os.path.exists(state_path):
+        add(PG, "Google Indexing submit-new state", "SEO", None, MISSING, "mtime", None,
+            "indexing-last-run.json absent — submit-new is full-catalog-resubmitting every night "
+            "instead of proactively submitting only new listings; see "
+            "[GOOGLE-INDEXING-SUBMIT-NEW-NEVER-PERSISTS-STATE]")
+    else:
+        ts = datetime.fromtimestamp(os.path.getmtime(state_path), tz=timezone.utc)
+        st, dt = judge(ts, "nightly", now_utc, last_run)
+        add(PG, "Google Indexing submit-new state", "SEO", str(ts.date()), st, "mtime", ts, dt)
+
     # ----- Known Gaps (structural; documented, not alarms) -----
     PG = "Known Gaps"
     for name, scope, note in [
