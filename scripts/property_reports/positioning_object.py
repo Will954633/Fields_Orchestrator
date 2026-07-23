@@ -88,6 +88,11 @@ FRAMES: Dict[str, Dict[str, Any]] = {
         "lead": "a combination the market rarely offers",
         "assumable": True,
     },
+    "value_liquidity_play": {
+        "noun": "well-priced, fast-moving home",
+        "lead": "the price point and how quickly homes like it move",
+        "assumable": False,
+    },
 }
 
 # Anti-frames are their OWN catalogue (not reused archetype nouns) so the
@@ -151,6 +156,7 @@ def _nearest_school_walk_m(pois: List[Dict[str, Any]]) -> Optional[int]:
 
 def _compute_flags(
     fb: Dict[str, Any], scarcity: Dict[str, Any], pois: List[Dict[str, Any]],
+    liquidity: Optional[Dict[str, Any]] = None, price_anchor: Optional[float] = None,
 ) -> Dict[str, Any]:
     cohort = scarcity.get("cohort_stats") or {}
     land = _num(fb.get("land_size_sqm"))
@@ -161,7 +167,28 @@ def _compute_flags(
     matching = scarcity.get("active_matching_full_stack") or 0
     total = scarcity.get("active_listings_total") or 0
     n_diff = len(scarcity.get("differentiator_features") or []) + len(_walkable_differentiators(pois))
-    scarce = _is_scarce(matching, total, n_diff)
+    scarce = _is_scarce(matching, total, n_diff, has_countable_anchors=bool(scarcity.get("anchor_features")))
+
+    # Affordable-for-its-suburb + genuinely faster-selling — gated on real,
+    # per-suburb precomputed evidence (precompute_price_tier_liquidity.py),
+    # never assumed. Found 2026-07-23: true in Robina/Burleigh Waters houses
+    # (~45-52% faster), flat in Varsity Lakes over the same window — so
+    # `liquidity.qualifies` must be checked per suburb, not treated as a
+    # universal "affordable = fast" rule. Only meaningful for a house-like
+    # subject (the benchmark itself is House-only).
+    affordable_fast_mover = False
+    liquidity_gap_pct = None
+    liquidity_lower_dom = None
+    liquidity_upper_dom = None
+    is_house_like = (land or 0) > 0
+    if liquidity and liquidity.get("qualifies") and price_anchor and is_house_like:
+        lower_tier = (liquidity.get("tiers") or {}).get("lower") or {}
+        lower_max = lower_tier.get("max_price")
+        if lower_max and price_anchor <= lower_max:
+            affordable_fast_mover = True
+            liquidity_gap_pct = liquidity.get("gap_pct")
+            liquidity_lower_dom = lower_tier.get("median_dom")
+            liquidity_upper_dom = ((liquidity.get("tiers") or {}).get("upper") or {}).get("median_dom")
 
     return {
         "veryStrongSchoolWalk": school_m is not None and school_m <= 500,
@@ -179,10 +206,14 @@ def _compute_flags(
         "dated": 0 < reno <= 4,
         "scarce": scarce,
         "common": total > 0 and (matching / total) > 0.25,
+        "affordableFastMover": affordable_fast_mover,
         # raw values for evidence strings
         "_beach_km": beach_km,
         "_school_m": school_m,
         "_reno": reno,
+        "_liquidity_gap_pct": liquidity_gap_pct,
+        "_liquidity_lower_dom": liquidity_lower_dom,
+        "_liquidity_upper_dom": liquidity_upper_dom,
     }
 
 
@@ -208,6 +239,8 @@ def _score_archetypes(f: Dict[str, Any]) -> Dict[str, int]:
             _score(f["largeLand"], 2) + _score(f["turnkey"], 1) + _score(f["waterViews"], 1),
         "scarcity_play":
             _score(f["scarce"], 4) - _score(f["common"], 3) + _score(f["waterViews"], 1),
+        "value_liquidity_play":
+            _score(f["affordableFastMover"], 4),
     }
 
 
@@ -309,14 +342,20 @@ def _soft_lead_phrases(
         sig = "the pool" if "the pool" in drivers.get("buyer", []) else "the outdoor space"
     elif primary == "beachside_lifestyle":
         sig = "the beach proximity"
+    elif primary == "value_liquidity_play":
+        sig = "the price point"
     if sig and sig not in lead:
         lead.append(sig)
     # Frames without a signature case above (scarcity_play, renovator_valueadd,
     # prestige_privacy) and with zero price drivers would otherwise return an
     # empty list here — producing "We'd lead on  — and let the right buyer..."
     # (a real bug found 2026-07-23 building the off-market deck's positioning
-    # card). FRAMES[primary]["lead"] is exactly the archetype's own generic
-    # lead phrase, designed for this fallback.
+    # card). Prefer the home's REAL buyer drivers (concrete — a differentiator
+    # or a walkable POI — beats a vague archetype description every time);
+    # only fall back to the frame's own generic descriptor when the home
+    # genuinely has nothing concrete to name at all.
+    if not lead:
+        lead = list(drivers.get("buyer", []))[:2]
     return lead or [soft.get(d, d) for d in price[:1]] or [FRAMES[primary]["lead"]]
 
 
@@ -335,6 +374,7 @@ def resolve_positioning_object(
     suburb_display: str,
     scarcity: Optional[Dict[str, Any]] = None,
     pois: Optional[List[Dict[str, Any]]] = None,
+    price_anchor: Optional[float] = None,
 ) -> Optional[Dict[str, Any]]:
     """Compute the single positioning object for one property.
 
@@ -369,7 +409,31 @@ def resolve_positioning_object(
     fb = scarcity.get("features_basic_snapshot") or {}
     pois = pois or []
 
-    flags = _compute_flags(fb, scarcity, pois)
+    # Price anchor (caller-supplied override, else the engine's own
+    # reconciled-range midpoint if valued) + the per-suburb precomputed
+    # liquidity benchmark — both best-effort, feed the value_liquidity_play
+    # frame only, everything else works unaffected if either is missing.
+    # Off-market docs almost never carry a cached valuation_data range (the
+    # off-market deck's own range comes from a client-side nearby-comps
+    # calc instead) — offmarket_intel_poller.py passes a comps-based
+    # price_anchor explicitly for that path; slot_resolver's mini-site call
+    # doesn't pass one and falls back to the cached engine valuation below.
+    if price_anchor is None:
+        try:
+            rng = ((subject_doc.get("valuation_data") or {}).get("confidence") or {}).get("range") or {}
+            if rng.get("low") and rng.get("high"):
+                price_anchor = (rng["low"] + rng["high"]) / 2
+        except Exception:
+            price_anchor = None
+    liquidity = None
+    suburb_key = subject_doc.get("suburb_key")
+    if suburb_key:
+        try:
+            liquidity = db["precomputed_price_tier_liquidity"].find_one({"_id": f"{suburb_key}_House"})
+        except Exception:
+            liquidity = None
+
+    flags = _compute_flags(fb, scarcity, pois, liquidity=liquidity, price_anchor=price_anchor)
     scores = _score_archetypes(flags)
     ranked = sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
     primary = ranked[0][0] if ranked and ranked[0][1] > 0 else None
@@ -446,6 +510,11 @@ def resolve_positioning_object(
             "beach_distance_km": flags["_beach_km"],
             "school_walk_m": flags["_school_m"],
             "renovation_score": flags["_reno"],
+            "liquidity": {
+                "gap_pct": flags["_liquidity_gap_pct"],
+                "lower_median_dom": flags["_liquidity_lower_dom"],
+                "upper_median_dom": flags["_liquidity_upper_dom"],
+            } if flags.get("affordableFastMover") else None,
             "flags": {k: v for k, v in flags.items() if not k.startswith("_")},
         },
     }
