@@ -205,7 +205,13 @@ processes:
     name: "Valuation-Grade Photo & Floor Plan Enrichment (Target Market)"
     description: "GPT valuation-grade analysis of property photos and floor plans for 3 target market suburbs (Robina, Varsity Lakes, Burleigh Waters). Writes property_valuation_data, floor_plan_analysis, and processing_status to Gold_Coast. Fields are preserved when properties migrate to Gold_Coast_Recently_Sold."
     phase: "enrichment_target"
-    command: "./run_target_market_valuation_enrichment.sh"
+    # Must export ANTHROPIC_BACKEND=openrouter — the vision calls route through
+    # shared/claude_vision.py, and direct ANTHROPIC_API_KEY billing has been dead
+    # since 2026-07 ("credit balance too low"). Without this the batch silently
+    # returns "Empty response from vision model" for every property (regression
+    # 2026-07-17 → 07-24; see fix-history 2026-07-24 STEP108-VISION-BACKEND).
+    # Every other vision step (112, 117, 120) already sets this.
+    command: "bash -c 'set -a && source /home/fields/Fields_Orchestrator/.env && set +a && export ANTHROPIC_BACKEND=openrouter && ./run_target_market_valuation_enrichment.sh'"
     working_dir: "/home/fields/Property_Data_Scraping/03_Gold_Coast/Gold_Coast_Wide_Currently_For_Sale_AND_Recently_Sold/Ollama_Property_Analysis"
     mongodb_activity: "heavy_write"
     requires_browser: false
