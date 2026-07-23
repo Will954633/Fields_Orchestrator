@@ -237,7 +237,9 @@ def _validate_output(parsed: Dict[str, Any]) -> Optional[str]:
     return None
 
 
-def _is_scarce(matching: int, total: int, n_differentiators: int = 0) -> bool:
+def _is_scarce(
+    matching: int, total: int, n_differentiators: int = 0, has_countable_anchors: bool = True,
+) -> bool:
     """Whether the combination is uncommon enough to justify the
     'compete for it' close.
 
@@ -246,8 +248,19 @@ def _is_scarce(matching: int, total: int, n_differentiators: int = 0) -> bool:
     finish) further narrow the real buyer pool but aren't counted — so each
     one relaxes the share threshold the anchor match must clear. A moderate
     anchor match plus several real differentiators is genuinely competitive
-    territory; a moderate anchor match with none is not."""
+    territory; a moderate anchor match with none is not.
+
+    has_countable_anchors=False means the home has ZERO qualifying anchors at
+    all (no bed/land/floor/bath/pool/water/beach anchor cleared its floor) —
+    `matching` is then trivially 0 because there was nothing to count, not
+    because the combination is rare. Found 2026-07-23: a single-differentiator
+    home (single-level living only) was being labelled "uncommon_combination"
+    purely from this data gap. Treat it as NOT scarce — there's no anchor
+    evidence to support the claim either way, and "no data" should never read
+    as "rare"."""
     if total < SCARCE_MIN_COHORT:
+        return False
+    if not has_countable_anchors:
         return False
     if matching <= 0:
         return True
@@ -298,21 +311,14 @@ def resolve_scarcity_narrative(
         logger.info(f"  scarcity narrative skipped — stack too thin ({stack_size} feature) for combination framing")
         return None
 
-    is_scarce = _is_scarce(matching, total, n_diff)
+    is_scarce = _is_scarce(matching, total, n_diff, has_countable_anchors=bool(anchors))
     close = CLOSE_SCARCE if is_scarce else CLOSE_COMMON
 
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        logger.warning("ANTHROPIC_API_KEY not set — skipping scarcity narrative")
+    from scripts.property_reports._claude_backend import get_client_and_model
+    client, model = get_client_and_model(MODEL)
+    if not client:
+        logger.warning("No Claude backend available — skipping scarcity narrative")
         return None
-
-    try:
-        from anthropic import Anthropic
-    except ImportError:
-        logger.warning("anthropic package not installed — skipping scarcity narrative")
-        return None
-
-    client = Anthropic(api_key=api_key)
     user_prompt = _format_inputs(
         anchors, differentiators, walk_phrases, matching, total, counted_anchors_query,
         catchment, premiums, pois or [], suburb, address, is_scarce,
@@ -322,7 +328,7 @@ def resolve_scarcity_narrative(
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             response = client.messages.create(
-                model=MODEL,
+                model=model,
                 max_tokens=MAX_TOKENS,
                 system=SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": user_prompt}],
@@ -369,7 +375,7 @@ def resolve_scarcity_narrative(
             "combinatorialMatch": parsed["combinatorialMatch"].strip(),
             "walkingDistanceMonopoly": parsed["walkingDistanceMonopoly"].strip(),
             "generated_at": datetime.now(timezone.utc).isoformat(),
-            "model": MODEL,
+            "model": model,
             "attempt": attempt,
             "is_scarce": is_scarce,
             "inputs_snapshot": {
