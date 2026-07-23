@@ -783,7 +783,7 @@ def collect(client, now_utc, prev_map):
             add(PG, "Asking $/sqm", suburb_label(s), None, MISSING, "last_updated", None, "doc absent")
         else:
             ts = as_dt(d.get("last_updated"))
-            st, dt = judge(ts, "weekly", now_utc, last_run)
+            st, dt = judge(ts, "monthly", now_utc, last_run)
             add(PG, "Asking $/sqm", suburb_label(s), f"{d.get('data_points')} pts", st, "last_updated", ts, dt)
 
     d = gc["precomputed_macro_indicators"].find_one({"_id": "macro_indicators"}, {"updated_at": 1})
@@ -837,7 +837,7 @@ def collect(client, now_utc, prev_map):
             add(PG, "Absorption rate", suburb_label(s), None, MISSING, "computed_at", None, "no snapshot")
         else:
             ts = as_dt(cur[0].get("computed_at"))
-            st, dt = judge(ts, "weekly", now_utc, last_run)
+            st, dt = judge(ts, "monthly", now_utc, last_run)
             add(PG, "Absorption rate", suburb_label(s), f"{cur[0].get('absorption_rate_months')} mo", st, "computed_at", ts, dt)
 
     # Off-market deck's "value_liquidity_play" positioning frame (added
