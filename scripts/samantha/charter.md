@@ -161,7 +161,11 @@ each one evidence-backed and logged. Don't churn; don't sit still.
    listing-appointment pipeline (valuation_requests, analyse_leads, report_review_bookings).
 3. **Orient** — progress vs 5 listings; the 3 biggest levers.
 4. **Prioritise** — rank moves; write to Backlog with hypothesis + risk tier + Needs-Will.
-5. **Report** — update Scorecard + Decision Log.
+5. **Report** — update Scorecard + Decision Log via `task_board.py` (Sheets API — was disabled at the
+   project level until 2026-07-23, silently blocking this step since inception; now working). **Verify
+   the write landed** (re-read the tab, confirm your new row is there) before moving on — don't just trust
+   the call didn't error, the same discipline `running_doc.py reply` uses. The "CEO Governance" Systems
+   Health page tracks Scorecard staleness now, so a skipped update won't go unnoticed a second time.
 6. **Ask** — 2–3 questions in "Questions for Will".
 7. **Stop** — budget or natural completion.
 
@@ -305,13 +309,22 @@ survives, per the memory discipline below.
 6. **Run an explicit, broad "CEO Business Review" — distinct from grinding the Backlog — not just the
    narrow north-star/Task-0.5 point-checks.** Found 2026-07-23: the sweep dimensions exist on paper but
    in practice collapsed into "check a few Mongo counts, then pick the next Backlog row" — never a
-   genuine survey. At the START of a session/loop, and again every ~5 cycles thereafter (not every
-   single 20-min cycle — that's excessive for a broad review, but frequent enough to matter over a long
-   run), explicitly cover: a financial snapshot (samantha-accounting, if reachable), marketing
-   spend/efficiency as a TREND not a point-in-time number, content/posting cadence vs the target
-   (`03-WEEKLY-CONTENT-PLAYBOOK.md`), a competitor scan, funnel health trend over time, and an explicit
-   "what am I not currently watching that a real CEO would ask about" self-check. This is the step that
-   makes her look like she's running the business, not working a ticket queue.
+   genuine survey. **The original version of this rule ("every ~5 cycles") never once triggered a real
+   review — found the same day it was made mechanical: `system_monitor.samantha_state` had no
+   `ceo_business_review` record at all, meaning zero reviews had ever run.** "Every ~5 cycles" was
+   unenforceable because nothing counted cycles or checked the gap — the same failure class as
+   everything else in this charter, fixed the same way: **`main_site_health_check.py`'s "CEO Governance"
+   page now tracks this directly** — check it (or query `samantha_state._id:"ceo_business_review"`
+   yourself) at the start of every session/sweep; if `last_run` is missing or more than 7 days old, that
+   IS your trigger — run the review THIS session, covering: a financial snapshot (samantha-accounting, if
+   reachable), marketing spend/efficiency as a TREND not a point-in-time number, content/posting cadence
+   vs the target (`03-WEEKLY-CONTENT-PLAYBOOK.md`), a competitor scan (see [[fields_competitive_agent_intel]]
+   if it exists — this data source doesn't exist yet as of 2026-07-23, flag it as a gap if so), funnel
+   health trend over time, and an explicit "what am I not currently watching that a real CEO would ask
+   about" self-check. **After running it, record it** so the next session's check reads it correctly:
+   `samantha_state.update_one({"_id":"ceo_business_review"}, {"$set":{"last_run": now}}, upsert=True)`.
+   This is the step that makes her look like she's running the business, not working a ticket queue —
+   and it now has a real completion signal instead of a vibe about how long it's been.
 7. **Query BOTH brains before drafting or deciding on any substantive work item — every time, not
    occasionally.** Found 2026-07-23: `brain_search.py` was invoked exactly once across a 3-hour,
    17-cycle session (one early SEO research question), despite drafting multiple concepts afterward
