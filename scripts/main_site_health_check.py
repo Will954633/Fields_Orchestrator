@@ -61,7 +61,7 @@ CHART_TYPES = ["days_on_market", "sales_volume", "turnover_rate", "market_cycle"
 PAGES = ["Process Registry", "Pipeline Processes", "Sitemap", "GitHub Actions",
          "Market Metrics", "Market Signals Fetch", "For Sale / Sold", "Property Page",
          "Articles", "New Listings: Editorial & SEO", "Leads & CRM", "Ads & Compliance",
-         "Valuation Accuracy", "Known Gaps"]
+         "CEO Governance", "Valuation Accuracy", "Known Gaps"]
 
 FIELDS_AUTOMATION_REPO = "Will954633/fields-automation"
 
@@ -452,6 +452,59 @@ def collect_ads_compliance(add, sm, now_utc):
     except Exception as e:
         add(PG, "FB account billing status", "act_1463563608441065", None, UNKNOWN, "", None,
             f"could not check: {e}")
+
+
+# ---- CEO Governance (added 2026-07-23) -----------------------------------------
+def collect_ceo_governance(add, sm, now_utc):
+    """The charter's own run loop names two governance habits that turned out to have
+    never actually been enforced: 'Report — update Scorecard' (step 5, every run) and a
+    periodic 'CEO Business Review' (financial snapshot, marketing trend, competitor
+    scan). Both existed only as prose — the Scorecard went 8 days stale with nobody
+    noticing (Sheets API was disabled + no writer script existed until today), and the
+    CEO Business Review was never run once across an entire multi-hour session despite
+    being named in the charter. Both are the same failure class as everything else in
+    this file: a rule with no mechanical check silently doesn't happen. See fix-history
+    [DEEP-BUSINESS-REVIEW-NORTH-STAR-VISIBILITY-GAP].
+    """
+    PG = "CEO Governance"
+
+    # --- Scorecard freshness (reads the live sheet, same OAuth creds as task_board.py) ---
+    try:
+        import sys as _sys
+        _sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "samantha"))
+        from task_board import _svc, SHEET_ID  # noqa: E402
+        svc = _svc()
+        r = svc.spreadsheets().values().get(
+            spreadsheetId=SHEET_ID, range="Scorecard!A2:A1000").execute()
+        dates = [row[0] for row in r.get("values", []) if row]
+        if not dates:
+            add(PG, "Scorecard freshness", "Task Board", "no rows", MISSING, "", None,
+                "Scorecard tab has no data rows")
+        else:
+            newest = max(dates)  # ISO-ish YYYY-MM-DD strings sort correctly
+            ts = as_dt(newest + "T00:00:00Z") if len(newest) == 10 else None
+            st, dt = judge(ts, "weekly", now_utc, None) if ts else (UNKNOWN, "unparseable date")
+            add(PG, "Scorecard freshness", "Task Board", f"newest entry {newest}", st, "Date", ts, dt)
+    except Exception as e:
+        add(PG, "Scorecard freshness", "Task Board", None, UNKNOWN, "", None,
+            f"could not check: {e}")
+
+    # --- CEO Business Review cadence (financial snapshot / marketing trend / competitor
+    # scan / funnel-health trend / "what am I not watching" self-check) — tracked via a
+    # stored timestamp, the same pattern from_will.py already uses for its own pointer. ---
+    d = sm["samantha_state"].find_one({"_id": "ceo_business_review"})
+    ts = as_dt(d.get("last_run")) if d else None
+    if not ts:
+        add(PG, "CEO Business Review", "cadence", "never run", MISSING, "last_run", None,
+            "no ceo_business_review record — run one and record it via "
+            "samantha_state.update_one({'_id':'ceo_business_review'}, "
+            "{'$set':{'last_run': now}}, upsert=True)")
+    else:
+        age_days = (now_utc - ts).total_seconds() / 86400
+        st = OK if age_days <= 7 else ERROR
+        add(PG, "CEO Business Review", "cadence", f"last run {ts.date()} ({age_days:.1f}d ago)", st,
+            "last_run", ts, "" if st == OK else "overdue — run one this session (financial snapshot, "
+            "marketing spend trend, competitor scan, funnel health trend, self-check)")
 
 
 # ---- New Listings: Editorial & SEO ---------------------------------------------
@@ -1183,6 +1236,7 @@ def collect(client, now_utc, prev_map):
         ("New Listings: Editorial & SEO", collect_new_listings_editorial, (add, gc, sm, now_utc)),
         ("Leads & CRM", collect_leads_crm, (add, sm, now_utc, last_run)),
         ("Ads & Compliance", collect_ads_compliance, (add, sm, now_utc)),
+        ("CEO Governance", collect_ceo_governance, (add, sm, now_utc)),
     ]:
         try:
             fn(*fn_args)
