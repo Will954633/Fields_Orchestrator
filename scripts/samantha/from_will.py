@@ -158,7 +158,17 @@ def main() -> int:
         except Exception:
             comments = []
         for c in comments:
-            if c.get("createdTime", "") > since:
+            # Comments are all authored as "Will Simpson" regardless of who actually
+            # wrote them (Samantha posts through his OAuth identity, prefixed
+            # "Samantha:" per charter.md convention) — without this filter, every
+            # comment Samantha ever posts resurfaces here as if it were new content
+            # FROM Will on the next run. Found 2026-07-23 during a session-end sweep.
+            # NOTE: drive_comment.py's `comment --quote` prepends `Re: "<quote>" — `
+            # before the text, so the marker isn't always at index 0 — check anywhere
+            # near the start, not just a strict startswith.
+            content = (c.get("content") or "").strip()
+            is_samanthas_own = "samantha:" in content[:220].lower()
+            if c.get("createdTime", "") > since and not is_samanthas_own:
                 new_comments.append((name, f.get("webViewLink"), f["id"], c))
 
     # Digest
