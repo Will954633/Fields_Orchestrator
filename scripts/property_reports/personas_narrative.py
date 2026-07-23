@@ -128,6 +128,7 @@ def _format_inputs(
     cohort_premiums: List[Dict[str, Any]],
     pois: List[Dict[str, Any]],
     valuation_range: Optional[Dict[str, Any]] = None,
+    strategic_frame: Optional[str] = None,
 ) -> str:
     lines = [
         f"SUBJECT: {address} ({suburb})",
@@ -180,6 +181,17 @@ def _format_inputs(
         lines.append(
             f"WORKING VALUATION RANGE: ${_dr[0]:,} – ${_dr[1]:,} "
             f"(rounded to the nearest $100k for display)"
+        )
+
+    if strategic_frame:
+        lines.append("")
+        lines.append(f"STRATEGIC FRAME ALREADY CHOSEN FOR THIS PROPERTY: {strategic_frame}")
+        lines.append(
+            "  Your FIRST persona must clearly fit this frame — do not contradict it. "
+            "(e.g. if the frame leads with proximity to a specific school, persona 1 must be a "
+            "family/school-driven buyer, not an empty-nester/downsizer whose defining need — dropping "
+            "stairs and maintenance — has nothing to do with a school walk.) Personas 2 and 3 may cover "
+            "different angles on the SAME property, but none may undermine or contradict the chosen frame."
         )
 
     return "\n".join(lines)
@@ -272,7 +284,15 @@ def resolve_personas_narrative(
     cohort_premiums: List[Dict[str, Any]],
     pois: List[Dict[str, Any]],
     valuation_range: Optional[Dict[str, Any]] = None,
+    strategic_frame: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
+    """strategic_frame (optional): a short description of the positioning
+    frame ALREADY chosen for this property (e.g. positioning_object.py's
+    frameLine + leadLine) — when supplied, persona 1 is required to align
+    with it rather than being picked independently, so a downstream reader
+    never sees two cards arguing for contradictory buyer profiles (found
+    2026-07-23: a 'downsizer' persona alongside a 'walk to school' frame on
+    the same property, in Will's words 'the cards' intent is incongruent')."""
     from scripts.property_reports._claude_backend import get_client_and_model
     client, model = get_client_and_model(MODEL)
     if not client:
@@ -281,7 +301,7 @@ def resolve_personas_narrative(
     user_prompt = _format_inputs(
         address, suburb, features_basic or {}, notable_features or [],
         matching_full_stack or 0, active_listings_total or 0,
-        cohort_premiums or [], pois or [], valuation_range,
+        cohort_premiums or [], pois or [], valuation_range, strategic_frame,
     )
 
     last_error: Optional[str] = None
