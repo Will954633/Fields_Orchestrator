@@ -13,10 +13,12 @@ Pattern mirrors the other VM pollers (offmarket_order_processor.py). Runs as
 systemd service `fields-offmarket-intel-poller`.
 """
 import argparse
+import math
+import re
 import sys
 import time
 import traceback
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, "/home/fields/Fields_Orchestrator")  # repo root -> scripts.*, shared.*
 
@@ -147,6 +149,79 @@ def compute_intel(gc, suburb, slug):
     return result, None
 
 
+def _parse_price(s):
+    if not s or not isinstance(s, str):
+        return None
+    nums = re.findall(r"\$?([\d,]{6,})", s)
+    vals = []
+    for n in nums:
+        try:
+            v = float(n.replace(",", ""))
+            if 50000 <= v <= 20_000_000:
+                vals.append(v)
+        except ValueError:
+            pass
+    return sum(vals) / len(vals) if vals else None
+
+
+def _haversine_km_local(lat1, lon1, lat2, lon2):
+    r = 6371.0
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dlat, dlon = math.radians(lat2 - lat1), math.radians(lon2 - lon1)
+    a = math.sin(dlat / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dlon / 2) ** 2
+    return r * 2 * math.asin(math.sqrt(a))
+
+
+def estimate_price_anchor(gc, suburb_key, lat, lon, bedrooms, radius_km=2.5, limit=6):
+    """Coarse comps-based price estimate — mirrors the off-market deck's own
+    'wealth reveal' card (getNearbySoldComps + a percentile range, in
+    db.server.ts) so the value_liquidity_play frame's affordable/not read
+    agrees with what the same visitor already saw on an earlier card. Off-
+    market docs almost never carry a cached valuation_data range (that's a
+    client-side calc for this specific deck), so this fills that gap for the
+    positioning path only — not a valuation, not displayed as one, just an
+    anchor for the suburb price-tier comparison."""
+    if lat is None or lon is None or not suburb_key:
+        return None
+    try:
+        coll = gc[suburb_key]
+    except Exception:
+        return None
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=730)).strftime("%Y-%m-%d")
+    query = {"listing_status": "sold", "sold_date": {"$gte": cutoff}}
+    if isinstance(bedrooms, (int, float)) and bedrooms > 0:
+        query["bedrooms"] = {"$gte": int(bedrooms) - 1, "$lte": int(bedrooms) + 1}
+    try:
+        candidates = list(coll.find(
+            query, {"sale_price": 1, "LATITUDE": 1, "LONGITUDE": 1, "latitude": 1, "longitude": 1},
+        ).limit(400))
+    except Exception:
+        return None
+
+    scored = []
+    for d in candidates:
+        clat = d.get("LATITUDE", d.get("latitude"))
+        clon = d.get("LONGITUDE", d.get("longitude"))
+        try:
+            clat, clon = float(clat), float(clon)
+        except (TypeError, ValueError):
+            continue
+        dist = _haversine_km_local(lat, lon, clat, clon)
+        if dist > radius_km:
+            continue
+        price = _parse_price(d.get("sale_price"))
+        if price:
+            scored.append((dist, price))
+    if len(scored) < 3:
+        return None
+    scored.sort(key=lambda x: x[0])
+    prices = sorted(p for _, p in scored[:limit])
+    n = len(prices)
+    lo = prices[max(0, int(n * 0.15))]
+    hi = prices[min(n - 1, int(n * 0.85))]
+    return (lo + hi) / 2
+
+
 def compute_positioning(gc, suburb, slug):
     """The deck's 'Combination' / 'Right Buyer' / 'How we'd position it' cards.
     Decoupled from compute_intel() — includes a real Sonnet 5 generation
@@ -198,8 +273,15 @@ def compute_positioning(gc, suburb, slug):
     suburb_display = (matched or suburb or "").replace("_", " ").title()
 
     try:
+        price_anchor = estimate_price_anchor(gc, matched, lat, lon, subject.get("bedrooms"))
+    except Exception:
+        traceback.print_exc()
+        price_anchor = None
+
+    try:
         positioning = resolve_positioning_object(
             subject, gc, suburb_display, scarcity=scarcity_patched, pois=walk_pois,
+            price_anchor=price_anchor,
         )
     except Exception:
         traceback.print_exc()
