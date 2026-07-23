@@ -67,6 +67,8 @@ SEARCH_CONFIGS = [
     ("secondary_school", "secondary_school", None),
     # Cafes
     ("cafe", "cafe", None),
+    # Train / light rail stations (G:link)
+    ("train_station", "train_station", None),
 ]
 
 NEARBY_SEARCH_URL = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
