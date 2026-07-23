@@ -193,13 +193,25 @@ survives, per the memory discipline below.
    `python3 scripts/samantha/drive_comment.py list --file <id>` and check whether it already has a
    reply.** If it does, don't redo the work — read the prior answer, confirm it still holds (or note
    what's changed), and mark the paragraph orange. Only answer from scratch if genuinely nothing exists.
-2. **Post an actual in-document comment for EVERY new item you act on, every time — a chat answer or a
-   Backlog row is NOT a substitute.** Found 2026-07-23: an entire session answered ~10 of Will's note
-   items via chat/Backlog/memory but posted a new doc comment for exactly ONE of them. The document
-   itself must show engagement independent of whatever channel (chat, headless) happened to be live —
-   Will (or a future session) reading the doc alone should see it wasn't ignored. Use
-   `drive_comment.py comment --file <id> --quote "<the item text>" --text "Samantha: <answer or a
-   pointer to where the full answer lives>"` for each genuinely new item, prefixed "Samantha:" always.
+2. **Answer EVERY item directly in the document BODY, immediately under the paragraph it answers —
+   a chat answer, a Backlog row, or a Drive comment ALONE is NOT a substitute (revised 2026-07-23,
+   supersedes the comment-only version of this rule).** Found 2026-07-23, twice in one session: (a) an
+   earlier session answered ~10 of Will's note items via chat/Backlog/memory but posted a new doc
+   comment for exactly ONE of them; (b) THIS session posted comments for every item, and every one of
+   them was invisible to Will anyway — `drive_comment.py comment --quote` never actually set the Drive
+   API's `anchor` field, so 26 "in-thread" replies existed via the API but showed no attachment to any
+   text in the real Docs UI (`anchor: None` on every one, confirmed live). Will asked "where are your
+   replies" three separate times before this was caught. **The fix is a channel change, not a stronger
+   version of the same rule:** the REQUIRED, PRIMARY answer channel is now
+   `running_doc.py reply --doc <id> --match "<snippet of the item>" --text "<answer>"` — it inserts the
+   reply as real, indented, italicised BODY TEXT immediately after the paragraph it answers, and
+   self-verifies by re-reading the document afterward to confirm the text is genuinely there before
+   reporting success (do not trust the API call alone — same "success at the API level ≠ success at the
+   goal level" trap that caused the anchor bug in the first place). Body text is unambiguous: if it's in
+   the document, Will can see it, full stop — no undocumented rendering behaviour to hope works.
+   `drive_comment.py` (comment/reply) may still be used as a SECONDARY, best-effort nicety (e.g.
+   replying in-thread on a comment Will himself started, which — unlike a fresh comment — inherits a
+   real anchor and does work), but never as the only place an answer lives.
 3. **Mark the paragraph ORANGE the moment you've commented/actioned it — this was already a rule
    (`running_doc.py complete`) that simply wasn't followed.** Do it in the SAME step as posting the
    comment, not as a separate/optional follow-up you might skip. An un-orange paragraph with a buried
@@ -283,14 +295,16 @@ survives, per the memory discipline below.
        `drive_comment.py list --file <id>` for an existing reply (rule 1); (b) if genuinely new, actually
        do the work it asks for — research, a code/data check, a written answer, a decision — proportional
        to what it asks (a one-line factual question gets a real answer; "build a scoping document" gets an
-       actual scoping document, not a one-paragraph gesture at one); (c) post a comment via
-       `drive_comment.py comment` (rule 2) with the real answer or a pointer to where it lives (fix-history,
-       a Backlog row, memory, a file path); (d) mark the paragraph orange (rule 3).
+       actual scoping document, not a one-paragraph gesture at one); (c) answer it via
+       `running_doc.py reply --match "..." --text "..."` (rule 2 — BODY TEXT, not a Drive comment; the
+       command self-verifies the reply is genuinely readable before it reports success — trust that
+       verification, not just "the call didn't error"); (d) the reply command marks both the original
+       paragraph and the new reply orange automatically — confirm both actually went orange, don't assume.
     3. **Purely structural/header text that carries no request** (e.g. "Will Notes", a one-line preamble
-       sentence) does not need a substantive answer, but still mark it orange with a brief "Samantha: no
-       action needed, context only" comment rather than silently leaving it un-orange — an un-orange
-       paragraph is a promise that it hasn't been looked at yet, and it should never be ambiguous whether
-       something was reviewed-and-skipped versus never-seen.
+       sentence) does not need a substantive answer, but still mark it orange (`running_doc.py complete`)
+       with a brief body reply — "Samantha: no action needed, context only" — rather than silently leaving
+       it un-orange — an un-orange paragraph is a promise that it hasn't been looked at yet, and it should
+       never be ambiguous whether something was reviewed-and-skipped versus never-seen.
     4. **A paragraph whose action can't be finished this session** (needs Will's decision, needs a
        multi-day research effort, needs a credential you don't have) still gets a comment now — what you
        found so far, the concrete next step, and either a Backlog row or an explicit "blocked on Will"
@@ -305,6 +319,14 @@ survives, per the memory discipline below.
     This procedure is deliberately mechanical (count → enumerate → touch each → verify against the count)
     because the principle-level version of this rule already existed and was still skipped — a countable
     loop with an explicit completion check is harder to silently shortcut than a reminder to "be thorough."
+    6. **"Marked orange" is not the finish line — "verifiably present as body text" is (added 2026-07-23,
+       same session that found rule 2's comment-anchor bug).** Before considering the running-doc task
+       genuinely complete, do a final independent check: `python3 -c "..."` (or equivalent) that re-reads
+       the live document and counts paragraphs starting with `→ Samantha:` — that count should be close to
+       the number of items you answered this pass. A gap between "items I answered" and "replies actually
+       readable in the body" means something silently failed (an insert landed in the wrong place, merged
+       into the wrong paragraph, or errored) — go find and fix it before reporting done, the same
+       discipline that caught the comment-anchor bug in the first place.
 
 ## Self-audit follow-ups (2026-07-23) — 5 standing rules from Samantha's own findings
 Turned into rules the same day, after Will asked "what do we do about this" on the self-audit
