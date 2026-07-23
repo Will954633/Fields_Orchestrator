@@ -14,7 +14,10 @@ Usage:
     from scripts.property_reports.nearby_pois import resolve_nearby_pois
     pois = resolve_nearby_pois(lat, lon, gc_db)   # gc_db = client["Gold_Coast"]
 """
+import json
 import math
+import os
+import urllib.request
 
 _CACHE = {}  # poi_type -> list of {name, latitude, longitude} — cached per-process
 
@@ -64,5 +67,73 @@ def resolve_nearby_pois(lat, lon, gc_db, categories=None):
                 "name": best["name"],
                 "distance_km": round(best_km, 2),
                 "distance_m": int(round(best_km * 1000)),
+                "latitude": best.get("latitude"),
+                "longitude": best.get("longitude"),
             }
+    return out
+
+
+# Category -> the "category" string positioning_object.py / scarcity_narrative.py
+# expect (matches walking_distances.py's original POI_CATEGORIES vocabulary).
+# Beach excluded — scarcity_narrative handles beach proximity via its own
+# near-beach anchor, not the walkable-differentiator phrase. Cafe excluded —
+# not in scarcity_narrative's WALKABLE_CATEGORIES.
+_WALKABLE_CATEGORY_MAP = {
+    "primary_school": "school",
+    "secondary_school": "school",
+    "childcare": "childcare",
+    "supermarket": "shops",
+    "park": "park",
+    "train_station": "station",
+}
+# Straight-line prefilter — only bother routing candidates plausibly within
+# scarcity_narrative's 1000m walkable ceiling (buffered, since a real route is
+# never shorter than straight-line).
+_ROUTE_CHECK_CEILING_M = 1200
+MAPBOX_DIRECTIONS_URL = "https://api.mapbox.com/directions/v5/mapbox/walking"
+
+
+def _real_walk_metres(from_lat, from_lon, to_lat, to_lon, token):
+    url = (
+        f"{MAPBOX_DIRECTIONS_URL}/{from_lon},{from_lat};{to_lon},{to_lat}"
+        f"?overview=false&access_token={token}"
+    )
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Fields-Off-Market/1.0"})
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        routes = data.get("routes") or []
+        return int(routes[0]["distance"]) if routes else None
+    except Exception:
+        return None
+
+
+def to_walking_poi_list(proximity, subject_lat, subject_lon, mapbox_token=None):
+    """Convert resolve_nearby_pois()'s straight-line proximity dict into the
+    {name, category, walkMetres} shape positioning_object.py / scarcity_narrative.py
+    expect — with REAL routed walking distance, not straight-line, for every
+    candidate returned. Only candidates plausibly within walking range get a
+    (single, targeted) Mapbox Directions call; anything the route pushes over
+    the walkable ceiling, or that Mapbox can't route, is dropped rather than
+    shown with an unverified distance. Intended for the decoupled, cached-once
+    narrative path — NOT the fast per-pageview intel path (adds real latency).
+    """
+    token = mapbox_token or os.environ.get("MAPBOX_TOKEN") or os.environ.get("VITE_MAPBOX_TOKEN")
+    if not token or subject_lat is None or subject_lon is None:
+        return []
+    out = []
+    seen = set()
+    for cat, entry in (proximity or {}).items():
+        mapped = _WALKABLE_CATEGORY_MAP.get(cat)
+        if not mapped or entry.get("distance_m") is None or entry["distance_m"] > _ROUTE_CHECK_CEILING_M:
+            continue
+        dedupe_key = (entry["name"], mapped)
+        if dedupe_key in seen:
+            continue
+        walk_m = _real_walk_metres(subject_lat, subject_lon, entry.get("latitude"), entry.get("longitude"), token) \
+            if entry.get("latitude") is not None else None
+        if walk_m is None:
+            continue
+        seen.add(dedupe_key)
+        out.append({"name": entry["name"], "category": mapped, "walkMetres": walk_m})
     return out
