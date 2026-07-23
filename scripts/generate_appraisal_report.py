@@ -603,20 +603,39 @@ def get_market_stats(client, suburb):
 # ---------------------------------------------------------------------------
 # AI-generated editorial content (Claude)
 # ---------------------------------------------------------------------------
+# Original tier for this script. _claude_backend preserves the Opus tier when
+# routing through the Max CLI (its alias mapping keys off "opus" in the string).
+EDITORIAL_MODEL = os.environ.get("APPRAISAL_EDITORIAL_MODEL", "claude-opus-4-20250514")
+
+
+def _claude_model() -> str:
+    """Resolve the model the configured backend should use for this script."""
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent / "property_reports"))
+        from _claude_backend import get_client_and_model
+        _, model = get_client_and_model(EDITORIAL_MODEL)
+        return model or EDITORIAL_MODEL
+    except Exception:
+        return EDITORIAL_MODEL
+
+
 def generate_editorial(prop: dict, top_comps: list, market_stats: dict, rates: dict, suburb: str, scarcity_stats: dict = None) -> dict:
     """Generate ALL editorial content via Claude — headline, verdict, value equations, buyer profiles, positioning."""
+    # Route through the shared backend resolver (Max CLI / OpenRouter / Vertex /
+    # direct API) rather than building a raw pay-as-you-go client. The direct API
+    # has no credit balance, so this previously fell straight through to
+    # _minimal_editorial and shipped placeholder prose in a real appraisal PDF.
     try:
-        import anthropic
-    except ImportError:
-        print("  [WARN] anthropic not installed, using minimal editorial")
+        sys.path.insert(0, str(Path(__file__).resolve().parent / "property_reports"))
+        from _claude_backend import get_client_and_model
+        client, editorial_model = get_client_and_model(EDITORIAL_MODEL)
+    except Exception as e:
+        print(f"  [WARN] Claude backend unavailable ({e}), using minimal editorial")
         return _minimal_editorial(prop, top_comps, market_stats)
 
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        print("  [WARN] ANTHROPIC_API_KEY not set, using minimal editorial")
+    if client is None:
+        print("  [WARN] no Claude backend configured, using minimal editorial")
         return _minimal_editorial(prop, top_comps, market_stats)
-
-    client = anthropic.Anthropic(api_key=api_key)
 
     # Build property summary
     pvd = prop.get("property_valuation_data", {})
@@ -785,7 +804,7 @@ OUTPUT FORMAT (CRITICAL — parser is strict):
 
     try:
         resp = client.messages.create(
-            model="claude-opus-4-20250514",
+            model=editorial_model,
             max_tokens=6000,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -857,7 +876,7 @@ Current narrative:
 \"\"\""""
         try:
             resp = client.messages.create(
-                model="claude-opus-4-20250514",
+                model=_claude_model(),
                 max_tokens=1500,
                 messages=[{"role": "user", "content": retry_prompt}],
             )
@@ -1872,8 +1891,11 @@ def main():
         # blunt instrument. ~$0.50 per retry, max 2 retries.
         if not args.skip_ai and editorial.get("morning_in_this_home"):
             try:
-                import anthropic
-                client_anth = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
+                sys.path.insert(0, str(Path(__file__).resolve().parent / "property_reports"))
+                from _claude_backend import get_client_and_model
+                client_anth, _ = get_client_and_model(EDITORIAL_MODEL)
+                if client_anth is None:
+                    raise RuntimeError("no Claude backend configured")
                 editorial["morning_in_this_home"] = regenerate_morning_narrative(
                     client_anth, prop, editorial["morning_in_this_home"]
                 )
