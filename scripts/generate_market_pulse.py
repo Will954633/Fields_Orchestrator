@@ -37,16 +37,52 @@ def _child_env() -> dict:
     return env
 
 
-def _call_claude_max(system_prompt: str, user_prompt: str) -> str:
+def _call_claude_max(system_prompt: str, user_prompt: str, timeout: int = CLI_TIMEOUT_S) -> str:
     """Invoke the claude CLI (billed to Max, not API credits) and return the raw text response."""
     cmd = [CLI_BIN, "-p", user_prompt, "--system-prompt", system_prompt, "--output-format", "json"]
-    proc = subprocess.run(cmd, text=True, capture_output=True, timeout=CLI_TIMEOUT_S, env=_child_env())
+    proc = subprocess.run(cmd, text=True, capture_output=True, timeout=timeout, env=_child_env())
     if proc.returncode != 0:
         raise RuntimeError(f"claude CLI exited {proc.returncode}: {(proc.stderr or '')[:500]}")
     data = json.loads(proc.stdout)
     if data.get("is_error") or data.get("subtype") != "success":
         raise RuntimeError(f"CLI returned error: {data.get('subtype')}: {str(data.get('result'))[:500]}")
     return data.get("result", "")
+
+
+POLICY_DIGEST_SYSTEM_PROMPT = """You condense long-form policy research briefs into a compact reference
+digest for a real estate copywriter. The copywriter writes 3-4 sentence suburb market summaries and will
+select AT MOST ONE fact from your digest per summary, only when it's genuinely relevant — so each fact must
+stand alone (don't rely on surrounding sentence context) and be quotable as-is."""
+
+POLICY_DIGEST_USER_PROMPT_TEMPLATE = """Condense the policy brief below into 6-10 short, self-contained
+factual bullet points (plain text, one per line, no markdown headers) covering: RBA cash rate level + next
+decision date, negative gearing / CGT reform (effective date, who's affected, who's grandfathered),
+first-home-buyer schemes (5% Deposit Scheme, Help to Buy, QLD Boost to Buy — caps and dates), QLD stamp
+duty / First Home Owner Grant status. Skip AML/CTF and anything not relevant to a buyer/seller/investor
+market summary. Keep the whole digest under 900 characters.
+
+Policy brief:
+{brief}"""
+
+
+def fetch_policy_digest(sm_db) -> str:
+    """Fetch the latest monthly policy research brief and condense it into a short digest
+    reusable across all suburb/category summary prompts (one Max CLI call per run, not one
+    per suburb/category — the full brief is ~9K chars, too long to inject 12x per run)."""
+    doc = sm_db["policy_research_briefs"].find_one(sort=[("generated_at", -1)])
+    if not doc or not doc.get("brief_text"):
+        return ""
+    try:
+        digest = _call_claude_max(
+            POLICY_DIGEST_SYSTEM_PROMPT,
+            POLICY_DIGEST_USER_PROMPT_TEMPLATE.format(brief=doc["brief_text"]),
+            timeout=180,
+        ).strip()
+        print(f"  Policy digest ({doc.get('month_label', '?')}): {len(digest)} chars")
+        return digest
+    except Exception as e:
+        print(f"  WARNING: policy digest condensation failed ({e}) — continuing without policy context")
+        return ""
 
 # ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -306,6 +342,10 @@ They are anxious about timing — they don't want to sell too early (miss furthe
 Here is the current market data for {suburb}:
 {data}
 
+Current AU/QLD housing policy context (use AT MOST ONE fact from this list, only if it genuinely
+strengthens the analysis — do not force a policy mention into every summary):
+{policy}
+
 Write a 3-4 sentence market summary that:
 1. Opens with "Should you sell your house in {suburb} now?"
 2. Gives a direct verdict: conditions currently favour sellers / market is balanced / conditions favour buyers
@@ -330,6 +370,11 @@ They want to know: is now a smart time to enter the market, or should they wait?
 
 Here is the current market data for {suburb}:
 {data}
+
+Current AU/QLD housing policy context (use AT MOST ONE fact from this list, only if it genuinely
+strengthens the analysis — do not force a policy mention into every summary). First-home-buyer scheme
+facts (5% Deposit Scheme, Help to Buy, stamp duty/FHOG) are usually most relevant here:
+{policy}
 
 Write a 3-4 sentence summary that:
 1. Opens with "Is now a good time to buy a house in {suburb}?"
@@ -366,6 +411,11 @@ Your crash risk assessment should primarily reference these leading indicators (
 Here is the current market data for {suburb}:
 {data}
 
+Current AU/QLD housing policy context (use AT MOST ONE fact from this list, only if it genuinely
+strengthens the analysis — do not force a policy mention into every summary). The RBA cash rate/next
+decision date and negative gearing/CGT reform are usually most relevant here:
+{policy}
+
 Write a 3-4 sentence summary that:
 1. Opens with "Is the Gold Coast property market going to crash?"
 2. Acknowledges the concern honestly, then assesses crash risk based on the LEADING indicators (wage growth trend, household spending, lending)
@@ -387,6 +437,10 @@ Return as JSON:
 Here is the current market data for {suburb}:
 {data}
 
+Current AU/QLD housing policy context (use AT MOST ONE fact from this list, only if it genuinely
+strengthens the analysis — do not force a policy mention into every summary):
+{policy}
+
 Write a 3-4 sentence overview that:
 1. Opens with "What is the {suburb} property market doing?"
 2. Covers the headline numbers: median price, recent sales volume, DOM, active listings
@@ -406,6 +460,10 @@ Return as JSON:
 
 Here is the current market data for {suburb}:
 {data}
+
+Current AU/QLD housing policy context (use AT MOST ONE fact from this list, only if it genuinely
+strengthens the analysis — do not force a policy mention into every summary):
+{policy}
 
 Write a 3-4 sentence summary that:
 1. Opens with "Are houses or units a better investment in {suburb}?"
@@ -433,6 +491,10 @@ IMPORTANT CONTEXT — Research shows:
 Here is the current market data for {suburb}:
 {data}
 
+Current AU/QLD housing policy context (use AT MOST ONE fact from this list, only if it genuinely
+strengthens the analysis — do not force a policy mention into every summary):
+{policy}
+
 Write a 3-4 sentence summary that:
 1. Opens with "Which way is the {suburb} property market moving?"
 2. References QoQ and YoY growth momentum and whether it's accelerating or decelerating
@@ -452,6 +514,10 @@ Return as JSON:
 
 Here is the current market data including cross-suburb comparisons:
 {data}
+
+Current AU/QLD housing policy context (use AT MOST ONE fact from this list, only if it genuinely
+strengthens the analysis — do not force a policy mention into every summary; often not relevant here):
+{policy}
 
 Write a 3-4 sentence summary that:
 1. Opens with "How does {suburb} compare to nearby suburbs?"
@@ -484,7 +550,7 @@ Rules:
 
 # ─── Claude API Call ──────────────────────────────────────────────────────────
 
-def generate_summary(client, category_id, suburb_display, data_dict, dry_run=False):
+def generate_summary(client, category_id, suburb_display, data_dict, policy_digest="", dry_run=False):
     """Call Claude Sonnet to generate a category summary."""
     prompt_template = CATEGORY_PROMPTS.get(category_id)
     if not prompt_template:
@@ -492,7 +558,11 @@ def generate_summary(client, category_id, suburb_display, data_dict, dry_run=Fal
 
     # Format data as readable text for the prompt
     data_text = json.dumps(data_dict, indent=2, default=str)
-    prompt = prompt_template.format(suburb=suburb_display, data=data_text)
+    prompt = prompt_template.format(
+        suburb=suburb_display,
+        data=data_text,
+        policy=policy_digest or "(no current policy brief available)",
+    )
 
     if dry_run:
         print(f"\n{'='*60}")
@@ -599,6 +669,13 @@ def main():
     suburbs = [args.suburb] if args.suburb else TARGET_SUBURBS
     categories = [c for c in CATEGORIES if not args.category or c["id"] == args.category]
 
+    # Fetch + condense the latest policy research brief ONCE per run (not once per
+    # suburb/category — the full brief is ~9K chars, condensing it 12x per run would
+    # be wasteful). Reused across every generate_summary() call below.
+    policy_digest = ""
+    if not args.dry_run:
+        policy_digest = fetch_policy_digest(sm_db)
+
     total_input_tokens = 0
     total_output_tokens = 0
     generated_count = 0
@@ -629,7 +706,7 @@ def main():
 
             print(f"\n  Generating: {cat['title']} ({cat_id})...")
 
-            result = generate_summary(claude_client, cat_id, display, data, dry_run=args.dry_run)
+            result = generate_summary(claude_client, cat_id, display, data, policy_digest=policy_digest, dry_run=args.dry_run)
 
             if result is None:
                 continue
