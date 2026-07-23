@@ -60,14 +60,35 @@ def cmd_reply(a) -> int:
 
 
 def cmd_comment(a) -> int:
+    """Post a new comment. When --quote is given, find that paragraph via the Docs
+    API and attach a real anchor (Drive API's undocumented-but-community-confirmed
+    text-range anchor format) so the comment lands ON that text in the Docs UI —
+    not just prefixed with "Re: ..." in the comment body (which is NOT the same
+    thing: an unanchored comment has no visual link to any text at all, and Will
+    could not find it in-context — found 2026-07-23, root-caused via a live check
+    showing `anchor: None` on every prior --quote comment this session).
+    """
     svc = _drive()
     content = a.text
+    anchor = None
     if a.quote:
-        content = f'Re: "{a.quote[:180]}" — {a.text}'
+        import sys as _sys
+        _sys.path.insert(0, __file__.rsplit("/", 1)[0])
+        from running_doc import _docs, paragraphs  # noqa: E402
+        doc = _docs().documents().get(documentId=a.file).execute()
+        match = next((p for p in paragraphs(doc) if a.quote in p["text"]), None)
+        if match:
+            anchor = json.dumps({"r": "head", "a": [{"txt": {
+                "o": match["start"], "l": match["end"] - match["start"]}}]})
+        else:
+            content = f'Re: "{a.quote[:180]}" (paragraph not found for anchoring — fell back to text prefix) — {a.text}'
+    body = {"content": content}
+    if anchor:
+        body["anchor"] = anchor
     r = svc.comments().create(
-        fileId=a.file, fields="id,content,createdTime", body={"content": content},
+        fileId=a.file, fields="id,content,createdTime,anchor", body=body,
     ).execute()
-    print(f"commented on {a.file}: {r.get('id')}")
+    print(f"commented on {a.file}: {r.get('id')} (anchored={bool(r.get('anchor'))})")
     return 0
 
 
