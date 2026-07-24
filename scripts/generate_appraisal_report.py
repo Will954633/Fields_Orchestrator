@@ -603,39 +603,20 @@ def get_market_stats(client, suburb):
 # ---------------------------------------------------------------------------
 # AI-generated editorial content (Claude)
 # ---------------------------------------------------------------------------
-# Original tier for this script. _claude_backend preserves the Opus tier when
-# routing through the Max CLI (its alias mapping keys off "opus" in the string).
-EDITORIAL_MODEL = os.environ.get("APPRAISAL_EDITORIAL_MODEL", "claude-opus-4-20250514")
-
-
-def _claude_model() -> str:
-    """Resolve the model the configured backend should use for this script."""
-    try:
-        sys.path.insert(0, str(Path(__file__).resolve().parent / "property_reports"))
-        from _claude_backend import get_client_and_model
-        _, model = get_client_and_model(EDITORIAL_MODEL)
-        return model or EDITORIAL_MODEL
-    except Exception:
-        return EDITORIAL_MODEL
-
-
 def generate_editorial(prop: dict, top_comps: list, market_stats: dict, rates: dict, suburb: str, scarcity_stats: dict = None) -> dict:
     """Generate ALL editorial content via Claude — headline, verdict, value equations, buyer profiles, positioning."""
-    # Route through the shared backend resolver (Max CLI / OpenRouter / Vertex /
-    # direct API) rather than building a raw pay-as-you-go client. The direct API
-    # has no credit balance, so this previously fell straight through to
-    # _minimal_editorial and shipped placeholder prose in a real appraisal PDF.
     try:
-        sys.path.insert(0, str(Path(__file__).resolve().parent / "property_reports"))
-        from _claude_backend import get_client_and_model
-        client, editorial_model = get_client_and_model(EDITORIAL_MODEL)
-    except Exception as e:
-        print(f"  [WARN] Claude backend unavailable ({e}), using minimal editorial")
+        import anthropic
+    except ImportError:
+        print("  [WARN] anthropic not installed, using minimal editorial")
         return _minimal_editorial(prop, top_comps, market_stats)
 
-    if client is None:
-        print("  [WARN] no Claude backend configured, using minimal editorial")
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        print("  [WARN] ANTHROPIC_API_KEY not set, using minimal editorial")
         return _minimal_editorial(prop, top_comps, market_stats)
+
+    client = anthropic.Anthropic(api_key=api_key)
 
     # Build property summary
     pvd = prop.get("property_valuation_data", {})
@@ -804,7 +785,7 @@ OUTPUT FORMAT (CRITICAL — parser is strict):
 
     try:
         resp = client.messages.create(
-            model=editorial_model,
+            model="claude-opus-4-20250514",
             max_tokens=6000,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -876,7 +857,7 @@ Current narrative:
 \"\"\""""
         try:
             resp = client.messages.create(
-                model=_claude_model(),
+                model="claude-opus-4-20250514",
                 max_tokens=1500,
                 messages=[{"role": "user", "content": retry_prompt}],
             )
@@ -1551,8 +1532,7 @@ def _fmt_sat_label(val: str) -> str:
 def render_html(prop, client_name, top_comps, room_assessments, editorial,
                 market_stats, photo_paths, suburb_display: str,
                 sell_timeline: str = "", sell_timeline_label: str = "",
-                rates: dict = None, pipeline_record: dict | None = None,
-                positioning: bool = False) -> str:
+                rates: dict = None, pipeline_record: dict | None = None) -> str:
     env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)))
     template = env.get_template("seller_report_v2.html")
     rates = rates or {}
@@ -1574,28 +1554,6 @@ def render_html(prop, client_name, top_comps, room_assessments, editorial,
     except Exception as e:
         print(f"[WARN] §01 right template render failed, using legacy banner: {e}")
         section_01_right_html = None
-
-    # ── Positioning-report variant (cold off-market recipient) ──────────────
-    # Retitle + derive the live-version URL and a vector QR for the opener page.
-    # When positioning=False these vars are inert (template falls back to default).
-    if positioning:
-        report_title = "Private Property Positioning Report"
-        report_title_short = "Property Positioning Report"
-    else:
-        report_title = "Property Position Report"
-        report_title_short = "Property Position Report"
-    live_url, qr_live_uri = "", ""
-    if positioning:
-        import re as _re
-        _addr = (prop.get("street_address") or prop.get("address") or "").split(",")[0]
-        _slug = _re.sub(r"[^a-z0-9]+", "-", f"{_addr} {suburb_display}".strip().lower()).strip("-")
-        live_url = f"https://fieldsestate.com.au/your-home/{_slug}#home" if _slug else "https://fieldsestate.com.au"
-        try:
-            import segno
-            qr_live_uri = segno.make(live_url, error="m").svg_data_uri(
-                dark="#22382C", light="#ffffff", border=3, scale=1)
-        except Exception as _e:
-            print(f"  [WARN] positioning QR generation failed: {_e}")
 
     pvd = prop.get("property_valuation_data", {})
     fpa = prop.get("floor_plan_analysis", {})
@@ -1730,12 +1688,6 @@ def render_html(prop, client_name, top_comps, room_assessments, editorial,
         # Phase A appraisal template system — new §01 right HTML block, or
         # None to fall back to the legacy scarcity-banner.
         "section_01_right_html": section_01_right_html,
-        # Positioning-report variant fields (inert unless positioning=True)
-        "positioning": positioning,
-        "report_title": report_title,
-        "report_title_short": report_title_short,
-        "live_url": live_url,
-        "qr_live_uri": qr_live_uri,
     }
 
     return template.render(**context)
@@ -1814,10 +1766,6 @@ def main():
     parser.add_argument("--strict", action="store_true",
                         help="Run scripts/editorial_review.py against the editorial JSON before render; "
                              "abort if any FAIL-severity check fails")
-    parser.add_argument("--positioning", action="store_true",
-                        help="Positioning-report variant for cold off-market recipients (no prior contact): "
-                             "retitles to 'Private Property Positioning Report' and adds a 'why you've "
-                             "received this' opener. Warm-lead appraisal render is unchanged without this flag.")
     args = parser.parse_args()
 
     db_client = get_db()
@@ -1837,7 +1785,6 @@ def main():
     else:
         if not args.address or not args.client or not args.suburb:
             sys.exit("[ERROR] Provide --pipeline-id OR --address + --client + --suburb")
-        pipeline = None  # manual mode has no pipeline record (fixes UnboundLocalError in render_html call)
         address = args.address
         client_name = args.client
         suburb_key = args.suburb
@@ -1924,11 +1871,8 @@ def main():
         # blunt instrument. ~$0.50 per retry, max 2 retries.
         if not args.skip_ai and editorial.get("morning_in_this_home"):
             try:
-                sys.path.insert(0, str(Path(__file__).resolve().parent / "property_reports"))
-                from _claude_backend import get_client_and_model
-                client_anth, _ = get_client_and_model(EDITORIAL_MODEL)
-                if client_anth is None:
-                    raise RuntimeError("no Claude backend configured")
+                import anthropic
+                client_anth = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
                 editorial["morning_in_this_home"] = regenerate_morning_narrative(
                     client_anth, prop, editorial["morning_in_this_home"]
                 )
@@ -1970,8 +1914,7 @@ def main():
                        sell_timeline=sell_timeline,
                        sell_timeline_label=timeline_labels.get(sell_timeline, sell_timeline),
                        rates=rates,
-                       pipeline_record=pipeline,
-                       positioning=args.positioning)
+                       pipeline_record=pipeline)
     html_path = work_dir / "report.html"
     html_path.write_text(html)
 
