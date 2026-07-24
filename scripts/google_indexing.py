@@ -199,7 +199,13 @@ def get_property_urls():
     for suburb in TARGET_SUBURBS:
         try:
             coll = db[suburb]
-            for doc in coll.find({"listing_status": "for_sale"}, {"_id": 1, "last_updated": 1}):
+            # EDITORIAL GATE: only submit for-sale pages that have passed the
+            # editorial pipeline (ai_analysis.status == "published"). Without this
+            # we pinged Google's Indexing API the same night a listing was scraped,
+            # so Google indexed the fallback meta ("Property For Sale | Fields")
+            # BEFORE the nightly editorial run wrote the real hook — then we had to
+            # wait for a re-crawl to fix it. See fix-history 2026-07-24 (27 Florabella).
+            for doc in coll.find({"listing_status": "for_sale", "ai_analysis.status": "published"}, {"_id": 1, "last_updated": 1}):
                 for_sale.append((_recency(doc), f"{SITE_URL}/property/{doc['_id']}"))
             for doc in coll.find({"listing_status": "sold"}, {"_id": 1, "last_updated": 1}):
                 sold.append((_recency(doc), f"{SITE_URL}/sold/{doc['_id']}"))
@@ -337,7 +343,10 @@ def cmd_submit_new():
     for suburb in TARGET_SUBURBS:
         try:
             coll = db[suburb]
-            for doc in coll.find({**query, "listing_status": "for_sale"}, {"_id": 1}):
+            # EDITORIAL GATE (see get_property_urls): never submit a for-sale page
+            # to Google until its editorial has been published, so the FIRST time
+            # Google sees the page it already has the real meta title + description.
+            for doc in coll.find({**query, "listing_status": "for_sale", "ai_analysis.status": "published"}, {"_id": 1}):
                 urls.append(f"{SITE_URL}/property/{doc['_id']}")
             for doc in coll.find({**query, "listing_status": "sold"}, {"_id": 1}):
                 urls.append(f"{SITE_URL}/sold/{doc['_id']}")
