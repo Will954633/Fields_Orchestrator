@@ -71,11 +71,20 @@ img.chart.p2chart { width: auto; max-width: 100%; max-height: 51mm; margin: 1.5m
 
 /* ---- Cover FCI hero ---- */
 .hero-headline { font-size: 40pt; line-height: 0.98; letter-spacing: -0.01em; margin: 4mm 0 4mm 0; }
-.fci-hero { display: flex; align-items: center; gap: 8mm; margin: 2mm 0 5mm 0; }
-.fci-hero .num { font-family: var(--serif); font-weight: 700; font-size: 78pt; line-height: 0.85; color: var(--fields-grass); font-variant-numeric: tabular-nums; }
-.fci-hero .meta { font-family: var(--sans); font-size: 9pt; color: var(--charcoal); line-height: 1.45; }
+.fci-hero { display: flex; align-items: center; gap: 7mm; margin: 2mm 0 5mm 0; }
+.fci-hero .num { font-family: var(--serif); font-weight: 700; font-size: 74pt; line-height: 0.85; color: var(--fields-grass); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.fci-hero .meta { font-family: var(--sans); font-size: 8.6pt; color: var(--charcoal); line-height: 1.42; flex: 1; }
 .fci-hero .meta .lbl { font-size: 8pt; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fields-copper); font-weight: 600; display: block; margin-bottom: 1mm; }
 .fci-hero .meta .delta { color: var(--fields-grass); font-weight: 600; }
+.fci-qr { flex-shrink: 0; text-align: center; width: 22mm; }
+.fci-qr img { width: 20mm; height: 20mm; display: block; margin: 0 auto; }
+.fci-qr .qr-cap { font-family: var(--sans); font-size: 6.4pt; line-height: 1.2; color: var(--slate); margin-top: 1mm; letter-spacing: 0.02em; }
+.fci-qr .qr-cap b { color: var(--fields-grass); display: block; }
+.back-row { display: flex; align-items: center; justify-content: space-between; gap: 6mm; margin-top: 4mm; }
+.back-qr-inline { display: flex; align-items: center; gap: 3mm; flex-shrink: 0; }
+.back-qr-inline img { width: 21mm; height: 21mm; display: block; }
+.back-qr-inline .qr-cap { font-family: var(--sans); font-size: 7.5pt; line-height: 1.35; color: var(--slate); text-align: right; max-width: 40mm; }
+.back-qr-inline .qr-cap b { color: var(--fields-grass); display: block; }
 
 .fci-badges { display: flex; gap: 4mm; margin: 4mm 0 5mm 0; }
 .badge { flex: 1; background: #FFFFFF; border-top: 3pt solid var(--fields-sage); padding: 3.5mm 4mm; }
@@ -157,6 +166,10 @@ table.data td.num { text-align: right; font-variant-numeric: tabular-nums; }
       A single reading of price, transaction volume and days-on-market, measured against each suburb's own five-year history.
       Rebased to Q1 2020 = 100, where 100 marks balanced conviction.<br><br>
       <span class="delta">Down from 100.1 in Q1 2026</span> — the index has slipped below its baseline for the first time since early 2025.
+    </div>
+    <div class="fci-qr">
+      <img src="file:///home/fields/Fields_Orchestrator/10_Market_Report/pipeline/output/qr/qr_conviction_index.png" alt="Scan to read how the Conviction Index works">
+      <div class="qr-cap"><b>How the Index works</b>Scan or visit fieldsestate.com.au/conviction-index</div>
     </div>
   </div>
 
@@ -380,7 +393,13 @@ table.data td.num { text-align: right; font-variant-numeric: tabular-nums; }
   <div class="method">
     <b>Method.</b> House transactions across Robina (4226), Burleigh Waters (4220) and Varsity Lakes (4227). Quarterly medians can swing on small samples (Q2 2026: 12–26 sales per suburb), so trend claims lean on the trailing-12-month median (90–140 sales). The Fields Conviction Index is a composite z-score of price, sales volume and days-on-market, each measured against the suburb's own five-year history and rebased to Q1 2020 = 100. Macro indicators from ABS and RBA. Prices shown are exact recorded transaction figures. Data close 30 June 2026; case-study sales settled through 23 July 2026. Sources: Fields Real Estate, Domain, ABS, RBA. This report presents data and analysis for information only — it is not personal or financial advice, and makes no forecast of future prices.
   </div>
-  <p class="cta-line">Full interactive charts and suburb detail at fieldsestate.com.au/market-metrics · Smarter with data.</p>
+  <div class="back-row">
+    <p class="cta-line" style="margin:0;">Full interactive charts and suburb detail at<br>fieldsestate.com.au/market-metrics · Smarter with data.</p>
+    <div class="back-qr-inline">
+      <img src="file:///home/fields/Fields_Orchestrator/10_Market_Report/pipeline/output/qr/qr_market_metrics_robina.png" alt="Scan for live Robina market data">
+      <div class="qr-cap"><b>Live Robina market data</b>Scan or visit fieldsestate.com.au/market-metrics/Robina</div>
+    </div>
+  </div>
 
   <div class="page-footer">
     <span><span class="tag">Fields · Smarter with data</span> — fieldsestate.com.au/market-metrics</span>
