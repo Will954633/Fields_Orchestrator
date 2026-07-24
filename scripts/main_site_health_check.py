@@ -768,6 +768,84 @@ def collect_seo_page_integrity(add, gc, now_utc):
             add(PG, label, path, val, OK, "", None, f"“{info['title']}”")
 
 
+
+    # --- Content match: a PUBLISHED page must serve its EDITORIAL meta, not the
+    # address-only fallback. The loop above only checks a <title> EXISTS; a
+    # published page silently serving "<address> | Fields Estate" instead of its
+    # editorial hook is indexable + non-empty, so it passes — yet that is exactly
+    # the wrong-copy failure that started this (27 Florabella, 2026-07-24). Assert
+    # the served description/og:title equal ai_analysis.meta_*.
+    import re as _re2, html as _html2, requests as _rq2
+
+    def _meta_of(_html, _prop, _attr="name"):
+        _m = _re2.search(rf'<meta\s+{_attr}="{_prop}"\s+content="([^"]*)"', _html, _re2.I)
+        return _html2.unescape(_m.group(1)).strip() if _m else None
+
+    try:
+        pub = None
+        for s in NEW_LISTING_SUBURBS:
+            pub = gc[s].find_one(
+                {"listing_status": "for_sale", "ai_analysis.status": "published",
+                 "ai_analysis.meta_title": {"$nin": [None, ""]},
+                 "ai_analysis.meta_description": {"$nin": [None, ""]},
+                 "url_slug": {"$nin": [None, ""]}},
+                {"address": 1, "url_slug": 1, "ai_analysis.meta_title": 1,
+                 "ai_analysis.meta_description": 1},
+                sort=[("ai_analysis.published_at", -1)])
+            if pub:
+                break
+        if pub:
+            aa = pub.get("ai_analysis") or {}
+            r = _rq2.get(f"{SITE_URL}/property/{pub['url_slug']}",
+                         headers={"User-Agent": GOOGLEBOT_UA}, timeout=20)
+            r.encoding = "utf-8"  # force UTF-8 so em-dashes in the hook aren't mangled into a false mismatch
+            got_desc = _meta_of(r.text, "description")
+            got_ogt = _meta_of(r.text, "og:title", "property")
+            probs = []
+            if got_desc != (aa.get("meta_description") or "").strip():
+                probs.append(f"description is NOT the editorial one (serving: '{(got_desc or '')[:50]}')")
+            if got_ogt != (aa.get("meta_title") or "").strip():
+                probs.append(f"og:title is NOT the editorial one (serving: '{(got_ogt or '')[:50]}')")
+            addr = pub.get("address", pub["url_slug"])
+            if probs:
+                add(PG, "Editorial content served", addr, "serving fallback", ERROR, "", None,
+                    "; ".join(probs)[:200])
+            else:
+                add(PG, "Editorial content served", addr, "matches DB", OK, "", None,
+                    "served meta title + description == published editorial")
+    except Exception as e:
+        add(PG, "Editorial content served", "sample", None, UNKNOWN, "", None,
+            f"check failed: {type(e).__name__}: {e}"[:120])
+
+    # --- Reverse gate direction: an UN-editorialised for-sale page MUST be noindex,
+    # or the editorial indexing gate (2026-07-24) is leaking fallback copy to Google.
+    try:
+        leak = None
+        for s in NEW_LISTING_SUBURBS:
+            leak = gc[s].find_one(
+                {"listing_status": "for_sale", "url_slug": {"$nin": [None, ""]},
+                 "ai_analysis.status": {"$ne": "published"}},
+                {"address": 1, "url_slug": 1})
+            if leak:
+                break
+        if leak:
+            r = _rq2.get(f"{SITE_URL}/property/{leak['url_slug']}",
+                         headers={"User-Agent": GOOGLEBOT_UA}, timeout=20)
+            r.encoding = "utf-8"
+            rm = _re2.search(r'<meta[^>]+name="robots"[^>]*>', r.text, _re2.I)
+            is_noindex = "noindex" in (rm.group(0).lower() if rm else "")
+            addr = leak.get("address", leak["url_slug"])
+            if is_noindex:
+                add(PG, "Indexing gate (un-editorialised)", addr, "noindex", OK, "", None,
+                    "un-editorialised page correctly withheld from Google")
+            else:
+                add(PG, "Indexing gate (un-editorialised)", addr, "GATE LEAK", ERROR, "", None,
+                    "no published editorial yet NOT noindex — Google can index fallback copy")
+    except Exception as e:
+        add(PG, "Indexing gate (un-editorialised)", "sample", None, UNKNOWN, "", None,
+            f"check failed: {type(e).__name__}: {e}"[:120])
+
+
 # ---- Process Registry (every cron job / systemd daemon / off-VM runner) -------
 # Declarative inventory from the 2026-07-22 crontab/systemd audit. Most rows
 # use the log-freshness fallback (their only observable trace); anything with
@@ -779,6 +857,7 @@ _REGISTRY_LOG_JOBS = [
     ("Property insights (nightly)", "Website", "/home/fields/logs/insights_*.log", 1),
     ("Schema snapshot", "Infra", "schema_snapshot.log", 1),
     ("Article index builder", "Content", "article-index.log", 1),
+    ("Editorial → Sheet (nightly)", "Content", "editorial-published-sheet.log", 1),
     ("Market intelligence extractor", "Content", "market-insights.log", 1),
     ("Search Intent Collector", "SEO", "search-intent.log", 3),
     ("Search Intent Analyser", "SEO", "search-intent-analyser.log", 3),
