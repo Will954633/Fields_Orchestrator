@@ -412,19 +412,7 @@ def render_appraisal(
         # accounts for the extra page automatically.
         if positioning:
             _sub_title = (suburb_name.title() if suburb_name.isupper() else suburb_name) or "the area"
-            _qr_block = ""
-            if qr_svg:
-                _qr_block = (
-                    '<div style="display:flex; align-items:center; gap:6mm; background:#fff;'
-                    ' border-radius:3mm; padding:4mm 5mm; max-width:150mm;">'
-                    '<img src="' + qr_svg + '" alt="Scan to reopen the live version"'
-                    ' style="width:20mm; height:20mm; image-rendering:pixelated; flex-shrink:0;">'
-                    '<div style="font-family:\'Poppins\',sans-serif; font-size:9pt; line-height:1.5;'
-                    ' color:var(--text-secondary);">'
-                    '<div style="font-weight:600; color:var(--grass); margin-bottom:1mm;">'
-                    'Scan to reopen the live version</div>'
-                    'Updated as nearby listings and sales change.</div></div>'
-                )
+            # Opener is text-only — the QR now has its own "Your live report" page below.
             _opener = (
                 '<div class="page">\n'
                 '  <div style="padding:44mm 24mm 14mm; height:100%; display:flex; flex-direction:column;">\n'
@@ -452,13 +440,54 @@ def render_appraisal(
                 '      <p style="color:var(--grass); font-weight:500;">This report is yours to keep.'
                 ' No response is required.</p>\n'
                 '    </div>\n'
-                '    <div style="margin-top:auto; padding-top:10mm;">' + _qr_block + '</div>\n'
+                '  </div>\n'
+                '</div>'
+            )
+            # "Your live report" page — sits between the opener and the philosophy
+            # page. This is the SECOND positioning front-matter page: adding it
+            # realigns the six thesis/data spreads (§0X LEFT back onto left-hand
+            # pages) AND makes the content count even, so the even-page padding no
+            # longer inserts a blank spacer. It also gives the QR a dedicated home
+            # and bridges the printed drop to the live mini-site.
+            _live_date = ((pipeline_record or {}).get("cover_date_override")
+                          or datetime.now().strftime("%-d %B %Y"))
+            if _live_date.isupper():
+                _live_date = _live_date.title()
+            _qr_center = ""
+            if qr_svg:
+                _qr_center = (
+                    '    <div style="margin-top:auto; display:flex; flex-direction:column;'
+                    ' align-items:center; text-align:center;">\n'
+                    '      <div style="background:#fff; border-radius:3mm; padding:5mm;'
+                    ' box-shadow:0 1mm 5mm rgba(0,0,0,0.10);"><img src="' + qr_svg + '"'
+                    ' alt="Scan to open your live report" style="display:block; width:34mm;'
+                    ' height:34mm; image-rendering:pixelated;"></div>\n'
+                    '      <div style="font-family:\'Poppins\',sans-serif; font-size:10pt;'
+                    ' color:var(--text-secondary); margin-top:5mm; max-width:115mm; line-height:1.5;">'
+                    'Scan to open your live report &mdash; nothing to log in to, nothing to fill in.</div>\n'
+                    '    </div>\n'
+                )
+            _live_page = (
+                '<div class="page">\n'
+                '  <div style="padding:50mm 24mm 22mm; height:100%; display:flex; flex-direction:column;">\n'
+                '    <div style="font-family:\'JetBrains Mono\',\'SF Mono\',monospace; font-size:7.5pt;'
+                ' letter-spacing:2.5px; text-transform:uppercase; color:var(--copper); font-weight:600;'
+                ' border-bottom:1.5px solid var(--copper); padding-bottom:4px; align-self:flex-start;'
+                ' margin-bottom:16mm;">Your live report</div>\n'
+                '    <p style="font-family:\'Playfair Display\',serif; font-size:26pt; font-weight:500;'
+                ' line-height:1.25; color:var(--grass); letter-spacing:-0.4px; max-width:155mm;'
+                ' margin-bottom:8mm;">This report is a snapshot.<br>Your live version isn&rsquo;t.</p>\n'
+                '    <p style="font-family:\'Poppins\',sans-serif; font-size:11.5pt; font-weight:300;'
+                ' line-height:1.7; color:var(--text-secondary); max-width:150mm;">The figures in these pages'
+                ' are current to ' + _live_date + '. Online, they update as nearby homes list and sell,'
+                ' and as the market moves.</p>\n'
+                + _qr_center +
                 '  </div>\n'
                 '</div>'
             )
             _anchor = '<div class="page">\n  <div class="inside-cover">'
             if _anchor in text:
-                text = text.replace(_anchor, _opener + "\n\n" + _anchor, 1)
+                text = text.replace(_anchor, _opener + "\n\n" + _live_page + "\n\n" + _anchor, 1)
 
     # Positioning variant — reframe page-19 "next steps" for a cold owner:
     # walkthrough/agency-agreement/pre-launch → keep-watching / verify-in-person
