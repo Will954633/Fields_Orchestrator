@@ -549,6 +549,37 @@ def render_appraisal(
         </div>
         <div class="ns-desc" style="margin-top:5mm; font-style:italic; color:#5a554d;">No pressure. No obligation. The first decision is simply whether a conversation would be useful.</div>""",
         )
+        # "Start building your strategy" QR — the SECOND, distinct code (the
+        # cover/back/live-report QRs open the mini-site; this one opens the dark
+        # off-market deck / strategy builder for this address). Injected at the
+        # foot of the right "three ways" column.
+        _om_slug = (subject_doc or {}).get("url_slug")
+        if not _om_slug and subject_doc:
+            _oa = (subject_doc.get("street_address") or subject_doc.get("address")
+                   or subject_doc.get("complete_address") or "").split(",")[0]
+            _osub = subject_doc.get("suburb") or subject_doc.get("LOCALITY") or ""
+            _om_slug = re.sub(r"[^a-z0-9]+", "-", f"{_oa} {_osub}".strip().lower()).strip("-") or None
+        if _om_slug:
+            _om_url = ("https://fieldsestate.com.au/off-market/" + _om_slug
+                       + "?arm=dark&utm_source=positioning_report")
+            _om_qr = render._qr_data_uri(_om_url)
+            if _om_qr:
+                _np = ('<div class="ns-desc" style="margin-top:5mm; font-style:italic;'
+                       ' color:#5a554d;">No pressure. No obligation. The first decision is'
+                       ' simply whether a conversation would be useful.</div>')
+                _strategy_block = _np + (
+                    '\n        <div style="margin-top:9mm; display:flex; align-items:center; gap:5mm;">'
+                    '<div style="background:#fff; border-radius:2.5mm; padding:3mm;'
+                    ' border:1px solid rgba(34,56,44,0.10); flex-shrink:0;">'
+                    '<img src="' + _om_qr + '" alt="Start building your strategy"'
+                    ' style="display:block; width:24mm; height:24mm; image-rendering:pixelated;"></div>'
+                    '<div><div style="font-family:\'IBM Plex Mono\',monospace; font-size:7.5pt;'
+                    ' letter-spacing:0.14em; text-transform:uppercase; color:#B76749;'
+                    ' margin-bottom:1.5mm;">Start building your strategy</div>'
+                    '<div style="font-size:9pt; line-height:1.5; color:#5a554d;">Scan to open your'
+                    ' private strategy builder &mdash; eight decisions, at your pace.</div></div></div>'
+                )
+                text = text.replace(_np, _strategy_block, 1)
 
     # Back cover + even-page booklet padding. Count printed page units (front
     # cover + content pages; `class="page"`/`class="cover"` match exactly, not
