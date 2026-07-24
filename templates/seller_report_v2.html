@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Property Position Report — {{ address }}</title>
+<title>{{ report_title | default("Property Position Report") }} — {{ address }}</title>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   @page { size: A4; margin: 0; }
@@ -507,7 +507,7 @@
    TRUTH / EVIDENCE / ACTION transitions of the Print Master per 02_report_blueprint.md. #}
 {% macro section_divider(label, tagline, bg_color, fg_color, accent_color) %}
 <div class="page" style="background: {{ bg_color }}; color: {{ fg_color }}; display: flex; flex-direction: column; justify-content: center; padding: 0 60mm;">
-  <div style="font-size: 9pt; letter-spacing: 4px; text-transform: uppercase; color: {{ accent_color }}; font-weight: 600; margin-bottom: 18mm;">Part of the Fields Property Position Report</div>
+  <div style="font-size: 9pt; letter-spacing: 4px; text-transform: uppercase; color: {{ accent_color }}; font-weight: 600; margin-bottom: 18mm;">Part of the Fields {{ report_title_short | default("Property Position Report") }}</div>
   <div style="font-size: 56pt; font-weight: 700; line-height: 1; letter-spacing: -0.5px; margin-bottom: 14mm;">{{ label }}</div>
   <div style="font-size: 14pt; font-weight: 300; line-height: 1.4; max-width: 90mm; opacity: 0.85;">{{ tagline }}</div>
 </div>
@@ -535,7 +535,7 @@
 
   <!-- Dark green band at bottom -->
   <div class="cover-band">
-    <div class="cover-band-label">Property Position Report</div>
+    <div class="cover-band-label">{{ report_title | default("Property Position Report") }}</div>
     <div>
       <div class="cover-band-prepared">Prepared for {{ client_name }}</div>
     </div>
@@ -550,6 +550,50 @@
     {{ smarter_with_data(true) }}
   </div>
 </div>
+
+
+{% if positioning %}
+<!-- ══════ POSITIONING VARIANT — WHY YOU'VE RECEIVED THIS ══════ -->
+{# Cold off-market recipient: they have NOT contacted us (no email/phone/request).
+   This page answers "how did this arrive?" honestly WITHOUT referencing their
+   website activity. First interior page, before the note. Gated so the warm-lead
+   appraisal render is byte-identical when positioning=False. #}
+<div class="page" style="background: var(--birch); padding: 34mm 32mm 22mm; display: flex; flex-direction: column;">
+  <div class="page-header" style="margin-bottom: 20mm;">
+    <div class="page-header-title" style="color: var(--copper); letter-spacing: 4px;">Why you've received this</div>
+    <div class="page-header-mark">{{ f_mark('#22382C', 22) }}</div>
+  </div>
+
+  <div style="max-width: 142mm;">
+    <p style="font-size: 17pt; font-weight: 400; line-height: 1.4; color: var(--text); margin-bottom: 16pt;">
+      Your home already has a position in today&rsquo;s market &mdash; even when it is not for sale.
+    </p>
+    <div style="font-size: 11.5pt; font-weight: 300; line-height: 1.7; color: var(--text-secondary);">
+      <p style="margin-bottom: 12pt;">That position is shaped by the homes buyers would compare it with, the features they may struggle to replace, the buyer most likely to value those features, and the evidence supporting the price.</p>
+      <p style="margin-bottom: 12pt;">Fields has analysed <strong style="color: var(--text); font-weight: 600;">{{ street_address }}</strong> as part of our property-level coverage of {{ suburb }}. The enclosed report brings that work together: the home&rsquo;s likely buyer groups, comparable evidence, an indicative value range, and the strategy that could shape a future sale.</p>
+      <p style="margin-bottom: 12pt;">We do not know whether you are planning to move, and we have not assumed that you are. You may be considering a sale, planning several years ahead, or simply keeping informed.</p>
+      <p style="font-weight: 400; color: var(--text);">This report is yours to keep. No response is required.</p>
+    </div>
+  </div>
+
+  <div style="flex: 1;"></div>
+
+  {% if qr_live_uri %}
+  <div style="display: flex; align-items: center; gap: 18px; background: var(--white); border-radius: 12px; padding: 15px 20px; page-break-inside: avoid; max-width: 142mm;">
+    <img src="{{ qr_live_uri }}" alt="Scan to reopen the live version" style="width: 68px; height: 68px; flex-shrink: 0;">
+    <div style="font-size: 9.5pt; line-height: 1.5; color: var(--text-secondary);">
+      <div style="font-weight: 600; color: var(--text); margin-bottom: 2pt; letter-spacing: 0.2px;">Scan to reopen the live version</div>
+      Updated as nearby listings and sales change.
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="page-footer" style="margin-top: 16px;">
+    <div class="page-footer-meta">Fields Estate &nbsp;|&nbsp; fieldsestate.com.au &nbsp;|&nbsp; Confidential &mdash; prepared for {{ client_name }}</div>
+    {{ smarter_with_data() }}
+  </div>
+</div>
+{% endif %}
 
 
 <!-- ══════ INSIDE FRONT COVER (M2): A Note Before You Read ══════ -->
