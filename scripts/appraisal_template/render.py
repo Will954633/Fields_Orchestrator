@@ -251,7 +251,7 @@ BACK_COVER_TEMPLATE = """\
 
     <!-- Wordmark -->
     <div style="display:flex; align-items:center; gap:3mm;">
-      <span style="font-family:'Playfair Display', serif; font-size:21pt; color:#ffffff; font-weight:600; letter-spacing:0.01em;">Fields</span>
+      <span style="font-family:'Poppins', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size:21pt; color:#ffffff; font-weight:600; letter-spacing:0.01em;">Fields</span>
       <img src="{{ back.logotype_white_src }}" alt="Fields" style="height:8.5mm; display:block;">
     </div>
 
@@ -270,6 +270,7 @@ BACK_COVER_TEMPLATE = """\
           <div style="font-weight:600;">{{ back.author_name }}</div>
           <div style="color:#c9d3cb; font-size:9.5pt;">{{ back.author_role }}</div>
           <div style="margin-top:2mm;">{{ back.email }}</div>
+          <div>{{ back.phone }}</div>
           <div>{{ back.url }}</div>
         </div>
         <div style="margin-top:7mm;">
@@ -333,6 +334,7 @@ def render_back_cover_html(
             "author_name": "Will Simpson",
             "author_role": "Property Consultant",
             "email": "will@fieldsestate.com.au",
+            "phone": "0416 529 481",
             "url": "fieldsestate.com.au",
             "qr_svg": qr_svg or "",
             "small_print": (
