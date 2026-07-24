@@ -1522,8 +1522,8 @@ SECTION_RECOMMENDATION_TEMPLATE = '''\
       </svg>
     </div>
     <div style="font-family:IBM Plex Mono, monospace; font-size:9pt; letter-spacing:0.15em; text-transform:uppercase; color:#B76749; margin-bottom:3mm;">Recommendation</div>
-    <h2 class="right-headline" style="font-size:30pt; margin-bottom:3mm;">{{ rec.headline_html | safe }}</h2>
-    <div class="right-subhead" style="margin-bottom:6mm;">{{ rec.subhead }}</div>
+    <h2 class="right-headline" style="font-size:30pt; margin-bottom:3mm;">{% if positioning and rec.page_number == 18 %}If selling became relevant, this is where the strategy would begin.{% else %}{{ rec.headline_html | safe }}{% endif %}</h2>
+    {% if not (positioning and rec.page_number == 18) %}<div class="right-subhead" style="margin-bottom:6mm;">{{ rec.subhead }}</div>{% endif %}
     {% if rec.pending_review %}
     <div style="background:#fdf3ec; border-left:3px solid #B76749; padding:7mm 9mm; margin-bottom:6mm;">
       <div style="font-family:'IBM Plex Mono', monospace; font-size:9pt; letter-spacing:0.18em; text-transform:uppercase; color:#B76749; margin-bottom:4mm;">Analyst review required</div>
@@ -1532,18 +1532,24 @@ SECTION_RECOMMENDATION_TEMPLATE = '''\
     </div>
     {% else %}
     {% if rec.page_number == 18 %}
+    {% if positioning %}
+    <p style="font-size:10.5pt; line-height:1.55; color:#2c2924; margin-bottom:4mm;">Across the six forces examined in this report, the opportunity for <strong>{{ subject.short_address }}</strong> resolves into a clear initial position.</p>
+    <p style="font-size:10.5pt; line-height:1.55; color:#2c2924; margin-bottom:4mm;">The buyer is identifiable. The comparable evidence provides an indicative range. The property has a combination of features around which a distinct campaign could be built.</p>
+    <p style="font-size:10.5pt; line-height:1.55; color:#2c2924; margin-bottom:5mm;">A physical inspection would allow Fields to verify the condition, improvements and presentation details that cannot be reliably established from property records and imagery alone. From there, the pricing and campaign recommendation could be confirmed or adjusted.</p>
+    {% else %}
     <p style="font-size:10.5pt; line-height:1.55; color:#2c2924; margin-bottom:5mm;">Across the six forces examined in this report, the strategy for <strong>{{ subject.short_address }}</strong> resolves to one specific recommendation. The home is genuinely rare; the premium buyer is identifiable; the price is defensible from cohort data. A multi-week campaign — engineered around the avatar, delivered across every major digital surface, anchored in transparency — produces the conditions for a premium sale.</p>
+    {% endif %}
     {% endif %}
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:6mm; margin-bottom:5mm;">
       <div style="background:#fdf3ec; border-left:3px solid #B76749; padding:5mm 6mm;">
-        <div style="font-family:IBM Plex Mono, monospace; font-size:8pt; letter-spacing:0.06em; text-transform:uppercase; color:#8d4d33; margin-bottom:3mm;">Recommended listing price</div>
+        <div style="font-family:IBM Plex Mono, monospace; font-size:8pt; letter-spacing:0.06em; text-transform:uppercase; color:#8d4d33; margin-bottom:3mm;">{% if positioning %}Indicative campaign entry point{% else %}Recommended listing price{% endif %}</div>
         <div style="font-family:Cormorant Garamond, serif; font-size:36pt; color:#B76749; line-height:1;">${{ '{:,}'.format(rec.listing_price) }}</div>
         {% if rec.listing_round_m %}
         <div style="font-family:'Playfair Display', serif; font-style:italic; font-size:9pt; line-height:1.4; color:#5a554d; margin-top:3mm;">Lower end of the derived range. Precise, above the {{ rec.listing_round_m }} round number.</div>
         {% endif %}
       </div>
       <div style="background:#fdf3ec; border-left:3px solid #B76749; padding:5mm 6mm;">
-        <div style="font-family:IBM Plex Mono, monospace; font-size:8pt; letter-spacing:0.06em; text-transform:uppercase; color:#8d4d33; margin-bottom:3mm;">Target sale price</div>
+        <div style="font-family:IBM Plex Mono, monospace; font-size:8pt; letter-spacing:0.06em; text-transform:uppercase; color:#8d4d33; margin-bottom:3mm;">{% if positioning %}Potential competitive sale range{% else %}Target sale price{% endif %}</div>
         <div style="font-family:Cormorant Garamond, serif; font-size:26pt; color:#B76749; line-height:1.15;">${{ '{:,}'.format(rec.target_sale_price_low) }} –<br>${{ '{:,}'.format(rec.target_sale_price_high) }}</div>
         <div style="font-family:'Playfair Display', serif; font-style:italic; font-size:9pt; line-height:1.4; color:#5a554d; margin-top:3mm;">Upper end of the derived range. Reached through buyer competition — not seller negotiation.</div>
       </div>
@@ -1598,10 +1604,11 @@ def render_section_recommendation_html(
     page_number: int = 11,
     pipeline_record: dict | None = None,
     write_substantiation: bool = True,
+    positioning: bool = False,
 ) -> str:
     subject = data_pull.get_subject(subject_id)
     rec = data_pull.section_recommendation(subject_id, pipeline_record=pipeline_record, page_number=page_number)
-    ctx = {'subject': {'short_address': _short_address(subject)}, 'rec': rec}
+    ctx = {'subject': {'short_address': _short_address(subject)}, 'rec': rec, 'positioning': positioning}
     if not rec.get("pending_review", False):
         section_key = "recommendation_p11" if page_number == 11 else "recommendation_p18"
         layout_rules.validate_and_record(section_key, {
