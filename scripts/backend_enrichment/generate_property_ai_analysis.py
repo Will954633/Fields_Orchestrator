@@ -1448,7 +1448,7 @@ BUILD THE MARKET NARRATIVE:
 
 1. DAYS ON MARKET — CONTEXT, NOT JUDGMENT:
    - State the DOM factually and explain what it means for this property type and price bracket
-   - 0-14 days: untested. 15-45 days: normal for $2M+ bracket. 45-90: the price has been tested. 90+: extended.
+   - 0-14 days: untested. 15-45 days: normal for $2,000,000+ bracket. 45-90: the price has been tested. 90+: extended.
    - NEVER say "the seller's leverage is gone" or coach negotiation tactics. State the data, let the buyer decide.
 
 2. SUPPLY & SCARCITY (Principle #6 — real scarcity only):
@@ -1544,15 +1544,15 @@ Every great property headline contains a CONTRADICTION, QUESTION, or PRICE TENSI
 HEADLINE FORMULA — PICK THE ONE THAT FITS:
 
 1. PRICE TENSION: Surface the gap between what you'd expect and what it costs.
-   "Comparable sales say low $1M. The guide might say $1.4M. Here's what explains the gap."
-   "Bought for $770K. Rebuilt from scratch. Now asking $2.975M — here's every dollar in between."
+   "Comparable sales say low $1,000,000. The guide might say $1,400,000. Here's what explains the gap."
+   "Bought for $770,000. Rebuilt from scratch. Now asking $2,975,000 — here's every dollar in between."
 
 2. CURIOSITY CONTRADICTION: Two facts that seem like they shouldn't coexist.
    "7/10 kitchen, park frontage, cul-de-sac — and still one of Robina's most affordable houses. Why?"
    "9/10 finish, pool, 1 km to the beach — and it's been on the market for 47 days. Here's the data."
 
 3. BUYER'S REAL QUESTION: Ask what the buyer is actually thinking.
-   "What does 'Contact Agent' actually mean when the comps say $1M?"
+   "What does 'Contact Agent' actually mean when the comps say $1,000,000?"
    "Is this the cheapest way into Burleigh Waters — or is something missing?"
 
 4. TRADE-OFF HOOK: Name what you get AND what you give up. Let the reader decide.
@@ -1566,7 +1566,7 @@ NEVER WRITE THESE (they are invisible in Google results):
 - Any headline that is just a list of specs with a generic hook appended
 
 PRICE ACCURACY IN HEADLINES:
-- If the listing price is "Offers Over $X" or "Offers Above $X" — NEVER write "$X" as if it's the price. Write "asking above $879K" or "guide from $879K" or "offers over $879K". The qualifier matters — dropping it implies the buyer can purchase at that price.
+- If the listing price is "Offers Over $X" or "Offers Above $X" — NEVER write "$X" as if it's the price. Write "asking above $879,000" or "guide from $879,000" or "offers over $879,000". The qualifier matters — dropping it implies the buyer can purchase at that price.
 - If the listing is "Auction" — say "heading to auction" or "auction, no guide". NEVER invent a price.
 - If "Contact Agent" or "Price on Request" — say "no published price" or "price withheld". NEVER guess.
 
@@ -1617,7 +1617,7 @@ BAD sub-headlines (flat summaries):
 - "A cosmetically updated four-bed on a quiet crescent. Listed since 20 March 2026."
 
 GOOD sub-headlines (escalate tension):
-- "The comps say low $1M. The renovated kitchen says more. We broke down every adjustment."
+- "The comps say low $1,000,000. The renovated kitchen says more. We broke down every adjustment."
 - "Every comparable that sold nearby was bigger, had more bedrooms, and cost more. So what's this one actually worth?"
 
 === GOOGLE SEARCH RESULT INSTRUCTIONS (MOST IMPORTANT PART OF YOUR JOB) ===
@@ -1643,9 +1643,9 @@ BAD meta titles:
 - "Property Analysis — 25 Dotterel Drive | Fields" (nobody cares)
 
 GOOD meta titles (disrupt the scroll):
-- "25 Dotterel Dr — $255K Below Top Comp. Why? | Fields" (price tension)
+- "25 Dotterel Dr — $255,000 Below Top Comp. Why? | Fields" (price tension)
 - "25 Dotterel Dr — We Priced Every Trade-Off | Fields" (curiosity)
-- "Is 25 Dotterel Dr Worth $2.345M? The Data Says... | Fields" (question)
+- "Is 25 Dotterel Dr Worth $2,345,000? The Data Says... | Fields" (question)
 - "25 Dotterel Dr — 9/10 Finish But 3 Catches | Fields" (contradiction)
 
 META DESCRIPTION RULES (max 155 chars):
@@ -1660,7 +1660,7 @@ BAD meta descriptions:
 
 GOOD meta descriptions:
 - "9/10 finish, pool, 80m to park — but weatherboard, 173 sqm, no garage. We priced each trade-off. Here's what it's actually worth."
-- "Comps say $960K–$1.2M. The asking price says $1.4M. We show exactly where the gap comes from — and whether the renovation justifies it."
+- "Comps say $960,000–$1,200,000. The asking price says $1,400,000. We show exactly where the gap comes from — and whether the renovation justifies it."
 
 The meta_description is your 155-character sales pitch. If it sounds like a listing description, the buyer clicks Domain instead. If it sounds like insider knowledge they can't get anywhere else, they click Fields.
 
@@ -1788,9 +1788,9 @@ Example lifestyle_hook for Insight 1: "Saturday morning here looks like this: co
 
 Example lifestyle_hook for Insight 2 (Condition): "You walk in and the hard work is done. Stone benchtops, new flooring, renovated bathrooms. The previous owner spent $40,000–$65,000 on the rooms that matter most — and that spend is already in the price, not on your to-do list."
 
-Example lifestyle_hook for Insight 3 (Price): "Two homes within a kilometre sold recently. One for $3.5M, one for $1.6M. After adjusting for size, condition, and features, they point to a range of $2.16M–$3.37M for this property. The asking price picks the lower half."
+Example lifestyle_hook for Insight 3 (Price): "Two homes within a kilometre sold recently. One for $3,500,000, one for $1,600,000. After adjusting for size, condition, and features, they point to a range of $2,160,000–$3,370,000 for this property. The asking price picks the lower half."
 
-Example lifestyle_hook for Insight 4 (Trade-offs): "Every dollar you're NOT paying has a name. Weatherboard instead of render: $60,000. No enclosed garage: $45,000. Average floor area instead of generous: $67,000. Add them up and you see exactly why this isn't a $2.6M home — and why it'll attract buyers who can't afford the $2.6M version."
+Example lifestyle_hook for Insight 4 (Trade-offs): "Every dollar you're NOT paying has a name. Weatherboard instead of render: $60,000. No enclosed garage: $45,000. Average floor area instead of generous: $67,000. Add them up and you see exactly why this isn't a $2,600,000 home — and why it'll attract buyers who can't afford the $2,600,000 version."
 
 The lifestyle_hook is NOT a feature description. It's the FEELING of living here connected to the FINANCIAL reality AND the competitive landscape. If it reads like an agent listing, rewrite it.
 
@@ -1802,27 +1802,27 @@ Every "what_this_means" section should include at least ONE bullet about competi
 - How supply scarcity in this spec creates urgency
 
 BAD: "If you need 200+ sqm, this isn't for you."
-GOOD: "This format — renovated, single-level, pool, under $1.4M — is what downsizers and young professional couples are both chasing. There are only 3 in Robina right now. If it fits, don't assume you're the only one who noticed."
+GOOD: "This format — renovated, single-level, pool, under $1,400,000 — is what downsizers and young professional couples are both chasing. There are only 3 in Robina right now. If it fits, don't assume you're the only one who noticed."
 
 BAD: "The trade-offs are priced in."
 GOOD: "The trade-offs are priced in — and that's exactly why this will attract multiple buyer types. Downsizers see low-maintenance. Investors see 3.8% yield. First-time upgraders see the price. Three different reasons to bid."
 
 Example H2: "Park behind the fence, renovated kitchen, cul-de-sac — and possibly one of Robina's most affordable houses. Here's what the trade-off looks like."
-Example key_points: Anchor every feature to what it means for the price or the decision. "The park behind the fence means no rear neighbour — but it also means the block is only 460 sqm, which is why you're not paying $1.5M."
+Example key_points: Anchor every feature to what it means for the price or the decision. "The park behind the fence means no rear neighbour — but it also means the block is only 460 sqm, which is why you're not paying $1,500,000."
 
 INSIGHT 2 — CONDITION vs PRICE (Principles #1, #5 — what the renovation saves you):
 Frame the renovation as money the buyer DOESN'T have to spend. Price the gap between what's done and what's not.
-Example H2: "7/10 kitchen, 8/10 bathroom — the renovation is partial, and the $80,000 gap to 'fully done' is the reason this isn't priced at $1.3M."
+Example H2: "7/10 kitchen, 8/10 bathroom — the renovation is partial, and the $80,000 gap to 'fully done' is the reason this isn't priced at $1,300,000."
 Example key_points: NEVER just list features. For every feature, say what it would COST if it wasn't done, or what it's WORTH compared to alternatives. "The kitchen renovation runs $25,000–$40,000 — that's money you're not spending. But the flooring hasn't been touched, and that's another $8,000–$15,000 if it bothers you."
 
 INSIGHT 3 — THE PRICE STORY (Principles #7, #11 — comparable evidence):
 Now give the financial framework. What did similar homes sell for? Where does this one sit?
-Example H2: "Every comp that sold was bigger, had more bedrooms, and cost more. After adjustments, they point to $960K–$1.2M for this spec."
-Example key_points: Name the comps, cite the sold prices, explain the key adjustments in plain language. "22 Camberwell Circuit sold for $1,345,000 — but that was a 4-bed on 800 sqm with 213 sqm of floor area. After adjusting down for the extra bedroom, bigger lot, and more floor space, that sale points to about $1M for a home like this one."
+Example H2: "Every comp that sold was bigger, had more bedrooms, and cost more. After adjustments, they point to $960,000–$1,200,000 for this spec."
+Example key_points: Name the comps, cite the sold prices, explain the key adjustments in plain language. "22 Camberwell Circuit sold for $1,345,000 — but that was a 4-bed on 800 sqm with 213 sqm of floor area. After adjusting down for the extra bedroom, bigger lot, and more floor space, that sale points to about $1,000,000 for a home like this one."
 
 INSIGHT 4 — THE TRADE-OFFS THAT MAKE THE PRICE (Principles #3, #4):
 This is the section that explains WHY the property is priced where it is. Every "weakness" is framed as the reason the buyer gets the price they're getting.
-Example H2: "142 sqm, 3 bedrooms, no pool — that's roughly $200,000 in adjustments that keep this under $1.2M. Here's the maths."
+Example H2: "142 sqm, 3 bedrooms, no pool — that's roughly $200,000 in adjustments that keep this under $1,200,000. Here's the maths."
 Example key_points: Price every trade-off. "No pool — homes with a pool in Robina sell for about $50,000–$80,000 more. Three bedrooms instead of four — that's another $60,000–$90,000 based on comparable sales. Smaller than average floor plan — at $3,000 per sqm, the 30 sqm gap to the suburb average costs roughly $90,000. Add it up and you see exactly why this home is priced where it is — and what you'd need to spend to close each gap."
 
 FLOOD — always last insight or dedicated section. Never before Insight 4.
@@ -1833,7 +1833,7 @@ The verdict should make the buyer feel they need to ACT, not just understand. Th
 BAD: "The renovation and parkland are the value case. The compact floor plan is the reason you're not paying $1.4 million."
 GOOD: "The renovation and parkland are the value case — and at this price, downsizers and young families are both circling. The compact floor plan is the reason you still have a chance under $1.4 million."
 
-Example: "Three buyer types want this home. Only one can have it. The trade-offs are the reason it hasn't already sold for $2M."
+Example: "Three buyer types want this home. Only one can have it. The trade-offs are the reason it hasn't already sold for $2,000,000."
 
 NEXT STEPS — 3-4 actionable steps. These should feel like the NATURAL next step for a buyer who's done the research, NOT a legal checklist.
    - Reference the comp range and frame the offer context
@@ -2731,7 +2731,7 @@ CRITICAL CHECKS:
 
 VALUATION LANGUAGE RULE — DO NOT FAIL approximate valuation claims:
 - Valuations are inherently ranges, not exact figures. A property valuation is an estimate, not a fact.
-- If the draft says "priced below the comparable midpoint" or "in the lower half of the range" or "around $2.4M" — this is ACCEPTABLE approximate language. Do NOT fail it for not being mathematically precise.
+- If the draft says "priced below the comparable midpoint" or "in the lower half of the range" or "around $2,400,000" — this is ACCEPTABLE approximate language. Do NOT fail it for not being mathematically precise.
 - If the draft says "our valuation is exactly $2,396,327" — THAT should be failed, because exact single-figure valuations imply false precision.
 - The correct standard: valuation claims should be directional (above/below/within range) or use ranges. Approximate language like "roughly", "around", "in the lower half" is CORRECT, not an error.
 
@@ -2749,7 +2749,7 @@ The reader should NEVER know which rooms our system did or didn't process. If da
 
 ROUNDING TOLERANCE — DO NOT FAIL reasonable rounding:
 - If the draft says "25.4 sqm" and the data says 25.38 sqm — that is VERIFIED, not failed. Rounding to 1 decimal place is acceptable.
-- If the draft says "$1.8M" and the actual range is $1.77M–$1.91M — that is VERIFIED. Rounding to the nearest $100K is acceptable for conversational language.
+- If the draft says "$1,800,000" and the actual range is $1,770,000–$1,910,000 — that is VERIFIED. Rounding to the nearest $100,000 is acceptable for conversational language.
 - If the draft says "50 sqm" and the actual is 48.2 sqm — that is VERIFIED. Rounding to the nearest 5 sqm is acceptable when preceded by "roughly", "about", or "~".
 - Only FAIL rounding when the draft presents a rounded number AS IF it were exact (no qualifier) AND the rounding changes the meaning materially (e.g. "3 bedrooms" when there are 4).
 
@@ -2767,7 +2767,7 @@ If the draft contains ANY reference to internal processes, mark it ❌ FAILED:
 The reader should never know that multiple drafts or internal review steps exist.
 
 PRICE QUALIFIER RULE (AUTOMATIC FAIL):
-- If the listing price contains "Offers Over", "Offers Above", "Expression of Interest", or similar qualifier — and the draft presents the number WITHOUT the qualifier (e.g. "$879K" instead of "offers above $879K") — mark it ❌ FAILED. Dropping the qualifier misleads the reader about what the property costs.
+- If the listing price contains "Offers Over", "Offers Above", "Expression of Interest", or similar qualifier — and the draft presents the number WITHOUT the qualifier (e.g. "$879,000" instead of "offers above $879,000") — mark it ❌ FAILED. Dropping the qualifier misleads the reader about what the property costs.
 
 FIELD NAME REFERENCES — DO NOT CITE INTERNAL FIELD NAMES:
 - The draft should NEVER reference raw database field names like "ac_ducted", "solar_visible", "floor_area_sqm", "property_valuation_data", etc.
@@ -2775,7 +2775,7 @@ FIELD NAME REFERENCES — DO NOT CITE INTERNAL FIELD NAMES:
 - The fact-check should verify the CLAIM (e.g. "ducted air conditioning is installed") against the DATA, not check whether the field name is correctly cited.
 
 PRICE/VALUATION ANCHOR VERIFICATION (AUTOMATIC FAIL):
-- If the draft cites a specific dollar amount as a price anchor, ceiling, or benchmark (e.g. "below $2.2M", "adjustments keep the price at $X", "priced against $X") — verify that this number matches one of:
+- If the draft cites a specific dollar amount as a price anchor, ceiling, or benchmark (e.g. "below $2,200,000", "adjustments keep the price at $X", "priced against $X") — verify that this number matches one of:
   a) The listed asking price
   b) A value within the Fields valuation range (low to high)
   c) The sold price of a COMPARABLE SALE marked as "used in valuation"
@@ -2963,7 +2963,7 @@ IMPORTANT: If a claim matches data in the RAW DATA above, it is VERIFIED — do 
 
 If a PRE-CALCULATED figure exists (growth %, CAGR), the draft MUST use that exact figure — do NOT recalculate from raw transaction prices.
 
-VALUATION LANGUAGE: Approximate valuation claims are CORRECT. "Below the comparable midpoint", "in the lower half of the range", "around $2.4M" — these are acceptable. Do NOT fail directional or approximate valuation language. Only fail exact single-figure valuations like "worth exactly $2,396,327."
+VALUATION LANGUAGE: Approximate valuation claims are CORRECT. "Below the comparable midpoint", "in the lower half of the range", "around $2,400,000" — these are acceptable. Do NOT fail directional or approximate valuation language. Only fail exact single-figure valuations like "worth exactly $2,396,327."
 
 Output ONLY failed claims as:
 ❌ FAILED: "[claim]" — actual: [what data shows]
@@ -3278,6 +3278,37 @@ def _fix_year_hallucinations(analysis: Dict, prop: Dict) -> Dict:
     return analysis
 
 
+def _expand_abbreviated_money(text: str) -> str:
+    """Expand abbreviated dollar amounts to full comma-separated figures:
+    $1.2M -> $1,200,000, $997K -> $997,000. Deterministic enforcement of the
+    mandatory number-format rule ($1,250,000, never $1.25m). The prompt asks the
+    agents for full figures but is not reliable (and is itself seeded with
+    abbreviated few-shot examples), so this guarantees the rule at save time.
+    Only touches $<num>[m|k] tokens; already-full figures ($1,250,000, $3,000)
+    and non-money text are left untouched. See fix-history 2026-07-24
+    [EDITORIAL-NUMBER-FORMAT]."""
+    import re
+
+    def _sub(m):
+        num = float(m.group(1))
+        mult = 1_000_000 if m.group(2).lower() == "m" else 1_000
+        return f"${int(round(num * mult)):,}"
+
+    return re.sub(r"\$\s?(\d+(?:\.\d+)?)\s?([mMkK])\b", _sub, text)
+
+
+def _normalize_money_formats(obj):
+    """Recursively apply _expand_abbreviated_money to every string in a nested
+    dict/list (i.e. the whole ai_analysis document)."""
+    if isinstance(obj, str):
+        return _expand_abbreviated_money(obj)
+    if isinstance(obj, list):
+        return [_normalize_money_formats(x) for x in obj]
+    if isinstance(obj, dict):
+        return {k: _normalize_money_formats(v) for k, v in obj.items()}
+    return obj
+
+
 def store_analysis(db, suburb: str, property_id, analysis: Dict) -> None:
     """Write ai_analysis field to the property document."""
     analysis["generated_at"] = datetime.now(timezone.utc).isoformat()
@@ -3301,6 +3332,10 @@ def store_analysis(db, suburb: str, property_id, analysis: Dict) -> None:
     elif _AUTO_PUBLISH:
         print(f"  [AUTO-PUBLISH] held for review (verify_outcome={analysis.get('_verify_outcome')!r}, "
               f"status={analysis['status']!r})")
+
+    # Deterministic number-format enforcement (belt-and-braces over the prompt):
+    # expand any $1.2M/$997K the agents emitted into full figures before persisting.
+    analysis = _normalize_money_formats(analysis)
 
     cosmos_retry(lambda: db[suburb].update_one(
         {"_id": property_id},
