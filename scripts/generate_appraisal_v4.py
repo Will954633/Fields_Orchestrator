@@ -193,6 +193,7 @@ def render_appraisal(
     output_basename: str | None = None,
     render_pdf: bool = True,
     open_pdf: bool = False,
+    positioning: bool = False,
 ) -> dict:
     """Render the full V4-format appraisal HTML and (optionally) PDF.
 
@@ -223,11 +224,18 @@ def render_appraisal(
     scan_url, minisite_url = render._minisite_urls(pipeline_record, _subj_for_qr or {})
     qr_svg = render._qr_data_uri(scan_url)
 
+    # Positioning variant — retitle the cover via the existing doc_type override
+    # hook, so render.py stays untouched. When positioning=False the cover keeps
+    # the original "Property Positioning Report" title.
+    _cover_overrides = dict(get_overrides("00_cover"))
+    if positioning:
+        _cover_overrides.setdefault("doc_type", "Private Property Positioning Report")
+
     # Section render — each returns the HTML block
     sections_rendered = []
     cover_html = render.render_section_00_cover_html(
         subject_id,
-        editorial_overrides=get_overrides("00_cover"),
+        editorial_overrides=_cover_overrides,
         hero_image_src=to_bucket_api_url(pipeline_record.get("cover_hero_image_src")) if pipeline_record.get("cover_hero_image_src") else None,
         prepared_for=pipeline_record.get("name") or "the Owner",
         date_override=pipeline_record.get("cover_date_override"),
@@ -393,6 +401,62 @@ def render_appraisal(
                     rf'\g<1>{sub_title}, QLD {postcode}',
                     text,
                 )
+
+        # ── Positioning variant opener (cold off-market recipients) ─────────
+        # Only when positioning=True. Answers "why did this arrive?" — with no
+        # reference to the recipient's site activity — before the philosophy
+        # page. Built with the real address/suburb/QR already in hand. Inserted
+        # before the page_units count below, so the even-page booklet padding
+        # accounts for the extra page automatically.
+        if positioning:
+            _sub_title = (suburb_name.title() if suburb_name.isupper() else suburb_name) or "the area"
+            _qr_block = ""
+            if qr_svg:
+                _qr_block = (
+                    '<div style="display:flex; align-items:center; gap:6mm; background:#fff;'
+                    ' border-radius:3mm; padding:4mm 5mm; max-width:150mm;">'
+                    '<img src="' + qr_svg + '" alt="Scan to reopen the live version"'
+                    ' style="width:20mm; height:20mm; image-rendering:pixelated; flex-shrink:0;">'
+                    '<div style="font-family:\'Poppins\',sans-serif; font-size:9pt; line-height:1.5;'
+                    ' color:var(--text-secondary);">'
+                    '<div style="font-weight:600; color:var(--grass); margin-bottom:1mm;">'
+                    'Scan to reopen the live version</div>'
+                    'Updated as nearby listings and sales change.</div></div>'
+                )
+            _opener = (
+                '<div class="page">\n'
+                '  <div style="padding:44mm 24mm 14mm; height:100%; display:flex; flex-direction:column;">\n'
+                '    <div style="font-family:\'JetBrains Mono\',\'SF Mono\',monospace; font-size:7.5pt;'
+                ' letter-spacing:2.5px; text-transform:uppercase; color:var(--copper); font-weight:600;'
+                ' border-bottom:1.5px solid var(--copper); padding-bottom:4px; align-self:flex-start;'
+                ' margin-bottom:14mm;">Why you&rsquo;ve received this</div>\n'
+                '    <p style="font-family:\'Playfair Display\',serif; font-size:20pt; font-weight:500;'
+                ' line-height:1.3; color:var(--grass); letter-spacing:-0.3px; max-width:150mm;'
+                ' margin-bottom:9mm;">Your home already has a position in today&rsquo;s market &mdash;'
+                ' even when it is not for sale.</p>\n'
+                '    <div style="font-family:\'Poppins\',sans-serif; font-size:11pt; font-weight:300;'
+                ' line-height:1.7; color:var(--text-secondary); max-width:150mm;">\n'
+                '      <p style="margin-bottom:5mm;">That position is shaped by the homes buyers would'
+                ' compare it with, the features they may struggle to replace, the buyer most likely to'
+                ' value those features, and the evidence supporting the price.</p>\n'
+                '      <p style="margin-bottom:5mm;">Fields has analysed <strong style="color:var(--grass);'
+                ' font-weight:600;">' + title_addr + '</strong> as part of our property-level coverage of '
+                + _sub_title + '. The enclosed report brings that work together: the home&rsquo;s likely'
+                ' buyer groups, comparable evidence, an indicative value range, and the strategy that could'
+                ' shape a future sale.</p>\n'
+                '      <p style="margin-bottom:5mm;">We do not know whether you are planning to move, and we'
+                ' have not assumed that you are. You may be considering a sale, planning several years ahead,'
+                ' or simply keeping informed.</p>\n'
+                '      <p style="color:var(--grass); font-weight:500;">This report is yours to keep.'
+                ' No response is required.</p>\n'
+                '    </div>\n'
+                '    <div style="margin-top:auto; padding-top:10mm;">' + _qr_block + '</div>\n'
+                '  </div>\n'
+                '</div>'
+            )
+            _anchor = '<div class="page">\n  <div class="inside-cover">'
+            if _anchor in text:
+                text = text.replace(_anchor, _opener + "\n\n" + _anchor, 1)
 
     # Back cover + even-page booklet padding. Count printed page units (front
     # cover + content pages; `class="page"`/`class="cover"` match exactly, not
@@ -716,6 +780,12 @@ def main() -> None:
                         help="Save report_path on the appraisal_pipeline record")
     parser.add_argument("--strict-photos", action="store_true",
                         help="Exit non-zero if cover_hero or satellite fell back to the generic 13TC placeholder. Use this before printing/mailing.")
+    parser.add_argument("--positioning", action="store_true",
+                        help="Positioning-report variant for cold off-market recipients (no prior contact): "
+                             "retitles the cover to 'Private Property Positioning Report' and adds a 'why "
+                             "you've received this' opener. WITHOUT this flag the report renders byte-for-byte "
+                             "identical to the original. (A pipeline record with report_variant='positioning' "
+                             "also enables it.)")
     args = parser.parse_args()
 
     if args.pipeline_id:
@@ -782,6 +852,7 @@ def main() -> None:
             pipeline_record=pipe,
             output_basename=args.output_basename,
             render_pdf=not args.no_pdf,
+            positioning=args.positioning or (bool(pipe) and pipe.get("report_variant") == "positioning"),
         )
     except Exception as exc:
         if args.update_pipeline and pipe:
