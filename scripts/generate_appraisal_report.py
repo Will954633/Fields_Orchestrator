@@ -1551,7 +1551,8 @@ def _fmt_sat_label(val: str) -> str:
 def render_html(prop, client_name, top_comps, room_assessments, editorial,
                 market_stats, photo_paths, suburb_display: str,
                 sell_timeline: str = "", sell_timeline_label: str = "",
-                rates: dict = None, pipeline_record: dict | None = None) -> str:
+                rates: dict = None, pipeline_record: dict | None = None,
+                positioning: bool = False) -> str:
     env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)))
     template = env.get_template("seller_report_v2.html")
     rates = rates or {}
@@ -1573,6 +1574,28 @@ def render_html(prop, client_name, top_comps, room_assessments, editorial,
     except Exception as e:
         print(f"[WARN] §01 right template render failed, using legacy banner: {e}")
         section_01_right_html = None
+
+    # ── Positioning-report variant (cold off-market recipient) ──────────────
+    # Retitle + derive the live-version URL and a vector QR for the opener page.
+    # When positioning=False these vars are inert (template falls back to default).
+    if positioning:
+        report_title = "Private Property Positioning Report"
+        report_title_short = "Property Positioning Report"
+    else:
+        report_title = "Property Position Report"
+        report_title_short = "Property Position Report"
+    live_url, qr_live_uri = "", ""
+    if positioning:
+        import re as _re
+        _addr = (prop.get("street_address") or prop.get("address") or "").split(",")[0]
+        _slug = _re.sub(r"[^a-z0-9]+", "-", f"{_addr} {suburb_display}".strip().lower()).strip("-")
+        live_url = f"https://fieldsestate.com.au/your-home/{_slug}#home" if _slug else "https://fieldsestate.com.au"
+        try:
+            import segno
+            qr_live_uri = segno.make(live_url, error="m").svg_data_uri(
+                dark="#22382C", light="#ffffff", border=3, scale=1)
+        except Exception as _e:
+            print(f"  [WARN] positioning QR generation failed: {_e}")
 
     pvd = prop.get("property_valuation_data", {})
     fpa = prop.get("floor_plan_analysis", {})
@@ -1707,6 +1730,12 @@ def render_html(prop, client_name, top_comps, room_assessments, editorial,
         # Phase A appraisal template system — new §01 right HTML block, or
         # None to fall back to the legacy scarcity-banner.
         "section_01_right_html": section_01_right_html,
+        # Positioning-report variant fields (inert unless positioning=True)
+        "positioning": positioning,
+        "report_title": report_title,
+        "report_title_short": report_title_short,
+        "live_url": live_url,
+        "qr_live_uri": qr_live_uri,
     }
 
     return template.render(**context)
@@ -1785,6 +1814,10 @@ def main():
     parser.add_argument("--strict", action="store_true",
                         help="Run scripts/editorial_review.py against the editorial JSON before render; "
                              "abort if any FAIL-severity check fails")
+    parser.add_argument("--positioning", action="store_true",
+                        help="Positioning-report variant for cold off-market recipients (no prior contact): "
+                             "retitles to 'Private Property Positioning Report' and adds a 'why you've "
+                             "received this' opener. Warm-lead appraisal render is unchanged without this flag.")
     args = parser.parse_args()
 
     db_client = get_db()
@@ -1937,7 +1970,8 @@ def main():
                        sell_timeline=sell_timeline,
                        sell_timeline_label=timeline_labels.get(sell_timeline, sell_timeline),
                        rates=rates,
-                       pipeline_record=pipeline)
+                       pipeline_record=pipeline,
+                       positioning=args.positioning)
     html_path = work_dir / "report.html"
     html_path.write_text(html)
 
