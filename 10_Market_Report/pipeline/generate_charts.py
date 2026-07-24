@@ -297,9 +297,9 @@ def chart_conviction_map(db, path):
             ha="left", va="bottom", fontsize=9, color=SLATE, fontweight="semibold")
 
     add_title_block(fig,
-        "The Fields Conviction Map — Q1 2026",
+        "The Fields Conviction Map",
         f"{len(suburbs_data)} Gold Coast suburbs plotted on price growth × volume strength. "
-        f"Core suburbs highlighted; southern Gold Coast sits in STANDOFF.")
+        f"Core suburbs highlighted.")
 
     style_axes(ax, xlabel="Rolling 12-month price growth (% YoY)",
                ylabel="Sales-volume z-score (vs 5-year same-quarter)")
@@ -424,6 +424,7 @@ def chart_indexed_prices(db, path):
     rebase_period = "Q1 2020"
     rebase_date = parse_period(rebase_period)
 
+    final_multiples = []
     for s in CORE_SUBURBS:
         series = load_indexed_and_volume(db, s)
         if not series:
@@ -455,12 +456,19 @@ def chart_indexed_prices(db, path):
             ax.annotate(f" {rebased[-1]:.0f}",
                         xy=(dates[-1], rebased[-1]),
                         color=SUBURB_COLOURS[s], fontsize=9, fontweight="semibold", va="center")
+            final_multiples.append(rebased[-1] / 100.0)
 
     ax.axhline(100, color=LIGHT_GREY, linewidth=0.6, zorder=1)
 
+    if final_multiples:
+        lo, hi = min(final_multiples), max(final_multiples)
+        mult_txt = (f"Robina, Burleigh Waters and Varsity Lakes have risen "
+                    f"{lo:.1f}–{hi:.1f}× since the start of 2020.")
+    else:
+        mult_txt = "Indexed to Q1 2020 = 100."
     add_title_block(fig,
         "Indexed median price by suburb, Q1 2020 = 100",
-        "Robina, Burleigh Waters and Varsity Lakes have all roughly 1.7×'d since the start of 2020.")
+        mult_txt)
 
     style_axes(ax, ylabel="Index (Q1 2020 = 100)")
     ax.xaxis.set_major_locator(mdates.YearLocator())
@@ -533,10 +541,22 @@ def chart_sales_volume(db, path):
     ax.set_xticks(x)
     ax.set_xticklabels(sorted_periods, rotation=45, ha="right", fontsize=7)
 
+    # Dynamic subtitle from the latest COMPLETE quarter, per suburb, vs its own 5yr average.
+    latest_p = sorted_periods[-1]
+    frags = []
+    for s in CORE_SUBURBS:
+        cnt = bar_data[s][-1]
+        avg = suburb_data[s].get("hist_avg")
+        if avg and avg > 0:
+            pct = (cnt - avg) / avg * 100
+            frags.append(f"{SUBURB_LABELS[s]} {cnt} ({pct:+.0f}% vs 5-yr avg)")
+        else:
+            frags.append(f"{SUBURB_LABELS[s]} {cnt}")
+    subtitle = (f"Latest complete quarter, {latest_p}: " + "; ".join(frags) +
+                ". The in-progress quarter is excluded.")
     add_title_block(fig,
         "Quarterly sales volume by suburb",
-        "Burleigh Waters' Q1 2026 print of 30 sales is 35.7% below its 5-year same-quarter average. "
-        "Robina is on trend; Varsity Lakes is mildly below.")
+        subtitle)
 
     style_axes(ax, ylabel="Quarterly sales count")
     ax.legend(loc="upper right")
