@@ -55,9 +55,9 @@ img.chart{ width:100%; display:block; }
 .cov .issue .no{ font-family:var(--sans); font-size:8pt; letter-spacing:0.14em; text-transform:uppercase; color:var(--copper); font-weight:600; }
 .cov .issue .qq{ font-family:var(--display); font-weight:600; font-size:26pt; color:var(--charcoal); display:flex; align-items:center; gap:1mm; }
 .cov .issue .yr{ font-family:var(--display); font-weight:500; font-size:12pt; line-height:0.82; color:var(--copper); display:inline-flex; flex-direction:column; }
-.cov .mid{ flex:1; display:flex; align-items:center; }
-.cov .fci{ font-family:var(--display); font-weight:900; font-size:150pt; line-height:0.8; letter-spacing:-.02em; color:var(--charcoal); }
-.cov .photo{ position:absolute; right:6mm; top:80mm; width:94mm; height:148mm; filter:grayscale(1) contrast(1.06) brightness(1.02); opacity:.94; border-radius:6mm; overflow:hidden; }
+.cov .mid{ flex:1; display:flex; align-items:center; position:relative; z-index:2; }
+.cov .fci{ font-family:var(--display); font-weight:900; font-size:152pt; line-height:0.8; letter-spacing:-.02em; color:var(--charcoal); }
+.cov .device{ position:absolute; right:0; top:58mm; width:107mm; height:auto; z-index:1; }
 .cov .lower{ max-width:112mm; position:relative; z-index:2; }
 .cov .lower .eyebrow{ margin-bottom:2.5mm; }
 .cov .lower p{ font-family:var(--display); font-size:10pt; line-height:1.55; }
@@ -171,7 +171,7 @@ td.num{ text-align:right; font-variant-numeric:tabular-nums; }
     <span class="qq">Q2 <span class="yr"><span>20</span><span>26</span></span></span>
   </div>
 
-  <div class="photo" style="background-image:url('file:///home/fields/Fields_Orchestrator/10_Market_Report/pipeline/output/brand/hero_bw_lakelands.jpg'); background-size:cover; background-position:center;"></div>
+  <img class="device" src="file:///home/fields/Fields_Orchestrator/10_Market_Report/pipeline/output/brand/cover_device.png">
 
   <div class="mid"><div class="fci">94.4</div></div>
 
