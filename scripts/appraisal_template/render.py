@@ -213,7 +213,7 @@ def render_section_00_cover_html(
             "logotype_white_src": "assets/img/fields_logotype_white.svg",
             "address_stacked_html": stacked,
             "suburb_line": suburb_line,
-            "doc_type": overrides.get("doc_type") or "Property Positioning Report",
+            "doc_type": overrides.get("doc_type") or "Private Property Positioning Report",
             "prepared_for": prepared_for_final,
             "author_line": overrides.get("author_line") or author,
             "url": "fieldsestate.com.au",
