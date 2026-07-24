@@ -292,10 +292,12 @@ def render_appraisal(
 
     rec_p11 = render.render_section_recommendation_html(
         subject_id, page_number=11, pipeline_record=pipeline_record, write_substantiation=True,
+        positioning=positioning,
     )
     sections_rendered.append("recommendation_p11")
     rec_p18 = render.render_section_recommendation_html(
         subject_id, page_number=18, pipeline_record=pipeline_record, write_substantiation=True,
+        positioning=positioning,
     )
     sections_rendered.append("recommendation_p18")
 
@@ -457,6 +459,64 @@ def render_appraisal(
             _anchor = '<div class="page">\n  <div class="inside-cover">'
             if _anchor in text:
                 text = text.replace(_anchor, _opener + "\n\n" + _anchor, 1)
+
+    # Positioning variant — reframe page-19 "next steps" for a cold owner:
+    # walkthrough/agency-agreement/pre-launch → keep-watching / verify-in-person
+    # / build-when-ready, plus a no-pressure close. Same page → no page-count
+    # impact. The block carries no address/name tokens, so this exact-match
+    # replace is unaffected by the substitutions above.
+    if positioning:
+        text = text.replace(
+"""        <div class="plan-col-title">Three next steps</div>
+        <div class="next-step-list">
+          <div class="next-step">
+            <div class="ns-num">01</div>
+            <div class="ns-body">
+              <div class="ns-name">A 30-minute walk-through.</div>
+              <div class="ns-desc">Will visits the home in person, refines the photography brief, confirms the avatar fit, answers any questions about the strategy.</div>
+            </div>
+          </div>
+          <div class="next-step">
+            <div class="ns-num">02</div>
+            <div class="ns-body">
+              <div class="ns-name">Agency agreement.</div>
+              <div class="ns-desc">A standard exclusive listing agreement, with the recommended list price, campaign budget and timeline locked.</div>
+            </div>
+          </div>
+          <div class="next-step">
+            <div class="ns-num">03</div>
+            <div class="ns-body">
+              <div class="ns-name">Pre-launch begins.</div>
+              <div class="ns-desc">Photography scheduled, editorial drafted, audiences built — five days from agreement to launch-ready.</div>
+            </div>
+          </div>
+        </div>""",
+"""        <div class="plan-col-title">Three ways to use this report</div>
+        <div class="next-step-list">
+          <div class="next-step">
+            <div class="ns-num">01</div>
+            <div class="ns-body">
+              <div class="ns-name">Keep watching the property.</div>
+              <div class="ns-desc">Scan the QR code to reopen the live report as listings, sales and market conditions change.</div>
+            </div>
+          </div>
+          <div class="next-step">
+            <div class="ns-num">02</div>
+            <div class="ns-body">
+              <div class="ns-name">Ask us to verify the property in person.</div>
+              <div class="ns-desc">A 30-minute walkthrough allows Will to confirm condition, improvements, layout and features that cannot be seen reliably in public data.</div>
+            </div>
+          </div>
+          <div class="next-step">
+            <div class="ns-num">03</div>
+            <div class="ns-body">
+              <div class="ns-name">Build the sale plan when the time is right.</div>
+              <div class="ns-desc">If selling becomes relevant, Fields will update the comparable evidence, confirm the pricing strategy and prepare the campaign plan.</div>
+            </div>
+          </div>
+        </div>
+        <div class="ns-desc" style="margin-top:5mm; font-style:italic; color:#5a554d;">No pressure. No obligation. The first decision is simply whether a conversation would be useful.</div>""",
+        )
 
     # Back cover + even-page booklet padding. Count printed page units (front
     # cover + content pages; `class="page"`/`class="cover"` match exactly, not
