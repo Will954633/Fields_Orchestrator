@@ -370,6 +370,63 @@ def collect_leads_crm(add, sm, now_utc, last_run):
             f"{no_pkg} HIGH-priority lead(s) have no real appraisal_pipeline entry yet — "
             f"see [APPRAISAL-BACKLOG-DISCOVERY] fix-history 2026-07-23")
 
+    # Gmail OAuth token — powers ALL site email (lead welcome, mini-site reports,
+    # subscribe, price alerts, Five Property Friday...). The `fields-estate-ads`
+    # consent screen is in "Testing", so Google expires the refresh token every
+    # ~7 days -> every Netlify email function silently returns ok:false and sends
+    # nothing (functions still return 200). On 2026-07-24 [FPF-GMAIL-TOKEN] this
+    # ran undetected for a full weekly cycle. Actively test the token here so the
+    # sheet turns red BEFORE the next batch needs it — the ONLY leading indicator
+    # (email_sends freshness is event-driven, so quiet != broken). Permanent fix:
+    # publish the consent screen to production (stops the 7-day expiry).
+    import glob as _glob
+    tok = os.environ.get("GMAIL_REFRESH_TOKEN", "")
+    secret_files = _glob.glob(os.path.join(orch_dir, "client_secret_*.json"))
+    if not tok or not secret_files:
+        add(PG, "Site email (Gmail OAuth token)", "refresh token", "unconfigured", UNKNOWN, "", None,
+            "GMAIL_REFRESH_TOKEN or client_secret_*.json not present on VM — cannot test the token")
+    else:
+        try:
+            import requests as _rq
+            cfg = json.load(open(secret_files[0]))
+            c = cfg.get("installed") or cfg.get("web") or {}
+            resp = _rq.post("https://oauth2.googleapis.com/token", data={
+                "client_id": c.get("client_id"), "client_secret": c.get("client_secret"),
+                "refresh_token": tok, "grant_type": "refresh_token"}, timeout=20)
+            j = resp.json() if resp.content else {}
+            if resp.status_code == 200 and j.get("access_token"):
+                add(PG, "Site email (Gmail OAuth token)", "refresh token", "alive", OK, "", None,
+                    "refresh token mints an access token — site email can send")
+            else:
+                err = j.get("error", f"http_{resp.status_code}")
+                add(PG, "Site email (Gmail OAuth token)", "refresh token", err, ERROR, "", None,
+                    f"Gmail refresh token FAILED ({err}) — ALL site email is down until re-auth as "
+                    f"rossmax06@gmail.com (see gmail_send_token_expiry memory / fix-history [FPF-GMAIL-TOKEN])")
+        except Exception as e:
+            add(PG, "Site email (Gmail OAuth token)", "refresh token", None, ERROR, "", None,
+                f"token check crashed: {type(e).__name__}: {e}")
+
+    # Five Property Friday batch (cron Fri 09:00 AEST). fpf_send.py self-reports
+    # its outcome to job_runs (added 2026-07-24) so a send failure or a
+    # non-firing cron can't hide behind a "N shortlists sent" log line again.
+    d = sm["job_runs"].find_one({"job": "fpf_friday_batch"})
+    if not d:
+        add(PG, "Five Property Friday delivery", "Fri 09:00 batch", None, UNKNOWN, "run_at", None,
+            "no batch outcome recorded yet — instrumentation added 2026-07-24, populates next Friday run")
+    else:
+        ts = as_dt(d.get("run_at"))
+        age_days = (now_utc - ts).total_seconds() / 86400 if ts else None
+        val = f"{d.get('sent', '?')} sent / {d.get('failed', '?')} failed"
+        if d.get("status") == "error" or (d.get("failed") or 0) > 0:
+            add(PG, "Five Property Friday delivery", "Fri 09:00 batch", val, ERROR, "run_at", ts,
+                d.get("detail", "batch reported send failures") + " — see [FPF-GMAIL-TOKEN]")
+        elif age_days is not None and age_days > 8:
+            add(PG, "Five Property Friday delivery", "Fri 09:00 batch", val, STALE, "run_at", ts,
+                f"last batch {age_days:.1f}d ago — expected weekly (Fri 09:00); cron may not be firing")
+        else:
+            add(PG, "Five Property Friday delivery", "Fri 09:00 batch", val, OK, "run_at", ts,
+                d.get("detail", ""))
+
 
 # ---- Ads & Compliance -----------------------------------------------------------
 def collect_ads_compliance(add, sm, now_utc):
