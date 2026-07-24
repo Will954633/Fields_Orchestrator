@@ -394,6 +394,63 @@ def render_appraisal(
                     text,
                 )
 
+        # ── Positioning-report opener (cold off-market recipients only) ─────
+        # For an anonymous owner ("the Owner") the recipient has NOT contacted
+        # us, so we lead with a page that answers "why did this arrive?" — with
+        # no reference to their site activity — before the philosophy page.
+        # Suppressed for named (warm) recipients who requested the report.
+        # Inserted before the page_units count below, so the even-page booklet
+        # padding accounts for the extra page automatically.
+        if prepared_for_name == "the Owner":
+            _sub_title = (suburb_name.title() if suburb_name.isupper() else suburb_name) or "the area"
+            _qr_block = ""
+            if qr_svg:
+                _qr_block = (
+                    '<div style="display:flex; align-items:center; gap:6mm; background:#fff;'
+                    ' border-radius:3mm; padding:4mm 5mm; max-width:150mm;">'
+                    '<img src="' + qr_svg + '" alt="Scan to reopen the live version"'
+                    ' style="width:20mm; height:20mm; image-rendering:pixelated; flex-shrink:0;">'
+                    '<div style="font-family:\'Poppins\',sans-serif; font-size:9pt; line-height:1.5;'
+                    ' color:var(--text-secondary);">'
+                    '<div style="font-weight:600; color:var(--grass); margin-bottom:1mm;">'
+                    'Scan to reopen the live version</div>'
+                    'Updated as nearby listings and sales change.</div></div>'
+                )
+            _opener = (
+                '<div class="page">\n'
+                '  <div style="padding:44mm 24mm 14mm; height:100%; display:flex; flex-direction:column;">\n'
+                '    <div style="font-family:\'JetBrains Mono\',\'SF Mono\',monospace; font-size:7.5pt;'
+                ' letter-spacing:2.5px; text-transform:uppercase; color:var(--copper); font-weight:600;'
+                ' border-bottom:1.5px solid var(--copper); padding-bottom:4px; align-self:flex-start;'
+                ' margin-bottom:14mm;">Why you&rsquo;ve received this</div>\n'
+                '    <p style="font-family:\'Playfair Display\',serif; font-size:20pt; font-weight:500;'
+                ' line-height:1.3; color:var(--grass); letter-spacing:-0.3px; max-width:150mm;'
+                ' margin-bottom:9mm;">Your home already has a position in today&rsquo;s market &mdash;'
+                ' even when it is not for sale.</p>\n'
+                '    <div style="font-family:\'Poppins\',sans-serif; font-size:11pt; font-weight:300;'
+                ' line-height:1.7; color:var(--text-secondary); max-width:150mm;">\n'
+                '      <p style="margin-bottom:5mm;">That position is shaped by the homes buyers would'
+                ' compare it with, the features they may struggle to replace, the buyer most likely to'
+                ' value those features, and the evidence supporting the price.</p>\n'
+                '      <p style="margin-bottom:5mm;">Fields has analysed <strong style="color:var(--grass);'
+                ' font-weight:600;">' + title_addr + '</strong> as part of our property-level coverage of '
+                + _sub_title + '. The enclosed report brings that work together: the home&rsquo;s likely'
+                ' buyer groups, comparable evidence, an indicative value range, and the strategy that could'
+                ' shape a future sale.</p>\n'
+                '      <p style="margin-bottom:5mm;">We do not know whether you are planning to move, and we'
+                ' have not assumed that you are. You may be considering a sale, planning several years ahead,'
+                ' or simply keeping informed.</p>\n'
+                '      <p style="color:var(--grass); font-weight:500;">This report is yours to keep.'
+                ' No response is required.</p>\n'
+                '    </div>\n'
+                '    <div style="margin-top:auto; padding-top:10mm;">' + _qr_block + '</div>\n'
+                '  </div>\n'
+                '</div>'
+            )
+            _anchor = '<div class="page">\n  <div class="inside-cover">'
+            if _anchor in text:
+                text = text.replace(_anchor, _opener + "\n\n" + _anchor, 1)
+
     # Back cover + even-page booklet padding. Count printed page units (front
     # cover + content pages; `class="page"`/`class="cover"` match exactly, not
     # `page-pad`/`cover-image`). The booklet must end on the back cover with an
