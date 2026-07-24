@@ -32,7 +32,7 @@ CREAM      = FIELDS_BIRCH
 ACCENT     = FIELDS_COPPER
 
 SUBURB_COLOURS = {
-    "robina":          FIELDS_SAGE,    # mid-tone sage (secondary suburb)
+    "robina":          FIELDS_SKY,     # teal (designer palette)
     "burleigh_waters": FIELDS_GRASS,   # primary brand green (focus suburb)
     "varsity_lakes":   FIELDS_COPPER,  # copper accent (third distinguishable suburb)
 }
