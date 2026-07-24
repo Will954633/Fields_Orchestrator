@@ -455,16 +455,21 @@ def render_appraisal(
                 _live_date = _live_date.title()
             _qr_center = ""
             if qr_svg:
+                # flex:1 centres the QR vertically in the space below the text
+                # (not margin-top:auto, which jams it to the page bottom). No
+                # box-shadow — headless-Chrome print renders soft shadows as an
+                # ugly grey block; a hairline border gives clean definition.
                 _qr_center = (
-                    '    <div style="margin-top:auto; display:flex; flex-direction:column;'
-                    ' align-items:center; text-align:center;">\n'
+                    '    <div style="flex:1; display:flex; flex-direction:column;'
+                    ' align-items:center; justify-content:center; text-align:center;">\n'
                     '      <div style="background:#fff; border-radius:3mm; padding:5mm;'
-                    ' box-shadow:0 1mm 5mm rgba(0,0,0,0.10);"><img src="' + qr_svg + '"'
+                    ' border:1px solid rgba(34,56,44,0.10);"><img src="' + qr_svg + '"'
                     ' alt="Scan to open your live report" style="display:block; width:34mm;'
                     ' height:34mm; image-rendering:pixelated;"></div>\n'
-                    '      <div style="font-family:\'Poppins\',sans-serif; font-size:10pt;'
-                    ' color:var(--text-secondary); margin-top:5mm; max-width:115mm; line-height:1.5;">'
-                    'Scan to open your live report &mdash; nothing to log in to, nothing to fill in.</div>\n'
+                    '      <div style="font-family:\'Poppins\',sans-serif; font-size:11pt;'
+                    ' font-weight:500; color:var(--grass); margin-top:6mm;">Scan to open your live report</div>\n'
+                    '      <div style="font-family:\'Poppins\',sans-serif; font-size:9.5pt;'
+                    ' color:var(--text-muted); margin-top:1.5mm;">No login, nothing to fill in.</div>\n'
                     '    </div>\n'
                 )
             _live_page = (
