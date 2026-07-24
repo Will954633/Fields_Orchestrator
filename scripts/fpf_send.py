@@ -143,11 +143,13 @@ def handle_lead(lead, dry=False, force_friday=None):
     subs = target_suburbs(f.get("area"))
     sends = {}
 
+    fails = []                                     # (kind, error) for any send that returned ok:false
     if not subs:                                   # elsewhere / unknown suburb
         html = welcome_html("", None, "needs_suburb")
         r = tracked_send(email, "Your Gold Coast shortlist — one quick question first", html,
                          "fpf_welcome_needs_suburb", {"lead": lead["_id"]}, dry)
         sends["welcome"] = r.get("send_id")
+        if not (dry or r.get("ok")): fails.append(("welcome_needs_suburb", r.get("error")))
         status = "welcomed_needs_suburb"
     else:
         label = " / ".join(SUBURB_LABEL.get(s, s) for s in subs)
@@ -156,6 +158,7 @@ def handle_lead(lead, dry=False, force_friday=None):
         subj = "Your first 5 — coming through today" if friday else "Your first shortlist — one quick thing first"
         r = tracked_send(email, subj, html, "fpf_welcome_friday" if friday else "fpf_welcome", {"lead": lead["_id"]}, dry)
         sends["welcome"] = r.get("send_id")
+        if not (dry or r.get("ok")): fails.append(("welcome", r.get("error")))
         status = "welcomed"
         if friday:
             picks = build_picks(subs, _int(f.get("bedrooms")), _int(f.get("bathrooms")), budget)
@@ -163,7 +166,17 @@ def handle_lead(lead, dry=False, force_friday=None):
                 r2 = tracked_send(email, f"Your 5 for Friday — {label}", shortlist_html(label, picks),
                                   "fpf_shortlist", {"lead": lead["_id"], "count": len(picks)}, dry)
                 sends["shortlist"] = r2.get("send_id")
+                if not (dry or r2.get("ok")): fails.append(("shortlist", r2.get("error")))
                 status = "welcomed+shortlist_sent"
+    if fails:                                      # never let a new-lead send fail silently
+        print(f"  SEND FAILURE for {email}: {fails}")
+        try:
+            from telegram_notify import send_message
+            send_message(f"🚨 *FPF new-lead send failed* — {email}\n"
+                         + "\n".join(f"• {k}: {err}" for k, err in fails)
+                         + "\n\nLikely Gmail token expiry — re-auth (gmail_send_token_expiry memory).")
+        except Exception as e:
+            print(f"(telegram alert failed: {e})")
     if not dry:
         sm["fb_leads"].update_one({"_id": lead["_id"]}, {"$set": {
             "fpf_status": "active", "contact_status": status, "sends": sends,
@@ -171,19 +184,70 @@ def handle_lead(lead, dry=False, force_friday=None):
     print(f"  {email}: {status} {sends}")
 
 
+def _aest_date(v):
+    """AEST calendar date (YYYY-MM-DD) for a stored UTC-ISO timestamp/datetime.
+    The double-send guard compares dates: last_shortlist_at is stored in UTC, so
+    at 09:00 AEST it reads as the *previous* UTC day — a naive [:10] slice made
+    the guard compare a UTC date to an AEST date and mismatch. Always normalise
+    to AEST before comparing."""
+    if not v:
+        return None
+    try:
+        s = str(v).replace("Z", "+00:00")
+        dt = datetime.fromisoformat(s)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(AEST).date().isoformat()
+    except Exception:
+        return None
+
+
+def _report_batch(sent, failed, skipped, dry):
+    """Make a batch outcome loud, not silent. Records a self-reported result to
+    system_monitor.job_runs (read by main_site_health_check.py -> "Leads & CRM"
+    -> "Five Property Friday delivery") and Telegram-alerts on any send failure.
+    This is the fix for [FPF-GMAIL-TOKEN] 2026-07-24: a dead Gmail token made
+    every send return ok:false while the batch still logged "N shortlists sent"
+    and stamped the leads — a full weekly cycle lost with zero signal."""
+    if dry:
+        return
+    status = "error" if failed else "success"
+    detail = ("; ".join(f"{e}: {err}" for e, err in failed)[:400] if failed
+              else f"{len(sent)} shortlists delivered")
+    try:
+        from job_status import record_job_result
+        record_job_result("fpf_friday_batch", status, detail=detail,
+                          sent=len(sent), failed=len(failed), skipped=skipped)
+    except Exception as e:
+        print(f"(job_status record failed: {e})")
+    if failed:
+        try:
+            from telegram_notify import send_message
+            lines = "\n".join(f"• {e} — {err}" for e, err in failed)
+            send_message(
+                "🚨 *Five Property Friday — send failure*\n"
+                f"{len(sent)} sent, *{len(failed)} FAILED*, {skipped} already-sent.\n{lines}\n\n"
+                "Most likely the Gmail OAuth token expired (7-day testing-mode). "
+                "Re-auth per the `gmail_send_token_expiry` memory / fix-history [FPF-GMAIL-TOKEN], "
+                "then re-run `python3 scripts/fpf_send.py --friday-batch`.")
+        except Exception as e:
+            print(f"(telegram alert failed: {e})")
+
+
 def friday_batch(dry=False, force=False):
     if not force and not is_friday():
         print("not Friday (AEST) — batch skipped"); return
     sm = get_client()["system_monitor"]
-    today = datetime.now(AEST).date().isoformat()
+    today = datetime.now(AEST).date().isoformat()   # AEST calendar date
     q = {"form_id": {"$in": list(BUYER_BRIEF_FORMS)}, "fpf_status": "active"}
-    n = 0
+    sent, failed, skipped = [], [], 0
     for lead in sm["fb_leads"].find(q):
         f = lead.get("fields", {}) or {}
         subs = target_suburbs(f.get("area"))
         if not subs:
             continue                                # no suburb → skip (awaiting reply)
-        if str(lead.get("last_shortlist_at", ""))[:10] == today:
+        if _aest_date(lead.get("last_shortlist_at")) == today:
+            skipped += 1
             continue                                # already sent today — no double-send
         label = " / ".join(SUBURB_LABEL.get(s, s) for s in subs)
         budget = budget_for(subs)
@@ -193,13 +257,21 @@ def friday_batch(dry=False, force=False):
         email = f.get("email")
         r = tracked_send(email, f"Your 5 for Friday — {label}", shortlist_html(label, picks),
                          "fpf_shortlist", {"lead": lead["_id"], "count": len(picks)}, dry)
-        if not dry:
-            sm["fb_leads"].update_one({"_id": lead["_id"]},
-                                      {"$set": {"last_shortlist_at": datetime.now(timezone.utc).isoformat(),
-                                                "last_shortlist_send": r.get("send_id")}})
-        n += 1
-        print(f"  batch → {email} ({label})")
-    print(f"friday batch: {n} shortlists sent")
+        # Only count + stamp a send that ACTUALLY succeeded. tracked_send returns
+        # {ok:false, error} on a failed Gmail send — stamping on that is what hid
+        # the 2026-07-24 outage.
+        if dry or r.get("ok"):
+            if not dry:
+                sm["fb_leads"].update_one({"_id": lead["_id"]},
+                                          {"$set": {"last_shortlist_at": datetime.now(timezone.utc).isoformat(),
+                                                    "last_shortlist_send": r.get("send_id")}})
+            sent.append(email)
+            print(f"  batch → {email} ({label})")
+        else:
+            failed.append((email, r.get("error", "unknown")))
+            print(f"  FAILED → {email} ({label}): {r.get('error')}")
+    print(f"friday batch: {len(sent)} sent, {len(failed)} failed, {skipped} already-sent-today")
+    _report_batch(sent, failed, skipped, dry)
 
 
 def main():
