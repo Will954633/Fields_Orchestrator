@@ -58,10 +58,10 @@ CHART_TYPES = ["days_on_market", "sales_volume", "turnover_rate", "market_cycle"
 # Leads & CRM / Ads & Compliance cover the rest of the business (orchestrator
 # cron fleet, off-VM automation, leads pipeline, ad-decision logging) so the
 # sheet is one source of truth, not a website-only view.
-PAGES = ["Process Registry", "Pipeline Processes", "Sitemap", "GitHub Actions",
-         "Market Metrics", "Market Signals Fetch", "For Sale / Sold", "Property Page",
-         "Articles", "New Listings: Editorial & SEO", "Leads & CRM", "Ads & Compliance",
-         "CEO Governance", "Valuation Accuracy", "Known Gaps"]
+PAGES = ["Process Registry", "Pipeline Processes", "Sitemap", "SEO Page Integrity",
+         "GitHub Actions", "Market Metrics", "Market Signals Fetch", "For Sale / Sold",
+         "Property Page", "Articles", "New Listings: Editorial & SEO", "Leads & CRM",
+         "Ads & Compliance", "CEO Governance", "Valuation Accuracy", "Known Gaps"]
 
 FIELDS_AUTOMATION_REPO = "Will954633/fields-automation"
 
@@ -655,6 +655,117 @@ def collect_new_listings_editorial(add, gc, sm, now_utc):
 
         for addr, detail in flagged:
             add(PG, "Flagged listing", f"{suburb_label(s)}: {addr}", detail[:70], ERROR, "", None, detail)
+
+
+# ---- SEO Page Integrity (does each SEO-critical page actually serve crawlable
+# SSR HTML?) --------------------------------------------------------------------
+# The gap this fills (2026-07-24): every OTHER SEO monitor in this file is
+# UPSTREAM of the page itself — sitemap freshness, Google Indexing submit-new,
+# GSC coverage of article slugs. NONE of them fetch a page and confirm the
+# server HTML a crawler receives actually has a real <title>, an <h1>,
+# indexable robots, a canonical, and a non-empty body. /for-sale-v3 sat live
+# serving only a loading skeleton (no <h1>, generic title, absent from the
+# sitemap) with every upstream monitor green — it was invisible to Google and
+# nothing here would ever have gone red. This collector fetches representative
+# page TEMPLATES as Googlebot and asserts the on-page SEO fundamentals, so an
+# SSR regression (a broken loader, a refactor that drops the <h1>, a stuck
+# noindex flip on a published property) becomes a red row instead of a silence
+# that only surfaces when a human notices a page missing from search.
+SITE_URL = "https://fieldsestate.com.au"
+GOOGLEBOT_UA = "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
+
+# (path, label, must_be_indexable) — static SEO-critical templates. A live
+# published /property/ URL is sampled from the DB at run time (below).
+SEO_INTEGRITY_PAGES = [
+    ("/", "Homepage (News)", True),
+    ("/for-sale", "For Sale listings", True),
+    ("/for-sale-v3", "Decision feed v3", True),
+    ("/recently-sold", "Recently sold", True),
+    ("/market-metrics/Robina", "Market metrics (suburb)", True),
+    ("/analyse-your-home", "Analyse Your Home", True),
+]
+
+
+def _fetch_seo_html(path):
+    import requests
+    r = requests.get(SITE_URL + path,
+                     headers={"User-Agent": GOOGLEBOT_UA, "Cache-Control": "no-cache"},
+                     timeout=20)
+    return r.status_code, r.text
+
+
+def _seo_findings(html, must_be_indexable):
+    """Return (problems[], info{}) for one page's server (pre-JS) HTML."""
+    import re
+    title_m = re.search(r"<title[^>]*>(.*?)</title>", html, re.I | re.S)
+    title = title_m.group(1).strip() if title_m else ""
+    has_h1 = bool(re.search(r"<h1[\s>]", html, re.I))
+    robots_m = re.search(r'<meta[^>]+name=["\']robots["\'][^>]*>', html, re.I)
+    noindex = "noindex" in (robots_m.group(0).lower() if robots_m else "")
+    canonical = bool(re.search(r'<link[^>]+rel=["\']canonical["\']', html, re.I))
+    # crude visible-text length: drop scripts/styles, strip tags, collapse ws.
+    text = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", html, flags=re.I | re.S)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text_len = len(re.sub(r"\s+", " ", text).strip())
+
+    problems = []
+    if not title:
+        problems.append("no <title>")
+    if not has_h1:
+        problems.append("no <h1> in server HTML (client-only render / SSR regression)")
+    if must_be_indexable and noindex:
+        problems.append("page carries meta robots noindex")
+    if not canonical:
+        problems.append("no canonical link")
+    if text_len < 600:
+        problems.append(f"server HTML body only {text_len} chars (near-empty shell)")
+    return problems, {"title": title[:70], "has_h1": has_h1, "noindex": noindex,
+                      "canonical": canonical, "text_len": text_len}
+
+
+def collect_seo_page_integrity(add, gc, now_utc):
+    """Fetch SEO-critical page templates as Googlebot; flag any that fail the
+    on-page SEO fundamentals in the server HTML (the layer a crawler indexes
+    first). Handed to Samantha to investigate when red."""
+    PG = "SEO Page Integrity"
+    pages = list(SEO_INTEGRITY_PAGES)
+
+    # Sample one live PUBLISHED property page — the biggest SEO surface. Its
+    # editorial has published, so the noindex-until-editorial flip should have
+    # cleared; a published page stuck on noindex is a silent de-indexer.
+    try:
+        for s in NEW_LISTING_SUBURBS:
+            doc = gc[s].find_one(
+                {"listing_status": "for_sale", "ai_analysis.status": "published",
+                 "url_slug": {"$exists": True, "$nin": [None, ""]}},
+                {"url_slug": 1})
+            if doc and doc.get("url_slug"):
+                pages.append((f"/property/{doc['url_slug']}",
+                              "Property page (published sample)", True))
+                break
+    except Exception as e:
+        add(PG, "Property sample lookup", "", None, UNKNOWN, "", None,
+            f"could not pick a live property slug: {type(e).__name__}: {e}")
+
+    for path, label, must_index in pages:
+        try:
+            status_code, html = _fetch_seo_html(path)
+        except Exception as e:
+            add(PG, label, path, None, ERROR, "", None,
+                f"fetch failed: {type(e).__name__}: {e}"[:150])
+            continue
+        if status_code != 200:
+            add(PG, label, path, f"HTTP {status_code}", ERROR, "", None,
+                f"expected 200, got {status_code}")
+            continue
+        problems, info = _seo_findings(html, must_index)
+        val = (f"title:{'y' if info['title'] else 'N'} "
+               f"h1:{'y' if info['has_h1'] else 'N'} "
+               f"idx:{'N' if info['noindex'] else 'y'} body:{info['text_len']}c")
+        if problems:
+            add(PG, label, path, val, ERROR, "", None, "; ".join(problems)[:200])
+        else:
+            add(PG, label, path, val, OK, "", None, f"“{info['title']}”")
 
 
 # ---- Process Registry (every cron job / systemd daemon / off-VM runner) -------
@@ -1337,6 +1448,7 @@ def collect(client, now_utc, prev_map):
         ("GitHub Actions", collect_github_actions, (add,)),
         ("Market Signals Fetch", collect_market_signals_fetch, (add, sm, now_utc)),
         ("New Listings: Editorial & SEO", collect_new_listings_editorial, (add, gc, sm, now_utc)),
+        ("SEO Page Integrity", collect_seo_page_integrity, (add, gc, now_utc)),
         ("Leads & CRM", collect_leads_crm, (add, sm, now_utc, last_run)),
         ("Ads & Compliance", collect_ads_compliance, (add, sm, now_utc)),
         ("CEO Governance", collect_ceo_governance, (add, sm, now_utc)),
