@@ -229,7 +229,7 @@ def render_appraisal(
     # the original "Property Positioning Report" title.
     _cover_overrides = dict(get_overrides("00_cover"))
     if positioning:
-        _cover_overrides.setdefault("doc_type", "Private Property Positioning Report")
+        _cover_overrides.setdefault("doc_type", "Private Positioning Report")
 
     # Section render — each returns the HTML block
     sections_rendered = []
@@ -468,8 +468,6 @@ def render_appraisal(
                     ' height:34mm; image-rendering:pixelated;"></div>\n'
                     '      <div style="font-family:\'Poppins\',sans-serif; font-size:11pt;'
                     ' font-weight:500; color:var(--grass); margin-top:6mm;">Scan to open your live report</div>\n'
-                    '      <div style="font-family:\'Poppins\',sans-serif; font-size:9.5pt;'
-                    ' color:var(--text-muted); margin-top:1.5mm;">No login, nothing to fill in.</div>\n'
                     '    </div>\n'
                 )
             _live_page = (
@@ -876,7 +874,7 @@ def main() -> None:
                         help="Exit non-zero if cover_hero or satellite fell back to the generic 13TC placeholder. Use this before printing/mailing.")
     parser.add_argument("--positioning", action="store_true",
                         help="Positioning-report variant for cold off-market recipients (no prior contact): "
-                             "retitles the cover to 'Private Property Positioning Report' and adds a 'why "
+                             "retitles the cover to 'Private Positioning Report' and adds a 'why "
                              "you've received this' opener. WITHOUT this flag the report renders byte-for-byte "
                              "identical to the original. (A pipeline record with report_variant='positioning' "
                              "also enables it.)")
