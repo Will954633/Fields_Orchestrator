@@ -58,6 +58,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 os.environ.setdefault("CLAUDE_MAX_CLI_TIMEOUT", "600")
 from claude_max_client import make_client  # noqa: E402
 
+# Canonical waterfront detector — the editorial gate below refuses to produce
+# content for waterfront homes (see WATERFRONT GATE). Orchestrator root on path
+# so `shared` is importable regardless of the CWD the step is launched from.
+sys.path.insert(0, "/home/fields/Fields_Orchestrator")
+from shared.waterfront import detect_waterfront  # noqa: E402
+
 _USE_MAX = os.environ.get("USE_CLAUDE_MAX", "1").strip().lower() in {"1", "true", "yes", "on"}
 # Lever 1: compact the comparable-sales pool in the serialised doc. Default on;
 # set COMPACT_COMPARABLES=0 to send the full untrimmed document (A/B / escape hatch).
@@ -3383,6 +3389,13 @@ def process_cadastral_property(
     address = prop.get("address") or prop.get("complete_address") or "Unknown"
     prop_id = prop["_id"]
 
+    # WATERFRONT GATE — on-demand (owner/cadastral) reports are also withheld for
+    # waterfront homes (see _waterfront_editorial_gate). A homeowner asking about a
+    # canal/lake home must not receive a report built on a valuation we know is wrong.
+    _wf = _waterfront_editorial_gate(db, suburb, prop)
+    if _wf is not None:
+        return _wf
+
     # Skip if recent cadastral analysis exists (within 7 days) and not forced
     if not force:
         existing = prop.get("ai_analysis") or {}
@@ -3562,10 +3575,60 @@ def _compact_valuation_data(prop_clean: Dict) -> None:
     prop_clean["valuation_data"] = vd
 
 
+# ─── WATERFRONT GATE ─────────────────────────────────────────────────────────
+# Fields does NOT publish editorial (or valuations) for waterfront homes yet.
+# Two reasons (Will, 2026-07-26): (1) waterfront is its own market needing a
+# dedicated arm of the business — pricing/positioning a canal/lake/riverfront home
+# well takes expertise we don't have yet; (2) the comparable-sales valuation model
+# is not ready for it (a waterfront home valued against dry blocks produces a wrong
+# range — surfaced by 46 Mornington Terrace, Robina). Full rationale + the detector
+# live in shared/waterfront.py. Until we're ready, the editorial generators SKIP
+# waterfront homes entirely rather than produce content we can't stand behind.
+def _waterfront_editorial_gate(db, suburb: str, prop: Dict) -> Optional[Dict]:
+    """If the property is waterfront, persist the canonical flag, mark the editorial
+    as skipped (so nothing is generated OR auto-published), and return that record.
+    Returns None for non-waterfront homes (pipeline proceeds as normal)."""
+    res = detect_waterfront(prop)
+    if not res["is_waterfront"]:
+        return None
+    address = prop.get("address") or prop.get("complete_address") or "Unknown"
+    now = datetime.now(timezone.utc).isoformat()
+    skip_record = {
+        "status": "skipped_waterfront",
+        "skipped_reason": "waterfront_out_of_scope_2026-07-26",
+        "skipped_at": now,
+        "headline": f"[SKIPPED] {address} — waterfront (out of editorial scope)",
+    }
+    set_fields = {"ai_analysis.status": skip_record["status"],
+                  "ai_analysis.skipped_reason": skip_record["skipped_reason"],
+                  "ai_analysis.skipped_at": now}
+    if not prop.get("is_waterfront"):
+        set_fields["is_waterfront"] = True
+        set_fields["waterfront_meta"] = {
+            "reason": res["reason"], "borderline": res["borderline"],
+            "signals": res["signals"], "detected_at": now,
+            "detector": "waterfront.py@2026-07-26",
+            "policy": "waterfront_out_of_scope_2026-07-26",
+        }
+    try:
+        cosmos_retry(lambda: db[suburb].update_one({"_id": prop["_id"]}, {"$set": set_fields}),
+                     "waterfront_gate")
+    except Exception as exc:  # noqa: BLE001 — don't let a write hiccup produce editorial
+        print(f"  [WARN] waterfront flag write failed for {address}: {exc}")
+    print(f"[SKIP] {address} — WATERFRONT ({res['reason']}"
+          f"{'/borderline' if res['borderline'] else ''}); editorial withheld (out of scope)")
+    return skip_record
+
+
 def process_property(db, suburb: str, prop: Dict, api_key: str, force: bool = False, use_gemini_gather: bool = False, gemini_api_key: str = None, use_openai_gather: bool = False, openai_api_key: str = None, use_hybrid_gather: bool = False) -> Dict:
     """Run the full pipeline for one property."""
     address = prop.get("address", "Unknown")
     prop_id = prop["_id"]
+
+    # WATERFRONT GATE — refuse editorial for waterfront homes (see helper above).
+    _wf = _waterfront_editorial_gate(db, suburb, prop)
+    if _wf is not None:
+        return _wf
 
     if not force and prop.get("ai_analysis") and prop["ai_analysis"].get("headline"):
         print(f"[SKIP] {address} — already has ai_analysis (use --force to regenerate)")
