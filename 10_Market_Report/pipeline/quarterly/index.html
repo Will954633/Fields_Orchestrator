@@ -1,0 +1,2167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>THE FIELDS QUARTERLY</title>
+<style>
+@font-face {
+  font-family: 'PlayfairDisplay';
+  src: url('assets/fonts/PlayfairDisplay.eot');
+  src: url('assets/fonts/PlayfairDisplay.eot?#iefix') format('embedded-opentype'),
+       url('assets/fonts/PlayfairDisplay.woff2') format('woff2'),
+       url('assets/fonts/PlayfairDisplay.woff') format('woff');
+        font-display: swap;
+}
+
+@font-face {
+  font-family: 'PlayfairDisplay-Italic';
+  src: url('assets/fonts/PlayfairDisplay-Italic.eot');
+  src: url('assets/fonts/PlayfairDisplay-Italic.eot?#iefix') format('embedded-opentype'),
+       url('assets/fonts/PlayfairDisplay-Italic.woff2') format('woff2'),
+       url('assets/fonts/PlayfairDisplay-Italic.woff') format('woff');
+        font-display: swap;
+}
+
+@font-face {
+  font-family: 'Poppins';
+  src: url('assets/fonts/Poppins.eot');
+  src: url('assets/fonts/Poppins.eot?#iefix') format('embedded-opentype'),
+       url('assets/fonts/Poppins.woff2') format('woff2'),
+       url('assets/fonts/Poppins.woff') format('woff');
+        font-display: swap;
+}
+
+@font-face {
+  font-family: 'Poppins-Medium';
+  src: url('assets/fonts/Poppins-Medium.eot');
+  src: url('assets/fonts/Poppins-Medium.eot?#iefix') format('embedded-opentype'),
+       url('assets/fonts/Poppins-Medium.woff2') format('woff2'),
+       url('assets/fonts/Poppins-Medium.woff') format('woff');
+        font-display: swap;
+}
+
+@font-face {
+  font-family: 'Poppins-Bold';
+  src: url('assets/fonts/Poppins-Bold.eot');
+  src: url('assets/fonts/Poppins-Bold.eot?#iefix') format('embedded-opentype'),
+       url('assets/fonts/Poppins-Bold.woff2') format('woff2'),
+       url('assets/fonts/Poppins-Bold.woff') format('woff');
+        font-display: swap;
+}
+
+@font-face {
+  font-family: 'SourceSerifPro-Bold';
+  src: url('assets/fonts/SourceSerifPro-Bold.eot');
+  src: url('assets/fonts/SourceSerifPro-Bold.eot?#iefix') format('embedded-opentype'),
+       url('assets/fonts/SourceSerifPro-Bold.woff2') format('woff2'),
+       url('assets/fonts/SourceSerifPro-Bold.woff') format('woff');
+        font-display: swap;
+}
+
+@font-face {
+  font-family: 'SourceSerifPro-Regular';
+  src: url('assets/fonts/SourceSerifPro-Regular.eot');
+  src: url('assets/fonts/SourceSerifPro-Regular.eot?#iefix') format('embedded-opentype'),
+       url('assets/fonts/SourceSerifPro-Regular.woff2') format('woff2'),
+       url('assets/fonts/SourceSerifPro-Regular.woff') format('woff');
+        font-display: swap;
+}
+
+@page { size: A4; margin: 0; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --text: #1a1a1a;
+  --grey: #6b7280;
+  --brown: #bd775b;
+  --brown-dark: #b76749;
+  --dark: #1a1a1a;
+  --green: #22382c;
+  --playfair: 'PlayfairDisplay';
+  --poppins: 'Poppins';
+  --poppins-bold: 'Poppins-Bold';
+  --poppins-med: 'Poppins-Medium';
+  --italic: 'PlayfairDisplay-Italic';
+  --number: 'SourceSerifPro-Bold', 'Tiempos Text', Georgia, serif;
+  --serif: 'SourceSerifPro-Bold', 'Tiempos Text', Georgia, serif;
+  --serif-regular: 'SourceSerifPro-Regular';
+
+  --grass: #22382C;
+  --grass-deep: #1B2D24;
+  --birch: #E6DDD2;
+  --birch-warm: #efe8de;
+  --copper: #B76749;
+  --copper-deep: #8d4d33;
+  --copper-soft: #f0d9cc;
+  --copper-tint: #fdf3ec;
+  --text-muted: #7a8a80;
+  --rule: rgba(34, 56, 44, 0.18);
+  --rule-soft: rgba(34, 56, 44, 0.10);
+  --light-grey: #9ca3af;
+  --light: #E5E7EB;
+  --light-grey2: #e5e7eb;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+}
+
+html, body {
+  background: #e6ddd2;
+  font-family: var(--playfair);
+  color: var(--text);
+  font-size: 11.5pt;
+  line-height: 1.7;
+  font-weight: 300;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+@media screen {
+  body { padding: 24px 0; }
+  .page { box-shadow: 0 12px 40px rgba(0,0,0,0.18); margin: 14px auto; }
+}
+
+.page {
+  width: 210mm;
+  height: 297mm;
+  position: relative;
+  overflow: hidden;
+  background: var(--birch);
+  page-break-after: always;
+}
+.page:last-of-type { page-break-after: auto; }
+.last-page {
+  background-color: #22382c;
+  padding: 28mm 22mm;
+}
+
+a {
+  color: #22382C;
+  text-decoration: none;
+}
+a:hover {
+  color: #000;
+}
+
+.page-image {
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+.page-pad {
+  padding: 8.5mm 18mm;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--poppins);
+  font-size: 7.5pt;
+  color: var(--grey);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-bottom: 1.3pt solid var(--light-grey);
+  padding-bottom: 2mm;
+  margin-bottom: 12mm;
+}
+h2 {
+  font-size: 36pt;
+  font-weight: 600;
+  margin-top: 3.5mm;
+  line-height: 1.1;
+}
+.fs-32 {
+  font-size: 32pt;
+}
+h2:first-child {
+  margin-top: 0;
+}
+h3.page-headline {
+  font-family: var(--playfair);
+  font-size: 20pt;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--dark);
+  margin-bottom: 4mm;
+}
+h3.page-headline:last-child {
+  margin-bottom: 0;
+}
+h3.page-headline-smaller {
+  font-size: 14pt;
+}
+h3.mb-bigger {
+  margin-bottom: 6mm;
+}
+.page-subhead {
+  font-family: var(--poppins);
+  font-size: 8.9pt;
+  color: var(--grey);
+}
+h4 {
+  font-family: var(--italic);
+  font-size: 12pt;
+  font-weight: 400;
+  line-height: 1.65;
+  margin-top: 3mm;
+}
+h5 {
+  font-family: var(--serif);
+  font-size: 11pt;
+  line-height: 1.3;
+  font-weight: 400;
+  margin-bottom: 3mm;
+  color: var(--charcoal);
+}
+h6 {
+  font-family: var(--poppins);
+  font-size: 8pt;
+  letter-spacing: 0.1em;
+  font-weight: 400;
+  text-transform: uppercase;
+  color: var(--brown);
+  margin-top: 2mm;
+}
+h4:first-child, h6:first-child {
+  margin-top: 0;
+}
+.letters-wider {
+  letter-spacing: 0.18em;
+}
+p {
+  font-size: 10.2pt;
+  line-height: 1.55;
+  color: var(--text);
+  margin-bottom: 4mm;
+}
+.text-lh-smaller p {
+  line-height: 1.5;
+}
+.mb-1 {
+  margin-bottom: 1mm;
+}
+.mb-2 {
+  margin-bottom: 2mm;
+}
+.mb-6 {
+  margin-bottom: 6mm;
+}
+.mt-5 {
+  margin-top: 5mm;
+}
+.table-block {
+  margin-top: 7.5mm;
+}
+.text-smaller p {
+  margin-bottom: 3mm;
+}
+p:last-child, .text-smaller p:last-child {
+  margin-bottom: 0;
+}
+.text-poppins p, .text-poppins {
+  font-family: var(--poppins);
+}
+.author {
+  margin-top: 6mm;
+}
+.italic {
+  font-style: italic;
+}
+.font-serif {
+  font-family: var(--serif-regular);
+}
+.text-smaller p, .p-smaller {
+  font-size: 8.25pt;
+  line-height: 1.6;
+}
+.text-grey {
+  color: var(--grey);
+}
+.text-bold, .text-bold p, strong {
+  font-weight: 600;
+}
+.text-poppins strong {
+  font-family: var(--poppins-bold);
+  font-weight: 100;
+}
+
+/*list*/
+li {
+  font-family: var(--poppins);
+  font-size: 8.5pt;
+  line-height: 1.55;
+  padding-left: 9mm;
+  margin-bottom: 1.5mm;
+}
+ul, ol {
+  margin-bottom: 4mm;
+}
+ul:last-child, ol:last-child, .mb-0 {
+  margin-bottom: 0;
+}
+ol {
+  list-style: none;
+  padding: 0;
+  counter-reset: numlist;
+}
+ol li {
+  position: relative;
+  counter-increment: numlist;
+  padding-left: 7mm;
+}
+ol li:before {
+  content: counter(numlist) ".";
+  position: absolute;
+  left: 0;
+  font-weight: 600;
+  color: var(--green);
+}
+.text-long p {
+  font-size: 10pt;
+  line-height: 1.5;
+  margin-bottom: 3mm;
+}
+.text-long p:last-child {
+  margin-bottom: 0;
+}
+/*page 02*/
+.divider {
+  border: 0;
+  border-top: 1.3pt solid var(--light-grey);
+  margin: 6mm 0;
+}
+.info-block {
+  margin-bottom: 4mm;
+}
+.info-block p {
+  font-size: 8pt;
+  line-height: 1.6;
+}
+.info-block-title {
+  font-family: var(--poppins-med);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 0.6mm;
+}
+.text-poppins .info-block-title {
+  font-family: var(--poppins-med);
+}
+
+/*page 03 - How to read this report*/
+.howto-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6mm;
+  margin-bottom: 6mm;
+}
+
+.howto-card {
+  background: #FFFFFF;
+  border-left: 2pt solid #000;
+  padding: 4mm 5mm;
+  font-size: 8.5pt;
+  line-height: 1.5;
+}
+.text-smaller .formal {
+  font-size: 7.2pt;
+  font-style: italic;
+  color: var(--grey);
+}
+
+/*page 04*/
+.main-text p {
+  color: var(--dark);
+}
+.main-text-bigger p {
+  font-size: 12pt;
+  line-height: 1.55;
+}
+.main-text p:first-letter { 
+  font-size: 25pt; 
+  font-weight: 600; 
+  color: var(--green);
+  float: left; 
+  line-height: 0.85; 
+  padding-right: 0.08em; 
+  padding-top: 0.1em; 
+}
+
+/*page 05*/
+.graph {
+  margin-top: 5mm;
+  margin-bottom: 5mm;
+}
+.graph:first-child {
+  margin-top: 0;
+}
+.graph-mt-bigger {
+  margin-top: 6mm;
+}
+.text-long .graph {
+  margin-bottom: 4mm;
+}
+.mb-3 {
+  margin-bottom: 3mm;
+}
+.graph-subtitle {
+  font-family: var(--poppins);
+  font-size: 7.5pt;
+  line-height: 1.7;
+  font-style: italic;
+  color: var(--grey);
+}
+
+.page-body {
+  margin-top: 5mm;
+}
+.mt-bigger {
+  margin-top: 6.5mm;
+}
+.mt-main {
+  margin-top: 4mm;
+}
+.mt-0 {
+  margin-top: 0;
+}
+
+/*page 06 - table*/
+table.data {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--poppins);
+  font-size: 9pt;
+  margin: 4.3mm 0;
+  text-align: left;
+}
+table.data:first-child {
+  margin-top: 0;
+}
+table th {
+  background: #FFFFFF;
+  border-bottom: 1.3pt solid var(--dark);
+  font-weight: 600;
+  line-height: 1.55;
+  color: var(--dark);
+  text-transform: uppercase;
+  font-size: 7.5pt;
+  letter-spacing: 0.07em;
+  padding: 2.6mm 3mm;
+}
+.col-abelson {
+  width: 43mm;
+}
+table td {
+  font-size: 8.03pt;
+  line-height: 1.5;
+  border-bottom: 1.3pt solid #e5e6e8;
+  padding: 2.4mm 3mm;
+  text-align: left;
+}
+table .total {
+  font-weight: 600;
+}
+table .align-right {
+  text-align: right;
+}
+.text-below-table {
+  font-family: var(--poppins);
+  font-size: 7.8pt;
+  font-style: italic;
+  line-height: 1.6;
+  color: var(--grey);
+}
+.notice {
+  background: #FFFFFF;
+  border-left: 3pt solid var(--brown-dark);
+  padding: 4mm 6mm;
+  margin: 4mm 0;
+}
+.notice-mt-bigger {
+  margin-top: 6mm;
+}
+.notice-dark {
+  border-color: var(--dark);
+}
+.notice p {
+  font-family: var(--poppins);
+}
+.notice-label {
+  display: block;
+  font-size: 7pt;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--brown-dark);
+  margin-bottom: 2.4mm;
+}
+.notice-dark p {
+  color: var(--dark);
+}
+.notice-text {
+  font-size: 8.6pt;
+  line-height: 1.6;
+  color: var(--dark);
+}
+
+/*section*/
+.section-num {
+  font-size: 10pt;
+  letter-spacing: 0.3em;
+}
+.section-text {
+  max-width: 115mm;
+  font-family: var(--italic);
+  font-size: 12pt;
+  line-height: 1.6;
+  color: var(--grey);
+  margin: 8mm auto 0 auto;
+}
+.section-body {
+  text-align: center;
+  padding-top: 60mm;
+}
+
+/*page-image*/
+.page-image-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 30mm 18mm 22mm 18mm;
+  background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.55) 60%, rgba(0,0,0,0) 100%);
+  color: #FFFFFF;
+}
+.page-image-top-label {
+  position: absolute;
+  top: 8mm;
+  right: 14mm;
+  font-family: var(--poppins);
+  font-size: 7pt;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: #FFFFFF;
+  opacity: 0.75;
+}
+.page-image-subhead {
+  font-family: var(--poppins);
+  font-size: 8pt;
+  letter-spacing: 0.2em;
+  color: #C9D9E3;
+  text-transform: uppercase;
+  margin: 0 0 3mm 0;
+}
+.page-image-headline {
+  font-size: 28pt;
+  font-weight: 600;
+  line-height: 1.15;
+  margin: 0 0 6mm 0;
+  color: #FFFFFF;
+}
+.page-image-text p {
+  max-width: 135mm;
+  font-family: var(--poppins);
+  font-size: 9pt;
+  color: #E5E7EB;
+  line-height: 1.55;
+}
+
+.postcode {
+  font-family: var(--poppins);
+  font-size: 9pt;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--brown);
+  margin: 0 0 6mm 0;
+} 
+
+/*page footer*/
+.page-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--poppins);
+  font-size: 7.5pt;
+  color: var(--grey);
+  border-top: 1.3pt solid var(--light-grey);
+  padding-top: 2mm;
+  margin-top: auto;
+}
+
+/* Cover Page ----------------------------- */
+.cover {
+  padding: 31mm 18mm;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.cover h3 {
+  max-width: 148mm;
+}
+.cover .ic-philosophy {
+  font-family: var(--playfair);
+  font-size: 26pt;
+  font-weight: 500;
+  line-height: 1.25;
+  color: var(--grass);
+  letter-spacing: -0.4px;
+  max-width: 155mm;
+}
+.cover-title {
+  font-family: var(--poppins);
+  font-size: 9pt;
+  line-height: 1.4;
+  letter-spacing: 0.25em;
+  color: var(--grey);
+  text-transform: uppercase;
+  margin-bottom: 0;
+}
+.cover-number {
+  flex-grow: 1;
+  display: flex;
+  align-items: center;
+  font-family: var(--number);
+  font-weight: normal;
+  font-size: 240pt;
+  line-height: 0.92;
+  color: var(--green);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+}
+.cover-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: 'Poppins-Medium';
+  font-size: 7.3pt;
+  color: var(--grey);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-top: 1.3pt solid var(--light-grey);
+  padding-top: 4.5mm;
+  margin-top: 15mm;
+}
+
+/*case study*/
+.block {
+  font-family: var(--poppins);
+  font-size: 8.5pt;
+  line-height: 1.5;
+  background: #FFFFFF;
+  border: 0.5pt solid var(--light-grey);
+  border-top: 2pt solid var(--dark);
+  page-break-inside: avoid;
+  padding: 5mm 6mm;
+  margin-bottom: 6mm;
+}
+.two-columns.block {
+  border: 0;
+  border-top: 1pt solid var(--dark);
+  border-bottom: 1pt solid var(--dark);
+  padding: 4mm 5mm;
+}
+.two-columns.block .stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 3mm 6mm;
+  border: 0;
+  font-size: 9pt;
+  margin: 0;
+  padding: 0;
+}
+.block:last-child {
+  margin-bottom: 0;
+}
+.block-label {
+  display: block;
+  font-family: var(--poppins);
+  font-size: 7pt;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--brand-blue);
+  font-weight: 600;
+  margin-bottom: 1.5mm;
+}
+.block h4 {
+  font-family: var(--playfair);
+  font-weight: 600;
+  color: var(--charcoal);
+  margin: 0 0 2mm 0;
+  line-height: 1.25;
+}
+.block .stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2mm 4mm;
+  margin: 3mm 0;
+  padding: 3mm 0 2.5mm 0;
+  border-top: 1.2pt solid var(--light-grey2);
+  border-bottom: 1.2pt solid var(--light-grey2);
+  font-size: 8pt;
+}
+.block .stats .label {
+  font-family: var(--poppins);
+  color: var(--grey);
+  text-transform: uppercase;
+  font-size: 6.5pt;
+  letter-spacing: 0.1em;
+}
+.block .stats .value {
+  font-family: var(--poppins);
+  font-size: 9pt;
+  line-height: 1.2;
+  font-weight: 600;
+  color: var(--dark);
+  font-variant-numeric: tabular-nums;
+  margin-top: 1mm;
+}
+.block p {
+  margin: 0 0 2mm 0;
+}
+.block .block-note {
+  font-style: italic;
+  border-top: 1.2pt solid var(--light-grey2);
+  margin-top: 3mm;
+  padding-top: 3mm;
+}
+.bottom-text {
+  font-family: var(--poppins);
+  font-size: 8.25pt;
+  color: var(--grey);
+  line-height: 1.6;
+  text-align: center;
+  border-top: 1.3pt solid var(--grey);
+  padding-top: 6mm;
+  margin-top: 6mm;
+}
+
+/*glossary*/
+.glossary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5mm 8mm;
+  font-family: var(--poppins);
+  font-size: 9pt;
+  line-height: 1.45;
+}
+.glossary dt {
+  font-weight: 600;
+  color: var(--dark);
+  margin-bottom: 1mm;
+}
+.glossary dd {
+  margin: 0 0 4mm 0;
+}
+
+/*last page*/
+.page.last-page {
+  display: flex;
+  flex-direction: column;
+}
+.last-page-header-title {
+  font-family: var(--poppins);
+  font-size: 9pt;
+  line-height: 1.2;
+  letter-spacing: 0.25em;
+  color: #e6ddd2;
+  text-transform: uppercase;
+  margin-bottom: 2.5mm;
+}
+.last-page-header-subtitle {
+  font-family: var(--poppins);
+  font-size: 8pt;
+  letter-spacing: 0.18em;
+  color: rgba(230,221,210,0.7);
+  text-transform: uppercase;
+}
+.last-page h2, .last-page p {
+  color: #e6ddd2;
+}
+.last-page h2 {
+  margin-bottom: 9mm;
+}
+.last-page .page-body p {
+  font-size: 11pt;
+}
+.last-page .page-body .fs-13 {
+  font-size: 13pt;
+}
+.last-page .page-body {
+  padding: 42mm 7mm 0 7mm;
+  margin-top: 0;
+}
+.last-page .page-body .last-page-note {
+  font-size: 9pt;
+  border-top: 0.5pt solid rgba(230,221,210,0.35);
+  margin-top: 18mm;
+  padding-top: 6mm;
+}
+.last-page a {
+  font-weight: 600;
+  color: #e6ddd2;
+}
+.last-page .page-footer span {
+  font-family: var(--poppins);
+  font-size: 8pt;
+  color: rgba(230,221,210,0.7);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+.last-page .page-footer {
+  margin-top: auto;
+  display: flex;
+  justify-content: space-between;
+  border: 0;
+  padding: 0;
+}
+</style>
+</head>
+<body>
+
+<!-- ============================================================ -->
+<!-- PAGE 01 — COVER -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="cover">
+    <p class="cover-title">The Fields Quarterly</p>
+    <h6 class="accent-title letters-wider">Issue 01 · Q1 2026</h6>
+    <div class="cover-number">98.6</div>
+    <div class="cover-text">
+      <h6 class="accent-title">The Fields Conviction Index, Southern Gold Coast</h6>
+      <h4>In Q1 2026, the Fields Conviction Index for the southern Gold Coast closed at 98.6 — just below the five-year baseline of 100, with a marginal cooling tilt. Median house prices rose between 7.0% and 18.6% year-on-year across Robina, Burleigh Waters and Varsity Lakes. Sales volumes were essentially on their five-year same-quarter average overall, but Burleigh Waters volumes ran 35.7% below trend. The headline price line and the underlying conviction line are now telling different stories.</h4>
+    </div>
+    <div class="cover-bottom">
+      <span class="cover-bottom-text">Smarter with data</span>
+      <span class="cover-bottom-site">fieldsestate.com.au/quarterly</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 02 — The Fields QuarterlY -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <span>Masthead</span>
+      <span>The Fields Quarterly · Q1 2026</span>
+    </div>
+
+    <div class="page-top">
+      <h3 class="page-headline">The Fields Quarterly</h3>
+      <p class="page-subhead">A quarterly record of what the southern Gold Coast property market actually did, and why. Issue 01, Q1 2026.</p>
+    </div>
+    <div class="divider"></div>
+
+    <div class="page-body text-poppins mt-0">
+      <div class="info-block">
+        <p class="info-block-title">Editor and analyst</p>
+        <p class="text-grey">Will Simpson — <a href="mailto:will@fieldsestate.com.au">will@fieldsestate.com.au</a></p>
+      </div>
+      <div class="info-block">
+        <p class="info-block-title">Methodology</p>
+        <p class="text-grey">Hedonic indexed prices, comparable-sales valuations, transaction-weighted suburb composite. Full method on page 23.</p>
+      </div>
+      <div class="info-block">
+        <p class="info-block-title">Data closed</p>
+        <p class="text-grey">31 March 2026. The Q2 2026 quarter is in progress at the time of publication and is not included.</p>
+      </div>
+      <div class="info-block">
+        <p class="info-block-title">Next edition</p>
+        <p class="text-grey">15 August 2026, covering Q2 2026.</p>
+      </div>
+      <div class="info-block">
+        <p class="info-block-title">Permanent URL</p>
+        <p class="text-grey">fieldsestate.com.au/quarterly/q1-2026 — back issues archived freely at /quarterly/archive.</p>
+      </div>
+      <div class="info-block">
+        <p class="info-block-title">Free CSV download</p>
+        <p class="text-grey">fieldsestate.com.au/quarterly/q1-2026/data — every chart's underlying figures, attribution-only licence.</p>
+      </div>
+      <div class="info-block">
+        <p class="info-block-title">About this report</p>
+        <p class="text-grey">The Fields Quarterly is published by Fields Real Estate. We represent sellers and work with buyers across the Gold Coast, applying a data-led approach to pricing, positioning, and negotiation. This report reflects the same analysis that underpins our day-to-day work. It's provided free of charge. And if, at some point, you need guidance navigating your own move in the market, we'd welcome the conversation.</p>
+      </div>
+      <div class="info-block">
+        <p class="info-block-title">Privacy</p>
+        <p class="text-grey">Your email is used only to send the next quarterly. One-click unsubscribe. We do not sell or share subscriber data.</p>
+      </div>
+      <div class="info-block">
+        <p class="info-block-title">Our commitment</p>
+        <p class="text-grey">We commit to publishing every quarter without exception, and to making every back issue freely available. Consistency is the moat we are willing to invest in for the long arc.</p>
+      </div>
+    </div>
+
+    <div class="page-footer">
+      <span>Issue 01 · Q1 2026</span>
+      <span>Page 2</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 03 — How to read this report -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <span>Masthead</span>
+      <span>The Fields Quarterly · Q1 2026</span>
+    </div>
+
+    <div class="page-top">
+      <h3 class="page-headline">How to read this report.</h3>
+      <p class="page-subhead">Three minutes here will save you fifteen later. Plain-English explanations of the four numbers we lean on most. The technical names are in brackets — for the readers who want them.</p>
+    </div>
+
+    <div class="page-body text-poppins text-smaller mt-bigger">
+      
+      <div class="howto-grid">
+        <div class="howto-card">
+          <h5>The Fields Conviction Index (98.6 this issue)</h5>
+          <p>One number we publish every quarter. We've designed it so that <strong>100 means "a typical southern Gold Coast quarter pre-COVID"</strong>. Anything above 100 means tighter than that — sellers in charge. Below 100 means looser — buyers in charge. This issue: 98.6.</p>
+          <p>We build it from three measurable things: prices, sales volume, and how long homes take to sell. Each is converted to a standard score against five years of its own history, then weighted and combined.</p>
+          <p class="formal">Formal: a weighted composite of indexed median price (40%/50%), latest-quarter sales-volume z-score (20%/25%), and inverse days-on-market z-score (20%/25%), rebased Q1 2020 = 100.</p>
+        </div>
+        <div class="howto-card">
+          <h5>The rolling 12-month median</h5>
+          <p>The middle sale price across the last twelve months. We prefer it to a single-quarter median because <strong>twelve months gives us a sample of 80-200 sales per suburb</strong>; a single quarter gives us 20-50. One $5M sale moves a small sample dramatically; the 12-month series barely flinches.</p>
+          <p>When we report a "year-on-year" growth number, this is what we compare to the same number a year ago.</p>
+          <p class="formal">Formal: median of all arms-length house transactions over the trailing 12 months, recomputed monthly.</p>
+        </div>
+        <div class="howto-card">
+          <h5>The composite</h5>
+          <p>When we say "the southern Gold Coast composite", we mean <strong>Robina, Burleigh Waters and Varsity Lakes combined</strong>, weighted by how many transactions each suburb produced. So Robina pulls more weight than Varsity Lakes (it has more sales), but no suburb is left out.</p>
+          <p>The composite is for the broad picture. The suburb pages are where individual stories live.</p>
+          <p class="formal">Formal: transaction-weighted aggregate of the three core suburbs.</p>
+        </div>
+        <div class="howto-card">
+          <h5>Sample size and what we don't trust</h5>
+          <p>Every chart in this report cites how many sales went into it. <strong>Below 30 sales in a quarter, we flag the number as small-sample</strong> and don't make strong claims off it. The rolling 12-month series is what we trust at suburb level; the single-quarter prints are colour and texture only.</p>
+          <p>We also flag when our data sources disagree, and we don't resolve disagreements by picking a winner — we report the gap and explain it.</p>
+          <p class="formal">Formal: minimum N≥30 for quarterly reporting, N≥100 for confidence-banded statistics.</p>
+        </div>
+      </div>
+      <p class="text-grey italic">Full methodology is on page 23. There is also a one-glance glossary on the inside back cover.</p>
+  
+    </div>
+
+    <div class="page-footer">
+      <span>Issue 01 · Q1 2026</span>
+      <span>Page 3</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 04 — The standoff -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <span>Masthead</span>
+      <span>The Fields Quarterly · Q1 2026</span>
+    </div>
+
+    <div class="page-top">
+      <h3 class="page-headline mb-bigger">The standoff.</h3>
+      <div class="main-text main-text-bigger">
+        <p>Two facts that should not sit in the same paragraph: median house prices on the southern Gold Coast rose between 7.0% and 18.6% year-on-year by suburb in Q1 2026. The Fields Conviction Index for the same three suburbs combined <span class="brackets">(the composite)</span> closed at 98.6 — just below the five-year baseline of 100.</p>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <p>That gap is the editorial subject of this first issue. Headline prices are loud and rising; underneath, the picture is uneven. Robina volume was essentially on its 5-year trend; Varsity Lakes was a touch below; Burleigh Waters volume came in 35.7% below its long-term Q1 norm. The few houses that sold sold close to their asking price. The houses that did not sell sat. The market is in a state where the loudest data point and the underlying signal of buyer-and-seller conviction are pointing in opposite directions.</p>
+      <p>Whichever way Q2 and Q3 resolve — sellers capitulating first, or buyers returning first — the answer reframes the year. The conditions under which each scenario unfolds are the work of the next twenty-five pages.</p>
+      <p>I believe decisions are better made with data, and that property markets — where people are making some of the biggest decisions of their lives — are severely lacking in essential decision-making data. And not just data, but real data analysis and interpretation. That's why I built a database and analysis pipelines that provide real insight into your local market, so you can see exactly what's going on and make informed decisions. I am solely responsible for the information we provide, including its depth and accuracy.</p>
+      <p>This issue does not tell you what to do. It tells you what is, what we measure, what we admit we cannot yet measure, and which signals we are watching. If you feel there are any gaps in our information, you would like something added, or you would just like to chat about all things property related, please reach out to me at <a href="mailto:will@fieldsestate.com.au">will@fieldsestate.com.au.</a></p>
+      <p class="author italic">Will Simpson</p>
+      <p class="text-poppins p-smaller text-grey">Editor, The Fields Quarterly · 6 May 2026</p>
+    </div>
+
+    <div class="page-footer">
+      <span>Issue 01 · Q1 2026</span>
+      <span>Page 4</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 05 — 98.6 — just below baseline, marginal cooling tilt. -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <span>Masthead</span>
+      <span>The Fields Quarterly · Q1 2026</span>
+    </div>
+
+    <div class="page-top">
+      <h3 class="page-headline"><span class="font-serif">98.6</span> — just below baseline, marginal cooling tilt.</h3>
+      <p class="page-subhead">The composite Fields Conviction Index for the southern Gold Coast finished Q1 2026 at 98.6, against a five-year baseline of 100. Within the index's nine-year history, this reading sits close to the long-run average — much closer to "typical" than to either the post-COVID peak (116) or the post-rate-hike trough (92).</p>
+    </div>
+
+    <div class="page-body">
+      <img src="assets/img/graph_page_05.png" class="graph" alt="The Fields Conviction Index Since Q1 2017" />
+      <p>The Conviction Index sits at 98.6 — just below the five-year baseline of 100. Within the index's history this is a balanced reading with a marginal cooling tilt: not far enough below to call a turn, not above the line either. The composite has been higher (the post-COVID peak in 2021 lifted it to 116) and lower (the post-rate-hike trough in 2022 took it to 92). 98.6 is much closer to "typical" than to either extreme.</p>
+      <p>What drives the current reading is the gap between the three components. Prices, after adjusting for the mix of houses sold (<span class="text-grey">the indexed price</span>), remain firmly above their five-year trend. Sales volume has softened, particularly in Burleigh Waters. Median time-to-sell has lengthened. The price line and the conviction line have separated — not dramatically, but visibly.</p>
+    </div>
+
+    <div class="page-footer">
+      <span>Issue 01 · Q1 2026</span>
+      <span>Page 5</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 06 — The three components, Q1 2026 composite -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <span>Masthead</span>
+      <span>The Fields Quarterly · Q1 2026</span>
+    </div>
+
+    <div class="page-top">
+      <h3 class="page-headline">The three components, Q1 2026 composite</h3>
+      <p class="page-subhead">Each measure below is converted to a "how unusual is this versus the last five years" score (formally a z-score), then combined: 50% prices, 25% sales volume, 25% how long homes took to sell. The number 100 means a typical pre-COVID quarter; above 115 means tight; below 85 means buyer-side.</p>
+    </div>
+
+    <div class="page-body">
+      <table class="data">
+        <thead>
+          <tr><th>Component</th><th>Q1 2026 reading</th><th class="num">How unusual <span class="brackets">(z)</span></th><th>Direction</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Indexed price <span class="brackets">(quality-adjusted, rolling 12-month)</span></td>
+            <td>+10.5% YoY across the three suburbs</td>
+            <td class="align-right">+1.6</td>
+            <td>Well above trend</td></tr>
+          <tr>
+            <td>Sales volume (Q1 2026) <span class="brackets">(precomputed_market_charts)</span></td>
+            <td>105 sales versus ~127 same-quarter five-year average</td>
+            <td class="align-right">−0.8</td>
+            <td>Mildly below trend</td></tr>
+          <tr>
+            <td>Days-on-market median</td>
+            <td>27 days versus 22.8-day five-year median</td>
+            <td class="align-right">−0.3</td>
+            <td>Slightly slower</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="text-below-table">A z-score of +1 means "this reading is one standard deviation above the five-year average" — statistically uncommon, not rare.+1.6 is meaningfully strong. −0.8 is mildly below trend. The combination of a strong price reading with a softer volume reading iswhat produces a composite just below the 100 baseline.</p>
+      <div class="table-block">
+        <h5>FCI by suburb, Q1 2026</h5>
+        <table class="data">
+          <thead>
+            <tr>
+              <th>Suburb</th>
+              <th class="align-right">FCI</th>
+              <th>Position</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Robina</td>
+              <td class="align-right">97.9</td>
+              <td>Just below baseline — volume on trend, DOM and price growth softer than composite</td>
+            </tr>
+            <tr>
+              <td>Burleigh Waters</td>
+              <td class="align-right">96.7</td>
+              <td>Below baseline — volume the dominant drag (35.7% below 5-yr Q1 norm)</td>
+            </tr>
+            <tr>
+              <td>Varsity Lakes</td>
+              <td class="align-right">103.1</td>
+              <td>Above baseline — price growth (+18.6% YoY) outweighs volume softness</td></tr>
+            <tr class="total">
+              <td>Southern Gold Coast (composite)</td>
+              <td class="align-right">98.6</td>
+              <td>Just below baseline, marginal cooling tilt</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="notice">
+        <p class="notice-label">Methodology disclosure</p>
+        <p class="notice-text">The four-component FCI specified in our methodology document includes a sale-to-list ratio and a stock-on-market vs five-year baseline component. Both require historical data not yet in our precomputed collections. Issue 01 publishes the FCI on three components; the four-component version is due in Issue 02 once backfill is complete. The transition is itself a publishable event — we will note where the historical series shifts.</p>
+      </div>
+    </div>
+
+    <div class="page-footer">
+      <span>Issue 01 · Q1 2026</span>
+      <span>Page 6</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 07 — The Conviction Map, Q1 2026 -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <span>Masthead</span>
+      <span>The Fields Quarterly · Q1 2026</span>
+    </div>
+
+    <div class="page-top">
+      <h3 class="page-headline">The Conviction Map, Q1 2026.</h3>
+      <p class="page-subhead">Every Gold Coast suburb with sufficient sample size, plotted on price growth (x) against latest-quarter volume strength (y). The three core suburbs sit in the STANDOFF quadrant — price strength alongside thinning volume.</p>
+    </div>
+
+    <div class="page-body">
+      <img src="assets/img/graph_page_07.png" class="graph" alt="The Conviction Map, Q1 2026" />
+      <p class="text-bold">Where the southern Gold Coast sits this quarter:</p>
+      <ul>
+        <li><strong>Varsity Lakes</strong> — FCI 103.1, the only suburb above the 100 baseline. 12-month rolling price growth 18.6%, thefastest of the three. Volume below trend but the price acceleration is unmistakable.</li>
+        <li><strong>Burleigh Waters</strong> — FCI 96.7. Price +8.2% YoY but Q1 volume 35.7% below the 5-year average. The clearestsingle example of the standoff.</li>
+        <li><strong>Robina</strong> — FCI 97.9. Volume on trend (54 sales versus 53.2 average), but DOM has lengthened (26 vs 22.5 historical) and price growth at +7.0% trails the composite of +10.5%.</li>
+      </ul>
+      <p>All three core suburbs land in STANDOFF: rising prices alongside softer volume. The pattern is broaderthan the southern Gold Coast — most Gold Coast suburbs with adequate sample sit in the same quadrantin Q1 2026.</p>
+    </div>
+
+    <div class="page-footer">
+      <span>Issue 01 · Q1 2026</span>
+      <span>Page 7</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 08 — Section 01 -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+
+    <div class="page-body section-body">
+      <h6 class="section-num">Section 01</h6>
+      <h2 class="section-title">The Standoff</h2>
+      <p class="section-text">When the price line and the conviction line separate, what does the data say happens next? It depends.</p>
+    </div>
+
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 09 — When the price line and the conviction line separate -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad text-long">
+    <div class="page-header">
+      <span>Masthead</span>
+      <span>The Fields Quarterly · Q1 2026</span>
+    </div>
+
+    <div class="page-top">
+      <h3 class="page-headline page-headline-smaller">When the price line and the conviction line separate</h3>
+      <img src="assets/img/graph_page_09.png" class="graph" alt="The Standoff - when the price line and the conviction line separate" />
+      <div class="main-text">
+        <p>The two lines tracked closely through the first three quarters of 2023 — both staying within ~1.5 points of one another. They began separating in Q4 2023, when the indexed median pulled ahead of the Conviction Index by seven points. The gap widened progressively: ~18 points by Q4 2024, ~30 points by Q3 2025, peaking near 43 points in Q4 2025. Q1 2026 closed with the indexed median at 138.4 — 38 points above its early-2023 level — while the Conviction Index sat at 98.9, fractionally below the 100 baseline.</p>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <p>The data behind the standoff:</p>
+      <ol class="mb-0">
+        <li><strong>Sales volume.</strong> 105 transactions across the three suburbs combined in Q1 2026, against a five-year same-quarter average of approximately 127 — a 17% shortfall. Burleigh Waters carried the largest share (30 salesversus a 5-year average of 46.7, 35.7% below). Robina came in on trend (54 versus 53.2). Varsity Lakes was 25% below the prior year but only marginally below its 5-year average.</li>
+        <li><strong>Prices.</strong> Rolling 12-month medians by suburb: Robina $1,450,000 (+7.0% year-on-year), Burleigh Waters$1,840,000 (+8.2%), Varsity Lakes $1,400,000 (+18.6%). Across the three combined, growth runs atapproximately +10.5% — well above the 5-year average annual growth of 6.7%.</li>
+        <li><strong>Time-to-sell</strong> <strong class="text-grey">(days-on-market).</strong> 27 days median across the three suburbs, lifted from a 5-year median of 22.8days. Robina and Varsity Lakes contribute most of the lift; Burleigh Waters is essentially in line with itshistorical median.</li>
+        <li><strong>The Fields Conviction Index.</strong> 98.6 for the three combined. Robina at 97.9, Burleigh Waters at 96.7; VarsityLakes the only suburb above the 100 baseline at 103.1.</li>
+      </ol>
+      <p>The thing the data does not say: which side breaks first. Two scenarios resolve a standoff. The first: stock-on-market keeps shrinking (sellers withholding) while transaction volume picks up — buyers absorbingthe scarce listings. Historically that combination has preceded renewed price acceleration. The second:transaction volume picks up because sellers capitulate on price — same volume recovery, but with priceseasing rather than accelerating. The Q2 data will likely distinguish the two.</p>
+      <p>Between now and the August edition we watch four numbers: how much stock sits on market (<span class="text-grey">stock-on-market</span>), what share of asking price vendors actually achieve (<span class="text-grey">sale-to-list ratio</span>), what share of listings getpulled within 60 days, and how lenders respond to the new APRA debt-to-income lending cap. Each will be reported next quarter.</p>
+    </div>
+
+    <div class="page-footer">
+      <span>Issue 01 · Q1 2026</span>
+      <span>Page 9</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 10 — 27 Bittern Avenue, Burleigh Waters -->
+<!-- ============================================================ -->
+<div class="page page-image" style="background-image: url(assets/img/bg_page_10.jpg);">
+  <div class="page-image-top-label">Case study · The Standoff</div>
+  <div class="page-image-overlay">
+    <p class="page-image-subhead">27 Bittern Avenue, Burleigh Waters · sold in 21 days</p>
+    <h2 class="page-image-headline">Two houses in the same suburb. Two opposite outcomes.</h2>
+    <div class="page-image-text">
+      <p>Listed 2 April 2026. Sold in 21 days for $1,905,500. 157 Christine Avenue, a comparable four-bedroom less than a kilometre away, passed in at auction in late March and now sits at "Offers Above $1,700,000" after two reductions — roughly $200,000 below 27 Bittern's sale price. The standoff at street level.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 11 — The standoff at street level -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <span>Masthead</span>
+      <span>The Fields Quarterly · Q1 2026</span>
+    </div>
+
+    <div class="page-top">
+      <h3 class="page-headline page-headline-smaller">The standoff at street level</h3>
+      <p class="page-subhead">Two Burleigh Waters houses in the same suburb pocket illustrate the price-volume divergence at the level of an individual transaction.</p>
+    </div>
+
+    <div class="page-body mt-bigger">
+      <div class="block">
+        <span class="block-label">CASE STUDY — THE STANDOFF AT STREET LEVEL</span>
+        <h4>Two Burleigh Waters houses. One sold in 21 days. The other has been listed sinceMarch.</h4>
+        <div class="stats">
+          <div>
+            <div class="label">Sold</div>
+            <div class="value">$1,905,500</div>
+          </div>
+          <div>
+            <div class="label">Days on market</div>
+            <div class="value">21 days</div>
+          </div>
+          <div>
+            <div class="label">Specifications</div>
+            <div class="value">4 bed / 2 bath</div>
+          </div>
+        </div>
+        <div class="text-poppins text-smaller">
+          <p>27 Bittern Avenue listed on 2 April 2026 and sold in 21 days for $1,905,500 — comfortably above the suburb's rolling 12-month median. 157 Christine Avenue, less than a kilometre away, is a four-bedroom on a similar 647 m² lot. It listed for auction in late March 2026; the auction passed in. The seller switched to a fixed-price campaign at "Offers Over $1,800,000" in late April, then reduced the guide to "Offers Above $1,700,000" — roughly $200,000 below what 27 Bittern Avenue sold for three weeks earlier. The property remains unsold.</p>
+          <p>The two outcomes look like opposites. They are not. They are the same market doing what a market does when the volume side has thinned: sellers whose pricing tracks recent comparable sales transact quickly and well; sellers whose pricing tracks ambition or earlier-cycle expectations do not transact at all. In Q1 2026, more sellers chose to wait than chose to test the market. <em>That is the standoff.</em></p>
+          <p class="block-note">The pattern repeats across the three core suburbs. The reward for accurate pricing has rarely been higher; the cost of inaccurate pricing has rarely been longer.</p>
+        </div>
+      </div>
+    </div>
+    <div class="page-footer">
+      <span>Issue 01 · Q1 2026</span>
+      <span>Page 11</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Section 02 -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+
+    <div class="page-body section-body">
+      <h6 class="section-num">Section 02</h6>
+      <h2 class="section-title">Where prices<br> actually are</h2>
+      <p class="section-text">The headline median is one number. The distribution is a different story. Both are reported here.</p>
+    </div>
+
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 13 — Indexed median price by suburb, six years -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <span>WHERE PRICES ACTUALLY ARE</span>
+      <span>The Fields Quarterly · Q1 2026</span>
+    </div>
+
+    <div class="page-top">
+      <h3 class="page-headline page-headline-smaller">Indexed median price by suburb, six years</h3>
+    </div>
+
+    <div class="page-body">
+      <img src="assets/img/graph_page_05.png" class="graph graph-mt-bigger" alt="Indexed median price by suburb, six years" />
+      <p>All three core suburbs have roughly 1.7×'d their median price since the start of 2020. Burleigh Waters leads on a six-year basis (index 219), with Varsity Lakes at 219 and Robina at 209. After CPI of approximately 22% over the same period, the real purchasing-power gain across the three is meaningfully smaller — about half the nominal growth. The headline number and the real number differ by about as much as one of the three suburbs differs from another.</p>
+      <p>The cycle is visible in the chart. The 2020-21 acceleration; the 2022 pause; the 2023-24 recovery; the late-2024 leg up; and the recent volatility into Q1 2026. The Q1 2026 print continues the upward leg in absolute terms — but the FCI on the previous page tells you the texture underneath has weakened.</p>
+    </div>
+
+    <div class="page-footer">
+      <span>Issue 01 · Q1 2026</span>
+      <span>Page 13</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 14 — Indexed median price by suburb, six years -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <span>WHERE PRICES ACTUALLY ARE</span>
+      <span>The Fields Quarterly · Q1 2026</span>
+    </div>
+
+    <div class="page-top">
+      <h3 class="page-headline page-headline-smaller">Three suburbs, three distributions</h3>
+    </div>
+
+    <div class="page-body">
+      <img src="assets/img/graph_page_14.png" class="graph graph-mt-bigger" alt="Three suburbs, three distributions" />
+      <p>The median is a single number; the distribution shows what is actually selling. Burleigh Waters' upper tail (canal-front transactions) is what drags the suburb median upward — reporting only the median understates how bimodal this market really is. The non-canal cluster sits well below the canal-frontcluster, and a buyer or seller's individual price tier matters more than the suburb headline.</p>
+      <p>Robina's distribution is the broadest of the three: a long left tail (units and townhouses entering the$700,000 band) and a long right tail to $4M+. The breadth is what makes Robina the most analytically tractable of the three suburbs — sample sizes are large at every tier.</p>
+      <div class="notice notice-dark">
+        <p class="notice-label">Methodology note</p>
+        <p class="notice-text">This is the only chart in the report computed directly from raw transaction records rather than the precomputed series the website uses. Drawing a distribution shape requires every individual sale price, which the precomputed collections do not store (only aggregates). Source: Gold_Coast.{suburb} sold-property records, last 12 months of arms-length house sales. Sales above $10,000,000 and below $100,000 excluded as data outliers. Sample sizes shown above each panel.</p>
+      </div>
+      <p>Varsity Lakes is tighter than the others: most sales sit between $1.0M and $1.7M, with a separate small cluster around $2.0M-$2.4M for lake-fronting properties.</p>
+      <div class="notice">
+        <p class="notice-label">WHAT THIS MEANS FOR READERS</p>
+        <p class="notice-text">A median price for any of these suburbs is, by construction, an average across multiple sub-markets. The right reference point for any individual home is the relevant tier — canal-front in Burleigh Waters; older Bond Estate in Robina; lake-fronting in Varsity Lakes. The Fields Position Report applies that tier disciplineto a specific address.</p>
+      </div>
+    </div>
+
+    <div class="page-footer">
+      <span>Issue 01 · Q1 2026</span>
+      <span>Page 14</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Section 03 -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+
+    <div class="page-body section-body">
+      <h6 class="section-num">Section 02</h6>
+      <h2 class="section-title">How fast the <br>market moves</h2>
+      <p class="section-text">Volume and velocity. Together they tell you whether the priceline will hold.</p>
+    </div>
+
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 16 — Quarterly sales volume by suburb -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <span>HOW FAST THE MARKET MOVES</span>
+      <span>The Fields Quarterly · Q1 2026</span>
+    </div>
+
+    <div class="page-top">
+      <h3 class="page-headline page-headline-smaller">Quarterly sales volume by suburb</h3>
+    </div>
+
+    <div class="page-body">
+      <img src="assets/img/graph_page_16.png" class="graph graph-mt-bigger" alt="Quarterly sales volume by suburb" />
+      <p>Sales volume is the most under-reported number in property reporting. A 10% price rise on stable volume means something different from a 10% rise on 30% lower volume. In Q1 2026, the southern Gold Coast composite ran 17% below the five-year same-quarter average. Most of the short fall is concentrated in Burleigh Waters, which printed 30 sales against a 5-year average of 46.7 — a 35.7% gap. Robina printed 54, essentially on its 5-year average of 53.2. Varsity Lakes printed 21, 25% below its prior year.</p>
+      <p>The pattern is consistent with supply tightness, not demand weakness: the few houses that sold sold closeto ask, days-on-market for closed sales remained reasonable, and the sale-to-list ratio held. The sellers who are not transacting are not transacting because they have chosen to wait.</p>
+    </div>
+
+    <div class="page-footer">
+      <span>Issue 01 · Q1 2026</span>
+      <span>Page 16</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 16 — Quarterly sales volume by suburb -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <span>HOW FAST THE MARKET MOVES</span>
+      <span>The Fields Quarterly · Q1 2026</span>
+    </div>
+
+    <div class="page-top">
+      <h3 class="page-headline page-headline-smaller">Median days-on-market by suburb</h3>
+    </div>
+
+    <div class="page-body">
+      <img src="assets/img/graph_page_17.png" class="graph graph-mt-bigger" alt="Median days-on-market by suburb" />
+      <p>Days-on-market in Q1 2026 stretched in two of the three core suburbs. Robina's median lifted from a 22.5-day historical to 26 days. Varsity Lakes lifted from an 18-day historical to 26.5 days. Burleigh Waters held essentially in line with its historical median — 30 days versus a 28-day baseline. The pattern is that lower-volume suburbs are seeing the strongest pace lengthening.</p>
+      <p>The three-year history available in the chart is short but the signal is clear: DOM bottomed in mid-2024 across all three suburbs, lifted through late 2024 and 2025, and now sits above each suburb's historical median except for Burleigh Waters. The lengthening is consistent with a market in which sellers have begun pricing toward ambition rather than recent comparables.</p>
+    </div>
+
+    <div class="page-footer">
+      <span>Issue 01 · Q1 2026</span>
+      <span>Page 17</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 18 — The three components, Q1 2026 composite -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <span>LEADING INDICATORS</span>
+      <span>The Fields Quarterly · Q1 2026</span>
+    </div>
+
+    <div class="page-top">
+      <h3 class="page-headline">What moves before prices move.</h3>
+      <p class="page-subhead">Most market commentary mistakes confirmation for prediction. By the time interest-rate cuts have moved house prices, the market has already moved — for between three and twelve months. The indicators that genuinely lead prices are different from the ones the news leads with.</p>
+    </div>
+
+    <div class="page-body text-lh-smaller">
+      <p>This report's underlying methodology leans on Australian property economics — particularly Abelson,Joyeux & Knight (2005), which formally established the correlations and lead-times below for the Australian housing market. Where else where in this report we say "the data is consistent with…", this is the framework we are leaning on.</p>
+      <p>The strongest forward-looking indicator we know of is wage growth.
+      Wages have led residential propertyprices in Australia by 3 to 4 months with a correlation of 0.94 — the kind of statistical relationship thatdoesn't show up by accident. Household spending follows almost in real time (correlation 0.91). Interestrates and credit growth, by contrast, <em>lag</em> prices — by 12 months and 3.5 months respectively. They confirm; they do not predict.</p>
+      <table class="data">
+        <thead>
+          <tr>
+            <th>Indicator</th>
+            <th class="col-abelson">Lead / lag <span class="brackets text-grey">(Abelson 2005 + Fields 2014-26)</span></th>
+            <th class="num">Correlation</th>
+            <th>What it tells you</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Wage growth</strong> (ABS WPI)</td>
+            <td>Leads prices by 3-4 months</td>
+            <td class="num">r = 0.94</td>
+            <td>Strongest forward indicator. Sustained wage growth has historically preceded sustained price firmness.</td>
+          </tr>
+          <tr>
+            <td><strong>Household spending</strong> (ABS Cat. 8501.0)</td>
+            <td>Coincident, ~real-time</td>
+            <td class="num">r&nbsp;=&nbsp;0.91</td>
+            <td>Strongest real-time confirmation. Used to validate wage signal.</td></tr>
+          <tr>
+            <td><strong>ASX 200</strong></td>
+            <td>Leads (substitution effect)</td>
+            <td class="num">— </td>
+            <td>Equity market weakness historically drives capital into property as a substitution.</td></tr>
+          <tr>
+            <td><strong>Credit / lending growth</strong> (RBA D2)</td>
+            <td>Lags prices by 3.5 months</td><td class="num">r&nbsp;=&nbsp;0.78</td>
+            <td>Confirms what already happened. Useful for ruling out fakeouts; not for prediction.</td>
+          </tr>
+          <tr>
+            <td><strong>RBA cash rate</strong></td><td>Lags prices by ~12 months</td>
+            <td class="num">— </td><td>Reactive, not predictive. The RBA responds to inflation and price evidence, not to property prices.</td>
+          </tr>
+          <tr>
+            <td><strong>Housing approvals</strong> (ABS 8731.0)</td>
+            <td>Leads completions by 18-24 months</td>
+            <td class="num">elasticity −3.6</td>
+            <td>The structural risk indicator. Sustained approvals above household-formation demand is the long-run downward pressure.</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="text-bold mb-1">What the indicator board is saying right now (as at Q1 2026)</p>
+      <p>QLD wage growth has held at approximately 4.0% year-on-year through the trailing twelve months — historically consistent with continued price firmness on a 3-4 month forward basis. The cash rate (4.35%) and any potential easing cycle would <em>confirm</em> price moves already in train rather than precede them; if rates ease in late 2026, the signal would be retrospective, not predictive. Housing-supply pressure remains the largest <em>structural</em> risk over a 2-year horizon — but QLD approvals are running below trend, which is why the supply pipeline does not yet look meaningful through to 2027. Of these, the indicator we watch most carefully is wage growth: a meaningful slowdown would precede price softness with the highest reliability.</p>
+    </div>
+
+    <div class="page-footer">
+      <span>Issue 01 · Q1 2026</span>
+      <span>Page 18</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Section 04 -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+
+    <div class="page-body section-body">
+      <h6 class="section-num">Section 02</h6>
+      <h2 class="section-title">The three<br> suburbs</h2>
+      <p class="section-text">Robina, Burleigh Waters, Varsity Lakes. Three markets sharinga postcode bracket and very little else.</p>
+    </div>
+
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 20 — ROBINA -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <span>ROBINA · 4226</span>
+      <span>The Fields Quarterly · Q1 2026</span>
+    </div>
+
+    <div class="page-top">
+      <p class="postcode">Postcode 4226 · 12.3 km²</p>
+      <h2>Robina.</h2>
+      <p class="page-subhead mt-main">The largest of the three core southern Gold Coast suburbs by transaction volume — and the easiest to read in thedata.</p>
+      <div class="main-text">
+        <p>Robina's housing stock is the most diverse of the three core suburbs: master-planned releases by the original Robin Group (now Robina Land Corp), older Bond Estate streets dating to the early 1980s, the newer Robina Quays releases, and a continuous belt of townhouses and units around Robina TownCentre. Owner-occupier share at sale is approximately 64% — the highest of the three.</p>
+      </div>
+    </div>
+
+    <div class="page-body mt-main">
+      <p>Three things define Robina as a property market. First, <strong>buyer-pool depth</strong>. Bond University, Robina hospital, the Town Centre, the train station, and the school catchments (Robina State High, Hillcrest Christian, Somerset College) draw multiple distinct buyer cohorts simultaneously. When one cohort pauses, another fills the gap. Second, <strong>master-planned variance is low</strong>. Covenants on build envelope, fence height and colour palette mean Robina houses cluster more tightly around the suburb median than in either of the other core suburbs — which makes valuation comparisons easier and the indexed pricemore reliable. Third, the suburb is <strong>split between houses (~61%) and units / townhouses (~39%)</strong> in a waythe other two are not. Through 2024 and into 2025 the two halves moved together; through Q3-Q4 2025they began to separate.</p>
+      <img src="assets/img/graph_page_20.png" class="graph mb-3" alt="ROBINA" />
+      <p class="graph-subtitle">Robina suburb boundary outlined in Fields Grass. Surrounding suburbs faded. Source: City of Gold Coast cadastral boundaries, Mapboxlight theme.</p>
+    </div>
+
+    <div class="page-footer">
+      <span>Issue 01 · Q1 2026</span>
+      <span>Page 20</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 21 — Robina -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <span>ROBINA · 4226</span>
+      <span>The Fields Quarterly · Q1 2026</span>
+    </div>
+
+    <div class="page-top">
+      <h3 class="page-headline">Robina</h3>
+      <p class="page-subhead">Master-planned, school-driven, deepest buyer pool of the three. The suburb where the standoff is least visible involume but most visible in pace.</p>
+    </div>
+
+    <div class="page-body">
+      <div class="block two-columns">
+        <div class="stats">
+          <div>
+            <div class="label">SUBURB FCI Q1 2026</div>
+            <div class="value">97.9</div>
+          </div>
+          <div>
+            <div class="label">Rolling 12mo median</div>
+            <div class="value">$1,450,000</div>
+          </div>
+          <div>
+            <div class="label">PRICE GROWTH YOY</div>
+            <div class="value">+7.0%</div>
+          </div>
+          <div>
+            <div class="label">Q1 2026 SALES (5-YR AVG)</div>
+            <div class="value">54 (53.2)</div>
+          </div>
+          <div>
+            <div class="label">DOM MEDIAN Q1</div>
+            <div class="value">26 days</div>
+          </div>
+          <div>
+            <div class="label">DOM HISTORICAL MEDIAN</div>
+            <div class="value">22.5 days</div>
+          </div>
+        </div>
+      </div>
+      <p>Robina is the easiest of the three core suburbs to read in the data <span class="text-grey">(the most analytically tractable, intechnical terms)</span>. The housing stock is the most diverse: master-planned releases from the 1980s through to the new Robina Quays release; older Bond Estate streets carrying their own pricing logic; a mix of family-tier four-bedrooms and entry-tier townhouses; and proximity to Bond University, Robina TownCentre, and the Robina hospital precinct holding multiple buyer pools simultaneously. When one buyer group pauses, another fills the gap.</p>
+      <p>Q1 2026 produced the most balanced picture of the three suburbs: volume came in at 54, essentially on the 5-year average. But the suburb's Conviction Index is the lowest of the three core suburbs — driven bydays-on-market lifting from 22.5 to 26 days, and price growth at +7.0% year-on-year running below the broader composite of +10.5%. Robina is moving slower across all three measures but no single one hascracked.</p>
+      <div class="notice notice-mt-bigger">
+        <p class="notice-label">WHAT SURPRISED US</p>
+        <p class="notice-text">Robina's volume in Q1 2026 came in at 54 — exactly on its 5-year average — while the suburb's ConvictionIndex is the lowest of the three. The standoff in Robina is not visible in the volume data; it is visible in the price growth running below the composite and in days-on-market extending from 22.5 days to 26 days.</p>
+      </div>
+    </div>
+    <div class="page-footer">
+      <span>Issue 01 · Q1 2026</span>
+      <span>Page 21</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 22 — 27 Bittern Avenue, Burleigh Waters -->
+<!-- ============================================================ -->
+<div class="page page-image" style="background-image: url(assets/img/bg_page_22.jpg);">
+  <div class="page-image-top-label">Case study · Robina at the upper tier</div>
+  <div class="page-image-overlay">
+    <p class="page-image-subhead">32 Outrigger Drive, Robina · sold March 2026 in 27 days</p>
+    <h2 class="page-image-headline">$1,710,000 — $374,000 above<br> Robina's rolling median.</h2>
+    <div class="page-image-text">
+      <p>A four-bedroom on 619 sqm in a cul-de-sac that backs onto parkland. Dual-living configuration, pool, four car spaces. Sold at suburb-median speed despite a price 14.6% above the four-bedroom median. The buyer pool, not the market temperature, is the answer.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 23 — Robina — case study -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <span>ROBINA · 4226</span>
+      <span>The Fields Quarterly · Q1 2026</span>
+    </div>
+
+    <div class="page-top">
+      <h3 class="page-headline page-headline-smaller">Robina — case study</h3>
+    </div>
+
+    <div class="page-body mt-bigger">
+      <div class="block">
+        <span class="block-label">CASE STUDY — ROBINA AT THE UPPER TIER</span>
+        <h4>$1,710,000 on Outrigger Drive: Robina absorbing premium stock at trend pace</h4>
+        <div class="stats">
+          <div>
+            <div class="label">Sold</div>
+            <div class="value">$1,710,000</div>
+          </div>
+          <div>
+            <div class="label">Days on market</div>
+            <div class="value">27 days</div>
+          </div>
+          <div>
+            <div class="label">Specifications</div>
+            <div class="value">+14.6%</div>
+          </div>
+        </div>
+        <div class="text-poppins text-smaller">
+          <p>32 Outrigger Drive sold in late March 2026 for $1,710,000 — $374,000 above the Robina rolling 12-month median, and 14.6% above the four-bedroom median of $1,492,500. A four-bedroom, three-bathroom home on 619 sqm ina cul-de-sac that backs onto parkland. Dual-living configuration, fresh paint inside and out, solar added before listing, in-ground pool and four car spaces.</p>
+          <p>The campaign ran 27 days — essentially the suburb average of 24. <strong>What this tells us about Robina: a property well above the median can still transact at trend pace if the configuration justifies the price.</strong></p>
+          <p>The deep buyer pool drawn by school catchments, Bond University, and Robina Town Centre means the suburb does not need torun hot to move stock at every tier.</p>
+          <p class="block-note">When a $1.7M home sells at suburb-median speed, the question worth asking is not "is the market hot?" but "isthe buyer pool deep?" In Robina, the answer is the latter.</p>
+        </div>
+      </div>
+      <p class="text-bold">Three numbers we are watching to next edition</p>
+      <ol>
+        <li>House-unit spread on indexed price growth — pending unit-stratified enrichment.</li>
+        <li>Days-on-market — does the median return to the 22.5-day historical, or hold above 25?</li>
+        <li>Investor share among new sales — pending demographics-of-sale enrichment.</li>
+      </ol>
+    </div>
+    <div class="page-footer">
+      <span>Issue 01 · Q1 2026</span>
+      <span>Page 23</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 24 — ROBINA -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <span>BURLEIGH WATERS · 4220</span>
+      <span>The Fields Quarterly · Q1 2026</span>
+    </div>
+
+    <div class="page-top">
+      <p class="postcode">POSTCODE 4220 · 5.6 KM²</p>
+      <h2>Burleigh Waters.</h2>
+      <p class="page-subhead mt-main">A canal suburb that does not announce itself — ridged east, creek-bound south, motorway-bound north.Geography is a feature.</p>
+      <div class="main-text">
+        <p>Burleigh Waters sits inland of Burleigh Heads, ridged on its eastern edge, bounded south byTallebudgera Creek and north by the motorway. The geography is a feature: it tightens supply andshapes the price distribution. Two-thirds of the house stock sits canal-front or one street back from a canal.</p>
+      </div>
+    </div>
+
+    <div class="page-body text-smaller mt-main">
+      <p>The canal-front cluster trades on a 30-50% premium over comparable non-canal stock, which is why thesuburb median (currently $1,840,000 on the rolling 12-month basis) hides a meaningfully <strong>bimodal</strong> distribution. A non-canal three-bedroom typically transacts in the $1.2-1.5M band; a canal-front four-bedroom rarely transacts below $2.2M. Reporting only the median in this suburb misrepresents bothhalves of the market.</p>
+      <p>The defining contemporary question for Burleigh Waters is the <strong>flood overlay</strong>. The City of Gold Coast CityPlan flood overlay maps a conservative planning footprint that captures most canal-front lots; the Insurance Council of Australia's Insurance Probability Zones map a narrower actuarial footprint. Many properties under the council overlay sit outside any insurer zone — council classifies them as flood-affected for planning, insurers do not price them as flood risk. Both maps are evidence; this report presents both. Insurance premium pressure has been real since Cyclone Alfred (2025), particularly oncanal-front stock; that repricing has not yet fully reflected in our valuation comparables.</p>
+      <img src="assets/img/graph_page_24.png" class="graph mb-3" alt="Burleigh Waters" />
+      <p class="graph-subtitle">Burleigh Waters suburb boundary outlined in Fields Grass. Eastern ridge and southern Tallebudgera Creek visible. Source: City of GoldCoast cadastral boundaries, Mapbox light theme.</p>
+    </div>
+
+    <div class="page-footer">
+      <span>Issue 01 · Q1 2026</span>
+      <span>Page 24</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 25 — Burleigh Waters -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <span>BURLEIGH WATERS · 4220</span>
+      <span>The Fields Quarterly · Q1 2026</span>
+    </div>
+
+    <div class="page-top">
+      <h3 class="page-headline">Burleigh Waters</h3>
+      <p class="page-subhead">Canal-front and non-canal in one suburb median. The clearest single example of the standoff in Q1 2026 data:record-high rolling median, lowest first-quarter volume on record.</p>
+    </div>
+
+    <div class="page-body">
+      <div class="block two-columns">
+        <div class="stats">
+          <div>
+            <div class="label">SUBURB FCI Q1 2026</div>
+            <div class="value">96.7</div>
+          </div>
+          <div>
+            <div class="label">ROLLING 12MO MEDIAN</div>
+            <div class="value">$1,840,000</div>
+          </div>
+          <div>
+            <div class="label">PRICE GROWTH YOY</div>
+            <div class="value">+8.2%</div>
+          </div>
+          <div>
+            <div class="label">Q1 2026 SALES (5-YR AVG)</div>
+            <div class="value">30 (46.7)</div>
+          </div>
+          <div>
+            <div class="label">DOM MEDIAN Q1</div>
+            <div class="value">30 days</div>
+          </div>
+          <div>
+            <div class="label">DOM HISTORICAL MEDIAN</div>
+            <div class="value">28 days</div>
+          </div>
+        </div>
+      </div>
+      <p>Burleigh Waters is a canal suburb that does not announce itself. It sits inland of Burleigh Heads, ridged on its eastern edge, bounded south by Tallebudgera Creek and north by the motorway. The geography is a feature: it tightens supply. Once you have walked Christine Avenue or Allambi Avenue, the canals are the suburb. Two-thirds of the house stock is canal-front or one street back.</p>
+      <p>This issue's tension shows up most clearly here. Sales in Q1 2026 ran at 30 — 35.7% below the five-yearsame-quarter average. The rolling 12-month median continued to climb, reaching $1,840,000 (+8.2% year-on-year). Median days-on-market came in at 30, only slightly above the 28-day historical median — so the few sales that completed completed at the usual pace. The suburb's Conviction Index is 96.7. The gap between Burleigh Waters' record-high rolling median and its below-baseline conviction reading is the cleanest single example of the standoff anywhere in the Q1 data.</p>
+      <p class="text-bold">The flood question</p>
+      <p>"Does Burleigh Waters flood?" is the most-searched question for this suburb and the most data-richquestion we can answer. Two distinct flood definitions are in use: the City of Gold Coast City Plan flood overlay (planning-conservative; captures most canal-front lots), and the ICA Insurance Probability Zones(insurer-actuarial; often narrower than council mapping).</p>
+      <p>Many properties under the council overlay sit <em>outside</em> any ICA zone — council classifies them as flood-affected for planning, insurers do not price them as flood risk. Both maps are evidence; we report both. Recorded flood events on this suburb are real (flash flooding 2017 and 2022). Insurance premiums on canal-front properties have risen materially since Cyclone Alfred (2025).</p>
+    </div>
+    <div class="page-footer">
+      <span>Issue 01 · Q1 2026</span>
+      <span>Page 25</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 26 — 27 Bittern Avenue, Burleigh Waters -->
+<!-- ============================================================ -->
+<div class="page page-image" style="background-image: url(assets/img/bg_page_26.jpg);">
+  <div class="page-image-top-label">Case study · How a Burleigh upper tier formed</div>
+  <div class="page-image-overlay">
+    <p class="page-image-subhead">27 Banksia Broadway, Burleigh Waters · resold December 2024</p>
+    <h2 class="page-image-headline">$1,550,000 to $3,465,000 in eighteen months.</h2>
+    <div class="page-image-text">
+      <p>A May 2023 buyer paid $1,550,000 for a fairly standard Burleigh Waters home. Eighteen months later it sold again as a contemporary two-storey designer build for $3,465,000. The mechanism by which a suburb's median ratchets upward as the dwellings that trade change.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 27 — Burleigh Waters — case study -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <span>BURLEIGH WATERS · 4220</span>
+      <span>The Fields Quarterly · Q1 2026</span>
+    </div>
+
+    <div class="page-top">
+      <h3 class="page-headline page-headline-smaller">Burleigh Waters — case study</h3>
+    </div>
+
+    <div class="page-body mt-bigger">
+      <div class="block">
+        <span class="block-label">CASE STUDY — HOW A BURLEIGH UPPER TIER FORMED</span>
+        <h4>$1,550,000 to $3,465,000 in eighteen months</h4>
+        <div class="stats">
+          <div>
+            <div class="label">MAY 2023 SALE</div>
+            <div class="value">$1,550,000</div>
+          </div>
+          <div>
+            <div class="label">DEC 2024 RESALE</div>
+            <div class="value">$3,465,000</div>
+          </div>
+          <div>
+            <div class="label">HOLD PERIOD</div>
+            <div class="value">18 months</div>
+          </div>
+        </div>
+        <div class="text-poppins text-smaller">
+          <p>27 Banksia Broadway sits on 536 sqm approximately 500 metres from the beach. In May 2023 it sold privately for $1,550,000. In December 2024 it sold again for $3,465,000 — a $1,915,000 difference. What happened inbetween was a knock-down rebuild: a contemporary two-storey home, designer-credited, builder-credited,finishes throughout. The previous structure (a fairly standard Burleigh Waters home, last leased at $850 perweek) is no longer on the lot.</p>
+          <p>The $1,915,000 difference is not pure profit — build costs for a project of this calibre would consume a substantial share. But the trajectory tells a story about what Burleigh Waters now rewards: well-executed rebuild, walking-distance-to-beach, designer credentials. <strong>This is one mechanism by which a suburb's median ratchets upward even as transaction volumes thin: the dwellings that do trade are increasingly different from the ones that came before.</strong></p>
+          <p class="block-note">Reading the suburb median without understanding which dwellings are selling produces a misleading picture. TheBurleigh Waters median you see today is being shaped, in part, by knock-down rebuilds like Banksia Broadway.</p>
+        </div>
+      </div>
+      <div class="notice">
+        <p class="notice-label">WHAT SURPRISED US</p>
+        <p class="notice-text">Burleigh Waters Q1 sale volume came in at 30 — the lowest first-quarter figure in our three-year sales-volume record. Yet the rolling 12-month median lifted to a record-high $1,840,000. The market shrank andaccelerated at the same time — the volume cohort that left was disproportionately at the lower-tier end.</p>
+      </div>
+      <p class="text-bold">Three numbers we are watching</p>
+      <ol>
+        <li>Q2 2026 sales volume against the 5-year same-quarter average of 46.7. If Q2 prints below 35, the volumeproblem is structural; above 45, Q1 was a one-quarter pause.</li>
+        <li>Days-on-market — does the median drift further above the 28-day historical, or contract?</li>
+        <li>ICA-zone reclassification post-Cyclone Alfred. Insurer premium repricing for canal-front properties is not yetreflected in our valuation comparables.</li>
+      </ol>
+    </div>
+    <div class="page-footer">
+      <span>Issue 01 · Q1 2026</span>
+      <span>Page 27</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 28 — Varsity Lakes. -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <span>VARSITY LAKES · 4227</span>
+      <span>The Fields Quarterly · Q1 2026</span>
+    </div>
+
+    <div class="page-top">
+      <p class="postcode">POSTCODE 4227 · 6.2 KM²</p>
+      <h2>Varsity Lakes.</h2>
+      <p class="page-subhead mt-main">Built around an artificial lake system in the late 1980s. Younger, denser, more transient than its neighbours — andthe fastest-growing of the three in Q1 2026.</p>
+      <div class="main-text">
+        <p>Varsity Lakes sits between Burleigh Heads and Robina, formed around a system of artificial lakes builtin the late 1980s. The defining geographic feature is the lake frontage: lake-fronting properties tradeat a measurable premium (currently around 14% over comparable non-lake stock) and have driven much of the suburb's recent price acceleration.</p>
+      </div>
+    </div>
+
+    <div class="page-body text-smaller mt-main">
+      <p>The housing mix differs from the other two core suburbs. Approximately 52% of stock is townhouses and units — the highest townhouse share of the three — reflecting the master-planned residential and student-housing releases through the 2000s. Bond University proximity creates a rental-yield floor: Bond-proximate two-bedroom townhouses currently yield above 4.5%, the highest of any tracked Gold Coast pocket.</p>
+      <p>The buyer base is younger and more transient than Robina's or Burleigh's. Tenure turnover is high, which has two consequences for analysis: more comparable sales come through the data (good for valuationprecision), but more renovation drift between repeat sales (which is why we use a hedonic-style indexed price rather than a repeat-sales index for this suburb). Q1 2026 produced the strongest indexed-pricegrowth of the three core suburbs at +18.6% year-on-year, driven primarily by lake-fronting trades.</p>
+      <img src="assets/img/graph_page_28.png" class="graph mb-3" alt="Varsity Lakes" />
+      <p class="graph-subtitle">Varsity Lakes suburb boundary outlined in Fields Grass. Lake system visible centrally. Bond University adjacent to the south-east. Source: City of Gold Coast cadastral boundaries, Mapbox light theme.</p>
+    </div>
+
+    <div class="page-footer">
+      <span>Issue 01 · Q1 2026</span>
+      <span>Page 28</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 29 — Burleigh Waters -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <span>VARSITY LAKES · 4227</span>
+      <span>The Fields Quarterly · Q1 2026</span>
+    </div>
+
+    <div class="page-top">
+      <h3 class="page-headline">Varsity Lakes</h3>
+      <p class="page-subhead">Lake-fronting versus the rest. Younger demographic, higher townhouse share, the only one of the three suburbs above the FCI baseline this quarter.</p>
+    </div>
+
+    <div class="page-body">
+      <div class="block two-columns">
+        <div class="stats">
+          <div>
+            <div class="label">SUBURB FCI Q1 2026</div>
+            <div class="value">103.1</div>
+          </div>
+          <div>
+            <div class="label">ROLLING 12MO MEDIAN</div>
+            <div class="value">$1,400,000</div>
+          </div>
+          <div>
+            <div class="label">PRICE GROWTH YOY</div>
+            <div class="value">+18.6%</div>
+          </div>
+          <div>
+            <div class="label">Q1 2026 SALES (5-YR AVG)</div>
+            <div class="value">21 (27.5)</div>
+          </div>
+          <div>
+            <div class="label">DOM MEDIAN Q1</div>
+            <div class="value">26.5 days</div>
+          </div>
+          <div>
+            <div class="label">DOM HISTORICAL MEDIAN</div>
+            <div class="value">18 days</div>
+          </div>
+        </div>
+      </div>
+      <p>Varsity Lakes is the only one of the three core suburbs above the Conviction Index baseline of 100 in Q12026. The standout signal is price: the rolling 12-month median rose 18.6% year-on-year — substantially the fastest of the three suburbs. Sales volume was below trend (21 sales versus a 5-year average of 27.5), and median days-on-market has lengthened materially (26.5 days versus an 18-day historical median). On price the suburb is on fire; on velocity it is slowing more than the others. The combined Conviction Index of 103.1 reflects the price strength outweighing the softening on volume and pace.</p>
+      <p class="text-bold">Suburb-specific dimensions</p>
+      <ol>
+        <li><strong>Lake-fronting vs non-lake.</strong> The dominant dimension. Lake-front trades on a measurable premium; quantification is in scope for Issue 02 once the lake-frontage classification is enriched.</li>
+        <li><strong>Townhouse / unit dominance.</strong> Approximately 52% of stock is non-detached — the highest of the three suburbs. Dwelling-type split is non-negotiable for honest reporting.</li>
+        <li><strong>Bond University proximity.</strong> Student / young-professional rental demand provides a yield floor on smaller dwellings; yields above 4.5% on Bond-proximate two-bedroom townhouses.</li>
+        <li><strong>Younger demographic, higher tenure turnover.</strong> More comparable sales available, but more renovation drift between repeat sales — favouring hedonic over repeat-sales index methodology.</li>
+      </ol>
+      <div class="notice">
+        <p class="notice-label">WHAT SURPRISED US</p>
+        <p class="notice-text">Varsity Lakes' rolling 12-month YoY price growth of +18.6% is the strongest among the three core suburbs — and it is happening even as Q1 sale volume (21) ran 25% below the prior year. The price acceleration is being carried by a smaller number of stronger trades.</p>
+      </div>
+    </div>
+    <div class="page-footer">
+      <span>Issue 01 · Q1 2026</span>
+      <span>Page 29</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 30 — CASE STUDY · THE VARSITY LAKES GROWTH STORY -->
+<!-- ============================================================ -->
+<div class="page page-image" style="background-image: url(assets/img/bg_page_30.jpg);">
+  <div class="page-image-top-label">CASE STUDY · THE VARSITY LAKES GROWTH STORY</div>
+  <div class="page-image-overlay">
+    <p class="page-image-subhead">17 North Shore Avenue, Varsity Lakes · sold April 2026 in 26 days</p>
+    <h2 class="page-image-headline">$1,685,000 today. The same property sold for $640,000 in 2010.</h2>
+    <div class="page-image-text">
+      <p>A five-bedroom in one of Varsity Lakes' established lake-adjacent pockets. Fifteen-year hold. Nominal gain $1,045,000 — 163% increase, or 6.7% per year compounded. After inflation, real growth lands closer to 4.4% per year. The arithmetic of the +18.6% YoY headline.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 31 — Varsity Lakes — case study -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <span>VARSITY LAKES · 4227</span>
+      <span>The Fields Quarterly · Q1 2026</span>
+    </div>
+
+    <div class="page-top">
+      <h3 class="page-headline page-headline-smaller">Varsity Lakes — case study</h3>
+    </div>
+
+    <div class="page-body mt-bigger">
+      <div class="block">
+        <span class="block-label">CASE STUDY — THE VARSITY LAKES GROWTH STORY</span>
+        <h4>$1,685,000 on North Shore Avenue: a fifteen-year gain of $1,045,000</h4>
+        <div class="stats">
+          <div>
+            <div class="label">APRIL 2026 SALE</div>
+            <div class="value">$1,685,000</div>
+          </div>
+          <div>
+            <div class="label">DAYS ON MARKET</div>
+            <div class="value">26 days</div>
+          </div>
+          <div>
+            <div class="label">2010 PURCHASE</div>
+            <div class="value">$640,000</div>
+          </div>
+        </div>
+        <div class="text-poppins text-smaller">
+          <p>17 North Shore Avenue is a five-bedroom, three-bathroom house in one of Varsity Lakes' established lake-adjacent pockets. It sold in late April 2026 for $1,685,000 in 26 days — comfortably above the suburb's rolling 12-month median of $1,400,000. The previous sale was December 2010 at $640,000. Over the fifteen-year hold, the property gained $1,045,000 in nominal terms — a 163% increase, or roughly 6.7% per year compounded.</p>
+          <p>After accounting for inflation across the hold period (CPI added approximately 38% to the cost of living), the realgain shrinks to roughly 90% — or 4.4% per year compounded in real, after-inflation terms. <strong>Substantial, but meaningfully less dramatic than the headline.</strong> This is the difference the Real Pain & Gain analysis (planned for Issue 02) will quantify across thousands of resold properties.</p>
+          <p class="block-note">Varsity Lakes' +18.6% year-on-year growth is being driven by exactly this kind of trade: fifteen-year owners exiting at multiples of their original entry price, into a smaller cohort of buyers willing to meet the new ask.</p>
+        </div>
+      </div>
+      <p class="text-bold">Three numbers we are watching</p>
+      <ol>
+        <li>Lake-front to non-lake premium (currently estimated ~14%; tracking).</li>
+        <li>Bond Uni rental yield trajectory (4.5% Q1; rate-sensitive).</li>
+        <li>Townhouse approvals pipeline.</li>
+      </ol>
+    </div>
+    <div class="page-footer">
+      <span>Issue 01 · Q1 2026</span>
+      <span>Page 31</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 32 — How every chart in this report is made. -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <span>METHODOLOGY</span>
+      <span>The Fields Quarterly · Q1 2026</span>
+    </div>
+
+    <div class="page-top">
+      <h3 class="page-headline">How every chart in this report is made.</h3>
+      <p class="page-subhead">A first-class chapter, not an appendix. Trust scales with disclosure; we publish what we measure and how we measure it.</p>
+    </div>
+
+    <div class="page-body">
+      <p class="text-bold mb-2">The Fields Conviction Index</p>
+      <p>A composite of three components, each z-scored against its own rolling 5-year history, then weighted and rebased so that Q1 2020 = 100. The components are: indexed median price (50% weight), latest-quarter sales volume (25%), and inverse days-on-market (25%) where DOM data is available. Where DOM data isnot available (pre-Q2 2023), the index is computed on the two-component basis (67% price, 33% volume).The four-component FCI specified in the methodology document — adding sale-to-list ratio and stock-on-market — will be live from Issue 02 once historical backfill is complete.</p>
+      <p class="text-bold mb-2">Indexed prices</p>
+      <p>Hedonic regression at suburb level. Each transaction generates an attribute-adjusted index point; the index is the time-series of those points smoothed to quarterly. Methodology cross-validated against the Cotality Hedonic Home Value Index at the SA2 level.</p>
+      <p class="text-bold mb-2">Comparable-sales valuations</p>
+      <p>Per property: 3-8 comparables matched on distance ≤500m, recency ≤6 months, beds/baths, floor area±15%, land size ±20%, condition, position, view. Each comp adjusted; weighted mean used; 90% confidence interval is 1.645 × weighted standard deviation. Properties listing ≥$2,500,000 flagged as <span class="text-poppins">directional_only</span> — comp scarcity widens the CI; shown as a range only.</p>
+      <p class="text-bold mb-2">Days-on-market</p>
+      <p>First-list date to unconditional contract. Excludes properties withdrawn within 14 days. Excludes family transfers under $200,000 and probate sales without arms-length pricing.</p>
+      <p class="text-bold mb-2">Sales volume</p>
+      <p>Houses only, deduplicated across three sources (Domain, REA, on-property), taking max per quarter to avoid double-counting. The in-progress current quarter is excluded from this report.</p>
+      <p class="text-bold mb-2">Sample sizes</p>
+      <p>Any quarter with fewer than 30 transactions for a suburb is flagged. Charts cite the underlying N. Confidence intervals widen with sample size; we report N every time.</p>
+      <p class="text-bold mb-2">Where we differ from Cotality, Domain, PropTrack and SQM</p>
+      <p>Each source answers a slightly different question. Cotality models attribute-adjusted hedonic prices onsettled sales; we use the same approach at suburb level and reconcile against their published series.Domain reports stratified medians on settled sales; we use these as a postcode-level sanity check. PropTrack and SQM track asking prices on currently listed stock; we treat asking-price indices as a <em>negotiability signal</em> rather than as price-trend evidence. The four-source reconciliation chart is in scope for Issue 02.</p>
+    </div>
+    <div class="page-footer">
+      <span>Issue 01 · Q1 2026</span>
+      <span>Page 32</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 33 — What this report does not answer. -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <span>WHAT THIS REPORT DOES NOT ANSWER</span>
+      <span>The Fields Quarterly · Q1 2026</span>
+    </div>
+
+    <div class="page-top">
+      <h3 class="page-headline">What this report does not answer.</h3>
+      <p class="page-subhead">Five honest items, Q1 2026. Trust compounds when uncertainty is named alongside findings.</p>
+    </div>
+
+    <div class="page-body">
+      <ol>
+        <li><strong>Whether the volume drop is structural or seasonal.</strong> Q1 2026 volume is below the five-year average across the southern Gold Coast. We will not know whether this is a cyclical pause or the start of structural change until we see Q3. The data does not currently distinguish.</li>
+        <li><strong>The flood-zone repricing trajectory.</strong> ICA paid >$1.5bn on Cyclone Alfred (2025) and ~$3.5bn on extreme weather across 2025. Insurance premium pricing for 2026-27 is not yet in published indices; the canal-frontpremium adjustment in our valuations will lag insurer repricing.</li>
+        <li><strong>DTI speed-limit response.</strong> The new APRA ≤20%-of-new-lending-at-DTI-≥6× rule has been active for ~3 months. Banks may front-load DTI-≥6 lending in some quarters and ration in others. Effect on the sub-$1MFHB market is monitored, not modelled.</li>
+        <li><strong>Help to Buy uptake.</strong> Launched 5 December 2025; only two lender panels live at start of 2026. Volume too thin to call structural impact yet.</li>
+        <li><strong>Composition drift in our own dataset.</strong> Fields' active-listing scrape is comprehensive but sold-record coverage varies by source. Coverage gaps for non-core suburbs are documented and disclosed. We are not yet in aposition to publish reliable indexed prices for some Gold Coast outer suburbs.</li>
+      </ol>
+      <p class="text-bold">What we are working on</p>
+      <p>An asking-vs-actual gap distribution chart for Issue 02 (data prepared). A school-catchment premium analysis for Issue 02-03 (catchment shapefiles being acquired). A historical sale-to-list series for the four-component FCI (in progress). The conviction tracker for Issue 02 — the page where we check what we said this quarter against subsequent data — becomes a permanent feature.</p>
+      <div class="notice notice-mt-bigger">
+        <p class="notice-label">HELP US IMPROVE THIS REPORT</p>
+        <p class="notice-text">If you have spotted a number that does not look right, an interpretation that does not square with what you observe locally, or a question we should be answering — reply to the email that delivered this report. Weread every reply.</p>
+      </div>
+    </div>
+    <div class="page-footer">
+      <span>Issue 01 · Q1 2026</span>
+      <span>Page 33</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 34 — A reflection -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <span>EDITOR'S CLOSING</span>
+      <span>The Fields Quarterly · Q1 2026</span>
+    </div>
+
+    <div class="page-top">
+      <h3 class="page-headline mb-bigger">A reflection.</h3>
+      <div class="main-text main-text-bigger">
+        <p>The southern Gold Coast spent Q1 2026 in a standoff. Median prices rose between 7.0%and 18.6% across the three core suburbs. The Fields Conviction Index for the samecomposite closed at 98.6 — just below the five-year baseline. Two readings of the samemarket that, on their face, do not belong in the same paragraph.</p>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <p>What surprised me this issue: how clearly the gap shows up once you stop reading the headline median. The price line and the conviction line have separated. The price line is the loud one; the conviction line is the one that has historically led at turning points. Whether this is a turning point or a pause that resolves quietly the way the 2017 and 2019 cooler readings did is the open question of the year.</p>
+      <p>If you would like the same analysis applied to your home, get in touch at <a href="mailto:will@fieldsestate.com.au">will@fieldsestate.com.au</a> — I willprepare a Position Report for you. Free, no listing commitment, no follow-up sales call. We do this because the readers who request these reports are the buyers and sellers we eventually want to know.</p>
+      <p>The next edition is 15 August 2026, covering Q2 2026. Between now and then there will be a monthly Pulse, a market update video, and a chart of the week. If you would like to suggest what we cover next quarter, write to me at <a href="mailto:will@fieldsestate.com.au">will@fieldsestate.com.au</a>. I read everything that comes in.</p>
+      <p>— Will Simpson</p>
+      <p class="text-poppins p-smaller text-grey">Editor, The Fields Quarterly · 6 May 2026</p>
+      <p class="bottom-text"><strong>Get the next edition free:</strong> fieldsestate.com.au/quarterly · <strong>Free CSV data:</strong> fieldsestate.com.au/quarterly/q1-2026/data · <strong>Permanentarchive:</strong> fieldsestate.com.au/quarterly/archive</p>
+    </div>
+
+    <div class="page-footer">
+      <span>Issue 01 · Q1 2026</span>
+      <span>Page 34</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 35 — The terms we use, defined. -->
+<!-- ============================================================ -->
+<div class="page">
+  <div class="page-pad">
+    <div class="page-header">
+      <span>GLOSSARY</span>
+      <span>The Fields Quarterly · Q1 2026</span>
+    </div>
+
+    <div class="page-top">
+      <h3 class="page-headline mb-bigger">The terms we use, defined.</h3>
+      <p class="page-subhead">A one-glance reference for the technical terms in this report. The plain-English meaning is given first; the formalname is in italics.</p>
+    </div>
+
+    <div class="page-body">
+      <dl class="glossary">
+        <div>
+          <dt>The Fields Conviction Index (FCI)</dt>
+          <dd>One number, published every quarter, that captures the underlying strength of the southern Gold Coast property market. 100 is a typical pre-COVID baseline; above 115 is tight; below 85 favours buyers. <em>Formal: a transaction-weighted weighted composite of three components, each z-scored against five years of history.</em></dd>
+        </div>
+
+        <div>
+          <dt>Composite</dt>
+          <dd>Robina, Burleigh Waters and Varsity Lakes combined into one number, weighted by how many transactions each suburb produced. <em>Formal: transaction-weighted aggregate.</em></dd>
+        </div>
+
+        <div>
+          <dt>Indexed price</dt>
+          <dd>The price level after adjusting for the mix of houses sold each quarter, so a quarter heavy with prestige sales does not fake a price boom. <em>Formal: hedonic regression-based price index, the same statistical method CoreLogic / Cotality use.</em></dd>
+        </div>
+
+        <div>
+          <dt>Rolling 12-month median</dt>
+          <dd>The middle sale price across the most recent twelve months, recomputed monthly. We trust it more than a single-quarter median because the sample size is larger. <em>Formal: trailing-twelve-month median, recomputed at month-end.</em></dd>
+        </div>
+
+        <div>
+          <dt>Z-score</dt>
+          <dd>A measure of how unusual a reading is against its own history. A z-score of +1 means "one standard deviation above the five-year average" — uncommon but not rare. +2 means strongly above; −2 means strongly below. <em>Formal: standardised score, (current value − mean) ÷ standard deviation.</em></dd>
+        </div>
+
+        <div>
+          <dt>Sale-to-list ratio</dt>
+          <dd>The final sale price as a share of the property's first listed price. 100% means the home sold at ask; 95% means it sold 5% below; 102% means it sold above. <em>Formal: median (sale ÷ first list) across closed transactions.</em></dd>
+        </div>
+
+        <div>
+          <dt>Days-on-market</dt>
+          <dd>How long a home took to sell, measured from first listing to unconditional contract. We report the median across each quarter so a few outliers do not distort the figure. <em>Formal: list-to-unconditional median, private-treaty + auction combined.</em></dd>
+        </div>
+
+        <div>
+          <dt>Sample size (N)</dt>
+          <dd>How many transactions a number is based on. Below 30, we flag the figure as small-sample and do not make strong claims off it. <em>Formal: transaction count for the relevant period and segment.</em></dd>
+        </div>
+      </dl>
+      <p class="text-poppins p-smaller italic text-grey mt-5">Spotted a term in this report we have not defined? Reply to the email that delivered this issue — we will add it to the next edition'sglossary. The full methodology is on page 23.</p>
+    </div>
+
+    <div class="page-footer">
+    <span>Issue 01 · Q1 2026</span>
+    <span>Page 35</span>
+  </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 36 - LAST PAGE -->
+<!-- ============================================================ -->
+<div class="page last-page">
+  <div class="last-page-header">
+    <p class="last-page-header-title">The Fields Quarterly</p>
+    <p class="last-page-header-subtitle">Issue 01 · Q1 2026</p>
+  </div>
+
+  <div class="page-body">
+    <h2 class="fs-32">Decisions are best made with data.</h2>
+    <p class="fs-13">We believe property decisions should be grounded in evidence — not guesswork, pressure, or opinion.</p>
+    <p>This report brings together the numbers that actually matter: pricing trends, comparable sales, buyer behaviour, and the underlying forces shaping the local market. The kind of insight most people don't have access to — and that becomes meaningful given the right context.</p>
+    <p>At Fields, we combine this data with deep local knowledge to help you understand not just what is happening, but what it means for you.</p>
+    <p>Because when you can see the market clearly, you can move with confidence.</p>
+    <p class="last-page-note text-poppins">If you'd like a personalised analysis of your home or a deeper breakdown of your position in the market, visit <a href="fieldsestate.com.au">fieldsestate.com.au</a>. </p>
+  </div>
+
+  <div class="page-footer">
+    <span>Smarter with data</span>
+    <span>fieldsestate.com.au/quarterly</span>
+  </div>
+</div>
+
+</body>
+</html>
