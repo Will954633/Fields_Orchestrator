@@ -27,6 +27,11 @@ from datetime import datetime, timezone
 
 from pymongo import MongoClient
 
+# Waterfront is out of editorial scope (see shared/waterfront.py) — sold pages for
+# waterfront homes get no sold_analysis either. Orchestrator root on path first.
+sys.path.insert(0, "/home/fields/Fields_Orchestrator")
+from shared.waterfront import detect_waterfront  # noqa: E402
+
 MIN_SEGMENT_N = 8            # below this, fall back to the parent (all-houses) segment
 FORBIDDEN = ["stunning", "nestled", "boasting", "rare opportunity", "robust market"]
 ADVICE = re.compile(r"\b(you should|we recommend|consider (buying|selling)|now is|"
@@ -325,6 +330,12 @@ def verify(analysis, p):
 
 # ---------------------------------------------------------------- runner
 def process(db, suburb, p, bench, dry, write):
+    # WATERFRONT GATE — no sold editorial for waterfront homes (out of scope, 2026-07-26).
+    if detect_waterfront(p)["is_waterfront"]:
+        print(f"[SKIP] {p.get('address')} — waterfront (sold editorial withheld, out of scope)")
+        if write and not p.get("is_waterfront"):
+            db[suburb].update_one({"_id": p["_id"]}, {"$set": {"is_waterfront": True}})
+        return "skipped_waterfront", False
     a = analyse(p, bench)
     ok, problems = verify(a, p)
     if not ok:
