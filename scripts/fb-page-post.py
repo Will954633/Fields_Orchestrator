@@ -2968,7 +2968,7 @@ def main():
         elif args.stage:
             pending_id = stage_post(message, template_type, image_url)
             print(f"\nStaged for approval. Pending ID: {pending_id}")
-            print("View in Marketing Monitor at https://fieldsestate.com.au/ops")
+            print("View in the Marketing Monitor (ops dashboard)")
         else:
             print("\n(Dry run — add --post to publish or --stage to queue for approval)")
 
