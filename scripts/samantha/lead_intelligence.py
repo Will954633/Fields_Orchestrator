@@ -519,10 +519,21 @@ def main() -> int:
         cosmos_retry(lambda: sm["lead_worklist"].update_one(
             {"lead_key": r["lead_key"]}, {"$set": doc}, upsert=True))
         if r["email"] and not r["is_test"]:
+            # Promote every real lead to a first-class CRM contact (Will 2026-07-28). Previously
+            # this was annotate-only (no upsert), so form-submitters/subscribers that PostHog
+            # engagement hadn't already surfaced never became crm_contacts rows. $setOnInsert
+            # seeds identity on NEW rows only — existing engagement-rich contacts are untouched.
             cosmos_retry(lambda: sm["crm_contacts"].update_one(
                 {"email": r["email"]},
                 {"$set": {"worklist_priority": r["priority"], "worklist_reason": r["reason"],
-                          "worklist_updated_at": NOW}}))
+                          "worklist_updated_at": NOW, "updated_at": NOW},
+                 "$setOnInsert": {
+                     "name": r["name"], "phone": r["phone"],
+                     "source": (r["sources"][0] if r["sources"] else "lead_intelligence"),
+                     "status": "lead", "tags": list(r["sources"]), "notes": [],
+                     "first_seen": r["first_seen"], "last_seen": r["last_seen"],
+                     "linked_records": {}, "created_at": NOW}},
+                upsert=True))
         written += 1
 
     # Summary
