@@ -33,7 +33,7 @@ from datetime import datetime, timezone, timedelta
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from src.mongo_client_factory import get_mongo_client
 
-ORCH = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ORCH = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # repo root
 INTERACTIVE_DIR = "/home/projects/.claude/projects/-home-fields-Fields-Orchestrator"
 
 
