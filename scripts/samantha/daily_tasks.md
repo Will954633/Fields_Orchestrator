@@ -93,8 +93,12 @@ Work these in order (this supersedes the old "Task 0 leads-worklist first" order
   rank the warmest, and for each ask: is there a next step for this person, or a dead-end to fix?
 - **B. Warming-engine health & cadence.** Are the warming engines firing? Content cadence vs the playbook,
   editorial auto-publish, the off-market deck, Five Property Friday, articles. Fix/flag what's stalled.
-- **C. KPI scoreboard update.** Refresh the KPI Monitor sheet (Weekly Log + Dashboard), compute trend,
-  flag red. This is your report backbone (replaces the old appraisal-count section).
+- **C. KPI scoreboard update + close the loop.** Run `python3 scripts/samantha/kpi_rollup.py all`
+  (auto-populates the Dashboard 'Latest' + a Weekly Log row from HogQL + Mongo, and rebuilds the
+  "Samantha Impact" tab), then read the trend and flag red. AND **measure any due changes**:
+  `change_ledger.py due` → `change_ledger.py measure` for each — the CEO Governance page now flags an
+  overdue measurement as ERROR, so a shipped-but-unmeasured change is no longer invisible. This is your
+  report backbone (replaces the old appraisal-count section).
 - **D. Engagement/intent experiments — driven by Task G.** Run the Growth Ideation brief
   (`growth_ideation.py`, see Task G below) to SOURCE the tests: A/B candidates, funnel-engagement +
   conversion lifts, lead-capture fixes, ad concepts. Within the usual $15/day, $500/wk caps and
