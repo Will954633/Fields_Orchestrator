@@ -30,7 +30,10 @@ sys.path.insert(0, HERE)
 import ingest_sold          # noqa: E402
 import ingest_suburb_stats  # noqa: E402
 import link_property_ids    # noqa: E402
+import recalibrate_charts   # noqa: E402
+from suburb_stats import house_headline  # noqa: E402
 from job_status import record_job_result  # noqa: E402
+from shared.db import get_gold_coast_db  # noqa: E402
 
 SUBURBS = ["robina", "burleigh_waters", "varsity_lakes"]
 JOB = "propradar_ingest"
@@ -56,8 +59,16 @@ def main():
             total_linked += len(matched)
             total_gaps += len(gaps)
             per.append(f"{s} {len(recs)}/{len(matched)}/{len(gaps)}")
-        detail = (f"stats+sold refreshed; ingested {total_recs}, linked {total_linked}, "
-                  f"gaps {total_gaps} [{'; '.join(per)}]")
+        # Re-anchor median+volume trend charts to the fresh PR stats (idempotent; must run
+        # AFTER any precompute regeneration, which resets the docs to raw). See recalibrate_charts.
+        db = get_gold_coast_db()
+        for s in SUBURBS:
+            pr = house_headline(db, s)
+            if pr:
+                recalibrate_charts.recalibrate_median(db, s, pr, apply=True)
+                recalibrate_charts.recalibrate_volume(db, s, pr, apply=True)
+        detail = (f"stats+sold refreshed + charts recalibrated; ingested {total_recs}, "
+                  f"linked {total_linked}, gaps {total_gaps} [{'; '.join(per)}]")
         record_job_result(JOB, "success", detail, records=total_recs,
                           linked=total_linked, gaps=total_gaps, suburbs=len(SUBURBS))
         print("OK:", detail)
