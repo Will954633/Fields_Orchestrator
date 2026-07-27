@@ -519,8 +519,11 @@ Last run you delivered the report and stopped with 20 minutes unused. **Don't do
 2. **Then ACT until the soft deadline** — work your own "Follow-up opportunities" list top-down and
    **execute the auto-executable ones** (reversible web changes, ad tweaks within caps, safe blocker fixes).
    Investigate anything you flagged. Append an **"Actions Taken this run"** section to `report.md` as you go.
-3. **Finalise** — UPDATE the Google Doc with the actions you took (google-drive `update_file`), send a
-   short final Telegram listing what you DID (not just found), and write your status file.
+3. **Finalise** — UPDATE the session-report Doc (which lives in TODAY'S SESSION FOLDER —
+   `session_folder.py ensure`; the Doc + any scoping docs + shareables all go there, not loose in the
+   root), write the end-of-session summary ENTRY to Will Notes with the session-folder link on its
+   Details line (charter rule 9), reply to every active Will Notes item (rule 10), send a short final
+   Telegram listing what you DID (not just found) with the folder link, and write your status file.
 
 **Do not stop early.** Genuine idle — nothing safe, valuable, and reversible left to do — is rare. If you
 truly have nothing left, say so explicitly in the report and stop; otherwise keep advancing until the
