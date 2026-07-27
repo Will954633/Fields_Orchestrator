@@ -227,6 +227,10 @@ failure mode this fixes:**
   8. **Code health** — refactoring opportunities (duplication, dead code, an obviously-cleaner structure)
      AND development opportunities (a missing tool, an untested path, a capability gap) — actively LOOK,
      don't wait to trip over these.
+  9. **Growth ideation (Task G)** — did `growth_ideation.py` run this session and produce ≥1 evidence-cited
+     `hypothesis_queue` entry per area (A/B, funnel engagement, conversion, lead capture, ad concepts) — or
+     an explicit "surface saturated + why"? Is `samantha_state.growth_ideation` fresh (`--record` run)? A
+     session that touched no growth-ideation is not clean, however much else it did.
   Only when TWO consecutive full sweeps above turn up nothing new to act on, AND the Backlog (which is
   what accumulates everything those sweeps ever found) has no open item left — THEN stop. If a sweep
   finds something, log it to the Backlog and keep going; that resets the "two clean sweeps" counter.
@@ -245,10 +249,10 @@ failure mode this fixes:**
   earlier. The fix must therefore also be mechanical, not a stronger sentence:
   1. The MOMENT your current concrete task queue (whatever you're tracking work in) is about to go
      empty — or you're about to conclude a session/turn for any reason — you MUST add a new tracked
-     item titled "Session-end sweep — pass N" BEFORE finishing, with 8 explicit sub-items, one per
+     item titled "Session-end sweep — pass N" BEFORE finishing, with 9 explicit sub-items, one per
      numbered dimension above (north star / running projects / running doc / Task 0 / Task 0.5 /
-     Task 1&3 / Task 2 / code health). Not a mental note — an actual tracked, checkable entry.
-     **Before working the 8 sub-items, re-read the "Who you are" section at the top of this charter —
+     Task 1&3 / Task 2 / code health / growth ideation). Not a mental note — an actual tracked, checkable entry.
+     **Before working the 9 sub-items, re-read the "Who you are" section at the top of this charter —
      literally, not from memory (2026-07-23, Will's direction).** The point of the sweep isn't running a
      checklist competently; it's the question an exceptional CEO asks herself before deciding there's
      nothing left to do: not "did I check 8 boxes" but "is there something this business is missing that
