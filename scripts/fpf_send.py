@@ -58,6 +58,32 @@ def target_suburbs(area):
     return AREA_TO_SUBURBS.get((area or "").lower())   # None if elsewhere/unknown
 
 
+WEBSITE_SUBS_COLL = "five_property_friday_subscribers"
+_ALL_THREE = ["robina", "burleigh_waters", "varsity_lakes"]
+_LABEL_TO_KEY = {v.lower(): k for k, v in SUBURB_LABEL.items()}
+
+
+def website_sub_suburbs(doc):
+    """Resolve suburb keys for a website 5PF subscriber (the /for-sale-v3 ladder
+    opt-in, or a legacy signup). Prefers the explicit `suburbs` key list; falls
+    back to `suburb_preference` ('all', comma/slash-joined keys, or labels).
+    Unknown/empty → all three (a subscriber never gets nothing)."""
+    keys = [s for s in (doc.get("suburbs") or []) if s in SUBURB_LABEL]
+    if keys:
+        return keys
+    pref = (doc.get("suburb_preference") or "").strip().lower()
+    if not pref or pref == "all":
+        return list(_ALL_THREE)
+    out = []
+    for p in re.split(r"[,/]", pref):
+        p = p.strip()
+        if p in SUBURB_LABEL and p not in out:
+            out.append(p)
+        elif p in _LABEL_TO_KEY and _LABEL_TO_KEY[p] not in out:
+            out.append(_LABEL_TO_KEY[p])
+    return out or list(_ALL_THREE)
+
+
 def _int(v):
     m = re.sub(r"\D", "", str(v or ""))
     return int(m) if m else 0
@@ -270,6 +296,44 @@ def friday_batch(dry=False, force=False):
         else:
             failed.append((email, r.get("error", "unknown")))
             print(f"  FAILED → {email} ({label}): {r.get('error')}")
+
+    # Website 5 Property Friday opt-ins (system_monitor.five_property_friday_subscribers).
+    # Previously these were stored by the signup endpoint but NEVER emailed — only
+    # fb_leads was queried. The /for-sale-v3 ladder opt-in writes here too, so the
+    # batch now delivers to them as well. Dedup: skip any email already handled as
+    # an active buyer-brief FB lead, so a person on both lists gets one email.
+    fb_emails = set()
+    for l in sm["fb_leads"].find({"form_id": {"$in": list(BUYER_BRIEF_FORMS)}, "fpf_status": "active"},
+                                 {"fields.email": 1}):
+        e = ((l.get("fields") or {}).get("email") or "").strip().lower()
+        if e:
+            fb_emails.add(e)
+    for sub in sm[WEBSITE_SUBS_COLL].find({"status": "active"}):
+        email = (sub.get("email") or "").strip()
+        if not email or email.lower() in fb_emails:
+            continue                                # no email, or already sent via fb_leads
+        if _aest_date(sub.get("last_shortlist_at")) == today:
+            skipped += 1
+            continue                                # already sent today — no double-send
+        subs = website_sub_suburbs(sub)
+        label = " / ".join(SUBURB_LABEL.get(s, s) for s in subs)
+        budget = budget_for(subs)
+        picks = build_picks(subs, _int(sub.get("bedrooms")), _int(sub.get("bathrooms")), budget)
+        if not picks:
+            continue
+        r = tracked_send(email, f"Your 5 for Friday — {label}", shortlist_html(label, picks),
+                         "fpf_shortlist", {"subscriber": str(sub.get("_id")), "count": len(picks), "src": "website"}, dry)
+        if dry or r.get("ok"):
+            if not dry:
+                sm[WEBSITE_SUBS_COLL].update_one({"_id": sub["_id"]},
+                                                 {"$set": {"last_shortlist_at": datetime.now(timezone.utc).isoformat(),
+                                                           "last_shortlist_send": r.get("send_id")}})
+            sent.append(email)
+            print(f"  batch(web) → {email} ({label})")
+        else:
+            failed.append((email, r.get("error", "unknown")))
+            print(f"  FAILED(web) → {email} ({label}): {r.get('error')}")
+
     print(f"friday batch: {len(sent)} sent, {len(failed)} failed, {skipped} already-sent-today")
     _report_batch(sent, failed, skipped, dry)
 
