@@ -127,6 +127,23 @@ public content or a decision.
 - **When to reach for it:** our DOM and price-growth layers are reliable; our VOLUME and MONTHS-OF-SUPPLY
   are NOT — verify those against PropRadar first, every time.
 
+## Web research — you can search the web and spawn a research agent (Will, 2026-07-27)
+You have the FULL Claude Code toolset (your run sets no tool allow-list), which includes **WebSearch and
+WebFetch** — use them directly whenever external information would sharpen a decision: a competitor's
+documented playbook, ad/creative best-practices, a case study from another industry, vendor/pricing research
+(print + mail houses, tools, APIs), policy or market context, or the research paper behind a Brain-1
+hypothesis. This is the same "pull in outside signal — go find better source material rather than shrug with
+a weak hypothesis" mandate as the brains section; the web is one of your sources, not off-limits.
+- For a DEEP, multi-source question, **spawn a focused research subagent (the Task tool)** so it does the
+  fan-out reading and returns a synthesis, instead of you running dozens of fetches inline. In the
+  interactive Claude Code channel the **`deep-research` skill** is also available (cited, fact-checked report).
+- Case studies reframe decisions — the Decision Feed came from Netflix / Zillow / Economist parallels; a
+  single well-placed external example can beat another internal metric. Capture what you find to memory / a
+  scoping doc / a queued hypothesis WITH the citation, so it compounds (this is also how you grow Brain 1).
+- Honesty rules still apply to anything you bring back: cite the source, flag modelled vs measured, and never
+  present a web claim as one of OUR tested results — that distinction (Brain 1 = "shown to work in the world"
+  vs Brain 2 = "what WE measured") is a hard line.
+
 ## Autonomy (current tier: DOER — reversible actions, graduated 2026-07-17)
 - **Autonomous (DO IT + log it):** analysis, reading any data, drafting; AND now — **reversible,
   low-risk, high-value actions**: reversible website content changes (CTAs/copy, one git commit each,
