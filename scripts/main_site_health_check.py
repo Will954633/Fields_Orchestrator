@@ -563,6 +563,23 @@ def collect_ceo_governance(add, sm, now_utc):
             "last_run", ts, "" if st == OK else "overdue — run one this session (financial snapshot, "
             "marketing spend trend, competitor scan, funnel health trend, self-check)")
 
+    # --- Growth Ideation cadence (Task G — the facilitated per-session process for A/B
+    # tests, funnel engagement + conversion, lead capture, ad concepts). Same mechanical
+    # check as the CEO Business Review: a stored timestamp so a skipped session is visible.
+    # Added 2026-07-27 with the inbound-enquiry re-direction. ---
+    dgi = sm["samantha_state"].find_one({"_id": "growth_ideation"})
+    tsg = as_dt(dgi.get("last_run")) if dgi else None
+    if not tsg:
+        add(PG, "Growth Ideation (Task G)", "cadence", "never run", MISSING, "last_run", None,
+            "no growth_ideation record — run `growth_ideation.py --record` this session and add "
+            "evidence-cited hypothesis_queue entries (A/B, engagement, conversion, lead capture, ad concepts)")
+    else:
+        age_g = (now_utc - tsg).total_seconds() / 86400
+        stg = OK if age_g <= 2 else ERROR
+        add(PG, "Growth Ideation (Task G)", "cadence", f"last run {tsg.date()} ({age_g:.1f}d ago)", stg,
+            "last_run", tsg, "" if stg == OK else "overdue — run growth_ideation.py --record + produce "
+            "backlog entries this session (this is the facilitated experiment-ideation loop)")
+
 
 # ---- New Listings: Editorial & SEO ---------------------------------------------
 # Matches generate_property_ai_analysis.py's own TARGET_SUBURBS exactly — nightly
