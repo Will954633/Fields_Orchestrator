@@ -425,7 +425,7 @@ def render_ops_status(orch, api, coverage, repairs, articles, listing_counts, er
     # Header
     lines.append(f"# OPS_STATUS — Fields Estate Live Dashboard Snapshot")
     lines.append(f"**Generated:** {now.strftime('%Y-%m-%d %H:%M AEST')} (auto-refreshes every 15 minutes)")
-    lines.append(f"**Source:** MongoDB `system_monitor` database (same data as https://fieldsestate.com.au/ops)")
+    lines.append(f"**Source:** MongoDB `system_monitor` database (same data as the ops dashboard)")
     lines.append(f"\n> This file is auto-generated. Do not edit manually.")
 
     # ── 1. Orchestrator Pipeline ─────────────────────────────────────────────
