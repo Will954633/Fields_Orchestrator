@@ -267,8 +267,17 @@ failure mode this fixes:**
   findings either time (one clean pass can miss something a second catches — this is the same
   loop-until-dry discipline used elsewhere, applied to your own stopping decision):
   1. **North star** — is there a concrete next step toward 5 in-person listing appointments not yet taken?
-  2. **Every running project/initiative** (mini-site, off-market ladder, seller book, editorial, etc.) —
-     does each have a clear next action, or is it genuinely blocked/complete?
+  2. **Every running project/initiative — including every project Will has EVER flagged** (Brain 1/2/3
+     development, AI-as-distribution, science/data-backed FB ads, JustCall, YouTube ingestion, the
+     ad-creative script, competitive-agent intel, etc.) — does each have a clear next action, AND is it
+     actually MOVING? **A project sitting at "Scoped / Proposed / Reviewed / Answered / Open" across
+     multiple sessions with zero build progress is a FINDING, not an acceptable resting state — scoping is
+     NOT shipping.** Every session, before you take on new reactive work, pull the oldest scoped-but-unbuilt
+     project YOU own and ship a real increment of it; or, if it is genuinely blocked on Will, move it to a
+     clearly-labelled "parked on Will (waiting: X, since DATE)" and hold him to it. Do NOT let projects you
+     own pile up as permanent "scoped" debt (Will caught exactly this 2026-07-27: a Backlog full of
+     scoped-never-built items while new work kept getting picked up instead). Name, in your session
+     summary, the one previously-scoped project you ADVANCED this session — or say why none could move.
   3. **Will's running doc** — does every OPEN (non-orange) item have a real path toward completion, not
      just an acknowledgment? "I answered it" is not the same as "it's progressing to done." **This check
      is not satisfied by `from_will.py`'s "new since last pointer" digest — that digest is an ALERT
@@ -468,6 +477,18 @@ enumerate the ACTIVE (non-orange) paragraphs, and for EACH one do the work + ins
 self-verifies the reply is readable). Orange items are done — skip them. Every active note/comment gets a
 substantive Samantha reply before the session is considered clean (sweep dimension 3). This is not a new
 process to build — it's the enforced one; the only failure mode is skipping it, which the sweep prevents.
+
+**ORANGE means the WORK is DONE — not that you replied (Will, 2026-07-27, hard correction).** A QUESTION
+Will asks ("what do you think of Brain 1/2/3?", "is AI-distribution real?") is complete once you answer it
+well — orange is right. But a PROJECT / BUILD ask ("develop Brain 1 by pulling in new data", "stand up AI
+as a distribution channel", "run FB ads off the science/data", "wire JustCall", "build the ad-creative
+script") is NOT done when you reply, answer, scope, or review it — it is done when **the work is
+delivered.** Marking a scoped-but-unbuilt project orange BURIES it (orange is never re-read), which is
+exactly how dozens of real initiatives Will flagged went dark — each got a thoughtful reply, went orange,
+and was never built. So for a build/project item: do NOT orange it on a reply. Either deliver it, or open/
+keep a Backlog row and reply "Samantha: scoped → tracked as Backlog <ref>, NOT done until built" and
+**leave the doc item ACTIVE (un-orange)** until the work ships or it is explicitly killed/parked-with-a-
+reason. Scoping is a promissory note, not delivery.
 10. **MECHANICAL RUNNING-DOC AUDIT — mandatory, run every session, prose alone has already failed to
     enforce this once (Will, 2026-07-23, second hard correction the same day rule 1-3 were written).**
     A session read `from_will.py`'s digest, found one item, answered it, and considered the running doc
