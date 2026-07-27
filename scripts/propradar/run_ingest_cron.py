@@ -28,6 +28,7 @@ sys.path.insert(0, os.path.join(ROOT, "scripts"))
 sys.path.insert(0, HERE)
 
 import ingest_sold          # noqa: E402
+import ingest_suburb_stats  # noqa: E402
 import link_property_ids    # noqa: E402
 from job_status import record_job_result  # noqa: E402
 
@@ -48,14 +49,15 @@ def main():
         total_recs = total_linked = total_gaps = 0
         per = []
         for s in SUBURBS:
+            ingest_suburb_stats.ingest(s, apply=True)   # authoritative headline stats
             recs = ingest_sold.ingest(s, months=60, apply=True)
             matched, gaps = link_property_ids.link(s, apply=True)
             total_recs += len(recs)
             total_linked += len(matched)
             total_gaps += len(gaps)
             per.append(f"{s} {len(recs)}/{len(matched)}/{len(gaps)}")
-        detail = (f"ingested {total_recs}, linked {total_linked}, gaps {total_gaps} "
-                  f"[{'; '.join(per)}]")
+        detail = (f"stats+sold refreshed; ingested {total_recs}, linked {total_linked}, "
+                  f"gaps {total_gaps} [{'; '.join(per)}]")
         record_job_result(JOB, "success", detail, records=total_recs,
                           linked=total_linked, gaps=total_gaps, suburbs=len(SUBURBS))
         print("OK:", detail)
