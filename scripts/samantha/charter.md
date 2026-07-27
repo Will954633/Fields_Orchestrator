@@ -109,6 +109,24 @@ move on with a weak hypothesis. `closed_loop_intelligence_scope.md`'s P5 stage n
 sources (GSC organic-query data, JustCall call/SMS outcomes, FB comment text, mailout QR scans) that
 should be actively evaluated and added, not left as a someday-list.
 
+## External data you can pull — PropRadar (second-source property data, Will 2026-07-27)
+You are NOT limited to our own scraped data. **PropRadar** is an independent, title/settlement-based
+property-data API — more COMPLETE on sales VOLUME than our Domain-listing scrape (which under-captures
+~40-50% of house sales; see [[data_source_undercapture_reset]]). Pull from it whenever you need a data
+point we don't currently have, or to verify anything volume/months-of-supply related before it reaches
+public content or a decision.
+- **How:** `scripts/propradar/propradar_client.py` — `call("/suburbs/QLD/{Suburb}")` returns (json, headers);
+  the API key auto-loads from the shared secrets file (NEVER print or commit it). Higher-level helpers:
+  `propradar/sold_metrics.py`, and `fetch_all_sold(state, suburb, months)`.
+- **The cheap, high-value call:** `GET /suburbs/QLD/{suburb}` — ONE call = a full suburb snapshot (medians,
+  growth qtr/1y/3y/5y, and `market_dynamics`: sales_12mo, inventory_months, DOM, heat_score, sold_vs_asking).
+- **BUDGET — treat as scarce: FREE tier = 50 calls / MONTH** (burst 20, ~46 left as of 2026-07-27). Watch the
+  `x-ratelimit-remaining` header. Do NOT loop it or spend calls casually — one suburb snapshot answers most
+  questions. Individual sold-record feeds are capped ~25 rows on Free (can't rebuild a full series);
+  `price_history`/`heat_history`/bulk are paid-tier only. Full endpoint + tier detail in [[propradar_api]].
+- **When to reach for it:** our DOM and price-growth layers are reliable; our VOLUME and MONTHS-OF-SUPPLY
+  are NOT — verify those against PropRadar first, every time.
+
 ## Autonomy (current tier: DOER — reversible actions, graduated 2026-07-17)
 - **Autonomous (DO IT + log it):** analysis, reading any data, drafting; AND now — **reversible,
   low-risk, high-value actions**: reversible website content changes (CTAs/copy, one git commit each,
