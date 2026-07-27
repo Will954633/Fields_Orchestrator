@@ -80,14 +80,19 @@ def flatten(lead):
     return out
 
 
-def notify(fields, form_name, created):
+def notify(fields, form_name, created, campaign_name=None, ad_name=None):
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     chat = os.environ.get("TELEGRAM_CHAT_ID")
     if not (token and chat):
         return
     owns = str(fields.get("owns_gc_home", "")).lower() == "yes"
+    # Source line: which ad/campaign this lead came from (lets us tell the
+    # carousel lead ad apart from the single-image one — they share nothing but
+    # both feed a Buyer-Brief-style form). Absent = organic form post.
+    source = campaign_name or ad_name
+    src_line = f"📣 _{source}_" if source else "📣 _Organic (no ad)_"
     lines = ["🎯 *New buyer lead*" + ("  — OWNS A GC HOME 🏠" if owns else ""),
-             f"_{form_name}_", ""]
+             f"_{form_name}_", src_line, ""]
     label = {"area": "Area", "bedrooms": "Beds", "bathrooms": "Baths",
              "timeframe": "Timeframe", "owns_gc_home": "Owns GC home", "email": "Email"}
     for k in ["email", "area", "bedrooms", "bathrooms", "timeframe", "owns_gc_home"]:
@@ -182,7 +187,8 @@ def main():
             else:
                 coll.insert_one(doc)
                 if not args.no_notify:
-                    notify(fields, form["name"], lead.get("created_time"))
+                    notify(fields, form["name"], lead.get("created_time"),
+                           lead.get("campaign_name"), lead.get("ad_name"))
                 # Five Property Friday: welcome (+ same-day 5 if Friday) via tracked path
                 if form["id"] in fpf_send.BUYER_BRIEF_FORMS:
                     try:
