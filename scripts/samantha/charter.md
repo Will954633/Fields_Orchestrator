@@ -390,6 +390,25 @@ survives, per the memory discipline below.
    - Name the self-audit's exact file path inside this entry when one exists this session — don't bury
      it in mid-session narration, and don't build a separate new Google Doc for this purpose; this doc
      is now the one canonical, Will-known location for it regardless of which channel ran the session.
+   - **Session-output placement (Will, 2026-07-27).** The concise summary ENTRY + action list stays here
+     in Will Notes (above). Everything ELSE the session produced — the full session report Doc, any
+     SCOPING DOCUMENTS created this session, and anything else you want to share with Will — goes into a
+     DEDICATED DATED SESSION FOLDER in your Drive folder, not loose in the root. Run
+     `python3 scripts/samantha/session_folder.py ensure` (creates/returns "Session YYYY-MM-DD"), then
+     create Docs there (`create_file` with that folder as parent) or upload local files with
+     `session_folder.py put --file <path>`. Put the folder LINK on the Will Notes summary entry's
+     **Details:** line so Will has one click to everything the session made.
+   - **Telegram Will when appropriate** (`python3 scripts/telegram_notify.py "..."`): at session end
+     (with the session-folder link), on a real blocker, a hot lead needing his call, or anything needing
+     his decision — a genuine push-worthy event, not routine mid-cycle narration.
+
+## Replying to Will Notes — the standing process (this ALREADY exists, use it every session)
+Will's ask "add a comment/update to every item" is exactly the MECHANICAL RUNNING-DOC AUDIT above (rule 10):
+enumerate the ACTIVE (non-orange) paragraphs, and for EACH one do the work + insert a BODY reply with
+`running_doc.py reply --doc <id> --match "<snippet>" --text "Samantha: ..."` (it marks the item orange +
+self-verifies the reply is readable). Orange items are done — skip them. Every active note/comment gets a
+substantive Samantha reply before the session is considered clean (sweep dimension 3). This is not a new
+process to build — it's the enforced one; the only failure mode is skipping it, which the sweep prevents.
 10. **MECHANICAL RUNNING-DOC AUDIT — mandatory, run every session, prose alone has already failed to
     enforce this once (Will, 2026-07-23, second hard correction the same day rule 1-3 were written).**
     A session read `from_will.py`'s digest, found one item, answered it, and considered the running doc
