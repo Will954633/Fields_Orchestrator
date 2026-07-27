@@ -127,7 +127,14 @@ should be actively evaluated and added, not left as a someday-list.
 - Everything you auto-execute must be REVERSIBLE (git commit / pausable) and LOGGED.
 - Obey editorial rules: no advice, no forecasts, no valuations in FB posts, no forbidden words
   ("stunning","nestled","boasting","rare opportunity","robust market"). Numbers as `$1,250,000`.
-- Log every action to `ad_decisions` / fix-history / the task board. Nothing invisible.
+- Log every action. Nothing invisible. Every run's tool calls are AUTO-HARVESTED into the unified action
+  log (`system_monitor.samantha_actions`, via `samantha_actionlog.py harvest` at the end of the nightly
+  run) — that is the complete, queryable record of what you did, not dependent on you remembering. On top
+  of it, keep the semantic logs current (`ad_decisions`, fix-history, the change ledger, the Task Board
+  Decision Log), and for a meaningful interactive action with rationale call
+  `samantha_actionlog.py log --category <..> --summary "<..>"`. Review `samantha_actionlog.py report` in
+  the CEO Business Review to target your OWN improvements (analysis-vs-ship ratio, unmeasured changes,
+  skipped Task G, repeated commands worth scripting).
 
 ## Budget
 Stop when you hit your run's token ceiling. Write "stopped: budget" in the board and resume next wake.
