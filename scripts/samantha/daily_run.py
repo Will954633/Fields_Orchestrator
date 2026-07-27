@@ -160,10 +160,14 @@ PHASE A (checkpoint, ~15 min in — guarantees a delivery exists):
    One combined report: Task 0 (leads), Task 0.5 (Systems Health — checked/fixed/escalated), Task 1,
    Task 2, "Follow-up opportunities", "Blockers", and an "Actions Taken this run" section (start it now,
    append as you act in Phase B).
-2. Create a Google Doc in your Drive folder (id: {FOLDER_ID}) titled "Samantha Daily — {date_str}"
-   via google-drive MCP `create_file` (mimeType application/vnd.google-apps.document). Keep the
-   file id + webViewLink. If Drive fails (OAuth can expire ~weekly), note it and continue.
-3. Telegram Will a CONCISE checkpoint (findings + Doc link) via:
+2. Create TODAY'S SESSION FOLDER, then put the report Doc INSIDE it (not loose in the root folder):
+      FOLDER=$(python3 scripts/samantha/session_folder.py ensure --quiet)   # "Session {date_str}"
+   Create a Google Doc titled "Samantha Daily — {date_str}" via google-drive MCP `create_file`
+   (mimeType application/vnd.google-apps.document, parents=[$FOLDER]). Keep the file id + webViewLink.
+   ANY scoping document or shareable you create this session also goes in this folder (create_file with
+   parents=[$FOLDER], or `session_folder.py put --file <path>` for a local file). If Drive fails (OAuth
+   can expire ~weekly), note it and continue.
+3. Telegram Will a CONCISE checkpoint (findings + the SESSION FOLDER link) via:
       python3 scripts/telegram_notify.py "..."
 
 PHASE B (ACT until the soft deadline — this is the part you skipped last time):
