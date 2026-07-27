@@ -372,6 +372,21 @@ def collect_leads_crm(add, sm, now_utc, last_run):
             error_patterns=("Traceback (most recent call last)", "pymongo.errors"))
         add(PG, name, "nightly sync", mtime.date().isoformat() if mtime else None, st, "log mtime", mtime, dt)
 
+    # Lead-intelligence pipeline (added 2026-07-27). Builds system_monitor.lead_worklist
+    # — the flagged/enriched view of EVERY lead that Samantha reads. Re-enabled to a
+    # 02:00 AEST cron this date after being on-demand-only since 2026-07-19; a fresh
+    # /for-sale-v3 opt-in had reached nobody because the worklist was 9 days stale (see
+    # [LEAD-FORSALEV3-NOTIFY] fix-history). This is the standing check so a silent cron
+    # death (or a crash mid-build) turns this tab red at the 01:00 audit instead of only
+    # being noticed when a lead is missed. mtime staleness = cron stopped; error-pattern
+    # tail = the build crashed. Cadence 2d gives grace (health runs 01:00, build 02:00,
+    # so the freshest successful log is ~23h old at audit time).
+    st, dt, mtime = log_freshness_check(
+        os.path.join(orch_dir, "logs", "samantha", "lead_intelligence.log"), 2,
+        error_patterns=("Traceback (most recent call last)", "pymongo.errors", "Error:"))
+    add(PG, "Lead-Intelligence Pipeline (worklist build)", "nightly 02:00",
+        mtime.date().isoformat() if mtime else None, st, "log mtime", mtime, dt)
+
     # High-priority leads with no appraisal package started yet (added 2026-07-23).
     # Found by accident this session — a HIGH lead's "existing" appraisal turned out
     # to be a test artifact, and cross-referencing lead_worklist against
@@ -1041,7 +1056,7 @@ _REGISTRY_DISABLED = [
     ("Email triage check", "2026-04-09 — autonomous agent cleanup"),
     ("Worker Agent", "2026-04-27 — autonomous Worker Agent retired"),
     ("Samantha nightly", "2026-07-19 — on-demand only"),
-    ("Lead-intelligence pipeline", "2026-07-19 — on-demand only, feeds Samantha"),
+    ("Lead-intelligence pipeline", "ACTIVE — nightly 02:00 (re-enabled 2026-07-27); freshness-checked on Leads & CRM tab"),
     ("Mini-Site Health → Sheet (standalone cron)", "merged into Main Site Health's 01:00 run — see Mini-Site tabs"),
 ]
 _REGISTRY_SYSTEMD_UNITS = [
