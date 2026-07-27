@@ -212,7 +212,7 @@ def chart_conviction_map(db, path):
         return
 
     fig, ax = plt.subplots(figsize=(10.5, 7.2))
-    ax.set_facecolor("#FFFFFF")
+    ax.set_facecolor("none")
 
     # Pass 1: plot dots (scatter) so axis bounds settle before label placement.
     for sd in suburbs_data:
@@ -375,7 +375,7 @@ def chart_tension(suburb_series, composite, path):
         rebased_fci = [100 * v / rebase_fci_value for v in fci_values]
 
     fig, ax = plt.subplots(figsize=(10.5, 5.4))
-    ax.set_facecolor("#FFFFFF")
+    ax.set_facecolor("none")
 
     ax.plot(idx_dates, rebased_idx, color=BRAND_BLUE, linewidth=2.4,
             label="Indexed median price (composite)", zorder=3)
@@ -417,7 +417,7 @@ def chart_tension(suburb_series, composite, path):
 
 def chart_indexed_prices(db, path):
     fig, ax = plt.subplots(figsize=(10.5, 5.4))
-    ax.set_facecolor("#FFFFFF")
+    ax.set_facecolor("none")
 
     # Pull from indexed_series, use index_value (which is pct change from base)
     # Convert to 100 = rebase point (Q1 2020)
@@ -493,7 +493,7 @@ def chart_sales_volume(db, path):
     EXCLUDES the in-progress quarter (Q2 2026 — partial data).
     """
     fig, ax = plt.subplots(figsize=(10.5, 5.4))
-    ax.set_facecolor("#FFFFFF")
+    ax.set_facecolor("none")
 
     # Determine which quarter is in-progress
     today = datetime.now()
@@ -575,7 +575,7 @@ def chart_sales_volume(db, path):
 
 def chart_dom(db, path):
     fig, ax = plt.subplots(figsize=(10.5, 5.4))
-    ax.set_facecolor("#FFFFFF")
+    ax.set_facecolor("none")
 
     for s in CORE_SUBURBS:
         timeline, hist_med, hist_avg = load_dom_timeline(db, s)
@@ -630,11 +630,11 @@ def chart_distributions(db, path):
     """Half-violin + scatter for each suburb's recent sold records."""
     # Pull sold records from Gold_Coast suburb collections
     fig, axes = plt.subplots(1, 3, figsize=(11.5, 5.0), sharey=False)
-    fig.patch.set_facecolor(CREAM)
+    fig.patch.set_alpha(0)
 
     for i, suburb in enumerate(CORE_SUBURBS):
         ax = axes[i]
-        ax.set_facecolor("#FFFFFF")
+        ax.set_facecolor("none")
 
         # Pull all sold records
         coll = db[suburb]
