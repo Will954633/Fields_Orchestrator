@@ -330,6 +330,35 @@ def fetch_all_data(gc_db, sm_db, suburb):
     data["suburb_display"] = display
     data["data_date"] = datetime.now().strftime("%Y-%m-%d")
 
+    # --- Authoritative headline stats from PropRadar (validated vs realestate.com.au) ---
+    # Our own quarterly medians/growth/absorption run off an under-captured, premium-skewed
+    # sold sample (e.g. Burleigh median inflated to $2.115M vs REA/PR ~$1.71-1.91M → 23.7%
+    # phantom growth). Override median / 1yr-growth / months-of-supply with PropRadar's
+    # complete settlement stats where available; fall back to our computation otherwise.
+    # DOM stays ours (already reliable). See scripts/propradar/, DATA_SOURCE_RESET_SCOPING.md.
+    try:
+        import os as _os
+        import sys as _sys
+        _sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "propradar"))
+        from suburb_stats import house_headline
+        _prs = house_headline(gc_db, suburb)
+    except Exception as _e:
+        _prs = None
+        print(f"  (propradar_suburb_stats unavailable for {suburb}: {_e})")
+    if _prs:
+        if _prs.get("median_price"):
+            data["current_median_price"] = _prs["median_price"]
+        if _prs.get("growth_1y_pct") is not None:
+            data["yoy_growth_pct"] = _prs["growth_1y_pct"]
+        if _prs.get("growth_qtr_pct") is not None:
+            data["qoq_growth_pct"] = _prs["growth_qtr_pct"]
+        if _prs.get("inventory_months") is not None:
+            data["absorption_rate_months"] = _prs["inventory_months"]
+        if _prs.get("sales_12mo") is not None:
+            data["sales_12mo_house"] = _prs["sales_12mo"]
+        data["headline_stats_source"] = "propradar"
+        data["propradar_as_of"] = _prs.get("as_of")
+
     return data
 
 
