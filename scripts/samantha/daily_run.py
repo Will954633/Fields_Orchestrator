@@ -422,6 +422,18 @@ def main() -> int:
 
     _fallback_delivery(date_str, report_path, status_path, finished_reason)
 
+    # Auto-harvest the run transcript into the unified action log (system_monitor.samantha_actions)
+    # so EVERYTHING she did this run is captured + queryable, independent of her remembering to log.
+    if transcript_path.exists():
+        try:
+            hr = subprocess.run(
+                ["python3", "scripts/samantha/samantha_actionlog.py", "harvest",
+                 "--transcript", str(transcript_path), "--channel", "nightly"],
+                cwd=ORCH, capture_output=True, text=True, timeout=120)
+            print(f"[runner] actionlog: {(hr.stdout or hr.stderr).strip()[:160]}", flush=True)
+        except Exception as e:  # noqa: BLE001
+            print(f"[runner] actionlog harvest failed (non-fatal): {e}", flush=True)
+
     print(f"[runner] done in {(_now()-start).total_seconds():.0f}s "
           f"reason={finished_reason}", flush=True)
     return 0
