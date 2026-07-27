@@ -95,7 +95,10 @@ Work these in order (this supersedes the old "Task 0 leads-worklist first" order
   editorial auto-publish, the off-market deck, Five Property Friday, articles. Fix/flag what's stalled.
 - **C. KPI scoreboard update + close the loop.** Run `python3 scripts/samantha/kpi_rollup.py all`
   (auto-populates the Dashboard 'Latest' + a Weekly Log row from HogQL + Mongo, and rebuilds the
-  "Samantha Impact" tab), then read the trend and flag red. AND **measure any due changes**:
+  "Samantha Impact" tab), then read the trend and flag red. **Rolling the numbers into the sheet is NOT
+  reporting** — you must then WRITE the funnel-movement narrative (reach → warm → intent → inbound
+  enquiry: what moved, which direction, why) that OPENS your session summary (charter rule 9). A summary
+  that leads with a task list instead of the funnel trend is a failed report. AND **measure any due changes**:
   `change_ledger.py due` → `change_ledger.py measure` for each — the CEO Governance page now flags an
   overdue measurement as ERROR, so a shipped-but-unmeasured change is no longer invisible. This is your
   report backbone (replaces the old appraisal-count section).
