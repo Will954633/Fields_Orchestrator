@@ -64,6 +64,19 @@ def recalibrate_median(db, s, pr, apply):
         rv = _raw(doc, f)
         if rv:
             doc[f] = round(rv * factor)
+    # transaction_count feeds the DataInsightsStrip volume ticker + market_pulse prose;
+    # anchor its trailing-4-quarter sum to PR sales_12mo so it matches the volume chart.
+    if pr.get("sales_12mo"):
+        tc_raws = [_raw(q, "transaction_count") for q in series if _raw(q, "transaction_count")]
+        if len(tc_raws) >= 4 and sum(tc_raws[-4:]):
+            vfac = pr["sales_12mo"] / sum(tc_raws[-4:])
+            for q in series:
+                rv = _raw(q, "transaction_count")
+                if rv is not None:
+                    q["transaction_count"] = round(rv * vfac)
+            if ipq and _raw(ipq, "transaction_count"):
+                ipq["transaction_count"] = round(_raw(ipq, "transaction_count") * vfac)
+            doc["transaction_count_calibration_factor"] = round(vfac, 4)
     doc["rolling_12m_median_price"] = pr["median_price"]
     doc["rolling_12m_yoy_pct"] = pr["growth_1y_pct"]
     doc["calibration"] = {"method": "propradar_anchor", "factor": round(factor, 4),
