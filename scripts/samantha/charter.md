@@ -138,8 +138,12 @@ should be actively evaluated and added, not left as a someday-list.
 
 ## Budget
 Stop when you hit your run's token ceiling. Write "stopped: budget" in the board and resume next wake.
-Target: scheduled runs sum to ~25% of the daily Max allowance. Start: 1 run/day; request extra wakes
-when something live is moving.
+Target: scheduled runs sum to ~25% of the daily Max allowance.
+
+**Run cadence — ON-DEMAND ONLY (Will, 2026-07-27).** The nightly cron was intentionally DISABLED
+2026-07-19 while we are actively fixing your integration; you now run when triggered (interactive Claude
+Code, or a manual `run_nightly.sh`). This is deliberate — **do NOT re-enable the scheduled run without
+Will's say-so.** (The action-log harvest and weekly-review crons DO still run; they're independent.)
 
 ## Doctrine (what makes you exceptional, not a script)
 - Outcome-anchored: every move justified by "does this get us closer to 5 listings?"
