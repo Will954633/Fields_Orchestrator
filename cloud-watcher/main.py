@@ -45,7 +45,7 @@ INSTANCE = os.environ.get("VM_INSTANCE", "fields-orchestrator-vm")
 VM_IP = os.environ.get("VM_IP", "34.40.230.132")
 PORTS = [22, 443]
 
-HEARTBEAT_BUCKET = os.environ.get("HEARTBEAT_BUCKET", "fields-blob-backup")
+HEARTBEAT_BUCKET = os.environ.get("HEARTBEAT_BUCKET", "fields-vm-watchdog")
 HEARTBEAT_OBJECT = os.environ.get("HEARTBEAT_OBJECT", "vm-heartbeat.txt")
 STATE_OBJECT = os.environ.get("STATE_OBJECT", "vm-watchdog-state.json")
 
@@ -159,10 +159,12 @@ def vm_watcher(request):
         status = "degraded"
 
     state = _state_get()
+    prev = state.get("last_status", "ok")
+    changed = status != prev            # alert only on TRANSITIONS, never every cycle
     age_str = "unreadable" if age is None else f"{age:.1f} min"
     port_str = ", ".join(f"{p}:{'up' if up else 'DOWN'}" for p, up in ports.items())
 
-    if status == "wedged" and _cooldown_ok(state, "last_alert", ALERT_COOLDOWN_MIN):
+    if status == "wedged" and changed and _cooldown_ok(state, "last_alert", ALERT_COOLDOWN_MIN):
         header = ("\U0001F6A8 *fields-orchestrator-vm looks WEDGED*\n"
                   f"Heartbeat: {age_str} old · Ports: {port_str}\n"
                   "The guest is unresponsive (this mirrors the OOM hang). "
@@ -181,13 +183,22 @@ def vm_watcher(request):
                 "parse_mode": "Markdown"})
         _state_set(last_alert=datetime.now(timezone.utc).isoformat(), last_status="wedged")
 
-    elif status == "degraded" and _cooldown_ok(state, "last_degraded_alert", 60):
+    elif status == "degraded" and changed:
+        # Fire ONCE on entering degraded — not every 3-min cycle. Recovery note follows.
         tg_send(ALERT_BOT_TOKEN, {
             "text": (f"⚠️ *VM monitoring degraded* — heartbeat {age_str} old but VM "
-                     f"reachable ({port_str}). Likely write_heartbeat cron, not a hang. "
-                     f"No reset needed."),
+                     f"reachable ({port_str}). Likely write_heartbeat cron/Mongo, not a hang. "
+                     f"No reset needed. (You'll get one 🟢 when it clears.)"),
             "parse_mode": "Markdown"})
         _state_set(last_degraded_alert=datetime.now(timezone.utc).isoformat(), last_status="degraded")
+
+    elif status == "ok" and prev in ("degraded", "wedged"):
+        # Recovery — one clear note when the box returns to healthy.
+        tg_send(ALERT_BOT_TOKEN, {
+            "text": (f"🟢 *VM monitoring recovered* — heartbeat {age_str}, ports {port_str} "
+                     f"(was {prev})."),
+            "parse_mode": "Markdown"})
+        _state_set(last_status="ok")
     else:
         _state_set(last_status=status)
 
