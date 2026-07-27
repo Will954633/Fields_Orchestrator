@@ -351,19 +351,17 @@ def _draft_owner_narrative(
     Validated against the editorial rules (no advice, no forecasts, no banned
     words, no subject-home valuation). Returns the sections dict, or None —
     the card then ships data-only, never blocked on the LLM."""
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
+    if not os.environ.get("ANTHROPIC_API_KEY"):
         try:
             from dotenv import load_dotenv
             load_dotenv("/home/fields/Fields_Orchestrator/.env")
-            api_key = os.environ.get("ANTHROPIC_API_KEY")
         except Exception:
             pass
-    if not api_key:
-        logger.warning("  cs0 narrative: ANTHROPIC_API_KEY not set — shipping data-only")
+    from scripts.property_reports._claude_backend import get_client_and_model
+    client, model = get_client_and_model(NARRATIVE_MODEL)
+    if not client:
+        logger.warning("  cs0 narrative: no Claude backend available — shipping data-only")
         return None
-    from anthropic import Anthropic
-    client = Anthropic(api_key=api_key)
 
     sold_home = {
         "address": case.get("address"),
@@ -403,7 +401,7 @@ def _draft_owner_narrative(
     for attempt in range(1, NARRATIVE_RETRIES + 1):
         try:
             resp = client.messages.create(
-                model=NARRATIVE_MODEL, max_tokens=NARRATIVE_MAX_TOKENS,
+                model=model, max_tokens=NARRATIVE_MAX_TOKENS,
                 system=NARRATIVE_SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": user_prompt}],
             )
@@ -429,7 +427,7 @@ def _draft_owner_narrative(
         logger.info(f"  cs0 narrative drafted (attempt {attempt})")
         return {
             **{k: str(sections[k]).strip() for k in NARRATIVE_KEYS},
-            "model": NARRATIVE_MODEL,
+            "model": model,
             "generated_at": dt.datetime.utcnow().isoformat() + "Z",
             "attempt": attempt,
         }

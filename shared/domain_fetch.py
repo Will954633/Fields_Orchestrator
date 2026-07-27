@@ -82,9 +82,12 @@ def _post_unlocker(url: str, return_json: bool = False, timeout: int = DEFAULT_T
         'Content-Type': 'application/json',
         'Authorization': f'Bearer {api_key}',
     }
+    debug = os.environ.get('DOMAIN_FETCH_DEBUG')
     try:
         resp = cffi_requests.post(BRIGHTDATA_ENDPOINT, headers=headers, json=payload, timeout=timeout)
         if resp.status_code != 200:
+            if debug:
+                print(f"      [domain_fetch] brightdata API returned HTTP {resp.status_code}: {resp.text[:300]}")
             return None
 
         brd_status_raw = resp.headers.get('x-brd-status-code', '')
@@ -94,8 +97,12 @@ def _post_unlocker(url: str, return_json: bool = False, timeout: int = DEFAULT_T
         # Unlocker failure (min_size 502, challenge, empty) — signal retry. A real
         # Domain 404 still returns a full body, so size is a safe discriminator.
         if brd_status in (502, 0) and len(body) < 200:
+            if debug:
+                print(f"      [domain_fetch] unlocker failure: brd_status={brd_status} body_len={len(body)} body={body[:200]!r}")
             return None
         if not return_json and len(body) < 200:
+            if debug:
+                print(f"      [domain_fetch] short body: brd_status={brd_status} body_len={len(body)} body={body[:200]!r}")
             return None
         if not return_json:
             return {'body': body}
@@ -108,7 +115,9 @@ def _post_unlocker(url: str, return_json: bool = False, timeout: int = DEFAULT_T
             'url': final_url,
             'headers': dict(resp.headers),
         }
-    except Exception:
+    except Exception as e:
+        if debug:
+            print(f"      [domain_fetch] exception: {type(e).__name__}: {e}")
         return None
 
 

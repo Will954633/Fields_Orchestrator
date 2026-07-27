@@ -432,18 +432,11 @@ def resolve_buyers_narrative(
         logger.warning("  buyers narrative requires 3 personas — skipping")
         return None
 
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        logger.warning("ANTHROPIC_API_KEY not set — skipping buyers narrative")
+    from scripts.property_reports._claude_backend import get_client_and_model
+    client, model = get_client_and_model(MODEL)
+    if not client:
+        logger.warning("No Claude backend available — skipping buyers narrative")
         return None
-
-    try:
-        from anthropic import Anthropic
-    except ImportError:
-        logger.warning("anthropic not installed — skipping buyers narrative")
-        return None
-
-    client = Anthropic(api_key=api_key)
     user_prompt = _format_inputs(
         address, suburb, features_basic or {}, notable_features or [],
         matching_full_stack or 0, active_listings_total or 0,
@@ -454,7 +447,7 @@ def resolve_buyers_narrative(
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             response = client.messages.create(
-                model=MODEL,
+                model=model,
                 max_tokens=MAX_TOKENS,
                 system=SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": user_prompt}],
@@ -513,7 +506,7 @@ def resolve_buyers_narrative(
             "catchment": parsed["catchment"],
             "campaignMath": parsed["campaignMath"],
             "generated_at": datetime.now(timezone.utc).isoformat(),
-            "model": MODEL,
+            "model": model,
             "attempt": attempt,
         }
 

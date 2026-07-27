@@ -132,19 +132,18 @@ def draft(case_id: str, dry_run: bool) -> Optional[Dict[str, Any]]:
         log.error(f"case not found: {case_id}")
         return None
 
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        log.error("ANTHROPIC_API_KEY not set")
+    from scripts.property_reports._claude_backend import get_client_and_model
+    client, model = get_client_and_model(MODEL)
+    if not client:
+        log.error("No Claude backend available")
         return None
-    from anthropic import Anthropic
-    client = Anthropic(api_key=api_key)
 
     user_prompt = _scaffold_for_prompt(rec)
     last_err = None
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             resp = client.messages.create(
-                model=MODEL, max_tokens=MAX_TOKENS,
+                model=model, max_tokens=MAX_TOKENS,
                 system=SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": user_prompt}],
             )
@@ -169,7 +168,7 @@ def draft(case_id: str, dry_run: bool) -> Optional[Dict[str, Any]]:
 
         analysis = {
             **sections,
-            "model": MODEL,
+            "model": model,
             "generated_at": dt.datetime.utcnow().isoformat() + "Z",
             "attempt": attempt,
         }

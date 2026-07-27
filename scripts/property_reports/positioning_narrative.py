@@ -285,18 +285,11 @@ def resolve_positioning_narrative(
 ) -> Optional[Dict[str, Any]]:
     """Generate the positioning narrative. Returns None on permanent failure."""
 
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        logger.warning("ANTHROPIC_API_KEY not set — skipping positioning narrative")
+    from scripts.property_reports._claude_backend import get_client_and_model
+    client, model = get_client_and_model(MODEL)
+    if not client:
+        logger.warning("No Claude backend available — skipping positioning narrative")
         return None
-
-    try:
-        from anthropic import Anthropic
-    except ImportError:
-        logger.warning("anthropic package not installed — skipping positioning narrative")
-        return None
-
-    client = Anthropic(api_key=api_key)
     user_prompt = _format_inputs(
         address, suburb, features_basic or {}, notable_features or [],
         matching_full_stack or 0, active_listings_total or 0,
@@ -307,7 +300,7 @@ def resolve_positioning_narrative(
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             response = client.messages.create(
-                model=MODEL,
+                model=model,
                 max_tokens=MAX_TOKENS,
                 system=SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": user_prompt}],
@@ -352,7 +345,7 @@ def resolve_positioning_narrative(
             "sampleParagraph": parsed["sampleParagraph"],
             "genericParagraph": parsed["genericParagraph"],
             "generated_at": datetime.now(timezone.utc).isoformat(),
-            "model": MODEL,
+            "model": model,
             "attempt": attempt,
         }
 

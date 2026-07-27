@@ -154,25 +154,18 @@ def resolve_market_narrative(
     if not market or not suburb:
         return None
 
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        logger.warning("ANTHROPIC_API_KEY not set — skipping market narrative")
+    from scripts.property_reports._claude_backend import get_client_and_model
+    client, model = get_client_and_model(MODEL)
+    if not client:
+        logger.warning("No Claude backend available — skipping market narrative")
         return None
-
-    try:
-        from anthropic import Anthropic
-    except ImportError:
-        logger.warning("anthropic package not installed — skipping market narrative")
-        return None
-
-    client = Anthropic(api_key=api_key)
     user_prompt = _format_market_for_prompt(market, suburb, bedroom_band)
 
     last_error: Optional[str] = None
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             response = client.messages.create(
-                model=MODEL,
+                model=model,
                 max_tokens=MAX_TOKENS,
                 system=SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": user_prompt}],
@@ -206,7 +199,7 @@ def resolve_market_narrative(
         return {
             "text": text,
             "generated_at": datetime.now(timezone.utc).isoformat(),
-            "model": MODEL,
+            "model": model,
             "inputs_snapshot": {
                 "suburb": suburb,
                 "bedroom_band": bedroom_band,
