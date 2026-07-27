@@ -62,7 +62,10 @@ def download(url, dest):
 
 
 def make_qr(slug):
-    url = f"{BASE_URL}/your-home/{slug}?{UTM}"
+    # utm_content = the mailed address slug, so a scan is attributable to ONE
+    # posted mailer — this is what makes before/after engagement uplift measurable
+    # per address (see scripts/samantha/mailout_uplift_tracking.md).
+    url = f"{BASE_URL}/your-home/{slug}?{UTM}&utm_content={slug}"
     qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=20, border=4)
     qr.add_data(url); qr.make(fit=True)
     img = qr.make_image(fill_color=GREEN, back_color=PAPER)
