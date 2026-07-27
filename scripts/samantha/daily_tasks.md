@@ -95,8 +95,10 @@ Work these in order (this supersedes the old "Task 0 leads-worklist first" order
   editorial auto-publish, the off-market deck, Five Property Friday, articles. Fix/flag what's stalled.
 - **C. KPI scoreboard update.** Refresh the KPI Monitor sheet (Weekly Log + Dashboard), compute trend,
   flag red. This is your report backbone (replaces the old appraisal-count section).
-- **D. Engagement/intent experiments.** Test warming hooks, intent-tease CTAs, content angles — within the
-  usual $15/day, $500/wk caps and one-test-per-surface rule. **NOTE (Will, 2026-07-27):** the strategic
+- **D. Engagement/intent experiments — driven by Task G.** Run the Growth Ideation brief
+  (`growth_ideation.py`, see Task G below) to SOURCE the tests: A/B candidates, funnel-engagement +
+  conversion lifts, lead-capture fixes, ad concepts. Within the usual $15/day, $500/wk caps and
+  one-test-per-surface rule. **NOTE (Will, 2026-07-27):** the strategic
   FB ad-spend review + new-concept round is a SCHEDULED WORKING SESSION WITH WILL (see the "FB ad-spend
   review" task on the board) — prep the evidence-backed cut-list for it, but do NOT unilaterally overhaul
   the ad portfolio ahead of that session. Routine "pause an obvious dud within caps" autonomy still stands.
@@ -477,6 +479,34 @@ not** (~600 visitors/wk, ~46 organic) — so copy the discipline, NOT the volume
   (`scripts/brain2/seo_indexation_check.py`); never bulk-dump thousands of pages.
 
 Fewer, well-powered, well-measured experiments beat many noisy ones. Learning velocity WITH rigour, not volume.
+
+---
+
+## Task G — Growth Ideation & Experiment Design (MANDATORY every session — the facilitated process, not a vibe)
+
+Identifying what to A/B test, where to lift funnel engagement + conversion, how to improve lead capture,
+and which ad concepts to develop is a **repeatable process with a brief and a completion check** — not
+something to improvise. (That's why `hypothesis_queue` sat at 2 null stubs and `change_ledger` at 3
+unmeasured entries: it was *instructed* but never *facilitated*.) Run this every session:
+
+1. **Read the brief:** `python3 scripts/samantha/growth_ideation.py` — a decision-ready snapshot of the
+   funnel: stage-by-stage 7d/30d drop-offs, which lead-capture doors are DEAD/thin, the worst-converting
+   high-traffic entry pages (CRO candidates), ad-angle performance, and the live/queued experiment pipeline.
+   It tells you WHERE the opportunities are; you decide WHAT to do.
+2. **Query both brains** for each area you're about to act on (`brain_search.py "<q>" --brain all`) — cite it.
+3. **Produce ≥1 evidence-cited hypothesis per area, or explicitly state the surface is saturated + why:**
+   (1) A/B test candidate · (2) funnel engagement · (3) conversion · (4) lead capture · (5) ad concepts.
+   Log each to the backlog:
+   `python3 scripts/samantha/hypothesis_queue.py add --concept "..." --sources brain1,brain2 --evidence "<cite>" --surface <fb_ads|website|seo|email> --expected-effect "..." --est-power directional --score <1-10>`.
+   Mirror the top items to the **KPI Monitor sheet 'Experiment Backlog' tab** so Will can see the pipeline.
+4. **Close the loop FIRST:** if a surface already has a LIVE unmeasured test (brief section [5]), measure it
+   (`change_ledger.py measure`) before adding another test there — one test per surface.
+5. **Ad concepts are PREP for the Will session** (decision 2026-07-27), not autonomous launch: stage the
+   cut-list + candidate angles and bring them to the scheduled FB ad-review; don't overhaul the account.
+6. **Record it so a skip is visible:** finish with `python3 scripts/samantha/growth_ideation.py --record`
+   (stamps `samantha_state.growth_ideation`). The Systems-Health "CEO Governance" page flags it if it's
+   missing or >2 days stale — the same mechanism as the CEO Business Review. Not running it is a failed
+   session, not a skipped optional.
 
 ---
 
