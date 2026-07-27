@@ -655,6 +655,37 @@ def collect_ceo_governance(add, sm, now_utc):
         add(PG, "Drive OAuth token", "auth", "Drive call FAILED — re-consent likely needed", st,
             "", None, f"re-consent the gdrive OAuth (see gdrive-oauth-7day-expiry memory): {msg[:120]}")
 
+    # --- Scoped-but-unbuilt project debt (added 2026-07-27, Will's direction). Backlog items
+    # that sit at Scoped/Proposed/Open/Reviewed across sessions without shipping are debt she
+    # OWNS (distinct from items genuinely parked-on-Will). Surface the pile so it can't quietly
+    # grow — the exact failure Will caught 2026-07-27 (projects scoped, orange-buried, never built). ---
+    try:
+        import sys as _s3, os as _o3, re as _re3
+        from datetime import timedelta as _td
+        _s3.path.insert(0, _o3.path.join(_o3.path.dirname(_o3.path.abspath(__file__)), "samantha"))
+        from task_board import _svc as _tb_svc, SHEET_ID as _TB  # noqa: E402
+        rows = _tb_svc().spreadsheets().values().get(
+            spreadsheetId=_TB, range="Backlog!A2:I120").execute().get("values", [])
+        DONE = _re3.compile(r"done|resolved|superseded|shipped|validated|complete|killed|dropped|no action|endorsed", _re3.I)
+        PARKED = _re3.compile(r"park|blocked|escalat|paused by will|awaiting will|needs will|quota|billing|on will|will decid|confirmed \+ esc", _re3.I)
+        cutoff = (now_utc - _td(days=14)).strftime("%Y-%m-%d")
+        stalled = []
+        for r in rows:
+            task = r[1] if len(r) > 1 else ""
+            blob = f"{r[6] if len(r) > 6 else ''} {r[7] if len(r) > 7 else ''}"
+            if not task.strip() or DONE.search(blob) or PARKED.search(blob):
+                continue
+            m = _re3.search(r"20\d{2}-\d{2}-\d{2}", blob)
+            stalled.append((task[:46], bool(m and m.group(0) < cutoff)))
+        n = len(stalled); aged = sum(1 for _, a in stalled if a)
+        stg = ERROR if n >= 6 else (STALE if n >= 3 else OK)
+        note = "" if stg == OK else ("advance the oldest owned project each session (or park-on-Will "
+               "with a dated reason): " + "; ".join(t for t, _ in stalled[:4]))
+        add(PG, "Scoped-but-unbuilt projects", "backlog debt",
+            f"{n} scoped/proposed but NOT shipped ({aged} dated >14d)", stg, "", None, note)
+    except Exception as e:
+        add(PG, "Scoped-but-unbuilt projects", "backlog debt", None, UNKNOWN, "", None, f"could not check: {e}")
+
 
 # ---- New Listings: Editorial & SEO ---------------------------------------------
 # Matches generate_property_ai_analysis.py's own TARGET_SUBURBS exactly — nightly
