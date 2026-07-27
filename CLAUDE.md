@@ -78,7 +78,7 @@ All public-facing content (articles, Facebook posts, chart narratives, market su
 - **No single valuation in headlines:** Use comparable ranges, not single figures. Single figures OK inside Valuation Guide tab.
 - **Value framing:** Every property trade-off is value, not a flaw. A seller should read our content and think we'd position their property honestly.
 - **Factual accuracy:** Always cite data source + limitations. Exact transaction prices (never rounded). Verify "all/none/every" claims.
-- **No valuation references in Facebook posts** — user not confident in accuracy for public-facing posts yet.
+- **Valuation data in Facebook content (updated 2026-07-27):** We now back our valuation data publicly in Facebook **ads** — because we already publish it on-site. Allowed: comparable **ranges** and **gaps/savings** (differences, e.g. "$98K hiding in plain sight", "comps say $1.75M–$1.98M"). Still forbidden: a **single-property valuation figure** stated as the home's worth in a headline (the "No single valuation in headlines" rule above still stands). **Mandatory pre-flight:** any ad carrying a $ claim must point to a landing page that visibly shows the valuation methodology + confidence disclaimer (property pages already do; `/for-sale-v3` needs a one-line disclaimer added). Organic FB posts remain conservative unless Will says otherwise.
 - **Forbidden words:** "stunning", "nestled", "boasting", "rare opportunity", "robust market"
 - **Number format:** `$1,250,000` not "$1.25m", suburbs always capitalised
 
