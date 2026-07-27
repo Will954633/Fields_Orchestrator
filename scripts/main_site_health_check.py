@@ -61,7 +61,7 @@ CHART_TYPES = ["days_on_market", "sales_volume", "turnover_rate", "market_cycle"
 PAGES = ["Process Registry", "Pipeline Processes", "Sitemap", "SEO Page Integrity",
          "GitHub Actions", "Market Metrics", "Market Signals Fetch", "For Sale / Sold",
          "Property Page", "Articles", "New Listings: Editorial & SEO", "Leads & CRM",
-         "Ads & Compliance", "CEO Governance", "Valuation Accuracy", "Known Gaps"]
+         "Ads & Compliance", "CEO Governance", "Valuation Accuracy", "PropRadar Ingest", "Known Gaps"]
 
 FIELDS_AUTOMATION_REPO = "Will954633/fields-automation"
 
@@ -320,6 +320,37 @@ def collect_market_signals_fetch(add, sm, now_utc):
                 f"only {written}/{total} indicators resolved — {d.get('detail', '')}")
         else:
             add(PG, job, "job outcome", val, OK, "run_at", ts, d.get("detail", ""))
+
+
+# ---- PropRadar Ingest (job-success: keeps propradar_sold fresh) ----------------
+def collect_propradar_ingest(add, sm, now_utc):
+    """The PropRadar sold-data ingest (scripts/propradar/run_ingest_cron.py, weekly)
+    keeps Gold_Coast.propradar_sold — the settlement-based sold source now feeding
+    recent volume + months-of-supply — current. It self-reports via
+    job_status.record_job_result('propradar_ingest', ...). A silent failure here would
+    let volume/supply metrics quietly drift back to the Domain-scrape undercount, so
+    this is a job-outcome check (like Market Signals Fetch), not just data staleness."""
+    PG = "PropRadar Ingest"
+    d = sm["job_runs"].find_one({"job": "propradar_ingest"})
+    if not d:
+        add(PG, "propradar_ingest", "job outcome", None, MISSING, "run_at", None,
+            "no run recorded yet — populates after first cron run")
+        return
+    ts = as_dt(d.get("run_at"))
+    age_days = (now_utc - ts).total_seconds() / 86400 if ts else None
+    recs, subs = d.get("records"), d.get("suburbs")
+    val = f"{recs} sold / {subs} suburbs" if recs is not None else d.get("status")
+    if d.get("status") == "error":
+        add(PG, "propradar_ingest", "job outcome", val, ERROR, "run_at", ts,
+            d.get("detail", "job reported error"))
+    elif age_days is not None and age_days > 8:
+        add(PG, "propradar_ingest", "job outcome", val, STALE, "run_at", ts,
+            f"last run {age_days:.1f}d ago (expected weekly)")
+    elif recs is not None and recs <= 0:
+        add(PG, "propradar_ingest", "job outcome", val, ERROR, "run_at", ts,
+            "0 records ingested — feed/auth problem (Cloudflare 1010? plan downgrade?)")
+    else:
+        add(PG, "propradar_ingest", "job outcome", val, OK, "run_at", ts, d.get("detail", ""))
 
 
 # ---- Leads & CRM ---------------------------------------------------------------
@@ -1543,6 +1574,7 @@ def collect(client, now_utc, prev_map):
         ("Process Registry", collect_process_registry, (add,)),
         ("GitHub Actions", collect_github_actions, (add,)),
         ("Market Signals Fetch", collect_market_signals_fetch, (add, sm, now_utc)),
+        ("PropRadar Ingest", collect_propradar_ingest, (add, sm, now_utc)),
         ("New Listings: Editorial & SEO", collect_new_listings_editorial, (add, gc, sm, now_utc)),
         ("SEO Page Integrity", collect_seo_page_integrity, (add, gc, now_utc)),
         ("Leads & CRM", collect_leads_crm, (add, sm, now_utc, last_run)),
