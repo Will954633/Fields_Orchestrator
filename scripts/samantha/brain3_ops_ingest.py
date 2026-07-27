@@ -48,7 +48,7 @@ FS_ROOTS = ["07_Focus", "08_Seller-Book", "001_Our_Competitive_Advantages",
 FS_EXTS = (".md", ".txt")
 MONGO_COLLECTIONS = ["content_articles", "ceo_proposals", "ceo_memory", "ceo_briefs",
                      "will_tasks", "ad_decisions", "website_change_log", "case_study_library",
-                     "market_pulse"]
+                     "market_pulse", "website_feedback"]
 PII_FIELD = re.compile(r"email|phone|mobile|password|token|secret|_id$|embedding|distinct_id", re.I)
 DATE_IN_NAME = re.compile(r"(20\d{2}-\d{2}-\d{2})")
 MONGO_DATE_FIELDS = ["date", "created_at", "createdAt", "timestamp", "published_at", "generated_at"]
