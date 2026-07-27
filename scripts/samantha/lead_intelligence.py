@@ -239,6 +239,18 @@ def collect_leads(sm, gc_db) -> dict:
             {"property_id": d.get("property_id"), "lead_quality": d.get("lead_quality"),
              "status": d.get("status")})
 
+    # Footer / newsletter subscribers (added 2026-07-28 — previously a DEAD-END SILO: the
+    # subscribe form wrote to system_monitor.subscribers but NO downstream pipeline read it,
+    # so every footer signup since March 2026 was invisible to CRM + this worklist. Hitting
+    # "Subscribe" is a real (if low-intensity) intent signal — surface it. Founder/test emails
+    # are dropped downstream by the standard _is_test filter.)
+    for d in sm["subscribers"].find():
+        src = _s(d.get("source")) or "footer"
+        add(d.get("email"), d.get("name"), None, None,
+            f"{src}_subscribe", ("subscribers", d["_id"]),
+            _s(d.get("subscribed_at")),
+            {"subscriber_status": d.get("status"), "signal": "newsletter_subscribe"})
+
     for d in sm["fb_leads"].find():
         f = d.get("fields") or {}
         add(f.get("email"), f.get("full_name") or f.get("name"), f.get("phone"),
