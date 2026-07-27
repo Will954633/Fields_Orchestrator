@@ -611,6 +611,50 @@ def collect_ceo_governance(add, sm, now_utc):
             "last_run", tsg, "" if stg == OK else "overdue — run growth_ideation.py --record + produce "
             "backlog entries this session (this is the facilitated experiment-ideation loop)")
 
+    # --- Change measurement loop (added 2026-07-27). A shipped change that is never
+    # re-measured means she isn't closing the loop — the whole point of the change ledger.
+    # Flag live changes that are overdue for a read (review date passed, no measurement). ---
+    try:
+        live = list(sm["samantha_changes"].find({"status": "live"}))
+        overdue = []
+        today_str = now_utc.strftime("%Y-%m-%d")
+        for ch in live:
+            measured = [m.get("review_date") for m in ch.get("measurements", [])]
+            pending = [r for r in ch.get("review_dates", [])
+                       if r <= today_str and r not in measured]
+            if pending:
+                overdue.append(str(ch.get("change_id", "?")))
+        if overdue:
+            add(PG, "Change measurement loop", "cadence",
+                f"{len(overdue)} change(s) with an overdue measurement checkpoint", ERROR, "", None,
+                "close the loop: change_ledger.py due → measure. Overdue: " + ", ".join(x[:38] for x in overdue[:4]))
+        else:
+            add(PG, "Change measurement loop", "cadence",
+                f"{len(live)} live, none overdue for measurement", OK, "", None, "")
+    except Exception as e:
+        add(PG, "Change measurement loop", "cadence", None, UNKNOWN, "", None, f"could not check: {e}")
+
+    # --- Drive OAuth token health (added 2026-07-27, Will's direction). The gdrive OAuth
+    # dies ~weekly in testing mode; when it lapses, session folders / Will Notes replies /
+    # KPI + board writes silently fail. Publishing the OAuth app isn't an option yet, so we
+    # TRACK it on this sheet — an ERROR here is the "re-consent now" trigger. ---
+    try:
+        import sys as _s2, os as _o2
+        _s2.path.insert(0, _o2.path.join(_o2.path.dirname(_o2.path.abspath(__file__)), "samantha"))
+        from session_folder import _drive as _sf_drive  # noqa: E402
+        _sf_drive().files().get(fileId="19avOQvAdn5uYiPveNxuXuKaMHEfzgShb",
+                                fields="id", supportsAllDrives=True).execute()
+        mt = _o2.path.getmtime("/home/fields/.gdrive-server-credentials.json")
+        age_h = (now_utc.timestamp() - mt) / 3600
+        add(PG, "Drive OAuth token", "auth", f"OK — Drive reachable (token {age_h:.0f}h since refresh)",
+            OK, "", None, "" if age_h < 24 * 6 else "token is getting old — re-consent proactively "
+            "(7-day testing-mode expiry); publishing the OAuth app would remove this.")
+    except Exception as e:
+        msg = str(e)
+        st = ERROR if ("invalid_grant" in msg or "expired" in msg.lower() or "token" in msg.lower()) else UNKNOWN
+        add(PG, "Drive OAuth token", "auth", "Drive call FAILED — re-consent likely needed", st,
+            "", None, f"re-consent the gdrive OAuth (see gdrive-oauth-7day-expiry memory): {msg[:120]}")
+
 
 # ---- New Listings: Editorial & SEO ---------------------------------------------
 # Matches generate_property_ai_analysis.py's own TARGET_SUBURBS exactly — nightly
