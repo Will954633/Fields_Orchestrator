@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Fields VM Resource Guard every 90s
+
+[Timer]
+OnBootSec=60
+OnUnitActiveSec=90
+AccuracySec=10s
+Unit=fields-resource-guard.service
+
+[Install]
+WantedBy=timers.target
