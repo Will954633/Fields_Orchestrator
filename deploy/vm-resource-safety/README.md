@@ -24,10 +24,14 @@ couldn't help — and once the box wedged it died with it.
 **Layer 3 — Early warning (on-VM).** In `resource_guard.py`: Telegrams Will when memory
 or disk *trend* toward the cliff, while the box is still reachable.
 
-**Layer 2 — Detect + recover (off-VM).** In `../../cloud-watcher/`. A GCP Cloud Function
-(Scheduler every 3 min) reads the `vm_metrics` heartbeat + TCP-probes ports 22/443; on a
-confirmed wedge it Telegrams Will with a one-tap reset (alert-first — never automatic).
-Deploy per `cloud-watcher/DEPLOY.md` (needs Will's GCP creds; the VM SA is read-only).
+**Layer 2 — Detect + recover (off-VM). LIVE (Tier A) since 2026-07-27.** In
+`../../cloud-watcher/`. A GCP Cloud Function (`vm-watcher`, Scheduler `vm-watcher-ping`
+every 3 min) reads a **GCS heartbeat** (`gs://fields-vm-watchdog/vm-heartbeat.txt`,
+re-uploaded every minute by `scripts/write_heartbeat.sh`) + TCP-probes ports 22/443; on a
+confirmed wedge it Telegrams Will (alert-first — never automatic). Heartbeat is GCS, not
+Cosmos, because Cosmos/Azure firewalls off GCP function egress. Tier B (one-tap phone
+reset button) is optional and still pending — needs a Telegram bot only Will can create.
+See `cloud-watcher/DEPLOY.md`.
 
 ## Reinstall (e.g. after a rebuild)
 ```bash
