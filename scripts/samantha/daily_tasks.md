@@ -84,12 +84,34 @@ how to revert) AND its proper log (fix-history / ad_decisions / deploy tracker).
 
 ---
 
-## PRIME DIRECTIVE — spend your WHOLE budget advancing 5 in-person appraisals (read this every run)
+## TASK PRIORITY — re-directed 2026-07-27 (Will): grow INBOUND ENQUIRY, not appraisal bookings
+
+Work these in order (this supersedes the old "Task 0 leads-worklist first" ordering). Full rationale:
+`07_Focus/05-STOCKTAKE-KPI-AND-SAMANTHA-REDIRECT.md`.
+- **A. Intent-signal sweep (highest value).** Pull the week's intent signals — `offmarket_qualification`
+  (timeframe), `neighbour_sale_trigger`, `forsale_ladder` (seller), price alerts, report-review interest —
+  rank the warmest, and for each ask: is there a next step for this person, or a dead-end to fix?
+- **B. Warming-engine health & cadence.** Are the warming engines firing? Content cadence vs the playbook,
+  editorial auto-publish, the off-market deck, Five Property Friday, articles. Fix/flag what's stalled.
+- **C. KPI scoreboard update.** Refresh the KPI Monitor sheet (Weekly Log + Dashboard), compute trend,
+  flag red. This is your report backbone (replaces the old appraisal-count section).
+- **D. Engagement/intent experiments.** Test warming hooks, intent-tease CTAs, content angles — within the
+  usual $15/day, $500/wk caps and one-test-per-surface rule. **NOTE (Will, 2026-07-27):** the strategic
+  FB ad-spend review + new-concept round is a SCHEDULED WORKING SESSION WITH WILL (see the "FB ad-spend
+  review" task on the board) — prep the evidence-backed cut-list for it, but do NOT unilaterally overhaul
+  the ad portfolio ahead of that session. Routine "pause an obvious dud within caps" autonomy still stands.
+- **E. Leads worklist (kept, demoted).** Still surface & stage packages for genuinely hot enquiries — but
+  this is now downstream of A–D, not the headline. Task 0 below still runs; it is no longer "first."
+- **F. Systems & data-health.** Task 0.5 plus the monitoring-gap fixes from the stock take
+  (website_daily_metrics broken, marketing_stage reach/visitors 0, article_events capture).
+
+## PRIME DIRECTIVE — spend your WHOLE budget advancing INBOUND ENQUIRY (read this every run)
 
 The tasks below are a **minimum floor, NOT the finish line.** Your job is to spend your **entire time
-budget** generating and executing the highest-value moves toward **5 in-person seller appraisals** (goal
-is currently 0/5). Analysis is not progress — **shipped growth moves are progress.** Past runs stopped at
-50–65% of budget having only analysed — that is a FAILED run. Do not repeat it.
+budget** generating and executing the highest-value moves that **warm the audience, surface intent, and
+produce inbound enquiry** (steer on the KPI sheet, not an appraisal count). Analysis is not progress —
+**shipped growth moves are progress.** Past runs stopped at 50–65% of budget having only analysed — that
+is a FAILED run. Do not repeat it.
 
 **Hard budget floor.** Before you finalise, check `date`. If **more than ~15% of your budget remains**, you
 are NOT done — loop back and make another concrete goal-advancing move. The ONLY acceptable early stop is if
@@ -120,8 +142,9 @@ paying a supplier, contacting a person, a decision only Will can make): do ALL t
 the exact blocker + precisely what Will must do under **"WILL (unblock)"**, and ask him. "I can't fully
 execute it" is NEVER "nothing to do" — advance it to the edge of your authority and escalate cleanly.
 
-**Required report section "PATH TO 5 APPRAISALS":** where the count stands, exactly what you did THIS run
-to move it, the single highest-leverage next move, and whether you executed/staged it (and if not, why not).
+**Required report section "FUNNEL MOVEMENT THIS RUN":** what moved across reach → warm → intent → enquiry
+this run (cite the KPI sheet), the single highest-leverage next warming/intent move, and whether you
+executed/staged it (and if not, why not).
 
 ---
 
