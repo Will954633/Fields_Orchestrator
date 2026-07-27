@@ -7,19 +7,25 @@ Why this exists (2026-07-27):
   `gcloud compute instances reset` from his laptop. An on-VM watchdog cannot save
   a wedged VM; it goes down with the ship. This runs on GCP, entirely off the VM.
 
+Heartbeat over GCS (not Cosmos):
+  Cosmos (Azure) refuses connections from GCP Cloud Function egress (its own IP
+  firewall), so the safety net must not depend on it. Instead the VM re-uploads a
+  tiny object gs://<bucket>/vm-heartbeat.txt every minute (write_heartbeat.sh via
+  cron). The function reads that object's last-updated time — always reachable
+  from GCP. A wedged VM stops re-uploading, so the object goes stale within minutes.
+  Watcher state (alert/reset cooldowns) also lives in a GCS object, so the whole
+  function has zero dependency on the VM or Cosmos being reachable.
+
 Design (alert-first, human-in-the-loop — Will's choice):
   * Cloud Scheduler pings `vm_watcher` every ~3 min.
-  * `vm_watcher` checks TWO independent signals:
-      1. Heartbeat: the freshest system_monitor.vm_metrics.recorded_at in Cosmos
-         (write_vm_metrics.py writes it every minute; a wedged VM stops writing).
-      2. Reachability: TCP probe of the VM's public IP on ports 22 and 443.
-  * WEDGED  = heartbeat stale > STALE_MIN AND at least one port is dead.
-              -> Telegram alert. NEVER resets automatically.
-  * DEGRADED = heartbeat stale but ports still open (cron/Mongo issue, VM alive).
-              -> softer Telegram note, no reset offered.
-  * If VM_WATCHDOG_BOT_TOKEN is set, the WEDGED alert carries a one-tap
-    "Reset VM now" inline button handled by `vm_reset_callback` (Tier B).
-    Otherwise the alert just contains the copy-paste gcloud reset command (Tier A).
+  * Two independent signals:
+      1. Heartbeat: age of gs://<bucket>/vm-heartbeat.txt (stale => VM not writing).
+      2. Reachability: TCP probe of the VM public IP on ports 22 and 443.
+  * WEDGED   = heartbeat stale > STALE_MIN AND at least one port dead -> Telegram alert.
+  * DEGRADED = heartbeat stale but ports open (cron/write issue, VM alive) -> soft note.
+  * Never resets automatically. If VM_WATCHDOG_BOT_TOKEN is set, the WEDGED alert
+    carries a one-tap "Reset VM now" button handled by vm_reset_callback (Tier B);
+    otherwise the alert contains the copy-paste gcloud reset command (Tier A).
 
 Two HTTP entry points (deploy each as its own function):
   vm_watcher(request)         <- Cloud Scheduler target
@@ -39,68 +45,69 @@ INSTANCE = os.environ.get("VM_INSTANCE", "fields-orchestrator-vm")
 VM_IP = os.environ.get("VM_IP", "34.40.230.132")
 PORTS = [22, 443]
 
+HEARTBEAT_BUCKET = os.environ.get("HEARTBEAT_BUCKET", "fields-blob-backup")
+HEARTBEAT_OBJECT = os.environ.get("HEARTBEAT_OBJECT", "vm-heartbeat.txt")
+STATE_OBJECT = os.environ.get("STATE_OBJECT", "vm-watchdog-state.json")
+
 STALE_MIN = int(os.environ.get("STALE_MIN", "8"))          # heartbeat age -> stale
 ALERT_COOLDOWN_MIN = int(os.environ.get("ALERT_COOLDOWN_MIN", "20"))
 RESET_COOLDOWN_MIN = int(os.environ.get("RESET_COOLDOWN_MIN", "30"))
 
-COSMOS = os.environ.get("COSMOS_CONNECTION_STRING", "")
 # Alerts: reuse Will's existing bot for sending (sendMessage does NOT conflict with
-# the on-VM polling bridges). Button/callback needs a SEPARATE bot (webhook), see Tier B.
+# the on-VM polling bridges). Button/callback needs a SEPARATE bot (webhook), Tier B.
 ALERT_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 WATCHDOG_BOT_TOKEN = os.environ.get("VM_WATCHDOG_BOT_TOKEN", "")   # optional (Tier B)
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 RESET_SECRET = os.environ.get("RESET_SECRET", "fields-reset")      # guards the callback
 
 
-# --- helpers --------------------------------------------------------------- #
-def _mongo():
-    from pymongo import MongoClient
-    return MongoClient(COSMOS, serverSelectionTimeoutMS=8000,
-                       socketTimeoutMS=12000, retryWrites=False)
+# --- GCS helpers (heartbeat + state) --------------------------------------- #
+def _bucket():
+    from google.cloud import storage
+    return storage.Client().bucket(HEARTBEAT_BUCKET)
 
 
 def heartbeat_age_min():
-    """Minutes since the freshest vm_metrics doc. None if unreadable."""
+    """Minutes since the heartbeat object was last written. None if unreadable."""
     try:
-        client = _mongo()
-        doc = client["system_monitor"]["vm_metrics"].find_one(sort=[("_id", -1)])
-        client.close()
-        if not doc or "recorded_at" not in doc:
+        blob = _bucket().get_blob(HEARTBEAT_OBJECT)
+        if blob is None or blob.updated is None:
             return None
-        ra = doc["recorded_at"]
-        if ra.tzinfo is None:
-            ra = ra.replace(tzinfo=timezone.utc)
-        return (datetime.now(timezone.utc) - ra).total_seconds() / 60.0
+        updated = blob.updated
+        if updated.tzinfo is None:
+            updated = updated.replace(tzinfo=timezone.utc)
+        return (datetime.now(timezone.utc) - updated).total_seconds() / 60.0
     except Exception:
         return None
 
 
-def port_open(ip, port, timeout=6):
-    try:
-        with socket.create_connection((ip, port), timeout=timeout):
-            return True
-    except Exception:
-        return False
-
-
 def _state_get():
     try:
-        client = _mongo()
-        doc = client["system_monitor"]["vm_watcher_state"].find_one({"_id": "watcher"})
-        client.close()
-        return doc or {}
+        blob = _bucket().get_blob(STATE_OBJECT)
+        if blob is None:
+            return {}
+        return json.loads(blob.download_as_text())
     except Exception:
         return {}
 
 
 def _state_set(**fields):
     try:
-        client = _mongo()
-        client["system_monitor"]["vm_watcher_state"].update_one(
-            {"_id": "watcher"}, {"$set": fields}, upsert=True)
-        client.close()
+        state = _state_get()
+        state.update(fields)
+        blob = _bucket().blob(STATE_OBJECT)
+        blob.upload_from_string(json.dumps(state), content_type="application/json")
     except Exception:
         pass
+
+
+# --- misc helpers ---------------------------------------------------------- #
+def port_open(ip, port, timeout=6):
+    try:
+        with socket.create_connection((ip, port), timeout=timeout):
+            return True
+    except Exception:
+        return False
 
 
 def _cooldown_ok(state, key, minutes):
@@ -118,19 +125,17 @@ def tg_send(token, payload):
     if not token or not CHAT_ID:
         return
     payload["chat_id"] = CHAT_ID
-    req = urllib.request.Request(
-        f"https://api.telegram.org/bot{token}/sendMessage",
-        data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"})
-    try:
+    def _post(p):
+        req = urllib.request.Request(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            data=json.dumps(p).encode(), headers={"Content-Type": "application/json"})
         urllib.request.urlopen(req, timeout=10).read()
+    try:
+        _post(payload)
     except Exception:
-        # retry without parse_mode (entity errors)
-        payload.pop("parse_mode", None)
+        payload.pop("parse_mode", None)  # retry plain on entity errors
         try:
-            req = urllib.request.Request(
-                f"https://api.telegram.org/bot{token}/sendMessage",
-                data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"})
-            urllib.request.urlopen(req, timeout=10).read()
+            _post(payload)
         except Exception:
             pass
 
@@ -163,7 +168,6 @@ def vm_watcher(request):
                   "The guest is unresponsive (this mirrors the OOM hang). "
                   "It will NOT reset by itself.")
         if WATCHDOG_BOT_TOKEN:
-            # Tier B: one-tap button via the dedicated watchdog bot (webhook -> vm_reset_callback)
             tg_send(WATCHDOG_BOT_TOKEN, {
                 "text": header + "\n\nTap to power-cycle it:",
                 "parse_mode": "Markdown",
@@ -172,21 +176,18 @@ def vm_watcher(request):
                      "callback_data": f"reset:{RESET_SECRET}"}]]},
             })
         else:
-            # Tier A: alert with the copy-paste command
             tg_send(ALERT_BOT_TOKEN, {
                 "text": header + f"\n\nReset it with:\n`{reset_command()}`",
                 "parse_mode": "Markdown"})
-        _state_set(last_alert=datetime.now(timezone.utc).isoformat(),
-                   last_status="wedged")
+        _state_set(last_alert=datetime.now(timezone.utc).isoformat(), last_status="wedged")
 
     elif status == "degraded" and _cooldown_ok(state, "last_degraded_alert", 60):
         tg_send(ALERT_BOT_TOKEN, {
-            "text": (f"⚠️ *VM monitoring degraded* — heartbeat {age_str} old but VM reachable "
-                     f"({port_str}). Likely write_vm_metrics cron or Mongo, not a hang. "
+            "text": (f"⚠️ *VM monitoring degraded* — heartbeat {age_str} old but VM "
+                     f"reachable ({port_str}). Likely write_heartbeat cron, not a hang. "
                      f"No reset needed."),
             "parse_mode": "Markdown"})
-        _state_set(last_degraded_alert=datetime.now(timezone.utc).isoformat(),
-                   last_status="degraded")
+        _state_set(last_degraded_alert=datetime.now(timezone.utc).isoformat(), last_status="degraded")
     else:
         _state_set(last_status=status)
 
@@ -219,7 +220,6 @@ def vm_reset_callback(request):
         except Exception:
             pass
 
-    # authz: only Will's chat id, and the shared secret must match
     if CHAT_ID and from_id != str(CHAT_ID):
         answer("Not authorised.")
         return ("unauthorized", 200)
