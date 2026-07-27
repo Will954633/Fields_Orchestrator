@@ -1,0 +1,13 @@
+[Unit]
+Description=Fields VM Resource Guard (fast OOM/disk preventive governor + early warning)
+After=network.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/home/fields/Fields_Orchestrator
+ExecStart=/home/fields/venv/bin/python /home/fields/Fields_Orchestrator/scripts/resource_guard.py
+# Never let the guard itself contribute to memory pressure or get OOM-killed.
+MemoryMax=200M
+OOMScoreAdjust=-900
+Nice=10
