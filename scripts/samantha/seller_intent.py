@@ -144,8 +144,11 @@ def lead_distinct_ids(lead: dict, sm) -> set:
                     ids.add(did)
             except Exception:
                 pass
+    for o in lead.get("origins") or []:
+        if o.get("collection") == "posthog_behavior" and o.get("id"):
+            ids.add(o["id"])
     lk = str(lead.get("lead_key", ""))
-    if lk.startswith("offmarket_view:"):
+    if lk.startswith("offmarket_view:") or lk.startswith("behavior:"):
         ids.add(lk.split(":", 1)[1])
     return ids
 
@@ -286,6 +289,62 @@ def behavioral_score(b):
             + b["property_views"] + min(b["sessions"], 10))
 
 
+def _all_known_distinct_ids(sm):
+    """Every distinct_id already tied to a worklist lead — so we don't double-surface."""
+    known = set()
+    for d in sm["lead_worklist"].find({}, {"extra": 1, "lead_key": 1, "origins": 1}):
+        known |= lead_distinct_ids(d, sm)
+    return known
+
+
+def _anon_qualifies(b):
+    """Threshold gate — a GENUINE intent bar so random browsers are never surfaced."""
+    return (b["ayh_build"] >= 1                       # generated a valuation for an address
+            or b["sell_now_landings"] >= 1            # landed on a 'sell now' page
+            or b["ladder_optin"] >= 1                 # opted in on the buyer/seller quiz
+            or b["seller_anchor"] >= 3                # heavy seller-content engagement
+            or (b["sessions"] >= 4 and (b["property_views"] + b["offmarket_views"]) >= 3))
+
+
+def surface_behavioral_leads(sm, dry_run=False):
+    """Create worklist entries for anonymous HIGH-signal visitors not tied to any lead —
+    so genuine intent with no contact/address is never missed. Threshold-gated (see
+    _anon_qualifies) so noise stays out. Keyed 'behavior:<distinct_id>'; the normal
+    enrichment pass then gives them a behavioral story."""
+    if not BEHAV:
+        load_behavioral()
+    try:
+        from crm_sync import INTERNAL_IDS, BOT_CITIES
+    except Exception:
+        INTERNAL_IDS, BOT_CITIES = set(), set()
+    known = _all_known_distinct_ids(sm)
+    n = 0
+    for did, b in BEHAV.items():
+        if did in known or did in INTERNAL_IDS:
+            continue
+        if (b.get("country") or "Australia") != "Australia" or (b.get("city") in BOT_CITIES):
+            continue
+        if not _anon_qualifies(b):
+            continue
+        key = f"behavior:{did}"
+        n += 1
+        if dry_run:
+            continue
+        cosmos_retry(lambda: sm["lead_worklist"].update_one(
+            {"lead_key": key},
+            {"$setOnInsert": {
+                "lead_key": key, "email": "", "name": "", "phone": "", "address": "",
+                "sources": ["site_behavior"], "is_test": False,
+                "first_seen": b.get("first_seen"), "behavioral_surface": True},
+             "$set": {"origins": [{"collection": "posthog_behavior", "id": did}],
+                      "extra": {"posthog_distinct_id": did},
+                      "last_seen": b.get("last_seen"), "updated_at": NOW}},
+            upsert=True))
+    print(f"[behavioral-surface] {n} anonymous high-signal lead(s) "
+          f"{'(dry-run)' if dry_run else 'upserted'}")
+    return n
+
+
 # ============================ PropRadar enrichment ==========================
 _PR_CACHE: dict = {}
 
@@ -423,6 +482,11 @@ def build_story(lead, own, current_viewed, behav, pr, label):
     occ = (lead.get("occupancy") or {}).get("type")
     tenure = _years_since((pr or {}).get("last_sale_date")) or lead.get("years_held")
 
+    # Anonymous (behaviour-surfaced) visitor with no address/contact captured yet.
+    if not addr:
+        loc = f"{city}-based " if city else ""
+        bits.append(f"Anonymous {loc}visitor — no contact captured yet.")
+
     # Who
     who = []
     if city and addr and city.split(",")[0] not in addr:
@@ -559,6 +623,17 @@ def analyze(lead: dict, sm, gc_db, suburb_index, pr_budget=None) -> dict:
         elif behav["seller_anchor"]:
             moment = "Just engaged seller-focused content"
 
+    # "Just listed" inbound trigger — the strongest signal. If this home was NOT listed on
+    # the previous run and is now on the market, the owner went from researching to selling.
+    prev = lead.get("seller_intent") or {}
+    prev_listed = ((prev.get("own_property") or {}).get("listing_status") == "for_sale"
+                   or (prev.get("propradar") or {}).get("on_market") is True)
+    now_listed = st == "for_sale" or (pr or {}).get("on_market") is True
+    just_listed = bool(prev and now_listed and not prev_listed)
+    if just_listed:
+        moment = "Their home JUST LISTED — selling now"
+        hotness += 50
+
     story = build_story(lead, own, current_viewed, behav, pr, label)
 
     return {
@@ -574,6 +649,7 @@ def analyze(lead: dict, sm, gc_db, suburb_index, pr_budget=None) -> dict:
         "behavioral_score": bscore,
         "hotness": hotness,
         "moment": moment,
+        "just_listed": just_listed,
         "propradar": pr,
         "journey_sessions": sessions,
         "generated_own_minisite": generated_minisite,
@@ -587,6 +663,11 @@ def run(query: dict, dry_run: bool = False, limit: int = 0, max_pr: int = 30) ->
     gc_db = c["Gold_Coast"]
     suburb_index = build_suburb_index(gc_db)
     load_behavioral()  # one PostHog sweep -> BEHAV
+
+    # On a full run, first surface anonymous high-signal visitors into the worklist so
+    # they're enriched + written to the sheet alongside everyone else.
+    if query == {}:
+        surface_behavioral_leads(sm, dry_run=dry_run)
 
     leads = list(sm["lead_worklist"].find(query))
     if limit:
@@ -602,14 +683,17 @@ def run(query: dict, dry_run: bool = False, limit: int = 0, max_pr: int = 30) ->
         reverse=True)
 
     pr_budget = [max_pr]
-    n = hits = pr_used_start = 0
     pr_used_start = max_pr
+    n = hits = 0
+    alerts = []
     for lead in leads:
         si = analyze(lead, sm, gc_db, suburb_index, pr_budget)
         n += 1
         actionable = si["label"] != "no_cross_signal" or si["behavioral_score"] >= 8 or si.get("moment")
         if actionable:
             hits += 1
+        if si.get("just_listed"):
+            alerts.append((lead.get("address") or lead.get("lead_key"), si))
         flag = "🔥" if si.get("moment") else ("•" if actionable else " ")
         print(f"{flag} [{si['label']:>24}] hot={si['hotness']:>3} "
               f"{(lead.get('address') or lead.get('lead_key'))[:40]:<40} "
@@ -617,10 +701,29 @@ def run(query: dict, dry_run: bool = False, limit: int = 0, max_pr: int = 30) ->
         if not dry_run:
             cosmos_retry(lambda: sm["lead_worklist"].update_one(
                 {"_id": lead["_id"]}, {"$set": {"seller_intent": si}}))
+    if alerts and not dry_run:
+        _notify_just_listed(alerts)
     print(f"\nseller_intent: {n} leads processed, {hits} actionable, "
+          f"{len(alerts)} JUST-LISTED trigger(s), "
           f"PropRadar-enriched {pr_used_start - pr_budget[0]} lead(s), "
           f"{'DRY-RUN (nothing written)' if dry_run else 'written to lead_worklist.seller_intent'}")
     return hits
+
+
+def _notify_just_listed(alerts):
+    """Telegram alert when a tracked pre-market lead's home flips to on-market — the
+    strongest inbound selling-intent trigger."""
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from telegram_notify import send_message
+        lines = ["🔥 JUST LISTED — a tracked lead's home just went on-market:"]
+        for addr, si in alerts[:10]:
+            lines.append(f"• {addr}")
+            if si.get("story"):
+                lines.append(f"  {si['story'][:180]}")
+        send_message("\n".join(lines), parse_mode="")
+    except Exception as e:  # noqa: BLE001
+        print(f"(just-listed Telegram alert skipped: {e})")
 
 
 def main() -> int:
