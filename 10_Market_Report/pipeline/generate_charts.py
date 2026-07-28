@@ -372,7 +372,12 @@ def chart_tension(suburb_series, composite, path):
     # FCI: same rebase
     if fci_values:
         rebase_fci_value = fci_values[0]
-        rebased_fci = [100 * v / rebase_fci_value for v in fci_values]
+        # Plot the FCI on its native scale (already indexed to 100 = long-run
+        # baseline) rather than double-rebasing to Q1 2023. It sits at ~100.3 in
+        # Q1 2023 so the "started together, then diverged" story is unchanged, and
+        # the endpoint label now matches the headline Conviction Index (94.5)
+        # instead of a rebased 94.2 that reads like a contradiction.
+        rebased_fci = list(fci_values)
 
     fig, ax = plt.subplots(figsize=(10.5, 5.4))
     ax.set_facecolor("none")
