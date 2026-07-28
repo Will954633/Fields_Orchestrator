@@ -198,8 +198,9 @@ def conclude(own, current_viewed, generated_minisite):
                     f"Own home has been FOR SALE {dom} days ({(own or {}).get('price')}). "
                     "Long on market + actively researching Fields = likely frustrated vendor, "
                     "second-opinion / re-list candidate. Verify listing is fresh before any contact.")
+        dom_txt = f"{dom}d on market, " if dom is not None else ""
         return ("on_market_active",
-                f"Own home is FOR SALE ({dom}d on market, {(own or {}).get('price')}) — active campaign. "
+                f"Own home is FOR SALE ({dom_txt}{(own or {}).get('price')}) — active campaign. "
                 "Track the listing; not a pre-market seller.")
     if own_status == "withdrawn":
         return ("pre_market_withdrawn",
@@ -279,7 +280,7 @@ def run(query: dict, dry_run: bool = False, limit: int = 0) -> int:
                 {"_id": lead["_id"]}, {"$set": {"seller_intent": si}}))
     print(f"\nseller_intent: {n} leads processed, {hits} with a cross-signal, "
           f"{'DRY-RUN (nothing written)' if dry_run else 'written to lead_worklist.seller_intent'}")
-    return 0
+    return hits
 
 
 def main() -> int:
@@ -299,7 +300,19 @@ def main() -> int:
         q = {}
     else:
         ap.error("pass --lead-key, --address, or --all")
-    return run(q, dry_run=args.dry_run, limit=args.limit)
+
+    # Scheduled full run (nightly, after lead_intelligence) self-reports so it can
+    # never fail silently (Rule 7). Targeted/dry runs stay unmonitored.
+    if args.all and not args.dry_run:
+        from scripts.job_status import job_run
+        with job_run("seller_intent", cadence_hours=24,
+                     title="CRM Seller-Intent Enrichment") as beat:
+            hits = run(q, dry_run=False, limit=args.limit)
+            beat.detail = f"{hits} leads with a seller-intent cross-signal"
+            beat.metrics = {"cross_signals": hits}
+        return 0
+    run(q, dry_run=args.dry_run, limit=args.limit)
+    return 0
 
 
 if __name__ == "__main__":
