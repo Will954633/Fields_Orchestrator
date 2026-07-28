@@ -58,6 +58,10 @@ from shared.db import get_client
 from crm_sync import posthog_query, INTERNAL_IDS, BOT_CITIES
 from scripts.property_reports import occupancy_classifier as occ
 
+# seller-intent enrichment (own-listing status/days-on-market + live listings viewed)
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "samantha"))
+import seller_intent as sim  # noqa: E402
+
 # ---- config ---------------------------------------------------------------
 LIVE_SPREADSHEET_ID = "1mRjT_PmjTepF1rDajJlM553Umy47dKa4fHOclrzAKFs"
 TAB = "All Leads"
@@ -76,7 +80,7 @@ FB_LOCATION_NOTE = "AU (inferred — geo-targeted FB campaign, no on-site sessio
 
 HEADERS = ["Date", "Source", "Name", "Email", "Phone", "City", "Country",
            "Suburb / Address", "Details", "Campaign / Channel", "Status",
-           "Selling Plan", "Lead ID"]
+           "Selling Plan", "Lead ID", "Situation"]
 # Selling Plan (col L, 0-indexed 11) and Lead ID (col M, 0-indexed 12) are the
 # only two auto-refreshed-in-place columns (see LIVE-LEADS-SHEET-AUTOUPDATE
 # fix-history, 2026-07-21) -- everything else is written once, at first add,
@@ -84,7 +88,8 @@ HEADERS = ["Date", "Source", "Name", "Email", "Phone", "City", "Country",
 # never clobbered. Lead ID is hidden -- it exists purely so a later run can
 # find "this exact row" again to refresh its Selling Plan cell.
 SELLING_PLAN_COL = 11  # 0-indexed -> column L
-LEAD_ID_COL = 12       # 0-indexed -> column M
+LEAD_ID_COL = 12       # 0-indexed -> column M (hidden)
+SITUATION_COL = 13     # 0-indexed -> column N (new; auto-refreshed in place like Selling Plan)
 AEST = timezone(timedelta(hours=10))
 
 LEDGER_DB = "system_monitor"
@@ -412,10 +417,93 @@ def tab_id(svc, ssid, title):
     return None
 
 
+# ---- seller-intent "Situation" column ---------------------------------------
+def build_worklist_index(db):
+    """Index lead_worklist so any source-row can be matched to its CRM record."""
+    by_origin, by_key, by_email = {}, {}, {}
+    for d in db["lead_worklist"].find({}):
+        if d.get("lead_key"):
+            by_key[d["lead_key"]] = d
+        em = (d.get("email") or "").lower()
+        if em:
+            by_email[em] = d
+        for o in d.get("origins") or []:
+            by_origin[(o.get("collection"), str(o.get("id")))] = d
+    return by_origin, by_key, by_email
+
+
+def _worklist_doc_for(lead, idx):
+    by_origin, by_key, by_email = idx
+    lid = lead.get("lead_id", "")
+    if ":" in lid:
+        coll, rid = lid.split(":", 1)
+        d = by_origin.get((coll, rid))
+        if d:
+            return d
+    if lid in by_key:
+        return by_key[lid]
+    em = (lead.get("email") or "").lower()
+    if em and em in by_email:
+        return by_email[em]
+    return None
+
+
+def format_situation(doc, si) -> str:
+    """One human-readable line packing every follow-up-relevant fact we hold."""
+    si = si or {}
+    parts = []
+    pri = doc.get("priority")
+    if pri and pri not in ("low", "test", None):
+        parts.append(f"PRIORITY {pri.upper()}")
+    own = si.get("own_property") or {}
+    st = own.get("listing_status")
+    if st:
+        s = f"Own home {str(st).replace('_', ' ')}"
+        if own.get("days_on_market") is not None:
+            s += f", {own['days_on_market']}d on market"
+        if own.get("price"):
+            s += f" ({own['price']})"
+        if own.get("agency"):
+            s += f" via {own['agency']}"
+        parts.append(s)
+    viewed = si.get("current_listings_viewed") or []
+    if viewed:
+        vs = "; ".join(
+            f"{v.get('address')} [{v.get('price') or '?'}"
+            + (f", {v['days_on_market']}d" if v.get("days_on_market") is not None else "") + "]"
+            for v in viewed[:3])
+        parts.append(f"Also viewing live listings: {vs}")
+    occ = doc.get("occupancy") or {}
+    ot = occ.get("type")
+    if ot and ot != "unknown":
+        yh = doc.get("years_held")
+        parts.append(str(ot).replace("_", " ") + (f", held {yh}y" if yh else ""))
+    label = si.get("label")
+    concl = si.get("conclusion")
+    if concl and label and label != "no_cross_signal":
+        parts.append("→ " + concl)
+    elif doc.get("reason"):
+        parts.append("→ " + doc["reason"])
+    return " | ".join(p for p in parts if p)
+
+
+def situation_for(lead, idx, sm, gc_db, suburb_index) -> str:
+    """Live seller-intent line for a lead. Falls back to the stored field on error."""
+    doc = _worklist_doc_for(lead, idx)
+    if not doc:
+        return ""
+    try:
+        si = sim.analyze(doc, sm, gc_db, suburb_index)
+    except Exception:
+        si = doc.get("seller_intent") or {}
+    return format_situation(doc, si)
+
+
 def row_values(lead, city, country):
     return [lead["date"], lead["source"], lead["name"], lead["email"], lead["phone"],
             city, country, lead["suburb_address"], lead["details"], lead["campaign"],
-            lead["status"], lead.get("selling_plan", ""), lead["lead_id"]]
+            lead["status"], lead.get("selling_plan", ""), lead["lead_id"],
+            lead.get("situation", "")]
 
 
 def hide_lead_id_column(svc, ssid, sheet_id):
@@ -480,6 +568,58 @@ def refresh_selling_plans(svc, ssid, all_leads, already_ledgered: set[str], dry_
     return len(updates)
 
 
+def ensure_situation_header(svc, ssid, dry_run=False):
+    """Idempotently make sure N1 == 'Situation' (column is absent on pre-2026-07-28 sheets)."""
+    cur = svc.spreadsheets().values().get(
+        spreadsheetId=ssid, range=f"'{TAB}'!N1").execute().get("values", [])
+    if cur and cur[0] and cur[0][0] == "Situation":
+        return
+    if dry_run:
+        print("(would set N1 = 'Situation')")
+        return
+    svc.spreadsheets().values().update(
+        spreadsheetId=ssid, range=f"'{TAB}'!N1",
+        valueInputOption="RAW", body={"values": [["Situation"]]}).execute()
+
+
+def refresh_situations(svc, ssid, all_leads, already_ledgered, dry_run=False):
+    """Update-in-place col N (Situation) for leads ALREADY on the sheet — backfills the
+    new column on first run and keeps it current as seller-intent evolves (own listing's
+    days-on-market ticks up, new live listings viewed). Matches rows by the hidden Lead ID
+    (col M), the same safe mechanism as refresh_selling_plans; never touches any other cell,
+    so Will's manual Status/notes edits are preserved."""
+    current = svc.spreadsheets().values().get(
+        spreadsheetId=ssid, range=f"'{TAB}'!M2:N10000").execute().get("values", [])
+    row_by_lead_id = {}
+    for i, row in enumerate(current):
+        lead_id_cell = row[0] if len(row) > 0 else ""
+        sit_cell = row[1] if len(row) > 1 else ""
+        if lead_id_cell:
+            row_by_lead_id[lead_id_cell] = (i + 2, sit_cell)
+    updates = []
+    for lead in all_leads:
+        if lead["lead_id"] not in already_ledgered:
+            continue
+        new_sit = lead.get("situation", "")
+        if not new_sit:
+            continue
+        hit = row_by_lead_id.get(lead["lead_id"])
+        if hit is None:
+            continue
+        row_num, existing = hit
+        if existing == new_sit:
+            continue
+        updates.append({"range": f"'{TAB}'!N{row_num}", "values": [[new_sit]]})
+    if not updates:
+        return 0
+    print(f"{len(updates)} existing lead(s) have new/changed Situation.")
+    if dry_run:
+        return len(updates)
+    svc.spreadsheets().values().batchUpdate(spreadsheetId=ssid, body={
+        "valueInputOption": "RAW", "data": updates}).execute()
+    return len(updates)
+
+
 # ---- main -----------------------------------------------------------------
 def set_env_from_file():
     # python-dotenv, not a hand-rolled parser (standardised 2026-07-23).
@@ -512,6 +652,13 @@ def main():
 
     all_leads = list(fb_lead_rows(db)) + list(ayh_rows(db)) + list(offmarket_rows(db, gc_db))
 
+    # Attach the seller-intent "Situation" line to every lead (own-listing status +
+    # days-on-market + the live listings they viewed + tailored follow-up conclusion).
+    wl_idx = build_worklist_index(db)
+    suburb_index = sim.build_suburb_index(gc_db)
+    for l in all_leads:
+        l["situation"] = situation_for(l, wl_idx, db, gc_db, suburb_index)
+
     if args.rebuild:
         candidates = sorted(all_leads, key=lambda l: l["date"], reverse=True)
         if args.dry_run:
@@ -539,9 +686,14 @@ def main():
     candidates.sort(key=lambda l: l["date"], reverse=True)
 
     refreshed = refresh_selling_plans(svc, args.spreadsheet_id, all_leads, seen, dry_run=args.dry_run)
+    ensure_situation_header(svc, args.spreadsheet_id, dry_run=args.dry_run)
+    refreshed_sit = refresh_situations(svc, args.spreadsheet_id, all_leads, seen, dry_run=args.dry_run)
 
     if not candidates:
-        print("Nothing new." if not refreshed else f"No new leads; {refreshed} selling-plan update(s) applied.")
+        msg = "Nothing new."
+        if refreshed or refreshed_sit:
+            msg = f"No new leads; {refreshed} selling-plan + {refreshed_sit} situation update(s) applied."
+        print(msg)
         client.close()
         return
 
