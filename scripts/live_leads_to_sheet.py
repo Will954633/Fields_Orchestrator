@@ -424,6 +424,8 @@ SOURCE_LABELS = {
     "direct_appraisal_request": "Direct Appraisal Request", "price_alert": "Price Alert",
     "five_property_friday": "5 Property Friday", "website_feedback": "Website Feedback",
     "launch_form": "Launch Form", "lead": "Lead",
+    "site_behavior": "Site Behaviour (anon)",
+    "listing_expiry": "Listing Nearing Expiry",
 }
 # Collections already emitted by fb_lead_rows / ayh_rows / offmarket_rows — a worklist
 # lead touching any of these is already on the sheet under its source-specific Lead ID.
