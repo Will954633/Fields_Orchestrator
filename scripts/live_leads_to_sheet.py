@@ -417,6 +417,61 @@ def tab_id(svc, ssid, title):
     return None
 
 
+# ---- worklist-only leads (sources not covered by fb/ayh/offmarket generators) --
+SOURCE_LABELS = {
+    "analyse_your_home": "Analyse Your Home", "footer_subscribe": "Newsletter (footer)",
+    "form_submission": "Form Submission", "posthog_sync": "Site Engagement",
+    "direct_appraisal_request": "Direct Appraisal Request", "price_alert": "Price Alert",
+    "five_property_friday": "5 Property Friday", "website_feedback": "Website Feedback",
+    "launch_form": "Launch Form", "lead": "Lead",
+}
+# Collections already emitted by fb_lead_rows / ayh_rows / offmarket_rows — a worklist
+# lead touching any of these is already on the sheet under its source-specific Lead ID.
+COVERED_ORIGIN_COLLECTIONS = {"fb_leads", "property_reports", "offmarket_orders"}
+
+
+def worklist_only_rows(db):
+    """Emit a row for every REAL lead_worklist lead not covered by the three source
+    generators — newsletter subscribers, direct appraisal requests, 5-Property-Friday,
+    website feedback, etc. Deduped by lead_id 'worklist:<lead_key>' via the ledger. The
+    Situation column (computed downstream) carries the seller-intent context."""
+    for d in db["lead_worklist"].find({}):
+        if d.get("is_test"):
+            continue
+        origin_colls = {o.get("collection") for o in (d.get("origins") or [])}
+        if origin_colls & COVERED_ORIGIN_COLLECTIONS:
+            continue
+        if str(d.get("lead_key", "")).startswith("offmarket_view:"):
+            continue
+        srcs = d.get("sources") or []
+        label = " / ".join(dict.fromkeys(SOURCE_LABELS.get(s, s.replace("_", " ").title())
+                                         for s in srcs)) or "Website Lead"
+        ex = d.get("extra") or {}
+        occ = d.get("occupancy") or {}
+        details = []
+        if occ.get("type") and occ["type"] != "unknown":
+            details.append(f"occupancy={occ['type']}")
+        if d.get("years_held"):
+            details.append(f"held={d['years_held']}y")
+        for k in ("buy_timeline", "sell_timeline", "timeline", "value_range",
+                  "subscriber_status", "signal"):
+            if ex.get(k):
+                details.append(f"{k}={ex[k]}")
+        yield {
+            "lead_id": f"worklist:{d['lead_key']}",
+            "date": (str(d.get("first_seen") or "")[:10]),
+            "source": label,
+            "name": d.get("name") or "",
+            "email": d.get("email") or "",
+            "phone": d.get("phone") or "",
+            "posthog_distinct_id": ex.get("posthog_distinct_id"),
+            "suburb_address": d.get("address") or "",
+            "details": "; ".join(details),
+            "campaign": ", ".join(srcs),
+            "status": "",  # left blank for Will to triage
+        }
+
+
 # ---- seller-intent "Situation" column ---------------------------------------
 def build_worklist_index(db):
     """Index lead_worklist so any source-row can be matched to its CRM record."""
@@ -435,6 +490,8 @@ def build_worklist_index(db):
 def _worklist_doc_for(lead, idx):
     by_origin, by_key, by_email = idx
     lid = lead.get("lead_id", "")
+    if lid.startswith("worklist:"):
+        return by_key.get(lid[len("worklist:"):])
     if ":" in lid:
         coll, rid = lid.split(":", 1)
         d = by_origin.get((coll, rid))
@@ -650,7 +707,8 @@ def main():
         print(f"Tab '{TAB}' not found in spreadsheet {args.spreadsheet_id}")
         sys.exit(1)
 
-    all_leads = list(fb_lead_rows(db)) + list(ayh_rows(db)) + list(offmarket_rows(db, gc_db))
+    all_leads = (list(fb_lead_rows(db)) + list(ayh_rows(db)) + list(offmarket_rows(db, gc_db))
+                 + list(worklist_only_rows(db)))
 
     # Attach the seller-intent "Situation" line to every lead (own-listing status +
     # days-on-market + the live listings they viewed + tailored follow-up conclusion).
