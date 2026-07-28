@@ -50,14 +50,19 @@ def _get_client():
 
 def record_job_result(job: str, status: str, detail: str = "", *,
                       cadence_hours: float | None = None, title: str | None = None,
-                      **extra):
+                      stale_hours: float | None = None, **extra):
     """Write one status doc for `job` to system_monitor.job_runs. Best-effort —
     never raises, so a monitoring write can't itself break the calling job.
 
     Pass `cadence_hours` (how often the job is expected to run) to SELF-REGISTER:
     the doc gets `self_registered=True` + `cadence_hours`, and the generic
     Process Registry collector in main_site_health_check.py then renders it
-    automatically (OK / STALE past cadence / ERROR) — no bespoke wiring."""
+    automatically (OK / STALE past cadence / ERROR) — no bespoke wiring.
+
+    `stale_hours` optionally overrides WHEN the job is flagged STALE (default is
+    cadence_hours × 1.5). Use it when the alert threshold differs from the nominal
+    cadence — e.g. a weekly job (cadence 168h) that must flag if not run within
+    ~7 days rather than the default 10.5."""
     assert status in ("success", "error"), f"bad status: {status}"
     try:
         client = _get_client()
@@ -66,6 +71,8 @@ def record_job_result(job: str, status: str, detail: str = "", *,
         if cadence_hours is not None:
             doc["cadence_hours"] = cadence_hours
             doc["self_registered"] = True
+        if stale_hours is not None:
+            doc["stale_hours"] = stale_hours
         if title:
             doc["title"] = title
         client["system_monitor"]["job_runs"].replace_one({"job": job}, doc, upsert=True)
@@ -84,7 +91,8 @@ class _Beat:
 
 
 @contextlib.contextmanager
-def job_run(job: str, cadence_hours: float = 24, title: str | None = None, **extra):
+def job_run(job: str, cadence_hours: float = 24, title: str | None = None,
+            stale_hours: float | None = None, **extra):
     """Context manager that heartbeats the outcome of an ongoing process.
 
     - Clean exit  -> record_job_result(status="success", duration_s=..., <metrics>)
@@ -101,13 +109,13 @@ def job_run(job: str, cadence_hours: float = 24, title: str | None = None, **ext
         record_job_result(
             job, "error",
             detail=(f"{type(e).__name__}: {e}")[:500],
-            cadence_hours=cadence_hours, title=title,
+            cadence_hours=cadence_hours, title=title, stale_hours=stale_hours,
             traceback=traceback.format_exc()[-1500:],
             duration_s=round(time.time() - start, 1), **extra)
         raise
     else:
         record_job_result(
             job, "success", detail=str(beat.detail)[:500],
-            cadence_hours=cadence_hours, title=title,
+            cadence_hours=cadence_hours, title=title, stale_hours=stale_hours,
             duration_s=round(time.time() - start, 1),
             metrics=beat.metrics or {}, **extra)

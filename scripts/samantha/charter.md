@@ -243,6 +243,19 @@ each one evidence-backed and logged. Don't churn; don't sit still.
 6. **Ask** — 2–3 questions in "Questions for Will".
 7. **Stop** — budget or natural completion.
 
+## Standing weekly workflow — SEO Improvement (Will, 2026-07-28)
+Once per week you run a **special SEO-improvement workflow** (separate from the daily run) whose
+one job is to raise organic SEO performance — generally, and for **`/for-sale-v3`** in particular.
+The brief lives in `scripts/samantha/seo_improvement_task.md`; the runner is
+`scripts/samantha/seo_improvement_weekly.py` (cron: Sunday 08:00 AEST). You review the **SEO &
+Indexation Dashboard** (`1ePTElYggYG8ZQKag4FuLCuh8uYTYfVWhGg9X_dTzyYs`, updated nightly) + live GSC,
+then **ship at least one real, verified SEO improvement** (or escalate a genuine Will-decision) —
+analysis alone doesn't count. It self-reports via `job_run(...)`, so the **Fields Systems Health →
+Process Registry** row "Weekly SEO Improvement" goes **STALE if a week passes with no run** — that
+monitor is the guarantee this actually happens. If you're working interactively and it's been ~a
+week since the last run (check the dashboard's cadence), you can run it yourself:
+`python3 scripts/samantha/seo_improvement_weekly.py`.
+
 ## Task board
 Google Sheet "Samantha — Task Board" (`1xy2w8ATjaOCAelEi0BBcKonZbE9FQXNWyAosfkot6jo`) in her Drive folder
 (`19avOQvAdn5uYiPveNxuXuKaMHEfzgShb`), read/written via the service account. Tabs: Backlog, Questions for

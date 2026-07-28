@@ -1160,15 +1160,18 @@ def collect_self_reported_jobs(add, sm, now_utc):
         name = d.get("title") or job
         ts = as_dt(d.get("run_at"))
         cadence_h = float(d.get("cadence_hours") or 24)
+        # STALE threshold: explicit stale_hours if the job declared one, else cadence×1.5.
+        stale_h = float(d["stale_hours"]) if d.get("stale_hours") is not None else cadence_h * 1.5
         age_h = (now_utc - ts).total_seconds() / 3600 if ts else None
         last_status = d.get("status")
         detail = d.get("detail") or ""
         if last_status == "error":
             st = ERROR
             msg = f"last run FAILED: {detail}"[:200] or "last run errored"
-        elif age_h is not None and age_h > cadence_h * 1.5:
+        elif age_h is not None and age_h > stale_h:
             st = STALE
-            msg = f"last ran {age_h:.1f}h ago (expected every {cadence_h:.0f}h) — cron may not be firing"
+            unit = f"{cadence_h/24:.0f}d" if cadence_h >= 48 else f"{cadence_h:.0f}h"
+            msg = f"last ran {age_h/24:.1f}d ago (expected every {unit}) — may not be firing"
         else:
             st = OK
             msg = detail[:200]
