@@ -91,6 +91,30 @@ After writing or editing ANY `system_monitor.market_pulse` content (summaries, `
 
 **Why this is mandatory, not optional:** on 2026-07-23, a full Market Pulse rewrite fixed the narrative text and confirmed it live via the API — but a THIRD content field (`narrative.pillars`, holding separate long-form AI-written paragraphs) was never touched, stayed stale since 2026-07-03, and produced a live page showing three different absorption-rate figures contradicting each other and citing quarters a year out of date. It was only caught because the user manually copy-pasted the entire rendered page back into the session. This step exists so that doesn't have to happen manually again.
 
+### 7. Self-Monitoring for Every Ongoing Process (No Silent Failures)
+
+Whenever you create a **new script/process/system that runs on an ongoing basis** (any cron job, systemd daemon, scheduled/looping task, or anything expected to run again on a schedule), it MUST self-report its status so it can never fail silently. This is not optional and applies the moment the process is created — not "later".
+
+**How (use the shared helper — do not reinvent):**
+```python
+from job_status import job_run   # scripts/job_status.py
+with job_run("my_process", cadence_hours=24, title="Human-Readable Name") as beat:
+    ...do the work...
+    beat.detail  = "one-line success summary"      # optional
+    beat.metrics = {"rows": 123, "indexed_pct": 62}  # optional
+# clean exit -> records status=success; ANY exception -> records status=error
+# (with traceback) and re-raises. Passing cadence_hours SELF-REGISTERS the job.
+```
+Passing `cadence_hours` writes a `self_registered` heartbeat to `system_monitor.job_runs`, which the generic `collect_self_reported_jobs` collector in `scripts/main_site_health_check.py` renders **automatically** on the **"Fields Systems Health"** sheet (Process Registry page) — `https://docs.google.com/spreadsheets/d/1Oa7uZv0shzsxftDYJJ3WErxhr7OZMf_SOxRFawbSgTk/edit`. **OK** = ran within cadence; **STALE** = last run older than `cadence_hours × 1.5` (cron stopped firing); **ERROR** = last run raised. No bespoke renderer or sheet-auth code per script — the one call is the whole contract.
+
+**Checklist when shipping any ongoing process:**
+1. Wrap the run body in `job_run(name, cadence_hours=…, title=…)` (or, if a plain function fits better, call `record_job_result(name, "success"/"error", cadence_hours=…, …)` on both paths).
+2. **Run it once at creation** so a real heartbeat exists (a job that never ran even once has no row — the first run seeds it; the wrapper records even a failed first run).
+3. Verify it appears on the Process Registry page of the Systems Health sheet before considering the task done.
+4. If it warrants a richer, dedicated view (like a data dashboard), still keep the heartbeat — the health sheet is the single "is everything running?" board.
+
+**Why this is mandatory, not optional:** we have repeatedly had processes die silently and go unnoticed for days-to-weeks (the daily sitemap push failing every day 2026-07-20→22; three GitHub Actions failing for up to 5 weeks; the lead worklist frozen 9 days). Every such incident was invisible because the process had no self-check. This rule closes that class for good — a new process is not "done" until its own status is visible on the health board.
+
 ---
 
 ## The Business

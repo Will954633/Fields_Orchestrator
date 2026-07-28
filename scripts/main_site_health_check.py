@@ -1134,6 +1134,48 @@ def collect_process_registry(add):
                 f"{len(online)}/{len(runners)} online", OK, "", None, "")
 
 
+# ---- Self-reported jobs (generic: any process that calls job_status.job_run) --
+def collect_self_reported_jobs(add, sm, now_utc):
+    """GENERIC heartbeat renderer — the mechanism behind Mandatory Rule 7
+    ("no process fails silently"). Any ongoing script that wraps its run in
+    job_status.job_run(name, cadence_hours=…) (or calls record_job_result with
+    cadence_hours) writes a self_registered doc to system_monitor.job_runs; this
+    lists every one of them on the Process Registry with staleness + last-outcome
+    detection — WITHOUT needing a bespoke collector per script. That's the whole
+    point: a new cron created next month shows up here automatically.
+
+    A job that has run at least once but then dies goes STALE (run_at older than
+    cadence_hours × 1.5); a job whose last run raised goes ERROR. A brand-new job
+    that never ran even once has no doc — covered by running it once at creation
+    (the job_run wrapper records even a failed first run)."""
+    PG = "Process Registry"
+    try:
+        docs = list(sm["job_runs"].find({"self_registered": True}))
+    except Exception as e:
+        add(PG, "Self-reported jobs", "query", None, ERROR, "", None,
+            f"could not read job_runs: {type(e).__name__}: {e}"[:200])
+        return
+    for d in sorted(docs, key=lambda x: x.get("title") or x.get("job") or ""):
+        job = d.get("job", "?")
+        name = d.get("title") or job
+        ts = as_dt(d.get("run_at"))
+        cadence_h = float(d.get("cadence_hours") or 24)
+        age_h = (now_utc - ts).total_seconds() / 3600 if ts else None
+        last_status = d.get("status")
+        detail = d.get("detail") or ""
+        if last_status == "error":
+            st = ERROR
+            msg = f"last run FAILED: {detail}"[:200] or "last run errored"
+        elif age_h is not None and age_h > cadence_h * 1.5:
+            st = STALE
+            msg = f"last ran {age_h:.1f}h ago (expected every {cadence_h:.0f}h) — cron may not be firing"
+        else:
+            st = OK
+            msg = detail[:200]
+        val = f"ran {ts.date()}" if ts else "never"
+        add(PG, name, "self-reported (auto)", val, st, "run_at", ts, msg)
+
+
 # ---- collectors (one per data-point group) ------------------------------------
 def collect(client, now_utc, prev_map):
     gc = client["Gold_Coast"]
@@ -1662,6 +1704,7 @@ def collect(client, now_utc, prev_map):
     # one level up into the checker itself.
     for page_name, fn, fn_args in [
         ("Process Registry", collect_process_registry, (add,)),
+        ("Process Registry", collect_self_reported_jobs, (add, sm, now_utc)),
         ("GitHub Actions", collect_github_actions, (add,)),
         ("Market Signals Fetch", collect_market_signals_fetch, (add, sm, now_utc)),
         ("PropRadar Ingest", collect_propradar_ingest, (add, sm, now_utc)),
