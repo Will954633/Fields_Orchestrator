@@ -97,3 +97,39 @@ def fetch_all_sold(state: str, suburb: str, months: int = 60,
             break
         time.sleep(sleep)
     return records, calls, last_hdr
+
+
+def recently_modified(since, event_type=None, postcodes=None, max_pages=40, sleep=0.4):
+    """PropRadar's nationwide 'who just listed / cut price / sold' feed (Starter+).
+
+    `since`      ISO date or datetime string.
+    `event_type` None (all), 'listing_update', or 'sold'.
+    `postcodes`  optional iterable of postcodes to KEEP — the API does NOT filter
+                 server-side (postcode/state params are silently ignored), so filtering
+                 is done client-side here.
+    Cursor-paginates (50/page, newest-first). Returns (events, calls, last_headers).
+    Stops at max_pages or when the feed is exhausted.
+    """
+    base = {"since": since, "limit": 50}
+    if event_type:
+        base["event_type"] = event_type
+    pcset = {str(p) for p in postcodes} if postcodes else None
+    events, calls, cursor, last_hdr = [], 0, None, {}
+    while calls < max_pages:
+        params = dict(base)
+        if cursor:
+            params["cursor"] = cursor
+        data, hdr = call("/properties/recently-modified", params)
+        calls += 1
+        last_hdr = hdr
+        rows = data.get("events") or []
+        if not rows:
+            break
+        if pcset:
+            rows = [e for e in rows if str((e.get("summary") or {}).get("postcode")) in pcset]
+        events.extend(rows)
+        cursor = (data.get("pagination") or {}).get("next_cursor")
+        if not cursor:
+            break
+        time.sleep(sleep)
+    return events, calls, last_hdr
