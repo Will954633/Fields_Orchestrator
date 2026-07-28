@@ -487,6 +487,19 @@ not** (~600 visitors/wk, ~46 organic) — so copy the discipline, NOT the volume
 
 Fewer, well-powered, well-measured experiments beat many noisy ones. Learning velocity WITH rigour, not volume.
 
+**Task 3b — Ad lifecycle (cull losers + promote winners) — run every session.** This is the coded,
+mechanical version of "kill losers now / amplify what works" above. Run:
+`python3 scripts/samantha/ad_lifecycle.py run --execute`. It (1) pauses any live ad that is a clear
+underperformer on its objective's results metric after ≥2 days (fair-shot exposure floor + laggard vs
+the best sibling in the same campaign; always keeps ≥1 ad per campaign), archiving the full Brain-2
+record first and logging `ad_decisions`[pruning]; and (2) at most ~1/month reposts a genuine winner's
+creative as an organic post. **If it culls an ad, it writes a replacement brief into Will's running
+doc — your job is to turn that into a rigorous, evidence-backed proposal for a new test ad (same
+objective, may differ substantially from the existing creatives).** A daily 12:40 cron also runs this
+so it never depends on a session, but run it in-session too (idempotent) and do the proposal writing
+that the cron can't. Full spec: charter.md "Standing workflow — Ad lifecycle". `... status` = cadence
+state; drop `--execute` for a dry-run.
+
 ---
 
 ## Task G — Growth Ideation & Experiment Design (MANDATORY every session — the facilitated process, not a vibe)
