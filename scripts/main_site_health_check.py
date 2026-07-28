@@ -626,6 +626,29 @@ def collect_ceo_governance(add, sm, now_utc):
             "last_run", tsg, "" if stg == OK else "overdue — run growth_ideation.py --record + produce "
             "backlog entries this session (this is the facilitated experiment-ideation loop)")
 
+    # --- Ad lifecycle cadence (added 2026-07-28, Will). Two coded behaviours that must run
+    # each session + a daily 12:40 cron: cull clear ad underperformers (>=2d, exposure floor,
+    # laggard vs sibling) and repost a genuine winner organically (max ~1/mo). Same stored-
+    # timestamp mechanical check — a stopped daily run is visible here; the monthly-publish
+    # state is shown on the promote row. (The job_run heartbeat also surfaces on Process
+    # Registry as "samantha_ad_lifecycle".) See scripts/samantha/ad_lifecycle.py. ---
+    for _key, _label in (("ad_cull_scan", "Ad cull scan"), ("ad_organic_promote", "Ad organic promote")):
+        dal = sm["samantha_state"].find_one({"_id": _key})
+        tsa = as_dt(dal.get("last_run")) if dal else None
+        if not tsa:
+            add(PG, _label, "cadence", "never run", MISSING, "last_run", None,
+                f"no {_key} record — run `ad_lifecycle.py run --execute` or check the 12:40 daily cron")
+        else:
+            age_a = (now_utc - tsa).total_seconds() / 86400
+            st_a = OK if age_a <= 2 else ERROR
+            extra = ""
+            if _key == "ad_organic_promote" and dal.get("last_promote_at"):
+                lp = as_dt(dal.get("last_promote_at"))
+                extra = f" · last organic repost {lp.date() if lp else '?'} (period {dal.get('last_period')})"
+            add(PG, _label, "cadence", f"last run {tsa.date()} ({age_a:.1f}d ago){extra}", st_a,
+                "last_run", tsa, "" if st_a == OK else "overdue — the ad-lifecycle daily run has stopped; "
+                "check the 12:40 cron / run_ad_lifecycle.sh")
+
     # --- Change measurement loop (added 2026-07-27). A shipped change that is never
     # re-measured means she isn't closing the loop — the whole point of the change ledger.
     # Flag live changes that are overdue for a read (review date passed, no measurement). ---
