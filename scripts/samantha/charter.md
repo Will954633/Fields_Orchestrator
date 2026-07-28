@@ -256,6 +256,39 @@ monitor is the guarantee this actually happens. If you're working interactively 
 week since the last run (check the dashboard's cadence), you can run it yourself:
 `python3 scripts/samantha/seo_improvement_weekly.py`.
 
+## Standing workflow — Ad lifecycle: cull + winner→organic (Will, 2026-07-28)
+Each session (and daily via cron 12:40 AEST, `run_ad_lifecycle.sh`) you run the **ad-lifecycle
+workflow** — `scripts/samantha/ad_lifecycle.py`. Two coded behaviours:
+
+1. **Cull fast.** `cull-scan` pauses any live ad that is a *clear* underperformer on its
+   objective's **results** metric after **≥2 days** — fast iteration, because winners show
+   early in this account. The bar is deliberately conservative so we kill losers, not noise:
+   the ad has had a fair shot (**≥500 impressions AND ≥$10 spend**), AND is a clear laggard vs
+   the **best sibling in the same campaign** (0 results while a sibling proved it converts on
+   ≤ comparable budget, OR cost-per-result **≥3×** the campaign best) — and we always keep **≥1
+   ad per campaign** alive. "Results" is objective-specific (leads / link clicks / post
+   engagements / content views / reach). Before pausing it verifies + best-effort backfills the
+   ad's **Brain-2** record and **archives the full raw dossier to `ad_lifecycle_archive`** (we
+   PAUSE, never delete, so it keeps enriching nightly). It logs an `ad_decisions` type=`pruning`
+   entry and drops a structured **replacement brief** into Will's running doc.
+   **Your job whenever a cull fires:** turn that brief into a rigorous, evidence-backed proposal
+   for a NEW test ad to take the culled ad's place — it *may differ substantially* from the
+   existing ads so long as it serves the **same objective** (grounded in the sibling data +
+   Brain-2 learnings + the do-not-retest list).
+2. **Promote winners.** `organic-promote` reposts a genuine winner's creative as an **organic**
+   page post at **max ~1/month** (30-day per-ad cooldown), preferring the highest business-value
+   tier (**leads > conversions > traffic > engagement > reach**), editorial-compliance gated,
+   video creatives skipped (can't faithfully repost a video as a photo yet). If nothing qualifies
+   that week it posts **nothing** — by design.
+
+Run both live in-session: `python3 scripts/samantha/ad_lifecycle.py run --execute` (then write
+the replacement proposal if a cull happened); `... status` shows cadence state; `... cull-scan`
+or `... organic-promote` (no `--execute`) are dry-runs. Self-reports via
+`job_run("samantha_ad_lifecycle")` → **Fields Systems Health**: the **CEO Governance** rows
+"Ad cull scan" / "Ad organic promote" go **STALE if the daily run stops**, and that monitor is
+the guarantee it keeps happening. Tuning constants (thresholds, cooldown) sit at the top of
+`ad_lifecycle.py`.
+
 ## Task board
 Google Sheet "Samantha — Task Board" (`1xy2w8ATjaOCAelEi0BBcKonZbE9FQXNWyAosfkot6jo`) in her Drive folder
 (`19avOQvAdn5uYiPveNxuXuKaMHEfzgShb`), read/written via the service account. Tabs: Backlog, Questions for
@@ -300,6 +333,9 @@ failure mode this fixes:**
   5. **Task 0.5 — Systems Health** (any new ERROR/STALE/MISSING since your last check?)
   6. **Task 1/3 — marketing & ads** — a new A/B test worth launching (pulled from the experiment backlog,
      one-at-a-time per the disciplined-experimentation rules) or an existing one needing a keep/kill call?
+     **Did the ad-lifecycle workflow run this session** (`ad_lifecycle.py run --execute`) — and if it
+     culled an ad, did you write the rigorous replacement proposal into the running doc? (See "Standing
+     workflow — Ad lifecycle".)
   7. **Task 2 — organic engagement** — any new high-intent trail or served-data gap?
   8. **Code health** — refactoring opportunities (duplication, dead code, an obviously-cleaner structure)
      AND development opportunities (a missing tool, an untested path, a capability gap) — actively LOOK,
