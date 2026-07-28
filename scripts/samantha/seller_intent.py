@@ -50,6 +50,7 @@ except Exception:  # pragma: no cover
 
 NOW = datetime.now(timezone.utc)
 STALE_DOM_DAYS = 90  # a listing on market longer than this reads as "stale / frustrated vendor"
+CORE_SUBURBS = ["robina", "varsity_lakes", "burleigh_waters"]  # expiry-monitor scan scope
 
 # Paths that point at a specific property (the slug is the last segment).
 LISTING_PATH_RE = re.compile(
@@ -215,10 +216,10 @@ SELECT distinct_id,
   toString(min(timestamp)) AS first_seen,
   toString(max(timestamp)) AS last_seen,
   countIf(event='analyse_home_build_complete') AS ayh_build,
-  countIf(event='forsale_ladder_optin') AS ladder_optin,
+  countIf(event='forsale_ladder_complete' AND toString(properties.opted_in) IN ('true','True','1')) AS buyer_optin,
   countIf(event='forsale_ladder_answer') AS ladder_ans,
   countIf(event='v3_seller_anchor_view') AS seller_anchor,
-  countIf(event='price_alert_impression') AS price_alert,
+  countIf(event='price_alert_submit_success') AS price_alert_set,
   countIf(event='minisite_tab') AS minisite_tab,
   countIf(event='offmarket_report_view') AS offmkt,
   countIf(event='property_view') AS prop_view,
@@ -239,13 +240,13 @@ LIMIT 50000
         return BEHAV
     BEHAV = {}
     for r in rows:
-        (did, sessions, pv, first_seen, last_seen, ayh_build, ladder_optin, ladder_ans,
-         seller_anchor, price_alert, minisite_tab, offmkt, prop_view, sellnow, searches,
+        (did, sessions, pv, first_seen, last_seen, ayh_build, buyer_optin, ladder_ans,
+         seller_anchor, price_alert_set, minisite_tab, offmkt, prop_view, sellnow, searches,
          city, country) = r
         BEHAV[did] = dict(
             sessions=sessions, pageviews=pv, first_seen=first_seen, last_seen=last_seen,
-            ayh_build=ayh_build, ladder_optin=ladder_optin, ladder_answered=ladder_ans,
-            seller_anchor=seller_anchor, price_alert=price_alert, minisite_tab=minisite_tab,
+            ayh_build=ayh_build, buyer_optin=buyer_optin, ladder_answered=ladder_ans,
+            seller_anchor=seller_anchor, price_alert_set=price_alert_set, minisite_tab=minisite_tab,
             offmarket_views=offmkt, property_views=prop_view, sell_now_landings=sellnow,
             address_searches=[s for s in (searches or []) if s and s != "null"],
             city=city, country=country)
@@ -253,8 +254,8 @@ LIMIT 50000
     return BEHAV
 
 
-_COUNT_KEYS = ("sessions", "pageviews", "ayh_build", "ladder_optin", "ladder_answered",
-               "seller_anchor", "price_alert", "minisite_tab", "offmarket_views",
+_COUNT_KEYS = ("sessions", "pageviews", "ayh_build", "buyer_optin", "ladder_answered",
+               "seller_anchor", "price_alert_set", "minisite_tab", "offmarket_views",
                "property_views", "sell_now_landings")
 
 
@@ -283,9 +284,9 @@ def merge_behavioral(distinct_ids):
 
 def behavioral_score(b):
     """Weighted intent score — strongest seller signals weighted highest."""
-    return (b["ayh_build"] * 6 + b["sell_now_landings"] * 6 + b["ladder_optin"] * 5
+    return (b["ayh_build"] * 6 + b["sell_now_landings"] * 6 + b["buyer_optin"] * 5
             + b["minisite_tab"] * 4 + len(b["address_searches"]) * 3 + b["seller_anchor"] * 3
-            + b["price_alert"] * 2 + b["ladder_answered"] * 2 + b["offmarket_views"]
+            + b["price_alert_set"] * 4 + b["ladder_answered"] * 2 + b["offmarket_views"]
             + b["property_views"] + min(b["sessions"], 10))
 
 
@@ -301,7 +302,8 @@ def _anon_qualifies(b):
     """Threshold gate — a GENUINE intent bar so random browsers are never surfaced."""
     return (b["ayh_build"] >= 1                       # generated a valuation for an address
             or b["sell_now_landings"] >= 1            # landed on a 'sell now' page
-            or b["ladder_optin"] >= 1                 # opted in on the buyer/seller quiz
+            or b["buyer_optin"] >= 1                  # gave email to the weekly buyer brief
+            or b["price_alert_set"] >= 1              # set a real price alert
             or b["seller_anchor"] >= 3                # heavy seller-content engagement
             or (b["sessions"] >= 4 and (b["property_views"] + b["offmarket_views"]) >= 3))
 
@@ -343,6 +345,82 @@ def surface_behavioral_leads(sm, dry_run=False):
     print(f"[behavioral-surface] {n} anonymous high-signal lead(s) "
           f"{'(dry-run)' if dry_run else 'upserted'}")
     return n
+
+
+def _dom_from_our_listing(d):
+    """Days-on-market from our own scraped listing (first_listed_timestamp preferred)."""
+    ts = d.get("first_listed_timestamp")
+    if ts:
+        try:
+            dt = datetime.strptime(str(ts)[:19], "%Y-%m-%dT%H:%M:%S")
+            return (NOW.replace(tzinfo=None) - dt).days
+        except Exception:
+            pass
+    try:
+        return int(d.get("days_on_domain"))
+    except Exception:
+        return None
+
+
+def listing_expiry_monitor(sm, gc_db, suburbs=None, dry_run=False):
+    """Scan current for-sale listings in target suburbs and CAPTURE the ones whose ~90-day
+    Form 6 exclusive agency is nearing expiry as leads — the moment a vendor can switch or
+    re-list (an already-listed home is only a lead as its agreement expires). Cheap: uses
+    our own DOM; the enrichment pass PropRadar-verifies each captured lead afterwards.
+    Alerts Will with the expiring set."""
+    suburbs = suburbs or CORE_SUBURBS
+    captured, alerts = 0, []
+    for suburb in suburbs:
+        for d in gc_db[suburb].find(
+                {"listing_status": "for_sale"},
+                {"address": 1, "url_slug": 1, "price": 1, "agency": 1, "agent_name": 1,
+                 "first_listed_timestamp": 1, "days_on_domain": 1, "bedrooms": 1}):
+            dom = _dom_from_our_listing(d)
+            if dom is None:
+                continue
+            label, _reason, dte = listing_stage(dom)
+            if label != "on_market_expiring":
+                continue
+            addr = d.get("address")
+            if not addr:
+                continue
+            slug = d.get("url_slug")
+            key = f"listing:{slug or re.sub(r'[^a-z0-9]+', '', addr.lower())}"
+            alerts.append((addr, dom, dte, d.get("price"), d.get("agency")))
+            captured += 1
+            if dry_run:
+                continue
+            cosmos_retry(lambda: sm["lead_worklist"].update_one(
+                {"lead_key": key},
+                {"$setOnInsert": {"lead_key": key, "email": "", "name": "", "phone": "",
+                                  "sources": ["listing_expiry"], "is_test": False, "first_seen": NOW},
+                 "$set": {"address": addr,
+                          "origins": [{"collection": "gc_listing", "id": str(d.get("_id"))}],
+                          "extra": {"report_slug": slug, "agency": d.get("agency"),
+                                    "agent_name": d.get("agent_name")},
+                          "listing_expiry": {"days_on_market": dom, "days_to_expiry": dte,
+                                             "agency": d.get("agency"), "price": d.get("price")},
+                          "updated_at": NOW}},
+                upsert=True))
+    if alerts and not dry_run:
+        _notify_expiring(alerts)
+    print(f"[listing-expiry] {captured} near-expiry listing(s) captured as leads "
+          f"{'(dry-run)' if dry_run else ''}")
+    return captured
+
+
+def _notify_expiring(alerts):
+    """Telegram alert with listings whose ~90-day agency is nearing expiry (switch/re-list leads)."""
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from telegram_notify import send_message
+        alerts.sort(key=lambda a: a[2])  # soonest expiry first
+        lines = [f"⏰ {len(alerts)} listing(s) nearing ~90-day agency expiry — switch/re-list leads:"]
+        for addr, dom, dte, price, agency in alerts[:12]:
+            lines.append(f"• {addr} — {dom}d on market, ~{dte}d to expiry, {price or '?'} via {agency or '?'}")
+        send_message("\n".join(lines), parse_mode="")
+    except Exception as e:  # noqa: BLE001
+        print(f"(expiry Telegram alert skipped: {e})")
 
 
 # ============================ PropRadar enrichment ==========================
@@ -423,6 +501,39 @@ def _money(v):
         return str(v) if v else "?"
 
 
+# A home ALREADY listed is NOT a lead — they've just committed to a competing agent
+# (Will 2026-07-28). They become a lead as the Form 6 exclusive agency agreement nears
+# expiry. In QLD a sole/exclusive residential-sales appointment maxes at 90 days
+# (Property Occupations Act 2014); the 90-day mark (and each renewal boundary) is the
+# decision point to renew, switch agent, or withdraw.
+FORM6_DAYS = 90
+EXPIRY_WINDOW = 21  # days before a 90-day boundary that we treat as "nearing expiry"
+
+
+def listing_stage(dom):
+    """Classify an on-market listing by where it sits against the ~90-day agency term.
+    Returns (label, reason, days_to_expiry)."""
+    if dom is None:
+        return ("on_market_active",
+                "On the market (days-on-market unknown) — verify the agency stage before treating as a lead.", None)
+    dte = (FORM6_DAYS - (dom % FORM6_DAYS)) % FORM6_DAYS   # days to next 90-day boundary (0 = at it)
+    boundary = ((dom // FORM6_DAYS) + (0 if dom % FORM6_DAYS == 0 else 1)) * FORM6_DAYS or FORM6_DAYS
+    if dom < FORM6_DAYS - EXPIRY_WINDOW:
+        # Comfortably inside the first exclusive term.
+        return ("on_market_fresh",
+                f"Just listed with another agent (~{dom}d in) — their exclusive agency has ~{dte} days to run. "
+                "NOT a lead yet: they've committed to a competitor. Watch for the ~90-day expiry, don't approach now.",
+                dte)
+    if dte <= EXPIRY_WINDOW:
+        return ("on_market_expiring",
+                f"Their exclusive agency is nearing expiry — ~{dte} days to the {boundary}-day mark, still unsold after {dom} days. "
+                "The decision point to renew, switch agent, or withdraw. PRIME approach window: offer a candid read + re-list plan.",
+                dte)
+    return ("on_market_stale",
+            f"On the market {dom} days — past the first 90-day agency term and still unsold. "
+            "Renewed but struggling / likely frustrated vendor. Open to a second opinion.", dte)
+
+
 def conclude(own, current_viewed, generated_minisite):
     own_status = (own or {}).get("listing_status")
     dom = (own or {}).get("days_on_market")
@@ -430,15 +541,8 @@ def conclude(own, current_viewed, generated_minisite):
     addrs = ", ".join(v["address"] for v in current_viewed if v.get("address"))[:200]
 
     if own_status == "for_sale":
-        if dom is not None and dom >= STALE_DOM_DAYS:
-            return ("on_market_stale",
-                    f"Own home has been FOR SALE {dom} days ({(own or {}).get('price')}). "
-                    "Long on market + actively researching Fields = likely frustrated vendor, "
-                    "second-opinion / re-list candidate. Verify listing is fresh before any contact.")
-        dom_txt = f"{dom}d on market, " if dom is not None else ""
-        return ("on_market_active",
-                f"Own home is FOR SALE ({dom_txt}{(own or {}).get('price')}) — active campaign. "
-                "Track the listing; not a pre-market seller.")
+        label, reason, _ = listing_stage(dom)
+        return (label, reason)
     if own_status == "withdrawn":
         return ("pre_market_withdrawn",
                 "Own home recently WITHDRAWN from market — wait-and-see pre-market seller. High-intent.")
@@ -462,9 +566,13 @@ def conclude(own, current_viewed, generated_minisite):
 
 
 READS = {
-    "on_market_stale": "Read: a long-stalled vendor, likely open to a candid second opinion / re-list strategy. "
-                       "Approach: lead with why a long campaign stalls and a concrete pricing/re-list plan — verify the listing is still live first.",
-    "on_market_active": "Read: actively selling on a fresh campaign — not pre-market. Approach: track only (buyer-side angle if they're also searching).",
+    "on_market_fresh": "Read: just listed with a COMPETING agent — not a lead yet (they've committed). "
+                       "Approach: none now; auto-watch for the ~90-day agency expiry.",
+    "on_market_expiring": "Read: their exclusive agency is at/near expiry with no sale — the single best moment to approach. "
+                          "Approach: a candid 'why it hasn't sold + what I'd do differently' + concrete re-list plan.",
+    "on_market_stale": "Read: past the first agency term and still unsold — frustrated vendor. "
+                       "Approach: a second-opinion / re-list conversation; verify the listing is still live first.",
+    "on_market_active": "Read: on the market, agency stage unclear. Approach: verify days-on-market before treating as a lead.",
     "pre_market_withdrawn": "Read: pulled the listing to wait — a warm pre-market seller. Approach: acknowledge the pause; offer a no-pressure repositioning view.",
     "browsing_while_unlisted": "Read: not listed but researching the market — probable seller weighing a move. Approach: a soft, helpful pre-market appraisal offer.",
     "engaged_owner_researching": "Read: an owner quietly testing the waters on their own home — early-stage but real seller intent. Approach: a warm, no-pressure 'here's what your home could be worth' follow-up.",
@@ -544,10 +652,12 @@ def build_story(lead, own, current_viewed, behav, pr, label):
         beh.append("searched " + ", ".join(behav["address_searches"][:3]))
     if behav.get("seller_anchor"):
         beh.append(f"read seller-focused content {behav['seller_anchor']}×")
-    if behav.get("price_alert"):
-        beh.append(f"set {behav['price_alert']} price alert(s)")
-    if behav.get("ladder_optin"):
-        beh.append("opted in on the buyer/seller quiz")
+    if behav.get("price_alert_set"):
+        beh.append(f"set {behav['price_alert_set']} price alert(s) on a property")
+    if behav.get("ladder_answered"):
+        beh.append("answered the /for-sale-v3 buyer preferences quiz")
+    if behav.get("buyer_optin"):
+        beh.append("opted into the weekly buyer email (5 Property Friday)")
     if current_viewed:
         beh.append("also viewing live listing(s): "
                    + "; ".join(f"{v['address']} ({v.get('price')})" for v in current_viewed[:2]))
@@ -591,18 +701,35 @@ def analyze(lead: dict, sm, gc_db, suburb_index, pr_budget=None) -> dict:
         reason = ("Not listed, but actively researching their own home — generated a valuation / explored "
                   "their report / visited a sell-now page. Probable early-stage seller.")
 
-    # PropRadar — rationed to genuinely high-intent, address-bearing leads.
+    # PropRadar — rationed to genuine leads. A FRESH listing (well inside its exclusive
+    # agency term) is NOT a lead (they just committed to a competitor), so skip paid enrichment.
     pr = None
     addr = lead.get("address")
     st = (own or {}).get("listing_status")
-    high_intent = (st in ("for_sale", "withdrawn") or bscore >= 8
-                   or label in ("on_market_stale", "browsing_while_unlisted", "pre_market_withdrawn"))
+    own_dom = (own or {}).get("days_on_market")
+    listing_lead = (st == "for_sale" and (own_dom is None or own_dom >= FORM6_DAYS - EXPIRY_WINDOW - 9)) \
+        or st == "withdrawn"
+    high_intent = (listing_lead or bscore >= 8
+                   or label in ("on_market_stale", "on_market_expiring", "browsing_while_unlisted",
+                                "engaged_owner_researching", "pre_market_withdrawn"))
     if addr and high_intent and (pr_budget is None or pr_budget[0] > 0):
         pr = pr_enrich(addr)
         if pr_budget is not None and pr and "error" not in pr:
             pr_budget[0] -= 1
 
-    hotness = bscore + (10 if st in ("for_sale", "withdrawn") else 0)
+    # Reclassify the listing with PropRadar's accurate CURRENT-campaign days-on-market
+    # (our first_listed_timestamp can include earlier relists; the agency term restarts on
+    # the current listing).
+    if st == "for_sale":
+        eff_dom = (pr or {}).get("dom")
+        if eff_dom is None:
+            eff_dom = own_dom
+        label, reason, _dte = listing_stage(eff_dom)
+
+    # Hotness by lead-worthiness: a fresh listing is NOT a lead -> deprioritise.
+    listing_bonus = {"on_market_expiring": 22, "on_market_stale": 12, "pre_market_withdrawn": 14,
+                     "on_market_fresh": -6}.get(label, 0)
+    hotness = bscore + listing_bonus
     moment = None
     ls = behav.get("last_seen")
     recent = False
@@ -616,8 +743,8 @@ def analyze(lead: dict, sm, gc_db, suburb_index, pr_budget=None) -> dict:
             moment = "Just generated a home valuation"
         elif behav["sell_now_landings"]:
             moment = "Just visited a 'sell now' page"
-        elif behav["ladder_optin"]:
-            moment = "Just opted in on the buyer/seller quiz"
+        elif behav["buyer_optin"]:
+            moment = "Just opted into the weekly buyer email"
         elif behav["minisite_tab"] >= 3:
             moment = "Actively exploring their report (incl. Messages)"
         elif behav["seller_anchor"]:
@@ -631,8 +758,9 @@ def analyze(lead: dict, sm, gc_db, suburb_index, pr_budget=None) -> dict:
     now_listed = st == "for_sale" or (pr or {}).get("on_market") is True
     just_listed = bool(prev and now_listed and not prev_listed)
     if just_listed:
-        moment = "Their home JUST LISTED — selling now"
-        hotness += 50
+        # They've just committed to a competing agent — NOT a lead now. Flag for the
+        # ~90-day expiry watch instead of treating it as hot intent.
+        moment = "Just listed with another agent — NOT a lead now; flag for ~90-day expiry watch"
 
     story = build_story(lead, own, current_viewed, behav, pr, label)
 
@@ -668,6 +796,7 @@ def run(query: dict, dry_run: bool = False, limit: int = 0, max_pr: int = 30) ->
     # they're enriched + written to the sheet alongside everyone else.
     if query == {}:
         surface_behavioral_leads(sm, dry_run=dry_run)
+        listing_expiry_monitor(sm, gc_db, dry_run=dry_run)
 
     leads = list(sm["lead_worklist"].find(query))
     if limit:
@@ -716,7 +845,8 @@ def _notify_just_listed(alerts):
     try:
         sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
         from telegram_notify import send_message
-        lines = ["🔥 JUST LISTED — a tracked lead's home just went on-market:"]
+        lines = ["📋 A tracked pre-market lead just LISTED WITH ANOTHER AGENT "
+                 "(not a lead now — flagged for the ~90-day expiry watch):"]
         for addr, si in alerts[:10]:
             lines.append(f"• {addr}")
             if si.get("story"):
