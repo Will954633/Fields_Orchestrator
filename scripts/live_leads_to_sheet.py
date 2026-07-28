@@ -506,8 +506,21 @@ def _worklist_doc_for(lead, idx):
 
 
 def format_situation(doc, si) -> str:
-    """One human-readable line packing every follow-up-relevant fact we hold."""
+    """The verbose seller-intent story (behavioral + PropRadar), with a hotness/moment
+    header, so a follow-up can be fully tailored. Falls back to a terse compose for any
+    lead not yet enriched with a story."""
     si = si or {}
+    story = si.get("story")
+    if story:
+        head = []
+        pri = doc.get("priority")
+        if pri and pri not in ("low", "test", None):
+            head.append(pri.upper())
+        if si.get("hotness"):
+            head.append(f"hot {si['hotness']}")
+        prefix = f"[NOW] {si['moment']}. " if si.get("moment") else ""
+        headstr = (" · ".join(head) + " — ") if head else ""
+        return f"{prefix}{headstr}{story}"
     parts = []
     pri = doc.get("priority")
     if pri and pri not in ("low", "test", None):
@@ -545,14 +558,18 @@ def format_situation(doc, si) -> str:
 
 
 def situation_for(lead, idx, sm, gc_db, suburb_index) -> str:
-    """Live seller-intent line for a lead. Falls back to the stored field on error."""
+    """Prefer the STORED seller_intent (computed nightly at 02:00 with a PropRadar budget)
+    so the sheet never re-hits PropRadar for every lead. Compute live (bounded PropRadar)
+    only for a lead not yet enriched — i.e. one added since the last nightly run."""
     doc = _worklist_doc_for(lead, idx)
     if not doc:
         return ""
-    try:
-        si = sim.analyze(doc, sm, gc_db, suburb_index)
-    except Exception:
-        si = doc.get("seller_intent") or {}
+    si = doc.get("seller_intent")
+    if not si or not si.get("story"):
+        try:
+            si = sim.analyze(doc, sm, gc_db, suburb_index, pr_budget=[3])
+        except Exception:
+            si = doc.get("seller_intent") or {}
     return format_situation(doc, si)
 
 
