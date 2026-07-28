@@ -186,6 +186,184 @@ def own_property_brief(lead: dict, gc_db, suburb_index):
     return None, None
 
 
+# ============================ behavioral signals =============================
+# PostHog event signals that reveal intent, beyond raw pageviews. Loaded once per
+# run into BEHAV (keyed by distinct_id) and merged across a lead's distinct_ids.
+BEHAV: dict = {}
+BEHAV_DAYS = 45
+
+
+def load_behavioral(days=BEHAV_DAYS):
+    """One HogQL sweep of intent-bearing events -> {distinct_id: signals}."""
+    global BEHAV
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"))
+        from crm_sync import posthog_query
+    except Exception as e:  # noqa: BLE001
+        print(f"[behavioral] PostHog unavailable ({e}); behavioral signals skipped")
+        BEHAV = {}
+        return BEHAV
+    try:
+        rows = posthog_query(f"""
+SELECT distinct_id,
+  uniq(properties.$session_id) AS sessions,
+  countIf(event='$pageview') AS pv,
+  toString(min(timestamp)) AS first_seen,
+  toString(max(timestamp)) AS last_seen,
+  countIf(event='analyse_home_build_complete') AS ayh_build,
+  countIf(event='forsale_ladder_optin') AS ladder_optin,
+  countIf(event='forsale_ladder_answer') AS ladder_ans,
+  countIf(event='v3_seller_anchor_view') AS seller_anchor,
+  countIf(event='price_alert_impression') AS price_alert,
+  countIf(event='minisite_tab') AS minisite_tab,
+  countIf(event='offmarket_report_view') AS offmkt,
+  countIf(event='property_view') AS prop_view,
+  countIf(properties.$pathname LIKE '%sell-now%') AS sellnow,
+  arrayFilter(x -> x != '', groupUniqArray(toString(properties.search_query))) AS searches,
+  argMax(properties.$geoip_city_name, timestamp) AS city,
+  argMax(properties.$geoip_country_name, timestamp) AS country
+FROM events
+WHERE timestamp > now() - INTERVAL {int(days)} DAY
+GROUP BY distinct_id
+HAVING pv >= 1
+ORDER BY sessions DESC
+LIMIT 50000
+""")
+    except Exception as e:  # noqa: BLE001
+        print(f"[behavioral] query failed ({e}); behavioral signals skipped")
+        BEHAV = {}
+        return BEHAV
+    BEHAV = {}
+    for r in rows:
+        (did, sessions, pv, first_seen, last_seen, ayh_build, ladder_optin, ladder_ans,
+         seller_anchor, price_alert, minisite_tab, offmkt, prop_view, sellnow, searches,
+         city, country) = r
+        BEHAV[did] = dict(
+            sessions=sessions, pageviews=pv, first_seen=first_seen, last_seen=last_seen,
+            ayh_build=ayh_build, ladder_optin=ladder_optin, ladder_answered=ladder_ans,
+            seller_anchor=seller_anchor, price_alert=price_alert, minisite_tab=minisite_tab,
+            offmarket_views=offmkt, property_views=prop_view, sell_now_landings=sellnow,
+            address_searches=[s for s in (searches or []) if s and s != "null"],
+            city=city, country=country)
+    print(f"[behavioral] loaded {len(BEHAV)} people from PostHog ({days}d)")
+    return BEHAV
+
+
+_COUNT_KEYS = ("sessions", "pageviews", "ayh_build", "ladder_optin", "ladder_answered",
+               "seller_anchor", "price_alert", "minisite_tab", "offmarket_views",
+               "property_views", "sell_now_landings")
+
+
+def merge_behavioral(distinct_ids):
+    agg = {k: 0 for k in _COUNT_KEYS}
+    agg.update(address_searches=[], first_seen=None, last_seen=None, city=None)
+    for did in distinct_ids or []:
+        b = BEHAV.get(did)
+        if not b:
+            continue
+        for k in _COUNT_KEYS:
+            agg[k] += b.get(k, 0) or 0
+        agg["address_searches"] += b.get("address_searches") or []
+        agg["city"] = agg["city"] or b.get("city")
+        fs, ls = b.get("first_seen"), b.get("last_seen")
+        if fs and (agg["first_seen"] is None or fs < agg["first_seen"]):
+            agg["first_seen"] = fs
+        if ls and (agg["last_seen"] is None or ls > agg["last_seen"]):
+            agg["last_seen"] = ls
+    # Drop incremental-typing prefixes ("20 GLEN" when "20 GLEN EAG" is also present).
+    uniq = list(dict.fromkeys(agg["address_searches"]))
+    uniq = [s for s in uniq if not any(o != s and o.lower().startswith(s.lower()) for o in uniq)]
+    agg["address_searches"] = uniq[:8]
+    return agg
+
+
+def behavioral_score(b):
+    """Weighted intent score — strongest seller signals weighted highest."""
+    return (b["ayh_build"] * 6 + b["sell_now_landings"] * 6 + b["ladder_optin"] * 5
+            + b["minisite_tab"] * 4 + len(b["address_searches"]) * 3 + b["seller_anchor"] * 3
+            + b["price_alert"] * 2 + b["ladder_answered"] * 2 + b["offmarket_views"]
+            + b["property_views"] + min(b["sessions"], 10))
+
+
+# ============================ PropRadar enrichment ==========================
+_PR_CACHE: dict = {}
+
+
+def pr_enrich(address):
+    """On-demand PropRadar: listing status, real days-on-market, valuation, potential
+    sell price, last sale (=> tenure + equity), attributes, price-cut count. Cached per
+    address. ~2-3 calls; only call for genuinely high-intent leads (quota is 5000/mo)."""
+    if not address:
+        return None
+    key = address.strip().lower()
+    if key in _PR_CACHE:
+        return _PR_CACHE[key]
+    pc = re.search(r"\b(\d{4})\b", address)
+    postcode = pc.group(1) if pc else None
+    street = re.split(r",|\bQLD\b", address)[0].strip()
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "propradar"))
+        import propradar_client as pr
+        params = {"address": street}
+        if postcode:
+            params["postcode"] = postcode
+        s, _ = pr.call("/properties/search", params)
+    except Exception as e:  # noqa: BLE001
+        _PR_CACHE[key] = {"error": str(e)[:80]}
+        return _PR_CACHE[key]
+    pid = s.get("property_id") or (s.get("matches") or [{}])[0].get("property_id")
+    res = {"on_market": s.get("on_market"), "sold_record": s.get("sold_record_available"), "pid": pid}
+    if pid:
+        try:
+            d, _ = pr.call(f"/properties/{pid}", {})
+            lst = d.get("listing") or {}
+            val = d.get("valuation") or {}
+            ls = d.get("last_sale") or {}
+            at = d.get("attributes") or {}
+            res.update(dom=lst.get("days_on_market"), asking_low=lst.get("asking_price_low"),
+                       asking_high=lst.get("asking_price_high"), sale_type=lst.get("sale_type"),
+                       est_value=val.get("estimated_value"), est_conf=val.get("confidence"),
+                       psp=d.get("potential_sell_price"), last_sale_price=ls.get("sold_price"),
+                       last_sale_date=ls.get("sold_date"), bedrooms=at.get("bedrooms"),
+                       land_sqm=at.get("land_size_sqm"), year_built=at.get("year_built"),
+                       property_type=at.get("property_type"))
+        except Exception:
+            pass
+        try:
+            hist, _ = pr.call(f"/properties/{pid}/history", {})
+            evs = hist.get("history") or []
+            res["price_cuts"] = sum(1 for e in evs if e.get("event_type") == "price_change")
+            listed = [e for e in evs if e.get("event_type") == "listed"]
+            if listed:
+                res["first_listed_date"] = listed[0].get("date")
+            solds = [e for e in evs if e.get("event_type") == "sold"]
+            if solds and not res.get("last_sale_price"):
+                res["last_sale_price"] = solds[-1].get("price")
+                res["last_sale_date"] = solds[-1].get("date")
+        except Exception:
+            pass
+    _PR_CACHE[key] = res
+    return res
+
+
+def _years_since(datestr):
+    if not datestr:
+        return None
+    try:
+        d = datetime.strptime(str(datestr)[:10], "%Y-%m-%d")
+        return round((NOW.replace(tzinfo=None) - d).days / 365.25, 1)
+    except Exception:
+        return None
+
+
+def _money(v):
+    try:
+        return f"${int(v):,}"
+    except Exception:
+        return str(v) if v else "?"
+
+
 def conclude(own, current_viewed, generated_minisite):
     own_status = (own or {}).get("listing_status")
     dom = (own or {}).get("days_on_market")
@@ -224,8 +402,103 @@ def conclude(own, current_viewed, generated_minisite):
     return ("no_cross_signal", "No active-listing cross-signal yet.")
 
 
-def analyze(lead: dict, sm, gc_db, suburb_index) -> dict:
-    dids = lead_distinct_ids(lead, sm)
+READS = {
+    "on_market_stale": "Read: a long-stalled vendor, likely open to a candid second opinion / re-list strategy. "
+                       "Approach: lead with why a long campaign stalls and a concrete pricing/re-list plan — verify the listing is still live first.",
+    "on_market_active": "Read: actively selling on a fresh campaign — not pre-market. Approach: track only (buyer-side angle if they're also searching).",
+    "pre_market_withdrawn": "Read: pulled the listing to wait — a warm pre-market seller. Approach: acknowledge the pause; offer a no-pressure repositioning view.",
+    "browsing_while_unlisted": "Read: not listed but researching the market — probable seller weighing a move. Approach: a soft, helpful pre-market appraisal offer.",
+    "engaged_owner_researching": "Read: an owner quietly testing the waters on their own home — early-stage but real seller intent. Approach: a warm, no-pressure 'here's what your home could be worth' follow-up.",
+    "viewing_listings_home_unknown": "Read: engaged but unidentified — buyer or seller unclear. Approach: capture identity before pitching.",
+    "no_cross_signal": "",
+}
+
+
+def build_story(lead, own, current_viewed, behav, pr, label):
+    """A verbose, human-readable paragraph: who they likely are, what they did, what it
+    means, and the best way to help — everything a person needs to tailor an approach."""
+    bits = []
+    addr = lead.get("address")
+    city = behav.get("city")
+    occ = (lead.get("occupancy") or {}).get("type")
+    tenure = _years_since((pr or {}).get("last_sale_date")) or lead.get("years_held")
+
+    # Who
+    who = []
+    if city and addr and city.split(",")[0] not in addr:
+        who.append(f"{city}-based")
+    if occ and occ != "unknown":
+        who.append(occ.replace("_", " "))
+    if tenure:
+        who.append(f"held ~{tenure}y")
+    if who and addr:
+        bits.append(f"{' '.join(who).capitalize()} owner of {addr}.")
+
+    # Own-home situation (PropRadar-enriched where available)
+    st = (own or {}).get("listing_status")
+    if st == "for_sale":
+        s = "Their home is on the market"
+        dom = (pr or {}).get("dom") or (own or {}).get("days_on_market")
+        if dom:
+            s += f", ~{dom} days into the current campaign"
+        if (own or {}).get("price"):
+            s += f", asking {own['price']}"
+        if (own or {}).get("agency"):
+            s += f" via {own['agency']}"
+        bits.append(s + ".")
+        if pr and pr.get("est_value"):
+            eq = ""
+            if pr.get("last_sale_price"):
+                gain = pr["est_value"] - pr["last_sale_price"]
+                yr = str(pr.get("last_sale_date"))[:4] if pr.get("last_sale_date") else ""
+                eq = f"; bought for {_money(pr['last_sale_price'])}{(' in ' + yr) if yr else ''} → ~{_money(gain)} unrealised gain"
+            bits.append(f"PropRadar values it at {_money(pr['est_value'])} ({pr.get('est_conf')} confidence), "
+                        f"potential sell price {_money(pr.get('psp'))}{eq}.")
+            if pr.get("price_cuts"):
+                bits.append(f"{pr['price_cuts']} price change(s) recorded — motivation/price-discovery signal.")
+    elif st == "withdrawn":
+        bits.append("Their home was recently withdrawn from the market — a wait-and-see vendor.")
+    elif addr and label == "browsing_while_unlisted":
+        note = "not currently listed"
+        if pr and pr.get("est_value"):
+            note += f"; PropRadar estimate {_money(pr['est_value'])}"
+            if pr.get("last_sale_price"):
+                note += f" vs {_money(pr['last_sale_price'])} paid"
+        bits.append(f"Their home is {note}.")
+
+    # Behaviour
+    beh = []
+    if behav.get("sessions"):
+        beh.append(f"{behav['sessions']} session(s)/{behav['pageviews']} pageviews")
+    if behav.get("ayh_build"):
+        beh.append(f"generated our valuation {behav['ayh_build']}×")
+    if behav.get("minisite_tab"):
+        beh.append(f"opened their report's tabs {behav['minisite_tab']}× (incl. Messages)")
+    if behav.get("sell_now_landings"):
+        beh.append(f"visited a 'sell now' page {behav['sell_now_landings']}×")
+    if behav.get("address_searches"):
+        beh.append("searched " + ", ".join(behav["address_searches"][:3]))
+    if behav.get("seller_anchor"):
+        beh.append(f"read seller-focused content {behav['seller_anchor']}×")
+    if behav.get("price_alert"):
+        beh.append(f"set {behav['price_alert']} price alert(s)")
+    if behav.get("ladder_optin"):
+        beh.append("opted in on the buyer/seller quiz")
+    if current_viewed:
+        beh.append("also viewing live listing(s): "
+                   + "; ".join(f"{v['address']} ({v.get('price')})" for v in current_viewed[:2]))
+    if beh:
+        bits.append("Behaviour: " + "; ".join(beh) + ".")
+
+    if READS.get(label):
+        bits.append(READS[label])
+    return " ".join(bits).strip()
+
+
+def analyze(lead: dict, sm, gc_db, suburb_index, pr_budget=None) -> dict:
+    dids = lead.get("_dids")
+    if dids is None:
+        dids = lead_distinct_ids(lead, sm)
     pages, sessions = journeys_for(sm, dids)
     own, own_slug = own_property_brief(lead, gc_db, suburb_index)
 
@@ -241,44 +514,111 @@ def analyze(lead: dict, sm, gc_db, suburb_index) -> dict:
     generated_minisite = any(o.get("collection") == "property_reports"
                              for o in lead.get("origins") or [])
     label, reason = conclude(own, current_viewed, generated_minisite)
+
+    behav = merge_behavioral(dids)
+    bscore = behavioral_score(behav)
+
+    # Behavioral upgrade: an unlisted owner actively valuing their own home is a
+    # pre-market seller signal the listing-status logic alone cannot see.
+    if (label == "no_cross_signal"
+            and (own or {}).get("listing_status") not in ("for_sale", "withdrawn")
+            and (behav["ayh_build"] or behav["sell_now_landings"] or behav["minisite_tab"] >= 3)):
+        label = "engaged_owner_researching"
+        reason = ("Not listed, but actively researching their own home — generated a valuation / explored "
+                  "their report / visited a sell-now page. Probable early-stage seller.")
+
+    # PropRadar — rationed to genuinely high-intent, address-bearing leads.
+    pr = None
+    addr = lead.get("address")
+    st = (own or {}).get("listing_status")
+    high_intent = (st in ("for_sale", "withdrawn") or bscore >= 8
+                   or label in ("on_market_stale", "browsing_while_unlisted", "pre_market_withdrawn"))
+    if addr and high_intent and (pr_budget is None or pr_budget[0] > 0):
+        pr = pr_enrich(addr)
+        if pr_budget is not None and pr and "error" not in pr:
+            pr_budget[0] -= 1
+
+    hotness = bscore + (10 if st in ("for_sale", "withdrawn") else 0)
+    moment = None
+    ls = behav.get("last_seen")
+    recent = False
+    if ls:
+        try:
+            recent = (NOW.replace(tzinfo=None) - datetime.strptime(ls[:19], "%Y-%m-%d %H:%M:%S")).days <= 3
+        except Exception:
+            recent = False
+    if recent:
+        if behav["ayh_build"]:
+            moment = "Just generated a home valuation"
+        elif behav["sell_now_landings"]:
+            moment = "Just visited a 'sell now' page"
+        elif behav["ladder_optin"]:
+            moment = "Just opted in on the buyer/seller quiz"
+        elif behav["minisite_tab"] >= 3:
+            moment = "Actively exploring their report (incl. Messages)"
+        elif behav["seller_anchor"]:
+            moment = "Just engaged seller-focused content"
+
+    story = build_story(lead, own, current_viewed, behav, pr, label)
+
     return {
         "label": label,
         "conclusion": reason,
+        "story": story,
         "own_property": own,
         "listings_viewed": viewed,
         "current_listings_viewed": current_viewed,
         "n_current_listings_viewed": len(current_viewed),
+        "behavioral": {**{k: behav[k] for k in _COUNT_KEYS},
+                       "address_searches": behav["address_searches"], "last_seen": behav["last_seen"]},
+        "behavioral_score": bscore,
+        "hotness": hotness,
+        "moment": moment,
+        "propradar": pr,
         "journey_sessions": sessions,
         "generated_own_minisite": generated_minisite,
         "computed_at": NOW,
     }
 
 
-def run(query: dict, dry_run: bool = False, limit: int = 0) -> int:
+def run(query: dict, dry_run: bool = False, limit: int = 0, max_pr: int = 30) -> int:
     c = get_client()
     sm = c["system_monitor"]
     gc_db = c["Gold_Coast"]
     suburb_index = build_suburb_index(gc_db)
+    load_behavioral()  # one PostHog sweep -> BEHAV
 
     leads = list(sm["lead_worklist"].find(query))
     if limit:
         leads = leads[:limit]
 
-    n = hits = 0
+    # Resolve distinct_ids once, then process HOTTEST first so the PropRadar budget
+    # (quota-limited) is spent on the highest-intent leads.
     for lead in leads:
-        si = analyze(lead, sm, gc_db, suburb_index)
+        lead["_dids"] = lead_distinct_ids(lead, sm)
+    leads.sort(key=lambda l: (
+        behavioral_score(merge_behavioral(l["_dids"]))
+        + (12 if (l.get("property") or {}).get("listing_status") in ("for_sale", "withdrawn") else 0)),
+        reverse=True)
+
+    pr_budget = [max_pr]
+    n = hits = pr_used_start = 0
+    pr_used_start = max_pr
+    for lead in leads:
+        si = analyze(lead, sm, gc_db, suburb_index, pr_budget)
         n += 1
-        if si["label"] != "no_cross_signal":
+        actionable = si["label"] != "no_cross_signal" or si["behavioral_score"] >= 8 or si.get("moment")
+        if actionable:
             hits += 1
-        own = si["own_property"] or {}
-        line = (f"[{si['label']:>22}] {(lead.get('address') or lead.get('lead_key'))[:44]:<44} "
-                f"own={own.get('listing_status')} dom={own.get('days_on_market')} "
-                f"| current_viewed={si['n_current_listings_viewed']}")
-        print(line)
+        flag = "🔥" if si.get("moment") else ("•" if actionable else " ")
+        print(f"{flag} [{si['label']:>24}] hot={si['hotness']:>3} "
+              f"{(lead.get('address') or lead.get('lead_key'))[:40]:<40} "
+              f"{('| ' + si['moment']) if si.get('moment') else ''}")
         if not dry_run:
             cosmos_retry(lambda: sm["lead_worklist"].update_one(
                 {"_id": lead["_id"]}, {"$set": {"seller_intent": si}}))
-    print(f"\nseller_intent: {n} leads processed, {hits} with a cross-signal, "
+    print(f"\nseller_intent: {n} leads processed, {hits} actionable, "
+          f"PropRadar-enriched {pr_used_start - pr_budget[0]} lead(s), "
           f"{'DRY-RUN (nothing written)' if dry_run else 'written to lead_worklist.seller_intent'}")
     return hits
 
@@ -290,6 +630,8 @@ def main() -> int:
     ap.add_argument("--all", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--max-pr", type=int, default=30,
+                    help="max leads to PropRadar-enrich this run (quota guard)")
     args = ap.parse_args()
 
     if args.lead_key:
@@ -307,11 +649,11 @@ def main() -> int:
         from scripts.job_status import job_run
         with job_run("seller_intent", cadence_hours=24,
                      title="CRM Seller-Intent Enrichment") as beat:
-            hits = run(q, dry_run=False, limit=args.limit)
-            beat.detail = f"{hits} leads with a seller-intent cross-signal"
-            beat.metrics = {"cross_signals": hits}
+            hits = run(q, dry_run=False, limit=args.limit, max_pr=args.max_pr)
+            beat.detail = f"{hits} actionable seller-intent leads"
+            beat.metrics = {"actionable": hits}
         return 0
-    run(q, dry_run=args.dry_run, limit=args.limit)
+    run(q, dry_run=args.dry_run, limit=args.limit, max_pr=args.max_pr)
     return 0
 
 
