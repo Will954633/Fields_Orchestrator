@@ -17,7 +17,7 @@ Usage:
     python3 scripts/fb-lead-puller.py --no-notify
 Schedule (suggested): every 15 min via cron.
 """
-import os, sys, argparse, requests
+import os, sys, argparse, requests, re
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 
@@ -35,6 +35,25 @@ TOKEN = os.environ["FACEBOOK_ADS_TOKEN"]
 # AYH forms are fulfilled (address -> mini-site -> email) via a Netlify function.
 AYH_FORM_IDS = {"1735418400974915"}
 FULFIL_URL = "https://fieldsestate.com.au/.netlify/functions/ayh-lead-fulfil"
+
+# Seller-intent Instant-Form lead ads (Home Owner Lead Funnel, 2026-07-28).
+# These capture full_name + email + phone_number + a selling-intent qualifier so
+# Will can CALL them. The generic notify() below is hardcoded for buyer forms and
+# would fire an empty, mislabelled alert (no name/phone) for these — so route them
+# to notify_seller() which surfaces the phone number and the selling answer.
+# Populated as forms are created (see 03_Facebook/Home_Owner_Lead_Funnel_Search).
+SELLER_FORM_IDS = {
+    "1961613607744103",  # Seller Intent (report) — name+email+phone
+    "1689297792302611",  # Sold-Price Alerts — name+email+phone
+    "1307646261451971",  # Seller Intent (report+address)
+}
+
+# "Before You List" — free printed hardcover, POSTED (2026-07-28). Physical-only:
+# name+email+phone+postal address. Route to the print-and-post queue (tagged by
+# A/B/C arm) so Will can dispatch a book; a mailed hardcover has a real per-unit
+# cost, so implausible/blank addresses are flagged needs_review, not auto-posted.
+BYL_FORM_IDS = {"1797190291266790"}
+CORE_POSTCODES = {"4220", "4226", "4227"}  # Burleigh Waters, Robina, Varsity Lakes
 
 
 def page_token():
@@ -107,6 +126,39 @@ def notify(fields, form_name, created, campaign_name=None, ad_name=None):
         print(f"  telegram notify failed: {e}", file=sys.stderr)
 
 
+def notify_seller(fields, form_name, created, campaign_name=None, ad_name=None):
+    """Seller-intent lead alert — surfaces the PHONE NUMBER and selling answer so
+    Will can call promptly. Distinct from the buyer notify() (which renders neither)."""
+    token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    chat = os.environ.get("TELEGRAM_CHAT_ID")
+    if not (token and chat):
+        return
+    # selling intent may arrive under a few possible keys depending on the form
+    intent = (fields.get("selling_intent") or fields.get("selling_timeframe")
+              or fields.get("thinking_of_selling") or "?")
+    hot = str(intent).lower().startswith(("yes", "now", "within", "0", "1", "2", "3"))
+    name = fields.get("full_name") or fields.get("name") or "?"
+    phone = fields.get("phone_number") or fields.get("phone") or "?"
+    source = campaign_name or ad_name
+    src_line = f"📣 _{source}_" if source else "📣 _Organic (no ad)_"
+    lines = ["🏷️ *New SELLER lead — call them*" + ("  🔥 SELLING INTENT" if hot else ""),
+             f"_{form_name}_", src_line, "",
+             f"• *Name:* {name}",
+             f"• *📞 Phone:* {phone}",
+             f"• *Email:* {fields.get('email','?')}",
+             f"• *Selling?:* {intent}"]
+    for k in ("property_address", "address", "suburb"):
+        if fields.get(k):
+            lines.append(f"• *{k.replace('_',' ').title()}:* {fields[k]}")
+            break
+    lines += ["", f"_{created}_"]
+    try:
+        requests.post(f"https://api.telegram.org/bot{token}/sendMessage",
+                      json={"chat_id": chat, "text": "\n".join(lines), "parse_mode": "Markdown"}, timeout=20)
+    except Exception as e:
+        print(f"  telegram notify failed: {e}", file=sys.stderr)
+
+
 def fulfil_ayh(fields):
     """Resolve address -> mini-site -> email via the Netlify fulfilment function."""
     payload = {"address": fields.get("property_address", ""),
@@ -143,6 +195,45 @@ def notify_ayh(fields, form_name, created, result):
         print(f"  telegram notify failed: {e}", file=sys.stderr)
 
 
+def fulfil_byl(fields, doc, coll):
+    """Queue a 'Before You List' lead for print-and-post, tagged by A/B/C arm.
+    Returns (queue_doc, needs_review)."""
+    name = fields.get("full_name") or fields.get("name") or ""
+    email = fields.get("email") or ""
+    phone = fields.get("phone_number") or fields.get("phone") or ""
+    address = (fields.get("postal_address")
+               or next((v for k, v in fields.items() if "address" in k.lower()), "") or "")
+    m = re.search(r"BYL\s+([ABC])\b", doc.get("adset_name") or "")
+    arm = m.group(1) if m else "?"
+    pc = next(iter(re.findall(r"\b(\d{4})\b", str(address))), None)
+    needs_review = (not str(address).strip()) or (pc is None)
+    q = {"book": "before_you_list", "campaign": "before_you_list", "arm": arm,
+         "name": name, "email": email, "mobile": phone, "address": address,
+         "status": "needs_review" if needs_review else "queued_for_post",
+         "lead_id": doc["_id"], "source_form_id": doc["form_id"],
+         "created_at": datetime.now(timezone.utc).isoformat()}
+    coll.database["print_post_queue"].insert_one(q)
+    return q, needs_review
+
+
+def notify_byl(fields, form_name, created, arm, address, needs_review):
+    token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    chat = os.environ.get("TELEGRAM_CHAT_ID")
+    if not (token and chat):
+        return
+    head = "📕 *Before You List — post the book*" + ("  ⚠️ CHECK ADDRESS" if needs_review else "")
+    lines = [head, f"_{form_name}_  ·  arm *{arm}*", "",
+             f"• *Name:* {fields.get('full_name', '?')}",
+             f"• *📞 Phone:* {fields.get('phone_number', '?')}",
+             f"• *Email:* {fields.get('email', '?')}",
+             f"• *📮 Address:* {address or '— none given —'}", "", f"_{created}_"]
+    try:
+        requests.post(f"https://api.telegram.org/bot{token}/sendMessage",
+                      json={"chat_id": chat, "text": "\n".join(lines), "parse_mode": "Markdown"}, timeout=20)
+    except Exception as e:
+        print(f"  telegram notify failed: {e}", file=sys.stderr)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--dry-run", action="store_true")
@@ -171,7 +262,8 @@ def main():
                    "created_time": lead.get("created_time"), "fields": fields,
                    # ad attribution (None when organic form post) — Brain 2 join keys
                    "ad_id": lead.get("ad_id"), "ad_name": lead.get("ad_name"),
-                   "adset_id": lead.get("adset_id"), "campaign_id": lead.get("campaign_id"),
+                   "adset_id": lead.get("adset_id"), "adset_name": lead.get("adset_name"),
+                   "campaign_id": lead.get("campaign_id"),
                    "campaign_name": lead.get("campaign_name"),
                    "platform": lead.get("platform"), "is_organic": lead.get("is_organic"),
                    "raw": lead, "pulled_at": datetime.now(timezone.utc).isoformat()}
@@ -184,6 +276,18 @@ def main():
                 coll.insert_one(doc)
                 if not args.no_notify:
                     notify_ayh(fields, form["name"], lead.get("created_time"), result)
+            elif form["id"] in SELLER_FORM_IDS:
+                coll.insert_one(doc)
+                if not args.no_notify:
+                    notify_seller(fields, form["name"], lead.get("created_time"),
+                                  lead.get("campaign_name"), lead.get("ad_name"))
+            elif form["id"] in BYL_FORM_IDS:
+                coll.insert_one(doc)
+                q, needs_review = fulfil_byl(fields, doc, coll)
+                print(f"    BYL -> print_post_queue (arm {q['arm']}, {q['status']})")
+                if not args.no_notify:
+                    notify_byl(fields, form["name"], lead.get("created_time"),
+                               q["arm"], q["address"], needs_review)
             else:
                 coll.insert_one(doc)
                 if not args.no_notify:
