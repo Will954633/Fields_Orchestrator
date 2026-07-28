@@ -124,19 +124,15 @@ def designer_ticks(ax, xticks=None, xlabels=None, yticks=None, ylabels=None,
 
 
 # --------------------------------------------------- back-compat shims -------
+# Titles/subtitles/source lines are intentionally NO-OPS: the report page
+# provides its own headline + deck, and methodology lives on the "how every
+# chart is made" page — so the charts stay as clean as the designer's assets.
 def add_source_line(fig, text, wrap_chars=170):
-    import textwrap as _tw
-    wrapped = "\n".join(_tw.wrap(text, width=wrap_chars)) if text else ""
-    fig.text(0.02, 0.012, wrapped, fontsize=6.5, color=SLATE,
-             fontproperties=POP, alpha=0.85)
+    return
 
 
 def add_title_block(fig, title, subtitle=None):
-    fig.text(0.04, 0.95, title, fontsize=15, color=INK,
-             fontproperties=PLAY, ha="left", va="top")
-    if subtitle:
-        fig.text(0.04, 0.90, subtitle, fontsize=8.5, color=SLATE,
-                 fontproperties=POP, ha="left", va="top")
+    return
 
 
 def style_axes(ax, ylabel=None, xlabel=None):
