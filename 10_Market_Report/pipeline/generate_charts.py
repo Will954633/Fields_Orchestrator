@@ -128,7 +128,7 @@ def chart_fci(suburb_series, composite, path):
     add_source_line(fig,
         "Source: Fields Real Estate, precomputed_indexed_prices and precomputed_market_charts. "
         "FCI v2: 50% indexed price + 25% sales volume + 25% inverse DOM where DOM available; otherwise 67%/33% price/volume.")
-    plt.tight_layout(rect=[0, 0.04, 1, 0.85])
+    plt.tight_layout()
     plt.savefig(path)
     plt.close()
 
@@ -308,7 +308,7 @@ def chart_conviction_map(db, path):
     add_source_line(fig,
         "Source: precomputed_indexed_prices.rolling_12m_yoy_pct (X) + precomputed_market_charts.sales_volume.sales_count z-scored against own history (Y). "
         "Sample restricted to suburbs with ≥30 trailing-12m transactions.")
-    plt.tight_layout(rect=[0, 0.04, 1, 0.85])
+    plt.tight_layout()
     plt.savefig(path)
     plt.close()
 
@@ -406,7 +406,7 @@ def chart_tension(suburb_series, composite, path):
     add_source_line(fig,
         "Sources: Fields composite indexed median (average of Robina, Burleigh Waters, Varsity Lakes index_value); "
         "Fields Conviction Index v1 composite (transaction-weighted).")
-    plt.tight_layout(rect=[0, 0.04, 1, 0.85])
+    plt.tight_layout()
     plt.savefig(path)
     plt.close()
 
@@ -478,7 +478,7 @@ def chart_indexed_prices(db, path):
     add_source_line(fig,
         "Source: precomputed_indexed_prices.indexed_series. Quarterly. "
         "Houses only, deduplicated across three sources. Sample sizes per quarter in the appendix.")
-    plt.tight_layout(rect=[0, 0.04, 1, 0.85])
+    plt.tight_layout()
     plt.savefig(path)
     plt.close()
 
@@ -564,7 +564,7 @@ def chart_sales_volume(db, path):
     add_source_line(fig,
         "Source: precomputed_market_charts.{suburb}_sales_volume. Houses only, deduplicated. "
         "Dashed lines show each suburb's historical quarterly average.")
-    plt.tight_layout(rect=[0, 0.04, 1, 0.85])
+    plt.tight_layout()
     plt.savefig(path)
     plt.close()
 
@@ -617,7 +617,7 @@ def chart_dom(db, path):
     add_source_line(fig,
         "Source: precomputed_market_charts.{suburb}_days_on_market. List-to-unconditional, "
         "private-treaty + auction combined. Sample sizes per quarter in the appendix.")
-    plt.tight_layout(rect=[0, 0.04, 1, 0.85])
+    plt.tight_layout()
     plt.savefig(path)
     plt.close()
 
@@ -713,7 +713,7 @@ def chart_distributions(db, path):
     add_source_line(fig,
         "Source: Gold_Coast.{suburb} sold records, all available transactions. "
         "Box: median + IQR (25th/75th percentile). Whiskers: 10th/90th. Outliers <$100k or >$10M excluded.")
-    plt.tight_layout(rect=[0, 0.04, 1, 0.92])
+    plt.tight_layout()
     plt.savefig(path)
     plt.close()
 
