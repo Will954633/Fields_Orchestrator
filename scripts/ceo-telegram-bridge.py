@@ -163,21 +163,35 @@ def aest_label() -> str:
     return aest_now().strftime("%Y-%m-%d %H:%M AEST")
 
 
-def samantha_status() -> tuple[bool, str]:
-    """Is the Samantha management run active right now, and when does she next wake?
-    (The legacy GPT 'CEO team' is retired — Will's Telegram replies now hand off to Samantha.)"""
+# The NEW Samantha = the General RL meta-conductor agent. Founder Telegram messages wake her.
+CONDUCTOR_CYCLE = "/home/fields/Fields_Orchestrator/16_General_Reinforcement_Learning/conductor_cycle.sh"
+
+
+def conductor_running() -> bool:
+    """Is the Samantha conductor agent currently running? (flock in the runner is the real guard;
+    this is just for the reply wording.)"""
     try:
-        r = subprocess.run(["pgrep", "-f", "samantha/daily_run.py"],
+        r = subprocess.run(["pgrep", "-f", "conductor_cycle.sh"],
                            capture_output=True, text=True, timeout=5)
-        running = bool(r.stdout.strip())
+        return bool(r.stdout.strip())
     except Exception:
-        running = False
-    now = aest_now()
-    nxt = now.replace(hour=23, minute=55, second=0, microsecond=0)
-    if nxt <= now:
-        from datetime import timedelta
-        nxt = nxt + timedelta(days=1)
-    return running, nxt.strftime("%H:%M %a AEST")
+        return False
+
+
+def wake_conductor() -> bool:
+    """Launch the conductor agent detached in the background. Returns True if we started it,
+    False if it was already running (the runner's flock also prevents a real double-run)."""
+    if conductor_running():
+        return False
+    try:
+        subprocess.Popen(["bash", CONDUCTOR_CYCLE],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         start_new_session=True, cwd="/home/fields/Fields_Orchestrator")
+        log.info("Launched Samantha conductor cycle (founder message wake)")
+        return True
+    except Exception:
+        log.exception("Failed to launch conductor cycle")
+        return False
 
 
 def title_from_text(text: str, fallback: str = "Telegram request") -> str:
@@ -1054,13 +1068,17 @@ def handle_command(sm, chat: dict[str, Any], user: dict[str, Any], text: str) ->
         send_message(chat["id"], reply)
         return True
 
-    if command == "/run_ceo":
-        # The legacy GPT/Codex "CEO batch run" is RETIRED (Will, 2026-07-29). Do not launch it (quota-exceeded).
-        send_message(
-            chat["id"],
-            "The old GPT CEO-team batch run is retired. Samantha is the management AI now — she runs nightly "
-            f"(next {samantha_status()[1]}), or start her manually on the VM. Send any message and I'll save it for her.",
-        )
+    if command in ("/run_ceo", "/wake"):
+        # Legacy GPT/Codex "CEO batch run" is retired. This now manually wakes the NEW Samantha (RL conductor).
+        already = conductor_running()
+        launched = wake_conductor() if not already else False
+        if already:
+            msg = "🟢 Samantha (RL conductor) is already running — she'll finish her current pass shortly."
+        elif launched:
+            msg = "🟢 Waking Samantha (RL conductor) now — she'll review the board + your inbox and report back."
+        else:
+            msg = "⚠️ Couldn't start Samantha just now — check conductor_cycle.log."
+        send_message(chat["id"], msg)
         return True
 
     return False
@@ -1109,22 +1127,27 @@ def handle_text_message(sm, update: dict[str, Any], message: dict[str, Any], tex
         send_message(chat_id, reply)
         return
 
-    # LEGACY GPT "CEO team" is RETIRED (Will, 2026-07-29) — do NOT spawn a GPT run (fails on OpenAI
-    # quota). The message is already stored in ceo_chat_messages (above) for Samantha to read on her
-    # next run. Reply with a real status: received + whether Samantha is running + when she next wakes.
-    running, nextwake = samantha_status()
+    # LEGACY GPT "CEO team" is RETIRED (Will, 2026-07-29). The message is already stored in
+    # ceo_chat_messages (above). Auto-wake the NEW Samantha (the RL meta-conductor agent): she reads
+    # her inbox first thing, answers Will, and acts. (Will chose auto-wake-every-message.)
+    already = conductor_running()
+    launched = wake_conductor() if not already else False
     sm[SESSION_COLL].update_one(
         {"_id": session["_id"]},
-        {"$set": {"last_remote_status": "captured_for_samantha", "updated_at": iso_now()}},
+        {"$set": {"last_remote_status": "handed_to_samantha", "updated_at": iso_now()}},
     )
-    if running:
-        sam = ("🟢 Samantha (your management AI) is running RIGHT NOW — she'll see this in her live "
-               "run and reply here when she finishes.")
+    if already:
+        sam = ("🟢 Samantha (your RL conductor) is running RIGHT NOW — she'll read this in her current "
+               "pass and reply here when she's done (usually a few minutes).")
+    elif launched:
+        sam = ("🟢 Waking Samantha (your RL conductor) now — she'll read this, act on it, and reply "
+               "here in a few minutes.")
     else:
-        sam = (f"⏸ Samantha isn't running right now — your message is saved, and she'll pick it up on "
-               f"her next run at **{nextwake}** (or sooner if you start her manually).")
-    send_message(chat_id, f"✅ Got it — received and saved for Samantha.\n{sam}")
-    log.info("Captured founder message for Samantha (session %s); GPT CEO routing retired", session["_id"])
+        sam = ("⚠️ Saved — but I couldn't start Samantha automatically just now. She'll pick it up on "
+               "her next scheduled pass. (conductor_cycle.log has the detail.)")
+    send_message(chat_id, f"✅ Got it.\n{sam}")
+    log.info("Founder message captured; conductor already=%s launched=%s (session %s)",
+             already, launched, session["_id"])
 
 
 def process_job(job_id: str) -> None:
