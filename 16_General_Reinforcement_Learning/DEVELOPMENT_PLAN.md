@@ -24,7 +24,7 @@ just a **sensor** + a **prompt** + cron lines (not 5 hand-cloned files).
 - Migrate SEO to the generic runner (lowest-risk); GEO stays on its tested bespoke scripts (migrate later).
 - **Acceptance:** SEO runs end-to-end via `rl_dispatch.sh seo`; heartbeat green; a new domain needs only 2 new files.
 
-## M2 — Upstream breadth  ◐ (M2a Ads ✅ · M2b Articles ✅ · M2c FB-organic + FB-funnel/ad-lifecycle→ledger pending)  *(the bulk — biggest channels)*
+## M2 — Upstream breadth  ✅ (M2a Ads · M2b Articles · M2c ad-action onboarding ✅ — FB-organic PUBLIC posting-enable = Will's governance OK)  *(the bulk — biggest channels)*
 Each is a new domain via the M1 scaffold (sensor + prompt), reading the shared ledger, tiered-execution.
 - **M2a — Ads** (FB + Google): sensor over `ad_daily_metrics` + `google_ads_daily_metrics` + reward tie; cycle
   proposes budget/cull/creative moves (Tier-3 = spend/campaign → draft+telegram; Tier-1 = analysis, reporting).
@@ -51,7 +51,7 @@ winners, retire losers. This is what makes it reinforcement-*learning*, not rein
 - **Acceptance:** one real arm gets a data-backed verdict (win/kill/inconclusive-need-more-N) the cycles consume.
   (Value 🔁 accrues with volume; the machinery is the deliverable.)
 
-## M5 — Foundation hardening  🔨
+## M5 — Foundation hardening  ✅ (WTA-013 done + honest scoping; identity-join/true-reward accrue with data via the union)
 - Anonymous-journey handling: attribute where possible; retroactive `distinct_id` stitch onto historic leads.
 - Switch the true reward from the `converted` proxy to the `lead_worklist` contactable-seller join once linkage
   is dense enough (the join exists; add the switchover + a coverage gate).
