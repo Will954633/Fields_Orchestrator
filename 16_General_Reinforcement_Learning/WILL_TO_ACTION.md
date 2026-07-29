@@ -94,3 +94,12 @@ on the dead ChatGPT channel (had leads months ago, none now). (§2.2)
 **Needs a human because:** The AI Performance report is UI-only in Bing Webmaster Tools (API endpoints returned 404). Account is verified (ID 188439555).
 **Proposed:** Log into Bing Webmaster Tools → look for "AI Performance" or "Copilot" tab. This report (launched Feb 2026) shows: which pages Copilot cites us in, the "Grounding Queries" (Copilot's internal search phrases), citation count over 90 days, and trends. This is the ONLY first-party Copilot citation data — PostHog only shows us clicks, not citations. A page can be cited 100× in Copilot answers and we'd only know if someone clicks through.
 **What we'd learn:** Whether Copilot citations are growing, stable, or declining; which queries trigger citations; whether the sitemap/robots.txt changes had any effect on citation frequency.
+
+## [WTA-014] Onsite personalization go-live — raised 2026-07-29 — [onsite] — status: IN-FLIGHT (auto)
+**Resolved (Will: yes, flip on after cycle proposes 1st experiment + LCP recheck):** watcher `personalization_golive_watch.sh` running — flips `genrl_personalization_v1` ON + Telegrams you once the onsite cycle serves its first experiment. Instant off: `enable_personalization.py --disable`.
+
+## [WTA-005] Offsite mechanism — status: RESOLVED (Telegram-only for now)
+**Will:** Claude Telegrams the offsite actions needed; Will does them manually; automate later. Already the model (onsite cycle surfaces hot individuals + drafts outbound as Tier-3 → Telegram).
+
+## [FB-organic] Public posting gate — status: DONE
+**Will:** gate behind Telegram yes/no. `fb_approval.py` LIVE (propose→Telegram→YES/NO reply→publish/skip; poll */3). Reply `YES <token>` / `NO <token>` on @WillFieldsBot. FB-organic proposer can now be revived safely (nothing posts without your yes).
