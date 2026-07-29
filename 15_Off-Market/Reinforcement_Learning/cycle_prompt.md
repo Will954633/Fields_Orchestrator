@@ -42,10 +42,11 @@ re-read unchanged data.
   A variant that lifts swipes but never moves a meso/macro milestone is a **false winner** — say so.
 - Do fresh research when a genuinely new hypothesis is warranted (Brains 1/2/3, web, the palette in SCOPING §3.3,
   and the FB funnel's proven mechanics: specific personal numbers ≫ abstract; narrative + $-shock + personal ask; fear > aspiration).
-- **VERIFY before asserting a UX root cause (cycle-1 lesson).** Cycle 1 wrongly called pages "thin/hero-only" from a *static*
-  screenshot — the "1/1" was the intent-menu gate by design; the value cards live on the sell path. Never diagnose from a single
-  frame: navigate the actual path (scripted headless click through the sell flow, `[role=radiogroup] button[role=radio]` →
-  `button[aria-label=Next]`) and read the PNGs. Acting on an unverified root cause makes bad policy.
+- **VERIFY before asserting — for BOTH UX and DATA.** (a) *UX:* never diagnose a page from a single frame — navigate the actual
+  path (scripted headless click through the sell flow, `[role=radiogroup] button[role=radio]` → `button[aria-label=Next]`) and read
+  the PNGs (cycle 1 wrongly called pages "thin" — the "1/1" was the intent-menu gate by design). (b) *DATA:* never assert a
+  collection/metric is "empty" or "populated" without querying it (cycle 2 wrongly called the reward ledger empty — it had 165
+  off-market journeys + 4 milestones). Check, THEN claim. Acting on an unverified root cause or a wrong data-state makes bad policy.
 
 ### 3. Act — bounded, one hypothesis, safe
 - **State ONE hypothesis this cycle** with: the change, the predicted effect, the metric + milestone it moves, and an explicit
@@ -55,10 +56,14 @@ re-read unchanged data.
 - **Content/format experiments** run as PostHog feature-flag arms (sticky per person), **2–4 concurrent max** (trials, not dollars,
   are scarce here). Action space = information move AND format (webpage / deck / ladder / canonical / system-devised — SCOPING §2).
   Adjust **ONE** variable per cycle so attribution stays clean.
-- **AUTONOMY BOUNDARIES (you run unsupervised).** AUTO (do it): coverage scraper + comp backfill; sitemap release increments;
-  PostHog **flag-gated** content/format arms; analysis, docs, research. STAGE FOR WILL (do NOT ship autonomously — write to
-  `WILL_TO_ACTION.md`): editing live deck copy/structure outside a flag; any new website deploy; enabling a winner site-wide;
-  spending beyond routine PropRadar/Bright-Data; anything brand-facing or irreversible.
+- **AUTONOMY BOUNDARIES (Will, 2026-07-29: autonomous iteration toward the objective IS the system — deploy freely within these rails).**
+  **AUTO — do it, then screenshot-verify + log (fix-history + ledger):** coverage scraper + comp backfill; sitemap release increments;
+  **safe instrumentation & bug fixes to the live site** (analytics, rendering, non-brand-facing correctness — *deploy them*, don't stage);
+  **building AND running flag-gated content/format experiment arms** (reversible, per-person, measured — this is the core RL action, incl.
+  building the arm plumbing like re-enabling `offmarket_gate_v1`); analysis, docs, research.
+  **STAGE FOR WILL (append to `WILL_TO_ACTION.md`, don't ship):** rolling a winning arm out **site-wide to ALL users** (the irreversible
+  commitment); brand / positioning / messaging changes or net-new features shown to everyone (not flag-gated); spend beyond routine
+  PropRadar/Bright-Data; anything genuinely irreversible. When unsure, a flag-gated 50/50 experiment is almost always the AUTO path.
 - **Coverage**: for the current rollout suburb, run `offmarket_coverage_scraper.py` (houses-only, GSC-governed ≤500/day) to mint
   the subject pages, THEN `offmarket_comp_backfill.py --suburb <s>` (PropRadar recent-sold → matched to cadastral coords → stamped
   as sold comps, ~2 calls/suburb, refresh ~fortnightly) so the wealth-reveal/capital-gain/market cards render RICH not hero-only.
@@ -71,8 +76,10 @@ re-read unchanged data.
 ### 4. GUARDRAILS (non-negotiable)
 - **Editorial rules bind all public copy** (CLAUDE.md Rule 5): no advice, no predictions, no single valuation figure in a headline
   (ranges/gaps only), data-framed, methodology-backed, forbidden words. Value framing.
-- **Any change to a live public page must be screenshot-verified** (Rule 4) and, if risky or brand-facing, **staged for Will, not shipped autonomously.**
-  Early cycles: prefer observe + document + coverage + PostHog-flag arms over risky prod edits.
+- **SCREENSHOT-VERIFY IS MANDATORY BEFORE *AND* AFTER ANY DEPLOY YOU MAKE** (Rule 4). Never touch a live page without confirming it
+  still renders — SSR + the sell path *past the intent menu* (scripted headless click → read the PNGs). A deploy you haven't visually
+  verified is NOT done. (Cycle 2 deployed a fix without verifying — correct fix, but don't repeat the gap.) For a flag-gated arm,
+  verify BOTH arms render.
 - **Self-monitor** (Rule 7): the scraper + this cycle report to Systems Health. **Never leave a public page broken** — the screenshot gate catches it.
 - Push any code changed (Rule 2). Log fixes (Rule 1).
 
