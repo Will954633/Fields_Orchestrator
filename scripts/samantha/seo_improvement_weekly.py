@@ -7,7 +7,7 @@ Dashboard (and live GSC) with one aim: raise organic SEO performance generally,
 and for /for-sale-v3 in particular — then SHIP at least one real, verified
 improvement (or escalate a genuine Will-decision), and report it.
 
-Runs headless on the Claude Max subscription (Fable 5, high effort), same billing
+Runs headless on the Claude Max subscription (Opus, high effort), same billing
 pattern as daily_run.py (strips ANTHROPIC_API_KEY so it uses the Max OAuth).
 
 The whole run is wrapped in job_status.job_run("samantha_seo_improvement",
@@ -95,7 +95,7 @@ make any website change. The point is to verify Max auth + Drive + Telegram + th
 async def _run_agent(prompt: str, timeout_s: int, smoke: bool,
                      transcript_path: Path, report_path: Path) -> str:
     options = ClaudeAgentOptions(
-        model="claude-fable-5",
+        model="opus",             # Fable disabled 2026-07-29 (Will) — draws down Max limit too fast
         fallback_model="opus",
         effort="high",
         cwd=ORCH,
