@@ -12,37 +12,57 @@ and keeps working other arms rather than stalling. Item format:
 
 ---
 
-## [WTA-001] Approve scoping direction + governance model — raised 2026-07-29 — [meta] — status: OPEN
-**Blocks:** the entire build. Nothing is committed until you pick a shape.
-**Needs a human because:** strategic sign-off + resolves how this coexists with Samantha (two autonomous Claude loops must not fight over the same levers).
-**Proposed:** Conductor = tactical execution layer that Samantha governs; existing loops (ad-lifecycle, weekly-SEO, FB wakeup) become coordinated arms, one writer per lever. See `00_SCOPING.md` §7 + Open Question 1.
+## RESOLVED in scoping session 2026-07-29
 
-## [WTA-002] Define the single true reward — raised 2026-07-29 — [meta] — status: OPEN
-**Blocks:** the reward ledger — everything grades against this one number.
-**Needs a human because:** it's a business-objective decision.
-**Proposed:** **inbound enquiry** (per the 2026-07-27 north star). Confirm, or name booked-call / identified-seller instead. See Open Question 2.
+## [WTA-001] Governance model — raised 2026-07-29 — [meta] — status: DONE
+**Resolved:** Independent sub-autonomous workflows per domain + ONE shared reward ledger they all read/write.
+Samantha = future meta-conductor over the top (manual-only today → no collision now). The two existing
+autonomous loops (FB funnel, off-market RL) join the shared ledger for holistic view. (00_SCOPING v2 §4)
 
-## [WTA-003] Approve the identity-join fix (forward distinct_id from all forms) — raised 2026-07-29 — [onsite/attribution] — status: OPEN
-**Blocks:** Phase 0 — behaviour↔outcome only connects at form-submit today; `lead-signup`/`subscribe` don't forward `posthog_distinct_id`; anonymous + FB-ad leads are stranded.
-**Needs a human because:** website code change + a call on whether to identify() more visitors (privacy posture).
-**Proposed:** forward distinct_id from every conversion form; add a retroactive stitch where possible. Low-risk wiring. See §3.3 Gap A.
+## [WTA-002] The single true reward — raised 2026-07-29 — [meta] — status: DONE
+**Resolved:** True reward = **identified, contactable seller** (name+email+phone+intent in `lead_worklist`);
+**proactive inbound enquiry = high-weight bonus multiplier**; booked-call/listing = weekly sanity-check.
+Graded via a **self-discovering, self-reweighting milestone map** (weight = measured predictiveness). (§5)
 
-## [WTA-004] Decide whether server-side onsite personalization is in scope — raised 2026-07-29 — [onsite] — status: OPEN
-**Blocks:** Phase 2 (Sphere 1). Today the site can only vary content client-side via PostHog flags; genuine per-user content is a build.
-**Needs a human because:** it's a real infra investment vs. a much weaker flag-only alternative.
-**Proposed:** build a server/edge personalization-decision endpoint after Phase 0/1 prove the ledger. See §3.3 Gap B + Open Question 4.
+## [WTA-006] Autonomy bounds — raised 2026-07-29 — [meta] — status: DONE
+**Resolved:** FB-funnel model. Free on low-risk reversible (stage variants, cull weak ads, propose SEO/GEO/
+articles, re-weight milestones, flag individuals). Routes here for real-world blast radius: net-new ad spend
+beyond caps, **GC go-live**, physical mail / outbound calls, anything new public-facing. Never unattended on
+the irreversible/costly. (§12)
 
-## [WTA-005] Physical-mail + outbound-call mechanism for offsite arm — raised 2026-07-29 — [offsite] — status: OPEN
-**Blocks:** Sphere 3 (offsite) is theoretical until there's a repeatable way to send posted assets / place calls at the loop's request.
-**Needs a human because:** requires a vendor/tool decision + budget (PostGrid for print-post, JustCall/SMS, or Will-manual).
-**Proposed:** confirm which mechanisms the loop may assume exist. See Open Question 6.
+---
 
-## [WTA-006] Set autonomy bounds (what changes unattended vs. routes here) — raised 2026-07-29 — [meta] — status: OPEN
-**Blocks:** safe operation. Especially: ad spend, GC go-live, anything public-facing.
-**Needs a human because:** risk tolerance is yours to set.
-**Proposed:** mirror the FB funnel rule — the loop never promotes to the Gold Coast served surface or spends beyond set caps without you; all such steps become Will-to-action items. See Open Question 7.
+## OPEN
 
-## [WTA-007] Verify Samantha nightly DOER (02:30) is actually cronned — raised 2026-07-29 — [meta] — status: OPEN
-**Blocks:** clean governance — the infra map couldn't confirm the 02:30 DOER in the live crontab (only lead-intel/SEO-weekly/ad-lifecycle/actionlog are scheduled).
+## [WTA-003] Build the reward ledger + milestone map + identity-join fix (Phase 0) — raised 2026-07-29 — [foundation] — status: OPEN
+**Blocks:** everything — nothing can learn until this exists.
+**Needs a human because:** website code change (forward `posthog_distinct_id` from ALL conversion forms, incl.
+`lead-signup`/`subscribe`) + a call on identifying more anonymous visitors (privacy posture).
+**Proposed:** extend `lead_worklist` → action→outcome ledger w/ channel/referrer/content attribution; stand up
+milestone map cold-started from the FB laws; forward distinct_id everywhere + retroactive stitch. Direction
+approved in principle; this tracks the actual build sign-off. (§13 Phase 0)
+
+## [WTA-004] Confirm onsite personalization scope — raised 2026-07-29 — [onsite] — status: OPEN
+**Blocks:** Phase 2 (Sphere 1 build shape).
+**Needs a human because:** real infra investment vs. a weaker flag-only alternative.
+**Proposed (recommended):** THIN, STAGED server-side decision layer on the two surfaces with traffic
+(`/for-sale-v3`, `/analyse-your-home`), keyed to milestone-state — NOT a site-wide engine, NOT before Phase 0/1
+prove which milestones matter. Confirm. (§7)
+
+## [WTA-005] Physical-mail + outbound-call mechanism (offsite) — raised 2026-07-29 — [offsite] — status: OPEN
+**Blocks:** Sphere 3 (offsite closer) is theoretical until there's a repeatable way to post assets / place calls
+at the loop's request.
+**Needs a human because:** vendor/tool decision + budget (PostGrid print-post, JustCall/SMS, or Will-manual).
+**Proposed:** confirm which the loop may assume. Phases 0–2 don't depend on it. (§9)
+
+## [WTA-008] Approve GEO / AI-channel content as the flagship Phase-1 arm — raised 2026-07-29 — [upstream] — status: OPEN
+**Blocks:** building the flagship feedback loop first.
+**Needs a human because:** sign-off on a new upstream content type (AI-optimised / LLM-citation-friendly pages).
+**Proposed (recommended):** yes — it's live (Copilot referrals this morning), instrumented (`ai_source`), already
+converting (Bing 2/7 conversions ~4× Google), fast on both ends, and uncontested. Also runs diagnosis-and-recovery
+on the dead ChatGPT channel (had leads months ago, none now). (§2.2)
+
+## [WTA-007] Verify Samantha nightly DOER (02:30) status — raised 2026-07-29 — [meta] — status: OPEN
+**Blocks:** clean governance — the infra map couldn't confirm the 02:30 DOER in the live crontab.
 **Needs a human because:** you know whether it was intentionally moved/disabled.
-**Proposed:** confirm its status so the Conductor doesn't assume a loop that isn't firing (or double-run one that is).
+**Proposed:** confirm status so the Conductor doesn't assume a loop that isn't firing.
