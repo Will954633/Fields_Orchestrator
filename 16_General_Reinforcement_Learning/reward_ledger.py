@@ -57,6 +57,17 @@ def _user_milestones(u):
         ms.add("searched_address")
     if u["search_in_coverage"]:
         ms.add("search_in_coverage")
+    # off-market owner-lookup deck trajectory (micro → macro); each auto-earns a
+    # predictiveness weight toward the true reward, same as every other milestone.
+    ome = u.get("offmarket_events") or set()
+    if u.get("offmarket_view"):
+        ms.add("offmarket_page_view")
+    if u.get("offmarket_cards", 0) >= 2 or "deck_exit" in ome:
+        ms.add("offmarket_deck_engaged")      # swiped past the hero/intent-menu
+    if "offmarket_menu_sell" in ome:
+        ms.add("offmarket_intent_sell")       # chose "see how this home might sell"
+    if "offmarket_qualify" in ome:
+        ms.add("offmarket_qualified")         # answered the ownership/intent question
     if u["converted"]:
         ms.add("submitted_address")  # == true-reward proxy (contact capture)
     return ms
@@ -64,13 +75,32 @@ def _user_milestones(u):
 
 TRUE_REWARD_MILESTONE = "submitted_address"
 
+# --- HISTORICAL PRIORS (informed cold-start from PostHog full-year history) ----------------
+# Each milestone's weight shrinks toward its YEAR-LONG measured conversion rate (not a flat base
+# rate), weighted by how much history backs it (`strength` = pseudo-observations). Measured
+# 2026-07-29 via PostHog funnels [milestone_event -> analyse_home_address_submit], 365d window.
+# This is what "use historical data to inform the weights" means concretely — the thin current
+# window updates a sturdy prior instead of starting from scratch. Refresh via refresh_priors().
+HISTORICAL_PRIORS = {
+    #                  prior_rate  strength  provenance
+    "viewed_property":       (0.0095, 40, "posthog_365d n=524"),   # passive browse barely predicts
+    "searched_address":      (0.3226, 12, "posthog_365d n=31"),    # THE dominant pre-reward milestone
+    "forward_cta_clicked":   (0.02,    6, "posthog_365d n=6 (weak)"),
+    # milestones with no direct PostHog event fall back to the base rate (strength 5) below.
+}
+
+
+def _posterior(conv, reached, prior_rate, strength):
+    """Beta-binomial posterior: blend the current-window rate with an informed prior.
+    strength = pseudo-observations of the prior (bigger = the prior pulls harder)."""
+    if reached <= 0 and strength <= 0:
+        return prior_rate
+    return (conv + strength * prior_rate) / (reached + strength)
+
 
 def _shrink(conv, reached, base, strength=5.0):
-    """Beta-binomial shrink of a conversion rate to the base rate (Laplace-style prior).
-    strength = pseudo-observations of the prior. Keeps tiny-N weights sane."""
-    if reached <= 0:
-        return base
-    return (conv + strength * base) / (reached + strength)
+    """Shrink a rate toward the scalar base rate (used for channel attribution)."""
+    return _posterior(conv, reached, base, strength) if (reached or strength) else base
 
 
 def build(window_days=None, dry_run=False):
@@ -95,7 +125,9 @@ def build(window_days=None, dry_run=False):
     # roll sessions up to users (distinct_id) ------------------------------------------------
     users = defaultdict(lambda: {"sessions": 0, "properties_viewed": 0, "searches": 0,
                                  "search_in_coverage": False, "converted": False,
-                                 "channels": set(), "ai_sources": set(), "referrers": set()})
+                                 "channels": set(), "ai_sources": set(), "referrers": set(),
+                                 "offmarket_view": False, "offmarket_events": set(),
+                                 "offmarket_cards": 0})
     for j in journeys:
         u = users[j.get("distinct_id")]
         u["sessions"] += 1
@@ -105,6 +137,11 @@ def build(window_days=None, dry_run=False):
             u["search_in_coverage"] = True
         if j.get("converted"):
             u["converted"] = True
+        # off-market deck trajectory (from organic_journey_build)
+        if j.get("is_offmarket"):
+            u["offmarket_view"] = True
+        u["offmarket_events"] |= set(j.get("offmarket_events") or [])
+        u["offmarket_cards"] = max(u["offmarket_cards"], int(j.get("offmarket_card_views") or 0))
         if j.get("channel"):
             u["channels"].add(j["channel"])
         if j.get("ai_source"):
@@ -129,17 +166,25 @@ def build(window_days=None, dry_run=False):
 
     milestones = []
     for m in ["reached_site", "return_visit", "viewed_property", "viewed_multiple_properties",
-              "searched_address", "search_in_coverage", "submitted_address"]:
+              "searched_address", "search_in_coverage",
+              "offmarket_page_view", "offmarket_deck_engaged", "offmarket_intent_sell",
+              "offmarket_qualified", "submitted_address"]:
         r = reached[m]
         cvt = reached_and_conv[m]
-        pred = _shrink(cvt, r, base_rate)
+        # informed prior from full-year history where we have it; else shrink to base rate
+        if m in HISTORICAL_PRIORS:
+            prate, pstr, prov = HISTORICAL_PRIORS[m]
+        else:
+            prate, pstr, prov = base_rate, 5.0, "base_rate (no direct history)"
+        pred = _posterior(cvt, r, prate, pstr)
         milestones.append({
             "milestone": m,
             "reached_users": r,
             "converted_users": cvt,
-            "predictiveness": round(pred, 4),          # P(true_reward | reached M), shrunk
+            "predictiveness": round(pred, 4),          # P(true_reward | reached M), prior-informed
+            "prior": {"rate": round(prate, 4), "strength": pstr, "source": prov},
             "lift_vs_base": round(pred / base_rate, 2) if base_rate else None,
-            "confidence_n": r,                          # sample size behind the weight
+            "confidence_n": r,                          # current-window sample behind the update
             "is_true_reward": (m == TRUE_REWARD_MILESTONE),
         })
 
@@ -231,7 +276,7 @@ def _print_summary(s):
     print(f"\n=== RL REWARD LEDGER  ({s['window']['from']} → {s['window']['to']}) ===")
     print(f"users={s['n_users']}  sessions={s['n_sessions']}  conversions={s['n_conversions']}  "
           f"base_rate={s['base_conversion_rate']:.3f}")
-    print("\nMILESTONE MAP (predictiveness = P(reward | reached), shrunk to base):")
+    print("\nMILESTONE MAP (predictiveness = P(reward | reached), history-informed prior + current):")
     print(f"  {'milestone':<28}{'reached':>8}{'conv':>6}{'pred':>8}{'lift':>7}")
     for m in s["milestones"]:
         star = " ★reward" if m["is_true_reward"] else ""

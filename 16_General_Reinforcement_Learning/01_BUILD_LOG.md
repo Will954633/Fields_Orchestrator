@@ -50,6 +50,18 @@ forward the **anonymous** PostHog id too (Will: no `identify()`, no new PII), an
 on `lead_signups` / `subscribers`. → those conversions become joinable to the visitor's journey going forward.
 Verified: react-router build clean; pushed as ONE Trees-API commit (Netlify discipline); deploy logged.
 
+### ✅ Off-market deck trajectory added to the shared ledger (2026-07-29)
+The Off-Market RL initiative (`15_Off-Market/Reinforcement_Learning/`) is an **application on this shared
+framework**, not a fork. `organic_journey_build.py` now reconstructs `/off-market` sessions (previously dropped
+as "not notable") and captures the deck events by presence — `offmarket_report_view`, `card_viewed`, `deck_exit`,
+`offmarket_menu_*`, `forward_cta_clicked`, `offmarket_qualify` → new journey fields `is_offmarket`,
+`offmarket_events`, `offmarket_card_views`. `reward_ledger._user_milestones()` grades four new milestones:
+`offmarket_page_view`, `offmarket_deck_engaged`, `offmarket_intent_sell`, `offmarket_qualified` — same
+predictiveness weighting as every channel. **First read:** offmarket_page_view reached 153 / lift **0.70 (below
+base)** — the off-market engagement bottleneck, now quantified in the shared reward truth. The off-market cycle
+READS this ledger for the macro/delayed reward and reads its own dense deck signals (dwell/swipe/reached-%) from
+PostHog directly. One reward truth, many loops.
+
 ### ⏭ Next in Phase 0
 - **Strengthen the true reward:** upgrade `reward_ledger.py` from the `converted` proxy to a real
   join across `lead_worklist` / `lead_signups` / `subscribers` / `offmarket_qualification` on

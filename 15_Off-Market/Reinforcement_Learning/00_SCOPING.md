@@ -230,6 +230,28 @@ The true reward is **not a single event**. A homeowner may engage today and call
 
 ---
 
+## 5b. Relationship to the General-RL framework (composition, not duplication)
+
+This initiative is an **application on top of the shared General-RL reward framework**
+(`16_General_Reinforcement_Learning/`), not a parallel reward system. The division is explicit:
+
+- **The shared ledger owns the macro / true reward + delayed attribution.** `reward_ledger.py` →
+  `system_monitor.rl_reward_ledger` computes per-user milestones, cross-session joins, and each
+  milestone's predictive power toward the true reward (`submitted_address` = identified-seller candidate),
+  Bayesian-shrunk against historical priors. The off-market cycle **reads** this — it does not rebuild it.
+- **Off-market milestones are now first-class in that shared ledger** (2026-07-29): `organic_journey_build.py`
+  captures the deck trajectory (`offmarket_report_view` → `card_viewed`/`deck_exit` → `offmarket_menu_sell` →
+  `offmarket_qualify`) and `reward_ledger._user_milestones()` grades them —
+  `offmarket_page_view` / `offmarket_deck_engaged` / `offmarket_intent_sell` / `offmarket_qualified` —
+  so the whole micro→macro off-market path is learnable with the same weighting as every other channel.
+  (First read: `offmarket_page_view` lift **0.70 < base** — the engagement bottleneck, quantified.)
+- **The off-market cycle additionally reads its own dense deck signals** (per-card dwell, swipe direction,
+  reached-%) straight from PostHog via `brain2_util.hog_retry()` — the shared ledger holds the milestone/macro
+  layer, PostHog holds the turn-by-turn micro layer. Off-market **acts** on the on-page action space (content
+  move × format) that the general framework's ACQUIRE/other arms don't touch.
+
+Net: one reward truth, many application loops. Off-market composes with General-RL; it never forks the reward.
+
 ## 6. Cadence
 
 | Rhythm | What happens | Why |

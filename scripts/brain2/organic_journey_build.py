@@ -46,6 +46,14 @@ CONV_EVENTS = ["analyse_home_submit_start", "analyse_home_submit_success",
 SUBMIT_EVENT = "analyse_home_address_submit"  # carries properties.address
 CONTENT_EVENTS = ["article_view", "v3_section_marker_view", "property_view",
                   "address_search", "v3_card_click", "time_on_page", "scroll_depth"]
+# Off-market owner-lookup deck (`/off-market/:slug`) — the highest-intent organic seller
+# surface. These micro→macro signals let the SHARED reward ledger capture the off-market
+# trajectory (deck engagement → sell intent → qualify), composed with the true reward
+# (submitted_address). Presence-based rollup (no extra event properties needed).
+OFFMARKET_EVENTS = ["offmarket_report_view", "card_viewed", "deck_exit",
+                    "offmarket_menu_sell", "offmarket_menu_market", "offmarket_menu_surprise",
+                    "offmarket_menu_else", "forward_cta_clicked", "offmarket_qualify",
+                    "offmarket_selling_plan_open"]
 STATE_TOKENS = {"qld", "nsw", "vic", "act", "sa", "wa", "nt", "tas", "australia"}
 
 # --- Funnel-regime labelling (Will, 2026-07-16) ---------------------------------
@@ -191,7 +199,7 @@ def main():
         if sid in conv_sids:
             return True
         ep = m.get("entry_path") or ""
-        if ep.startswith("/property") or ep.startswith("/analyse"):
+        if ep.startswith("/property") or ep.startswith("/analyse") or ep.startswith("/off-market"):
             return True
         if (m.get("pageviews") or 0) >= 3 or (m.get("duration_s") or 0) > 90:
             return True
@@ -205,7 +213,7 @@ def main():
 
     # 4) full event stream for target sessions
     sid_list = ",".join("'" + s.replace("'", "") + "'" for s in target)
-    ev_in = ",".join("'" + e + "'" for e in (CONTENT_EVENTS + CONV_EVENTS + ["$pageview"]))
+    ev_in = ",".join("'" + e + "'" for e in (CONTENT_EVENTS + CONV_EVENTS + OFFMARKET_EVENTS + ["$pageview"]))
     ev = hog(f"""SELECT properties.$session_id, timestamp, event, properties.$pathname,
         properties.property_id, properties.suburb, properties.address,
         properties.$referrer, properties.distinct_id
@@ -243,6 +251,10 @@ def main():
             j["conv_events"].add(event)
             if event == SUBMIT_EVENT and address:
                 j["submits"].append(address)
+        elif event in OFFMARKET_EVENTS:
+            j.setdefault("offmarket", set()).add(event)
+            if event == "card_viewed":
+                j["offmarket_cards"] = j.get("offmarket_cards", 0) + 1
 
     # neighbour-sale trigger: entry /property/<addr> then valued a house on same street
     def neighbour_flag(entry_path, submits):
@@ -312,6 +324,10 @@ def main():
             "searched_address_category": sa_cat,
             "searched_address_label": sa_label,
             "searched_address_detail": sa_detail,
+            # Off-market deck trajectory (micro → macro) for the shared reward ledger
+            "is_offmarket": (m.get("entry_path") or "").startswith("/off-market") or bool(j.get("offmarket")),
+            "offmarket_events": sorted(j.get("offmarket", [])),
+            "offmarket_card_views": j.get("offmarket_cards", 0),
             "funnel_regime": funnel_regime(j.get("t_first")),
             "t_first": j.get("t_first"), "t_last": j.get("t_last"),
             "timeline": j.get("timeline", [])[:3000],  # full timestamped event sequence
