@@ -85,7 +85,7 @@ on the dead ChatGPT channel (had leads months ago, none now). (§2.2)
 ## [WTA-012] Approve quotable stat blocks + AYH bridge on market-metrics pages — raised 2026-07-29 — [GEO] — status: OPEN
 **Blocks:** AI citation quality + conversion from AI traffic.
 **Needs a human because:** content change on public pages.
-**STATUS: DRAFTED for review → `WTA-012_DRAFT_stat_blocks_and_bridge.md`** (binds to live market data, zero added latency, editorial-compliant). Awaiting Will's approve-to-implement.
+**STATUS: DONE — approved + shipped 2026-07-29 (commit ef97323+d21ea92, verified live).** Per-suburb market-metrics pages now render question→stat→source Q&A + FAQPage JSON-LD + AYH bridge, bound to SSR data (zero latency). ⚠ Gold-Coast city-wide page → WTA-013 (needs aggregate median wired).
 **Proposed:** (a) Add "At a Glance" stat blocks with question-shaped H2s (e.g. "What is the median house price in Robina?") — 30-40% higher AI visibility per Princeton GEO study. (b) Add soft contextual link from market-metrics → AYH ("See how your home compares"). Both Bing conversions came through the market-data → AYH funnel; AI-chat users don't take that step because there's no visible bridge. Spec in `cycles/geo_cycle_20260729_1345.md` §3 ACTION 4-5.
 **Strengthened by Cycle #2 research:** tables extract at 2.1× inline stats; front-loaded answers capture 55% of citations; question-shaped H2s = 34% more likely to be cited. All support the spec.
 
