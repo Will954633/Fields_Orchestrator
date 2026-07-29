@@ -33,3 +33,14 @@ GSC-governed ≤500/day, watched waves highest-value-suburb-first.
   `Gold_Coast.offmarket_sitemap_release`; core suburbs unlimited/unchanged). First **500 of 3,479** Nerang pages LIVE in the sitemap
   (verified: live sitemap off-market 17,245 -> 17,745). `offmarket_sitemap_release.py` +500/day cron @ 06:00 AEST (before the 06:15 VM
   regen that pushes it live); GSC-governed — hold/reduce if discovered-not-indexed backlog builds. Full Nerang in ~7 days. Deploy: website d070e95.
+- **Cycle 2 — 2026-07-29 14:17** — funnel analysis + instrumentation fix. **Key finding:** `deck_exit` has ZERO events ever
+  (React cleanup unreliable on tab close); fixed to `visibilitychange` + `sendBeacon` (commit `3c4fdc55`). Also emits final
+  `card_dwell` with `direction: "exit"`. Coverage scraper crash fixed (malformed Domain JSON, commit `33c31280`). Full card funnel
+  mapped: 54 users, 63% hero-only (first-swipe cliff), 37% reach value-range, 22% capital-gain, ~19% market suite, 9% ownership,
+  2% full-depth. **Hypothesis staged:** hero-teaser (show $ range on hero card to break the 63% cliff). See `cycles/cycle_20260729_1417.md`.
+- **Cycle 3 — 2026-07-30 00:30** — **HERO-TEASER A/B DEPLOYED LIVE.** Post-redesign engaged_rate is 100% but only 6.1% choose "sell"
+  path → the bottleneck is menu_sell_rate, not engagement. Root cause: hero card shows PAST purchase price but no CURRENT market
+  context — no personal gap to close. Deployed 50/50 code-split (visitor_id hash) adding a one-line comp-range teaser ("Recent nearby
+  sales: $X–$Y · N comparable sales") between last-sale info and intent menu. Creates the open loop the FB funnel proved is the #1
+  conversion driver ($670K purchase → $1.4M–$1.87M comps = $730K–$1.2M gap). All events carry `hero_teaser` property for clean
+  attribution. Kill: no lift after 14d. Scale: ≥5pp lift + meso milestones hold. Commit `f2f03286`. See `cycles/cycle_20260730_0030.md`.
