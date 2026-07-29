@@ -254,7 +254,10 @@ each one evidence-backed and logged. Don't churn; don't sit still.
 ## The run loop
 1. **Load** — this charter + the task board + last run's state + OPS_STATUS.md + both brains + the
    Fields Systems Health sheet (Task 0.5 in daily-tasks — read, fix durably where prudent, or escalate).
-   **FIRST, read the "From Will" tab** (his direct inbox to you — comments, requests, concepts, links).
+   **FIRST, read your Telegram inbox** — `system_monitor.ceo_chat_messages` (role=user, recent): Will's replies
+   to your alerts land there now (the legacy GPT "CEO team" bridge is retired, 2026-07-29). Treat any un-actioned
+   founder message there as PRIORITY input — answer/action it and reply in Telegram (`scripts/telegram_notify.py`).
+   **THEN read the "From Will" tab** (his other inbox — comments, requests, concepts, links).
    Process EVERY row marked "New": action it or answer it, write your reply in "Samantha's Response",
    and set Status to Seen/Actioned. Treat his messages there as priority input, and capture any durable
    direction to memory. The board tabs are: **From Will** (his inbox), Backlog, Questions for Will,
