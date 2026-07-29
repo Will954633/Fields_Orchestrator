@@ -15,7 +15,7 @@
    - **Reward is near-empty + instrumentation is incompatible.** Over the surface's entire 9-day history: **1** seller-intent (`offmarket_qualify`) event, **10** users doing any downstream action, and the per-card funnel is instrumented in **only one of the two live arms**. There is no per-card dwell, swipe outcome, or card position. The learnable dataset today is ≈ zero.
    - **More volume is data-gated, not quota-gated.** You can't reach "whole-GC $1M–$2M houses" by *filtering* — that bracket is only ~1,601 houses whole-GC vs ~1,573 already in core, and everything outside core is bare cadastral skeleton. The right expansion lever (Will, 2026-07-29) is **whole-population TIMELINE enrichment via Bright Data Domain scraping** — infra we already own — over the **117,038-address southern-to-middle band (incl Nerang); a ~115K gap ≈ 7× the current corpus** at a one-time ~$175–350. **A "recently-sold" feed is the wrong lever** (fresh owners = least likely to relist; misses the long-tenure majority). PropRadar Starter (now 20K/mo) is for suburb-selection + the `/recently-modified` inbound-intent feed, not bulk enrichment. Google index "quota" is a non-issue; the real ceiling is crawl-budget × domain authority × page quality — so roll out in watched waves.
 
-4. **Recommended shape:** a **daily** (not hourly) Claude cycle with a **low arm count** (2–4, because trials — not dollars — are scarce here), using **deck-depth as a dense shaped reward** and downstream-action as the sparse true reward. Sequenced as **Phase 0 instrumentation → Phase 1 quality-first coverage lap → Phase 2 content loop.** Weekly is the honest cadence for actual kill/scale verdicts at current N.
+4. **Shape (approved 2026-07-29):** a **daily** (not hourly) Claude cycle, **low arm count** (2–4, trials not dollars are scarce), testing **both content moves AND the presentation format** (webpage / deck / ladder / canonical / system-devised — format is part of the action space). Reward is a **discovered, multi-milestone, time-delayed ladder** (micro deck signals → meso intent → macro conversion weeks later), capturing all events + returns with delayed credit-assignment. Sequenced **Phase 0 instrumentation → Phase 1 coverage → Phase 2 loop**; daily→twice-daily as volume grows; weekly kill/scale verdicts at current N.
 
 5. **Will's index-quota worry is validated:** an "other-city lap" is the worst-ROI expansion (thin pages, no local authority, near-certain "discovered-not-indexed," diverts crawl from the corpus that's ranking). Expand within southern GC where index equity compounds.
 
@@ -61,7 +61,7 @@ Structural differences that change the RL design:
 
 | Dimension | Ad funnel (source) | Off-market surface (target) |
 |---|---|---|
-| Action space | Ad copy variant | **On-page information move** (which card, what data, order, what ask, tone) |
+| Action space | Ad copy variant | **On-page information move** (which card, what data, order, what ask, tone) **AND the presentation format itself** — plain webpage vs swipe-deck vs scroll-ladder vs single canonical deck vs `rich`/`ladder_dark` vs system-devised formats (Will, 2026-07-29: format is a tested dimension, not a fixed choice) |
 | Environment | Meta auction, out-of-market | Google organic, real GC owners on **their** address |
 | Reward | Form-fill (name+email+phone+intent) | **Engagement depth → downstream action** (deck depth → door/deep-dive → lead/qualify) |
 | Cost per trial | $15/day real spend | ~$0 marginal (organic) — but **traffic volume is the scarce resource**, not dollars |
@@ -212,17 +212,21 @@ Tiers 2–3 **already work this way** in the deck (market-pulse on mount, intel 
 
 ---
 
-## 5. Reward design (the RL heart)
+## 5. Reward design — a discovered, multi-milestone, time-delayed model (Will, 2026-07-29)
 
-Use **reward shaping** — a dense proxy the loop can learn from now, plus the sparse true reward it ultimately optimises:
+The true reward is **not a single event**. A homeowner may engage today and call weeks later; the path to a listing runs through **many intermediate milestones**, and the system's job is to **discover which milestones matter and what behaviours follow them** — not to hard-code one conversion. Two design consequences:
 
-| Tier | Signal | Density (today) | Role |
+**(1) Capture EVERYTHING, attribute over time.** Every event a visitor emits — and every *return* — is a potential signal: deck depth, per-card dwell, a book request, a market-report/appraisal request, a form-fill, a second (or third) site visit days later, a call. All of it is logged against a durable person key (`posthog_distinct_id` / device token, [[crm_attribution_writepath]]) so a milestone reached today and an action taken three weeks later are joined into **one trajectory**. Delayed conversions attribute *back* to the content variant that produced the earlier milestone (windowed credit assignment — the classic delayed-reward problem). This makes cross-session, long-horizon instrumentation a **Phase 0 requirement**, not just per-page card events.
+
+**(2) Reward shaping over a milestone ladder.** Rather than one dense proxy + one sparse true reward, use a **ladder of milestones the system ranks by how strongly each predicts the next** — learned from data, re-weighted each cycle, not fixed by us:
+
+| Band | Example milestones (system discovers + re-weights) | Density today | Role |
 |---|---|---|---|
-| **Dense (shaped)** | deck-depth reached, per-card dwell, forward-swipe rate, first-swipe survival | thousands/week *once instrumented* | fast policy signal; where the loop actually learns |
-| **Mid (behavioural)** | menu-door click, `forward_cta_clicked`, deep-dive build start | ~10/week now | intermediate intent |
-| **Sparse (true)** | `offmarket_qualify`, lead submit, book/call/print | ~1/week now | the real objective; used to validate that dense gains transfer |
+| **Micro (dense)** | first-swipe survival, deck-depth, per-card dwell, forward-swipe rate | thousands/wk *once instrumented* | fast policy signal — where the loop learns turn-to-turn |
+| **Meso (intent)** | menu-door click, `forward_cta_clicked`, deep-dive build, **return visit**, book/market-report request | ~10/wk now | mid-funnel intent; the strongest *leading* indicators of the true reward |
+| **Macro (true, delayed)** | form-fill (name/email/phone), `offmarket_qualify`, booked call, posted-appraisal request, listing | ~1/wk now, **may land weeks later** | the objective; credit assigned back to the variant that seeded the trajectory |
 
-The known risk with shaping: optimising the dense proxy (e.g. "make people swipe") can diverge from the true reward (a real seller signal). Mitigation: **weekly** re-check that dense-reward gains still move the sparse reward; if a variant lifts swipes but not intent, it's a false winner (the funnel already saw this — high-CTR agent-trust angles that never converted).
+**How the system uses it:** each cycle it (a) mines all trajectories for *which milestone transitions actually predict progression* (e.g. "book request → return visit → call" vs a dead end), (b) sets the current optimisation target to the **highest-predictive reachable milestone** given today's volume (early on that's a meso milestone, since macro rewards are too sparse to learn from directly), and (c) validates that micro-reward gains still propagate up the ladder — a variant that lifts swipes but never moves a meso/macro milestone is a **false winner** (the funnel already saw this: high-CTR agent-trust angles that never converted). As indexed volume and traffic grow, the target moves up the ladder toward the true macro reward.
 
 ---
 
@@ -239,16 +243,20 @@ The known risk with shaping: optimising the dense proxy (e.g. "make people swipe
 
 ---
 
-## 7. Proposed phased roadmap (for discussion — nothing committed)
+## 7. Phased roadmap (direction approved by Will 2026-07-29; see Decisions, §8)
 
-**Phase 0 — Make the loop observable (instrumentation; ~days, cheap).**
-Unify per-card schema across both arms; add `card_index`, per-card dwell, swipe-outcome, deck-terminal marker; add the dense shaped-reward events; collapse to **one** deck arm variant so trajectories are comparable (or instrument both identically). *Exit test:* a clean card-level funnel with dwell + a dense reward series, both arms comparable. **Until this exists, the loop has nothing to learn from — this is the true first task.**
+**Phase 0 — Make the loop observable (instrumentation; ~days, cheap). FIRST TASK (Will: agreed).**
+Two layers:
+- *Per-turn (card-level):* unify the event schema across **every** format arm — `card_index`/position, per-card dwell, swipe-outcome, terminal marker + the micro shaped-reward events — so trajectories are comparable across formats (deck / ladder / webpage / canonical).
+- *Cross-session (milestone-level) — the Q6 requirement:* log **every** event and every return against a durable person key (`posthog_distinct_id` / device token) so a milestone today and an action weeks later join into one trajectory, with **windowed credit assigned back** to the content variant that seeded it. Capture the full milestone set (book request, market-report/appraisal request, form-fill, return visit, call), not just in-deck events.
+
+*Exit test:* a clean per-turn funnel with dwell **and** a cross-session, delayed-attribution trajectory store the cycle can mine for milestone transitions. **Until this exists, the loop has nothing to learn from.**
 
 **Phase 1 — Lift volume via lazy, demand-shaped enrichment (coverage; on-demand default, Bright Data as accelerator).**
 (a) Add the **Tier-0/1 on-demand-cache-forever hook** to the SSR loader — non-core cache-miss → PropRadar subject fetch → write back → render (mirrors the intel/positioning cache pattern). (b) Rank the 26 southern-to-middle suburbs by $1–2M house stock (one PropRadar snapshot call each) and **sitemap in waves, highest-value first** (e.g. Palm Beach, Burleigh Heads, Mermaid Waters, Reedy Creek), so crawl-triggered enrichment stays inside the 20K/mo budget. (c) **Run the synthetic-floor indexing test** (Section 4): sitemap a sample of non-core URLs whose SSR floor is cadastral + per-suburb comps + market (no subject last-sale) and measure indexation vs the core rate — this decides whether we can index the 117K near-free or must pre-pull the subject datum. (d) Densify internal links among off-market/property pages; (e) stand up the PropRadar `/recently-modified` feed as an ongoing inbound-intent trigger. **Bright Data bulk** only if (c) fails or we want to pre-warm ahead of organic crawl. **Watch GSC 2–4 weeks per wave.** *Exit test:* a wave indexes + pulls impressions at the core rate → scale suburb-by-suburb; if it piles into "discovered-not-indexed," that's the authority ceiling → shift to links/PR, not more pages. Runs **in parallel with Phase 0** (backend vs frontend) but the *loop* needs both.
 
 **Phase 2 — Run the content loop (the RL cycle).**
-Daily Claude cycle over a **low arm count (2–4)** from the Section 5 palette, seeded with the funnel's proven mechanics (specific personal numbers > abstract; narrative + $-shock + personal ask; fear > aspiration; the first-swipe wall as the #1 target). Deck-depth as dense reward, downstream-action as sparse validator; weekly kill/scale; attribute every winner's *why*; document each cycle; self-monitor as a registered job. **First hypotheses practically write themselves:** (a) fix the hero→value-range −62% first-swipe cliff (put a specific personal number *above the first swipe*); (b) test your-street premium / dynamic case study / full valuation range as the hero payload; (c) shorten the pre-ask sequence and surface a low-friction ask earlier (the `/for-sale-v3` ladder is the counter-model).
+Daily Claude cycle over a **low arm count (2–4 concurrent)** spanning **both the content moves (§3.3 palette) and the presentation format** (Will Q5: test plain webpage / swipe-deck / scroll-ladder / single canonical deck / `rich` vs `ladder_dark` / system-devised — the cycle picks arms from Brains 1–3 + web + domain knowledge signal). Micro milestone as dense reward, meso/macro milestones as the up-the-ladder validators (§5); weekly kill/scale; attribute every winner's *why*; document each cycle; self-monitor as a registered job. The cycle may call **PropRadar as it sees fit** (verification, `/recently-modified`, on-demand enrichment — Will Q4). **First hypotheses practically write themselves:** (a) fix the hero→value-range −62% first-swipe cliff (specific personal number *above the first swipe*); (b) test your-street premium / dynamic case study / full valuation range as the hero payload; (c) shorten the pre-ask sequence and surface a low-friction ask earlier (the `/for-sale-v3` ladder is the counter-model); (d) test the format itself, not just the cards. **Cadence (Will Q7):** daily now; move to twice-daily (midday + late evening) once rising indexation lifts daily visits enough to justify it.
 
 ### Phase 1 — execution spec (approved by Will, 2026-07-29): `offmarket_coverage_scraper`
 **Goal:** mint ~**500 net new HOUSE off-market pages/day** across southern-to-central GC, GSC-governed, self-verifying. Daytime cron (can run through the day). Wrapped in `job_run("offmarket_coverage_scraper", cadence_hours=24, …)` (Rule 7).
@@ -267,15 +275,19 @@ Daily Claude cycle over a **low arm count (2–4)** from the Section 5 palette, 
 
 ---
 
-## 8. Open questions for Will
+## 8. Decisions (resolved by Will, 2026-07-29)
 
-1. **Sequencing:** agree that **instrumentation (Phase 0) comes before any loop**, given the reward is currently ~1 event? Or run a coarse loop on deck-depth in parallel while instrumentation lands?
-2. **Enrichment model:** agree the default is **on-demand PropRadar, cache-forever** (demand-shaped, ~1,500 calls/mo at current traffic) with **Bright Data bulk only as an accelerator** if the synthetic indexing floor won't index or we want to pre-warm ahead of crawl? Confirm we **skip the other-city lap**.
-3. **Coverage scope & pace:** sitemap the 117K southern-to-middle band (incl Nerang) **in watched waves, highest-value-suburb-first**, gated on the per-wave GSC indexation result — with the synthetic-floor test up front to decide near-free-index vs pre-pull-the-subject-datum?
-4. **PropRadar Starter roles:** it's for **on-demand serving + suburb-selection + `/recently-modified` inbound-intent feed + verification**, not bulk pre-enrichment? Worth standing the intent feed up now as its own seller-signal, independent of the RL loop?
-5. **Arm strategy:** collapse to a **single canonical deck** and A/B *cards within it*, or keep `rich` vs `ladder_dark` as competing whole-deck arms (harder to instrument comparably)?
-6. **True-reward definition:** for the sparse reward, is the target `offmarket_qualify` (in-deck seller signal), a lead submit, or a **booked call / posted appraisal**? This sets what the loop actually optimises.
-7. **Cadence:** daily observe + weekly decide (recommended), or push for twice-daily once Phase 1 lifts volume?
+**Locked:** (1) **Phase 0 instrumentation first.** (2) **On-demand PropRadar cache-forever as default** + **500/day Domain/Bright-Data house scrape** sitemapped to Google daily to grow the corpus slowly; **skip the other-city lap.** (3) **Watched-wave rollout, highest-value first**, synthetic-floor test up front. (4) PropRadar Starter for serving + selection + `/recently-modified` + verification — **the cycle uses it as it sees fit.** (5) **Format is part of the action space** — test plain webpage / deck / ladder / canonical / rich vs dark / system-devised. (6) **Reward is a discovered, multi-milestone, time-delayed ladder** — capture ALL events + returns, attribute delayed conversions back (§5). (7) **Daily now → twice-daily (midday + late-evening)** once indexation lifts daily visits.
+
+_Original questions with Will's inline answers, retained for context:_
+
+1. **Sequencing:** agree that **instrumentation (Phase 0) comes before any loop**, given the reward is currently ~1 event? Or run a coarse loop on deck-depth in parallel while instrumentation lands? Agreed. 
+2. **Enrichment model:** agree the default is **on-demand PropRadar, cache-forever** (demand-shaped, ~1,500 calls/mo at current traffic) with **Bright Data bulk only as an accelerator** if the synthetic indexing floor won't index or we want to pre-warm ahead of crawl? Confirm we **skip the other-city lap**. Agreed. We have also spoken about pulling 500 addresses per day from southern GC to central GC including nerang using domain and bright data. Indexing sent to google daily to increase total count slowly. 
+3. **Coverage scope & pace:** sitemap the 117K southern-to-middle band (incl Nerang) **in watched waves, highest-value-suburb-first**, gated on the per-wave GSC indexation result — with the synthetic-floor test up front to decide near-free-index vs pre-pull-the-subject-datum? agreed and as dicscussed above. 
+4. **PropRadar Starter roles:** it's for **on-demand serving + suburb-selection + `/recently-modified` inbound-intent feed + verification**, not bulk pre-enrichment? Worth standing the intent feed up now as its own seller-signal, independent of the RL loop? agreed. System should use it on cycles as it sees fit
+5. **Arm strategy:** collapse to a **single canonical deck** and A/B *cards within it*, or keep `rich` vs `ladder_dark` as competing whole-deck arms (harder to instrument comparably)? This is part of the action space that needs to be explored through testing. the system should should test single normal webpage, deck, ladder, single canonical deck, `rich` vs `ladder_dark`, and other formats it sees fit and as its researh from brains 1-3 and web and its own domain knowledge gives it signal for test cases. 
+6. **True-reward definition:** for the sparse reward, is the target `offmarket_qualify` (in-deck seller signal), a lead submit, or a **booked call / posted appraisal**? This sets what the loop actually optimises. Yes but this could be over time too, someone may call in weeks later. There will need to be many milestones identified by the system along the way. These will be data ponts that give the system signal and direction for next actions, e.g. someone may request a book or a market update report, a second website visit, a form fill, anything. all data needs to be gathered and analysed so key milestone events and subsequent behiours from key milestones can be identified. 
+7. **Cadence:** daily observe + weekly decide (recommended), or push for twice-daily once Phase 1 lifts volume? yes, both. if we get hiher daily vistits as indexed pages increase then we may be able to move to 2 day cadence (midday and late evening for example)
 
 ---
 
