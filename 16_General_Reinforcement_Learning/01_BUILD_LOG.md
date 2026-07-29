@@ -208,3 +208,24 @@ learning loop, a meta-conductor board, and a passing self-test — all self-moni
 organic + onboard FB-funnel/ad-lifecycle to the ledger), M5 hardening (WTA-013 Gold-Coast aggregate; wider identity
 join; true-reward switchover), M6 (P2.1 + offsite — gated on Will), and extending the ops Control Loop tab to render
 the conductor's all-domains board.
+
+---
+
+## M2c + M5 (finishing the buildable remainder)  2026-07-29
+- **WTA-013 ✅** `scripts/precompute_gold_coast_aggregate.py` — mints the `gold_coast` aggregate (txn-weighted
+  from the 3 tracked suburbs) into precomputed_indexed_prices/_market_charts/_active_listings. The AI-traffic page
+  `/market-metrics/Gold-Coast/*` now renders its citable Q&A **with real, honestly-scoped data** — "median across
+  our tracked Gold Coast suburbs is $1,616,635 (+17.1%), 32.2 days" (verified: Robina 10.9%/Varsity 17.7%/Burleigh
+  22.8% → 17.1% weighted). Frontend framing scoped to "tracked suburbs" (Rule 5, not overclaiming all-GC). Zero
+  loader latency (precompute, not a runtime aggregate). Cron monthly (2nd @ 05:00).
+- **M2c ad-action onboarding ✅** `ads_signal.py` now surfaces recent `ad_decisions` (FB-funnel + ad_lifecycle
+  actions) into `rl_ads_signal` → the ads cycle + conductor see + grade what those loops did against the one reward.
+- **M5 identity-join / true-reward switchover:** the reward ledger already UNIONS the journey proxy with the
+  distinct_id-linked seller outcomes — coverage widens automatically as the (post-fix) linkage data accrues; no
+  discrete build, it's a data-accrual curve. Reported in each snapshot's `true_reward` block.
+- Self-test: 51/51 pass.
+
+**REMAINING (all now gated on Will, nothing left to autonomously build):** (1) flip the onsite kill-switch
+`genrl_personalization_v1` ON (after the onsite cycle proposes its 1st experiment + a perf re-check); (2) enable
+FB-organic public auto-posting (Will's governance OK — public-facing); (3) offsite mechanism (WTA-005: PostGrid/
+JustCall/manual). The autonomous build is otherwise COMPLETE.
