@@ -28,7 +28,7 @@ PROMPT="$(cat "$DIR/geo_prompt.md")"
 echo "[$STAMP] ===== GEO cycle start =====" >> "$LOG"
 
 set +e
-timeout -k 60 1500 claude -p "$PROMPT" \
+timeout -k 60 1500 claude --model claude-opus-4-8 -p "$PROMPT" \
   --allowedTools "Bash,Read,Write,Edit,Glob,Grep,WebSearch,WebFetch,TodoWrite" \
   --max-turns 60 >> "$LOG" 2>&1
 RC=$?
