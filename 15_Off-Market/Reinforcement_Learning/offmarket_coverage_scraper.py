@@ -85,7 +85,11 @@ def resolve_scraped_data(doc, allow_fetch, fetch_budget):
     fetch_budget[0] -= 1
     if not html:
         return None, "fetch_failed", True
-    data = dps._extract_from_html(html)
+    try:
+        data = dps._extract_from_html(html)
+    except (ValueError, KeyError) as e:
+        print(f"  ⚠ malformed Domain HTML for {addr}: {e}")
+        return None, "fetch_parse_error", True
     if not data or not data.get("property_timeline"):
         return None, "no_timeline_on_domain", True
     data["url"] = url
