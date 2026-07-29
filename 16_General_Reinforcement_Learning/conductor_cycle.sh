@@ -35,7 +35,7 @@ python3 "$DIR/conductor.py" >> "$LOG" 2>&1 || echo "[$STAMP] board refresh warne
 
 # 2) run the conductor agent
 set +e
-timeout -k 120 3600 claude -p "$(cat "$PROMPT_FILE")" \
+timeout -k 120 3600 claude --model claude-opus-4-8 -p "$(cat "$PROMPT_FILE")" \
   --allowedTools "Bash,Read,Write,Edit,Glob,Grep,WebSearch,WebFetch,TodoWrite" \
   --max-turns 60 >> "$LOG" 2>&1
 RC=$?
