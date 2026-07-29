@@ -37,8 +37,8 @@ NO = re.compile(r"\b(no|skip|reject|don'?t|hold)\b", re.I)
 
 def _tg(msg):
     try:
-        from telegram_notify import send_telegram
-        send_telegram(msg)
+        from telegram_notify import send_message
+        send_message(msg)
     except Exception as e:
         print("telegram send failed:", e)
 
