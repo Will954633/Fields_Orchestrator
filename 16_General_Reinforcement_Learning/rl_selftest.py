@@ -141,8 +141,8 @@ def main():
             if failed:
                 try:
                     sys.path.insert(0, "/home/fields/Fields_Orchestrator/scripts")
-                    from telegram_notify import send_telegram
-                    send_telegram("⚠️ General RL self-test FAILED:\n" + "\n".join(f"• {n} ({d})" for n, d in failed[:8]))
+                    from telegram_notify import send_message
+                    send_message("⚠️ General RL self-test FAILED:\n" + "\n".join(f"• {n} ({d})" for n, d in failed[:8]))
                 except Exception:
                     pass
     else:
