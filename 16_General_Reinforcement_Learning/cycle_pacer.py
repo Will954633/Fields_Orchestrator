@@ -34,7 +34,7 @@ COLL = f"rl_{JOB}_cycle_state"
 SID = "state"
 
 # --- tunables -----------------------------------------------------------------
-MAX_CYCLES_PER_DAY = 8       # hard cap — cycle can never exceed this in a rolling AEST day
+MAX_CYCLES_PER_DAY = 14       # hard cap — cycle can never exceed this in a rolling AEST day
 MIN_GAP_MINUTES = 20         # floor on self-chosen delay (can't hammer)
 MAX_GAP_MINUTES = 1440       # ceiling (a full day off)
 DEFAULT_BACKOFF_MIN = 1200   # if a cycle forgets to set next_run_at: fail safe (~20h, ~next day)
