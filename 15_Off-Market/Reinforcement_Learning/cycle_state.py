@@ -41,6 +41,27 @@ def suburb_counts(db, name):
             "minted_by_scraper": minted}
 
 
+def scorecard(sys_db, corpus_total):
+    """Persist a comparable metric snapshot each run + return the delta vs the previous one,
+    so a cycle can answer 'did engagement move?' instead of re-deriving from prose."""
+    now = datetime.now(timezone.utc).isoformat()
+    # off-market milestone lifts from the shared reward ledger (nightly-computed)
+    led = sys_db["rl_reward_ledger"].find_one(sort=[("computed_at", -1)]) or {}
+    lifts = {m["milestone"]: m.get("lift_vs_base")
+             for m in (led.get("milestones") or []) if "offmarket" in m.get("milestone", "")}
+    card = {"at": now, "corpus_eligible": corpus_total, "offmarket_milestone_lifts": lifts}
+    prev = sys_db["rl_offmarket_scorecard"].find_one(sort=[("at", -1)])
+    sys_db["rl_offmarket_scorecard"].insert_one(dict(card))
+    diff = {}
+    if prev:
+        for k, v in lifts.items():
+            pv = (prev.get("offmarket_milestone_lifts") or {}).get(k)
+            if isinstance(v, (int, float)) and isinstance(pv, (int, float)):
+                diff[k] = round(v - pv, 3)
+        diff["corpus_eligible"] = corpus_total - (prev.get("corpus_eligible") or 0)
+    return card, diff, (prev or {}).get("at")
+
+
 def main():
     db = get_gold_coast_db()
     now = datetime.now(timezone.utc).isoformat()
@@ -83,6 +104,21 @@ def main():
         tag = " [core]" if row["suburb"] in CORE else ""
         print(f"{row['suburb']:20}{(row['addresses'] or 0):>11,}"
               f"{row['offmarket_eligible']:>14,}{row['minted_by_scraper']:>16,}{tag}")
+
+    # persisted scorecard + delta vs the previous cycle (did engagement move?)
+    try:
+        from shared.db import get_client
+        card, diff, prev_at = scorecard(get_client()["system_monitor"],
+                                        state["corpus"]["total_eligible"])
+        print(f"\nSCORECARD (off-market milestone lifts vs base): {card['offmarket_milestone_lifts']}")
+        if prev_at:
+            print(f"  Δ vs previous cycle ({prev_at}): {diff}")
+        else:
+            print("  (first scorecard — no prior to diff)")
+        state["scorecard"] = card
+        state["scorecard_delta"] = diff
+    except Exception as e:
+        print(f"\n(scorecard skipped: {e})")
     return state
 
 
