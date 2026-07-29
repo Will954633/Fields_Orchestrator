@@ -65,12 +65,12 @@ on the dead ChatGPT channel (had leads months ago, none now). (§2.2)
 **Needs a human because:** you know whether it was intentionally moved/disabled.
 **Proposed:** confirm status so the Conductor doesn't assume a loop that isn't firing.
 
-## [WTA-009] Add Gold-Coast market-metrics pages to sitemap — raised 2026-07-29 — [GEO] — status: OPEN
+## [WTA-009] Add Gold-Coast market-metrics pages to sitemap — raised 2026-07-29 — [GEO] — status: DONE (deployed 2026-07-29, commit fcecf1f + sitemap 4a2d847)
 **Blocks:** ChatGPT win-back + AI-engine discovery of our #1 cited page.
 **Needs a human because:** sitemap generator change + deploy.
 **Proposed:** Add 7 URLs (`/market-metrics/Gold-Coast/overview`, `/direction`, `/crash-risk`, `/sell-now`, `/buy`, `/suburb-compare`, and the index `/market-metrics/Gold-Coast`) to the sitemap. These pages get 100% of AI-chat traffic and 41% of Bing traffic but are currently invisible to sitemap-based discovery. ChatGPT likely went dormant because Bing deprioritised the page without freshness signals. This is the single highest-impact GEO fix.
 
-## [WTA-010] Push robots.txt with explicit AI crawler allows — raised 2026-07-29 — [GEO] — status: OPEN
+## [WTA-010] Push robots.txt with explicit AI crawler allows — raised 2026-07-29 — [GEO] — status: DONE (deployed 2026-07-29, commit fcecf1f)
 **Blocks:** AI crawler access verification.
 **Needs a human because:** website file change + deploy.
 **Proposed:** Add explicit `User-agent: GPTBot / Allow: /` (and OAI-SearchBot, PerplexityBot, ClaudeBot, CCBot, Google-Extended) to robots.txt. Research shows 41% of sites accidentally block AI bots via CDN/WAF overrides that ignore the generic `User-agent: *` rule. Explicit allows bypass this. Critical: `OAI-SearchBot` is what ChatGPT uses for search citations (separate from GPTBot for training).
