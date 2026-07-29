@@ -127,6 +127,32 @@ def _seller_reward_dids(sm):
     return dids, by_src
 
 
+def _ultimate_reward(sm):
+    """The ULTIMATE reward (North Star) — an INBOUND ENQUIRY: a seller who asked to talk to us.
+    This is DISTINCT from the near-term reward below. Strategy (Will, 2026-07-29): the public won't
+    give phone/email to agents, so we capture the ADDRESS (near-term reward) → direct-mail rapport →
+    the seller CALLS us. This ultimate tier measures whether that actually happens, so the system
+    validates address-capture against real enquiries instead of declaring victory at the address.
+    Expect it sparse for now — that's the point, it's the thing the whole loop is trying to grow.
+    Sources: report_review_bookings (booked a call about their report) + genuinely contactable
+    seller-intent leads in lead_worklist (real phone AND a seller_intent signal)."""
+    names = set(sm.list_collection_names())
+    booked = sm["report_review_bookings"].count_documents({}) if "report_review_bookings" in names else 0
+    contactable = 0
+    for d in sm["lead_worklist"].find({"is_test": {"$ne": True}}, {"phone": 1, "seller_intent": 1}):
+        ph = (d.get("phone") or "").strip().replace(" ", "")
+        if len(ph) >= 8 and ph not in ("0400000000",) and d.get("seller_intent"):
+            contactable += 1
+    return {
+        "definition": "inbound enquiry — a seller who asked to talk to us (booked call OR contactable seller-intent lead)",
+        "booked_calls": booked,
+        "contactable_seller_leads": contactable,
+        "note": ("Distinct from the near-term address reward. Sparse by design — the address→mail→"
+                 "rapport→call strategy is what grows this. booked_calls and contactable may overlap; "
+                 "treat as the North-Star validation + weekly sanity-check, not a dense learning signal."),
+    }
+
+
 def build(window_days=None, dry_run=False):
     c = get_client()
     sm = c["system_monitor"]
@@ -285,18 +311,25 @@ def build(window_days=None, dry_run=False):
         "window": {"from": dmin, "to": dmax, "window_days": window_days},
         "n_sessions": n_sessions, "n_users": n_users, "n_conversions": n_conv,
         "base_conversion_rate": round(base_rate, 4),
+        # NEAR-TERM reward (dense, learnable) = ADDRESS captured / home-analysis engaged. This is the
+        # achievable target Will's strategy is built on (address → direct-mail rapport → inbound call);
+        # it is NOT phone/email capture (the public won't give that). The system learns on this signal.
         "true_reward": {
-            "definition": ("identified seller = journey `converted` (address submit) UNION a real "
+            "tier": "near-term (address captured → mail channel opens)",
+            "definition": ("address captured = journey `converted` (address submit) UNION a real "
                            "seller outcome linked by distinct_id (property_reports homeowners + "
-                           "off-market qualifiers)."),
+                           "off-market qualifiers). NOT phone/email — see ultimate_reward for the North Star."),
             "journey_converted": n_journey_conv,
             "seller_linked_extra": n_seller_linked,   # true sellers the proxy alone missed
             "total_true_rewards": n_conv,
             "linked_sources": seller_src,
-            "note": ("The distinct_id linkage grows as the Gap-A identity fix accrues data "
-                     "(lead-signup/subscribe now forward it). When seller-linked >> journey proxy, "
-                     "switch the primary weight driver to the linked signal."),
+            "note": ("This is the DENSE learnable reward and it's aligned with strategy — capturing an "
+                     "address unlocks the mail-out channel. Validate it against `ultimate_reward` "
+                     "(actual inbound enquiries): if addresses never convert to calls, that's the signal "
+                     "to change the mail/rapport mechanism, not to chase phone/email head-on."),
         },
+        # ULTIMATE reward (sparse, North Star) = an inbound enquiry (a seller who asked to talk to us).
+        "ultimate_reward": _ultimate_reward(sm),
         "milestones": milestones,
         "channels": channels,
         "ai_sources": ai_sources,
