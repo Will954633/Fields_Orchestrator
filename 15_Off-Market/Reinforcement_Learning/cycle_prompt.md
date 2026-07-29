@@ -53,9 +53,11 @@ re-read unchanged data.
   **kill/scale rule** (the off-market analogue of the funnel's CPL≤$8-win / 0-leads-kill). E.g. "Arm B puts a specific $ number
   above the first swipe → predict first-swipe survival (deck_engaged rate) +X; read at N≥Y dark-arm sessions; KILL if no lift in
   7 days, SCALE if deck_engaged rate up AND a meso milestone (menu_sell/qualify) doesn't drop." No hypothesis with no kill rule.
-- **Content/format experiments** run as PostHog feature-flag arms (sticky per person), **2–4 concurrent max** (trials, not dollars,
-  are scarce here). Action space = information move AND format (webpage / deck / ladder / canonical / system-devised — SCOPING §2).
-  Adjust **ONE** variable per cycle so attribution stays clean.
+- **Content/format experiments** run as REAL PostHog feature-flag arms (sticky per person, instantly killable), **2–4 concurrent max**.
+  Create/kill flags with `python3 posthog_flag.py --create KEY --variants control:50,teaser:50` / `--kill KEY` / `--to-control KEY`
+  — flag WRITES need `POSTHOG_ALL_ACCESS_KEY` (the PERSONAL key is read-only; that's why cycle 3 fell back to a hash). The deck reads
+  `phGetFlag(KEY)` (multivariate → variant string), with a deterministic hash as pre-flags-load fallback. Your kill rule executes with
+  `--kill`/`--to-control` (no deploy needed). Action space = information move AND format (SCOPING §2). Adjust **ONE** variable per cycle.
 - **AUTONOMY BOUNDARIES (Will, 2026-07-29: autonomous iteration toward the objective IS the system — deploy freely within these rails).**
   **AUTO — do it, then screenshot-verify + log (fix-history + ledger):** coverage scraper + comp backfill; sitemap release increments;
   **safe instrumentation & bug fixes to the live site** (analytics, rendering, non-brand-facing correctness — *deploy them*, don't stage);
@@ -84,7 +86,7 @@ re-read unchanged data.
 - Push any code changed (Rule 2). Log fixes (Rule 1).
 
 ### 5. Document (every cycle)
-- Write `cycles/cycle_YYYYMMDD_HHMM.md`: scorecard diff vs last cycle, what you found + WHY (incl. change-epoch reads), the ONE hypothesis + kill/scale rule you set, what you changed.
+- Write `cycles/cycle_<STAMP>.md` where **`STAMP=$(TZ=Australia/Brisbane date +%Y%m%d_%H%M)`** (run the command — don't guess the timestamp; cycle 3 mis-stamped its file). Contents: scorecard diff vs last cycle, what you found + WHY (incl. change-epoch reads), the ONE hypothesis + kill/scale rule you set, what you changed.
 - Append a one-line entry to `00_LEDGER.md`. Record ad/experiment decisions where applicable.
 - **Needs-Will items → append to `WILL_TO_ACTION.md`** (a crisp, dated, actionable queue — the General-RL discipline: analysis/drafts here, Will decides go-live). Don't bury decisions inside cycle files.
 
