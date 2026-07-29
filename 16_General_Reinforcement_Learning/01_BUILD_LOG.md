@@ -158,3 +158,23 @@ Full cycle doc: `cycles/geo_cycle_20260730_0039.md`
 - WTA-013 (NEW) — Will to check Bing AI Performance report in Bing Webmaster UI.
 - Strengthen the true reward (cross-collection distinct_id join) as the widened data accrues.
 - Phase 2: onsite personalization (thin, two-surface) — WTA-004.
+
+---
+
+## 2nd autonomous domain — SEO (Google organic)  (2026-07-29)
+
+Proves the GEO pattern replicates. Same shape: sensor + Claude-as-analyst cycle + self-pacing + tiered
+execution + shared reward ledger + self-monitoring.
+- **`seo_signal.py`** → `rl_seo_signal` (cron 01:00). Joins GSC per-page performance
+  (`seo_landing_performance`, `search_console_queries`) with the conversion tie (`organic_landing_affinity`)
+  → flags striking_distance / low_ctr / converting. **First read:** `/market-metrics/Robina` = **295 impressions
+  at position 11.9 (page 2), 0.3% CTR** — the single biggest organic lever (and the page WTA-012 just made citable).
+- **`seo_prompt.md` + `seo_cycle.sh` + `seo_dispatch.sh`** (cron :10/:30/:50 8-22) — tiered: Tier-1 executes
+  indexation (Bing/IndexNow) + sitemap priority; Tier-3 (titles/meta/on-page copy — the #1 SEO lever, but public
+  content) drafts + telegrams Will. Analysis+draft-heavy by design.
+- **`cycle_pacer.py --job seo`** — generalized self-pacer (GEO's `cycle_state.py` left untouched); `rl_seo_cycle_state`.
+- Self-monitored: `rl_seo_signal` + `seo_dispatch` heartbeats green. Coordinates with `seo_improvement_weekly.py`
+  (checks rl_seo_actions to avoid collision).
+
+**Now 2 autonomous upstream sub-workflows (GEO + SEO), both on the shared reward ledger.** Next domains clone the
+same 5 files. Whole-upstream autonomy is the sum of these; the meta-conductor (cross-sphere coordination) is later.
