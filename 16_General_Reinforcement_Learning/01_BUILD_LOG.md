@@ -106,7 +106,32 @@ via WILL_TO_ACTION). `flock`+`timeout`+`job_run` `geo_cycle` (Rule 7). First cyc
 Published control panel (reward-ledger milestone weights, GEO signal, running workflows, cost) so the whole
 system is visible at a glance. Regenerate from `rl_reward_ledger` + `rl_geo_signal` + `job_runs`.
 
+### ✅ GEO Cycle #1 — inaugural signal read + action plan (2026-07-29)
+First full SENSE→ANALYSE→PLAN cycle. Key findings:
+
+**Signal:** Bing converts at **3.67× Google** (23 users → 2 conv, $0 cost). ALL AI-chat engines (Copilot, ChatGPT)
+land on `/market-metrics/Gold-Coast/overview` — our most-cited page. ChatGPT **DORMANT** since week 25 (7 weeks).
+
+**Root cause (ChatGPT dormancy):** `/market-metrics/Gold-Coast/overview` is NOT in the sitemap (19,422 URLs, zero
+Gold-Coast market-metrics pages). ChatGPT's OAI-SearchBot uses Bing's index; Bing uses sitemap for discovery/freshness.
+Missing sitemap entry → Bing deprioritises → ChatGPT stops citing.
+
+**Action plan (4 items, all WTA):**
+1. **WTA-009 [CRITICAL]** Add Gold-Coast market-metrics (7 URLs) to sitemap — fix the discovery gap
+2. **WTA-010 [HIGH]** Explicit AI crawler allows in robots.txt — prevent CDN/WAF blocking
+3. **WTA-011 [HIGH]** Verify Bing Webmaster Tools — confirm indexation pipeline healthy
+4. **WTA-012 [MEDIUM]** Quotable stat blocks + AYH bridge on market-metrics — increase citation + conversion
+
+**Existing strengths confirmed:** 5 JSON-LD blocks (RealEstateAgent, BreadcrumbList, FAQPage, AnalysisNewsArticle,
+Dataset), good SSR (46KB/20K chars), proper meta. The content is citable — the problem is DISCOVERY, not quality.
+
+**Theory state:** AI citations follow `market-metrics entry → property interest → address search (26× lift)`.
+The cheapest pathway to sellers is fixing the discovery pipeline so AI engines can find and re-cite what's already good.
+
+Full cycle doc: `cycles/geo_cycle_20260729_1345.md`
+
 ### ⏭ Next
-- Read the first GEO cycle output; iterate the prompt.
+- Will to action on WTA-009/010/011 (sitemap + robots.txt + Bing Webmaster)
+- Cycle #2: monitor ChatGPT recovery after fixes land; iterate if no recovery in 4 weeks
 - Strengthen the true reward (cross-collection distinct_id join) as the widened data accrues.
 - Phase 2: onsite personalization (thin, two-surface) — WTA-004.
