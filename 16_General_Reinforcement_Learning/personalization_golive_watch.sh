@@ -15,7 +15,7 @@ for i in $(seq 1 90); do   # up to ~45 min
 done
 python3 - <<'PY' 2>/dev/null || true
 import sys; sys.path.insert(0,"scripts")
-from telegram_notify import send_telegram
-send_telegram("⏳ Onsite cycle hasn't served a first experiment within 45min — personalization kill-switch stays OFF. It'll go live on the next cycle that proposes one.")
+from telegram_notify import send_message
+send_message("⏳ Onsite cycle hasn't served a first experiment within 45min — personalization kill-switch stays OFF. It'll go live on the next cycle that proposes one.")
 PY
 exit 0
