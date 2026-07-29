@@ -1806,6 +1806,37 @@ def _backfill_reddit_scores(sm_db):
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+_SRC_ERR_HINT = {"auto": "autocomplete", "ads": "google-ads"}
+
+
+def _emit_source_heartbeats(selected, results_by_src, all_errors):
+    """Per-source health beat → system_monitor.job_runs so a silently-dead source
+    (e.g. the expired GSC token that stopped 2026-06-10) surfaces on the Fields
+    Systems Health sheet instead of rotting unnoticed for weeks. Each source that
+    was actually attempted this run reports success (rows>0) or error (0 rows)."""
+    try:
+        from job_status import record_job_result
+    except Exception:
+        return
+    for src, results in results_by_src.items():
+        if selected not in ("all", src):
+            continue  # source not attempted this run — don't touch its heartbeat
+        hint = _SRC_ERR_HINT.get(src, src)
+        src_errs = [e for e in all_errors if hint in e.lower()]
+        status = "success" if results else "error"
+        detail = (f"{len(results)} rows" if status == "success"
+                  else (src_errs[0][:180] if src_errs else "0 rows collected"))
+        try:
+            record_job_result(
+                f"search_intent_{src}", status, detail=detail,
+                cadence_hours=72,  # collector runs every 3 days → STALE after ~4.5d
+                title=f"Search Intent — {src.upper()}",
+                rows=len(results),
+            )
+        except Exception:
+            pass
+
+
 def main():
     parser = argparse.ArgumentParser(description="Search Intent Data Collector")
     parser.add_argument("--source", choices=["all", "auto", "youtube", "trends", "ads", "gsc", "paa", "reddit"],
@@ -1922,6 +1953,14 @@ def main():
         reddit_results, errs = collect_reddit()
         all_errors.extend(errs)
         print(f"  Collected {len(reddit_results)} Reddit posts")
+
+    # Per-source health beats (real runs only) — a silently-dead source now shows
+    # on the Fields Systems Health sheet instead of rotting unnoticed (cf. GSC 06-10).
+    if not args.dry_run:
+        _emit_source_heartbeats(args.source, {
+            "auto": auto_results, "youtube": youtube_results, "trends": trends_results,
+            "ads": ads_results, "gsc": gsc_results, "paa": paa_results, "reddit": reddit_results,
+        }, all_errors)
 
     # Detect new queries (include YouTube suggestions alongside Google)
     new_queries = detect_new_queries(sm_db, auto_results + youtube_results) if (auto_results or youtube_results) else []
