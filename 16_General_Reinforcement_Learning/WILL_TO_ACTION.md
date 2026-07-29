@@ -87,3 +87,10 @@ on the dead ChatGPT channel (had leads months ago, none now). (§2.2)
 **Needs a human because:** content change on public pages.
 **STATUS: DRAFTED for review → `WTA-012_DRAFT_stat_blocks_and_bridge.md`** (binds to live market data, zero added latency, editorial-compliant). Awaiting Will's approve-to-implement.
 **Proposed:** (a) Add "At a Glance" stat blocks with question-shaped H2s (e.g. "What is the median house price in Robina?") — 30-40% higher AI visibility per Princeton GEO study. (b) Add soft contextual link from market-metrics → AYH ("See how your home compares"). Both Bing conversions came through the market-data → AYH funnel; AI-chat users don't take that step because there's no visible bridge. Spec in `cycles/geo_cycle_20260729_1345.md` §3 ACTION 4-5.
+**Strengthened by Cycle #2 research:** tables extract at 2.1× inline stats; front-loaded answers capture 55% of citations; question-shaped H2s = 34% more likely to be cited. All support the spec.
+
+## [WTA-013] Check Bing AI Performance report in Webmaster UI — raised 2026-07-30 — [GEO] — status: OPEN
+**Blocks:** Understanding Copilot citation volume + which queries trigger citations.
+**Needs a human because:** The AI Performance report is UI-only in Bing Webmaster Tools (API endpoints returned 404). Account is verified (ID 188439555).
+**Proposed:** Log into Bing Webmaster Tools → look for "AI Performance" or "Copilot" tab. This report (launched Feb 2026) shows: which pages Copilot cites us in, the "Grounding Queries" (Copilot's internal search phrases), citation count over 90 days, and trends. This is the ONLY first-party Copilot citation data — PostHog only shows us clicks, not citations. A page can be cited 100× in Copilot answers and we'd only know if someone clicks through.
+**What we'd learn:** Whether Copilot citations are growing, stable, or declining; which queries trigger citations; whether the sitemap/robots.txt changes had any effect on citation frequency.
