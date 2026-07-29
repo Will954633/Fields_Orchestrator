@@ -17,7 +17,7 @@
 
 4. **Architecture (decided): independent sub-autonomous workflows + one shared reward ledger, with Samantha as the future meta-conductor.** Each domain (system-health, SEO, FB-ads, off-market, onsite-funnel) runs its own self-contained loop at its own cadence, but they all **read from and write to a shared reward ledger** so nothing optimises a private proxy while the real number stays flat. Samantha (manual-only today → no collision) sits over the top later, monitoring and conducting from that one scoreboard. The two existing autonomous loops (FB funnel, off-market RL — now live) join the ledger too. (§4)
 
-5. **The true reward (decided): an identified, contactable seller** (name+email+phone+intent in `lead_worklist`), with **proactive inbound enquiry as a high-weight bonus multiplier**, and booked-call/listing as the weekly sanity-check. Everything grades against this one number. (§5)
+5. **The true reward (decided): an identified, contactable seller** (name+email+phone+intent in `lead_worklist`), with **proactive inbound enquiry as a high-weight bonus multiplier** — and **net of cost.** The system optimises **cost per identified seller** (sellers per dollar), so it prefers the *cheapest converting pathway*, and it has **every lever at its disposal** — FB paid ads, FB organic posts, Google Ads, article generation + posting, SEO/GEO, email, onsite content — ranked by cost-per-outcome. Booked-call/listing = weekly sanity-check. (§5, §8)
 
 6. **The reward is a self-discovering, self-reweighting milestone map (decided).** The system earns a *shaped* reward at each milestone a user reaches, weighted by that milestone's **measured predictive power** toward the true reward (potential-based shaping — provably doesn't distort the real objective). Weights are re-learned continuously (the built-in Goodhart defence), cold-started from the FB funnel's proven laws. **The system discovers and re-weights milestones as an ongoing job.** Building this ledger + fixing the identity join is **Phase 0** — nothing can learn until it exists. (§5)
 
@@ -106,7 +106,7 @@ So: same observe → analyse → note → iterate discipline, same cycle files. 
 - **Samantha is the future meta-conductor** — she monitors and conducts the workflows from that scoreboard. She runs manual-only today, so there is **no two-loops-fighting risk right now**; the sub-workflows are built first, Samantha inherits the conductor role when automated.
 - **The two existing autonomous loops (FB funnel, off-market RL) join the ledger** so Samantha gets a holistic view (e.g. an FB lead going cold, or an off-market swiper resurfacing on `/analyse-your-home` weeks later — visible in one place). They keep running exactly as-is; they just also report in.
 
-**The ledger's #1 job is channel/referrer/content attribution of conversion** — because that is the wire the ACQUIRE arm needs to know what to make more of (§2).
+**The ledger's #1 job is channel/referrer/content attribution of conversion *and cost*** — every action's outcome *and* its attributed cost, so the ACQUIRE arm knows not just what to make more of, but what produces sellers most **cheaply** (§2, §5.1).
 
 ---
 
@@ -130,7 +130,15 @@ Properties of the design:
 - **Never flying blind.** Cold-started from the FB funnel's proven laws (personal-open-loop milestones weighted high, passive-browse low), updated as real data accumulates.
 - **Self-discovering (decided).** Discovering new candidate milestones and re-weighting existing ones is an **ongoing job of the system itself**, not a fixed list we define once.
 
-**Building this milestone ledger + fixing the identity join is Phase 0.** It *is* the shared reward ledger; every workflow grades against it.
+### 5.1 Cost as a reward dimension (decided)
+Conversion count alone is the wrong objective — a seller won for $2 of article generation beats a seller won for $18 of ad spend. So the reward is **net of cost**: the system optimises **cost per true reward** (equivalently, sellers-per-dollar / ROI), not raw conversions.
+
+- **Every action carries an attributed cost**, logged into the ledger alongside its outcome: paid ads = direct $ spend (CPL, already tracked for FB + Google); articles / SEO / GEO / organic posts = production cost (compute + generation) with ~$0 marginal distribution; offsite = postage + call-time + Will's time. Each **pathway** then has a computable **cost-per-identified-seller.**
+- **This ranks the toolbox empirically, not by assumption.** Near-zero-marginal-cost organic (GEO/articles/SEO) is *preferred when it converts* — which is exactly why the GEO flagship (§2.2) is attractive: AI-referred traffic is converting at ~4× Google per journey **for zero ad spend.** But cost-efficiency is measured, not assumed: a cheap channel that doesn't convert loses to a dearer one that does. The system optimises **cost-per-outcome at the margin**, balancing cheap-but-slow organic against paid-but-fast volume.
+- **Multi-touch cost attribution mirrors the reward side.** A pathway may span an article + a FB ad + a call; cost is credit-assigned across touches the same way milestone reward is (start last-touch, refine to fractional/position-based as data allows).
+- **Guardrail interplay:** cost-efficiency never overrides the autonomy bounds (§12) — the system prefers cheap pathways, but net-new spend beyond caps and GC go-live still route to Will.
+
+**Building this milestone ledger (with cost attribution) + fixing the identity join is Phase 0.** It *is* the shared reward ledger; every workflow grades against it.
 
 ---
 
@@ -160,17 +168,21 @@ Accumulate sessions *by milestone-state* over weeks; learn "for a session in sta
 
 ---
 
-## 8. Upstream — the actuator that manufactures traffic
+## 8. Upstream — the actuator that manufactures traffic (the full toolbox)
 
-Where the loop's leverage compounds. Coordinate the **existing** loops (don't rebuild), make them accountable to the shared reward, and add the GEO arm:
+Where the loop's leverage compounds. **The system has every acquisition lever at its disposal** and chooses among them by **cost-per-outcome** (§5.1) — coordinate the existing loops (don't rebuild), make them accountable to the shared reward, and add the GEO arm:
 
-- **FB ads** — Home Owner funnel wakeup (hourly, live) + `ad_lifecycle.py` (daily cull + winner→organic).
-- **SEO** — `seo_dashboard.py` (nightly) + Samantha weekly SEO ship (live) + the new **GEO/AI-channel** arm (§2.2) — the flagship.
-- **Articles** — orchestrator step 120 auto-publish + `fields-automation` GH Actions. Topic/cadence/hook become steered by what converts, not just "new listings."
-- **Organic FB** — `fb-content-scheduler` is **currently dormant (cron commented out)** — a live gap to revive as a governed arm.
-- **Landing pages** — static today; enter the loop via the onsite personalization layer (§7).
+| Lever | Entry point | Status | Cost basis |
+|---|---|---|---|
+| **FB paid ads** | Home Owner funnel wakeup (hourly) + `ad_lifecycle.py` (daily cull + winner→organic) | live | direct $ (CPL tracked) |
+| **Google Ads** | `scripts/google_ads_manager.py` (create/pause/report/keywords; caps $50/day/campaign, $500/mo, start PAUSED) | available, under-used | direct $ (CPL tracked) |
+| **SEO + GEO** | `seo_dashboard.py` (nightly) + Samantha weekly SEO ship + **new GEO/AI-channel arm (§2.2 — flagship)** | live / new | production cost, ~$0 distribution |
+| **Article generation + posting** | orchestrator step 120 auto-publish → 121 sitemap resubmit + `fields-automation` GH Actions | live | compute/generation, ~$0 distribution |
+| **FB organic posts** | `fb-content-scheduler.py` + `fb-page-post.py` (14 templates) — **currently DORMANT (cron commented out)** | dormant → revive | ~$0 |
+| **Email / newsletter** | subscriber list + email agent (auth partial) | partial | ~$0 |
+| **Landing pages** | React routes; enter the loop via the onsite personalization layer (§7) | static → Phase 2 | build cost |
 
-**The change is not new optimisers — it's making each one read the shared ledger** so its output is graded by real downstream conversion (and by channel), not its local proxy (CPL, CTR, indexation).
+**Two changes, not new optimisers:** (1) make each lever **read the shared ledger** so its output is graded by real downstream conversion *and by cost*, not its local proxy (CPL, CTR, indexation); (2) let the loop **allocate effort across the whole toolbox by cost-per-identified-seller** — leaning into near-zero-cost organic/GEO/articles where they convert, buying paid volume (FB/Google) where speed is worth the CPL, always within the autonomy caps (§12).
 
 ---
 
@@ -222,7 +234,7 @@ Contextual, human-in-loop: the loop proposes the best call/email/posted-asset fo
 ## 13. Phased roadmap
 
 **Phase 0 — Shared reward ledger + milestone map + identity join (the true first task; mostly wiring).**
-Extend `lead_worklist` into an action→outcome ledger with channel/referrer/content attribution; stand up the milestone map + predictiveness weights (cold-started from the FB laws); fix Gap A (forward distinct_id from all forms + retroactive stitch). *Exit:* for a real conversion, trace the full channel→onsite→outcome chain in one query, and read each milestone's current predictive weight. **Nothing learns before this.**
+Extend `lead_worklist` into an action→outcome ledger with channel/referrer/content **and cost** attribution; stand up the milestone map + predictiveness weights (cold-started from the FB laws); fix Gap A (forward distinct_id from all forms + retroactive stitch). *Exit:* for a real conversion, trace the full channel→onsite→outcome chain **plus its cost-per-outcome** in one query, and read each milestone's current predictive weight. **Nothing learns before this.**
 
 **Phase 1 — The flagship loop (GEO/AI-channel) + make existing upstream loops ledger-accountable.**
 Stand up the onsite-funnel sensor workflow; ship the AI-channel loop (§2.2) end-to-end (sense ai_source → generate GEO content → measure); point the existing FB/SEO/article loops at the shared reward; revive dormant FB organic as a governed arm; wire OBSERVE→Will-to-action. *Exit:* one full turn of the loop — an onsite signal drives an upstream action that measurably moves AI-referred conversion.
