@@ -72,8 +72,16 @@ def build(days=60, dry_run=False):
     key = os.environ["POSTHOG_PERSONAL_API_KEY"]
     reward_in = ", ".join(f"'{e}'" for e in REWARD_EVENTS)
 
+    # include any live onsite content-experiment flags the onsite cycle created (dynamic)
+    try:
+        exp_flags = [d["flag_key"] for d in get_client()["system_monitor"]["rl_onsite_experiments"]
+                     .find({"status": "serving"}, {"flag_key": 1})]
+    except Exception:
+        exp_flags = []
+    all_flags = list(dict.fromkeys(FLAGS + exp_flags))
+
     experiments = []
-    for flag in FLAGS:
+    for flag in all_flags:
         sql = f"""
         SELECT properties['$feature/{flag}'] AS variant,
                count(DISTINCT person_id) AS users,
