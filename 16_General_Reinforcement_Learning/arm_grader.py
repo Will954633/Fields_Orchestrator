@@ -29,10 +29,10 @@ COLL = "rl_arm_grades"
 # The live experiment flags (arms) to grade. Extend as new flag experiments ship.
 FLAGS = ["for_sale_page_v1", "discover_mode_v1", "offmarket_gate_v1", "genrl_personalization_v1"]
 # Events that count as the true reward (identified-seller candidate).
-REWARD_EVENTS = ["analyse_home_address_submit", "analyse_home_submit_success",
+REWARD_EVENTS = ["address_search", "analyse_home_address_submit", "analyse_home_submit_success",
                  "offmarket_qualify", "forsale_ladder_complete"]
-MIN_USERS_PER_ARM = 50     # below this a variant can't be called
-MIN_TOTAL_CONV = 5         # below this the whole experiment is inconclusive
+MIN_USERS_PER_ARM = 10     # batch-of-10: 10 sessions/arm = analysable (Will 2026-07-29)
+MIN_TOTAL_CONV = 2         # act on directional signal fast, do not wait for significance
 
 
 def _grade(variants):
