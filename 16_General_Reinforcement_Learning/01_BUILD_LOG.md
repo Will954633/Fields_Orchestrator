@@ -70,3 +70,43 @@ PostHog directly. One reward truth, many loops.
 - **Retroactive stitch (optional):** best-effort backfill of distinct_id onto historic leads where a
   matching journey exists (email/session heuristics). Lower priority than forward-capture.
 - **Then Phase 1:** the GEO/AI-channel flagship loop (pending WTA-008 approval).
+
+### ✅ Weights now informed by full-year history (2026-07-29)
+The milestone weights were learning off the thin 60-day journey build (7 conversions). Now each milestone's
+current-window rate **shrinks toward its year-long PostHog rate** (measured via funnels [milestone →
+address_submit], 365d), weighted by how much history backs it (`HISTORICAL_PRIORS` in `reward_ledger.py`).
+Effect: `searched_address` blended from a small-sample 70% down to a defensible **49% (26× lift)** — still the
+dominant lever; `viewed_property` held near base by **524 people** of history (passive browse ≠ intent).
+Refreshable as history grows.
+
+---
+
+## Phase 1 — GEO / AI-channel flagship loop  (started 2026-07-29, WTA-008 green-lit by Will)
+
+The onsite→upstream feedback loop, and the first turn of the closed loop. AI-referred traffic is ~$0 marginal
+and converting above weight → the cheapest pathway we have.
+
+### ✅ `geo_signal.py` — the AI-channel SENSOR (LIVE)
+Read-only over `organic_journeys` → `system_monitor.rl_geo_signal`. Classifies every session's engine
+(`ai_source` + referrer): generative engines (ChatGPT/Copilot/Perplexity/Gemini = GEO targets) vs AI-adjacent
+search (Bing/DuckDuckGo). Per engine: users, conversions, conv-rate vs base, lift, 8-week trend, landing pages,
+and **DORMANT detection** (silent for the last two complete weeks = win-back candidate). Cron 00:45; `job_run`
+`rl_geo_signal` cadence 24h.
+**First read:** **Bing 3.7× base** (23 users → 2 conv, zero ad spend) — AI-adjacent search is our best-converting
+channel; **ChatGPT DORMANT** (2 users W24, silent since — the "had leads months ago, none now" signal, auto-caught);
+Copilot active (first referrals this morning). AI engines mostly land on `/market-metrics/Gold-Coast/overview`.
+
+### ✅ `geo_cycle.sh` + `geo_prompt.md` — the Claude-as-analyst cycle (LIVE, daily 01:00)
+Durable OS cron → headless `claude -p` (Claude Max), run_wakeup pattern: reads geo_signal + reward_ledger →
+attributes WHY → researches GEO/AEO tactics (web + Brains) → produces a prioritised, editorial-compliant content
+plan + win-back plan for dormant channels. **ANALYSIS/DRAFTS ONLY — never publishes** (publish routes to Will
+via WILL_TO_ACTION). `flock`+`timeout`+`job_run` `geo_cycle` (Rule 7). First cycle kicked at creation.
+
+### ✅ Live dashboard — "General RL — Control Loop"
+Published control panel (reward-ledger milestone weights, GEO signal, running workflows, cost) so the whole
+system is visible at a glance. Regenerate from `rl_reward_ledger` + `rl_geo_signal` + `job_runs`.
+
+### ⏭ Next
+- Read the first GEO cycle output; iterate the prompt.
+- Strengthen the true reward (cross-collection distinct_id join) as the widened data accrues.
+- Phase 2: onsite personalization (thin, two-surface) — WTA-004.
