@@ -35,6 +35,9 @@ answer Will, and make the cross-domain calls no single domain can. Naming the co
 - Answering Will is your #1 priority — do it before the board work below.
 
 ### 1. Read the board (don't rebuild it — the sensor already did)
+- **FIRST, your standing memory: `python3 conductor_state.py show`** — the binding constraint + cross-domain
+  priority + open directives YOU set last cycle. This PERSISTS across cycles — start from it, don't re-derive from
+  scratch. You will re-validate and update it in step 3. (This is why you don't need a human re-reading your docs.)
 - `system_monitor.rl_conductor` (`_id:"latest"`) — the holistic board built by `conductor.py`: per-domain
   `sensor_status` / `cycle_status` / `next_run_at` / `top_opportunity`, `arm_recommendations` (promote/retire),
   `cross_sphere_priority`, `true_reward`. (The runner refreshes this immediately before you — it is current.)
@@ -45,9 +48,18 @@ answer Will, and make the cross-domain calls no single domain can. Naming the co
   so you compound instead of restarting.
 
 ### 2. Diagnose the constraint — and RESEARCH, don't just read the board
-- State, in one sentence, the **single thing most limiting inbound seller enquiry right now** — the reward physics is
-  sparse (~1–2 conversions/day), so be honest about which milestone up the ladder is the true bottleneck (e.g. onsite
-  surfaces hot leads but **0 have a phone number**; a domain's cycle has **never run**; ads spend isn't converting).
+- State, in one sentence, the **single thing most limiting inbound seller enquiry right now** — re-validate the
+  standing constraint from your memory against fresh data (has it moved?), don't blindly restate it.
+- **The reward is TWO-TIER (read both in `rl_reward_ledger`) — do not confuse them:**
+  - **NEAR-TERM reward = an ADDRESS captured** (`true_reward`). This IS the strategy and it works — capturing an address
+    opens the direct-mail rapport channel (posted reports/positioning docs/printed articles/QR-video links → the seller
+    calls us). **Do NOT treat "0 phone/email" as failure** — the public won't give contact details to agents; we don't
+    ask head-on. This is the dense signal the system learns on.
+  - **ULTIMATE reward = an INBOUND ENQUIRY** (`ultimate_reward`: booked call / contactable seller-intent lead). Sparse
+    by design — it's what the whole loop is trying to grow. Optimise the near-term densely **while validating it against
+    the ultimate**: does address→mail→rapport→call actually convert? If addresses never become calls, the fix is the
+    mail/rapport mechanism (or a lower-friction angle like buyer-first, which is showing early signs) — never chasing
+    phone/email. (Full context: memory `contact_capture_reality_and_address_mail_strategy`.)
 - **The board is only signals your sub-processes already computed. Your edge as conductor is finding signals they
   CAN'T see.** Whenever the board can't explain a plateau, a constraint's cause is unclear, or you suspect an untapped
   lever — RESEARCH before acting. You have first-class research reach; use it liberally (all via `Bash` + web tools):
@@ -73,6 +85,12 @@ answer Will, and make the cross-domain calls no single domain can. Naming the co
   - Either way, research for REAL — never reason from memory; verify before asserting.
 
 ### 3. ACT at the meta level (a cycle where you only observed + asked questions is a FAILED cycle)
+- **Update your DURABLE MEMORY (mandatory — this is what makes you autonomous):**
+  - Keep or move the constraint: `python3 conductor_state.py set --constraint "..." --priority "onsite,seo,..." --why "..." --cycle N`.
+    Only change the constraint when the DATA moved (e.g. address→call is now converting); otherwise keep it and deepen it.
+  - **Issue durable directives so your decisions actually reach the domains** (not just prose in your doc):
+    `python3 conductor_state.py directive --domain onsite --text "design an identity-capture / mail-loop experiment on the address-submit flow"`.
+    Each domain reads + actions its own open directives next cycle. Close finished ones: `conductor_state.py done --id <id>`.
 - **Unblock the bottleneck domain.** If the constraint is a domain that is idle/stale/never-run, nudge its pacer to
   run now: `python3 cycle_pacer.py --job <domain> --set-next 0 --reason "conductor: <why>"` (domains: seo/ads/articles/
   onsite/geo). You are not overriding its *decisions* — you are telling a stalled worker to wake and do its own thing.
