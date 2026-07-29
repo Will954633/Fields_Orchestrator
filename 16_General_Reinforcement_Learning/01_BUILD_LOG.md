@@ -130,8 +130,31 @@ The cheapest pathway to sellers is fixing the discovery pipeline so AI engines c
 
 Full cycle doc: `cycles/geo_cycle_20260729_1345.md`
 
+### ✅ GEO Cycle #2 — Bing intelligence + theory correction (2026-07-30)
+Executed 5 Tier-1 actions:
+
+1. **Extended Bing URL submission** from 7 → 33 URLs (all market-metrics + key conversion pages). All batches OK.
+2. **Deployed llms.txt** at `/.well-known/llms.txt` (commit `b4dd0aaf`, build clean).
+3. **IndexNow ping** for robots.txt, sitemap.xml, llms.txt — all 202 accepted.
+4. **IndexNow key verification file** deployed (commit `51085670`) — without this, prior IndexNow pings were unverified.
+5. **Fixed personalization_policy.py bug** — `_id: None` → BSON null collision on re-run (commit `2ad5700b`).
+
+**Critical theory update from Bing Webmaster data:**
+- `/market-metrics/Gold-Coast/overview` was **discovered by Bing on 2026-05-18**, continuously indexed at position 3-5, and **last crawled 2026-07-28**. It was NEVER missing.
+- robots.txt was **never blocking AI crawlers** — 0 blocked-by-robots in Bing crawl stats.
+- **ChatGPT dormancy ≠ indexation failure.** The 2 users in W24 may be statistical noise, not a channel that died. The "sitemap gap" hypothesis is disconfirmed.
+- **Bing is the real AI opportunity**: 23 users, 2 conversions (6.9%, 3.67× base), market data queries at position 2-5. Copilot sits on Bing → improving Bing ranking automatically lifts Copilot citations.
+
+**Research findings integrated:**
+- Tables = 2.1× extraction rate; question-shaped H2s = 34% more citations; front-loaded answers = 55% of citations come from top 30% of page. All support WTA-012.
+- Speakable schema and Bing AI Performance report are new intelligence levers.
+- Definitive language gets cited more, but conflicts with our editorial rules (no advice/predictions). DO NOT change — liability > citations.
+
+Full cycle doc: `cycles/geo_cycle_20260730_0039.md`
+
 ### ⏭ Next
-- Will to action on WTA-009/010/011 (sitemap + robots.txt + Bing Webmaster)
-- Cycle #2: monitor ChatGPT recovery after fixes land; iterate if no recovery in 4 weeks
+- Cycle #3: re-run sensors after organic_journeys rebuild; verify IndexNow key live; re-ping 33 URLs with verified key; compare Bing query stats W31 vs W30.
+- WTA-012 (stat blocks + AYH bridge) — strongest content-quality lever, awaiting Will.
+- WTA-013 (NEW) — Will to check Bing AI Performance report in Bing Webmaster UI.
 - Strengthen the true reward (cross-collection distinct_id join) as the widened data accrues.
 - Phase 2: onsite personalization (thin, two-surface) — WTA-004.
