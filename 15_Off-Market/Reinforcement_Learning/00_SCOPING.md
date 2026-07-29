@@ -273,6 +273,8 @@ Daily Claude cycle over a **low arm count (2–4 concurrent)** spanning **both t
 
 **Governor (the number to watch, not the scrape rate):** 500/day is supported by evidence — the initial ~16.9K sale-history corpus indexed at an effective >500/day on this domain. But hold it **GSC-governed**: weekly read of *indexed vs "discovered/crawled – not indexed"*; if a not-indexed backlog builds, that's the authority ceiling → throttle and shift effort to **internal-link suburb hubs** (crawl budget follows links), not more URLs/day. **Expectation set honestly:** indexed ≠ trafficked (~19% of indexed pages pull impressions), so owner-arrivals climb over weeks-to-months, not per-day. **Corpus ≈ 90–100K houses → ~6 months at 500/day.** Runs in parallel with Phase 0; RL payoff waits on both.
 
+**⚠ Pilot finding (2026-07-29, cycle 1):** the scraper + frontend path is validated end-to-end (24 Nerang houses minted → `findPropertyById` fixed to resolve any suburb from the slug → live page renders real address + last sale + aerial, screenshot-verified). BUT new-suburb pages currently render **hero-only** because `getNearbySoldComps` filters `listing_status:"sold"` and minted docs are `listing_status:None` → no comps → the wealth-reveal/capital-gain/market cards gate off. **The unlock for rich (not thin) new-suburb pages** is extending the comp query to also use nearby off-market docs' `enriched_data.transactions` (recency-filtered) as comps — so clustered minted docs become each other's comps. Decision staged for cycle 2. Corollary: mint **clusters** first, and consider batch-enriching + verifying a suburb's richness before sitemapping it.
+
 ---
 
 ## 8. Decisions (resolved by Will, 2026-07-29)
