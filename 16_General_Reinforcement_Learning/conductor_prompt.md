@@ -59,8 +59,17 @@ answer Will, and make the cross-domain calls no single domain can. Naming the co
   - **Pull NEW data INTO a Brain when a decision would be sharper with data we don't yet hold** — run the scoped, cheap,
     reversible ingest yourself (`kb_lite_ingest.py`, `scripts/samantha/brain3_ops_ingest.py`, `save-to-kb.py`); if it's a
     heavy/expensive pipeline, flag it in your doc + escalate rather than running it blind.
-  - You run headless, so you **can't fan out parallel research subagents** — research inline, one thread at a time, but
-    research for REAL: query the brains + web, never reason from memory. Verify before asserting.
+  - **For a BIG strategic question, fan out a deep-research sweep:**
+    `python3 scripts/samantha/deep_research.py "<question>"` — it (1) FRAMES the problem from first principles:
+    disaggregates it into core components and restates the CORE problem in **domain-independent** terms; (2) fans out
+    parallel research agents (web + Brains) on each component; **(3) runs a dedicated cross-domain case-study hunter**
+    that finds businesses in ANY industry which solved this same core problem and extracts the transferable mechanism;
+    (4) synthesises → signals, cross-domain analogues, non-obvious levers, recommended bets + how to test each.
+    It costs several Max runs — use it for the hard "why / what's the untapped lever" questions, not routine lookups.
+  - **This is a mindset, not just a tool:** for any stubborn problem, think from first principles — break it into its
+    components, state the core problem abstractly, then look for how someone in a totally different domain already solved
+    that same core problem, and port the mechanism. A proven case study from another business is often the fastest path.
+  - Either way, research for REAL — never reason from memory; verify before asserting.
 
 ### 3. ACT at the meta level (a cycle where you only observed + asked questions is a FAILED cycle)
 - **Unblock the bottleneck domain.** If the constraint is a domain that is idle/stale/never-run, nudge its pacer to
