@@ -28,7 +28,7 @@ DOMAINS = ["geo", "seo", "ads", "articles", "onsite"]
 SIGNAL_COLL = {d: f"rl_{d}_signal" for d in DOMAINS}
 PACER_COLL = {d: f"rl_{d}_cycle_state" for d in DOMAINS}   # geo via cycle_state.py, rest via cycle_pacer
 FRESH_HOURS = 30           # a "fresh" latest snapshot must be newer than this
-SUPPORT_COLLS = ["rl_reward_ledger", "rl_arm_grades", "rl_conductor", "rl_personalization_policy"]
+SUPPORT_COLLS = ["rl_reward_ledger", "rl_arm_grades", "rl_conductor"]  # personalization_policy retired → rl_onsite_experiments (cycle-driven, may be empty)
 
 results = []
 def check(name, ok, detail=""):
