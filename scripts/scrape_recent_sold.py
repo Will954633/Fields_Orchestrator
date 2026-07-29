@@ -209,10 +209,12 @@ def extract_listing_id(url: str) -> Optional[str]:
 # ---------------------------------------------------------------------------
 
 class RecentSoldScraper:
-    def __init__(self, dry_run: bool = False, verbose: bool = False, max_pages: int = MAX_PAGES):
+    def __init__(self, dry_run: bool = False, verbose: bool = False, max_pages: int = MAX_PAGES,
+                 house_only: bool = False):
         self.dry_run = dry_run
         self.verbose = verbose
         self.max_pages = max_pages
+        self.house_only = house_only  # restrict the sold-listings URL to houses (/house/)
         self.session = None
         self.db = None
 
@@ -316,7 +318,12 @@ class RecentSoldScraper:
         """Scrape all recently sold properties for a suburb, stopping at cutoff_date."""
         slug = suburb_info["name"].lower().replace(" ", "-")
         postcode = suburb_info["postcode"]
-        base_url = f"https://www.domain.com.au/sold-listings/{slug}-qld-{postcode}/?ssubs=0"
+        # /house/ path pre-filters Domain to houses only — used for the house
+        # volume-sample metric so unit/townhouse sales never inflate the count
+        # (and fewer pages are needed to reach the 12-month cutoff). Price-withheld
+        # sales are NOT excluded — they are still sales and must be counted.
+        type_seg = "/house" if self.house_only else ""
+        base_url = f"https://www.domain.com.au/sold-listings/{slug}-qld-{postcode}{type_seg}/?ssubs=0"
 
         print(f"\n{'='*70}")
         print(f"  Scraping {suburb_info['name']} (cutoff: {cutoff_date})")
@@ -460,6 +467,11 @@ class RecentSoldScraper:
                     stats["skipped"] += 1
                     continue
 
+                # The /house/ URL guarantees house type even when the card text
+                # didn't yield one — stamp it so the house volume-count query is clean.
+                if self.house_only and not rec.get("property_type"):
+                    rec["property_type"] = "House"
+
                 existing = self._find_existing(collection, rec)
                 now = datetime.utcnow().isoformat()
 
@@ -483,6 +495,8 @@ class RecentSoldScraper:
                         update_fields["sale_price"] = rec["sale_price"]
                     if rec.get("sale_method"):
                         update_fields["sale_method"] = rec["sale_method"]
+                    if rec.get("property_type"):
+                        update_fields["property_type"] = rec["property_type"]
 
                     if not self.dry_run:
                         self._retry_db(lambda: collection.update_one(
@@ -573,6 +587,8 @@ def main():
     parser.add_argument("--max-pages", type=int, default=MAX_PAGES,
                         help=f"Max search-result pages per suburb (default: {MAX_PAGES}). "
                              "Raise for one-time deep historical backfills (e.g. --days 365 --max-pages 40).")
+    parser.add_argument("--house-only", action="store_true",
+                        help="Restrict the sold-listings URL to houses (/house/) — for the house volume-sample metric.")
     args = parser.parse_args()
 
     suburbs = TARGET_SUBURBS
@@ -583,7 +599,8 @@ def main():
             print(f"ERROR: Unknown suburb '{args.suburb}'. Options: robina, varsity_lakes, burleigh_waters")
             sys.exit(1)
 
-    scraper = RecentSoldScraper(dry_run=args.dry_run, verbose=args.verbose, max_pages=args.max_pages)
+    scraper = RecentSoldScraper(dry_run=args.dry_run, verbose=args.verbose, max_pages=args.max_pages,
+                                house_only=args.house_only)
     scraper.run(suburbs, args.days)
 
 

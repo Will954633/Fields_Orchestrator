@@ -43,9 +43,19 @@ FULFIL_URL = "https://fieldsestate.com.au/.netlify/functions/ayh-lead-fulfil"
 # to notify_seller() which surfaces the phone number and the selling answer.
 # Populated as forms are created (see 03_Facebook/Home_Owner_Lead_Funnel_Search).
 SELLER_FORM_IDS = {
-    "1961613607744103",  # Seller Intent (report) — name+email+phone
-    "1689297792302611",  # Sold-Price Alerts — name+email+phone
-    "1307646261451971",  # Seller Intent (report+address)
+    "1961613607744103",  # GC Seller Intent (report) — name+email+phone
+    "1689297792302611",  # GC Sold-Price Alerts — name+email+phone
+    "1307646261451971",  # GC Seller Intent (report+address)
+}
+
+# OUT-OF-MARKET copy-test forms (SEQ ex-GC). Captured SILENTLY as signal only:
+# NO Telegram alert, NO CRM sync, NO fulfilment — these leads receive NOTHING
+# post-submission (Will, 2026-07-28: a GC report in a Brisbane inbox would burn the
+# brand). We only tally count + selling-intent answer per angle. Not callable.
+TEST_FORM_IDS = {
+    "2116153228999527",  # TEST Seller Report (report) v2
+    "1066797086300513",  # TEST Sold-Price Alerts v2
+    "2861236714240026",  # TEST Seller Report (report+address) v2
 }
 
 # "Before You List" — free printed hardcover, POSTED (2026-07-28). Physical-only:
@@ -276,6 +286,11 @@ def main():
                 coll.insert_one(doc)
                 if not args.no_notify:
                     notify_ayh(fields, form["name"], lead.get("created_time"), result)
+            elif form["id"] in TEST_FORM_IDS:
+                # out-of-market signal only: store tagged, NO notify / CRM / fulfilment
+                doc["test_market"] = True
+                coll.insert_one(doc)
+                print(f"    [test-market] captured silently (no follow-up)")
             elif form["id"] in SELLER_FORM_IDS:
                 coll.insert_one(doc)
                 if not args.no_notify:
@@ -300,10 +315,13 @@ def main():
                     except Exception as e:
                         print(f"    FPF send failed: {e}", file=sys.stderr)
             # sync into the CRM (email-keyed contact with brief + attribution)
-            try:
-                crm_lead_sync.upsert_lead(coll.database, doc)
-            except Exception as e:
-                print(f"    CRM upsert failed: {e}", file=sys.stderr)
+            # — skip out-of-market TEST leads: signal only, must receive NOTHING and
+            #   must NOT enter the callable CRM / lead worklist.
+            if not doc.get("test_market"):
+                try:
+                    crm_lead_sync.upsert_lead(coll.database, doc)
+                except Exception as e:
+                    print(f"    CRM upsert failed: {e}", file=sys.stderr)
 
     print(f"done — {new_count} new lead(s)")
 
