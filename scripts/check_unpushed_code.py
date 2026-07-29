@@ -24,7 +24,15 @@ REPOS = [
     {"path": "/home/fields/Property_Data_Scraping", "remote": "Will954633/Property_Data_Scraping"},
 ]
 CODE_EXT = (".py", ".mjs", ".js", ".sh", ".yaml", ".yml")
-SCRATCH_RE = re.compile(r"11_House_Mini_Site/|13_Will-Learns-to-Code/|08_Seller-Book/|v2-e2e|v3-[a-z]|-e2e-test|-e2e-wave")
+# One-off, per-cycle FB ad builders (Home Owner Lead Funnel): each ran once to push a
+# specific batch of ads to Meta and is never re-run — the durable record lives in that
+# folder's 00_MASTER_LEDGER.md / 03_MONITORING.md and on Meta itself, so they are
+# intentionally not backed up. The reusable core of that funnel (build_campaign,
+# build_copy_lab, checkpoint, create_lead_forms) is NOT scratch and is pushed.
+SCRATCH_RE = re.compile(
+    r"11_House_Mini_Site/|13_Will-Learns-to-Code/|08_Seller-Book/|v2-e2e|v3-[a-z]|-e2e-test|-e2e-wave"
+    r"|Home_Owner_Lead_Funnel_Search/(build_cycle|build_market_test|build_morning_batch|create_test_forms|render_launch_cards|render_test_cards)"
+)
 SECRET_RE = re.compile(
     r"mongodb(\+srv)?://[^ '\"]*:[^ '\"]*@|AccountKey=|sk-[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}"
     r"|ghp_[A-Za-z0-9]{20,}|xox[baprs]-|(secret|password|passwd|token|api_key|apikey)\s*=\s*['\"][A-Za-z0-9_\-]{16,}['\"]"
