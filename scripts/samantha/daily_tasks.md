@@ -20,7 +20,10 @@ disagrees). The report is a *checkpoint*, not the finish line — see "Use your 
      in `src/routes.ts` + `src/routes/` (NOT App.tsx). Known targets: crash-risk = `MarketMetricsPage` /
      `CrashRiskSection.tsx`; `/analyse-your-home` = `AnalyseYourHomePage`. `grep -rl` for the page text.
   2. Edit locally. Keep it small + obey editorial rules (no advice/forecast/valuation, no forbidden words).
-  3. Push ONE file = ONE commit (clean revert). GitHub path maps `01_Website/src/...` → repo `src/...`:
+  3. **Batch a session's website changes into ONE commit** (Netlify build discipline — each commit = a build,
+     and the account usage-PAUSES when builds pile up; Will, 2026-07-29). Use the Trees-API multi-file commit for
+     several files at once; do NOT push file-by-file. Keep the change set small + coherent so a single revert is
+     still clean. GitHub path maps `01_Website/src/...` → repo `src/...`:
      ```
      SHA=$(gh api 'repos/Will954633/Website_Version_Feb_2026/contents/src/PATH' --jq '.sha')
      CONTENT=$(base64 -w0 < /home/fields/Feilds_Website/01_Website/src/PATH)
