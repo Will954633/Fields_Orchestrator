@@ -13,11 +13,17 @@ This is a Claude-in-the-loop RL pattern modelled on `03_Facebook/Home_Owner_Lead
 ### 1. Read state (measured baseline — don't re-derive from memory)
 - `python3 15_Off-Market/Reinforcement_Learning/cycle_state.py` — corpus size + coverage by suburb + scraper-minted counts.
 - Read the **last 2 cycle files** in `cycles/` and `00_LEDGER.md` for what was tried + why.
-- **PostHog off-market behaviour (last 7d)** — you have posthog access (project 348370). Pull, per format arm:
-  the card funnel (`card_viewed` by `card_id`/`rendered_index`), **per-card dwell** (`card_dwell.dwell_ms`),
-  **swipe direction** (`card_dwell.direction`), the **terminal marker** (`deck_exit.max_index_reached`/`reached_pct`),
-  and the downstream milestones (`offmarket_menu_*`, `forward_cta_clicked`, `offmarket_qualify`, `offmarket_selling_plan_open`,
-  return visits, book/report requests). Internal traffic is opt-out and headless is bot-filtered — Ns are small; treat as directional.
+- **The macro / delayed reward — read the SHARED ledger (don't rebuild it):** `system_monitor.rl_reward_ledger` +
+  `system_monitor.organic_journeys` (built nightly by `16_General_Reinforcement_Learning/reward_ledger.py` +
+  `scripts/brain2/organic_journey_build.py`). This is the Q6 multi-milestone, delayed-attribution store — per-user milestones,
+  cross-session joins, and each milestone's predictive power toward the true reward (`submitted_address`). Off-market arrivals
+  (pageviews/owner-lookups) are in it. Use it for the macro reward + which milestones actually predict progression.
+- **The micro deck signals — query PostHog directly (headless path, NO MCP):** use `scripts/brain2/brain2_util.py`'s
+  `hog_retry(pid, key, sql)` (project 348370; `POSTHOG_PROJECT_ID`/`POSTHOG_PERSONAL_API_KEY` in `.env`) to run HogQL for the
+  dense deck signals: card funnel (`card_viewed` by `card_id`/`rendered_index`), **per-card dwell** (`card_dwell.dwell_ms`),
+  **swipe direction** (`card_dwell.direction`), the **terminal marker** (`deck_exit.max_index_reached`/`reached_pct`), and the meso
+  milestones (`offmarket_menu_*`, `forward_cta_clicked`, `offmarket_qualify`, `offmarket_selling_plan_open`). Internal traffic is
+  opt-out and headless is bot-filtered — Ns are small; treat as directional. (`card_dwell`/`deck_exit` shipped 2026-07-29 — need traffic to fill.)
 
 ### 2. Analyse — WHAT engaged and WHY, up the milestone ladder
 - Attribute engagement to **content move × format × card position**. Which cards hold attention (dwell), which shed it
