@@ -60,10 +60,17 @@ def enable(rollout, force):
     fid = _flag_id()
     body = {"key": FLAG, "name": "[GenRL] master onsite personalization kill-switch",
             "active": True, "filters": {"groups": [{"rollout_percentage": rollout}]}}
-    if fid:
-        _ph("PATCH", f"feature_flags/{fid}/", {"active": True, "filters": body["filters"]})
-    else:
-        _ph("POST", "feature_flags/", body)
+    try:
+        if fid:
+            _ph("PATCH", f"feature_flags/{fid}/", {"active": True, "filters": body["filters"]})
+        else:
+            _ph("POST", "feature_flags/", body)
+    except Exception as e:
+        _tg("⚠️ Couldn't flip the onsite personalization switch — the PostHog Personal API Key "
+            "lacks feature-flag WRITE scope (403). Add `feature_flag:write` to the key in PostHog → "
+            "Settings → Personal API Keys, then it'll enable automatically. Experiments stay inert until then.")
+        print("ENABLE FAILED (403 — key needs feature_flag:write):", str(e)[:100])
+        return False
     ttfb = _ttfb()
     exp = serving[0] if serving else {}
     msg = (f"🟢 Onsite personalization ENABLED ({rollout}% rollout).\n"
