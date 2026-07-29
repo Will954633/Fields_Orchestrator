@@ -163,6 +163,23 @@ def aest_label() -> str:
     return aest_now().strftime("%Y-%m-%d %H:%M AEST")
 
 
+def samantha_status() -> tuple[bool, str]:
+    """Is the Samantha management run active right now, and when does she next wake?
+    (The legacy GPT 'CEO team' is retired — Will's Telegram replies now hand off to Samantha.)"""
+    try:
+        r = subprocess.run(["pgrep", "-f", "samantha/daily_run.py"],
+                           capture_output=True, text=True, timeout=5)
+        running = bool(r.stdout.strip())
+    except Exception:
+        running = False
+    now = aest_now()
+    nxt = now.replace(hour=23, minute=55, second=0, microsecond=0)
+    if nxt <= now:
+        from datetime import timedelta
+        nxt = nxt + timedelta(days=1)
+    return running, nxt.strftime("%H:%M %a AEST")
+
+
 def title_from_text(text: str, fallback: str = "Telegram request") -> str:
     for line in text.splitlines():
         stripped = line.strip().lstrip("#").strip()
@@ -1038,28 +1055,12 @@ def handle_command(sm, chat: dict[str, Any], user: dict[str, Any], text: str) ->
         return True
 
     if command == "/run_ceo":
-        active_job = get_active_job(sm, session)
-        if active_job:
-            send_message(
-                chat["id"],
-                build_job_status_text(active_job) + "\n\nWait for the current job to finish before starting a fresh CEO batch run.",
-            )
-            return True
-        new_session = reset_session(sm, chat, user)
-        kickoff = "Run a fresh CEO batch review across all operational data and founder request threads."
-        append_message(sm, new_session["_id"], "system", kickoff, {"mode": "batch_run_trigger"})
-        job = create_job(sm, new_session, kickoff, job_type=JOB_TYPE_BATCH)
-        sm[SESSION_COLL].update_one(
-            {"_id": new_session["_id"]},
-            {"$set": {"last_remote_status": "queued", "updated_at": iso_now()}},
-        )
+        # The legacy GPT/Codex "CEO batch run" is RETIRED (Will, 2026-07-29). Do not launch it (quota-exceeded).
         send_message(
             chat["id"],
-            f"Started a new CEO session: {new_session['_id']}\nRunning a full CEO batch review now. I’ll send the artifact path and any clarification questions here.",
+            "The old GPT CEO-team batch run is retired. Samantha is the management AI now — she runs nightly "
+            f"(next {samantha_status()[1]}), or start her manually on the VM. Send any message and I'll save it for her.",
         )
-        send_chat_action(chat["id"])
-        log.info("Queued CEO batch Telegram job %s for session %s", job["_id"], new_session["_id"])
-        launch_background_job(job["_id"])
         return True
 
     return False
@@ -1079,13 +1080,8 @@ def handle_text_message(sm, update: dict[str, Any], message: dict[str, Any], tex
             return
 
     session = get_or_create_active_session(sm, chat, user)
-    active_job = get_active_job(sm, session)
-    if active_job:
-        send_message(
-            chat_id,
-            build_job_status_text(active_job) + "\n\nThe CEO team is still working on the previous message. Send `/status` to check again.",
-        )
-        return
+    # (No active-job guard any more — the GPT CEO-team is retired, so plain messages are always just
+    #  captured for Samantha; a stale legacy job must never trap the founder's message.)
 
     session = append_message(
         sm,
@@ -1100,8 +1096,8 @@ def handle_text_message(sm, update: dict[str, Any], message: dict[str, Any], tex
 
     if is_simple_greeting(text):
         reply = (
-            "CEO Telegram bridge is live. Send your question for the management team and I’ll route it through.\n"
-            "Use `/status` if you want the current bridge state."
+            "👋 I'm your bridge to Samantha (the management AI). Send anything — a question, a decision, "
+            "a request — and I'll save it straight to her inbox and tell you when she'll action it."
         )
         append_message(
             sm,
@@ -1113,15 +1109,22 @@ def handle_text_message(sm, update: dict[str, Any], message: dict[str, Any], tex
         send_message(chat_id, reply)
         return
 
-    job = create_job(sm, session, text, job_type=JOB_TYPE_ADVISORY)
+    # LEGACY GPT "CEO team" is RETIRED (Will, 2026-07-29) — do NOT spawn a GPT run (fails on OpenAI
+    # quota). The message is already stored in ceo_chat_messages (above) for Samantha to read on her
+    # next run. Reply with a real status: received + whether Samantha is running + when she next wakes.
+    running, nextwake = samantha_status()
     sm[SESSION_COLL].update_one(
         {"_id": session["_id"]},
-        {"$set": {"last_remote_status": "queued", "updated_at": iso_now()}},
+        {"$set": {"last_remote_status": "captured_for_samantha", "updated_at": iso_now()}},
     )
-    send_message(chat_id, "Routing this to the CEO team now. I’ll reply here when the run finishes. Send `/status` any time for progress.")
-    send_chat_action(chat_id)
-    log.info("Queued CEO Telegram job %s for session %s", job["_id"], session["_id"])
-    launch_background_job(job["_id"])
+    if running:
+        sam = ("🟢 Samantha (your management AI) is running RIGHT NOW — she'll see this in her live "
+               "run and reply here when she finishes.")
+    else:
+        sam = (f"⏸ Samantha isn't running right now — your message is saved, and she'll pick it up on "
+               f"her next run at **{nextwake}** (or sooner if you start her manually).")
+    send_message(chat_id, f"✅ Got it — received and saved for Samantha.\n{sam}")
+    log.info("Captured founder message for Samantha (session %s); GPT CEO routing retired", session["_id"])
 
 
 def process_job(job_id: str) -> None:
