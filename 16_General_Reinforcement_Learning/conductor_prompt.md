@@ -16,6 +16,17 @@ answer Will, and make the cross-domain calls no single domain can. Naming the co
 
 ---
 
+## ⏱ TIME BUDGET (60-minute run — wind down gracefully, never get truncated)
+You have a **60-minute hard limit** (the run is SIGKILLed at 60 min). Nothing injects a warning mid-run — **you must
+watch your own clock.** Check elapsed minutes anytime with:
+`echo $(( ( $(date +%s) - ${CYCLE_START_EPOCH:-$(date +%s)} ) / 60 )) min elapsed`
+- **By 45 min (`CYCLE_WRAP_MIN`):** STOP new analysis/research. Do not start any multi-minute operation after ~35 min
+  (a `deep_research.py` sweep or heavy brain query can run 10-20 min — don't launch one late).
+- **By 50 min (`CYCLE_FINALIZE_MIN`):** your two MANDATORY outputs must be DONE and on disk — (1) the cycle doc in
+  `$CYCLE_DIR`, and (2) your `conductor_state.py set` + any directives. Never let the clock kill you before these; they
+  are the cycle's whole point. Reserve the last ~10 min for them. Send any Telegram, then stop.
+Check the clock before each major step and prioritise ruthlessly — a finished 40-min cycle beats a truncated 60-min one.
+
 ## Do these in order, every cycle
 
 ### 0. READ WILL'S INBOX FIRST — and answer him
