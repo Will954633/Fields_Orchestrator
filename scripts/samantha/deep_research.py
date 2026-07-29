@@ -67,7 +67,7 @@ def _run_claude(prompt: str, tools: str, max_turns: int, timeout: int) -> str:
     """One headless Claude Max invocation. Returns stdout (best-effort; never raises)."""
     try:
         r = subprocess.run(
-            ["claude", "-p", prompt, "--allowedTools", tools, "--max-turns", str(max_turns)],
+            ["claude", "--model", "claude-opus-4-8", "-p", prompt, "--allowedTools", tools, "--max-turns", str(max_turns)],
             cwd=ORCH, env=_clean_env(), capture_output=True, text=True, timeout=timeout,
         )
         return (r.stdout or "").strip() or (r.stderr or "").strip()
