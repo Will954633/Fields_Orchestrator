@@ -19,6 +19,8 @@ set -a; source ./.env; set +a
 source /home/fields/venv/bin/activate 2>/dev/null || true
 export GH_CONFIG_DIR=/home/projects/.config/gh
 export CYCLE_STAMP="$STAMP"   # Brisbane stamp for the cycle doc — the agent MUST use this, not guess
+export CYCLE_DIR="$DIR/cycles/$(TZ=Australia/Brisbane date +%G-W%V)/$(TZ=Australia/Brisbane date +%Y-%m-%d)"
+mkdir -p "$CYCLE_DIR"
 unset CLAUDECODE CLAUDE_CODE_SSE_PORT 2>/dev/null || true
 unset ANTHROPIC_API_KEY 2>/dev/null || true   # force Claude Max, not API billing
 mkdir -p "$DIR/cycles"
@@ -29,7 +31,7 @@ python3 "$DIR/conductor.py" >> "$LOG" 2>&1 || echo "[$STAMP] board refresh warne
 
 # 2) run the conductor agent
 set +e
-timeout 1500 claude -p "$(cat "$PROMPT_FILE")" \
+timeout -k 60 1800 claude -p "$(cat "$PROMPT_FILE")" \
   --allowedTools "Bash,Read,Write,Edit,Glob,Grep,WebSearch,WebFetch,TodoWrite" \
   --max-turns 60 >> "$LOG" 2>&1
 RC=$?
