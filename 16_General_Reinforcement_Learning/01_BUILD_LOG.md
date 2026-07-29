@@ -43,9 +43,18 @@ Validated: heartbeat status=success.
 
 **Run:** `python3 reward_ledger.py [--dry-run] [--window-days N]`
 
+### ✅ Identity join widened — lead-signup + subscribe forms (LIVE, deployed d22f3da)
+Gap A: `posthog_distinct_id` was forwarded only by AYH/off-market/ladder forms. Now the for-sale-gate
+(`SignupGate`→`lead-signup.mjs`) and newsletter (`SubscribeModal`/`SubscribeForm`→`subscribe.mjs`) forms
+forward the **anonymous** PostHog id too (Will: no `identify()`, no new PII), and both backends persist it
+on `lead_signups` / `subscribers`. → those conversions become joinable to the visitor's journey going forward.
+Verified: react-router build clean; pushed as ONE Trees-API commit (Netlify discipline); deploy logged.
+
 ### ⏭ Next in Phase 0
-- **Identity-join fix (Gap A):** forward `posthog_distinct_id` from ALL conversion forms
-  (`lead-signup.mjs`, `subscribe.mjs` currently don't) + retroactive stitch — expands the joinable
-  population beyond form-submitters. Website code → careful, separate step (WTA-003).
-- **Strengthen true reward:** join to `lead_worklist` contactable-seller (name+email+phone+intent)
-  rather than the `converted` proxy, once the identity join is wider.
+- **Strengthen the true reward:** upgrade `reward_ledger.py` from the `converted` proxy to a real
+  join across `lead_worklist` / `lead_signups` / `subscribers` / `offmarket_qualification` on
+  `posthog_distinct_id` → contactable-seller (name+email+phone+intent). Now unblocked as the widened
+  distinct_id data accumulates.
+- **Retroactive stitch (optional):** best-effort backfill of distinct_id onto historic leads where a
+  matching journey exists (email/session heuristics). Lower priority than forward-capture.
+- **Then Phase 1:** the GEO/AI-channel flagship loop (pending WTA-008 approval).
