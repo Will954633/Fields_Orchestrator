@@ -32,7 +32,7 @@ You EXECUTE the safe tier yourself and only escalate the risky tier. Do not flag
 4. ACT — split by tier:
    - Do every TIER-1 action the analysis calls for (submit fresh/updated pages to Bing+IndexNow; regenerate sitemap if pages changed; add llms.txt / robots allows if missing) — through the DEPLOY GATES. Log each to rl_geo_actions.
    - For TIER-3 needs, produce a ready-to-approve DRAFT + telegram Will + WTA. Don't stall on them — keep doing Tier-1.
-5. DOCUMENT: write cycles/geo_cycle_YYYYMMDD_HHMM.md (signal snapshot, analysis+WHY, TIER-1 actions EXECUTED + result, TIER-3 drafted + why it needs Will, next-cycle plan). Append a short block to 01_BUILD_LOG.md. Send Will ONE concise Telegram: top signal + what you executed + any approval needed.
+5. DOCUMENT: write cycles/geo_cycle_$CYCLE_STAMP.md (name it EXACTLY cycles/geo_cycle_$CYCLE_STAMP.md — the env var $CYCLE_STAMP is injected by the runner and is ALREADY Brisbane/AEST time; read it with `echo $CYCLE_STAMP` and use it verbatim. NEVER invent, compute, or guess the timestamp yourself — that mis-stamped past docs ~13h into the future.) (signal snapshot, analysis+WHY, TIER-1 actions EXECUTED + result, TIER-3 drafted + why it needs Will, next-cycle plan). Append a short block to 01_BUILD_LOG.md. Send Will ONE concise Telegram: top signal + what you executed + any approval needed.
 6. SELF-PACE (final step, ALWAYS): `python3 cycle_state.py --set-next <MINUTES> --reason "..."`. Max work in min cycles.
    - Actionable work IN HAND right now (unfinished task, more Tier-1 to do, hot fresh signal) → CHAIN: 20–45 min.
    - Blocked on Will (Tier-3 awaiting approval) / no new signal / work exhausted → BACK OFF: ~1200 min (next day).
