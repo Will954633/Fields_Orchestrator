@@ -29,7 +29,7 @@ mkdir -p "$DIR/cycles"
 
 echo "[$STAMP] ===== $DOMAIN cycle start =====" >> "$LOG"
 set +e
-timeout -k 60 1500 claude -p "$(cat "$PROMPT_FILE")" \
+timeout -k 60 1500 claude --model claude-opus-4-8 -p "$(cat "$PROMPT_FILE")" \
   --allowedTools "Bash,Read,Write,Edit,Glob,Grep,WebSearch,WebFetch,TodoWrite" \
   --max-turns 60 >> "$LOG" 2>&1
 RC=$?
