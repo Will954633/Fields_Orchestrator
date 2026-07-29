@@ -101,14 +101,14 @@ def build(dry_run=False, telegram=False):
     if telegram and not dry_run:
         try:
             sys.path.insert(0, "/home/fields/Fields_Orchestrator/scripts")
-            from telegram_notify import send_telegram  # type: ignore
+            from telegram_notify import send_message  # type: ignore
             lines = [f"🎛️ General RL board — {board_doc['health']['sensors_ok']}/{len(board)} sensors ok",
                      f"true reward (window): {board_doc['true_reward']['total']}"]
             for b in board:
                 lines.append(f"• {b['domain']}: {b['top_opportunity'] or 'no live opp'}")
             if recs:
                 lines.append("arms: " + "; ".join(recs[:3]))
-            send_telegram("\n".join(lines))
+            send_message("\n".join(lines))
         except Exception as e:
             print("telegram digest failed:", e)
     return board_doc
