@@ -43,9 +43,10 @@ the irreversible/costly. (§12)
 ## [WTA-004] Confirm onsite personalization scope — raised 2026-07-29 — [onsite] — status: OPEN
 **Blocks:** Phase 2 (Sphere 1 build shape).
 **Needs a human because:** real infra investment vs. a weaker flag-only alternative.
-**Proposed (recommended):** THIN, STAGED server-side decision layer on the two surfaces with traffic
-(`/for-sale-v3`, `/analyse-your-home`), keyed to milestone-state — NOT a site-wide engine, NOT before Phase 0/1
-prove which milestones matter. Confirm. (§7)
+**Will: approved thin/staged/two-surface + HARD perf constraint (site can't get slower).**
+- ✅ Design: `PHASE2_DESIGN.md` — zero-latency architecture (server decides / client applies late, post-LCP; kill-switch; perf-gated). Baseline measured: p75 LCP 11-22s (!).
+- ✅ P2.0 decision layer LIVE: `personalization_policy.py` → `rl_personalization_policy` (variants target the 26× address-search milestone; cron 01:15).
+- ⏭ P2.1 (the one render-path touch) needs Will's nod: deferred-slot on /analyse-your-home, perf-gated. See PHASE2_DESIGN open question.
 
 ## [WTA-005] Physical-mail + outbound-call mechanism (offsite) — raised 2026-07-29 — [offsite] — status: OPEN
 **Blocks:** Sphere 3 (offsite closer) is theoretical until there's a repeatable way to post assets / place calls
@@ -75,7 +76,8 @@ on the dead ChatGPT channel (had leads months ago, none now). (§2.2)
 **Needs a human because:** website file change + deploy.
 **Proposed:** Add explicit `User-agent: GPTBot / Allow: /` (and OAI-SearchBot, PerplexityBot, ClaudeBot, CCBot, Google-Extended) to robots.txt. Research shows 41% of sites accidentally block AI bots via CDN/WAF overrides that ignore the generic `User-agent: *` rule. Explicit allows bypass this. Critical: `OAI-SearchBot` is what ChatGPT uses for search citations (separate from GPTBot for training).
 
-## [WTA-011] Verify Bing Webmaster Tools + re-submit sitemap — raised 2026-07-29 — [GEO] — status: OPEN
+## [WTA-011] Verify Bing Webmaster Tools + re-submit sitemap — raised 2026-07-29 — [GEO] — status: DONE (2026-07-29)
+**Done:** Site verified in Bing (IsVerified=true). Submitted the 7 Gold-Coast market-metrics URLs via Bing Webmaster API (SubmitUrlbatch OK). Sitemap auto-submit method 404'd but sitemap is in robots.txt → Bing crawls it. Account 188439555 / G120Q45Z on file.
 **Blocks:** Bing→Copilot→ChatGPT indexation pipeline health.
 **Needs a human because:** Bing Webmaster account access.
 **Proposed:** Log into Bing Webmaster, verify sitemap submission, check crawl errors on market-metrics pages, re-submit after WTA-009 lands. Bing powers both Copilot and ChatGPT search — if Bing doesn't have our latest pages, AI engines can't cite us.
@@ -83,4 +85,5 @@ on the dead ChatGPT channel (had leads months ago, none now). (§2.2)
 ## [WTA-012] Approve quotable stat blocks + AYH bridge on market-metrics pages — raised 2026-07-29 — [GEO] — status: OPEN
 **Blocks:** AI citation quality + conversion from AI traffic.
 **Needs a human because:** content change on public pages.
+**STATUS: DRAFTED for review → `WTA-012_DRAFT_stat_blocks_and_bridge.md`** (binds to live market data, zero added latency, editorial-compliant). Awaiting Will's approve-to-implement.
 **Proposed:** (a) Add "At a Glance" stat blocks with question-shaped H2s (e.g. "What is the median house price in Robina?") — 30-40% higher AI visibility per Princeton GEO study. (b) Add soft contextual link from market-metrics → AYH ("See how your home compares"). Both Bing conversions came through the market-data → AYH funnel; AI-chat users don't take that step because there's no visible bridge. Spec in `cycles/geo_cycle_20260729_1345.md` §3 ACTION 4-5.
