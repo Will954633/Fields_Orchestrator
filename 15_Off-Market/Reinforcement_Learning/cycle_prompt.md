@@ -32,8 +32,12 @@ This is a Claude-in-the-loop RL pattern modelled on `03_Facebook/Home_Owner_Lead
 - **Content/format experiments** run as PostHog feature-flag arms (sticky per person), **2–4 concurrent max** (trials, not dollars,
   are scarce here). The action space includes both the information move AND the format (webpage / deck / ladder / canonical /
   system-devised — SCOPING §2). Stage/adjust **ONE** variable per cycle so attribution stays clean.
-- **Coverage**: run the daily wave of `offmarket_coverage_scraper.py` (houses-only, GSC-governed ≤500/day) for the current
-  rollout suburb; **screenshot-verify a sample** of newly-minted live pages (headless Chrome → read the PNG) before counting them done.
+- **Coverage**: for the current rollout suburb, run `offmarket_coverage_scraper.py` (houses-only, GSC-governed ≤500/day) to mint
+  the subject pages, THEN `offmarket_comp_backfill.py --suburb <s>` (PropRadar recent-sold → matched to cadastral coords → stamped
+  as sold comps, ~2 calls/suburb, refresh ~fortnightly) so the wealth-reveal/capital-gain/market cards render RICH not hero-only.
+  **Screenshot-verify a sample** through the sell path (click "See how this home might sell today" → the reveal card shows a real
+  `$low–$high from N recent nearby sales` range) before counting the suburb done. (The bare hero is card 1 of the intent-menu deck
+  by design — richness lives on the sell path, so always verify past the menu.)
   Sitemap submission stays a deliberate, watched step — grow the indexed count slowly; watch GSC indexed-vs-discovered.
 - **PropRadar** (Starter, 20K/mo): use as you see fit — `/recently-modified` inbound-intent, on-demand enrichment, verification.
 
