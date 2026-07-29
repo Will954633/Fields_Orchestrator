@@ -89,7 +89,7 @@ def build(dry_run=False):
     if not dry_run:
         c = sm[COLL]
         c.replace_one({"_id": "latest"}, policy, upsert=True)
-        c.insert_one({**policy, "_id": None, "snapshot_at": NOW.isoformat()})
+        c.insert_one({k: v for k, v in {**policy, "snapshot_at": NOW.isoformat()}.items() if k != "_id"})
     return policy
 
 
