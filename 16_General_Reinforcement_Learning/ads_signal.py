@@ -101,6 +101,13 @@ def build(days=14, dry_run=False):
                  for k, v in camp.items()]
     campaigns.sort(key=lambda c: -c["spend"])
 
+    # M2c onboarding: surface what the FB-funnel + ad_lifecycle loops DID (their action log) into the
+    # shared view, so the ads cycle + conductor see them and grade them against the one reward.
+    recent_actions = []
+    for d in sm["ad_decisions"].find({}).sort("_id", -1).limit(12):
+        recent_actions.append({"date": d.get("date"), "type": d.get("type"),
+                               "title": (d.get("title") or "")[:70], "tags": d.get("tags")})
+
     tot_spend = sum(r["spend_aud"] for r in rows)
     tot_real = sum(r["real_leads"] for r in rows)
     snapshot = {
@@ -114,6 +121,7 @@ def build(days=14, dry_run=False):
         "cull_candidates": [r for r in rows if "wasteful" in r["flags"]][:12],
         "campaigns": campaigns,
         "top_ads": rows[:20],
+        "recent_ad_actions": recent_actions,   # FB-funnel + ad_lifecycle actions, onboarded (M2c)
         "note": ("SENSE half of the Ads sub-workflow. Ties ad spend → real seller leads = cost-per-"
                  "identified-seller (cost-as-reward). Spend moves are Tier-3 (draft+telegram Will); "
                  "the cycle never spends. Coordinates with FB funnel + ad_lifecycle."),
