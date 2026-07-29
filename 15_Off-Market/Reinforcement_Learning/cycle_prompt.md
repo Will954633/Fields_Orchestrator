@@ -84,6 +84,9 @@ re-read unchanged data.
   verify BOTH arms render.
 - **Self-monitor** (Rule 7): the scraper + this cycle report to Systems Health. **Never leave a public page broken** — the screenshot gate catches it.
 - Push any code changed (Rule 2). Log fixes (Rule 1).
+- **NETLIFY BUILD DISCIPLINE (Will, 2026-07-29 — the site was usage-paused by too many builds):** batch a cycle's
+  website changes into ONE Trees-API commit — never many small commits (each = a Netlify build; the account
+  usage-pauses when builds pile up). One deploy per cycle, max. Prefer flag/config changes (no build) over code deploys.
 
 ### 5. Document (every cycle)
 - Write `cycles/cycle_<STAMP>.md` where **`STAMP=$(TZ=Australia/Brisbane date +%Y%m%d_%H%M)`** (run the command — don't guess the timestamp; cycle 3 mis-stamped its file). Contents: scorecard diff vs last cycle, what you found + WHY (incl. change-epoch reads), the ONE hypothesis + kill/scale rule you set, what you changed.
