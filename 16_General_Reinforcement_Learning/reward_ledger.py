@@ -103,6 +103,30 @@ def _shrink(conv, reached, base, strength=5.0):
     return _posterior(conv, reached, base, strength) if (reached or strength) else base
 
 
+def _seller_reward_dids(sm):
+    """Distinct_ids that reached the TRUE reward — an identified seller outcome linked back to
+    a website journey via posthog_distinct_id. Richer than the organic_journeys `converted`
+    proxy: it catches AYH homeowners (property_reports) + off-market qualifiers whose journey
+    conversion event wasn't captured. Grows as the identity-join fix (Gap A) accrues data."""
+    dids, by_src = set(), {}
+    # AYH homeowner analysis → seller intent (owner.posthog_distinct_id)
+    for d in sm["property_reports"].find(
+            {"owner.posthog_distinct_id": {"$exists": True, "$nin": [None, ""]}},
+            {"owner.posthog_distinct_id": 1}):
+        v = (d.get("owner") or {}).get("posthog_distinct_id")
+        if v:
+            dids.add(v); by_src["property_reports"] = by_src.get("property_reports", 0) + 1
+    # off-market in-deck seller qualification
+    for coll in ("offmarket_qualification",):
+        for d in sm[coll].find({"$or": [{"posthog_distinct_id": {"$nin": [None, ""]}},
+                                        {"distinct_id": {"$nin": [None, ""]}}]},
+                               {"posthog_distinct_id": 1, "distinct_id": 1}):
+            v = d.get("posthog_distinct_id") or d.get("distinct_id")
+            if v:
+                dids.add(v); by_src[coll] = by_src.get(coll, 0) + 1
+    return dids, by_src
+
+
 def build(window_days=None, dry_run=False):
     c = get_client()
     sm = c["system_monitor"]
@@ -148,6 +172,18 @@ def build(window_days=None, dry_run=False):
             u["ai_sources"].add(j["ai_source"])
         if j.get("referring_domain"):
             u["referrers"].add(j["referring_domain"])
+
+    # TRUE-reward strengthening: union the journey `converted` proxy with real seller outcomes
+    # linked by distinct_id (property_reports homeowners + off-market qualifiers). This makes the
+    # reward truer (an identified seller) AND denser, without destabilising — it only ADDS rewards.
+    seller_dids, seller_src = _seller_reward_dids(sm)
+    n_journey_conv = sum(1 for u in users.values() if u["converted"])
+    n_seller_linked = 0
+    for did, u in users.items():
+        if did in seller_dids:
+            if not u["converted"]:
+                n_seller_linked += 1
+            u["converted"] = True  # journey-converted OR linked to a real seller outcome
 
     n_users = len(users)
     n_conv = sum(1 for u in users.values() if u["converted"])
@@ -249,10 +285,18 @@ def build(window_days=None, dry_run=False):
         "window": {"from": dmin, "to": dmax, "window_days": window_days},
         "n_sessions": n_sessions, "n_users": n_users, "n_conversions": n_conv,
         "base_conversion_rate": round(base_rate, 4),
-        "true_reward_definition": (
-            "v1 PROXY: organic_journeys.converted (address submit / contact-capture) = identified-"
-            "seller candidate. TRUE reward = contactable seller in lead_worklist (name+email+phone+"
-            "intent); strengthened once the identity-join fix (Gap A) lands."),
+        "true_reward": {
+            "definition": ("identified seller = journey `converted` (address submit) UNION a real "
+                           "seller outcome linked by distinct_id (property_reports homeowners + "
+                           "off-market qualifiers)."),
+            "journey_converted": n_journey_conv,
+            "seller_linked_extra": n_seller_linked,   # true sellers the proxy alone missed
+            "total_true_rewards": n_conv,
+            "linked_sources": seller_src,
+            "note": ("The distinct_id linkage grows as the Gap-A identity fix accrues data "
+                     "(lead-signup/subscribe now forward it). When seller-linked >> journey proxy, "
+                     "switch the primary weight driver to the linked signal."),
+        },
         "milestones": milestones,
         "channels": channels,
         "ai_sources": ai_sources,
