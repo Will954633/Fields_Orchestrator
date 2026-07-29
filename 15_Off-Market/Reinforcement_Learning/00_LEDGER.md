@@ -24,3 +24,12 @@ GSC-governed ≤500/day, watched waves highest-value-suburb-first.
   sell path**: page went 1/1 → **7 cards**, reveal card shows real **$940,000–$1,240,000 from 6 recent nearby sales** (editorially
   clean: range + methodology note, our method, no third-party AVM). Corrected the cycle-1 misread: the visible "1/1" is the
   intent-menu gate (by design); the comp backfill was still required so the sell path shows the real range vs the "one step away" fallback.
+- **First full wave — NERANG — 2026-07-29.** Transform-only mint (zero fetch): **3,472 houses minted → 3,479 off-market house pages total**.
+  Comp backfill: 23 PropRadar recent sales stamped → **100% of a 300-page sample has a comp within 2.5km** (Nerang is compact) → every
+  page renders the real reveal card. Screenshot-verified across streets (Crusader Way $940k–$1.24M; Dugandan St $1.0M–$1.51M; both 7-card
+  sell decks). **NOT sitemapped** (watched step pending Will). 1,838 no-timeline houses remain → bounded Bright-Data fetch batch (max 300)
+  running in background (`logs/offmarket_nerang_fetch_batch.log`); the daily cycle finishes the tail. Skipped: 216 not-house, ~2.5K strata units, 1 waterfront.
+- **Sitemap rollout STARTED — NERANG — 2026-07-29.** Release-gated expansion in `generate-sitemap.mjs` (per-suburb counter in
+  `Gold_Coast.offmarket_sitemap_release`; core suburbs unlimited/unchanged). First **500 of 3,479** Nerang pages LIVE in the sitemap
+  (verified: live sitemap off-market 17,245 -> 17,745). `offmarket_sitemap_release.py` +500/day cron @ 06:00 AEST (before the 06:15 VM
+  regen that pushes it live); GSC-governed — hold/reduce if discovered-not-indexed backlog builds. Full Nerang in ~7 days. Deploy: website d070e95.
