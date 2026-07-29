@@ -34,13 +34,11 @@ the irreversible/costly. (§12)
 
 ## OPEN
 
-## [WTA-003] Build the reward ledger + milestone map + identity-join fix (Phase 0) — raised 2026-07-29 — [foundation] — status: OPEN
-**Blocks:** everything — nothing can learn until this exists.
-**Needs a human because:** website code change (forward `posthog_distinct_id` from ALL conversion forms, incl.
-`lead-signup`/`subscribe`) + a call on identifying more anonymous visitors (privacy posture).
-**Proposed:** extend `lead_worklist` → action→outcome ledger w/ channel/referrer/content attribution; stand up
-milestone map cold-started from the FB laws; forward distinct_id everywhere + retroactive stitch. Direction
-approved in principle; this tracks the actual build sign-off. (§13 Phase 0)
+## [WTA-003] Build the reward ledger + milestone map + identity-join fix (Phase 0) — raised 2026-07-29 — [foundation] — status: DONE (core)
+**Resolved 2026-07-29 (Will: go ahead; forward anonymous distinct_id only, no identify()):**
+- ✅ `reward_ledger.py` LIVE (milestone map + predictiveness + channel/cost attribution → `rl_reward_ledger`; cron 00:30; Rule-7 heartbeat). First insight: searched_address = 16× lift; passive property-view below base.
+- ✅ Identity join widened — lead-signup + subscribe forms now forward `posthog_distinct_id` (deployed d22f3da, build clean, one commit).
+- ⏭ Remaining (not blocking): strengthen true reward via cross-collection distinct_id join; optional retroactive stitch. Tracked in 01_BUILD_LOG.
 
 ## [WTA-004] Confirm onsite personalization scope — raised 2026-07-29 — [onsite] — status: OPEN
 **Blocks:** Phase 2 (Sphere 1 build shape).
