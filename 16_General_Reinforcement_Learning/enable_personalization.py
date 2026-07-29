@@ -23,7 +23,7 @@ FLAG = "genrl_personalization_v1"
 
 
 def _ph(method, path, body=None):
-    pid = os.environ["POSTHOG_PROJECT_ID"]; key = os.environ["POSTHOG_PERSONAL_API_KEY"]
+    pid = os.environ["POSTHOG_PROJECT_ID"]; key = os.environ.get("POSTHOG_ALL_ACCESS_KEY") or os.environ["POSTHOG_PERSONAL_API_KEY"]
     req = urllib.request.Request(f"https://us.posthog.com/api/projects/{pid}/{path}",
         data=json.dumps(body).encode() if body is not None else None, method=method,
         headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
@@ -39,7 +39,7 @@ def _flag_id():
 
 def _tg(m):
     try:
-        from telegram_notify import send_telegram; send_telegram(m)
+        from telegram_notify import send_message; send_message(m)
     except Exception as e:
         print("telegram failed:", e)
 
