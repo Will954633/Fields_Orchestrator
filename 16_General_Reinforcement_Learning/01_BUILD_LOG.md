@@ -178,3 +178,17 @@ execution + shared reward ledger + self-monitoring.
 
 **Now 2 autonomous upstream sub-workflows (GEO + SEO), both on the shared reward ledger.** Next domains clone the
 same 5 files. Whole-upstream autonomy is the sum of these; the meta-conductor (cross-sphere coordination) is later.
+
+---
+
+## M1 — generic scaffold ✅ + M2a — Ads domain ✅  (2026-07-29, per DEVELOPMENT_PLAN.md)
+- **M1:** `rl_cycle.sh <domain>` + `rl_dispatch.sh <domain>` (generic; lock/log/job/pacer by name) + `domains.yaml`
+  registry. A new domain now = a sensor + a prompt + 2 cron lines. SEO migrated to it (cron repointed;
+  seo_cycle.sh now a wrapper); GEO stays on its tested scripts (migrate in M8). `cycle_pacer.py` generalised (--job).
+- **M2a — Ads:** `ads_signal.py` → `rl_ads_signal` (ties ad spend → real seller leads = cost-per-identified-seller,
+  the cost-as-reward gap). First read: **$1,171/14d, blended $83.69/real-lead; one scale-worthy ad @ $6.30 CPL;
+  the seller ad @ $203/lead; Buyer Brief @ $17.84 (buyer, not seller).** `ads_prompt.md` — spend is ALWAYS Tier-3
+  (propose+telegram; the cycle never spends); coordinates with FB funnel + ad_lifecycle. Crons: signal 01:20,
+  dispatch :05/:25/:45. Heartbeats green.
+- **3 autonomous upstream domains now: GEO, SEO, Ads.** Remaining M2: Articles (M2b), revive FB organic (M2c),
+  onboard FB-funnel + ad_lifecycle to write the shared ledger.
