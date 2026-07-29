@@ -64,3 +64,23 @@ on the dead ChatGPT channel (had leads months ago, none now). (§2.2)
 **Blocks:** clean governance — the infra map couldn't confirm the 02:30 DOER in the live crontab.
 **Needs a human because:** you know whether it was intentionally moved/disabled.
 **Proposed:** confirm status so the Conductor doesn't assume a loop that isn't firing.
+
+## [WTA-009] Add Gold-Coast market-metrics pages to sitemap — raised 2026-07-29 — [GEO] — status: OPEN
+**Blocks:** ChatGPT win-back + AI-engine discovery of our #1 cited page.
+**Needs a human because:** sitemap generator change + deploy.
+**Proposed:** Add 7 URLs (`/market-metrics/Gold-Coast/overview`, `/direction`, `/crash-risk`, `/sell-now`, `/buy`, `/suburb-compare`, and the index `/market-metrics/Gold-Coast`) to the sitemap. These pages get 100% of AI-chat traffic and 41% of Bing traffic but are currently invisible to sitemap-based discovery. ChatGPT likely went dormant because Bing deprioritised the page without freshness signals. This is the single highest-impact GEO fix.
+
+## [WTA-010] Push robots.txt with explicit AI crawler allows — raised 2026-07-29 — [GEO] — status: OPEN
+**Blocks:** AI crawler access verification.
+**Needs a human because:** website file change + deploy.
+**Proposed:** Add explicit `User-agent: GPTBot / Allow: /` (and OAI-SearchBot, PerplexityBot, ClaudeBot, CCBot, Google-Extended) to robots.txt. Research shows 41% of sites accidentally block AI bots via CDN/WAF overrides that ignore the generic `User-agent: *` rule. Explicit allows bypass this. Critical: `OAI-SearchBot` is what ChatGPT uses for search citations (separate from GPTBot for training).
+
+## [WTA-011] Verify Bing Webmaster Tools + re-submit sitemap — raised 2026-07-29 — [GEO] — status: OPEN
+**Blocks:** Bing→Copilot→ChatGPT indexation pipeline health.
+**Needs a human because:** Bing Webmaster account access.
+**Proposed:** Log into Bing Webmaster, verify sitemap submission, check crawl errors on market-metrics pages, re-submit after WTA-009 lands. Bing powers both Copilot and ChatGPT search — if Bing doesn't have our latest pages, AI engines can't cite us.
+
+## [WTA-012] Approve quotable stat blocks + AYH bridge on market-metrics pages — raised 2026-07-29 — [GEO] — status: OPEN
+**Blocks:** AI citation quality + conversion from AI traffic.
+**Needs a human because:** content change on public pages.
+**Proposed:** (a) Add "At a Glance" stat blocks with question-shaped H2s (e.g. "What is the median house price in Robina?") — 30-40% higher AI visibility per Princeton GEO study. (b) Add soft contextual link from market-metrics → AYH ("See how your home compares"). Both Bing conversions came through the market-data → AYH funnel; AI-chat users don't take that step because there's no visible bridge. Spec in `cycles/geo_cycle_20260729_1345.md` §3 ACTION 4-5.
