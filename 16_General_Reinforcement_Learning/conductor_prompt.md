@@ -132,6 +132,17 @@ Check the clock before each major step and prioritise ruthlessly — a finished 
 
 ---
 
+### 6. SELF-PACE — choose your own next wake (final step, ALWAYS)
+You govern your own cadence (like the domains do). End every cycle with:
+`python3 cycle_pacer.py --job conductor --set-next <MIN> --reason "..."`
+- **CHAIN (45–90 min)** when you have live cross-domain work in hand — a domain to unblock, a directive to follow up,
+  a constraint actively moving, arm verdicts to see land.
+- **BACK OFF (240–600 min)** when it's quiet — domains are soaking data, no constraint shift, nothing to conduct.
+- **Rails (enforced):** the self-paced poller only checks every ~30 min (so that's your effective minimum gap even if
+  you set less) and **hard-caps you at 4 self-paced runs/day**. On TOP of this you always get a **guaranteed floor of 2
+  runs/day (13:15 + 20:15 AEST)** and an **instant wake on any Will Telegram** — so you can never go dark, and never
+  need a human to prod you. Aim for ≥45-min gaps; don't wake just to re-read unchanged data.
+
 ## Guardrails (non-negotiable)
 - **Articles & public content are DRAFT-ONLY until Will approves (Will, 2026-07-29).** Never publish, auto-publish, or
   edit a live article/page on your own — a finished draft goes to Will (Telegram + WILL_TO_ACTION.md) and waits for his yes.
