@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
 """
+⚠ DEPRECATED 2026-07-29 — this hand-authored static table was the WRONG model (it pre-decided the
+content instead of letting Claude hypothesise + test). REPLACED by the Claude-driven experiment loop:
+`experiment_manager.py` (registry `rl_onsite_experiments` + PostHog flags) driven by the onsite cycle
+(`onsite_prompt.md`), measured by `arm_grader.py`. Kept only for history; cron removed. Do not use.
+
 personalization_policy.py — Phase 2 (P2.0): the onsite personalization DECISION layer.
 
 Reads the reward ledger's milestone weights and emits a tiny lookup table
