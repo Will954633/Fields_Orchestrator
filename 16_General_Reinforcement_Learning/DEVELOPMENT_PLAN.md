@@ -24,7 +24,7 @@ just a **sensor** + a **prompt** + cron lines (not 5 hand-cloned files).
 - Migrate SEO to the generic runner (lowest-risk); GEO stays on its tested bespoke scripts (migrate later).
 - **Acceptance:** SEO runs end-to-end via `rl_dispatch.sh seo`; heartbeat green; a new domain needs only 2 new files.
 
-## M2 — Upstream breadth: onboard the remaining levers  🔨 (M2a Ads ✅ · M2b Articles · M2c FB-organic pending)  *(the bulk — biggest channels)*
+## M2 — Upstream breadth  ◐ (M2a Ads ✅ · M2b Articles ✅ · M2c FB-organic + FB-funnel/ad-lifecycle→ledger pending)  *(the bulk — biggest channels)*
 Each is a new domain via the M1 scaffold (sensor + prompt), reading the shared ledger, tiered-execution.
 - **M2a — Ads** (FB + Google): sensor over `ad_daily_metrics` + `google_ads_daily_metrics` + reward tie; cycle
   proposes budget/cull/creative moves (Tier-3 = spend/campaign → draft+telegram; Tier-1 = analysis, reporting).
@@ -35,14 +35,14 @@ Each is a new domain via the M1 scaffold (sensor + prompt), reading the shared l
 - **Acceptance:** each domain has a green heartbeat, a cycle file, actions in `rl_<domain>_actions`, and its
   outcomes visible in the shared ledger / Control Loop. FB funnel + ad_lifecycle write to the ledger.
 
-## M3 — Onsite per-user loop  🔨  *(ungated; high near-term value)*
+## M3 — Onsite per-user loop  ✅ DONE (sensor live; cycle self-paced)  *(ungated; high near-term value)*
 A cycle that reads `seller_intent` + `organic_journeys` + reward ledger, identifies **hot individuals**
 (frustrated vendors, pre-market sellers, returning searchers), and **Telegrams Will while they're warm** +
 queues them in `lead_worklist`. Not personalization-serving (that's P2.1) — this is intent-surfacing.
 - **Acceptance:** a real high-intent visitor is surfaced to Will within the hour of a qualifying session, with
   their story + recommended action, logged.
 
-## M4 — The learning/grading loop  🔨🔁  *(closes the RL heart)*
+## M4 — The learning/grading loop  ✅ DONE (arm_grader live; graded discover=scroll 1.33×)  *(closes the RL heart)*
 The automated arm-outcome attribution: for every active arm (content variant, title change, personalization
 variant, ad angle), measure its effect on the target milestone, grade it, and update the policy — promote
 winners, retire losers. This is what makes it reinforcement-*learning*, not reinforcement-*informed*.
@@ -66,14 +66,14 @@ winners, retire losers. This is what makes it reinforcement-*learning*, not rein
   JustCall / manual). Prep the cycle so it's ready the moment the mechanism is chosen.
 - **Acceptance:** each is one Will decision away from live, with the work pre-staged + measured.
 
-## M7 — Meta-conductor (last)  🔨  *(after ≥3 domains)*
+## M7 — Meta-conductor  ✅ DONE (conductor.py board, 5/5 domains, arm recs, daily digest)  *(after ≥3 domains)*
 The cross-sphere coordinator (future-Samantha layer): reads the whole shared ledger + every sub-workflow's state,
 allocates effort across domains, enforces one-writer-per-lever, surfaces the holistic picture. Independent
 sub-workflows already give autonomous operation — this optimises allocation.
 - `conductor.py` (or Samantha integration) + Control Loop dashboard shows ALL domains + arm grades.
 - **Acceptance:** the conductor reallocates a cycle's cadence/priority based on cross-sphere reward, visible on the board.
 
-## M8 — Observability + hardening pass  🔨  *(continuous)*
+## M8 — Observability + self-test  ✅ DONE (rl_selftest.py 51/51; cron daily)  *(continuous)*
 Every cycle self-monitors; Control Loop shows all domains, arm grades, action-audit trails; a weekly "what did the
 system do + what moved" digest to Will. **Acceptance:** the board answers "is everything running + is it working?" at a glance.
 
