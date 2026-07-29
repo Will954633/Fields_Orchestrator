@@ -21,6 +21,7 @@ unset CLAUDECODE CLAUDE_CODE_SSE_PORT 2>/dev/null || true
 unset ANTHROPIC_API_KEY 2>/dev/null || true   # force Claude Max subscription, not API billing
 mkdir -p "$DIR/cycles"
 
+export CYCLE_STAMP="$STAMP"   # Brisbane-time stamp for the cycle doc — the agent MUST use this, not guess
 PROMPT="$(cat "$DIR/geo_prompt.md")"
 echo "[$STAMP] ===== GEO cycle start =====" >> "$LOG"
 
