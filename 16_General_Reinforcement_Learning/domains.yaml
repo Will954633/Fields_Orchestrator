@@ -7,3 +7,4 @@ domains:
   ads:   { sensor: ads_signal.py,   sphere: upstream, status: live,      note: "FB + Google paid (M2a)" }
   articles: { sensor: articles_signal.py, sphere: upstream, status: live   , note: "topic selection by conversion (M2b)" }
   onsite:   { sensor: onsite_signal.py,   sphere: onsite,   status: live   , note: "per-user hot-lead surfacing (M3)" }
+  conductor: { sensor: conductor.py,     sphere: meta,     status: live,      note: "NEW Samantha — meta-conductor agent over all domains + Will inbox" }
