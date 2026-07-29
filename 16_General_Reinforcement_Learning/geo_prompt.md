@@ -14,4 +14,10 @@ STEPS:
 4. PRODUCE a concrete, prioritised GEO ACTION PLAN (drafts + targets, NOT published): specific pages to make more citable (which schema, which quotable stat to surface, which Q&A heading); 1-3 drafted GEO content pieces or page-improvement specs that obey the editorial rules; and a diagnosis + win-back plan for any DORMANT converting channel (esp. ChatGPT). For anything that needs publishing or a human, append a WILL_TO_ACTION.md item.
 5. DOCUMENT every cycle (mandate): write cycles/geo_cycle_YYYYMMDD_HHMM.md (signal snapshot, analysis + WHY, the action plan + the hypothesis behind each item, what needs Will). Append a short block to 01_BUILD_LOG.md. Send Will ONE concise Telegram summary (scripts/fields-telegram or the @WillFieldsBot sender) noting the top signal + any Will-to-action.
 
-If there is no actionable new signal (near-zero AI traffic change, nothing new), write a brief cycles/ note with the current numbers and stop — no churn. Be decisive: attribute wins to the mechanic (which content got us cited + converted), compound the theory each cycle.
+6. SELF-PACE (final step, ALWAYS do this): decide when the NEXT cycle should run and record it —
+   `python3 cycle_state.py --set-next <MINUTES> --reason "<one line>"`. Principle: **max work in min cycles.**
+   - If you have ACTIONABLE WORK IN HAND RIGHT NOW — a task you started but didn't finish, more drafts/research queued, a hot fresh signal to act on — chain straight on: set a SHORT delay (**20–45 min**) so the next dispatch tick continues immediately.
+   - If you produced a plan that is now BLOCKED on Will (Will-to-action items), or there is NO new signal, or you've exhausted the useful work — BACK OFF: set a LONG delay (**~1200 min**, i.e. next day).
+   - A hard cap of MAX_CYCLES_PER_DAY (currently 8) is enforced by the dispatcher regardless — you can request a short delay, but you can't exceed the cap. Don't burn cycles on churn; chain only when a cycle would genuinely do NEW work.
+
+If there is no actionable new signal (near-zero AI traffic change, nothing new), write a brief cycles/ note with the current numbers, set a long --set-next backoff, and stop — no churn. Be decisive: attribute wins to the mechanic (which content got us cited + converted), compound the theory each cycle.
