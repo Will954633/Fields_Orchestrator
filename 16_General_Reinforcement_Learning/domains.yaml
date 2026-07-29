@@ -5,5 +5,5 @@ domains:
   geo:   { sensor: geo_signal.py,   sphere: upstream, status: live,     note: "AI-channel / GEO flagship" }
   seo:   { sensor: seo_signal.py,   sphere: upstream, status: live,     note: "Google organic" }
   ads:   { sensor: ads_signal.py,   sphere: upstream, status: live,      note: "FB + Google paid (M2a)" }
-  articles: { sensor: articles_signal.py, sphere: upstream, status: planned, note: "topic selection by conversion (M2b)" }
-  onsite:   { sensor: onsite_signal.py,   sphere: onsite,   status: planned, note: "per-user hot-lead surfacing (M3)" }
+  articles: { sensor: articles_signal.py, sphere: upstream, status: live   , note: "topic selection by conversion (M2b)" }
+  onsite:   { sensor: onsite_signal.py,   sphere: onsite,   status: live   , note: "per-user hot-lead surfacing (M3)" }
