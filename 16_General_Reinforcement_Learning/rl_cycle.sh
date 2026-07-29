@@ -20,6 +20,7 @@ set -a; source ./.env; set +a
 source /home/fields/venv/bin/activate 2>/dev/null || true
 export GH_CONFIG_DIR=/home/projects/.config/gh
 export PACER_JOB="$DOMAIN"
+export CYCLE_STAMP="$STAMP"   # Brisbane-time stamp for the cycle doc — the agent MUST use this, not guess
 unset CLAUDECODE CLAUDE_CODE_SSE_PORT 2>/dev/null || true
 unset ANTHROPIC_API_KEY 2>/dev/null || true   # force Claude Max, not API billing
 mkdir -p "$DIR/cycles"
