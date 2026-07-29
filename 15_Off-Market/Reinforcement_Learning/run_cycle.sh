@@ -26,7 +26,7 @@ PROMPT="$(cat "$DIR/cycle_prompt.md")"
 echo "[$STAMP] ===== off-market RL cycle start =====" >> "$LOG"
 
 set +e
-timeout 3600 claude -p "$PROMPT" \
+timeout 3600 claude --model claude-opus-4-8 -p "$PROMPT" \
   --allowedTools "Bash,Read,Write,Edit,Glob,Grep,WebSearch,WebFetch,TodoWrite" \
   --max-turns 160 >> "$LOG" 2>&1
 RC=$?
