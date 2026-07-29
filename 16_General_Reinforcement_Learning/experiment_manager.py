@@ -80,14 +80,31 @@ def serve(exp_id):
             for i, v in enumerate(variants)]
     flag = {"key": doc["flag_key"], "name": f"[GenRL onsite] {doc['hypothesis'][:60]}",
             "active": True, "filters": {"multivariate": {"variants": roll}, "groups": [{"rollout_percentage": 100}]}}
+    # Create the flag. Only mark 'serving' if the flag actually exists afterward — otherwise a
+    # 403 (missing feature_flag:write scope) would leave a phantom 'serving' experiment with no flag.
+    created = False
     try:
         _ph("POST", "feature_flags/", flag)
+        created = True
     except Exception as e:
-        # already exists → PATCH active
-        print("flag create note:", str(e)[:100])
+        existing = next((f for f in _ph("GET", "feature_flags/?limit=200").get("results", [])
+                         if f["key"] == doc["flag_key"]), None) if "GET" else None
+        if existing:  # already exists → activate
+            try:
+                _ph("PATCH", f"feature_flags/{existing['id']}/", {"active": True, "filters": flag["filters"]})
+                created = True
+            except Exception:
+                pass
+        if not created:
+            _coll().update_one({"_id": exp_id}, {"$set": {"status": "serve_failed",
+                               "serve_error": str(e)[:140]}})
+            print(f"SERVE FAILED for {exp_id}: {str(e)[:100]} — flag NOT created. "
+                  f"(Likely the PostHog Personal API Key lacks feature_flag:write scope.) Left as serve_failed.")
+            return False
     _coll().update_one({"_id": exp_id}, {"$set": {"status": "serving", "served_at": NOW.isoformat()}})
-    print(f"serving {exp_id} — flag '{doc['flag_key']}' live. NOTE: renders to users only when "
-          f"master kill-switch '{MASTER_KILL_SWITCH}' is ON (Will's gated call).")
+    print(f"serving {exp_id} — flag '{doc['flag_key']}' live. Renders to users only when "
+          f"master kill-switch '{MASTER_KILL_SWITCH}' is ON.")
+    return True
 
 
 def grade():
