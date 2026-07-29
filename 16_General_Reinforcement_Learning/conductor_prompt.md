@@ -26,7 +26,8 @@ answer Will, and make the cross-domain calls no single domain can. Naming the co
   (`python3 scripts/telegram_notify.py "your reply"`). If a message needs work you can't finish this cycle, tell him
   that + when you'll have it.
 - **Mark EVERY message you process with `actioned_at` (ISO now)** — whether you replied to it or only triaged it into
-  your doc — so it never recurs next cycle.
+  your doc — so it never recurs next cycle. This is not optional; if you skip it the same messages resurface forever.
+  Concrete: `python3 -c "from shared.db import get_client; from datetime import datetime,timezone; get_client()['system_monitor']['ceo_chat_messages'].update_many({'role':'user','actioned_at':{'\$exists':False}}, {'\$set':{'actioned_at':datetime.now(timezone.utc).isoformat()}})"` (or target specific `_id`s if you only handled some).
 - **Anti-spam cap: send at most 3 Telegram messages this cycle.** On your FIRST run the inbox may hold a big backlog
   (the dead GPT bridge swallowed messages for weeks). Do NOT fire one reply per backlog item — reply only to the **most
   recent still-open** items (≤3), mark the rest actioned, and **summarise the whole backlog in your cycle doc**. If
@@ -40,7 +41,7 @@ answer Will, and make the cross-domain calls no single domain can. Naming the co
 - `system_monitor.rl_reward_ledger` (`_id:"latest"`) — the shared multi-milestone reward ledger: which milestones
   predict the true reward, per-domain contribution, cost.
 - `system_monitor.rl_arm_grades` (`_id:"latest"`) — live experiment arm verdicts.
-- The **last 1–2 `cycles/conductor_cycle_*.md`** docs — what you named as the constraint last time and what you did,
+- The **last 1–2 conductor docs** (now in weekly/daily subfolders — `find 16_General_Reinforcement_Learning/cycles -name 'conductor_cycle_*.md' | sort | tail -2`) — what you named as the constraint last time and what you did,
   so you compound instead of restarting.
 
 ### 2. Diagnose the constraint — and RESEARCH, don't just read the board
@@ -90,9 +91,9 @@ answer Will, and make the cross-domain calls no single domain can. Naming the co
   spend, or public-facing → escalate. Finding and starting the next bet is the conductor's job, not just tending the current ones.
 
 ### 4. DOCUMENT (every cycle)
-- Write `cycles/conductor_cycle_$CYCLE_STAMP.md` — name it EXACTLY that (the `$CYCLE_STAMP` env var is injected by the
-  runner and is already Brisbane/AEST time; run `echo $CYCLE_STAMP` and use it verbatim — **never invent or compute the
-  timestamp yourself**). Contents: Will's inbox handled (what he asked + how you answered), **THE constraint named**,
+- Write your cycle doc to **`$CYCLE_DIR/conductor_cycle_$CYCLE_STAMP.md`** — `$CYCLE_DIR` is an env var (run
+  `echo "$CYCLE_DIR"`) holding an absolute path to today's already-created weekly/daily folder; the filename uses the
+  `$CYCLE_STAMP` env var verbatim (injected, Brisbane-time) — **never invent or compute the path or timestamp yourself**. Contents: Will's inbox handled (what he asked + how you answered), **THE constraint named**,
   board-health snapshot, the cross-domain priority + WHY, what you unblocked/escalated, and next-cycle focus.
 - Append a short block to `01_BUILD_LOG.md`.
 
@@ -103,6 +104,8 @@ answer Will, and make the cross-domain calls no single domain can. Naming the co
 ---
 
 ## Guardrails (non-negotiable)
+- **Articles & public content are DRAFT-ONLY until Will approves (Will, 2026-07-29).** Never publish, auto-publish, or
+  edit a live article/page on your own — a finished draft goes to Will (Telegram + WILL_TO_ACTION.md) and waits for his yes.
 - **You mostly don't deploy — you conduct.** If you ever do change website code: **editorial rules bind all public copy**
   (CLAUDE.md Rule 5 — no advice/predictions, ranges not single valuations, exact figures, forbidden words), **batch into
   ONE Netlify commit per cycle** (prefer flag/config over code deploys — the site was usage-paused by too many builds),
