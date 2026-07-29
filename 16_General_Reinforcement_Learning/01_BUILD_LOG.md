@@ -192,3 +192,19 @@ same 5 files. Whole-upstream autonomy is the sum of these; the meta-conductor (c
   dispatch :05/:25/:45. Heartbeats green.
 - **3 autonomous upstream domains now: GEO, SEO, Ads.** Remaining M2: Articles (M2b), revive FB organic (M2c),
   onboard FB-funnel + ad_lifecycle to write the shared ledger.
+
+---
+
+## M2b–M8 built + full self-test  (2026-07-29, per DEVELOPMENT_PLAN.md)
+- **M2b Articles** ✅ `articles_signal.py` → `rl_articles_signal` (53 articles, 25 dead cold-start — honest thin signal) + `articles_prompt.md`. Cron signal 01:25 / dispatch :15/:35/:55.
+- **M3 Onsite per-user** ✅ `onsite_signal.py` → `rl_onsite_signal` (42 known-hot frustrated vendors + 88 anon high-intent returning-searchers) + `onsite_prompt.md` (low-latency pacing; Telegram Will while warm; outbound = Tier-3). Cron signal 01:30 / dispatch :08/:23/:38/:53.
+- **M4 Learning/grading loop** ✅ `arm_grader.py` → `rl_arm_grades`: grades PostHog flag-variant arms by true-reward lift vs control, min-N gated. **First verdicts:** discover_mode `scroll` LEADING (1.33×, 12 conv) vs swipe; for_sale `test_c` leading, `test_a/b` lagging. Cron 01:35.
+- **M7 Meta-conductor** ✅ `conductor.py` → `rl_conductor`: holistic board over all 5 domains (health, each domain's top opportunity + next run, arm promote/retire recs, cross-sphere priority); advisory (never overrides self-pacing); daily Telegram digest. Cron 01:40.
+- **M8 Self-test** ✅ `rl_selftest.py`: 51/51 checks pass (compile · signal freshness · heartbeats · pacers · crons · support collections · conductor health · ops-tab source). Self-monitored; telegrams on failure. Cron 01:50.
+- **cycle_pacer** generalises pacing for all non-geo domains; **domains.yaml** registry now lists geo/seo/ads/articles/onsite all `live`.
+
+**System state: 5 autonomous domains (geo, seo, ads, articles, onsite) on one shared reward ledger, an arm-grading
+learning loop, a meta-conductor board, and a passing self-test — all self-monitored.** Remaining: M2c (revive FB
+organic + onboard FB-funnel/ad-lifecycle to the ledger), M5 hardening (WTA-013 Gold-Coast aggregate; wider identity
+join; true-reward switchover), M6 (P2.1 + offsite — gated on Will), and extending the ops Control Loop tab to render
+the conductor's all-domains board.
