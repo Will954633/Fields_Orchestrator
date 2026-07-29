@@ -22,11 +22,13 @@ unset ANTHROPIC_API_KEY 2>/dev/null || true   # force Claude Max subscription, n
 mkdir -p "$DIR/cycles"
 
 export CYCLE_STAMP="$STAMP"   # Brisbane-time stamp for the cycle doc — the agent MUST use this, not guess
+export CYCLE_DIR="$DIR/cycles/$(TZ=Australia/Brisbane date +%G-W%V)/$(TZ=Australia/Brisbane date +%Y-%m-%d)"
+mkdir -p "$CYCLE_DIR"
 PROMPT="$(cat "$DIR/geo_prompt.md")"
 echo "[$STAMP] ===== GEO cycle start =====" >> "$LOG"
 
 set +e
-timeout 1500 claude -p "$PROMPT" \
+timeout -k 60 1500 claude -p "$PROMPT" \
   --allowedTools "Bash,Read,Write,Edit,Glob,Grep,WebSearch,WebFetch,TodoWrite" \
   --max-turns 60 >> "$LOG" 2>&1
 RC=$?
