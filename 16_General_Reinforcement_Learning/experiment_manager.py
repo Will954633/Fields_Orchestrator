@@ -39,7 +39,7 @@ SURFACES = ("/analyse-your-home", "/for-sale-v3")
 
 def _ph(method, path, body=None):
     pid = os.environ["POSTHOG_PROJECT_ID"]
-    key = os.environ["POSTHOG_PERSONAL_API_KEY"]
+    key = os.environ.get("POSTHOG_ALL_ACCESS_KEY") or os.environ["POSTHOG_PERSONAL_API_KEY"]
     url = f"https://us.posthog.com/api/projects/{pid}/{path}"
     data = json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(url, data=data, method=method,
