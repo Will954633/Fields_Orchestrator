@@ -104,7 +104,7 @@ def sync_posthog(lg: Ledger, hours: int) -> dict:
         SELECT uuid, distinct_id, event, timestamp,
                properties.variant, properties.lab_cid, properties.step,
                properties.field, properties.goal, properties.terminal_type,
-               properties.email, properties.selling_intent
+               properties.email_domain, properties.selling_intent
         FROM events
         WHERE event IN ({all_events})
           AND timestamp > now() - INTERVAL {int(hours)} HOUR
@@ -117,12 +117,14 @@ def sync_posthog(lg: Ledger, hours: int) -> dict:
     n = 0
     for row in rows:
         (uuid, did, event, ts, variant, lab_cid, step, field, goal,
-         terminal_type, email, intent) = (list(row) + [None] * 12)[:12]
+         terminal_type, email_domain, intent) = (list(row) + [None] * 12)[:12]
         if not uuid or not variant:
             continue  # a lab event with no variant is unattributable — skip
+        if variant == "unknown" or str(variant).startswith("_"):
+            continue  # self-test / misconfigured traffic (e.g. _SELFTEST) — never ledger it
         props = {}
-        if email:
-            props["email"] = email
+        if email_domain:
+            props["email_domain"] = email_domain
         if intent:
             props["selling_intent"] = intent
         lg.record_funnel_event(uuid=str(uuid), distinct_id=str(did or "?"),
