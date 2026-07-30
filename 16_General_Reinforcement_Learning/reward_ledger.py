@@ -330,10 +330,24 @@ def build(window_days=None, dry_run=False):
     # cost attribution -----------------------------------------------------------------------
     dates = [str(j.get("t_last"))[:10] for j in journeys if j.get("t_last")]
     dmin, dmax = (min(dates), max(dates)) if dates else (None, None)
-    fb_spend = 0.0
+    # split FB spend into GC-served vs out-of-market (SEQ ex-GC copy discovery). OOM spend must
+    # NOT be in the GC cost-per-seller numerator. Marker = 'ex-gc' token in campaign name (mirrors
+    # ads_signal.is_oom). Requires an ad_id→campaign join (ad_daily_metrics alone has no campaign).
+    _prof = {p.get("ad_id"): (p.get("campaign_name") or "")
+             for p in sm["ad_profiles"].find({}, {"ad_id": 1, "campaign_name": 1})}
+    def _oom(cn):
+        cn = (cn or "").lower()
+        return "ex-gc" in cn or "ex gc" in cn
+    gc_spend = oom_spend = 0.0
     if dmin:
         for d in sm["ad_daily_metrics"].find({"date": {"$gte": dmin, "$lte": dmax}}):
-            fb_spend += float(d.get("spend_aud") or 0)
+            sp = float(d.get("spend_aud") or 0)
+            cn = _prof.get(d.get("ad_id")) or d.get("campaign_name")
+            if _oom(cn):
+                oom_spend += sp
+            else:
+                gc_spend += sp
+    fb_spend = gc_spend + oom_spend
     ai_compute = infra = 0.0
     if dmin:
         for d in sm["cost_tracking"].find({"date": {"$gte": dmin, "$lte": dmax}}):
@@ -365,18 +379,21 @@ def build(window_days=None, dry_run=False):
     cost_summary = {
         "window": {"from": dmin, "to": dmax},
         "fb_ad_spend_aud": round(fb_spend, 2),
+        "gc_ad_spend_aud": round(gc_spend, 2),        # GC-served spend (the CPL numerator)
+        "oom_test_spend_aud": round(oom_spend, 2),    # out-of-market (SEQ ex-GC) copy discovery, excluded
         "ai_compute_aud": round(ai_compute, 2),
         "infra_aud": round(infra, 2),
         "paid_conversions": paid_conv,
         "organic_conversions": organic_conv,
         "paid_conversions_by_ad": dict(paid_by_ad),
         "paid_conversions_by_campaign": dict(paid_by_campaign),
-        "cost_per_paid_conversion_aud": round(fb_spend / paid_conv, 2) if paid_conv else None,
+        # TRUE GC cost-per-paid-conversion: GC-served spend ÷ GC paid conversions (OOM removed).
+        "cost_per_paid_conversion_aud": round(gc_spend / paid_conv, 2) if paid_conv else None,
+        "cost_per_paid_conversion_incl_oom_aud": round(fb_spend / paid_conv, 2) if paid_conv else None,
         "note": ("Paid vs organic read from all_conversions (every-channel address submits) — NOT "
-                 "organic_journeys, which is non-paid by design. cost_per_paid_conversion divides "
-                 "TOTAL fb spend (incl. out-of-market copy tests) by GC-served paid conversions, so "
-                 "it over-states cost until OOM spend is separated; per-ad/campaign breakdown is the "
-                 "honest attribution. Organic conversions carry ~$0 marginal cost."),
+                 "organic_journeys, which is non-paid by design. cost_per_paid_conversion uses "
+                 "GC-served spend only (out-of-market SEQ ex-GC copy-test spend excluded); the "
+                 "incl_oom variant is kept for reference. Organic conversions carry ~$0 marginal cost."),
     }
 
     snapshot = {
@@ -444,9 +461,10 @@ def _print_summary(s):
     for a in s["ai_sources"] or [{"key": "(none captured)", "users": 0, "conversions": 0, "conv_rate": 0, "raw_conv_rate": 0}]:
         print(f"  {a['key']:<20} users={a['users']:>4}  conv={a['conversions']:>3}  rate={a['conv_rate']:.3f}")
     cs = s["cost_summary"]
-    print(f"\nCOST: FB ad spend ${cs['fb_ad_spend_aud']} | ai_compute ${cs['ai_compute_aud']} | "
-          f"infra ${cs['infra_aud']} | organic conv {cs['organic_conversions']} (~$0 marginal) | "
-          f"paid conv {cs['paid_conversions']}")
+    print(f"\nCOST: FB spend ${cs['fb_ad_spend_aud']} (GC ${cs['gc_ad_spend_aud']} + OOM "
+          f"${cs['oom_test_spend_aud']}) | organic conv {cs['organic_conversions']} (~$0) | "
+          f"paid conv {cs['paid_conversions']} @ GC cost/conv ${cs['cost_per_paid_conversion_aud']} "
+          f"(incl-OOM ${cs['cost_per_paid_conversion_incl_oom_aud']})")
     print(f"\n{s['coverage_note']}\n")
 
 
