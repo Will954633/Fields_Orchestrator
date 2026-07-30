@@ -61,6 +61,12 @@ def _use_max() -> bool:
 def _model_alias(model: str) -> str:
     """Map an Anthropic model id to a CLI alias the Max subscription honours."""
     m = (model or "").lower()
+    # Pin Opus 4.8 by its FULL id BEFORE the bare-'opus' branch: bare 'opus'
+    # collapses to a stale tier default on this Max account (same reason Sonnet 5
+    # needs explicit pinning — see fix-history 2026-07-30 ARTICLE-MODEL-OPUS48).
+    # Verified: `claude --model claude-opus-4-8 -p` returns OK on the Max account.
+    if "opus-4-8" in m or "opus-4.8" in m:
+        return "claude-opus-4-8"
     if "opus" in m:
         return "opus"
     if "haiku" in m:
