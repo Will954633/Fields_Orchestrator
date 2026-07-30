@@ -419,6 +419,8 @@ def build_contact_doc(distinct_id: str, v: dict, existing: dict | None = None) -
         "probable_address_source": (existing or {}).get("probable_address_source"),
         "probable_address_label": (existing or {}).get("probable_address_label"),
         "probable_address_at": (existing or {}).get("probable_address_at"),
+        # Off-market google owner-lookup signal (written by offmarket_home_signal.py).
+        "offmarket_home": (existing or {}).get("offmarket_home"),
         "physical_scan": (existing or {}).get("physical_scan"),
         "communications": (existing or {}).get("communications", []),
         "owner": (existing or {}).get("owner", "will"),
