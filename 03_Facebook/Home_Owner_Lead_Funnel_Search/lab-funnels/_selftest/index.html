@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lab Harness Self-Test</title>
+  <script>window.LAB_POSTHOG_TOKEN = 'phc_RQ68rG9adv6NYtoZS4JzmJVzVyOWUfprV9ceHb0nLEs';</script>
+</head>
+<body data-lab-variant="_SELFTEST">
+  <h1>Lab harness self-test (internal, noindex)</h1>
+  <p>Exercises every event in the spine so the client contract can be verified
+     against the reward ledger. Not a live funnel; no ad traffic points here.</p>
+
+  <div data-lab-step="1" data-lab-step-name="ask-name">
+    <label>Name <input data-lab-field="name"></label>
+  </div>
+  <div data-lab-step="2" data-lab-step-name="ask-email">
+    <label>Email <input data-lab-field="email" type="email"></label>
+  </div>
+  <div data-lab-step="3" data-lab-step-name="ask-address">
+    <label>Address <input data-lab-field="address"></label>
+  </div>
+
+  <button data-lab-micro="address">Simulate address micro-conversion</button>
+  <a data-lab-call href="#">Simulate call CTA</a>
+  <div data-lab-terminal="deadend"><p>End state (honest dead-end).</p></div>
+
+  <script src="/lab/lab_harness.js"></script>
+</body>
+</html>
