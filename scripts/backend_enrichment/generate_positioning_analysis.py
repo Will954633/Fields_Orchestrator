@@ -54,7 +54,7 @@ from shared.ru_guard import cosmos_retry, sleep_with_jitter
 
 TARGET_SUBURBS = ["robina", "varsity_lakes", "burleigh_waters"]
 
-MODEL = "claude-opus-4-6"
+MODEL = "claude-opus-4-8"
 MAX_TOKENS = 8000  # Structured JSON output needs room
 
 # Portal price brackets (Domain/REA standard search filters)
