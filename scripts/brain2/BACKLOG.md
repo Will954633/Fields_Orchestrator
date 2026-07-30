@@ -24,3 +24,15 @@ cron, so this is cosmetic — but the collector should be the single source of t
 - [x] Layer 5 — FULL ATTRIBUTION (organic_journey_build.py): all-channel. `organic_journeys` (non-paid sessions), `all_conversions` (EVERY address submit any channel — the review register), `organic_landing_affinity`. Auto-detects neighbour_sale_trigger. Nightly 23:40 refresh chain (attribution+behaviour+organic).
 - [ ] Layer 5b (Half B, GATED on Will) — SEO query/position: Google Search Console + Bing Webmaster APIs → per-URL query/impressions/position/CTR, joined to converting pages. Needs service-account verified as owner of fieldsestate.com.au in GSC + a Bing Webmaster API key.
 - [ ] Query layer — Opus reads whole joined package in-context
+
+## PARKED (2026-07-30): emailed-link lead token — bind Instant-Form leads → website behaviour
+FB Instant-Form leads (`fb_leads`) are filled ON Facebook — no website session, no
+`posthog_distinct_id` at submit time — so they can't be joined to `organic_journeys`
+by identity, and 5-second date-matching can't work (they never land on-site then).
+The durable fix: `ayh-lead-fulfil.mjs` appends a lead token (e.g. `?lead=<lead_id>`)
+to the emailed `/your-home/<slug>` link; the frontend reads it on load → `posthog.identify`
+/ capture an event stamping the lead_id onto the visitor's distinct_id. Then the eventual
+click-through binds the form lead to all subsequent site behaviour (and to the reward ledger).
+**Why parked:** needs a website deploy + a small frontend change + visual verification —
+Will parked it 2026-07-30 after the RL paid-attribution fixes ([RL-ADS-PAID-BLIND]).
+Closes 00_SCOPING §10.3 Gap A for the Instant-Form population when picked up.
