@@ -127,7 +127,7 @@ So the claim we buy here is *"we learned the shape of the funnel and the order p
 ---
 
 ### Build sequence
-1. **Ledger first** (6A) — no optimisation is possible across the FB→LP seam without it. *Needed regardless of any §11 choice — safe to start immediately.*
+1. **Ledger first** (6A) — ✅ **DONE 2026-07-30.** `ledger/funnel_ledger.py` (schema + `lab_*` event-spine contract + idempotent writers), `ledger/ledger_sync.py` (FB + PostHog → ledger, Rule-7 heartbeat, cron `3 8-22`), `ledger/compute_reward.py` (§5 composite + Q1 resistance ranking + quality-adjusted cost/goal). Validated end-to-end (synthetic join/reward/ranking all correct); live sync = 116 ad_stats rows / 82 variants / 0 lab events (expected pre-LP). Pushed to GitHub.
 2. **Lab infra + instrumentation** (6C, 6B) — `/lab/` nginx block, noindex, template harness, PostHog wiring, Rule 7 heartbeat.
 3. **Brisbane market-newsletter** (dependency of the §11.2 waitlist end-state) — commit or build before waitlist goes live; else dead-end until ready.
 4. **First approved template** (§8 gate) — progressive multi-step (name → email → address), preview link + spec to Will, stop for approval.
