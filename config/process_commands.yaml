@@ -353,9 +353,9 @@ processes:
 
   - id: 120
     name: "AI Property Editorial (New Listings)"
-    description: "Generates editorial content for new listings (<=7 days) missing ai_analysis. Uses multi-agent pipeline: 3 specialist analysts + editor + reflection + fact-check. Auto-publishes when the verify pass comes back clean/minor_flags (2026-07-21 always-verify fix); anything worse is held in needs_review/failed_factcheck for manual review in ops dashboard. Production config confirmed 2026-07-20/21: OpenRouter + Sonnet 5 + comparables compaction + prompt caching + adaptive/medium thinking."
+    description: "Generates editorial content for new listings (<=7 days) missing ai_analysis. Uses multi-agent pipeline: 3 specialist analysts + editor + reflection + fact-check. Auto-publishes when the verify pass comes back clean/minor_flags (2026-07-21 always-verify fix); anything worse is held in needs_review/failed_factcheck for manual review in ops dashboard. Model config (2026-07-30): Opus 4.8 on the Claude Max subscription (USE_CLAUDE_MAX=1, ANTHROPIC_BACKEND cleared so make_client uses Max not OpenRouter). Prompt caching dropped — it's a no-op on the Max CLI path. Comparables compaction + adaptive/medium thinking retained. The satellite-verify vision sub-step routes through Gemini-via-Vertex (VISION_BACKEND from .env)."
     phase: "backend_enrichment"
-    command: "bash -c 'source /home/fields/venv/bin/activate && set -a && source /home/fields/Fields_Orchestrator/.env && set +a && export ANTHROPIC_BACKEND=openrouter USE_CLAUDE_MAX=0 EDITORIAL_MODEL=anthropic/claude-sonnet-5 COMPACT_COMPARABLES=1 PROMPT_CACHE=1 THINKING_MODE=adaptive THINKING_EFFORT=medium AUTO_PUBLISH=1 && python3 scripts/backend_enrichment/generate_property_ai_analysis.py --new-listings --days 7'"
+    command: "bash -c 'source /home/fields/venv/bin/activate && set -a && source /home/fields/Fields_Orchestrator/.env && set +a && export ANTHROPIC_BACKEND= USE_CLAUDE_MAX=1 EDITORIAL_MODEL=claude-opus-4-8 COMPACT_COMPARABLES=1 THINKING_MODE=adaptive THINKING_EFFORT=medium AUTO_PUBLISH=1 && python3 scripts/backend_enrichment/generate_property_ai_analysis.py --new-listings --days 7'"
     working_dir: "/home/fields/Fields_Orchestrator"
     mongodb_activity: "moderate_write"
     requires_browser: false
@@ -520,9 +520,12 @@ processes:
 
 # Execution order (processes will run in this order based on schedule)
 # Note: Schedule manager determines which processes run based on day of week
-# - Monday-Saturday: 101, 103, 111, 113, 114, 115, 116, 112, 105, 106, 108, 6, 11, 12, 13, 14, 16, 15, 17, 19, 18, 109, 107
-# - Sunday: 102, 104, 101, 103, 111, 113, 114, 115, 116, 112, 105, 106, 108, 6, 11, 12, 13, 14, 16, 15, 17, 19, 18, 109, 107
-execution_order: [101, 102, 103, 104, 111, 113, 114, 115, 110, 116, 112, 105, 106, 108, 117, 6, 11, 12, 13, 14, 16, 15, 17, 19, 18, 109, 107]
+# - Monday-Saturday: 101, 103, 111, 113, 114, 115, 116, 112, 105, 106, 108, 6, 11, 12, 13, 14, 16, 15, 17, 19, 18, 120, 121, 109, 107
+# - Sunday: 102, 104, 101, 103, 111, 113, 114, 115, 116, 112, 105, 106, 108, 6, 11, 12, 13, 14, 16, 15, 17, 19, 18, 120, 121, 109, 107
+# 120 (new-listing editorial) + 121 (sitemap resubmit) run after 18 (valuation precompute) and 117 (satellite),
+# which are their depends_on. 120 was defined 2026-03-27 but never added to the order (original omission);
+# re-added 2026-07-30 so nightly listing editorial actually runs. 121 follows 120 (resubmits sitemap for new pages).
+execution_order: [101, 102, 103, 104, 111, 113, 114, 115, 110, 116, 112, 105, 106, 108, 117, 6, 11, 12, 13, 14, 16, 15, 17, 19, 18, 120, 121, 109, 107]
 
 # Phase descriptions for UI display
 phases:
