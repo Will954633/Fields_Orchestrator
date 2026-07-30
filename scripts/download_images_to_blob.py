@@ -114,7 +114,7 @@ def upload_images_for_property(blob_service_client, doc, db_label, suburb, dry_r
                                 date_prefix=None):
     property_id = str(doc.get('_id', 'unknown'))
     # Prefer scraped_property_images (fresh Domain URLs) over property_images (may be blob URLs)
-    photo_urls  = doc.get('scraped_property_images') or doc.get('property_images', [])
+    photo_urls  = doc.get('scraped_property_images') or doc.get('property_images') or doc.get('domain_image_urls', [])
     fp_urls     = doc.get('scraped_floor_plans') or doc.get('floor_plans', [])
 
     if not isinstance(photo_urls, list):
@@ -201,10 +201,29 @@ def process_collection(mongo_client, blob_service_client, db_name, db_label,
     # 1. images_uploaded_to_blob is not True (new or reset by scraper)
     # 2. Has image URLs to download (property_images or scraped_property_images)
     query = {
-        "images_uploaded_to_blob": {"$ne": True},
         "$or": [
-            {"property_images": {"$exists": True, "$ne": []}},
-            {"scraped_property_images": {"$exists": True, "$ne": []}},
+            # Normal path: has source URLs and not yet uploaded to blob.
+            {
+                "images_uploaded_to_blob": {"$ne": True},
+                "$or": [
+                    {"property_images": {"$exists": True, "$ne": []}},
+                    {"scraped_property_images": {"$exists": True, "$ne": []}},
+                ],
+            },
+            # Gap fix (2026-07-30): the profile scraper captures the full gallery into
+            # `domain_image_urls` but never uploads it — property_images stays absent/empty
+            # even though images_uploaded_to_blob can be (wrongly) True. These photo-less
+            # sold homes were falling back to a chart hero. Pull their galleries in too —
+            # but ONLY for actual listings (sold/for_sale), NOT the whole cadastral base
+            # (every parcel carries a domain_image_urls gallery; we don't need those).
+            {
+                "domain_image_urls": {"$exists": True, "$ne": []},
+                "listing_status": {"$in": ["sold", "for_sale"]},
+                "$or": [
+                    {"property_images": {"$exists": False}},
+                    {"property_images": {"$in": [None, []]}},
+                ],
+            },
         ],
     }
     docs = list(collection.find(query))
@@ -223,7 +242,7 @@ def process_collection(mongo_client, blob_service_client, db_name, db_label,
             continue
 
         property_id = str(doc.get('_id', 'unknown'))
-        source_photos = doc.get('scraped_property_images') or doc.get('property_images', [])
+        source_photos = doc.get('scraped_property_images') or doc.get('property_images') or doc.get('domain_image_urls', [])
         source_fps = doc.get('scraped_floor_plans') or doc.get('floor_plans', [])
         n_photos = len(source_photos) if isinstance(source_photos, list) else 0
         n_fps    = len(source_fps) if isinstance(source_fps, list) else 0
@@ -251,7 +270,7 @@ def process_collection(mongo_client, blob_service_client, db_name, db_label,
                 }
 
                 # Preserve original source URLs
-                original_photos = doc.get('scraped_property_images') or doc.get('property_images', [])
+                original_photos = doc.get('scraped_property_images') or doc.get('property_images') or doc.get('domain_image_urls', [])
                 original_fps = doc.get('scraped_floor_plans') or doc.get('floor_plans', [])
 
                 collection.update_one(
