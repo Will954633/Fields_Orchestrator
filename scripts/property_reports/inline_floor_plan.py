@@ -93,47 +93,23 @@ def _anthropic_client():
 
 
 def _claude_vision_text(url: str, prompt: str, max_tokens: int = 1200) -> Optional[str]:
-    """Run a single vision prompt through Claude, returning the raw text (or
-    None if the fallback is unavailable / the call fails). Fetches the image and
-    sends it base64 — Domain bucket URLs aren't reliably fetchable by the
-    provider, so we proxy the bytes ourselves."""
-    client = _anthropic_client()
-    if not client or not url:
+    """Run a single vision prompt and return the raw text (None on failure).
+
+    Delegates to shared.claude_vision.vision_text, which routes to Gemini-via-
+    Vertex when VISION_BACKEND=gemini_vertex (the mini-site default, 2026-07-30)
+    — every direct Claude/OpenAI path in this module is dead on billing (Anthropic
+    400 credit, OpenAI 429 quota) and kept only as dormant fallbacks. vision_text
+    proxies the image bytes itself (Domain bucket URLs aren't reliably
+    provider-fetchable). Model hint stays `_CLAUDE_VISION_MODEL` so a future
+    Anthropic revival needs no change here; the vision layer maps it to a Gemini
+    tier under the Gemini backend."""
+    if not url:
         return None
     try:
-        import base64
-        import requests
-        r = requests.get(url, timeout=30)
-        r.raise_for_status()
-        ctype = (r.headers.get("content-type") or "").split(";")[0].strip().lower()
-        c = r.content
-        # Magic-byte sniff — CDN sometimes mislabels (e.g. GIF as image/jpeg), which 400s.
-        if c[:3] == b"\xff\xd8\xff":
-            media = "image/jpeg"
-        elif c[:8] == b"\x89PNG\r\n\x1a\n":
-            media = "image/png"
-        elif c[:6] in (b"GIF87a", b"GIF89a"):
-            media = "image/gif"
-        elif c[:4] == b"RIFF" and c[8:12] == b"WEBP":
-            media = "image/webp"
-        else:
-            media = ctype if ctype in _CLAUDE_MEDIA_TYPES else "image/jpeg"
-        b64 = base64.standard_b64encode(c).decode()
-        resp = client.messages.create(
-            model=_CLAUDE_VISION_MODEL,
-            max_tokens=max_tokens,
-            temperature=0,
-            messages=[{
-                "role": "user",
-                "content": [
-                    {"type": "image", "source": {"type": "base64", "media_type": media, "data": b64}},
-                    {"type": "text", "text": prompt},
-                ],
-            }],
-        )
-        return (resp.content[0].text if resp.content else "") or ""
+        from shared.claude_vision import vision_text
+        return vision_text(prompt, [url], model=_CLAUDE_VISION_MODEL, max_tokens=max_tokens)
     except Exception as e:
-        logger.warning(f"  claude vision fallback threw on {url[:80]}: {e}")
+        logger.warning(f"  vision (gemini/claude) threw on {url[:80]}: {e}")
         return None
 
 
