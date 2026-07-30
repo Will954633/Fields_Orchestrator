@@ -153,6 +153,59 @@ def _ultimate_reward(sm):
     }
 
 
+def _form_lead_rewards(sm):
+    """Facebook Instant-Form SELLER leads as a first-class reward tier. A completed seller form
+    carrying name/email/phone/intent IS an identified seller — but these live in fb_leads (filled
+    on FB, no website session, no posthog_distinct_id), so they never touch organic_journeys and
+    were invisible to this ledger. Surfaced here so the ads cycle + conductor credit the ads that
+    drove them; kept SEPARATE from the milestone/base-rate math (different population — folding
+    them in would distort predictiveness). Split GC-served (real) vs out-of-market copy-test."""
+    import ast
+    # Seller-intent SIGNAL fields — the reliable discriminator. A seller-ish form NAME alone is
+    # not enough (e.g. the "Independent Listing Analysis" carousel routes to a Buyer Brief form),
+    # so we require the submission itself to carry a selling-intent / property-address field.
+    SELLER_SIGNAL_FIELDS = ("selling_intent", "selling_timeframe", "property_address",
+                            "sell_timeframe", "thinking_of_selling")
+
+    def parse_fields(l):
+        f = l.get("fields")
+        if isinstance(f, str):
+            try:
+                f = ast.literal_eval(f)
+            except Exception:
+                f = {}
+        return f or {}
+
+    real_seller, test_seller = [], []
+    for l in sm["fb_leads"].find({}):
+        f = parse_fields(l)
+        if not any(k in f for k in SELLER_SIGNAL_FIELDS):
+            continue
+        is_test = bool(l.get("test_market")) or str(l.get("is_test")).lower() in ("true", "1")
+        rec = {"ad_id": l.get("ad_id"), "ad_name": l.get("ad_name"),
+               "campaign": l.get("campaign_name"), "created_time": l.get("created_time"),
+               "name": f.get("full_name"), "email": f.get("email"),
+               "phone": f.get("phone_number"),
+               "intent": f.get("selling_intent") or f.get("selling_timeframe"),
+               "address": f.get("property_address")}
+        (test_seller if is_test else real_seller).append(rec)
+
+    def _yes(recs):
+        return sum(1 for r in recs if str(r.get("intent") or "").lower() in
+                   ("yes", "y", "true", "now", "soon", "1_3_months", "3_6_months"))
+    return {
+        "definition": ("FB Instant-Form seller leads = identified sellers (name/email/phone/intent). "
+                       "Separate reward tier, NOT in milestone math."),
+        "gc_served": {"count": len(real_seller), "intent_yes": _yes(real_seller),
+                      "leads": real_seller[:20]},
+        "out_of_market_test": {"count": len(test_seller), "intent_yes": _yes(test_seller)},
+        "note": ("gc_served = the true paid seller reward from Instant-Form ads; out_of_market_test = "
+                 "contactable but outside GC (copy discovery), excluded from GC CPL. No distinct_id on "
+                 "these (form filled on FB) — bind future site visits via a lead token on the emailed "
+                 "link (website change, not implemented here)."),
+    }
+
+
 def build(window_days=None, dry_run=False):
     c = get_client()
     sm = c["system_monitor"]
@@ -288,10 +341,27 @@ def build(window_days=None, dry_run=False):
             ai_compute += float(bc.get("ai_compute") or 0)
             infra += float(bc.get("infrastructure") or 0)
 
-    # paid vs organic conversions (paid = channel Paid Search/Social; else organic)
-    paid_channels = {"Paid Search", "Paid Social", "Paid"}
-    paid_conv = sum(1 for u in users.values() if u["converted"] and (u["channels"] & paid_channels))
-    organic_conv = n_conv - paid_conv
+    # paid vs organic conversions — read from all_conversions, which captures EVERY-channel
+    # address submit (organic_journeys is non-paid by design, so counting paid there was always
+    # 0; that manufactured the false "∞ paid / every seller organic" result). all_conversions
+    # now carries is_paid + ad_id + utm_campaign for paid sessions (organic_journey_build 1b).
+    ac_docs = list(sm["all_conversions"].find({}, {"is_paid": 1, "channel": 1, "ad_id": 1,
+                                                   "utm_campaign": 1, "submitted_at": 1,
+                                                   "contact_captured": 1}))
+    if window_days:
+        cutstamp = (NOW.timestamp() - window_days * 86400)
+        ac_docs = [d for d in ac_docs if (_dt(d.get("submitted_at")) or NOW).timestamp() >= cutstamp]
+    def _is_paid(d):
+        return bool(d.get("is_paid")) or str(d.get("channel") or "").startswith("Paid")
+    paid_conv = sum(1 for d in ac_docs if _is_paid(d))
+    organic_conv = sum(1 for d in ac_docs if not _is_paid(d))
+    # per-ad / per-campaign paid conversion breakdown (the ads sensor joins on this)
+    paid_by_ad = defaultdict(int); paid_by_campaign = defaultdict(int)
+    for d in ac_docs:
+        if _is_paid(d):
+            if d.get("ad_id"):
+                paid_by_ad[d["ad_id"]] += 1
+            paid_by_campaign[d.get("utm_campaign") or "(untagged)"] += 1
     cost_summary = {
         "window": {"from": dmin, "to": dmax},
         "fb_ad_spend_aud": round(fb_spend, 2),
@@ -299,10 +369,14 @@ def build(window_days=None, dry_run=False):
         "infra_aud": round(infra, 2),
         "paid_conversions": paid_conv,
         "organic_conversions": organic_conv,
+        "paid_conversions_by_ad": dict(paid_by_ad),
+        "paid_conversions_by_campaign": dict(paid_by_campaign),
         "cost_per_paid_conversion_aud": round(fb_spend / paid_conv, 2) if paid_conv else None,
-        "note": ("Most FB spend is the out-of-market copy TEST, not GC-served — its leads are "
-                 "captured separately in fb_leads, not organic_journeys. Organic conversions carry "
-                 "~$0 marginal cost (ai_compute+infra are fixed-ish overhead)."),
+        "note": ("Paid vs organic read from all_conversions (every-channel address submits) — NOT "
+                 "organic_journeys, which is non-paid by design. cost_per_paid_conversion divides "
+                 "TOTAL fb spend (incl. out-of-market copy tests) by GC-served paid conversions, so "
+                 "it over-states cost until OOM spend is separated; per-ad/campaign breakdown is the "
+                 "honest attribution. Organic conversions carry ~$0 marginal cost."),
     }
 
     snapshot = {
@@ -330,6 +404,8 @@ def build(window_days=None, dry_run=False):
         },
         # ULTIMATE reward (sparse, North Star) = an inbound enquiry (a seller who asked to talk to us).
         "ultimate_reward": _ultimate_reward(sm),
+        # FB Instant-Form seller leads — identified sellers that live outside organic_journeys.
+        "form_lead_rewards": _form_lead_rewards(sm),
         "milestones": milestones,
         "channels": channels,
         "ai_sources": ai_sources,
