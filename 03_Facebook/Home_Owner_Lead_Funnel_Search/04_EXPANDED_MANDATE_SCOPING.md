@@ -128,7 +128,7 @@ So the claim we buy here is *"we learned the shape of the funnel and the order p
 
 ### Build sequence
 1. **Ledger first** (6A) — ✅ **DONE 2026-07-30.** `ledger/funnel_ledger.py` (schema + `lab_*` event-spine contract + idempotent writers), `ledger/ledger_sync.py` (FB + PostHog → ledger, Rule-7 heartbeat, cron `3 8-22`), `ledger/compute_reward.py` (§5 composite + Q1 resistance ranking + quality-adjusted cost/goal). Validated end-to-end (synthetic join/reward/ranking all correct); live sync = 116 ad_stats rows / 82 variants / 0 lab events (expected pre-LP). Pushed to GitHub.
-2. **Lab infra + instrumentation** (6C, 6B) — `/lab/` nginx block, noindex, template harness, PostHog wiring, Rule 7 heartbeat.
+2. **Lab infra + instrumentation** (6C, 6B) — ✅ **DONE 2026-07-30.** nginx `/lab/` on vm.fieldsestate.com.au (alias `/home/fields/lab-funnels/`, `X-Robots-Tag: noindex,nofollow,noarchive`, no-store); `lab_harness.js` emits the full spine with declarative data-attributes, variant+lab_cid super-props, and **no raw PII** (email domain-only). `_selftest/` + README = the LP contract. Ledger aligned to `email_domain`; `_`/`unknown` variant guard added. Headless validation: all 7 spine events fire, no PII leak, no JS errors (PASS). Served copy at `/home/fields/lab-funnels/`; mirrored to repo `…/lab-funnels/`.
 3. **Brisbane market-newsletter** (dependency of the §11.2 waitlist end-state) — commit or build before waitlist goes live; else dead-end until ready.
 4. **First approved template** (§8 gate) — progressive multi-step (name → email → address), preview link + spec to Will, stop for approval.
 5. **Rewrite `run_wakeup_prompt.md`** to the expanded mandate (this doc's §3/§5/§9), keeping the hourly thinking-cycle cadence.
