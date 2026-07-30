@@ -421,6 +421,8 @@ def build_contact_doc(distinct_id: str, v: dict, existing: dict | None = None) -
         "probable_address_at": (existing or {}).get("probable_address_at"),
         # Off-market google owner-lookup signal (written by offmarket_home_signal.py).
         "offmarket_home": (existing or {}).get("offmarket_home"),
+        # User-confirmed home from the recognition modal (written by my-home-confirm.mjs).
+        "home_confirmed": (existing or {}).get("home_confirmed"),
         "physical_scan": (existing or {}).get("physical_scan"),
         "communications": (existing or {}).get("communications", []),
         "owner": (existing or {}).get("owner", "will"),
