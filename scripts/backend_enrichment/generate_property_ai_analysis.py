@@ -63,6 +63,11 @@ from claude_max_client import make_client  # noqa: E402
 # so `shared` is importable regardless of the CWD the step is launched from.
 sys.path.insert(0, "/home/fields/Fields_Orchestrator")
 from shared.waterfront import detect_waterfront  # noqa: E402
+# Vision (satellite-verify) must NOT go through the text client: the Max CLI can't
+# express image content and the direct-Anthropic fallback key is dry. Route it
+# through the funded Gemini-via-Vertex backend (VISION_BACKEND=gemini_vertex),
+# same as every other vision task.
+from shared.claude_vision import vision_text  # noqa: E402
 
 _USE_MAX = os.environ.get("USE_CLAUDE_MAX", "1").strip().lower() in {"1", "true", "yes", "on"}
 # Lever 1: compact the comparable-sales pool in the serialised doc. Default on;
@@ -245,16 +250,16 @@ ADAPT YOUR ANALYSIS:
 # ---------------------------------------------------------------------------
 PIPELINE_CONFIG = {
     "models": {
-        "gather_default": "claude-opus-4-6",
+        "gather_default": "claude-opus-4-8",
         "gather_openai": "gpt-5.4",
         "gather_gemini": "gemini-3.1-pro-preview",
-        "editor": "claude-opus-4-6",
-        "reflection": "claude-opus-4-6",
-        "fact_check": "claude-opus-4-6",
-        "sabri": "claude-opus-4-6",
-        "draft2": "claude-opus-4-6",
-        "backfill": "claude-opus-4-6",
-        "satellite_verify": "claude-opus-4-6",
+        "editor": "claude-opus-4-8",
+        "reflection": "claude-opus-4-8",
+        "fact_check": "claude-opus-4-8",
+        "sabri": "claude-opus-4-8",
+        "draft2": "claude-opus-4-8",
+        "backfill": "claude-opus-4-8",
+        "satellite_verify": "claude-opus-4-8",
     },
     "token_limits": {
         "gather": 600,
@@ -290,7 +295,7 @@ PIPELINE_CONFIG = {
 
 # Optional global model override: set EDITORIAL_MODEL to run EVERY Claude agent on
 # one model (e.g. claude-sonnet-5 for a cheaper run). Leaves the Gemini/OpenAI
-# gather models alone. Unset = per-agent defaults above (claude-opus-4-6).
+# gather models alone. Unset = per-agent defaults above (claude-opus-4-8).
 _EDITORIAL_MODEL = os.environ.get("EDITORIAL_MODEL", "").strip()
 if _EDITORIAL_MODEL:
     for _k, _v in list(PIPELINE_CONFIG["models"].items()):
@@ -545,37 +550,22 @@ OUTPUT as JSON only — no markdown, no code fences:
     "verification_notes": "Brief explanation of what you verified and what you corrected."
 }}"""
 
-    # Vision call — the Max CLI shim can't express image content, so make_client
-    # transparently falls back to the real API here (needs a funded key). Wrapped
-    # in try/except by the caller, so a dry key degrades to a [WARN], not a crash.
-    client = make_client(api_key=api_key, use_max=_USE_MAX)
+    # Vision call — routed through shared.claude_vision.vision_text so it uses the
+    # funded Gemini-via-Vertex backend (VISION_BACKEND=gemini_vertex), consistent
+    # with every other vision task. It must NOT go through the editorial text
+    # client: on Max the CLI can't express image content and the direct-Anthropic
+    # fallback key is dry. Wrapped in try/except by the caller, so any backend
+    # failure degrades to a [WARN], not a crash.
     try:
-        response = client.messages.create(
+        result_text = vision_text(
+            prompt,
+            images=[("image/png", img_b64)],
             model=PIPELINE_CONFIG["models"]["satellite_verify"],
             max_tokens=PIPELINE_CONFIG["token_limits"]["fact_check"],
-            messages=[{
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": "image/png",
-                            "data": img_b64,
-                        },
-                    },
-                    {
-                        "type": "text",
-                        "text": prompt,
-                    },
-                ],
-            }],
-            thinking=_thinking_param(),  # see THINKING_MODE toggle near PIPELINE_CONFIG
-            timeout=_nonstreaming_timeout_for(PIPELINE_CONFIG["token_limits"]["fact_check"]),
-            **_output_config_kwargs(),
         )
-
-        result_text = _extract_text(response).strip()
+        if not result_text:
+            raise RuntimeError("empty response from vision backend")
+        result_text = result_text.strip()
         # Strip markdown fences if present
         if result_text.startswith("```"):
             result_text = result_text.split("\n", 1)[1]
