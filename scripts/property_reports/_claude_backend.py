@@ -58,14 +58,27 @@ def get_client_and_model(default_model: str) -> Tuple[Optional[object], Optional
         return None, None
 
     try:
-        from claude_max_client import make_client
+        from claude_max_client import make_client, MaxClient
     except Exception:
         if not api_key:
             return None, None
         from anthropic import Anthropic
         return Anthropic(api_key=api_key), default_model
 
-    client = make_client(api_key=api_key)
+    # House mini-site narratives run on the Claude Max subscription, NOT the
+    # metered OpenRouter/Anthropic API. make_client() honours ANTHROPIC_BACKEND
+    # (set to "openrouter" globally for other systems) BEFORE USE_CLAUDE_MAX, so
+    # calling it directly would route mini-site builds through OpenRouter — which
+    # ran out of credit on 2026-07-30 and 402'd the positioning slot, locking a
+    # real seller's report in `under_review`. Force Max whenever USE_CLAUDE_MAX is
+    # on, falling back to make_client's resolution only if the Max CLI is down.
+    if _use_max():
+        try:
+            client = MaxClient(api_key=api_key)
+        except Exception:
+            client = make_client(api_key=api_key)
+    else:
+        client = make_client(api_key=api_key)
     # Model resolution:
     #   - EDITORIAL_MODEL (if set) wins on EVERY backend — lets the mini-site
     #     build run on claude-sonnet-5 (Max maps it to the "sonnet" alias).
