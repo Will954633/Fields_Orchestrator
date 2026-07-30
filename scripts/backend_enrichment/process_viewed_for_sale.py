@@ -148,8 +148,13 @@ def _backend_env(mode):
         env["ANTHROPIC_BACKEND"] = ""
         env["USE_CLAUDE_MAX"] = "0"
         env["PROMPT_CACHE"] = "1"
-    else:  # max
+    else:  # max — Opus 4.8 on the Claude Max subscription (default)
+        # Clear ANTHROPIC_BACKEND: make_client checks it BEFORE use_max, so an
+        # inherited ANTHROPIC_BACKEND=openrouter (from .env) would otherwise keep
+        # this on metered OpenRouter instead of Max.
+        env["ANTHROPIC_BACKEND"] = ""
         env["USE_CLAUDE_MAX"] = "1"
+        env["EDITORIAL_MODEL"] = env.get("EDITORIAL_MODEL", "claude-opus-4-8")
     return env
 
 
@@ -157,12 +162,12 @@ def preflight(mode):
     """One tiny call to confirm the backend is live (e.g. Vertex quota landed)."""
     env = _backend_env(mode)
     code = ("import os,sys\n"
-            "sys.path.insert(0,os.path.dirname(%r))\n"
+            "sys.path.insert(0,os.path.dirname({gen!r}))\n"
             "from claude_max_client import make_client\n"
-            "c=make_client(api_key=os.environ.get('ANTHROPIC_API_KEY',''), use_max=False)\n"
-            "m=c.messages.create(model=os.environ.get('EDITORIAL_MODEL') or 'claude-sonnet-5',max_tokens=20,"
-            "messages=[{'role':'user','content':'Reply with exactly: READY'}])\n"
-            "print('PREFLIGHT:', m.content[0].text.strip())\n" % GEN)
+            "c=make_client(api_key=os.environ.get('ANTHROPIC_API_KEY',''), use_max={use_max!r})\n"
+            "m=c.messages.create(model=os.environ.get('EDITORIAL_MODEL') or 'claude-opus-4-8',max_tokens=20,"
+            "messages=[{{'role':'user','content':'Reply with exactly: READY'}}])\n"
+            "print('PREFLIGHT:', m.content[0].text.strip())\n").format(gen=GEN, use_max=(mode == "max"))
     p = subprocess.run(["python3", "-c", code], env=env, capture_output=True, text=True, timeout=120)
     ok = "READY" in (p.stdout or "")
     return ok, (p.stdout + p.stderr).strip()[-400:]
