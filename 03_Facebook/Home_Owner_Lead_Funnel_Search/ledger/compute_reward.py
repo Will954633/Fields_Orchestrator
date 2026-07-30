@@ -72,10 +72,10 @@ def compute():
             p["focus"].add(e["field"]); field_focus[v][e["field"]] += 1
         if ev == "lab_field_complete" and e.get("field"):
             p["complete"].add(e["field"]); field_complete[v][e["field"]] += 1
-            # invalid-contact heuristic on completion props
+            # invalid-contact heuristic on completion props (domain only — no raw PII stored)
             pr = e.get("props", {}) or {}
-            em = (pr.get("email") or "").lower()
-            if em and em.split("@")[-1] in DISPOSABLE_EMAIL_DOMAINS:
+            dom = (pr.get("email_domain") or "").lower()
+            if dom and dom in DISPOSABLE_EMAIL_DOMAINS:
                 p["invalid_contact"] = True
         if ev == "lab_micro_conversion" and e.get("goal"):
             p["goals"].add(e["goal"])
