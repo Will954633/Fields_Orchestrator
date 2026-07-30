@@ -342,7 +342,8 @@ Ghost CMS is **deprecated** (subscription expired). Articles are self-hosted in 
 Multi-agent pipeline generating editorial content for property pages.
 
 - **Script:** `scripts/backend_enrichment/generate_property_ai_analysis.py`
-- **Model:** Claude Opus 4.6 for all agents
+- **Model:** Claude Opus 4.8 for all agents, on the **Claude Max subscription** (`USE_CLAUDE_MAX=1`; step 120 clears `ANTHROPIC_BACKEND` so `make_client` uses Max, not OpenRouter — it checks that var *before* `use_max`). Model pinned by full id in `claude_max_client._model_alias` (bare `opus` collapses to a stale tier on this Max account). Migrated 2026-07-30, see fix-history `[EDITORIAL-MAX-OPUS48]`.
+- **Vision sub-step:** the `satellite_verify` agent is a vision call and can't run on the Max CLI (text-only) — it routes through `shared/claude_vision.py` → **Gemini via Vertex** (`VISION_BACKEND=gemini_vertex`, GCP `fields-estate` billing), like every other vision task.
 - **Pipeline:** Price/Property/Market agents → Editor → Reflection → Fact-Check → Draft 2 → Verify (max 3 retries)
 - **Output:** `ai_analysis` field on property document, status: draft/published/failed_factcheck
 - **Review:** Ops dashboard → Editorial Review tab
