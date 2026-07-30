@@ -187,6 +187,25 @@ def main():
                            "duration_s": r[4], "is_bounce": bool(r[5]), "pageviews": r[6],
                            "utm_source": r[7], "utm_medium": r[8]}
 
+    # 1b) PAID sessions (Paid Social/Search/etc.) — kept OUT of organic_journeys (which is
+    # non-paid by design) but pulled here so paid CONVERSIONS in all_conversions carry real
+    # per-ad attribution (utm_content = FB ad_id, utm_campaign) instead of the opaque
+    # "Paid (see ad store)". This is what lets the reward ledger + ads sensor finally SEE and
+    # grade paid seller conversions (they were previously discarded entirely). Ads are already
+    # UTM-tagged; PostHog classifies them Paid Social — we just stopped throwing that away.
+    prows = hog(f"""SELECT session_id, $channel_type, $entry_pathname,
+        $entry_referring_domain, $session_duration, $is_bounce, $pageview_count,
+        $entry_utm_source, $entry_utm_medium, $entry_utm_campaign, $entry_utm_content
+        FROM sessions
+        WHERE $start_timestamp > {since} AND $channel_type IN ({paid_list})
+        LIMIT 1000000""")
+    paid_meta = {}
+    for r in prows:
+        paid_meta[r[0]] = {"channel": r[1], "entry_path": r[2], "referring_domain": r[3],
+                           "duration_s": r[4], "is_bounce": bool(r[5]), "pageviews": r[6],
+                           "utm_source": r[7], "utm_medium": r[8],
+                           "utm_campaign": r[9], "ad_id": r[10]}  # utm_content = FB ad_id
+
     # 2) every session (ANY channel) that has an address-submit conversion
     conv_in = ",".join("'" + e + "'" for e in CONV_EVENTS)
     crows = hog(f"""SELECT DISTINCT properties.$session_id FROM events
@@ -384,9 +403,15 @@ def main():
         j = J.get(sid, {})
         if j.get("person") in internal:  # drop Will / internal from the leads register
             continue
-        m = sess_meta.get(sid)  # None => paid (not in non-paid pull)
-        channel = m.get("channel") if m else "Paid (see ad store)"
-        entry = m.get("entry_path") if m else (j.get("pages", ["?"])[0] if j.get("pages") else "?")
+        m = sess_meta.get(sid)   # non-paid session meta
+        pm = paid_meta.get(sid)  # paid session meta (utm_content=ad_id, utm_campaign)
+        meta = m or pm           # whichever channel this conversion came through
+        # channel: real PostHog channel for paid (e.g. "Paid Social") + the ad_id/campaign that
+        # drove it — no longer the opaque "Paid (see ad store)". Falls back gracefully if a paid
+        # conversion session somehow isn't in either pull.
+        channel = (meta.get("channel") if meta else None) or "Paid (see ad store)"
+        entry = (meta.get("entry_path") if meta else None) or (j.get("pages", ["?"])[0] if j.get("pages") else "?")
+        is_paid = pm is not None or (channel or "").startswith("Paid")
         flag, flag_addr = neighbour_flag(entry, j.get("submits", []))
         addr = j["submits"][0] if j.get("submits") else None
         sa_cat, sa_label, sa_detail = classify_searched(j.get("submits", []), entry)
@@ -394,9 +419,12 @@ def main():
             "session_id": sid, "distinct_id": j.get("person"),
             "submitted_address": addr, "all_addresses": j.get("submits", []),
             "channel": channel, "entry_path": entry,
-            "referring_domain": (m.get("referring_domain") if m else None) or j.get("first_referrer"),
-            "ai_source": detect_ai(m.get("utm_source") if m else None,
-                                   (m.get("referring_domain") if m else None) or j.get("first_referrer")),
+            "is_paid": is_paid,
+            "ad_id": (pm or {}).get("ad_id"),            # FB ad_id (utm_content) for paid conversions
+            "utm_campaign": (pm or {}).get("utm_campaign"),
+            "referring_domain": (meta.get("referring_domain") if meta else None) or j.get("first_referrer"),
+            "ai_source": detect_ai(meta.get("utm_source") if meta else None,
+                                   (meta.get("referring_domain") if meta else None) or j.get("first_referrer")),
             "pages": j.get("pages", [])[:30],
             "properties_viewed": [{"property_id": k, "suburb": v} for k, v in j.get("properties", {}).items()],
             "pattern": flag, "pattern_address": flag_addr,
