@@ -290,68 +290,42 @@ def _encode_for_llm(pil: Image.Image, max_edge: int = 1568):
 
 def _detect_branding_regions_claude(png_bytes: bytes, model: str, W: int, H: int,
                                     timeout_s: int = 60) -> List[tuple]:
-    """Stylized-logo boxes from Claude. Degrades to [] on any error (non-fatal)."""
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
-    if not api_key:
-        logger.warning("  floor_plan debrand: ANTHROPIC_API_KEY unset; skipping logo pass")
-        return []
-    b64 = base64.b64encode(png_bytes).decode()
-    tool = {
-        "name": "report_branding",
-        "description": "Report bounding boxes of agent/agency branding found in the floor plan.",
-        "input_schema": {
-            "type": "object",
-            "properties": {"regions": {"type": "array", "items": {
-                "type": "object",
-                "properties": {
-                    "x_min": {"type": "integer"}, "y_min": {"type": "integer"},
-                    "x_max": {"type": "integer"}, "y_max": {"type": "integer"},
-                    "label": {"type": "string"},
-                },
-                "required": ["x_min", "y_min", "x_max", "y_max", "label"],
-            }}},
-            "required": ["regions"],
-        },
-    }
+    """Stylized-logo bounding boxes via shared vision_text (Gemini-via-Vertex
+    when VISION_BACKEND=gemini_vertex — the direct Anthropic tool-use path this
+    replaced was dead on billing, 2026-07-30). Asks for a JSON regions array and
+    parses it robustly. Degrades to [] on any error (non-fatal). Name kept for
+    call-site stability. Returns list of (label, (x_min,y_min,x_max,y_max))."""
     prompt = (f"The image is {W}px wide by {H}px tall. " + _LLM_PROMPT +
-              " Give coordinates in full-image pixels (origin top-left). Call report_branding "
-              "with one region per branding element; pass an empty list if there is none.")
-    body = {
-        "model": model, "max_tokens": 1500, "tools": [tool],
-        "tool_choice": {"type": "tool", "name": "report_branding"},
-        "messages": [{"role": "user", "content": [
-            {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": b64}},
-            {"type": "text", "text": prompt},
-        ]}],
-    }
-    headers = {"x-api-key": api_key, "anthropic-version": "2023-06-01",
-               "content-type": "application/json"}
-    payload = json.dumps(body).encode()
-    data = None
-    for attempt in range(6):
-        req = urllib.request.Request(ANTHROPIC_URL, data=payload, headers=headers, method="POST")
-        try:
-            with urllib.request.urlopen(req, timeout=timeout_s) as resp:
-                data = json.loads(resp.read())
-            break
-        except urllib.error.HTTPError as e:
-            if e.code in (429, 500, 502, 503, 529) and attempt < 5:
-                ra = e.headers.get("retry-after")
-                wait = float(ra) if ra and ra.replace(".", "", 1).isdigit() else 2.0 * (2 ** attempt)
-                time.sleep(min(wait, 30.0))
-                continue
-            logger.warning(f"  floor_plan debrand: Claude HTTP {e.code}; skipping logo pass")
-            return []
-        except Exception as e:
-            logger.warning(f"  floor_plan debrand: Claude pass failed ({e}); skipping")
-            return []
-    if data is None:
+              " Give coordinates in full-image pixels (origin top-left). "
+              'Return ONLY JSON of the form {"regions":[{"x_min":int,"y_min":int,'
+              '"x_max":int,"y_max":int,"label":str}]} — one entry per branding '
+              "element, an empty list if there is none. No prose, no code fences.")
+    try:
+        from shared.claude_vision import vision_text
+        b64 = base64.b64encode(png_bytes).decode()
+        txt = vision_text(prompt, [("image/png", b64)], model=model, max_tokens=1500) or ""
+    except Exception as e:
+        logger.warning(f"  floor_plan debrand: vision logo pass failed ({e}); skipping")
         return []
+    txt = txt.strip()
+    if txt.startswith("```"):  # tolerate a fenced ```json block
+        txt = txt.strip("`")
+        if txt[:4].lower() == "json":
+            txt = txt[4:]
+        txt = txt.strip()
     regions = []
-    for blk in data.get("content", []):
-        if blk.get("type") == "tool_use" and blk.get("name") == "report_branding":
-            regions = blk.get("input", {}).get("regions", [])
-            break
+    try:
+        parsed = json.loads(txt)
+    except Exception:
+        m = re.search(r"(\{.*\}|\[.*\])", txt, re.DOTALL)  # last-ditch: first JSON blob
+        try:
+            parsed = json.loads(m.group(1)) if m else None
+        except Exception:
+            parsed = None
+    if isinstance(parsed, dict):
+        regions = parsed.get("regions", []) or []
+    elif isinstance(parsed, list):
+        regions = parsed
     out = []
     for r in regions:
         try:
