@@ -27,6 +27,15 @@ NOW = datetime.now(timezone.utc)
 COLL = "rl_ads_signal"
 
 
+def is_oom(campaign_name):
+    """Out-of-market copy-discovery spend (South-East QLD EXCLUDING Gold Coast). Marked by the
+    geographic 'ex-GC' token in the campaign name. These ads serve people who can't be GC seller
+    leads, so their SPEND must be excluded from GC cost-per-seller. NB: 'test' alone is NOT the
+    marker — several in-market campaigns are also A/B 'tests' (Before You List, video copy)."""
+    cn = (campaign_name or "").lower()
+    return "ex-gc" in cn or "ex gc" in cn
+
+
 def build(days=14, dry_run=False):
     sm = get_client()["system_monitor"]
     cut = (NOW - timedelta(days=days)).strftime("%Y-%m-%d")
@@ -107,10 +116,13 @@ def build(days=14, dry_run=False):
             flags.append("web_converter")       # converts on-site (traffic ad), not via Instant Form
         if test and not conv:
             flags.append("test_only")           # out-of-market copy test, not GC-served
+        oom = is_oom(p.get("campaign_name"))
+        if oom and "oom_test" not in flags:
+            flags.append("oom_test")            # out-of-market copy discovery — spend excluded from GC CPL
         rows.append({
             "ad_id": aid, "ad_name": (a["name"] or p.get("name") or "")[:60],
             "campaign": p.get("campaign_name"), "objective": p.get("campaign_objective"),
-            "status": p.get("effective_status"),
+            "status": p.get("effective_status"), "is_oom": oom,
             "spend_aud": round(a["spend"], 2), "impressions": a["impressions"], "clicks": a["clicks"],
             "ctr": round(a["clicks"] / a["impressions"], 4) if a["impressions"] else 0,
             "real_leads": real, "web_leads": web, "conversions": conv, "test_leads": test,
@@ -137,18 +149,24 @@ def build(days=14, dry_run=False):
                                "title": (d.get("title") or "")[:70], "tags": d.get("tags")})
 
     tot_spend = sum(r["spend_aud"] for r in rows)
+    gc_spend = sum(r["spend_aud"] for r in rows if not r["is_oom"])   # GC-served spend only
+    oom_spend = sum(r["spend_aud"] for r in rows if r["is_oom"])       # out-of-market copy test
     tot_real = sum(r["real_leads"] for r in rows)
     tot_web = sum(r["web_leads"] for r in rows)
-    tot_conv = sum(r["conversions"] for r in rows)
+    tot_conv = sum(r["conversions"] for r in rows)   # GC conversions (test/OOM leads already excluded)
     snapshot = {
         "kind": "ads_signal_snapshot", "_id": "latest", "computed_at": NOW.isoformat(),
         "window_days": days,
         "totals": {"spend_aud": round(tot_spend, 2),
+                   "gc_spend_aud": round(gc_spend, 2),      # spend on GC-served ads (the CPL numerator)
+                   "oom_test_spend_aud": round(oom_spend, 2),  # out-of-market copy discovery, excluded
                    "real_leads": tot_real,              # FB Instant-Form leads
                    "web_leads": tot_web,                # on-site AYH submits attributed to a paid ad
                    "conversions": tot_conv,             # form + on-site GC conversions (the true reward)
                    "test_leads": sum(r["test_leads"] for r in rows),
-                   "blended_cost_per_conversion": round(tot_spend / tot_conv, 2) if tot_conv else None,
+                   # TRUE GC cost-per-seller: GC-served spend ÷ GC conversions (OOM spend removed).
+                   "blended_cost_per_conversion": round(gc_spend / tot_conv, 2) if tot_conv else None,
+                   "blended_cost_incl_oom": round(tot_spend / tot_conv, 2) if tot_conv else None,
                    "active_ads": len(rows)},
         "scale_candidates": [r for r in rows if "scale" in r["flags"]][:12],
         "cull_candidates": [r for r in rows if "wasteful" in r["flags"]][:12],
@@ -168,9 +186,10 @@ def build(days=14, dry_run=False):
 
 def _summary(s):
     t = s["totals"]
-    print(f"\n=== ADS SIGNAL ({s['window_days']}d) — ${t['spend_aud']} spend, {t['conversions']} conv"
-          f" (form={t['real_leads']} + web={t['web_leads']}, {t['test_leads']} test), "
-          f"blended cost/conv {t['blended_cost_per_conversion']} ===")
+    print(f"\n=== ADS SIGNAL ({s['window_days']}d) — ${t['spend_aud']} spend "
+          f"(GC ${t['gc_spend_aud']} + OOM ${t['oom_test_spend_aud']}), {t['conversions']} conv"
+          f" (form={t['real_leads']} + web={t['web_leads']}, {t['test_leads']} test) ===")
+    print(f"    GC cost/conv ${t['blended_cost_per_conversion']}  (incl-OOM ${t['blended_cost_incl_oom']})")
     print(f"\nSCALE candidates ({len(s['scale_candidates'])}):")
     for r in s["scale_candidates"][:6]:
         print(f"  {r['ad_name'][:34]:<34} ${r['spend_aud']:>6} {r['conversions']}c (f{r['real_leads']}/w{r['web_leads']}) cost/conv={r['cost_per_conversion']}")
