@@ -3610,6 +3610,101 @@ def _waterfront_editorial_gate(db, suburb: str, prop: Dict) -> Optional[Dict]:
     return skip_record
 
 
+# Feature vocabulary -> the words a photo-vision "absence" negative uses for it.
+# Used by _scrub_false_absence_negatives to drop step-108 negatives that claim a
+# feature is missing when a GROUND-TRUTH source (floor plan / Domain features
+# list) confirms it exists. Photos are an incomplete sample; "not visible in a
+# photo" is never evidence a feature is absent. Belt-and-braces companion to the
+# step-108 prompt guardrail (enrich_for_sale_batch.py).
+_ABSENCE_FEATURE_ALIASES = {
+    "ensuite": ("ensuite", "en-suite", "en suite"),
+    "garage": ("garage",),
+    "carport": ("carport",),
+    "study": ("study", "home office"),
+    "pool": ("pool",),
+    "shed": ("shed",),
+    "robe": ("robe", "wardrobe", "built-in", "built in", "wir", "walk-in robe"),
+    "dishwasher": ("dishwasher",),
+    "air_conditioning": ("air conditioning", "air-conditioning", "aircon", "a/c", "ducted"),
+}
+_ABSENCE_MARKERS = ("no ", "not visible", "not shown", "lacks", "missing", "without", "absent", "none visible", "no visible")
+
+
+def _confirmed_features(prop: Dict) -> set:
+    """Set of feature keys (matching _ABSENCE_FEATURE_ALIASES) that a ground-truth
+    source confirms the property HAS. Sources: Domain `features` list, and
+    `floor_plan_analysis` (rooms/room features, parking, bathrooms.ensuites)."""
+    present = set()
+    text_blobs = []
+    # Domain listing features array (authoritative -- the agent's own feature list)
+    for f in (prop.get("features") or []):
+        text_blobs.append(str(f).lower())
+    fpa = prop.get("floor_plan_analysis") or {}
+    # room-level features on the floor plan
+    for room in (fpa.get("rooms") or []):
+        text_blobs.append(str(room.get("room_type", "")).lower())
+        text_blobs.append(str(room.get("room_name", "")).lower())
+        for feat in (room.get("features") or []):
+            text_blobs.append(str(feat).lower())
+    # explicit parking + ensuite counts on the floor plan
+    parking = fpa.get("parking") or {}
+    if (parking.get("garage_spaces") or 0) > 0:
+        present.add("garage")
+    if (parking.get("carport_spaces") or 0) > 0:
+        present.add("carport")
+    if (fpa.get("bathrooms") or {}).get("ensuites"):
+        present.add("ensuite")
+    blob = " | ".join(text_blobs)
+    for key, aliases in _ABSENCE_FEATURE_ALIASES.items():
+        if any(a in blob for a in aliases):
+            present.add(key)
+    return present
+
+
+def _scrub_false_absence_negatives(prop: Dict) -> None:
+    """In-place (editorial input only, not persisted): drop any step-108
+    `property_valuation_data.property_metadata.negative_features` entry that
+    asserts the ABSENCE of a feature which a ground-truth source confirms exists,
+    and reconcile the master-bedroom ensuite/robe flags with the floor plan.
+    This is the root cause of the 4 Pipit Parade "no ensuite" failure
+    (fix-history [PIPIT-ENSUITE-CONFLICT], 2026-07-30)."""
+    pvd = prop.get("property_valuation_data")
+    if not isinstance(pvd, dict):
+        return
+    confirmed = _confirmed_features(prop)
+    if not confirmed:
+        return
+    pm = pvd.get("property_metadata") or {}
+    negs = pm.get("negative_features")
+    if isinstance(negs, list):
+        kept, dropped = [], []
+        for n in negs:
+            s = str(n).lower()
+            is_absence = any(m in s for m in _ABSENCE_MARKERS)
+            hits = [k for k in confirmed if any(a in s for a in _ABSENCE_FEATURE_ALIASES[k])]
+            if is_absence and hits:
+                dropped.append(n)
+            else:
+                kept.append(n)
+        if dropped:
+            pm["negative_features"] = kept
+            pvd["property_metadata"] = pm
+            for d in dropped:
+                print(f"  [SCRUB] dropped false-absence negative (feature confirmed elsewhere): {d!r}")
+    # Reconcile master bedroom ensuite/robe flags with the floor plan.
+    if "ensuite" in confirmed or "robe" in confirmed:
+        beds = pvd.get("bedrooms")
+        if isinstance(beds, list) and beds:
+            master = beds[0]
+            if isinstance(master, dict):
+                if "ensuite" in confirmed and master.get("ensuite") is False:
+                    master["ensuite"] = True
+                    print("  [SCRUB] set master ensuite=True (confirmed by floor plan / features)")
+                if "robe" in confirmed and master.get("built_in_wardrobe") is False:
+                    master["built_in_wardrobe"] = True
+                    print("  [SCRUB] set master built_in_wardrobe=True (confirmed by floor plan / features)")
+
+
 def process_property(db, suburb: str, prop: Dict, api_key: str, force: bool = False, use_gemini_gather: bool = False, gemini_api_key: str = None, use_openai_gather: bool = False, openai_api_key: str = None, use_hybrid_gather: bool = False) -> Dict:
     """Run the full pipeline for one property."""
     address = prop.get("address", "Unknown")
@@ -3633,6 +3728,11 @@ def process_property(db, suburb: str, prop: Dict, api_key: str, force: bool = Fa
     print(f"\n{'='*60}")
     print(f"Processing: {address}")
     print(f"{'='*60}")
+
+    # Reconcile photo-vision (step-108) absence-claims against ground-truth
+    # sources before any agent sees them - a feature not captured in photos is
+    # not a feature that is missing (fix-history [PIPIT-ENSUITE-CONFLICT]).
+    _scrub_false_absence_negatives(prop)
 
     # Pre-step 0: Data readiness gate — check floor plan analysis
     has_floor_plans = bool(prop.get("floor_plans") or prop.get("scraped_floor_plans"))
