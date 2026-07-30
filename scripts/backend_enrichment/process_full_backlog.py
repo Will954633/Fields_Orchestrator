@@ -54,11 +54,14 @@ def worklist(allowed_types=("House",)):
 
 def _backend_env():
     env = dict(os.environ)
-    env["ANTHROPIC_BACKEND"] = "openrouter"
-    env["USE_CLAUDE_MAX"] = "0"
-    env["EDITORIAL_MODEL"] = env.get("EDITORIAL_MODEL", "anthropic/claude-sonnet-5")
+    # Opus 4.8 on the Claude Max subscription. ANTHROPIC_BACKEND is cleared
+    # explicitly because make_client checks it BEFORE use_max — an inherited
+    # ANTHROPIC_BACKEND=openrouter (from .env) would otherwise keep this on
+    # metered OpenRouter. PROMPT_CACHE dropped: it's a no-op on the Max CLI path.
+    env["ANTHROPIC_BACKEND"] = ""
+    env["USE_CLAUDE_MAX"] = "1"
+    env["EDITORIAL_MODEL"] = env.get("EDITORIAL_MODEL", "claude-opus-4-8")
     env["COMPACT_COMPARABLES"] = "1"
-    env["PROMPT_CACHE"] = "1"
     env["THINKING_MODE"] = env.get("THINKING_MODE", "adaptive")
     env["THINKING_EFFORT"] = env.get("THINKING_EFFORT", "medium")
     env["AUTO_PUBLISH"] = "1"
