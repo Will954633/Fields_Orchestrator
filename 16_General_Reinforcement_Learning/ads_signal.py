@@ -49,7 +49,12 @@ def build(days=14, dry_run=False):
         a["landing_page_views"] += int(d.get("landing_page_views") or 0)
         a["name"] = d.get("ad_name") or a["name"]
 
-    # real vs test leads per ad (window)
+    # real vs test leads per ad (window). TWO conversion surfaces, both matter:
+    #  (1) fb_leads      = Facebook Instant-Form submissions (on-FB lead ads).
+    #  (2) all_conversions = on-SITE "Analyse Your Home" address submits from PAID traffic,
+    #      attributed to the ad via utm_content=ad_id (organic_journey_build 1b). Traffic-
+    #      objective ads (AYH videos) convert HERE and were previously invisible to this sensor
+    #      — counting only fb_leads is what produced the false "0 leads / ∞" for such ads.
     leads_real = defaultdict(int)
     leads_test = defaultdict(int)
     for l in sm["fb_leads"].find({}):
@@ -60,26 +65,47 @@ def build(days=14, dry_run=False):
         except Exception:
             pass
         aid = l.get("ad_id")
-        if l.get("test_market"):
+        # test = out-of-market copy discovery (test_market) OR an internal self-test (is_test,
+        # e.g. Will's own AYH submit). Both must be kept OUT of real GC seller CPL — the latter
+        # was previously counted as a real lead (the report's phantom "1 lead, no intent").
+        is_test = bool(l.get("test_market")) or str(l.get("is_test")).lower() in ("true", "1")
+        if is_test:
             leads_test[aid] += 1
         else:
             leads_real[aid] += 1
 
+    # (2) on-site paid conversions per ad_id (window)
+    web_conv = defaultdict(int)
+    for d in sm["all_conversions"].find({"is_paid": True, "ad_id": {"$nin": [None, ""]}},
+                                        {"ad_id": 1, "submitted_at": 1}):
+        try:
+            sd = str(d.get("submitted_at") or "")[:10]
+            if sd and sd < cut:
+                continue
+        except Exception:
+            pass
+        web_conv[d.get("ad_id")] += 1
+
     rows = []
     for aid, a in ads.items():
-        if a["spend"] <= 0 and not (leads_real.get(aid) or leads_test.get(aid)):
+        if a["spend"] <= 0 and not (leads_real.get(aid) or leads_test.get(aid) or web_conv.get(aid)):
             continue
         p = prof.get(aid, {})
         real, test = leads_real.get(aid, 0), leads_test.get(aid, 0)
+        web = web_conv.get(aid, 0)               # on-site AYH submits attributed to this ad
+        conv = real + web                        # GC-served conversions (form + on-site), the true reward
         cpl_real = round(a["spend"] / real, 2) if real else None
+        cpc_conv = round(a["spend"] / conv, 2) if conv else None   # cost per GC conversion (form+site)
         flags = []
-        if a["spend"] >= 15 and real == 0 and test == 0:
-            flags.append("wasteful")            # spend, no leads at all → cull candidate
-        if cpl_real is not None and cpl_real <= 8:
-            flags.append("scale")               # ≤$8/real-lead → scale candidate
-        elif cpl_real is not None and cpl_real <= 25:
+        if a["spend"] >= 15 and conv == 0 and test == 0:
+            flags.append("wasteful")            # spend, no conversions at all → cull candidate
+        if cpc_conv is not None and cpc_conv <= 8:
+            flags.append("scale")               # ≤$8/conversion → scale candidate
+        elif cpc_conv is not None and cpc_conv <= 25:
             flags.append("watch")
-        if test and not real:
+        if web:
+            flags.append("web_converter")       # converts on-site (traffic ad), not via Instant Form
+        if test and not conv:
             flags.append("test_only")           # out-of-market copy test, not GC-served
         rows.append({
             "ad_id": aid, "ad_name": (a["name"] or p.get("name") or "")[:60],
@@ -87,17 +113,19 @@ def build(days=14, dry_run=False):
             "status": p.get("effective_status"),
             "spend_aud": round(a["spend"], 2), "impressions": a["impressions"], "clicks": a["clicks"],
             "ctr": round(a["clicks"] / a["impressions"], 4) if a["impressions"] else 0,
-            "real_leads": real, "test_leads": test,
-            "cost_per_real_lead": cpl_real, "flags": flags,
+            "real_leads": real, "web_leads": web, "conversions": conv, "test_leads": test,
+            "cost_per_real_lead": cpl_real, "cost_per_conversion": cpc_conv, "flags": flags,
         })
-    rows.sort(key=lambda r: (-(("scale" in r["flags"])), -(r["real_leads"]), -r["spend_aud"]))
+    rows.sort(key=lambda r: (-(("scale" in r["flags"])), -(r["conversions"]), -r["spend_aud"]))
 
     # campaign rollup
-    camp = defaultdict(lambda: {"spend": 0.0, "real_leads": 0, "test_leads": 0})
+    camp = defaultdict(lambda: {"spend": 0.0, "real_leads": 0, "web_leads": 0, "conversions": 0, "test_leads": 0})
     for r in rows:
         c = camp[r["campaign"] or "—"]
-        c["spend"] += r["spend_aud"]; c["real_leads"] += r["real_leads"]; c["test_leads"] += r["test_leads"]
-    campaigns = [{"campaign": k, **v, "cost_per_real_lead": round(v["spend"] / v["real_leads"], 2) if v["real_leads"] else None}
+        c["spend"] += r["spend_aud"]; c["real_leads"] += r["real_leads"]
+        c["web_leads"] += r["web_leads"]; c["conversions"] += r["conversions"]; c["test_leads"] += r["test_leads"]
+    campaigns = [{"campaign": k, **v,
+                  "cost_per_conversion": round(v["spend"] / v["conversions"], 2) if v["conversions"] else None}
                  for k, v in camp.items()]
     campaigns.sort(key=lambda c: -c["spend"])
 
@@ -110,12 +138,17 @@ def build(days=14, dry_run=False):
 
     tot_spend = sum(r["spend_aud"] for r in rows)
     tot_real = sum(r["real_leads"] for r in rows)
+    tot_web = sum(r["web_leads"] for r in rows)
+    tot_conv = sum(r["conversions"] for r in rows)
     snapshot = {
         "kind": "ads_signal_snapshot", "_id": "latest", "computed_at": NOW.isoformat(),
         "window_days": days,
-        "totals": {"spend_aud": round(tot_spend, 2), "real_leads": tot_real,
+        "totals": {"spend_aud": round(tot_spend, 2),
+                   "real_leads": tot_real,              # FB Instant-Form leads
+                   "web_leads": tot_web,                # on-site AYH submits attributed to a paid ad
+                   "conversions": tot_conv,             # form + on-site GC conversions (the true reward)
                    "test_leads": sum(r["test_leads"] for r in rows),
-                   "blended_cost_per_real_lead": round(tot_spend / tot_real, 2) if tot_real else None,
+                   "blended_cost_per_conversion": round(tot_spend / tot_conv, 2) if tot_conv else None,
                    "active_ads": len(rows)},
         "scale_candidates": [r for r in rows if "scale" in r["flags"]][:12],
         "cull_candidates": [r for r in rows if "wasteful" in r["flags"]][:12],
@@ -135,17 +168,18 @@ def build(days=14, dry_run=False):
 
 def _summary(s):
     t = s["totals"]
-    print(f"\n=== ADS SIGNAL ({s['window_days']}d) — ${t['spend_aud']} spend, {t['real_leads']} real leads"
-          f" ({t['test_leads']} test), blended CPL {t['blended_cost_per_real_lead']} ===")
+    print(f"\n=== ADS SIGNAL ({s['window_days']}d) — ${t['spend_aud']} spend, {t['conversions']} conv"
+          f" (form={t['real_leads']} + web={t['web_leads']}, {t['test_leads']} test), "
+          f"blended cost/conv {t['blended_cost_per_conversion']} ===")
     print(f"\nSCALE candidates ({len(s['scale_candidates'])}):")
     for r in s["scale_candidates"][:6]:
-        print(f"  {r['ad_name'][:34]:<34} ${r['spend_aud']:>6} {r['real_leads']}L CPL={r['cost_per_real_lead']}")
+        print(f"  {r['ad_name'][:34]:<34} ${r['spend_aud']:>6} {r['conversions']}c (f{r['real_leads']}/w{r['web_leads']}) cost/conv={r['cost_per_conversion']}")
     print(f"\nCULL candidates ({len(s['cull_candidates'])}):")
     for r in s["cull_candidates"][:6]:
-        print(f"  {r['ad_name'][:34]:<34} ${r['spend_aud']:>6} 0L  [{r['status']}]")
+        print(f"  {r['ad_name'][:34]:<34} ${r['spend_aud']:>6} 0c  [{r['status']}]")
     print("\nBy campaign:")
     for c in s["campaigns"][:6]:
-        print(f"  {(c['campaign'] or '—')[:40]:<40} ${c['spend']:>7.0f}  real={c['real_leads']} test={c['test_leads']} CPL={c['cost_per_real_lead']}")
+        print(f"  {(c['campaign'] or '—')[:40]:<40} ${c['spend']:>7.0f}  conv={c['conversions']} (f{c['real_leads']}/w{c['web_leads']}) test={c['test_leads']} cost/conv={c['cost_per_conversion']}")
     print()
 
 
@@ -162,7 +196,8 @@ def main():
         with job_run("rl_ads_signal", cadence_hours=24, title="General RL — Ads (paid) sensor") as beat:
             s = build(days=args.days, dry_run=False)
             _summary(s)
-            beat.detail = (f"${s['totals']['spend_aud']} / {s['totals']['real_leads']} real leads; "
+            beat.detail = (f"${s['totals']['spend_aud']} / {s['totals']['conversions']} conv "
+                           f"(form {s['totals']['real_leads']} + web {s['totals']['web_leads']}); "
                            f"{len(s['scale_candidates'])} scale, {len(s['cull_candidates'])} cull")
     else:
         s = build(days=args.days, dry_run=args.dry_run)
