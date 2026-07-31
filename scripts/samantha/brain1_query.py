@@ -19,10 +19,10 @@ Usage:
 import os, re, sys, json, argparse
 from collections import defaultdict
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import openrouter_client as orc
+import max_client as orc
 
 PACKAGE = "/home/fields/brain1_build/package.json"
-MODEL = orc.SONNET5  # was Opus on Max -> now claude-sonnet-5 via OpenRouter (Will 2026-07-19)
+MODEL = orc.SONNET5  # query/synthesis -> Opus on Max (SONNET5 aliases to opus-4-8; Will 2026-07-31)
 _ws = re.compile(r"\s+")
 STOP = set("the a an and or of to in for on with your you it is are be as at by from this that "
            "how why what when who do does can will if into over out up not no more most your their "
