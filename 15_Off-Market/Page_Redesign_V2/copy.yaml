@@ -1,0 +1,314 @@
+# =============================================================================
+# copy.yaml — the STATIC framing library for the 10-card Discovery Experience.
+#
+# This is the file Will + Claude iterate on. It holds every fixed sentence of
+# emotional scaffolding. Dynamic data ({placeholders}) is filled by assemble.py
+# from the property's fact bundle — the copy here never contains a real number.
+#
+# The three jobs of every card (the expert's directive):
+#   - answer  : closes the question the previous card opened
+#   - reveal  : the substance (mostly dynamic data)
+#   - opens   : the curiosity loop handed to the next card
+#
+# Placeholders available per card are listed in the comment above each block.
+# Edit the prose freely, then re-run assemble.py / batch.py — no data re-fetch.
+# =============================================================================
+
+# CARD 01 — Recognition.  Purpose: remove uncertainty ("did it find my home?").
+# Placeholders: {address_short} {suburb_display} {sales_reviewed} {active_compared}
+card_01_recognition:
+  headline: "We found your home."
+  body: |
+    We've analysed it.
+
+    The results were interesting.
+  credibility_intro: ""   # a small credibility layer, no lead-in line
+  credibility_lines:
+    - "{characteristics} property characteristics analysed"
+    - "{sales_reviewed} recent sales reviewed"
+    - "{homes_compared}+ nearby homes compared"
+  # Deliberately NO valuation figure here. We have not earned the reveal.
+  opens: "What was interesting?"
+
+# CARD 02 — The Curiosity Hook.  Purpose: create the "why?".
+# Placeholders: {suburb_display}
+# =============================================================================
+# INSIGHTS — small, research-backed "did you know" delights (Playbook v5.0:
+# 2,153 sold + 14 papers). Fired ONLY when genuinely relevant to this home, and
+# capped at ≤2 per deck so they stay a delight, not a lecture. Data, not advice.
+# Each: trigger (evaluated in code), card it attaches to, priority, text.
+# =============================================================================
+insights:
+  water_value:
+    trigger: water
+    card: card_03
+    priority: 9
+    text: "Water views are one of the very few features buyers genuinely pay a premium for — about {value} where you are, in our analysis of 2,153 local sales. Most features don't move value per square metre. This one does."
+    suburb_value: { "Burleigh Waters": "+45%", "Varsity Lakes": "+16%", "Robina": "+6%" }
+  bedroom_value:
+    trigger: beds4plus
+    card: card_06
+    priority: 8
+    text: "Worth knowing: across local sales, each extra bedroom has been worth $255,000–$607,000 — the step from three to four beds outweighs almost any renovation."
+  floor_value:
+    trigger: has_floor
+    card: card_06
+    priority: 6
+    text: "Size is the single strongest predictor of price in our data — every extra square metre of internal floor is worth roughly $6,900–$9,500 here. It's why we measure yours precisely."
+  pool_marker:
+    trigger: pool
+    card: card_07
+    priority: 7
+    text: "Buyers love a pool — but across 2,153 local sales it added only about 1–4% to value per square metre. It's more a signal of the price tier than a driver of it. Good to know before anyone tries to over- or under-weight it."
+
+card_02_hook:
+  answer: "Here's what stood out."
+  # Angle-specific curiosity headline. Alludes to the DIRECTION of the lead
+  # characteristic (larger / rare / close / a view) + its CONSEQUENCE — never
+  # names the feature or its value. Card 03 does the reveal. {a} = intensity word.
+  hooks:
+    land_prestige: "There's one number attached to your home that runs {a} than most around it — and it quietly lifts where you sit in the market."
+    scale: "There's one measurement inside your home that's {a} than most it competes with — and buyers pay for it."
+    parkland: "There's one thing right at your boundary that very few homes nearby can claim — and it keeps quietly removing your competition."
+    water_views: "There's one thing you can see from your home that most on your street can't — and buyers value it more than any model will admit."
+    water_adjacent: "There's one outlook from the back of your home that most in the street can't claim — and buyers value it more than any model will admit."
+    beachside: "There's one distance your home has that most in the area can't match — and it pulls buyers in before they've walked through."
+    school_walk: "There's one thing a short walk from your door that quietly decides who comes looking."
+    scarcity: "There's one combination your home has that very few others share — and it's quietly thinning out your competition."
+    thin_competition: "Right now there's almost nothing else a buyer could choose instead of your home — and that isn't by accident."
+    renovation_upside: "There's one thing about your home that makes buyers see something the house next door doesn't offer."
+    prestige_value: "There's one thing that quietly places your home on a shortlist most in the area never reach."
+    # Honest fallback — no manufactured mystery for a genuinely ordinary home.
+    market_context: "Your home sits right where the most buyers are looking — and that has its own quiet advantage."
+  # Intensity word for the size angles, chosen by lead strength (never overclaim).
+  intensity:
+    land_prestige: { strong: "far larger", moderate: "a good deal larger" }
+    scale: { strong: "much bigger", moderate: "bigger" }
+  body: |
+    Most property websites compare homes on basic features — beds, baths, a price guess.
+
+    We looked deeper.
+  cta: "Show me what makes it different"
+  opens: "So what did you find?"
+
+# CARD 03 — The Rarity Reveal.  The scarcity engine is the hero.
+# Placeholders: {active_total} {active_matching} {feature_lines}
+# Shown only when the combination is genuinely uncommon (assemble.py gate).
+# CARDS 03 + 04 form the OPENING ACT and adapt to the lead angle chosen by the
+# discovery engine. The angle-specific text lives under `angles:` below; these
+# top-level keys are only the shared scaffolding.
+card_03_rarity:
+  reveal_intro_default: "What makes it up:"      # per-angle override in angles.*
+  location_intro: "And at your doorstep:"        # POI lifestyle layer (straight-line)
+  # POI-aware rarity — the walkable-cluster intersection. Shown only when the
+  # cluster (2+ lifestyle spots) genuinely narrows the physical pool.
+  poi_rarity_line: "Of the {physical_matching} homes nearby that share your core combination, only **{matching}** {verb} also this close to {phrase} — all at once."
+  opens: "Why does that matter?"
+
+# CARD 04 — The Explanation.  Never leave a statistic floating.
+# Placeholders: {filter_lines}
+card_04_explanation:
+  # Wait-time — supply scarcity over TIME. Slots in after the angle's psychology,
+  # on genuinely rare homes only. Observed past pattern, not a forecast.
+  wait_intro: "And a buyer can't just wait for the next one."
+  wait_line: "Across the area, {combo_phrase} have sold {interval_phrase} over the past year."
+  wait_disclaimer: "Based on homes we tracked selling publicly — the true figure may be a little higher."
+  opens: "So who am I actually competing with?"
+
+
+# =============================================================================
+# ANGLES — the opening act (cards 03 + 04) per lead story.
+# The discovery engine picks the angle; assemble.py fills {placeholders} from
+# the fact bundle. Editorial rules apply: data-led, no advice, no forecasts.
+#
+# Card 03 keys:  c03_answer, c03_lead, c03_lead_bold(optional), c03_reveal_intro
+# Card 04 keys:  c04_answer, c04_headline, c04_close
+#   scarcity is special — c04_mode: filters uses the buyer-filter checklist.
+# =============================================================================
+angles:
+
+  scarcity:
+    c03_answer: "Your home's combination is uncommon."
+    c03_lead: "{active_matching} of {active_total} homes near you share it."
+    c03_lead_bold: true
+    c03_reveal_intro: "The combination:"
+    c04_answer: "Why this matters"
+    c04_headline: |
+      When buyers search online, they don't search for houses.
+
+      They search for combinations.
+    c04_mode: filters
+    c04_body: "Example:"
+    c04_filter_intro: "Buyer filters:"
+    c04_close: "Your home survives those filters."
+
+  land_prestige:
+    c03_answer: "The land is what sets it apart."
+    c03_lead: "Your {land}m² block is larger than most homes competing for the same buyer."
+    c03_reveal_intro: "What sits on it:"
+    c04_answer: "Why the land matters"
+    c04_headline: "A buyer can update a kitchen or add a bathroom. They can't add land."
+    c04_close: "Big blocks like yours are a fixed and shrinking supply — and buyers know it."
+
+  beachside:
+    c03_answer: "It's the location that leads."
+    c03_lead: "You're about {beach_m}m from {beach_name}."
+    c03_reveal_intro: "What comes with it:"
+    c04_answer: "Why that distance matters"
+    c04_headline: "Buyers can change almost anything about a home. They can't move it closer to the sand."
+    c04_close: "Proximity like yours is priced in — and it doesn't depreciate."
+
+  water_views:
+    c03_answer: "The view is the headline."
+    c03_lead: "Your home carries water views — something no renovation can add."
+    c03_reveal_intro: "What comes with it:"
+    c04_answer: "Why the view matters"
+    c04_headline: "A water view sells a feeling before a buyer reads a single statistic."
+    c04_close: "It's the one thing a competing home down the road can't replicate."
+
+  thin_competition:
+    c03_answer: "Right now, almost nothing competes with it."
+    c03_lead: "Only {n_compete} homes on the market give a buyer what yours does."
+    c03_reveal_intro: "What makes it up:"
+    c04_answer: "Why that matters"
+    c04_headline: "When a buyer has few real alternatives, your home stops being an option and becomes the option."
+    c04_close: "A short list of rivals is quiet leverage."
+
+  scale:
+    c03_answer: "The size is what stands out."
+    c03_lead: "At {floor}m² of floor area, your home is larger than most it competes with."
+    c03_reveal_intro: "What makes it up:"
+    c04_answer: "Why the size matters"
+    c04_headline: "Space is the hardest thing for a buyer to find and the most expensive to add."
+    c04_close: "Room to grow is something a smaller home simply can't offer."
+
+  school_walk:
+    c03_answer: "The position is the story."
+    c03_lead: "You're about {school_m}m from {school_name} — a walk, not a drive."
+    c03_reveal_intro: "What comes with it:"
+    c04_answer: "Why the walk matters"
+    c04_headline: "For a family buyer, a walk to school reshapes every weekday."
+    c04_close: "It's a location advantage a home two streets over can't claim."
+
+  prestige_value:
+    c03_answer: "This home sits at the top end."
+    c03_lead: "Its range opens above {val_low}, placing it among the suburb's premium homes."
+    c03_reveal_intro: "What makes it up:"
+    c04_answer: "Why that matters"
+    c04_headline: "At this level, buyers weigh homes on land, privacy and finish — not price per square metre."
+    c04_close: "The right buyer is comparing yours to a short list, not the whole market."
+
+  renovation_upside:
+    c03_answer: "The opportunity is the story."
+    c03_lead: "A well-kept but original home on {land}m² — room for a buyer to add their own value."
+    c03_reveal_intro: "What sits on it:"
+    c04_answer: "Why that matters"
+    c04_headline: "Some buyers pay for finished. Others pay for potential — and yours offers it on real land."
+    c04_close: "Land plus upside is exactly what a renovator hunts for."
+
+  water_adjacent:
+    c03_answer: "It's the water that leads."
+    c03_lead: "Your home {green_relation} {green_name} — a setting most nearby simply can't offer."
+    c03_reveal_intro: "What comes with it:"
+    c04_answer: "Why the water matters"
+    c04_headline: "A buyer can change almost anything about a house. They can't move it to the water."
+    c04_close: "Homes that sit on the water are a fixed, tightly-held set."
+
+  parkland:
+    c03_answer: "Your backdrop is the story."
+    c03_lead: "Your rear boundary backs onto {green_name} — green space that can't be built out."
+    c03_reveal_intro: "What sits in front of it:"
+    c04_answer: "Why that backdrop matters"
+    c04_headline: "A buyer can renovate a house. They can't manufacture a park at the back fence."
+    c04_close: "Homes that border protected green space are a fixed, tightly-held set."
+
+  market_context:
+    c03_answer: "Your home sits in the heart of its market."
+    c03_lead: "It shares its core profile with {active_matching} of {active_total} nearby homes — right where buyer demand is deepest."
+    c03_reveal_intro: "What makes it up:"
+    c04_answer: "Why that matters"
+    c04_headline: "The largest pool of buyers is shopping for exactly this kind of home."
+    c04_close: "Broad demand means competition works in your favour."
+
+# CARD 05 — The Competition Reveal.  The competitor matcher becomes fascinating.
+# Placeholders: {active_total} {n_compete} {suburb_display} {suburb_stock}
+card_05_competition:
+  answer: "The homes competing with yours are not what you think."
+  headline: |
+    Most real estate finds three similar sales.
+
+    We find the homes buyers would actually choose instead.
+  funnel_intro: ""
+  # Always shown as a three-tier funnel with real numbers. Labels make the scope
+  # explicit and honest: tier 1 is the suburb, tiers 2-3 are the wider area (the
+  # competitor engine looks across nearby suburbs, since buyers shop across them).
+  funnel_labels:
+    - "Homes in {suburb}"
+    - "For sale across the area"
+    - "Comparable to yours"
+  none_note: "Not one listing on the market gives your buyer the same combination. They either choose your home — or they compromise."
+  opens: "But what about that sale down the road that looks just like mine?"
+
+# CARD 06 — The Comparable Surprise.  The most expert moment.
+# Placeholders: {comp_address} {comp_price} {comp_distance_m} {comp_deltas}
+card_06_comparable:
+  answer: "The obvious comparison can mislead you."
+  headline: "{comp_address} — sold {comp_price}, {comp_distance_m}m away."
+  looks: "Looks like the same home."
+  reveal_intro: "But against yours:"
+  # comp_deltas rendered as bullet list
+  close: "Same street, different home. The headline number was never the comparison."
+  opens: "So what will buyers actually pay for in mine?"
+
+# CARD 07 — The Value Drivers.  Consultant language, not scores.
+# Placeholders: {carries_lines} {negotiate_lines}
+card_07_value_drivers:
+  answer: "Here's what carries the price."
+  strengthens_intro: "What strengthens your position:"
+  # carries_lines rendered ✓
+  negotiate_intro: "Where a buyer may focus:"
+  # negotiate_lines rendered — omitted entirely if we have nothing honest to list
+  close: "Knowing both is how you hold your number."
+  opens: "And who is that buyer?"
+
+# CARD 08 — The Buyer Reveal.  Emotionally powerful: it stops being "my house".
+# Placeholders: {buyer_label} {buyer_body}
+card_08_buyer:
+  answer: "Someone is already looking for a home like yours."
+  # A believable HUMAN portrait (with a motivation) is rendered dynamically from
+  # the buyer archetype + this home's suburb/school/features — not a data tag.
+  # Then a "why your home fits them" line from the buyer drivers.
+  fit_template: "What a cheaper home can't give them: {drivers}."
+  reframe: "Right now it's your home. To them, it's the one they've been waiting for."
+  opens: "So where does that put its value?"
+
+# CARD 09 — The Valuation Reveal.  Finally. The number is the conclusion, not the product.
+# Placeholders: {val_low} {val_high} {confidence} {n_comps}
+card_09_valuation:
+  answer: "Based on everything we've analysed..."
+  # Anchor FIRST (a rounded central figure), THEN the fuller spread.
+  likely_intro: "Most likely selling position"
+  likely_value: "Around {anchor}"
+  range_intro: "Most comparable homes sold between"
+  range_value: "{val_low} – {val_high}"
+  range_note: "This range reflects homes with similar characteristics after adjusting for differences in land, floor area, condition, features and current market competition."
+  basis_intro: "Based on:"
+  basis_lines:
+    - "{n_comps} adjusted comparable sales"
+    - "the competing homes buyers would actually consider"
+    - "feature-by-feature adjustments"
+    - "current market conditions"
+  # Honesty + soft consultant CTA, in one line.
+  closing: "Our analysis identifies where your home is most likely to sit in today's market. A property visit allows us to refine that position by assessing the things no database can see."
+  opens: "If I ever did sell — how would you position it?"
+
+# CARD 10 — The Strategic Future.  This is where Fields enters. Not before.
+# Placeholders: {frame_line} {lead_line} {avoid_lines}
+card_10_strategy:
+  answer: "If you decided to sell, here's what we'd do."
+  headline: "{frame_line}"
+  # lead_line from the positioning engine
+  avoid_intro: "What we would not do:"
+  # avoid_lines rendered ✗
+  cta: "Build my complete selling strategy"
+  # Deliberately NOT "Request an appraisal" — too transactional.
