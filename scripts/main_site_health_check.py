@@ -736,6 +736,46 @@ INDEX_GRACE_DAYS = 4           # don't GSC-check until published this long — G
 MAX_GSC_CALLS_PER_RUN = 30     # shares seo_indexation_check.py's ~2000/day quota; safety valve, expected nightly volume is far below this
 
 
+def collect_listing_coverage(add, sm, now_utc):
+    """#1 (2026-07-31): per-suburb currently-listed discovery completeness AND the
+    SPECIFIC addresses Domain lists that we don't hold as for_sale. This is the
+    signal that was missing when a home listed the day before (6 Joy Avenue)
+    rendered as an off-market page: the scraper under-discovered ~30% of core-
+    suburb listings and nobody was told which ones. Fed by the scraper's
+    record_coverage() → system_monitor.listing_coverage (written each nightly run)."""
+    PG = "Listing Coverage"
+    coll = sm["listing_coverage"]
+    for s in NEW_LISTING_SUBURBS:
+        d = coll.find_one({"_id": s})
+        label = suburb_label(s)
+        if not d:
+            add(PG, "Discovery completeness", label, None, MISSING, "updated_at", None,
+                "no coverage recorded yet — scraper hasn't run record_coverage for this suburb")
+            continue
+        ts = as_dt(d.get("updated_at"))
+        exp = d.get("domain_expected")
+        disc = d.get("discovered_urls", 0)
+        in_db = d.get("in_db_for_sale", 0)
+        missing = d.get("missing_addresses") or []
+        val = f"{disc}/{exp if exp is not None else '?'} discovered, {in_db} in DB"
+        # Stale first: coverage must refresh with the nightly scrape.
+        if ts is None or (now_utc - ts).total_seconds() > 2 * 86400:
+            add(PG, "Discovery completeness", label, val, STALE, "updated_at", ts,
+                "coverage not refreshed in >2d — nightly scrape may not be recording it")
+            continue
+        if exp and disc < exp * 0.95:
+            add(PG, "Discovery completeness", label, val, ERROR, "updated_at", ts,
+                f"discovered {disc} of Domain's {exp} listed ({exp - disc} short) — "
+                f"discovery under-yielding again (cf. 6 Joy Avenue incident)")
+        elif missing:
+            preview = "; ".join(missing[:8]) + (f" … +{len(missing) - 8} more" if len(missing) > 8 else "")
+            add(PG, "Listed but not in DB", label, f"{len(missing)} missing", GAP, "updated_at", ts,
+                f"Domain lists these, we don't hold them as for_sale: {preview}")
+        else:
+            add(PG, "Discovery completeness", label, val, OK, "updated_at", ts,
+                f"{in_db} listings held; full coverage")
+
+
 def collect_new_listings_editorial(add, gc, sm, now_utc):
     """Confirms two things Will asked for directly (2026-07-22): (1) every new
     listing actually gets editorial processing — including anything stuck in
@@ -1734,6 +1774,7 @@ def collect(client, now_utc, prev_map):
         ("GitHub Actions", collect_github_actions, (add,)),
         ("Market Signals Fetch", collect_market_signals_fetch, (add, sm, now_utc)),
         ("PropRadar Ingest", collect_propradar_ingest, (add, sm, now_utc)),
+        ("Listing Coverage", collect_listing_coverage, (add, sm, now_utc)),
         ("New Listings: Editorial & SEO", collect_new_listings_editorial, (add, gc, sm, now_utc)),
         ("SEO Page Integrity", collect_seo_page_integrity, (add, gc, now_utc)),
         ("Leads & CRM", collect_leads_crm, (add, sm, now_utc, last_run)),
