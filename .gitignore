@@ -51,3 +51,25 @@ proposals/
 .netlify
 node_modules
 compliance_exports/
+
+# Credentials — never commit
+00_Run_Commands/gh-token-29Mar.txt
+*-token-*.txt
+*.token
+brain1_build
+brain3_build
+.gcp-vertex-key.json
+brain3_ops
+
+# Website visitor feedback — contains PII (emails), never push to public repo
+feedback/
+
+# Generated / regenerable per-address data — NOT source (produced by
+# emit_json.py / batch.py / appraisal substantiation exporters). These bloat
+# the working tree (~16k files) and trip VS Code's "too many active changes"
+# limit. Generator scripts at the parent level stay tracked.
+15_Off-Market/Page_Redesign_V2/bundles/
+15_Off-Market/Page_Redesign_V2/output/
+09_Appraisals/Substantiation/
+# Local property-photo cache (regenerable from blob storage)
+cache/
