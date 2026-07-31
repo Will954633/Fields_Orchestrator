@@ -34,10 +34,10 @@ from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import brain1_query as bq
-import openrouter_client as orc
+import max_client as orc
 
 UID_RE = re.compile(r"\b[uki]\d{4,10}\b")  # u#### coaching + k##### KB units
-HAIKU = orc.HAIKU  # decompose / judge / map — Haiku via OpenRouter
+HAIKU = orc.HAIKU  # decompose / judge / map -> Haiku on Max (Will 2026-07-31)
 JUDGE_WORKERS = 6      # bounded concurrency for I/O-bound claude calls (judge + map)
 MAX_SINGLE_UNITS = 150 # fidelity ceiling: above this, single-context synthesis stops citing real
                        # unit ids and confabulates (empirically ~1000 units -> 0 real citations).
