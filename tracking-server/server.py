@@ -393,6 +393,107 @@ def scan(tracking_id):
     return redirect(target_final, code=302)
 
 
+# ---------------------------------------------------------------------------
+# Printed-asset QR scan (mass-produced material — no per-recipient identity).
+#
+# The appraisal QR above is one-code-per-homeowner (`/scan/<tracking_id>`). A
+# printed publication is the opposite: every physical copy of an issue carries
+# the SAME code, so the identity we track is the ASSET + ISSUE, not the reader.
+# `/a/<asset_code>` resolves that code against `system_monitor.print_assets`
+# (seeded by whatever generates the QR), writes ONE new document per scan to
+# `system_monitor.asset_scans`, then 302s to the asset's destination with UTM
+# params so the on-site session is attributed to print.
+#
+# Unknown codes still log and still redirect — a printed code can never 404.
+# ---------------------------------------------------------------------------
+ASSET_FALLBACK_URL = "https://fieldsestate.com.au"
+
+
+@app.route("/a/<asset_code>")
+def asset_scan(asset_code):
+    asset_code = (asset_code or "").strip().lower()[:64]
+    now = datetime.now(timezone.utc)
+    asset = None
+    try:
+        asset = get_db()["print_assets"].find_one({"asset_code": asset_code})
+    except Exception as e:
+        log.error(f"print_assets lookup failed for {asset_code}: {e}")
+
+    # `?m=` lets one asset_code distinguish the surface it was scanned from —
+    # the printed copy and the PDF carry the same issue, so the code stays the
+    # same and the medium rides in utm_content.
+    medium = (request.args.get("m") or (asset or {}).get("medium") or "print")[:24]
+
+    target = (asset or {}).get("destination_url") or ASSET_FALLBACK_URL
+    parts = urlsplit(target)
+    q = dict(parse_qsl(parts.query))
+    q.update({
+        "utm_source": (asset or {}).get("utm_source") or "print_qr",
+        "utm_medium": "qr",
+        "utm_campaign": asset_code,
+        "utm_content": medium,
+    })
+    target_final = urlunsplit((parts.scheme, parts.netloc, parts.path,
+                               urlencode(q), parts.fragment))
+
+    # One document per scan — this collection IS the engagement record for the
+    # asset. Denormalise the asset identity onto every scan so the scans remain
+    # readable even if the registry doc is later edited.
+    scan_doc = {
+        "asset_code": asset_code,
+        "asset_type": (asset or {}).get("asset_type"),
+        "asset_title": (asset or {}).get("title"),
+        "issue_label": (asset or {}).get("issue_label"),
+        "period": (asset or {}).get("period"),
+        "medium": medium,
+        "known_asset": bool(asset),
+        "scanned_at": now,
+        "ip": request.headers.get("X-Real-IP", request.remote_addr),
+        "user_agent": request.headers.get("User-Agent", ""),
+        "referrer": request.headers.get("Referer", ""),
+        "accept_language": request.headers.get("Accept-Language", ""),
+        "redirect_to": target_final,
+    }
+    try:
+        get_db()["asset_scans"].insert_one(scan_doc)
+    except Exception as e:
+        log.error(f"asset_scans insert failed for {asset_code}: {e}")
+
+    if asset:
+        try:
+            get_db()["print_assets"].update_one(
+                {"asset_code": asset_code},
+                {"$inc": {"scan_count": 1}, "$set": {"last_scan_at": now}},
+            )
+        except Exception as e:
+            log.error(f"print_assets counter update failed for {asset_code}: {e}")
+
+    # Anonymous scan — no person identity exists server-side, so key PostHog on
+    # the asset itself. The client-side session is joined via the UTM params.
+    posthog_capture(f"asset_{asset_code}", "print_asset_qr_scan", {
+        "asset_code": asset_code,
+        "asset_title": (asset or {}).get("title"),
+        "issue_label": (asset or {}).get("issue_label"),
+        "period": (asset or {}).get("period"),
+        "known_asset": bool(asset),
+        "redirect_to": target_final,
+    })
+
+    label = (asset or {}).get("title") or asset_code
+    issue = (asset or {}).get("issue_label") or ""
+    aest_now = now.astimezone(AEST).strftime("%-d %b %Y, %-I:%M %p AEST")
+    notify_telegram(
+        f"*QR scanned* (printed asset)\n{label}"
+        + (f" — {issue}" if issue else "")
+        + f"\n{aest_now}"
+    )
+
+    if not asset:
+        log.warning(f"/a for unregistered asset_code {asset_code} — redirecting anyway")
+
+    return redirect(target_final, code=302)
+
+
 # 1x1 transparent tracking pixel
 @app.route("/pixel/<tracking_id>.gif")
 def pixel(tracking_id):
