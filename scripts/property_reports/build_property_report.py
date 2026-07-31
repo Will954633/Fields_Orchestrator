@@ -101,6 +101,47 @@ def _notify_new_lead(report_doc: Dict[str, Any], occ: Optional[Dict[str, Any]]) 
     )
 
 
+def _find_live_listing(gc_db, report_doc: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Return the Gold_Coast for-sale doc for this address, or None.
+
+    Mirrors analyse-your-home-submit.mjs findLiveListing: an address can have a
+    cadastral twin (no listing_status) and a separate for-sale twin, so we
+    query for listing_status:"for_sale" specifically rather than trusting the
+    first address match. The returned doc's _id is what /property/:id resolves.
+    """
+    import re
+    from bson import ObjectId
+
+    suburb_key = report_doc.get("suburb_key")
+    address = report_doc.get("address") or ""
+    property_id = report_doc.get("property_id")
+    if not suburb_key:
+        return None
+    try:
+        coll = gc_db[suburb_key]
+    except Exception:
+        return None
+
+    if property_id:
+        try:
+            doc = coll.find_one({"_id": ObjectId(property_id), "listing_status": "for_sale"})
+            if doc:
+                return doc
+        except Exception:
+            pass
+
+    normalised = re.sub(r"\s+QLD\s+\d{4}.*$", "", address, flags=re.I).strip()
+    if not normalised:
+        return None
+    escaped = re.escape(normalised).replace("\\ ", "\\s+")
+    try:
+        return coll.find_one(
+            {"address": {"$regex": f"^{escaped}", "$options": "i"}, "listing_status": "for_sale"}
+        )
+    except Exception:
+        return None
+
+
 def resolve_one(report_doc: Dict[str, Any], force: bool = False) -> Dict[str, Any]:
     """Resolve slots for one doc. Returns the update dict that was applied."""
     slug = report_doc["slug"]
@@ -113,6 +154,37 @@ def resolve_one(report_doc: Dict[str, Any], force: bool = False) -> Dict[str, An
     gc_db = get_gold_coast_db()
     sm = get_system_monitor_db()
     coll = sm["property_reports"]
+
+    # Currently-listed guard (defence in depth). The Netlify submit handler now
+    # refuses to create a stub for a home that's on the market, but stubs
+    # created before that guard shipped — or by any future bypass — can still
+    # reach the poller. Never spend a build on a live listing: flip the stub to
+    # a terminal 'currently_listed' state pointing at the editorial property
+    # page, and skip. find_stub_slugs only returns state=="stub", so this is
+    # not re-picked next cycle.
+    if not force:
+        listed = _find_live_listing(gc_db, report_doc)
+        if listed:
+            listed_id = str(listed["_id"])
+            cosmos_retry(
+                lambda: coll.update_one(
+                    {"slug": slug},
+                    {
+                        "$set": {
+                            "state": "currently_listed",
+                            "build_state": "skipped_currently_listed",
+                            "listed_property_id": listed_id,
+                            "listed_property_url": f"/property/{listed_id}",
+                            "updated_at": datetime.utcnow(),
+                        }
+                    },
+                ),
+                label=f"property_reports.currently_listed.{slug}",
+            )
+            logger.info(
+                f"  {slug}: currently listed for sale (property {listed_id}) — skipping build"
+            )
+            return {}
 
     # Reset build_events for this run so a re-resolve doesn't accumulate stale
     # events from previous attempts. Stamp the start time and live-build state
