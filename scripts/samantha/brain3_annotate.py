@@ -16,10 +16,10 @@ Cron auto-resume: */10 * * * * /home/fields/brain3_build/run_<pool>.sh
 import os, re, sys, json, glob, time, fcntl, argparse
 from datetime import datetime, timezone
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import openrouter_client as orc
+import max_client as orc
 
 DEFAULT_BASE = "/home/fields/brain3_build"
-MODEL = orc.HAIKU  # annotation stays Haiku, now via OpenRouter (off Max budget)
+MODEL = orc.HAIKU  # annotation stays Haiku, on the Max subscription (Will 2026-07-31)
 MAX_WORDS_PER_UNIT = 1200
 
 PROMPT_HEADER = """You are annotating UNITS from a real-estate company's internal knowledge base (books, papers, articles, strategy docs, meeting notes) to build a queryable knowledge graph.
@@ -167,6 +167,13 @@ def main():
                 if not isinstance(recs, list) or not recs:
                     raise ValueError("empty/invalid array")
                 break
+            except orc.MaxQuotaExhausted as e:
+                # Max-only, never silent: stop the whole run cleanly (don't skip-loop the rest
+                # of the batches like the old 402 storm did). Cron resumes it next Max window.
+                log(LOG, f"PAUSED [{pool}] — Max quota exhausted at {name}: {str(e)[:160]}")
+                remaining = [b for b in batches if os.path.basename(b) not in done]
+                log(LOG, f"PAUSED [{pool}] — {len(remaining)} remain (resume next Max window)")
+                return
             except Exception as e:
                 log(LOG, f"  {name} attempt {attempt} failed: {str(e)[:160]}")
                 time.sleep(5)
