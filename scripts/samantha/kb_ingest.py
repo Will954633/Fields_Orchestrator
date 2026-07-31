@@ -19,7 +19,7 @@ Two phases:
 import os, re, sys, json, glob, argparse
 from concurrent.futures import ThreadPoolExecutor
 
-import openrouter_client as orc
+import max_client as orc
 KB = "/home/fields/knowledge-base"
 OUT = "/home/fields/brain3_build"
 HAIKU = orc.HAIKU
