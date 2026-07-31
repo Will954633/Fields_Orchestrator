@@ -29,8 +29,8 @@ MAP = BUILD / "concept_norm_map.jsonl"       # raw_concept -> canonical (pass 1,
 DONE = BUILD / "norm_done_batches.txt"
 LOCK = BUILD / ".norm_lock"
 FINAL = BUILD / "concept_canonical.json"      # final raw -> canonical (after consolidate)
-import openrouter_client as orc
-MODEL = orc.SONNET5  # was "sonnet" on Max -> OpenRouter
+import max_client as orc
+MODEL = orc.SONNET5  # normalize -> Opus on Max (SONNET5 aliases to opus-4-8; Will 2026-07-31)
 BATCH = 120
 
 PROMPT_HEAD = (
