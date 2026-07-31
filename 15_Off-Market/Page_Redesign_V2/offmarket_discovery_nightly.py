@@ -1,33 +1,33 @@
 #!/usr/bin/env python3
 """
-offmarket_discovery_nightly.py — demand-driven builder for the off-market
+offmarket_discovery_nightly.py — full-coverage builder for the off-market
 Discovery deck (the cinematic scroll page served at /off-market/<slug>).
 
-Precomputing all ~26k eligible homes is pointless (~17 off-market views/day),
-so coverage FOLLOWS DEMAND: we build a Discovery doc only for homes people
-actually look up. The demand set is the union of
+COVERAGE = THE INDEXED OFF-MARKET SET. Every off-market URL we submit to Google
+must render the new design, so the target is EXACTLY the sitemap's
+getOffMarketUrls() criteria (generate-sitemap.mjs) — the sale-history tier:
+standalone houses, non-waterfront, not for_sale/under_contract, with a recorded
+sale (never-listed cadastral with enriched_data.transactions, OR sold 12+ months
+ago with its own sale_price/sold_date). ~14.6k homes across the core suburbs.
+Keeping this 1:1 with the sitemap means "indexed → deck" is guaranteed.
 
-  1. crm_contacts.offmarket_home          — the PERMANENT google->/off-market
-                                             owner-lookup signal (offmarket_home_signal.py)
-  2. organic_journeys off-market sessions — recent (rolling ~60d) /off-market
-                                             pageviews, so brand-new lookups get
-                                             a deck by the next nightly run.
+INCREMENTAL + RESUMABLE. We load every existing doc's generated_at once, then
+build a home only when it has NO doc yet OR the property was re-enriched after
+its doc was built (enriched_data.last_enriched > generated_at). So the FIRST run
+backfills the whole set (~hours, sequential ~1s/home; each upsert makes that home
+live immediately), and every night after only touches new/changed homes (cheap).
+Interrupted? Just re-run — already-built fresh docs are skipped.
 
-For each demand slug we (a) skip it unless it is loader-eligible (a genuinely
-off-market home — not for_sale / under_contract / sold within 12 months, which
-the React loader 301s to /property anyway), then (b) build_one() + upsert with
---delta semantics (unchanged source_hash is skipped). The React loader renders
-the deck when a doc exists and falls back to the current off-market page when
-it does not, so missing coverage never breaks a page — it just means "not yet".
+The React loader (off-market.$slug.tsx) renders the deck when a doc exists and
+falls back to the classic off-market page when it does not, so partial coverage
+never breaks a page. Wrapped in job_run (CLAUDE.md Rule 7) — heartbeat on the
+Systems Health Process Registry.
 
-Run once at creation to backfill, then nightly via cron. Wrapped in job_run so
-it self-reports on the Systems Health "Process Registry" (CLAUDE.md Rule 7).
-
-  python3 offmarket_discovery_nightly.py                 # full demand set
-  python3 offmarket_discovery_nightly.py --limit 25      # staged backfill
-  python3 offmarket_discovery_nightly.py --dry-run       # list, don't build
+  python3 offmarket_discovery_nightly.py                 # build missing/stale
+  python3 offmarket_discovery_nightly.py --limit 50      # staged
+  python3 offmarket_discovery_nightly.py --rebuild-all   # force rebuild every home
+  python3 offmarket_discovery_nightly.py --dry-run       # count only
 """
-import re
 import sys
 import time
 import argparse
@@ -39,37 +39,21 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent.parent))
 sys.path.insert(0, str(HERE.parent.parent / "scripts"))
 
+import re as _re
 import offmarket_discovery_build as ODB
 from job_status import job_run
 
 CORE = ["robina", "varsity_lakes", "burleigh_waters"]
-SOLD_THRESHOLD_MONTHS = 12  # mirror the React loader (off-market.$slug.tsx)
 
-# Houses only — same policy as the off-market sitemap/index (generate-sitemap.mjs).
-# The Discovery engine assumes house features (land, floor, green boundary); units
-# would get a degraded deck, so they keep the current off-market page (fallback).
-NON_HOUSE_TYPES = {
+# Mirror generate-sitemap.mjs getOffMarketUrls() EXACTLY so deck coverage == index.
+NON_HOUSE_TYPES = [
     "Townhouse", "Apartment", "Apartment / Unit / Flat", "Unit", "Flat",
     "Duplex", "Villa", "Terrace", "Semi-Detached", "Studio",
     "Retirement Living", "New Apartments / Off the Plan",
-}
-UNIT_ADDR_RE = re.compile(r"\d+\s*/\s*\d+")  # "12/3 …" unit addresses
-# Leading "unit-street" double number in the slug ("1-48-glen-eagles-…" = 1/48),
-# which Will flagged as not-a-house even when property_type is missing.
-UNIT_SLUG_RE = re.compile(r"^\d+-\d+-")
-
-
-def _months_since(ds):
-    if not ds:
-        return None
-    try:
-        d = datetime.datetime.fromisoformat(str(ds).replace("Z", "+00:00"))
-        now = datetime.datetime.now(datetime.timezone.utc)
-        if d.tzinfo is None:
-            d = d.replace(tzinfo=datetime.timezone.utc)
-        return (now.year - d.year) * 12 + (now.month - d.month)
-    except Exception:
-        return None
+    "Land", "Vacant land", "Industrial", "Development Site",
+    "Leisure", "Sport", "Other", "Farm",
+]
+UNIT_ADDR_RE = _re.compile(r"\d+\s*/\s*\d+")
 
 
 def _gc():
@@ -77,115 +61,121 @@ def _gc():
     return get_mongo_client()["Gold_Coast"]
 
 
-def _sm():
-    from src.mongo_client_factory import get_mongo_client
-    return get_mongo_client()["system_monitor"]
+def indexed_query():
+    cutoff = (datetime.datetime.utcnow() - datetime.timedelta(days=int(12 * 30.44))).strftime("%Y-%m-%d")
+    return {
+        "listing_status": {"$nin": ["for_sale", "under_contract"]},
+        "url_slug": {"$exists": True, "$nin": [None, ""]},
+        "is_waterfront": {"$ne": True},
+        "property_type": {"$nin": NON_HOUSE_TYPES},
+        "building_type": {"$nin": NON_HOUSE_TYPES},
+        "address": {"$not": UNIT_ADDR_RE},
+        "$or": [
+            {"listing_status": {"$ne": "sold"}, "enriched_data.transactions.0": {"$exists": True}},
+            {"listing_status": "sold", "sale_price": {"$exists": True, "$ne": None},
+             "sold_date": {"$lte": cutoff}},
+        ],
+    }
 
 
-def demand_slugs():
-    """Union of permanent owner-lookup signal + recent off-market pageviews."""
-    sm = _sm()
-    names = set(sm.list_collection_names())
-    slugs = set()
-    if "crm_contacts" in names:
-        for d in sm["crm_contacts"].find(
-            {"offmarket_home": {"$exists": True}}, {"offmarket_home": 1}
-        ):
-            om = d.get("offmarket_home") or {}
-            if om.get("slug"):
-                slugs.add(om["slug"])
-            for s in (om.get("slugs") or []):
-                slugs.add(s)
-    if "organic_journeys" in names:
-        for d in sm["organic_journeys"].find(
-            {"is_offmarket": True},
-            {"pages": 1, "entry_path": 1, "pattern_address": 1, "timeline": 1},
-        ):
-            blob = [d.get("entry_path"), d.get("pattern_address")]
-            for k in ("pages", "timeline"):
-                v = d.get(k)
-                if isinstance(v, list):
-                    for x in v:
-                        blob.append(x if isinstance(x, str)
-                                    else (x.get("path") or x.get("url") if isinstance(x, dict) else ""))
-            for p in blob:
-                m = re.search(r"/off-market/([a-z0-9][a-z0-9-]+)", str(p or ""))
-                if m:
-                    slugs.add(m.group(1))
-    return slugs
-
-
-def eligible(slug):
-    """True when the React off-market loader would render (not 301) this slug."""
-    if UNIT_SLUG_RE.match(slug):
-        return False
+def indexed_homes():
+    """Yield (slug, last_enriched) for every indexed off-market home."""
     gc = _gc()
+    q = indexed_query()
     for c in CORE:
-        r = gc[c].find_one(
-            {"url_slug": slug},
-            {"listing_status": 1, "sold_date": 1, "sale_date": 1,
-             "property_type": 1, "building_type": 1, "address": 1},
-        )
-        if not r:
-            continue
-        ls = r.get("listing_status")
-        if ls in ("for_sale", "under_contract"):
-            return False
-        if ls == "sold":
-            ms = _months_since(r.get("sold_date") or r.get("sale_date"))
-            if ms is None or ms < SOLD_THRESHOLD_MONTHS:
-                return False
-        # houses only (mirror off-market index policy)
-        if r.get("property_type") in NON_HOUSE_TYPES or r.get("building_type") in NON_HOUSE_TYPES:
-            return False
-        if UNIT_ADDR_RE.search(str(r.get("address") or "")):
-            return False
+        for r in gc[c].find(q, {"url_slug": 1, "enriched_data.last_enriched": 1}):
+            slug = r.get("url_slug")
+            if not slug:
+                continue
+            le = (r.get("enriched_data") or {}).get("last_enriched")
+            yield slug, le
+
+
+def existing_generated_at():
+    """{slug: generated_at} for docs already built — one pass, cheap."""
+    coll = ODB._mongo()
+    return {d["slug"]: d.get("generated_at", "")
+            for d in coll.find({}, {"slug": 1, "generated_at": 1})}
+
+
+def _needs_build(slug, last_enriched, have, rebuild_all):
+    if rebuild_all:
         return True
-    return False  # not in a core collection -> out of scope for now
+    gen = have.get(slug)
+    if gen is None:            # no doc yet
+        return True
+    if last_enriched and str(last_enriched) > str(gen):  # re-enriched since build
+        return True
+    return False
 
 
-def run(limit=None, dry_run=False):
-    with job_run("offmarket_discovery_nightly", cadence_hours=24,
-                 title="Off-Market Discovery Deck (demand build)") as beat:
-        demand = sorted(demand_slugs())
-        elig = [s for s in demand if eligible(s)]
-        if limit:
-            elig = elig[:limit]
-        print(f"demand={len(demand)}  eligible={len(elig)}"
-              + (f"  (capped to {limit})" if limit else ""), file=sys.stderr)
-        if dry_run:
-            for s in elig:
-                print("  •", s)
-            beat.detail = f"dry-run: {len(elig)} eligible of {len(demand)} demand"
-            beat.metrics = {"demand": len(demand), "eligible": len(elig)}
-            return
-        coll = ODB._mongo()
-        built = skipped = failed = 0
-        t0 = time.time()
-        for slug in elig:
-            try:
-                doc = ODB.build_one(slug, rebuild=True)
-            except Exception as e:
-                print(f"  ✗ {slug}: {e}", file=sys.stderr)
-                failed += 1
-                continue
-            cur = coll.find_one({"slug": slug}, {"source_hash": 1})
-            if cur and cur.get("source_hash") == doc["source_hash"]:
-                skipped += 1
-                continue
+def _build_loop(todo, tag=""):
+    """Build + upsert each home; returns (built, failed, seconds)."""
+    built = failed = 0
+    t0 = time.time()
+    n = len(todo)
+    for i, (slug, _le) in enumerate(todo, 1):
+        try:
+            doc = ODB.build_one(slug, rebuild=True)
             ODB.upsert(doc)
             built += 1
-            print(f"  ✓ {slug:44} lead={doc['lead_angle']}", file=sys.stderr)
-        dt = int(time.time() - t0)
-        print(f"\nbuilt={built} skipped={skipped} failed={failed} in {dt}s", file=sys.stderr)
-        beat.detail = f"built {built}, skipped {skipped}, failed {failed} of {len(elig)} eligible"
-        beat.metrics = {"demand": len(demand), "eligible": len(elig),
-                        "built": built, "skipped": skipped, "failed": failed}
+        except Exception as e:
+            print(f"  ✗ [{tag}] {slug}: {e}", file=sys.stderr)
+            failed += 1
+        if i % 200 == 0:
+            rate = i / max(1e-6, time.time() - t0)
+            eta = int((n - i) / max(1e-6, rate))
+            print(f"  … [{tag}] {i}/{n}  built={built} failed={failed}  "
+                  f"{rate:.1f}/s  eta={eta // 60}m", file=sys.stderr)
+    return built, failed, int(time.time() - t0)
+
+
+def run(limit=None, rebuild_all=False, dry_run=False, shard=None):
+    # shard = (i, N): process only homes whose position ≡ i (mod N). Lets us run
+    # N parallel processes (each its own Mongo client — separate processes, no
+    # fork) to cut the initial ~14.6k backfill from latency-bound hours to ~1/N.
+    # Skip job_run heartbeat for shard workers (a shard isn't "the job"); the
+    # unsharded nightly run owns the heartbeat.
+    if shard is not None:
+        homes = sorted(indexed_homes())
+        have = existing_generated_at()
+        todo = [(s, le) for (s, le) in homes if _needs_build(s, le, have, rebuild_all)]
+        i, N = shard
+        todo = [t for k, t in enumerate(todo) if k % N == i]
+        _build_loop(todo, tag=f"shard{i}/{N}")
+        return
+    with job_run("offmarket_discovery_nightly", cadence_hours=24,
+                 title="Off-Market Discovery Deck (full indexed coverage)") as beat:
+        homes = list(indexed_homes())
+        have = existing_generated_at()
+        todo = [(s, le) for (s, le) in homes if _needs_build(s, le, have, rebuild_all)]
+        if limit:
+            todo = todo[:limit]
+        total_indexed = len(homes)
+        print(f"indexed={total_indexed}  have_docs={len(have)}  to_build={len(todo)}"
+              + (f"  (capped {limit})" if limit else ""), file=sys.stderr)
+        if dry_run:
+            beat.detail = f"dry-run: {len(todo)} to build of {total_indexed} indexed"
+            beat.metrics = {"indexed": total_indexed, "have": len(have), "to_build": len(todo)}
+            return
+
+        built, failed, dt = _build_loop(todo, tag="main")
+        cov = len(existing_generated_at())  # coverage after this run
+        print(f"\nbuilt={built} failed={failed} in {dt}s  |  coverage={cov}/{total_indexed}", file=sys.stderr)
+        beat.detail = (f"built {built}, failed {failed}; coverage {cov}/{total_indexed} indexed")
+        beat.metrics = {"indexed": total_indexed, "built": built, "failed": failed,
+                        "coverage": cov, "seconds": dt}
 
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--limit", type=int, default=None)
+    ap.add_argument("--rebuild-all", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--shard", default=None, help='"i/N" — build only homes where index%%N==i (parallel workers)')
     args = ap.parse_args()
-    run(limit=args.limit, dry_run=args.dry_run)
+    shard = None
+    if args.shard:
+        i, N = args.shard.split("/")
+        shard = (int(i), int(N))
+    run(limit=args.limit, rebuild_all=args.rebuild_all, dry_run=args.dry_run, shard=shard)
