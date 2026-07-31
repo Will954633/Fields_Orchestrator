@@ -31,12 +31,54 @@ This is an **editorial** report — ~30 of the 36 pages carry quarter-specific p
 - **Evergreen** (write once, reuse): 03 how-to-read · 08 section divider · 32 how-charts-are-made · 33 what-this-doesn't-answer · 35 glossary · 36 back cover.
 - **Quarter-specific** (author each issue): 01 cover (number+date) · 04 editor's letter · 05–09 the index + components + maps · 10–11 lead case study · 13–18 the data pages · 20–31 the three suburb sections + case studies · 34 reflection.
 
+## Cover QR — tracked per issue
+The cover carries a QR unique to the issue. Scanning it logs engagement before
+redirecting, so we can measure readership of a specific issue of a specific
+asset — across both the printed copy and the PDF.
+
+```
+pipeline/generate_issue_qr.py            asset_code = quarterly-q2-2026
+   │                                          │
+   ├─ upserts system_monitor.print_assets ────┘  (registry: code -> destination + issue metadata)
+   └─ writes quarterly/assets/img/qr_<asset_code>.svg   (vector, grass on birch)
+                     │
+   QR encodes  https://vm.fieldsestate.com.au/track/a/<asset_code>
+                     │  tracking-server/server.py  ->  @app.route("/a/<asset_code>")
+                     ├─ INSERTS ONE DOC PER SCAN -> system_monitor.asset_scans
+                     ├─ $inc print_assets.scan_count / $set last_scan_at
+                     ├─ PostHog `print_asset_qr_scan` + Telegram ping
+                     └─ 302 -> destination + utm_source/medium/campaign/content
+```
+
+- **Destination (Q2 2026):** `https://fieldsestate.com.au/market-intelligence/Robina`
+- **Print vs PDF:** the same code serves both. Append `?m=pdf` to the encoded URL
+  for a PDF-only build and the medium lands in `asset_scans.medium` +
+  `utm_content`; the printed copy defaults to `print`.
+- **Unknown codes never 404** — they log and redirect to the homepage, so a code
+  that outlives its registry entry still works on paper.
+- **Regenerating is idempotent** — re-running the script does not reset
+  `scan_count`, so it is safe to re-run mid-issue.
+
+Each new issue needs its own code (`--quarter Q3 --issue 03`) and a matching
+`src` in the cover's `.cover-qr` block. Verify before any print run:
+
+```bash
+python3 pipeline/generate_issue_qr.py --quarter Q3 --year 2026 --issue 03 \
+    --verify-pdf ../issues/q3_2026_quarterly/latest.pdf
+```
+
+`--verify-pdf` decodes the cover straight out of the rendered PDF at 150/300/600
+dpi. This is the check that catches the cover still pointing at last quarter's
+code — the symbol can be flawless and the issue attribution still wrong.
+
 ## Producing a new issue (workflow)
 1. Refresh data: `fci_calculator.py`, `generate_charts.py`, `manual_market_pulse.py --show-data`.
 2. `render_quarterly.py --regen-charts` to pull fresh charts into the slots.
 3. Author the quarter-specific pages in `index.html` (cover number/date, editor's letter, the three suburb sections + case studies, reflection). We have Q2 2026 content ready from the earlier Market-Pulse work (FCI 94.4; the CGT policy section; six case studies read through the *Before You List* method; About Will) to drop in.
 4. Add the 3 suburb charts (once source exists).
-5. `render_quarterly.py --out q2_2026_quarterly` and QA every page.
+5. `generate_issue_qr.py --quarter Qn --year YYYY --issue NN`, then point the cover's `.cover-qr` `<img src>` at the new file.
+6. `render_quarterly.py --out q2_2026_quarterly` and QA every page.
+7. Re-run `generate_issue_qr.py ... --verify-pdf issues/<label>/latest.pdf` and confirm all three dpi rows PASS.
 
 ## Open items
 1. **3 custom suburb charts** — get the developer's source or replicate in `generate_charts.py`.
