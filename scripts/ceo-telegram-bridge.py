@@ -178,15 +178,25 @@ def conductor_running() -> bool:
         return False
 
 
+_background_children: list[subprocess.Popen] = []
+
+
+def reap_background_children() -> None:
+    """Reap finished detached children. start_new_session() does not reparent them to init,
+    so without this they stay zombies and hold a slot against the unit's TasksMax."""
+    _background_children[:] = [c for c in _background_children if c.poll() is None]
+
+
 def wake_conductor() -> bool:
     """Launch the conductor agent detached in the background. Returns True if we started it,
     False if it was already running (the runner's flock also prevents a real double-run)."""
     if conductor_running():
         return False
     try:
-        subprocess.Popen(["bash", CONDUCTOR_CYCLE],
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                         start_new_session=True, cwd="/home/fields/Fields_Orchestrator")
+        _background_children.append(
+            subprocess.Popen(["bash", CONDUCTOR_CYCLE],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                             start_new_session=True, cwd="/home/fields/Fields_Orchestrator"))
         log.info("Launched Samantha conductor cycle (founder message wake)")
         return True
     except Exception:
@@ -560,7 +570,7 @@ def build_job_status_text(job: dict[str, Any]) -> str:
 
 
 def launch_background_job(job_id: str) -> None:
-    subprocess.Popen(
+    _background_children.append(subprocess.Popen(
         [sys.executable, str(Path(__file__).resolve()), "--run-job", job_id],
         cwd=ROOT,
         stdout=subprocess.DEVNULL,
@@ -568,7 +578,7 @@ def launch_background_job(job_id: str) -> None:
         stdin=subprocess.DEVNULL,
         start_new_session=True,
         env={**os.environ, "PATH": os.environ.get("PATH", "")},
-    )
+    ))
 
 
 def should_refresh_context(last_sync_at: str | None, force: bool) -> bool:
@@ -1328,6 +1338,7 @@ def extract_message_text(update: dict[str, Any]) -> tuple[dict[str, Any] | None,
 
 
 def poll_once(sm) -> int:
+    reap_background_children()
     state = get_bridge_state(sm)
     payload = {
         "timeout": 30,
