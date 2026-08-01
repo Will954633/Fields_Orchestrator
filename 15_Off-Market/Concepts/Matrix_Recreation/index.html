@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Digital Rain</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    height: 100%;
+    background: #000;
+    overflow: hidden;
+    cursor: default;
+  }
+
+  #stage { position: fixed; inset: 0; background: #000; }
+
+  /* Sharp glyph layer */
+  #rain { position: absolute; inset: 0; display: block; }
+
+  /* Low-res copy of the sharp layer, blurred and screen-blended back over it.
+     This is the bloom the film's phosphor monitors have. The blur is done
+     inside the canvas at 1/5 resolution — a CSS blur here would rasterize at
+     full viewport size and cost ~25x more for the same result. */
+  #bloom {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    mix-blend-mode: screen;
+    opacity: .85;
+    pointer-events: none;
+  }
+  #bloom.css-blur { filter: blur(7px) brightness(1.3); }
+
+  /* CRT scanlines */
+  #scanlines {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    /* plain alpha over a black scene reads the same as multiply, and skips a
+       full-screen blend pass */
+    background: repeating-linear-gradient(
+      to bottom,
+      rgba(0,0,0,0) 0px,
+      rgba(0,0,0,0) 2px,
+      rgba(0,0,0,.13) 3px,
+      rgba(0,0,0,.13) 4px
+    );
+  }
+
+  /* Screen curvature falloff */
+  #vignette {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse 78% 72% at 50% 50%, rgba(0,0,0,0) 40%, rgba(0,0,0,.55) 82%, rgba(0,0,0,.9) 100%);
+  }
+
+  /* Panel */
+  #panel {
+    position: absolute;
+    top: 16px; left: 16px;
+    width: 268px;
+    padding: 14px 16px 16px;
+    background: rgba(0, 14, 4, .82);
+    border: 1px solid rgba(0, 255, 70, .28);
+    border-radius: 4px;
+    backdrop-filter: blur(6px);
+    font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color: #4dff77;
+    text-shadow: 0 0 6px rgba(0,255,70,.45);
+    z-index: 10;
+    display: none;
+  }
+  #panel.open { display: block; }
+  #panel h1 {
+    font-size: 11px;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: #9dffb4;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(0,255,70,.18);
+  }
+  .row { margin-bottom: 10px; }
+  .row label {
+    display: flex; justify-content: space-between;
+    font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
+    color: rgba(120,255,150,.72);
+    margin-bottom: 4px;
+  }
+  .row label span { color: #d6ffdf; }
+  input[type=range] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 3px; background: rgba(0,255,70,.22);
+    border-radius: 2px; outline: none;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 11px; height: 11px; border-radius: 50%;
+    background: #3dff6b; box-shadow: 0 0 8px rgba(0,255,70,.85); cursor: pointer;
+  }
+  input[type=range]::-moz-range-thumb {
+    width: 11px; height: 11px; border: 0; border-radius: 50%;
+    background: #3dff6b; box-shadow: 0 0 8px rgba(0,255,70,.85); cursor: pointer;
+  }
+  #panel .keys {
+    margin-top: 12px; padding-top: 10px;
+    border-top: 1px solid rgba(0,255,70,.18);
+    font-size: 10px; color: rgba(120,255,150,.55); letter-spacing: .04em;
+  }
+  #panel .keys b { color: #9dffb4; font-weight: 600; }
+
+  #hint {
+    position: absolute; bottom: 18px; right: 20px;
+    font: 10px/1 ui-monospace, Menlo, Consolas, monospace;
+    letter-spacing: .16em; text-transform: uppercase;
+    color: rgba(0,255,70,.34);
+    text-shadow: 0 0 8px rgba(0,255,70,.3);
+    z-index: 10;
+    transition: opacity 1.2s ease;
+    pointer-events: none;
+  }
+  #hint.gone { opacity: 0; }
+
+  @media (max-width: 640px) { #panel { width: calc(100vw - 32px); } }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <canvas id="rain"></canvas>
+  <canvas id="bloom"></canvas>
+  <div id="scanlines"></div>
+  <div id="vignette"></div>
+
+  <div id="panel">
+    <h1>Rain Parameters</h1>
+    <div class="row">
+      <label>Glyph size <span id="v-size"></span></label>
+      <input type="range" id="c-size" min="9" max="34" step="1">
+    </div>
+    <div class="row">
+      <label>Fall speed <span id="v-speed"></span></label>
+      <input type="range" id="c-speed" min="20" max="260" step="5">
+    </div>
+    <div class="row">
+      <label>Density <span id="v-density"></span></label>
+      <input type="range" id="c-density" min="10" max="100" step="1">
+    </div>
+    <div class="row">
+      <label>Trail length <span id="v-trail"></span></label>
+      <input type="range" id="c-trail" min="6" max="60" step="1">
+    </div>
+    <div class="row">
+      <label>Mutation <span id="v-mutate"></span></label>
+      <input type="range" id="c-mutate" min="0" max="100" step="1">
+    </div>
+    <div class="row">
+      <label>Bloom <span id="v-glow"></span></label>
+      <input type="range" id="c-glow" min="0" max="150" step="1">
+    </div>
+    <div class="keys">
+      <b>C</b> panel &nbsp;·&nbsp; <b>F</b> fullscreen &nbsp;·&nbsp; <b>R</b> reset &nbsp;·&nbsp; <b>Space</b> pause
+    </div>
+  </div>
+
+  <div id="hint">press C</div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  // ── Glyph set ────────────────────────────────────────────────────────────
+  // The film's typeface (Simon Whiteley, 1999) is half-width katakana traced
+  // from Japanese cookbooks and MIRRORED, mixed with Latin numerals and a
+  // handful of punctuation marks. Every glyph below is drawn flipped on X.
+  const KATAKANA = 'ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ';
+  const DIGITS   = '0123456789';
+  const SYMBOLS  = ':."=*+-<>¦|╌';
+  // Weighted toward katakana, exactly as the source frames read.
+  const GLYPHS = (KATAKANA + KATAKANA + DIGITS + SYMBOLS).split('');
+  const G = GLYPHS.length;
+
+  // ── Config ───────────────────────────────────────────────────────────────
+  const DEFAULTS = {
+    size:    17,    // glyph cell font size, px
+    speed:   90,    // median fall speed, px/sec
+    density: 62,    // % of columns streaming at any moment
+    trail:   26,    // median trail length, cells
+    mutate:  34,    // glyph churn rate, 0-100
+    glow:    85     // bloom opacity, %
+  };
+  const cfg = { ...DEFAULTS };
+
+  // Colour ramp — phosphor green with a near-white leading cell.
+  const HEAD  = [205, 255, 210];
+  const BRIGHT= [ 90, 255, 120];
+  const CORE  = [  0, 240,  64];
+  const DEEP  = [  0, 100,  28];
+  const TIERS = 24;                       // quantised brightness levels
+
+  // ── Canvases ─────────────────────────────────────────────────────────────
+  const rain  = document.getElementById('rain');
+  const bloom = document.getElementById('bloom');
+  const ctx   = rain.getContext('2d', { alpha: false });
+  const bctx  = bloom.getContext('2d');
+
+  const BLOOM_DIV = 5;
+  // Safari < 16.4 has no canvas filter — fall back to the CSS blur there.
+  const canvasBlur = typeof bctx.filter === 'string';
+  if (!canvasBlur) bloom.classList.add('css-blur');
+
+  let W = 0, H = 0, dpr = 1;
+  let cellW = 0, cellH = 0, cols = 0, rows = 0;
+
+  let atlas = null, aCellW = 0, aCellH = 0;
+
+  // Stream state (parallel arrays — one allocation, no per-frame GC churn).
+  // Streams are NOT one-per-column: several can occupy the same column at once,
+  // which is what gives the film's field its stacked, overlapping look.
+  let sCol, sY, sSpeed, sLen, sDim, sWait;
+  let streamMax = 0, streamCount = 0;
+  // Per-cell glyph index, churn phase, spark timer, composited brightness
+  let cell, churn, spark, bright;
+
+  let paused = false, reduced = false;
+
+  // ── Glyph atlas ──────────────────────────────────────────────────────────
+  // Pre-render every glyph at every brightness tier once, then the animation
+  // loop is pure drawImage — no fillText, no per-glyph transforms.
+  function lerp(a, b, t) { return a + (b - a) * t; }
+
+  function ramp(v) {
+    // v: 0 (tail end) .. 1 (leading cell)
+    let c, a;
+    if (v > 0.94) {                       // the head itself: blown-out white
+      const t = (v - 0.94) / 0.06;
+      c = [lerp(BRIGHT[0], HEAD[0], t), lerp(BRIGHT[1], HEAD[1], t), lerp(BRIGHT[2], HEAD[2], t)];
+      a = 1;
+    } else if (v > 0.78) {                // hot cells just behind the head
+      const t = (v - 0.78) / 0.16;
+      c = [lerp(CORE[0], BRIGHT[0], t), lerp(CORE[1], BRIGHT[1], t), lerp(CORE[2], BRIGHT[2], t)];
+      a = 1;
+    } else {                              // the body, decaying into black
+      const t = v / 0.78;
+      c = [lerp(DEEP[0], CORE[0], t), lerp(DEEP[1], CORE[1], t), lerp(DEEP[2], CORE[2], t)];
+      a = Math.pow(t, 1.45);
+    }
+    return `rgba(${c[0]|0},${c[1]|0},${c[2]|0},${a.toFixed(3)})`;
+  }
+
+  function buildAtlas() {
+    const fontPx = cfg.size * dpr;
+    const probe = document.createElement('canvas').getContext('2d');
+    const family = `"MS Gothic","Osaka-Mono","Yu Gothic","Hiragino Kaku Gothic ProN","Noto Sans JP","Noto Sans CJK JP",monospace`;
+    probe.font = `${fontPx}px ${family}`;
+
+    let maxW = 0;
+    for (const g of GLYPHS) maxW = Math.max(maxW, probe.measureText(g).width);
+
+    aCellW = Math.max(2, Math.round(maxW * 1.06));
+    aCellH = Math.max(2, Math.round(fontPx * 1.04));
+    cellW  = aCellW / dpr;
+    cellH  = aCellH / dpr;
+
+    atlas = document.createElement('canvas');
+    atlas.width  = aCellW * G;
+    atlas.height = aCellH * TIERS;
+    const a = atlas.getContext('2d');
+    a.font = `${fontPx}px ${family}`;
+    a.textAlign = 'center';
+    a.textBaseline = 'middle';
+
+    for (let t = 0; t < TIERS; t++) {
+      a.fillStyle = ramp(t / (TIERS - 1));
+      for (let g = 0; g < G; g++) {
+        a.save();
+        // mirror on X about the cell centre — the defining trait of the font
+        a.translate(g * aCellW + aCellW / 2, t * aCellH + aCellH / 2);
+        a.scale(-1, 1);
+        a.fillText(GLYPHS[g], 0, 0);
+        a.restore();
+      }
+    }
+  }
+
+  // ── Layout ───────────────────────────────────────────────────────────────
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth;
+    H = window.innerHeight;
+
+    rain.width  = Math.round(W * dpr);
+    rain.height = Math.round(H * dpr);
+    rain.style.width  = W + 'px';
+    rain.style.height = H + 'px';
+
+    // bloom runs at a fifth of the resolution — it gets blurred and upscaled
+    bloom.width  = Math.max(1, Math.round(W / BLOOM_DIV));
+    bloom.height = Math.max(1, Math.round(H / BLOOM_DIV));
+    if (canvasBlur) bctx.filter = `blur(${(7 / BLOOM_DIV).toFixed(2)}px)`;
+
+    buildAtlas();
+
+    cols = Math.ceil(W / cellW);
+    rows = Math.ceil(H / cellH) + 2;
+
+    streamMax = cols * 3;
+    sCol   = new Int32Array(streamMax);
+    sY     = new Float32Array(streamMax);
+    sSpeed = new Float32Array(streamMax);
+    sLen   = new Float32Array(streamMax);
+    sDim   = new Float32Array(streamMax);
+    sWait  = new Float32Array(streamMax);
+
+    cell   = new Uint8Array(cols * rows);
+    churn  = new Float32Array(cols * rows);
+    spark  = new Float32Array(cols * rows);
+    bright = new Float32Array(cols * rows);
+
+    for (let i = 0; i < cell.length; i++) cell[i] = (Math.random() * G) | 0;
+
+    // Seed the field mid-flight so it opens in steady state rather than
+    // raining in from an empty screen.
+    targetStreams();
+    for (let i = 0; i < streamCount; i++) spawn(i, true);
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+  }
+
+  function targetStreams() {
+    streamCount = Math.min(streamMax, Math.round(cols * (cfg.density / 100) * 1.9));
+  }
+
+  function spawn(i, seeded) {
+    sCol[i]   = (Math.random() * cols) | 0;
+    sLen[i]   = cfg.trail * (0.45 + Math.random() * 1.35);
+    // speed spread: slow drifters alongside fast runners, as in the film
+    const s   = Math.pow(Math.random(), 1.7);
+    sSpeed[i] = (cfg.speed * (0.45 + s * 1.75)) / cellH;     // rows per second
+    sDim[i]   = 0.42 + Math.random() * 0.58;                 // per-stream falloff
+    // seeded: anywhere in its cycle. otherwise: just above the top edge.
+    sY[i]     = seeded ? Math.random() * (rows + sLen[i]) : -Math.random() * 6;
+    sWait[i]  = seeded ? 0 : Math.random() * 2.2;            // stagger re-entry
+  }
+
+  // ── Frame ────────────────────────────────────────────────────────────────
+  let last = performance.now();
+
+  function frame(now) {
+    const dt = Math.min((now - last) / 1000, 0.05);
+    last = now;
+
+    if (!paused) step(dt, now);
+    draw(now);
+
+    requestAnimationFrame(frame);
+  }
+
+  function step(dt, now) {
+    bright.fill(0);
+
+    // 1 — advance every stream, compositing its trail into the brightness
+    //     buffer. Overlapping streams take the brighter value, so two streams
+    //     crossing in one column read as one dense run of code, not a flicker.
+    for (let i = 0; i < streamCount; i++) {
+      if (sWait[i] > 0) { sWait[i] -= dt; continue; }
+
+      sY[i] += sSpeed[i] * dt;
+
+      const y = sY[i], len = sLen[i], c = sCol[i], d = sDim[i];
+      if (y - len > rows) { spawn(i, false); continue; }     // cleared the bottom
+
+      const top = Math.max(0, Math.ceil(y - len));
+      const bot = Math.min(rows - 1, Math.floor(y));
+      const base = c * rows;
+
+      for (let r = top; r <= bot; r++) {
+        const dist = y - r;                 // 0 at the head, len at the tail
+        let v;
+        if (dist < 1) {
+          v = 1;                            // the leading cell — always white
+        } else {
+          const k = 1 - (dist - 1) / len;   // position along the trail
+          if (k <= 0) continue;
+          v = Math.pow(k, 1.3) * d;
+        }
+        const j = base + r;
+        if (v > bright[j]) bright[j] = v;
+      }
+    }
+
+    // 2 — glyphs rewrite themselves in place while lit, and occasionally
+    //     flare white for a frame or two (the shimmer through the field).
+    const churnRate = (cfg.mutate / 100) * 24;
+    const n = bright.length;
+    for (let j = 0; j < n; j++) {
+      if (spark[j] > 0) spark[j] -= dt;
+      if (bright[j] <= 0.02) continue;
+
+      churn[j] -= dt * churnRate * (0.3 + Math.random());
+      if (churn[j] <= 0) {
+        cell[j]  = (Math.random() * G) | 0;
+        churn[j] = 0.4 + Math.random() * 2.4;
+        if (Math.random() < 0.035) spark[j] = 0.05 + Math.random() * 0.12;
+      }
+    }
+  }
+
+  function draw(now) {
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, W, H);
+
+    const tMax = TIERS - 1;
+    // whole-field brightness wobble — CRT phosphor instability
+    const wob = 0.94 + 0.06 * Math.sin(now * 0.011) * Math.sin(now * 0.0037);
+
+    for (let c = 0; c < cols; c++) {
+      const base = c * rows, x = c * cellW;
+
+      for (let r = 0; r < rows; r++) {
+        const j = base + r;
+        let v = bright[j];
+        if (v <= 0.02) continue;
+        if (spark[j] > 0) v = Math.max(v, 0.97);
+        else v *= wob;
+
+        const tier = (v * tMax) | 0;
+        if (tier <= 0) continue;
+
+        ctx.drawImage(
+          atlas,
+          cell[j] * aCellW, tier * aCellH, aCellW, aCellH,
+          x, r * cellH, cellW, cellH
+        );
+      }
+    }
+
+    // bloom pass — downsample, blur cheap at low res, then a second additive
+    // pass for intensity (free here; a CSS brightness() would not be)
+    if (cfg.glow > 0) {
+      bctx.globalCompositeOperation = 'source-over';
+      bctx.clearRect(0, 0, bloom.width, bloom.height);
+      bctx.drawImage(rain, 0, 0, bloom.width, bloom.height);
+      bctx.globalCompositeOperation = 'lighter';
+      bctx.globalAlpha = 0.45;
+      bctx.drawImage(rain, 0, 0, bloom.width, bloom.height);
+      bctx.globalAlpha = 1;
+    }
+  }
+
+  // ── Controls ─────────────────────────────────────────────────────────────
+  const panel = document.getElementById('panel');
+  const hint  = document.getElementById('hint');
+
+  const controls = [
+    ['size',    'c-size',    'v-size',    v => v + 'px',        true ],
+    ['speed',   'c-speed',   'v-speed',   v => v,               false],
+    ['density', 'c-density', 'v-density', v => v + '%',         false],
+    ['trail',   'c-trail',   'v-trail',   v => v,               false],
+    ['mutate',  'c-mutate',  'v-mutate',  v => v + '%',         false],
+    ['glow',    'c-glow',    'v-glow',    v => v + '%',         false]
+  ];
+
+  function syncUI() {
+    for (const [key, cid, vid, fmt] of controls) {
+      document.getElementById(cid).value = cfg[key];
+      document.getElementById(vid).textContent = fmt(cfg[key]);
+    }
+    bloom.style.opacity = cfg.glow / 100;
+  }
+
+  for (const [key, cid, vid, fmt, relayout] of controls) {
+    document.getElementById(cid).addEventListener('input', e => {
+      cfg[key] = +e.target.value;
+      document.getElementById(vid).textContent = fmt(cfg[key]);
+      if (key === 'glow') bloom.style.opacity = cfg.glow / 100;
+      if (relayout) { resize(); return; }
+      if (key === 'density') {
+        const prev = streamCount;
+        targetStreams();
+        // newly added streams enter from the top rather than popping in
+        for (let i = prev; i < streamCount; i++) spawn(i, false);
+      }
+      if (key === 'speed' || key === 'trail') {
+        // re-derive live streams so the change reads immediately
+        for (let i = 0; i < streamCount; i++) {
+          const s = Math.pow(Math.random(), 1.7);
+          sSpeed[i] = (cfg.speed * (0.45 + s * 1.75)) / cellH;
+          sLen[i]   = cfg.trail * (0.45 + Math.random() * 1.35);
+        }
+      }
+    });
+  }
+
+  addEventListener('keydown', e => {
+    const k = e.key.toLowerCase();
+    if (k === 'c') { panel.classList.toggle('open'); hint.classList.add('gone'); }
+    else if (k === 'f') {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else document.documentElement.requestFullscreen?.();
+    }
+    else if (k === 'r') { Object.assign(cfg, DEFAULTS); syncUI(); resize(); }
+    else if (e.code === 'Space') { e.preventDefault(); paused = !paused; last = performance.now(); }
+  });
+
+  // ── Boot ─────────────────────────────────────────────────────────────────
+  reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduced) { cfg.speed = 38; cfg.mutate = 10; }
+
+  let rt;
+  addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(resize, 140); });
+
+  // Wait for the CJK font to settle before measuring glyph widths.
+  const boot = () => { resize(); syncUI(); requestAnimationFrame(frame); };
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(boot); else boot();
+
+  setTimeout(() => hint.classList.add('gone'), 6000);
+})();
+</script>
+</body>
+</html>
