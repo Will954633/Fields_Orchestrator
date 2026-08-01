@@ -379,7 +379,22 @@ def fetch_all_data(gc_db, sm_db, suburb):
     # prose and the page cannot disagree. It carries a 90% CI and a sample size, both exposed
     # here so summaries can state the limitation rather than assert a bare figure.
     if idx:
-        if idx.get("rolling_12m_median_price"):
+        # `current_median_price` is read by every tab section (Overview, SellNow, Buy,
+        # CrashRisk, Direction, SuburbCompare) for their headline figure, their FAQ text AND
+        # their FAQPage JSON-LD. It used to be the latest complete QUARTER while
+        # `yoy_growth_pct` just below was a 12-MONTH rolling figure — so the same sentence
+        # mixed two bases ("median is $X, a +Y% change over the trailing 12 months"), and the
+        # page carried a different median in the hero, the tabs and the prose.
+        #
+        # Where the union median exists it becomes THE median, so one label means one number.
+        # It is also the only one with a published CI and sample size. Suburbs outside the
+        # union (76 of 79 — it runs for the 3 core suburbs only) keep the quarterly figure,
+        # which is what they showed before.
+        if idx.get("median_source") == "domain_union_onthehouse" and idx.get("rolling_12m_median_price"):
+            # Capture the quarterly figure before it is replaced as the headline.
+            data["latest_quarter_median_price"] = data.get("current_median_price")
+            data["current_median_price"] = idx["rolling_12m_median_price"]
+            data["current_median_price_basis"] = "12-month rolling median (Domain ∪ onthehouse)"
             data["median_12m"] = idx["rolling_12m_median_price"]
             data["median_12m_ci_low"] = idx.get("rolling_12m_ci_low")
             data["median_12m_ci_high"] = idx.get("rolling_12m_ci_high")
@@ -387,12 +402,18 @@ def fetch_all_data(gc_db, sm_db, suburb):
             data["median_12m_sample_n"] = idx.get("rolling_12m_median_sample_n")
             data["median_source"] = idx.get("median_source")
             data["median_computed_at"] = idx.get("median_computed_at")
-        # YoY off the 12-month rolling series, not a single thin quarter.
+            data["latest_quarter_median_price_basis"] = (
+                "latest complete quarter — name it as a quarterly figure wherever it appears, "
+                "never as 'the median house price'"
+            )
+        else:
+            data["current_median_price_basis"] = "latest complete quarter"
+
+        # YoY off the 12-month rolling series, not a single thin quarter. Paired with a
+        # 12-month median above, so both halves of the sentence are now the same basis.
         if idx.get("rolling_12m_yoy_pct") is not None:
             data["yoy_growth_pct"] = idx["rolling_12m_yoy_pct"]
-        # `current_median_price` stays the latest COMPLETE quarter — a different statistic
-        # from the 12-month median, so label it rather than letting the two be conflated.
-        data["current_median_price_basis"] = "latest complete quarter"
+            data["yoy_growth_basis"] = "rolling 12 months vs the prior 12 months"
         if idx.get("union_from"):
             data["volume_comparable_from"] = idx["union_from"]
 
