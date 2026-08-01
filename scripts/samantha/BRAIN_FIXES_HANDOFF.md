@@ -10,7 +10,7 @@ preserved in `logs/fix-history/2026-08-01.md` under `[BRAIN-VERIFIER-COVERAGE-IN
 or confirmed at code level.
 
 **Read alongside:** `10_Market_Report/research/brain1_deep_recall_review.md` — a prior review of a
-*recall* failure. Its RC5 (entity drop) is now FIXED (§3.6).
+*recall* failure. Its RC5 (entity drop) is now FIXED (§2.6).
 
 ---
 
@@ -206,13 +206,41 @@ citation-verification one — see §4.
 
 ---
 
+## 3.5 END-TO-END RE-RUN (the §0 query, all fixes live)
+
+```
+no [judge] FAIL-OPEN line at all          (was: lost an 18-unit batch to a parse error)
+facets served from cache                  (run is now reproducible)
+[concentration] RealEstate_Gym 160/245 (65%)  ⚠ >50%
+[verify] ⚠ MALFORMED shape: ['i0048']     (4 digits where i-ids have 10)
+[repair] i0560085714 -> k02964            1 MISATTRIBUTED -> 0
+31 quoted spans | 30 attributable | 22 verified | 0 MISATTRIBUTED | 8 NOT_FOUND | 73.3% fidelity
+```
+
+Every plumbing fix held. **But the surviving defect is not the one the original handoff predicted.**
+Misattribution — the entire basis of the shard-boundary hypothesis — is **zero** after repair. What
+remains is **8 fabricated quotes**: the synthesis puts its own paraphrase and section labels inside
+quotation marks next to a unit id ("frequency outweighs content substance",
+"platform-as-credential... un-copyable"). Checked individually: best coverage 0.54–0.81, all well
+below the 0.90 bar — genuine paraphrase, not a matching artifact. The old verifier scored this class
+as **0** because its broken coverage always found a spurious cov-1.0 "true source".
+
+**The definition of done ("100% quote fidelity, 0 invented ids") is NOT met — and that is the right
+outcome.** The brief is correctly stamped `⚠ NOT publication-ready`. The tool is now measuring
+honestly instead of reporting 89.8% while masking fabrications.
+
+---
+
 ## 4. WHAT IS STILL OPEN
 
-1. **Brain 2 annotation schema validation.** Validate `ad_annotate.py` output against the enum sets
+1. **Quotation marks used for paraphrase — the #1 target.** 8 of 30 attributable spans. This is a
+   **synthesis-prompt** problem, not retrieval or sharding: `rules_for()` says "include DIRECT
+   VERBATIM QUOTES" but never says *only* verbatim text may sit inside quote marks. Try requiring
+   the brief to use quote marks exclusively for copied text and a different device (italics, plain
+   prose) for its own labels — then re-measure. It is now cheaply measurable, and cheap to iterate
+   on via `--load-relevant` (re-synthesise the saved evidence without re-paying for retrieval).
+2. **Brain 2 annotation schema validation.** Validate `ad_annotate.py` output against the enum sets
    its prompt specifies; reject/retry on drift. This is the genuine Brain 2 integrity gap.
-2. **The 4 fabricated quotes.** Now that NOT_FOUND actually fires, the map-reduce path is producing
-   quotes that exist in no unit. This is the real fidelity defect and it was invisible before.
-   Worth attacking via the map step's contract (see 3).
 3. **Map-reduce shard-boundary experiment — deliberately NOT run.** Its premise was the
    5-misattribution pattern, now known to be mostly measurement error. The genuine misattributions
    are a single confusion (u0449 vs u0645 — two units about the *same* quarterly booklet), too thin
