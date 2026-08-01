@@ -42,8 +42,13 @@ def score_units(pkg, query):
     qt = set(toks(query))
     scored = []
     for u in pkg["units"]:
+        # entities (named people/companies/places) are part of the searchable text — without
+        # them a name-anchored query could only match units where the name happened to leak
+        # into a quote or module title. Requires a package built by a brain1_graph.py that
+        # carries entities; .get() keeps older packages working.
+        ents = u.get("entities", []) or []
         blob = " ".join(
-            u["concepts"] + u["topics"] + u["asks"] + u["quotes"]
+            u["concepts"] + u["topics"] + u["asks"] + u["quotes"] + ents
             + [u["src"].get("module", ""), u["src"].get("course", "")]
         )
         ut = toks(blob)
@@ -55,7 +60,10 @@ def score_units(pkg, query):
         s = len(overlap) + 0.1 * sum(ut.count(w) for w in overlap)
         # asks/quotes hits are high-signal for narrative content -> bonus
         ask_hit = sum(1 for a in u["asks"] if qt & set(toks(a)))
-        scored.append((s + 0.5 * ask_hit, u))
+        # an entity hit is a strong signal for a name-anchored question ("what did X say about Y"):
+        # the unit is genuinely ABOUT that person, not just mentioning the word in passing.
+        ent_hit = sum(1 for e in ents if qt & set(toks(e)))
+        scored.append((s + 0.5 * ask_hit + 1.0 * ent_hit, u))
     scored.sort(key=lambda x: -x[0])
     return scored
 
@@ -125,7 +133,16 @@ def main():
     ap.add_argument("--neigh", type=int, default=25, help="max graph-neighbour units")
     ap.add_argument("--mode", choices=list(PROMPTS), default="general")
     ap.add_argument("--dry", action="store_true")
+    ap.add_argument("--package", help="graph package to query (default Brain 1)")
+    ap.add_argument("--no-verify", action="store_true")
+    ap.add_argument("--no-repair", action="store_true",
+                    help="report misattributed citations without auto-correcting them")
+    ap.add_argument("--out")
     args = ap.parse_args()
+
+    global PACKAGE
+    if args.package:
+        PACKAGE = args.package
 
     pkg = load()
     scored = score_units(pkg, args.query)
@@ -150,7 +167,24 @@ def main():
         print(json.dumps(ctx, ensure_ascii=False, indent=2)[:4000])
         return
     print("[opus] reasoning…", file=sys.stderr)
-    print(call_opus(prompt))
+    answer = call_opus(prompt)
+
+    # CITATION VERIFICATION — this is the path most likely to be used casually, and until now it
+    # had none: it can misattribute exactly as the deep path does, silently. Same shared audit,
+    # same ⚠ NOT publication-ready contract as brain1_deep.py.
+    if not args.no_verify:
+        try:
+            import brain1_verify as bv
+            shortlist_ids = {u["id"] for u in top} | {u["id"] for u in neigh}
+            answer, _ = bv.audit(answer, by_id, shortlist_ids=shortlist_ids,
+                                 repair=not args.no_repair)
+        except Exception as e:
+            print(f"[verify] skipped ({e})", file=sys.stderr)
+
+    print(answer)
+    if args.out:
+        open(args.out, "w", encoding="utf-8").write(answer)
+        print(f"[saved] {args.out}", file=sys.stderr)
 
 
 if __name__ == "__main__":
