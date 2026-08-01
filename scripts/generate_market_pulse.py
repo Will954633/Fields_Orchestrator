@@ -165,8 +165,27 @@ def fetch_all_data(gc_db, sm_db, suburb):
                 data["yoy_growth_pct"] = round((latest - year_ago) / year_ago * 100, 1)
             if len(series) >= 2:
                 prev = series[-2].get("median_price", 0)
-                if prev:
+                # Only publish a quarter-on-quarter change when BOTH quarters are wide enough
+                # to support one. precompute_union_prices.py bootstraps a 90% CI per quarter and
+                # marks `reliable: false` where it is too wide — Burleigh Waters fails in 5 of
+                # its last 6 quarters, Robina in 3 of 4. Narrating a QoQ move off those is
+                # reporting sampling noise as a market move; the union's own method note says
+                # they "must not narrate a QoQ change from them". Suppressing it here removes
+                # the figure from every consumer at once, rather than per component.
+                q_now, q_prev = series[-1], series[-2]
+                both_reliable = q_now.get("reliable") is not False and q_prev.get("reliable") is not False
+                if prev and both_reliable:
                     data["qoq_growth_pct"] = round((latest - prev) / prev * 100, 1)
+                elif prev:
+                    # OMIT the key rather than setting null. DirectionSection.tsx guards on
+                    # `ds.qoq_growth_pct !== undefined`, so a null would pass the check and
+                    # render "null%" in the verdict text. Absent is the only safe signal.
+                    data.pop("qoq_growth_pct", None)
+                    data["qoq_suppressed_reason"] = (
+                        f"{q_now.get('period')} vs {q_prev.get('period')}: confidence interval too "
+                        f"wide to support a quarter-on-quarter claim (n={q_now.get('median_sample_n')} "
+                        f"and n={q_prev.get('median_sample_n')}). Do not state a QoQ change."
+                    )
             data["current_median_price"] = latest
         # 10-year journey
         if len(series) >= 40:
