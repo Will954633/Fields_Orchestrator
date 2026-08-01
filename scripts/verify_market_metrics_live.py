@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-verify_market_metrics_live.py — Live-page verification for /market-metrics.
+verify_market_metrics_live.py — Live-page verification for /market-intelligence.
 
 Why: 2026-07-23 — a Market Pulse rewrite fixed the summary/verdict text and
 data_snapshot fields, and both were independently confirmed live via the API.
@@ -42,7 +42,10 @@ from datetime import datetime, timezone
 
 SUBURBS = ["robina", "burleigh-waters", "varsity-lakes"]
 CATEGORIES = ["sell-now", "buy", "crash-risk", "overview", "houses-vs-units", "direction", "suburb-compare"]
-BASE_URL = "https://fieldsestate.com.au/market-metrics"
+# The pages moved from /market-metrics to /market-intelligence on 2026-07-31; the old path is
+# now a 301. Fetching through the redirect worked but meant this check was validating a route
+# we no longer ship, so point it at the canonical one.
+BASE_URL = "https://fieldsestate.com.au/market-intelligence"
 
 OUTPUT_ROOT = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "..", "artifacts", "market_metrics_verify"
@@ -143,11 +146,51 @@ def run(suburbs, categories):
     return out_dir
 
 
+def list_latest():
+    """Print the file paths from the most recent run, without re-fetching."""
+    if not os.path.isdir(OUTPUT_ROOT):
+        print(f"No runs found under {OUTPUT_ROOT}")
+        return 1
+    runs = sorted(d for d in os.listdir(OUTPUT_ROOT) if os.path.isdir(os.path.join(OUTPUT_ROOT, d)))
+    if not runs:
+        print(f"No runs found under {OUTPUT_ROOT}")
+        return 1
+
+    latest = os.path.join(OUTPUT_ROOT, runs[-1])
+    print(f"Most recent run: {latest}\n")
+    manifest_path = os.path.join(latest, "manifest.json")
+    if os.path.exists(manifest_path):
+        with open(manifest_path) as fh:
+            manifest = json.load(fh)  # list of {suburb, category, url, file, status}
+        # status is "OK", "OK (n console errors)", or "FAILED"
+        problems = [e for e in manifest if not str(e.get("status", "")).startswith("OK")]
+        noisy = [e for e in manifest if "console errors" in str(e.get("status", ""))]
+        print(f"{len(manifest)} pages — {len(problems)} failed, {len(noisy)} with console errors\n")
+        for entry in manifest:
+            status = str(entry.get("status", "?"))
+            flag = "" if status == "OK" else f"  <-- {status}"
+            print(f"{entry.get('file')}{flag}")
+    else:
+        for name in sorted(os.listdir(latest)):
+            if name.endswith(".txt"):
+                print(os.path.join(latest, name))
+    return 0
+
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Fetch live /market-metrics page text for review")
+    parser = argparse.ArgumentParser(
+        description="Fetch live /market-intelligence page text for review"
+    )
     parser.add_argument("--suburb", type=str, help="Single suburb slug (e.g. robina)")
     parser.add_argument("--category", type=str, help="Single category (e.g. sell-now)")
+    parser.add_argument(
+        "--list", action="store_true",
+        help="Print paths from the most recent run without re-fetching",
+    )
     args = parser.parse_args()
+
+    if args.list:
+        sys.exit(list_latest())
 
     suburbs = [args.suburb] if args.suburb else SUBURBS
     categories = [args.category] if args.category else CATEGORIES
