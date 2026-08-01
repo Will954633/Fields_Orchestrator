@@ -234,6 +234,34 @@ citation-verification one — see §4.
 
 ---
 
+
+## 4b. NEW — apostrophes produce FALSE NOT_FOUND (found 2026-08-01 20:20, after the rewrite)
+
+`coverage()`'s exact-containment short-circuit does not fire when the needle contains an
+apostrophe. Measured on a quote present verbatim in u0048:
+
+```
+coverage("There's a picture of their house on the covering letter", src) = 0.891  <- fails the 0.90 gate
+coverage("a picture of their house on the covering letter",         src) = 1.000  <- identical span, apostrophe removed
+```
+
+Both sides use the same straight apostrophe — this is not a smart-quote issue. The apostrophe
+splits the span so the ≥8-char block rule loses matched length.
+
+**Do this BEFORE §4.2.** NOT_FOUND only began firing in the same change that reported the 4
+fabrications. Coaching transcripts are dense with contractions, so an unknown share of those 4 are
+false positives. Normalise apostrophes on both sides, re-run the 4, and only then decide whether a
+map-reduce fidelity defect exists at all. Designing the map-step fix on the current count would
+repeat exactly the error §1 documents.
+
+Regression fixture — 11 claims used in a real strategy discussion, 10 verify under the current
+build: `u0199` (5,000 letterbox/week), `u1002/1003/1009` (old stuff again), `u1229` (5th-12th
+contact), `u1468/u2267` (14-day taper), `u0695` (dinner parties), `u0645` (eight-page glossy
+booklet), `u0370/u0645` (50% from database), `u0048` (secret weapon; no competition),
+`u0293/0299/0302` (60% before presentation), and `u0048` picture-of-their-house which currently
+FALSE-NOT_FOUNDs.
+
+---
 ## 5. DO NOT BREAK
 
 - **Fail-open on judge errors.** Dropping relevant data is worse than carrying noise. The parse is
