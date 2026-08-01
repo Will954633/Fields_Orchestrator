@@ -170,8 +170,25 @@ def verdict(st: dict) -> tuple[bool, str]:
         return False, f"NO — could not check sale status ({st['error'][:80]}); erring closed"
 
     dom = st.get("days_on_market")
-    if st.get("on_market") or st.get("gc_for_sale"):
-        src = "PropRadar" if st.get("on_market") else "our own listings data"
+    # Three independent sale signals, because no single source is complete. Measured
+    # 2026-08-01 on the core suburbs (houses): Domain and onthehouse overlap only 72%,
+    # each holding ~25% the other cannot see, and PropRadar's index misses ordinary
+    # never-listed stock by design. ANY of them saying "on the market" is decisive; none
+    # of them saying so is only weak evidence, which is why a miss is never proof.
+    oth = st.get("oth_for_sale")
+    if st.get("on_market") or st.get("gc_for_sale") or oth:
+        src = ("PropRadar" if st.get("on_market")
+               else "our own listings data" if st.get("gc_for_sale")
+               else "onthehouse")
+        if oth and not (st.get("on_market") or st.get("gc_for_sale")):
+            # Only onthehouse sees it — worth naming, since this is the ~25% of live
+            # listings Domain and PropRadar both miss.
+            agency = oth.get("agency")
+            return False, (f"NO — currently FOR SALE with another agent (onthehouse"
+                           + (f", {agency}" if agency else "")
+                           + (f", listed {oth['listed_date']}" if oth.get("listed_date") else "")
+                           + "). Neither PropRadar nor our own Domain data has this "
+                             "listing — onthehouse is the only source that sees it.")
         if dom is not None and dom >= FORM6_NEAR_DAYS:
             state = "PAST" if dom >= FORM6_DAYS else "nearing"
             return False, (f"NO for mail — ON THE MARKET {dom} days ({src}), {state} the "
