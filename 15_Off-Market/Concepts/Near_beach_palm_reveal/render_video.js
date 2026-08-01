@@ -81,6 +81,16 @@ async function main() {
 
   // stills never touch this; only create it when frames are actually written
   const frameDir = o.stills > 0 ? null : fs.mkdtempSync(path.join(os.tmpdir(), "palm-reveal-"));
+  try {
+    await render(o, url, frameDir);
+  } finally {
+    // a few hundred full-size PNGs — clear them however we got here, including
+    // a browser crash part-way through capture
+    if (frameDir) fs.rmSync(frameDir, { recursive: true, force: true });
+  }
+}
+
+async function render(o, url, frameDir) {
   const browser = await puppeteer.launch({
     executablePath: CHROME, headless: "new", args: LAUNCH_ARGS,
   });
@@ -142,9 +152,10 @@ async function main() {
     await browser.close();
   }
 
-  try {
-  const stem = o.out ? o.out.replace(/\.(mp4|gif)$/, "") : `palm_reveal_${o.mode}`;
-  const mp4 = path.join(HERE, `${stem}.mp4`);
+  // resolve, not join — so an absolute --out lands where it was asked to,
+  // rather than being pasted onto HERE and written somewhere that isn't there
+  const stem = path.resolve(HERE, (o.out || `palm_reveal_${o.mode}`).replace(/\.(mp4|gif)$/, ""));
+  const mp4 = `${stem}.mp4`;
   const pattern = path.join(frameDir, "f_%05d.png");
   const evenScale = "scale=trunc(iw/2)*2:trunc(ih/2)*2";
 
@@ -164,15 +175,11 @@ async function main() {
     const gifScale = "scale=640:-1:flags=lanczos";
     await run("ffmpeg", ["-y", "-loglevel", "error", "-framerate", String(o.fps), "-i", pattern,
       "-vf", `fps=${gifFps},${gifScale},palettegen=stats_mode=diff`, palette]);
-    const gif = path.join(HERE, `${stem}.gif`);
+    const gif = `${stem}.gif`;
     await run("ffmpeg", ["-y", "-loglevel", "error", "-framerate", String(o.fps), "-i", pattern,
       "-i", palette, "-lavfi", `fps=${gifFps},${gifScale}[x];[x][1:v]paletteuse=dither=bayer:bayer_scale=3`,
       gif]);
     console.log(`  ${path.basename(gif)}  (${(fs.statSync(gif).size / 1048576).toFixed(1)} MB)`);
-  }
-  } finally {
-    // a few hundred full-size PNGs — always clear them, even if ffmpeg failed
-    fs.rmSync(frameDir, { recursive: true, force: true });
   }
 }
 
