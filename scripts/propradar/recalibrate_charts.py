@@ -42,6 +42,59 @@ def _raw(entry, field):
     return entry[rk]
 
 
+# DISABLED 2026-08-01 — see [PROPRADAR-MEDIAN-ANCHOR-WRONG] in fix-history.
+#
+# The median anchor was substituting a median computed over a DIFFERENT dwelling
+# population. PropRadar reports 240 Burleigh Waters house sales against REA's 195
+# at a 10% lower median, and its BW `unit_price` is null despite 75 recorded unit
+# sales — its house/unit split for that suburb is broken, so attached stock lands
+# in the house bucket and drags the median down. The anchor also compared a
+# 12-month median against a MEAN OF FOUR QUARTERLY MEDIANS, which is a different
+# statistic even when the populations match.
+#
+# Effect on the public page: Burleigh Waters published at $1,625,976 against a
+# REA-comparable $1,910,000. Medians now come from the Domain union onthehouse
+# transaction set (`scripts/precompute_union_prices.py`), which lands within 0.8%
+# of REA on a sample within 4.6% of theirs.
+#
+# Volume calibration below is UNCHANGED and still runs — PropRadar remains the
+# better source for completeness/counts, which is what it is actually good at.
+# That is being addressed separately (capture rate is not constant over time, so a
+# uniform factor is also wrong, but fixing it needs the frontend).
+RECALIBRATE_MEDIAN = False
+
+
+def _volume_only(db, s, pr, doc, series, apply, factor):
+    """Volume calibration with every price field left alone.
+
+    Mirrors the transaction_count block below, minus the median/yoy writes. Prices
+    on this doc are owned by precompute_union_prices.py; this function must never
+    write median_price, latest_price, baseline_price, rolling_12m_median_price or
+    rolling_12m_yoy_pct.
+    """
+    ipq = doc.get("in_progress_quarter")
+    if pr.get("sales_12mo"):
+        tc_raws = [_raw(q, "transaction_count") for q in series if _raw(q, "transaction_count")]
+        if len(tc_raws) >= 4 and sum(tc_raws[-4:]):
+            vfac = pr["sales_12mo"] / sum(tc_raws[-4:])
+            for q in series:
+                rv = _raw(q, "transaction_count")
+                if rv is not None:
+                    q["transaction_count"] = round(rv * vfac)
+            if ipq and _raw(ipq, "transaction_count"):
+                ipq["transaction_count"] = round(_raw(ipq, "transaction_count") * vfac)
+            doc["transaction_count_calibration_factor"] = round(vfac, 4)
+            print(f"  VOLUME  {s}: factor {vfac:.3f} (prices untouched)")
+    doc["calibration"] = {"method": "propradar_anchor_VOLUME_ONLY",
+                          "median_factor_not_applied": round(factor, 4),
+                          "pr_sales_12mo": pr.get("sales_12mo"),
+                          "as_of": pr.get("as_of")}
+    if apply:
+        cosmos_retry(lambda: db["precomputed_indexed_prices"].replace_one({"_id": s}, doc),
+                     f"recal_volume_only:{s}")
+    return None
+
+
 def recalibrate_median(db, s, pr, apply):
     doc = db["precomputed_indexed_prices"].find_one({"_id": s})
     if not doc or not pr.get("median_price"):
@@ -53,6 +106,15 @@ def recalibrate_median(db, s, pr, apply):
     anchor = sum(raws[-4:]) / 4.0                 # trailing 4 complete quarters ≈ 12mo
     factor = pr["median_price"] / anchor
     before_last = series[-1].get("median_price")
+
+    if not RECALIBRATE_MEDIAN:
+        print(f"  MEDIAN  {s}: SKIPPED (PropRadar median anchor disabled) — "
+              f"would have applied factor {factor:.3f}; medians owned by "
+              f"precompute_union_prices.py")
+        # Volume calibration still needs to run, so fall through to it rather than
+        # returning — but never touch a price field on the way.
+        return _volume_only(db, s, pr, doc, series, apply, factor)
+
     for q in series:
         rv = _raw(q, "median_price")
         if rv:
