@@ -109,9 +109,25 @@ def holders(frs, blobs, scope_ids=None, cover=0.90):
 
 
 def fragments(quote):
-    """Split a brief quote on ellipsis elisions; keep substantial pieces."""
-    parts = re.split(r"\s*(?:\.\.\.|…)\s*", quote)
-    return [p.strip() for p in parts if len(p.strip()) >= 8] or [quote.strip()]
+    """Split a brief quote into the pieces that should appear VERBATIM in a source unit.
+
+    Splits on ellipsis elisions AND on square-bracket editorial insertions — "I do 50
+    [letterbox drops per week]" is quoting only "I do 50"; the bracketed words are the brief's
+    own gloss and are not in the source, so matching against them guarantees a false miss.
+    """
+    parts = [p.strip() for p in re.split(r"\s*(?:\.\.\.|…|\[[^\]]*\])\s*", quote) if p.strip()]
+    kept = [p for p in parts if len(p) >= 8]
+    if kept:
+        return kept
+    # every piece is short — fall back to the elided/gloss-stripped remainder, NOT the raw quote,
+    # so a mostly-glossed span is judged on the few words it actually quotes (and lands in
+    # UNVERIFIABLE rather than being reported as a fabrication).
+    return [" ".join(parts)] if parts else [quote.strip()]
+
+
+def attributable_len(frs):
+    """Verbatim characters actually available to attribute with (excludes elided/glossed text)."""
+    return sum(len(norm(f)) for f in frs)
 
 
 def parse_pairs(text):
@@ -169,7 +185,7 @@ def verify_text(text, blobs=None, cover=0.85, true_cover=0.90, scope_ids=None):
             rec["why"] = ("held by %d units — attribution ambiguous" % len(found)
                           if len(found) > MAX_NAMED_SOURCES else "held by a different unit")
             misattr.append(rec)
-        elif len(norm(q)) < MIN_ATTRIBUTABLE:
+        elif attributable_len(frs) < MIN_ATTRIBUTABLE:
             rec["why"] = "too short to attribute and not found verbatim — likely a coined label, not a quote"
             unverifiable.append(rec)
         else:
