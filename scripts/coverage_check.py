@@ -48,15 +48,66 @@ LOG_FILE = Path(__file__).parent.parent / "logs" / "coverage_check.log"
 
 DATABASE_NAME = 'Gold_Coast'
 
+SETTINGS_YAML = REPO_ROOT / "config" / "settings.yaml"
+
 # Domain URL template — swap in suburb slug (e.g. "robina-qld-4226")
 DOMAIN_URL_TEMPLATE = "https://www.domain.com.au/sale/{slug}/?excludeunderoffer=1&ssubs=0"
 
-# data-testid for the count element: <h1 data-testid="summary">...<strong>54 Properties</strong>...
-COUNT_PATTERN = re.compile(r'<strong[^>]*>\s*(\d+)\s+Propert', re.IGNORECASE)
+# Domain serves more than one page variant for the same URL — the light one (~500KB)
+# carries only the <h1 data-testid="summary"> heading, the heavy one (~2MB) also embeds
+# a "totalResults" JSON field. Burleigh Waters returned a variant matching NONE of the
+# original patterns on 2026-08-01 and was silently reported DOMAIN_UNAVAILABLE, so the
+# count is now tried against every known shape before giving up.
+COUNT_PATTERNS = [
+    # <h1 data-testid="summary"><strong>54 Properties</strong> for sale ...
+    re.compile(r'data-testid="summary"[^>]*>.*?<strong[^>]*>\s*([\d,]+)\s+Propert', re.I | re.S),
+    # bare <strong>54 Properties</strong>
+    re.compile(r'<strong[^>]*>\s*([\d,]+)\s+Propert', re.I),
+    # embedded search state: "totalResults":54
+    re.compile(r'"totalResults"\s*:\s*([\d,]+)', re.I),
+    # any ">54 Properties<" text node
+    re.compile(r'>\s*([\d,]+)\s+Propert\w*\s*<', re.I),
+]
 
 # Retry settings
 MAX_RETRIES = 3
 RETRY_DELAY = 5  # seconds
+
+
+def load_suburbs_from_settings(path: Path = SETTINGS_YAML) -> List[Dict]:
+    """Load the suburb list from config/settings.yaml `target_market.suburbs`.
+
+    settings.yaml is what step 101 actually scrapes, so reading it here keeps the
+    coverage check and the scraper from drifting. They HAD drifted: Merrimac and
+    Carrara were commented out of target_market but stayed in step 109's hardcoded
+    --suburbs list, so both reported ERROR (missing 16 / missing 4) every night for
+    properties nothing was scraping. Permanent false alarms train you to ignore the board.
+    """
+    try:
+        import yaml  # local import: only needed for this path
+        with open(path) as f:
+            data = yaml.safe_load(f) or {}
+        raw = (data.get('target_market') or {}).get('suburbs') or []
+    except Exception as e:
+        print(f"ERROR: Failed to load target_market from {path}: {e}")
+        return []
+
+    suburbs = []
+    for entry in raw:
+        # entries look like "Robina:4226"
+        if not isinstance(entry, str) or ':' not in entry:
+            print(f"WARNING: Skipping malformed target_market entry {entry!r}")
+            continue
+        name, postcode = entry.split(':', 1)
+        name, postcode = name.strip(), postcode.strip()
+        suburbs.append({
+            'name': name,
+            'postcode': postcode,
+            'slug': f"{name.lower().replace(' ', '-')}-qld-{postcode}",
+        })
+    if not suburbs:
+        print(f"WARNING: No target_market.suburbs found in {path}")
+    return suburbs
 
 
 def load_suburbs_from_json(path: Path) -> List[Dict]:
@@ -98,22 +149,33 @@ def fetch_domain_count(suburb: Dict) -> Optional[int]:
     slug = suburb.get('slug', '')
     url = DOMAIN_URL_TEMPLATE.format(slug=slug)
 
-    # Fetch via Bright Data Web Unlocker (helper handles retries + Akamai bypass)
-    html = _domain_fetch_html(url, retries=MAX_RETRIES)
-    if not html:
-        print(f"  WARNING: Fetch failed for {suburb['name']} ({url})")
-        return None
+    # Fetch via Bright Data Web Unlocker (helper handles retries + Akamai bypass).
+    # A fetch can succeed and still return an unparseable variant, so extraction gets
+    # its own retry loop rather than trusting the first body we're handed.
+    html = None
+    for attempt in range(1, MAX_RETRIES + 1):
+        html = _domain_fetch_html(url, retries=MAX_RETRIES)
+        if not html:
+            print(f"  WARNING: Fetch failed for {suburb['name']} ({url}) [attempt {attempt}/{MAX_RETRIES}]")
+        else:
+            for pattern in COUNT_PATTERNS:
+                match = pattern.search(html)
+                if match:
+                    return int(match.group(1).replace(',', ''))
+            print(f"  WARNING: Unparseable Domain page variant for {suburb['name']} "
+                  f"({len(html)} bytes) [attempt {attempt}/{MAX_RETRIES}]")
+        if attempt < MAX_RETRIES:
+            time.sleep(RETRY_DELAY)
 
-    match = COUNT_PATTERN.search(html)
-    if match:
-        return int(match.group(1))
-
-    summary_match = re.search(
-        r'data-testid="summary"[^>]*>.*?<strong[^>]*>(\d+)\s+Propert',
-        html, re.IGNORECASE | re.DOTALL
-    )
-    if summary_match:
-        return int(summary_match.group(1))
+    # Every attempt exhausted. Keep the last body so the next failure is diagnosable
+    # instead of reappearing as a bare DOMAIN_UNAVAILABLE with nothing to inspect.
+    if html:
+        try:
+            debug_path = LOG_FILE.parent / f"coverage_unparseable_{suburb.get('slug', 'unknown')}.html"
+            debug_path.write_text(html[:500_000])
+            print(f"  WARNING: Saved unparseable page to {debug_path}")
+        except Exception as e:
+            print(f"  WARNING: Could not save debug page: {e}")
 
     print(f"  WARNING: Could not extract count from Domain page for {suburb['name']}")
     return None
@@ -193,6 +255,9 @@ Examples:
         """
     )
     parser.add_argument('--suburbs', type=str, help='Comma-separated Name:postcode pairs to check')
+    parser.add_argument('--from-config', action='store_true',
+                        help='Check exactly the suburbs in config/settings.yaml target_market '
+                             '(what step 101 actually scrapes). Preferred for the nightly run.')
     parser.add_argument('--no-fail', action='store_true',
                         help='Exit 0 even when coverage gaps found (for orchestrator integration)')
     args = parser.parse_args()
@@ -200,6 +265,8 @@ Examples:
     # Load suburb list
     if args.suburbs:
         suburbs = parse_suburbs_arg(args.suburbs)
+    elif args.from_config:
+        suburbs = load_suburbs_from_settings()
     else:
         suburbs = load_suburbs_from_json(SUBURBS_JSON)
 
