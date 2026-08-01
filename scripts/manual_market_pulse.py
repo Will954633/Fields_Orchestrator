@@ -276,7 +276,39 @@ def check_monthly_status():
     client.close()
 
 
-def write_summary(suburb, category, verdict, summary, key_signals=None):
+_SNAPSHOT_CACHE = {}
+
+
+def _fresh_snapshot(client, suburb):
+    """
+    Rebuild data_snapshot from live data, using the same builder the auto-generator uses.
+
+    Why this is not optional: a market_pulse document has THREE independent content layers —
+    `summary` (the prose), `data_snapshot` (the figures the React components read directly) and
+    historically `narrative.pillars`. This function used to `$set` only the prose, so a full
+    manual rewrite left the OLD snapshot driving the verdict blocks, chart captions and per-tab
+    FAQPage JSON-LD. On 2026-08-02 that meant the page would have shown a freshly written summary
+    quoting $1,925,000 beside a verdict block still reading $1,710,000 from a snapshot captured
+    the day before — the exact failure CLAUDE.md Rule 6 was written about.
+
+    Cached per suburb: 7 categories share one snapshot, so a full 21-summary rewrite does 3
+    rebuilds rather than 21.
+    """
+    if suburb in _SNAPSHOT_CACHE:
+        return _SNAPSHOT_CACHE[suburb]
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from generate_market_pulse import fetch_all_data
+        snap = fetch_all_data(client["Gold_Coast"], client["system_monitor"], suburb)
+    except Exception as e:
+        print(f"   ⚠️  Could not rebuild data_snapshot for {suburb}: {e}")
+        print(f"      The prose will be written but the figures on the page will be STALE.")
+        snap = None
+    _SNAPSHOT_CACHE[suburb] = snap
+    return snap
+
+
+def write_summary(suburb, category, verdict, summary, key_signals=None, refresh_snapshot=True):
     """Write a manual summary to MongoDB."""
     client = get_db()
     db = client["system_monitor"]
@@ -303,6 +335,11 @@ def write_summary(suburb, category, verdict, summary, key_signals=None):
         "model": "human+claude",
     }
 
+    if refresh_snapshot:
+        snap = _fresh_snapshot(client, suburb)
+        if snap:
+            doc["data_snapshot"] = snap
+
     db["market_pulse"].update_one(
         {"suburb": suburb, "category": category},
         {"$set": doc},
@@ -312,6 +349,12 @@ def write_summary(suburb, category, verdict, summary, key_signals=None):
     print(f"✅ Written: {DISPLAY_NAMES.get(suburb, suburb)} / {CATEGORIES[category]}")
     print(f"   Verdict: {verdict}")
     print(f"   Summary: {summary[:100]}...")
+    if refresh_snapshot and doc.get("data_snapshot"):
+        s = doc["data_snapshot"]
+        print(f"   Snapshot refreshed: median ${s.get('current_median_price', 0):,.0f} "
+              f"({s.get('current_median_price_basis', '?')}), "
+              f"YoY {s.get('yoy_growth_pct')}%, "
+              f"QoQ {s.get('qoq_growth_pct', 'suppressed')}")
 
     client.close()
 
@@ -326,6 +369,8 @@ if __name__ == "__main__":
     parser.add_argument("--category", type=str, help="Category ID (e.g. sell-now)")
     parser.add_argument("--verdict", type=str, help="Verdict string")
     parser.add_argument("--summary", type=str, help="Summary text")
+    parser.add_argument("--no-snapshot-refresh", action="store_true",
+                        help="Do NOT rebuild data_snapshot on write. Only use this if the\n                              figures on the page are already current — a stale snapshot\n                              will contradict the summary you just wrote (Rule 6).")
     parser.add_argument("--signals", type=str, help="Key signals as JSON array")
     args = parser.parse_args()
 
@@ -340,6 +385,7 @@ if __name__ == "__main__":
             print("ERROR: --write requires --suburb, --category, --verdict, and --summary")
             sys.exit(1)
         signals = json.loads(args.signals) if args.signals else []
-        write_summary(args.suburb, args.category, args.verdict, args.summary, signals)
+        write_summary(args.suburb, args.category, args.verdict, args.summary, signals,
+                      refresh_snapshot=not args.no_snapshot_refresh)
     else:
         parser.print_help()
