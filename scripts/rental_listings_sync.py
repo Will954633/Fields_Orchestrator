@@ -34,7 +34,7 @@ import os
 import re
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -52,6 +52,9 @@ PAGE_PAUSE_S = 1.5      # be a polite client
 # asked for is exhausted. Stop on the target suburb instead — the neighbours get their
 # own pass anyway, since they're all in SUBURBS.
 PAGE_BUDGET_S = 420     # hard ceiling for one suburb, so the nightly job can't hang
+# Backstop for listings picked up from SURROUNDING suburbs we never query directly:
+# they can never be reconciled, so retire them if they go unseen this long.
+STALE_AFTER_DAYS = 10
 
 # Suburbs we hold contacts in. Keep aligned with propradar/market_status.SUBURB_POSTCODES.
 SUBURBS = [
@@ -252,6 +255,17 @@ def sync(db, suburbs: list[str], dry_run: bool = False) -> dict:
              "_id": {"$nin": list(all_rows)}},
             {"$set": {"active": False, "ended_at": now}})
         stats["ended"] = ended.modified_count
+
+    # Staleness backstop. Each index also returns SURROUNDING suburbs, so we pick up
+    # listings in suburbs we never query directly (Mermaid Beach, Broadbeach, ...).
+    # Those can never be reconciled by the rule above and would stay "active" forever —
+    # a stale rental record silently blocks an address that is no longer leased.
+    # Anything not re-seen in STALE_AFTER_DAYS is retired regardless of suburb.
+    stale_cut = now - timedelta(days=STALE_AFTER_DAYS)
+    stale = coll.update_many(
+        {"active": True, "last_seen": {"$lt": stale_cut}},
+        {"$set": {"active": False, "ended_at": now, "ended_reason": "stale"}})
+    stats["stale_retired"] = stale.modified_count
     return stats
 
 
@@ -273,6 +287,7 @@ def main():
         st = sync(db, args.suburbs, args.dry_run)
         beat.detail = (f"{st['active']} active across {st['suburbs_ok']} suburb(s); "
                        f"{st['new']} new, {st['ended']} ended, "
+                       f"{st.get('stale_retired', 0)} stale retired, "
                        f"{st['suburbs_failed']} fetch failure(s)")
         beat.metrics = st
         print("\n" + beat.detail)
