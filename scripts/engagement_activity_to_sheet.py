@@ -230,8 +230,10 @@ def reach_for(c: dict, status: dict | None = None,
     # days_on_market); it has NO lease data, so lease is reported as unknown, never
     # assumed clear.
     st = status.get(best["address"])
+    sell_note = ""
     if st is not None:
         sellable, why = ms.verdict(st)
+        sell_note = why
         if not sellable:
             return {"via": f"Postal address ({tier_label}) — {best['basis']}",
                     "detail": st.get("canonical_address") or best["address"],
@@ -242,13 +244,15 @@ def reach_for(c: dict, status: dict | None = None,
         ok = (f"NO — we do not know which of {others} addresses is theirs" if others > 1
               else "NO — no evidence this address is theirs")
     elif best["tier"] == T_CONFIRMED:
-        ok = "Yes — they confirmed this is their home; not for sale per PropRadar"
+        ok = "Yes — they confirmed this is their home"
     elif best["tier"] == T_SUBMITTED:
         ok = "Probably — they submitted it, but that isn't proof of ownership"
     else:
         ok = "Maybe — inferred only, no confirmation"
-    if not ok.startswith("NO"):
-        ok += ". ⚠ LEASE STATUS UNKNOWN — no rent data source; confirm before posting"
+    # Carry the real sellability finding rather than a hardcoded caveat — whether the
+    # lease side was actually checked depends on rental_listings being populated.
+    if not ok.startswith("NO") and sell_note:
+        ok += f". {sell_note}"
 
     return {"via": f"Postal address ({tier_label}) — {best['basis']}",
             "detail": (status.get(best["address"], {}) or {}).get("canonical_address")
@@ -294,6 +298,9 @@ def market_status_for(addresses: list[str], db, gc_db, max_calls: int) -> dict[s
     we've seen it miss addresses, and our Gold_Coast scrape is authoritative only for
     the three core suburbs. A hit in EITHER blocks the mail.
     """
+    import rental_listings_sync as rls
+    lease_ok = db[rls.COLL].count_documents({"active": True}) > 0
+
     gc_listed = set()
     for sub in ("robina", "varsity_lakes", "burleigh_waters"):
         for d in gc_db[sub].find({"listing_status": "for_sale"}, {"address": 1}):
@@ -307,10 +314,15 @@ def market_status_for(addresses: list[str], db, gc_db, max_calls: int) -> dict[s
                       "lease_status": ms.LEASE_UNKNOWN}
         else:
             out[a] = ms.check(a, db=db, spend=spend)
-        out[a] = dict(out[a], gc_for_sale=ms._key(a) in gc_listed)
-    blocked = sum(1 for v in out.values() if v.get("on_market") or v.get("gc_for_sale"))
-    print(f"  Sale check: {spend['calls']} PropRadar call(s), {len(out)} address(es), "
-          f"{blocked} currently listed")
+        # Lease side — a home the owner is leasing is not one we can sell.
+        lease = rls.is_for_lease(db, a) if lease_ok else None
+        out[a] = dict(out[a], gc_for_sale=ms._key(a) in gc_listed,
+                      for_lease=lease, lease_checked=lease_ok)
+    sale_blocked = sum(1 for v in out.values() if v.get("on_market") or v.get("gc_for_sale"))
+    lease_blocked = sum(1 for v in out.values() if v.get("for_lease"))
+    print(f"  Sellability: {spend['calls']} PropRadar call(s), {len(out)} address(es) — "
+          f"{sale_blocked} for sale, {lease_blocked} for lease"
+          + ("" if lease_ok else " (LEASE DATA EMPTY — run rental_listings_sync.py)"))
     return out
 
 
@@ -569,6 +581,8 @@ def candidates_cell(cands: list[dict], status: dict, caveats: dict) -> str:
             mark = " [sale status UNVERIFIED]"
         else:
             mark = ""
+        if (status.get(x["address"]) or {}).get("for_lease"):
+            mark += " [FOR LEASE]"
         cav = caveats.get(x["address"])
         lines.append(f"[{tier_name[x['tier']]}] "
                      f"{st.get('canonical_address') or x['address']}{mark} — {x['basis']}"
