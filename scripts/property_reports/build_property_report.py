@@ -142,6 +142,40 @@ def _find_live_listing(gc_db, report_doc: Dict[str, Any]) -> Optional[Dict[str, 
         return None
 
 
+def _find_oth_listing(report_doc: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Live onthehouse.com.au sale listing for this address, or None.
+
+    Second opinion on "is this home on the market". Gold_Coast is Domain-derived, and
+    Domain is not complete: measured 2026-08-01 on the core suburbs, Domain and
+    onthehouse overlap only 72% on live houses, each seeing ~25% the other misses. Six
+    finished seller reports were sitting in `under_review` for homes listed with other
+    agents, invisible to _find_live_listing because Domain never had the listing.
+
+    A hit is decisive. A miss means nothing — onthehouse misses stock too, which is why
+    this runs AFTER the Gold_Coast check rather than replacing it.
+    """
+    import os
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    try:
+        import onthehouse_listings_sync as ohl
+    except Exception:
+        return None
+    address = report_doc.get("address") or ""
+    if not address:
+        return None
+    try:
+        sm = get_system_monitor_db()
+        if sm[ohl.COLL].count_documents({"active": True}, limit=1) == 0:
+            return None      # collection unpopulated -> "not checked", never "not listed"
+        suburb = (report_doc.get("suburb_key") or "").replace("_", " ") or None
+        return ohl.is_listed(sm, address, suburb=suburb)
+    except Exception as e:
+        logger.warning(f"  onthehouse listing check failed ({type(e).__name__}: {e}) — "
+                       f"treating as UNKNOWN, not as 'not listed'")
+        return None
+
+
 def resolve_one(report_doc: Dict[str, Any], force: bool = False) -> Dict[str, Any]:
     """Resolve slots for one doc. Returns the update dict that was applied."""
     slug = report_doc["slug"]
@@ -183,6 +217,33 @@ def resolve_one(report_doc: Dict[str, Any], force: bool = False) -> Dict[str, An
             )
             logger.info(
                 f"  {slug}: currently listed for sale (property {listed_id}) — skipping build"
+            )
+            return {}
+
+        # Domain didn't know — ask onthehouse before spending a build.
+        oth = _find_oth_listing(report_doc)
+        if oth:
+            cosmos_retry(
+                lambda: coll.update_one(
+                    {"slug": slug},
+                    {
+                        "$set": {
+                            "state": "currently_listed",
+                            "build_state": "skipped_currently_listed",
+                            "listed_source": "onthehouse",
+                            "listed_agency": oth.get("agency"),
+                            "listed_date": oth.get("listed_date"),
+                            # No listed_property_url: we have no /property page for a
+                            # listing Domain never gave us. Say what we know, not more.
+                            "updated_at": datetime.utcnow(),
+                        }
+                    },
+                ),
+                label=f"property_reports.currently_listed_oth.{slug}",
+            )
+            logger.info(
+                f"  {slug}: currently listed per onthehouse ({oth.get('agency')}, "
+                f"listed {oth.get('listed_date')}) — not in our Domain data — skipping build"
             )
             return {}
 
