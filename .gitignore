@@ -56,10 +56,32 @@ compliance_exports/
 00_Run_Commands/gh-token-29Mar.txt
 *-token-*.txt
 *.token
+.gcp-vertex-key.json
+
+# Convenience symlinks to sibling projects under /home/fields — VM-local only,
+# so every main folder is visible from one tree. Never tracked (a committed
+# symlink would break any clone that doesn't have /home/fields).
+actions-runner
+audio_library
+aux
+backups
 brain1_build
 brain3_build
-.gcp-vertex-key.json
 brain3_ops
+brain_drive
+build-logs
+claude-terminal
+Feilds_Website
+fields-automation
+knowledge-base
+lab-funnels
+offmarket-preview
+Property_Data_Scraping
+Property_Valuation
+quarterly-preview
+samantha-accounting
+samantha-email-agent
+samantha-knowledge-base
 
 # Website visitor feedback — contains PII (emails), never push to public repo
 feedback/
