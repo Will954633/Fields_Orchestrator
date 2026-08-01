@@ -60,10 +60,12 @@ from datetime import datetime, timedelta, timezone
 warnings.filterwarnings("ignore")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "propradar"))
 
 from shared.db import get_client
 from crm_sync import posthog_query, INTERNAL_IDS, BOT_CITIES
 from job_status import job_run
+import market_status as ms
 from live_leads_to_sheet import (
     LIVE_SPREADSHEET_ID, get_sheets, tab_id, set_env_from_file, AEST,
 )
@@ -199,10 +201,13 @@ def address_candidates(c: dict, seen_now: set[str] | None = None) -> list[dict]:
     return out
 
 
-def reach_for(c: dict, listed: set[str] | None = None,
+def reach_for(c: dict, status: dict | None = None,
               seen_now: set[str] | None = None) -> dict | None:
-    """Best available way to reach this contact, with an explicit mailability verdict."""
-    listed = listed or set()
+    """Best available way to reach this contact, with an explicit mailability verdict.
+
+    `status` maps address -> PropRadar market status (see propradar/market_status).
+    """
+    status = status or {}
     email = (c.get("email") or "").strip()
     if email:
         return {"via": "Email", "detail": email, "mail_ok": "Yes — email",
@@ -220,37 +225,92 @@ def reach_for(c: dict, listed: set[str] | None = None,
                   T_LOOKUP: "inferred (single-address lookup)",
                   T_AMBIGUOUS: "AMBIGUOUS"}[best["tier"]]
 
-    if best["slug"] and best["slug"] in listed:
-        ok = "NO — that address is currently ON THE MARKET (buyer, or already listed elsewhere)"
-    elif best["tier"] == T_AMBIGUOUS:
+    # Sellability first: it doesn't matter how strong the ownership evidence is if we
+    # can't sell the place. PropRadar covers FOR SALE (incl. the Form 6 window via
+    # days_on_market); it has NO lease data, so lease is reported as unknown, never
+    # assumed clear.
+    st = status.get(best["address"])
+    if st is not None:
+        sellable, why = ms.verdict(st)
+        if not sellable:
+            return {"via": f"Postal address ({tier_label}) — {best['basis']}",
+                    "detail": st.get("canonical_address") or best["address"],
+                    "mail_ok": why, "candidates": cands, "tier": best["tier"]}
+
+    if best["tier"] == T_AMBIGUOUS:
         others = len([x for x in cands if x["tier"] == T_AMBIGUOUS])
         ok = (f"NO — we do not know which of {others} addresses is theirs" if others > 1
               else "NO — no evidence this address is theirs")
     elif best["tier"] == T_CONFIRMED:
-        ok = "Yes — they confirmed this is their home"
+        ok = "Yes — they confirmed this is their home; not for sale per PropRadar"
     elif best["tier"] == T_SUBMITTED:
         ok = "Probably — they submitted it, but that isn't proof of ownership"
     else:
         ok = "Maybe — inferred only, no confirmation"
+    if not ok.startswith("NO"):
+        ok += ". ⚠ LEASE STATUS UNKNOWN — no rent data source; confirm before posting"
 
     return {"via": f"Postal address ({tier_label}) — {best['basis']}",
-            "detail": best["address"], "mail_ok": ok, "candidates": cands,
-            "tier": best["tier"]}
+            "detail": (status.get(best["address"], {}) or {}).get("canonical_address")
+                      or best["address"],
+            "mail_ok": ok, "candidates": cands, "tier": best["tier"]}
 
 
-def listed_slugs(gc_db, slugs: set[str]) -> set[str]:
-    """Which of these slugs are currently ON THE MARKET.
+def cadastral_address(gc_db, slug: str) -> tuple[str | None, str | None]:
+    """(postable address, caveat) rebuilt from the QLD cadastral fields.
 
-    A listed address is disqualifying: either the visitor is a buyer researching that
-    listing, or they own it and it's already with another agent. Posting "we noticed
-    you looking at your home report" is wrong in both cases. (Same principle as the
-    AYH currently-listed guard.)
+    Far more reliable than reconstructing from the slug — and it exposes a trap: the
+    leading number in a slug like `13-4-yodelay-street-varsity-lakes` is the LOT
+    (LOT 13, PLAN GTP4152, STREET_NO_1 4), NOT necessarily the unit number. Writing
+    "13/4 Yodelay Street" on an envelope is a guess. We surface that caveat rather
+    than printing a confident address we can't stand behind.
     """
-    out = set()
     for sub in ("robina", "varsity_lakes", "burleigh_waters"):
-        for d in gc_db[sub].find({"url_slug": {"$in": list(slugs)},
-                                  "listing_status": "for_sale"}, {"url_slug": 1}):
-            out.add(d["url_slug"])
+        d = gc_db[sub].find_one({"url_slug": slug})
+        if not d:
+            continue
+        if d.get("address"):
+            return d["address"], None
+        no1, name = d.get("STREET_NO_1"), d.get("STREET_NAME")
+        if not (no1 and name):
+            return None, None
+        street = " ".join(str(x).title() for x in
+                          [no1, name, d.get("STREET_TYPE")] if x)
+        loc = str(d.get("LOCALITY") or "").title()
+        addr = f"{street}, {loc} QLD {d.get('POSTCODE') or ''}".strip()
+        caveat = None
+        if d.get("UNIT_TYPE") and d.get("LOT"):
+            caveat = (f"unit number UNCONFIRMED — cadastral has LOT {d['LOT']} of plan "
+                      f"{d.get('PLAN')} at {street}; the slug's leading number is the "
+                      f"LOT, not necessarily the unit")
+        return addr, caveat
+    return None, None
+
+
+def market_status_for(addresses: list[str], db, gc_db, max_calls: int) -> dict[str, dict]:
+    """address -> market status, from PropRadar PLUS our own listings as a 2nd source.
+
+    Two sources because neither is complete: PropRadar indexes listings statewide but
+    we've seen it miss addresses, and our Gold_Coast scrape is authoritative only for
+    the three core suburbs. A hit in EITHER blocks the mail.
+    """
+    gc_listed = set()
+    for sub in ("robina", "varsity_lakes", "burleigh_waters"):
+        for d in gc_db[sub].find({"listing_status": "for_sale"}, {"address": 1}):
+            if d.get("address"):
+                gc_listed.add(ms._key(d["address"]))
+
+    spend, out = {"calls": 0}, {}
+    for a in addresses:
+        if spend["calls"] >= max_calls:
+            out[a] = {"error": "PropRadar call budget reached",
+                      "lease_status": ms.LEASE_UNKNOWN}
+        else:
+            out[a] = ms.check(a, db=db, spend=spend)
+        out[a] = dict(out[a], gc_for_sale=ms._key(a) in gc_listed)
+    blocked = sum(1 for v in out.values() if v.get("on_market") or v.get("gc_for_sale"))
+    print(f"  Sale check: {spend['calls']} PropRadar call(s), {len(out)} address(es), "
+          f"{blocked} currently listed")
     return out
 
 
@@ -495,14 +555,24 @@ def narrative(c: dict, s: dict, prior_days: int, first_seen: str, reach: dict) -
     return "\n".join(bits)
 
 
-def candidates_cell(cands: list[dict], listed: set[str]) -> str:
+def candidates_cell(cands: list[dict], status: dict, caveats: dict) -> str:
     """Every address on file with its evidence, so ambiguity is visible not hidden."""
     tier_name = {T_CONFIRMED: "CONFIRMED", T_SUBMITTED: "submitted",
                  T_LOOKUP: "inferred", T_AMBIGUOUS: "no evidence"}
     lines = []
     for x in cands:
-        mark = " [ON THE MARKET]" if x["slug"] and x["slug"] in listed else ""
-        lines.append(f"[{tier_name[x['tier']]}] {x['address']}{mark} — {x['basis']}")
+        st = status.get(x["address"]) or {}
+        if st.get("on_market"):
+            dom = st.get("days_on_market")
+            mark = f" [FOR SALE{f' — {dom}d on market' if dom is not None else ''}]"
+        elif st.get("on_market") is None:
+            mark = " [sale status UNVERIFIED]"
+        else:
+            mark = ""
+        cav = caveats.get(x["address"])
+        lines.append(f"[{tier_name[x['tier']]}] "
+                     f"{st.get('canonical_address') or x['address']}{mark} — {x['basis']}"
+                     + (f" ⚠ {cav}" if cav else ""))
     return "\n".join(lines) or "—"
 
 
@@ -594,17 +664,42 @@ def known_before(c: dict, when: datetime) -> str | None:
     return min(cands) if cands else None
 
 
-def build_rows(db, gc_db, hours: int, include_first: bool) -> list[dict]:
+def build_rows(db, gc_db, hours: int, include_first: bool, max_pr: int = 150) -> list[dict]:
     contacts = reachable_contacts(db)
     if not contacts:
         return []
     events = fetch_events(sorted(contacts), hours)
 
-    # One listing lookup for every address we might name, so "is it on the market?"
-    # is answered from the live DB rather than assumed.
-    all_slugs = {x["slug"] for c in contacts.values()
-                 for x in address_candidates(c) if x["slug"]}
-    listed = listed_slugs(gc_db, all_slugs) if all_slugs else set()
+    # Resolve every address we might name to a POSTABLE form (cadastral beats a
+    # slug reconstruction) and then ask PropRadar whether it's sellable at all.
+    addr_fix, caveats = {}, {}
+    for c in contacts.values():
+        for x in address_candidates(c):
+            if x["slug"] and x["address"] not in addr_fix:
+                a, cav = cadastral_address(gc_db, x["slug"])
+                if a:
+                    addr_fix[x["address"]] = a
+                if cav:
+                    caveats[x["address"]] = cav
+    # Only resolve addresses that could plausibly be mailed: each contact's BEST
+    # candidate, plus anything with real ownership evidence. The long tail of
+    # "a report they opened" is already disqualified on evidence, so spending a
+    # PropRadar call on it buys nothing.
+    wanted = set()
+    for c in contacts.values():
+        cands = address_candidates(c)
+        if not cands:
+            continue
+        wanted.add(addr_fix.get(cands[0]["address"], cands[0]["address"]))
+        for x in cands:
+            if x["tier"] <= T_SUBMITTED:
+                wanted.add(addr_fix.get(x["address"], x["address"]))
+    wanted = sorted(wanted)
+    status = market_status_for(wanted, db, gc_db, max_pr)
+    # index by the pre-fix address too, so lookups by either form hit
+    for orig, fixed in addr_fix.items():
+        if fixed in status:
+            status[orig] = status[fixed]
 
     rows = []
     for did, evs in events.items():
@@ -622,7 +717,7 @@ def build_rows(db, gc_db, hours: int, include_first: bool) -> list[dict]:
                                if str(d)[:10] < vday})
             s = summarise_visit(v, own)
             local = v["start"].astimezone(AEST)
-            reach = reach_for(c, listed, s["seen_slugs"])
+            reach = reach_for(c, status, s["seen_slugs"])
             rows.append({
                 "activity_id": f"{cid}:{v['start'].isoformat()}",
                 "date": local.strftime("%Y-%m-%d"),
@@ -631,7 +726,7 @@ def build_rows(db, gc_db, hours: int, include_first: bool) -> list[dict]:
                 "mail_ok": reach["mail_ok"],
                 "contact_detail": reach["detail"],
                 "evidence": reach["via"],
-                "all_addresses": candidates_cell(reach["candidates"], listed),
+                "all_addresses": candidates_cell(reach["candidates"], status, caveats),
                 "visit": f"{prior_dates} earlier day(s)" if first_seen else "first visit",
                 "channel": s["channel"],
                 "location": s["location"],
@@ -705,6 +800,8 @@ def main():
                     help="PostHog lookback (default 26 — nightly with overlap)")
     ap.add_argument("--include-first-visit", action="store_true",
                     help="also log visits by contacts we only met during this visit")
+    ap.add_argument("--max-pr", type=int, default=150,
+                    help="cap PropRadar API calls per run (Hobby tier = 20k/month)")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--rebuild", action="store_true",
                     help="drop the tab and the ledger and rewrite from scratch — for "
@@ -717,7 +814,8 @@ def main():
 
     with job_run("engagement_activity_to_sheet", cadence_hours=24,
                  title="Known-Contact Activity → Live Leads Tracker") as beat:
-        rows = build_rows(db, client["Gold_Coast"], args.hours, args.include_first_visit)
+        rows = build_rows(db, client["Gold_Coast"], args.hours,
+                          args.include_first_visit, args.max_pr)
 
         if args.rebuild and not args.dry_run:
             svc0 = get_sheets()
