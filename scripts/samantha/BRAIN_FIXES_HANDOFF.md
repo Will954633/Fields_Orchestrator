@@ -217,31 +217,61 @@ facets served from cache                  (run is now reproducible)
 31 quoted spans | 30 attributable | 22 verified | 0 MISATTRIBUTED | 8 NOT_FOUND | 73.3% fidelity
 ```
 
-Every plumbing fix held. **But the surviving defect is not the one the original handoff predicted.**
-Misattribution — the entire basis of the shard-boundary hypothesis — is **zero** after repair. What
-remains is **8 fabricated quotes**: the synthesis puts its own paraphrase and section labels inside
-quotation marks next to a unit id ("frequency outweighs content substance",
-"platform-as-credential... un-copyable"). Checked individually: best coverage 0.54–0.81, all well
-below the 0.90 bar — genuine paraphrase, not a matching artifact. The old verifier scored this class
-as **0** because its broken coverage always found a spurious cov-1.0 "true source".
+Every plumbing fix held. **But the surviving defect was not the one the original handoff predicted.**
+Misattribution — the entire basis of the shard-boundary hypothesis — was **zero** after repair. What
+remained was **8 fabricated quotes**: the synthesis putting its own paraphrase and section labels
+inside quotation marks next to a unit id. Nothing in the prompt had ever told it that quotation
+marks are a claim about provenance.
 
-**The definition of done ("100% quote fidelity, 0 invented ids") is NOT met — and that is the right
-outcome.** The brief is correctly stamped `⚠ NOT publication-ready`. The tool is now measuring
-honestly instead of reporting 89.8% while masking fabrications.
+### Then fixed — three changes, same evidence set throughout
+
+Iterated with `--load-relevant` so only the prompt/repair changed and every delta is attributable:
+
+| | baseline | + quotation rule | + remap & echo |
+|---|---|---|---|
+| fidelity | 73.3% | 87.1% | **100.0%** |
+| fabricated (NOT_FOUND) | 8 | 1 | **0** |
+| misattributed | 0 | 3 | **0** |
+| invented ids | 1 | 0 | **0** |
+| publication_ready | false | false | **true** |
+
+1. **QUOTATION RULE** in `rules_for()` — quote marks mean exactly one thing: text copied
+   character-for-character from a unit's `quotes` field. Never around the model's own labels,
+   coined shorthand, or paraphrase; use plain text or bold. Says explicitly that a paraphrase
+   inside quote marks beside a unit id is a FALSE ATTRIBUTION, and that spans are machine-checked
+   after generation — so "quote less and quote exactly".
+2. **Systematic id remap** in `fix_citations()` — the re-run exposed a new class: the brief cited
+   `u2909` four times for McGrath Magazine material whose true source is `k02909` (the model
+   dropped the "k0" prefix). `u2909` is a *real* unit — a Sell It unit on rapport building — so
+   the id-membership check passed it and only quote verification caught it. **Two of the four
+   citations were in prose with no quote at all**, structurally invisible to quote verification.
+   Guarded: remap X→Y only when no quote anywhere verifies against X and every unambiguously
+   resolved quote citing X resolves to the same single Y.
+3. **Question-echo class** — a brief restating the user's own words is quoting the question, not
+   claiming a source. Matched with the same contiguity-aware `coverage` at ≥0.85 (the brief wrote
+   "vs." where the question said "against", so exact containment missed it). Guard-tested: the
+   three genuine fabrications score 0.00–0.22 against the question. Without this, models restate
+   the question often enough that nearly every brief would be flagged — and a gate that always
+   fires is a gate that gets ignored.
+
+**The definition of done is now MET:** 100% quote fidelity, 0 invented ids, reproducible facets,
+name-anchored recall restored, `brain1_query.py` emitting a fidelity line.
 
 ---
 
 ## 4. WHAT IS STILL OPEN
 
-1. **Quotation marks used for paraphrase — the #1 target.** 8 of 30 attributable spans. This is a
-   **synthesis-prompt** problem, not retrieval or sharding: `rules_for()` says "include DIRECT
-   VERBATIM QUOTES" but never says *only* verbatim text may sit inside quote marks. Try requiring
-   the brief to use quote marks exclusively for copied text and a different device (italics, plain
-   prose) for its own labels — then re-measure. It is now cheaply measurable, and cheap to iterate
-   on via `--load-relevant` (re-synthesise the saved evidence without re-paying for retrieval).
-2. **Brain 2 annotation schema validation.** Validate `ad_annotate.py` output against the enum sets
-   its prompt specifies; reject/retry on drift. This is the genuine Brain 2 integrity gap.
-3. **Map-reduce shard-boundary experiment — deliberately NOT run.** Its premise was the
+1. **Confirm 100% holds on a second, different question.** The 100% figure is one question's brief.
+   The quotation rule and the remap guard are general, but a single run is a single data point —
+   run two or three unrelated questions before treating the number as the tool's steady state.
+2. **`message_theme` presentation, not validation.** Checked this session: 92/92 annotated ads
+   conform on every Brain 2 **enum** (`primary_emotional_lever`, `hook_type`, `target_persona`) —
+   there is no drift bug. But `message_theme` is free text by design and has 28 values across 92
+   ads, 24 of them singletons ("market timing" 35 vs "market timing indicators" 1 vs "market timing
+   with leading vs lagging indicators" 1). `ad_query.py compare --by theme` prints those singletons
+   in the same table format as real groupings, so noise can read as signal. Fix is canonicalisation
+   or suppressing n=1 rows — **not** enum validation.
+3. **Map-reduce shard-boundary experiment — still deliberately NOT run.** Its premise was the
    5-misattribution pattern, now known to be mostly measurement error. The genuine misattributions
    are a single confusion (u0449 vs u0645 — two units about the *same* quarterly booklet), too thin
    to design a sharding change on. The scaffolding is now in place to do it properly, holding
@@ -254,9 +284,13 @@ honestly instead of reporting 89.8% while masking fabrications.
    Do this after a few runs under the corrected verifier, so the comparison is against a
    trustworthy baseline. If sharding is implicated, the fix is to make the Haiku map step emit
    `{id, quote}` pairs as structured JSON rather than prose.
-4. **Zero-yield libraries.** `KB:financial` (0/96), `KB:general` (0/310), `KB:project` (0/14) —
-   420 units judged for zero carry. May be correct for this question. Test with a question those
-   libraries *should* answer, to separate "correctly irrelevant" from "systematically unreachable".
+4. ~~**Zero-yield libraries.**~~ **RESOLVED — correctly irrelevant, not unreachable.** Inspected
+   this session: `KB:financial` is auction-fever and time-on-market economics papers, `KB:project`
+   is a foreign-real-estate-investment study, `KB:general` is house-price-distribution and
+   market-sentiment research. Returning 0 relevant units for a question about practitioner
+   marketing collateral is the right answer. (Unrelated observation while looking: some `KB:general`
+   units are ASIC corporate-registry boilerplate — an ingestion artifact worth a look someday, but
+   it is noise in the corpus, not a retrieval defect.)
 5. **`brain_search.py`** does lexical retrieval only (no synthesis, no citations) so it needs no
    verifier — but it does benefit from entities, automatically, via `score_units`.
 
