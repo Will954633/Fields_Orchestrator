@@ -117,6 +117,14 @@ def build(units, canon=None):
         topics = [t for t in (norm(x) for x in u.get("topic_tags", []) or []) if t]
         asks = [q.strip() for q in (u.get("answers_questions", []) or []) if isinstance(q, str) and q.strip()]
         quotes = [q.strip() for q in (u.get("key_quotes", []) or []) if isinstance(q, str) and q.strip()]
+        # NAMED ENTITIES — extracted at annotate time but, until now, dropped here and never
+        # carried into the package, so they reached neither the retrieval blob nor the LLM.
+        # A name-anchored question ("what did X say about market reports") could therefore only
+        # match where the name happened to leak into a quote or the module title. Kept verbatim
+        # (NOT norm()'d) because names are the retrieval key and casefolding is done by the
+        # tokenizer anyway.
+        entities = sorted({e.strip() for e in (u.get("entities", []) or [])
+                           if isinstance(e, str) and e.strip()})
 
         out_units.append({
             "id": uid,
@@ -125,6 +133,7 @@ def build(units, canon=None):
             "topics": topics,
             "channels": u.get("channels", []) or [],
             "concepts": concepts,
+            "entities": entities,
             "asks": asks,
             "quotes": quotes,
         })
