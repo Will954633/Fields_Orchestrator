@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
-# Lead-intelligence pipeline — cron 02:00 AEST, before Samantha's 02:30 review.
-# Unifies + enriches + flags every lead into system_monitor.lead_worklist.
+# Lead-intelligence pipeline — unifies + enriches + flags every lead into
+# system_monitor.lead_worklist.
+#
+# NOT the cron entrypoint any more (2026-08-01). scripts/nightly_lead_chain.py now
+# runs lead_intelligence.py + seller_intent.py itself at 00:15, in order, between
+# crm_sync and live_leads_to_sheet — the sheet's Situation column reads what these
+# two write, so it has to run BEFORE the sheet, not at 02:00 after it. Kept as a
+# convenient manual "just rebuild the worklist" shortcut.
 set -euo pipefail
 cd /home/fields/Fields_Orchestrator
 set -a
