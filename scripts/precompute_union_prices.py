@@ -74,6 +74,7 @@ PRICE_FLOOR = 150_000
 PRICE_CEILING = 10_000_000
 MIN_N_QUARTER = 5          # below this a quarterly median is not reported at all
 BOOTSTRAP_N = 2000
+DEDUPE_DAYS = 120          # contract-vs-settlement drift window (see dedupe_sales)
 BASELINE_PERIOD = "Q1 2020"
 
 random.seed(42)            # reproducible CIs — the same data must give the same range
@@ -107,6 +108,53 @@ def parse_price(val):
     return val if PRICE_FLOOR <= val <= PRICE_CEILING else None
 
 
+def dedupe_sales(events):
+    """Collapse the same sale recorded twice into one.
+
+    Keying on (address, EXACT date) is not enough. Domain records a contract date and
+    onthehouse a settlement date, so one transaction appears twice, days to weeks
+    apart, at an identical price:
+
+        |42|aruma|burleigh waters   2025-08-14 $1,925,000 (timeline)
+        |42|aruma|burleigh waters   2025-08-21 $1,925,000 (sold_listing)
+
+    Burleigh Waters alone had 14 such pairs in a 12-month window — roughly 7% inflation
+    on both the count and the median's effective weights. The onthehouse integration
+    documented the same contract-vs-settlement drift when it quarantined price conflicts.
+
+    Rule: same address + price within 1% + dates within DEDUPE_DAYS = one sale, dated
+    EARLIEST. Earliest approximates the contract date, which is when the market
+    actually cleared — settlement lags by an arbitrary conveyancing period and would
+    smear sales into the following quarter.
+
+    A genuine resale of the same house at within 1% of the same price inside four
+    months does not meaningfully occur, so this cannot collapse two real transactions.
+
+    `events` is an iterable of (address_key, date_str, price). Returns {(key, date): price}.
+    """
+    by_address = defaultdict(list)
+    for key, date, price in events:
+        by_address[key].append((date, price))
+
+    out = {}
+    for key, items in by_address.items():
+        kept = []                                  # [(date, price)] already accepted
+        for date, price in sorted(items):
+            dt = datetime.strptime(date, "%Y-%m-%d")
+            merged = False
+            for i, (kdate, kprice) in enumerate(kept):
+                gap = abs((dt - datetime.strptime(kdate, "%Y-%m-%d")).days)
+                same_price = abs(price - kprice) <= max(kprice, price) * 0.01
+                if gap <= DEDUPE_DAYS and same_price:
+                    merged = True                  # keep the earlier date already stored
+                    break
+            if not merged:
+                kept.append((date, price))
+        for date, price in kept:
+            out[(key, date)] = price
+    return out
+
+
 def bootstrap_ci(values, confidence=0.90):
     """90% CI for the median. Reported so the page can publish a range instead of
     false precision — a suburb median on 40 sales is not a point estimate."""
@@ -129,7 +177,7 @@ def load_domain_history(gc, suburb, counters):
     recent months. Deduped on (address, date) so a property appearing in both the
     timeline and the sold feed is counted once.
     """
-    sales = {}
+    events = []
     projection = {
         "street_address": 1, "suburb": 1, "property_type": 1,
         "classified_property_type": 1, "sale_price": 1, "sold_date": 1,
@@ -167,15 +215,15 @@ def load_domain_history(gc, suburb, counters):
             date = str(event.get("date") or "")[:10]
             price = parse_price(event.get("price"))
             if len(date) == 10 and price:
-                sales[(key, date)] = price
+                events.append((key, date, price))
 
         # (b) the sold-listing record itself
         if doc.get("listing_status") == "sold":
             date = str(doc.get("sold_date") or doc.get("sale_date") or "")[:10]
             price = parse_price(doc.get("sale_price"))
             if len(date) == 10 and price:
-                sales[(key, date)] = price
-    return sales
+                events.append((key, date, price))
+    return events
 
 
 def load_onthehouse(sm, suburb, counters):
@@ -185,7 +233,7 @@ def load_onthehouse(sm, suburb, counters):
     counted, not silently skipped: they are real transactions we cannot price, and
     excluding them without saying so would misstate volume.
     """
-    sales = {}
+    events = []
     pattern = "^" + suburb.replace("_", "-")
     for doc in sm["onthehouse_sold"].find({"suburb_key": {"$regex": pattern}}):
         if classify_dwelling(doc) != "house":
@@ -200,8 +248,8 @@ def load_onthehouse(sm, suburb, counters):
         price = parse_price(doc.get("sale_price"))
         key = doc.get("match_key") or address_key(doc.get("address") or "")
         if price and key:
-            sales[(key, date)] = price
-    return sales
+            events.append((key, date, price))
+    return events
 
 
 def build_series(sales, union_from):
@@ -264,6 +312,77 @@ def build_series(sales, union_from):
             "ci_margin_pct": round(max(median - lo, hi - median) / median * 100, 1) if lo else None,
         })
     return quarterly, rolling
+
+
+def first_full_quarter(oth_events):
+    """First quarter onthehouse covers END TO END.
+
+    Its sold index is a rolling ~12-month window, so the OLDEST quarter it touches is
+    always partial. On 1 Aug 2026 its data starts 3 Aug 2025 — Q3 2025 therefore has
+    Domain for all three months but onthehouse for only two, and reporting it as a
+    union count understates it (Varsity Lakes reads 18 against 45 the next quarter,
+    which is coverage, not the market). Counts need complete coverage in a way medians
+    do not, so the volume window starts one quarter after onthehouse's earliest date.
+    """
+    dates = [d for _, d, _ in oth_events]
+    if not dates:
+        return None
+    first = min(dates)
+    y, q = int(first[:4]), (int(first[5:7]) - 1) // 3 + 1
+    # if it does not start on the very first day of that quarter, the quarter is partial
+    if first[5:] != {1: "01-01", 2: "04-01", 3: "07-01", 4: "10-01"}[q]:
+        q += 1
+        if q > 4:
+            q, y = 1, y + 1
+    return f"Q{q} {y}"
+
+
+def write_union_volume(gc, suburb, sales, union_from, apply):
+    """Union sale counts for the volume chart, union window only.
+
+    The two existing volume series disagree in DIRECTION, not just level. For
+    Burleigh Waters, raw counts read (Q4 2025 / Q1 2026 / Q2 2026):
+
+        precomputed_market_charts.timeline   33 -> 36 -> 47   (rising)
+        indexed_series.transaction_count     37 -> 26 -> 26   (falling)
+        Domain union onthehouse              52 -> 48 -> 41   (gentle decline)
+
+    They count different things — the chart doc from sold listings, indexed_series
+    from property-timeline events — and each was then scaled by its own PropRadar
+    factor, so the live chart currently shows volume RISING through 2026.
+
+    Written as a SEPARATE `union_timeline` field rather than overwriting `timeline`:
+    `market-insights.mjs:677` coerces a missing count to 0, so any consumer not yet
+    updated must keep seeing the old shape rather than a cliff to zero. Only quarters
+    inside the union window are emitted — splicing union counts onto Domain-only
+    history would show a +30-160% step that is us getting better at looking. History
+    also crosses two composition shifts (the sold-listing feed arriving ~Q4 2024 and
+    property timelines going stale ~Q4 2025), neither of them market events.
+    """
+    in_progress = current_quarter()
+    counts = defaultdict(int)
+    for (_, date) in sales:
+        counts[qtr(date)] += 1
+
+    timeline = [
+        {"period": p, "sales_count": n, "is_in_progress": p == in_progress}
+        for p, n in sorted(counts.items(), key=lambda kv: qsort(kv[0]))
+        if qsort(p) >= qsort(union_from)
+    ]
+    if not timeline:
+        return None
+    doc_id = f"{suburb}_sales_volume"
+    update = {
+        "union_timeline": timeline,
+        "union_from": union_from,
+        "union_basis": ("Domain union onthehouse, houses only, deduped on address+date. "
+                        "Union window only — earlier quarters are Domain-recorded and "
+                        "undercount by roughly 25-55%, on a source mix that changes twice."),
+        "union_computed_at": datetime.utcnow(),
+    }
+    if apply:
+        gc["precomputed_market_charts"].update_one({"_id": doc_id}, {"$set": update})
+    return timeline
 
 
 def promote_medians(gc, suburb, live, staged, quarterly, rolling, latest, union_from):
@@ -397,9 +516,12 @@ def run(args, beat=None):
         counters = defaultdict(int)
         domain = load_domain_history(gc, suburb, counters)
         oth = load_onthehouse(sm, suburb, counters)
-        overlap = len(set(domain) & set(oth))
-        sales = dict(domain)
-        sales.update(oth)
+        # Dedupe across BOTH sources together — the contract/settlement pair that
+        # dedupe_sales() exists to catch usually has one leg in each source, so
+        # deduping them separately would not find it.
+        sales = dedupe_sales(domain + oth)
+        raw_total = len(domain) + len(oth)
+        overlap = raw_total - len(sales)
 
         quarterly, rolling = build_series(sales, union_from)
         if not rolling:
@@ -429,8 +551,8 @@ def run(args, beat=None):
                          "support a quarter-on-quarter claim."),
             },
             "coverage": {
-                "domain_sales": len(domain), "onthehouse_sales": len(oth),
-                "overlap": overlap, "union_sales": len(sales),
+                "domain_events": len(domain), "onthehouse_events": len(oth),
+                "deduped_away": overlap, "union_sales": len(sales),
                 "excluded_attached": counters["attached"],
                 "excluded_unknown_type": counters["unknown"],
                 "onthehouse_price_withheld": counters["oth_price_withheld"],
@@ -443,17 +565,25 @@ def run(args, beat=None):
 
         if args.promote:
             promote_medians(gc, suburb, live, doc, quarterly, rolling, latest, union_from)
+        volume_from = first_full_quarter(oth) or union_from
+        vol = write_union_volume(gc, suburb, sales, volume_from, args.promote)
         shift = f"{(latest['rolling_median'] / old - 1) * 100:+.1f}%" if old else "n/a"
         print(f"== {suburb}")
         print(f"   12m median  {latest['rolling_median']:>10,}  "
               f"(90% CI {latest['ci_low']:,}-{latest['ci_high']:,}, "
               f"+/-{latest['ci_margin_pct']}%, n={latest['transaction_count']})")
         print(f"   live was    {old if old else 'n/a':>10}   shift {shift}")
-        print(f"   sales: domain {len(domain)} + oth {len(oth)} - overlap {overlap} = {len(sales)}")
+        print(f"   sales: domain {len(domain)} + oth {len(oth)} raw = {raw_total}; "
+              f"deduped {overlap} -> {len(sales)} distinct")
         print(f"   excluded: attached {counters['attached']}, unknown-type {counters['unknown']}, "
               f"oth price-withheld {counters['oth_price_withheld']}")
         unreliable = [q["period"] for q in quarterly[-6:] if not q["reliable"]]
-        print(f"   last 6 quarters too noisy to publish QoQ: {unreliable or 'none'}\n")
+        print(f"   last 6 quarters too noisy to publish QoQ: {unreliable or 'none'}")
+        if vol:
+            parts = [f"{v['period']} {v['sales_count']}" + ("*" if v["is_in_progress"] else "")
+                     for v in vol]
+            print("   union volume: " + ", ".join(parts) + "   (* in progress)")
+        print()
 
         summary.append(f"{suburb} {latest['rolling_median']:,} +/-{latest['ci_margin_pct']}%")
         metrics[f"{suburb}_median_12m"] = latest["rolling_median"]
