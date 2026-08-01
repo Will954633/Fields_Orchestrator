@@ -235,9 +235,14 @@ ORDER BY sessions DESC
 LIMIT 50000
 """)
     except Exception as e:  # noqa: BLE001
-        print(f"[behavioral] query failed ({e}); behavioral signals skipped")
-        BEHAV = {}
-        return BEHAV
+        # Do NOT degrade to empty. Behavioral signals ARE the seller-intent story —
+        # without them every lead scores "no_cross_signal" and the Situation column
+        # quietly goes blank, which looks identical to "this lead has no intent".
+        # posthog_query already retried transient failures before raising, so a
+        # failure here is real: fail the run loudly (job_run -> ERROR) instead.
+        print(f"[behavioral] PostHog query failed ({e}) — aborting rather than "
+              f"writing story-less seller_intent over good data")
+        raise
     BEHAV = {}
     for r in rows:
         (did, sessions, pv, first_seen, last_seen, ayh_build, buyer_optin, ladder_ans,
