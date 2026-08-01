@@ -17,6 +17,7 @@ import os, re, sys, json, glob, time, fcntl, argparse
 from datetime import datetime, timezone
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import max_client as orc
+import brain_json as bj
 
 DEFAULT_BASE = "/home/fields/brain3_build"
 MODEL = orc.HAIKU  # annotation stays Haiku, on the Max subscription (Will 2026-07-31)
@@ -80,10 +81,13 @@ def call_haiku(prompt, timeout=300):
 
 
 def extract_json_array(s):
-    a, b = s.find("["), s.rfind("]")
-    if a == -1 or b == -1 or b < a:
-        raise ValueError("no JSON array in output")
-    return json.loads(s[a:b + 1])
+    """Shared robust extractor (direct -> fenced block -> balanced scan).
+
+    The old outermost-span slice (first "[" .. last "]") swallowed any trailing prose or a
+    second array into the span, raising "Extra data: line N column 1" and losing the whole
+    batch. Same defect class as the greedy regex in brain1_deep. See brain_json.py.
+    """
+    return bj.parse_json_array(s)
 
 
 def backfill_dates(base, pool):
