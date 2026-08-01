@@ -207,6 +207,17 @@ def rules_for(pkg):
             "throughout; give EQUAL consideration to material from every source regardless of how "
             "many units it has — a point made once is as admissible as one made often; if the corpus "
             "does not cover something, say so plainly — do NOT invent. Structure with clear headings.\n"
+            "QUOTATION RULE — this is a hard constraint, not a style note. Quotation marks mean ONE "
+            "thing: the enclosed words are copied character-for-character from a unit's \"quotes\" "
+            "field. Never put quotation marks around your own wording — not around section labels, "
+            "not around coined shorthand, not around a paraphrase or compression of what a unit "
+            "said, not around scare-quoted terms. For your own phrasing use plain text or "
+            "**bold**. If you remember the gist of a passage but not its exact words, write it as "
+            "plain prose and cite the unit id — that is correct and expected. A paraphrase inside "
+            "quote marks beside a unit id is a FALSE ATTRIBUTION: the reader will believe that "
+            "person said those exact words. Every quoted span you write is machine-checked against "
+            "the corpus after generation, and any that is not found verbatim blocks the brief from "
+            "publication — so quote less and quote exactly, rather than quoting often.\n"
             "TEMPORAL RULE: some units carry a 'date' field. Do not treat retrieval score as recency — a "
             "unit can rank highly and still be OLD. When units on the same topic carry different dates, "
             "or a topic could plausibly have changed since a unit's date, state the chronology explicitly: "
@@ -399,7 +410,7 @@ def main():
         # gets falsely attributed to a verbatim match in another brain not in context.
         import brain1_verify as bv
         answer, _stats = bv.audit(answer, by_id, shortlist_ids=shortlist_ids,
-                                  repair=not args.no_repair)
+                                  repair=not args.no_repair, question=args.question)
     print(answer)
 
     if args.out:
