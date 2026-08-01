@@ -229,6 +229,19 @@ def reach_for(c: dict, status: dict | None = None,
     # can't sell the place. PropRadar covers FOR SALE (incl. the Form 6 window via
     # days_on_market); it has NO lease data, so lease is reported as unknown, never
     # assumed clear.
+    best_addr = (status.get(best["address"], {}) or {}).get("canonical_address") \
+        or best["address"]
+    # A postcode disagreement is a CORRECTION, not a disqualification — we hold the
+    # right answer (QLD cadastral), so use it and say so. Only an address we cannot
+    # verify at all blocks: there is nothing to put on the envelope.
+    addr_problem = (status.get(best["address"], {}) or {}).get("address_conflict")
+    addr_note = ""
+    if addr_problem and "UNVERIFIED" in addr_problem:
+        return {"via": f"Postal address ({tier_label}) — {best['basis']}",
+                "detail": best_addr, "mail_ok": f"NO — {addr_problem}",
+                "candidates": cands, "tier": best["tier"]}
+    if addr_problem:
+        addr_note = f" [address corrected: {addr_problem}]"
     st = status.get(best["address"])
     sell_note = ""
     if st is not None:
@@ -252,7 +265,7 @@ def reach_for(c: dict, status: dict | None = None,
     # Carry the real sellability finding rather than a hardcoded caveat — whether the
     # lease side was actually checked depends on rental_listings being populated.
     if not ok.startswith("NO") and sell_note:
-        ok += f". {sell_note}"
+        ok += f". {sell_note}{addr_note}"
 
     return {"via": f"Postal address ({tier_label}) — {best['basis']}",
             "detail": (status.get(best["address"], {}) or {}).get("canonical_address")
@@ -291,7 +304,8 @@ def cadastral_address(gc_db, slug: str) -> tuple[str | None, str | None]:
     return None, None
 
 
-def market_status_for(addresses: list[str], db, gc_db, max_calls: int) -> dict[str, dict]:
+def market_status_for(addresses: list[str], db, gc_db, max_calls: int,
+                      resolved: dict | None = None) -> dict[str, dict]:
     """address -> market status, from PropRadar PLUS our own listings as a 2nd source.
 
     Two sources because neither is complete: PropRadar indexes listings statewide but
@@ -299,6 +313,7 @@ def market_status_for(addresses: list[str], db, gc_db, max_calls: int) -> dict[s
     the three core suburbs. A hit in EITHER blocks the mail.
     """
     import rental_listings_sync as rls
+    resolved = resolved or {}
     lease_ok = db[rls.COLL].count_documents({"active": True}) > 0
 
     gc_listed = set()
@@ -316,8 +331,11 @@ def market_status_for(addresses: list[str], db, gc_db, max_calls: int) -> dict[s
             out[a] = ms.check(a, db=db, spend=spend)
         # Lease side — a home the owner is leasing is not one we can sell.
         lease = rls.is_for_lease(db, a) if lease_ok else None
+        r = resolved.get(rls.address_key(a) or "") or {}
+        bad = [c for c in (r.get("conflicts") or []) if "misroute" in c or "UNVERIFIED" in c]
         out[a] = dict(out[a], gc_for_sale=ms._key(a) in gc_listed,
-                      for_lease=lease, lease_checked=lease_ok)
+                      for_lease=lease, lease_checked=lease_ok,
+                      address_conflict=(bad[0] if bad else None))
     sale_blocked = sum(1 for v in out.values() if v.get("on_market") or v.get("gc_for_sale"))
     lease_blocked = sum(1 for v in out.values() if v.get("for_lease"))
     print(f"  Sellability: {spend['calls']} PropRadar call(s), {len(out)} address(es) — "
@@ -686,15 +704,28 @@ def build_rows(db, gc_db, hours: int, include_first: bool, max_pr: int = 150) ->
 
     # Resolve every address we might name to a POSTABLE form (cadastral beats a
     # slug reconstruction) and then ask PropRadar whether it's sellable at all.
+    # normalize_addresses.py has already resolved every stored address to the QLD
+    # cadastral `complete_address` (correct unit number, street type and postcode) and
+    # recorded any conflict. Prefer that over reconstructing from a slug.
+    import rental_listings_sync as _rls
+    resolved = {d["_id"]: d for d in db["address_resolution"].find({})}
     addr_fix, caveats = {}, {}
     for c in contacts.values():
         for x in address_candidates(c):
-            if x["slug"] and x["address"] not in addr_fix:
-                a, cav = cadastral_address(gc_db, x["slug"])
-                if a:
-                    addr_fix[x["address"]] = a
-                if cav:
-                    caveats[x["address"]] = cav
+            if x["address"] in addr_fix or x["address"] in caveats:
+                continue
+            r = resolved.get(_rls.address_key(x["address"]) or "")
+            if r:
+                if r.get("canonical") and r["canonical"] != x["address"]:
+                    addr_fix[x["address"]] = r["canonical"]
+                if r.get("conflicts"):
+                    caveats[x["address"]] = "; ".join(r["conflicts"])
+                continue
+            a, cav = cadastral_address(gc_db, x["slug"]) if x["slug"] else (None, None)
+            if a:
+                addr_fix[x["address"]] = a
+            if cav:
+                caveats[x["address"]] = cav
     # Only resolve addresses that could plausibly be mailed: each contact's BEST
     # candidate, plus anything with real ownership evidence. The long tail of
     # "a report they opened" is already disqualified on evidence, so spending a
@@ -709,7 +740,7 @@ def build_rows(db, gc_db, hours: int, include_first: bool, max_pr: int = 150) ->
             if x["tier"] <= T_SUBMITTED:
                 wanted.add(addr_fix.get(x["address"], x["address"]))
     wanted = sorted(wanted)
-    status = market_status_for(wanted, db, gc_db, max_pr)
+    status = market_status_for(wanted, db, gc_db, max_pr, resolved)
     # index by the pre-fix address too, so lookups by either form hit
     for orig, fixed in addr_fix.items():
         if fixed in status:
@@ -826,66 +857,68 @@ def main():
     client = get_client()
     db = client["system_monitor"]
 
-    with job_run("engagement_activity_to_sheet", cadence_hours=24,
-                 title="Known-Contact Activity → Live Leads Tracker") as beat:
-        rows = build_rows(db, client["Gold_Coast"], args.hours,
-                          args.include_first_visit, args.max_pr)
+    try:
+      with job_run("engagement_activity_to_sheet", cadence_hours=24,
+                   title="Known-Contact Activity → Live Leads Tracker") as beat:
+          rows = build_rows(db, client["Gold_Coast"], args.hours,
+                            args.include_first_visit, args.max_pr)
 
-        if args.rebuild and not args.dry_run:
-            svc0 = get_sheets()
-            old = tab_id(svc0, args.spreadsheet_id, TAB)
-            if old is not None:
-                svc0.spreadsheets().batchUpdate(
-                    spreadsheetId=args.spreadsheet_id,
-                    body={"requests": [{"deleteSheet": {"sheetId": old}}]}).execute()
-            db[LEDGER_COLL].delete_many({})
-            print(f"[rebuild] dropped '{TAB}' + ledger.")
+          if args.rebuild and not args.dry_run:
+              svc0 = get_sheets()
+              old = tab_id(svc0, args.spreadsheet_id, TAB)
+              if old is not None:
+                  svc0.spreadsheets().batchUpdate(
+                      spreadsheetId=args.spreadsheet_id,
+                      body={"requests": [{"deleteSheet": {"sheetId": old}}]}).execute()
+              db[LEDGER_COLL].delete_many({})
+              print(f"[rebuild] dropped '{TAB}' + ledger.")
 
-        seen = {d["_id"] for d in db[LEDGER_COLL].find({}, {"_id": 1})}
-        new = [r for r in rows if r["activity_id"] not in seen]
+          seen = {d["_id"] for d in db[LEDGER_COLL].find({}, {"_id": 1})}
+          new = [r for r in rows if r["activity_id"] not in seen]
 
-        print(f"{len(rows)} visit(s) by reachable contacts in the last {args.hours}h; "
-              f"{len(new)} not yet logged.")
-        for r in new:
-            print(f"\n--- {r['date']} {r['time']}  {r['who']}")
-            print(f"    MAIL? {r['mail_ok']}")
-            print(f"    best: {r['contact_detail']}  ({r['evidence']})")
-            print("    addresses on file:\n      " + r['all_addresses'].replace("\n","\n      "))
-            print("    " + r["what"].replace("\n", "\n    "))
-            print(f"    opportunity: {r['opportunity']}")
+          print(f"{len(rows)} visit(s) by reachable contacts in the last {args.hours}h; "
+                f"{len(new)} not yet logged.")
+          for r in new:
+              print(f"\n--- {r['date']} {r['time']}  {r['who']}")
+              print(f"    MAIL? {r['mail_ok']}")
+              print(f"    best: {r['contact_detail']}  ({r['evidence']})")
+              print("    addresses on file:\n      " + r['all_addresses'].replace("\n","\n      "))
+              print("    " + r["what"].replace("\n", "\n    "))
+              print(f"    opportunity: {r['opportunity']}")
 
-        beat.detail = f"{len(new)} new activity row(s)"
-        beat.metrics = {"visits_seen": len(rows), "rows_added": 0 if args.dry_run else len(new)}
+          beat.detail = f"{len(new)} new activity row(s)"
+          beat.metrics = {"visits_seen": len(rows), "rows_added": 0 if args.dry_run else len(new)}
 
-        if args.dry_run or not new:
-            client.close()
-            return
+          if args.dry_run or not new:
+              return
 
-        svc = get_sheets()
-        sid = ensure_tab(svc, args.spreadsheet_id)
-        # Newest FIRST: the whole batch is written downward from row 2 in one update,
-        # so the first element of the list is the row that ends up directly under the
-        # header. (Sorting ascending here would bury today's activity at the bottom.)
-        new.sort(key=lambda r: r["_sort"], reverse=True)
-        svc.spreadsheets().batchUpdate(spreadsheetId=args.spreadsheet_id, body={"requests": [{
-            "insertDimension": {
-                "range": {"sheetId": sid, "dimension": "ROWS",
-                          "startIndex": 1, "endIndex": 1 + len(new)},
-                "inheritFromBefore": False}}]}).execute()
-        svc.spreadsheets().values().update(
-            spreadsheetId=args.spreadsheet_id, range=f"'{TAB}'!A2",
-            valueInputOption="RAW", body={"values": [row_values(r) for r in new]}).execute()
+          svc = get_sheets()
+          sid = ensure_tab(svc, args.spreadsheet_id)
+          # Newest FIRST: the whole batch is written downward from row 2 in one update,
+          # so the first element of the list is the row that ends up directly under the
+          # header. (Sorting ascending here would bury today's activity at the bottom.)
+          new.sort(key=lambda r: r["_sort"], reverse=True)
+          svc.spreadsheets().batchUpdate(spreadsheetId=args.spreadsheet_id, body={"requests": [{
+              "insertDimension": {
+                  "range": {"sheetId": sid, "dimension": "ROWS",
+                            "startIndex": 1, "endIndex": 1 + len(new)},
+                  "inheritFromBefore": False}}]}).execute()
+          svc.spreadsheets().values().update(
+              spreadsheetId=args.spreadsheet_id, range=f"'{TAB}'!A2",
+              valueInputOption="RAW", body={"values": [row_values(r) for r in new]}).execute()
 
-        ts = datetime.now(AEST).isoformat()
-        for r in new:
-            db[LEDGER_COLL].update_one({"_id": r["activity_id"]},
-                                       {"$setOnInsert": {"logged_at": ts,
-                                                         "date": r["date"],
-                                                         "who": r["who"]}}, upsert=True)
-        beat.metrics = {"visits_seen": len(rows), "rows_added": len(new)}
+          ts = datetime.now(AEST).isoformat()
+          for r in new:
+              db[LEDGER_COLL].update_one({"_id": r["activity_id"]},
+                                         {"$setOnInsert": {"logged_at": ts,
+                                                           "date": r["date"],
+                                                           "who": r["who"]}}, upsert=True)
+          beat.metrics = {"visits_seen": len(rows), "rows_added": len(new)}
+          print(f"\nDone. {len(new)} row(s) added to '{TAB}'.")
+
+
+    finally:
         client.close()
-        print(f"\nDone. {len(new)} row(s) added to '{TAB}'.")
-
 
 if __name__ == "__main__":
     main()
