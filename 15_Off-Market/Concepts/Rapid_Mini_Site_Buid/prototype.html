@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rapid Mini-Site Build — pixel-reveal prototype</title>
+<style>
+  /* Tokens lifted verbatim from discovery.module.css so the prototype reads
+     exactly like the live deck. */
+  :root {
+    --ground: #000000;
+    --surface: #16110E;
+    --ink: #E6DDD2;
+    --ink-soft: #CABEB0;
+    --muted: #8C8177;
+    --line: rgba(230, 221, 210, 0.13);
+    --line-soft: rgba(230, 221, 210, 0.055);
+    --accent: #C0704A;
+    --gold: #D28C5E;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --pad: clamp(1.5rem, 6vw, 4rem);
+
+    /* The paper the box is made of. Deliberately NOT #fff — birch paper, so it
+       reads as "a document is being made" rather than "a browser dialog". */
+    --paper: #F6F1EA;
+    --paper-ink: #1A1512;
+    --paper-muted: #6E6459;
+    --paper-line: rgba(26, 21, 18, 0.14);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--sans); line-height: 1.55; -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------- mock deck cards (context only) ---------- */
+  .card {
+    min-height: 100svh; display: flex; flex-direction: column; justify-content: center;
+    padding: max(6rem, 12svh) var(--pad) max(5rem, 10svh);
+    border-top: 1px solid var(--line-soft);
+  }
+  .inner { width: 100%; max-width: 40rem; margin: 0 auto; }
+  .chapter { font-size: .7rem; letter-spacing: .22em; text-transform: uppercase; color: var(--accent); margin-bottom: 1.6rem; }
+  .answer { color: var(--muted); font-size: clamp(.95rem,2.4vw,1.05rem); margin: 0 0 1rem; font-style: italic; }
+  h2.h2 { font-family: var(--serif); font-weight: 500; letter-spacing: -.01em; text-wrap: balance;
+          margin: 0; font-size: clamp(1.9rem,5.4vw,3rem); line-height: 1.08; }
+  .p { margin: 1.1rem 0 0; color: var(--ink-soft); font-size: clamp(1rem,2.6vw,1.12rem); }
+  .avoid { color: var(--muted); margin-top: 1.4rem; }
+  .cta {
+    display: inline-flex; align-items: center; gap: .7rem; margin-top: 2rem;
+    background: var(--accent); color: #06110B; border: none; border-radius: 999px;
+    padding: 1rem 1.7rem; font-size: 1.02rem; font-weight: 600; font-family: var(--sans);
+    cursor: pointer; text-decoration: none; transition: transform .2s ease, box-shadow .3s ease;
+  }
+  .cta:hover { transform: translateY(-2px); box-shadow: 0 12px 40px -12px var(--accent); }
+  .scrollHint { color: var(--muted); font-style: italic; margin-top: 3rem; }
+
+  /* =========================================================================
+     THE BUILD BOX
+     Structure:
+       .buildSlot   — reserves/animates vertical space so the page grows with
+                      the box instead of snapping (prevents scroll jump)
+         .buildBox  — the panel itself; holds three stacked layers:
+           .pixelGrid  z1 — the matrix cells that draw the shape
+           .paperFill  z2 — the solid panel that consolidates over the cells
+           .boxBody    z3 — real content, fades in last
+         .edge*        — the four border strokes, drawn independently
+     ========================================================================= */
+
+  .buildSlot {
+    max-width: 40rem; margin: 0 auto;
+    padding: 0 var(--pad); /* matches .card horizontal padding at narrow widths */
+    /* Height is animated by JS from 0 → measured height so the document grows
+       at the same rate the pixels land. */
+    height: 0; overflow: visible;
+    transition: height var(--growMs, 1100ms) cubic-bezier(.22,.68,.24,1);
+  }
+  .buildWrap { padding-bottom: max(5rem, 10svh); }
+
+  .buildBox {
+    position: relative;
+    width: 100%;
+    min-height: var(--boxH, 320px);
+    border-radius: 4px;              /* near-square: this is paper, not a card */
+    opacity: 0;
+  }
+  .buildBox.armed { opacity: 1; }
+
+  /* --- layer 1: the pixel grid --- */
+  .pixelGrid {
+    position: absolute; inset: 0; z-index: 1;
+    display: grid; gap: 0;
+    overflow: hidden;   /* required — landed cells are scaled >1 to kill seams */
+    /* columns/rows set inline by JS */
+  }
+  .px {
+    background: var(--paper);
+    /* Guarantees a full 1px bleed on every side regardless of where the cell's
+       fractional edge lands. scale() alone gives only ~0.7px at a 24px cell —
+       not enough to close the seam at every phase of the rounding beat. */
+    box-shadow: 0 0 0 1px var(--paper);
+    opacity: 0;
+    transform: scale(.55);
+    will-change: opacity, transform;
+    animation: pxIn 260ms cubic-bezier(.2,1.5,.3,1) forwards;
+    animation-delay: var(--d);
+  }
+  /* "leader" cells — a scattered few land ahead of the wavefront. This is the
+     whole reason it reads as Matrix rather than as a progress bar. */
+  .px.lead { animation-name: pxLead; }
+  /* Cells rest at scale(1.06), not scale(1). `repeat(N, 1fr)` puts cell edges on
+     fractional pixels, and the antialiased gap between neighbours beats against
+     the pixel grid to draw visible vertical seams across the panel. Overlapping
+     each cell by ~1px hides the seam; .pixelGrid clips the outer bleed. */
+  @keyframes pxIn   { from { opacity:0; transform: scale(.55); } to { opacity:1; transform: scale(1.06); } }
+  @keyframes pxLead { 0% { opacity:0; transform: scale(.4); } 45% { opacity:.42; transform: scale(1.02); } 100% { opacity:1; transform: scale(1.06); } }
+
+  /* --- layer 2: the consolidated paper --- */
+  .paperFill {
+    position: absolute; inset: 0; z-index: 2;
+    background: var(--paper);
+    opacity: 0;
+    transition: opacity 260ms ease;
+    box-shadow: 0 30px 80px -40px rgba(0,0,0,.9);
+  }
+  .buildBox.solid .paperFill { opacity: 1; }
+  .buildBox.solid .pixelGrid { opacity: 0; transition: opacity 200ms ease 120ms; }
+
+  /* --- the border strokes --- */
+  .edge { position: absolute; z-index: 3; background: var(--accent); opacity: .9; }
+  .edgeT, .edgeB { height: 1.5px; left: 0; right: 0; transform: scaleX(0); }
+  .edgeL, .edgeR { width: 1.5px; top: 0; bottom: 0; transform: scaleY(0); }
+  .edgeT { top: 0;    transform-origin: left center; }
+  .edgeR { right: 0;  transform-origin: center top; }
+  .edgeB { bottom: 0; transform-origin: right center; }
+  .edgeL { left: 0;   transform-origin: center bottom; }
+  .buildBox.stroked .edge { transition: transform 340ms cubic-bezier(.3,.8,.3,1); }
+  .buildBox.stroked .edgeT { transform: scaleX(1); transition-delay: 0ms; }
+  .buildBox.stroked .edgeR { transform: scaleY(1); transition-delay: 170ms; }
+  .buildBox.stroked .edgeB { transform: scaleX(1); transition-delay: 340ms; }
+  .buildBox.stroked .edgeL { transform: scaleY(1); transition-delay: 510ms; }
+
+  /* --- layer 3: content --- */
+  .boxBody {
+    position: relative; z-index: 4;
+    padding: clamp(1.3rem, 4vw, 2rem);
+    color: var(--paper-ink); font-family: var(--sans);
+    opacity: 0; transition: opacity 420ms ease;
+  }
+  .buildBox.content .boxBody { opacity: 1; }
+
+  .boxKicker { font-size: .68rem; letter-spacing: .18em; text-transform: uppercase; color: var(--accent); }
+  .boxTitle { font-family: var(--serif); font-size: clamp(1.35rem, 4vw, 1.75rem); line-height: 1.15;
+              margin: .5rem 0 0; color: var(--paper-ink); font-weight: 500; }
+  .boxSub { margin: .5rem 0 0; color: var(--paper-muted); font-size: .95rem; }
+
+  .steps { list-style: none; padding: 0; margin: 1.2rem 0 0; display: grid; gap: .05rem; }
+  .steps li {
+    display: flex; align-items: center; gap: .7rem;
+    font-size: .93rem; color: var(--paper-muted);
+    padding: .34rem 0; border-bottom: 1px solid transparent;
+    opacity: 0; transform: translateY(6px);
+    transition: opacity .3s ease, transform .3s ease, color .3s ease;
+  }
+  .steps li.in { opacity: 1; transform: none; }
+  .steps li.done { color: var(--paper-ink); }
+  .dot { width: 1rem; height: 1rem; flex: none; border-radius: 999px;
+         border: 1.5px solid var(--paper-line); position: relative; }
+  .steps li.running .dot { border-color: var(--accent); animation: pulse 1s ease-in-out infinite; }
+  .steps li.done .dot { border-color: var(--accent); background: var(--accent); }
+  .steps li.done .dot::after {
+    content: ""; position: absolute; inset: 2px; background: var(--paper);
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23000' d='M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z'/%3E%3C/svg%3E") center/contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23000' d='M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z'/%3E%3C/svg%3E") center/contain no-repeat;
+  }
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(192,112,74,.45); } 50% { box-shadow: 0 0 0 4px rgba(192,112,74,0); } }
+  .stepVal { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--paper-ink);
+             font-family: var(--serif); font-size: .98rem; opacity: 0; transition: opacity .3s ease; }
+  .steps li.done .stepVal { opacity: 1; }
+
+  .boxFoot { margin-top: 1.3rem; padding-top: 1.1rem; border-top: 1px solid var(--paper-line);
+             display: flex; flex-wrap: wrap; align-items: center; gap: .8rem; }
+  .boxCta {
+    display: inline-flex; align-items: center; gap: .55rem; background: var(--paper-ink); color: var(--paper);
+    border: none; border-radius: 999px; padding: .8rem 1.35rem; font-size: .95rem; font-weight: 600;
+    font-family: var(--sans); cursor: pointer; text-decoration: none;
+    opacity: 0; transform: translateY(6px); transition: opacity .35s ease, transform .35s ease;
+  }
+  .boxCta.in { opacity: 1; transform: none; }
+  .boxNote { color: var(--paper-muted); font-size: .84rem; }
+
+  /* Reduced motion: no pixels, no growth animation — the box is just there. */
+  @media (prefers-reduced-motion: reduce) {
+    .buildSlot { transition: none; }
+    .px { animation: none; opacity: 1; transform: none; }
+    .buildBox.stroked .edge { transition: none; }
+    .steps li { transition: none; }
+  }
+
+  /* ---------- prototype-only tuning panel ---------- */
+  .panel {
+    position: fixed; left: 12px; bottom: 12px; z-index: 100;
+    background: rgba(22,17,14,.94); border: 1px solid var(--line); border-radius: 12px;
+    padding: .8rem .9rem; font-size: .74rem; color: var(--ink-soft);
+    display: grid; gap: .45rem; min-width: 15rem; backdrop-filter: blur(6px);
+  }
+  .panel h4 { margin: 0 0 .2rem; font-size: .68rem; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .panel label { display: grid; grid-template-columns: 7.4rem 1fr 2.6rem; align-items: center; gap: .4rem; }
+  .panel input[type=range] { width: 100%; accent-color: var(--accent); }
+  .panel output { font-variant-numeric: tabular-nums; text-align: right; color: var(--ink); }
+  .panel button { background: var(--accent); color: #06110B; border: none; border-radius: 999px;
+                  padding: .5rem .9rem; font-weight: 600; cursor: pointer; font-size: .78rem; margin-top: .2rem; }
+  .panel .hint { color: var(--muted); font-size: .68rem; line-height: 1.4; }
+  @media (max-width: 720px) { .panel { display: none; } }
+</style>
+</head>
+<body>
+
+<!-- ---------- context: a stand-in for card 09 so scrolling feels real ---------- -->
+<section class="card">
+  <div class="inner">
+    <div class="chapter">09&nbsp;&nbsp;/&nbsp;&nbsp;10</div>
+    <p class="answer">So what's it actually worth?</p>
+    <h2 class="h2">A range, not a number.</h2>
+    <p class="p">Scroll on — this is only here so the trigger fires the way it does in the real deck.</p>
+    <p class="scrollHint">↓ Keep scrolling to card 10</p>
+  </div>
+</section>
+
+<!-- ---------- CARD 10 (the real one) ---------- -->
+<section class="card" id="card10">
+  <div class="inner">
+    <div class="chapter">10&nbsp;&nbsp;/&nbsp;&nbsp;10</div>
+    <p class="answer">If you decided to sell, here's what we'd do.</p>
+    <h2 class="h2">A Burleigh Waters family home built around the walk to school.</h2>
+    <p class="p">We'd lead on the walk to school — and let the right buyer see themselves in it.</p>
+    <p class="avoid">What we would not do: <s>open homes every Saturday</s></p>
+    <a class="cta" href="#build" id="ctaBtn">Build my complete selling strategy →</a>
+  </div>
+</section>
+
+<!-- ---------- THE BUILD BOX ---------- -->
+<div class="buildWrap">
+  <div class="buildSlot" id="slot">
+    <div class="buildBox" id="box">
+      <div class="pixelGrid" id="grid"></div>
+      <div class="paperFill"></div>
+      <span class="edge edgeT"></span><span class="edge edgeR"></span>
+      <span class="edge edgeB"></span><span class="edge edgeL"></span>
+
+      <div class="boxBody" id="body">
+        <div class="boxKicker">Building your strategy</div>
+        <h3 class="boxTitle">14 Kingfisher Court, Burleigh Waters</h3>
+        <p class="boxSub">Assembling from the same data the pages above are built on. No form — it's already yours.</p>
+        <ul class="steps" id="steps"></ul>
+        <div class="boxFoot">
+          <a class="boxCta" id="boxCta" href="#">Open my house website →</a>
+          <span class="boxNote" id="boxNote">Building…</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ---------- tuning panel (prototype only) ---------- -->
+<div class="panel">
+  <h4>Reveal tuning</h4>
+  <label>Trigger delay <input type="range" id="tDelay" min="0" max="4000" step="100" value="1500"><output id="oDelay"></output></label>
+  <label>Cell size (px) <input type="range" id="tCell" min="6" max="28" step="1" value="13"><output id="oCell"></output></label>
+  <label>Fill duration <input type="range" id="tFill" min="300" max="3000" step="50" value="900"><output id="oFill"></output></label>
+  <label>Jitter <input type="range" id="tJit" min="0" max="900" step="25" value="380"><output id="oJit"></output></label>
+  <label>Leader cells % <input type="range" id="tLead" min="0" max="25" step="1" value="7"><output id="oLead"></output></label>
+  <label>Downward bias <input type="range" id="tBias" min="0" max="100" step="5" value="78"><output id="oBias"></output></label>
+  <button id="replay">Replay reveal ⟲</button>
+  <p class="hint">Downward bias 100 = strict top-to-bottom wave. 0 = pure random scatter.<br>Numbers you settle on go into REVEAL_SPEC in README.md.</p>
+</div>
+
+<script>
+(() => {
+  const slot  = document.getElementById('slot');
+  const box   = document.getElementById('box');
+  const grid  = document.getElementById('grid');
+  const body  = document.getElementById('body');
+  const steps = document.getElementById('steps');
+  const boxCta= document.getElementById('boxCta');
+  const boxNote=document.getElementById('boxNote');
+  const card10= document.getElementById('card10');
+
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // The real 16 steps, verbatim from STEP_ORDER in
+  // netlify/functions/property-report-progress.mjs. Labels are the human copy
+  // we'd surface; the fake values stand in for what the resolver returns.
+  const STEPS = [
+    ['address_resolved',   'Address matched to title',        '14 Kingfisher Ct'],
+    ['cadastral',          'Land parcel + boundary',          '612 m²'],
+    ['floor_plan',         'Floor plan read',                 '4 bed · 2 bath'],
+    ['satellite',          'Satellite pass',                  'North-east rear'],
+    ['street_view',        'Street frontage',                 'Reviewed'],
+    ['gallery',            'Photography assessed',            '31 images'],
+    ['comps',              'Comparable sales selected',       '6 within 700m'],
+    ['valuation',          'Valuation range built',           '$1.42M–$1.61M'],
+    ['walking_distances',  'Walking distances measured',      '650m to school'],
+    ['market_position',    'Market position',                 'Top 22% of stock'],
+    ['scarcity',           'Scarcity check',                  '3 like it for sale'],
+    ['scarcity_story',     'What makes it rare',              'Written'],
+    ['positioning',        'Positioning angle chosen',        'Walk to school'],
+    ['personas',           'Buyer profiles matched',          '2 strong fits'],
+    ['buyers',             'Active buyer pool sized',         '41 watching'],
+    ['analyst_handoff',    'Reviewed by Will',                'Queued'],
+  ];
+
+  const cfg = { delay: 1500, cell: 13, fill: 900, jitter: 380, lead: 7, bias: 78 };
+  let timers = [];
+  const clearTimers = () => { timers.forEach(clearTimeout); timers = []; };
+  const at = (ms, fn) => timers.push(setTimeout(fn, ms));
+
+  // Hard ceiling on animated nodes. At 13px cells a 900×540 box wants ~2,800
+  // divs each running its own transform+opacity animation — fine on a desktop,
+  // jank on a mid-range Android, which is most of this traffic. Above the
+  // budget we grow the cell instead of dropping the effect: coarser pixels
+  // actually read MORE Matrix, so the degradation is free.
+  const CELL_BUDGET = 900;
+
+  /** Build the pixel grid sized to the box's real footprint. */
+  function paintGrid() {
+    const w = box.clientWidth;
+    const h = box.clientHeight;
+    let cell = cfg.cell;
+    while (Math.ceil(w / cell) * Math.ceil(h / cell) > CELL_BUDGET) cell += 1;
+    const cols = Math.max(6, Math.ceil(w / cell));
+    const rows = Math.max(4, Math.ceil(h / cell));
+    const horizon = cfg.fill + cfg.jitter * 0.45;
+    grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+    grid.style.gridTemplateRows    = `repeat(${rows}, 1fr)`;
+
+    const frag = document.createDocumentFragment();
+    for (let r = 0; r < rows; r++) {
+      // Row progress, eased. easeInOutQuad makes the wavefront start slow,
+      // rush through the middle, then settle — the "non-uniform rate".
+      const t = rows > 1 ? r / (rows - 1) : 0;
+      const eased = t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+      for (let c = 0; c < cols; c++) {
+        const px = document.createElement('i');
+        px.className = 'px';
+        // Blend the downward wave against pure randomness by `bias`.
+        const wave = eased * cfg.fill;
+        const rand = Math.random() * cfg.fill;
+        const b = cfg.bias / 100;
+        let d = (wave * b + rand * (1 - b)) + Math.random() * cfg.jitter;
+        const isLead = Math.random() * 100 < cfg.lead;
+        if (isLead) { d *= 0.35; px.classList.add('lead'); }
+        // Clamp to a known horizon. Unclamped, a handful of jittered stragglers
+        // land ~400ms after the wave, so consolidating had to wait for them —
+        // which showed as a second of empty white paper before any content.
+        // With a horizon the panel consolidates the instant the wave lands.
+        px.style.setProperty('--d', `${Math.round(Math.min(d, horizon))}ms`);
+        frag.appendChild(px);
+      }
+    }
+    grid.replaceChildren(frag);
+    return horizon + 260; // + the cell's own 260ms pop
+  }
+
+  /** Render the step list (hidden until content phase). */
+  function paintSteps() {
+    steps.replaceChildren();
+    STEPS.forEach(([key, label, val]) => {
+      const li = document.createElement('li');
+      li.dataset.step = key;
+      li.innerHTML = `<span class="dot"></span><span>${label}</span><span class="stepVal">${val}</span>`;
+      steps.appendChild(li);
+    });
+  }
+
+  /** Full sequence. */
+  function run() {
+    clearTimers();
+    box.className = 'buildBox';
+    slot.style.height = '0px';
+    boxCta.classList.remove('in');
+    boxNote.textContent = 'Building…';
+    paintSteps();
+
+    // Measure the box's natural height off-screen, then animate the slot to it.
+    slot.style.height = 'auto';
+    const target = box.scrollHeight;
+    box.style.setProperty('--boxH', target + 'px');
+    slot.style.height = '0px';
+    void slot.offsetHeight; // force reflow so the transition takes
+
+    if (reduced) {
+      slot.style.height = target + 'px';
+      box.classList.add('armed', 'solid', 'stroked', 'content');
+      steps.querySelectorAll('li').forEach(li => li.classList.add('in', 'done'));
+      boxCta.classList.add('in');
+      boxNote.textContent = 'Ready';
+      return;
+    }
+
+    // t0 → 1.5s dwell on card 10, then the box starts forming.
+    at(cfg.delay, () => {
+      const fillEnd = paintGrid();
+      slot.style.setProperty('--growMs', `${Math.round(cfg.fill * 0.9)}ms`);
+      slot.style.height = target + 'px';
+      box.classList.add('armed');
+
+      // Border strokes start once the fill is ~55% through — the shape is
+      // legible by then, so the frame reads as containment, not decoration.
+      at(cfg.fill * 0.55, () => box.classList.add('stroked'));
+      // Consolidate: solid paper crossfades over the cells (kills grid seams).
+      at(fillEnd, () => box.classList.add('solid'));
+      // Content in — deliberately overlapping the tail of the consolidate, so
+      // the paper settling and the first words are read as one motion.
+      at(fillEnd + 140, () => {
+        box.classList.add('content');
+        streamSteps(fillEnd);
+      });
+    });
+  }
+
+  /** Simulates the 1.5s poll of /api/v1/property-report-progress. */
+  function streamSteps() {
+    const lis = [...steps.querySelectorAll('li')];
+    lis.forEach((li, i) => {
+      at(i * 90, () => li.classList.add('in'));
+      // Steps resolve at an uneven cadence — fast lookups, slow analysis.
+      const runAt = 240 + i * 210 + (i % 3 === 0 ? 180 : 0);
+      at(runAt, () => li.classList.add('running'));
+      at(runAt + 380, () => { li.classList.remove('running'); li.classList.add('done'); });
+    });
+    const total = 240 + lis.length * 210 + 380;
+    at(total + 150, () => {
+      boxNote.textContent = 'Ready — no form, no email.';
+      boxCta.classList.add('in');
+      // Box grew as steps came in; re-fit the slot.
+      slot.style.height = box.scrollHeight + 'px';
+    });
+  }
+
+  // Trigger: same IntersectionObserver contract the deck already uses (>0.5).
+  let fired = false;
+  new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting && e.intersectionRatio > 0.5 && !fired) { fired = true; run(); }
+    });
+  }, { threshold: [0.5] }).observe(card10);
+
+  // CTA is a shortcut, not a requirement — it skips the dwell timer.
+  document.getElementById('ctaBtn').addEventListener('click', (e) => {
+    e.preventDefault();
+    fired = true; clearTimers();
+    const keep = cfg.delay; cfg.delay = 0; run(); cfg.delay = keep;
+    setTimeout(() => slot.scrollIntoView({ behavior: 'smooth', block: 'center' }), 60);
+  });
+
+  // ---- tuning panel wiring ----
+  const bind = (id, out, key, suffix = '') => {
+    const el = document.getElementById(id), o = document.getElementById(out);
+    const sync = () => { cfg[key] = +el.value; o.textContent = el.value + suffix; };
+    el.addEventListener('input', sync); sync();
+  };
+  bind('tDelay','oDelay','delay','ms'); bind('tCell','oCell','cell','px');
+  bind('tFill','oFill','fill','ms');    bind('tJit','oJit','jitter','ms');
+  bind('tLead','oLead','lead','%');     bind('tBias','oBias','bias','%');
+  document.getElementById('replay').addEventListener('click', () => {
+    card10.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(run, 400);
+  });
+})();
+</script>
+</body>
+</html>
