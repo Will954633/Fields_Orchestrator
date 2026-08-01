@@ -45,3 +45,76 @@ Panel exposes glyph size, fall speed, density, trail length, mutation rate and b
 - Scanlines use plain alpha rather than `mix-blend-mode: multiply` — identical
   over a black scene, one less full-screen blend pass.
 - Honours `prefers-reduced-motion` by slowing the fall and damping the churn.
+
+---
+
+# Version 2 — Homeowner sequence
+
+**View:** https://vm.fieldsestate.com.au/concepts/off-market/Matrix_Recreation/homeowner-sequence.html
+
+Same rain engine, new alphabet and a scripted payoff.
+
+## Why not katakana, and why not 0/1
+
+- **Katakana** carries the reference but says nothing to a Burleigh Waters
+  homeowner — it's set dressing from someone else's story.
+- **Binary** has only two glyph shapes, so it has no visual texture, and 0/1
+  rain reads as generic stock-footage "hacking".
+- **What's here instead:** the raw material of a property record — digits
+  (prices, land size, days on market) weighted 3:1 over capitals, plus
+  `$ % m² ▲ ▼`. Unmirrored, because this is meant to read as data.
+
+The strongest touch is the **token streams**: ~16% of streams carry a real
+string that stamps one character per row as the head falls, so it reads
+*vertically* out of the noise and then sits still while the trail decays —
+`BURLEIGH WATERS`, `4220`, `SOLD`, `607M2`, `DOM 34`, `OFF MARKET`.
+The owner sees their own suburb surface before a single word is typed.
+
+## Sequence
+
+| t | Beat |
+|---|---|
+| 0–3.0s | Full-field rain |
+| 3.0–4.6s | Field contracts to a band on the left (34% width) and dims 42%; scrim fades in |
+| 4.6s+ | Terminal types, left-aligned, over the narrowed field |
+
+Typed lines, each below the last, with a blinking block cursor:
+
+```
+searching...          ← dots land one at a time, 380ms apart
+searching...          ← again, 1s later
+Found it
+3 Avocet Avenue       ← white, bold
+Burleigh Waters, QLD 4220
+There's a problem...  ← amber
+ERROR                 ← red, each triggers an alarm wash
+ERROR
+ERROR
+ABORT                 ← red, tracked out, screen shake + rain surge + flicker
+```
+
+Holds 4.2s on ABORT, then loops. `R` replay · `L` toggle loop · `F` fullscreen.
+
+## Per-owner address
+
+The address is overridable by query string, so one file serves every owner —
+useful if this is ever wired into the off-market funnel, where pages are
+already per-address:
+
+```
+homeowner-sequence.html?street=12%20Curlew%20Court&locality=Robina,%20QLD%204226
+```
+
+Falls back to 3 Avocet Avenue. Input is control-character stripped and length
+capped, and inserted via `textContent` (never HTML).
+
+## Two things to decide before this goes anywhere public
+
+1. **A real address next to "There's a problem / ERROR / ABORT."** Fine as a
+   concept or for an owner's own page. If it runs as a broad ad against real
+   addresses, it asserts something negative about an identifiable home. Worth a
+   deliberate call rather than inheriting it from the demo.
+2. **The `$1,285,000` / `$970,000` tokens in the rain** are unattached to any
+   address, so they don't breach the no-single-valuation-in-headlines rule —
+   but they are dollar figures on screen. Easy to drop from `TOKENS` if you'd
+   rather not carry them.
