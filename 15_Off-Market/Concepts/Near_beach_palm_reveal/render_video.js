@@ -79,7 +79,8 @@ async function main() {
   });
   const url = `file://${indexPath}?${q}`;
 
-  const frameDir = fs.mkdtempSync(path.join(os.tmpdir(), "palm-reveal-"));
+  // stills never touch this; only create it when frames are actually written
+  const frameDir = o.stills > 0 ? null : fs.mkdtempSync(path.join(os.tmpdir(), "palm-reveal-"));
   const browser = await puppeteer.launch({
     executablePath: CHROME, headless: "new", args: LAUNCH_ARGS,
   });
@@ -141,6 +142,7 @@ async function main() {
     await browser.close();
   }
 
+  try {
   const stem = o.out ? o.out.replace(/\.(mp4|gif)$/, "") : `palm_reveal_${o.mode}`;
   const mp4 = path.join(HERE, `${stem}.mp4`);
   const pattern = path.join(frameDir, "f_%05d.png");
@@ -168,8 +170,10 @@ async function main() {
       gif]);
     console.log(`  ${path.basename(gif)}  (${(fs.statSync(gif).size / 1048576).toFixed(1)} MB)`);
   }
-
-  fs.rmSync(frameDir, { recursive: true, force: true });
+  } finally {
+    // a few hundred full-size PNGs — always clear them, even if ffmpeg failed
+    fs.rmSync(frameDir, { recursive: true, force: true });
+  }
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });
