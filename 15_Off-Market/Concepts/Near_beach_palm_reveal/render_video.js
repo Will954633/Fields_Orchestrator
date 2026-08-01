@@ -39,12 +39,15 @@ function parseArgs() {
     chaos: 0.28, mosaic: 0.85, fade: 0.055,
     fps: 30, width: 1024, hold: 1.0, gif: false, stills: 0,
     out: null,
+    // host-page matching (see reveal.template.html) — null means "leave theme alone"
+    paper: null, ink: null, grain: null, vignette: null,
   };
   for (let i = 0; i < a.length; i++) {
     const k = a[i].replace(/^--/, "");
     const next = () => a[++i];
     switch (k) {
-      case "mode": case "theme": o[k] = next(); break;
+      case "mode": case "theme": case "paper": case "ink": o[k] = next(); break;
+      case "grain": case "vignette": o[k] = next(); break;
       case "block": case "dur": case "fps": case "width": o[k] = +next(); break;
       case "chaos": case "mosaic": case "fade": case "hold": o[k] = +next(); break;
       case "stills": o.stills = +next(); break;
@@ -77,6 +80,9 @@ async function main() {
     block: String(o.block), dur: String(o.dur), chaos: String(o.chaos),
     mosaic: String(o.mosaic), fade: String(o.fade),
   });
+  for (const k of ["paper", "ink", "grain", "vignette"]) {
+    if (o[k] !== null) q.set(k, String(o[k]));
+  }
   const url = `file://${indexPath}?${q}`;
 
   // stills never touch this; only create it when frames are actually written
