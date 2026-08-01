@@ -780,6 +780,12 @@ def analyze(lead: dict, sm, gc_db, suburb_index, pr_budget=None) -> dict:
         "behavioral": {**{k: behav[k] for k in _COUNT_KEYS},
                        "address_searches": behav["address_searches"], "last_seen": behav["last_seen"]},
         "behavioral_score": bscore,
+        "listing_bonus": listing_bonus,
+        # `hotness` is bscore + listing_bonus. Kept for continuity, but it adds two
+        # unrelated things — what the person DID vs what is happening to their
+        # PROPERTY — into one unbounded number, so it is no longer displayed on its
+        # own anywhere. Render the two components instead (see hotness_label() in
+        # live_leads_to_sheet.py).
         "hotness": hotness,
         "moment": moment,
         "just_listed": just_listed,
@@ -829,7 +835,8 @@ def run(query: dict, dry_run: bool = False, limit: int = 0, max_pr: int = 30) ->
         if si.get("just_listed"):
             alerts.append((lead.get("address") or lead.get("lead_key"), si))
         flag = "🔥" if si.get("moment") else ("•" if actionable else " ")
-        print(f"{flag} [{si['label']:>24}] hot={si['hotness']:>3} "
+        print(f"{flag} [{si['label']:>24}] intent={si['behavioral_score']:>3} "
+              f"listing={si['listing_bonus']:>+3} "
               f"{(lead.get('address') or lead.get('lead_key'))[:40]:<40} "
               f"{('| ' + si['moment']) if si.get('moment') else ''}")
         if not dry_run:
