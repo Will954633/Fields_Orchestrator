@@ -52,6 +52,11 @@ from scripts.property_reports import personas_narrative  # noqa: E402
 TARGET_SUBURBS = [
     "robina", "burleigh_waters", "varsity_lakes", "burleigh_heads",
     "mudgeeraba", "reedy_creek", "merrimac", "worongary", "carrara",
+    # nerang: off-market sitemap expansion suburb (released from 2026-07-29). A slug
+    # missing from this scan resolves to subject_not_found, so any suburb whose URLs
+    # we publish must be listed. Callers that already know the collection should
+    # PASS `suburb` rather than lean on this fallback scan.
+    "nerang",
 ]
 POLL_SECONDS = 3
 FRESH_DAYS = 14
