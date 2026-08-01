@@ -68,6 +68,60 @@ Policy brief:
 {brief}"""
 
 
+MINDSET_DIGEST_SYSTEM_PROMPT = """\
+You condense an internal seller-psychology brief into a short framing note for a writer producing \
+public market commentary. You are not writing marketing copy and you are not writing advice."""
+
+MINDSET_DIGEST_USER_PROMPT_TEMPLATE = """\
+Condense the brief below into at most 900 words of framing for a writer producing public market \
+commentary for homeowners in Robina, Burleigh Waters and Varsity Lakes.
+
+Keep: the dominant tension in the reader's head, their ranked worries, what they actually want to \
+know, and the explicit list of things we must NOT assert (the brief's "did NOT conclude" section).
+
+Drop: all suburb figures (the writer has live data and the brief's numbers may be stale), all \
+source citations, and anything tagged [INFERRED] unless you mark it clearly as unconfirmed.
+
+Write it as guidance on WHICH facts matter to this reader and WHY, never as instructions to \
+persuade. The output will be read by a writer bound by rules that forbid advice, prediction, and \
+urgency — do not suggest anything that would breach those.
+
+BRIEF:
+{brief}"""
+
+
+def fetch_mindset_digest() -> str:
+    """
+    Condense the homeowner mindset brief once per run into framing for every category prompt.
+
+    The brief exists so the monthly prose speaks to what an owner in the target market is actually
+    worried about, rather than only to the numbers. It is INTERNAL — the digest carries the brief's
+    binding constraints with it so a downstream prompt cannot quietly turn seller psychology into
+    persuasion. Deliberately non-fatal: a missing or stale brief warns and degrades to no framing
+    rather than blocking the monthly cycle.
+    """
+    from homeowner_mindset import check_freshness, digest_guardrails
+
+    rep, status = check_freshness()
+    if rep is None:
+        return ""
+    if status == "stale":
+        print("      (continuing — stale framing is better than none, but refresh it)")
+
+    try:
+        digest = _call_claude_max(
+            MINDSET_DIGEST_SYSTEM_PROMPT,
+            MINDSET_DIGEST_USER_PROMPT_TEMPLATE.format(brief=rep["text"]),
+            timeout=240,
+        ).strip()
+    except Exception as e:
+        print(f"  WARNING: mindset digest condensation failed ({e}) — continuing without it")
+        return ""
+
+    print(f"  Mindset digest ({rep['date']:%d %b %Y}, {rep['age_days']}d old): {len(digest)} chars")
+    return digest + "\n\n" + digest_guardrails()
+
+
 def fetch_policy_digest(sm_db) -> str:
     """Fetch the latest monthly policy research brief and condense it into a short digest
     reusable across all suburb/category summary prompts (one Max CLI call per run, not one
@@ -477,6 +531,11 @@ Current AU/QLD housing policy context (use AT MOST ONE fact from this list, only
 strengthens the analysis — do not force a policy mention into every summary):
 {policy}
 
+Who you are writing for (INTERNAL framing — never quote this, never reveal that we profile
+seller psychology, never write persuasion. It tells you WHICH facts matter to this reader and
+WHY; it does not license advice, prediction or urgency, and the live data always wins):
+{mindset}
+
 Write a 3-4 sentence market summary that:
 1. Opens with "Should you sell your house in {suburb} now?"
 2. Gives a direct verdict: conditions currently favour sellers / market is balanced / conditions favour buyers
@@ -506,6 +565,11 @@ Current AU/QLD housing policy context (use AT MOST ONE fact from this list, only
 strengthens the analysis — do not force a policy mention into every summary). First-home-buyer scheme
 facts (5% Deposit Scheme, Help to Buy, stamp duty/FHOG) are usually most relevant here:
 {policy}
+
+Who you are writing for (INTERNAL framing — never quote this, never reveal that we profile
+seller psychology, never write persuasion. It tells you WHICH facts matter to this reader and
+WHY; it does not license advice, prediction or urgency, and the live data always wins):
+{mindset}
 
 Write a 3-4 sentence summary that:
 1. Opens with "Is now a good time to buy a house in {suburb}?"
@@ -547,6 +611,11 @@ strengthens the analysis — do not force a policy mention into every summary). 
 decision date and negative gearing/CGT reform are usually most relevant here:
 {policy}
 
+Who you are writing for (INTERNAL framing — never quote this, never reveal that we profile
+seller psychology, never write persuasion. It tells you WHICH facts matter to this reader and
+WHY; it does not license advice, prediction or urgency, and the live data always wins):
+{mindset}
+
 Write a 3-4 sentence summary that:
 1. Opens with "Is the Gold Coast property market going to crash?"
 2. Acknowledges the concern honestly, then assesses crash risk based on the LEADING indicators (wage growth trend, household spending, lending)
@@ -572,6 +641,11 @@ Current AU/QLD housing policy context (use AT MOST ONE fact from this list, only
 strengthens the analysis — do not force a policy mention into every summary):
 {policy}
 
+Who you are writing for (INTERNAL framing — never quote this, never reveal that we profile
+seller psychology, never write persuasion. It tells you WHICH facts matter to this reader and
+WHY; it does not license advice, prediction or urgency, and the live data always wins):
+{mindset}
+
 Write a 3-4 sentence overview that:
 1. Opens with "What is the {suburb} property market doing?"
 2. Covers the headline numbers: median price, recent sales volume, DOM, active listings
@@ -595,6 +669,11 @@ Here is the current market data for {suburb}:
 Current AU/QLD housing policy context (use AT MOST ONE fact from this list, only if it genuinely
 strengthens the analysis — do not force a policy mention into every summary):
 {policy}
+
+Who you are writing for (INTERNAL framing — never quote this, never reveal that we profile
+seller psychology, never write persuasion. It tells you WHICH facts matter to this reader and
+WHY; it does not license advice, prediction or urgency, and the live data always wins):
+{mindset}
 
 Write a 3-4 sentence summary that:
 1. Opens with "Are houses or units a better investment in {suburb}?"
@@ -626,6 +705,11 @@ Current AU/QLD housing policy context (use AT MOST ONE fact from this list, only
 strengthens the analysis — do not force a policy mention into every summary):
 {policy}
 
+Who you are writing for (INTERNAL framing — never quote this, never reveal that we profile
+seller psychology, never write persuasion. It tells you WHICH facts matter to this reader and
+WHY; it does not license advice, prediction or urgency, and the live data always wins):
+{mindset}
+
 Write a 3-4 sentence summary that:
 1. Opens with "Which way is the {suburb} property market moving?"
 2. References QoQ and YoY growth momentum and whether it's accelerating or decelerating
@@ -649,6 +733,11 @@ Here is the current market data including cross-suburb comparisons:
 Current AU/QLD housing policy context (use AT MOST ONE fact from this list, only if it genuinely
 strengthens the analysis — do not force a policy mention into every summary; often not relevant here):
 {policy}
+
+Who you are writing for (INTERNAL framing — never quote this, never reveal that we profile
+seller psychology, never write persuasion. It tells you WHICH facts matter to this reader and
+WHY; it does not license advice, prediction or urgency, and the live data always wins):
+{mindset}
 
 Write a 3-4 sentence summary that:
 1. Opens with "How does {suburb} compare to nearby suburbs?"
@@ -686,7 +775,8 @@ Rules:
 
 # ─── Claude API Call ──────────────────────────────────────────────────────────
 
-def generate_summary(client, category_id, suburb_display, data_dict, policy_digest="", dry_run=False):
+def generate_summary(client, category_id, suburb_display, data_dict, policy_digest="",
+                     mindset_digest="", dry_run=False):
     """Call Claude Sonnet to generate a category summary."""
     prompt_template = CATEGORY_PROMPTS.get(category_id)
     if not prompt_template:
@@ -698,6 +788,7 @@ def generate_summary(client, category_id, suburb_display, data_dict, policy_dige
         suburb=suburb_display,
         data=data_text,
         policy=policy_digest or "(no current policy brief available)",
+        mindset=mindset_digest or "(no homeowner mindset brief available)",
     )
 
     if dry_run:
@@ -809,8 +900,11 @@ def main():
     # suburb/category — the full brief is ~9K chars, condensing it 12x per run would
     # be wasteful). Reused across every generate_summary() call below.
     policy_digest = ""
+    mindset_digest = ""
     if not args.dry_run:
         policy_digest = fetch_policy_digest(sm_db)
+        # Homeowner psychology framing — same once-per-run pattern, same non-fatal degrade.
+        mindset_digest = fetch_mindset_digest()
 
     total_input_tokens = 0
     total_output_tokens = 0
@@ -842,7 +936,10 @@ def main():
 
             print(f"\n  Generating: {cat['title']} ({cat_id})...")
 
-            result = generate_summary(claude_client, cat_id, display, data, policy_digest=policy_digest, dry_run=args.dry_run)
+            result = generate_summary(claude_client, cat_id, display, data,
+                                      policy_digest=policy_digest,
+                                      mindset_digest=mindset_digest,
+                                      dry_run=args.dry_run)
 
             if result is None:
                 continue
