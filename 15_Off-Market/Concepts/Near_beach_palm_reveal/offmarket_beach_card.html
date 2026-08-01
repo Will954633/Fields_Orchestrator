@@ -76,6 +76,12 @@
 
   /* ---- card shell ---- */
   .card {
+    /* .mediaGlow is inset -10% horizontally, which pushes past the card on a
+       phone and gives the document 2-4px of horizontal scroll. `clip` kills it
+       without creating a scroll container the way `hidden` would. */
+    overflow-x: hidden;
+    overflow-x: clip;
+    min-height: 100vh;   /* fallback before svh, which iOS only has from 15.4 */
     min-height: 100svh;
     display: flex; flex-direction: column; justify-content: center;
     padding: max(6rem, 12svh) var(--pad) max(5rem, 10svh);
@@ -141,6 +147,14 @@
   .replay { background: none; border: none; padding: 0; font: inherit; letter-spacing: inherit;
             text-transform: inherit; color: var(--accent); cursor: pointer; }
   .replay:hover { color: var(--gold); }
+  /* autoplay refused (Low Power Mode / Data Saver) — make it obviously tappable */
+  .media.needsTap .mediaFrame::after {
+    content: "▶ Tap to play";
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    color: var(--accent); font-size: 0.8rem; letter-spacing: 0.16em; text-transform: uppercase;
+    border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+    border-radius: 999px; padding: 0.6rem 1.1rem; pointer-events: none;
+  }
 
   /* ---- reveal (mirrors discovery.module.css:159-172) ----
      Scoped to .stagger so it lands per line. The live deck applies this to
@@ -300,11 +314,30 @@
   });
 
   let mediaFired = false;
+  let revealAt = 0;               // when the beach card's copy started arriving
+
   function playPalm() {
     media.classList.add("mediaIn");
     if (reduced) { video.controls = true; return; }
     try { video.currentTime = 0; } catch (_) {}
-    video.play().catch(() => { video.controls = true; });  // autoplay blocked
+    // Muted + playsinline satisfies iOS and Android, but Low Power Mode and
+    // Data Saver refuse regardless. Fall back to a tappable video rather than
+    // leaving a blank rectangle.
+    video.play().catch(() => { video.controls = true; media.classList.add("needsTap"); });
+  }
+
+  function schedulePalm() {
+    if (mediaFired) return;
+    mediaFired = true;
+    if (reduced) return playPalm();
+    // Hold the animation back until the copy has landed — but only for however
+    // much of that wait is left. On desktop the palm sits beside the text and
+    // becomes visible at the same moment, so the full delay applies and the
+    // text still reads first. On mobile it is stacked below the fold and only
+    // comes into view seconds later, by which point the copy is long since
+    // read: waiting again would just play it to a viewport that has moved on.
+    const remaining = MEDIA_DELAY_MS - (performance.now() - revealAt);
+    setTimeout(playPalm, Math.max(200, Math.min(MEDIA_DELAY_MS, remaining)));
   }
 
   const io = new IntersectionObserver((entries) => {
@@ -313,15 +346,23 @@
       if (!e.isIntersecting) return;
       e.target.classList.add("revealIn");           // one-way, like the live deck
       if (e.intersectionRatio > 0.5) setActive(n);
-      if (e.target.id === "card-beach" && !mediaFired) {
-        mediaFired = true;
-        // text first, then the animation
-        setTimeout(playPalm, reduced ? 0 : MEDIA_DELAY_MS);
-      }
+      if (e.target.id === "card-beach" && !revealAt) revealAt = performance.now();
     });
   }, { threshold: [0.15, 0.5] });
 
   cards.forEach((c) => io.observe(c));
+
+  // Play when the animation itself is on screen, not when the card is. The card
+  // is 100svh+ tall, so on a phone "card visible" happens while the palm is
+  // still ~1000px below the fold — it would draw itself and finish unwatched.
+  const mediaIO = new IntersectionObserver((entries) => {
+    entries.forEach((e) => {
+      if (!e.isIntersecting) return;
+      schedulePalm();
+      mediaIO.disconnect();
+    });
+  }, { threshold: 0.3 });
+  mediaIO.observe(media);
 
   // first card is already on screen at load
   cards[0].classList.add("revealIn");
