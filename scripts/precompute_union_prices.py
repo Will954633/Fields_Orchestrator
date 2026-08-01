@@ -64,6 +64,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from shared.db import get_client                      # noqa: E402
 from shared.dwelling_type import classify_dwelling    # noqa: E402
 from onthehouse.matching import address_key           # noqa: E402
+from job_status import job_run                        # noqa: E402
 
 SUBURBS = ["robina", "burleigh_waters", "varsity_lakes"]
 STAGING = "precomputed_indexed_prices_staging"
@@ -376,11 +377,21 @@ def main():
     ap.add_argument("--promote", action="store_true",
                     help="also write to the live collection (read the diff first)")
     args = ap.parse_args()
+    # cadence 744h ≈ monthly. This job MUST run after precompute_indexed_price_data.py
+    # (0 5 1 * *) and recalibrate_charts.py (30 5 1 * *), because the first does a full
+    # replace_one on precomputed_indexed_prices and would otherwise silently revert
+    # every corrected median and CI on the 1st of each month.
+    with job_run("market_metrics_union_medians", cadence_hours=744,
+                 title="Market Metrics — union medians + CIs") as beat:
+        run(args, beat)
 
+
+def run(args, beat=None):
     client = get_client()
     gc, sm = client["Gold_Coast"], client["system_monitor"]
     union_from = qtr((datetime.utcnow() - timedelta(days=365)).strftime("%Y-%m-%d"))
     print(f"union window starts {union_from}\n")
+    summary, metrics = [], {}
 
     for suburb in SUBURBS:
         counters = defaultdict(int)
@@ -444,7 +455,15 @@ def main():
         unreliable = [q["period"] for q in quarterly[-6:] if not q["reliable"]]
         print(f"   last 6 quarters too noisy to publish QoQ: {unreliable or 'none'}\n")
 
+        summary.append(f"{suburb} {latest['rolling_median']:,} +/-{latest['ci_margin_pct']}%")
+        metrics[f"{suburb}_median_12m"] = latest["rolling_median"]
+        metrics[f"{suburb}_ci_margin_pct"] = latest["ci_margin_pct"]
+        metrics[f"{suburb}_sample_n"] = latest["transaction_count"]
+
     print(f"staged -> Gold_Coast.{STAGING}" + ("  (AND PROMOTED TO LIVE)" if args.promote else ""))
+    if beat is not None:
+        beat.detail = ("promoted: " if args.promote else "staged only: ") + "; ".join(summary)
+        beat.metrics = metrics
 
 
 if __name__ == "__main__":
