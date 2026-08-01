@@ -30,6 +30,9 @@ import argparse
 from datetime import datetime
 from pymongo import MongoClient
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from market_series import five_year_growth  # noqa: E402
+
 TARGET_SUBURBS = ["robina", "burleigh_waters", "varsity_lakes"]
 DISPLAY_NAMES = {
     "robina": "Robina",
@@ -190,20 +193,29 @@ def show_data(suburb=None, category=None):
                 f"({cs_series[-1].get('period', '?')})"
             )
 
-            rolling = [
-                r for r in (cs_idx.get("rolling_12m_median_series") or [])
-                if not r.get("is_in_progress") and r.get("rolling_median")
-            ]
-            if len(rolling) > 20:
-                now_pt, then_pt = rolling[-1], rolling[-21]
-                growth = (now_pt["rolling_median"] / then_pt["rolling_median"] - 1) * 100
+            # Matched on period label — the rolling series is sparse, so rolling[-21]
+            # is NOT "five years back". See scripts/market_series.py.
+            g = five_year_growth(cs_idx)
+            if g:
                 print(
-                    f"        └─ 5yr median growth: {growth:+.1f}% "
-                    f"(${then_pt['rolling_median']:,.0f} {then_pt.get('period')} "
-                    f"→ ${now_pt['rolling_median']:,.0f} {now_pt.get('period')}, 12m rolling)"
+                    f"        └─ 5yr median growth: {g['growth_pct']:+.1f}% "
+                    f"(${g['from_median']:,.0f} {g['from_period']} "
+                    f"→ ${g['to_median']:,.0f} {g['to_period']}, 12m rolling)"
                 )
             else:
-                print(f"        └─ 5yr median growth: insufficient rolling history")
+                print(
+                    "        └─ 5yr median growth: n/a — no 12m rolling median for the "
+                    "same quarter 5 years earlier"
+                )
+
+            if cs_idx.get("rolling_12m_median_price"):
+                print(
+                    f"        └─ 12m median: ${cs_idx['rolling_12m_median_price']:,.0f} "
+                    f"(90% CI ${cs_idx.get('rolling_12m_ci_low', 0):,.0f}–"
+                    f"${cs_idx.get('rolling_12m_ci_high', 0):,.0f}, "
+                    f"n={cs_idx.get('rolling_12m_median_sample_n')}, "
+                    f"src={cs_idx.get('median_source')})"
+                )
 
     client.close()
 
