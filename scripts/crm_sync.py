@@ -18,6 +18,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import sys
 import time
 import urllib.request
@@ -71,6 +72,14 @@ class PostHogQueryError(RuntimeError):
 POSTHOG_RETRY_STATUSES = {408, 425, 429, 500, 502, 503, 504}
 POSTHOG_BACKOFF_SECONDS = (5, 20, 60)  # len+1 == max attempts
 
+# HogQL silently applies LIMIT 100 when a query doesn't specify one. It is not an
+# error and there is no marker on the response — you just get 100 rows and no way
+# to tell a truncated result from a complete one. On 2026-08-01 this was hiding 83
+# of 183 off-market viewers (45%) from the lead pipeline, and capping crm_sync's
+# property-view query at exactly 100. Every query goes out with an explicit limit.
+POSTHOG_DEFAULT_LIMIT = 50000
+_HAS_TRAILING_LIMIT = re.compile(r"\bLIMIT\s+\d+\s*$", re.IGNORECASE)
+
 
 def posthog_query(query_str: str, *, soft: bool = False) -> list[list]:
     """Execute a HogQL query against PostHog and return results.
@@ -89,6 +98,17 @@ def posthog_query(query_str: str, *, soft: bool = False) -> list[list]:
     if not api_key:
         raise RuntimeError("POSTHOG_API_KEY not set")
 
+    # Force an explicit limit rather than inheriting HogQL's silent LIMIT 100.
+    # The regex anchors to the END of the query, so a LIMIT inside a subquery
+    # -- "... IN (SELECT ... LIMIT 10)" -- correctly does NOT count as one.
+    limit = POSTHOG_DEFAULT_LIMIT
+    query_str = query_str.rstrip()
+    m = _HAS_TRAILING_LIMIT.search(query_str)
+    if m:
+        limit = int(m.group(0).split()[-1])
+    else:
+        query_str += f"\nLIMIT {limit}"
+
     payload = json.dumps({"query": {"kind": "HogQLQuery", "query": query_str}}).encode()
     attempts = len(POSTHOG_BACKOFF_SECONDS) + 1
     last_err = ""
@@ -104,7 +124,13 @@ def posthog_query(query_str: str, *, soft: bool = False) -> list[list]:
         )
         try:
             resp = urllib.request.urlopen(req, timeout=120)
-            return json.loads(resp.read()).get("results", [])
+            results = json.loads(resp.read()).get("results", [])
+            if len(results) >= limit:
+                # Landing exactly on the limit almost always means rows were cut.
+                print(f"  WARNING: PostHog query returned {len(results)} rows == LIMIT "
+                      f"{limit} — result is probably TRUNCATED. Raise the limit or "
+                      f"narrow the query; do not treat this as the full set.")
+            return results
         except urllib.error.HTTPError as e:
             body = e.read().decode()[:500]
             last_err = f"HTTP {e.code}: {body}"
