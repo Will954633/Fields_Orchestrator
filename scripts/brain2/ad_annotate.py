@@ -31,7 +31,9 @@ from dotenv import load_dotenv
 
 load_dotenv("/home/fields/Fields_Orchestrator/.env")
 sys.path.insert(0, "/home/fields/Fields_Orchestrator")
+sys.path.insert(0, "/home/fields/Fields_Orchestrator/scripts/samantha")
 from shared.db import get_client  # noqa: E402
+import brain_json as bj  # noqa: E402
 
 MODEL = "claude-opus-4-8"
 LOG = "/home/fields/Fields_Orchestrator/logs/brain2-ad-annotate.log"
@@ -128,10 +130,13 @@ def call_opus(block, timeout=300):
 
 
 def extract_json_object(s):
-    a, b = s.find("{"), s.rfind("}")
-    if a == -1 or b == -1 or b < a:
-        raise ValueError("no JSON object in output")
-    return json.loads(s[a:b + 1])
+    """Shared robust extractor (direct -> fenced block -> balanced scan).
+
+    The old outermost-span slice (first "{" .. last "}") over-captured whenever Opus added a
+    closing remark containing a brace, or emitted a second object — raising "Extra data" and
+    losing the annotation. Same defect class as brain1_deep's greedy regex. See brain_json.py.
+    """
+    return bj.parse_json_object(s)
 
 
 def main():
