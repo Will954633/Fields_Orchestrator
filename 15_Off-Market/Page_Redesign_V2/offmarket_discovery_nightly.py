@@ -57,19 +57,43 @@ CORE = ["robina", "varsity_lakes", "burleigh_waters"]
 # to meter Google's crawl exposure, not to decide what's built; building ahead means
 # a home's deck is ready BEFORE its URL is ever submitted, and we never have to
 # replicate the sitemap's `sort({_id:1}).limit(N)` ordering to stay in sync.
+#
+# FROZEN suburbs (config doc `frozen: [...]`) are the exception, added 2026-08-01 when
+# Nerang was pulled back to concentrate on the southern core. A frozen suburb:
+#   - is NOT built any further (no new decks, and the release limit never widens), but
+#   - KEEPS its already-released slice live and in the sitemap — generate-sitemap.mjs
+#     reads `limits` and is deliberately left untouched by freezing, so the URLs Google
+#     has already indexed keep resolving to a real deck instead of being orphaned.
+# Because the builder no longer covers the whole suburb, "builder ⊇ sitemap" would stop
+# holding by construction — so the coverage assertion keeps watching the RELEASED SLICE
+# of every frozen suburb (see watched_homes). Freezing must never turn into blindness:
+# a frozen suburb losing a deck is the exact 2026-07-29 failure (indexed URL → old
+# classic page), and it has to stay loud. To unfreeze, drop the name from `frozen`.
 RELEASE_CFG = ("offmarket_sitemap_release", "release")
 
 
-def expansion_suburbs(gc=None):
-    """Suburb collections released (or queued for release) beyond the core three."""
+def _release_cfg(gc=None):
     try:
         coll, _id = RELEASE_CFG
         db = _gc() if gc is None else gc   # pymongo Database has no __bool__ — never `gc or …`
-        cfg = db[coll].find_one({"_id": _id}) or {}
-        return [s for s in (cfg.get("limits") or {}) if s not in CORE]
+        return db[coll].find_one({"_id": _id}) or {}
     except Exception as e:
         print(f"(release config unreadable, core suburbs only: {e})", file=sys.stderr)
-        return []
+        return {}
+
+
+def expansion_suburbs(gc=None):
+    """Expansion suburbs we still BUILD (released, minus frozen)."""
+    cfg = _release_cfg(gc)
+    frozen = set(cfg.get("frozen") or [])
+    return [s for s in (cfg.get("limits") or {}) if s not in CORE and s not in frozen]
+
+
+def frozen_suburbs(gc=None):
+    """{suburb: released_limit} — built no further, but still watched and still served."""
+    cfg = _release_cfg(gc)
+    limits = cfg.get("limits") or {}
+    return {s: limits.get(s) or 0 for s in (cfg.get("frozen") or []) if s not in CORE}
 
 
 def target_suburbs(gc=None):
@@ -103,6 +127,10 @@ def indexed_query():
         "listing_status": {"$nin": ["for_sale", "under_contract"]},
         "url_slug": {"$exists": True, "$nin": [None, ""]},
         "is_waterfront": {"$ne": True},
+        # Multi-lot street addresses (community-title schemes recorded one row per lot,
+        # no unit number) — see scripts/flag_multilot_offmarket.py. Must stay in lockstep
+        # with getOffMarketUrls() in generate-sitemap.mjs and meta() in off-market.$slug.tsx.
+        "offmarket_multilot": {"$ne": True},
         "property_type": {"$nin": NON_HOUSE_TYPES},
         "building_type": {"$nin": NON_HOUSE_TYPES},
         "address": {"$not": UNIT_ADDR_RE},
@@ -132,6 +160,26 @@ def indexed_homes():
                 continue
             le = (r.get("enriched_data") or {}).get("last_enriched")
             yield slug, le, c
+
+
+def frozen_released_slugs(gc=None):
+    """Slugs a FROZEN suburb can still emit into the sitemap.
+
+    Mirrors generate-sitemap.mjs exactly: same `indexed_query()` filter, same
+    `sort({_id: 1}).limit(N)` release slice. These are not built any more, but they
+    must keep their decks — Google already has these URLs, and a missing deck means
+    the loader silently falls through to the OLD classic page.
+    """
+    gc = _gc() if gc is None else gc
+    out = set()
+    q = indexed_query()
+    for sub, limit in frozen_suburbs(gc).items():
+        if not limit:
+            continue
+        for r in gc[sub].find(q, {"url_slug": 1}).sort([("_id", 1)]).limit(int(limit)):
+            if r.get("url_slug"):
+                out.add(r["url_slug"])
+    return out
 
 
 def existing_generated_at():
@@ -212,7 +260,9 @@ def run(limit=None, rebuild_all=False, dry_run=False, shard=None):
         # OLD classic page.
         after = existing_generated_at()
         cov = len(after)
-        indexed_slugs = {s for s, _le, _sub in homes}
+        # Frozen suburbs are not built, but their released slice is still reachable from
+        # the sitemap — so it is still covered by this assertion. Watch ⊇ build.
+        indexed_slugs = {s for s, _le, _sub in homes} | frozen_released_slugs()
         missing = sorted(indexed_slugs - set(after))
         sample = ", ".join(missing[:5]) + (" …" if len(missing) > 5 else "")
         gap = f"; GAP {len(missing)} indexed w/o deck ({sample})" if missing else ""
@@ -223,7 +273,8 @@ def run(limit=None, rebuild_all=False, dry_run=False, shard=None):
                        + (f"; {len(missing)} MISSING ({sample})" if missing else ""))
         beat.metrics = {"indexed": total_indexed, "built": built, "failed": failed,
                         "coverage": cov, "missing": len(missing), "seconds": dt,
-                        "suburbs": target_suburbs()}
+                        "suburbs": target_suburbs(),
+                        "frozen": frozen_suburbs()}
         if len(missing) > COVERAGE_GAP_TOLERANCE:
             raise RuntimeError(
                 f"off-market deck coverage gap: {len(missing)} indexed homes have no "
