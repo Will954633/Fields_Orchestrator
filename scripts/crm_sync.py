@@ -62,29 +62,68 @@ SUBURBS = ["robina", "burleigh-waters", "varsity-lakes", "burleigh_waters", "var
 # PostHog API
 # ---------------------------------------------------------------------------
 
-def posthog_query(query_str: str) -> list[list]:
-    """Execute a HogQL query against PostHog and return results."""
+class PostHogQueryError(RuntimeError):
+    """A HogQL query could not be completed (after retries, if retryable)."""
+
+
+# PostHog sheds load under contention with a 503 "Queries are a little too busy
+# right now" — transient, and worth retrying rather than treating as "no data".
+POSTHOG_RETRY_STATUSES = {408, 425, 429, 500, 502, 503, 504}
+POSTHOG_BACKOFF_SECONDS = (5, 20, 60)  # len+1 == max attempts
+
+
+def posthog_query(query_str: str, *, soft: bool = False) -> list[list]:
+    """Execute a HogQL query against PostHog and return results.
+
+    Retries transient failures (503 load-shedding, 429 rate-limit, timeouts) with
+    backoff, then RAISES PostHogQueryError. It must never return [] on failure:
+    every caller treats an empty result as "no such data", so a swallowed error
+    silently drops real leads/events from whatever the caller writes (this is
+    exactly how a Sydney off-market lead could have gone missing from the Live
+    Leads Tracker on a busy night — see fix-history POSTHOG-QUERY-SILENT-EMPTY).
+
+    soft=True restores the old log-and-return-[] behaviour, for the rare caller
+    where an empty result genuinely is an acceptable degraded answer.
+    """
     api_key = os.environ.get("POSTHOG_PERSONAL_API_KEY") or os.environ.get("POSTHOG_API_KEY")
     if not api_key:
         raise RuntimeError("POSTHOG_API_KEY not set")
 
     payload = json.dumps({"query": {"kind": "HogQLQuery", "query": query_str}}).encode()
-    req = urllib.request.Request(
-        POSTHOG_QUERY_URL,
-        data=payload,
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
-    )
-    try:
-        resp = urllib.request.urlopen(req, timeout=60)
-        data = json.loads(resp.read())
-        return data.get("results", [])
-    except urllib.error.HTTPError as e:
-        body = e.read().decode()[:500]
-        print(f"  PostHog API error {e.code}: {body}")
+    attempts = len(POSTHOG_BACKOFF_SECONDS) + 1
+    last_err = ""
+
+    for attempt in range(1, attempts + 1):
+        req = urllib.request.Request(
+            POSTHOG_QUERY_URL,
+            data=payload,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+        )
+        try:
+            resp = urllib.request.urlopen(req, timeout=120)
+            return json.loads(resp.read()).get("results", [])
+        except urllib.error.HTTPError as e:
+            body = e.read().decode()[:500]
+            last_err = f"HTTP {e.code}: {body}"
+            retryable = e.code in POSTHOG_RETRY_STATUSES
+        except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError) as e:
+            last_err = f"{type(e).__name__}: {e}"
+            retryable = True
+
+        if not retryable or attempt == attempts:
+            break
+        wait = POSTHOG_BACKOFF_SECONDS[attempt - 1]
+        print(f"  PostHog query failed ({last_err}) — retry {attempt}/{attempts - 1} in {wait}s")
+        time.sleep(wait)
+
+    msg = f"PostHog query failed after {attempt} attempt(s): {last_err}"
+    if soft:
+        print(f"  {msg} (soft mode — returning no rows)")
         return []
+    raise PostHogQueryError(msg)
 
 
 # Meta/AWS datacenter cities — their crawlers hit tagged ad URLs and pollute attribution (not real users)
