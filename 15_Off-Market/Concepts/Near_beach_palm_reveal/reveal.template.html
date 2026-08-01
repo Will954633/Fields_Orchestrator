@@ -185,20 +185,20 @@
   let blocks = null;      // { x, y, w, h, density } sorted by threshold
   let committed = 0;      // blocks already painted onto `ink` at full opacity
   let lastP = 0;
+  let coverage = null;    // ink coverage per source pixel, read back once at load
 
   function buildBlocks() {
     const bp   = cfg.block;
     const cols = Math.ceil(SRC_W / bp);
     const rows = Math.ceil(SRC_H / bp);
-    const data = sctx.getImageData(0, 0, SRC_W, SRC_H).data;
 
     // per-block mean ink coverage
     const density = new Float32Array(cols * rows);
     for (let y = 0; y < SRC_H; y++) {
       const rowOff = (y / bp) | 0;
-      const base = y * SRC_W * 4 + 3;
+      const base = y * SRC_W;
       for (let x = 0; x < SRC_W; x++) {
-        const a = data[base + x * 4];
+        const a = coverage[base + x];
         if (a) density[rowOff * cols + ((x / bp) | 0)] += a;
       }
     }
@@ -462,6 +462,13 @@
   const img = new Image();
   img.onload = () => {
     sctx.drawImage(img, 0, 0);
+    // Pull the mask's alpha channel out once and keep it. Changing the pixel
+    // size rebuilds the block grid, and re-reading the canvas each time would
+    // both stall the GPU pipeline and drag `src` onto the software path — it is
+    // only ever drawn from after this point.
+    const rgba = sctx.getImageData(0, 0, SRC_W, SRC_H).data;
+    coverage = new Uint8Array(SRC_W * SRC_H);
+    for (let i = 0, n = coverage.length; i < n; i++) coverage[i] = rgba[i * 4 + 3];
     makeGrain();
     if (CAPTURE) document.body.classList.add("capture");
     resize();
