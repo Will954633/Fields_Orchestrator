@@ -507,6 +507,37 @@ def _worklist_doc_for(lead, idx):
     return None
 
 
+def hotness_label(si: dict) -> str:
+    """Render the two things `hotness` mixes together as two visible numbers.
+
+    seller_intent's `hotness` is a single unbounded tally of two unrelated inputs:
+    what the person DID (behavioral_score — sessions, page views, valuations built,
+    price alerts, address searches) and what is happening to their PROPERTY
+    (listing_bonus — +22 listing near expiry, +14 withdrawn, +12 stale, -6 freshly
+    listed). Collapsed into one number they can't be told apart, so a lead with real
+    engagement and one with an expiring listing and zero engagement look alike.
+
+    Worse, the single number reads like a warmth grade when it's actually a count:
+    "hot 2" means "one session, nothing else" — the floor, not "slightly warm". On
+    2026-08-01, 100 of 259 scored leads sat at exactly 2 and 180 were at <= 2, while
+    the scale ran to 164. Split so a follow-up call can see which half is driving it.
+    """
+    intent = si.get("behavioral_score")
+    if intent is None:  # nothing to split — fall back to the old single number
+        return f"hot {si['hotness']}" if si.get("hotness") else ""
+    bonus = si.get("listing_bonus")
+    if bonus is None:
+        # Docs scored before 2026-08-01 have no listing_bonus, but hotness is
+        # bscore + listing_bonus by construction, so this recovers it exactly.
+        bonus = (si.get("hotness") or 0) - intent
+    parts = []
+    if intent:
+        parts.append(f"intent {intent}")
+    if bonus:
+        parts.append(f"listing {bonus:+d}")
+    return " · ".join(parts)
+
+
 def format_situation(doc, si) -> str:
     """The verbose seller-intent story (behavioral + PropRadar), with a hotness/moment
     header, so a follow-up can be fully tailored. Falls back to a terse compose for any
@@ -518,8 +549,9 @@ def format_situation(doc, si) -> str:
         pri = doc.get("priority")
         if pri and pri not in ("low", "test", None):
             head.append(pri.upper())
-        if si.get("hotness"):
-            head.append(f"hot {si['hotness']}")
+        hot = hotness_label(si)
+        if hot:
+            head.append(hot)
         prefix = f"[NOW] {si['moment']}. " if si.get("moment") else ""
         headstr = (" · ".join(head) + " — ") if head else ""
         return f"{prefix}{headstr}{story}"
