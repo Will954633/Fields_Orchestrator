@@ -30,6 +30,32 @@ def _public_base() -> str:
     return os.getenv("BLOB_PUBLIC_BASE_URL", "https://blobs.fieldsestate.com.au").rstrip("/")
 
 
+# Hosts that no longer serve anything. The Azure `fieldspropertyimages` account was
+# retired 2026-05-28 and now answers 403 "account is disabled", but ~20k stored
+# documents still carry those URLs. The blob PATHS are unchanged — the same objects
+# are served by nginx from /data/blobs under BLOB_PUBLIC_BASE_URL — so a dead URL is
+# recoverable by host substitution alone.
+DEAD_BLOB_HOSTS = (
+    "fieldspropertyimages.blob.core.windows.net",
+)
+
+
+def to_live_url(url: Optional[str]) -> Optional[str]:
+    """Rewrite a dead-Azure blob URL to its live equivalent (identical path).
+
+    Mirrors `toLiveBlobUrl` in the website's netlify/functions/shared-utils.mjs. The
+    website already did this; the Python pipeline did not, so step 106 (floor plan
+    vision) burned 54 analyses on 403s in the 2026-08-01 run while the same images
+    sat live on the replacement host. Non-dead URLs and falsy input pass through.
+    """
+    if not url or not isinstance(url, str):
+        return url
+    for host in DEAD_BLOB_HOSTS:
+        if host in url:
+            return url.replace(host, _public_base().split("://", 1)[-1])
+    return url
+
+
 def upload(
     container: str,
     blob_name: str,
