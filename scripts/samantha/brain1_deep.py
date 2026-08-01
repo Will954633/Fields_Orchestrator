@@ -29,14 +29,16 @@ Usage:
       [--library "Sell It"] [--mode general|insight] [--out answer.md] [--dry] [--no-verify] \
       [--cand-per-facet 40] [--judge-batch 18] [--token-budget 500000]
 """
-import os, re, sys, json, argparse
+import os, re, sys, json, hashlib, argparse
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import brain1_query as bq
 import max_client as orc
+import brain_json as bj
 
 UID_RE = re.compile(r"\b[uki]\d{4,10}\b")  # u#### coaching + k##### KB units
+FACET_CACHE = os.path.expanduser("~/.cache/brain1/facets")
 HAIKU = orc.HAIKU  # decompose / judge / map -> Haiku on Max (Will 2026-07-31)
 JUDGE_WORKERS = 6      # bounded concurrency for I/O-bound claude calls (judge + map)
 MAX_SINGLE_UNITS = 150 # fidelity ceiling: above this, single-context synthesis stops citing real
@@ -53,20 +55,53 @@ def tok(s):
     return len(s) // 4
 
 
-def decompose(question, n=8):
+def _facet_cache_path(question, n, package):
+    key = hashlib.sha256(f"{package}|{n}|{question.strip()}".encode()).hexdigest()[:20]
+    return os.path.join(FACET_CACHE, f"{key}.json")
+
+
+def decompose(question, n=8, package="", refresh=False):
+    """Decompose the question into retrieval facets.
+
+    CACHED per (package, n, question). Haiku is non-deterministic, so an uncached re-run of the
+    SAME question produced different facets -> different candidate pools -> a different answer.
+    For a tool used to make business decisions that is a reproducibility failure: we could not
+    re-run a query to check an answer. Caching is cheaper and more reliable than trying to make
+    the model deterministic. Use --refresh-facets to deliberately re-decompose.
+    """
+    path = _facet_cache_path(question, n, package)
+    if not refresh and os.path.exists(path):
+        try:
+            facets = json.load(open(path, encoding="utf-8"))["facets"]
+            if facets:
+                sys.stderr.write(f"[facets] reused cached decomposition ({len(facets)}) — "
+                                 f"reproducible re-run. --refresh-facets to regenerate.\n")
+                return facets
+        except Exception:
+            pass  # corrupt cache entry -> just regenerate
+
     p = (f"Break this research question into {n} DISTINCT search facets for retrieving passages "
          f"from a real-estate coaching corpus. Each facet = a short keyword-rich phrase covering a "
          f"different angle (methods, obstacles, objections, psychology, principles, etc.). Vary the "
          f"VOCABULARY deliberately (synonyms, related jargon) so different phrasings are covered. "
          f"Return ONLY a JSON array of {n} strings.\n\nQUESTION: {question}")
     try:
-        out = claude(p, HAIKU, timeout=120)
-        facets = json.loads(re.search(r"\[.*\]", out, re.S).group(0))
-        facets = [f.strip() for f in facets if isinstance(f, str) and f.strip()]
-        return facets or [question]
+        raw = bj.parse_with_retry(
+            p, lambda pr: claude(pr, HAIKU, timeout=120), want="array",
+            on_retry=lambda e: sys.stderr.write(f"[decompose] unparseable, retrying once ({e})\n"))
+        facets = [f.strip() for f in raw if isinstance(f, str) and f.strip()]
     except Exception as e:
         sys.stderr.write(f"[decompose] fell back to raw question ({e})\n")
         return [question]
+    if not facets:
+        return [question]
+    try:
+        os.makedirs(FACET_CACHE, exist_ok=True)
+        json.dump({"question": question, "n": n, "package": package, "facets": facets},
+                  open(path, "w", encoding="utf-8"), indent=2)
+    except Exception as e:
+        sys.stderr.write(f"[facets] cache write failed ({e}) — continuing uncached\n")
+    return facets
 
 
 def compact(u, nq=2, na=3, nc=8):
@@ -75,6 +110,10 @@ def compact(u, nq=2, na=3, nc=8):
          "concepts": u["concepts"][:nc], "asks": u["asks"][:na], "quotes": u["quotes"][:nq]}
     if u.get("date"):
         d["date"] = u["date"]  # structured, recency-aware synthesis reasons over this
+    if u.get("entities"):
+        # who/what the unit names — lets the synthesis attribute a method to the practitioner
+        # who described it instead of to a library, and answers name-anchored questions.
+        d["entities"] = u["entities"][:8]
     return d
 
 
@@ -110,8 +149,14 @@ def _judge_chunk(question, chunk):
          f"QUESTION: {question}\n\nUNITS (one JSON per line):\n{listing}\n\n"
          "Return ONLY a JSON array of the unit ids to KEEP.")
     try:
-        out = claude(p, HAIKU, timeout=120)
-        ids = set(json.loads(re.search(r"\[.*\]", out, re.S).group(0)))
+        # Robust parse + ONE retry before giving up. The old greedy re.search(r"\[.*\]") spanned
+        # from the first "[" to the LAST "]" in the reply, so any trailing prose or second array
+        # made the captured span invalid JSON -> "Extra data: line 7 column 1" -> a whole batch
+        # lost its filtering. See brain_json.py.
+        raw = bj.parse_with_retry(
+            p, lambda pr: claude(pr, HAIKU, timeout=120), want="array",
+            on_retry=lambda e: sys.stderr.write(f"[judge] unparseable, retrying once ({e})\n"))
+        ids = {i for i in raw if isinstance(i, str)}
         return [u for u in chunk if u["id"] in ids]
     except Exception as e:
         sys.stderr.write(f"[judge] FAIL-OPEN (kept all {len(chunk)}): {e}\n")
@@ -170,10 +215,26 @@ def rules_for(pkg):
             "current without checking whether a more recent unit contradicts it.\n\n")
 
 
-def synth_prompt(question, mode, payload_json, pkg, is_findings=False):
+def concentration_rule(concentration):
+    """When one library supplies most of the evidence, the brief MUST say so. Otherwise one
+    training organisation's doctrine reads as settled industry consensus — a citation-integrity
+    problem for a business whose positioning is methodology transparency."""
+    lib, share = concentration or (None, 0.0)
+    if not lib or share <= 0.5:
+        return ""
+    return ("SOURCE-CONCENTRATION RULE: {pct:.0f}% of the evidence below comes from a single "
+            "source ({lib}). You MUST state this plainly near the top of the brief and note that "
+            "conclusions therefore reflect that source's doctrine rather than demonstrated "
+            "industry consensus. Where a claim rests only on {lib}, say so at the claim. Where "
+            "another source corroborates or contradicts it, name that source explicitly.\n\n"
+            ).format(pct=100 * share, lib=lib)
+
+
+def synth_prompt(question, mode, payload_json, pkg, is_findings=False, concentration=None):
     src = "PRE-EXTRACTED FINDINGS (already citation-tagged)" if is_findings else "CORPUS SHORTLIST (JSON)"
     today = datetime.now().strftime("%Y-%m-%d")
-    return (header_for(pkg) + PROMPTS[mode] + rules_for(pkg) + f"TODAY'S DATE: {today}\n\n"
+    return (header_for(pkg) + PROMPTS[mode] + rules_for(pkg) + concentration_rule(concentration)
+            + f"TODAY'S DATE: {today}\n\n"
             f"=== QUESTION ===\n{question}\n\n=== {src} ===\n" + payload_json)
 
 
@@ -189,7 +250,11 @@ def map_extract(question, units):
     return claude(p, HAIKU, timeout=300)
 
 
-def synthesise(question, mode, relevant, budget, pkg):
+def synthesise(question, mode, relevant, budget, pkg, shard_n=60, force_path=None,
+               concentration=None):
+    """force_path: None = automatic (production). "single"/"mapreduce" force one path, holding the
+    evidence constant so the two can be compared directly — used to test whether citation
+    fidelity is lost at the map-reduce shard boundary. Not for production use."""
     # Sort most-recent-first (missing dates last) so recency is salient in reading order — this
     # does NOT drop or deprioritise anything (completeness principle intact), it only orders what
     # the LLM sees so a later, possibly-superseding unit isn't buried behind an older one.
@@ -197,11 +262,16 @@ def synthesise(question, mode, relevant, budget, pkg):
     ctx = {"units": [compact(u, nq=4, na=5, nc=10) for u in relevant]}
     payload = json.dumps(ctx, ensure_ascii=False)
     # Single-context ONLY when small enough to cite faithfully AND under token budget.
-    if len(relevant) <= MAX_SINGLE_UNITS and tok(payload) <= budget:
+    fits = len(relevant) <= MAX_SINGLE_UNITS and tok(payload) <= budget
+    if force_path == "single" or (force_path is None and fits):
+        if force_path == "single" and not fits:
+            sys.stderr.write(f"[synth] ⚠ FORCED single-context past the fidelity ceiling "
+                             f"({len(relevant)} units > MAX_SINGLE_UNITS={MAX_SINGLE_UNITS}) — "
+                             f"experiment only, expect confabulated ids\n")
         sys.stderr.write(f"[synth] single-context ({tok(payload):,} tok, {len(relevant)} units)\n")
-        return claude(synth_prompt(question, mode, payload, pkg), bq.MODEL, timeout=900), {u["id"] for u in relevant}
+        return claude(synth_prompt(question, mode, payload, pkg, concentration=concentration),
+                      bq.MODEL, timeout=900), {u["id"] for u in relevant}
     # OVERFLOW (unit-count fidelity limit OR token budget) -> map-reduce, citation-preserving extraction
-    shard_n = 60
     shards = [relevant[i:i + shard_n] for i in range(0, len(relevant), shard_n)]
     sys.stderr.write(f"[synth] overflow ({tok(payload):,} tok) -> map-reduce over {len(shards)} shards\n")
     with ThreadPoolExecutor(max_workers=JUDGE_WORKERS) as ex:
@@ -214,7 +284,9 @@ def synthesise(question, mode, relevant, budget, pkg):
         findings = [claude("Merge these findings, preserving every unit id and verbatim quote, dropping "
                            "nothing relevant:\n\n" + "\n".join(g), HAIKU, timeout=300) for g in groups]
         blob = "\n".join(findings)
-    return claude(synth_prompt(question, mode, blob, pkg, is_findings=True), bq.MODEL, timeout=900), {u["id"] for u in relevant}
+    return claude(synth_prompt(question, mode, blob, pkg, is_findings=True,
+                               concentration=concentration),
+                  bq.MODEL, timeout=900), {u["id"] for u in relevant}
 
 
 def main():
@@ -231,6 +303,20 @@ def main():
     ap.add_argument("--dry", action="store_true", help="stop after the relevance judge; print coverage")
     ap.add_argument("--no-judge", action="store_true", help="skip Haiku judge (keep all candidates)")
     ap.add_argument("--no-verify", action="store_true")
+    ap.add_argument("--refresh-facets", action="store_true",
+                    help="re-decompose instead of reusing the cached facets for this question")
+    ap.add_argument("--no-repair", action="store_true",
+                    help="report misattributed citations without auto-correcting them")
+    ap.add_argument("--save-relevant", metavar="FILE",
+                    help="write the judged relevant set to FILE (retrieval is the slow part; "
+                         "this lets a later run re-synthesise the SAME evidence)")
+    ap.add_argument("--load-relevant", metavar="FILE",
+                    help="skip retrieval+judging and synthesise from a saved relevant set")
+    ap.add_argument("--limit-relevant", type=int,
+                    help="truncate the relevant set to N units (experiments only)")
+    ap.add_argument("--shard-n", type=int, default=60, help="units per map-reduce shard")
+    ap.add_argument("--force-path", choices=["single", "mapreduce"],
+                    help="force the synthesis path instead of auto-selecting (experiments only)")
     args = ap.parse_args()
 
     if args.package:
@@ -240,63 +326,81 @@ def main():
     libs = [args.library] if args.library else all_libs
     by_id = {u["id"]: u for u in pkg["units"]}
 
-    facets = decompose(args.question, args.facets)
-    sys.stderr.write(f"[facets] {len(facets)}:\n" + "".join(f"   - {f}\n" for f in facets))
+    if args.load_relevant:
+        cached = json.load(open(args.load_relevant, encoding="utf-8"))
+        facets = cached.get("facets", [])
+        coverage = {l: tuple(v) for l, v in cached.get("coverage", {}).items()}
+        relevant = [by_id[i] for i in cached["relevant_ids"] if i in by_id]
+        missing = len(cached["relevant_ids"]) - len(relevant)
+        sys.stderr.write(f"[load] {len(relevant)} relevant units from {args.load_relevant}"
+                         + (f" ({missing} no longer in package)" if missing else "") + "\n")
+    else:
+        facets = decompose(args.question, args.facets, package=bq.PACKAGE,
+                           refresh=args.refresh_facets)
+        sys.stderr.write(f"[facets] {len(facets)}:\n" + "".join(f"   - {f}\n" for f in facets))
 
-    cand = gather_candidates(pkg, facets, libs, args.cand_per_facet)
-    sys.stderr.write("[candidates] per source: " +
-                     " | ".join(f"{l}={len(cand[l])}" for l in libs) + "\n")
+        cand = gather_candidates(pkg, facets, libs, args.cand_per_facet)
+        sys.stderr.write("[candidates] per source: " +
+                         " | ".join(f"{l}={len(cand[l])}" for l in libs) + "\n")
 
-    # relevance judge per source (keeps sources independent end-to-end)
-    relevant, coverage = [], {}
-    for l in libs:
-        rel = cand[l] if args.no_judge else judge_relevant(args.question, cand[l], args.judge_batch)
-        coverage[l] = (len(cand[l]), len(rel))
-        relevant.extend(rel)
+        # relevance judge per source (keeps sources independent end-to-end)
+        relevant, coverage = [], {}
+        for l in libs:
+            rel = cand[l] if args.no_judge else judge_relevant(args.question, cand[l], args.judge_batch)
+            coverage[l] = (len(cand[l]), len(rel))
+            relevant.extend(rel)
     sys.stderr.write("[COVERAGE] relevant / candidates per source:\n" +
                      "".join(f"   {l:15s}: {r:3d} relevant / {c:3d} judged\n"
                              for l, (c, r) in coverage.items()) +
                      f"   {'TOTAL':15s}: {sum(r for _, r in coverage.values())} relevant units carried\n")
 
+    # SOURCE CONCENTRATION — a brief drawn 67% from one training organisation reads as industry
+    # consensus when it is one school's doctrine. Surface it to the caller, and (below) tell the
+    # synthesis to say so in the brief itself.
+    dom_lib, dom_share = None, 0.0
+    if relevant:
+        counts = {}
+        for u in relevant:
+            counts[u["src"].get("lib", "?")] = counts.get(u["src"].get("lib", "?"), 0) + 1
+        dom_lib, dom_n = max(counts.items(), key=lambda kv: kv[1])
+        dom_share = dom_n / len(relevant)
+        sys.stderr.write(f"[concentration] top source {dom_lib} = {dom_n}/{len(relevant)} "
+                         f"({100*dom_share:.0f}%) of carried evidence"
+                         + ("  ⚠ >50% — single-source dominance\n" if dom_share > 0.5 else "\n"))
+
+    if args.save_relevant:
+        json.dump({"question": args.question, "package": bq.PACKAGE, "facets": facets,
+                   "coverage": {l: list(v) for l, v in coverage.items()},
+                   "relevant_ids": [u["id"] for u in relevant]},
+                  open(args.save_relevant, "w", encoding="utf-8"), indent=2)
+        sys.stderr.write(f"[saved] relevant set -> {args.save_relevant}\n")
+
     if args.dry:
         print(json.dumps({"facets": facets,
                           "coverage": {l: {"candidates": c, "relevant": r} for l, (c, r) in coverage.items()},
-                          "total_relevant": len(relevant)}, indent=2))
+                          "total_relevant": len(relevant),
+                          "top_source": dom_lib, "top_source_share": round(dom_share, 3)}, indent=2))
         return
 
-    sys.stderr.write("[opus] deep synthesis…\n")
-    answer, shortlist_ids = synthesise(args.question, args.mode, relevant, args.token_budget, pkg)
-    print(answer)
+    if args.limit_relevant:
+        relevant = relevant[:args.limit_relevant]
+        sys.stderr.write(f"[limit] truncated to {len(relevant)} relevant units (experiment)\n")
 
+    sys.stderr.write("[opus] deep synthesis…\n")
+    answer, shortlist_ids = synthesise(args.question, args.mode, relevant, args.token_budget, pkg,
+                                       shard_n=args.shard_n, force_path=args.force_path,
+                                       concentration=(dom_lib, dom_share))
+    # VERIFY (+ REPAIR) BEFORE OUTPUT — the verifier already knows each misattributed quote's true
+    # source, so the correct id is substituted back into the brief and the result re-verified.
+    # Detection alone left the caller to hand-fix; repair means the printed/saved brief is the
+    # corrected one. Fabricated quotes are never auto-repaired and still fail the publish gate.
     if not args.no_verify:
-        # (1) id-level: invented / out-of-shortlist ids
-        cited = sorted(set(UID_RE.findall(answer)))
-        in_short = [c for c in cited if c in shortlist_ids]
-        invented = [c for c in cited if c not in by_id]
-        oos = [c for c in cited if c in by_id and c not in shortlist_ids]
-        sys.stderr.write(f"\n[verify] {len(cited)} cited | {len(in_short)} in shortlist ✓ | "
-                         f"{len(oos)} exist-not-in-shortlist | {len(invented)} INVENTED\n")
-        if invented:
-            sys.stderr.write(f"[verify] ⚠ INVENTED ids: {invented}\n")
-        # (2) quote-level: misattribution (real quote -> wrong unit) + fabrication
-        try:
-            import brain1_verify as bv
-            # scope the true-source search to THIS package's units — otherwise a paraphrased quote
-            # gets falsely attributed to a verbatim match in another brain not in context.
-            total, ok, misattr, notfound = bv.verify_text(answer, scope_ids=set(by_id))
-            if total:
-                sys.stderr.write(f"[quote-verify] {total} quotes | {ok} verified | {len(misattr)} "
-                                 f"MISATTRIBUTED | {len(notfound)} NOT_FOUND | {100*ok/total:.1f}% fidelity\n")
-                for r in misattr:
-                    sys.stderr.write(f"   ✗ MISATTR cited {','.join(r['cited'])} -> actually "
-                                     f"{r['actual']} (cov {r['cov']}): \"{r['quote'][:60]}\"\n")
-                for r in notfound:
-                    sys.stderr.write(f"   ✗ FABRICATED (best {r['actual']} {r['cov']}): "
-                                     f"\"{r['quote'][:60]}\"\n")
-                if misattr or notfound:
-                    sys.stderr.write("[quote-verify] ⚠ NOT publication-ready — fix flagged quotes before public use.\n")
-        except Exception as e:
-            sys.stderr.write(f"[quote-verify] skipped ({e})\n")
+        # scope the true-source search to THIS package's units — otherwise a paraphrased quote
+        # gets falsely attributed to a verbatim match in another brain not in context.
+        import brain1_verify as bv
+        answer, _stats = bv.audit(answer, by_id, shortlist_ids=shortlist_ids,
+                                  repair=not args.no_repair)
+    print(answer)
 
     if args.out:
         open(args.out, "w", encoding="utf-8").write(answer)
