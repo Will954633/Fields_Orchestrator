@@ -1,228 +1,262 @@
 # Brain 1 / 2 / 3 — reliability fixes handoff
 
-**Written:** 2026-08-01, after using `brain1_deep.py` for a real decision (printed market-report length + format for The Fields Quarterly).
+**Originally written:** 2026-08-01, after using `brain1_deep.py` for a real decision (printed
+market-report length + format for The Fields Quarterly).
+**Rewritten:** 2026-08-01 19:55 AEST, after implementing the fixes. **The original version's
+headline finding was wrong**, and it was wrong in an instructive way — see §1. The history is
+preserved in `logs/fix-history/2026-08-01.md` under `[BRAIN-VERIFIER-COVERAGE-INVALID]`.
 **For:** a Claude Code session picking this up cold.
-**Status of the brains:** all three are LIVE and in nightly use. Nothing here is theoretical — every defect below was observed in a real run or confirmed by reading the code.
+**Status:** all three brains LIVE and in nightly use. Everything below was observed in a real run
+or confirmed at code level.
 
-**Read first:** `10_Market_Report/research/brain1_deep_recall_review.md` — a prior three-pass review of a *recall* failure (canonical units dropped despite passing the judge). This document is about *fidelity* failures and is complementary, not a replacement. Several root causes there (RC5 entity drop, non-deterministic facets) are still unfixed and are restated here with code-level confirmation.
+**Read alongside:** `10_Market_Report/research/brain1_deep_recall_review.md` — a prior review of a
+*recall* failure. Its RC5 (entity drop) is now FIXED (§3.6).
 
 ---
 
-## 0. How to reproduce the run this came from
+## 0. Reproduce the run this came from
 
 ```bash
 cd /home/fields/Fields_Orchestrator
 source /home/fields/venv/bin/activate
 set -a && source .env && set +a
-python3 scripts/samantha/brain1_deep.py "How did agents use printed market reports to \
-establish themselves and win listings? Contrast a LARGE substantial report against a SHORT \
-eight-page quarterly review — what did each achieve, how were they distributed, what length \
-did practitioners actually recommend, and what evidence is there about whether recipients \
-read them?" --facets 10
+env -u CLAUDECODE python3 scripts/samantha/brain1_deep.py "How did agents use printed market \
+reports to establish themselves and win listings? Contrast a LARGE substantial report against a \
+SHORT eight-page quarterly review — what did each achieve, how were they distributed, what length \
+did practitioners actually recommend, and what evidence is there about whether recipients read \
+them?" --facets 10 --save-relevant /tmp/rel.json --out /tmp/answer.md
 ```
 
-Runtime ~23 min. Judged 2,542 candidate units, carried 302 relevant. **The answer was genuinely
-useful** — it surfaced a specific practitioner account (an eight-page quarterly booklet, 3,264-contact
-database, four mailings a year each paired with a phone call) that no amount of reasoning would have
-produced. Do not "fix" this tool into uselessness: the retrieval works. The problem is that **its
-citations cannot be trusted as published**, which for a business whose entire positioning is
-methodology transparency is a hard blocker on using output in public work.
+Runtime ~23 min. **Facets are now cached**, so a repeat run reuses the same decomposition and is
+reproducible; add `--refresh-facets` to force new ones. `--save-relevant` writes the judged
+evidence set so a later run can re-synthesise the *same* evidence via `--load-relevant` without
+paying for retrieval again.
+
+**The retrieval works and the answer was genuinely useful** — it surfaced a practitioner account
+(an eight-page quarterly booklet, 3,264-contact database, four mailings a year each paired with a
+phone call) that no amount of reasoning would have produced. Do not "fix" this tool into
+uselessness.
 
 ---
 
-## 1. CONFIRMED DEFECTS — Brain 1
+## 1. THE MOST IMPORTANT THING: the fidelity metric was measuring noise
 
-### 1.1 Quote misattribution — 5 of 49 quotes (89.8% fidelity) · HIGH
-Observed verbatim in the run:
+The original handoff led with:
 
-```
-[quote-verify] 49 quotes | 44 verified | 5 MISATTRIBUTED | 0 NOT_FOUND | 89.8% fidelity
-   ✗ MISATTR cited u0202        -> actually u0001 (cov 1.0): "substantial = authority"
-   ✗ MISATTR cited u0449        -> actually u0645 (cov 1.0): "We have four phone calls a year..."
-   ✗ MISATTR cited u0202,u0449  -> actually u0509 (cov 1.0): "a document,"
-   ✗ MISATTR cited u0202,u0449  -> actually u0016 (cov 1.0): "beautiful glossy booklet"
-   ✗ MISATTR cited u0202,u2267  -> actually u0061 (cov 1.0): "14-day taper"
-```
+> `49 quotes | 44 verified | 5 MISATTRIBUTED | 0 NOT_FOUND | 89.8% fidelity`
+> …the wrong ids are nearly always `u0202` and `u0449`, i.e. it is **anchoring on a few salient
+> ids** … a strong hint the map-reduce shards lose the id↔quote binding.
 
-Coverage 1.0 means the quoted text **does exist in the corpus** — the synthesis is not
-hallucinating text, it is attaching real quotes to the wrong unit ids. Note the pattern: the wrong
-ids are nearly always `u0202` and `u0449`, i.e. it is **anchoring on a few salient ids and
-attributing everything nearby to them**. That is a strong hint the map-reduce shards lose the
-id↔quote binding (see 1.3).
+**That hypothesis was built on an artifact.** `brain1_verify.coverage()` summed *every*
+`SequenceMatcher` matching block, including 1- and 2-character ones. Over a long unit blob those
+scattered fragments reassemble almost any short needle. It was never a containment test:
 
-`brain1_deep.py:284-297` detects this and prints `⚠ NOT publication-ready`. **Detection is good and
-must be preserved.** What is missing is any *repair* step.
+| quoted span | normalized chars | units scoring ≥0.90 (of 9,525) |
+|---|---|---|
+| `"substantial = authority"` | 21 | **5,621** |
+| `"beautiful glossy booklet"` | 24 | 2,480 |
+| `"14-day taper"` | 12 | 2,549 |
 
-**Fix direction:** the verifier already knows the correct id (`-> actually uXXXX`). Add a
-rewrite pass that substitutes the verified id back into the synthesis before output, then re-verify.
-Only fall back to the warning if a quote genuinely cannot be located.
+So `-> actually u0001 (cov 1.0)` meant only "u0001 was hit first among thousands of spurious
+matches". The `u0202`/`u0449` pattern was the verifier grabbing whatever id happened to sit on the
+same line as a non-quote — not a synthesis behaviour at all.
 
-### 1.2 Invented unit id · HIGH
-```
-[verify] 28 cited | 27 in shortlist ✓ | 0 exist-not-in-shortlist | 1 INVENTED
-[verify] ⚠ INVENTED ids: ['u5850349667']
-```
-One fabricated id in 28 citations. Note its shape — 10 digits where real ids are 4 (`u0202`). A
-cheap format guard (`^u\d{4}$`) would catch this class at generation time, not just after.
+It failed in **both** directions:
+- **Inflated the headline** — quotes scored ≥0.85 against their cited unit by noise and were
+  marked VERIFIED. True fidelity was *lower* than reported.
+- **NOT_FOUND could never fire** — the true-source scan always found something at cov 1.0, so
+  genuine fabrications were reported as misattributions. The run reported **0** fabrications;
+  there were **4**.
 
-`brain1_deep.py:274-280`.
+Corrected measurement of the same brief:
 
-### 1.3 Map-reduce sharding degrades citation fidelity · HIGH — likely ROOT CAUSE of 1.1
-```
-[synth] overflow (86,466 tok) -> map-reduce over 6 shards
-```
-`brain1_deep.py:203-210`, `shard_n = 60`. `MAX_SINGLE_UNITS = 150` (`:42`) is documented as a
-*fidelity ceiling* — above it, "single-context synthesis stops citing real unit ids and
-confabulates (empirically ~1000 units -> 0 real citations)".
+| | reported before | actual |
+|---|---|---|
+| fidelity | 89.8% | **84.4%** (86.7% after repair) |
+| misattributed | 5 | 3 → 2 after repair |
+| fabricated (NOT_FOUND) | 0 | **4** |
+| unverifiable coined labels | not a category | 9 |
 
-So the author already knew fidelity breaks with scale and added map-reduce to mitigate it. The
-observed 89.8% suggests **the mitigation itself leaks** — a Haiku map step extracting
-"citation-preserving findings" per shard, then an Opus reduce, gives two chances to detach a quote
-from its id. Worth testing: does a run whose `relevant` count stays under 150 (single-context)
-produce 100% quote fidelity? If yes, the shard boundary is the culprit and the map step needs a
-stricter contract (e.g. emit `{id, quote}` pairs as structured JSON, never prose).
+**Generalisable lesson:** the verification apparatus is itself unverified code. Before trusting a
+quality metric enough to design a fix around it, test the metric against a known case — here, "how
+many units does this 21-character string match?" would have exposed it in one line.
 
-### 1.4 Relevance judge fails open on a JSON parse error · MEDIUM
-```
-[judge] FAIL-OPEN (kept all 18): Extra data: line 7 column 1 (char 47)
-```
-`brain1_deep.py:113-118`:
-```python
-    ids = set(json.loads(re.search(r"\[.*\]", out, re.S).group(0)))
-    return [u for u in chunk if u["id"] in ids]
-except Exception as e:
-    sys.stderr.write(f"[judge] FAIL-OPEN (kept all {len(chunk)}): {e}\n")
-    return list(chunk)  # fail-open: never silently drop relevant data
-```
-Fail-open is the **right** default (dropping relevant data is worse than keeping noise) — do not
-change that policy. Two things are wrong with the implementation:
+---
 
-1. **No retry.** A transient parse failure permanently costs that batch its filtering.
-2. **The regex is the actual bug.** `re.search(r"\[.*\]", out, re.S)` is greedy across the whole
-   response; if Haiku emits prose after the array, or two arrays, the captured span is not valid
-   JSON — which is exactly "Extra data: line 7 column 1". The same fragile pattern is used for
-   facets at `:64`.
+## 2. WHAT WAS FIXED
 
-**Fix:** a shared `parse_json_array(text)` helper that tries, in order — direct `json.loads`,
-fenced-block extraction, then a *balanced-bracket* scan (not a greedy regex) — with one retry at
-temperature 0 before failing open. Apply at `:64` and `:114`.
+### 2.1 `coverage()` is now a containment test · brain1_verify.py
+Exact containment short-circuits to 1.0; fuzzy matching counts only blocks ≥8 chars. A real quote
+with a transcription slip ("curl"→"cull") still scores ~1.0 (two long blocks either side); a short
+needle assembled from noise scores 0.0. `"substantial = authority"` now matches **0** units;
+`"beautiful glossy booklet"` matches exactly **1** (u0645 — the genuine source, which the old
+verifier named as u0016).
 
-### 1.5 Facet generation is non-deterministic · MEDIUM
-`decompose()` (`:57-69`) calls Haiku with no seed, so the same question yields different facets run
-to run — meaning **different candidate pools and therefore different answers to the same question**.
-Already identified in `brain1_deep_recall_review.md`. For a tool used to make business decisions
-this is a reproducibility problem: we cannot re-run a query to check an answer.
+### 2.2 A fourth verdict: UNVERIFIABLE
+A quoted span under `MIN_ATTRIBUTABLE` (30 normalized chars) that appears verbatim nowhere is not
+a citation — it is the synthesis's own coined label in quote marks (`"substantial = authority"`,
+`"14-day taper"`). Reported separately with an advisory, and **excluded from the fidelity
+denominator** so the metric no longer moves with the model's punctuation habits. They still warrant
+a human look: quote marks beside a unit id imply verbatim to a reader.
 
-**Fix:** cache facets per (question-hash, n) so a repeat query reuses them, with `--refresh-facets`
-to override. Cheaper and more effective than trying to make the model deterministic.
+True-source claims now name *every* holding unit and mark the verdict ambiguous when several
+qualify, instead of confidently asserting one.
 
-### 1.6 Named-entity retrieval is broken · MEDIUM (long-standing, still unfixed)
-Confirmed at code level this session:
+### 2.3 The repair pass — and why the obvious wiring was wrong
+`fix_citations()` already existed but had never been wired in. **Wiring it in as-written made
+things worse, not better**: it anchored to "the first id within 60 chars AFTER the quote",
+`count=1`, over the whole document. On a comparison-table row with two quotes and two ids it
+rewrote the wrong id (breaking a *correct* attribution); where the id preceded the quote it matched
+nothing. Measured: it reported `corrected 4` while fidelity did not move at all (90.7% → 90.7%).
 
-| file | `entities` occurrences |
+Rewritten to repair only **unambiguous** bindings — the line must carry exactly one quoted span and
+exactly one flagged id, and exactly one unit must hold the quote — then **re-verify and roll back
+if the verified count did not increase**. The repair count can no longer overstate what happened.
+Ambiguous cases are listed for manual review. On the real brief: 1 repaired, 2 correctly refused.
+
+### 2.4 Shared JSON parsing · brain_json.py (new)
+Four sites each hand-rolled their own extractor and all four broke the same way:
+
+| site | old approach |
 |---|---|
-| `brain1_annotate.py` | 1 |
-| `brain1_normalize.py` | 0 |
-| `brain1_graph.py` | 0 |
-| `brain1_deep.py` | 0 |
-| `brain1_query.py` | 0 |
-| `brain_search.py` | 0 |
+| `brain1_deep.decompose` | `re.search(r"\[.*\]", out, re.S)` — greedy |
+| `brain1_deep._judge_chunk` | same greedy regex |
+| `brain3_annotate.extract_json_array` | first `[` .. last `]` slice |
+| `brain2/ad_annotate.extract_json_object` | first `{` .. last `}` slice |
 
-Entities are extracted at annotate time and then **never carried into the graph package**.
-`brain1_graph.py:119-129` builds each unit from `src` + `quotes` + fields, with no entity field. So
-a name-anchored query ("what did Alex Jordan say about market reports") can only match where the
-name happens to leak into `src` or a quote — 8 units out of ~33 that actually concern him.
+All span to the LAST bracket, so trailing prose or a second array makes the span invalid JSON.
+This reproduces the exact production error `[judge] FAIL-OPEN (kept all 18): Extra data: line 7
+column 1 (char 47)`. Replaced with: direct parse → fenced block → **balanced-bracket scan**
+(string/escape aware, returns the first complete value, cannot over-capture), plus one retry with
+an explicit format reminder. 11 regression cases — run `python3 scripts/samantha/brain_json.py`.
 
-**Practical impact this session:** I had to deliberately phrase the query around *concepts*
-("printed market report", "eight-page quarterly review") rather than names. It worked, but only
-because I knew about the bug. Anyone asking the obvious question gets a bad answer and no warning.
+**Fail-open policy on the judge is unchanged** (§5).
 
-**Fix:** carry `entities` through `brain1_graph.py` into the unit doc and include it in the
-searchable text. Prior review estimates name-anchored recall 17→~33 units.
+### 2.5 Shared `audit()` + verification for the casual path
+`brain1_verify.audit(answer, by_id, shortlist_ids=…, repair=…)` is now the single contract:
+id-shape guard → id membership → quote verification → repair → `⚠ NOT publication-ready`.
 
-### 1.7 Three of ten sources returned zero relevant units · LOW (investigate before fixing)
-```
-KB:financial   : 0 relevant /  96 judged
-KB:general     : 0 relevant / 310 judged
-KB:project     : 0 relevant /  14 judged
-```
-420 units judged for zero yield. May be entirely correct for this question. Worth a one-off check
-against a question those libraries *should* answer, to distinguish "correctly irrelevant" from
-"systematically unreachable".
+Wired into `brain1_deep.py` (replacing its inline block; **repair now runs BEFORE output**, so the
+printed and `--out` brief is the corrected one) and into `brain1_query.py`, **which previously had
+no citation verification whatsoever** — the path most likely to be used casually could misattribute
+silently. It now emits the same fidelity line.
 
-### 1.8 Single-source dominance is not surfaced to the caller · LOW
-`RealEstate_Gym` supplied **203 of 302** relevant units (67%). The synthesis presents its
-conclusions without noting that two-thirds of the evidence comes from one training organisation.
-For our editorial standards that is a citation-integrity issue: it reads as industry consensus when
-it is one school's doctrine.
+The id-shape guard derives valid shapes from the loaded package and flags `u5850349667` (10 digits
+where real ids have 4) as MALFORMED — a generation artefact, distinct from "a real-looking id not
+in the package".
 
-**Fix:** print the source-concentration ratio in the output header, and have the synthesis prompt
-require a caveat when any single source exceeds ~50% of carried units.
+### 2.6 Named entities reach the graph
+`entities` was extracted at annotate time (5,981 of 6,400 units have them) and then dropped by
+`brain1_graph.py` — it never reached the package, the retrieval blob, or the LLM. Now carried into
+the unit doc, into `score_units`' searchable blob (with a rank bonus, since an entity hit means the
+unit is genuinely *about* that person), and into `compact()`.
+
+Measured, top-45 units genuinely about the person:
+
+| name | before | after |
+|---|---|---|
+| Tom Panos | 6 | **32** |
+| Alex Jordan (top-150, of 25) | 9 | **17** |
+
+Package rebuilt and promoted; backup at `/home/fields/brain1_build/package.json.bak-pre-entities`.
+Structurally identical to the previous build (same units/concepts/edges/questions) apart from the
+new field. `brain3_ops` picks the change up on its nightly rebuild (03:35).
+
+### 2.7 Reproducibility + source concentration
+- Facets cached per (package, n, question) under `~/.cache/brain1/facets`; `--refresh-facets` to
+  override. The same question now yields the same candidate pool, so answers can be re-checked.
+- Source concentration measured and printed. When one library exceeds 50% of carried evidence the
+  synthesis prompt now *requires* the brief to say so. (`RealEstate_Gym` supplied 203/302 = 67% in
+  the original run and the brief read as industry consensus.)
 
 ---
 
-## 2. CROSS-BRAIN AUDIT — the important finding
+## 3. CORRECTING THE CROSS-BRAIN AUDIT
 
-**The entire verification apparatus exists only in `brain1_deep.py`.** Measured this session:
+The original §2 claimed the verification apparatus exists only in `brain1_deep.py` and that
+"Brain 2 feeds ad decisions … a misattributed figure there becomes a spend decision". **Half right.**
+Checked at code level:
 
-| file | judge | verify | quote-verify |
+| path | LLM? | citations? | status |
 |---|---|---|---|
-| `samantha/brain1_deep.py` | ✅ | ✅ | ✅ |
-| `samantha/brain1_query.py` | ❌ | ❌ | ❌ |
-| `samantha/brain3_annotate.py` | ❌ | ❌ | ❌ |
-| `brain2/ad_query.py` | ❌ | ❌ | ❌ |
-| `brain2/*` (15 files) | ❌ | ❌ | ❌ |
+| `samantha/brain1_deep.py` | yes | yes | verified (+ repair) |
+| `samantha/brain1_query.py` | yes | yes | **verification added this session** |
+| Brain 3 **query** | — | — | it *is* `brain1_deep.py --package /home/fields/brain3_ops/package.json` — already verified |
+| `samantha/brain3_annotate.py` | yes | **no** | ingest, emits structured JSON per unit — nothing to citation-verify; JSON parsing hardened |
+| `brain2/ad_query.py` | **no** | no | pure MongoDB aggregation — every number comes straight from the DB |
+| `brain2/ad_annotate.py` | yes | no | structured creative labelling — JSON parsing hardened |
+| `brain2/*` (13 others) | no | no | deterministic builders/reporters |
 
 So:
+- **Brain 3's query path was never unverified** — the original table listed `brain3_annotate.py`,
+  which is the *ingest* path. Brain 3 queries run through `brain1_deep.py` and always had the full
+  apparatus.
+- **Brain 2 has no LLM query path at all.** `ad_query.py` is deterministic aggregation; there are
+  no citations to misattribute. The "unverified Brain 2 figure becomes an ad-spend decision" risk
+  as stated does not exist. (`organic_journey_build.py` matched an "anthropic" grep only via
+  `detect_ai()`, which classifies AI *referrer traffic* — not an LLM call.)
+- What Brain 2 and 3 genuinely shared with Brain 1 was the **fragile JSON extraction** (§2.4), now
+  fixed in all four places.
 
-- **Brain 1 shallow (`brain1_query.py`)** — the path most likely to be used casually — has no
-  citation verification at all. It can misattribute exactly as the deep path does, silently.
-- **Brain 2 (ads/PostHog)** — no verification anywhere. Its outputs feed ad decisions and the
-  RL reward ledger. A misattributed figure here becomes a spend decision.
-- **Brain 3 (internal knowledge)** — same.
-
-**The 89.8% fidelity number is only known for Brain 1 because Brain 1 is the only one that measures
-it.** Brains 2 and 3 are not verified-good; they are *unmeasured*. That is the single most important
-thing in this document.
-
-**Fix direction:** extract the verifier from `brain1_deep.py:264-299` into a shared
-`scripts/samantha/brain_verify.py` exposing `verify_citations(answer, shortlist)` and
-`verify_quotes(answer, units)`, then wire it into every brain's query path. Same warning contract,
-same `⚠ NOT publication-ready` line.
-
----
-
-## 3. SUGGESTED ORDER
-
-1. **Shared `parse_json_array()`** (1.4) — smallest change, removes a whole failure class, unblocks clean measurement of everything else.
-2. **Test the shard-boundary hypothesis** (1.3) — run a query whose relevant count lands under 150 and check quote fidelity. This determines whether 1.1 is a sharding bug or a prompt bug; do not attempt 1.1 before knowing.
-3. **Quote-repair pass** (1.1) + **id format guard** (1.2).
-4. **Extract the shared verifier and wire into Brains 2 and 3** (§2) — highest *business* risk, since those outputs drive spend.
-5. **Facet caching** (1.5) — makes every later change measurable by making runs reproducible.
-6. **Entities through to the graph** (1.6).
-7. **Source-concentration caveat** (1.8), then investigate the zero-yield libraries (1.7).
+**Brain 2's real unverified surface is different and still open:** `ad_annotate.py` emits a fixed
+schema of enum-ish labels (`primary_emotional_lever`, `hook_type`, `cta_semantic.hardness`) that
+`ad_query.py` then groups by. Nothing validates those values against an allowed set, so a drifting
+label silently becomes its own row in every rollup. That is a **schema-validation** job, not a
+citation-verification one — see §4.
 
 ---
 
-## 4. DO NOT BREAK
+## 4. WHAT IS STILL OPEN
 
-- **Fail-open on judge errors.** Dropping relevant data is worse than carrying noise. Fix the parse, keep the policy.
-- **The `⚠ NOT publication-ready` warning.** It is the reason we know any of this. If a repair pass is added, it must still warn when repair fails.
-- **`MAX_SINGLE_UNITS = 150`.** It encodes a real empirical finding (~1000 units → 0 real citations). Do not raise it to avoid sharding without re-measuring fidelity.
-- **The judge's bias-to-include prompt** (`:105-111`). A prior recall failure came from over-filtering; the current prompt deliberately keeps rare one-off mentions.
+1. **Brain 2 annotation schema validation.** Validate `ad_annotate.py` output against the enum sets
+   its prompt specifies; reject/retry on drift. This is the genuine Brain 2 integrity gap.
+2. **The 4 fabricated quotes.** Now that NOT_FOUND actually fires, the map-reduce path is producing
+   quotes that exist in no unit. This is the real fidelity defect and it was invisible before.
+   Worth attacking via the map step's contract (see 3).
+3. **Map-reduce shard-boundary experiment — deliberately NOT run.** Its premise was the
+   5-misattribution pattern, now known to be mostly measurement error. The genuine misattributions
+   are a single confusion (u0449 vs u0645 — two units about the *same* quarterly booklet), too thin
+   to design a sharding change on. The scaffolding is now in place to do it properly, holding
+   evidence constant across both paths:
+   ```bash
+   # one retrieval, two synthesis paths, identical evidence
+   brain1_deep.py "<q>" --save-relevant /tmp/rel.json --limit-relevant 140 --force-path single
+   brain1_deep.py "<q>" --load-relevant /tmp/rel.json --limit-relevant 140 --force-path mapreduce
+   ```
+   Do this after a few runs under the corrected verifier, so the comparison is against a
+   trustworthy baseline. If sharding is implicated, the fix is to make the Haiku map step emit
+   `{id, quote}` pairs as structured JSON rather than prose.
+4. **Zero-yield libraries.** `KB:financial` (0/96), `KB:general` (0/310), `KB:project` (0/14) —
+   420 units judged for zero carry. May be correct for this question. Test with a question those
+   libraries *should* answer, to separate "correctly irrelevant" from "systematically unreachable".
+5. **`brain_search.py`** does lexical retrieval only (no synthesis, no citations) so it needs no
+   verifier — but it does benefit from entities, automatically, via `score_units`.
 
-## 5. DEFINITION OF DONE
+---
 
-- A repeat of the §0 query returns **100% quote fidelity, 0 invented ids**, and the same facets on re-run.
-- `brain1_query.py`, `brain2/ad_query.py` and the Brain 3 path all emit a fidelity line.
-- A name-anchored query ("what did Alex Jordan say about market reports") returns his material.
-- Every change logged to `logs/fix-history/` per CLAUDE.md rule 1 and pushed per rule 2.
-- If any new scheduled process is added, it self-reports per rule 7.
+## 5. DO NOT BREAK
+
+- **Fail-open on judge errors.** Dropping relevant data is worse than carrying noise. The parse is
+  fixed and a retry added; the *policy* is unchanged and must stay.
+- **The `⚠ NOT publication-ready` warning.** It is the reason any of this is known. Repair must
+  still warn when repair fails or is refused.
+- **`MAX_SINGLE_UNITS = 150`.** Encodes a real empirical finding (~1000 units → 0 real citations).
+  Do not raise it to avoid sharding without re-measuring fidelity. `--force-path` bypasses it for
+  experiments only and warns loudly when it does.
+- **The judge's bias-to-include prompt.** A prior recall failure came from over-filtering; it
+  deliberately keeps rare one-off mentions.
+- **Repair rollback.** If a "fix" does not raise the verified count, it is discarded. Never report
+  a repair count that is not backed by a re-verification.
+- **The completeness principle** (per-source candidate pools, no global top-N) — corpus size is an
+  accident of what footage exists, not a relevance signal.
+
+---
 
 ## 6. WHY THIS MATTERS COMMERCIALLY
 
-Fields' entire market position is that we publish our method and are right because of it. Brain 1's
-retrieval is genuinely good and found material that changed a real format decision today. But a
-quote we cannot attribute correctly is a quote we cannot print — and an unverified Brain 2 figure
-is an ad-spend decision made on an unchecked number. The fix is not more intelligence; it is making
-the existing intelligence auditable.
+Fields' position is that we publish our method and are right because of it. A quote we cannot
+attribute correctly is a quote we cannot print. But the deeper lesson from this session is narrower
+and sharper: **we were reporting a fidelity number that was not measuring fidelity**, and it was
+reassuring in exactly the places it should have alarmed (0 fabrications, when there were 4). An
+unverified verifier is worse than no verifier, because it launders confidence. The fix was not more
+intelligence — it was making the existing intelligence auditable, and then auditing the auditor.
