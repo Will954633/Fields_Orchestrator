@@ -21,6 +21,9 @@ from datetime import datetime, timedelta
 from pymongo import MongoClient
 import anthropic
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from market_series import five_year_growth  # noqa: E402
+
 CLI_BIN = os.environ.get("CLAUDE_BIN", "claude")
 CLI_TIMEOUT_S = 120
 
@@ -319,9 +322,9 @@ def fetch_all_data(gc_db, sm_db, suburb):
     # true 5yr median growth puts it last). See fix-history [PULSE-FIVE-YEAR-INDEX-MISLABEL].
     #
     # Growth is computed off rolling_12m_median_series (12-month rolling medians), not the raw
-    # quarterly series, because single quarters here are thin enough to swing the answer — and
-    # in-progress quarters are excluded outright.
-    QUARTERS_IN_5Y = 20
+    # quarterly series, because single quarters here are thin enough to swing the answer. The
+    # rolling series is SPARSE after the union merge, so the five-year point is matched on the
+    # period label, never on position — see scripts/market_series.py.
     capital_gains = {}
     for s in TARGET_SUBURBS:
         s_idx = gc_db["precomputed_indexed_prices"].find_one({"_id": s})
@@ -339,27 +342,18 @@ def fetch_all_data(gc_db, sm_db, suburb):
             "index_baseline_period": s_idx.get("baseline_period"),
         }
 
-        # Prefer the smoothed rolling series; fall back to raw quarters if it is absent.
-        rolling = [
-            r for r in (s_idx.get("rolling_12m_median_series") or [])
-            if not r.get("is_in_progress") and r.get("rolling_median")
-        ]
-        if len(rolling) > QUARTERS_IN_5Y:
-            now_pt, then_pt = rolling[-1], rolling[-(QUARTERS_IN_5Y + 1)]
-            now_med, then_med = now_pt.get("rolling_median"), then_pt.get("rolling_median")
-            basis = "rolling_12m_median"
-        elif len(s_series) > QUARTERS_IN_5Y:
-            now_pt, then_pt = s_series[-1], s_series[-(QUARTERS_IN_5Y + 1)]
-            now_med, then_med = now_pt.get("median_price"), then_pt.get("median_price")
-            basis = "quarterly_median (rolling series unavailable — treat as indicative)"
+        growth = five_year_growth(s_idx)
+        if growth:
+            entry["five_year_growth_pct"] = growth["growth_pct"]
+            entry["five_year_from_period"] = growth["from_period"]
+            entry["five_year_from_median"] = growth["from_median"]
+            entry["five_year_basis"] = growth["basis"]
         else:
-            now_med = then_med = None
-
-        if now_med and then_med:
-            entry["five_year_growth_pct"] = round((now_med / then_med - 1) * 100, 1)
-            entry["five_year_from_period"] = then_pt.get("period")
-            entry["five_year_from_median"] = then_med
-            entry["five_year_basis"] = basis
+            entry["five_year_growth_pct"] = None
+            entry["five_year_note"] = (
+                "no 12-month rolling median recorded for the same quarter five years earlier — "
+                "do not substitute a nearby quarter"
+            )
 
         capital_gains[name] = entry
     data["capital_gains_comparison"] = capital_gains
@@ -373,12 +367,36 @@ def fetch_all_data(gc_db, sm_db, suburb):
     data["suburb_display"] = display
     data["data_date"] = datetime.now().strftime("%Y-%m-%d")
 
-    # --- Authoritative headline stats from PropRadar (validated vs realestate.com.au) ---
-    # Our own quarterly medians/growth/absorption run off an under-captured, premium-skewed
-    # sold sample (e.g. Burleigh median inflated to $2.115M vs REA/PR ~$1.71-1.91M → 23.7%
-    # phantom growth). Override median / 1yr-growth / months-of-supply with PropRadar's
-    # complete settlement stats where available; fall back to our computation otherwise.
-    # DOM stays ours (already reliable). See scripts/propradar/, DATA_SOURCE_RESET_SCOPING.md.
+    # --- Authoritative headline median: the Domain ∪ onthehouse union ---
+    # Until 2026-08-01 this block overrode the median and 1-year growth with PropRadar's,
+    # because our own quarterly series is an under-captured, premium-skewed sample. That
+    # anchor was then REMOVED from the chart pipeline (recalibrate_charts.py
+    # RECALIBRATE_MEDIAN = False) after it was found to substitute a median computed over a
+    # DIFFERENT dwelling population — and PropRadar's Burleigh Waters median_price is now
+    # null outright. PropRadar remains authoritative for VOLUME only.
+    #
+    # The median therefore comes from precompute_union_prices.py, same as the charts, so the
+    # prose and the page cannot disagree. It carries a 90% CI and a sample size, both exposed
+    # here so summaries can state the limitation rather than assert a bare figure.
+    if idx:
+        if idx.get("rolling_12m_median_price"):
+            data["median_12m"] = idx["rolling_12m_median_price"]
+            data["median_12m_ci_low"] = idx.get("rolling_12m_ci_low")
+            data["median_12m_ci_high"] = idx.get("rolling_12m_ci_high")
+            data["median_12m_margin_pct"] = idx.get("rolling_12m_ci_margin_pct")
+            data["median_12m_sample_n"] = idx.get("rolling_12m_median_sample_n")
+            data["median_source"] = idx.get("median_source")
+            data["median_computed_at"] = idx.get("median_computed_at")
+        # YoY off the 12-month rolling series, not a single thin quarter.
+        if idx.get("rolling_12m_yoy_pct") is not None:
+            data["yoy_growth_pct"] = idx["rolling_12m_yoy_pct"]
+        # `current_median_price` stays the latest COMPLETE quarter — a different statistic
+        # from the 12-month median, so label it rather than letting the two be conflated.
+        data["current_median_price_basis"] = "latest complete quarter"
+        if idx.get("union_from"):
+            data["volume_comparable_from"] = idx["union_from"]
+
+    # --- PropRadar: volume-side stats only ---
     try:
         import os as _os
         import sys as _sys
@@ -389,18 +407,19 @@ def fetch_all_data(gc_db, sm_db, suburb):
         _prs = None
         print(f"  (propradar_suburb_stats unavailable for {suburb}: {_e})")
     if _prs:
-        if _prs.get("median_price"):
-            data["current_median_price"] = _prs["median_price"]
-        if _prs.get("growth_1y_pct") is not None:
-            data["yoy_growth_pct"] = _prs["growth_1y_pct"]
-        if _prs.get("growth_qtr_pct") is not None:
-            data["qoq_growth_pct"] = _prs["growth_qtr_pct"]
+        _used = []
         if _prs.get("inventory_months") is not None:
             data["absorption_rate_months"] = _prs["inventory_months"]
+            _used.append("inventory_months")
         if _prs.get("sales_12mo") is not None:
             data["sales_12mo_house"] = _prs["sales_12mo"]
-        data["headline_stats_source"] = "propradar"
-        data["propradar_as_of"] = _prs.get("as_of")
+            _used.append("sales_12mo")
+        # Only claim PropRadar as a source if something actually came from it — the old code
+        # stamped headline_stats_source="propradar" even when every field it read was null.
+        if _used:
+            data["propradar_fields_used"] = _used
+            data["propradar_as_of"] = _prs.get("as_of")
+    data["headline_stats_source"] = data.get("median_source") or "fields_quarterly_series"
 
     return data
 
