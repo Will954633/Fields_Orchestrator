@@ -313,8 +313,12 @@ def market_status_for(addresses: list[str], db, gc_db, max_calls: int,
     the three core suburbs. A hit in EITHER blocks the mail.
     """
     import rental_listings_sync as rls
+    import onthehouse_listings_sync as ohl
     resolved = resolved or {}
     lease_ok = db[rls.COLL].count_documents({"active": True}) > 0
+    # Same empty-collection guard as the lease side: an unpopulated collection must read
+    # as "not checked", never as "nothing is for sale".
+    oth_ok = db[ohl.COLL].count_documents({"active": True}) > 0
 
     gc_listed = set()
     for sub in ("robina", "varsity_lakes", "burleigh_waters"):
@@ -331,16 +335,26 @@ def market_status_for(addresses: list[str], db, gc_db, max_calls: int,
             out[a] = ms.check(a, db=db, spend=spend)
         # Lease side — a home the owner is leasing is not one we can sell.
         lease = rls.is_for_lease(db, a) if lease_ok else None
+        # Sale side, third opinion. Domain and onthehouse overlap only 72% on live
+        # houses; 31 addresses in offmarket_discovery were actively for sale and
+        # invisible to us until this source was added.
+        oth = ohl.is_listed(db, a) if oth_ok else None
         r = resolved.get(rls.address_key(a) or "") or {}
         bad = [c for c in (r.get("conflicts") or []) if "misroute" in c or "UNVERIFIED" in c]
         out[a] = dict(out[a], gc_for_sale=ms._key(a) in gc_listed,
                       for_lease=lease, lease_checked=lease_ok,
+                      oth_for_sale=oth, oth_checked=oth_ok,
                       address_conflict=(bad[0] if bad else None))
-    sale_blocked = sum(1 for v in out.values() if v.get("on_market") or v.get("gc_for_sale"))
+    sale_blocked = sum(1 for v in out.values()
+                       if v.get("on_market") or v.get("gc_for_sale") or v.get("oth_for_sale"))
+    oth_only = sum(1 for v in out.values()
+                   if v.get("oth_for_sale") and not (v.get("on_market") or v.get("gc_for_sale")))
     lease_blocked = sum(1 for v in out.values() if v.get("for_lease"))
     print(f"  Sellability: {spend['calls']} PropRadar call(s), {len(out)} address(es) — "
-          f"{sale_blocked} for sale, {lease_blocked} for lease"
-          + ("" if lease_ok else " (LEASE DATA EMPTY — run rental_listings_sync.py)"))
+          f"{sale_blocked} for sale ({oth_only} seen ONLY by onthehouse), "
+          f"{lease_blocked} for lease"
+          + ("" if lease_ok else " (LEASE DATA EMPTY — run rental_listings_sync.py)")
+          + ("" if oth_ok else " (OTH SALE DATA EMPTY — run onthehouse_listings_sync.py)"))
     return out
 
 
