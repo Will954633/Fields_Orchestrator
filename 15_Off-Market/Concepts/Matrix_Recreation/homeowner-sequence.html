@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Digital Rain — Homeowner Sequence</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; background: #000; overflow: hidden; }
+
+  #stage { position: fixed; inset: 0; background: #000; }
+  #shake { position: absolute; inset: 0; will-change: transform; }
+
+  #rain  { position: absolute; inset: 0; display: block; }
+  #bloom {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    mix-blend-mode: screen; opacity: .85; pointer-events: none;
+  }
+  #bloom.css-blur { filter: blur(7px) brightness(1.3); }
+
+  #scanlines {
+    position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(to bottom,
+      rgba(0,0,0,0) 0px, rgba(0,0,0,0) 2px,
+      rgba(0,0,0,.13) 3px, rgba(0,0,0,.13) 4px);
+  }
+  #vignette {
+    position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse 78% 72% at 50% 50%,
+      rgba(0,0,0,0) 40%, rgba(0,0,0,.55) 82%, rgba(0,0,0,.9) 100%);
+  }
+
+  /* Dark scrim behind the terminal so type stays legible over the rain */
+  #scrim {
+    position: absolute; inset: 0; pointer-events: none; opacity: 0;
+    background: radial-gradient(ellipse 46% 62% at 22% 52%,
+      rgba(0,0,0,.92) 0%, rgba(0,0,0,.72) 45%, rgba(0,0,0,0) 78%);
+    transition: opacity 1.4s ease;
+  }
+  #scrim.on { opacity: 1; }
+
+  /* Terminal */
+  #term {
+    position: absolute;
+    left: 7vw; top: 50%; transform: translateY(-50%);
+    font: 400 clamp(17px, 2.05vw, 32px)/1.62 ui-monospace, SFMono-Regular, Menlo, Consolas, "DejaVu Sans Mono", monospace;
+    letter-spacing: .02em;
+    white-space: pre;
+    z-index: 5;
+    pointer-events: none;
+    max-width: 86vw;
+  }
+  #term .line { opacity: 0; }
+  #term .line.show { opacity: 1; }
+
+  .c-dim   { color: #35d95d; text-shadow: 0 0 10px rgba(0,255,70,.45); }
+  .c-ok    { color: #7dff9b; text-shadow: 0 0 14px rgba(0,255,90,.6); }
+  .c-addr  { color: #e8fff0; text-shadow: 0 0 18px rgba(150,255,180,.75); font-weight: 600; }
+  .c-warn  { color: #ffc247; text-shadow: 0 0 14px rgba(255,170,40,.6); }
+  .c-err   { color: #ff3b30; text-shadow: 0 0 16px rgba(255,40,30,.72); font-weight: 600; }
+  .c-abort { color: #ff5a4d; text-shadow: 0 0 26px rgba(255,50,35,.95); font-weight: 700; letter-spacing: .22em; }
+
+  #cursor {
+    display: inline-block;
+    width: .58em; height: 1.02em;
+    vertical-align: -.16em;
+    background: currentColor;
+    box-shadow: 0 0 12px currentColor;
+    animation: blink 1.06s steps(1) infinite;
+  }
+  @keyframes blink { 0%,49% { opacity: 1 } 50%,100% { opacity: 0 } }
+
+  /* Red alarm wash + shake on ABORT */
+  #alarm {
+    position: absolute; inset: 0; pointer-events: none; opacity: 0;
+    background: radial-gradient(ellipse 90% 80% at 50% 50%,
+      rgba(255,0,0,.20) 0%, rgba(255,0,0,.06) 55%, rgba(120,0,0,.34) 100%);
+    mix-blend-mode: screen;
+  }
+  #alarm.pulse { animation: alarm 1.5s ease-out 2; }
+  @keyframes alarm { 0% { opacity: 0 } 12% { opacity: 1 } 100% { opacity: 0 } }
+
+  #shake.glitch { animation: shake .5s steps(2) 2; }
+  @keyframes shake {
+    0%   { transform: translate(0,0) }
+    25%  { transform: translate(-5px, 2px) }
+    50%  { transform: translate(4px,-3px) }
+    75%  { transform: translate(-3px,-1px) }
+    100% { transform: translate(0,0) }
+  }
+
+  #hint {
+    position: absolute; bottom: 18px; right: 20px; z-index: 9;
+    font: 10px/1 ui-monospace, Menlo, Consolas, monospace;
+    letter-spacing: .16em; text-transform: uppercase;
+    color: rgba(0,255,70,.34); text-shadow: 0 0 8px rgba(0,255,70,.3);
+    transition: opacity 1.2s ease; pointer-events: none;
+  }
+  #hint.gone { opacity: 0 }
+
+  @media (max-width: 640px) {
+    #term { left: 6vw; font-size: clamp(15px, 4.6vw, 26px); }
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div id="shake">
+    <canvas id="rain"></canvas>
+    <canvas id="bloom"></canvas>
+    <div id="scrim"></div>
+    <div id="term"></div>
+  </div>
+  <div id="scanlines"></div>
+  <div id="vignette"></div>
+  <div id="alarm"></div>
+  <div id="hint">R replay · F fullscreen</div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  // ── Glyph set ────────────────────────────────────────────────────────────
+  // Not katakana. This rain is made of the raw material of a property record:
+  // digits (prices, land size, days on market), currency and unit marks, and
+  // capitals for street and suburb names. Unmirrored — meant to read as data.
+  const POOL =
+    '0123456789' + '0123456789' + '0123456789' +   // digits dominate the field
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZ' +
+    '$%.,:/-+=<>#*·▲▼²';
+  const GLYPHS = (POOL + ' ').split('');           // trailing space = blank cell
+  const G = GLYPHS.length;
+  const SPACE = G - 1;                             // excluded from random churn
+  const GIDX = new Map(GLYPHS.map((c, i) => [c, i]));
+
+  // Tokens that surface vertically out of the noise. Suburb-specific, so a
+  // local homeowner recognises their own data before a word is typed.
+  const TOKENS = [
+    'BURLEIGH WATERS', 'ROBINA', 'VARSITY LAKES', 'MIAMI', 'MERMAID WATERS',
+    '4220', '4226', '4227', 'SOLD', 'LISTED', 'OFF MARKET', 'WITHDRAWN',
+    'DOM 34', 'DOM 71', '4 BED', '3 BATH', '2 CAR', '607M2', '812M2', '445M2',
+    'AVOCET AVE', 'CURLEW CRT', 'GALLEON WAY', 'MALLAWA DR',
+    'MEDIAN', 'COMPS 6', 'CONF 82%', 'SETTLED', '$1,285,000', '$970,000'
+  ];
+
+  // ── Config ───────────────────────────────────────────────────────────────
+  const cfg = {
+    size: 17, speed: 92, density: 66, trail: 26, mutate: 34, glow: 85,
+    tokenChance: 0.16          // share of streams carrying a readable token
+  };
+
+  const HEAD  = [205, 255, 210];
+  const BRIGHT= [ 90, 255, 120];
+  const CORE  = [  0, 240,  64];
+  const DEEP  = [  0, 100,  28];
+  const TIERS = 24;
+
+  // ── Timeline ─────────────────────────────────────────────────────────────
+  const T_RAIN     = 3.0;      // full-field rain before anything happens
+  const T_CONTRACT = 1.6;      // field narrows to the left band
+  const BAND_FRAC  = 0.34;     // width the field collapses to
+
+  // The address is overridable per view, so one file can serve every owner:
+  //   ?street=12 Curlew Court&locality=Robina, QLD 4226
+  const qs = new URLSearchParams(location.search);
+  // strip control characters; text is inserted via textContent, never HTML
+  const clip = (s, n) => String(s).replace(/[\u0000-\u001F]/g, '').slice(0, n);
+  const STREET   = clip(qs.get('street')   || '3 Avocet Avenue', 46);
+  const LOCALITY = clip(qs.get('locality') || 'Burleigh Waters, QLD 4220', 46);
+
+  const SCRIPT = [
+    { t: 'searching...',              cls: 'dim',   pause: 0.15 },
+    { t: 'searching...',              cls: 'dim',   pause: 1.00 },
+    { t: 'Found it',                  cls: 'ok',    pause: 0.85 },
+    { t: STREET,                      cls: 'addr',  pause: 0.55 },
+    { t: LOCALITY,                    cls: 'addr',  pause: 0.12 },
+    { t: "There's a problem...",      cls: 'warn',  pause: 1.05 },
+    { t: 'ERROR',                     cls: 'err',   pause: 0.75 },
+    { t: 'ERROR',                     cls: 'err',   pause: 0.34 },
+    { t: 'ERROR',                     cls: 'err',   pause: 0.20 },
+    { t: 'ABORT',                     cls: 'abort', pause: 0.65 }
+  ];
+  const CPS_MS  = 52;          // per-character type speed
+  const DOT_MS  = 380;         // the "..." land one at a time, slowly
+  const HOLD_MS = 4200;        // dwell on ABORT before looping
+  let   loop    = true;
+
+  // ── Canvas ───────────────────────────────────────────────────────────────
+  const rain  = document.getElementById('rain');
+  const bloom = document.getElementById('bloom');
+  const ctx   = rain.getContext('2d', { alpha: false });
+  const bctx  = bloom.getContext('2d');
+  const BLOOM_DIV = 5;
+  const canvasBlur = typeof bctx.filter === 'string';
+  if (!canvasBlur) bloom.classList.add('css-blur');
+
+  const term   = document.getElementById('term');
+  const scrim  = document.getElementById('scrim');
+  const alarm  = document.getElementById('alarm');
+  const shake  = document.getElementById('shake');
+  const hint   = document.getElementById('hint');
+
+  let W = 0, H = 0, dpr = 1, cellW = 0, cellH = 0, cols = 0, rows = 0;
+  let atlas = null, aCellW = 0, aCellH = 0;
+
+  let sCol, sY, sSpeed, sLen, sDim, sWait, sTok, sPos, sRow;
+  let streamMax = 0, streamCount = 0;
+  let cell, churn, spark, bright, lock;
+
+  let bandCols = 0;            // columns currently eligible for spawning
+  let fieldDim = 1;            // global brightness, dips while text is on screen
+  let surge = 0;               // brief density/speed kick on ABORT
+
+  // ── Atlas ────────────────────────────────────────────────────────────────
+  const lerp = (a, b, t) => a + (b - a) * t;
+
+  function ramp(v) {
+    let c, a;
+    if (v > 0.94)      { const t = (v-0.94)/0.06; c = [lerp(BRIGHT[0],HEAD[0],t), lerp(BRIGHT[1],HEAD[1],t), lerp(BRIGHT[2],HEAD[2],t)]; a = 1; }
+    else if (v > 0.78) { const t = (v-0.78)/0.16; c = [lerp(CORE[0],BRIGHT[0],t), lerp(CORE[1],BRIGHT[1],t), lerp(CORE[2],BRIGHT[2],t)]; a = 1; }
+    else               { const t = v/0.78;        c = [lerp(DEEP[0],CORE[0],t),   lerp(DEEP[1],CORE[1],t),   lerp(DEEP[2],CORE[2],t)];   a = Math.pow(t,1.45); }
+    return `rgba(${c[0]|0},${c[1]|0},${c[2]|0},${a.toFixed(3)})`;
+  }
+
+  function buildAtlas() {
+    const fontPx = cfg.size * dpr;
+    const family = `ui-monospace, SFMono-Regular, Menlo, Consolas, "DejaVu Sans Mono", monospace`;
+    const probe = document.createElement('canvas').getContext('2d');
+    probe.font = `${fontPx}px ${family}`;
+
+    let maxW = 0;
+    for (const g of GLYPHS) maxW = Math.max(maxW, probe.measureText(g).width);
+
+    aCellW = Math.max(2, Math.round(maxW * 1.10));
+    aCellH = Math.max(2, Math.round(fontPx * 1.06));
+    cellW  = aCellW / dpr;
+    cellH  = aCellH / dpr;
+
+    atlas = document.createElement('canvas');
+    atlas.width = aCellW * G;
+    atlas.height = aCellH * TIERS;
+    const a = atlas.getContext('2d');
+    a.font = `${fontPx}px ${family}`;
+    a.textAlign = 'center';
+    a.textBaseline = 'middle';
+
+    for (let t = 0; t < TIERS; t++) {
+      a.fillStyle = ramp(t / (TIERS - 1));
+      for (let g = 0; g < G; g++) {
+        a.fillText(GLYPHS[g], g * aCellW + aCellW / 2, t * aCellH + aCellH / 2);
+      }
+    }
+  }
+
+  // ── Layout ───────────────────────────────────────────────────────────────
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    rain.width = Math.round(W * dpr); rain.height = Math.round(H * dpr);
+    rain.style.width = W + 'px';      rain.style.height = H + 'px';
+    bloom.width  = Math.max(1, Math.round(W / BLOOM_DIV));
+    bloom.height = Math.max(1, Math.round(H / BLOOM_DIV));
+    if (canvasBlur) bctx.filter = `blur(${(7 / BLOOM_DIV).toFixed(2)}px)`;
+
+    buildAtlas();
+    cols = Math.ceil(W / cellW);
+    rows = Math.ceil(H / cellH) + 2;
+    bandCols = cols;
+
+    streamMax = cols * 3;
+    sCol = new Int32Array(streamMax); sY = new Float32Array(streamMax);
+    sSpeed = new Float32Array(streamMax); sLen = new Float32Array(streamMax);
+    sDim = new Float32Array(streamMax); sWait = new Float32Array(streamMax);
+    sTok = new Array(streamMax).fill(null);
+    sPos = new Int32Array(streamMax); sRow = new Int32Array(streamMax);
+
+    cell = new Uint8Array(cols * rows); churn = new Float32Array(cols * rows);
+    spark = new Float32Array(cols * rows); bright = new Float32Array(cols * rows);
+    lock = new Uint8Array(cols * rows);
+
+    for (let i = 0; i < cell.length; i++) cell[i] = (Math.random() * (G - 1)) | 0;
+
+    streamCount = Math.min(streamMax, Math.round(cols * (cfg.density / 100) * 1.9));
+    for (let i = 0; i < streamCount; i++) spawn(i, true);
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+  }
+
+  function spawn(i, seeded) {
+    // during/after the contraction, new streams only enter the left band
+    sCol[i]   = (Math.random() * Math.max(1, bandCols)) | 0;
+    sLen[i]   = cfg.trail * (0.45 + Math.random() * 1.35);
+    const s   = Math.pow(Math.random(), 1.7);
+    sSpeed[i] = (cfg.speed * (0.45 + s * 1.75)) / cellH;
+    sDim[i]   = 0.42 + Math.random() * 0.58;
+    sY[i]     = seeded ? Math.random() * (rows + sLen[i]) : -Math.random() * 6;
+    sWait[i]  = seeded ? 0 : Math.random() * 2.2;
+
+    if (Math.random() < cfg.tokenChance) {
+      sTok[i] = TOKENS[(Math.random() * TOKENS.length) | 0] + '  ';
+      sDim[i] = 0.85 + Math.random() * 0.15;      // tokens ride brighter
+    } else {
+      sTok[i] = null;
+    }
+    sPos[i] = 0;
+    sRow[i] = Math.floor(sY[i]) - 1;
+  }
+
+  // ── Simulation ───────────────────────────────────────────────────────────
+  function step(dt) {
+    bright.fill(0);
+    const spd = 1 + surge * 1.4;
+
+    for (let i = 0; i < streamCount; i++) {
+      if (sWait[i] > 0) { sWait[i] -= dt; continue; }
+      sY[i] += sSpeed[i] * dt * spd;
+
+      const y = sY[i], len = sLen[i], c = sCol[i], d = sDim[i];
+      if (y - len > rows) { spawn(i, false); continue; }
+      if (c >= bandCols && bandCols < cols && y - len > 0) {
+        // outside the band: let it finish falling, then it respawns inside
+      }
+
+      const base = c * rows;
+
+      // token streams stamp one character per row as the head advances, so the
+      // word reads downward and then sits still while the trail decays
+      if (sTok[i]) {
+        const hr = Math.floor(y);
+        if (hr > sRow[i]) {
+          for (let r = Math.max(sRow[i] + 1, 0); r <= hr; r++) {
+            if (r >= 0 && r < rows) {
+              const ch = sTok[i][sPos[i] % sTok[i].length];
+              const gi = GIDX.has(ch) ? GIDX.get(ch) : SPACE;
+              cell[base + r] = gi;
+              lock[base + r] = 1;
+            }
+            sPos[i]++;
+          }
+          sRow[i] = hr;
+        }
+      }
+
+      const top = Math.max(0, Math.ceil(y - len));
+      const bot = Math.min(rows - 1, Math.floor(y));
+      for (let r = top; r <= bot; r++) {
+        const dist = y - r;
+        let v;
+        if (dist < 1) v = 1;
+        else {
+          const k = 1 - (dist - 1) / len;
+          if (k <= 0) continue;
+          v = Math.pow(k, 1.3) * d;
+        }
+        const j = base + r;
+        if (v > bright[j]) bright[j] = v;
+      }
+    }
+
+    const churnRate = (cfg.mutate / 100) * 24;
+    const n = bright.length;
+    for (let j = 0; j < n; j++) {
+      if (spark[j] > 0) spark[j] -= dt;
+      if (bright[j] <= 0.02) { lock[j] = 0; continue; }   // dark cell: release
+      if (lock[j]) continue;                              // token char: hold
+      churn[j] -= dt * churnRate * (0.3 + Math.random());
+      if (churn[j] <= 0) {
+        cell[j] = (Math.random() * (G - 1)) | 0;
+        churn[j] = 0.4 + Math.random() * 2.4;
+        if (Math.random() < 0.035) spark[j] = 0.05 + Math.random() * 0.12;
+      }
+    }
+
+    if (surge > 0) surge = Math.max(0, surge - dt * 1.6);
+  }
+
+  function draw(now) {
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, W, H);
+    const tMax = TIERS - 1;
+    const wob = (0.94 + 0.06 * Math.sin(now * 0.011) * Math.sin(now * 0.0037)) * fieldDim;
+
+    for (let c = 0; c < cols; c++) {
+      const base = c * rows, x = c * cellW;
+      for (let r = 0; r < rows; r++) {
+        const j = base + r;
+        let v = bright[j];
+        if (v <= 0.02) continue;
+        if (spark[j] > 0) v = Math.max(v, 0.97) * fieldDim;
+        else v *= wob;
+        const tier = (v * tMax) | 0;
+        if (tier <= 0) continue;
+        ctx.drawImage(atlas, cell[j] * aCellW, tier * aCellH, aCellW, aCellH,
+                      x, r * cellH, cellW, cellH);
+      }
+    }
+
+    if (cfg.glow > 0) {
+      bctx.globalCompositeOperation = 'source-over';
+      bctx.clearRect(0, 0, bloom.width, bloom.height);
+      bctx.drawImage(rain, 0, 0, bloom.width, bloom.height);
+      bctx.globalCompositeOperation = 'lighter';
+      bctx.globalAlpha = 0.45;
+      bctx.drawImage(rain, 0, 0, bloom.width, bloom.height);
+      bctx.globalAlpha = 1;
+    }
+  }
+
+  // ── Sequence ─────────────────────────────────────────────────────────────
+  let phase = 'rain', phaseT = 0, timers = [];
+  const wait = (ms) => new Promise(res => timers.push(setTimeout(res, ms)));
+  const clearTimers = () => { timers.forEach(clearTimeout); timers = []; };
+
+  function typeLine({ t, cls }) {
+    return new Promise(async res => {
+      const line = document.createElement('div');
+      line.className = 'line show c-' + cls;
+      const text = document.createElement('span');
+      const cur  = document.createElement('span');
+      cur.id = 'cursor';
+      line.append(text, cur);
+      term.append(line);
+
+      for (let i = 0; i < t.length; i++) {
+        text.textContent += t[i];
+        await wait(t[i] === '.' ? DOT_MS : CPS_MS + Math.random() * 26);
+      }
+      cur.remove();
+      res(line);
+    });
+  }
+
+  async function runSequence() {
+    // 1 — open on the full field
+    phase = 'rain'; phaseT = 0;
+    await wait(T_RAIN * 1000);
+
+    // 2 — the field narrows to a band on the left
+    phase = 'contract'; phaseT = 0;
+    scrim.classList.add('on');
+    await wait(T_CONTRACT * 1000 + 250);
+
+    // 3 — type the script
+    phase = 'type';
+    for (const step of SCRIPT) {
+      await wait(step.pause * 1000);
+      const line = await typeLine(step);
+      if (step.cls === 'err')   { alarm.classList.remove('pulse'); void alarm.offsetWidth; alarm.classList.add('pulse'); }
+      if (step.cls === 'abort') {
+        surge = 1;
+        shake.classList.add('glitch');
+        alarm.classList.add('pulse');
+        line.animate(
+          [{ opacity: 1 }, { opacity: .25 }, { opacity: 1 }, { opacity: .4 }, { opacity: 1 }],
+          { duration: 620, easing: 'steps(5)' }
+        );
+      }
+    }
+
+    // 4 — hold, then loop
+    const cur = document.createElement('span');
+    cur.id = 'cursor';
+    term.lastChild.append(cur);
+    await wait(HOLD_MS);
+    if (loop) restart();
+  }
+
+  function restart() {
+    clearTimers();
+    term.innerHTML = '';
+    term.style.opacity = '1';
+    scrim.classList.remove('on');
+    alarm.classList.remove('pulse');
+    shake.classList.remove('glitch');
+    bandCols = cols; fieldDim = 1; surge = 0;
+    for (let i = 0; i < streamCount; i++) spawn(i, true);
+    runSequence();
+  }
+
+  // ── Frame ────────────────────────────────────────────────────────────────
+  let last = performance.now();
+
+  function frame(now) {
+    const dt = Math.min((now - last) / 1000, 0.05);
+    last = now;
+    phaseT += dt;
+
+    if (phase === 'contract') {
+      const k = Math.min(1, phaseT / T_CONTRACT);
+      const e = 1 - Math.pow(1 - k, 3);                 // ease-out
+      bandCols = Math.max(1, Math.round(cols * (1 - (1 - BAND_FRAC) * e)));
+      fieldDim = 1 - 0.42 * e;
+    }
+
+    step(dt);
+    draw(now);
+    requestAnimationFrame(frame);
+  }
+
+  // ── Boot ─────────────────────────────────────────────────────────────────
+  addEventListener('keydown', e => {
+    const k = e.key.toLowerCase();
+    if (k === 'r') restart();
+    else if (k === 'l') { loop = !loop; }
+    else if (k === 'f') {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else document.documentElement.requestFullscreen?.();
+    }
+  });
+
+  let rt;
+  addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => {
+    const wasBand = bandCols / cols;
+    resize();
+    bandCols = Math.max(1, Math.round(cols * wasBand));
+  }, 140); });
+
+  const boot = () => { resize(); requestAnimationFrame(frame); runSequence(); };
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(boot); else boot();
+  setTimeout(() => hint.classList.add('gone'), 6000);
+})();
+</script>
+</body>
+</html>
