@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pandanus — pixel reveal</title>
+<style>
+  :root {
+    --bg: #14151a;
+    --panel: rgba(255,255,255,.045);
+    --line: rgba(255,255,255,.10);
+    --text: #e8e6e1;
+    --muted: #8d9099;
+    --accent: #c8c2b4;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 13px/1.5 ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    padding: 24px;
+    -webkit-font-smoothing: antialiased;
+  }
+  body.capture { padding: 0; gap: 0; background: #000; }
+  body.capture .ui { display: none; }
+
+  .stage {
+    position: relative;
+    border-radius: 3px;
+    overflow: hidden;
+    box-shadow: 0 24px 70px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.06);
+    line-height: 0;
+  }
+  body.capture .stage { box-shadow: none; border-radius: 0; }
+  canvas { display: block; width: 100%; height: auto; }
+
+  .ui {
+    width: 100%;
+    max-width: 860px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 18px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 12px 16px;
+  }
+  .field { display: flex; align-items: center; gap: 9px; }
+  label { color: var(--muted); letter-spacing: .02em; white-space: nowrap; }
+  .val { color: var(--accent); font-variant-numeric: tabular-nums; min-width: 42px; }
+  input[type=range] { width: 108px; accent-color: #b9b2a1; }
+  select, button {
+    font: inherit;
+    color: var(--text);
+    background: rgba(255,255,255,.06);
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    padding: 6px 12px;
+    cursor: pointer;
+  }
+  button:hover, select:hover { background: rgba(255,255,255,.11); }
+  button.primary { background: #e8e6e1; color: #16171b; border-color: transparent; font-weight: 600; }
+  button.primary:hover { background: #fff; }
+  .scrub { flex: 1; min-width: 200px; }
+  .scrub input { width: 100%; }
+  .hint { color: var(--muted); font-size: 12px; text-align: center; }
+  kbd {
+    background: rgba(255,255,255,.08); border: 1px solid var(--line);
+    border-bottom-width: 2px; border-radius: 4px; padding: 1px 5px; font-size: 11px;
+  }
+</style>
+</head>
+<body>
+
+<div class="stage" id="stage"><canvas id="c"></canvas></div>
+
+<div class="ui">
+  <div class="row">
+    <button class="primary" id="replay">Replay</button>
+    <div class="scrub"><input type="range" id="scrub" min="0" max="1000" value="1000"></div>
+    <div class="field"><label for="loop">loop</label><input type="checkbox" id="loop"></div>
+    <button id="save">Save frame</button>
+  </div>
+  <div class="row">
+    <div class="field">
+      <label for="mode">reveal</label>
+      <select id="mode">
+        <option value="growth">growth — from the trunk out</option>
+        <option value="develop">develop — darkest ink first</option>
+        <option value="dissolve">dissolve — random pixels</option>
+        <option value="rise">rise — bottom to top</option>
+        <option value="sweep">sweep — diagonal wipe</option>
+      </select>
+    </div>
+    <div class="field"><label for="theme">paper</label>
+      <select id="theme">
+        <option value="light">light — black on paper</option>
+        <option value="dark">dark — chalk on slate</option>
+      </select>
+    </div>
+    <div class="field"><label for="block">pixel</label><input type="range" id="block" min="2" max="16" step="1" value="5"><span class="val" id="blockV">5px</span></div>
+  </div>
+  <div class="row">
+    <div class="field"><label for="dur">duration</label><input type="range" id="dur" min="1000" max="12000" step="250" value="5000"><span class="val" id="durV">5.0s</span></div>
+    <div class="field"><label for="chaos">scatter</label><input type="range" id="chaos" min="0" max="100" value="28"><span class="val" id="chaosV">0.28</span></div>
+    <div class="field"><label for="mosaic">mosaic</label><input type="range" id="mosaic" min="0" max="100" value="85"><span class="val" id="mosaicV">0.85</span></div>
+    <div class="field"><label for="fade">soften</label><input type="range" id="fade" min="1" max="200" value="55"><span class="val" id="fadeV">0.055</span></div>
+  </div>
+  <div class="hint"><kbd>space</kbd> replay &nbsp;·&nbsp; drag the scrubber to inspect any moment</div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  const SRC_W = {{IMAGE_W}};
+  const SRC_H = {{IMAGE_H}};
+  const INK_URI = "{{INK_DATA_URI}}";
+
+  const params   = new URLSearchParams(location.search);
+  const CAPTURE  = params.get("capture") === "1";
+  const OUT_W    = Math.max(160, parseInt(params.get("w") || "0", 10) || 0);
+
+  const THEMES = {
+    light: { paper: "#f7f4ee", ink: "#101012", grain: 0.030, vignette: 0.055 },
+    dark:  { paper: "#111216", ink: "#efece4", grain: 0.026, vignette: 0.100 },
+  };
+
+  const cfg = {
+    mode:    params.get("mode")  || "growth",
+    theme:   params.get("theme") || "light",
+    block:   +(params.get("block")  || 5),
+    dur:     +(params.get("dur")    || 5000),
+    chaos:   +(params.get("chaos")  || 0.28),
+    mosaic:  +(params.get("mosaic") || 0.85),
+    fade:    +(params.get("fade")   || 0.055),
+    seed:    +(params.get("seed")   || 20260802),
+    loop:    params.get("loop") === "1",
+  };
+
+  // ---- deterministic RNG so the preview and the rendered video match --------
+  const mulberry32 = (a) => () => {
+    a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+
+  const clamp01   = (v) => v < 0 ? 0 : v > 1 ? 1 : v;
+  const smoothstep = (u) => { u = clamp01(u); return u * u * (3 - 2 * u); };
+
+  // ---- canvases ------------------------------------------------------------
+  const view   = document.getElementById("c");
+  const vctx   = view.getContext("2d");
+  const stage  = document.getElementById("stage");
+
+  const mk = (w, h) => { const c = document.createElement("canvas"); c.width = w; c.height = h; return c; };
+  const src    = mk(SRC_W, SRC_H);   // the ink master (black, alpha = coverage)
+  const sctx   = src.getContext("2d");
+  const ink    = mk(SRC_W, SRC_H);   // blocks already fully revealed
+  const ictx   = ink.getContext("2d");
+  const flight = mk(SRC_W, SRC_H);   // blocks mid-fade, redrawn every frame
+  const fctx   = flight.getContext("2d");
+
+  let grainTile = null;
+
+  // ---- block model ---------------------------------------------------------
+  // Every block gets a sort key from the chosen mode, blended with noise. After
+  // sorting, a block's reveal threshold is simply its rank / count — so pacing
+  // stays even no matter how the key happens to be distributed, and the mode
+  // only decides the *order* things appear in.
+  let blocks = null;      // { x, y, w, h, density } sorted by threshold
+  let committed = 0;      // blocks already painted onto `ink` at full opacity
+  let lastP = 0;
+
+  function buildBlocks() {
+    const bp   = cfg.block;
+    const cols = Math.ceil(SRC_W / bp);
+    const rows = Math.ceil(SRC_H / bp);
+    const data = sctx.getImageData(0, 0, SRC_W, SRC_H).data;
+
+    // per-block mean ink coverage
+    const density = new Float32Array(cols * rows);
+    for (let y = 0; y < SRC_H; y++) {
+      const rowOff = (y / bp) | 0;
+      const base = y * SRC_W * 4 + 3;
+      for (let x = 0; x < SRC_W; x++) {
+        const a = data[base + x * 4];
+        if (a) density[rowOff * cols + ((x / bp) | 0)] += a;
+      }
+    }
+    const perBlock = bp * bp * 255;
+
+    // anchor for "growth": the base of the trunk — x centroid of the ink in the
+    // bottom eighth of the drawing, at the lowest inked row.
+    let ax = SRC_W / 2, ay = SRC_H - 1, mass = 0, sumX = 0, lowest = 0;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const d = density[r * cols + c];
+        if (d > perBlock * 0.02) lowest = Math.max(lowest, r);
+      }
+    }
+    const bandTop = Math.max(0, lowest - Math.round(rows * 0.10));
+    for (let r = bandTop; r <= lowest; r++) {
+      for (let c = 0; c < cols; c++) {
+        const d = density[r * cols + c];
+        if (d > perBlock * 0.02) { sumX += c * d; mass += d; }
+      }
+    }
+    if (mass > 0) { ax = (sumX / mass) * bp; ay = lowest * bp; }
+
+    const rand = mulberry32(cfg.seed);
+    const maxD = Math.hypot(Math.max(ax, SRC_W - ax), Math.max(ay, SRC_H - ay));
+    const list = [];
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const dens = density[r * cols + c] / perBlock;
+        const n = rand();                       // drawn for every cell so the
+        if (dens < 0.004) continue;             // noise field is stable
+        const x = c * bp, y = r * bp;
+        const cx = x + bp / 2, cy = y + bp / 2;
+
+        let key;
+        switch (cfg.mode) {
+          case "develop":  key = 1 - Math.min(1, dens * 1.6); break;
+          case "dissolve": key = n; break;
+          case "rise":     key = 1 - cy / SRC_H; break;
+          case "sweep":    key = (cx / SRC_W * 0.55) + (cy / SRC_H * 0.45); break;
+          default:         key = Math.hypot(cx - ax, cy - ay) / maxD;   // growth
+        }
+        key = key * (1 - cfg.chaos) + n * cfg.chaos;
+
+        list.push({
+          x, y,
+          w: Math.min(bp, SRC_W - x),
+          h: Math.min(bp, SRC_H - y),
+          d: Math.min(1, dens * 1.35),
+          k: key,
+        });
+      }
+    }
+
+    list.sort((a, b) => a.k - b.k);
+    const last = Math.max(1, list.length - 1);
+    for (let i = 0; i < list.length; i++) list[i].t = i / last;
+    blocks = list;
+    reset();
+  }
+
+  function reset() {
+    ictx.clearRect(0, 0, SRC_W, SRC_H);
+    committed = 0;
+    lastP = 0;
+  }
+
+  // first index whose threshold is > p  (blocks are sorted, thresholds are i/n)
+  const upperBound = (p) => {
+    if (p <= 0) return 0;
+    if (p >= 1) return blocks.length;
+    return Math.min(blocks.length, Math.ceil(p * (blocks.length - 1)) + 1);
+  };
+
+  // ---- painting ------------------------------------------------------------
+  function paint(p) {
+    if (!blocks) return;
+    if (p < lastP) reset();          // scrubbed backwards — rebuild from zero
+    lastP = p;
+
+    const theme = THEMES[cfg.theme];
+    const done  = upperBound(p - cfg.fade);
+    const started = upperBound(p);
+
+    // commit everything that has finished fading, once
+    for (; committed < done; committed++) {
+      const b = blocks[committed];
+      ictx.drawImage(src, b.x, b.y, b.w, b.h, b.x, b.y, b.w, b.h);
+    }
+
+    // redraw the in-flight band: a flat "pixel" that resolves into fine hatch
+    fctx.clearRect(0, 0, SRC_W, SRC_H);
+    for (let i = done; i < started; i++) {
+      const b = blocks[i];
+      const a = clamp01((p - b.t) / cfg.fade);
+      if (a <= 0) continue;
+      const solid = (1 - a) * b.d * cfg.mosaic;
+      if (solid > 0.004) {
+        fctx.globalAlpha = solid;
+        fctx.fillStyle = "#000";
+        fctx.fillRect(b.x, b.y, b.w, b.h);
+      }
+      fctx.globalAlpha = a;
+      fctx.drawImage(src, b.x, b.y, b.w, b.h, b.x, b.y, b.w, b.h);
+    }
+    fctx.globalAlpha = 1;
+
+    // composite: paper -> ink -> in-flight -> grain -> vignette
+    const W = view.width, H = view.height;
+    vctx.setTransform(1, 0, 0, 1, 0, 0);
+    vctx.fillStyle = theme.paper;
+    vctx.fillRect(0, 0, W, H);
+
+    // the master is black-on-transparent; tint it to the theme's ink colour
+    const tinted = tint(theme.ink);
+    vctx.drawImage(tinted, 0, 0, W, H);
+
+    if (grainTile) {
+      vctx.save();
+      vctx.globalAlpha = theme.grain;
+      vctx.fillStyle = vctx.createPattern(grainTile, "repeat");
+      vctx.fillRect(0, 0, W, H);
+      vctx.restore();
+    }
+    if (theme.vignette > 0) {
+      const g = vctx.createRadialGradient(W / 2, H * 0.46, Math.min(W, H) * 0.30, W / 2, H * 0.5, Math.max(W, H) * 0.78);
+      g.addColorStop(0, "rgba(0,0,0,0)");
+      g.addColorStop(1, `rgba(0,0,0,${theme.vignette})`);
+      vctx.fillStyle = g;
+      vctx.fillRect(0, 0, W, H);
+    }
+  }
+
+  // ink + flight, recoloured to the theme, on a scratch canvas
+  const scratch = mk(SRC_W, SRC_H);
+  const xctx = scratch.getContext("2d");
+  function tint(colour) {
+    xctx.globalCompositeOperation = "source-over";
+    xctx.clearRect(0, 0, SRC_W, SRC_H);
+    xctx.drawImage(ink, 0, 0);
+    xctx.drawImage(flight, 0, 0);
+    xctx.globalCompositeOperation = "source-in";
+    xctx.fillStyle = colour;
+    xctx.fillRect(0, 0, SRC_W, SRC_H);
+    xctx.globalCompositeOperation = "source-over";
+    return scratch;
+  }
+
+  function makeGrain() {
+    const n = 128;
+    const c = mk(n, n);
+    const g = c.getContext("2d");
+    const img = g.createImageData(n, n);
+    const rand = mulberry32(7717);
+    for (let i = 0; i < n * n; i++) {
+      const v = 120 + rand() * 135;
+      img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = v;
+      img.data[i * 4 + 3] = 255;
+    }
+    g.putImageData(img, 0, 0);
+    grainTile = c;
+  }
+
+  // ---- sizing --------------------------------------------------------------
+  function resize() {
+    const dpr = CAPTURE ? 1 : Math.min(window.devicePixelRatio || 1, 2);
+    let cssW;
+    if (CAPTURE) {
+      cssW = OUT_W || SRC_W;
+    } else {
+      const avail = Math.min(window.innerWidth - 48, 720);
+      const byHeight = (window.innerHeight - 300) * (SRC_W / SRC_H);
+      cssW = Math.max(280, Math.min(avail, byHeight));
+    }
+    const cssH = cssW * (SRC_H / SRC_W);
+    view.width  = Math.round(cssW * dpr);
+    view.height = Math.round(cssH * dpr);
+    stage.style.width = Math.round(cssW) + "px";
+    if (blocks) paint(lastP);
+  }
+
+  // ---- playback ------------------------------------------------------------
+  let startedAt = null, raf = null, playing = false;
+
+  function tick(now) {
+    if (startedAt === null) startedAt = now;
+    const u = (now - startedAt) / cfg.dur;
+    const p = smoothstep(u);
+    paint(p);
+    if (!CAPTURE) scrub.value = String(Math.round(clamp01(u) * 1000));
+    if (u >= 1) {
+      playing = false;
+      if (cfg.loop) { setTimeout(play, 900); return; }
+      return;
+    }
+    raf = requestAnimationFrame(tick);
+  }
+
+  function play() {
+    cancelAnimationFrame(raf);
+    reset();
+    startedAt = null;
+    playing = true;
+    raf = requestAnimationFrame(tick);
+  }
+
+  function stop() { cancelAnimationFrame(raf); playing = false; }
+
+  // ---- controls ------------------------------------------------------------
+  const $ = (id) => document.getElementById(id);
+  const scrub = $("scrub");
+
+  function syncLabels() {
+    $("blockV").textContent  = cfg.block + "px";
+    $("durV").textContent    = (cfg.dur / 1000).toFixed(1) + "s";
+    $("chaosV").textContent  = cfg.chaos.toFixed(2);
+    $("mosaicV").textContent = cfg.mosaic.toFixed(2);
+    $("fadeV").textContent   = cfg.fade.toFixed(3);
+  }
+
+  function wire() {
+    $("mode").value  = cfg.mode;
+    $("theme").value = cfg.theme;
+    $("block").value = cfg.block;
+    $("dur").value   = cfg.dur;
+    $("chaos").value = Math.round(cfg.chaos * 100);
+    $("mosaic").value = Math.round(cfg.mosaic * 100);
+    $("fade").value  = Math.round(cfg.fade * 1000);
+    $("loop").checked = cfg.loop;
+    syncLabels();
+
+    $("replay").onclick = play;
+    $("save").onclick = () => {
+      const a = document.createElement("a");
+      a.download = `pandanus_reveal_${cfg.mode}_${Math.round(lastP * 100)}.png`;
+      a.href = view.toDataURL("image/png");
+      a.click();
+    };
+    $("loop").onchange = (e) => { cfg.loop = e.target.checked; };
+
+    $("mode").onchange  = (e) => { cfg.mode = e.target.value; buildBlocks(); play(); };
+    $("theme").onchange = (e) => { cfg.theme = e.target.value; paint(lastP); };
+    $("block").oninput  = (e) => { cfg.block = +e.target.value; syncLabels(); buildBlocks(); play(); };
+    $("dur").oninput    = (e) => { cfg.dur = +e.target.value; syncLabels(); };
+    $("chaos").oninput  = (e) => { cfg.chaos = +e.target.value / 100; syncLabels(); buildBlocks(); play(); };
+    $("mosaic").oninput = (e) => { cfg.mosaic = +e.target.value / 100; syncLabels(); paint(lastP); };
+    $("fade").oninput   = (e) => { cfg.fade = +e.target.value / 1000; syncLabels(); paint(lastP); };
+
+    scrub.oninput = (e) => { stop(); paint(smoothstep(+e.target.value / 1000)); };
+
+    addEventListener("keydown", (e) => {
+      if (e.code === "Space" && e.target.tagName !== "INPUT" && e.target.tagName !== "SELECT") {
+        e.preventDefault(); play();
+      }
+    });
+    addEventListener("resize", resize);
+  }
+
+  // ---- boot ----------------------------------------------------------------
+  const img = new Image();
+  img.onload = () => {
+    sctx.drawImage(img, 0, 0);
+    makeGrain();
+    if (CAPTURE) document.body.classList.add("capture");
+    resize();
+    buildBlocks();
+    if (CAPTURE) {
+      // deterministic stepping for the video renderer
+      window.__reveal = {
+        duration: cfg.dur,
+        frame(t) { paint(smoothstep(t / cfg.dur)); },
+        reset,
+        ready: true,
+      };
+      paint(0);
+    } else {
+      wire();
+      play();
+    }
+  };
+  img.onerror = () => {
+    document.body.innerHTML = '<p style="color:#e66">Could not load the ink master. Re-run build_master.py.</p>';
+  };
+  img.src = INK_URI;
+})();
+</script>
+</body>
+</html>
