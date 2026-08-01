@@ -45,6 +45,42 @@ from job_status import job_run
 
 CORE = ["robina", "varsity_lakes", "burleigh_waters"]
 
+# EXPANSION suburbs are NOT hardcoded here. generate-sitemap.mjs release-gates them
+# (`EXPANSION_SUBURBS` ∩ the Gold_Coast.offmarket_sitemap_release config doc: a
+# suburb with no limit contributes 0 URLs), so the config doc's keys are a strict
+# SUPERSET of what the sitemap can ever emit. Deriving from it here makes
+# "builder ⊇ sitemap" hold no matter which side someone edits — the 2026-07-29
+# Nerang drift (985 indexed URLs, 0 decks → old page served) came from this list
+# being a second, independently-maintained copy. See fix-history [OFFMARKET-DECK-EXPANSION-DRIFT].
+#
+# We build the WHOLE expansion suburb, not just the released slice. The gate exists
+# to meter Google's crawl exposure, not to decide what's built; building ahead means
+# a home's deck is ready BEFORE its URL is ever submitted, and we never have to
+# replicate the sitemap's `sort({_id:1}).limit(N)` ordering to stay in sync.
+RELEASE_CFG = ("offmarket_sitemap_release", "release")
+
+
+def expansion_suburbs(gc=None):
+    """Suburb collections released (or queued for release) beyond the core three."""
+    try:
+        coll, _id = RELEASE_CFG
+        db = _gc() if gc is None else gc   # pymongo Database has no __bool__ — never `gc or …`
+        cfg = db[coll].find_one({"_id": _id}) or {}
+        return [s for s in (cfg.get("limits") or {}) if s not in CORE]
+    except Exception as e:
+        print(f"(release config unreadable, core suburbs only: {e})", file=sys.stderr)
+        return []
+
+
+def target_suburbs(gc=None):
+    return CORE + expansion_suburbs(gc)
+
+
+# A residual coverage gap this large means a whole suburb (or a systemic query
+# mismatch) is missing, not the handful of per-home build failures we tolerate.
+# Crossing it raises -> status=error on the Systems Health Process Registry.
+COVERAGE_GAP_TOLERANCE = 25
+
 # Mirror generate-sitemap.mjs getOffMarketUrls() EXACTLY so deck coverage == index.
 NON_HOUSE_TYPES = [
     "Townhouse", "Apartment", "Apartment / Unit / Flat", "Unit", "Flat",
@@ -79,16 +115,23 @@ def indexed_query():
 
 
 def indexed_homes():
-    """Yield (slug, last_enriched) for every indexed off-market home."""
+    """Yield (slug, last_enriched, suburb) for every indexed off-market home.
+
+    The suburb is carried through to build_one() rather than left to
+    fact_bundle's fallback scan (offmarket_intel_poller.TARGET_SUBURBS) — that
+    scan is its own hardcoded list and silently returns subject_not_found for a
+    collection it doesn't know about. We already know which collection the home
+    came from; passing it is both correct and one fewer list to keep in sync.
+    """
     gc = _gc()
     q = indexed_query()
-    for c in CORE:
+    for c in target_suburbs(gc):
         for r in gc[c].find(q, {"url_slug": 1, "enriched_data.last_enriched": 1}):
             slug = r.get("url_slug")
             if not slug:
                 continue
             le = (r.get("enriched_data") or {}).get("last_enriched")
-            yield slug, le
+            yield slug, le, c
 
 
 def existing_generated_at():
@@ -114,9 +157,9 @@ def _build_loop(todo, tag=""):
     built = failed = 0
     t0 = time.time()
     n = len(todo)
-    for i, (slug, _le) in enumerate(todo, 1):
+    for i, (slug, _le, suburb) in enumerate(todo, 1):
         try:
-            doc = ODB.build_one(slug, rebuild=True)
+            doc = ODB.build_one(slug, suburb, rebuild=True)
             ODB.upsert(doc)
             built += 1
         except Exception as e:
@@ -139,7 +182,7 @@ def run(limit=None, rebuild_all=False, dry_run=False, shard=None):
     if shard is not None:
         homes = sorted(indexed_homes())
         have = existing_generated_at()
-        todo = [(s, le) for (s, le) in homes if _needs_build(s, le, have, rebuild_all)]
+        todo = [(s, le, sub) for (s, le, sub) in homes if _needs_build(s, le, have, rebuild_all)]
         i, N = shard
         todo = [t for k, t in enumerate(todo) if k % N == i]
         _build_loop(todo, tag=f"shard{i}/{N}")
@@ -148,7 +191,7 @@ def run(limit=None, rebuild_all=False, dry_run=False, shard=None):
                  title="Off-Market Discovery Deck (full indexed coverage)") as beat:
         homes = list(indexed_homes())
         have = existing_generated_at()
-        todo = [(s, le) for (s, le) in homes if _needs_build(s, le, have, rebuild_all)]
+        todo = [(s, le, sub) for (s, le, sub) in homes if _needs_build(s, le, have, rebuild_all)]
         if limit:
             todo = todo[:limit]
         total_indexed = len(homes)
@@ -160,11 +203,32 @@ def run(limit=None, rebuild_all=False, dry_run=False, shard=None):
             return
 
         built, failed, dt = _build_loop(todo, tag="main")
-        cov = len(existing_generated_at())  # coverage after this run
-        print(f"\nbuilt={built} failed={failed} in {dt}s  |  coverage={cov}/{total_indexed}", file=sys.stderr)
-        beat.detail = (f"built {built}, failed {failed}; coverage {cov}/{total_indexed} indexed")
+
+        # COVERAGE ASSERTION — the invariant this job exists to hold is
+        # "indexed → deck". Compare the actual indexed SLUG SET against the built
+        # docs, not just the counts: a doc count can match while a whole suburb is
+        # absent and an equal number of stale docs sit in its place. Any indexed
+        # slug without a doc is a home Google can send traffic to that renders the
+        # OLD classic page.
+        after = existing_generated_at()
+        cov = len(after)
+        indexed_slugs = {s for s, _le, _sub in homes}
+        missing = sorted(indexed_slugs - set(after))
+        sample = ", ".join(missing[:5]) + (" …" if len(missing) > 5 else "")
+        gap = f"; GAP {len(missing)} indexed w/o deck ({sample})" if missing else ""
+        print(f"\nbuilt={built} failed={failed} in {dt}s  |  coverage={cov}/{total_indexed}{gap}",
+              file=sys.stderr)
+        beat.detail = (f"built {built}, failed {failed}; "
+                       f"{len(indexed_slugs) - len(missing)}/{len(indexed_slugs)} indexed have decks"
+                       + (f"; {len(missing)} MISSING ({sample})" if missing else ""))
         beat.metrics = {"indexed": total_indexed, "built": built, "failed": failed,
-                        "coverage": cov, "seconds": dt}
+                        "coverage": cov, "missing": len(missing), "seconds": dt,
+                        "suburbs": target_suburbs()}
+        if len(missing) > COVERAGE_GAP_TOLERANCE:
+            raise RuntimeError(
+                f"off-market deck coverage gap: {len(missing)} indexed homes have no "
+                f"discovery doc and are serving the OLD classic page (e.g. {sample}). "
+                f"Suburbs built: {', '.join(target_suburbs())}.")
 
 
 if __name__ == "__main__":
