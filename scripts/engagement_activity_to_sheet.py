@@ -78,10 +78,11 @@ VISIT_GAP_MIN = 30
 # claim as engaged reading time on a single page.
 ENGAGED_CAP_S = 300
 
-HEADERS = ["Date", "Time (AEST)", "Who", "Reach Via", "Contact Detail", "Visit",
-           "Channel", "Location", "Engaged", "What They Did", "Already Sent",
-           "Opportunity", "Activity ID"]
-ACTIVITY_ID_COL = 12  # 0-indexed -> column M (hidden, dedupe key only)
+HEADERS = ["Date", "Time (AEST)", "Who", "Safe to mail?", "Best address / contact",
+           "Evidence", "All addresses on file", "Visit", "Channel", "Location",
+           "Engaged", "What They Did", "Already Sent", "Opportunity", "Activity ID"]
+ACTIVITY_ID_COL = 14  # 0-indexed -> column O (hidden, dedupe key only)
+WRAP_COLS = (3, 15)   # "Safe to mail?" through "Opportunity" are all prose
 
 CATEGORY_LABELS = {
     "crash-risk": "crash risk",
@@ -121,41 +122,136 @@ OPPORTUNITY_RULES = [
 
 
 # ---- pathway resolution ------------------------------------------------------
-def reach_for(c: dict) -> tuple[str, str] | None:
-    """Return (how we can reach them, the actual detail) or None.
+# Which address is actually THEIRS is the whole ballgame — a wrong answer posts mail
+# to a stranger's letterbox. These tiers exist because the underlying fields are NOT
+# equally trustworthy, and the first version of this script wrongly flattened them:
+#
+#   T1 CONFIRMED  home_confirmed.source == "user_confirmed" — they clicked "yes, this
+#                 is my home" in the recognition modal. The only direct evidence we
+#                 ever get. Mailable.
+#   T2 SUBMITTED  property_address — they typed it into Analyse Your Home and we built
+#                 them a report. Strong, but people also run AYH on homes they're
+#                 researching, so it is not proof of ownership. Mailable, flagged.
+#   T3 LOOKUP     offmarket_home, AND they only ever looked at that ONE address. This
+#                 is the documented owner-lookup pattern (see memory
+#                 organic_offmarket_pivot: 94% of off-market visitors view exactly one
+#                 address). The single-address condition is what makes it credible.
+#   T4 AMBIGUOUS  everything else — most importantly `probable_address`, which is just
+#                 the LAST mini-site they happened to open. `probable_address_slugs`
+#                 is every address they viewed, not addresses they own. NOT mailable.
+#
+# A currently-listed address is never mailable regardless of tier: either they're a
+# buyer researching a listing, or they're a seller already on the market with another
+# agent — and "we noticed you looking at your home report" is wrong in both cases.
+T_CONFIRMED, T_SUBMITTED, T_LOOKUP, T_AMBIGUOUS = 1, 2, 3, 4
 
-    Ordered by how directly actionable it is. Every postal address states its
-    provenance — an address the owner confirmed and an address we inferred from an
-    off-market page lookup are completely different things to act on, and a row that
-    blurs them would invite contacting someone as if they'd given us their details.
+
+def address_candidates(c: dict, seen_now: set[str] | None = None) -> list[dict]:
+    """Every address we associate with this contact, each with its evidence tier.
+
+    Returns them all — the row shows the ambiguity rather than hiding it behind one
+    confidently-wrong pick.
     """
-    email = (c.get("email") or "").strip()
-    if email:
-        return "Email", email
-    phone = (c.get("phone") or "").strip()
-    if phone:
-        return "Phone", phone
+    out, added = [], set()
+
+    def add(addr, slug, tier, basis):
+        key = (slug or addr or "").lower()
+        if not key or key in added:
+            return
+        added.add(key)
+        out.append({"address": addr, "slug": slug, "tier": tier, "basis": basis})
 
     hc = c.get("home_confirmed") or {}
-    if isinstance(hc, dict) and hc.get("address"):
-        return "Postal address (owner-confirmed)", hc["address"]
+    if isinstance(hc, dict) and hc.get("address") and hc.get("source") == "user_confirmed":
+        add(hc["address"], hc.get("slug"), T_CONFIRMED,
+            "they clicked “yes, this is my home”")
 
     pa = (c.get("property_address") or "").strip()
     if pa:
-        return "Postal address (they submitted it)", pa
+        add(pa, None, T_SUBMITTED, "they submitted it to Analyse Your Home")
+
+    om = c.get("offmarket_home") or {}
+    if isinstance(om, dict) and (om.get("slug") or om.get("address")):
+        slugs = [s for s in (om.get("slugs") or []) if s] or ([om["slug"]] if om.get("slug") else [])
+        # Stored fields lag: `/building/<slug>` views never write to crm_contacts at
+        # all. Fold in the addresses observed during THIS visit so a person looking at
+        # two units in the same block can't be called the owner of one of them.
+        viewed = {v for v in (c.get("probable_address_slugs") or []) if v} | (seen_now or set())
+        # Only one address in their whole footprint -> the owner-lookup read holds.
+        single = len(set(slugs) | viewed) == 1
+        for s in slugs:
+            # offmarket_home.address is stored unpunctuated ("13 4 Yodelay Street
+            # Varsity Lakes") and is not postable — rebuild it from the slug.
+            add(slug_to_address(s), s,
+                T_LOOKUP if single else T_AMBIGUOUS,
+                "arrived from Google straight to this address's off-market page"
+                + ("" if single else " — but they viewed other addresses too, so this "
+                                    "is just one of several"))
 
     prob = (c.get("probable_address") or "").strip()
     if prob:
-        src = c.get("probable_address_source") or "site activity"
-        return f"Postal address (inferred — {src}, not given to us)", prob
+        add(prob, c.get("probable_address_slug"), T_AMBIGUOUS,
+            "the most recent mini-site they opened — NOT evidence of ownership")
+    for s in (c.get("probable_address_slugs") or []):
+        add(slug_to_address(s), s, T_AMBIGUOUS, "a report they opened")
 
-    om = c.get("offmarket_home") or {}
-    if isinstance(om, dict) and (om.get("address") or om.get("slug")):
-        # Prefer the slug — offmarket_home.address is stored unpunctuated
-        # ("13 4 Yodelay Street Varsity Lakes"), which is not a postable address.
-        addr = slug_to_address(om["slug"]) if om.get("slug") else om["address"]
-        return ("Postal address (inferred — off-market lookup, not given to us)", addr)
-    return None
+    out.sort(key=lambda x: x["tier"])
+    return out
+
+
+def reach_for(c: dict, listed: set[str] | None = None,
+              seen_now: set[str] | None = None) -> dict | None:
+    """Best available way to reach this contact, with an explicit mailability verdict."""
+    listed = listed or set()
+    email = (c.get("email") or "").strip()
+    if email:
+        return {"via": "Email", "detail": email, "mail_ok": "Yes — email",
+                "candidates": address_candidates(c, seen_now)}
+    phone = (c.get("phone") or "").strip()
+    if phone:
+        return {"via": "Phone", "detail": phone, "mail_ok": "Yes — phone",
+                "candidates": address_candidates(c, seen_now)}
+
+    cands = address_candidates(c, seen_now)
+    if not cands:
+        return None
+    best = cands[0]
+    tier_label = {T_CONFIRMED: "owner-CONFIRMED", T_SUBMITTED: "self-submitted",
+                  T_LOOKUP: "inferred (single-address lookup)",
+                  T_AMBIGUOUS: "AMBIGUOUS"}[best["tier"]]
+
+    if best["slug"] and best["slug"] in listed:
+        ok = "NO — that address is currently ON THE MARKET (buyer, or already listed elsewhere)"
+    elif best["tier"] == T_AMBIGUOUS:
+        others = len([x for x in cands if x["tier"] == T_AMBIGUOUS])
+        ok = (f"NO — we do not know which of {others} addresses is theirs" if others > 1
+              else "NO — no evidence this address is theirs")
+    elif best["tier"] == T_CONFIRMED:
+        ok = "Yes — they confirmed this is their home"
+    elif best["tier"] == T_SUBMITTED:
+        ok = "Probably — they submitted it, but that isn't proof of ownership"
+    else:
+        ok = "Maybe — inferred only, no confirmation"
+
+    return {"via": f"Postal address ({tier_label}) — {best['basis']}",
+            "detail": best["address"], "mail_ok": ok, "candidates": cands,
+            "tier": best["tier"]}
+
+
+def listed_slugs(gc_db, slugs: set[str]) -> set[str]:
+    """Which of these slugs are currently ON THE MARKET.
+
+    A listed address is disqualifying: either the visitor is a buyer researching that
+    listing, or they own it and it's already with another agent. Posting "we noticed
+    you looking at your home report" is wrong in both cases. (Same principle as the
+    AYH currently-listed guard.)
+    """
+    out = set()
+    for sub in ("robina", "varsity_lakes", "burleigh_waters"):
+        for d in gc_db[sub].find({"url_slug": {"$in": list(slugs)},
+                                  "listing_status": "for_sale"}, {"url_slug": 1}):
+            out.add(d["url_slug"])
+    return out
 
 
 def who_for(c: dict, reach_detail: str) -> str:
@@ -220,26 +316,15 @@ def slug_to_address(slug: str) -> str:
 
 
 def own_slugs_for(c: dict) -> set[str]:
-    """Every address slug we believe belongs to THIS contact.
+    """Slugs we have ACTUAL EVIDENCE belong to this contact — tier 1/2 only.
 
-    Needed so a home report they opened is only ever called "their own" when it
-    actually is theirs — they also browse neighbours' and comparables' reports, and
-    a row telling Will "they re-opened their own home report" when they didn't would
-    send him into a conversation on a false premise.
+    The first version of this pooled `probable_address_slugs` (which is simply every
+    report they ever opened) into "own", so a contact who browsed four mini-sites had
+    all four called "their OWN home report" — while the Reach Via column named a
+    different address. One row contradicted itself. Only confirmed/submitted counts.
     """
-    out = set()
-    for k in ("probable_address_slug",):
-        if c.get(k):
-            out.add(c[k])
-    hc = c.get("home_confirmed") or {}
-    if isinstance(hc, dict) and hc.get("slug"):
-        out.add(hc["slug"])
-    om = c.get("offmarket_home") or {}
-    if isinstance(om, dict):
-        if om.get("slug"):
-            out.add(om["slug"])
-        out.update(om.get("slugs") or [])
-    return {s for s in out if s}
+    return {x["slug"] for x in address_candidates(c)
+            if x["tier"] <= T_SUBMITTED and x["slug"]}
 
 
 def describe_path(path: str, category: str | None, suburb: str | None,
@@ -292,6 +377,23 @@ def describe_path(path: str, category: str | None, suburb: str | None,
     if parts and parts[0] == "discover":
         return "Discover feed", "for_sale"
     return p, ""
+
+
+ADDRESS_ROUTES = {"your-home", "off-market", "building", "property"}
+
+
+def path_address_slug(path: str) -> str | None:
+    """The address slug a page is about, if any — used to catch a visitor looking at
+    several different addresses in one sitting, which invalidates the owner-lookup
+    read no matter what the stored CRM fields say."""
+    parts = [x for x in (path or "").split("/") if x]
+    if not parts:
+        return None
+    if parts[0] in ADDRESS_ROUTES and len(parts) > 1:
+        return parts[2] if (parts[1] == "building" and len(parts) > 2) else parts[1]
+    if parts[0] == "analyse-your-home" and len(parts) > 2 and parts[1] == "building":
+        return parts[2]
+    return None
 
 
 def channel_for(ref_domain: str | None, utm_source: str | None) -> str:
@@ -358,6 +460,7 @@ def summarise_visit(v: dict, own: set[str]) -> dict:
     city = next((e.get("city") for e in v["events"] if e.get("city")), "")
     country = next((e.get("country") for e in v["events"] if e.get("country")), "")
     return {
+        "seen_slugs": {x for x in (path_address_slug(p) for p in order) if x},
         "pages": [dict(pages[p], path=p) for p in order],
         "channel": channel_for(ref, utm),
         "location": ", ".join(x for x in (city, country) if x) or "Unknown",
@@ -365,7 +468,7 @@ def summarise_visit(v: dict, own: set[str]) -> dict:
     }
 
 
-def narrative(c: dict, s: dict, prior_days: int, first_seen: str, reach: tuple[str, str]) -> str:
+def narrative(c: dict, s: dict, prior_days: int, first_seen: str, reach: dict) -> str:
     """The verbose, plain-English line Will actually reads."""
     bits = []
     # Counted in DAYS, not visits — PostHog gives us visit_dates, and two sessions on
@@ -387,9 +490,20 @@ def narrative(c: dict, s: dict, prior_days: int, first_seen: str, reach: tuple[s
     if deep:
         bits.append("Read " + " and ".join(f"“{p['label']}”" for p in deep[:2]) +
                     " properly, not a bounce.")
-    how, detail = reach
-    bits.append(f"Reachable by — {how}: {detail}")
+    bits.append(f"Best contact — {reach['via']}: {reach['detail']}")
+    bits.append(f"Safe to contact? {reach['mail_ok']}")
     return "\n".join(bits)
+
+
+def candidates_cell(cands: list[dict], listed: set[str]) -> str:
+    """Every address on file with its evidence, so ambiguity is visible not hidden."""
+    tier_name = {T_CONFIRMED: "CONFIRMED", T_SUBMITTED: "submitted",
+                 T_LOOKUP: "inferred", T_AMBIGUOUS: "no evidence"}
+    lines = []
+    for x in cands:
+        mark = " [ON THE MARKET]" if x["slug"] and x["slug"] in listed else ""
+        lines.append(f"[{tier_name[x['tier']]}] {x['address']}{mark} — {x['basis']}")
+    return "\n".join(lines) or "—"
 
 
 def opportunity(s: dict, c: dict) -> str:
@@ -401,6 +515,24 @@ def opportunity(s: dict, c: dict) -> str:
 
 
 # ---- gather ------------------------------------------------------------------
+def identity_key(c: dict) -> str:
+    """Collapse duplicate crm_contacts docs describing the same human.
+
+    crm_sync keys contacts on a distinct_id hash, so one person browsing on two
+    devices (or re-identified mid-journey) gets two documents with identical
+    addresses — which would produce two Activity rows for the same visit and, worse,
+    two mail-outs to the same letterbox. Prefer a confirmed/submitted address as the
+    identity; fall back to the contact id.
+    """
+    email = (c.get("email") or "").strip().lower()
+    if email:
+        return f"email:{email}"
+    for x in address_candidates(c):
+        if x["tier"] <= T_SUBMITTED:
+            return f"addr:{(x['slug'] or x['address']).lower()}"
+    return f"id:{c.get('_id')}"
+
+
 def reachable_contacts(db) -> dict[str, dict]:
     """distinct_id -> contact doc, for every contact we can actually reach."""
     out = {}
@@ -462,15 +594,22 @@ def known_before(c: dict, when: datetime) -> str | None:
     return min(cands) if cands else None
 
 
-def build_rows(db, hours: int, include_first: bool) -> list[dict]:
+def build_rows(db, gc_db, hours: int, include_first: bool) -> list[dict]:
     contacts = reachable_contacts(db)
     if not contacts:
         return []
     events = fetch_events(sorted(contacts), hours)
+
+    # One listing lookup for every address we might name, so "is it on the market?"
+    # is answered from the live DB rather than assumed.
+    all_slugs = {x["slug"] for c in contacts.values()
+                 for x in address_candidates(c) if x["slug"]}
+    listed = listed_slugs(gc_db, all_slugs) if all_slugs else set()
+
     rows = []
     for did, evs in events.items():
         c = contacts[did]
-        cid = str(c.get("_id"))
+        cid = identity_key(c)
         own = own_slugs_for(c)
         for v in build_visits(sorted(evs, key=lambda e: e["ts"])):
             first_seen = known_before(c, v["start"])
@@ -483,14 +622,16 @@ def build_rows(db, hours: int, include_first: bool) -> list[dict]:
                                if str(d)[:10] < vday})
             s = summarise_visit(v, own)
             local = v["start"].astimezone(AEST)
-            reach = reach_for(c)
+            reach = reach_for(c, listed, s["seen_slugs"])
             rows.append({
                 "activity_id": f"{cid}:{v['start'].isoformat()}",
                 "date": local.strftime("%Y-%m-%d"),
                 "time": local.strftime("%H:%M"),
-                "who": who_for(c, reach[1]),
-                "reach_via": reach[0],
-                "contact_detail": reach[1],
+                "who": who_for(c, reach["detail"]),
+                "mail_ok": reach["mail_ok"],
+                "contact_detail": reach["detail"],
+                "evidence": reach["via"],
+                "all_addresses": candidates_cell(reach["candidates"], listed),
                 "visit": f"{prior_dates} earlier day(s)" if first_seen else "first visit",
                 "channel": s["channel"],
                 "location": s["location"],
@@ -502,13 +643,18 @@ def build_rows(db, hours: int, include_first: bool) -> list[dict]:
                 "_sort": v["start"],
             })
     rows.sort(key=lambda r: r["_sort"])
-    return rows
+    # Same human, same visit, two contact docs -> one row (see identity_key).
+    dedup = {}
+    for r in rows:
+        dedup[r["activity_id"]] = r
+    return sorted(dedup.values(), key=lambda r: r["_sort"])
 
 
 def row_values(r: dict) -> list[str]:
-    return [r["date"], r["time"], r["who"], r["reach_via"], r["contact_detail"],
-            r["visit"], r["channel"], r["location"], r["engaged"], r["what"],
-            r["already_sent"], r["opportunity"], r["activity_id"]]
+    return [r["date"], r["time"], r["who"], r["mail_ok"], r["contact_detail"],
+            r["evidence"], r["all_addresses"], r["visit"], r["channel"],
+            r["location"], r["engaged"], r["what"], r["already_sent"],
+            r["opportunity"], r["activity_id"]]
 
 
 # ---- sheet -------------------------------------------------------------------
@@ -534,13 +680,18 @@ def ensure_tab(svc, ssid):
             "properties": {"hiddenByUser": True}, "fields": "hiddenByUser"}},
         # "What They Did" is a multi-line narrative — it must wrap, or the row is unreadable.
         {"repeatCell": {
-            "range": {"sheetId": sid, "startColumnIndex": 9, "endColumnIndex": 12},
+            "range": {"sheetId": sid, "startColumnIndex": WRAP_COLS[0],
+                      "endColumnIndex": WRAP_COLS[1]},
             "cell": {"userEnteredFormat": {"wrapStrategy": "WRAP",
                                            "verticalAlignment": "TOP"}},
             "fields": "userEnteredFormat.wrapStrategy,userEnteredFormat.verticalAlignment"}},
-        {"updateDimensionProperties": {
+        {"updateDimensionProperties": {  # "All addresses on file"
             "range": {"sheetId": sid, "dimension": "COLUMNS",
-                      "startIndex": 9, "endIndex": 10},
+                      "startIndex": 6, "endIndex": 7},
+            "properties": {"pixelSize": 420}, "fields": "pixelSize"}},
+        {"updateDimensionProperties": {  # "What They Did"
+            "range": {"sheetId": sid, "dimension": "COLUMNS",
+                      "startIndex": 11, "endIndex": 12},
             "properties": {"pixelSize": 520}, "fields": "pixelSize"}},
     ]}).execute()
     print(f"Created '{TAB}' tab.")
@@ -555,6 +706,9 @@ def main():
     ap.add_argument("--include-first-visit", action="store_true",
                     help="also log visits by contacts we only met during this visit")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--rebuild", action="store_true",
+                    help="drop the tab and the ledger and rewrite from scratch — for "
+                         "column-schema changes; discards any manual edits on the tab")
     args = ap.parse_args()
 
     set_env_from_file()
@@ -563,7 +717,18 @@ def main():
 
     with job_run("engagement_activity_to_sheet", cadence_hours=24,
                  title="Known-Contact Activity → Live Leads Tracker") as beat:
-        rows = build_rows(db, args.hours, args.include_first_visit)
+        rows = build_rows(db, client["Gold_Coast"], args.hours, args.include_first_visit)
+
+        if args.rebuild and not args.dry_run:
+            svc0 = get_sheets()
+            old = tab_id(svc0, args.spreadsheet_id, TAB)
+            if old is not None:
+                svc0.spreadsheets().batchUpdate(
+                    spreadsheetId=args.spreadsheet_id,
+                    body={"requests": [{"deleteSheet": {"sheetId": old}}]}).execute()
+            db[LEDGER_COLL].delete_many({})
+            print(f"[rebuild] dropped '{TAB}' + ledger.")
+
         seen = {d["_id"] for d in db[LEDGER_COLL].find({}, {"_id": 1})}
         new = [r for r in rows if r["activity_id"] not in seen]
 
@@ -571,7 +736,9 @@ def main():
               f"{len(new)} not yet logged.")
         for r in new:
             print(f"\n--- {r['date']} {r['time']}  {r['who']}")
-            print(f"    reach: {r['reach_via']} -> {r['contact_detail']}")
+            print(f"    MAIL? {r['mail_ok']}")
+            print(f"    best: {r['contact_detail']}  ({r['evidence']})")
+            print("    addresses on file:\n      " + r['all_addresses'].replace("\n","\n      "))
             print("    " + r["what"].replace("\n", "\n    "))
             print(f"    opportunity: {r['opportunity']}")
 
