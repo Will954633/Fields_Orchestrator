@@ -213,6 +213,42 @@ def _repair_line(line, quote, wrong_ids, actual):
     return re.sub(r"\b" + re.escape(present[0]) + r"\b", actual, line), True
 
 
+def systematic_remaps(text, misattr, blobs, cover=0.85):
+    """Detect a cited id that is WHOLLY wrong and always means the same other unit.
+
+    The motivating real case: a brief cited `u2909` four times for McGrath Magazine material whose
+    true source is `k02909` — the model dropped the "k0" prefix. Because `u2909` is itself a real
+    unit (a Sell It unit on rapport building), the id-membership check passed it; only quote
+    verification caught it.
+
+    Two things make a whole-document remap the right repair rather than a per-quote one:
+      * a per-quote fix leaves the id wrong everywhere it appears WITHOUT a quote — and those
+        prose citations are invisible to quote verification, so nothing else will ever catch them.
+      * the error is systematic (a transcription slip), not a per-claim confusion.
+
+    Strictly guarded — remap X->Y only when:
+      * NO quote anywhere in the text verifies against X (if X is ever right, it is not a slip), and
+      * every unambiguously-resolved quote citing X resolves to the SAME single unit Y.
+    Returns {X: Y}.
+    """
+    by_cited = {}
+    for r in misattr:
+        for cid in r["cited"]:
+            by_cited.setdefault(cid, []).append(r)
+    out = {}
+    for cid, recs in by_cited.items():
+        # does ANY quote in the document verify against cid? then cid is sometimes correct.
+        ever_right = any(
+            cid in ids and all(coverage(fr, blobs.get(cid, "")) >= cover for fr in fragments(q))
+            for q, ids in parse_pairs(text))
+        if ever_right:
+            continue
+        targets = {r["sources"][0] for r in recs if r.get("n_sources") == 1 and r.get("sources")}
+        if len(targets) == 1:
+            out[cid] = targets.pop()
+    return out
+
+
 def fix_citations(text, misattr, blobs=None, scope_ids=None):
     """Auto-correct MISATTRIBUTED quotes: swap the wrong cited id for the verified true source.
 
@@ -229,7 +265,20 @@ def fix_citations(text, misattr, blobs=None, scope_ids=None):
     """
     if blobs is None:
         blobs = unit_texts()
+    original = text
     before = verify_text(text, blobs=blobs, scope_ids=scope_ids)[1]
+
+    # PASS 1 — whole-document remap of systematically-wrong ids (also corrects the id where it
+    # appears in prose with no quote, which quote verification alone can never reach).
+    remaps = systematic_remaps(text, misattr, blobs)
+    remapped = 0
+    for wrong, right in remaps.items():
+        text, n = re.subn(r"\b" + re.escape(wrong) + r"\b", right, text)
+        remapped += n
+    if remaps:
+        misattr = verify_text(text, blobs=blobs, scope_ids=scope_ids)[2]
+
+    # PASS 2 — per-quote repair of what remains
     lines = text.splitlines(keepends=True)
     fixed, skipped = 0, []
     for r in misattr:
@@ -245,15 +294,16 @@ def fix_citations(text, misattr, blobs=None, scope_ids=None):
                 break
         if not done:
             skipped.append(r)
-    if not fixed:
-        return text, 0, skipped
     candidate = "".join(lines)
+    total_fixed = remapped + fixed
+    if not total_fixed:
+        return original, 0, skipped
+    # Roll back against the ORIGINAL baseline — pass 1 already moved `text`, so comparing against
+    # anything else would let a net-neutral edit report success.
     after = verify_text(candidate, blobs=blobs, scope_ids=scope_ids)[1]
     if after <= before:
-        # the rewrite did not increase the verified count -> discard it rather than report a
-        # success that did not happen.
-        return text, 0, skipped + [r for r in misattr if r not in skipped]
-    return candidate, fixed, skipped
+        return original, 0, skipped + [r for r in misattr if r not in skipped]
+    return candidate, total_fixed, skipped
 
 
 UID_RE = re.compile(r"\b[uki]\d{4,10}\b")
@@ -265,7 +315,38 @@ def id_shapes(by_id):
     return {(i[0], len(i) - 1) for i in by_id}
 
 
-def audit(answer, by_id, shortlist_ids=None, repair=True, log=None, label="verify"):
+ECHO_COVER = 0.85
+
+
+def split_question_echoes(question, *buckets):
+    """Pull out spans the brief quoted from the QUESTION rather than from the corpus.
+
+    A brief restating the user's own words is quoting the question, not claiming a source.
+    Scoring that as a fabrication is a false positive — and since models restate the question
+    routinely, leaving it in would stamp almost every brief NOT publication-ready, which trains
+    the reader to ignore the gate entirely.
+
+    Matched with the same contiguity-aware `coverage` rather than exact containment, because the
+    restatement is usually near-verbatim but not identical — the real case was the brief writing
+    "a LARGE substantial report vs. a SHORT eight-page quarterly review" where the question said
+    "against" instead of "vs.". Requiring ≥8-char blocks means a genuine fabrication cannot reach
+    the threshold just by sharing vocabulary with the question.
+
+    Returns (echoes, *filtered_buckets)."""
+    if not question:
+        return ([],) + buckets
+    q = norm(question)
+    echoes, out = [], []
+    for b in buckets:
+        keep = []
+        for r in b:
+            is_echo = bool(norm(r["quote"])) and coverage(r["quote"], q) >= ECHO_COVER
+            (echoes if is_echo else keep).append(r)
+        out.append(keep)
+    return (echoes,) + tuple(out)
+
+
+def audit(answer, by_id, shortlist_ids=None, repair=True, log=None, label="verify", question=None):
     """SHARED citation audit for every brain's query path.
 
     Three layers:
@@ -315,14 +396,20 @@ def audit(answer, by_id, shortlist_ids=None, repair=True, log=None, label="verif
     if not total:
         return answer, stats
 
+    echoes, misattr, notfound, unver = split_question_echoes(question, misattr, notfound, unver)
+    n_echo = [len(echoes)]  # mutable so `report` sees re-splits after repair
+
     def report(total, ok, misattr, notfound, unver, tag="quote-verify"):
-        # fidelity is over ATTRIBUTABLE quotes — counting un-attributable coined labels in the
-        # denominator would make the number depend on the model's punctuation habits.
-        attributable = total - len(unver)
+        # fidelity is over ATTRIBUTABLE quotes — counting un-attributable coined labels (or the
+        # brief restating the question) in the denominator would make the number depend on the
+        # model's punctuation habits rather than on its citation accuracy.
+        attributable = total - len(unver) - n_echo[0]
         pct = (100 * ok / attributable) if attributable else 100.0
         log(f"[{tag}] {total} quoted spans | {attributable} attributable | {ok} verified | "
             f"{len(misattr)} MISATTRIBUTED | {len(notfound)} NOT_FOUND | "
-            f"{len(unver)} unverifiable | {pct:.1f}% fidelity\n")
+            f"{len(unver)} unverifiable"
+            + (f" | {n_echo[0]} question-echo" if n_echo[0] else "")
+            + f" | {pct:.1f}% fidelity\n")
         return pct
 
     pct = report(total, ok, misattr, notfound, unver)
@@ -341,6 +428,9 @@ def audit(answer, by_id, shortlist_ids=None, repair=True, log=None, label="verif
         stats["repaired"] = n
         if n:
             total, ok, misattr, notfound, unver = verify_text(answer, blobs=blobs, scope_ids=scope)
+            echoes, misattr, notfound, unver = split_question_echoes(
+                question, misattr, notfound, unver)
+            n_echo[0] = len(echoes)
             log(f"[repair] corrected {n} citation(s) — re-verify:\n")
             pct = report(total, ok, misattr, notfound, unver, tag="repair")
         if skipped:
@@ -348,7 +438,7 @@ def audit(answer, by_id, shortlist_ids=None, repair=True, log=None, label="verif
                 f"ambiguous true source)\n")
 
     stats.update(quotes=total, verified=ok, misattributed=len(misattr), not_found=len(notfound),
-                 unverifiable=len(unver), fidelity=round(pct, 1))
+                 unverifiable=len(unver), question_echo=n_echo[0], fidelity=round(pct, 1))
     if misattr or notfound:
         stats["publication_ready"] = False
         log("[quote-verify] ⚠ NOT publication-ready — fix flagged quotes before public use.\n")
