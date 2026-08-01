@@ -1,0 +1,659 @@
+<title>Pixel Reveal — hero photo resolve</title>
+<style>
+  :root {
+    --ground: #0d1611;
+    --panel: #14201a;
+    --panel-2: #1a2921;
+    --line: #2a3d33;
+    --text: #dde7e0;
+    --dim: #8ba396;
+    --copper: #c97a57;
+    --sun: #fec66f;
+    --sky: #a0d1c9;
+    --stage: #0d1611;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, "DejaVu Sans Mono", monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --ground: #e6ddd2; --panel: #f1ebe3; --panel-2: #e9e1d6;
+      --line: #cec2b2; --text: #22382c; --dim: #6d7f72;
+      --copper: #a2573a; --sun: #b8842c; --sky: #3f7f75;
+    }
+  }
+  :root[data-theme="light"] {
+    --ground: #e6ddd2; --panel: #f1ebe3; --panel-2: #e9e1d6;
+    --line: #cec2b2; --text: #22382c; --dim: #6d7f72;
+    --copper: #a2573a; --sun: #b8842c; --sky: #3f7f75;
+  }
+  :root[data-theme="dark"] {
+    --ground: #0d1611; --panel: #14201a; --panel-2: #1a2921;
+    --line: #2a3d33; --text: #dde7e0; --dim: #8ba396;
+    --copper: #c97a57; --sun: #fec66f; --sky: #a0d1c9;
+  }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--text);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 28px 20px 72px;
+    display: flex;
+    flex-direction: column;
+    gap: 26px;
+  }
+
+  /* ---- masthead ---- */
+  .masthead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 18px; }
+  .masthead h1 {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: clamp(19px, 2.6vw, 26px);
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    text-wrap: balance;
+  }
+  .masthead h1 span { color: var(--copper); }
+  .masthead p {
+    margin: 0;
+    color: var(--dim);
+    font-size: 14px;
+    max-width: 46ch;
+    line-height: 1.5;
+  }
+
+  /* ---- stage ---- */
+  .stage {
+    position: relative;
+    background: var(--stage);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    overflow: hidden;
+    line-height: 0;
+  }
+  .stage canvas { display: block; width: 100%; height: auto; }
+  .rail { height: 2px; background: var(--line); position: relative; overflow: hidden; }
+  .rail i { position: absolute; inset: 0 100% 0 0; background: var(--copper); }
+
+  .readout {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 26px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--dim);
+    font-variant-numeric: tabular-nums;
+  }
+  .readout b { color: var(--text); font-weight: 600; }
+  .readout .live { color: var(--sun); }
+
+  /* ---- controls ---- */
+  .bench {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  .bench-head {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+    justify-content: space-between;
+  }
+  .lab {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em;
+    text-transform: uppercase; color: var(--dim);
+  }
+  .btns { display: flex; flex-wrap: wrap; gap: 8px; }
+  button, .chip {
+    font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--text);
+    background: var(--panel-2); border: 1px solid var(--line);
+    padding: 8px 13px; border-radius: 2px; cursor: pointer;
+    transition: border-color .15s, color .15s, background .15s;
+  }
+  button:hover, .chip:hover { border-color: var(--copper); }
+  button:focus-visible, .chip:focus-visible,
+  input[type="range"]:focus-visible { outline: 2px solid var(--sun); outline-offset: 2px; }
+  button[data-on="1"], .chip[aria-pressed="true"] {
+    color: var(--ground); background: var(--copper); border-color: var(--copper);
+  }
+  button.primary { background: var(--copper); border-color: var(--copper); color: #0d1611; font-weight: 600; }
+  :root[data-theme="light"] button.primary, :root[data-theme="light"] button[data-on="1"] { color: #f1ebe3; }
+  @media (prefers-color-scheme: light) {
+    button.primary, button[data-on="1"], .chip[aria-pressed="true"] { color: #f1ebe3; }
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 18px 24px;
+  }
+  .ctl { display: flex; flex-direction: column; gap: 7px; }
+  .ctl-top {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+  }
+  .ctl-top span:first-child { color: var(--dim); }
+  .ctl-top output { color: var(--sky); font-variant-numeric: tabular-nums; }
+  .ctl small { color: var(--dim); font-family: var(--sans); font-size: 11.5px; letter-spacing: 0; text-transform: none; line-height: 1.4; }
+
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 20px; background: transparent; cursor: pointer; margin: 0;
+  }
+  input[type="range"]::-webkit-slider-runnable-track { height: 2px; background: var(--line); }
+  input[type="range"]::-moz-range-track { height: 2px; background: var(--line); }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 13px; height: 13px; margin-top: -5.5px;
+    background: var(--copper); border-radius: 50%; border: 0;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 13px; height: 13px; background: var(--copper); border-radius: 50%; border: 0;
+  }
+
+  .origins { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+  .origins .chip { text-align: center; padding: 8px 0; font-size: 13px; letter-spacing: 0; }
+
+  .shots { display: flex; gap: 8px; flex-wrap: wrap; }
+  .shots button {
+    padding: 0; overflow: hidden; line-height: 0; width: 62px; height: 44px;
+    border-width: 2px;
+  }
+  .shots img { width: 100%; height: 100%; object-fit: cover; opacity: .6; transition: opacity .15s; }
+  .shots button[aria-pressed="true"] { border-color: var(--copper); }
+  .shots button[aria-pressed="true"] img { opacity: 1; }
+
+  /* ---- notes + code ---- */
+  .notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 22px; }
+  .note h3 {
+    margin: 0 0 6px; font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--copper); font-weight: 600;
+  }
+  .note p { margin: 0; font-size: 13.5px; line-height: 1.6; color: var(--dim); }
+  .note p b { color: var(--text); font-weight: 600; }
+
+  pre {
+    margin: 0; padding: 18px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 2px; overflow-x: auto;
+    font-family: var(--mono); font-size: 12px; line-height: 1.65; color: var(--text);
+  }
+  pre .c { color: var(--dim); }
+  pre .k { color: var(--sky); }
+
+  footer { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition-duration: 0.01ms !important; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <h1>Pixel <span>Reveal</span></h1>
+    <p>A hero photo resolving out of the dark — coarse blocks first, sharpening as the front sweeps from the bottom-left corner toward the top-right.</p>
+  </header>
+
+  <div>
+    <div class="stage">
+      <canvas id="cv" aria-label="House photo revealing in pixel blocks"></canvas>
+    </div>
+    <div class="rail"><i id="railFill"></i></div>
+  </div>
+
+  <div class="readout">
+    <span>Front <b id="rProg">0%</b></span>
+    <span>Resolved <b id="rTiles">0 / 0</b></span>
+    <span>Block <b id="rBlock">—</b></span>
+    <span>Grid <b id="rGrid">—</b></span>
+    <span id="rState" class="live">idle</span>
+  </div>
+
+  <section class="bench">
+    <div class="bench-head">
+      <span class="lab">Controls</span>
+      <div class="btns">
+        <button id="replay" class="primary" type="button">Replay</button>
+        <button id="loop" type="button" data-on="0">Loop</button>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="ctl">
+        <div class="ctl-top"><span>Origin</span><output id="oOrigin">bottom-left</output></div>
+        <div class="origins" id="origins" role="group" aria-label="Reveal origin">
+          <button class="chip" type="button" data-o="bl" aria-pressed="true" title="Bottom left">&#8601;</button>
+          <button class="chip" type="button" data-o="br" aria-pressed="false" title="Bottom right">&#8600;</button>
+          <button class="chip" type="button" data-o="tl" aria-pressed="false" title="Top left">&#8598;</button>
+          <button class="chip" type="button" data-o="tr" aria-pressed="false" title="Top right">&#8599;</button>
+          <button class="chip" type="button" data-o="c" aria-pressed="false" title="Centre">&#9678;</button>
+        </div>
+        <small>Where the reveal begins. Bottom-left is the default.</small>
+      </div>
+
+      <div class="ctl">
+        <div class="ctl-top"><label for="sTile">Block size</label><output id="oTile">28px</output></div>
+        <input id="sTile" type="range" min="14" max="72" step="2" value="28">
+        <small>Size of one reveal cell. Smaller = finer front, more work per frame.</small>
+      </div>
+
+      <div class="ctl">
+        <div class="ctl-top"><label for="sDur">Duration</label><output id="oDur">2.6s</output></div>
+        <input id="sDur" type="range" min="800" max="6000" step="100" value="2600">
+        <small>Total sweep time from first block to last.</small>
+      </div>
+
+      <div class="ctl">
+        <div class="ctl-top"><label for="sShape">Front shape</label><output id="oShape">55% radial</output></div>
+        <input id="sShape" type="range" min="0" max="100" step="1" value="55">
+        <small>0 = a straight diagonal wall. 100 = a circular bloom out of the corner.</small>
+      </div>
+
+      <div class="ctl">
+        <div class="ctl-top"><label for="sScatter">Scatter</label><output id="oScatter">22%</output></div>
+        <input id="sScatter" type="range" min="0" max="100" step="1" value="22">
+        <small>Randomises each block's turn so the edge breaks up instead of marching.</small>
+      </div>
+
+      <div class="ctl">
+        <div class="ctl-top"><label for="sTrail">Trail</label><output id="oTrail">26%</output></div>
+        <input id="sTrail" type="range" min="4" max="60" step="1" value="26">
+        <small>How long one block takes to sharpen — the depth of the blurred edge.</small>
+      </div>
+
+      <div class="ctl">
+        <div class="ctl-top"><label for="sCoarse">Coarseness</label><output id="oCoarse">32&times;</output></div>
+        <input id="sCoarse" type="range" min="2" max="6" step="1" value="5">
+        <small>How chunky a block starts before it resolves to full detail.</small>
+      </div>
+
+      <div class="ctl">
+        <div class="ctl-top"><span>Photo</span><output id="oShot">Huntingdale</output></div>
+        <div class="shots" id="shots" role="group" aria-label="Choose photo"></div>
+        <small>Real listing photos — the effect adapts to any aspect ratio.</small>
+      </div>
+    </div>
+  </section>
+
+  <section class="notes">
+    <div class="note">
+      <h3>The delay field</h3>
+      <p>Every cell gets a start time from its distance to the origin — blended between a <b>diagonal projection</b> (straight wall) and <b>true radial distance</b> (bloom), then jittered by Scatter.</p>
+    </div>
+    <div class="note">
+      <h3>Resolving, not fading</h3>
+      <p>The image is pre-rendered at a stack of pixelation levels. A cell walks down that stack as its own clock runs, so it <b>sharpens</b> from coarse blocks to full detail rather than just fading in.</p>
+    </div>
+    <div class="note">
+      <h3>Cheap per frame</h3>
+      <p>Finished cells are blitted once into a settled layer. Each frame draws that layer plus only the cells <b>currently in flight</b> — so block size barely affects frame cost.</p>
+    </div>
+  </section>
+
+  <pre><span class="c">// per-cell start time — this is the whole effect</span>
+<span class="k">const</span> dx = cx - originX, dy = cy - originY;              <span class="c">// pixels from origin</span>
+<span class="k">const</span> diag   = (dx * dirX + dy * dirY) / diagSpan;      <span class="c">// straight front</span>
+<span class="k">const</span> radial = Math.hypot(dx, dy) / radialSpan;        <span class="c">// circular bloom</span>
+<span class="k">let</span>   d      = diag + (radial - diag) * shape;          <span class="c">// blend the two</span>
+      d     += (rand() - 0.5) * scatter;                <span class="c">// break the edge</span>
+cell.start = clamp01(d) * (1 - trail);
+
+<span class="c">// per frame, for cells with 0 &lt; p &lt; 1</span>
+<span class="k">const</span> e   = easeOutCubic(p);
+<span class="k">const</span> mip = MIPS[Math.min(LEVELS - 1, (1 - e) * LEVELS | 0)];
+ctx.imageSmoothingEnabled = <span class="k">false</span>;
+ctx.drawImage(mip.cv, x / mip.b, y / mip.b, w / mip.b, h / mip.b, x, y, w, h);   <span class="c">// 64px blocks -&gt; 1px</span></pre>
+
+  <footer>Fields Real Estate &middot; concept build &middot; photos from listing library</footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var SHOTS = [
+    { label: "Huntingdale", src: "__IMG_A__" },
+    { label: "Windemere",   src: "__IMG_C__" },
+    { label: "Alex St",     src: "__IMG_B__" }
+  ];
+
+  var STAGE_DARK = "#0d1611";
+  var FRONT_TINT = [201, 122, 87];   // copper
+  var MAX_RENDER_W = 1500;
+
+  var cv = document.getElementById("cv");
+  var ctx = cv.getContext("2d", { alpha: false });
+
+  var img = null, shotIdx = 0;
+  var rw = 0, rh = 0;              // render-space size
+  var MIPS = [];                   // pixelation stack
+  var settled = null, sctx = null; // finished cells
+  var tiles = [];                  // sorted by start
+  var settledIdx = 0, activeEnd = 0;
+
+  var opts = {
+    origin: "bl", tile: 28, dur: 2600,
+    shape: 0.55, scatter: 0.22, trail: 0.26, levels: 5
+  };
+  var ORIGIN_LABEL = {
+    bl: "bottom-left", br: "bottom-right",
+    tl: "top-left", tr: "top-right", c: "centre"
+  };
+
+  var running = false, looping = false, startedAt = 0, raf = 0;
+  var reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---------- deterministic jitter, so replays are comparable ---------- */
+  function makeRand(seed) {
+    var s = seed >>> 0;
+    return function () {
+      s ^= s << 13; s >>>= 0;
+      s ^= s >> 17;
+      s ^= s << 5;  s >>>= 0;
+      return s / 4294967296;
+    };
+  }
+
+  function easeOutCubic(t) { var u = 1 - t; return 1 - u * u * u; }
+  function clamp01(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
+
+  /* ---------- build the pixelation stack ---------- */
+  function buildMips() {
+    MIPS = [];
+    var count = opts.levels + 2;              // levels 1,2,4,8,...
+    for (var i = 0; i < count; i++) {
+      var b = 1 << i;
+      var w = Math.max(1, Math.ceil(rw / b));
+      var h = Math.max(1, Math.ceil(rh / b));
+      var c = document.createElement("canvas");
+      c.width = w; c.height = h;
+      var g = c.getContext("2d");
+      g.imageSmoothingEnabled = true;
+      g.imageSmoothingQuality = "high";
+      g.drawImage(img, 0, 0, w, h);
+      MIPS.push({ cv: c, b: b });
+    }
+  }
+
+  /* ---------- build the grid + delay field ---------- */
+  function buildTiles() {
+    var t = opts.tile;
+    var cols = Math.ceil(rw / t), rows = Math.ceil(rh / t);
+    var ox = (opts.origin === "br" || opts.origin === "tr") ? rw : (opts.origin === "c" ? rw / 2 : 0);
+    var oy = (opts.origin === "bl" || opts.origin === "br") ? rh : (opts.origin === "c" ? rh / 2 : 0);
+
+    // diagonal direction = origin -> centre, normalised (degenerate at centre)
+    var vx = rw / 2 - ox, vy = rh / 2 - oy;
+    var vlen = Math.hypot(vx, vy);
+    var hasDiag = vlen > 1;
+    var dirX = hasDiag ? vx / vlen : 0, dirY = hasDiag ? vy / vlen : 0;
+    var shape = hasDiag ? opts.shape : 1;
+
+    var rand = makeRand(0x9e3779b9 ^ (cols * 73856093) ^ (rows * 19349663));
+    var list = [], i, j;
+
+    for (j = 0; j < rows; j++) {
+      for (i = 0; i < cols; i++) {
+        var x = i * t, y = j * t;
+        var w = Math.min(t, rw - x), h = Math.min(t, rh - y);
+        var cx = x + w / 2, cy = y + h / 2;
+        var dx = cx - ox, dy = cy - oy;
+        var diag = hasDiag ? (dx * dirX + dy * dirY) : 0;
+        var radial = Math.hypot(dx, dy);
+        list.push({
+          x: x, y: y, w: w, h: h,
+          diag: diag, radial: radial,
+          jitter: rand() - 0.5,
+          start: 0
+        });
+      }
+    }
+
+    // normalise each metric across the grid, then blend
+    var dMin = Infinity, dMax = -Infinity, rMax = 0;
+    for (i = 0; i < list.length; i++) {
+      if (list[i].diag < dMin) dMin = list[i].diag;
+      if (list[i].diag > dMax) dMax = list[i].diag;
+      if (list[i].radial > rMax) rMax = list[i].radial;
+    }
+    var dSpan = (dMax - dMin) || 1;
+    rMax = rMax || 1;
+
+    for (i = 0; i < list.length; i++) {
+      var c = list[i];
+      var nd = (c.diag - dMin) / dSpan;
+      var nr = c.radial / rMax;
+      var d = nd + (nr - nd) * shape;
+      d = clamp01(d + c.jitter * opts.scatter);
+      c.start = d * (1 - opts.trail);
+    }
+
+    list.sort(function (a, b) { return a.start - b.start; });
+    tiles = list;
+  }
+
+  /* ---------- layout ---------- */
+  function layout() {
+    if (!img) return;
+    var cssW = cv.parentNode.clientWidth || 900;
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var w = Math.min(Math.round(cssW * dpr), MAX_RENDER_W, img.naturalWidth * 2);
+    var h = Math.round(w * img.naturalHeight / img.naturalWidth);
+    if (w === rw && h === rh) return false;
+    rw = w; rh = h;
+    cv.width = rw; cv.height = rh;
+    cv.style.aspectRatio = img.naturalWidth + " / " + img.naturalHeight;
+    settled = document.createElement("canvas");
+    settled.width = rw; settled.height = rh;
+    sctx = settled.getContext("2d");
+    buildMips();
+    return true;
+  }
+
+  /* ---------- reset + run ---------- */
+  function reset() {
+    if (!img) return;
+    buildTiles();
+    settledIdx = 0; activeEnd = 0;
+    sctx.clearRect(0, 0, rw, rh);
+    ctx.fillStyle = STAGE_DARK;
+    ctx.fillRect(0, 0, rw, rh);
+    paintReadout(0);
+  }
+
+  function play() {
+    if (!img) return;
+    reset();
+    running = true;
+    startedAt = performance.now();
+    cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(frame);
+  }
+
+  function finish() {
+    ctx.fillStyle = STAGE_DARK;
+    ctx.fillRect(0, 0, rw, rh);
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(img, 0, 0, rw, rh);
+    sctx.clearRect(0, 0, rw, rh);
+    sctx.imageSmoothingEnabled = true;
+    sctx.drawImage(img, 0, 0, rw, rh);
+    settledIdx = tiles.length;
+    running = false;
+    paintReadout(1);
+  }
+
+  function frame(now) {
+    var T = (now - startedAt) / opts.dur;
+    if (T >= 1) { finish(); if (looping) { setTimeout(play, 700); } return; }
+
+    var trail = opts.trail;
+    var levels = MIPS.length;
+
+    // retire everything that finished
+    while (settledIdx < tiles.length && tiles[settledIdx].start + trail <= T) {
+      var s = tiles[settledIdx];
+      sctx.imageSmoothingEnabled = true;
+      sctx.drawImage(MIPS[0].cv, s.x, s.y, s.w, s.h, s.x, s.y, s.w, s.h);
+      settledIdx++;
+    }
+    while (activeEnd < tiles.length && tiles[activeEnd].start <= T) activeEnd++;
+
+    ctx.fillStyle = STAGE_DARK;
+    ctx.fillRect(0, 0, rw, rh);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(settled, 0, 0);
+
+    var coarsest = 1;
+    for (var i = settledIdx; i < activeEnd; i++) {
+      var c = tiles[i];
+      var p = clamp01((T - c.start) / trail);
+      var e = easeOutCubic(p);
+      var lv = Math.floor((1 - e) * levels);
+      if (lv > levels - 1) lv = levels - 1;
+      if (lv < 0) lv = 0;
+      var m = MIPS[lv];
+      if (m.b > coarsest) coarsest = m.b;
+
+      ctx.globalAlpha = p < 0.34 ? p / 0.34 : 1;
+      ctx.drawImage(m.cv, c.x / m.b, c.y / m.b, c.w / m.b, c.h / m.b, c.x, c.y, c.w, c.h);
+
+      // sink the young cells back toward the dark ground
+      if (e < 1) {
+        ctx.globalAlpha = (1 - e) * 0.62;
+        ctx.fillStyle = STAGE_DARK;
+        ctx.fillRect(c.x, c.y, c.w, c.h);
+      }
+      // warm glint right at the front edge
+      if (p < 0.3) {
+        ctx.globalAlpha = (0.3 - p) * 0.9;
+        ctx.fillStyle = "rgb(" + FRONT_TINT[0] + "," + FRONT_TINT[1] + "," + FRONT_TINT[2] + ")";
+        ctx.fillRect(c.x, c.y, c.w, c.h);
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    paintReadout(T, coarsest);
+    raf = requestAnimationFrame(frame);
+  }
+
+  /* ---------- readout ---------- */
+  var elProg = document.getElementById("rProg"),
+      elTiles = document.getElementById("rTiles"),
+      elBlock = document.getElementById("rBlock"),
+      elGrid = document.getElementById("rGrid"),
+      elState = document.getElementById("rState"),
+      elRail = document.getElementById("railFill");
+
+  function paintReadout(T, coarsest) {
+    var pct = Math.round(clamp01(T) * 100);
+    elProg.textContent = pct + "%";
+    elTiles.textContent = settledIdx.toLocaleString() + " / " + tiles.length.toLocaleString();
+    elBlock.textContent = coarsest ? coarsest + "px" : (running ? "—" : "1px");
+    elGrid.textContent = Math.ceil(rw / opts.tile) + " × " + Math.ceil(rh / opts.tile);
+    elState.textContent = running ? "resolving" : (T >= 1 ? "resolved" : "idle");
+    elState.style.color = running ? "var(--sun)" : "var(--dim)";
+    elRail.style.right = (100 - pct) + "%";
+  }
+
+  /* ---------- controls ---------- */
+  function bindRange(id, outId, key, fmt, scale) {
+    var el = document.getElementById(id), out = document.getElementById(outId);
+    function sync(rerun) {
+      var v = parseFloat(el.value);
+      opts[key] = scale ? scale(v) : v;
+      out.textContent = fmt(v);
+      if (rerun) play();
+    }
+    el.addEventListener("input", function () { sync(false); });
+    el.addEventListener("change", function () { sync(true); });
+    sync(false);
+  }
+
+  bindRange("sTile", "oTile", "tile", function (v) { return v + "px"; });
+  bindRange("sDur", "oDur", "dur", function (v) { return (v / 1000).toFixed(1) + "s"; });
+  bindRange("sShape", "oShape", "shape", function (v) { return v + "% radial"; }, function (v) { return v / 100; });
+  bindRange("sScatter", "oScatter", "scatter", function (v) { return v + "%"; }, function (v) { return v / 100; });
+  bindRange("sTrail", "oTrail", "trail", function (v) { return v + "%"; }, function (v) { return v / 100; });
+  bindRange("sCoarse", "oCoarse", "levels", function (v) { return (1 << (v + 1)) + "×"; });
+
+  document.getElementById("sCoarse").addEventListener("change", function () { buildMips(); play(); });
+
+  document.getElementById("origins").addEventListener("click", function (ev) {
+    var b = ev.target.closest("button[data-o]");
+    if (!b) return;
+    opts.origin = b.dataset.o;
+    Array.prototype.forEach.call(this.querySelectorAll("button"), function (x) {
+      x.setAttribute("aria-pressed", String(x === b));
+    });
+    document.getElementById("oOrigin").textContent = ORIGIN_LABEL[opts.origin];
+    play();
+  });
+
+  document.getElementById("replay").addEventListener("click", play);
+
+  var loopBtn = document.getElementById("loop");
+  loopBtn.addEventListener("click", function () {
+    looping = !looping;
+    loopBtn.dataset.on = looping ? "1" : "0";
+    loopBtn.setAttribute("aria-pressed", String(looping));
+    if (looping && !running) play();
+  });
+
+  /* ---------- photo picker ---------- */
+  var shotsEl = document.getElementById("shots");
+  SHOTS.forEach(function (s, i) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.setAttribute("aria-pressed", String(i === 0));
+    b.setAttribute("aria-label", s.label);
+    b.title = s.label;
+    var im = document.createElement("img");
+    im.src = s.src; im.alt = "";
+    b.appendChild(im);
+    b.addEventListener("click", function () {
+      if (i === shotIdx) return;
+      shotIdx = i;
+      Array.prototype.forEach.call(shotsEl.querySelectorAll("button"), function (x, k) {
+        x.setAttribute("aria-pressed", String(k === i));
+      });
+      document.getElementById("oShot").textContent = s.label;
+      load(s.src);
+    });
+    shotsEl.appendChild(b);
+  });
+
+  /* ---------- load ---------- */
+  function load(src) {
+    var n = new Image();
+    n.onload = function () {
+      img = n;
+      rw = 0; rh = 0;
+      layout();
+      if (reduced) { buildTiles(); finish(); }
+      else play();
+    };
+    n.src = src;
+  }
+
+  var resizeTimer = 0;
+  window.addEventListener("resize", function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () {
+      if (layout()) { if (reduced) { buildTiles(); finish(); } else play(); }
+    }, 180);
+  });
+
+  load(SHOTS[0].src);
+})();
+</script>
