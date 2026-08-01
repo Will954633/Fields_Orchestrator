@@ -295,8 +295,13 @@ def collect_leads(sm, gc_db) -> dict:
             {"posthog_distinct_id": did, "arm": d.get("arm"),
              "payment_status": d.get("payment_status"), "confidence": d.get("confidence")})
 
-    try:
-        view_rows = posthog_query("""
+    # No try/except here on purpose. This query IS the off-market channel — if it
+    # comes back empty because PostHog was busy, the worklist silently loses every
+    # off-market lead for the day and nothing looks wrong. posthog_query now retries
+    # transient failures and raises; a raise fails the run loudly (job_run -> ERROR
+    # on the health board) and yesterday's worklist stays intact until it succeeds.
+    # The 180-day window + upsert-by-lead_key mean nothing is permanently lost.
+    view_rows = posthog_query("""
 SELECT distinct_id,
        min(timestamp) as first_seen,
        count() as views,
@@ -307,9 +312,6 @@ FROM events
 WHERE event = 'offmarket_report_view' AND timestamp > now() - INTERVAL 180 DAY
 GROUP BY distinct_id
 """)
-    except Exception as e:  # noqa: BLE001 — PostHog outage shouldn't break the whole run
-        print(f"WARNING: offmarket_report_view PostHog query failed, skipping: {e}")
-        view_rows = []
 
     for did, first_seen, views, paths, country, city in view_rows:
         if did in purchased_distinct_ids or did in INTERNAL_IDS:
