@@ -180,10 +180,23 @@ def verdict(st: dict) -> tuple[bool, str]:
                        + (f", {dom} days on market" if dom is not None else "") + "). "
                        "The visitor is most likely a buyer, not the owner.")
 
+    lease = st.get("for_lease")
+    if lease:
+        rent = lease.get("address") or ""
+        agency = lease.get("agency")
+        return False, (f"NO — currently FOR LEASE"
+                       + (f" via {agency}" if agency else "")
+                       + (f" (listed {lease['listed_date']})" if lease.get("listed_date") else "")
+                       + ". The owner wants to rent it out, not sell — and the visitor "
+                         "is most likely a prospective tenant."
+                       + (f" [{rent}]" if rent else ""))
+    if st.get("lease_checked") is False:
+        return True, ("Not for sale, but LEASE STATUS UNCHECKED — confirm before posting")
+
     basis = ("no current listing in PropRadar or our own data"
              if st.get("found") else
              "not in PropRadar's listing/sold index and not listed in our own data")
-    return True, f"Not for sale ({basis}). ⚠ {LEASE_UNKNOWN}"
+    return True, f"Yes — not for sale ({basis}) and no current rental listing"
 
 
 if __name__ == "__main__":
