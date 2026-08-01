@@ -80,7 +80,14 @@ FB_LOCATION_NOTE = "AU (inferred — geo-targeted FB campaign, no on-site sessio
 
 HEADERS = ["Date", "Source", "Name", "Email", "Phone", "City", "Country",
            "Suburb / Address", "Details", "Campaign / Channel", "Status",
-           "Selling Plan", "Lead ID", "Situation"]
+           "Selling Plan", "Lead ID", "Situation", "PostHog"]
+
+# PostHog's person page accepts a distinct_id directly in the path (that's what its own
+# UI links to) and opens on the person's event feed — so this is a one-click jump from a
+# row to "everything this person actually did". Facebook Lead Ads have no on-site session
+# and so no distinct_id; those cells stay blank rather than linking somewhere useless.
+POSTHOG_PROJECT_ID = "348370"
+POSTHOG_PERSON_URL = "https://us.posthog.com/project/" + POSTHOG_PROJECT_ID + "/person/{did}"
 # Selling Plan (col L, 0-indexed 11) and Lead ID (col M, 0-indexed 12) are the
 # only two auto-refreshed-in-place columns (see LIVE-LEADS-SHEET-AUTOUPDATE
 # fix-history, 2026-07-21) -- everything else is written once, at first add,
@@ -90,6 +97,7 @@ HEADERS = ["Date", "Source", "Name", "Email", "Phone", "City", "Country",
 SELLING_PLAN_COL = 11  # 0-indexed -> column L
 LEAD_ID_COL = 12       # 0-indexed -> column M (hidden)
 SITUATION_COL = 13     # 0-indexed -> column N (new; auto-refreshed in place like Selling Plan)
+POSTHOG_COL = 14       # 0-indexed -> column O (auto-refreshed in place; HYPERLINK formula)
 AEST = timezone(timedelta(hours=10))
 
 LEDGER_DB = "system_monitor"
@@ -608,10 +616,58 @@ def situation_for(lead, idx, sm, gc_db, suburb_index) -> str:
 
 
 def row_values(lead, city, country):
+    # Column O (PostHog) is left blank here on purpose: this batch is written with
+    # valueInputOption=RAW, which would store a =HYPERLINK() formula as literal text.
+    # RAW is the right choice for the rest of the row -- USER_ENTERED would reinterpret
+    # unit addresses like "1/35 Thornleigh Crescent" as dates. refresh_posthog_links()
+    # fills O separately with USER_ENTERED, confining formula parsing to the one column
+    # that only ever holds our formula.
     return [lead["date"], lead["source"], lead["name"], lead["email"], lead["phone"],
             city, country, lead["suburb_address"], lead["details"], lead["campaign"],
             lead["status"], lead.get("selling_plan", ""), lead["lead_id"],
-            lead.get("situation", "")]
+            lead.get("situation", ""), ""]
+
+
+def refresh_posthog_links(svc, ssid, all_leads, dry_run=False):
+    """Fill column O with a clickable link to each lead's PostHog person page.
+
+    Runs over EVERY lead (not just new ones) so it backfills existing rows and picks up
+    a distinct_id that was attached after the row was first written. Matched by the
+    hidden Lead ID in column M -- the same safe mechanism as refresh_situations -- and
+    only ever writes column O. The visible text is the full distinct_id, so it can be
+    copied straight out of the sheet, not just clicked."""
+    current = svc.spreadsheets().values().get(
+        spreadsheetId=ssid, range=f"'{TAB}'!M2:O10000").execute().get("values", [])
+    row_by_lead_id = {}
+    for i, row in enumerate(current):
+        lid = row[0] if len(row) > 0 else ""
+        existing = row[2] if len(row) > 2 else ""
+        if lid:
+            row_by_lead_id[lid] = (i + 2, existing)
+
+    updates = []
+    for lead in all_leads:
+        did = lead.get("posthog_distinct_id")
+        if not did:
+            continue  # e.g. Facebook Lead Ads -- no on-site session, nothing to link to
+        hit = row_by_lead_id.get(lead["lead_id"])
+        if hit is None:
+            continue
+        row_num, existing = hit
+        if existing:
+            continue  # already linked; the person page URL never changes
+        url = POSTHOG_PERSON_URL.format(did=did)
+        updates.append({"range": f"'{TAB}'!O{row_num}",
+                        "values": [[f'=HYPERLINK("{url}","{did}")']]})
+
+    if not updates:
+        return 0
+    print(f"PostHog person links: filling {len(updates)} row(s).")
+    if dry_run:
+        return len(updates)
+    svc.spreadsheets().values().batchUpdate(spreadsheetId=ssid, body={
+        "valueInputOption": "USER_ENTERED", "data": updates}).execute()
+    return len(updates)
 
 
 def hide_lead_id_column(svc, ssid, sheet_id):
@@ -676,18 +732,109 @@ def refresh_selling_plans(svc, ssid, all_leads, already_ledgered: set[str], dry_
     return len(updates)
 
 
-def ensure_situation_header(svc, ssid, dry_run=False):
-    """Idempotently make sure N1 == 'Situation' (column is absent on pre-2026-07-28 sheets)."""
-    cur = svc.spreadsheets().values().get(
-        spreadsheetId=ssid, range=f"'{TAB}'!N1").execute().get("values", [])
-    if cur and cur[0] and cur[0][0] == "Situation":
-        return
+# Soft orange — "they've gone to market with someone else; park this one."
+LISTED_ORANGE = {"red": 0.98, "green": 0.80, "blue": 0.60}
+_WHITE = {"red": 1.0, "green": 1.0, "blue": 1.0}
+
+
+def _is_our_orange(bg) -> bool:
+    """True only for a fill this script painted. Any OTHER colour is assumed to be
+    Will's own manual highlight and is left strictly alone."""
+    if not bg:
+        return False
+    return all(abs((bg.get(k) if bg.get(k) is not None else 1.0) - LISTED_ORANGE[k]) < 0.02
+               for k in ("red", "green", "blue"))
+
+
+def _is_blank(bg) -> bool:
+    if not bg:
+        return True
+    return all((bg.get(k) if bg.get(k) is not None else 1.0) > 0.98 for k in ("red", "green", "blue"))
+
+
+def just_listed_now(doc) -> bool:
+    """Has this lead put their home on the market with another agent?
+
+    Deliberately NOT keyed on seller_intent's `just_listed`, which is a one-run
+    TRANSITION flag (not-listed last run -> listed this run). Painting on that alone
+    would make the row flash orange for a single night and clear itself, which is
+    useless to anyone reading the sheet the next morning.
+
+    Keyed instead on the `on_market_fresh` STATE, which persists for as long as the
+    fact does: "listed <69 days ago, comfortably inside the competitor's ~90-day
+    exclusive agency term — NOT a lead yet, don't approach now." The highlight then
+    clears itself the moment the listing ages into on_market_stale / on_market_expiring
+    — which is exactly when they become a prime lead again. So orange appearing means
+    "stop calling", and orange disappearing means "start calling".
+    """
+    si = (doc or {}).get("seller_intent") or {}
+    return bool(si.get("label") == "on_market_fresh" or si.get("just_listed"))
+
+
+def refresh_listed_highlight(svc, ssid, sheet_id, all_leads, idx, dry_run=False):
+    """Paint whole rows orange for leads that have just listed with another agent,
+    and un-paint them once that stops being true. Only ever touches the row's
+    background colour — never a cell value — so manual notes/status edits are safe."""
+    grid = svc.spreadsheets().get(
+        spreadsheetId=ssid, ranges=[f"'{TAB}'!A2:A10000"], includeGridData=True,
+        fields="sheets/data/rowData/values/userEnteredFormat/backgroundColor").execute()
+    rows = (grid.get("sheets") or [{}])[0].get("data", [{}])[0].get("rowData", [])
+    current_bg = []
+    for r in rows:
+        vals = r.get("values") or [{}]
+        current_bg.append((vals[0].get("userEnteredFormat") or {}).get("backgroundColor"))
+
+    lead_ids = svc.spreadsheets().values().get(
+        spreadsheetId=ssid, range=f"'{TAB}'!M2:M10000").execute().get("values", [])
+
+    want_orange = {l["lead_id"] for l in all_leads if just_listed_now(_worklist_doc_for(l, idx))}
+
+    paint, clear = [], []
+    for i, row in enumerate(lead_ids):
+        lid = row[0] if row else ""
+        if not lid:
+            continue
+        bg = current_bg[i] if i < len(current_bg) else None
+        if lid in want_orange:
+            if _is_blank(bg):          # never overwrite a colour Will chose himself
+                paint.append(i + 2)
+        elif _is_our_orange(bg):       # no longer freshly listed -> hand the row back
+            clear.append(i + 2)
+
+    if not paint and not clear:
+        return 0
+    print(f"Listed-with-another-agent highlight: {len(paint)} row(s) to orange, "
+          f"{len(clear)} back to blank.")
     if dry_run:
-        print("(would set N1 = 'Situation')")
-        return
-    svc.spreadsheets().values().update(
-        spreadsheetId=ssid, range=f"'{TAB}'!N1",
-        valueInputOption="RAW", body={"values": [["Situation"]]}).execute()
+        return len(paint) + len(clear)
+
+    requests = []
+    for rows_, colour in ((paint, LISTED_ORANGE), (clear, _WHITE)):
+        for rn in rows_:
+            requests.append({"repeatCell": {
+                "range": {"sheetId": sheet_id, "startRowIndex": rn - 1, "endRowIndex": rn,
+                          "startColumnIndex": 0, "endColumnIndex": len(HEADERS)},
+                "cell": {"userEnteredFormat": {"backgroundColor": colour}},
+                "fields": "userEnteredFormat.backgroundColor",
+            }})
+    svc.spreadsheets().batchUpdate(spreadsheetId=ssid, body={"requests": requests}).execute()
+    return len(paint) + len(clear)
+
+
+def ensure_headers(svc, ssid, dry_run=False):
+    """Idempotently make sure the late-added headers exist: N1 'Situation' (absent on
+    pre-2026-07-28 sheets) and O1 'PostHog' (absent pre-2026-08-01)."""
+    for cell, want in (("N1", "Situation"), ("O1", "PostHog")):
+        cur = svc.spreadsheets().values().get(
+            spreadsheetId=ssid, range=f"'{TAB}'!{cell}").execute().get("values", [])
+        if cur and cur[0] and cur[0][0] == want:
+            continue
+        if dry_run:
+            print(f"(would set {cell} = '{want}')")
+            continue
+        svc.spreadsheets().values().update(
+            spreadsheetId=ssid, range=f"'{TAB}'!{cell}",
+            valueInputOption="RAW", body={"values": [[want]]}).execute()
 
 
 def refresh_situations(svc, ssid, all_leads, already_ledgered, dry_run=False):
@@ -785,6 +932,18 @@ def main():
         for l in candidates:
             record_ledger(client, l["lead_id"], ts)
         hide_lead_id_column(svc, args.spreadsheet_id, sheet_id)
+        # values().clear() wipes VALUES but not FORMATTING, and a rebuild re-orders every
+        # row — so any existing orange would end up sitting on whichever lead now occupies
+        # that row number. Strip all backgrounds first, then re-derive from scratch.
+        svc.spreadsheets().batchUpdate(spreadsheetId=args.spreadsheet_id, body={"requests": [{
+            "repeatCell": {
+                "range": {"sheetId": sheet_id, "startRowIndex": 1,
+                          "startColumnIndex": 0, "endColumnIndex": len(HEADERS)},
+                "cell": {"userEnteredFormat": {"backgroundColor": _WHITE}},
+                "fields": "userEnteredFormat.backgroundColor",
+            }}]}).execute()
+        refresh_posthog_links(svc, args.spreadsheet_id, candidates)
+        refresh_listed_highlight(svc, args.spreadsheet_id, sheet_id, candidates, wl_idx)
         client.close()
         print(f"[rebuild] wrote {len(candidates)} lead(s), ledger re-seeded.")
         return
@@ -795,13 +954,17 @@ def main():
     candidates.sort(key=lambda l: l["date"], reverse=True)
 
     refreshed = refresh_selling_plans(svc, args.spreadsheet_id, all_leads, seen, dry_run=args.dry_run)
-    ensure_situation_header(svc, args.spreadsheet_id, dry_run=args.dry_run)
+    ensure_headers(svc, args.spreadsheet_id, dry_run=args.dry_run)
     refreshed_sit = refresh_situations(svc, args.spreadsheet_id, all_leads, seen, dry_run=args.dry_run)
 
     if not candidates:
+        linked = refresh_posthog_links(svc, args.spreadsheet_id, all_leads, dry_run=args.dry_run)
+        painted = refresh_listed_highlight(svc, args.spreadsheet_id, sheet_id, all_leads,
+                                           wl_idx, dry_run=args.dry_run)
         msg = "Nothing new."
-        if refreshed or refreshed_sit:
-            msg = f"No new leads; {refreshed} selling-plan + {refreshed_sit} situation update(s) applied."
+        if refreshed or refreshed_sit or linked or painted:
+            msg = (f"No new leads; {refreshed} selling-plan + {refreshed_sit} situation "
+                   f"+ {linked} posthog-link + {painted} highlight update(s) applied.")
         print(msg)
         client.close()
         return
@@ -835,6 +998,10 @@ def main():
     ts = datetime.now(AEST).isoformat()
     for l in candidates:
         record_ledger(client, l["lead_id"], ts)
+
+    # After the insert, so the rows just added get their link + highlight in the same run.
+    refresh_posthog_links(svc, args.spreadsheet_id, all_leads)
+    refresh_listed_highlight(svc, args.spreadsheet_id, sheet_id, all_leads, wl_idx)
 
     client.close()
     print(f"\nDone. {n} row(s) added.")
