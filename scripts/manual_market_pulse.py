@@ -171,13 +171,39 @@ def show_data(suburb=None, category=None):
         print(f"\n  📉 PRICE ADJUSTMENTS: {reductions} reductions out of {len(events)} events")
 
         # --- Capital gain comparison ---
-        print(f"\n  🏆 CAPITAL GAIN COMPARISON (indexed):")
+        # Two distinct measures — see the note in generate_market_pulse.py build_data_snapshot().
+        # The index is a LEVEL since the 2016 baseline; five-year growth is a RATE. Ranking on
+        # one does not give the same order as ranking on the other.
+        print(f"\n  🏆 CAPITAL GAIN COMPARISON:")
         for cs in TARGET_SUBURBS:
             cs_idx = gc["precomputed_indexed_prices"].find_one({"_id": cs})
-            if cs_idx:
-                cs_series = cs_idx.get("indexed_series", [])
-                if cs_series:
-                    print(f"     {DISPLAY_NAMES.get(cs, cs)}: index={cs_series[-1].get('index_value', '?')}, median=${cs_series[-1].get('median_price', 0):,.0f}")
+            if not cs_idx:
+                continue
+            cs_series = cs_idx.get("indexed_series", [])
+            if not cs_series:
+                continue
+            label = DISPLAY_NAMES.get(cs, cs)
+            print(
+                f"     {label}: index since {cs_idx.get('baseline_period', '?')}"
+                f"={cs_series[-1].get('index_value', '?')}, "
+                f"median=${cs_series[-1].get('median_price', 0):,.0f} "
+                f"({cs_series[-1].get('period', '?')})"
+            )
+
+            rolling = [
+                r for r in (cs_idx.get("rolling_12m_median_series") or [])
+                if not r.get("is_in_progress") and r.get("rolling_median")
+            ]
+            if len(rolling) > 20:
+                now_pt, then_pt = rolling[-1], rolling[-21]
+                growth = (now_pt["rolling_median"] / then_pt["rolling_median"] - 1) * 100
+                print(
+                    f"        └─ 5yr median growth: {growth:+.1f}% "
+                    f"(${then_pt['rolling_median']:,.0f} {then_pt.get('period')} "
+                    f"→ ${now_pt['rolling_median']:,.0f} {now_pt.get('period')}, 12m rolling)"
+                )
+            else:
+                print(f"        └─ 5yr median growth: insufficient rolling history")
 
     client.close()
 
