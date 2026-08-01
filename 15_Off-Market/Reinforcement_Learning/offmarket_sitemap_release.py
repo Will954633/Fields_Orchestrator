@@ -40,6 +40,17 @@ def run(args):
               f"({round(100*current/eligible) if eligible else 0}%). all limits: {limits}")
         return {"suburb": args.suburb, "released": current, "eligible": eligible}
 
+    # FROZEN suburbs must never widen. A frozen suburb keeps the slice it has already
+    # released (those URLs stay in the sitemap and keep their decks) but the deck builder
+    # no longer builds it — so widening here would publish URLs with no deck, which is
+    # precisely the 2026-07-29 drift that served the OLD classic page on ~985 Nerang URLs.
+    # Unfreezing is a deliberate act: drop the name from `frozen` in the config doc.
+    if args.suburb in set(doc.get("frozen") or []):
+        print(f"{args.suburb} is FROZEN — release held at {current} "
+              f"(unfreeze by removing it from `frozen` in the release config doc)")
+        return {"suburb": args.suburb, "released": current, "delta": 0,
+                "eligible": eligible, "frozen": True}
+
     target = args.set if args.set is not None else min(current + args.step, eligible)
     target = min(target, eligible)
     limits[args.suburb] = target
