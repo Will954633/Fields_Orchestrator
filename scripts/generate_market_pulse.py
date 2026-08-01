@@ -307,18 +307,61 @@ def fetch_all_data(gc_db, sm_db, suburb):
             ]
 
     # 11. Capital gain comparison (indexed prices for all target suburbs)
+    #
+    # Two separate measures, deliberately named so they cannot be conflated:
+    #   *_index_since_<baseline>  = cumulative % growth since the 2016 baseline (an index LEVEL,
+    #                               comparable across suburbs only because they share a baseline)
+    #   five_year_growth_pct      = actual % change in median over the last 5 years (a RATE)
+    # The old field was called "five_year_index" but held the index LEVEL as at ~5 years ago.
+    # Summaries read it as a five-year growth rate and ranked suburbs on the difference between
+    # two index levels — which is a percentage-POINT gap on a 2016 base, not five-year growth.
+    # That inverted the Aug-2026 suburb-compare ranking (index deltas put Burleigh Waters top;
+    # true 5yr median growth puts it last). See fix-history [PULSE-FIVE-YEAR-INDEX-MISLABEL].
+    #
+    # Growth is computed off rolling_12m_median_series (12-month rolling medians), not the raw
+    # quarterly series, because single quarters here are thin enough to swing the answer — and
+    # in-progress quarters are excluded outright.
+    QUARTERS_IN_5Y = 20
     capital_gains = {}
     for s in TARGET_SUBURBS:
         s_idx = gc_db["precomputed_indexed_prices"].find_one({"_id": s})
-        if s_idx:
-            s_series = s_idx.get("indexed_series", [])
-            if s_series:
-                capital_gains[DISPLAY_NAMES.get(s, s)] = {
-                    "latest_index": s_series[-1].get("index_value"),
-                    "latest_median": s_series[-1].get("median_price"),
-                }
-                if len(s_series) >= 20:
-                    capital_gains[DISPLAY_NAMES.get(s, s)]["five_year_index"] = s_series[-20].get("index_value")
+        if not s_idx:
+            continue
+        s_series = s_idx.get("indexed_series", [])
+        if not s_series:
+            continue
+
+        name = DISPLAY_NAMES.get(s, s)
+        entry = {
+            "latest_period": s_series[-1].get("period"),
+            "latest_median": s_series[-1].get("median_price"),
+            "index_since_baseline": s_series[-1].get("index_value"),
+            "index_baseline_period": s_idx.get("baseline_period"),
+        }
+
+        # Prefer the smoothed rolling series; fall back to raw quarters if it is absent.
+        rolling = [
+            r for r in (s_idx.get("rolling_12m_median_series") or [])
+            if not r.get("is_in_progress") and r.get("rolling_median")
+        ]
+        if len(rolling) > QUARTERS_IN_5Y:
+            now_pt, then_pt = rolling[-1], rolling[-(QUARTERS_IN_5Y + 1)]
+            now_med, then_med = now_pt.get("rolling_median"), then_pt.get("rolling_median")
+            basis = "rolling_12m_median"
+        elif len(s_series) > QUARTERS_IN_5Y:
+            now_pt, then_pt = s_series[-1], s_series[-(QUARTERS_IN_5Y + 1)]
+            now_med, then_med = now_pt.get("median_price"), then_pt.get("median_price")
+            basis = "quarterly_median (rolling series unavailable — treat as indicative)"
+        else:
+            now_med = then_med = None
+
+        if now_med and then_med:
+            entry["five_year_growth_pct"] = round((now_med / then_med - 1) * 100, 1)
+            entry["five_year_from_period"] = then_pt.get("period")
+            entry["five_year_from_median"] = then_med
+            entry["five_year_basis"] = basis
+
+        capital_gains[name] = entry
     data["capital_gains_comparison"] = capital_gains
 
     # 12. Asking prices houses vs units divergence
@@ -550,7 +593,12 @@ strengthens the analysis — do not force a policy mention into every summary; o
 
 Write a 3-4 sentence summary that:
 1. Opens with "How does {suburb} compare to nearby suburbs?"
-2. References the capital gain comparison (indexed growth) across the three suburbs
+2. References the capital gain comparison across the three suburbs. Two DIFFERENT measures are
+   supplied and must not be mixed: `index_since_baseline` is cumulative growth since the
+   `index_baseline_period` baseline (a level, not a recent rate), while `five_year_growth_pct`
+   is the actual change in median over the last five years. If you rank the suburbs, say which
+   measure you are ranking on — they do not produce the same order. Never describe a difference
+   between two `index_since_baseline` values as a growth rate; it is a percentage-point gap.
 3. Notes any standout differences in median price, turnover, or growth rate
 4. Helps the reader understand {suburb}'s positioning (value suburb, premium suburb, growth suburb)
 
