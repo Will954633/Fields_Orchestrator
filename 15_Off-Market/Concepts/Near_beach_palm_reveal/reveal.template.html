@@ -139,6 +139,19 @@
     dark:  { paper: "#111216", ink: "#efece4", grain: 0.026, vignette: 0.100 },
   };
 
+  // Per-theme overrides, so the animation can be matched to a host page it will
+  // sit on. Dropping paper to the host's own background (and grain/vignette to
+  // 0, which would otherwise lift it off pure black) makes the drawing appear
+  // to emerge from the page instead of sitting in a visible panel.
+  const hex = (v) => v ? "#" + v.replace(/^#/, "") : null;
+  for (const [key, parse] of [["paper", hex], ["ink", hex], ["grain", parseFloat], ["vignette", parseFloat]]) {
+    const raw = params.get(key);
+    if (raw !== null) {
+      const val = parse(raw);
+      if (val !== null && !Number.isNaN(val)) Object.values(THEMES).forEach((t) => { t[key] = val; });
+    }
+  }
+
   const cfg = {
     mode:    params.get("mode")  || "growth",
     theme:   params.get("theme") || "light",
