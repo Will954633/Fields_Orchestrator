@@ -177,7 +177,7 @@ def main():
             import brain1_verify as bv
             shortlist_ids = {u["id"] for u in top} | {u["id"] for u in neigh}
             answer, _ = bv.audit(answer, by_id, shortlist_ids=shortlist_ids,
-                                 repair=not args.no_repair)
+                                 repair=not args.no_repair, question=args.query)
         except Exception as e:
             print(f"[verify] skipped ({e})", file=sys.stderr)
 
