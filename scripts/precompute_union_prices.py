@@ -295,10 +295,17 @@ def promote_medians(gc, suburb, live, staged, quarterly, rolling, latest, union_
             if "index_value" in new:
                 entry["index_value"] = new["index_value"]
         merged_series.append(entry)
-    # quarters the union found that the old Domain-only series never had
+    # Quarters the union found that the old Domain-only series never had.
+    #
+    # NEVER append the in-progress quarter here. `db.server.ts:552` and
+    # `market-insights.mjs:213` both take `indexed_series[length - 1]` as THE median
+    # house price and feed it to the FAQ text and JSON-LD. Appending Q3 2026 put a
+    # 14-sale part-quarter on the page as "the median house price in Burleigh Waters
+    # is $2,125,000". The in-progress quarter belongs in `in_progress_quarter`, which
+    # is where those consumers already expect to find it.
     known = {e.get("period") for e in merged_series}
     for period, new in by_period.items():
-        if period not in known:
+        if period not in known and not new["is_in_progress"]:
             merged_series.append({k: v for k, v in new.items() if k != "transaction_count"}
                                  | {"median_sample_n": new["transaction_count"]})
     merged_series.sort(key=lambda e: qsort(e["period"]))
