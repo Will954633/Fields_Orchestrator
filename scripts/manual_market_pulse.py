@@ -72,6 +72,18 @@ def get_db():
 
 def show_data(suburb=None, category=None):
     """Display all current market data for writing summaries."""
+    # The prose has to be written for the reader's actual state of mind, not only the numbers.
+    # Surfaced here so the writing session cannot start without knowing whether the brief behind
+    # that framing is current. Non-blocking by design — see homeowner_mindset.check_freshness.
+    print("\n📋 HOMEOWNER MINDSET BRIEF")
+    try:
+        from homeowner_mindset import check_freshness
+        rep, _ = check_freshness()
+        if rep:
+            print(f"     Read before writing: {rep['path']}")
+    except Exception as e:
+        print(f"  ⚠️  Could not check the mindset brief: {e}")
+
     client = get_db()
     gc = client["Gold_Coast"]
     sm = client["system_monitor"]
