@@ -137,15 +137,18 @@ left and right of every printed line.
 | 0–1.4s | Field switches **ON, left → right** |
 | 1.4–4.0s | Full field |
 | 4.0–6.2s | Field switches **OFF, right → left**, easing out |
-| 6.2s+ | A ~17% band of columns keeps raining; the message prints into the grid |
+| 6.2s+ | Field is fully dark; the message prints into the grid on a clear screen |
 
 Each column extinguishes over 0.45s as the front passes, so it reads as
 switching off rather than snapping off. Same script, timing and payoff as v2
 (slow-landing dots, alarm wash per ERROR, shake + rain surge on ABORT), and the
 same `?street=&locality=` overrides.
 
-The surviving band is deliberately **not** zero — a thin strip keeps streaming so
-the field never looks frozen. Set `SURVIVOR = 0` for a fully silent screen.
+`SURVIVOR` controls how many columns keep raining after the collapse. It is
+**0** — the field switches off completely, so the message never types over live
+rain. Raise it for a residual ribbon of code; `layout()` then pushes the message
+clear of the surviving columns automatically, so the two can't overlap at any
+setting.
 
 ## How the message lives in the grid
 
@@ -169,3 +172,12 @@ correctly guarded against message cells, but the **token stamper was not** — i
 wrote `cell[]` unconditionally, so `BURLEIGH WATERS` and friends ate characters
 out of the printed words as they fell through those rows. Any writer to `cell[]`
 must check `textB[j] === 0` first; there are two of them, not one.
+
+### Second bug: columns freezing part-way through their fade
+
+With `SURVIVOR = 0` the sweep front only reaches its target at the very last
+instant of the shutdown phase, and `colLife` was updated **only** while that
+phase was active. The leftmost columns therefore froze mid-fade and sat on
+screen as a lit stripe down the left edge, which the message then typed beside.
+The fade now continues draining during the print phase. Verified by sampling lit
+pixels left of the message column: 177 before the fix, 0 after.
