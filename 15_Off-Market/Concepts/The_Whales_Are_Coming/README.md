@@ -62,52 +62,190 @@ local minimum to find. The trunk reference is a 90th percentile rather than a
 max because the pectoral fins hang below the belly and spike the column count by
 about 2× where they cross. The fattest columns in the image are fin, not body.
 
-## The physics
+## The kinematics are measured, not invented
 
-**Strouhal is the whole realism story.** `St = fA/U`, efficient band 0.25–0.35.
-Solving for frequency at humpback figures — L = 14 m, U = 2 m/s, A = 0.2 L =
-2.8 m, St = 0.30:
+The first version of this had amplitude clamped to zero across the front 38% of
+the body, so the head was nailed in place. That is a caricature of thunniform
+swimming and it is wrong twice over — wrong for cetaceans generally, and
+especially wrong for humpbacks.
 
-> **f ≈ 0.21 Hz — one full tail beat every 4.7 seconds.**
+**Fish, F. E., Peacock, J. E. & Rohr, J. J. (2003), "Stabilization mechanism in
+swimming odontocete cetaceans by phased movements", *Marine Mammal Science*
+19(3): 515–528** digitised four points — rostrum, flipper tip, peduncle, fluke
+tip — across seven species at 1.4–7.3 m/s. It is the load-bearing source here,
+and it overturns the obvious model:
 
-Almost every hand-animated whale runs about 10× too fast. Frequency here is
-derived, never set: change the speed slider and the tail retimes itself. It
-tracks *instantaneous* speed, so as the whale accelerates out of a glide the
-beat naturally quickens.
+| Point | Amplitude | Phase vs fluke |
+|---|---|---|
+| Rostrum | 0.02–0.06 L (ratio to fluke 1:4.34–6.76) | **−9.4° to +33.0°** |
+| Flipper tip | **smallest of the four** | trails by 60.9–123.4° |
+| Peduncle | between | **leads** by 18.9–48.7° |
+| Fluke tip | 0.17–0.25 L | — |
 
-**Burst and coast.** Large whales rarely beat continuously. The default is 3.5
-beats, then five seconds of rigid glide while quadratic drag bleeds the speed
-off. Thrust is scaled so continuous beating settles at exactly the cruise speed
-asked for (steady state is `thrust == drag·U²`), so the slider stays meaningful.
+Two things in that table are counter-intuitive and both are now built in.
 
-**The travelling wave.** Amplitude is ~0 across the rigid front, then ramps to
-full at the flukes; the phase term makes the wave travel backwards down the
-body at 0.9 body lengths, which is what makes the fluke lag the peduncle and
-scoop water rather than just wag.
+**The head moves nearly IN phase with the flukes, not against them.** A rigid
+beam pivoting about its centre of mass would put rostrum and fluke 180° apart.
+Real animals do not: in two species the phase difference is statistically
+indistinguishable from zero. The paper's explanation, verbatim — "By
+synchronously moving the rostrum in the same direction as flukes by muscular
+control, there is a reduction in the natural tendency of the rostrum to swing
+through a wide arc opposite the motion of the flukes."
 
-**Secondary motion.** The body heaves against the stroke and pitches counter to
-it, both lagging a quarter cycle. Without these the animation reads as a rigid
-sprite on a path with a wiggling tail bolted on.
+**The amplitude minimum is at the flippers.** The flipper tip has the smallest
+excursion of the four points, because it sits nearest the centre of mass — so
+the envelope is not monotonic from nose to tail, it dips. That measured node
+lands between this sprite's two flipper hinges (u = 0.25 and u = 0.37), which is
+a pleasing independent check on the segmentation.
 
-**A real crossing is slow.** At the default staging the frame holds 33 m of
-water, so a full left-to-right pass takes about 24 seconds. If a card only has
-six, shrink the whale — do not speed the tail up. That is exactly the failure
-mode that reads as sliding rather than swimming.
+So the body is modelled in **two zones meeting at the node**: a travelling wave
+behind it, and an anterior section whose phase is prescribed against the fluke
+rather than inherited from the wave. That split is not a modelling convenience —
+a single travelling wave cannot produce a near-synchronous rostrum *and* a
+peduncle leading by only ~38° at the same time. The animal is not a passive
+wave; it is actively stabilised, and the two-zone split is what that control
+does.
+
+Verified output against the measurements:
+
+| | model | measured |
+|---|---|---|
+| Rostrum amplitude | 19% of fluke, 3.8% L | 15–23%, 2–6% L |
+| Rostrum phase | +20° | −9.4° to +33.0° |
+| Peduncle phase | leads 38° | leads 18.9–48.7° |
+| Flipper excursion | 1–2% of fluke, the smallest | smallest of four |
+
+### Independent cross-check: 44 species of fish agree
+
+**Di Santo, V., Goerig, E., Wainwright, D. K., Akanyeti, O., Liao, J. C.,
+Castro-Santos, T. & Lauder, G. V. (2021), "Convergence of undulatory swimming
+kinematics across a diversity of fishes", *PNAS* 118(49):e2113206118** fitted 44
+species and got a global envelope (peak-to-peak, proportion of body length):
+
+> y = 0.05 − 0.13x + 0.28x²
+
+Head 0.05 L, tail 0.20 L → **head:tail = 25%**, minimum at **x = 0.232 L**. Their
+across-species medians give head 0.03 / tail 0.18 → **17%**. This model sits at
+**19%** with the node at 0.28 — between their fit and their medians, from an
+entirely separate literature (cetacean tag and video data). Two independent
+lines converging is the strongest evidence here.
+
+The older Videler & Hess (1984) saithe fit, `A(x) = 0.02 − 0.0825x + 0.1625x²`
+(half-amplitudes), gives nose:tail = **20.0%** with the node at **0.254 L** —
+the same answer a third time.
+
+**And the textbook ordering is empirically wrong.** Di Santo et al., verbatim:
+"there was **no decrease in head:tail amplitude from the anguilliform to
+thunniform mode** of locomotion as we expected from the traditional
+classification," and the ratio "was only statistically higher in the tuna." The
+supposedly stiffest swimmer has the *most* head yaw of the four canonical
+species. A locked head is not conservative realism — it is a myth.
+
+### Passive recoil is a demo slider, and zero is the correct default
+
+Lighthill's elongated-body recoil — zeroing net lateral and angular momentum,
+weighted by mass per unit length from the measured thickness profile — is
+implemented. It throws the head into **anti-phase** and roughly doubles its throw
+(20% → 39% of fluke).
+
+It defaults to **zero**, for two reasons. The measured phases say a live cetacean
+muscularly suppresses that anti-phase swing. And more decisively: **measured
+envelopes already contain whatever recoil was not cancelled**, so adding a recoil
+term on top double-counts it. Maertens, Gao & Triantafyllou (2017, *JFM*
+813:301) make this explicit by setting their recoil term `B(x,t) = 0` for the
+canonical carangiform gait, precisely because the envelope came from Videler's
+measurements. Solve the momentum balance only when prescribing a pure *bending*
+wave and deriving the rigid motions yourself — never on top of a measured
+envelope. The slider is there to show the see-saw, not to be used.
+
+For the record, Lighthill's 1960 *optimum* does call for amplitude "increasing
+from zero over the front portion." So the locked-head version was reproducing a
+theoretical optimum. The measurements simply say real animals do not swim that
+way.
+
+### Numbers, all from tag data
+
+| Parameter | Value | Source |
+|---|---|---|
+| Body length | 13.5 m (n=128) | Woodward, Winn & Fish 2006, *J. Morphol.* 267:1284 |
+| Cruising speed | 1.77–2.09 m/s | Gough et al. 2019/2021, *JEB* |
+| Fluke-beat frequency | **0.229 ± 0.039 Hz** (n=97) | Gough et al. 2019 |
+| Fluke amplitude | 0.20–0.24 L p-p | Gough et al. 2019 (direct fluke-tag measure) |
+| Fluke pitch angle | 30° | Gough et al. 2021 |
+
+> **One tail beat every ~4.3 seconds.** Almost every hand-animated whale runs
+> about 10× too fast.
+
+**Caveat on Strouhal.** Frequency here is still derived via `St = fA/U`, because
+it is a good animation control — change speed and the tail retimes itself. But
+the animal does not obey it. Gough et al. 2019 found frequency scales as
+**L^−0.53** where an optimal-Strouhal oscillator predicts L^−1.0, and concluded
+whales are not operating as Strouhal machines. Their one directly measured
+humpback Strouhal was **0.24** (at 2.61 m/s), while the default here is 0.31 —
+chosen so the lock reproduces the measured *frequency*. Those two facts cannot
+both be honoured at one speed; the frequency is the better-evidenced number
+(n=97 deployments vs n=1 animal). Rohr & Fish 2004 (n=248, 6 species) also found
+only 55% of cetaceans fall in the theoretical 0.25–0.35 band, with 74% in
+0.20–0.30.
+
+**Burst and coast.** 3.5 beats, then five seconds of rigid glide while quadratic
+drag bleeds the speed off. Thrust is scaled so continuous beating settles at
+exactly the cruise speed asked for (steady state is `thrust == drag·U²`).
+
+**A real crossing is slow.** The frame holds 33 m of water, so a left-to-right
+pass takes ~24 s. If a card only has six, shrink the whale — do not speed the
+tail up. That is the failure mode that reads as sliding rather than swimming.
+
+## Where the evidence runs out
+
+**The humpback-specific kinematic dataset does not exist.** Every per-body-point
+amplitude and phase above is **odontocete** — dolphins, orca, beluga. For
+humpbacks there is exactly one direct fluke-amplitude measurement in the
+literature (Gough et al. 2019: n=1 animal, 14 stroke sequences, from a tag that
+happened to slip onto a fluke blade). Everything else humpback-specific is
+frequency, speed and morphometrics.
+
+That matters because **humpbacks are more flexible than dolphins.** Buchholtz
+(2001, *J. Zool.* 253:175) found mysticetes retain the archaeocete pattern of
+constant vertebral shape along the torso, which acts as an undulatory unit:
+dorsoventral displacement begins **at the chest** in a swimming humpback, versus
+being restricted to the caudal peduncle in porpoises and white-sided dolphins.
+Woodward et al. 2006 puts the humpback at fineness ratio 4.21 against the blue
+whale's 6.37 — a fast manoeuvrer, not a stiff cruiser. So the anterior share of
+the motion here is plausibly *under*-stated, not over-stated. There is no
+published number to correct it with, so it has been left at the odontocete
+value rather than invented.
+
+**The wavelength is inferred, not measured.** λ = 1.8 body lengths is set purely
+to reproduce the measured peduncle phase lead over the fluke (38°, against 19–49°
+observed). That is longer than any published fish value — Di Santo et al. give
+0.58 L for eel, 0.96 for mackerel, 1.17 for tuna, with a thunniform median of
+1.14 — which is consistent with cetaceans being stiffer-tailed still, but it is
+an inference from phase data rather than a measurement of a wave.
+
+**No one has published a flipper motion time series for steady straight-line
+cruising** — for any cetacean. The descriptive work (Edel & Winn 1978, *Marine
+Biology* 48:279; Segre et al. 2017, *Curr. Biol.* 27:R636) has flippers acting as
+near-static trim and control surfaces in cruise, saving the large strokes for
+banked turns and lunges; Segre's flapping flipper-stroke was seen twice in
+hundreds of hours of video. So the flippers here are driven off the measured
+*phase lag* with deliberately small amplitude, and that is a modelling choice
+standing on an extrapolation from odontocete data, not a measurement.
 
 ## What is deliberately not modelled
 
 **Arc-length shortening.** A bent body projects slightly shorter than a straight
-one. At the amplitudes real whales use this is a 1–2% effect, well under the
-point where the hatch texture shearing gives the trick away first.
+one — a 1–2% effect at these amplitudes.
 
 **Depth rotation.** The source is a three-quarter view and a flat sprite cannot
 rotate in depth, so the fluke's angle of attack is faked by the phase lag rather
-than being a real pitch. It holds up at the default amplitude. Push
-`ampFrac` past ~0.28 and the flukes start to read as rubber.
+than being a real pitch. Push `ampFrac` past ~0.28 and the flukes read as rubber.
 
-**Separated pectoral fins.** The fins cross over the body, so the column warp
-drags them along with it. Cutting them as their own layers means inpainting the
-tone behind them — worth it only if the whale is going to be shown large.
+**Cross-section rotation.** Strips are sheared vertically, not rotated. Rotating
+each strip about its own centre makes adjacent strips disagree along their shared
+edge wherever the slope changes, and the gaps open into a visible comb down the
+peduncle exactly where the wave is steepest. The shear agrees with both
+neighbours by construction. The cost is a cos θ effect, invisible here.
 
 ## Controls
 
