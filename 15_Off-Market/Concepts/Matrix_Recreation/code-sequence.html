@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Digital Rain — In-Code Sequence</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; background: #000; overflow: hidden; }
+
+  #stage { position: fixed; inset: 0; background: #000; }
+  #shake { position: absolute; inset: 0; will-change: transform; }
+
+  #rain  { position: absolute; inset: 0; display: block; }
+  #bloom {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    mix-blend-mode: screen; opacity: .85; pointer-events: none;
+  }
+  #bloom.css-blur { filter: blur(7px) brightness(1.3); }
+
+  #scanlines {
+    position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(to bottom,
+      rgba(0,0,0,0) 0px, rgba(0,0,0,0) 2px,
+      rgba(0,0,0,.13) 3px, rgba(0,0,0,.13) 4px);
+  }
+  #vignette {
+    position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse 78% 72% at 50% 50%,
+      rgba(0,0,0,0) 40%, rgba(0,0,0,.55) 82%, rgba(0,0,0,.9) 100%);
+  }
+  #alarm {
+    position: absolute; inset: 0; pointer-events: none; opacity: 0;
+    background: radial-gradient(ellipse 90% 80% at 50% 50%,
+      rgba(255,0,0,.20) 0%, rgba(255,0,0,.06) 55%, rgba(120,0,0,.34) 100%);
+    mix-blend-mode: screen;
+  }
+  #alarm.pulse { animation: alarm 1.5s ease-out 2; }
+  @keyframes alarm { 0% { opacity: 0 } 12% { opacity: 1 } 100% { opacity: 0 } }
+
+  #shake.glitch { animation: shake .5s steps(2) 2; }
+  @keyframes shake {
+    0%   { transform: translate(0,0) }
+    25%  { transform: translate(-5px, 2px) }
+    50%  { transform: translate(4px,-3px) }
+    75%  { transform: translate(-3px,-1px) }
+    100% { transform: translate(0,0) }
+  }
+
+  #hint {
+    position: absolute; bottom: 18px; right: 20px; z-index: 9;
+    font: 10px/1 ui-monospace, Menlo, Consolas, monospace;
+    letter-spacing: .16em; text-transform: uppercase;
+    color: rgba(0,255,70,.34); text-shadow: 0 0 8px rgba(0,255,70,.3);
+    transition: opacity 1.2s ease; pointer-events: none;
+  }
+  #hint.gone { opacity: 0 }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div id="shake">
+    <canvas id="rain"></canvas>
+    <canvas id="bloom"></canvas>
+  </div>
+  <div id="scanlines"></div>
+  <div id="vignette"></div>
+  <div id="alarm"></div>
+  <div id="hint">R replay · F fullscreen</div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  // ── Glyph set ────────────────────────────────────────────────────────────
+  // Rain pool: the raw material of a property record. Digits dominate.
+  const POOL =
+    '0123456789' + '0123456789' + '0123456789' +
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZ' +
+    '$%.,:/-+=<>#*·▲▼²';
+  // Text-only glyphs. In the atlas but never chosen by random churn, so the
+  // rain keeps its uppercase/numeric character while the message can use
+  // ordinary sentence case.
+  const EXTRA = "abcdefghijklmnopqrstuvwxyz'!? ";
+  const GLYPHS = (POOL + EXTRA).split('');
+  const G = GLYPHS.length;
+  const RAND_G = POOL.length;                 // random churn picks below this
+  const SPACE = GLYPHS.indexOf(' ');
+  const GIDX = new Map(GLYPHS.map((c, i) => [c, i]));
+
+  const TOKENS = [
+    'BURLEIGH WATERS', 'ROBINA', 'VARSITY LAKES', 'MIAMI', 'MERMAID WATERS',
+    '4220', '4226', '4227', 'SOLD', 'LISTED', 'OFF MARKET', 'WITHDRAWN',
+    'DOM 34', 'DOM 71', '4 BED', '3 BATH', '2 CAR', '607M2', '812M2', '445M2',
+    'AVOCET AVE', 'CURLEW CRT', 'GALLEON WAY', 'MALLAWA DR',
+    'MEDIAN', 'COMPS 6', 'CONF 82%', 'SETTLED'
+  ];
+
+  const cfg = {
+    size: 21, speed: 95, density: 68, trail: 26, mutate: 34, glow: 85,
+    tokenChance: 0.16
+  };
+
+  // ── Palettes ─────────────────────────────────────────────────────────────
+  // One atlas per palette so the message can shift colour while still being
+  // drawn as grid glyphs — the same pipeline as the rain, not an overlay.
+  const PALETTES = {
+    rain:  { deep: [  0,100, 28], core: [  0,240, 64], bright: [ 90,255,120], head: [205,255,210] },
+    dim:   { deep: [  0, 90, 26], core: [ 20,225, 70], bright: [110,255,140], head: [200,255,210] },
+    ok:    { deep: [ 20,120, 45], core: [ 90,255,140], bright: [170,255,195], head: [230,255,238] },
+    addr:  { deep: [ 60,130, 80], core: [200,255,215], bright: [235,255,242], head: [255,255,255] },
+    warn:  { deep: [ 80, 42,  0], core: [255,160, 30], bright: [255,200, 95], head: [255,235,180] },
+    err:   { deep: [ 70,  6,  4], core: [255, 46, 34], bright: [255,105, 88], head: [255,190,180] },
+    abort: { deep: [ 90,  8,  5], core: [255, 60, 44], bright: [255,130,110], head: [255,215,205] }
+  };
+  const PAL_KEYS = Object.keys(PALETTES);
+  const PAL_IDX  = Object.fromEntries(PAL_KEYS.map((k, i) => [k, i]));
+  const TIERS = 24;
+
+  // ── Timeline ─────────────────────────────────────────────────────────────
+  const T_BUILD    = 1.4;   // field switches ON left -> right
+  const T_HOLD     = 2.6;   // full field
+  const T_SHUTDOWN = 2.2;   // field switches OFF right -> left
+  const SURVIVOR   = 0.17;  // fraction of columns left raining at the end
+  const COL_FADE   = 0.45;  // seconds a column takes to extinguish
+
+  const qs = new URLSearchParams(location.search);
+  // strip control characters; glyphs are looked up per char, never HTML
+  const clip = (s, n) => String(s).replace(/[\u0000-\u001F]/g, '').slice(0, n);
+  const STREET   = clip(qs.get('street')   || '3 Avocet Avenue', 44);
+  const LOCALITY = clip(qs.get('locality') || 'Burleigh Waters, QLD 4220', 44);
+
+  const SCRIPT = [
+    { t: 'searching...',         pal: 'dim',   pause: 0.15 },
+    { t: 'searching...',         pal: 'dim',   pause: 1.00 },
+    { t: 'Found it',             pal: 'ok',    pause: 0.85 },
+    { t: STREET,                 pal: 'addr',  pause: 0.55 },
+    { t: LOCALITY,               pal: 'addr',  pause: 0.12 },
+    { t: "There's a problem...", pal: 'warn',  pause: 1.05 },
+    { t: 'ERROR',                pal: 'err',   pause: 0.75 },
+    { t: 'ERROR',                pal: 'err',   pause: 0.34 },
+    { t: 'ERROR',                pal: 'err',   pause: 0.20 },
+    { t: 'ABORT',                pal: 'abort', pause: 0.65 }
+  ];
+  const CPS_MS  = 55;
+  const DOT_MS  = 380;
+  const HOLD_MS = 4200;
+  let   loop    = true;
+
+  // ── Canvas ───────────────────────────────────────────────────────────────
+  const rain  = document.getElementById('rain');
+  const bloom = document.getElementById('bloom');
+  const ctx   = rain.getContext('2d', { alpha: false });
+  const bctx  = bloom.getContext('2d');
+  const BLOOM_DIV = 5;
+  const canvasBlur = typeof bctx.filter === 'string';
+  if (!canvasBlur) bloom.classList.add('css-blur');
+
+  const alarm = document.getElementById('alarm');
+  const shake = document.getElementById('shake');
+  const hint  = document.getElementById('hint');
+
+  let W = 0, H = 0, dpr = 1, cellW = 0, cellH = 0, cols = 0, rows = 0;
+  let atlases = [], aCellW = 0, aCellH = 0;
+
+  let sCol, sY, sSpeed, sLen, sDim, sWait, sTok, sPos, sRow;
+  let streamMax = 0, streamCount = 0;
+  let cell, churn, spark, bright, lock;
+  // message layer, in the same grid: brightness + palette per cell
+  let textB, textP;
+
+  let colLife;                 // per-column on/off, 0..1
+  let liveCols = 0;            // columns still eligible for new streams
+  let surge = 0;
+
+  // ── Atlases ──────────────────────────────────────────────────────────────
+  const lerp = (a, b, t) => a + (b - a) * t;
+
+  function ramp(p, v) {
+    let c, a;
+    if (v > 0.94)      { const t=(v-0.94)/0.06; c=[lerp(p.bright[0],p.head[0],t),lerp(p.bright[1],p.head[1],t),lerp(p.bright[2],p.head[2],t)]; a=1; }
+    else if (v > 0.78) { const t=(v-0.78)/0.16; c=[lerp(p.core[0],p.bright[0],t),lerp(p.core[1],p.bright[1],t),lerp(p.core[2],p.bright[2],t)]; a=1; }
+    else               { const t=v/0.78;        c=[lerp(p.deep[0],p.core[0],t),  lerp(p.deep[1],p.core[1],t),  lerp(p.deep[2],p.core[2],t)];   a=Math.pow(t,1.45); }
+    return `rgba(${c[0]|0},${c[1]|0},${c[2]|0},${a.toFixed(3)})`;
+  }
+
+  function buildAtlases() {
+    const fontPx = cfg.size * dpr;
+    const family = `ui-monospace, SFMono-Regular, Menlo, Consolas, "DejaVu Sans Mono", monospace`;
+    const probe = document.createElement('canvas').getContext('2d');
+    probe.font = `${fontPx}px ${family}`;
+
+    let maxW = 0;
+    for (const g of GLYPHS) maxW = Math.max(maxW, probe.measureText(g).width);
+    aCellW = Math.max(2, Math.round(maxW * 1.10));
+    aCellH = Math.max(2, Math.round(fontPx * 1.06));
+    cellW = aCellW / dpr;
+    cellH = aCellH / dpr;
+
+    atlases = PAL_KEYS.map(key => {
+      const p = PALETTES[key];
+      const cv = document.createElement('canvas');
+      cv.width = aCellW * G;
+      cv.height = aCellH * TIERS;
+      const a = cv.getContext('2d');
+      a.font = `${fontPx}px ${family}`;
+      a.textAlign = 'center';
+      a.textBaseline = 'middle';
+      for (let t = 0; t < TIERS; t++) {
+        a.fillStyle = ramp(p, t / (TIERS - 1));
+        for (let g = 0; g < G; g++) {
+          a.fillText(GLYPHS[g], g * aCellW + aCellW / 2, t * aCellH + aCellH / 2);
+        }
+      }
+      return cv;
+    });
+  }
+
+  // ── Layout ───────────────────────────────────────────────────────────────
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    rain.width = Math.round(W * dpr); rain.height = Math.round(H * dpr);
+    rain.style.width = W + 'px'; rain.style.height = H + 'px';
+    bloom.width  = Math.max(1, Math.round(W / BLOOM_DIV));
+    bloom.height = Math.max(1, Math.round(H / BLOOM_DIV));
+    if (canvasBlur) bctx.filter = `blur(${(7 / BLOOM_DIV).toFixed(2)}px)`;
+
+    buildAtlases();
+    cols = Math.ceil(W / cellW);
+    rows = Math.ceil(H / cellH) + 2;
+    liveCols = cols;
+
+    streamMax = cols * 3;
+    sCol = new Int32Array(streamMax); sY = new Float32Array(streamMax);
+    sSpeed = new Float32Array(streamMax); sLen = new Float32Array(streamMax);
+    sDim = new Float32Array(streamMax); sWait = new Float32Array(streamMax);
+    sTok = new Array(streamMax).fill(null);
+    sPos = new Int32Array(streamMax); sRow = new Int32Array(streamMax);
+
+    const n = cols * rows;
+    cell = new Uint8Array(n); churn = new Float32Array(n);
+    spark = new Float32Array(n); bright = new Float32Array(n);
+    lock = new Uint8Array(n); textB = new Float32Array(n); textP = new Uint8Array(n);
+    colLife = new Float32Array(cols);
+
+    for (let i = 0; i < n; i++) cell[i] = (Math.random() * RAND_G) | 0;
+
+    streamCount = Math.min(streamMax, Math.round(cols * (cfg.density / 100) * 1.9));
+    for (let i = 0; i < streamCount; i++) spawn(i, true);
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+  }
+
+  function spawn(i, seeded) {
+    sCol[i]   = (Math.random() * Math.max(1, liveCols)) | 0;
+    sLen[i]   = cfg.trail * (0.45 + Math.random() * 1.35);
+    const s   = Math.pow(Math.random(), 1.7);
+    sSpeed[i] = (cfg.speed * (0.45 + s * 1.75)) / cellH;
+    sDim[i]   = 0.42 + Math.random() * 0.58;
+    sY[i]     = seeded ? Math.random() * (rows + sLen[i]) : -Math.random() * 6;
+    sWait[i]  = seeded ? 0 : Math.random() * 2.2;
+    if (Math.random() < cfg.tokenChance) {
+      sTok[i] = TOKENS[(Math.random() * TOKENS.length) | 0] + '  ';
+      sDim[i] = 0.85 + Math.random() * 0.15;
+    } else sTok[i] = null;
+    sPos[i] = 0;
+    sRow[i] = Math.floor(sY[i]) - 1;
+  }
+
+  // ── Simulation ───────────────────────────────────────────────────────────
+  function step(dt) {
+    bright.fill(0);
+    const spd = 1 + surge * 1.4;
+
+    for (let i = 0; i < streamCount; i++) {
+      if (sWait[i] > 0) { sWait[i] -= dt; continue; }
+      sY[i] += sSpeed[i] * dt * spd;
+      const y = sY[i], len = sLen[i], c = sCol[i], d = sDim[i];
+      if (y - len > rows) { spawn(i, false); continue; }
+      const base = c * rows;
+
+      if (sTok[i]) {
+        const hr = Math.floor(y);
+        if (hr > sRow[i]) {
+          for (let r = Math.max(sRow[i] + 1, 0); r <= hr; r++) {
+            if (r >= 0 && r < rows) {
+              const jt = base + r;
+              // never overwrite a cell the message owns — token streams fall
+              // straight through the printed words without eating characters
+              if (textB[jt] === 0) {
+                const ch = sTok[i][sPos[i] % sTok[i].length];
+                cell[jt] = GIDX.has(ch) ? GIDX.get(ch) : SPACE;
+                lock[jt] = 1;
+              }
+            }
+            sPos[i]++;
+          }
+          sRow[i] = hr;
+        }
+      }
+
+      const top = Math.max(0, Math.ceil(y - len));
+      const bot = Math.min(rows - 1, Math.floor(y));
+      for (let r = top; r <= bot; r++) {
+        const dist = y - r;
+        let v;
+        if (dist < 1) v = 1;
+        else {
+          const k = 1 - (dist - 1) / len;
+          if (k <= 0) continue;
+          v = Math.pow(k, 1.3) * d;
+        }
+        const j = base + r;
+        if (v > bright[j]) bright[j] = v;
+      }
+    }
+
+    const churnRate = (cfg.mutate / 100) * 24;
+    const n = bright.length;
+    for (let j = 0; j < n; j++) {
+      if (spark[j] > 0) spark[j] -= dt;
+      if (bright[j] <= 0.02) { lock[j] = 0; continue; }
+      if (lock[j] || textB[j] > 0) continue;   // token or message char: hold
+      churn[j] -= dt * churnRate * (0.3 + Math.random());
+      if (churn[j] <= 0) {
+        cell[j] = (Math.random() * RAND_G) | 0;
+        churn[j] = 0.4 + Math.random() * 2.4;
+        if (Math.random() < 0.035) spark[j] = 0.05 + Math.random() * 0.12;
+      }
+    }
+    if (surge > 0) surge = Math.max(0, surge - dt * 1.6);
+  }
+
+  function draw(now) {
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, W, H);
+    const tMax = TIERS - 1;
+    const wob = 0.94 + 0.06 * Math.sin(now * 0.011) * Math.sin(now * 0.0037);
+    const rainAtlas = atlases[PAL_IDX.rain];
+
+    for (let c = 0; c < cols; c++) {
+      const base = c * rows, x = c * cellW, life = colLife[c];
+
+      for (let r = 0; r < rows; r++) {
+        const j = base + r;
+        const tb = textB[j];
+        let v, at;
+
+        if (tb > 0) {
+          // message cells own their glyph outright — the rain cannot recolour
+          // or overwrite them, so the words stay stable as code streams past
+          v = tb;
+          at = atlases[textP[j]];
+        } else {
+          v = bright[j] * life;
+          if (v <= 0.02) continue;
+          v = spark[j] > 0 ? Math.max(v, 0.97) : v * wob;
+          at = rainAtlas;
+        }
+
+        const tier = (v * tMax) | 0;
+        if (tier <= 0) continue;
+        ctx.drawImage(at, cell[j] * aCellW, tier * aCellH, aCellW, aCellH,
+                      x, r * cellH, cellW, cellH);
+      }
+    }
+
+    // block cursor, drawn as a grid cell
+    if (cursor.on && Math.floor(now / 530) % 2 === 0) {
+      const p = PALETTES[cursor.pal];
+      ctx.fillStyle = `rgb(${p.bright[0]},${p.bright[1]},${p.bright[2]})`;
+      ctx.fillRect(cursor.c * cellW + cellW * 0.08, cursor.r * cellH + cellH * 0.1,
+                   cellW * 0.84, cellH * 0.8);
+    }
+
+    if (cfg.glow > 0) {
+      bctx.globalCompositeOperation = 'source-over';
+      bctx.clearRect(0, 0, bloom.width, bloom.height);
+      bctx.drawImage(rain, 0, 0, bloom.width, bloom.height);
+      bctx.globalCompositeOperation = 'lighter';
+      bctx.globalAlpha = 0.45;
+      bctx.drawImage(rain, 0, 0, bloom.width, bloom.height);
+      bctx.globalAlpha = 1;
+    }
+  }
+
+  // ── Message, written into the grid ───────────────────────────────────────
+  const cursor = { on: false, r: 0, c: 0, pal: 'dim' };
+  let textCells = [];          // every cell the message owns, for teardown
+
+  function stampChar(r, c, ch, pal) {
+    if (r < 0 || r >= rows || c < 0 || c >= cols) return;
+    const j = c * rows + r;
+    cell[j]  = GIDX.has(ch) ? GIDX.get(ch) : SPACE;
+    textP[j] = PAL_IDX[pal];
+    textB[j] = 1;                                  // lands white-hot...
+    textCells.push(j);
+    setTimeout(() => { if (textB[j] > 0) textB[j] = 0.84; }, 90);  // ...then settles
+  }
+
+  function clearText() {
+    for (const j of textCells) { textB[j] = 0; lock[j] = 0; }
+    textCells = [];
+    cursor.on = false;
+  }
+
+  // ── Sequence ─────────────────────────────────────────────────────────────
+  let phase = 'build', phaseT = 0, timers = [];
+  const wait = ms => new Promise(res => timers.push(setTimeout(res, ms)));
+  const clearTimers = () => { timers.forEach(clearTimeout); timers = []; };
+
+  function layout() {
+    const startCol = Math.max(1, Math.round(cols * 0.055));
+    const startRow = Math.max(1, Math.round((rows - SCRIPT.length) / 2) - 1);
+    return { startCol, startRow };
+  }
+
+  async function typeLine(line, row, startCol) {
+    cursor.on = true; cursor.r = row; cursor.pal = line.pal;
+    for (let i = 0; i < line.t.length; i++) {
+      cursor.c = startCol + i;
+      stampChar(row, startCol + i, line.t[i], line.pal);
+      await wait(line.t[i] === '.' ? DOT_MS : CPS_MS + Math.random() * 26);
+    }
+    cursor.c = startCol + line.t.length;
+  }
+
+  async function runSequence() {
+    phase = 'build'; phaseT = 0;
+    await wait((T_BUILD + T_HOLD) * 1000);
+
+    phase = 'shutdown'; phaseT = 0;
+    await wait(T_SHUTDOWN * 1000 + 300);
+
+    phase = 'print';
+    const { startCol, startRow } = layout();
+    for (let i = 0; i < SCRIPT.length; i++) {
+      const line = SCRIPT[i];
+      await wait(line.pause * 1000);
+      await typeLine(line, startRow + i, startCol);
+      if (line.pal === 'err') { alarm.classList.remove('pulse'); void alarm.offsetWidth; alarm.classList.add('pulse'); }
+      if (line.pal === 'abort') {
+        surge = 1;
+        shake.classList.add('glitch');
+        alarm.classList.add('pulse');
+      }
+    }
+
+    await wait(HOLD_MS);
+    if (loop) restart();
+  }
+
+  function restart() {
+    clearTimers();
+    clearText();
+    alarm.classList.remove('pulse');
+    shake.classList.remove('glitch');
+    liveCols = cols; surge = 0;
+    colLife.fill(0);
+    for (let i = 0; i < streamCount; i++) spawn(i, true);
+    runSequence();
+  }
+
+  // ── Frame ────────────────────────────────────────────────────────────────
+  let last = performance.now();
+
+  function frame(now) {
+    const dt = Math.min((now - last) / 1000, 0.05);
+    last = now;
+    phaseT += dt;
+
+    if (phase === 'build') {
+      // switch the field ON, left -> right
+      const front = (phaseT / T_BUILD) * cols;
+      for (let c = 0; c < cols; c++) {
+        const target = c <= front ? 1 : 0;
+        if (target > colLife[c]) colLife[c] = Math.min(1, colLife[c] + dt / COL_FADE);
+      }
+    } else if (phase === 'shutdown') {
+      // switch it OFF, right -> left, down to the surviving band
+      const keep = Math.max(1, Math.round(cols * SURVIVOR));
+      const k = Math.min(1, phaseT / T_SHUTDOWN);
+      const e = 1 - Math.pow(1 - k, 2.2);
+      const front = cols - (cols - keep) * e;
+      liveCols = Math.max(1, Math.round(front));
+      for (let c = 0; c < cols; c++) {
+        if (c >= front) colLife[c] = Math.max(0, colLife[c] - dt / COL_FADE);
+      }
+    }
+
+    step(dt);
+    draw(now);
+    requestAnimationFrame(frame);
+  }
+
+  // ── Boot ─────────────────────────────────────────────────────────────────
+  addEventListener('keydown', e => {
+    const k = e.key.toLowerCase();
+    if (k === 'r') restart();
+    else if (k === 'l') loop = !loop;
+    else if (k === 'f') {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else document.documentElement.requestFullscreen?.();
+    }
+  });
+
+  let rt;
+  addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { resize(); restart(); }, 160); });
+
+  const boot = () => { resize(); colLife.fill(0); requestAnimationFrame(frame); runSequence(); };
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(boot); else boot();
+  setTimeout(() => hint.classList.add('gone'), 6000);
+})();
+</script>
+</body>
+</html>
