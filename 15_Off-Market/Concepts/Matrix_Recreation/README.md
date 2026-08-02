@@ -118,3 +118,54 @@ capped, and inserted via `textContent` (never HTML).
    address, so they don't breach the no-single-valuation-in-headlines rule —
    but they are dollar figures on screen. Easy to drop from `TOKENS` if you'd
    rather not carry them.
+
+---
+
+# Version 3 — In-code sequence
+
+**View:** https://vm.fieldsestate.com.au/concepts/off-market/Matrix_Recreation/code-sequence.html
+
+No HTML text layer at all. The message is written **into the rain's own
+character grid** — same cells, same glyph atlas, same bloom — so the words are
+part of the code rather than sitting on top of it. Rain keeps streaming to the
+left and right of every printed line.
+
+## Sequence
+
+| t | Beat |
+|---|---|
+| 0–1.4s | Field switches **ON, left → right** |
+| 1.4–4.0s | Full field |
+| 4.0–6.2s | Field switches **OFF, right → left**, easing out |
+| 6.2s+ | A ~17% band of columns keeps raining; the message prints into the grid |
+
+Each column extinguishes over 0.45s as the front passes, so it reads as
+switching off rather than snapping off. Same script, timing and payoff as v2
+(slow-landing dots, alarm wash per ERROR, shake + rain surge on ABORT), and the
+same `?street=&locality=` overrides.
+
+The surviving band is deliberately **not** zero — a thin strip keeps streaming so
+the field never looks frozen. Set `SURVIVOR = 0` for a fully silent screen.
+
+## How the message lives in the grid
+
+- **Per-palette atlases.** Seven palettes (rain, dim, ok, addr, warn, err,
+  abort), each a full glyph atlas at 24 brightness tiers. That's what lets a
+  line turn amber or red while still being drawn by the same `drawImage` path
+  as the rain.
+- **Message layer.** `textB` (brightness) and `textP` (palette) per cell. A cell
+  with `textB > 0` owns its glyph outright — the rain can neither recolour nor
+  overwrite it.
+- **Landing flash.** Each character stamps at full white-hot brightness and
+  settles to 0.84 after 90ms, so type lands like a stream head.
+- **Text-only glyphs.** Lowercase, apostrophe and space live in the atlas but
+  sit above `RAND_G`, so random churn never selects them — the rain keeps its
+  uppercase/numeric character while the message reads in sentence case.
+
+### Bug worth remembering
+
+First cut printed `seaLc in2.2.` / `3 ANo2et A e ue`. The random churn was
+correctly guarded against message cells, but the **token stamper was not** — it
+wrote `cell[]` unconditionally, so `BURLEIGH WATERS` and friends ate characters
+out of the printed words as they fell through those rows. Any writer to `cell[]`
+must check `textB[j] === 0` first; there are two of them, not one.
