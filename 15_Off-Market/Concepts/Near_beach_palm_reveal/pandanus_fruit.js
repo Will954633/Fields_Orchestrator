@@ -259,7 +259,9 @@ function paintFruit(ctx, cx, cy, R, rot, lean){
 // build_fruit_sprites.py). It is what should actually be shown; the procedural
 // fruit above stays as the fallback for the moments before the sheet has
 // loaded, so the animation never has a hole in it.
-const SPRITE = { img: null, frames: 24, tile: 200, cols: 6, ready: false };
+// baseR: the body occupies this fraction of the tile — the rest is headroom
+// for drupes standing proud of the outline, so the draw size compensates.
+const SPRITE = { img: null, frames: 24, tile: 200, cols: 6, baseR: 0.88, ready: false };
 if (typeof window !== "undefined") {
   const im = new Image();
   im.onload = () => { SPRITE.img = im; SPRITE.ready = true; };
@@ -273,7 +275,8 @@ function paintFruitSprite(ctx, cx, cy, R, rot) {
   if (f < 0) f += n;
   const sx = (f % SPRITE.cols) * SPRITE.tile;
   const sy = Math.floor(f / SPRITE.cols) * SPRITE.tile;
-  const w = R * 2 * 1.15, h = R * 2 * 0.95;   // prolate, long axis horizontal
+  const k = 1 / SPRITE.baseR;
+  const w = R * 2 * 1.15 * k, h = R * 2 * 0.95 * k;  // prolate, long axis horizontal
   ctx.drawImage(SPRITE.img, sx, sy, SPRITE.tile, SPRITE.tile,
                 cx - w / 2, cy - h / 2, w, h);
 }
