@@ -45,6 +45,74 @@ SPINE_SMOOTH = 41     # odd window, in columns, for smoothing the centreline
 # ----------------------------------------------------------------------------
 
 
+# --- ink treatment ----------------------------------------------------------
+# The look from the V3 reveal deck (Page_Redesign_V3/reveals/build_reveal.py):
+# the drawing is reduced to an INK COVERAGE mask and that coverage is painted in
+# a warm cream onto black paper. Paper becomes ground, strokes come up light —
+# it reads as scratchboard or silverpoint rather than as an inverted photo.
+#
+# Constants are lifted from that build so the whale matches the rest of the deck
+# exactly rather than approximately.
+INK_COLOUR = (0xE6, 0xDD, 0xD2)
+INK_BLACK_POINT = 0.0015   # luminance quantile mapped to full ink
+INK_CLEAN_FLOOR = 0.014    # weaker than this is scanner haze — flatten to paper
+INK_GAMMA = 1.06           # >1 holds the light hatch back slightly
+INK_UNSHARP = (1.0, 45, 3) # radius, percent, threshold — keeps fine hatch crisp
+
+
+def paper_white(luma: np.ndarray) -> float:
+    """The paper is the most common bright tone, not the brightest pixel.
+
+    A percentile white point leaves a 1/255 haze across the whole background,
+    which is enough to make genuinely empty paper carry ink.
+    """
+    bright = luma[luma > 200].astype(np.uint8)
+    if bright.size == 0:
+        return float(luma.max())
+    vals, counts = np.unique(bright, return_counts=True)
+    return float(vals[counts.argmax()])
+
+
+def ink_coverage(src: Path) -> np.ndarray:
+    """Ink coverage over the FULL source frame, before any cropping.
+
+    Transparency is flattened onto white first, never discarded. Whale_V2.png is
+    77% transparent over a dark grey RGB ground; going straight to convert("RGB")
+    keeps that stored ground and turns the entire empty background into solid
+    ink.
+    """
+    im = Image.open(src)
+    if im.mode in ("RGBA", "LA", "P"):
+        im = im.convert("RGBA")
+        im = Image.alpha_composite(Image.new("RGBA", im.size, (255, 255, 255, 255)), im)
+    im = im.convert("RGB").filter(ImageFilter.UnsharpMask(*INK_UNSHARP))
+    luma = np.asarray(im.convert("L")).astype(np.float32)
+
+    white = paper_white(luma)
+    black = float(np.quantile(luma, INK_BLACK_POINT))
+    ink = np.clip((white - luma) / max(white - black, 1e-6), 0.0, 1.0) ** INK_GAMMA
+    ink[ink < INK_CLEAN_FLOOR] = 0.0
+    return ink
+
+
+def ink_layer(ink: np.ndarray, weight: np.ndarray) -> Image.Image:
+    """Cream-on-black layer: flat ink colour, alpha = coverage x layer weight.
+
+    The weight is the layer's own matte, used soft rather than as a boolean so
+    the ink edge inherits the matte's feather instead of being cut hard against
+    the black.
+
+    Clipping at all matters even though empty paper already carries zero ink —
+    the flipper layers must not carry each other's strokes, or a blade would drag
+    a ghost of its neighbour around as it swings.
+    """
+    h, w = ink.shape
+    rgba = np.zeros((h, w, 4), np.uint8)
+    rgba[..., 0], rgba[..., 1], rgba[..., 2] = INK_COLOUR
+    rgba[..., 3] = np.round(np.clip(ink * weight, 0, 1) * 255).astype(np.uint8)
+    return Image.fromarray(rgba, mode="RGBA")
+
+
 def bleed_rgb(rgb: np.ndarray, solid: np.ndarray, iters: int) -> np.ndarray:
     """Push colour outward into transparent pixels.
 
@@ -244,6 +312,7 @@ def split_flippers(rgb: np.ndarray, alpha: np.ndarray) -> tuple:
         lrgb = bleed_rgb(rgb[y0:y1, x0:x1], la > 32, 6)
         layers[name] = {
             "img": Image.fromarray(np.dstack([lrgb, la]).astype(np.uint8)),
+            "alpha": la,
             "meta": {"x": x0, "y": y0, "w": x1 - x0, "h": y1 - y0,
                      "hinge_x": round(hinge[0] - x0, 1),
                      "hinge_y": round(hinge[1] - y0, 1),
@@ -289,16 +358,32 @@ def main() -> None:
     for name, layer in flippers.items():
         layer["img"].save(HERE / f"whale_flipper_{name}.png")
 
+    # --- the ink treatment, from the same crop and the same cuts ---------------
+    # Computed on the FULL source then cropped identically, so every coordinate
+    # in whale_rig.json — spine, flipper hinges, eye — stays valid for both
+    # sprite sets and the two pages share one rig.
+    ink = ink_coverage(SOURCE)[y0:y1, x0:x1]
+    ink_layer(ink, body_alpha / 255.0).save(HERE / "whale_body_ink.png")
+    for name, layer in flippers.items():
+        m = layer["meta"]
+        sub = ink[m["y"]:m["y"] + m["h"], m["x"]:m["x"] + m["w"]]
+        ink_layer(sub, layer["alpha"] / 255.0).save(HERE / f"whale_flipper_{name}_ink.png")
+
     def uri(p: Path) -> str:
         return "data:image/png;base64," + base64.b64encode(p.read_bytes()).decode()
 
-    html = (TEMPLATE.read_text()
-            .replace("{{BODY_DATA_URI}}", uri(HERE / "whale_body.png"))
-            .replace("{{NEAR_DATA_URI}}", uri(HERE / "whale_flipper_near.png"))
-            .replace("{{FAR_DATA_URI}}", uri(HERE / "whale_flipper_far.png"))
-            .replace("{{RIG_JSON}}", json.dumps(rig, separators=(",", ":"))))
-    (HERE / "index.html").write_text(html)
-    (HERE / "whale_rig.json").write_text(json.dumps(rig, separators=(",", ":")))
+    tpl = TEMPLATE.read_text()
+    rig_json = json.dumps(rig, separators=(",", ":"))
+    for out, suffix, theme in (("index.html", "", "dark"),
+                               ("index_ink.html", "_ink", "ink")):
+        html = (tpl
+                .replace("{{BODY_DATA_URI}}", uri(HERE / f"whale_body{suffix}.png"))
+                .replace("{{NEAR_DATA_URI}}", uri(HERE / f"whale_flipper_near{suffix}.png"))
+                .replace("{{FAR_DATA_URI}}", uri(HERE / f"whale_flipper_far{suffix}.png"))
+                .replace("{{THEME_DEFAULT}}", theme)
+                .replace("{{RIG_JSON}}", rig_json))
+        (HERE / out).write_text(html)
+    (HERE / "whale_rig.json").write_text(rig_json)
 
     print(f"body        {w}x{h}")
     for name, layer in flippers.items():
@@ -307,7 +392,10 @@ def main() -> None:
               f"hinge ({m['hinge_abs_x']},{m['hinge_abs_y']})")
     print(f"peduncle    x={rig['waist_x']}  u={rig['waist_u']}  "
           f"(tail stock meets trunk; trunk ref {rig['trunk_thickness']}px)")
-    print(f"index.html  {(HERE / 'index.html').stat().st_size/1024:.0f} KB")
+    print(f"ink         mean coverage {ink.mean():.3f}, "
+          f"{(ink > 0).mean()*100:.1f}% of the crop carries ink")
+    for out in ("index.html", "index_ink.html"):
+        print(f"{out:12s} {(HERE / out).stat().st_size/1024:.0f} KB")
 
 
 if __name__ == "__main__":
