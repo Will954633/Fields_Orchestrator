@@ -1,0 +1,465 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>The Whales Are Coming — swim study</title>
+
+<style>
+  :root {
+    --paper: #0d1620; --ink: #e8eef4; --dim: #7b8b9c; --line: #1e2c3a;
+    --accent: #6fb3c9;
+  }
+  [data-theme="light"] {
+    --paper: #f2efe8; --ink: #1d2630; --dim: #6c7784; --line: #ddd7cb;
+    --accent: #2b6d85;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font: 14px/1.5 ui-sans-serif, -apple-system, "Segoe UI", Helvetica, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  header { padding: 22px 24px 10px; }
+  h1 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: .01em; }
+  h1 span { color: var(--dim); font-weight: 400; }
+  .stage { padding: 0 24px; }
+  canvas {
+    display: block; width: 100%; height: auto; border-radius: 3px;
+    background: transparent;
+  }
+
+  .readout {
+    display: flex; flex-wrap: wrap; gap: 0 28px;
+    padding: 14px 24px 0; color: var(--dim);
+    font: 12px/1.7 ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  .readout b { color: var(--ink); font-weight: 600; }
+  .readout .warn { color: #d98a4a; }
+
+  .panel {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 4px 26px; padding: 16px 24px 40px; max-width: 1400px;
+  }
+  .panel h2 {
+    grid-column: 1 / -1; margin: 18px 0 2px; font-size: 11px; font-weight: 600;
+    letter-spacing: .09em; text-transform: uppercase; color: var(--dim);
+    border-top: 1px solid var(--line); padding-top: 12px;
+  }
+  .panel h2:first-of-type { margin-top: 4px; }
+  label { display: grid; grid-template-columns: 1fr auto; align-items: center;
+          gap: 0 10px; padding: 3px 0; }
+  label > span:first-child { color: var(--dim); }
+  label > output { font: 12px ui-monospace, Menlo, monospace; color: var(--ink); }
+  input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--accent);
+                      margin: 2px 0 0; }
+  label.check { grid-template-columns: auto 1fr; justify-items: start; }
+  label.check input { accent-color: var(--accent); margin: 0 8px 0 0; }
+  .row { grid-column: 1 / -1; display: flex; gap: 10px; margin-top: 14px; }
+  button {
+    font: 12px/1 inherit; padding: 8px 14px; border-radius: 3px; cursor: pointer;
+    color: var(--ink); background: transparent; border: 1px solid var(--line);
+  }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  .note { grid-column: 1/-1; color: var(--dim); font-size: 12px; max-width: 62ch;
+          margin-top: 6px; }
+</style>
+
+<header>
+  <h1>The Whales Are Coming <span>— procedural swim study, Whale_V2</span></h1>
+</header>
+
+<div class="stage"><canvas id="c"></canvas></div>
+
+<div class="readout" id="readout"></div>
+
+<div class="panel" id="panel"></div>
+
+<script>
+// ---------------------------------------------------------------------------
+// The whale
+//
+// One flat sprite, sliced into vertical strips and re-laid along a travelling
+// wave. Each strip is translated by the wave's local displacement and rotated
+// by its local slope, about the spine point the build script measured out of
+// the matte — so at rest (displacement 0, slope 0) every strip lands exactly
+// where it was drawn and the pose is the artist's, untouched.
+//
+// What is deliberately NOT modelled: arc-length shortening when the body bends.
+// A bent body projects slightly shorter than a straight one, but at the
+// amplitudes real whales actually use (fluke peak-to-peak ~0.2 body lengths
+// over a ~0.9 body-length wave) that is a 1-2% effect, well under the point
+// where the hatch texture shearing gives the trick away first.
+// ---------------------------------------------------------------------------
+
+const RIG = {{RIG_JSON}};
+const SPRITE_URI = "{{SPRITE_DATA_URI}}";
+
+const P = {
+  // physics
+  St:        0.30,   // Strouhal number — 0.25-0.35 is the efficient band
+  U:         2.0,    // cruising speed, m/s
+  L:         14.0,   // body length, m
+  ampFrac:   0.20,   // fluke peak-to-peak amplitude, as a fraction of L
+  lambda:    0.90,   // wavelength, in body lengths
+  rigid:     0.38,   // fraction of the body from the nose that barely flexes
+  sharp:     2.2,    // how hard the amplitude ramps toward the fluke
+  // burst and coast
+  beats:     3.5,    // tail beats per burst
+  glide:     5.0,    // seconds of rigid glide between bursts
+  drag:      0.030,  // quadratic drag — sets how slowly speed builds and decays
+  // secondary
+  pitch:     0.35,   // body pitch coupled to the stroke (0-1)
+  heave:     0.22,   // whole-body recoil against the stroke (0-1)
+  // staging
+  size:      0.42,   // whale length as a fraction of canvas width
+  depth:     0.50,   // vertical placement
+  strips:    3,      // strip width in source px — smaller is smoother, slower
+  motes:     true,   // drifting particles, so the speed has something to read against
+  spine:     false,  // debug overlay
+  theme:     "dark",
+};
+
+const CANVAS_W = 1600, CANVAS_H = 720;
+
+const cv = document.getElementById("c");
+cv.width = CANVAS_W; cv.height = CANVAS_H;
+const ctx = cv.getContext("2d");
+ctx.imageSmoothingEnabled = true;
+ctx.imageSmoothingQuality = "high";
+
+const img = new Image();
+
+// --- derived quantities ----------------------------------------------------
+
+// Strouhal locks tail-beat frequency to speed and amplitude. Solving for f is
+// the whole realism story: a 14 m humpback at 2 m/s beats its tail about once
+// every 4.7 seconds. Nearly every hand-animated whale runs 10x too fast.
+const freqAt = (v) => (P.St * Math.abs(v)) / Math.max(P.ampFrac * P.L, 1e-6);
+
+// px per metre, from the sprite's on-screen length
+const pxPerM = () => (CANVAS_W * P.size) / P.L;
+
+// --- state -----------------------------------------------------------------
+
+const S = {
+  t: 0,          // seconds
+  phase: 0,      // tail-beat phase, radians — integrated, because f varies
+  v: 0,          // forward speed, m/s
+  x: 0,          // position, m, from the left edge of the world
+  cycleT: 0,     // seconds into the current burst+glide cycle
+  motes: [],
+};
+
+function resetSim() {
+  S.t = 0; S.phase = 0; S.v = P.U * 0.85; S.cycleT = 0;
+  // nose at the left edge, body trailing off-frame — the whale enters at once
+  // rather than spending its first ten seconds swimming through empty world
+  S.x = 0;
+  S.motes = Array.from({ length: 90 }, (_, i) => ({
+    x: Math.random() * CANVAS_W,
+    y: Math.random() * CANVAS_H,
+    z: 0.25 + Math.random() * 1.0,      // parallax depth
+    r: 0.6 + Math.random() * 1.8,
+  }));
+}
+
+// Burst-and-coast. Larger whales rarely beat continuously — a few strong
+// strokes, then a long rigid glide while drag bleeds the speed off. The tail
+// amplitude ramps in and out rather than switching, or the fluke snaps.
+function strokeEnvelope(cycleT) {
+  const burstDur = P.beats / Math.max(freqAt(P.U), 1e-6);
+  const total = burstDur + P.glide;
+  if (P.glide <= 0.01) return { on: 1, total };
+  const ramp = Math.min(0.9 / Math.max(freqAt(P.U), 1e-6), burstDur * 0.45);
+  let on;
+  if (cycleT < burstDur) {
+    const inN = Math.min(cycleT / ramp, 1);
+    const outN = Math.min((burstDur - cycleT) / ramp, 1);
+    on = Math.min(inN, outN);
+  } else {
+    on = 0;
+  }
+  return { on: on * on * (3 - 2 * on), total };   // smoothstep
+}
+
+function step(dt) {
+  const { on, total } = strokeEnvelope(S.cycleT);
+
+  // Thrust is scaled so that continuous beating settles at exactly the cruise
+  // speed the slider asks for — steady state is thrust == drag * U^2.
+  const thrust = P.drag * P.U * P.U;
+  S.v += (thrust * on - P.drag * S.v * S.v) * dt;
+  S.v = Math.max(S.v, 0);
+  S.x += S.v * dt;
+
+  S.phase += 2 * Math.PI * freqAt(S.v) * dt;
+  S.cycleT = (S.cycleT + dt) % total;
+  S.t += dt;
+
+  const ppm = pxPerM();
+  for (const m of S.motes) {
+    m.x -= S.v * ppm * dt * m.z * 0.55;
+    if (m.x < -8) { m.x = CANVAS_W + 8; m.y = Math.random() * CANVAS_H; }
+  }
+  return on;
+}
+
+// --- the wave --------------------------------------------------------------
+
+// u runs 0 at the nose to 1 at the fluke tip. Amplitude is ~0 across the rigid
+// front, then ramps to full at the flukes; the phase term makes the wave travel
+// backwards down the body, which is what makes the fluke lag the peduncle and
+// scoop water instead of just wagging.
+function envelope(u) {
+  const n = Math.max(0, Math.min(1, (u - P.rigid) / Math.max(1 - P.rigid, 1e-6)));
+  return Math.pow(n, P.sharp);
+}
+function displacement(u, on) {
+  const ampPx = (P.ampFrac * RIG.width) / 2;     // peak-to-peak -> single-sided
+  return ampPx * envelope(u) * on *
+         Math.sin(S.phase - (2 * Math.PI * u) / P.lambda);
+}
+
+// --- draw ------------------------------------------------------------------
+
+function paintWater() {
+  const dark = P.theme === "dark";
+  const g = ctx.createLinearGradient(0, 0, 0, CANVAS_H);
+  if (dark) {
+    g.addColorStop(0, "#16283a"); g.addColorStop(0.55, "#0d1927");
+    g.addColorStop(1, "#070e17");
+  } else {
+    g.addColorStop(0, "#e9e6dd"); g.addColorStop(0.6, "#dcdbd3");
+    g.addColorStop(1, "#cfd2cd");
+  }
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+  // soft light shafts from the surface
+  ctx.save();
+  ctx.globalAlpha = dark ? 0.055 : 0.05;
+  ctx.fillStyle = dark ? "#a9d8ee" : "#ffffff";
+  for (let i = 0; i < 7; i++) {
+    const x = ((i * 251) % CANVAS_W) + Math.sin(S.t * 0.11 + i) * 26;
+    ctx.save();
+    ctx.translate(x, 0); ctx.rotate(0.13 + i * 0.012);
+    ctx.fillRect(-45, -60, 90, CANVAS_H * 1.35);
+    ctx.restore();
+  }
+  ctx.restore();
+
+  if (!P.motes) return;
+  ctx.save();
+  ctx.fillStyle = dark ? "#cfe6f2" : "#8d9aa2";
+  for (const m of S.motes) {
+    ctx.globalAlpha = (dark ? 0.20 : 0.16) * m.z;
+    ctx.beginPath(); ctx.arc(m.x, m.y, m.r * m.z, 0, 6.2832); ctx.fill();
+  }
+  ctx.restore();
+}
+
+function paintWhale(on) {
+  const W = RIG.width, H = RIG.height;
+  const scale = (CANVAS_W * P.size) / W;
+  const ppm = pxPerM();
+
+  // world x -> screen. The sprite's nose is at its RIGHT edge, so the sprite's
+  // left edge sits one body length behind the nose.
+  const noseX = S.x * ppm;
+  const originX = noseX - W * scale;
+  const originY = CANVAS_H * P.depth - (H * scale) / 2;
+
+  // Whole-body recoil and pitch. A tail beating down drives the body up, and
+  // the head pitches counter to the stroke — both lag the tail by a quarter
+  // cycle, which is what stops the animation reading as a rigid sprite on a
+  // path with a wiggling tail bolted on.
+  const heave = -P.heave * (P.ampFrac * W * 0.5) * on *
+                Math.sin(S.phase - Math.PI / 2) * scale * 0.35;
+  const pitch = P.pitch * 0.055 * on * Math.sin(S.phase - Math.PI / 2);
+
+  ctx.save();
+  ctx.translate(originX + (W * scale) / 2, originY + (H * scale) / 2 + heave);
+  ctx.rotate(pitch);
+  ctx.translate(-(W * scale) / 2, -(H * scale) / 2);
+  ctx.scale(scale, scale);
+
+  const step = Math.max(1, Math.round(P.strips));
+  const spine = RIG.centre;
+
+  for (let sx = 0; sx < W; sx += step) {
+    const sw = Math.min(step, W - sx);
+    const xc = sx + sw / 2;
+    const u = 1 - xc / W;
+
+    const d = displacement(u, on);
+    // local slope of the wave, in source px, for the strip's rotation
+    const du = step / W;
+    const slope = (displacement(u + du, on) - displacement(u - du, on)) /
+                  (-2 * step);      // u decreases as x increases, hence the sign
+    const theta = Math.atan(slope);
+
+    const cy = spine[Math.min(sx + (sw >> 1), spine.length - 1)];
+
+    ctx.save();
+    ctx.translate(xc, cy + d);
+    ctx.rotate(theta);
+    // +1px of source and destination overlap, or the strips show as seams
+    ctx.drawImage(img, sx, 0, sw + 1, H, -sw / 2, -cy, sw + 1, H);
+    ctx.restore();
+  }
+
+  if (P.spine) {
+    ctx.strokeStyle = "#ff4d6d"; ctx.lineWidth = 2 / scale; ctx.beginPath();
+    for (let sx = 0; sx < W; sx += step) {
+      const u = 1 - (sx + step / 2) / W;
+      const y = spine[sx] + displacement(u, on);
+      sx === 0 ? ctx.moveTo(sx, y) : ctx.lineTo(sx, y);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function frame(on) {
+  paintWater();
+  paintWhale(on);
+  updateReadout(on);
+}
+
+// --- readout ---------------------------------------------------------------
+
+function updateReadout(on) {
+  const f = freqAt(S.v), fc = freqAt(P.U);
+  const screenM = CANVAS_W / pxPerM();
+  const crossing = (screenM + P.L) / Math.max(P.U, 1e-6);
+  const stNow = P.St;
+  const bad = stNow < 0.25 || stNow > 0.35;
+  document.getElementById("readout").innerHTML = [
+    `tail beat <b>${f.toFixed(3)} Hz</b> (${f > 0 ? (1 / f).toFixed(1) : "—"} s/cycle)`,
+    `speed <b>${S.v.toFixed(2)} m/s</b> of ${P.U.toFixed(1)}`,
+    `stroke <b>${on > 0.02 ? "burst" : "glide"}</b>`,
+    `screen <b>${screenM.toFixed(0)} m</b> of water`,
+    `crossing <b>${crossing.toFixed(0)} s</b>`,
+    `St <b class="${bad ? "warn" : ""}">${stNow.toFixed(2)}</b>${bad ? " outside 0.25–0.35" : ""}`,
+    `cruise beat <b>${(1 / fc).toFixed(1)} s</b>`,
+  ].join("&nbsp;&nbsp;·&nbsp;&nbsp;");
+}
+
+// --- controls --------------------------------------------------------------
+
+const CONTROLS = [
+  ["h", "Hydrodynamics"],
+  ["St", "Strouhal number", 0.18, 0.50, 0.01, v => v.toFixed(2)],
+  ["U", "Cruise speed (m/s)", 0.4, 5, 0.1, v => v.toFixed(1)],
+  ["L", "Body length (m)", 7, 20, 0.5, v => v.toFixed(1) + " m"],
+  ["ampFrac", "Fluke amplitude (A/L, p-p)", 0.04, 0.40, 0.01, v => v.toFixed(2)],
+  ["h", "Body wave"],
+  ["lambda", "Wavelength (body lengths)", 0.4, 2.0, 0.05, v => v.toFixed(2)],
+  ["rigid", "Rigid front (fraction)", 0, 0.65, 0.01, v => v.toFixed(2)],
+  ["sharp", "Envelope sharpness", 1, 4, 0.1, v => v.toFixed(1)],
+  ["h", "Burst and coast"],
+  ["beats", "Beats per burst", 1, 8, 0.5, v => v.toFixed(1)],
+  ["glide", "Glide (s)", 0, 14, 0.5, v => v.toFixed(1) + " s"],
+  ["drag", "Drag", 0.005, 0.12, 0.005, v => v.toFixed(3)],
+  ["h", "Secondary motion"],
+  ["pitch", "Body pitch", 0, 1, 0.02, v => v.toFixed(2)],
+  ["heave", "Body recoil", 0, 1, 0.02, v => v.toFixed(2)],
+  ["h", "Staging"],
+  ["size", "Whale size (of frame)", 0.12, 0.9, 0.01, v => (v * 100).toFixed(0) + "%"],
+  ["depth", "Depth on screen", 0.15, 0.85, 0.01, v => v.toFixed(2)],
+  ["strips", "Strip width (px)", 1, 8, 1, v => v.toFixed(0)],
+];
+
+function buildPanel() {
+  const panel = document.getElementById("panel");
+  for (const c of CONTROLS) {
+    if (c[0] === "h") {
+      const h = document.createElement("h2"); h.textContent = c[1];
+      panel.appendChild(h); continue;
+    }
+    const [key, label, min, max, stepv, fmt] = c;
+    const el = document.createElement("label");
+    el.innerHTML = `<span>${label}</span><output></output>`;
+    const inp = document.createElement("input");
+    Object.assign(inp, { type: "range", min, max, step: stepv, value: P[key] });
+    const out = el.querySelector("output");
+    out.textContent = fmt(P[key]);
+    inp.oninput = () => { P[key] = +inp.value; out.textContent = fmt(P[key]); };
+    el.appendChild(inp); panel.appendChild(el);
+  }
+
+  const row = document.createElement("div"); row.className = "row";
+  const toggle = (label, key) => {
+    const b = document.createElement("button");
+    b.textContent = label;
+    b.onclick = () => { P[key] = !P[key]; };
+    return b;
+  };
+  const themeBtn = document.createElement("button");
+  themeBtn.textContent = "Light / dark";
+  themeBtn.onclick = () => {
+    P.theme = P.theme === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = P.theme === "dark" ? "" : "light";
+  };
+  const replay = document.createElement("button");
+  replay.textContent = "Replay"; replay.onclick = resetSim;
+  const save = document.createElement("button");
+  save.textContent = "Save frame";
+  save.onclick = () => {
+    const a = document.createElement("a");
+    a.download = "whale_swim.png"; a.href = cv.toDataURL("image/png"); a.click();
+  };
+  row.append(replay, themeBtn, toggle("Motes", "motes"), toggle("Spine", "spine"), save);
+  document.getElementById("panel").appendChild(row);
+
+  const note = document.createElement("div");
+  note.className = "note";
+  note.textContent =
+    "Strouhal locks beat frequency to speed and amplitude — change speed and " +
+    "the tail retimes itself. Push St outside 0.25–0.35 and the whale starts " +
+    "to look like it is sliding through the water rather than pushing against it.";
+  document.getElementById("panel").appendChild(note);
+}
+
+// --- URL params, so the renderer can drive this ----------------------------
+
+const qs = new URLSearchParams(location.search);
+for (const k of Object.keys(P)) {
+  if (!qs.has(k)) continue;
+  const raw = qs.get(k);
+  P[k] = (typeof P[k] === "boolean") ? raw !== "0" && raw !== "false"
+       : (typeof P[k] === "number")  ? +raw : raw;
+}
+if (P.theme !== "dark") document.documentElement.dataset.theme = "light";
+
+// --- run -------------------------------------------------------------------
+
+img.onload = () => {
+  buildPanel();
+  resetSim();
+
+  if (qs.get("capture") === "1") {
+    // Deterministic stepping for headless render — fixed dt, no wall clock.
+    window.__swim = {
+      frame(tSec, fps) {
+        const dt = 1 / (fps || 30);
+        // re-integrate from zero so any frame is reproducible on its own
+        resetSim();
+        let on = 0;
+        for (let t = 0; t < tSec; t += dt) on = step(dt);
+        frame(on);
+      },
+      params: P,
+    };
+    return;
+  }
+
+  let last = performance.now();
+  (function loop(now) {
+    const dt = Math.min((now - last) / 1000, 1 / 20);
+    last = now;
+    frame(step(dt));
+    requestAnimationFrame(loop);
+  })(last);
+};
+img.src = SPRITE_URI;
+</script>
