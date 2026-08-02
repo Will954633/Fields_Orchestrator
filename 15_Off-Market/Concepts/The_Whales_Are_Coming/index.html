@@ -1,0 +1,93 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>The Whales Are Coming — versions</title>
+
+<style>
+  :root { --paper:#0d1620; --ink:#e8eef4; --dim:#7b8b9c; --line:#1e2c3a; --accent:#6fb3c9; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--paper); color:var(--ink); padding:34px 24px 60px;
+         font:15px/1.55 ui-sans-serif,-apple-system,"Segoe UI",Helvetica,sans-serif;
+         -webkit-font-smoothing:antialiased; }
+  h1 { margin:0 0 4px; font-size:19px; font-weight:600; letter-spacing:.01em; }
+  .sub { color:var(--dim); font-size:13px; margin-bottom:28px; max-width:70ch; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(330px,1fr));
+          gap:22px; max-width:1500px; }
+  .card { border:1px solid var(--line); border-radius:5px; overflow:hidden;
+          background:#0a121b; display:flex; flex-direction:column; }
+  .card video { width:100%; display:block; background:#000; aspect-ratio:20/9; object-fit:cover; }
+  .card .body { padding:14px 16px 16px; }
+  .card h2 { margin:0 0 5px; font-size:15px; font-weight:600; }
+  .card p { margin:0 0 12px; color:var(--dim); font-size:12.5px; line-height:1.5; }
+  .links { display:flex; gap:9px; flex-wrap:wrap; }
+  a.btn { font-size:12px; padding:6px 12px; border:1px solid var(--line); border-radius:3px;
+          color:var(--ink); text-decoration:none; }
+  a.btn:hover { border-color:var(--accent); color:var(--accent); }
+  a.btn.primary { border-color:var(--accent); color:var(--accent); }
+  code { font-size:12px; color:var(--ink); }
+  .foot { margin-top:34px; padding-top:18px; border-top:1px solid var(--line);
+          color:var(--dim); font-size:12.5px; max-width:78ch; }
+</style>
+
+<h1>The Whales Are Coming</h1>
+<div class="sub">
+  One humpback, one rig, three finishes. Same measured swim kinematics, same
+  articulated flippers, same blink — only the sprites and the ground differ.
+  Each page plays on load and every parameter is a live slider.
+</div>
+
+<div class="grid">
+
+  <div class="card">
+    <video src="whale_swim.mp4" autoplay loop muted playsinline></video>
+    <div class="body">
+      <h2>Black-and-white sketch</h2>
+      <p>The original tonal drawing, in blue water. This is the base version —
+         the one every other finish is derived from.</p>
+      <div class="links">
+        <a class="btn primary" href="sketch.html">Open</a>
+        <a class="btn" href="whale_swim.mp4">Video</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <video src="whale_swim_ink.mp4" autoplay loop muted playsinline></video>
+    <div class="body">
+      <h2>Ink</h2>
+      <p>Cream strokes on black, matching the V3 reveal deck. The drawing is
+         reduced to an ink-coverage mask and painted in <code>#E6DDD2</code>, so
+         paper becomes ground and only strokes carry light.</p>
+      <div class="links">
+        <a class="btn primary" href="ink.html">Open</a>
+        <a class="btn" href="whale_swim_ink.mp4">Video</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <video src="whale_swim_wash.mp4" autoplay loop muted playsinline></video>
+    <div class="body">
+      <h2>Watercolour</h2>
+      <p>Palette transferred from a reference painting by luminance-indexed
+         colour lookup, on pale paper. Colour comes from a smooth wash, lightness
+         from the drawing, so every pen stroke survives.</p>
+      <div class="links">
+        <a class="btn primary" href="watercolour.html">Open</a>
+        <a class="btn" href="whale_swim_wash.mp4">Video</a>
+        <a class="btn" href="wash_palette.png">Palette</a>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="foot">
+  Source lives in <code>15_Off-Market/Concepts/The_Whales_Are_Coming</code> and on
+  GitHub at <code>Will954633/Fields_Orchestrator</code>. Only four files are
+  irreplaceable — <code>swim.template.html</code>,
+  <code>build_whale_sprite.py</code>, <code>build_wash.py</code>,
+  <code>shoot.js</code> — plus the two source images. Everything else on this page
+  is generated and rebuilds byte-for-byte; see <code>README.md</code> for the
+  method, the measurements behind the swim, and where the evidence runs out.
+</div>
