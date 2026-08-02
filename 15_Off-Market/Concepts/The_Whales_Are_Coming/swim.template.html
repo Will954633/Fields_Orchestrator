@@ -158,6 +158,9 @@ const P = {
   flipAmp:   0.10,   // rad of blade rotation
   flipPhase: 90,     // degrees trailing the fluke (measured 60.9-123.4)
   flipLag:   0.10,   // s of compliance
+  // blink
+  blinkEvery: 11.0,  // mean seconds between blinks (jittered)
+  blinkDur:   0.55,  // seconds for the whole close-hold-open stroke
   // staging
   size:      0.42,
   depth:     0.50,
@@ -254,12 +257,23 @@ const freqAt = (v) => (P.St * Math.abs(v)) / Math.max(P.ampFrac * P.L, 1e-6);
 const pxPerM = () => (CANVAS_W * P.size) / P.L;
 
 const S = { t: 0, phase: 0, v: 0, x: 0, cycleT: 0, motes: [],
-            flip: { near: 0, far: 0 }, hingeY: { near: 0, far: 0 } };
+            flip: { near: 0, far: 0 }, hingeY: { near: 0, far: 0 },
+            blinkU: 0, blinkT: 0, blinkNext: 0, seed: 1 };
+
+// Deterministic PRNG. Blink timing is jittered, but the capture renderer
+// re-integrates every frame from t=0, so the jitter has to replay identically
+// or the eye would flicker at random between frames of the same render.
+function rnd() {
+  S.seed = (S.seed * 1664525 + 1013904223) >>> 0;
+  return S.seed / 4294967296;
+}
+const nextBlinkGap = () => P.blinkEvery * (0.55 + 0.9 * rnd());
 
 function resetSim() {
   S.t = 0; S.phase = 0; S.v = P.U * 0.85; S.cycleT = 0; S.x = 0;
   S.flip.near = S.flip.far = 0;
   S.hingeY.near = S.hingeY.far = 0;
+  S.seed = 20260802; S.blinkU = 0; S.blinkT = 0; S.blinkNext = nextBlinkGap();
   S.motes = Array.from({ length: 90 }, () => ({
     x: Math.random() * CANVAS_W, y: Math.random() * CANVAS_H,
     z: 0.25 + Math.random() * 1.0, r: 0.6 + Math.random() * 1.8,
@@ -303,6 +317,13 @@ function step(dt) {
   for (const k of ["near", "far"]) S.flip[k] += (target - S.flip[k]) * a;
 
   const ppm = pxPerM();
+
+  if (S.blinkU > 0) {
+    S.blinkU += dt / Math.max(P.blinkDur, 1e-3);
+    if (S.blinkU >= 1) { S.blinkU = 0; S.blinkT = 0; S.blinkNext = nextBlinkGap(); }
+  } else if ((S.blinkT += dt) >= S.blinkNext) {
+    S.blinkU = 1e-6;
+  }
 
   for (const m of S.motes) {
     m.x -= S.v * ppm * dt * m.z * 0.55;
@@ -364,6 +385,86 @@ function paintFlipper(k, on, ph) {
   ctx.restore();
 }
 
+// The blink.
+//
+// The lid is the band of skin directly above the eye, stretched downward over
+// it and anchored at the band's top edge — so it is the artist's own hatching
+// doing the closing, and no gap can open behind it. A painted lid or an
+// inpainted socket would have to invent texture that matches a pen drawing, and
+// at this magnification it would not.
+//
+// Shape of the stroke is fast down, brief hold, slower up. A symmetric blink
+// reads as a twitch; the asymmetry is what makes it look like an eyelid.
+function blinkAmount(u) {
+  if (u <= 0) return 0;
+  if (u >= 1) return 0;
+  let t;
+  if (u < 0.30) t = u / 0.30;                 // close
+  else if (u < 0.45) t = 1;                   // hold shut
+  else t = 1 - (u - 0.45) / 0.55;             // open, slower
+  return t * t * (3 - 2 * t);                 // smoothstep
+}
+
+let eyeCv = null, eyeCx = null;
+const EYE_PAD = 14;
+
+function paintEye(ph, on) {
+  const E = RIG.eye;
+  if (!E || P.blinkEvery <= 0) return;
+  const shut = blinkAmount(S.blinkU);
+  if (shut <= 0.001) return;
+
+  const cx = E.x + E.w / 2, cy = E.y + E.h / 2;
+  const travel = (E.lid_closed_y - E.lid_open_y) * shut;
+  const srcY = E.lid_open_y - E.lid_src_h;
+  const bx = E.x - EYE_PAD, by = E.y - EYE_PAD;
+  const w = E.w + EYE_PAD * 2, h = E.h + EYE_PAD * 2;
+
+  if (!eyeCv) { eyeCv = document.createElement("canvas"); eyeCx = eyeCv.getContext("2d"); }
+  if (eyeCv.width !== w || eyeCv.height !== h) { eyeCv.width = w; eyeCv.height = h; }
+  eyeCx.clearRect(0, 0, w, h);
+
+  // the lid: skin from directly above the eye, stretched down over it, anchored
+  // at its own top edge so nothing can open up behind it
+  eyeCx.drawImage(IMG.body,
+                  bx, srcY, w, E.lid_src_h,
+                  0, srcY - by, w, E.lid_src_h + travel);
+
+  // the lid margin, drawn before the feather so its ends soften with everything else
+  if (shut > 0.30) {
+    const y = srcY - by + E.lid_src_h + travel;
+    const g = eyeCx.createLinearGradient(0, y - 3.5, 0, y + 0.5);
+    g.addColorStop(0, "rgba(38,34,30,0)");
+    g.addColorStop(1, `rgba(38,34,30,${0.55 * (shut - 0.30) / 0.70})`);
+    eyeCx.fillStyle = g;
+    eyeCx.fillRect(EYE_PAD * 0.6, y - 3.5, w - EYE_PAD * 1.2, 4);
+  }
+
+  // Feather to an ellipse. A hard-edged rectangle of skin pasted over hatching
+  // announces itself immediately; bounding the lid to a soft-edged almond means
+  // it can only ever cover the eye opening, and the edge dissolves into the
+  // surrounding lid tissue instead of cutting across it.
+  eyeCx.save();
+  eyeCx.globalCompositeOperation = "destination-out";
+  eyeCx.translate(w / 2, h / 2);
+  eyeCx.scale(1, h / w);
+  const fg = eyeCx.createRadialGradient(0, 0, w * 0.26, 0, 0, w * 0.50);
+  fg.addColorStop(0, "rgba(0,0,0,0)");
+  fg.addColorStop(1, "rgba(0,0,0,1)");
+  eyeCx.fillStyle = fg;
+  eyeCx.fillRect(-w, -w, 2 * w, 2 * w);
+  eyeCx.restore();
+
+  // rotate about the EYE'S OWN CENTRE. Rotating about (cx, displacement) puts
+  // the pivot ~390px above the eye and swings the patch clear of the socket.
+  ctx.save();
+  ctx.translate(cx, cy + dispAt(cx, ph, on));
+  ctx.rotate(Math.atan(slopeAt(cx, ph, on)) + (E.angle_deg * Math.PI) / 180);
+  ctx.translate(-cx, -cy);
+  ctx.drawImage(eyeCv, bx, by);
+  ctx.restore();
+}
+
 function paintWhale(on) {
   const W = RIG.width, H = RIG.height;
   const scale = (CANVAS_W * P.size) / W;
@@ -396,6 +497,7 @@ function paintWhale(on) {
     ctx.restore();
   }
 
+  paintEye(ph, on);
   paintFlipper("near", on, ph);                       // in front of the body
 
   if (P.spine) {
@@ -471,6 +573,9 @@ const CONTROLS = [
   ["flipAmp", "Blade rotation (rad)", 0, 0.5, 0.01, v => v.toFixed(2)],
   ["flipPhase", "Trailing the fluke", 0, 180, 5, v => v.toFixed(0) + "\u00b0" + (v>=61&&v<=123?" \u2713":"")],
   ["flipLag", "Compliance lag (s)", 0.01, 0.8, 0.01, v => v.toFixed(2) + " s"],
+  ["h", "Blink"],
+  ["blinkEvery", "Mean interval (s)", 0, 40, 0.5, v => v <= 0 ? "off" : v.toFixed(1) + " s"],
+  ["blinkDur", "Stroke duration (s)", 0.15, 2.0, 0.05, v => v.toFixed(2) + " s"],
   ["h", "Burst and coast"],
   ["beats", "Beats per burst", 1, 8, 0.5, v => v.toFixed(1)],
   ["glide", "Glide (s)", 0, 14, 0.5, v => v.toFixed(1) + " s"],
