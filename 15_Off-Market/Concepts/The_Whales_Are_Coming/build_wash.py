@@ -104,6 +104,11 @@ def build_spectrum(rgb: np.ndarray, mask: np.ndarray) -> tuple[np.ndarray, np.nd
     return np.clip(lut, 0, 255), count / max(count.sum(), 1)
 
 
+def spectrum_saturation(lut: np.ndarray) -> np.ndarray:
+    mx, mn = lut.max(1), lut.min(1)
+    return np.where(mx > 0, (mx - mn) / np.maximum(mx, 1e-6), 0)
+
+
 def cdf_of(luma: np.ndarray, weights: np.ndarray) -> np.ndarray:
     h = np.bincount(np.clip(luma.astype(int), 0, BINS - 1),
                     weights=weights, minlength=BINS)
@@ -116,22 +121,76 @@ def match_curve(src_cdf: np.ndarray, ref_cdf: np.ndarray) -> np.ndarray:
     return np.interp(src_cdf, ref_cdf, np.arange(BINS)).astype(np.float32)
 
 
+def ref_weights(count: np.ndarray, sat: np.ndarray, bias: float) -> np.ndarray:
+    """How much each intensity band should attract the whale's tones.
+
+    At bias 0 this is the reference's own pixel count, which reproduces its
+    distribution exactly — and that is precisely why the first attempt looked
+    grey. 54% of this painting is pale wash sitting in bands where the spectrum's
+    saturation has fallen to 0.23 and below; matching the distribution faithfully
+    means faithfully inheriting all that greyness. The vivid colour lives at
+    intensity 64-127, which is only 22% of the painting, so the whale was
+    receiving mean saturation 0.285 out of 0.508 available.
+
+    Raising bias weights the bands by how much colour they actually carry, so the
+    whale's tones are drawn into the saturated part of the spectrum instead of
+    being spread in proportion to how much pale wash the painter happened to use.
+    """
+    if bias <= 0:
+        return count
+    rel = sat / max(sat.mean(), 1e-6)
+    return count * np.power(np.maximum(rel, 1e-3), bias)
+
+
 def recolour(layer: Path, lut: np.ndarray, curve: np.ndarray,
-             detail: float) -> Image.Image:
+             detail: float, wash: float, chroma: float) -> Image.Image:
+    """Flat colour wash, then line work on top — the way the reference was painted.
+
+    The first version looked up the LUT against the drawing's raw luminance and
+    then added detail on top, so the pen hatch was carried twice: once as colour
+    modulation and again as luminance. Measured against the reference that gave
+    2.7x its local contrast (26.4 vs 9.8), and high-frequency light/dark
+    integrates toward grey when the eye views it small — blurred saturation fell
+    to p90 0.353 against the painting's 0.474. Per-pixel saturation was never the
+    problem; it measured HIGHER than the reference throughout.
+
+    So the colour field is looked up against a BLURRED luminance, which produces
+    the flat washes a watercolour actually has, and the drawing's fine detail is
+    added back separately and more sparingly as line work over the top.
+    """
     a = np.asarray(Image.open(layer).convert("RGBA")).astype(np.float32)
     rgb, alpha = a[..., :3], a[..., 3]
     luma = rgb @ np.array([0.299, 0.587, 0.114], np.float32)
 
-    matched = np.interp(luma, np.arange(BINS), curve)
-    out = lut[np.clip(matched.astype(int), 0, BINS - 1)]
+    # 1. colour field: looked up against a BLURRED tone, so hue and chroma vary
+    #    smoothly across the animal the way a wash does
+    base = luma if wash <= 0 else np.asarray(
+        Image.fromarray(luma.astype(np.uint8)).filter(ImageFilter.GaussianBlur(wash))
+    ).astype(np.float32)
+    field = lut[np.clip(np.interp(base, np.arange(BINS), curve).astype(int), 0, BINS - 1)]
 
+    if chroma != 1.0:
+        g = (field @ np.array([0.299, 0.587, 0.114], np.float32))[..., None]
+        field = np.clip(g + chroma * (field - g), 0, 255)
+
+    # 2. lightness: taken from the DRAWING, tone-matched into the reference's
+    #    range. Scaling all three channels by v_target/max leaves hue and HSV
+    #    saturation exactly untouched (both are scale-invariant) while setting
+    #    the value — so the colour comes from the wash and every pen stroke comes
+    #    from the drawing. Blurring for colour and then trying to add the detail
+    #    back as a highpass does not work: the wash blur eats the mid frequencies
+    #    that carry the barnacle stipple and the ventral pleats, and a radius-2
+    #    highpass cannot put them back. That version came out looking like flat
+    #    vector art.
+    v_target = np.interp(luma, np.arange(BINS), curve)
+    mx = field.max(2)
+    scale = np.where(mx > 1.0, v_target / np.maximum(mx, 1e-6), 0.0)
+    out = np.clip(field * scale[..., None], 0, 255)
+
+    # optional extra bite on the finest strokes
     if detail > 0:
-        # The spectrum is a function of intensity alone, so wherever the drawing
-        # holds two nearby tones it returns two nearly identical colours and the
-        # hatch flattens. Adding the source's high-frequency luminance back keeps
-        # the pen marks legible under the wash.
         blur = np.asarray(Image.fromarray(luma.astype(np.uint8))
-                          .filter(ImageFilter.GaussianBlur(2.0))).astype(np.float32)
+                          .filter(ImageFilter.GaussianBlur(1.5))).astype(np.float32)
         out = np.clip(out + detail * (luma - blur)[..., None], 0, 255)
 
     return Image.fromarray(np.dstack([out, alpha]).astype(np.uint8), "RGBA")
@@ -163,8 +222,14 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--ref", type=Path, required=True, help="reference painting")
-    ap.add_argument("--detail", type=float, default=0.55,
-                    help="how much of the drawing's fine hatch to keep (0-1)")
+    ap.add_argument("--detail", type=float, default=0.15,
+                    help="how much of the drawing's fine hatch to keep as line work (0-1)")
+    ap.add_argument("--wash", type=float, default=9.0,
+                    help="blur radius of the colour field; larger = flatter washes")
+    ap.add_argument("--bias", type=float, default=2.0,
+                    help="pull tones toward the spectrum's saturated bands (0 = faithful distribution)")
+    ap.add_argument("--chroma", type=float, default=1.8,
+                    help="chroma multiplier, applied about each pixel's luminance")
     ap.add_argument("--palette-only", action="store_true",
                     help="write wash_palette.png and stop — inspect before committing")
     a = ap.parse_args()
@@ -194,14 +259,20 @@ def main() -> None:
     bl = body[..., :3] @ np.array([0.299, 0.587, 0.114], np.float32)
     ba = body[..., 3] / 255.0
     ref_l = (rgb @ np.array([0.299, 0.587, 0.114], np.float32))[mask]
-    curve = match_curve(cdf_of(bl[ba > 0.02], ba[ba > 0.02]),
-                        cdf_of(ref_l, np.ones_like(ref_l)))
+    sat = spectrum_saturation(lut)
+    counts = np.bincount(np.clip(ref_l.astype(int), 0, BINS - 1), minlength=BINS).astype(np.float32)
+    w = ref_weights(counts, sat, a.bias)
+    ref_cdf = np.cumsum(w) / max(np.cumsum(w)[-1], 1e-9)
+    curve = match_curve(cdf_of(bl[ba > 0.02], ba[ba > 0.02]), ref_cdf)
+    recv = np.interp(np.interp(bl[ba > 0.5], np.arange(BINS), curve), np.arange(BINS), sat)
+    print(f"colour      bias {a.bias:.1f} -> whale receives mean spectrum saturation "
+          f"{recv.mean():.3f} (of {sat.max():.3f} available)")
     print(f"match       whale {bl[ba > 0.5].mean():.0f} mean intensity "
           f"-> reference {ref_l.mean():.0f}")
 
     for stem in ("whale_body", "whale_flipper_near", "whale_flipper_far"):
-        recolour(HERE / f"{stem}.png", lut, curve, a.detail).save(HERE / f"{stem}_wash.png")
-    print(f"layers      3 written (detail {a.detail:.2f})")
+        recolour(HERE / f"{stem}.png", lut, curve, a.detail, a.wash, a.chroma).save(HERE / f"{stem}_wash.png")
+    print(f"layers      3 written (wash {a.wash:.1f}, chroma {a.chroma:.2f}, detail {a.detail:.2f})")
 
     def uri(p: Path) -> str:
         return "data:image/png;base64," + base64.b64encode(p.read_bytes()).decode()
