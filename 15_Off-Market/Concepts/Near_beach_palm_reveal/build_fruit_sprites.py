@@ -45,6 +45,10 @@ DRUPES_IN_PATCH = 6.0       # roughly how many the sampled patch spans
 DELIGHT_BLUR = 34           # radius used to flatten the drawing's own shading
 LIGHT = (-0.46, 0.66, 0.60)  # upper-left, toward the viewer
 AMBIENT = 0.34
+# The sphere is drawn smaller than the tile so protruding drupes have room to
+# break the outline without being clipped by the tile edge.
+BASE_R = 0.88
+BUMP = 0.042                # how far a drupe top stands proud of the body
 # ----------------------------------------------------------------------------
 
 
@@ -119,17 +123,31 @@ def render(tex: np.ndarray) -> Image.Image:
     span_round = DRUPES_ACROSS * math.pi * px_per_drupe
     TEXW, TEXH = int(round(span_axis)), int(round(span_round))
     tex = build_wrap_texture(tex, TEXW, TEXH)
-    print(f"  wrap texture {tex.shape}  (periodic around the axis)")
+    # A separate height map at DRUPE scale. Displacing by the raw texture makes
+    # every pen stroke a spike and the fruit comes out looking like a chestnut —
+    # the outline should be chewed up by the drupes, not by the hatching.
+    drupe_px = PATCH / DRUPES_IN_PATCH
+    hb = Image.fromarray((tex * 255).astype(np.uint8)).filter(
+        ImageFilter.GaussianBlur(drupe_px * 0.22))
+    height = np.asarray(hb).astype(np.float32) / 255.0
+    hlo, hhi = np.quantile(height, 0.05), np.quantile(height, 0.95)
+    height = np.clip((height - hlo) / max(hhi - hlo, 1e-6), 0, 1)
+    print(f"  wrap texture {tex.shape}  height map blur {drupe_px*0.22:.1f}px")
 
     lx, ly, lz = LIGHT
     ln = math.sqrt(lx * lx + ly * ly + lz * lz)
     lx, ly, lz = lx / ln, ly / ln, lz / ln
 
     g = (np.arange(TILE) + 0.5) / TILE * 2 - 1
-    X, Y = np.meshgrid(g, -g)
-    r2 = X * X + Y * Y
-    inside = r2 <= 1.0
-    Z = np.sqrt(np.clip(1.0 - r2, 0, None))
+    GX, GY = np.meshgrid(g, -g)
+    # work in units where the body has radius 1, then scale into the tile
+    X, Y = GX / BASE_R, GY / BASE_R
+    rq = np.sqrt(X * X + Y * Y)
+    # Beyond the body radius we are on a protruding drupe, so clamp the surface
+    # point to the rim rather than going imaginary.
+    rc = np.clip(rq, 1e-6, 1.0)
+    Xc, Yc = X / np.maximum(rq, 1.0), Y / np.maximum(rq, 1.0)
+    Z = np.sqrt(np.clip(1.0 - np.minimum(rq, 1.0) ** 2, 0, None))
 
     rows = math.ceil(FRAMES / COLS)
     sheet = Image.new("RGBA", (COLS * TILE, rows * TILE), (0, 0, 0, 0))
@@ -139,13 +157,34 @@ def render(tex: np.ndarray) -> Image.Image:
         # Un-rotate the surface point to find where it sits on the texture.
         # Rotation is about X, so the axial coordinate never changes — only the
         # angle around the axis does. That IS the barrel roll.
-        ny = Y * math.cos(-rot) - Z * math.sin(-rot)
-        nz = Y * math.sin(-rot) + Z * math.cos(-rot)
+        ny = Yc * math.cos(-rot) - Z * math.sin(-rot)
+        nz = Yc * math.sin(-rot) + Z * math.cos(-rot)
         theta = np.arctan2(ny, nz)
 
-        u = (X + 1) * 0.5 * (TEXW - 1)
+        u = (Xc + 1) * 0.5 * (TEXW - 1)
         v = (theta + math.pi) / (2 * math.pi) * TEXH
         val = sample_wrap(tex, u, v)
+
+        # --- silhouette displacement ------------------------------------
+        # A perfect circle is the one thing that gives this away as geometry:
+        # on a real head the drupes stand proud and chew up the outline. Push
+        # the alpha boundary out by the drupe height sampled AT THE RIM, so the
+        # bumps belong to the drupes actually sitting on the edge — and change
+        # as it rolls, rather than being a fixed decorative wobble.
+        # Along the silhouette the texture angle is constant for the top half
+        # and flips by pi for the bottom, so sampling it directly leaves a hard
+        # notch where the two meet — at the poles of the roll axis, the left and
+        # right extremes. Sample both and cross-fade through the flip.
+        th_up = math.atan2(math.cos(rot), -math.sin(rot))
+        th_dn = th_up + math.pi
+        v_up = (th_up + math.pi) / (2 * math.pi) * TEXH
+        v_dn = (th_dn + math.pi) / (2 * math.pi) * TEXH
+        h_up = sample_wrap(height, u, np.full_like(u, v_up))
+        h_dn = sample_wrap(height, u, np.full_like(u, v_dn))
+        sgn = np.clip(Yc / 0.22, -1, 1)                  # smooth sign of sin(phi)
+        w_up = (sgn + 1) * 0.5
+        rim_h = h_up * w_up + h_dn * (1 - w_up)
+        edge_r = 1.0 + BUMP * (1.0 - rim_h)   # ink (dark in source) = drupe body
 
         # relight: our own lambert on the flattened texture
         lam = np.clip(X * lx + Y * ly + Z * lz, 0, None)
@@ -158,10 +197,9 @@ def render(tex: np.ndarray) -> Image.Image:
         out = np.clip((ink * 0.86 + 0.14) * shade, 0, 1)
 
         rgb = (out * 255).astype(np.uint8)
-        alpha = np.zeros_like(rgb)
-        # soften the very edge so the silhouette is drawn, not die-cut
-        edge = np.clip((1.0 - np.sqrt(np.clip(r2, 0, None))) / 0.035, 0, 1)
-        alpha[inside] = (edge[inside] * 255).astype(np.uint8)
+        # feather in units of the body radius, so it scales with the sprite
+        a = np.clip((edge_r - rq) / 0.030, 0, 1)
+        alpha = (a * 255).astype(np.uint8)
 
         tile = np.dstack([rgb, rgb, rgb, alpha])
         img = Image.fromarray(tile, "RGBA")
@@ -184,7 +222,7 @@ def main() -> None:
     out = HERE / "fruit_sprites.png"
     sheet.convert("LA").save(out, optimize=True)
     meta = {"frames": FRAMES, "tile": TILE, "cols": COLS,
-            "rows": math.ceil(FRAMES / COLS),
+            "rows": math.ceil(FRAMES / COLS), "baseR": BASE_R,
             "source": SOURCE.name, "note": "one full barrel roll about the horizontal long axis"}
     (HERE / "fruit_sprites.json").write_text(json.dumps(meta, indent=2))
     print(f"  wrote {out.name}  {sheet.size}  ({out.stat().st_size/1024:.0f} KB)")
