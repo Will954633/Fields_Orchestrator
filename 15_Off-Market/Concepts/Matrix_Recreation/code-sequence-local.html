@@ -135,7 +135,10 @@
 
   // How much of the field is carrying recognisable text, over time. The
   // curtain lands already readable; what changes is how *local* it gets.
-  const RAMP = [[0,0.34], [2.4,0.42], [4.8,0.50], [7.2,0.56], [11.2,0.62]];
+  // Nearly the whole field carries real records. The "code" texture comes from
+  // dataChunk()'s lot/plan/area/DOM fragments rather than from random glyphs,
+  // so raising this does not flatten the look — it just removes the gibberish.
+  const RAMP = [[0,0.62], [2.4,0.78], [4.8,0.88], [7.2,0.94], [11.2,0.98]];
 
   function tokenChanceAt(t) {
     if (t <= RAMP[0][0]) return RAMP[0][1];
@@ -672,6 +675,16 @@
 
   let rt;
   addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { resize(); restart(); }, 160); });
+
+  // Tuning hook: what share of the field is actually carrying real text right
+  // now, versus random filler. window.__rainStats() in the console.
+  window.__rainStats = () => {
+    let withText = 0;
+    for (let i = 0; i < streamCount; i++) if (sTok[i]) withText++;
+    return { t: +openT.toFixed(2), streams: streamCount, withText,
+             actual: +(withText / streamCount).toFixed(3),
+             target: +tokenChanceAt(openT).toFixed(3) };
+  };
 
   const boot = () => {
     resize();
