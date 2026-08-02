@@ -149,6 +149,24 @@ VENTRAL_ANCHORS = [(0, 300), (400, 470), (520, 560), (600, 610), (700, 625),
 BLADE_MIN_PX = 5000    # anything smaller is a speck, not a flipper
 HINGE_ROWS = 12        # rows of the cut edge averaged to place the hinge
 
+# The eye, read off the drawing at 5x. It is an almond running from (962, 396)
+# up to (1052, 381) — tilted about 10 degrees — with the bright lower-lid crease
+# at y ~ 405 and the upper lid margin at y ~ 378.
+#
+# The blink works by stretching the band of skin ABOVE the eye downward over it,
+# anchored at the band's top edge so no gap can open behind it. That means the
+# lid is made of the artist's own hatching, sampled from the tissue immediately
+# above the eye, which is exactly what an upper lid is. Painting a lid instead —
+# or inpainting the socket and drawing a crease — would have to invent texture
+# that has to match a pen drawing at 5x, and would not.
+EYE = {
+    "x": 958, "y": 372, "w": 100, "h": 42,   # the eye opening
+    "lid_open_y": 378,     # where the upper lid margin sits when open
+    "lid_closed_y": 405,   # the lower crease — where the margin lands when shut
+    "lid_src_h": 48,       # how much skin above the eye is stretched down
+    "angle_deg": -10.4,    # tilt of the lid axis
+}
+
 
 def split_flippers(rgb: np.ndarray, alpha: np.ndarray) -> tuple:
     """Cut the two pectoral flippers off the body as independently posable layers.
@@ -244,7 +262,8 @@ def main() -> None:
     rig.update({"width": w, "height": h,
                 "source": SOURCE.name,
                 "trim": {"x": x0, "y": y0, "w": w, "h": h},
-                "flippers": {k: v["meta"] for k, v in flippers.items()}})
+                "flippers": {k: v["meta"] for k, v in flippers.items()},
+                "eye": EYE})
 
     Image.fromarray(np.dstack([rgb, body_alpha])).save(HERE / "whale_body.png")
     for name, layer in flippers.items():
