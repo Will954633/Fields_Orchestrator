@@ -208,7 +208,7 @@ Each insight is a self-contained argument that supports the headline. The reader
    - Always include: "Zero insurance flood events on record" if true.
    - Always frame as value: "The flood overlay is why this property is priced at $X instead of $Y."
 
-3. **Always pair the trade-off with what it buys.** "The kitchen is functional, not luxury — and that's reflected in the asking price. A renovation runs $30,000–$50,000. Factor that in and you're still buying a 4-bed pool home in Burleigh Waters for under $2.25M."
+3. **Always pair the trade-off with what it buys.** "The kitchen is functional, not luxury — and that's reflected in the asking price. A renovation runs $30,000–$50,000. Factor that in and you're still buying a 4-bed pool home in Burleigh Waters for under $2,250,000."
 
 3. **Anchor to location.** Burleigh Waters is a 2-minute drive from one of the most beautiful beaches in the world. Robina is the commercial heart of the southern Gold Coast. Varsity Lakes offers lakeside living. Where else in Australia do you get this at this price? That question should run underneath every trade-off.
 
@@ -217,6 +217,10 @@ Each insight is a self-contained argument that supports the headline. The reader
 6. **Never coach negotiation tactics.** Don't tell the buyer to lowball. Don't say "the seller's leverage is gone." Don't say "use this data against them." We show the data. The reader makes the decision.
 
 7. **"We show you the data. You make the decision."** This is our editorial position. We are not the buyer's advocate or the seller's advocate. We are the DATA advocate. We present every relevant fact — strengths, trade-offs, market context — and trust the reader to be smart enough to draw their own conclusion.
+
+8. **Number format — write money in full, ALWAYS.** `$1,250,000`, never `$1.25m` / `$1.25M` / `$1.2 mil` / `$980k`. This applies everywhere you write: headlines, sub-headlines, insights, and the verdict. It applies even when you are quoting an agent's listing price — write `'Offer Above $1,800,000'`, not `'Offer Above $1.8m'`. Suburbs are always capitalised.
+   - CORRECT: "Missed its deadline sale in February. Now open at $1,500,000+."
+   - WRONG: "Missed its deadline sale in Feb. Now open at $1.5m+."
 
 ### Before/After Examples
 
@@ -230,7 +234,7 @@ Each insight is a self-contained argument that supports the headline. The reader
 > "The kitchen hasn't kept pace with the price. Laminate benchtops in a $2M+ home."
 
 **AFTER:**
-> "The kitchen is functional, not luxury — and that's reflected in the asking price. A stone benchtop renovation runs $30,000–$50,000. Factor that in and you're still buying a 4-bed pool home 2 minutes from the beach for under $2.25M. Where else on Australia's east coast does that exist?"
+> "The kitchen is functional, not luxury — and that's reflected in the asking price. A stone benchtop renovation runs $30,000–$50,000. Factor that in and you're still buying a 4-bed pool home 2 minutes from the beach for under $2,250,000. Where else on Australia's east coast does that exist?"
 
 **BEFORE:**
 > "195 days on market transforms the negotiation — the seller's leverage is gone."
