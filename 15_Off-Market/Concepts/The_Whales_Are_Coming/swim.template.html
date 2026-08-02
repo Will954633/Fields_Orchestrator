@@ -22,13 +22,10 @@
   h1 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: .01em; }
   h1 span { color: var(--dim); font-weight: 400; }
   .stage { padding: 0 24px; }
-  canvas {
-    display: block; width: 100%; height: auto; border-radius: 3px;
-    background: transparent;
-  }
+  canvas { display: block; width: 100%; height: auto; border-radius: 3px; }
 
   .readout {
-    display: flex; flex-wrap: wrap; gap: 0 28px;
+    display: flex; flex-wrap: wrap; gap: 0 26px;
     padding: 14px 24px 0; color: var(--dim);
     font: 12px/1.7 ui-monospace, "SF Mono", Menlo, monospace;
   }
@@ -51,16 +48,14 @@
   label > output { font: 12px ui-monospace, Menlo, monospace; color: var(--ink); }
   input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--accent);
                       margin: 2px 0 0; }
-  label.check { grid-template-columns: auto 1fr; justify-items: start; }
-  label.check input { accent-color: var(--accent); margin: 0 8px 0 0; }
-  .row { grid-column: 1 / -1; display: flex; gap: 10px; margin-top: 14px; }
+  .row { grid-column: 1 / -1; display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
   button {
     font: 12px/1 inherit; padding: 8px 14px; border-radius: 3px; cursor: pointer;
     color: var(--ink); background: transparent; border: 1px solid var(--line);
   }
   button:hover { border-color: var(--accent); color: var(--accent); }
-  .note { grid-column: 1/-1; color: var(--dim); font-size: 12px; max-width: 62ch;
-          margin-top: 6px; }
+  .note { grid-column: 1/-1; color: var(--dim); font-size: 12px; max-width: 64ch;
+          margin-top: 8px; }
 </style>
 
 <header>
@@ -68,134 +63,247 @@
 </header>
 
 <div class="stage"><canvas id="c"></canvas></div>
-
 <div class="readout" id="readout"></div>
-
 <div class="panel" id="panel"></div>
 
 <script>
 // ---------------------------------------------------------------------------
-// The whale
+// Three layers — far flipper, body, near flipper — over a travelling body wave.
 //
-// One flat sprite, sliced into vertical strips and re-laid along a travelling
-// wave. Each strip is translated by the wave's local displacement and rotated
-// by its local slope, about the spine point the build script measured out of
-// the matte — so at rest (displacement 0, slope 0) every strip lands exactly
-// where it was drawn and the pose is the artist's, untouched.
+// The body is sliced into vertical strips and re-laid along the wave: each strip
+// is translated by the local displacement and rotated by the local slope, about
+// the spine point measured out of the matte. At rest every strip lands exactly
+// where it was drawn, so the pose is the artist's.
 //
-// What is deliberately NOT modelled: arc-length shortening when the body bends.
-// A bent body projects slightly shorter than a straight one, but at the
-// amplitudes real whales actually use (fluke peak-to-peak ~0.2 body lengths
-// over a ~0.9 body-length wave) that is a 1-2% effect, well under the point
-// where the hatch texture shearing gives the trick away first.
+// The whole animal moves, and it moves the way it was MEASURED to move.
+//
+// Fish, Peacock & Rohr (2003), "Stabilization mechanism in swimming odontocete
+// cetaceans by phased movements", Mar. Mammal Sci. 19(3):515-528, digitised four
+// points — rostrum, flipper tip, peduncle, fluke tip — across seven species at
+// 1.4-7.3 m/s. Their result overturns the obvious model:
+//
+//   * Amplitudes rank  fluke > peduncle > rostrum > FLIPPER.  The flipper tip
+//     has the SMALLEST excursion of the four, because it sits nearest the centre
+//     of mass. It is a measured node, and it sits right where the flippers
+//     attach — which is why the amplitude envelope here dips to a minimum at
+//     the flipper hinges rather than ramping monotonically.
+//
+//   * The rostrum moves very nearly IN PHASE with the flukes: -9.4 to +33.0
+//     degrees, statistically indistinguishable from zero in two species. A rigid
+//     beam pivoting about its centre would put them 180 degrees apart. The
+//     animal is actively cancelling that. Verbatim: "By synchronously moving the
+//     rostrum in the same direction as flukes by muscular control, there is a
+//     reduction in the natural tendency of the rostrum to swing through a wide
+//     arc opposite the motion of the flukes."
+//
+//   * Rostrum amplitude is 0.02-0.06 body lengths against 0.17-0.25 for the
+//     fluke — a ratio of 4.34 to 6.76. The head moves, but by a fifth or less.
+//
+//   * The flippers TRAIL the flukes by 60.9 to 123.4 degrees and oppose pitching.
+//
+// So the body is modelled in two zones that meet at the node: a travelling wave
+// behind it, and an anterior section whose phase is prescribed against the
+// fluke rather than inherited from the wave. That split is not a convenience —
+// it is what the muscular control described above actually does.
+//
+// The passive momentum balance (Lighthill recoil) is still here, on a slider
+// defaulting to ZERO — and zero is the CORRECT default for a second reason
+// beyond the muscular stabilisation above. Measured envelopes are fits to
+// observed motion, and observed motion already contains whatever recoil the
+// animal did not cancel. Adding a recoil term on top double-counts it. Maertens,
+// Gao & Triantafyllou (2017, JFM 813:301) make this explicit by setting their
+// recoil term B(x,t) = 0 for the canonical carangiform gait, precisely because
+// the envelope came from Videler's measurements. Solve the momentum balance only
+// if you are prescribing a pure BENDING wave and deriving the rigid motions
+// yourself — never on top of a measured envelope.
 // ---------------------------------------------------------------------------
 
 const RIG = {{RIG_JSON}};
-const SPRITE_URI = "{{SPRITE_DATA_URI}}";
+const SRC = {
+  body: "{{BODY_DATA_URI}}",
+  near: "{{NEAR_DATA_URI}}",
+  far:  "{{FAR_DATA_URI}}",
+};
 
+// Defaults are the measured humpback, not round numbers.
+//   L       13.50 m      Woodward, Winn & Fish 2006, J. Morphol. 267:1284, n=128
+//   U       2.0 m/s      Gough et al. 2019/2021 tag data (1.77-2.09)
+//   A/L     0.20 p-p     Gough et al. 2019 direct fluke-tag measure; A = L/5 convention
+//   f       ~0.23 Hz     Gough et al. 2019, 0.229 +/- 0.039 Hz over n=97 deployments
+// St is set so the Strouhal lock reproduces that measured frequency. Note the
+// tension: the one humpback with a directly measured St came in at 0.24, but at
+// a faster 2.61 m/s. Gough et al. also found frequency scales as L^-0.53 where
+// an optimal-Strouhal oscillator predicts L^-1.0 — their conclusion is that
+// whales are NOT operating as simple Strouhal machines. The lock is kept here
+// because it is a good animation control, not because the animal obeys it.
 const P = {
-  // physics
-  St:        0.30,   // Strouhal number — 0.25-0.35 is the efficient band
+  // hydrodynamics
+  St:        0.31,   // reproduces f = 0.23 Hz at L=13.5, U=2.0, A/L=0.20
   U:         2.0,    // cruising speed, m/s
-  L:         14.0,   // body length, m
+  L:         13.5,   // body length, m
   ampFrac:   0.20,   // fluke peak-to-peak amplitude, as a fraction of L
-  lambda:    0.90,   // wavelength, in body lengths
-  rigid:     0.38,   // fraction of the body from the nose that barely flexes
-  sharp:     2.2,    // how hard the amplitude ramps toward the fluke
+  lambda:    1.80,   // set so the peduncle leads the fluke by ~38 deg (meas. 19-49)
+  // anterior section — prescribed against the fluke, per Fish et al. 2003
+  rosAmp:    0.19,   // rostrum amplitude / fluke amplitude (measured 0.148-0.230)
+  rosPhase:  20,     // degrees relative to the fluke (measured -9.4 to +33.0)
+  nodeAt:    0.28,   // the measured minimum — it sits at the flipper attachment
+  antSharp:  1.4,    // how fast the anterior section falls away toward the node
+  sharp:     1.8,    // how fast the posterior wave grows behind the node
+  recoil:    0.0,    // OFF: measured envelopes already contain recoil (see above)
   // burst and coast
-  beats:     3.5,    // tail beats per burst
-  glide:     5.0,    // seconds of rigid glide between bursts
-  drag:      0.030,  // quadratic drag — sets how slowly speed builds and decays
-  // secondary
-  pitch:     0.35,   // body pitch coupled to the stroke (0-1)
-  heave:     0.22,   // whole-body recoil against the stroke (0-1)
+  beats:     3.5,
+  glide:     5.0,
+  drag:      0.030,
+  // flippers — smallest excursion of the four measured points, trailing the fluke
+  flipAmp:   0.10,   // rad of blade rotation
+  flipPhase: 90,     // degrees trailing the fluke (measured 60.9-123.4)
+  flipLag:   0.10,   // s of compliance
   // staging
-  size:      0.42,   // whale length as a fraction of canvas width
-  depth:     0.50,   // vertical placement
-  strips:    3,      // strip width in source px — smaller is smoother, slower
-  motes:     true,   // drifting particles, so the speed has something to read against
-  spine:     false,  // debug overlay
+  size:      0.42,
+  depth:     0.50,
+  strips:    3,
+  motes:     true,
+  spine:     false,
   theme:     "dark",
 };
 
 const CANVAS_W = 1600, CANVAS_H = 720;
-
 const cv = document.getElementById("c");
 cv.width = CANVAS_W; cv.height = CANVAS_H;
 const ctx = cv.getContext("2d");
 ctx.imageSmoothingEnabled = true;
 ctx.imageSmoothingQuality = "high";
 
-const img = new Image();
+// --- mass distribution, for the recoil balance -----------------------------
 
-// --- derived quantities ----------------------------------------------------
+const NS = 96;                 // samples along the body for the momentum sums
+const SU = new Float64Array(NS);   // u of each sample
+const SX = new Float64Array(NS);   // sprite x of each sample
+const SM = new Float64Array(NS);   // mass weight
+let XCM = 0, MTOT = 0;
 
-// Strouhal locks tail-beat frequency to speed and amplitude. Solving for f is
-// the whole realism story: a 14 m humpback at 2 m/s beats its tail about once
-// every 4.7 seconds. Nearly every hand-animated whale runs 10x too fast.
-const freqAt = (v) => (P.St * Math.abs(v)) / Math.max(P.ampFrac * P.L, 1e-6);
+(function buildMass() {
+  const W = RIG.width, th = RIG.thickness;
+  for (let i = 0; i < NS; i++) {
+    const x = ((i + 0.5) / NS) * W;
+    SX[i] = x;
+    SU[i] = 1 - x / W;
+    const t = th[Math.min(Math.floor(x), th.length - 1)];
+    SM[i] = t * t;             // slender-body: mass and added mass ~ cross-section
+  }
+  for (let i = 0; i < NS; i++) { MTOT += SM[i]; XCM += SM[i] * SX[i]; }
+  XCM /= MTOT;
+})();
 
-// px per metre, from the sprite's on-screen length
-const pxPerM = () => (CANVAS_W * P.size) / P.L;
+// --- the body wave ---------------------------------------------------------
+
+function fitEnvelope() { /* nothing to precompute — kept for call-site symmetry */ }
+
+// Phase of the fluke tip, which everything anterior is referenced against.
+const flukePhase = (phase) => phase - (2 * Math.PI) / P.lambda;
+
+// Two zones meeting at the node.
+//
+// Behind the node: a travelling wave, growing toward the flukes. Points nearer
+// the nose lead, which is what gives the peduncle its phase lead over the fluke
+// and lets the blade meet the water at an angle instead of just wagging.
+//
+// Ahead of the node: amplitude and phase prescribed directly against the fluke.
+// This is the muscular stabilisation Fish et al. measured — the head tracks the
+// flukes rather than reacting against them, and a travelling wave cannot produce
+// that at the same time as the peduncle's lead.
+function rawDisp(u, phase, on) {
+  const ampPx = (P.ampFrac * RIG.width) / 2;    // peak-to-peak -> single-sided
+  const n = Math.max(P.nodeAt, 1e-4);
+
+  const tp = Math.max(0, (u - n) / (1 - n));
+  const post = Math.pow(tp, P.sharp) *
+               Math.sin(phase - (2 * Math.PI * u) / P.lambda);
+
+  const ta = Math.max(0, (n - u) / n);
+  const ant = P.rosAmp * Math.pow(ta, P.antSharp) *
+              Math.sin(flukePhase(phase) - (P.rosPhase * Math.PI) / 180);
+
+  return ampPx * on * (post + ant);
+}
+
+// Lighthill's recoil: the prescribed wave carries net lateral momentum and net
+// angular momentum, which a free-swimming animal cannot. Subtracting the rigid
+// heave and pitch that zero both is what makes the head swing against the tail.
+let H0 = 0, T0 = 0;
+function solveRecoil(phase, on) {
+  if (P.recoil <= 0) { H0 = 0; T0 = 0; return; }
+  let s = 0, sm = 0, si = 0;
+  for (let i = 0; i < NS; i++) s += SM[i] * rawDisp(SU[i], phase, on);
+  const h = s / MTOT;                                   // zero net momentum
+  for (let i = 0; i < NS; i++) {
+    const r = SX[i] - XCM;
+    sm += SM[i] * r * (rawDisp(SU[i], phase, on) - h);
+    si += SM[i] * r * r;
+  }
+  H0 = h * P.recoil;
+  T0 = (sm / si) * P.recoil;                            // zero net moment
+}
+
+const disp = (u, phase, on) =>
+  rawDisp(u, phase, on) - H0 - T0 * ((1 - u) * RIG.width - XCM);
 
 // --- state -----------------------------------------------------------------
 
-const S = {
-  t: 0,          // seconds
-  phase: 0,      // tail-beat phase, radians — integrated, because f varies
-  v: 0,          // forward speed, m/s
-  x: 0,          // position, m, from the left edge of the world
-  cycleT: 0,     // seconds into the current burst+glide cycle
-  motes: [],
-};
+const freqAt = (v) => (P.St * Math.abs(v)) / Math.max(P.ampFrac * P.L, 1e-6);
+const pxPerM = () => (CANVAS_W * P.size) / P.L;
+
+const S = { t: 0, phase: 0, v: 0, x: 0, cycleT: 0, motes: [],
+            flip: { near: 0, far: 0 }, hingeY: { near: 0, far: 0 } };
 
 function resetSim() {
-  S.t = 0; S.phase = 0; S.v = P.U * 0.85; S.cycleT = 0;
-  // nose at the left edge, body trailing off-frame — the whale enters at once
-  // rather than spending its first ten seconds swimming through empty world
-  S.x = 0;
-  S.motes = Array.from({ length: 90 }, (_, i) => ({
-    x: Math.random() * CANVAS_W,
-    y: Math.random() * CANVAS_H,
-    z: 0.25 + Math.random() * 1.0,      // parallax depth
-    r: 0.6 + Math.random() * 1.8,
+  S.t = 0; S.phase = 0; S.v = P.U * 0.85; S.cycleT = 0; S.x = 0;
+  S.flip.near = S.flip.far = 0;
+  S.hingeY.near = S.hingeY.far = 0;
+  S.motes = Array.from({ length: 90 }, () => ({
+    x: Math.random() * CANVAS_W, y: Math.random() * CANVAS_H,
+    z: 0.25 + Math.random() * 1.0, r: 0.6 + Math.random() * 1.8,
   }));
 }
 
-// Burst-and-coast. Larger whales rarely beat continuously — a few strong
-// strokes, then a long rigid glide while drag bleeds the speed off. The tail
-// amplitude ramps in and out rather than switching, or the fluke snaps.
 function strokeEnvelope(cycleT) {
-  const burstDur = P.beats / Math.max(freqAt(P.U), 1e-6);
-  const total = burstDur + P.glide;
+  const burst = P.beats / Math.max(freqAt(P.U), 1e-6);
+  const total = burst + P.glide;
   if (P.glide <= 0.01) return { on: 1, total };
-  const ramp = Math.min(0.9 / Math.max(freqAt(P.U), 1e-6), burstDur * 0.45);
-  let on;
-  if (cycleT < burstDur) {
-    const inN = Math.min(cycleT / ramp, 1);
-    const outN = Math.min((burstDur - cycleT) / ramp, 1);
-    on = Math.min(inN, outN);
-  } else {
-    on = 0;
+  const ramp = Math.min(0.9 / Math.max(freqAt(P.U), 1e-6), burst * 0.45);
+  let on = 0;
+  if (cycleT < burst) {
+    on = Math.min(Math.min(cycleT / ramp, 1), Math.min((burst - cycleT) / ramp, 1));
   }
-  return { on: on * on * (3 - 2 * on), total };   // smoothstep
+  return { on: on * on * (3 - 2 * on), total };
 }
 
 function step(dt) {
+  fitEnvelope();
   const { on, total } = strokeEnvelope(S.cycleT);
-
-  // Thrust is scaled so that continuous beating settles at exactly the cruise
-  // speed the slider asks for — steady state is thrust == drag * U^2.
   const thrust = P.drag * P.U * P.U;
   S.v += (thrust * on - P.drag * S.v * S.v) * dt;
   S.v = Math.max(S.v, 0);
   S.x += S.v * dt;
-
   S.phase += 2 * Math.PI * freqAt(S.v) * dt;
   S.cycleT = (S.cycleT + dt) % total;
   S.t += dt;
+  solveRecoil(S.phase, on);
+
+  // Flippers trail the flukes by 60.9-123.4 degrees and oppose pitching (Fish,
+  // Peacock & Rohr 2003). Driving them off that measured phase lag rather than
+  // off a feathering model is the honest choice: no one has published a flipper
+  // sweep or pitch time series for steady straight-line cetacean swimming, and
+  // the descriptive work (Edel & Winn 1978; Segre et al. 2017) has them acting
+  // as near-static trim surfaces in cruise, saving the big strokes for banking
+  // turns and lunges. So this is deliberately small.
+  const target = P.flipAmp *
+                 Math.sin(flukePhase(S.phase) - (P.flipPhase * Math.PI) / 180) * on;
+  const a = 1 - Math.exp(-dt / Math.max(P.flipLag, 1e-3));
+  for (const k of ["near", "far"]) S.flip[k] += (target - S.flip[k]) * a;
 
   const ppm = pxPerM();
+
   for (const m of S.motes) {
     m.x -= S.v * ppm * dt * m.z * 0.55;
     if (m.x < -8) { m.x = CANVAS_W + 8; m.y = Math.random() * CANVAS_H; }
@@ -203,47 +311,24 @@ function step(dt) {
   return on;
 }
 
-// --- the wave --------------------------------------------------------------
-
-// u runs 0 at the nose to 1 at the fluke tip. Amplitude is ~0 across the rigid
-// front, then ramps to full at the flukes; the phase term makes the wave travel
-// backwards down the body, which is what makes the fluke lag the peduncle and
-// scoop water instead of just wagging.
-function envelope(u) {
-  const n = Math.max(0, Math.min(1, (u - P.rigid) / Math.max(1 - P.rigid, 1e-6)));
-  return Math.pow(n, P.sharp);
-}
-function displacement(u, on) {
-  const ampPx = (P.ampFrac * RIG.width) / 2;     // peak-to-peak -> single-sided
-  return ampPx * envelope(u) * on *
-         Math.sin(S.phase - (2 * Math.PI * u) / P.lambda);
-}
-
 // --- draw ------------------------------------------------------------------
+
+const IMG = {};
 
 function paintWater() {
   const dark = P.theme === "dark";
   const g = ctx.createLinearGradient(0, 0, 0, CANVAS_H);
-  if (dark) {
-    g.addColorStop(0, "#16283a"); g.addColorStop(0.55, "#0d1927");
-    g.addColorStop(1, "#070e17");
-  } else {
-    g.addColorStop(0, "#e9e6dd"); g.addColorStop(0.6, "#dcdbd3");
-    g.addColorStop(1, "#cfd2cd");
-  }
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+  if (dark) { g.addColorStop(0, "#16283a"); g.addColorStop(0.55, "#0d1927"); g.addColorStop(1, "#070e17"); }
+  else      { g.addColorStop(0, "#e9e6dd"); g.addColorStop(0.6, "#dcdbd3"); g.addColorStop(1, "#cfd2cd"); }
+  ctx.fillStyle = g; ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
-  // soft light shafts from the surface
   ctx.save();
   ctx.globalAlpha = dark ? 0.055 : 0.05;
   ctx.fillStyle = dark ? "#a9d8ee" : "#ffffff";
   for (let i = 0; i < 7; i++) {
     const x = ((i * 251) % CANVAS_W) + Math.sin(S.t * 0.11 + i) * 26;
-    ctx.save();
-    ctx.translate(x, 0); ctx.rotate(0.13 + i * 0.012);
-    ctx.fillRect(-45, -60, 90, CANVAS_H * 1.35);
-    ctx.restore();
+    ctx.save(); ctx.translate(x, 0); ctx.rotate(0.13 + i * 0.012);
+    ctx.fillRect(-45, -60, 90, CANVAS_H * 1.35); ctx.restore();
   }
   ctx.restore();
 
@@ -257,90 +342,112 @@ function paintWater() {
   ctx.restore();
 }
 
+// vertical displacement of the body at sprite column x
+const dispAt = (x, phase, on) => disp(1 - x / RIG.width, phase, on);
+
+// local slope of the displacement field, for anything that needs to sit tangent
+function slopeAt(x, phase, on) {
+  const h = 3;
+  return (dispAt(x + h, phase, on) - dispAt(x - h, phase, on)) / (2 * h);
+}
+
+function paintFlipper(k, on, ph) {
+  const f = RIG.flippers[k];
+  // The hinge rides at its OWN height on the body — the shoulder, down at the
+  // belly — not on the spine. It is carried by the wave like every other point
+  // of the body, and tilts with the local slope, then adds its own feathering.
+  const y = f.hinge_abs_y + dispAt(f.hinge_abs_x, ph, on);
+  ctx.save();
+  ctx.translate(f.hinge_abs_x, y);
+  ctx.rotate(Math.atan(slopeAt(f.hinge_abs_x, ph, on)) + S.flip[k]);
+  ctx.drawImage(IMG[k], -f.hinge_x, -f.hinge_y, f.w, f.h);
+  ctx.restore();
+}
+
 function paintWhale(on) {
   const W = RIG.width, H = RIG.height;
   const scale = (CANVAS_W * P.size) / W;
-  const ppm = pxPerM();
-
-  // world x -> screen. The sprite's nose is at its RIGHT edge, so the sprite's
-  // left edge sits one body length behind the nose.
-  const noseX = S.x * ppm;
-  const originX = noseX - W * scale;
-  const originY = CANVAS_H * P.depth - (H * scale) / 2;
-
-  // Whole-body recoil and pitch. A tail beating down drives the body up, and
-  // the head pitches counter to the stroke — both lag the tail by a quarter
-  // cycle, which is what stops the animation reading as a rigid sprite on a
-  // path with a wiggling tail bolted on.
-  const heave = -P.heave * (P.ampFrac * W * 0.5) * on *
-                Math.sin(S.phase - Math.PI / 2) * scale * 0.35;
-  const pitch = P.pitch * 0.055 * on * Math.sin(S.phase - Math.PI / 2);
+  const noseX = S.x * pxPerM();
+  const ph = S.phase;
 
   ctx.save();
-  ctx.translate(originX + (W * scale) / 2, originY + (H * scale) / 2 + heave);
-  ctx.rotate(pitch);
-  ctx.translate(-(W * scale) / 2, -(H * scale) / 2);
+  ctx.translate(noseX - W * scale, CANVAS_H * P.depth - (H * scale) / 2);
   ctx.scale(scale, scale);
 
-  const step = Math.max(1, Math.round(P.strips));
-  const spine = RIG.centre;
+  paintFlipper("far", on, ph);                        // behind the body
 
-  for (let sx = 0; sx < W; sx += step) {
-    const sw = Math.min(step, W - sx);
-    const xc = sx + sw / 2;
-    const u = 1 - xc / W;
-
-    const d = displacement(u, on);
-    // local slope of the wave, in source px, for the strip's rotation
-    const du = step / W;
-    const slope = (displacement(u + du, on) - displacement(u - du, on)) /
-                  (-2 * step);      // u decreases as x increases, hence the sign
-    const theta = Math.atan(slope);
-
-    const cy = spine[Math.min(sx + (sw >> 1), spine.length - 1)];
-
+  // Strips are sheared vertically, not rotated. Rotating each strip about its
+  // own centre means adjacent strips disagree along their shared edge wherever
+  // the slope is changing, and the gaps open into a visible comb down the
+  // peduncle exactly where the wave is steepest. A vertical shear that maps the
+  // strip's left edge to d(x0) and its right edge to d(x1) agrees with both
+  // neighbours by construction, so the body stays continuous however hard it
+  // bends. The cost is that cross-sections stay vertical instead of rotating
+  // with the spine — a cos(theta) effect, invisible at these amplitudes, and a
+  // far better trade than seams.
+  const stepPx = Math.max(1, Math.round(P.strips));
+  for (let sx = 0; sx < W; sx += stepPx) {
+    const sw = Math.min(stepPx, W - sx);
+    const d0 = dispAt(sx, ph, on);
+    const k = (dispAt(sx + sw, ph, on) - d0) / sw;
     ctx.save();
-    ctx.translate(xc, cy + d);
-    ctx.rotate(theta);
-    // +1px of source and destination overlap, or the strips show as seams
-    ctx.drawImage(img, sx, 0, sw + 1, H, -sw / 2, -cy, sw + 1, H);
+    ctx.transform(1, k, 0, 1, 0, d0 - k * sx);
+    ctx.drawImage(IMG.body, sx, 0, sw + 1, H, sx, 0, sw + 1, H);
     ctx.restore();
   }
 
+  paintFlipper("near", on, ph);                       // in front of the body
+
   if (P.spine) {
-    ctx.strokeStyle = "#ff4d6d"; ctx.lineWidth = 2 / scale; ctx.beginPath();
-    for (let sx = 0; sx < W; sx += step) {
-      const u = 1 - (sx + step / 2) / W;
-      const y = spine[sx] + displacement(u, on);
+    ctx.strokeStyle = "#ff4d6d"; ctx.lineWidth = 2 / scale;
+    ctx.beginPath();
+    for (let sx = 0; sx < W; sx += stepPx) {
+      const y = RIG.centre[Math.min(sx, RIG.centre.length - 1)] + dispAt(sx, ph, on);
       sx === 0 ? ctx.moveTo(sx, y) : ctx.lineTo(sx, y);
     }
     ctx.stroke();
+    for (const k of ["near", "far"]) {
+      const f = RIG.flippers[k];
+      ctx.fillStyle = "#4dd6ff";
+      ctx.beginPath();
+      ctx.arc(f.hinge_abs_x, f.hinge_abs_y + dispAt(f.hinge_abs_x, ph, on),
+              7 / scale, 0, 6.2832);
+      ctx.fill();
+    }
   }
   ctx.restore();
 }
 
-function frame(on) {
-  paintWater();
-  paintWhale(on);
-  updateReadout(on);
-}
+function frame(on) { paintWater(); paintWhale(on); updateReadout(on); }
 
 // --- readout ---------------------------------------------------------------
 
 function updateReadout(on) {
-  const f = freqAt(S.v), fc = freqAt(P.U);
+  const f = freqAt(S.v);
   const screenM = CANVAS_W / pxPerM();
-  const crossing = (screenM + P.L) / Math.max(P.U, 1e-6);
-  const stNow = P.St;
-  const bad = stNow < 0.25 || stNow > 0.35;
+  const bad = P.St < 0.20 || P.St > 0.35;   // Rohr & Fish 2004: 74% of cetaceans sit 0.20-0.30
+  // how far the nose actually travels, as a fraction of the fluke's throw
+  const amp = (u) => {
+    let lo = 1e9, hi = -1e9;
+    for (let i = 0; i < 48; i++) {
+      const ph = (i / 48) * 2 * Math.PI;
+      solveRecoil(ph, 1);
+      const d = disp(u, ph, 1);
+      lo = Math.min(lo, d); hi = Math.max(hi, d);
+    }
+    return hi - lo;
+  };
+  const noseAmp = amp(0), tailAmp = amp(1);
+  const nr = 100 * noseAmp / Math.max(tailAmp, 1e-6);
+  solveRecoil(S.phase, on);
   document.getElementById("readout").innerHTML = [
-    `tail beat <b>${f.toFixed(3)} Hz</b> (${f > 0 ? (1 / f).toFixed(1) : "—"} s/cycle)`,
-    `speed <b>${S.v.toFixed(2)} m/s</b> of ${P.U.toFixed(1)}`,
+    `tail beat <b>${f.toFixed(3)} Hz</b> (${f > 0 ? (1 / f).toFixed(1) : "—"} s)`,
+    `speed <b>${S.v.toFixed(2)} m/s</b>`,
     `stroke <b>${on > 0.02 ? "burst" : "glide"}</b>`,
-    `screen <b>${screenM.toFixed(0)} m</b> of water`,
-    `crossing <b>${crossing.toFixed(0)} s</b>`,
-    `St <b class="${bad ? "warn" : ""}">${stNow.toFixed(2)}</b>${bad ? " outside 0.25–0.35" : ""}`,
-    `cruise beat <b>${(1 / fc).toFixed(1)} s</b>`,
+    `rostrum <b class="${nr < 14.8 || nr > 23.0 ? "warn" : ""}">${nr.toFixed(0)}%</b> of fluke (meas. 15-23)`,
+    `rostrum A <b>${(100 * noseAmp / (RIG.width)).toFixed(1)}%</b> L (meas. 2-6)`,
+    `screen <b>${screenM.toFixed(0)} m</b>`,
+    `St <b class="${bad ? "warn" : ""}">${P.St.toFixed(2)}</b>`,
   ].join("&nbsp;&nbsp;·&nbsp;&nbsp;");
 }
 
@@ -352,17 +459,22 @@ const CONTROLS = [
   ["U", "Cruise speed (m/s)", 0.4, 5, 0.1, v => v.toFixed(1)],
   ["L", "Body length (m)", 7, 20, 0.5, v => v.toFixed(1) + " m"],
   ["ampFrac", "Fluke amplitude (A/L, p-p)", 0.04, 0.40, 0.01, v => v.toFixed(2)],
-  ["h", "Body wave"],
+  ["h", "Body wave — measured, Fish/Peacock/Rohr 2003"],
+  ["rosAmp", "Rostrum amp (of fluke)", 0, 0.6, 0.01, v => v.toFixed(2) + (v>=0.148&&v<=0.230?" \u2713":"")],
+  ["rosPhase", "Rostrum phase vs fluke", -180, 180, 5, v => v.toFixed(0) + "\u00b0" + (v>=-9.4&&v<=33?" \u2713":"")],
+  ["nodeAt", "Node (at the flippers)", 0.05, 0.6, 0.01, v => v.toFixed(2)],
   ["lambda", "Wavelength (body lengths)", 0.4, 2.0, 0.05, v => v.toFixed(2)],
-  ["rigid", "Rigid front (fraction)", 0, 0.65, 0.01, v => v.toFixed(2)],
-  ["sharp", "Envelope sharpness", 1, 4, 0.1, v => v.toFixed(1)],
+  ["antSharp", "Anterior falloff", 0.5, 4, 0.1, v => v.toFixed(1)],
+  ["sharp", "Posterior growth", 0.5, 4, 0.1, v => v.toFixed(1)],
+  ["recoil", "Passive recoil (double-counts \u2014 demo only)", 0, 1.5, 0.05, v => v.toFixed(2)],
+  ["h", "Flippers"],
+  ["flipAmp", "Blade rotation (rad)", 0, 0.5, 0.01, v => v.toFixed(2)],
+  ["flipPhase", "Trailing the fluke", 0, 180, 5, v => v.toFixed(0) + "\u00b0" + (v>=61&&v<=123?" \u2713":"")],
+  ["flipLag", "Compliance lag (s)", 0.01, 0.8, 0.01, v => v.toFixed(2) + " s"],
   ["h", "Burst and coast"],
   ["beats", "Beats per burst", 1, 8, 0.5, v => v.toFixed(1)],
   ["glide", "Glide (s)", 0, 14, 0.5, v => v.toFixed(1) + " s"],
   ["drag", "Drag", 0.005, 0.12, 0.005, v => v.toFixed(3)],
-  ["h", "Secondary motion"],
-  ["pitch", "Body pitch", 0, 1, 0.02, v => v.toFixed(2)],
-  ["heave", "Body recoil", 0, 1, 0.02, v => v.toFixed(2)],
   ["h", "Staging"],
   ["size", "Whale size (of frame)", 0.12, 0.9, 0.01, v => (v * 100).toFixed(0) + "%"],
   ["depth", "Depth on screen", 0.15, 0.85, 0.01, v => v.toFixed(2)],
@@ -386,12 +498,10 @@ function buildPanel() {
     inp.oninput = () => { P[key] = +inp.value; out.textContent = fmt(P[key]); };
     el.appendChild(inp); panel.appendChild(el);
   }
-
   const row = document.createElement("div"); row.className = "row";
   const toggle = (label, key) => {
     const b = document.createElement("button");
-    b.textContent = label;
-    b.onclick = () => { P[key] = !P[key]; };
+    b.textContent = label; b.onclick = () => { P[key] = !P[key]; };
     return b;
   };
   const themeBtn = document.createElement("button");
@@ -408,19 +518,23 @@ function buildPanel() {
     const a = document.createElement("a");
     a.download = "whale_swim.png"; a.href = cv.toDataURL("image/png"); a.click();
   };
-  row.append(replay, themeBtn, toggle("Motes", "motes"), toggle("Spine", "spine"), save);
-  document.getElementById("panel").appendChild(row);
+  row.append(replay, themeBtn, toggle("Motes", "motes"), toggle("Rig", "spine"), save);
+  panel.appendChild(row);
 
   const note = document.createElement("div");
   note.className = "note";
-  note.textContent =
-    "Strouhal locks beat frequency to speed and amplitude — change speed and " +
-    "the tail retimes itself. Push St outside 0.25–0.35 and the whale starts " +
-    "to look like it is sliding through the water rather than pushing against it.";
-  document.getElementById("panel").appendChild(note);
+  note.innerHTML =
+    "Ticks mark values inside the measured range. The head moves nearly IN " +
+    "phase with the flukes \u2014 not against them: a rigid beam would put them " +
+    "180\u00b0 apart, and a live cetacean spends muscle cancelling exactly that. " +
+    "Push <b>Passive recoil</b> up to see the anti-phase see-saw the animal is " +
+    "working to suppress. The amplitude minimum sits at the flippers because " +
+    "that is where it was measured \u2014 the flipper tip has the smallest " +
+    "excursion of the four digitised points.";
+  panel.appendChild(note);
 }
 
-// --- URL params, so the renderer can drive this ----------------------------
+// --- URL params ------------------------------------------------------------
 
 const qs = new URLSearchParams(location.search);
 for (const k of Object.keys(P)) {
@@ -433,16 +547,19 @@ if (P.theme !== "dark") document.documentElement.dataset.theme = "light";
 
 // --- run -------------------------------------------------------------------
 
-img.onload = () => {
+Promise.all(Object.entries(SRC).map(([k, src]) => new Promise((res) => {
+  const im = new Image();
+  im.onload = () => { IMG[k] = im; res(); };
+  im.src = src;
+}))).then(() => {
   buildPanel();
+  fitEnvelope();
   resetSim();
 
   if (qs.get("capture") === "1") {
-    // Deterministic stepping for headless render — fixed dt, no wall clock.
     window.__swim = {
       frame(tSec, fps) {
         const dt = 1 / (fps || 30);
-        // re-integrate from zero so any frame is reproducible on its own
         resetSim();
         let on = 0;
         for (let t = 0; t < tSec; t += dt) on = step(dt);
@@ -460,6 +577,5 @@ img.onload = () => {
     frame(step(dt));
     requestAnimationFrame(loop);
   })(last);
-};
-img.src = SPRITE_URI;
+});
 </script>
