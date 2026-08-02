@@ -21,6 +21,8 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageFilter
+from scipy.sparse import coo_matrix
+from scipy.sparse.csgraph import dijkstra
 
 HERE = Path(__file__).resolve().parent
 SOURCE = HERE / "Hatch_Sketch_Pandanas_Palm.png"
@@ -34,7 +36,50 @@ BLACK_POINT = 0.0015  # luminance percentile mapped to pure black
 CLEAN_FLOOR = 0.014   # ink weaker than this is scanner haze — flatten to paper
 GAMMA = 1.06          # >1 on the ink curve holds the light hatch back slightly
 UNSHARP = (1.0, 45, 3)  # radius, percent, threshold — keeps fine hatch crisp
+PAPER_COST = 0.03       # smaller = crossing blank paper costs more
 # ----------------------------------------------------------------------------
+
+
+def growth_order(ink: np.ndarray) -> np.ndarray:
+    """Geodesic distance from the base of the trunk, travelling THROUGH the ink.
+
+    This is what separates a crystal from a pixel reveal. A pixel reveal orders
+    blocks by straight-line distance, so the canopy starts filling before the
+    branch that feeds it exists. Here the cost of moving is the inverse of ink
+    density, so growth runs up the trunk, out along each branch and only then
+    into the fronds — it can only reach a frond by travelling the wood that
+    carries it, which is exactly how a crystal accretes.
+
+    Returned normalised 0..1; unreachable pixels are pinned to the far end.
+    """
+    h, w = ink.shape
+    cost = 1.0 / (PAPER_COST + ink)          # cheap through ink, dear across paper
+
+    idx = np.arange(h * w).reshape(h, w)
+    rows, cols, vals = [], [], []
+    for dy, dx in ((0, 1), (1, 0), (1, 1), (1, -1)):
+        a = idx[max(0, -dy):h - max(0, dy), max(0, -dx):w - max(0, dx)]
+        b = idx[max(0, dy):h - max(0, -dy), max(0, dx):w - max(0, -dx)]
+        ca = cost[max(0, -dy):h - max(0, dy), max(0, -dx):w - max(0, dx)]
+        cb = cost[max(0, dy):h - max(0, -dy), max(0, dx):w - max(0, -dx)]
+        wgt = (ca + cb) * 0.5 * np.hypot(dy, dx)
+        rows.append(a.ravel()); cols.append(b.ravel()); vals.append(wgt.ravel())
+    r = np.concatenate(rows); c = np.concatenate(cols); v = np.concatenate(vals)
+    g = coo_matrix((v, (r, c)), shape=(h * w, h * w)).tocsr()
+
+    # seed: the densest ink at the foot of the trunk
+    band = ink[int(h * 0.90):int(h * 0.97)]
+    colmass = band.sum(axis=0)
+    seed_x = int(np.argmax(np.convolve(colmass, np.ones(31) / 31, mode="same")))
+    seed_y = int(h * 0.93)
+    print(f"  growth seed  ({seed_x}, {seed_y}) — foot of the trunk")
+
+    d = dijkstra(g, directed=False, indices=seed_y * w + seed_x).reshape(h, w)
+    finite = np.isfinite(d)
+    dmax = d[finite & (ink > 0.02)].max()
+    d = np.where(finite, np.minimum(d, dmax), dmax)
+    print(f"  geodesic     max {dmax:.0f} over {finite.mean()*100:.1f}% reachable")
+    return np.clip(d / dmax, 0, 1)
 
 
 def load_luma(path: Path) -> np.ndarray:
@@ -99,8 +144,16 @@ def main() -> None:
     flat = Image.fromarray(np.round(norm * 255).astype(np.uint8), mode="L")
     flat.save(HERE / "palm_bw.png", optimize=True)
 
-    # 2. ink-as-alpha mask, used by the animation
+    # 2. ink-as-alpha mask, used by the animation.
+    #    RGB carries the geodesic growth order as a 16-bit value (R high byte,
+    #    G low), which the animation uses for the crystal reveal. It costs
+    #    nothing — those channels were zeroed before.
+    print("  computing growth order (geodesic through the ink)...")
+    order = growth_order(ink)
+    o16 = np.round(order * 65535).astype(np.uint16)
     rgba = np.zeros((h, w, 4), dtype=np.uint8)
+    rgba[..., 0] = (o16 >> 8).astype(np.uint8)
+    rgba[..., 1] = (o16 & 0xFF).astype(np.uint8)
     rgba[..., 3] = np.round(ink * 255).astype(np.uint8)
     mask = Image.fromarray(rgba, mode="RGBA")
     buf = io.BytesIO()
