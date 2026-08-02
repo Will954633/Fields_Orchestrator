@@ -285,10 +285,14 @@
         <!-- palm_reveal_deck.mp4 is rendered with paper #000 / no grain / no
              vignette so it sits on the deck ground with no visible panel edge.
              palm_reveal_growth_dark.mp4 is the standalone cut (#111216 paper). -->
-        <video id="palm" muted playsinline preload="auto"
-               aria-label="Pandanus palm drawn in, pixel by pixel">
-          <source src="palm_reveal_deck.mp4" type="video/mp4">
-        </video>
+        <!-- No src and preload="none" on purpose: with preload="auto" the
+             2.6 MB clip downloaded on first paint, while the reader was still
+             on card 02 looking at text, whether or not they ever scrolled far
+             enough to see it. It is attached when card 02 comes into view —
+             one card early, so it is buffered by the time it plays. -->
+        <video id="palm" muted playsinline preload="none"
+               data-src="palm_reveal_deck.mp4"
+               aria-label="Pandanus palm drawn in, pixel by pixel"></video>
         <!-- Covers the fruit's spot on the held final frame at the moment it
              detaches. Cloned from the video's own pixels, so it matches the
              encode exactly rather than a re-inverted master. -->
@@ -337,6 +341,27 @@
 
   const clamp01 = (v) => v < 0 ? 0 : v > 1 ? 1 : v;
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // Attach the clip on approach rather than at load. Called from both card 02
+  // (the normal path, giving it a full card of lead time) and card 03 (in case
+  // the reader jumps straight there), and it is idempotent.
+  function ensureVideoSrc() {
+    const v = document.getElementById("palm");
+    if (v.src) return;
+    v.src = v.dataset.src;
+    v.load();
+  }
+
+  // Attaching it when card 02 came into view turned out to be no deferral at
+  // all — card 02 IS the view at load, so the observer fired instantly. Hang it
+  // off the reader's first sign of intent instead: someone who opens the page
+  // and leaves never pays for it, and anyone who scrolls gets a full card of
+  // lead time, which is far longer than the clip needs to buffer.
+  ["wheel", "touchmove", "keydown", "pointerdown"].forEach((ev) =>
+    addEventListener(ev, ensureVideoSrc, { once: true, passive: true }));
+  // No rootMargin on the backstop. Card 03 begins exactly at the fold, so any
+  // positive bottom margin intersects on load and the "deferral" defers nothing
+  // — which is what a first-paint measurement caught. Plain visibility only.
   const cards = [...document.querySelectorAll(".card")];
   const media = document.getElementById("media");
   const video = document.getElementById("palm");
@@ -388,7 +413,12 @@
       if (!e.isIntersecting) return;
       e.target.classList.add("revealIn");           // one-way, like the live deck
       if (e.intersectionRatio > 0.5) setActive(n);
-      if (e.target.id === "card-beach" && !revealAt) revealAt = performance.now();
+      if (e.target.id === "card-beach") {
+        ensureVideoSrc();                     // safety net if they jump here
+
+        window.__loadSprites && window.__loadSprites();
+        if (!revealAt) revealAt = performance.now();
+      }
     });
   }, { threshold: [0.15, 0.5] });
 
