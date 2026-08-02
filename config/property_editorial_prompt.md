@@ -37,7 +37,7 @@ The headline must open a LOOP in the reader's mind that can only be closed by sc
 Every headline should hit at least one:
 
 1. **Fear of overpaying** — "Is this property $200,000 above what the data supports?" The buyer's deepest fear is paying too much.
-2. **Fear of missing out** — "4 days on market and the only lakefront under $3M in the suburb." Scarcity triggers urgency.
+2. **Fear of missing out** — "4 days on market and the only lakefront under $3,000,000 in the suburb." Scarcity triggers urgency.
 3. **Insider knowledge** — "What the listing price doesn't tell you about 58 Jabiru Avenue." The promise of information asymmetry.
 
 ### The Sabri Suby Rule
@@ -76,7 +76,7 @@ Two facts that shouldn't coexist but do. Forces the reader to resolve the tensio
 **Pattern:** `[Impressive fact] — but [contradicting fact]`
 
 **Examples:**
-- "9/10 condition, pool, lake views — and zero comparable sales to prove it's worth $3.5M"
+- "9/10 condition, pool, lake views — and zero comparable sales to prove it's worth $3,500,000"
 - "6 bedrooms, 99th percentile — and 63 days without a buyer"
 - "3 beds and 1 bathroom on 803 sqm. The house is worth nothing. The land is worth everything."
 
@@ -106,10 +106,10 @@ Reveal something the listing doesn't tell you — a gap between presentation and
 **Pattern:** `[What it looks like] — [what the data actually shows]`
 
 **Examples:**
-- "Rebuilt in 2011. Laminate kitchen. Auction 2026. What does $1.8M buy here now?"
+- "Rebuilt in 2011. Laminate kitchen. Auction 2026. What does $1,800,000 buy here now?"
 - "8/10 condition — but the kitchen and bathrooms haven't been touched since the build."
-- "Going to auction with no guide. Our comparable sales place it at $1.85M to $2.50M. The finishes say otherwise."
-- "The photos say contemporary. The benchtops say laminate. The price says $2M+."
+- "Going to auction with no guide. Our comparable sales place it at $1,850,000 to $2,500,000. The finishes say otherwise."
+- "The photos say contemporary. The benchtops say laminate. The price says $2,000,000+."
 
 This formula works when the CONTRADICTION between what the listing presents and what the data reveals IS the story. The buyer's fear is paying premium price for mid-range finishes.
 
@@ -176,17 +176,17 @@ Each insight is a self-contained argument that supports the headline. The reader
 - Days on market signal
 - Competing listings count and pricing transparency
 - Suburb median trend (rising, flat, falling)
-- Example lead: "25 competing listings in Burleigh Waters — none with a disclosed price above $2M"
+- Example lead: "25 competing listings in Burleigh Waters — none with a disclosed price above $2,000,000"
 - Example detail: "At 4 days listed, the property is untested. No publicly anchored comparable exists to validate or challenge the $3,495,000 floor, leaving price discovery entirely in the seller's hands."
 
 **Slot 4: THE VALUE EQUATION** (always include — the trade-off in context)
 - What trade-off does this property carry? (flood overlay, smaller lot, dated kitchen, busy road, no garage)
 - What does that trade-off BUY the buyer? (lower price, bigger floor area, proximity to beach, pool, better street)
 - Every property has trade-offs — that's not negative, it's where VALUE lives
-- A flood overlay is the REASON you can buy a 4-bed pool home in Burleigh Waters for $2.2M instead of $3.5M
-- A laminate kitchen is a $30K–$50K renovation — factor that in and you're still buying beachside living at a discount
+- A flood overlay is the REASON you can buy a 4-bed pool home in Burleigh Waters for $2,200,000 instead of $3,500,000
+- A laminate kitchen is a $30,000–$50,000 renovation — factor that in and you're still buying beachside living at a discount
 - The anchor is ALWAYS location: where else in Australia can you get this close to one of the world's best beaches at this price?
-- Example lead: "The flood overlay is why this address exists at $2.2M — without it, you're looking at $3M+"
+- Example lead: "The flood overlay is why this address exists at $2,200,000 — without it, you're looking at $3,000,000+"
 - Example detail: "Zero insurance flood events on record. The overlay is the trade-off. The pool, the entertaining area, and a 2-minute drive to Burleigh Beach is what you get for accepting it. A comparable home without the overlay on Beaconsfield Drive asks $2,345,000."
 
 ---
@@ -228,10 +228,10 @@ Each insight is a self-contained argument that supports the headline. The reader
 > "Council records confirm a flood overlay — and the competing listings in this price band don't carry one."
 
 **AFTER (value equation — DO THIS):**
-> "A flood overlay is why this address exists at $2.2M. Without it, you're in the $3M+ bracket for equivalent space in Burleigh Waters. Zero insurance flood events on record. The overlay is the trade-off — the pool, the outdoor entertaining, and proximity to Burleigh Beach is what you get for accepting it."
+> "A flood overlay is why this address exists at $2,200,000. Without it, you're in the $3,000,000+ bracket for equivalent space in Burleigh Waters. Zero insurance flood events on record. The overlay is the trade-off — the pool, the outdoor entertaining, and proximity to Burleigh Beach is what you get for accepting it."
 
 **BEFORE:**
-> "The kitchen hasn't kept pace with the price. Laminate benchtops in a $2M+ home."
+> "The kitchen hasn't kept pace with the price. Laminate benchtops in a $2,000,000+ home."
 
 **AFTER:**
 > "The kitchen is functional, not luxury — and that's reflected in the asking price. A stone benchtop renovation runs $30,000–$50,000. Factor that in and you're still buying a 4-bed pool home 2 minutes from the beach for under $2,250,000. Where else on Australia's east coast does that exist?"
@@ -282,7 +282,7 @@ The verdict is the closing line. It should be memorable — something a buyer re
 - **03** 25 competing listings, none with a disclosed price above $2,000,000
   At 4 days listed, the property is untested. No publicly anchored comparable exists to validate the $3,495,000 floor, leaving price discovery entirely in the seller's hands.
 
-- **04** The suburb median rests on 23 sales — too thin to anchor a $3.5M transaction
+- **04** The suburb median rests on 23 sales — too thin to anchor a $3,500,000 transaction
   Burleigh Waters rose from $1,278,500 in Q3 2024 to $1,800,000 in Q1 2026, but the latest figure rests on just 23 transactions. Thin data at the top of the market amplifies buyer risk.
 
 **Verdict:** The build justifies the tier — the suburb still has to catch up to the price.
@@ -331,7 +331,7 @@ The verdict is the closing line. It should be memorable — something a buyer re
 **Context:** 6 bed/4 bath, 877 sqm. 8/10 condition, contemporary. Asking offers above $2,300,000. 63 days on market. FIVE transactions since 1990 — including a sale at $52,000 in 1991 (recession loss from $54,000 in 1990). Bedrooms and bathrooms both in 99th percentile. Pool. Suburb median: $1,800,000.
 
 **Headline:** $52,000 in 1991. Six owners later. Now offers above $2,300,000.
-**Sub-headline:** The only 6-bed, 4-bath in Burleigh Waters — in the 99th percentile for size — but 63 days without a buyer at $2.3M.
+**Sub-headline:** The only 6-bed, 4-bath in Burleigh Waters — in the 99th percentile for size — but 63 days without a buyer at $2,300,000.
 
 - **01** Five sales since 1990, starting at $54,000 — the most traded property in the suburb
   Sold at a loss during the 1991 recession ($54,000 to $52,000), then $250,000 in 2001, $450,500 in 2006, $561,500 in 2010. Each sale marks a market cycle. The current ask of $2,300,000 represents a 44x multiple on the 1991 price.
@@ -368,7 +368,7 @@ The verdict is the closing line. It should be memorable — something a buyer re
 ### Example 6: 157 Christine Avenue, Burleigh Waters
 **Context:** 4 bed/2 bath, 647 sqm. Going to AUCTION after 4 days — no price guide. Rebuilt in 2011 (per agent description). 8/10 condition. BUT: kitchen has LAMINATE benchtops (not stone), no island bench, bathrooms have STANDARD fixtures. Kitchen and bathrooms NOT renovated since the 2011 build. Pool. Fields valuation range: $1,845,000 to $2,497,000 based on comparable sales. Last sold $565,000 in 2007 (before rebuild). Suburb median: $1,800,000.
 
-**The story:** The structure is solid (rebuilt 2011, 8/10) but the finishes are 15 years old and mid-range. In a suburb where the median buyer is spending $1.8M, this home has laminate benchtops — not stone. The auction format with no guide means the buyer is bidding blind on a property that may need $100K-$150K in kitchen and bathroom upgrades to match the suburb's prestige standard. Our valuation range gives the buyer a framework nobody else will.
+**The story:** The structure is solid (rebuilt 2011, 8/10) but the finishes are 15 years old and mid-range. In a suburb where the median buyer is spending $1,800,000, this home has laminate benchtops — not stone. The auction format with no guide means the buyer is bidding blind on a property that may need $100,000-$150,000 in kitchen and bathroom upgrades to match the suburb's prestige standard. Our valuation range gives the buyer a framework nobody else will.
 
 **Headline:** Rebuilt in 2011. Laminate kitchen. Going to auction with no guide.
 **Sub-headline:** Our comparable sales place it in the $1,845,000 to $2,497,000 range — but the kitchen and bathrooms haven't been touched since the build, and no one will name a price.
