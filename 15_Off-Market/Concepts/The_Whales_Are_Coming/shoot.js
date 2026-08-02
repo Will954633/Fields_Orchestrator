@@ -35,7 +35,7 @@ const ARGS = ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usa
   "--no-first-run"];
 
 const o = { stills: 0, from: 0, to: 5, dur: 20, fps: 30, mp4: false, width: 1200,
-            out: "frames", params: "" };
+            out: "frames", params: "", page: "index.html", name: "whale_swim" };
 const a = process.argv.slice(2);
 for (let i = 0; i < a.length; i++) {
   const k = a[i].replace(/^--/, "");
@@ -54,7 +54,7 @@ for (let i = 0; i < a.length; i++) {
     headless: "new", protocolTimeout: 180000 });
   const page = await browser.newPage();
   await page.setViewport({ width: 1700, height: 1000, deviceScaleFactor: 1 });
-  const url = `file://${path.join(HERE, "index.html")}?capture=1${o.params ? "&" + o.params : ""}`;
+  const url = `file://${path.join(HERE, o.page)}?capture=1${o.params ? "&" + o.params : ""}`;
   await page.goto(url, { waitUntil: "load", timeout: 120000 });
   await page.waitForFunction("window.__swim && window.__swim.frame", { timeout: 60000 });
 
@@ -76,21 +76,21 @@ for (let i = 0; i < a.length; i++) {
     // contact sheet
     await new Promise((res, rej) => execFile("montage", [
       path.join(outDir, "f*.png"), "-tile", "2x", "-geometry", `${o.width}x+6+6`,
-      "-background", "#0a0f16", path.join(HERE, "contact_sheet.png"),
+      "-background", "#000000", path.join(HERE, o.name + "_sheet.png"),
     ], (e) => e ? rej(e) : res())).catch(async () => {
       // ImageMagick may not be present — fall back to ffmpeg tile
       await new Promise((res, rej) => execFile("ffmpeg", ["-y", "-pattern_type", "glob",
         "-i", path.join(outDir, "f*.png"), "-filter_complex",
         `scale=${o.width}:-1,tile=2x${Math.ceil(times.length / 2)}:padding=6:color=0x0a0f16`,
-        "-frames:v", "1", path.join(HERE, "contact_sheet.png")],
+        "-frames:v", "1", path.join(HERE, o.name + "_sheet.png")],
         (e, so, se) => e ? rej(new Error(se)) : res()));
     });
-    console.log("wrote contact_sheet.png");
+    console.log("wrote " + o.name + "_sheet.png");
   } else if (o.mp4) {
     await new Promise((res, rej) => execFile("ffmpeg", ["-y", "-framerate", String(o.fps),
       "-i", path.join(outDir, "f%04d.png"), "-c:v", "libx264", "-pix_fmt", "yuv420p",
-      "-crf", "18", "-vf", `scale=${o.width}:-2`, path.join(HERE, "whale_swim.mp4")],
+      "-crf", "18", "-vf", `scale=${o.width}:-2`, path.join(HERE, o.name + ".mp4")],
       (e, so, se) => e ? rej(new Error(se)) : res()));
-    console.log("wrote whale_swim.mp4");
+    console.log("wrote " + o.name + ".mp4");
   }
 })().catch(e => { console.error(e); process.exit(1); });
