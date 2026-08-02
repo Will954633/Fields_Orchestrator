@@ -25,7 +25,7 @@ hinges are all inherited unchanged.
 
 Writes:  whale_{body,flipper_near,flipper_far}_wash.png
          wash_palette.png   the spectrum, labelled — see --palette-only
-         index_wash.html
+         watercolour.html
 Run:     python3 build_wash.py --ref "path/to/watercolour_whale.png"
 """
 
@@ -283,8 +283,8 @@ def main() -> None:
             .replace("{{FAR_DATA_URI}}", uri(HERE / "whale_flipper_far_wash.png"))
             .replace("{{THEME_DEFAULT}}", "wash")
             .replace("{{RIG_JSON}}", rig_path.read_text()))
-    (HERE / "index_wash.html").write_text(html)
-    print(f"index_wash.html {(HERE / 'index_wash.html').stat().st_size / 1024:.0f} KB")
+    (HERE / "watercolour.html").write_text(html)
+    print(f"watercolour.html {(HERE / 'watercolour.html').stat().st_size / 1024:.0f} KB")
 
 
 if __name__ == "__main__":
