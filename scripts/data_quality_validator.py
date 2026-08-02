@@ -167,10 +167,52 @@ def check_missing_critical_fields(doc):
     return None
 
 
+def check_stale_days_on_domain(doc):
+    """
+    days_on_domain must equal today minus first_listed_timestamp.
+
+    [DOM-ZERO-STALE] This field is time-relative but was being written once at
+    insert and never recomputed, so every active listing silently understated
+    its age — on 2026-08-02 all 3,002 of them, by up to 19 days, and 70 read 0
+    on homes that had been listed for weeks. The scraper now recomputes it in
+    _refresh_existing(); this check is the safety net that catches it if that
+    path ever moves again. Tolerance of 1 day absorbs run-time/day-boundary drift.
+    """
+    if doc.get('listing_status') != 'for_sale':
+        return None
+
+    ts = doc.get('first_listed_timestamp')
+    if not ts:
+        return None
+    try:
+        listed = datetime.fromisoformat(
+            str(ts).replace('Z', '+00:00').split('.')[0])
+        if listed.tzinfo is not None:
+            listed = listed.replace(tzinfo=None)
+    except (ValueError, TypeError):
+        return None
+
+    correct = max((datetime.now() - listed).days, 0)
+    stored = doc.get('days_on_domain')
+    if isinstance(stored, (int, float)) and abs(int(stored) - correct) <= 1:
+        return None
+
+    return {
+        'rule': 'stale_days_on_domain',
+        'severity': 'medium',
+        'message': (f'days_on_domain {stored} does not match first_listed_timestamp '
+                    f'({correct} days) — listing age is understated on the site'),
+        'field': 'days_on_domain',
+        'bad_value': stored,
+        'correct_value': correct,
+    }
+
+
 ALL_CHECKS = [
     check_land_size_divergence,
     check_implausible_land_size,
     check_missing_critical_fields,
+    check_stale_days_on_domain,
 ]
 
 
@@ -201,6 +243,7 @@ def run_validator(db, monitor_db, suburbs, auto_fix=False):
             'complete_address': 1, 'land_size_sqm': 1, 'lot_size_sqm': 1,
             'property_type': 1, 'listing_status': 1, 'bedrooms': 1,
             'bathrooms': 1, 'land_size_sqm_corrected': 1,
+            'days_on_domain': 1, 'first_listed_timestamp': 1,
         }
 
         # Only check properties with listing_status or land_size data
@@ -212,11 +255,15 @@ def run_validator(db, monitor_db, suburbs, auto_fix=False):
         }, proj)
 
         for doc in docs:
-            # Skip already-corrected records
-            if doc.get('land_size_sqm_corrected'):
-                continue
-
             for check_fn in ALL_CHECKS:
+                # A land-size correction is permanent; re-flagging it every night
+                # is noise. It must NOT suppress the other checks, though —
+                # days_on_domain goes stale again on any doc, corrected or not.
+                if (doc.get('land_size_sqm_corrected')
+                        and check_fn in (check_land_size_divergence,
+                                         check_implausible_land_size)):
+                    continue
+
                 issue = check_fn(doc)
                 if issue:
                     error_doc = {
@@ -229,6 +276,22 @@ def run_validator(db, monitor_db, suburbs, auto_fix=False):
                         **issue,
                     }
                     all_errors.append(error_doc)
+
+                    # Auto-fix a stale listing age — cheap, idempotent, and the
+                    # value is fully derived, so there is nothing to lose.
+                    if (auto_fix and issue['field'] == 'days_on_domain'
+                            and issue.get('correct_value') is not None):
+                        for attempt in range(3):
+                            try:
+                                coll.update_one(
+                                    {'_id': doc['_id']},
+                                    {'$set': {'days_on_domain': issue['correct_value']}})
+                                error_doc['auto_fixed'] = True
+                                fixed_count += 1
+                                break
+                            except OperationFailure:
+                                time.sleep(3 * (attempt + 1))
+                        continue
 
                     # Auto-fix land size issues if we have a correction value
                     if auto_fix and issue.get('correct_value') and issue['field'] == 'land_size_sqm':
