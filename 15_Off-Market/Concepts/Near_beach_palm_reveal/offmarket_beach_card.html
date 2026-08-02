@@ -190,6 +190,26 @@
   #card-beach .weight small { margin-top: 0.6rem; }
   #card-beach .next { margin-top: 1.5rem; }
 
+  /* the fruit's spot on the held final frame, revealed the moment it detaches */
+  .fruitPatch {
+    position: absolute; left: 50.29%; top: 21.80%; width: 9.57%; height: 9.19%;
+    opacity: 0; transition: opacity .18s linear; pointer-events: none;
+  }
+  .fruitPatch.on { opacity: 1; }
+
+  /* card 04 — copy sits to the right of where the fruit comes to rest */
+  #fruitLayer {
+    position: fixed; inset: 0; width: 100%; height: 100%;
+    pointer-events: none; z-index: 5;
+  }
+  .colFruit { display: none; }
+  @media (min-width: 900px) {
+    .innerWhy { grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr); }
+    .colFruit { display: block; }
+  }
+  /* on a phone the fruit sits low and the copy clears it from below */
+  @media (max-width: 899px) { #card-why { padding-bottom: 46svh; } }
+
   .scrollHint { position: absolute; left: 50%; bottom: 3.5svh; transform: translateX(-50%);
                 color: var(--muted); font-size: 0.72rem; letter-spacing: 0.18em; text-transform: uppercase;
                 display: flex; flex-direction: column; align-items: center; gap: 0.5rem; }
@@ -256,12 +276,7 @@
         <li>a short drive to Woolworths Burleigh Waters (1.2km)</li>
       </ul>
 
-      <div class="weight">
-        <p>Buyers can change almost anything about a home. They can't move it closer to the sand.</p>
-        <small>Distance to the sand is fixed at the title — it's the one thing a competing home can't change.</small>
-      </div>
-
-      <span class="next">↓ So who am I actually competing with?</span>
+      <span class="next">↓ Why does that matter?</span>
     </div>
 
     <figure class="media" id="media">
@@ -274,6 +289,10 @@
                aria-label="Pandanus palm drawn in, pixel by pixel">
           <source src="palm_reveal_deck.mp4" type="video/mp4">
         </video>
+        <!-- Covers the fruit's spot on the held final frame at the moment it
+             detaches. Cloned from the video's own pixels, so it matches the
+             encode exactly rather than a re-inverted master. -->
+        <img class="fruitPatch" id="fruitPatch" src="fruit_patch.png" alt="">
       </div>
       <figcaption class="caption">
         <span>Pandanus · the coastal marker</span>
@@ -283,6 +302,28 @@
 
   </div>
 </section>
+
+<!-- ============ CARD 04 — why the distance matters ============ -->
+<!-- copy.yaml:156-158 (card_03.beachside c04_*). The fruit comes to rest at the
+     bottom-left and this copy sits to its right. -->
+<section class="card reveal" id="card-why" data-n="4">
+  <div class="innerWide innerWhy">
+    <div class="colFruit" aria-hidden="true"></div>
+    <div class="colText stagger">
+      <div class="chapter">04&nbsp;&nbsp;/&nbsp;&nbsp;10</div>
+      <p class="answer">Why that distance matters</p>
+      <h2>Buyers can change almost anything about a home. They can't move it closer to the sand.</h2>
+      <p class="p">Distance to the sand is fixed at the title — it's the one thing a competing home can't change.</p>
+      <span class="next">↓ So who am I actually competing with?</span>
+    </div>
+  </div>
+</section>
+
+<!-- The fruit lives above the cards so it can travel out of the video, across
+     the page and come to rest as foreground. -->
+<canvas id="fruitLayer" aria-hidden="true"></canvas>
+
+<script src="pandanus_fruit.js"></script>
 
 <script>
 (() => {
@@ -294,6 +335,7 @@
   // than leaving a dead beat between the two.
   const MEDIA_DELAY_MS = 1250;
 
+  const clamp01 = (v) => v < 0 ? 0 : v > 1 ? 1 : v;
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const cards = [...document.querySelectorAll(".card")];
   const media = document.getElementById("media");
@@ -370,12 +412,135 @@
 
   replay.addEventListener("click", () => {
     media.classList.remove("mediaIn");
+    fruit.reset();
     setTimeout(() => {
       media.classList.add("mediaIn");
       try { video.currentTime = 0; } catch (_) {}
       video.play().catch(() => {});
     }, 260);
   });
+
+  // ---- the fruit ----------------------------------------------------------
+  // It detaches from the crown, drops to the sand, then rolls toward the viewer
+  // and away to the left, growing as it closes, and settles at the bottom-left
+  // where card 04's copy sits beside it.
+  //
+  // Fall is time-driven (a fruit frozen mid-air while you pause reading looks
+  // broken). The roll is scroll-driven, so the journey is tied to the move
+  // between cards 03 and 04 and it always arrives exactly where the copy needs
+  // it, however fast you scroll.
+  const fruit = (() => {
+    const cv = document.getElementById("fruitLayer");
+    const g = cv.getContext("2d");
+    const patch = document.getElementById("fruitPatch");
+    const cardWhy = document.getElementById("card-why");
+
+    const FALL_MS = 1150;               // detach -> settled on the sand
+    const FRUIT_CX = 0.5508, FRUIT_CY = 0.2640, FRUIT_R = 0.0225;  // of the video frame
+    const GROUND_Y = 0.926;             // sand line, as a fraction of the frame
+
+    let dpr = 1, detachedAt = 0, running = false, raf = 0;
+
+    function size() {
+      dpr = Math.min(devicePixelRatio || 1, 2);
+      cv.width = Math.round(innerWidth * dpr);
+      cv.height = Math.round(innerHeight * dpr);
+      g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    size();
+    addEventListener("resize", size);
+
+    const ease = (u) => 1 - Math.pow(1 - clamp01(u), 2.2);
+
+    // where the fruit starts, in viewport pixels, from the video's live rect
+    function origin() {
+      const r = video.getBoundingClientRect();
+      return { x: r.left + r.width * FRUIT_CX,
+               y: r.top + r.height * FRUIT_CY,
+               R: r.width * FRUIT_R,
+               groundY: r.top + r.height * GROUND_Y };
+    }
+
+    // 0 -> 1 as card 04 comes into view; this is what drives the roll.
+    // Must stay at 0 while card 04 is still entirely below the fold, or the
+    // fruit starts swelling on the tree's own card before anyone has scrolled.
+    function rollProgress() {
+      const top = cardWhy.getBoundingClientRect().top;
+      return clamp01((innerHeight - top) / (innerHeight * 0.85));
+    }
+
+    function restState() {
+      const vw = innerWidth, vh = innerHeight;
+      const wide = vw >= 900;
+      // On the tree the fruit is ~22px across; a 6m -> 1m approach is about a
+      // 6x gain, so ~300px across. Bigger than that stops reading as "a metre
+      // away" and starts reading as a boulder.
+      const R = wide ? Math.min(vh * 0.17, vw * 0.115) : Math.min(vh * 0.15, vw * 0.30);
+      return { x: wide ? vw * 0.165 : vw * 0.28,
+               y: wide ? vh * 0.70 : vh * 0.78,
+               R };
+    }
+
+    function frame() {
+      g.clearRect(0, 0, innerWidth, innerHeight);
+      if (!detachedAt) { raf = requestAnimationFrame(frame); return; }
+
+      const o = origin(), rest = restState();
+      const tFall = clamp01((performance.now() - detachedAt) / FALL_MS);
+      const p = rollProgress();
+
+      let x, y, R, rot;
+      if (tFall < 1) {
+        // fall: gravity, a small drift, one soft bounce at the sand
+        const f = tFall;
+        const drop = o.groundY - o.y;
+        const b = f < 0.82 ? (f / 0.82) * (f / 0.82)
+                           : 1 - Math.sin((f - 0.82) / 0.18 * Math.PI) * 0.11;
+        x = o.x + 26 * f;
+        y = o.y + drop * b;
+        R = o.R;
+        rot = f * 5.2;
+      } else {
+        // roll: toward the viewer (R grows) and away to the left, decelerating
+        const u = ease(p);
+        const landed = { x: o.x + 26, y: o.groundY, R: o.R };
+        x = landed.x + (rest.x - landed.x) * u;
+        y = landed.y + (rest.y - landed.y) * u;
+        R = landed.R + (rest.R - landed.R) * u;
+        // rolling left => negative spin; tie it to ground travel / radius so the
+        // surface speed matches the movement instead of spinning arbitrarily
+        const travel = Math.hypot(x - landed.x, y - landed.y);
+        rot = 5.2 + travel / Math.max(8, (landed.R + R) * 0.5) * 0.62;
+      }
+
+      window.paintFruit(g, x, y, R, rot, Math.sin(rot * 0.4) * 0.12);
+      raf = requestAnimationFrame(frame);
+    }
+
+    function detach() {
+      if (detachedAt) return;
+      detachedAt = performance.now();
+      patch.classList.add("on");
+    }
+
+    function start() {
+      if (running) return;
+      running = true;
+      raf = requestAnimationFrame(frame);
+    }
+
+    function reset() {
+      detachedAt = 0;
+      patch.classList.remove("on");
+      g.clearRect(0, 0, innerWidth, innerHeight);
+    }
+
+    return { start, detach, reset };
+  })();
+
+  fruit.start();
+  // detach once the palm has finished drawing itself
+  video.addEventListener("ended", () => setTimeout(fruit.detach, 260));
 })();
 </script>
 </body>
