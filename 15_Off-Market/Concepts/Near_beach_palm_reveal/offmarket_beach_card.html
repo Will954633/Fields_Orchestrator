@@ -450,50 +450,54 @@
     size();
     addEventListener("resize", size);
 
-    const ease = (u) => 1 - Math.pow(1 - clamp01(u), 2.2);
+    const smooth = (u) => { u = clamp01(u); return u * u * (3 - 2 * u); };
 
-    // where the fruit starts, in viewport pixels, from the video's live rect
+    // Everything below works in DOCUMENT coordinates (page space), not viewport.
+    // The first version anchored the roll to the video's live rect, so as the
+    // page scrolled the start point scrolled with it and the fruit drifted
+    // UPWARD by ~120px before descending — it read as floating, not rolling.
+    const docOf = (r) => ({ left: r.left + scrollX, top: r.top + scrollY });
+
+    // where the fruit starts, in document pixels
     function origin() {
-      const r = video.getBoundingClientRect();
-      return { x: r.left + r.width * FRUIT_CX,
-               y: r.top + r.height * FRUIT_CY,
+      const r = video.getBoundingClientRect(), d = docOf(r);
+      return { x: d.left + r.width * FRUIT_CX,
+               y: d.top + r.height * FRUIT_CY,
                R: r.width * FRUIT_R,
-               groundY: r.top + r.height * GROUND_Y };
+               groundY: d.top + r.height * GROUND_Y };
     }
 
     // 0 -> 1 as card 04 comes into view; this is what drives the roll.
-    // Must stay at 0 while card 04 is still entirely below the fold, or the
-    // fruit starts swelling on the tree's own card before anyone has scrolled.
     function rollProgress() {
       const top = cardWhy.getBoundingClientRect().top;
-      return clamp01((innerHeight - top) / (innerHeight * 0.85));
+      return clamp01((innerHeight - top) / (innerHeight * 0.92));
     }
 
+    // Rest is anchored to card 04 itself, not the viewport, so the fruit stays
+    // put beside the copy instead of sliding as you keep scrolling.
     function restState() {
-      const vw = innerWidth, vh = innerHeight;
-      const wide = vw >= 900;
-      // On the tree the fruit is ~22px across; a 6m -> 1m approach is about a
-      // 6x gain, so ~300px across. Bigger than that stops reading as "a metre
-      // away" and starts reading as a boulder.
-      const R = wide ? Math.min(vh * 0.17, vw * 0.115) : Math.min(vh * 0.15, vw * 0.30);
-      return { x: wide ? vw * 0.165 : vw * 0.28,
-               y: wide ? vh * 0.70 : vh * 0.78,
+      const r = cardWhy.getBoundingClientRect(), d = docOf(r);
+      const wide = innerWidth >= 900;
+      const R = wide ? Math.min(innerHeight * 0.17, innerWidth * 0.115)
+                     : Math.min(innerHeight * 0.15, innerWidth * 0.30);
+      return { x: d.left + (wide ? r.width * 0.17 : r.width * 0.30),
+               y: d.top + r.height * (wide ? 0.80 : 0.82),
                R };
     }
+
+    let land = null;   // frozen the moment it stops falling
 
     function frame() {
       g.clearRect(0, 0, innerWidth, innerHeight);
       if (!detachedAt) { raf = requestAnimationFrame(frame); return; }
 
-      const o = origin(), rest = restState();
       const tFall = clamp01((performance.now() - detachedAt) / FALL_MS);
       const p = rollProgress();
-
       let x, y, R, rot;
+
       if (tFall < 1) {
-        // fall: gravity, a small drift, one soft bounce at the sand
-        const f = tFall;
-        const drop = o.groundY - o.y;
+        const o = origin();
+        const f = tFall, drop = o.groundY - o.y;
         const b = f < 0.82 ? (f / 0.82) * (f / 0.82)
                            : 1 - Math.sin((f - 0.82) / 0.18 * Math.PI) * 0.11;
         x = o.x + 26 * f;
@@ -501,19 +505,36 @@
         R = o.R;
         rot = f * 5.2;
       } else {
-        // roll: toward the viewer (R grows) and away to the left, decelerating
-        const u = ease(p);
-        const landed = { x: o.x + 26, y: o.groundY, R: o.R };
-        x = landed.x + (rest.x - landed.x) * u;
-        y = landed.y + (rest.y - landed.y) * u;
-        R = landed.R + (rest.R - landed.R) * u;
-        // rolling left => negative spin; tie it to ground travel / radius so the
-        // surface speed matches the movement instead of spinning arbitrarily
-        const travel = Math.hypot(x - landed.x, y - landed.y);
-        rot = 5.2 + travel / Math.max(8, (landed.R + R) * 0.5) * 0.62;
+        if (!land) { const o = origin(); land = { x: o.x + 26, y: o.groundY, R: o.R }; }
+        const rest = restState();
+        const t = smooth(p);
+
+        // Path: leave the trunk heading DOWN the page (toward the viewer), then
+        // sweep LEFT into rest. A quadratic with the control point below the
+        // start gives exactly that — "rolls forward, then forward and to the
+        // left" — where a straight lerp just slid diagonally.
+        const c = { x: land.x + 30, y: land.y + (rest.y - land.y) * 0.88 };
+        const it = 1 - t;
+        x = it*it*land.x + 2*it*t*c.x + t*t*rest.x;
+        y = it*it*land.y + 2*it*t*c.y + t*t*rest.y;
+
+        // Perspective growth, not a lerp. Size goes as 1/distance, so closing
+        // from far to near is BACK-loaded — barely grows early, then rushes at
+        // you. Lerping made it jump 11px -> 45px on the first scroll notch,
+        // which is why it read as "appearing" rather than approaching.
+        const k = Math.max(1.01, rest.R / land.R);
+        R = land.R * k / (k - (k - 1) * t);
+
+        // roll angle from actual ground travel / radius, so surface speed
+        // matches how far it has moved rather than spinning arbitrarily
+        const travel = Math.hypot(x - land.x, y - land.y);
+        rot = 5.2 - travel / Math.max(10, (land.R + R) * 0.5) * 0.9;
       }
 
-      window.paintFruit(g, x, y, R, rot, Math.sin(rot * 0.4) * 0.12);
+      const vx = x - scrollX, vy = y - scrollY;
+      window.__fruitState = { x: Math.round(vx), y: Math.round(vy), R: Math.round(R),
+                              p: +p.toFixed(3), tFall: +tFall.toFixed(2) };
+      window.paintFruit(g, vx, vy, R, rot, Math.sin(rot * 0.4) * 0.12);
       raf = requestAnimationFrame(frame);
     }
 
@@ -531,6 +552,7 @@
 
     function reset() {
       detachedAt = 0;
+      land = null;
       patch.classList.remove("on");
       g.clearRect(0, 0, innerWidth, innerHeight);
     }
