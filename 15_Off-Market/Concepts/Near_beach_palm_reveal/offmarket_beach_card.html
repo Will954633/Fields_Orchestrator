@@ -503,19 +503,29 @@
       return clamp01(pSmooth);
     }
 
-    // Rest is anchored to card 04 itself, not the viewport, so the fruit stays
-    // put beside the copy instead of sliding as you keep scrolling.
+    // Rest is anchored to card 04's own empty left COLUMN, not to a fraction of
+    // the viewport.
+    //
+    // The copy is placed by the layout grid (a centred 68rem track), so a
+    // viewport fraction and the text drift apart as the window widens — which
+    // is what left a dead gap between the fruit and the words. Measuring the
+    // column keeps them related at any width.
+    const colFruit = document.querySelector("#card-why .colFruit");
+
     function restState() {
       const r = cardWhy.getBoundingClientRect(), d = docOf(r);
       const wide = innerWidth >= 900;
+      const col = wide ? colFruit.getBoundingClientRect() : null;
       // The tree sits ~6m off and the fruit is ~22px there, so a fruit a metre
       // away is ~130px across — not the 306px this used to be, which read as a
       // boulder rather than something you could pick up.
       const R = wide ? Math.min(innerHeight * 0.085, innerWidth * 0.058)
                      : Math.min(innerHeight * 0.085, innerWidth * 0.17);
-      return { x: d.left + (wide ? r.width * 0.17 : r.width * 0.30),
-               y: d.top + r.height * (wide ? 0.80 : 0.82),
-               R };
+      // sit in the column, biased toward the copy so the two read as one group
+      const x = wide
+        ? col.left + scrollX + col.width * 0.62
+        : d.left + r.width * 0.30;
+      return { x, y: d.top + r.height * (wide ? 0.78 : 0.82), R };
     }
 
     let land = null;   // frozen the moment it stops falling
