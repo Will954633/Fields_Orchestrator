@@ -8,6 +8,10 @@
     --paper: #0d1620; --ink: #e8eef4; --dim: #7b8b9c; --line: #1e2c3a;
     --accent: #6fb3c9;
   }
+  [data-theme="ink"] {
+    --paper: #000000; --ink: #e6ddd2; --dim: #6f6a63; --line: #241f1a;
+    --accent: #e6ddd2;
+  }
   [data-theme="light"] {
     --paper: #f2efe8; --ink: #1d2630; --dim: #6c7784; --line: #ddd7cb;
     --accent: #2b6d85;
@@ -167,7 +171,7 @@ const P = {
   strips:    3,
   motes:     true,
   spine:     false,
-  theme:     "dark",
+  theme:     "{{THEME_DEFAULT}}",
 };
 
 const CANVAS_W = 1600, CANVAS_H = 720;
@@ -336,28 +340,39 @@ function step(dt) {
 
 const IMG = {};
 
-function paintWater() {
-  const dark = P.theme === "dark";
-  const g = ctx.createLinearGradient(0, 0, 0, CANVAS_H);
-  if (dark) { g.addColorStop(0, "#16283a"); g.addColorStop(0.55, "#0d1927"); g.addColorStop(1, "#070e17"); }
-  else      { g.addColorStop(0, "#e9e6dd"); g.addColorStop(0.6, "#dcdbd3"); g.addColorStop(1, "#cfd2cd"); }
-  ctx.fillStyle = g; ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+const INK_PAPER = "#000000", INK_COLOUR = "#e6ddd2";
 
-  ctx.save();
-  ctx.globalAlpha = dark ? 0.055 : 0.05;
-  ctx.fillStyle = dark ? "#a9d8ee" : "#ffffff";
-  for (let i = 0; i < 7; i++) {
-    const x = ((i * 251) % CANVAS_W) + Math.sin(S.t * 0.11 + i) * 26;
-    ctx.save(); ctx.translate(x, 0); ctx.rotate(0.13 + i * 0.012);
-    ctx.fillRect(-45, -60, 90, CANVAS_H * 1.35); ctx.restore();
+function paintWater() {
+  const ink = P.theme === "ink", dark = P.theme === "dark";
+
+  if (ink) {
+    // Flat black. The treatment's whole premise is that paper becomes ground
+    // and only strokes carry light — a gradient or a light shaft would put
+    // luminance back into the ground and the effect collapses.
+    ctx.fillStyle = INK_PAPER;
+    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+  } else {
+    const g = ctx.createLinearGradient(0, 0, 0, CANVAS_H);
+    if (dark) { g.addColorStop(0, "#16283a"); g.addColorStop(0.55, "#0d1927"); g.addColorStop(1, "#070e17"); }
+    else      { g.addColorStop(0, "#e9e6dd"); g.addColorStop(0.6, "#dcdbd3"); g.addColorStop(1, "#cfd2cd"); }
+    ctx.fillStyle = g; ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+    ctx.save();
+    ctx.globalAlpha = dark ? 0.055 : 0.05;
+    ctx.fillStyle = dark ? "#a9d8ee" : "#ffffff";
+    for (let i = 0; i < 7; i++) {
+      const x = ((i * 251) % CANVAS_W) + Math.sin(S.t * 0.11 + i) * 26;
+      ctx.save(); ctx.translate(x, 0); ctx.rotate(0.13 + i * 0.012);
+      ctx.fillRect(-45, -60, 90, CANVAS_H * 1.35); ctx.restore();
+    }
+    ctx.restore();
   }
-  ctx.restore();
 
   if (!P.motes) return;
   ctx.save();
-  ctx.fillStyle = dark ? "#cfe6f2" : "#8d9aa2";
+  ctx.fillStyle = ink ? INK_COLOUR : (dark ? "#cfe6f2" : "#8d9aa2");
   for (const m of S.motes) {
-    ctx.globalAlpha = (dark ? 0.20 : 0.16) * m.z;
+    ctx.globalAlpha = (ink ? 0.13 : dark ? 0.20 : 0.16) * m.z;
     ctx.beginPath(); ctx.arc(m.x, m.y, m.r * m.z, 0, 6.2832); ctx.fill();
   }
   ctx.restore();
@@ -372,17 +387,17 @@ function slopeAt(x, phase, on) {
   return (dispAt(x + h, phase, on) - dispAt(x - h, phase, on)) / (2 * h);
 }
 
-function paintFlipper(k, on, ph) {
+function paintFlipper(g, k, on, ph) {
   const f = RIG.flippers[k];
   // The hinge rides at its OWN height on the body — the shoulder, down at the
   // belly — not on the spine. It is carried by the wave like every other point
   // of the body, and tilts with the local slope, then adds its own feathering.
   const y = f.hinge_abs_y + dispAt(f.hinge_abs_x, ph, on);
-  ctx.save();
-  ctx.translate(f.hinge_abs_x, y);
-  ctx.rotate(Math.atan(slopeAt(f.hinge_abs_x, ph, on)) + S.flip[k]);
-  ctx.drawImage(IMG[k], -f.hinge_x, -f.hinge_y, f.w, f.h);
-  ctx.restore();
+  g.save();
+  g.translate(f.hinge_abs_x, y);
+  g.rotate(Math.atan(slopeAt(f.hinge_abs_x, ph, on)) + S.flip[k]);
+  g.drawImage(IMG[k], -f.hinge_x, -f.hinge_y, f.w, f.h);
+  g.restore();
 }
 
 // The blink.
@@ -416,7 +431,7 @@ const EYE_STRIP = 2;
 // Drawn in narrow vertical strips so each column can carry its own travel.
 const canthusTaper = (t) => Math.pow(Math.sin(Math.PI * Math.min(Math.max(t, 0), 1)), 0.55);
 
-function paintEye(ph, on) {
+function paintEye(g, ph, on) {
   const E = RIG.eye;
   if (!E || P.blinkEvery <= 0) return;
   const shut = blinkAmount(S.blinkU);
@@ -440,13 +455,13 @@ function paintEye(ph, on) {
 
     // upper lid: skin from above, stretched down, anchored at its own top edge
     const up = upReach * k;
-    eyeCx.drawImage(IMG.body, bx + x, upSrcY, sw + 1, E.lid_src_h,
-                    x, upSrcY - by, sw + 1, E.lid_src_h + up);
+    eyeCx.drawImage(IMG.body, bx + x, upSrcY, sw, E.lid_src_h,
+                    x, upSrcY - by, sw, E.lid_src_h + up);
 
     // lower lid: tissue from below, stretched up, anchored at its bottom edge
     const lo = loReach * k;
-    eyeCx.drawImage(IMG.body, bx + x, E.lower_open_y, sw + 1, E.lower_src_h,
-                    x, E.lower_open_y - by - lo, sw + 1, E.lower_src_h + lo);
+    eyeCx.drawImage(IMG.body, bx + x, E.lower_open_y, sw, E.lower_src_h,
+                    x, E.lower_open_y - by - lo, sw, E.lower_src_h + lo);
 
     // the closing line where the two margins meet
     if (shut > 0.30) {
@@ -456,7 +471,7 @@ function paintEye(ph, on) {
       g.addColorStop(0, "rgba(38,34,30,0)");
       g.addColorStop(1, `rgba(38,34,30,${a})`);
       eyeCx.fillStyle = g;
-      eyeCx.fillRect(x, y - 3, sw + 1, 3.5);
+      eyeCx.fillRect(x, y - 3, sw, 3.5);
     }
   }
 
@@ -477,22 +492,24 @@ function paintEye(ph, on) {
 
   // rotate about the EYE'S OWN CENTRE. Rotating about (cx, displacement) puts
   // the pivot ~390px above the eye and swings the patch clear of the socket.
-  ctx.save();
-  ctx.translate(cx, cy + dispAt(cx, ph, on));
-  ctx.rotate(Math.atan(slopeAt(cx, ph, on)) + (E.angle_deg * Math.PI) / 180);
-  ctx.translate(-cx, -cy);
+  g.save();
+  g.translate(cx, cy + dispAt(cx, ph, on));
+  g.rotate(Math.atan(slopeAt(cx, ph, on)) + (E.angle_deg * Math.PI) / 180);
+  g.translate(-cx, -cy);
   // the globe retracts as the lids close, so the socket sits fractionally deeper
   if (shut > 0.2) {
-    ctx.globalAlpha = 0.16 * (shut - 0.2) / 0.8;
-    ctx.fillStyle = "#1d1a17";
-    ctx.beginPath();
-    ctx.ellipse(cx, cy, E.w * 0.40, E.h * 0.34, 0, 0, 6.2832);
-    ctx.fill();
-    ctx.globalAlpha = 1;
+    g.globalAlpha = 0.16 * (shut - 0.2) / 0.8;
+    g.fillStyle = P.theme === "ink" ? "#000000" : "#1d1a17";
+    g.beginPath();
+    g.ellipse(cx, cy, E.w * 0.40, E.h * 0.34, 0, 0, 6.2832);
+    g.fill();
+    g.globalAlpha = 1;
   }
-  ctx.drawImage(eyeCv, bx, by);
-  ctx.restore();
+  g.drawImage(eyeCv, bx, by);
+  g.restore();
 }
+
+let bodyCv = null, bodyCx = null;
 
 function paintWhale(on) {
   const W = RIG.width, H = RIG.height;
@@ -500,52 +517,65 @@ function paintWhale(on) {
   const noseX = S.x * pxPerM();
   const ph = S.phase;
 
-  ctx.save();
-  ctx.translate(noseX - W * scale, CANVAS_H * P.depth - (H * scale) / 2);
-  ctx.scale(scale, scale);
+  // Compose the animal at 1:1 sprite scale, then scale the whole thing once.
+  //
+  // Drawing the strips straight onto the scaled main canvas puts every strip
+  // boundary on a fractional device pixel, so each strip antialiases its own
+  // edges and adjacent edges do not sum to full coverage. With opaque sprites
+  // that is invisible; with semi-transparent ink it is not, and it cannot be
+  // patched by overlapping — a 1px overlap double-composites and comes out too
+  // bright (27% swing across strip settings), no overlap leaves gaps and comes
+  // out too dark (6%). At 1:1 the boundaries are integers, drawImage does no
+  // edge AA, and the strips tile exactly. Verified strip-count invariant.
+  const padY = Math.ceil(0.6 * P.ampFrac * W) + 24;   // room for the wave to swing
+  const ch = H + padY * 2;
+  if (!bodyCv) { bodyCv = document.createElement("canvas"); bodyCx = bodyCv.getContext("2d"); }
+  if (bodyCv.width !== W || bodyCv.height !== ch) { bodyCv.width = W; bodyCv.height = ch; }
+  bodyCx.clearRect(0, 0, W, ch);
+  bodyCx.imageSmoothingEnabled = true;
+  bodyCx.imageSmoothingQuality = "high";
 
-  paintFlipper("far", on, ph);                        // behind the body
+  bodyCx.save();
+  bodyCx.translate(0, padY);
 
-  // Strips are sheared vertically, not rotated. Rotating each strip about its
-  // own centre means adjacent strips disagree along their shared edge wherever
-  // the slope is changing, and the gaps open into a visible comb down the
-  // peduncle exactly where the wave is steepest. A vertical shear that maps the
-  // strip's left edge to d(x0) and its right edge to d(x1) agrees with both
-  // neighbours by construction, so the body stays continuous however hard it
-  // bends. The cost is that cross-sections stay vertical instead of rotating
-  // with the spine — a cos(theta) effect, invisible at these amplitudes, and a
-  // far better trade than seams.
+  paintFlipper(bodyCx, "far", on, ph);              // behind the body
+
   const stepPx = Math.max(1, Math.round(P.strips));
   for (let sx = 0; sx < W; sx += stepPx) {
     const sw = Math.min(stepPx, W - sx);
     const d0 = dispAt(sx, ph, on);
     const k = (dispAt(sx + sw, ph, on) - d0) / sw;
-    ctx.save();
-    ctx.transform(1, k, 0, 1, 0, d0 - k * sx);
-    ctx.drawImage(IMG.body, sx, 0, sw + 1, H, sx, 0, sw + 1, H);
-    ctx.restore();
+    bodyCx.save();
+    bodyCx.transform(1, k, 0, 1, 0, d0 - k * sx);
+    bodyCx.drawImage(IMG.body, sx, 0, sw, H, sx, 0, sw, H);
+    bodyCx.restore();
   }
 
-  paintEye(ph, on);
-  paintFlipper("near", on, ph);                       // in front of the body
+  paintEye(bodyCx, ph, on);
+  paintFlipper(bodyCx, "near", on, ph);             // in front of the body
 
   if (P.spine) {
-    ctx.strokeStyle = "#ff4d6d"; ctx.lineWidth = 2 / scale;
-    ctx.beginPath();
+    bodyCx.strokeStyle = "#ff4d6d"; bodyCx.lineWidth = 2;
+    bodyCx.beginPath();
     for (let sx = 0; sx < W; sx += stepPx) {
       const y = RIG.centre[Math.min(sx, RIG.centre.length - 1)] + dispAt(sx, ph, on);
-      sx === 0 ? ctx.moveTo(sx, y) : ctx.lineTo(sx, y);
+      sx === 0 ? bodyCx.moveTo(sx, y) : bodyCx.lineTo(sx, y);
     }
-    ctx.stroke();
+    bodyCx.stroke();
     for (const k of ["near", "far"]) {
       const f = RIG.flippers[k];
-      ctx.fillStyle = "#4dd6ff";
-      ctx.beginPath();
-      ctx.arc(f.hinge_abs_x, f.hinge_abs_y + dispAt(f.hinge_abs_x, ph, on),
-              7 / scale, 0, 6.2832);
-      ctx.fill();
+      bodyCx.fillStyle = "#4dd6ff";
+      bodyCx.beginPath();
+      bodyCx.arc(f.hinge_abs_x, f.hinge_abs_y + dispAt(f.hinge_abs_x, ph, on), 7, 0, 6.2832);
+      bodyCx.fill();
     }
   }
+  bodyCx.restore();
+
+  ctx.save();
+  ctx.translate(noseX - W * scale, CANVAS_H * P.depth - (H * scale) / 2);
+  ctx.scale(scale, scale);
+  ctx.drawImage(bodyCv, 0, -padY);
   ctx.restore();
 }
 
@@ -639,10 +669,14 @@ function buildPanel() {
     return b;
   };
   const themeBtn = document.createElement("button");
-  themeBtn.textContent = "Light / dark";
+  themeBtn.textContent = "Theme";
   themeBtn.onclick = () => {
-    P.theme = P.theme === "dark" ? "light" : "dark";
-    document.documentElement.dataset.theme = P.theme === "dark" ? "" : "light";
+    // The whale sprites are baked per theme: index.html carries the tonal
+    // drawing, index_ink.html the cream-on-black ink layers. Switching the
+    // ground here does NOT restyle the animal — open the other page for that.
+    const order = ["dark", "light", "ink"];
+    P.theme = order[(order.indexOf(P.theme) + 1) % order.length];
+    document.documentElement.dataset.theme = P.theme === "dark" ? "" : P.theme;
   };
   const replay = document.createElement("button");
   replay.textContent = "Replay"; replay.onclick = resetSim;
@@ -677,7 +711,8 @@ for (const k of Object.keys(P)) {
   P[k] = (typeof P[k] === "boolean") ? raw !== "0" && raw !== "false"
        : (typeof P[k] === "number")  ? +raw : raw;
 }
-if (P.theme !== "dark") document.documentElement.dataset.theme = "light";
+if (P.theme === "light") document.documentElement.dataset.theme = "light";
+if (P.theme === "ink") document.documentElement.dataset.theme = "ink";
 
 // --- run -------------------------------------------------------------------
 
