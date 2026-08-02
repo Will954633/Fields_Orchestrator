@@ -95,6 +95,15 @@ reassurance layer (local), with an emotional read of how each fact actually LAND
 9. **What we deliberately did NOT conclude** — claims that sound right but failed verification. \
 This section is mandatory and is the most valuable part of the document. Include anything you \
 could not stand up, especially where it would have been convenient to believe it.
+
+**Section 9 OUTRANKS section 8.** Before you finish, re-read your messaging section against your \
+own "did not conclude" list and delete any suggested line that section 9 rules out. The 30 July \
+2026 brief failed this twice: §8 offered "56 against 117" as a model sentence while §9.9 said that \
+magnitude must not be published without a lag reconciliation, and §8 proposed "most homes here are \
+sold by private treaty" while §9.8 recorded that no verified statistic for the auction/private-treaty \
+split could be found. A messaging section that contradicts its own verification section forces the \
+writer to re-litigate it every month. If a message only survives by ignoring section 9, it belongs \
+in the "dropped" list, not the "resonates" list.
 10. What Fields should validate next with first-party data we already own.
 11. Sources.
 
