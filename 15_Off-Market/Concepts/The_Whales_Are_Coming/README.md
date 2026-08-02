@@ -251,9 +251,22 @@ both be honoured at one speed; the frequency is the better-evidenced number
 only 55% of cetaceans fall in the theoretical 0.25–0.35 band, with 74% in
 0.20–0.30.
 
-**Burst and coast.** 3.5 beats, then five seconds of rigid glide while quadratic
-drag bleeds the speed off. Thrust is scaled so continuous beating settles at
-exactly the cruise speed asked for (steady state is `thrust == drag·U²`).
+**Burst and coast.** 2 beats, then three seconds of rigid glide while quadratic
+drag bleeds the speed off — about **two full cycles per 24-second crossing**, with
+the whale beating 41% of the time.
+
+Thrust is scaled by **1/duty**, which is what keeps the rhythm sliders from
+quietly changing the animal. Calibrating thrust for continuous beating
+(`thrust = drag·U²`) undershoots at any duty below 1: at 3.5 beats and a 3s
+glide the whale settled at **1.30 m/s** against a set 2.0, and because frequency
+is Strouhal-locked to *instantaneous* speed that dragged the beat down to
+**0.151 Hz** — outside the measured band, purely as a side effect of a rhythm
+control. Mean thrust must equal mean drag, so the instantaneous value during a
+burst is `drag·U²/duty`.
+
+Measured on the live page across a crossing: speed oscillates **1.72–2.28 m/s**
+and the beat **0.198–0.262 Hz**, every sample inside the measured
+0.229 ± 0.039 Hz band, at any rhythm setting.
 
 **A real crossing is slow.** The frame holds 33 m of water, so a left-to-right
 pass takes ~24 s. If a card only has six, shrink the whale — do not speed the
