@@ -16,6 +16,7 @@ network, no build step), and every parameter is a live slider.
 |---|---|
 | `index.html` | The tonal drawing, in blue water. |
 | `index_ink.html` | **Ink treatment** — cream strokes on black, as in the V3 reveal deck. |
+| `index_wash.html` | **Watercolour** — palette transferred from a reference painting, on pale paper. |
 
 Same rig, same physics, same blink. Only the sprites and the ground differ.
 
@@ -37,6 +38,40 @@ two files are not interchangeable: aspect 1.703 vs 1.831, so the spine, flipper
 hinges and eye box would all have to be re-measured. Worth doing if the ink
 version becomes the primary one.
 
+### The watercolour version
+
+`build_wash.py` does a **luminance-indexed colour transfer** from a reference
+painting. It suits this pair because both images order tone the same way — dark
+along the back, pale at the belly — so intensity is already carrying the anatomy
+and the mapping is semantic rather than arbitrary.
+
+1. **Spectrum.** The reference is binned into 256 intensity levels, each holding
+   the mean colour the painter used at that intensity. `wash_palette.png` prints
+   it as 16 labelled bands: number, intensity range, hex, and share of the
+   reference. From `whale_watercolour.png` that runs `#2D3B46` slate through
+   `#78A3AF` mid blue-grey to `#F0FAFA` — and shows that bands 00–02 carry
+   **0.0%**, i.e. the painting has essentially no true blacks, so the darkest
+   bands are interpolated rather than measured.
+2. **Histogram match.** The whale's cumulative intensity distribution is matched
+   to the reference's *before* lookup, so "the darkest 5% of the whale" maps to
+   "the darkest 5% of the painting". Without this the transfer degenerates into a
+   tint: if the painting is lighter overall, most of the whale lands in bins the
+   painter barely touched.
+3. **Lookup, then detail recovery.** A 1-D spectrum returns near-identical
+   colours for near-identical tones, which flattens the pen hatch, so the
+   drawing's high-frequency luminance is added back on top (`--detail`, 0.55).
+
+Run `--palette-only` to inspect the spectrum before committing to a recolour.
+
+**Known limitation:** the mapping is 1-D, so two regions of the reference at the
+same intensity but different hue collapse to one colour — a grey-green head and
+a blue flipper converge. Fixing that means adding a second axis (position along
+the body), which is an addition rather than a rewrite.
+
+The ground is pale paper, not blue water: that palette was mixed to sit on white,
+and dropping it into a dark sea would push every tone the painter chose out of
+its intended contrast.
+
 ## What to look at
 
 - The **whole animal** moves — head, body and flippers, not just the tail. That
@@ -52,13 +87,15 @@ version becomes the primary one.
 | File | What it is |
 |---|---|
 | `swim.template.html` | **Source of both pages.** `{{BODY_DATA_URI}}`, `{{NEAR_DATA_URI}}`, `{{FAR_DATA_URI}}`, `{{THEME_DEFAULT}}` and `{{RIG_JSON}}` are filled in by the build, once per version. |
-| `build_whale_sprite.py` | **Source of the sprite + rig.** `Whale_V2.png` → layers, measured rig → `index.html`. |
+| `build_whale_sprite.py` | **Source of the sprite + rig.** `Whale_V2.png` → layers, measured rig → `index.html` + `index_ink.html`. |
+| `build_wash.py` | **Colour transfer.** Reference painting + the built layers → `index_wash.html`. |
 | `shoot.js` | Headless-Chrome frame renderer → MP4 / contact sheet. |
 | `index.html` / `index_ink.html` | The two animations. *Generated* — edit `swim.template.html` instead. |
 | `whale_body.png` / `whale_body_ink.png` | Body with the flippers cut away. *Generated.* |
 | `whale_flipper_{near,far}[_ink].png` | The two pectoral blades. *Generated.* |
 | `whale_rig.json` | Measured spine, thickness profile, flipper hinges, eye. *Generated.* |
-| `whale_swim.mp4` / `whale_swim_ink.mp4` | Rendered crossings. *Generated.* |
+| `wash_palette.png` | The extracted spectrum, labelled. *Generated.* |
+| `whale_swim{,_ink,_wash}.mp4` | Rendered crossings. *Generated.* |
 
 The input image lives outside this folder, at
 `../Near_beach_palm_reveal/Other images/Whale_V2.png`.
@@ -69,7 +106,9 @@ The input image lives outside this folder, at
 source /home/fields/venv/bin/activate       # numpy, pillow, scipy
 python3 build_whale_sprite.py               # layers + rig + index.html
 node shoot.js --mp4 --dur 24 --fps 30       # the video
-node shoot.js --page index_ink.html --name whale_swim_ink --mp4 --dur 24
+python3 build_wash.py --ref "../Near_beach_palm_reveal/Other images/whale_watercolour.png"
+node shoot.js --page index_ink.html  --name whale_swim_ink  --mp4 --dur 24
+node shoot.js --page index_wash.html --name whale_swim_wash --mp4 --dur 24
 node shoot.js --stills 6 --from 9 --to 13.3 # contact sheet of one tail cycle
 ```
 
@@ -79,9 +118,9 @@ directly will be overwritten.
 
 ## Saving and restoring
 
-Only three files are irreplaceable: `swim.template.html`,
-`build_whale_sprite.py` and `shoot.js`, plus the input `Whale_V2.png`. All four
-are on GitHub (`Will954633/Fields_Orchestrator`). `whale_rig.json` is pushed too,
+Only four files are irreplaceable: `swim.template.html`,
+`build_whale_sprite.py`, `build_wash.py` and `shoot.js`, plus the two inputs
+`Whale_V2.png` and `whale_watercolour.png`. All are on GitHub (`Will954633/Fields_Orchestrator`). `whale_rig.json` is pushed too,
 as a readable record of the measurements.
 
 **Everything else regenerates byte-for-byte.** That was verified by deleting the
