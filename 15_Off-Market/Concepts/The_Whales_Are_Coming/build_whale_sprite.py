@@ -30,6 +30,7 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageFilter
+from scipy.ndimage import label
 
 HERE = Path(__file__).resolve().parent
 SOURCE = HERE.parent / "Near_beach_palm_reveal" / "Other images" / "Whale_V2.png"
@@ -132,6 +133,88 @@ def spine_from_matte(alpha: np.ndarray) -> dict:
     }
 
 
+# Anchors along the trunk's ventral silhouette, sampled at columns where no
+# flipper hangs below it. Everything below this line is flipper: the profile
+# shows two clean spikes (near flipper x 700-940, far flipper x 1025-1140)
+# separated by belly at x 950-1010, so a single cut separates all three.
+# The line dips well below the belly over x 520-800: the ventral pleat line
+# sweeps left there and a cut at the true silhouette takes it along with the
+# flipper. The blade hangs far lower than the pleat over that span, so there is
+# clear water between them to cut through. From x 840 rightward the cut has to
+# come back up to the real silhouette, because that is where the flipper root
+# genuinely crosses the body.
+VENTRAL_ANCHORS = [(0, 300), (400, 470), (520, 560), (600, 610), (700, 625),
+                   (780, 610), (840, 570), (900, 552), (975, 548), (1010, 551),
+                   (1150, 451), (1250, 381), (1444, 300)]
+BLADE_MIN_PX = 5000    # anything smaller is a speck, not a flipper
+HINGE_ROWS = 12        # rows of the cut edge averaged to place the hinge
+
+
+def split_flippers(rgb: np.ndarray, alpha: np.ndarray) -> tuple:
+    """Cut the two pectoral flippers off the body as independently posable layers.
+
+    The flippers hang below the belly into open water, so the cut runs along the
+    trunk's ventral silhouette and almost all of each blade is already against
+    background — there is nothing to inpaint.
+
+    The hinge is placed ON the cut line rather than at the anatomical shoulder,
+    which is a little higher inside the body. Rotating about the cut means the
+    blade's displacement is zero exactly where it meets the body, so the seam
+    cannot open however far the flipper swings. A hinge at the true shoulder
+    would be more correct and would shear the join by r*theta — about 8px at a
+    6 degree stroke, which reads as the flipper detaching.
+    """
+    h, w = alpha.shape
+    solid = alpha > 32
+    ax = [a[0] for a in VENTRAL_ANCHORS]
+    ay = [a[1] for a in VENTRAL_ANCHORS]
+    ventral = np.interp(np.arange(w), ax, ay)
+
+    below = solid & (np.arange(h)[:, None] > (ventral[None, :] + 2))
+    lab, n = label(below)
+    blades = []
+    for i in range(1, n + 1):
+        m = lab == i
+        if m.sum() < BLADE_MIN_PX:
+            continue
+        ys, xs = np.where(m)
+        blades.append({"mask": m, "x0": int(xs.min()), "x1": int(xs.max()),
+                       "y0": int(ys.min()), "y1": int(ys.max()),
+                       "cx": float(xs.mean())})
+    if len(blades) != 2:
+        raise SystemExit(f"expected 2 flippers below the ventral line, found {len(blades)}")
+
+    # nearer to the viewer is the one further from the nose (nose is at max x)
+    blades.sort(key=lambda b: b["cx"])
+    names = ["near", "far"]
+
+    body_alpha = alpha.copy()
+    layers = {}
+    for name, b in zip(names, blades):
+        m = b["mask"]
+        body_alpha[m] = 0
+
+        # hinge: centroid of the topmost rows of the blade — the cut edge
+        ys, xs = np.where(m)
+        top = ys < ys.min() + HINGE_ROWS
+        hinge = (float(xs[top].mean()), float(ys[top].mean()))
+
+        x0, x1, y0, y1 = b["x0"] - 4, b["x1"] + 5, b["y0"] - 4, b["y1"] + 5
+        x0, y0 = max(x0, 0), max(y0, 0)
+        x1, y1 = min(x1, w), min(y1, h)
+        la = np.where(m, alpha, 0)[y0:y1, x0:x1]
+        lrgb = bleed_rgb(rgb[y0:y1, x0:x1], la > 32, 6)
+        layers[name] = {
+            "img": Image.fromarray(np.dstack([lrgb, la]).astype(np.uint8)),
+            "meta": {"x": x0, "y": y0, "w": x1 - x0, "h": y1 - y0,
+                     "hinge_x": round(hinge[0] - x0, 1),
+                     "hinge_y": round(hinge[1] - y0, 1),
+                     "hinge_abs_x": round(hinge[0], 1),
+                     "hinge_abs_y": round(hinge[1], 1)},
+        }
+    return body_alpha, layers
+
+
 def main() -> None:
     src = Image.open(SOURCE)
     if src.mode != "RGBA":
@@ -152,24 +235,37 @@ def main() -> None:
         Image.fromarray(alpha).filter(ImageFilter.GaussianBlur(FEATHER))
     )
 
-    rig = spine_from_matte(alpha)
+    body_alpha, flippers = split_flippers(rgb, alpha)
+
+    # the spine is measured from the body alone — with the flippers still
+    # attached they roughly double the column count where they cross and drag
+    # the measured centreline down through the whole shoulder region
+    rig = spine_from_matte(body_alpha)
     rig.update({"width": w, "height": h,
                 "source": SOURCE.name,
-                "trim": {"x": x0, "y": y0, "w": w, "h": h}})
+                "trim": {"x": x0, "y": y0, "w": w, "h": h},
+                "flippers": {k: v["meta"] for k, v in flippers.items()}})
 
-    sprite = Image.fromarray(np.dstack([rgb, alpha]))
-    sprite.save(HERE / "whale_sprite.png")
-    (HERE / "whale_rig.json").write_text(json.dumps(rig, separators=(",", ":")))
+    Image.fromarray(np.dstack([rgb, body_alpha])).save(HERE / "whale_body.png")
+    for name, layer in flippers.items():
+        layer["img"].save(HERE / f"whale_flipper_{name}.png")
 
-    # inline into the page so it opens from file:// without tainting the canvas
-    png = (HERE / "whale_sprite.png").read_bytes()
-    uri = "data:image/png;base64," + base64.b64encode(png).decode()
+    def uri(p: Path) -> str:
+        return "data:image/png;base64," + base64.b64encode(p.read_bytes()).decode()
+
     html = (TEMPLATE.read_text()
-            .replace("{{SPRITE_DATA_URI}}", uri)
+            .replace("{{BODY_DATA_URI}}", uri(HERE / "whale_body.png"))
+            .replace("{{NEAR_DATA_URI}}", uri(HERE / "whale_flipper_near.png"))
+            .replace("{{FAR_DATA_URI}}", uri(HERE / "whale_flipper_far.png"))
             .replace("{{RIG_JSON}}", json.dumps(rig, separators=(",", ":"))))
     (HERE / "index.html").write_text(html)
+    (HERE / "whale_rig.json").write_text(json.dumps(rig, separators=(",", ":")))
 
-    print(f"sprite      {w}x{h}  ({len(png)/1024:.0f} KB)")
+    print(f"body        {w}x{h}")
+    for name, layer in flippers.items():
+        m = layer["meta"]
+        print(f"flipper {name:5s} {m['w']}x{m['h']} at ({m['x']},{m['y']})  "
+              f"hinge ({m['hinge_abs_x']},{m['hinge_abs_y']})")
     print(f"peduncle    x={rig['waist_x']}  u={rig['waist_u']}  "
           f"(tail stock meets trunk; trunk ref {rig['trunk_thickness']}px)")
     print(f"index.html  {(HERE / 'index.html').stat().st_size/1024:.0f} KB")
