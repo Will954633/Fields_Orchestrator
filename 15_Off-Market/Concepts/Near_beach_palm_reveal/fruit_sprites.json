@@ -3,6 +3,7 @@
   "tile": 200,
   "cols": 6,
   "rows": 4,
+  "baseR": 0.88,
   "source": "Pandanas_Palm_Fruit.png",
   "note": "one full barrel roll about the horizontal long axis"
 }
