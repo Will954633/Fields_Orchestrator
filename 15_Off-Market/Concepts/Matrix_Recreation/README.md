@@ -205,11 +205,15 @@ tier mix: 100% tier 1 at 2.5s, tier 3 dominant at 7s, tier 4 dominant at 10.5s.
 
 | From | Tier | Content | Share of field |
 |---|---|---|---|
-| 0s | — | **Pure noise.** No readable word exists on screen | 0% |
-| 1.5s | 1 | The suburb and the language of listings — `BURLEIGH WATERS`, `4220`, `SOLD`, `WITHDRAWN` | →13% |
-| 3.6s | 2 | Wider area: `CHRISTINE AVE`, `TALLEBUDGERA CREEK`, `MARYMOUNT COLLEGE`, `STOCKLAND BURLEIGH`, `SOLD 23 DAYS` | →29% |
-| 6.2s | 3 | The actual street grid around the home — `JABIRU AVE`, `FANTAIL CRT`, `CORELLA AVE`, `4 BED 2 BATH`, `612M2` | →44% |
-| 8.4s | 4 | Their own block and their own thoughts — `3 AVOCET AVE`, `WHERE WOULD I GO`, `IS THE NUMBER REAL` | →58% |
+| 0s | 1 | Readable immediately — the suburb and the language of listings: `BURLEIGH WATERS`, `4220`, `SOLD`, `WITHDRAWN` | 34% |
+| 2.4s | 2 | Wider area: `CHRISTINE AVE`, `TALLEBUDGERA CREEK`, `MARYMOUNT COLLEGE`, `STOCKLAND BURLEIGH` | →42% |
+| 4.8s | 3 | The actual street grid around the home — `JABIRU AVE`, `FANTAIL CRT`, `CORELLA AVE`, `612M2` | →50% |
+| 7.2s | 4 | Their own block and their own thoughts — `3 AVOCET AVE`, `WHERE WOULD I GO`, `IS THE NUMBER REAL` | →62% |
+
+The curtain lands already carrying words; what changes over the 11.2s is how
+*local* they get. Note a physical floor on this: a phrase needs roughly its own
+length in rows before it can render, so nothing is readable until the curtain is
+~15 rows deep (~1.5s), no matter how high the density is set.
 
 Then the field collapses right→left and the message prints, exactly as v3.
 
@@ -243,3 +247,19 @@ target count, converting streams still in the top quarter of their fall. Token
 streams also get `sLen` extended to at least `phrase.length + 4` so the whole
 phrase is lit simultaneously — otherwise the start fades before the end is
 written and nothing is readable.
+
+## Every column reads differently
+
+A stream does **not** repeat one phrase. Each time it finishes a chunk it pulls a
+different one, so a column reads as a run of varied records:
+
+```
+t=0.2s   4 CAR  DAYS ON MARKET  COMPARABLE  BURLEI
+t=6.0s   ACANTHUS AVE  67 WAGTAIL CRT  612M2  LOT
+t=10.5s  56 SANDPIPER DR  JUST CURIOUS  WILL I MIS
+```
+
+Roughly 45% of chunks are **generated fresh** rather than drawn from a list —
+lot numbers, QLD plan numbers (`RP182425`), floor and land areas, days on
+market, bed/bath counts, mock street numbers — which is what keeps two columns
+from ever running the same string. Measured: 154 distinct chunks in 400 draws.
