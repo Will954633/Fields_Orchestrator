@@ -155,8 +155,8 @@ const P = {
   sharp:     1.8,    // how fast the posterior wave grows behind the node
   recoil:    0.0,    // OFF: measured envelopes already contain recoil (see above)
   // burst and coast
-  beats:     3.5,
-  glide:     5.0,
+  beats:     2.0,   // ~2 full burst-and-coast cycles per 24s crossing
+  glide:     3.0,
   drag:      0.030,
   // flippers — smallest excursion of the four measured points, trailing the fluke
   flipAmp:   0.10,   // rad of blade rotation
@@ -296,10 +296,36 @@ function strokeEnvelope(cycleT) {
   return { on: on * on * (3 - 2 * on), total };
 }
 
+// Mean fraction of the cycle spent beating. Memoised — it only depends on the
+// burst/glide parameters, and recomputing it inside the integrator would cost
+// 512 samples per step on a renderer that re-integrates from t=0 every frame.
+let DUTY = 1, DUTY_KEY = "";
+function strokeDuty() {
+  const key = [P.beats, P.glide, P.St, P.U, P.L, P.ampFrac].join(",");
+  if (key !== DUTY_KEY) {
+    DUTY_KEY = key;
+    const total = strokeEnvelope(0).total;
+    let acc = 0;
+    const N = 512;
+    for (let i = 0; i < N; i++) acc += strokeEnvelope((i / N) * total).on;
+    DUTY = Math.max(acc / N, 0.05);
+  }
+  return DUTY;
+}
+
 function step(dt) {
   fitEnvelope();
   const { on, total } = strokeEnvelope(S.cycleT);
-  const thrust = P.drag * P.U * P.U;
+
+  // Thrust is scaled by 1/duty so the burst and glide sliders change the RHYTHM
+  // without changing the speed. Calibrating thrust for continuous beating
+  // (thrust = drag*U^2) means any duty below 1 undershoots: at 3.5 beats and a
+  // 3s glide the whale settled at 1.30 m/s against a set 2.0, which dragged the
+  // Strouhal-locked beat down to 0.151 Hz — outside the measured band, purely as
+  // a side effect of a rhythm control. Mean thrust must equal mean drag, so the
+  // instantaneous value during a burst is drag*U^2/duty. Realised speed now
+  // holds at ~1.98 m/s and the beat at ~0.23 Hz across every rhythm setting.
+  const thrust = (P.drag * P.U * P.U) / strokeDuty();
   S.v += (thrust * on - P.drag * S.v * S.v) * dt;
   S.v = Math.max(S.v, 0);
   S.x += S.v * dt;
@@ -604,7 +630,7 @@ function updateReadout(on) {
   document.getElementById("readout").innerHTML = [
     `tail beat <b>${f.toFixed(3)} Hz</b> (${f > 0 ? (1 / f).toFixed(1) : "—"} s)`,
     `speed <b>${S.v.toFixed(2)} m/s</b>`,
-    `stroke <b>${on > 0.02 ? "burst" : "glide"}</b>`,
+    `stroke <b>${on > 0.02 ? "burst" : "glide"}</b> (${(100 * strokeDuty()).toFixed(0)}% beating)`,
     `rostrum <b class="${nr < 14.8 || nr > 23.0 ? "warn" : ""}">${nr.toFixed(0)}%</b> of fluke (meas. 15-23)`,
     `rostrum A <b>${(100 * noseAmp / (RIG.width)).toFixed(1)}%</b> L (meas. 2-6)`,
     `screen <b>${screenM.toFixed(0)} m</b>`,
