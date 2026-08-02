@@ -122,8 +122,12 @@
   const TIERS = 24;
 
   // ── Timeline ─────────────────────────────────────────────────────────────
-  const T_BUILD    = 1.4;   // field switches ON left -> right
-  const T_HOLD     = 2.6;   // full field
+  // 'top'   — every column enters from the top at once, one curtain of code
+  // 'sweep' — the older left-to-right switch-on
+  const OPENING    = 'top';
+  const OPEN_MODE  = OPENING === 'top' ? 'top' : 'seed';
+  const T_OPEN     = 5.6;   // curtain drops and fills the screen
+  const T_SWEEP    = 1.4;   // only used when OPENING === 'sweep'
   const T_SHUTDOWN = 2.2;   // field switches OFF right -> left
   // Fraction of columns still raining once the field has collapsed. 0 = the
   // field switches off completely and the message prints to a clear screen.
@@ -255,20 +259,33 @@
     for (let i = 0; i < n; i++) cell[i] = (Math.random() * RAND_G) | 0;
 
     streamCount = Math.min(streamMax, Math.round(cols * (cfg.density / 100) * 1.9));
-    for (let i = 0; i < streamCount; i++) spawn(i, true);
+    for (let i = 0; i < streamCount; i++) spawn(i, OPEN_MODE);
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.imageSmoothingEnabled = false;
   }
 
-  function spawn(i, seeded) {
+  // mode: 'top'     every column enters together, just above the top edge
+  //       'recycle' a spent stream re-enters on its own stagger
+  //       'seed'    placed mid-flight, for a field that opens already raining
+  function spawn(i, mode) {
     sCol[i]   = (Math.random() * Math.max(1, liveCols)) | 0;
     sLen[i]   = cfg.trail * (0.45 + Math.random() * 1.35);
     const s   = Math.pow(Math.random(), 1.7);
     sSpeed[i] = (cfg.speed * (0.45 + s * 1.75)) / cellH;
     sDim[i]   = 0.42 + Math.random() * 0.58;
-    sY[i]     = seeded ? Math.random() * (rows + sLen[i]) : -Math.random() * 6;
-    sWait[i]  = seeded ? 0 : Math.random() * 2.2;
+    if (mode === 'seed') {
+      sY[i] = Math.random() * (rows + sLen[i]);
+      sWait[i] = 0;
+    } else if (mode === 'top') {
+      // barely above the top edge, near-zero stagger: the field arrives as one
+      // curtain, then spreads out naturally because the speeds differ
+      sY[i] = -Math.random() * 4;
+      sWait[i] = Math.random() * 0.12;
+    } else {
+      sY[i] = -Math.random() * 6;
+      sWait[i] = Math.random() * 2.2;
+    }
     if (Math.random() < cfg.tokenChance) {
       sTok[i] = TOKENS[(Math.random() * TOKENS.length) | 0] + '  ';
       sDim[i] = 0.85 + Math.random() * 0.15;
@@ -286,7 +303,7 @@
       if (sWait[i] > 0) { sWait[i] -= dt; continue; }
       sY[i] += sSpeed[i] * dt * spd;
       const y = sY[i], len = sLen[i], c = sCol[i], d = sDim[i];
-      if (y - len > rows) { spawn(i, false); continue; }
+      if (y - len > rows) { spawn(i, 'recycle'); continue; }
       const base = c * rows;
 
       if (sTok[i]) {
@@ -415,7 +432,7 @@
   }
 
   // ── Sequence ─────────────────────────────────────────────────────────────
-  let phase = 'build', phaseT = 0, timers = [];
+  let phase = 'open', phaseT = 0, timers = [];
   const wait = ms => new Promise(res => timers.push(setTimeout(res, ms)));
   const clearTimers = () => { timers.forEach(clearTimeout); timers = []; };
 
@@ -439,8 +456,8 @@
   }
 
   async function runSequence() {
-    phase = 'build'; phaseT = 0;
-    await wait((T_BUILD + T_HOLD) * 1000);
+    phase = 'open'; phaseT = 0;
+    await wait((OPENING === 'top' ? T_OPEN : T_SWEEP + 2.6) * 1000);
 
     phase = 'shutdown'; phaseT = 0;
     await wait(T_SHUTDOWN * 1000 + 300);
@@ -469,8 +486,8 @@
     alarm.classList.remove('pulse');
     shake.classList.remove('glitch');
     liveCols = cols; surge = 0;
-    colLife.fill(0);
-    for (let i = 0; i < streamCount; i++) spawn(i, true);
+    colLife.fill(OPENING === 'top' ? 1 : 0);
+    for (let i = 0; i < streamCount; i++) spawn(i, OPEN_MODE);
     runSequence();
   }
 
@@ -482,9 +499,9 @@
     last = now;
     phaseT += dt;
 
-    if (phase === 'build') {
+    if (phase === 'open' && OPENING === 'sweep') {
       // switch the field ON, left -> right
-      const front = (phaseT / T_BUILD) * cols;
+      const front = (phaseT / T_SWEEP) * cols;
       for (let c = 0; c < cols; c++) {
         const target = c <= front ? 1 : 0;
         if (target > colLife[c]) colLife[c] = Math.min(1, colLife[c] + dt / COL_FADE);
@@ -528,7 +545,12 @@
   let rt;
   addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { resize(); restart(); }, 160); });
 
-  const boot = () => { resize(); colLife.fill(0); requestAnimationFrame(frame); runSequence(); };
+  const boot = () => {
+    resize();
+    colLife.fill(OPENING === 'top' ? 1 : 0);
+    requestAnimationFrame(frame);
+    runSequence();
+  };
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(boot); else boot();
   setTimeout(() => hint.classList.add('gone'), 6000);
 })();
