@@ -8,15 +8,17 @@ Open `index.html` — it plays on load, is fully self-contained (no server, no
 network, no build step), and every parameter is a live slider.
 
 **Preview:** https://vm.fieldsestate.com.au/concepts/off-market/The_Whales_Are_Coming/
-(`whale_swim.mp4` on the same path is a rendered 24-second crossing.)
+— a landing page with all three versions, each with a looping preview and a link
+to its page, video and palette.
 
 ## Two versions
 
 | Page | Look |
 |---|---|
-| `index.html` | The tonal drawing, in blue water. |
-| `index_ink.html` | **Ink treatment** — cream strokes on black, as in the V3 reveal deck. |
-| `index_wash.html` | **Watercolour** — palette transferred from a reference painting, on pale paper. |
+| `index.html` | **Landing page** — all three, with looping previews. Hand-written, not generated. |
+| `sketch.html` | The original **black-and-white** tonal drawing, in blue water. The base version. |
+| `ink.html` | **Ink** — cream strokes on black, as in the V3 reveal deck. |
+| `watercolour.html` | **Watercolour** — palette transferred from a reference painting, on pale paper. |
 
 Same rig, same physics, same blink. Only the sprites and the ground differ.
 
@@ -122,7 +124,8 @@ its intended contrast.
 | `build_whale_sprite.py` | **Source of the sprite + rig.** `Whale_V2.png` → layers, measured rig → `index.html` + `index_ink.html`. |
 | `build_wash.py` | **Colour transfer.** Reference painting + the built layers → `index_wash.html`. |
 | `shoot.js` | Headless-Chrome frame renderer → MP4 / contact sheet. |
-| `index.html` / `index_ink.html` | The two animations. *Generated* — edit `swim.template.html` instead. |
+| `sketch.html` / `ink.html` / `watercolour.html` | The three animations. *Generated* — edit `swim.template.html` instead. |
+| `index.html` | Landing page. Hand-written — safe to edit directly. |
 | `whale_body.png` / `whale_body_ink.png` | Body with the flippers cut away. *Generated.* |
 | `whale_flipper_{near,far}[_ink].png` | The two pectoral blades. *Generated.* |
 | `whale_rig.json` | Measured spine, thickness profile, flipper hinges, eye. *Generated.* |
@@ -139,14 +142,15 @@ source /home/fields/venv/bin/activate       # numpy, pillow, scipy
 python3 build_whale_sprite.py               # layers + rig + index.html
 node shoot.js --mp4 --dur 24 --fps 30       # the video
 python3 build_wash.py --ref "../Near_beach_palm_reveal/Other images/whale_watercolour.png"
-node shoot.js --page index_ink.html  --name whale_swim_ink  --mp4 --dur 24
-node shoot.js --page index_wash.html --name whale_swim_wash --mp4 --dur 24
+node shoot.js --page ink.html         --name whale_swim_ink  --mp4 --dur 24
+node shoot.js --page watercolour.html --name whale_swim_wash --mp4 --dur 24
 node shoot.js --stills 6 --from 9 --to 13.3 # contact sheet of one tail cycle
 ```
 
 `build_whale_sprite.py` must be re-run after **any** edit to
-`swim.template.html` — `index.html` is a generated artefact and editing it
-directly will be overwritten.
+`swim.template.html` — `sketch.html` and `ink.html` are generated artefacts and
+editing them directly will be overwritten. `index.html` is hand-written and is
+not touched by any build.
 
 ## Saving and restoring
 
