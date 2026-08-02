@@ -8,6 +8,10 @@
     --paper: #0d1620; --ink: #e8eef4; --dim: #7b8b9c; --line: #1e2c3a;
     --accent: #6fb3c9;
   }
+  [data-theme="wash"] {
+    --paper: #f4f7f8; --ink: #23343c; --dim: #7d8d95; --line: #dce5e8;
+    --accent: #3d7f9c;
+  }
   [data-theme="ink"] {
     --paper: #000000; --ink: #e6ddd2; --dim: #6f6a63; --line: #241f1a;
     --accent: #e6ddd2;
@@ -369,9 +373,16 @@ const IMG = {};
 const INK_PAPER = "#000000", INK_COLOUR = "#e6ddd2";
 
 function paintWater() {
-  const ink = P.theme === "ink", dark = P.theme === "dark";
+  const ink = P.theme === "ink", dark = P.theme === "dark", wash = P.theme === "wash";
 
-  if (ink) {
+  if (wash) {
+    // Paper, not water. The reference is a watercolour on white, so the palette
+    // was mixed to sit on a pale ground — dropping it into a blue-black sea
+    // would push every tone the painter chose out of its intended contrast.
+    const g = ctx.createLinearGradient(0, 0, 0, CANVAS_H);
+    g.addColorStop(0, "#fbfcfc"); g.addColorStop(0.55, "#f2f6f7"); g.addColorStop(1, "#e7eef1");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+  } else if (ink) {
     // Flat black. The treatment's whole premise is that paper becomes ground
     // and only strokes carry light — a gradient or a light shaft would put
     // luminance back into the ground and the effect collapses.
@@ -396,9 +407,9 @@ function paintWater() {
 
   if (!P.motes) return;
   ctx.save();
-  ctx.fillStyle = ink ? INK_COLOUR : (dark ? "#cfe6f2" : "#8d9aa2");
+  ctx.fillStyle = ink ? INK_COLOUR : wash ? "#7fb0c6" : (dark ? "#cfe6f2" : "#8d9aa2");
   for (const m of S.motes) {
-    ctx.globalAlpha = (ink ? 0.13 : dark ? 0.20 : 0.16) * m.z;
+    ctx.globalAlpha = (ink ? 0.13 : wash ? 0.14 : dark ? 0.20 : 0.16) * m.z;
     ctx.beginPath(); ctx.arc(m.x, m.y, m.r * m.z, 0, 6.2832); ctx.fill();
   }
   ctx.restore();
@@ -525,7 +536,7 @@ function paintEye(g, ph, on) {
   // the globe retracts as the lids close, so the socket sits fractionally deeper
   if (shut > 0.2) {
     g.globalAlpha = 0.16 * (shut - 0.2) / 0.8;
-    g.fillStyle = P.theme === "ink" ? "#000000" : "#1d1a17";
+    g.fillStyle = P.theme === "ink" ? "#000000" : P.theme === "wash" ? "#2b4652" : "#1d1a17";
     g.beginPath();
     g.ellipse(cx, cy, E.w * 0.40, E.h * 0.34, 0, 0, 6.2832);
     g.fill();
@@ -700,7 +711,7 @@ function buildPanel() {
     // The whale sprites are baked per theme: index.html carries the tonal
     // drawing, index_ink.html the cream-on-black ink layers. Switching the
     // ground here does NOT restyle the animal — open the other page for that.
-    const order = ["dark", "light", "ink"];
+    const order = ["dark", "light", "ink", "wash"];
     P.theme = order[(order.indexOf(P.theme) + 1) % order.length];
     document.documentElement.dataset.theme = P.theme === "dark" ? "" : P.theme;
   };
