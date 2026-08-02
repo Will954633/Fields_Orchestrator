@@ -98,6 +98,7 @@
     <div class="field">
       <label for="mode">reveal</label>
       <select id="mode">
+        <option value="crystal">crystal — grows along the wood</option>
         <option value="growth">growth — from the trunk out</option>
         <option value="develop">develop — darkest ink first</option>
         <option value="dissolve">dissolve — random pixels</option>
@@ -153,11 +154,14 @@
   }
 
   const cfg = {
-    mode:    params.get("mode")  || "growth",
+    mode:    params.get("mode")  || "crystal",
     theme:   params.get("theme") || "light",
     block:   +(params.get("block")  || 5),
     dur:     +(params.get("dur")    || 5000),
-    chaos:   +(params.get("chaos")  || 0.28),
+    // Crystal wants a coherent front — heavy scatter breaks the growth edge
+    // into snow and the accretion stops reading. The block modes want more.
+    chaos:   params.get("chaos") !== null ? +params.get("chaos")
+             : ((params.get("mode") || "crystal") === "crystal" ? 0.10 : 0.28),
     mosaic:  +(params.get("mosaic") || 0.85),
     fade:    +(params.get("fade")   || 0.055),
     seed:    +(params.get("seed")   || 20260802),
@@ -199,20 +203,26 @@
   let committed = 0;      // blocks already painted onto `ink` at full opacity
   let lastP = 0;
   let coverage = null;    // ink coverage per source pixel, read back once at load
+  let growth = null;      // geodesic growth order, 0..65535
 
   function buildBlocks() {
     const bp   = cfg.block;
     const cols = Math.ceil(SRC_W / bp);
     const rows = Math.ceil(SRC_H / bp);
 
-    // per-block mean ink coverage
+    // per-block mean ink coverage, and mean growth order weighted by ink
     const density = new Float32Array(cols * rows);
+    const gsum = new Float64Array(cols * rows);
     for (let y = 0; y < SRC_H; y++) {
       const rowOff = (y / bp) | 0;
       const base = y * SRC_W;
       for (let x = 0; x < SRC_W; x++) {
         const a = coverage[base + x];
-        if (a) density[rowOff * cols + ((x / bp) | 0)] += a;
+        if (a) {
+          const ci = rowOff * cols + ((x / bp) | 0);
+          density[ci] += a;
+          gsum[ci] += growth[base + x] * a;
+        }
       }
     }
     const perBlock = bp * bp * 255;
@@ -249,6 +259,14 @@
 
         let key;
         switch (cfg.mode) {
+          case "crystal": {
+            // Geodesic order: a block can only be reached by travelling the ink
+            // that feeds it, so the tree accretes root -> trunk -> branch ->
+            // frond instead of filling in by proximity.
+            const gs = gsum[r * cols + c];
+            key = gs > 0 ? (gs / (density[r * cols + c] || 1)) / 65535 : 1;
+            break;
+          }
           case "develop":  key = 1 - Math.min(1, dens * 1.6); break;
           case "dissolve": key = n; break;
           case "rise":     key = 1 - cy / SRC_H; break;
@@ -309,7 +327,12 @@
       const b = blocks[i];
       const a = clamp01((p - b.t) / cfg.fade);
       if (a <= 0) continue;
-      const solid = (1 - a) * b.d * cfg.mosaic;
+      // In crystal mode the leading edge is a bright facet that anneals into
+      // the hatch, rather than a flat mosaic tile fading up from nothing —
+      // accretion catches the light along the growth front.
+      const solid = cfg.mode === "crystal"
+        ? (1 - a) * cfg.mosaic
+        : (1 - a) * b.d * cfg.mosaic;
       if (solid > 0.004) {
         fctx.globalAlpha = solid;
         fctx.fillStyle = "#000";
@@ -481,7 +504,13 @@
     // only ever drawn from after this point.
     const rgba = sctx.getImageData(0, 0, SRC_W, SRC_H).data;
     coverage = new Uint8Array(SRC_W * SRC_H);
-    for (let i = 0, n = coverage.length; i < n; i++) coverage[i] = rgba[i * 4 + 3];
+    // RGB carries the geodesic growth order baked by build_master.py: R is the
+    // high byte, G the low. It is what the crystal reveal orders blocks by.
+    growth = new Uint16Array(SRC_W * SRC_H);
+    for (let i = 0, n = coverage.length; i < n; i++) {
+      coverage[i] = rgba[i * 4 + 3];
+      growth[i] = (rgba[i * 4] << 8) | rgba[i * 4 + 1];
+    }
     makeGrain();
     if (CAPTURE) document.body.classList.add("capture");
     resize();
