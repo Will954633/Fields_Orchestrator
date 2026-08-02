@@ -13,7 +13,17 @@
 const { execFile } = require("child_process");
 const fs = require("fs");
 const path = require("path");
-const puppeteer = require("/home/fields/Fields_Orchestrator/node_modules/puppeteer-core");
+// puppeteer-core lives in the orchestrator root on this VM, not alongside this
+// script. Try the normal resolution first so a checkout elsewhere works, then
+// fall back to the known location rather than dying on a hardcoded path.
+const puppeteer = (() => {
+  for (const p of ["puppeteer-core",
+                   "/home/fields/Fields_Orchestrator/node_modules/puppeteer-core"]) {
+    try { return require(p); } catch (e) { /* try the next one */ }
+  }
+  console.error("puppeteer-core not found. npm i puppeteer-core, or set NODE_PATH.");
+  process.exit(1);
+})();
 
 const HERE = __dirname;
 const CHROME = process.env.SITE_INSPECTOR_CHROME_PATH || "/usr/bin/google-chrome";
