@@ -101,14 +101,19 @@ const LIGHT = V.norm([-0.5, 0.68, 0.55]);
 
 function drawFruit(ctx, cx, cy, R, rot, lean, opt={}){
   const INK = opt.ink || "239,236,228";
-  // Pandanus heads are ovoid — fuller at the base, tapering to the crown — not
-  // spherical. Taper x/z by height so the silhouette reads as fruit, not ball.
-  const squash = 1.10;
+  // A pandanus head is a rounded prolate — closer to a football than a ball —
+  // and on the ground it rolls about its LONG axis, like a barrel, not end over
+  // end. So the long axis lies horizontal, along the roll axis, and rotation is
+  // about that same axis. Consequence worth knowing: the silhouette barely
+  // changes while rolling and only the surface moves, which is exactly what a
+  // rolling fruit looks like. Rotating a vertically-elongated body (the first
+  // version) tumbled it over its points, which is what it is too fat to do.
+  const LONG = 1.15, GIRTH = 0.95;
   const tf = (p)=>{
-    const q = rotZ(rotX(p, rot), lean);
-    const taper = 0.86 + 0.14*(1 - Math.max(0, q[1]));
-    return [q[0]*taper, q[1]*squash, q[2]*taper];
+    const q = rotZ(rotX(p, rot), lean);       // spin about the horizontal long axis
+    return [q[0]*LONG, q[1]*GIRTH, q[2]*GIRTH];
   };
+  const squash = GIRTH / LONG;
 
   const drawn = CELLS.map(cell=>({c:tf(cell.c), verts:cell.verts.map(tf)}))
                      .filter(o=>o.c[2] > -0.05)
@@ -118,44 +123,17 @@ function drawFruit(ctx, cx, cy, R, rot, lean, opt={}){
   // carries the light (they invert to bright in the dark theme), so the body is
   // painted light and the drupes are punched dark on top of it — the reverse of
   // outlining cells, which read as a wireframe.
-  // Engraved shading, not a gradient. In the inverted (dark) theme the drawing's
-  // dense hatch reads BRIGHT, so the strokes crowd where the surface turns away
-  // from the light — the opposite of what it looks like it should be, but it is
-  // what keeps the fruit in the same visual language as the tree.
-  ctx.save();
-  ctx.beginPath(); ctx.ellipse(cx, cy, R, R*squash, 0, 0, 7); ctx.clip();
-  const ROWS = Math.max(14, Math.round(R * 0.42));
-  ctx.lineCap = "round";
-  for (let i = 0; i < ROWS; i++) {
-    const t = (i + 0.5) / ROWS;            // 0 top -> 1 bottom of the body
-    const yy = cy + (t * 2 - 1) * R * squash;
-    const halfW = R * Math.sqrt(Math.max(0, 1 - Math.pow(t * 2 - 1, 2)));
-    // surface normal at this latitude, roughly, for the light term
-    const ny = -(t * 2 - 1);
-    const shade = 1 - Math.max(0, (-0.42 * -0.6 + ny * 0.70 + 0.55 * 0.5));
-    const dens = Math.pow(Math.max(0, Math.min(1, shade)), 1.15);
-    if (dens < 0.06) continue;
-    // Break each row into a couple of segments with gaps and a little jitter.
-    // Full-width bands read as scan lines; a drawn hatch is never continuous.
-    const bow = R * 0.16 * (t * 2 - 1);
-    const segs = 1 + (i % 3);
-    for (let sgi = 0; sgi < segs; sgi++) {
-      const r0 = sgi / segs, r1 = (sgi + 1) / segs;
-      const jitA = (Math.sin(i * 7.3 + sgi * 2.1) * 0.5 + 0.5) * 0.16;
-      const jitB = (Math.sin(i * 3.1 + sgi * 5.7) * 0.5 + 0.5) * 0.16;
-      const a = -halfW + halfW * 2 * (r0 + jitA * (r1 - r0));
-      const bx = -halfW + halfW * 2 * (r1 - jitB * (r1 - r0));
-      if (bx - a < R * 0.05) continue;
-      const dy = Math.sin(i * 12.9 + sgi) * R * 0.008;
-      ctx.beginPath();
-      ctx.moveTo(cx + a, yy + dy);
-      ctx.quadraticCurveTo(cx + (a + bx) / 2, yy + dy + bow * 0.5, cx + bx, yy + dy);
-      ctx.lineWidth = Math.max(0.5, R * 0.016) * (0.5 + 0.8 * dens);
-      ctx.strokeStyle = `rgba(${INK},${(0.12 + 0.74 * dens).toFixed(3)})`;
-      ctx.stroke();
-    }
-  }
-  ctx.restore();
+  // Soft lit base. The grooves between drupes are what read as light in the
+  // inverted theme, so the body is painted light and the drupes are punched
+  // dark over it. (An earlier version hatched the body as well — with the
+  // per-drupe hatch also horizontal the two merged into stripes and the
+  // tessellation disappeared entirely.)
+  const bg = ctx.createRadialGradient(cx - R*0.36, cy - R*0.34, R*0.05, cx, cy, R*1.12);
+  bg.addColorStop(0,   `rgba(${INK},0.66)`);
+  bg.addColorStop(0.55,`rgba(${INK},0.40)`);
+  bg.addColorStop(1,   `rgba(${INK},0.12)`);
+  ctx.beginPath(); ctx.ellipse(cx, cy, R*LONG, R*GIRTH, 0, 0, 7);
+  ctx.fillStyle = bg; ctx.fill();
 
   for(const {c, verts} of drawn){
     const lam = Math.max(0, V.dot(c, LIGHT));
@@ -167,15 +145,69 @@ function drawFruit(ctx, cx, cy, R, rot, lean, opt={}){
       k ? ctx.lineTo(px,py) : ctx.moveTo(px,py);
     });
     ctx.closePath();
-    // drupe face: dark, deeper in shadow, softening at the rim so the
-    // silhouette stays drawn rather than cut
+    // Drupe face. Flat polygons read as vector cut-outs, so each face is filled
+    // dark and then given its own short hatch strokes — the density of those
+    // strokes is what carries the shading, the way it does in the drawing.
     const a = 0.90 - 0.30*face;
     ctx.fillStyle = `rgba(0,0,0,${(a*(0.35+0.65*Math.min(1,fore*2.2))).toFixed(3)})`;
     ctx.fill();
-    // a faint light edge on each drupe: engraved grooves catch the light and
-    // it stops the cells reading as flat vector holes
-    ctx.lineWidth = Math.max(0.4, R*0.006);
-    ctx.strokeStyle = `rgba(${INK},${(0.10 + 0.22*face*fore).toFixed(3)})`;
+
+    // cell extent, for sizing the hatch inside it
+    let x0=1e9, x1=-1e9, y0=1e9, y1=-1e9;
+    for (const [vx,vy] of verts) {
+      const px = cx + vx*R, py = cy - vy*R;
+      if(px<x0)x0=px; if(px>x1)x1=px; if(py<y0)y0=py; if(py>y1)y1=py;
+    }
+    const cw = x1-x0, ch = y1-y0;
+
+    // Only worth drawing once a drupe is big enough to read — below that the
+    // strokes just turn to mud and cost frames. The fruit spends most of the
+    // roll small, so this LOD matters.
+    if (cw > 9 && fore > 0.18 && !(typeof window!=='undefined' && window.__NOHATCH)) {
+      ctx.save();
+      ctx.beginPath();
+      verts.forEach(([vx,vy],k)=>{
+        const px = cx + vx*R, py = cy - vy*R;
+        k ? ctx.lineTo(px,py) : ctx.moveTo(px,py);
+      });
+      ctx.closePath(); ctx.clip();
+      const lines = Math.max(2, Math.round(ch / Math.max(2.4, R*0.026)));
+      ctx.lineCap = "round";
+      // Each drupe hatches at its own angle. All-parallel hatch across
+      // neighbouring cells reads as corduroy rather than as separate drupes.
+      ctx.translate((x0+x1)/2, (y0+y1)/2);
+      ctx.rotate((c[0]*1.9 + c[1]*2.7));
+      ctx.translate(-(x0+x1)/2, -(y0+y1)/2);
+      for (let li = 0; li < lines; li++) {
+        const ly = y0 + (li + 0.5) / lines * ch;
+        // hatch is denser away from the light, same inversion as the body
+        const dens = 1 - face;
+        if (((li * 7 + Math.round(c[0]*31)) % 5) / 5 > dens + 0.25) continue;
+        const inset = cw * 0.06 * (0.5 + ((li*13)%7)/7);
+        ctx.beginPath();
+        ctx.moveTo(x0 + inset, ly);
+        ctx.lineTo(x1 - inset, ly + (((li*11)%5)-2) * 0.25);
+        ctx.lineWidth = Math.max(0.45, R*0.010);
+        ctx.strokeStyle = `rgba(${INK},${(0.14 + 0.34*dens).toFixed(3)})`;
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // Rebuild the cell path before outlining it. ctx.restore() restores the
+    // transform, clip and styles but NOT the current path — so after the hatch
+    // block the current path is the last hatch segment, and stroking it here
+    // sprayed stray lines across the silhouette.
+    ctx.beginPath();
+    verts.forEach(([vx,vy],k)=>{
+      const px = cx + vx*R, py = cy - vy*R;
+      k ? ctx.lineTo(px,py) : ctx.moveTo(px,py);
+    });
+    ctx.closePath();
+
+    // engraved groove around the drupe, weight varying with the light
+    ctx.lineWidth = Math.max(0.4, R*0.009*(0.6+0.7*face));
+    ctx.strokeStyle = `rgba(${INK},${(0.16 + 0.46*face*(0.4+0.6*fore)).toFixed(3)})`;
     ctx.stroke();
   }
 }
@@ -206,11 +238,11 @@ function paintFruit(ctx, cx, cy, R, rot, lean){
   ctx.save();
   drawFruit(ctx, cx, cy, R, rot, lean);
   // clip grain to the fruit body
-  ctx.beginPath(); ctx.ellipse(cx, cy, R, R*1.10, 0, 0, 7); ctx.clip();
+  ctx.beginPath(); ctx.ellipse(cx, cy, R*1.15, R*0.95, 0, 0, 7); ctx.clip();
   ctx.globalAlpha = 0.13;
   ctx.globalCompositeOperation = "overlay";
   ctx.fillStyle = ctx.createPattern(grainTile(), "repeat");
   ctx.fillRect(cx-R, cy-R*1.2, R*2, R*2.4);
   ctx.restore();
 }
-if (typeof window !== "undefined") { window.paintFruit = paintFruit; }
+if (typeof window !== "undefined") { window.paintFruit = paintFruit; window.drawFruit = drawFruit; }
