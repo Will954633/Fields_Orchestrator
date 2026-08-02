@@ -153,17 +153,37 @@ HINGE_ROWS = 12        # rows of the cut edge averaged to place the hinge
 # up to (1052, 381) — tilted about 10 degrees — with the bright lower-lid crease
 # at y ~ 405 and the upper lid margin at y ~ 378.
 #
-# The blink works by stretching the band of skin ABOVE the eye downward over it,
-# anchored at the band's top edge so no gap can open behind it. That means the
-# lid is made of the artist's own hatching, sampled from the tissue immediately
-# above the eye, which is exactly what an upper lid is. Painting a lid instead —
-# or inpainting the socket and drawing a crease — would have to invent texture
-# that has to match a pen drawing at 5x, and would not.
+# The blink stretches the bands of skin above and below the eye toward each
+# other, so the lids are made of the artist's own hatching sampled from the
+# tissue immediately around the eye. Painting a lid — or inpainting the socket
+# and drawing a crease — would have to invent texture matching a pen drawing at
+# 5x, and would not.
+#
+# BOTH lids move, and the movement tapers to zero at the corners. A cetacean
+# blink is not an upper lid dropping like a shutter: the orbicularis oculi closes
+# the palpebral fissure "using the medial and lateral canthi as fulcrums"
+# (Nishimaniwa et al., J. Vet. Med. Sci. 88(1):1-12) — a sphincter purse anchored
+# at the corners, with the globe retracting inward at the same time.
+#
+# Which lid does the work is species-specific, and the humpback is the awkward
+# case. In dolphins and porpoises the upper palpebral region has degenerated into
+# an aponeurotic sheet with almost no facial-nerve supply, so the lower lid does
+# most of the moving. Mysticetes did not: in the humpback and bowhead the muscle
+# is "entirely composed of muscular fibers", the ancestral arrangement — so a
+# humpback blink should be MORE symmetric than a dolphin's, not less.
+# (Rodrigues et al. 2015, Acta Zool. 96:328; Zhu, Hillmann & Henk 2000, Anat.
+# Rec. 259:189.)
+#
+# No nictitating membrane. Cetaceans lack one (Meshida et al. 2020, Anat. Rec.),
+# despite what most popular sources claim. Do not animate a third eyelid.
 EYE = {
     "x": 958, "y": 372, "w": 100, "h": 42,   # the eye opening
-    "lid_open_y": 378,     # where the upper lid margin sits when open
-    "lid_closed_y": 405,   # the lower crease — where the margin lands when shut
-    "lid_src_h": 48,       # how much skin above the eye is stretched down
+    "lid_open_y": 378,     # upper lid margin when open
+    "lower_open_y": 406,   # lower lid margin when open — the bright crease
+    "meet_y": 393,         # where the two margins meet when shut
+    "lid_src_h": 48,       # skin above the eye stretched down
+    "lower_src_h": 30,     # tissue below the eye stretched up (shorter: the
+                           # bright jaw groove starts soon after)
     "angle_deg": -10.4,    # tilt of the lid axis
 }
 
