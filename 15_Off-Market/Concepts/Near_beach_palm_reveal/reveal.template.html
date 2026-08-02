@@ -98,8 +98,8 @@
     <div class="field">
       <label for="mode">reveal</label>
       <select id="mode">
-        <option value="crystal">crystal — grows along the wood</option>
         <option value="growth">growth — from the trunk out</option>
+        <option value="crystal">crystal — grows along the wood</option>
         <option value="develop">develop — darkest ink first</option>
         <option value="dissolve">dissolve — random pixels</option>
         <option value="rise">rise — bottom to top</option>
@@ -154,14 +154,14 @@
   }
 
   const cfg = {
-    mode:    params.get("mode")  || "crystal",
+    mode:    params.get("mode")  || "growth",
     theme:   params.get("theme") || "light",
     block:   +(params.get("block")  || 5),
     dur:     +(params.get("dur")    || 5000),
     // Crystal wants a coherent front — heavy scatter breaks the growth edge
     // into snow and the accretion stops reading. The block modes want more.
     chaos:   params.get("chaos") !== null ? +params.get("chaos")
-             : ((params.get("mode") || "crystal") === "crystal" ? 0.10 : 0.28),
+             : ((params.get("mode") || "growth") === "crystal" ? 0.10 : 0.28),
     mosaic:  +(params.get("mosaic") || 0.85),
     fade:    +(params.get("fade")   || 0.055),
     seed:    +(params.get("seed")   || 20260802),
