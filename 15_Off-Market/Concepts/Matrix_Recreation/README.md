@@ -134,10 +134,15 @@ left and right of every printed line.
 
 | t | Beat |
 |---|---|
-| 0–1.4s | Field switches **ON, left → right** |
-| 1.4–4.0s | Full field |
-| 4.0–6.2s | Field switches **OFF, right → left**, easing out |
-| 6.2s+ | Field is fully dark; the message prints into the grid on a clear screen |
+| 0–5.6s | A curtain of code drops **from the top, every column at once** |
+| 5.6–7.8s | Field switches **OFF, right → left**, easing out |
+| 7.8s+ | Field is fully dark; the message prints into the grid on a clear screen |
+
+The opening is set by `OPENING`: `'top'` (default) starts every column just
+above the top edge with near-zero stagger, so the field arrives as one curtain
+and spreads out on its own because the fall speeds differ. `'sweep'` restores
+the older left-to-right switch-on. `T_OPEN` is timed so the curtain reaches the
+bottom of the screen just as the collapse begins.
 
 Each column extinguishes over 0.45s as the front passes, so it reads as
 switching off rather than snapping off. Same script, timing and payoff as v2
