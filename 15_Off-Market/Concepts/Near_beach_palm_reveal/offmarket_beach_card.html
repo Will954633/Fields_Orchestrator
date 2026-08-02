@@ -508,8 +508,11 @@
     function restState() {
       const r = cardWhy.getBoundingClientRect(), d = docOf(r);
       const wide = innerWidth >= 900;
-      const R = wide ? Math.min(innerHeight * 0.17, innerWidth * 0.115)
-                     : Math.min(innerHeight * 0.15, innerWidth * 0.30);
+      // The tree sits ~6m off and the fruit is ~22px there, so a fruit a metre
+      // away is ~130px across — not the 306px this used to be, which read as a
+      // boulder rather than something you could pick up.
+      const R = wide ? Math.min(innerHeight * 0.085, innerWidth * 0.058)
+                     : Math.min(innerHeight * 0.085, innerWidth * 0.17);
       return { x: d.left + (wide ? r.width * 0.17 : r.width * 0.30),
                y: d.top + r.height * (wide ? 0.80 : 0.82),
                R };
