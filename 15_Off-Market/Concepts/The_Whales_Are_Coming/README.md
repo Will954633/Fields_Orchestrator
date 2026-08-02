@@ -10,6 +10,33 @@ network, no build step), and every parameter is a live slider.
 **Preview:** https://vm.fieldsestate.com.au/concepts/off-market/The_Whales_Are_Coming/
 (`whale_swim.mp4` on the same path is a rendered 24-second crossing.)
 
+## Two versions
+
+| Page | Look |
+|---|---|
+| `index.html` | The tonal drawing, in blue water. |
+| `index_ink.html` | **Ink treatment** — cream strokes on black, as in the V3 reveal deck. |
+
+Same rig, same physics, same blink. Only the sprites and the ground differ.
+
+The ink version reduces the drawing to an **ink coverage mask** and paints that
+coverage in warm cream (`#E6DDD2`) onto black. Paper becomes ground and only
+strokes carry light, so it reads as scratchboard or silverpoint rather than as
+an inverted photo. The levels — black point, clean floor, gamma, unsharp — are
+lifted verbatim from `Page_Redesign_V3/reveals/build_reveal.py` so the whale
+matches the rest of that deck exactly rather than approximately.
+
+The ground is flat black on purpose. A gradient or a light shaft puts luminance
+back into the paper and the effect collapses.
+
+**A note on the source.** The tonal `Whale_V2.png` gives a soft, mezzotint-like
+version of the treatment. The original pen drawing, `whale.png`, gives a far more
+striking one — every individual hatch stroke comes up as a separate cream line,
+which is exactly how the tree and pandanus read. It is not used here because the
+two files are not interchangeable: aspect 1.703 vs 1.831, so the spine, flipper
+hinges and eye box would all have to be re-measured. Worth doing if the ink
+version becomes the primary one.
+
 ## What to look at
 
 - The **whole animal** moves — head, body and flippers, not just the tail. That
@@ -24,14 +51,14 @@ network, no build step), and every parameter is a live slider.
 
 | File | What it is |
 |---|---|
-| `swim.template.html` | **Source of the animation.** `{{BODY_DATA_URI}}`, `{{NEAR_DATA_URI}}`, `{{FAR_DATA_URI}}` and `{{RIG_JSON}}` are filled in by the build. |
+| `swim.template.html` | **Source of both pages.** `{{BODY_DATA_URI}}`, `{{NEAR_DATA_URI}}`, `{{FAR_DATA_URI}}`, `{{THEME_DEFAULT}}` and `{{RIG_JSON}}` are filled in by the build, once per version. |
 | `build_whale_sprite.py` | **Source of the sprite + rig.** `Whale_V2.png` → layers, measured rig → `index.html`. |
 | `shoot.js` | Headless-Chrome frame renderer → MP4 / contact sheet. |
-| `index.html` | The animation. *Generated* — edit `swim.template.html` instead. |
-| `whale_body.png` | Body with the flippers cut away. *Generated.* |
-| `whale_flipper_near.png` / `_far.png` | The two pectoral blades. *Generated.* |
+| `index.html` / `index_ink.html` | The two animations. *Generated* — edit `swim.template.html` instead. |
+| `whale_body.png` / `whale_body_ink.png` | Body with the flippers cut away. *Generated.* |
+| `whale_flipper_{near,far}[_ink].png` | The two pectoral blades. *Generated.* |
 | `whale_rig.json` | Measured spine, thickness profile, flipper hinges, eye. *Generated.* |
-| `whale_swim.mp4`, `contact_sheet.png` | Rendered output. *Generated.* |
+| `whale_swim.mp4` / `whale_swim_ink.mp4` | Rendered crossings. *Generated.* |
 
 The input image lives outside this folder, at
 `../Near_beach_palm_reveal/Other images/Whale_V2.png`.
@@ -42,6 +69,7 @@ The input image lives outside this folder, at
 source /home/fields/venv/bin/activate       # numpy, pillow, scipy
 python3 build_whale_sprite.py               # layers + rig + index.html
 node shoot.js --mp4 --dur 24 --fps 30       # the video
+node shoot.js --page index_ink.html --name whale_swim_ink --mp4 --dur 24
 node shoot.js --stills 6 --from 9 --to 13.3 # contact sheet of one tail cycle
 ```
 
@@ -349,6 +377,17 @@ each strip about its own centre makes adjacent strips disagree along their share
 edge wherever the slope changes, and the gaps open into a visible comb down the
 peduncle exactly where the wave is steepest. The shear agrees with both
 neighbours by construction. The cost is a cos θ effect, invisible here.
+
+The animal is also composed at **1:1 sprite scale** into an offscreen canvas and
+scaled once, rather than drawn strip-by-strip onto the scaled canvas. Drawing
+into the scaled canvas puts every strip boundary on a fractional device pixel, so
+each strip antialiases its own edges and adjacent edges do not sum to full
+coverage. With opaque sprites that is invisible. With the semi-transparent ink
+layers it is not, and it cannot be patched either way: a 1 px overlap
+double-composites and comes out too bright (27% swing between `strips=1` and
+`strips=8`), no overlap leaves gaps and comes out too dark (6%). At 1:1 the
+boundaries are integers, `drawImage` does no edge AA, and the strips tile
+exactly — verified strip-count invariant to 0.0002%.
 
 ## Controls
 
