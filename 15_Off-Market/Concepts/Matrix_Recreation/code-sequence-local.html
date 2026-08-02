@@ -185,13 +185,16 @@
   // should catch the owner's eye — their own streets, their block, their own
   // questions — as opposed to background texture.
   let lastHot = false;
+  const HOT_RE = /AVOCET|BURLEIGH WATERS|MY HOME|MY STREET/;
 
   function nextChunk(t) {
     if (Math.random() < 0.45) { lastHot = false; return dataChunk(); }
     const pick = pickToken(t);
     if (!pick) { lastHot = false; return dataChunk(); }
-    // tier 2 = the streets around them, tier 3 = their own block and thoughts
-    lastHot = pick.tier === 3 || (pick.tier === 2 && Math.random() < 0.55);
+    // tier 2 = the streets around them, tier 3 = their own block and thoughts.
+    // HOT_RE also catches the few phrases that are personal at any tier, so the
+    // highlight is present from the opening rather than only after ~5s.
+    lastHot = pick.tier >= 2 || HOT_RE.test(pick.text);
     return pick.text;
   }
 
@@ -223,7 +226,9 @@
     addr:  { deep: [ 60,130, 80], core: [200,255,215], bright: [235,255,242], head: [255,255,255] },
     warn:  { deep: [ 80, 42,  0], core: [255,160, 30], bright: [255,200, 95], head: [255,235,180] },
     err:   { deep: [ 70,  6,  4], core: [255, 46, 34], bright: [255,105, 88], head: [255,190,180] },
-    abort: { deep: [ 90,  8,  5], core: [255, 60, 44], bright: [255,130,110], head: [255,215,205] }
+    abort: { deep: [ 90,  8,  5], core: [255, 60, 44], bright: [255,130,110], head: [255,215,205] },
+    // keywords about THIS owner — white-green, clearly apart from the field
+    hot:   { deep: [110,200,140], core: [205,255,220], bright: [240,255,246], head: [255,255,255] }
   };
   const PAL_KEYS = Object.keys(PALETTES);
   const PAL_IDX  = Object.fromEntries(PAL_KEYS.map((k, i) => [k, i]));
@@ -408,6 +413,7 @@
     if (!tok) return;
     sTok[i] = tok + '  ';
     sHot[i] = lastHot ? 1 : 0;
+    if (sHot[i]) sLen[i] = Math.max(sLen[i], tok.length + 12);
     sDim[i] = 0.85 + Math.random() * 0.15;      // readable text rides brighter
     // guarantee the whole phrase is lit at once, or it can never be read
     sLen[i] = Math.max(sLen[i], tok.length + 4);
@@ -426,7 +432,7 @@
       sTok[i] = next;
       sPos[i] = 0;
       sHot[i] = lastHot ? 1 : 0;
-      sLen[i] = Math.max(sLen[i], next.length + 3);
+      sLen[i] = Math.max(sLen[i], next.length + (sHot[i] ? 12 : 3));
     }
     feedIdx = sPos[i];
     feedHot = sHot[i] === 1;
@@ -516,6 +522,7 @@
     const tMax = TIERS - 1;
     const wob = 0.94 + 0.06 * Math.sin(now * 0.011) * Math.sin(now * 0.0037);
     const rainAtlas = atlases[PAL_IDX.rain];
+    const hotAtlas  = atlases[PAL_IDX.hot];
 
     for (let c = 0; c < cols; c++) {
       const base = c * rows, x = c * cellW, life = colLife[c];
@@ -536,14 +543,21 @@
           v = spark[j] > 0 ? Math.max(v, 0.97) : v * wob;
           const h = hot[j];
           if (h > 0) {
-            // A crest of light travels down the phrase — offsetting the wave by
-            // each character's position is what makes it sweep rather than
-            // blink. Keywords catch the eye without changing colour, so they
-            // still read as part of the code.
-            const wave = Math.sin(now * 0.0055 - (h - 1) * 0.5);
-            v = wave > 0.62 ? Math.max(v, 0.9 + 0.1 * wave) : Math.min(1, v * 1.16);
+            // Three things at once, because brightness alone is invisible in a
+            // field that is already full of bright heads:
+            //  1. a floor, so the phrase stays lit while the code around it
+            //     decays — the contrast comes from the surroundings dimming;
+            //  2. a hard crest sweeping down it (offset per character);
+            //  3. a whiter palette, so it differs in hue as well as level.
+            const floor = Math.min(0.7, bright[j] * life * 4.2);   // tails off, never pops
+            let vv = Math.max(v, floor);
+            const wave = Math.sin(now * 0.004 - (h - 1) * 0.35);
+            const crest = wave > 0 ? wave * wave * wave : 0;
+            v = vv + (1 - vv) * crest;
+            at = hotAtlas;
+          } else {
+            at = rainAtlas;
           }
-          at = rainAtlas;
         }
 
         const tier = Math.min(tMax, (v * tMax) | 0);   // boosted cells must not overrun the atlas
