@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * shoot.js — step index.html through headless Chrome and write frames.
+ * shoot.js — step a version page through headless Chrome and write frames.
  *
  * Drives ?capture=1, which swaps the rAF loop for window.__swim.frame(t, fps).
  * Every frame re-integrates the simulation from t=0 at a fixed dt, so a frame
