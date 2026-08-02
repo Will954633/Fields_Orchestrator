@@ -436,6 +436,7 @@
     const cardWhy = document.getElementById("card-why");
 
     const FALL_MS = 1150;               // detach -> settled on the sand
+    const ROLL_MS = 2700;               // sand -> at rest beside card 04
     const FRUIT_CX = 0.5508, FRUIT_CY = 0.2640, FRUIT_R = 0.0225;  // of the video frame
     const GROUND_Y = 0.926;             // sand line, as a fraction of the frame
 
@@ -467,10 +468,39 @@
                groundY: d.top + r.height * GROUND_Y };
     }
 
-    // 0 -> 1 as card 04 comes into view; this is what drives the roll.
-    function rollProgress() {
+    // Roll progress follows the scroll, but RATE-LIMITED.
+    //
+    // Pure scroll-scrubbing made the roll's speed the reader's scroll speed —
+    // one wheel flick covers the whole span in under a second, so the fruit
+    // teleported to its resting place with no roll to see. (Testing with gentle
+    // stepped scrolling hid that completely; it only showed up on a single fast
+    // jump.) Pure time-driving fixed the speed but desynced it from the reader:
+    // jumping to card 04 left the fruit starting its roll a whole viewport
+    // above the fold, so the first ~40% happened off-screen.
+    //
+    // Chasing the scroll target at a capped rate gives both — it feels tied to
+    // the scroll when you move slowly, and still takes ~ROLL_MS to travel when
+    // you throw the page down.
+    let pSmooth = 0, lastT = 0;
+
+    // Zero while card 04 is still below the fold. An earlier version started
+    // this 1.5 viewports out to get a head start, but that put progress at 0.37
+    // before the reader had scrolled at all, so most of the travel happened
+    // below the fold. The rate limiter is what handles a fast scroll, not an
+    // early start.
+    function rollTarget() {
       const top = cardWhy.getBoundingClientRect().top;
-      return clamp01((innerHeight - top) / (innerHeight * 0.92));
+      return clamp01((innerHeight - top) / (innerHeight * 0.95));
+    }
+
+    function rollProgress(now) {
+      const dt = lastT ? Math.min(64, now - lastT) : 16;
+      lastT = now;
+      const target = rollTarget();
+      const maxStep = dt / ROLL_MS;
+      const d = target - pSmooth;
+      pSmooth += Math.abs(d) <= maxStep ? d : Math.sign(d) * maxStep;
+      return clamp01(pSmooth);
     }
 
     // Rest is anchored to card 04 itself, not the viewport, so the fruit stays
@@ -491,8 +521,9 @@
       g.clearRect(0, 0, innerWidth, innerHeight);
       if (!detachedAt) { raf = requestAnimationFrame(frame); return; }
 
-      const tFall = clamp01((performance.now() - detachedAt) / FALL_MS);
-      const p = rollProgress();
+      const now = performance.now();
+      const tFall = clamp01((now - detachedAt) / FALL_MS);
+      const p = rollProgress(now);
       let x, y, R, rot;
 
       if (tFall < 1) {
@@ -553,6 +584,7 @@
     function reset() {
       detachedAt = 0;
       land = null;
+      pSmooth = 0; lastT = 0;
       patch.classList.remove("on");
       g.clearRect(0, 0, innerWidth, innerHeight);
     }
