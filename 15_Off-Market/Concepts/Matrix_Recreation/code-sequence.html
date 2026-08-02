@@ -125,7 +125,11 @@
   const T_BUILD    = 1.4;   // field switches ON left -> right
   const T_HOLD     = 2.6;   // full field
   const T_SHUTDOWN = 2.2;   // field switches OFF right -> left
-  const SURVIVOR   = 0.17;  // fraction of columns left raining at the end
+  // Fraction of columns still raining once the field has collapsed. 0 = the
+  // field switches off completely and the message prints to a clear screen.
+  // If raised, the message is pushed clear of the surviving band (see layout)
+  // so type is never printed over live rain.
+  const SURVIVOR   = 0;
   const COL_FADE   = 0.45;  // seconds a column takes to extinguish
 
   const qs = new URLSearchParams(location.search);
@@ -416,7 +420,10 @@
   const clearTimers = () => { timers.forEach(clearTimeout); timers = []; };
 
   function layout() {
-    const startCol = Math.max(1, Math.round(cols * 0.055));
+    // keep the message clear of any columns still raining, so type is never
+    // printed over live code
+    const survivors = Math.round(cols * SURVIVOR);
+    const startCol = Math.max(1, Math.round(cols * 0.055), survivors + 2);
     const startRow = Math.max(1, Math.round((rows - SCRIPT.length) / 2) - 1);
     return { startCol, startRow };
   }
@@ -484,13 +491,21 @@
       }
     } else if (phase === 'shutdown') {
       // switch it OFF, right -> left, down to the surviving band
-      const keep = Math.max(1, Math.round(cols * SURVIVOR));
+      const keep = Math.round(cols * SURVIVOR);      // may be 0 — full collapse
       const k = Math.min(1, phaseT / T_SHUTDOWN);
       const e = 1 - Math.pow(1 - k, 2.2);
       const front = cols - (cols - keep) * e;
-      liveCols = Math.max(1, Math.round(front));
+      liveCols = Math.max(1, Math.round(front));     // spawn() needs >= 1
       for (let c = 0; c < cols; c++) {
         if (c >= front) colLife[c] = Math.max(0, colLife[c] - dt / COL_FADE);
+      }
+    } else if (phase === 'print') {
+      // Keep draining. The sweep front reaches its target at the very end of
+      // the shutdown phase, so without this the last columns freeze part-way
+      // through their fade and sit on screen as a lit stripe.
+      const keep = Math.round(cols * SURVIVOR);
+      for (let c = keep; c < cols; c++) {
+        if (colLife[c] > 0) colLife[c] = Math.max(0, colLife[c] - dt / COL_FADE);
       }
     }
 
