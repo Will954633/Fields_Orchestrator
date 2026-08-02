@@ -407,6 +407,14 @@ function blinkAmount(u) {
 
 let eyeCv = null, eyeCx = null;
 const EYE_PAD = 14;
+const EYE_STRIP = 2;
+
+// A cetacean blink is a PURSE, not a shutter. The orbicularis oculi closes the
+// palpebral fissure using the medial and lateral canthi as fulcrums, so both
+// margins converge on a mid-line and the movement tapers to nothing at the
+// corners — which is why the closing margins bow rather than staying straight.
+// Drawn in narrow vertical strips so each column can carry its own travel.
+const canthusTaper = (t) => Math.pow(Math.sin(Math.PI * Math.min(Math.max(t, 0), 1)), 0.55);
 
 function paintEye(ph, on) {
   const E = RIG.eye;
@@ -415,34 +423,46 @@ function paintEye(ph, on) {
   if (shut <= 0.001) return;
 
   const cx = E.x + E.w / 2, cy = E.y + E.h / 2;
-  const travel = (E.lid_closed_y - E.lid_open_y) * shut;
-  const srcY = E.lid_open_y - E.lid_src_h;
   const bx = E.x - EYE_PAD, by = E.y - EYE_PAD;
   const w = E.w + EYE_PAD * 2, h = E.h + EYE_PAD * 2;
+  const upSrcY = E.lid_open_y - E.lid_src_h;
+  const upReach = (E.meet_y - E.lid_open_y) * shut;
+  const loReach = (E.lower_open_y - E.meet_y) * shut;
 
   if (!eyeCv) { eyeCv = document.createElement("canvas"); eyeCx = eyeCv.getContext("2d"); }
   if (eyeCv.width !== w || eyeCv.height !== h) { eyeCv.width = w; eyeCv.height = h; }
   eyeCx.clearRect(0, 0, w, h);
 
-  // the lid: skin from directly above the eye, stretched down over it, anchored
-  // at its own top edge so nothing can open up behind it
-  eyeCx.drawImage(IMG.body,
-                  bx, srcY, w, E.lid_src_h,
-                  0, srcY - by, w, E.lid_src_h + travel);
+  for (let x = 0; x < w; x += EYE_STRIP) {
+    const sw = Math.min(EYE_STRIP, w - x);
+    const k = canthusTaper((x + sw / 2 - EYE_PAD) / E.w);
+    if (k <= 0.001) continue;
 
-  // the lid margin, drawn before the feather so its ends soften with everything else
-  if (shut > 0.30) {
-    const y = srcY - by + E.lid_src_h + travel;
-    const g = eyeCx.createLinearGradient(0, y - 3.5, 0, y + 0.5);
-    g.addColorStop(0, "rgba(38,34,30,0)");
-    g.addColorStop(1, `rgba(38,34,30,${0.55 * (shut - 0.30) / 0.70})`);
-    eyeCx.fillStyle = g;
-    eyeCx.fillRect(EYE_PAD * 0.6, y - 3.5, w - EYE_PAD * 1.2, 4);
+    // upper lid: skin from above, stretched down, anchored at its own top edge
+    const up = upReach * k;
+    eyeCx.drawImage(IMG.body, bx + x, upSrcY, sw + 1, E.lid_src_h,
+                    x, upSrcY - by, sw + 1, E.lid_src_h + up);
+
+    // lower lid: tissue from below, stretched up, anchored at its bottom edge
+    const lo = loReach * k;
+    eyeCx.drawImage(IMG.body, bx + x, E.lower_open_y, sw + 1, E.lower_src_h,
+                    x, E.lower_open_y - by - lo, sw + 1, E.lower_src_h + lo);
+
+    // the closing line where the two margins meet
+    if (shut > 0.30) {
+      const y = E.lower_open_y - by - lo;
+      const a = 0.5 * (shut - 0.30) / 0.70 * k;
+      const g = eyeCx.createLinearGradient(0, y - 3, 0, y + 0.5);
+      g.addColorStop(0, "rgba(38,34,30,0)");
+      g.addColorStop(1, `rgba(38,34,30,${a})`);
+      eyeCx.fillStyle = g;
+      eyeCx.fillRect(x, y - 3, sw + 1, 3.5);
+    }
   }
 
   // Feather to an ellipse. A hard-edged rectangle of skin pasted over hatching
-  // announces itself immediately; bounding the lid to a soft-edged almond means
-  // it can only ever cover the eye opening, and the edge dissolves into the
+  // announces itself immediately; bounding the lids to a soft-edged almond means
+  // they can only ever cover the eye opening, and the edge dissolves into the
   // surrounding lid tissue instead of cutting across it.
   eyeCx.save();
   eyeCx.globalCompositeOperation = "destination-out";
@@ -461,6 +481,15 @@ function paintEye(ph, on) {
   ctx.translate(cx, cy + dispAt(cx, ph, on));
   ctx.rotate(Math.atan(slopeAt(cx, ph, on)) + (E.angle_deg * Math.PI) / 180);
   ctx.translate(-cx, -cy);
+  // the globe retracts as the lids close, so the socket sits fractionally deeper
+  if (shut > 0.2) {
+    ctx.globalAlpha = 0.16 * (shut - 0.2) / 0.8;
+    ctx.fillStyle = "#1d1a17";
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, E.w * 0.40, E.h * 0.34, 0, 0, 6.2832);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
   ctx.drawImage(eyeCv, bx, by);
   ctx.restore();
 }
