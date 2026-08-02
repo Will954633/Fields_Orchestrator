@@ -112,7 +112,7 @@
         <option value="dark">dark — chalk on slate</option>
       </select>
     </div>
-    <div class="field"><label for="block">pixel</label><input type="range" id="block" min="2" max="16" step="1" value="5"><span class="val" id="blockV">5px</span></div>
+    <div class="field"><label for="block">pixel</label><input type="range" id="block" min="1" max="16" step="1" value="1"><span class="val" id="blockV">5px</span></div>
   </div>
   <div class="row">
     <div class="field"><label for="dur">duration</label><input type="range" id="dur" min="1000" max="12000" step="250" value="5000"><span class="val" id="durV">5.0s</span></div>
@@ -156,7 +156,7 @@
   const cfg = {
     mode:    params.get("mode")  || "growth",
     theme:   params.get("theme") || "light",
-    block:   +(params.get("block")  || 5),
+    block:   +(params.get("block")  || 1),
     dur:     +(params.get("dur")    || 5000),
     // Crystal wants a coherent front — heavy scatter breaks the growth edge
     // into snow and the accretion stops reading. The block modes want more.
@@ -193,6 +193,18 @@
   const fctx   = flight.getContext("2d");
 
   let grainTile = null;
+  let buf = null;          // RGBA scratch: RGB = ink colour, A = revealed cover
+
+  function paintBuffer(colour) {
+    if (!buf) buf = ictx.createImageData(SRC_W, SRC_H);
+    const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(colour);
+    const r = m ? parseInt(m[1], 16) : 240, g = m ? parseInt(m[2], 16) : 236,
+          b = m ? parseInt(m[3], 16) : 228;
+    const d = buf.data;
+    for (let i = 0, n = SRC_W * SRC_H; i < n; i++) {
+      d[i * 4] = r; d[i * 4 + 1] = g; d[i * 4 + 2] = b;
+    }
+  }
 
   // ---- block model ---------------------------------------------------------
   // Every block gets a sort key from the chosen mode, blended with noise. After
@@ -289,11 +301,13 @@
     const last = Math.max(1, list.length - 1);
     for (let i = 0; i < list.length; i++) list[i].t = i / last;
     blocks = list;
+    if (typeof window !== 'undefined') window.__blockCount = list.length;
     reset();
   }
 
   function reset() {
     ictx.clearRect(0, 0, SRC_W, SRC_H);
+    if (buf) { const d = buf.data; for (let i = 3, n = d.length; i < n; i += 4) d[i] = 0; }
     committed = 0;
     lastP = 0;
   }
@@ -315,33 +329,50 @@
     const done  = upperBound(p - cfg.fade);
     const started = upperBound(p);
 
+    // Pixels are written straight into an ImageData rather than issuing canvas
+    // calls per block.
+    //
+    // The old path cost two canvas ops per in-flight block, which is fine at
+    // 5px but collapses as blocks shrink: measured 39ms/frame at 5px, 95ms at
+    // 2px and 253ms (4fps) at 1px, because the block count grows with the
+    // square. Writing bytes costs the same per PIXEL whatever the block size,
+    // so single-pixel reveals become as cheap as chunky ones — and the tint
+    // pass disappears, since the ink colour is written directly.
+    const d = buf.data;
+    const cover = coverage;
+
     // commit everything that has finished fading, once
     for (; committed < done; committed++) {
       const b = blocks[committed];
-      ictx.drawImage(src, b.x, b.y, b.w, b.h, b.x, b.y, b.w, b.h);
+      for (let y = b.y, ye = b.y + b.h; y < ye; y++) {
+        let i = y * SRC_W + b.x;
+        for (let x = 0; x < b.w; x++, i++) d[i * 4 + 3] = cover[i];
+      }
     }
 
-    // redraw the in-flight band: a flat "pixel" that resolves into fine hatch
-    fctx.clearRect(0, 0, SRC_W, SRC_H);
-    for (let i = done; i < started; i++) {
-      const b = blocks[i];
+    // rewrite the in-flight band: a flat "pixel" that resolves into fine hatch
+    for (let k = done; k < started; k++) {
+      const b = blocks[k];
       const a = clamp01((p - b.t) / cfg.fade);
       if (a <= 0) continue;
       // In crystal mode the leading edge is a bright facet that anneals into
-      // the hatch, rather than a flat mosaic tile fading up from nothing —
-      // accretion catches the light along the growth front.
+      // the hatch, rather than a flat mosaic tile fading up from nothing.
       const solid = cfg.mode === "crystal"
         ? (1 - a) * cfg.mosaic
         : (1 - a) * b.d * cfg.mosaic;
-      if (solid > 0.004) {
-        fctx.globalAlpha = solid;
-        fctx.fillStyle = "#000";
-        fctx.fillRect(b.x, b.y, b.w, b.h);
+      const inv = 1 - solid;
+      for (let y = b.y, ye = b.y + b.h; y < ye; y++) {
+        let i = y * SRC_W + b.x;
+        for (let x = 0; x < b.w; x++, i++) {
+          // the flat tile over the hatch, composited the same way the two
+          // stacked canvases used to do it
+          const c = cover[i] * a;
+          d[i * 4 + 3] = 255 - inv * (255 - c);
+        }
       }
-      fctx.globalAlpha = a;
-      fctx.drawImage(src, b.x, b.y, b.w, b.h, b.x, b.y, b.w, b.h);
     }
-    fctx.globalAlpha = 1;
+
+    ictx.putImageData(buf, 0, 0);
 
     // composite: paper -> ink -> in-flight -> grain -> vignette
     const W = view.width, H = view.height;
@@ -349,9 +380,7 @@
     vctx.fillStyle = theme.paper;
     vctx.fillRect(0, 0, W, H);
 
-    // the master is black-on-transparent; tint it to the theme's ink colour
-    const tinted = tint(theme.ink);
-    vctx.drawImage(tinted, 0, 0, W, H);
+    vctx.drawImage(ink, 0, 0, W, H);
 
     if (grainTile) {
       vctx.save();
@@ -367,21 +396,6 @@
       vctx.fillStyle = g;
       vctx.fillRect(0, 0, W, H);
     }
-  }
-
-  // ink + flight, recoloured to the theme, on a scratch canvas
-  const scratch = mk(SRC_W, SRC_H);
-  const xctx = scratch.getContext("2d");
-  function tint(colour) {
-    xctx.globalCompositeOperation = "source-over";
-    xctx.clearRect(0, 0, SRC_W, SRC_H);
-    xctx.drawImage(ink, 0, 0);
-    xctx.drawImage(flight, 0, 0);
-    xctx.globalCompositeOperation = "source-in";
-    xctx.fillStyle = colour;
-    xctx.fillRect(0, 0, SRC_W, SRC_H);
-    xctx.globalCompositeOperation = "source-over";
-    return scratch;
   }
 
   function makeGrain() {
@@ -477,7 +491,7 @@
     $("loop").onchange = (e) => { cfg.loop = e.target.checked; };
 
     $("mode").onchange  = (e) => { cfg.mode = e.target.value; buildBlocks(); play(); };
-    $("theme").onchange = (e) => { cfg.theme = e.target.value; paint(lastP); };
+    $("theme").onchange = (e) => { cfg.theme = e.target.value; paintBuffer(THEMES[cfg.theme].ink); paint(lastP); };
     $("block").oninput  = (e) => { cfg.block = +e.target.value; syncLabels(); buildBlocks(); play(); };
     $("dur").oninput    = (e) => { cfg.dur = +e.target.value; syncLabels(); };
     $("chaos").oninput  = (e) => { cfg.chaos = +e.target.value / 100; syncLabels(); buildBlocks(); play(); };
@@ -511,6 +525,7 @@
       coverage[i] = rgba[i * 4 + 3];
       growth[i] = (rgba[i * 4] << 8) | rgba[i * 4 + 1];
     }
+    paintBuffer(THEMES[cfg.theme].ink);
     makeGrain();
     if (CAPTURE) document.body.classList.add("capture");
     resize();
