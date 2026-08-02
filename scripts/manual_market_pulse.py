@@ -97,21 +97,44 @@ def show_data(suburb=None, category=None):
         print(f"{'='*70}")
 
         # --- Price data ---
+        # This block used to print the latest QUARTERLY median as "MEDIAN PRICE" and compute
+        # QoQ/YoY from it, with no reliability check — so the writing session was reading
+        # -9.6% QoQ and -4.7% YoY for Robina off quarters whose confidence intervals cannot
+        # support either claim, while the page showed +5.8% from the 12-month union series.
+        # Writing prose from that is how contradictions reach the live pages. The headline is
+        # now the same 12-month median the site publishes, and no unsupportable change is shown.
         idx = gc["precomputed_indexed_prices"].find_one({"_id": s})
         if idx:
             series = idx.get("indexed_series", [])
+            if idx.get("rolling_12m_median_price"):
+                print(f"\n  📈 MEDIAN (12-MONTH, the published headline): "
+                      f"${idx['rolling_12m_median_price']:,.0f}")
+                print(f"     90% CI: ${idx.get('rolling_12m_ci_low', 0):,.0f}–"
+                      f"${idx.get('rolling_12m_ci_high', 0):,.0f}  "
+                      f"(±{idx.get('rolling_12m_ci_margin_pct', '?')}%, "
+                      f"n={idx.get('rolling_12m_median_sample_n')})")
+                if idx.get("rolling_12m_yoy_pct") is not None:
+                    print(f"     YoY: {idx['rolling_12m_yoy_pct']:+.1f}% "
+                          f"(rolling 12 months vs the prior 12 — the ONLY YoY to quote)")
+                print(f"     Source: {idx.get('median_source')}")
+
             if series:
-                latest = series[-1]
-                print(f"\n  📈 MEDIAN PRICE: ${latest.get('median_price', 0):,.0f} ({latest.get('period', '')})")
-                if len(series) >= 2:
-                    prev = series[-2]
-                    qoq = ((latest['median_price'] - prev['median_price']) / prev['median_price'] * 100) if prev['median_price'] else 0
-                    print(f"     QoQ change: {qoq:+.1f}%")
-                if len(series) >= 5:
-                    year_ago = series[-5]
-                    yoy = ((latest['median_price'] - year_ago['median_price']) / year_ago['median_price'] * 100) if year_ago['median_price'] else 0
-                    print(f"     YoY change: {yoy:+.1f}%")
-                print(f"     Transactions: {latest.get('transaction_count', '?')} in quarter")
+                recent = [q for q in series
+                          if str(q.get("period", "")).split()[-1] in ("2025", "2026")]
+                if recent:
+                    print(f"\n     Quarterly medians (for context — NOT the headline):")
+                    for q in recent:
+                        flag = "" if q.get("reliable") else "   ← too noisy for a QoQ claim"
+                        print(f"       {q.get('period'):8} ${q.get('median_price', 0):>10,.0f}  "
+                              f"n={q.get('median_sample_n', '?'):<4}{flag}")
+                    # A QoQ move is only quotable when BOTH quarters are reliable.
+                    if len(recent) >= 2 and recent[-1].get("reliable") and recent[-2].get("reliable"):
+                        a, b = recent[-2], recent[-1]
+                        move = (b["median_price"] / a["median_price"] - 1) * 100
+                        print(f"     QoQ: {move:+.1f}% ({a['period']} → {b['period']}) — both "
+                              f"quarters reliable, safe to narrate")
+                    else:
+                        print(f"     QoQ: NOT QUOTABLE — the latest quarter pair is not both reliable")
 
         # --- DOM ---
         dom = gc["precomputed_market_charts"].find_one({"_id": f"{s}_days_on_market"})
@@ -124,13 +147,22 @@ def show_data(suburb=None, category=None):
                 print(f"     Quick sales (<30d): {latest_dom.get('quick_sales_pct', '?')}%")
 
         # --- Sales Volume ---
+        # Was printing timeline[-1], which is the IN-PROGRESS quarter — "14 sales (2026-Q3)" for
+        # a quarter a month old, next to a full prior quarter. Show complete quarters only.
         sv = gc["precomputed_market_charts"].find_one({"_id": f"{s}_sales_volume"})
         if sv:
-            timeline = sv.get("timeline", [])
-            if timeline:
-                latest_sv = timeline[-1]
-                print(f"\n  📊 SALES VOLUME: {latest_sv.get('sales_count', '?')} sales ({latest_sv.get('period', '')})")
-                print(f"     YoY change: {latest_sv.get('yoy_change', '?')}%")
+            complete = [t for t in (sv.get("timeline") or []) if not t.get("is_in_progress")]
+            if complete:
+                latest_sv = complete[-1]
+                print(f"\n  📊 SALES VOLUME: {latest_sv.get('sales_count', '?')} sales "
+                      f"({latest_sv.get('period', '')}, last complete quarter)")
+                print(f"     Recent: " + ", ".join(
+                    f"{t.get('period')} {t.get('sales_count')}" for t in complete[-6:]))
+                # Our sold capture lags settlement and under-counts the newest quarter. Checked
+                # 2026-08-02 against PropRadar settlement records: our Q2 2026 was 31% short for
+                # Robina and 49% short for Varsity Lakes. Direction is real; magnitude is not.
+                print(f"     ⚠️  Volume is a SAMPLE and the newest quarter is under-captured —")
+                print(f"        quote direction ('fewer sales'), never a % decline.")
 
         # --- Active Listings ---
         al = gc["precomputed_active_listings"].find_one({"_id": s})
@@ -140,13 +172,29 @@ def show_data(suburb=None, category=None):
                 print(f"\n  🏘️  ACTIVE LISTINGS: {snapshots[-1].get('active_listings', '?')}")
 
         # --- Absorption Rate ---
-        from datetime import timedelta
-        active = gc[s].count_documents({"listing_status": "for_sale"})
-        ninety_days_ago = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d")
-        sold_90d = gc[s].count_documents({"listing_status": "sold", "sold_date": {"$gte": ninety_days_ago}})
-        monthly_sales = sold_90d / 3.0 if sold_90d > 0 else 0
-        absorption = round(active / monthly_sales, 1) if monthly_sales > 0 else None
-        print(f"\n  ⚖️  ABSORPTION RATE: {absorption} months ({active} active / {monthly_sales:.0f} monthly sales)")
+        # Read the PUBLISHED figure rather than recomputing. This block used to divide a live
+        # ALL-PROPERTY-TYPE active count (95 for Robina) by monthly sales from our own sold
+        # sample — which is house-inclusive AND under-captures settlements by roughly 40%. Both
+        # errors push the same way, and it printed 3.8 months against the 2.18 the site actually
+        # publishes. Absorption decides the sell-now verdict (the 4-month balanced threshold), so
+        # writing from 3.8 would have inverted it. The published value is PropRadar's house
+        # inventory, computed from complete settlement data. See fix-history 2026-08-02.
+        snap = sm["absorption_rate_snapshots"].find_one(
+            {"_id": {"$regex": f"^{s}_"}}, sort=[("_id", -1)])
+        if snap:
+            print(f"\n  ⚖️  ABSORPTION RATE: {snap.get('absorption_rate_months')} months "
+                  f"(PUBLISHED — {snap.get('source', 'unknown source')}, {snap.get('_id', '')[-7:]})")
+            if snap.get("monthly_sales"):
+                print(f"     {snap['monthly_sales']} house sales/month "
+                      f"({snap.get('house_sales_12mo')} over 12 months)")
+            print(f"     Below 4 months = seller-favourable; above = balanced-to-buyer.")
+        else:
+            print(f"\n  ⚖️  ABSORPTION RATE: no published snapshot — do not quote one")
+
+        # House-only active listings, for context alongside the published rate.
+        active_all = gc[s].count_documents({"listing_status": "for_sale"})
+        print(f"     Active listings now: {active_all} all types "
+              f"(the 🏘️ figure above is houses only — do not mix them)")
 
         # --- Turnover ---
         tr = gc["precomputed_market_charts"].find_one({"_id": f"{s}_turnover_rate"})
