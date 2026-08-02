@@ -374,8 +374,8 @@ def main() -> None:
 
     tpl = TEMPLATE.read_text()
     rig_json = json.dumps(rig, separators=(",", ":"))
-    for out, suffix, theme in (("index.html", "", "dark"),
-                               ("index_ink.html", "_ink", "ink")):
+    for out, suffix, theme in (("sketch.html", "", "dark"),
+                               ("ink.html", "_ink", "ink")):
         html = (tpl
                 .replace("{{BODY_DATA_URI}}", uri(HERE / f"whale_body{suffix}.png"))
                 .replace("{{NEAR_DATA_URI}}", uri(HERE / f"whale_flipper_near{suffix}.png"))
@@ -394,7 +394,7 @@ def main() -> None:
           f"(tail stock meets trunk; trunk ref {rig['trunk_thickness']}px)")
     print(f"ink         mean coverage {ink.mean():.3f}, "
           f"{(ink > 0).mean()*100:.1f}% of the crop carries ink")
-    for out in ("index.html", "index_ink.html"):
+    for out in ("sketch.html", "ink.html"):
         print(f"{out:12s} {(HERE / out).stat().st_size/1024:.0f} KB")
 
 
