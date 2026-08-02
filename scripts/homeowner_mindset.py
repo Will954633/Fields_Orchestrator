@@ -204,4 +204,10 @@ def digest_guardrails() -> str:
         "- Claims tagged [INFERRED] in the brief are unverified behavioural reads. They may shape "
         "emphasis. They must never appear as stated fact in public content.\n"
         "- Where the brief and the live data disagree, the LIVE DATA WINS, always.\n"
+        "- Where the brief's MESSAGING section and its 'did NOT conclude' section disagree, the "
+        "'did NOT conclude' section WINS. The messaging section is written to be persuasive; the "
+        "verification section is written to be true. On 2026-08-02 the messaging section proposed "
+        "two lines its own verification section ruled out — a volume figure that could not be "
+        "published without a lag reconciliation, and an auction/private-treaty split that was "
+        "never verified. Follow the verification section and drop the line.\n"
     )
