@@ -186,3 +186,60 @@ phase was active. The leftmost columns therefore froze mid-fade and sat on
 screen as a lit stripe down the left edge, which the message then typed beside.
 The fade now continues draining during the print phase. Verified by sampling lit
 pixels left of the message column: 177 before the fix, 0 after.
+
+---
+
+# Version 4 — Local recognition sequence
+
+**View:** https://vm.fieldsestate.com.au/concepts/off-market/Matrix_Recreation/code-sequence-local.html
+
+v3's engine, with the rain running **twice as long** (11.2s) and carrying words
+the Burleigh Waters owner actually recognises. The intent is that the code feels
+like it knows them before it says anything.
+
+## The ramp
+
+Recognition is staged, and each tier is **weighted higher than the last**, so the
+mix keeps shifting toward the viewer rather than merely accumulating. Measured
+tier mix: 100% tier 1 at 2.5s, tier 3 dominant at 7s, tier 4 dominant at 10.5s.
+
+| From | Tier | Content | Share of field |
+|---|---|---|---|
+| 0s | — | **Pure noise.** No readable word exists on screen | 0% |
+| 1.5s | 1 | The suburb and the language of listings — `BURLEIGH WATERS`, `4220`, `SOLD`, `WITHDRAWN` | →13% |
+| 3.6s | 2 | Wider area: `CHRISTINE AVE`, `TALLEBUDGERA CREEK`, `MARYMOUNT COLLEGE`, `STOCKLAND BURLEIGH`, `SOLD 23 DAYS` | →29% |
+| 6.2s | 3 | The actual street grid around the home — `JABIRU AVE`, `FANTAIL CRT`, `CORELLA AVE`, `4 BED 2 BATH`, `612M2` | →44% |
+| 8.4s | 4 | Their own block and their own thoughts — `3 AVOCET AVE`, `WHERE WOULD I GO`, `IS THE NUMBER REAL` | →58% |
+
+Then the field collapses right→left and the message prints, exactly as v3.
+
+## Where the words come from
+
+- **Street names are real.** Pulled from `Gold_Coast.burleigh_waters` cadastral
+  records (6,885 geocoded parcels, 193 distinct streets) and ordered by true
+  haversine distance from the Avocet Avenue centroid. Tier 3 is literally the
+  nearest streets to the subject property, closest first: Jabiru 55m, Fantail
+  58m, Burleigh St 86m, Corella 147m, Bluejay 173m.
+- **House numbers are invented.** Real streets, mock numbers — so no real
+  neighbour's address appears beside words like `WITHDRAWN`.
+- **Owner-voice phrases** are drawn from the mindset brief's §3 and §5 — the
+  owner's own questions, not market claims.
+- **POIs are from general knowledge, not the database** — worth a sanity check.
+
+## What was deliberately left out
+
+The mindset brief is marked INTERNAL, and several of its figures are flagged in
+its own §9/§10 as not publishable: the Burleigh Waters median, the +6.9%
+year-on-year, and the 292→161 volume drop (which §10 says needs a lag
+reconciliation first). None appear here. `DOM 29` is included because the brief
+identifies volume and days-on-market as the reliable layer.
+
+## Implementation note
+
+Assigning tokens only at spawn ramps too slowly — the opening curtain fills the
+screen in one go and those streams take ~9s to clear, so the field would stay
+noise long past its cue. `maintainTokens()` therefore tops up each frame to a
+target count, converting streams still in the top quarter of their fall. Token
+streams also get `sLen` extended to at least `phrase.length + 4` so the whole
+phrase is lit simultaneously — otherwise the start fades before the end is
+written and nothing is readable.
