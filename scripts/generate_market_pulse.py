@@ -295,8 +295,38 @@ def fetch_all_data(gc_db, sm_db, suburb):
     # complete quarter. Checked 2026-08-02 against PropRadar settlement records — our Q2 2026 was
     # 31% short for Robina and 49% short for Varsity Lakes. The direction is real and independently
     # corroborated (PRD has Burleigh Heads house sales -15.3% y/y); the magnitude is not publishable.
+    # PREFER THE UNION COUNTS. `precomputed_market_charts.{suburb}_sales_volume` is anchored by
+    # recalibrate_charts.py to PropRadar's sales_12mo — the same counts that were DEMOTED for the
+    # median because they overstate (240 Burleigh Waters houses against realestate.com.au's 195).
+    # The two series disagree materially: on the anchored basis Burleigh Waters reads 51 -> 56 -> 73
+    # across Q4 2025 to Q2 2026 (a rise), while the union set behind our medians reads 41 -> 44 -> 42
+    # (flat). On 2026-08-02 the anchored series put "activity has picked up" into five published
+    # summaries — the same "Burleigh Waters is accelerating" artefact 10_Market_Report/
+    # HANDOFF_Q2_2026.md records as already published once and retracted.
+    #
+    # Volume is ONLY comparable from `union_from`; earlier quarters are Domain-only and undercount
+    # by 25-55%, so a year-on-year volume comparison crosses two capture bases and must not be made.
+    if idx:
+        union_counts = [
+            {"period": q.get("period"), "sales_count": q.get("median_sample_n")}
+            for q in (idx.get("indexed_series") or [])
+            if q.get("basis") == "union" and q.get("median_sample_n")
+        ]
+        if union_counts:
+            data["sales_volume_latest"] = union_counts[-1]["sales_count"]
+            data["sales_volume_period"] = union_counts[-1]["period"]
+            data["sales_volume_series"] = union_counts[-4:]
+            data["sales_volume_basis"] = (
+                f"union transaction set (Domain u onthehouse), comparable only from "
+                f"{idx.get('union_from')}. NO year-on-year comparison is possible. The newest "
+                f"quarter is still filling in as settlements register, so it is a floor. Report "
+                f"direction across the union window only — never a count, never a percentage."
+            )
+            if len(union_counts) >= 2:
+                data["sales_volume_prev"] = union_counts[-2]["sales_count"]
+
     sv_doc = gc_db["precomputed_market_charts"].find_one({"_id": f"{suburb}_sales_volume"})
-    if sv_doc:
+    if sv_doc and "sales_volume_latest" not in data:
         complete = [t for t in (sv_doc.get("timeline") or []) if not t.get("is_in_progress")]
         if complete:
             latest_sv = complete[-1]
