@@ -181,9 +181,18 @@
 
   // A stream never repeats one phrase. Each time it finishes a chunk it pulls
   // a different one, so a column reads as a run of varied records.
+  // Set alongside every nextChunk() call: is this phrase one of the ones that
+  // should catch the owner's eye — their own streets, their block, their own
+  // questions — as opposed to background texture.
+  let lastHot = false;
+
   function nextChunk(t) {
-    if (Math.random() < 0.45) return dataChunk();
-    return pickToken(t) || dataChunk();
+    if (Math.random() < 0.45) { lastHot = false; return dataChunk(); }
+    const pick = pickToken(t);
+    if (!pick) { lastHot = false; return dataChunk(); }
+    // tier 2 = the streets around them, tier 3 = their own block and thoughts
+    lastHot = pick.tier === 3 || (pick.tier === 2 && Math.random() < 0.55);
+    return pick.text;
   }
 
   function pickToken(t) {
@@ -193,8 +202,12 @@
     }
     if (!pool.length) return null;
     let r = Math.random() * total;
-    for (const [idx, w] of pool) { r -= w; if (r <= 0) return TOKEN_TIERS[idx].items[(Math.random() * TOKEN_TIERS[idx].items.length) | 0]; }
-    return TOKEN_TIERS[pool[pool.length - 1][0]].items[0];
+    for (const [idx, w] of pool) {
+      r -= w;
+      if (r <= 0) return { text: TOKEN_TIERS[idx].items[(Math.random() * TOKEN_TIERS[idx].items.length) | 0], tier: idx };
+    }
+    const last = pool[pool.length - 1][0];
+    return { text: TOKEN_TIERS[last].items[0], tier: last };
   }
   const cfg = {
     size: 21, speed: 95, density: 68, trail: 26, mutate: 34, glow: 85
@@ -270,9 +283,9 @@
   let W = 0, H = 0, dpr = 1, cellW = 0, cellH = 0, cols = 0, rows = 0;
   let atlases = [], aCellW = 0, aCellH = 0;
 
-  let sCol, sY, sSpeed, sLen, sDim, sWait, sTok, sPos, sRow;
+  let sCol, sY, sSpeed, sLen, sDim, sWait, sTok, sPos, sRow, sHot;
   let streamMax = 0, streamCount = 0;
-  let cell, churn, spark, bright, lock;
+  let cell, churn, spark, bright, lock, hot;
   // message layer, in the same grid: brightness + palette per cell
   let textB, textP;
 
@@ -345,11 +358,13 @@
     sDim = new Float32Array(streamMax); sWait = new Float32Array(streamMax);
     sTok = new Array(streamMax).fill(null);
     sPos = new Int32Array(streamMax); sRow = new Int32Array(streamMax);
+    sHot = new Uint8Array(streamMax);
 
     const n = cols * rows;
     cell = new Uint8Array(n); churn = new Float32Array(n);
     spark = new Float32Array(n); bright = new Float32Array(n);
     lock = new Uint8Array(n); textB = new Float32Array(n); textP = new Uint8Array(n);
+    hot = new Float32Array(n);   // 0 = plain, else 1 + index of the char in its phrase
     colLife = new Float32Array(cols);
 
     for (let i = 0; i < n; i++) cell[i] = (Math.random() * RAND_G) | 0;
@@ -392,6 +407,7 @@
     const tok = nextChunk(openT);
     if (!tok) return;
     sTok[i] = tok + '  ';
+    sHot[i] = lastHot ? 1 : 0;
     sDim[i] = 0.85 + Math.random() * 0.15;      // readable text rides brighter
     // guarantee the whole phrase is lit at once, or it can never be read
     sLen[i] = Math.max(sLen[i], tok.length + 4);
@@ -402,13 +418,18 @@
   // One character of this stream's feed, advancing to a NEW chunk when the
   // current one runs out. Always advances, even when the character is dropped,
   // so the phrase stays aligned to the rows it was stamped into.
+  let feedIdx = 0, feedHot = false;
+
   function feedChar(i) {
     if (sPos[i] >= sTok[i].length) {
       const next = nextChunk(openT) + '  ';
       sTok[i] = next;
       sPos[i] = 0;
+      sHot[i] = lastHot ? 1 : 0;
       sLen[i] = Math.max(sLen[i], next.length + 3);
     }
+    feedIdx = sPos[i];
+    feedHot = sHot[i] === 1;
     return sTok[i][sPos[i]++];
   }
 
@@ -449,6 +470,7 @@
               if (textB[jt] === 0) {
                 cell[jt] = GIDX.has(ch) ? GIDX.get(ch) : SPACE;
                 lock[jt] = 1;
+                hot[jt] = feedHot ? 1 + Math.min(200, feedIdx) : 0;
               }
             }
           }
@@ -476,7 +498,7 @@
     const n = bright.length;
     for (let j = 0; j < n; j++) {
       if (spark[j] > 0) spark[j] -= dt;
-      if (bright[j] <= 0.02) { lock[j] = 0; continue; }
+      if (bright[j] <= 0.02) { lock[j] = 0; hot[j] = 0; continue; }
       if (lock[j] || textB[j] > 0) continue;   // token or message char: hold
       churn[j] -= dt * churnRate * (0.3 + Math.random());
       if (churn[j] <= 0) {
@@ -512,10 +534,19 @@
           v = bright[j] * life;
           if (v <= 0.02) continue;
           v = spark[j] > 0 ? Math.max(v, 0.97) : v * wob;
+          const h = hot[j];
+          if (h > 0) {
+            // A crest of light travels down the phrase — offsetting the wave by
+            // each character's position is what makes it sweep rather than
+            // blink. Keywords catch the eye without changing colour, so they
+            // still read as part of the code.
+            const wave = Math.sin(now * 0.0055 - (h - 1) * 0.5);
+            v = wave > 0.62 ? Math.max(v, 0.9 + 0.1 * wave) : Math.min(1, v * 1.16);
+          }
           at = rainAtlas;
         }
 
-        const tier = (v * tMax) | 0;
+        const tier = Math.min(tMax, (v * tMax) | 0);   // boosted cells must not overrun the atlas
         if (tier <= 0) continue;
         ctx.drawImage(at, cell[j] * aCellW, tier * aCellH, aCellW, aCellH,
                       x, r * cellH, cellW, cellH);
@@ -681,9 +712,12 @@
   window.__rainStats = () => {
     let withText = 0;
     for (let i = 0; i < streamCount; i++) if (sTok[i]) withText++;
+    let hotStreams = 0, hotCells = 0;
+    for (let i = 0; i < streamCount; i++) if (sHot[i]) hotStreams++;
+    for (let j = 0; j < hot.length; j++) if (hot[j] > 0) hotCells++;
     return { t: +openT.toFixed(2), streams: streamCount, withText,
              actual: +(withText / streamCount).toFixed(3),
-             target: +tokenChanceAt(openT).toFixed(3) };
+             target: +tokenChanceAt(openT).toFixed(3), hotStreams, hotCells };
   };
 
   const boot = () => {
