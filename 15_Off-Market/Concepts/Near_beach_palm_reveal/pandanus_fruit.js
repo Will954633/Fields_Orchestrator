@@ -262,10 +262,18 @@ function paintFruit(ctx, cx, cy, R, rot, lean){
 // baseR: the body occupies this fraction of the tile — the rest is headroom
 // for drupes standing proud of the outline, so the draw size compensates.
 const SPRITE = { img: null, frames: 24, tile: 200, cols: 6, baseR: 0.88, ready: false };
+// Loaded on demand, not at parse. The sheet is ~0.9 MB and is not needed until
+// the fruit detaches, which is several seconds after card 03 appears — there is
+// no reason for a reader on card 02 to pay for it.
 if (typeof window !== "undefined") {
-  const im = new Image();
-  im.onload = () => { SPRITE.img = im; SPRITE.ready = true; };
-  im.src = "fruit_sprites.png";
+  let started = false;
+  window.__loadSprites = () => {
+    if (started) return;
+    started = true;
+    const im = new Image();
+    im.onload = () => { SPRITE.img = im; SPRITE.ready = true; };
+    im.src = "fruit_sprites.png";
+  };
 }
 
 function paintFruitSprite(ctx, cx, cy, R, rot) {
