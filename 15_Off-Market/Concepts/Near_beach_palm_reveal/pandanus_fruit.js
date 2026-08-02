@@ -83,7 +83,7 @@ function buildCells(n){
     const cxl = poly.reduce((s,a)=>s+a[0],0)/poly.length;
     const cyl = poly.reduce((s,a)=>s+a[1],0)/poly.length;
     const verts = poly.map(([x,y])=>{
-      const k = 0.60 + 0.10*Math.abs(Math.sin(i*3.3));   // vary drupe size
+      const k = 0.72 + 0.10*Math.abs(Math.sin(i*3.3));   // vary drupe size
       const sx = cxl + (x-cxl)*k, sy = cyl + (y-cyl)*k;
       return V.norm(V.add(p, V.add(V.mul(u,sx), V.mul(v,sy))));
     });
@@ -92,7 +92,7 @@ function buildCells(n){
   return cells;
 }
 
-const CELLS = buildCells(132);
+const CELLS = buildCells(138);
 
 function rotX(p,a){const c=Math.cos(a),s=Math.sin(a);return [p[0], p[1]*c-p[2]*s, p[1]*s+p[2]*c];}
 function rotZ(p,a){const c=Math.cos(a),s=Math.sin(a);return [p[0]*c-p[1]*s, p[0]*s+p[1]*c, p[2]];}
@@ -123,17 +123,26 @@ function drawFruit(ctx, cx, cy, R, rot, lean, opt={}){
   // carries the light (they invert to bright in the dark theme), so the body is
   // painted light and the drupes are punched dark on top of it — the reverse of
   // outlining cells, which read as a wireframe.
-  // Soft lit base. The grooves between drupes are what read as light in the
-  // inverted theme, so the body is painted light and the drupes are punched
-  // dark over it. (An earlier version hatched the body as well — with the
-  // per-drupe hatch also horizontal the two merged into stripes and the
-  // tessellation disappeared entirely.)
-  const bg = ctx.createRadialGradient(cx - R*0.36, cy - R*0.34, R*0.05, cx, cy, R*1.12);
-  bg.addColorStop(0,   `rgba(${INK},0.66)`);
-  bg.addColorStop(0.55,`rgba(${INK},0.40)`);
-  bg.addColorStop(1,   `rgba(${INK},0.12)`);
-  ctx.beginPath(); ctx.ellipse(cx, cy, R*LONG, R*GIRTH, 0, 0, 7);
-  ctx.fillStyle = bg; ctx.fill();
+  // The body is built FROM the drupes, not painted behind them.
+  //
+  // A single smooth ellipse behind the cells gives a perfectly elliptical
+  // silhouette, and that is the thing that made it read as a ball rather than a
+  // pandanus head — a real one is a knobbly cluster whose drupes break the
+  // outline. Filling an enlarged copy of every cell first builds the light
+  // groove network AND a bumpy edge in one pass.
+  for(const {c, verts} of drawn){
+    const lam = Math.max(0, V.dot(c, LIGHT));
+    const fore = Math.max(0, c[2]);
+    const face = Math.pow(lam, 0.9);
+    ctx.beginPath();
+    verts.forEach(([vx,vy],k)=>{
+      const px = cx + vx*R*1.055, py = cy - vy*R*1.055;
+      k ? ctx.lineTo(px,py) : ctx.moveTo(px,py);
+    });
+    ctx.closePath();
+    ctx.fillStyle = `rgba(${INK},${(0.13 + 0.60*face*(0.40+0.60*fore)).toFixed(3)})`;
+    ctx.fill();
+  }
 
   for(const {c, verts} of drawn){
     const lam = Math.max(0, V.dot(c, LIGHT));
@@ -148,7 +157,7 @@ function drawFruit(ctx, cx, cy, R, rot, lean, opt={}){
     // Drupe face. Flat polygons read as vector cut-outs, so each face is filled
     // dark and then given its own short hatch strokes — the density of those
     // strokes is what carries the shading, the way it does in the drawing.
-    const a = 0.90 - 0.30*face;
+    const a = 0.94 - 0.20*face;
     ctx.fillStyle = `rgba(0,0,0,${(a*(0.35+0.65*Math.min(1,fore*2.2))).toFixed(3)})`;
     ctx.fill();
 
@@ -163,7 +172,7 @@ function drawFruit(ctx, cx, cy, R, rot, lean, opt={}){
     // Only worth drawing once a drupe is big enough to read — below that the
     // strokes just turn to mud and cost frames. The fruit spends most of the
     // roll small, so this LOD matters.
-    if (cw > 9 && fore > 0.18 && !(typeof window!=='undefined' && window.__NOHATCH)) {
+    if (cw > 14 && fore > 0.30 && !(typeof window!=='undefined' && window.__NOHATCH)) {
       ctx.save();
       ctx.beginPath();
       verts.forEach(([vx,vy],k)=>{
@@ -171,7 +180,7 @@ function drawFruit(ctx, cx, cy, R, rot, lean, opt={}){
         k ? ctx.lineTo(px,py) : ctx.moveTo(px,py);
       });
       ctx.closePath(); ctx.clip();
-      const lines = Math.max(2, Math.round(ch / Math.max(2.4, R*0.026)));
+      const lines = Math.max(2, Math.round(ch / Math.max(3.2, R*0.040)));
       ctx.lineCap = "round";
       // Each drupe hatches at its own angle. All-parallel hatch across
       // neighbouring cells reads as corduroy rather than as separate drupes.
@@ -188,7 +197,7 @@ function drawFruit(ctx, cx, cy, R, rot, lean, opt={}){
         ctx.moveTo(x0 + inset, ly);
         ctx.lineTo(x1 - inset, ly + (((li*11)%5)-2) * 0.25);
         ctx.lineWidth = Math.max(0.45, R*0.010);
-        ctx.strokeStyle = `rgba(${INK},${(0.14 + 0.34*dens).toFixed(3)})`;
+        ctx.strokeStyle = `rgba(${INK},${(0.07 + 0.17*dens).toFixed(3)})`;
         ctx.stroke();
       }
       ctx.restore();
