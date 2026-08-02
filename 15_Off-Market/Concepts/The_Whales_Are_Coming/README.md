@@ -196,6 +196,32 @@ exactly the cruise speed asked for (steady state is `thrust == drag·U²`).
 pass takes ~24 s. If a card only has six, shrink the whale — do not speed the
 tail up. That is the failure mode that reads as sliding rather than swimming.
 
+## The blink
+
+The lid is **the band of skin directly above the eye, stretched down over it**,
+anchored at its own top edge so nothing can open up behind it. The artist's own
+hatching does the closing. Painting a lid, or inpainting the socket and drawing a
+crease, would have to invent pen texture that matches at 5× magnification — and
+it would not.
+
+It is bounded to a soft-edged almond via a destination-out radial mask, so the
+lid can only ever cover the eye opening and its edge dissolves into the
+surrounding lid tissue instead of cutting across it. It rides the body wave and
+tilts into the lid axis (−10.4°), so it closes *along* the eye rather than across
+it. The stroke is fast down, brief hold, slower up — a symmetric blink reads as a
+twitch.
+
+Timing is jittered from a **seeded** PRNG. The capture renderer re-integrates
+every frame from t=0, so unseeded jitter would make the eye flicker at random
+between frames of the same render.
+
+**The two blink numbers are chosen by eye, not measured** — mean interval 11 s,
+stroke 0.55 s. Unlike every other number in this file they are not sourced, and
+they are marked as such deliberately. Both are sliders.
+
+At the default staging the eye is only ~40 px wide on screen and the blink is
+correspondingly subtle. Raise **Whale size** to see it properly.
+
 ## Where the evidence runs out
 
 **The humpback-specific kinematic dataset does not exist.** Every per-body-point
