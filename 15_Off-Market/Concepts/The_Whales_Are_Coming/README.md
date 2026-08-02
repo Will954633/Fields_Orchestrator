@@ -198,26 +198,68 @@ tail up. That is the failure mode that reads as sliding rather than swimming.
 
 ## The blink
 
-The lid is **the band of skin directly above the eye, stretched down over it**,
-anchored at its own top edge so nothing can open up behind it. The artist's own
-hatching does the closing. Painting a lid, or inpainting the socket and drawing a
-crease, would have to invent pen texture that matches at 5× magnification — and
-it would not.
+The lids are made of **the artist's own hatching**, sampled from the tissue
+immediately above and below the eye and stretched toward each other. Painting a
+lid, or inpainting the socket and drawing a crease, would have to invent pen
+texture that matches at 5× magnification — and it would not. Both bands are
+bounded to a soft-edged almond via a destination-out radial mask, so they can
+only ever cover the eye opening and the edge dissolves into the surrounding lid
+tissue instead of cutting across it.
 
-It is bounded to a soft-edged almond via a destination-out radial mask, so the
-lid can only ever cover the eye opening and its edge dissolves into the
-surrounding lid tissue instead of cutting across it. It rides the body wave and
-tilts into the lid axis (−10.4°), so it closes *along* the eye rather than across
-it. The stroke is fast down, brief hold, slower up — a symmetric blink reads as a
-twitch.
+### It is a purse, not a shutter
+
+The first version dropped an upper lid like a window blind. That is wrong for a
+cetacean. The orbicularis oculi closes the palpebral fissure "using the medial
+and lateral canthi as fulcrums" (**Nishimaniwa, Yamada, Sekiya, Amano & Tajima,
+*J. Vet. Med. Sci.* 88(1):1–12**) — a sphincter contraction anchored at the
+corners, with the retractor bulbi pulling the globe inward at the same time. So
+both margins converge on a mid-line, the travel tapers to zero at the corners,
+and the closing line **bows** rather than staying straight. Drawn in 2 px
+vertical strips so each column carries its own travel.
+
+**And the humpback is the awkward case.** In dolphins and porpoises the upper
+palpebral region has degenerated into an aponeurotic sheet with almost no
+facial-nerve supply, so the lower lid does most of the moving. Mysticetes did
+not: in the humpback and bowhead the muscle is "entirely composed of muscular
+fibers", the ancestral mammalian arrangement (**Rodrigues et al. 2015, *Acta
+Zool.* 96:328; Zhu, Hillmann & Henk 2000, *Anat. Rec.* 259:189**). A humpback
+blink should therefore be **more** symmetric than a dolphin's, not less — which
+is why both lids move here by equal measure.
+
+**No nictitating membrane.** Cetaceans lack one (**Meshida, Lin, Domning,
+Reidenberg, Wang & Gilland 2020, *Anat. Rec.***, listing it among features
+"absent in cetaceans but present in other closely related terrestrial mammals").
+Most popular sources claim they have a third eyelid. They are wrong; none is
+animated.
+
+Closure is faster than reopening. That asymmetry *is* sourced — Aiello et al.
+(2023, *PNAS* 120(18):e2220404120) measured significantly higher peak velocity
+and acceleration on closing than reopening (P < 10⁻¹⁹), and note the same holds
+"in all tetrapods for which data is available."
+
+### The two timing numbers are NOT sourced
+
+**There is no published measurement of blink rate or blink duration for any
+cetacean species.** That was checked directly against Europe PMC across species
+and term variants; every cetacean hit is either anatomy with no kinematics, or
+sleep work that scores eye state as a sustained condition in 5-second epochs
+rather than counting blinks.
+
+So mean interval 11 s and stroke 0.55 s are **artistic choices**, and are the
+only numbers in this build that are not backed by a paper. What the literature
+does license is "infrequent, and slow" — the sleep-scoring methodology only works
+if frequent brief blinks are not happening, and cetaceans have well-developed
+Harderian glands, so "blinking seems unnecessary for maintaining the moisture of
+the corneal surface" (Nishimaniwa et al.). The mechanism is also heavy: thick
+lashless lids, a canthus-anchored sphincter, and simultaneous globe retraction.
+That is a reasoned argument for a slow blink, not a measurement.
+
+Widely-repeated web claims that whales "blink once every couple of hours" have no
+citation and no traceable origin. Do not use them.
 
 Timing is jittered from a **seeded** PRNG. The capture renderer re-integrates
 every frame from t=0, so unseeded jitter would make the eye flicker at random
 between frames of the same render.
-
-**The two blink numbers are chosen by eye, not measured** — mean interval 11 s,
-stroke 0.55 s. Unlike every other number in this file they are not sourced, and
-they are marked as such deliberately. Both are sliders.
 
 At the default staging the eye is only ~40 px wide on screen and the blink is
 correspondingly subtle. Raise **Whale size** to see it properly.
