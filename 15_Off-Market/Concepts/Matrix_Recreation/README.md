@@ -279,14 +279,27 @@ around them (tier 3) and their own block and questions (tier 4) — are flagged
 the highlight wave is offset by each character's index within its phrase, which
 is what makes it sweep rather than blink.
 
-Deliberately *not* a colour change. Hot phrases lift toward white within the
-existing rain palette, so they catch the eye while still reading as part of the
-code rather than as a caption laid over it. Highlights begin around 5–7s, once
-the local tiers are in play — the early, generic part of the ramp stays flat.
+**Brightness alone does not work here** — the field is already full of bright
+stream heads, so lifting a keyword to "bright" competes in a dimension that is
+already saturated, and it vanishes. The highlight therefore does three things at
+once:
+
+1. **A floor.** Hot cells stay lit while the code around them decays, so the
+   contrast comes from the *surroundings dimming* rather than the word
+   brightening. The floor tails off with the underlying trail so a phrase fades
+   rather than popping out of existence.
+2. **A hard crest** sweeping down the phrase (`wave³`, so the peak is narrow and
+   defined rather than a general glow).
+3. **A whiter palette** (`hot`), so keywords differ in *hue* as well as level.
+
+Hot streams also carry a longer trail (`phrase.length + 12`) so the whole phrase
+is lit at once. `HOT_RE` additionally catches personal phrases at any tier, so
+the highlight is present from the opening rather than only after ~5s.
 
 `window.__rainStats()` reports `hotStreams` / `hotCells` alongside text density.
-Measured: 0 highlights before 5s, 10 streams at 6.8s, 44 streams / 263 cells by
-10.8s.
+Measured: 4 streams at 0.8s, 24 at 6.8s, 58 streams / 307 cells by 10.8s — about
+44% of the field. To dial it back, tighten the tier rule in `nextChunk()` or drop
+the `floor` value; to push it further, widen `HOT_RE`.
 
 ### Why the original sparks had quietly stopped firing
 
