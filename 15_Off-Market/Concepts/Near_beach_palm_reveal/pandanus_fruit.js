@@ -254,4 +254,35 @@ function paintFruit(ctx, cx, cy, R, rot, lean){
   ctx.fillRect(cx-R, cy-R*1.2, R*2, R*2.4);
   ctx.restore();
 }
-if (typeof window !== "undefined") { window.paintFruit = paintFruit; window.drawFruit = drawFruit; }
+// ---- drawn sprite sheet -------------------------------------------------
+// fruit_sprites.png is the real pen-and-ink fruit wrapped onto the sphere (see
+// build_fruit_sprites.py). It is what should actually be shown; the procedural
+// fruit above stays as the fallback for the moments before the sheet has
+// loaded, so the animation never has a hole in it.
+const SPRITE = { img: null, frames: 24, tile: 200, cols: 6, ready: false };
+if (typeof window !== "undefined") {
+  const im = new Image();
+  im.onload = () => { SPRITE.img = im; SPRITE.ready = true; };
+  im.src = "fruit_sprites.png";
+}
+
+function paintFruitSprite(ctx, cx, cy, R, rot) {
+  const n = SPRITE.frames;
+  // rot runs negative when rolling left; wrap into [0, n)
+  let f = Math.round((-rot / (Math.PI * 2)) * n) % n;
+  if (f < 0) f += n;
+  const sx = (f % SPRITE.cols) * SPRITE.tile;
+  const sy = Math.floor(f / SPRITE.cols) * SPRITE.tile;
+  const w = R * 2 * 1.15, h = R * 2 * 0.95;   // prolate, long axis horizontal
+  ctx.drawImage(SPRITE.img, sx, sy, SPRITE.tile, SPRITE.tile,
+                cx - w / 2, cy - h / 2, w, h);
+}
+
+if (typeof window !== "undefined") {
+  window.paintFruit = (ctx, cx, cy, R, rot, lean) => {
+    if (SPRITE.ready) return paintFruitSprite(ctx, cx, cy, R, rot);
+    paintFruit(ctx, cx, cy, R, rot, lean);
+  };
+  window.drawFruit = drawFruit;
+  window.__spriteReady = () => SPRITE.ready;
+}
