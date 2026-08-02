@@ -270,3 +270,33 @@ Roughly 45% of chunks are **generated fresh** rather than drawn from a list —
 lot numbers, QLD plan numbers (`RP182425`), floor and land areas, days on
 market, bed/bath counts, mock street numbers — which is what keeps two columns
 from ever running the same string. Measured: 154 distinct chunks in 400 draws.
+
+## Keyword highlighting
+
+The phrases most relevant to the owner of the subject property — the streets
+around them (tier 3) and their own block and questions (tier 4) — are flagged
+`hot` as they are stamped. A **crest of light then travels down the phrase**:
+the highlight wave is offset by each character's index within its phrase, which
+is what makes it sweep rather than blink.
+
+Deliberately *not* a colour change. Hot phrases lift toward white within the
+existing rain palette, so they catch the eye while still reading as part of the
+code rather than as a caption laid over it. Highlights begin around 5–7s, once
+the local tiers are in play — the early, generic part of the ramp stays flat.
+
+`window.__rainStats()` reports `hotStreams` / `hotCells` alongside text density.
+Measured: 0 highlights before 5s, 10 streams at 6.8s, 44 streams / 263 cells by
+10.8s.
+
+### Why the original sparks had quietly stopped firing
+
+Worth recording, because it was invisible. The random white sparks are set
+inside the churn block — and churn is **skipped for locked cells**, which is
+every cell carrying text. So sparks only ever fired on random filler. Raising
+text density to 98% therefore came close to extinguishing them, trading sparkle
+for legibility without that being an intended choice. The keyword highlight puts
+that energy back, and puts it somewhere it does work.
+
+A clamp was also added to the tier lookup (`Math.min(tMax, …)`) — a brightened
+cell could otherwise index past the end of the glyph atlas and render nothing,
+turning a highlight into a dropout.
