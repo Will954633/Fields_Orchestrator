@@ -57,16 +57,48 @@ and the mapping is semantic rather than arbitrary.
    "the darkest 5% of the painting". Without this the transfer degenerates into a
    tint: if the painting is lighter overall, most of the whale lands in bins the
    painter barely touched.
-3. **Lookup, then detail recovery.** A 1-D spectrum returns near-identical
-   colours for near-identical tones, which flattens the pen hatch, so the
-   drawing's high-frequency luminance is added back on top (`--detail`, 0.55).
+3. **Colour from the wash, lightness from the drawing.** The spectrum is looked
+   up against a *blurred* luminance, which gives the smooth colour field a wash
+   actually has. The drawing's own luminance is then imposed on top by scaling
+   all three channels — hue and HSV saturation are both scale-invariant, so this
+   sets the value while leaving the colour untouched. Every pen stroke survives.
+4. **Bias (`--bias`, default 2.0).** See below.
+5. **Chroma (`--chroma`, default 1.8).** Scaled about each pixel's own
+   luminance, so lightness is untouched and only the colour strengthens.
 
 Run `--palette-only` to inspect the spectrum before committing to a recolour.
 
+### Why the faithful version came out grey
+
+The first attempt matched the reference's distribution exactly — and that was
+the fault, not a bug in the matching. Measured, the whale's mapped tones tracked
+the painting band for band (21.7% vs 22.3%, 25.4% vs 26.4%). But **54% of this
+painting is pale wash**, sitting in bands where the spectrum's saturation has
+fallen to 0.23, 0.14, 0.07. The vivid colour lives at intensity 64–127, which is
+only 22% of the pixels. Reproducing the distribution faithfully means faithfully
+inheriting all that grey: the whale received mean spectrum saturation **0.285 of
+0.508 available**.
+
+`--bias` weights the intensity bands by how much colour they actually carry
+rather than by how much of the painting sits in them, pulling the whale's tones
+into the saturated part of the spectrum. At bias 2.0 the whale receives **0.389**.
+
+Two other things that were wrong and are worth not repeating:
+
+- **Per-pixel saturation was never the problem.** It measured *higher* than the
+  reference throughout (0.315 vs 0.279). Reaching for a saturation multiplier
+  first would have been treating the wrong quantity.
+- **Blurring for colour and adding detail back as a highpass does not work.**
+  The wash blur eats the mid frequencies carrying the barnacle stipple and the
+  ventral pleats, and a radius-2 highpass cannot restore them — that version came
+  out looking like flat vector art. Hence imposing the drawing's full luminance
+  instead, at step 3.
+
 **Known limitation:** the mapping is 1-D, so two regions of the reference at the
-same intensity but different hue collapse to one colour — a grey-green head and
-a blue flipper converge. Fixing that means adding a second axis (position along
-the body), which is an addition rather than a rewrite.
+same intensity but different hue collapse to one colour — the painting's
+grey-green head and blue flipper converge. `--bias` compensates in aggregate but
+cannot restore the regional split. Fixing that properly means adding a second
+axis (position along the body), which is an addition rather than a rewrite.
 
 The ground is pale paper, not blue water: that palette was mixed to sit on white,
 and dropping it into a dark sea would push every tone the painter chose out of
