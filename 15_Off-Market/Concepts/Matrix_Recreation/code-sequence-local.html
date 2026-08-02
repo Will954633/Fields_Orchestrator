@@ -101,12 +101,12 @@
   // records and ordered by true distance from the subject property. House
   // numbers are invented — see README.
   const TOKEN_TIERS = [
-    { from: 1.5, items: [            // the suburb, and the language of listings
+    { from: 0.0, items: [            // the suburb, and the language of listings
       'BURLEIGH WATERS', 'GOLD COAST', '4220', 'QLD', 'SOLD', 'LISTED',
       'FOR SALE', 'WITHDRAWN', 'UNDER OFFER', 'PRIVATE TREATY', 'APPRAISAL',
       'DAYS ON MARKET', 'SETTLED', 'COMPARABLE', 'MEDIAN', 'VALUATION'
     ]},
-    { from: 3.6, items: [            // the wider area: roads, POIs, neighbours
+    { from: 2.4, items: [            // the wider area: roads, POIs, neighbours
       'CHRISTINE AVE', 'BERMUDA ST', 'REEDY CREEK RD', 'WEST BURLEIGH RD',
       'GOLD COAST HWY', 'TALLEBUDGERA CREEK', 'BURLEIGH HEADS', 'JAMES ST',
       'BURLEIGH HILL', 'STOCKLAND BURLEIGH', 'TREETOPS PLAZA', 'THE PINES',
@@ -115,14 +115,14 @@
       'JUST LISTED', 'RELISTED', 'PRICE REDUCED', 'UNDER CONTRACT',
       'OFF MARKET', 'SOLD 23 DAYS', 'SOLD 41 DAYS', 'DOM 29'
     ]},
-    { from: 6.2, items: [            // the actual street grid around the home
+    { from: 4.8, items: [            // the actual street grid around the home
       'AVOCET AVE', 'JABIRU AVE', 'FANTAIL CRT', 'BURLEIGH ST', 'CORELLA AVE',
       'BLUEJAY ST', 'SKUA ST', 'BITTERN AVE', 'DUNLIN DR', 'ACANTHUS AVE',
       'CURLEW CRES', 'AUK AVE', 'WAGTAIL CRT', 'BANKSIA BWY', 'SANDPIPER DR',
       'TURACO CRT', 'RAZORBILL ST', 'PINTAIL CRES', 'BELLBIRD AVE', 'KESTREL DR',
       '4 BED 2 BATH', '612M2', '219M2 FLOOR', 'FREEHOLD'
     ]},
-    { from: 8.4, items: [            // their own block, and their own thoughts
+    { from: 7.2, items: [            // their own block, and their own thoughts
       '3 AVOCET AVE', '11 JABIRU AVE', '6 FANTAIL CRT', '24 CORELLA AVE',
       '9 BLUEJAY ST', '18 SKUA ST', '7 BITTERN AVE', '52 DUNLIN DR',
       '14 CURLEW CRES', '27 WAGTAIL CRT', '31 ACANTHUS AVE',
@@ -133,9 +133,9 @@
     ]}
   ];
 
-  // How much of the field is carrying recognisable text, over time.
-  // Flat zero at the open: the first 1.5s must be unreadable noise.
-  const RAMP = [[0,0], [1.5,0], [3.6,0.13], [6.2,0.29], [8.4,0.44], [11.2,0.58]];
+  // How much of the field is carrying recognisable text, over time. The
+  // curtain lands already readable; what changes is how *local* it gets.
+  const RAMP = [[0,0.34], [2.4,0.42], [4.8,0.50], [7.2,0.56], [11.2,0.62]];
 
   function tokenChanceAt(t) {
     if (t <= RAMP[0][0]) return RAMP[0][1];
@@ -150,6 +150,39 @@
 
   // Pick from the unlocked tiers, biased hard toward the newest — that bias is
   // what makes the field feel like it is closing in rather than just filling up.
+  // Streets nearest the subject property, for generated mock addresses.
+  const NEAR_STREETS = [
+    'AVOCET AVE', 'JABIRU AVE', 'FANTAIL CRT', 'BURLEIGH ST', 'CORELLA AVE',
+    'BLUEJAY ST', 'SKUA ST', 'BITTERN AVE', 'DUNLIN DR', 'ACANTHUS AVE',
+    'CURLEW CRES', 'AUK AVE', 'WAGTAIL CRT', 'SANDPIPER DR', 'RAZORBILL ST',
+    'PINTAIL CRES', 'BELLBIRD AVE', 'KESTREL DR', 'BANKSIA BWY', 'TURACO CRT'
+  ];
+  const rnd = n => (Math.random() * n) | 0;
+
+  // Built fresh each time rather than drawn from a list, so no two columns run
+  // the same string and the field never reads as a loop.
+  function dataChunk() {
+    switch (rnd(10)) {
+      case 0:  return `LOT ${100 + rnd(700)}`;
+      case 1:  return `RP${100000 + rnd(99999)}`;          // real QLD plan format
+      case 2:  return `${380 + rnd(640)}M2`;
+      case 3:  return `DOM ${11 + rnd(70)}`;
+      case 4:  return `${3 + rnd(3)} BED ${1 + rnd(3)} BATH`;
+      case 5:  return `SOLD ${13 + rnd(62)} DAYS`;
+      case 6:  return `${1 + rnd(90)} ${NEAR_STREETS[rnd(NEAR_STREETS.length)]}`;
+      case 7:  return `BUILT ${1978 + rnd(45)}`;
+      case 8:  return `${2 + rnd(3)} CAR`;
+      default: return `${100 + rnd(800)}M2 LOT`;
+    }
+  }
+
+  // A stream never repeats one phrase. Each time it finishes a chunk it pulls
+  // a different one, so a column reads as a run of varied records.
+  function nextChunk(t) {
+    if (Math.random() < 0.45) return dataChunk();
+    return pickToken(t) || dataChunk();
+  }
+
   function pickToken(t) {
     let pool = [], total = 0;
     for (let i = 0; i < TOKEN_TIERS.length; i++) {
@@ -353,7 +386,7 @@
   }
 
   function assignToken(i) {
-    const tok = pickToken(openT);
+    const tok = nextChunk(openT);
     if (!tok) return;
     sTok[i] = tok + '  ';
     sDim[i] = 0.85 + Math.random() * 0.15;      // readable text rides brighter
@@ -361,6 +394,19 @@
     sLen[i] = Math.max(sLen[i], tok.length + 4);
     sPos[i] = 0;
     sRow[i] = Math.floor(sY[i]) - 1;
+  }
+
+  // One character of this stream's feed, advancing to a NEW chunk when the
+  // current one runs out. Always advances, even when the character is dropped,
+  // so the phrase stays aligned to the rows it was stamped into.
+  function feedChar(i) {
+    if (sPos[i] >= sTok[i].length) {
+      const next = nextChunk(openT) + '  ';
+      sTok[i] = next;
+      sPos[i] = 0;
+      sLen[i] = Math.max(sLen[i], next.length + 3);
+    }
+    return sTok[i][sPos[i]++];
   }
 
   // Spawning alone ramps too slowly: the opening curtain fills the screen in
@@ -392,17 +438,16 @@
         const hr = Math.floor(y);
         if (hr > sRow[i]) {
           for (let r = Math.max(sRow[i] + 1, 0); r <= hr; r++) {
+            const ch = feedChar(i);
             if (r >= 0 && r < rows) {
               const jt = base + r;
               // never overwrite a cell the message owns — token streams fall
               // straight through the printed words without eating characters
               if (textB[jt] === 0) {
-                const ch = sTok[i][sPos[i] % sTok[i].length];
                 cell[jt] = GIDX.has(ch) ? GIDX.get(ch) : SPACE;
                 lock[jt] = 1;
               }
             }
-            sPos[i]++;
           }
           sRow[i] = hr;
         }
