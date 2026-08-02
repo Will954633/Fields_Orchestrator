@@ -1,8 +1,21 @@
 # The Fields Quarterly — Q2 2026 handoff
 
 **Written:** 2026-08-01, ~21:00 AEST, at the end of a long working session with Will.
+**Revised:** 2026-08-02 — see the change log directly below. §9 and §10 in particular had gone stale
+within a day; do not trust an un-revised copy of this file.
 **For:** a Claude Code session picking this up cold.
-**Task:** write the Q2 2026 report. The data work underneath it is done; the writing is not.
+**Task:** write the Q2 2026 report. The data work underneath it is done; a first draft now exists.
+
+### Change log — 2026-08-02
+
+| Section | What changed |
+|---|---|
+| **§3 data** | **Re-verified, unchanged.** A fresh `precompute_union_prices.py` run reproduces every median, CI, n and volume figure in the table exactly. |
+| **§5** | `market_pulse` prose is **no longer stale** — 21 manual summaries written and verified live. Safe to quote. |
+| **§9** | Case study **sourced**, page 6 **decided**, first draft **written**. Lead number changed `42` → `29`, awaiting Will's ruling. |
+| **§10** | The "do not reorder the cron" warning is **obsolete** — six lines are now one ordered script with a daily tripwire. **A new trap added: two volume series exist and they disagree.** |
+| **New** | The house voice for all Fields market commentary was established with Will on 2026-08-02 and is recorded in `market_pulse_workflow.md` + `HOUSE_VOICE` in `generate_market_pulse.py`. The report draft follows it. |
+| **New** | A homeowner mindset brief now sits behind all market commentary: `15_Off-Market/Home_Owner_Perspective/`. Read its "What we deliberately did NOT conclude" section before writing anything — its §9 **outranks** its messaging section, and that precedence is now encoded. |
 
 Read this whole file before touching anything. Most of the traps below cost hours to rediscover,
 and three of them produced wrong numbers on the live website today.
@@ -94,7 +107,7 @@ market").
 | `issues/q2_2026/latest.pdf` (published 24 Jul) | Wrong medians, wrong volume direction, claims Burleigh Waters is accelerating, leads with the Conviction Index. Useful only as a "what not to do" reference. |
 | `drafts/q2_2026_editorial_outline.md` (28 Jul) | Read the site correctly at the time, but every figure has since moved. Its national-vs-local spine is still arguable; its numbers are not. |
 | `issues/q2_2026_quarterly/latest.pdf` (36pp) | Superseded by the per-suburb decision. |
-| `system_monitor.market_pulse` prose | Was regenerating when this was written. **Verify before quoting.** Prose/commentary is a separate session Will has explicitly deferred. |
+| `system_monitor.market_pulse` prose | **No longer stale — updated 2026-08-02.** All 21 summaries (3 suburbs x 7 categories) are now `source: manual`, written with Will against the corrected union data and verified on the rendered pages. Safe to quote. The house voice they establish is recorded in `market_pulse_workflow.md` and encoded as `HOUSE_VOICE` in `scripts/generate_market_pulse.py`. |
 
 ---
 
@@ -185,11 +198,23 @@ trust move available.
 
 ## 9. STILL TO DO
 
-1. **Source the page-5 case study** — a real Q2 2026 Burleigh Waters settlement from the union set.
-   **Must clear the currently-listed guard** (PropRadar real-time check) — ~0.75% of homes are on the
-   market at any time, and featuring one listed with another agent would be a serious own goal.
-2. **Page 6 onward-purchase data** — or drop to seven pages.
-3. **Write it.**
+1. ~~**Source the page-5 case study**~~ — **DONE 2026-08-02.** `2 Beaconsfield Drive`: guide
+   "Offers Over $2,250,000", sold **$2,100,000** (−6.7%) after **44 days** against a suburb median of
+   29. Private treaty, settled 22 May 2026, 4bd/2ba/4car. Guard cleared (zero `for_sale` records at
+   that exact address — a neighbouring hit at number 38 is a different house) and independently
+   confirmed in `propradar_sold` at the same price and date. **Caveat: its 3,409m² block is roughly
+   five times the suburb norm**, disclosed in the draft. It is the only Q2 sale holding a guide price,
+   a sale price and days on market together — the other 36 are missing at least one.
+2. ~~**Page 6 onward-purchase data**~~ — **DECIDED: page 6 ships**, built from verified data only
+   (QLD vacancy ~1.0%, rents +8.1% y/y, cash rate 4.35%, the three suburbs' asking prices). It carries
+   **no servicing calculation**, because we hold none, and says so.
+3. ~~**Write it.**~~ — **First draft done 2026-08-02:**
+   `drafts/q2_2026_burleigh_waters_issue.md`. Eight pages, ~2,700 words.
+   **Lead number changed from `42` to `29`** (days to sell, against 37 a year earlier). Reasoning in
+   the draft: `42` is a floor, not a count — Q2 is still filling in as settlements register, so it
+   will rise after printing — and it asks the cover to carry a flat series as though it moved. `29`
+   passes the same criteria and contradicts the national story more sharply, since every national
+   signal says slower and Burleigh Waters got faster. **Will has not yet ruled on this.**
 4. **Photography** — per the Alex Jordan finding, identity and place matter more than we assumed.
 5. **Extract the reusable process** (`working_notes/02_problem_register.md` P3.1–P3.6): master
    quarterly cycle, sentiment-research brief, editorial council agenda, issue spec template, evidence
@@ -207,9 +232,32 @@ trust move available.
   union series, but `indexed_series[].transaction_count` is still the old calibrated value — it was
   deliberately left alone because `market-insights.mjs:677` does `salesVolume: q.transaction_count || 0`,
   so nulling it would render years of history as a flat line at zero.
-- `precompute_indexed_price_data.py` does a **full `replace_one`** on the 1st of the month.
-  `precompute_union_prices.py` runs at `40 5 1 * *` **after** it, deliberately, and is what keeps the
-  corrected medians alive. **Do not reorder the cron.**
+- `precompute_indexed_price_data.py` does a **full `replace_one`** on the 1st of the month, which
+  deletes every union-owned field unless the promote follows it. **This is no longer six cron lines.**
+  As of 2026-08-02 the whole chain is `scripts/run_monthly_market_precompute.sh`, one `0 5 1 * *`
+  entry that runs all six steps in sequence and then calls `check_union_median_integrity.py` to
+  confirm the promote landed. Ordering is enforced by sequence, not by clock spacing. **For an
+  off-cycle rebuild run that script — never an individual precompute.** A daily tripwire at 01:30
+  (`check_union_median_integrity.py`) reports ERROR on the health board if the medians ever revert.
+  Background: the nightly pipeline was silently reverting them ~29 days in 30 via orchestrator step
+  17, which has been removed. See fix-history `[UNION-MEDIANS-REVERTED-NIGHTLY]`.
+
+- **⚠ TWO VOLUME SERIES EXIST AND THEY DISAGREE.** `precomputed_market_charts.{suburb}_sales_volume`
+  is anchored by `recalibrate_charts.py` to PropRadar's `sales_12mo` — the same counts §4 records as
+  demoted for the median (240 BW houses vs REA's 195). The union counts live in
+  `indexed_series[].median_sample_n` where `basis == "union"`.
+
+  | | anchored (charts) | union |
+  |---|---|---|
+  | Burleigh Waters Q4/Q1/Q2 | 51 / 56 / **73** | 41 / 44 / **42** |
+  | Robina | 111 / 101 / 56 | 71 / 71 / 51 |
+  | Varsity Lakes | 70 / 51 / 32 | 45 / 31 / 17 |
+
+  The anchored series says Burleigh Waters **rose**; the union says **flat**. On 2026-08-02 the
+  anchored series put "activity has picked up" into five published summaries — the same
+  "Burleigh Waters is accelerating" artefact §4 already forbids. `generate_market_pulse.py` now reads
+  the union counts; anything else that quotes volume must do the same. See
+  `[PULSE-VOLUME-WRONG-SERIES]`.
 
 **Process**
 - Rule 1: log every change to `logs/fix-history/YYYY-MM-DD.md`. Rule 2: push via `gh api` (git push
