@@ -35,9 +35,13 @@ const LAUNCH_ARGS = [
 function parseArgs() {
   const a = process.argv.slice(2);
   const o = {
-    mode: "growth", theme: "light", block: 5, dur: 5000,
+    mode: "growth", theme: "light", block: 1, dur: 5000,
     chaos: 0.28, mosaic: 0.85, fade: 0.055,
     fps: 30, width: 1024, hold: 1.0, gif: false, stills: 0,
+    // Fine-grained reveals compress far worse than chunky ones — the 1px cut
+    // came out at 3.7 MB against 2.1 MB for 5px blocks. 21 is visually a wash
+    // here (mean abs diff ~1.5/255 vs crf 17) and roughly a third smaller.
+    crf: 21,
     out: null,
     // host-page matching (see reveal.template.html) — null means "leave theme alone"
     paper: null, ink: null, grain: null, vignette: null,
@@ -48,7 +52,7 @@ function parseArgs() {
     switch (k) {
       case "mode": case "theme": case "paper": case "ink": o[k] = next(); break;
       case "grain": case "vignette": o[k] = next(); break;
-      case "block": case "dur": case "fps": case "width": o[k] = +next(); break;
+      case "block": case "dur": case "fps": case "width": case "crf": o[k] = +next(); break;
       case "chaos": case "mosaic": case "fade": case "hold": o[k] = +next(); break;
       case "stills": o.stills = +next(); break;
       case "gif": o.gif = true; break;
@@ -169,7 +173,7 @@ async function render(o, url, frameDir) {
   await run("ffmpeg", [
     "-y", "-loglevel", "error", "-framerate", String(o.fps), "-i", pattern,
     "-vf", `${evenScale},format=yuv420p`,
-    "-c:v", "libx264", "-preset", "slow", "-crf", "17",
+    "-c:v", "libx264", "-preset", "slow", "-crf", String(o.crf),
     "-movflags", "+faststart", mp4,
   ]);
   console.log(`  ${path.basename(mp4)}  (${(fs.statSync(mp4).size / 1048576).toFixed(1)} MB)`);
