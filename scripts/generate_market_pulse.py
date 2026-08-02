@@ -68,6 +68,28 @@ Policy brief:
 {brief}"""
 
 
+HOUSE_VOICE = """\
+HOUSE VOICE — established 2026-08-02 with Will, binding on every summary.
+
+1. OPEN ON THE HEADLINE THEY HAVE ALREADY SEEN, then place our data against it. The reader
+   arrives carrying national coverage ("prices are falling"). Naming it first earns permission;
+   leading with our own number reads as a sales position to someone braced for one.
+2. THE 12-MONTH MEDIAN IS THE ONLY PRICE HEADLINE — always with its 90% confidence interval,
+   its sample size, and a plain-language gloss of what the interval means. Never a bare figure.
+3. VOLUME BY DIRECTION, NEVER PERCENTAGE. Our sold capture under-counts the newest quarter by
+   31-49% against PropRadar settlements. "Fewer homes changed hands than a year earlier" is
+   supportable; a percentage fall is not.
+4. STATE PLAINLY WHAT WE WILL NOT CLAIM, AND WHY. If the quarters cannot support a
+   quarter-on-quarter move, say so in the summary itself. Every competitor draws the line
+   anyway — refusing to is the credential, not a hedge. This is the product.
+5. EXTERNAL EXPECTATIONS ARE REPORTED AND ATTRIBUTED, NEVER ADOPTED. "The four major banks
+   expect a hold" is reportable. Any version where we hold the view is a forecast.
+
+Bounded by the standing editorial rules, which always win: no advice, no predictions, no single
+valuation figure in a headline, no "stunning" / "nestled" / "boasting" / "rare opportunity" /
+"robust market", prices written in full ($1,250,000), suburbs capitalised."""
+
+
 MINDSET_DIGEST_SYSTEM_PROMPT = """\
 You condense an internal seller-psychology brief into a short framing note for a writer producing \
 public market commentary. You are not writing marketing copy and you are not writing advice."""
@@ -265,16 +287,48 @@ def fetch_all_data(gc_db, sm_db, suburb):
                 data["dom_yoy_prev"] = prev_dom.get("median_days_on_market")
 
     # 3. Sales Volume
+    # Complete quarters only. timeline[-1] is the IN-PROGRESS quarter — for Robina that put
+    # `sales_volume_latest = 14` (a month-old Q3 2026) next to a full prior quarter, inviting a
+    # "sales have collapsed" reading of a quarter that has barely started.
+    #
+    # Volume is also a SAMPLE: our sold capture lags settlement and under-counts the newest
+    # complete quarter. Checked 2026-08-02 against PropRadar settlement records — our Q2 2026 was
+    # 31% short for Robina and 49% short for Varsity Lakes. The direction is real and independently
+    # corroborated (PRD has Burleigh Heads house sales -15.3% y/y); the magnitude is not publishable.
     sv_doc = gc_db["precomputed_market_charts"].find_one({"_id": f"{suburb}_sales_volume"})
     if sv_doc:
-        timeline = sv_doc.get("timeline", [])
-        if timeline:
-            latest_sv = timeline[-1]
+        complete = [t for t in (sv_doc.get("timeline") or []) if not t.get("is_in_progress")]
+        if complete:
+            latest_sv = complete[-1]
             data["sales_volume_latest"] = latest_sv.get("sales_count")
             data["sales_volume_period"] = latest_sv.get("period", "")
-            data["sales_volume_yoy_change"] = latest_sv.get("yoy_change")
-            if len(timeline) >= 2:
-                data["sales_volume_prev"] = timeline[-2].get("sales_count")
+            data["sales_volume_basis"] = (
+                "last COMPLETE quarter; sample only — under-captures the newest quarter, so "
+                "report direction ('fewer sales than a year earlier'), never a percentage fall"
+            )
+            if len(complete) >= 2:
+                data["sales_volume_prev"] = complete[-2].get("sales_count")
+
+            # `sales_volume_yoy_change` is deliberately NOT emitted. It rendered directly as
+            # "Sales volume down 52% year-on-year — buyer pool contracting"
+            # (DirectionSection.tsx:153, :188; SellNowSection.tsx:112). Against PropRadar
+            # settlement records our Q2 2026 was 31% short for Robina and 49% short for Varsity
+            # Lakes, so that percentage overstates the fall by a wide margin. The DIRECTION is
+            # real and independently corroborated (PRD: Burleigh Heads house sales -15.3% y/y);
+            # the magnitude is not publishable until a lag reconciliation exists.
+            # Omitted rather than nulled — DirectionSection guards on `!== undefined`.
+            yoy_raw = latest_sv.get("yoy_change")
+            if yoy_raw is not None:
+                data["sales_volume_direction"] = (
+                    "lower than the same quarter a year earlier" if yoy_raw < 0
+                    else "higher than the same quarter a year earlier" if yoy_raw > 0
+                    else "level with the same quarter a year earlier"
+                )
+                data["sales_volume_yoy_suppressed_reason"] = (
+                    f"raw computed change {yoy_raw:+.1f}% withheld — our sold capture "
+                    f"under-counts the newest quarter (31-49% short vs PropRadar settlements). "
+                    f"State direction only."
+                )
 
     # 4. Turnover Rate
     tr_doc = gc_db["precomputed_market_charts"].find_one({"_id": f"{suburb}_turnover_rate"})
@@ -536,6 +590,8 @@ seller psychology, never write persuasion. It tells you WHICH facts matter to th
 WHY; it does not license advice, prediction or urgency, and the live data always wins):
 {mindset}
 
+{house_voice}
+
 Write a 3-4 sentence market summary that:
 1. Opens with "Should you sell your house in {suburb} now?"
 2. Gives a direct verdict: conditions currently favour sellers / market is balanced / conditions favour buyers
@@ -570,6 +626,8 @@ Who you are writing for (INTERNAL framing — never quote this, never reveal tha
 seller psychology, never write persuasion. It tells you WHICH facts matter to this reader and
 WHY; it does not license advice, prediction or urgency, and the live data always wins):
 {mindset}
+
+{house_voice}
 
 Write a 3-4 sentence summary that:
 1. Opens with "Is now a good time to buy a house in {suburb}?"
@@ -616,6 +674,8 @@ seller psychology, never write persuasion. It tells you WHICH facts matter to th
 WHY; it does not license advice, prediction or urgency, and the live data always wins):
 {mindset}
 
+{house_voice}
+
 Write a 3-4 sentence summary that:
 1. Opens with "Is the Gold Coast property market going to crash?"
 2. Acknowledges the concern honestly, then assesses crash risk based on the LEADING indicators (wage growth trend, household spending, lending)
@@ -646,6 +706,8 @@ seller psychology, never write persuasion. It tells you WHICH facts matter to th
 WHY; it does not license advice, prediction or urgency, and the live data always wins):
 {mindset}
 
+{house_voice}
+
 Write a 3-4 sentence overview that:
 1. Opens with "What is the {suburb} property market doing?"
 2. Covers the headline numbers: median price, recent sales volume, DOM, active listings
@@ -674,6 +736,8 @@ Who you are writing for (INTERNAL framing — never quote this, never reveal tha
 seller psychology, never write persuasion. It tells you WHICH facts matter to this reader and
 WHY; it does not license advice, prediction or urgency, and the live data always wins):
 {mindset}
+
+{house_voice}
 
 Write a 3-4 sentence summary that:
 1. Opens with "Are houses or units a better investment in {suburb}?"
@@ -710,6 +774,8 @@ seller psychology, never write persuasion. It tells you WHICH facts matter to th
 WHY; it does not license advice, prediction or urgency, and the live data always wins):
 {mindset}
 
+{house_voice}
+
 Write a 3-4 sentence summary that:
 1. Opens with "Which way is the {suburb} property market moving?"
 2. References QoQ and YoY growth momentum and whether it's accelerating or decelerating
@@ -738,6 +804,8 @@ Who you are writing for (INTERNAL framing — never quote this, never reveal tha
 seller psychology, never write persuasion. It tells you WHICH facts matter to this reader and
 WHY; it does not license advice, prediction or urgency, and the live data always wins):
 {mindset}
+
+{house_voice}
 
 Write a 3-4 sentence summary that:
 1. Opens with "How does {suburb} compare to nearby suburbs?"
@@ -789,6 +857,7 @@ def generate_summary(client, category_id, suburb_display, data_dict, policy_dige
         data=data_text,
         policy=policy_digest or "(no current policy brief available)",
         mindset=mindset_digest or "(no homeowner mindset brief available)",
+        house_voice=HOUSE_VOICE,
     )
 
     if dry_run:
