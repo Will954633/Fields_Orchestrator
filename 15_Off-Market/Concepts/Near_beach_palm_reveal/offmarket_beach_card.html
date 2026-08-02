@@ -562,12 +562,57 @@
         rot = 5.2 - travel / Math.max(10, (land.R + R) * 0.5) * 0.9;
       }
 
+      driveAutoScroll(now, tFall);
+
       const vx = x - scrollX, vy = y - scrollY;
       window.__fruitState = { x: Math.round(vx), y: Math.round(vy), R: Math.round(R),
-                              p: +p.toFixed(3), tFall: +tFall.toFixed(2) };
+                              p: +p.toFixed(3), tFall: +tFall.toFixed(2),
+                              auto: !!auto };
       window.paintFruit(g, vx, vy, R, rot, Math.sin(rot * 0.4) * 0.12);
       raf = requestAnimationFrame(frame);
     }
+
+    // ---- the page carries the reader down while the fruit rolls -------------
+    // Scripted scroll for this one transition, so the roll happens without the
+    // reader having to drive it. It only drives the SCROLL — the fruit is still
+    // the same rate-limited follow, so the two stay in step by construction
+    // rather than by two clocks that can drift apart.
+    //
+    // Taking over someone's scroll is hostile if it traps them, so: it fires
+    // once, only from card 03, never under reduced-motion, and ANY input
+    // (wheel, touch, key, pointer) hands control straight back.
+    let auto = null, autoUsed = false;
+
+    function maybeAutoScroll(now) {
+      if (autoUsed || reduced || auto) return;
+      const beach = document.getElementById("card-beach").getBoundingClientRect();
+      // only if the reader is actually still sitting on card 03
+      if (beach.top > innerHeight * 0.25 || beach.bottom < innerHeight * 0.55) return;
+      autoUsed = true;
+      const to = cardWhy.getBoundingClientRect().top + scrollY;
+      auto = { from: scrollY, to, at: now, dur: ROLL_MS + 400 };
+      // per-frame scrollTo fights CSS smooth scrolling — each call would kick
+      // off its own easing and the two compete
+      document.documentElement.style.scrollBehavior = "auto";
+    }
+
+    function endAuto() {
+      if (!auto) return;
+      auto = null;
+      document.documentElement.style.scrollBehavior = "";
+    }
+
+    function driveAutoScroll(now, tFall) {
+      if (tFall >= 1 && !autoUsed) maybeAutoScroll(now);
+      if (!auto) return;
+      const u = clamp01((now - auto.at) / auto.dur);
+      scrollTo(0, auto.from + (auto.to - auto.from) * smooth(u));
+      if (u >= 1) endAuto();
+    }
+
+    // hand control back the instant the reader touches anything
+    ["wheel", "touchstart", "keydown", "pointerdown"].forEach((ev) =>
+      addEventListener(ev, endAuto, { passive: true }));
 
     function detach() {
       if (detachedAt) return;
@@ -585,6 +630,7 @@
       detachedAt = 0;
       land = null;
       pSmooth = 0; lastT = 0;
+      endAuto(); autoUsed = false;
       patch.classList.remove("on");
       g.clearRect(0, 0, innerWidth, innerHeight);
     }
