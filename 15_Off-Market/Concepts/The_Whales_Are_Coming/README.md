@@ -1,37 +1,72 @@
 # The Whales Are Coming — procedural swim study
 
-A humpback swimming left to right, driven by the physics rather than by
-keyframes. One flat sprite, sliced into vertical strips and re-laid along a
-travelling wave whose frequency is locked to swimming speed by the Strouhal
-number.
+A humpback swimming left to right, driven by measured biomechanics rather than
+by keyframes. Three layers — far flipper, body, near flipper — sliced into
+vertical strips and re-laid along a travelling body wave, with a blinking eye.
 
 Open `index.html` — it plays on load, is fully self-contained (no server, no
 network, no build step), and every parameter is a live slider.
 
-Preview: `https://vm.fieldsestate.com.au/concepts/off-market/The_Whales_Are_Coming/`
+**Preview:** https://vm.fieldsestate.com.au/concepts/off-market/The_Whales_Are_Coming/
+(`whale_swim.mp4` on the same path is a rendered 24-second crossing.)
+
+## What to look at
+
+- The **whole animal** moves — head, body and flippers, not just the tail. That
+  is the point of the build, and it is what the measurements demand.
+- **One tail beat every ~4.3 seconds.** Slower than instinct says. Almost every
+  hand-animated whale runs about 10× too fast.
+- **Burst and coast** — a few strokes, then a long rigid glide.
+- The eye **blinks**, as a canthus-anchored purse rather than a shutter. At the
+  default size it is subtle; raise **Whale size** to see it.
 
 ## Files
 
 | File | What it is |
 |---|---|
-| `index.html` | The animation. Generated — edit `swim.template.html` instead. |
-| `swim.template.html` | Source of the animation. `{{SPRITE_DATA_URI}}` / `{{RIG_JSON}}` are filled in by the build. |
-| `build_whale_sprite.py` | `Whale_V2.png` → trimmed sprite + measured rig → `index.html`. |
+| `swim.template.html` | **Source of the animation.** `{{BODY_DATA_URI}}`, `{{NEAR_DATA_URI}}`, `{{FAR_DATA_URI}}` and `{{RIG_JSON}}` are filled in by the build. |
+| `build_whale_sprite.py` | **Source of the sprite + rig.** `Whale_V2.png` → layers, measured rig → `index.html`. |
 | `shoot.js` | Headless-Chrome frame renderer → MP4 / contact sheet. |
-| `whale_sprite.png` | Trimmed, feathered, colour-bled sprite. Generated. |
-| `whale_rig.json` | Measured spine, thickness profile, zone boundaries. Generated. |
-| `whale_swim.mp4` | Rendered crossing. Generated. |
+| `index.html` | The animation. *Generated* — edit `swim.template.html` instead. |
+| `whale_body.png` | Body with the flippers cut away. *Generated.* |
+| `whale_flipper_near.png` / `_far.png` | The two pectoral blades. *Generated.* |
+| `whale_rig.json` | Measured spine, thickness profile, flipper hinges, eye. *Generated.* |
+| `whale_swim.mp4`, `contact_sheet.png` | Rendered output. *Generated.* |
+
+The input image lives outside this folder, at
+`../Near_beach_palm_reveal/Other images/Whale_V2.png`.
 
 ## Rebuild
 
 ```bash
-python3 build_whale_sprite.py            # re-derives the sprite and index.html
-node shoot.js --mp4 --dur 24 --fps 30    # re-renders the video
-node shoot.js --stills 6 --from 9 --to 13.7   # contact sheet of one tail cycle
+source /home/fields/venv/bin/activate       # numpy, pillow, scipy
+python3 build_whale_sprite.py               # layers + rig + index.html
+node shoot.js --mp4 --dur 24 --fps 30       # the video
+node shoot.js --stills 6 --from 9 --to 13.3 # contact sheet of one tail cycle
 ```
 
-`build_whale_sprite.py` must be re-run after any edit to `swim.template.html` —
-`index.html` is the generated artefact.
+`build_whale_sprite.py` must be re-run after **any** edit to
+`swim.template.html` — `index.html` is a generated artefact and editing it
+directly will be overwritten.
+
+## Saving and restoring
+
+Only three files are irreplaceable: `swim.template.html`,
+`build_whale_sprite.py` and `shoot.js`, plus the input `Whale_V2.png`. All four
+are on GitHub (`Will954633/Fields_Orchestrator`). `whale_rig.json` is pushed too,
+as a readable record of the measurements.
+
+**Everything else regenerates byte-for-byte.** That was verified by deleting the
+generated files and rebuilding: `index.html`, `whale_body.png`, both flipper
+layers and `whale_rig.json` all came back with identical MD5s. So the ~8 MB of
+generated output is deliberately not committed — it would bloat the repo to
+preserve something the build reproduces exactly.
+
+The renders are deterministic for the same reason: `shoot.js` drives the page
+with `?capture=1`, which replaces the animation loop with `window.__swim.frame(t)`
+and re-integrates from t=0 at a fixed dt for every frame. Blink jitter runs off a
+seeded PRNG. Nothing depends on wall-clock time or machine speed, so a re-render
+is frame-identical.
 
 ## Why the source image works
 
