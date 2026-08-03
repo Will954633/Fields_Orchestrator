@@ -1,6 +1,15 @@
 # Illuminus — the off-market CTA as a night neon sign
 
-**View:** https://vm.fieldsestate.com.au/concepts/off-market/illuminus_sign_concept/index.html
+Two versions:
+
+| | View |
+|---|---|
+| **Wall sign** — the tight pill, closest to the current CTA | [index.html](https://vm.fieldsestate.com.au/concepts/off-market/illuminus_sign_concept/index.html) |
+| **Roadside pylon** — marquee cabinet on posts, with chase bulbs | [roadside.html](https://vm.fieldsestate.com.au/concepts/off-market/illuminus_sign_concept/roadside.html) |
+
+Both run the same discharge engine and the same three-swells-then-flicker
+sequence. The roadside version adds a second, physically different emitter —
+see [Roadside](#roadside) below.
 
 Replaces the flat copper pill at the end of the `/off-market` discovery deck
 ([`DiscoveryDeck.tsx:278`](../../../../Feilds_Website/01_Website/src/pages/OffMarketPage/discovery/DiscoveryDeck.tsx))
@@ -104,6 +113,70 @@ version is a genuine seizure risk on a page we point paid traffic at.
 
 The oscilloscope traces actual emission, so the physics is inspectable rather
 than something you have to take on trust.
+
+---
+
+## Roadside
+
+`roadside.html` — a highway pylon: marquee cabinet on steel posts, a `FIELDS`
+plate above the CTA, a chasing bulb arrow below, standing on a dark road under
+a night sky, swaying very slightly in the wind.
+
+The reason this is a real build and not a reskin is that **a roadside sign has
+two emitters, and they obey opposite physics.**
+
+| | Neon tube | Incandescent bulb |
+|---|---|---|
+| Switching | instant — microseconds | **cannot switch** — thermal mass |
+| Rise / fall | no afterglow at all | ~45 ms heat, ~115 ms cool |
+| Colour | fixed by the gas | **shifts with filament temperature** |
+
+That second column is the entire reason a real chase reads as real. The
+trailing bulbs are still hot after the drive has moved on, so the chase
+**smears** — and because radiated colour follows filament temperature, the
+smear is *red*: a cooling bulb slides down the blackbody curve from warm white
+through orange to dull red before it goes out.
+
+So bulbs are modelled as filaments, not as opacity:
+
+- temperature `T` integrates toward the drive with asymmetric time constants
+  (heating is faster than cooling, which is why the trail is longer than the
+  attack)
+- luminance is `T³·⁵` — radiated power in the visible band is steeply
+  superlinear in temperature, so a filament at half temperature is nowhere near
+  half as bright
+- colour is a real blackbody curve (Tanner Helland's approximation) mapped over
+  1500–2800 K
+- light is composited **additively** on canvas (`lighter`), because overlapping
+  light adds — it does not alpha-blend
+- a couple of bulbs are permanently dead and a couple make poor contact and
+  stutter, because every real sign has some
+
+Unlike the discharge, the filaments are **not** supersampled — deliberately.
+Their time constants are many times longer than a frame, so per-frame
+integration is already exact. Sub-frame detail matters for a tube that switches
+in microseconds; it does not for a lump of hot metal.
+
+**Verified:** sampled mid-chase during steady burn, 22 of 36 live bulbs are
+mid-transition at any instant (temperature histogram across quintiles:
+`10 · 12 · 0 · 0 · 14`). The filaments genuinely smear rather than switching
+binary, which is the whole claim.
+
+### Roadside-specific decisions for Will
+
+- **The `FIELDS` plate is a different gas** — argon/mercury blue-white
+  (`#BFE6FF`) against the neon orange. Mixed gas colours are what make a sign
+  read as *roadside* rather than as a modern backlit panel, but it is off-brand
+  by definition. Easy to pull back to a warm white if you'd rather. It also
+  settles a beat *before* the main tube, which is how a genuine multi-circuit
+  sign wakes up.
+- **The cabinet is squarer than a real pylon.** Roadside signs are tall because
+  they're read at 80 km/h from 200 m. Ours has to stay readable in a scroll
+  deck, so the CTA is set over three lines rather than stacked vertically.
+- **This is a bigger commitment than the wall sign.** It is a scene — sky,
+  road, structure — not a button. It would want to be the whole final card of
+  the deck, not an element inside one. The wall version drops into the existing
+  card; this one replaces it.
 
 ---
 
