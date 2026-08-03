@@ -7,6 +7,14 @@ Two versions:
 | **Wall sign** — the tight pill, closest to the current CTA | [index.html](https://vm.fieldsestate.com.au/concepts/off-market/illuminus_sign_concept/index.html) |
 | **Roadside pylon** — marquee cabinet on posts, with chase bulbs | [roadside.html](https://vm.fieldsestate.com.au/concepts/off-market/illuminus_sign_concept/roadside.html) |
 | **Low monument** — long slab ~1 m up, seen from the left at 40° | [low-profile.html](https://vm.fieldsestate.com.au/concepts/off-market/illuminus_sign_concept/low-profile.html) |
+| **Button** — tube + words only, no scene. The affordance-first option | [button.html](https://vm.fieldsestate.com.au/concepts/off-market/illuminus_sign_concept/button.html) |
+
+> **Affordance note.** The more photographic these got, the less they read as
+> something you can click — a scene with ground, posts and lens artefacts looks
+> like a picture of a sign, not a control. `button.html` is the deliberate
+> reversal: flat, axis-aligned, CTA-sized, no scene. Worth A/B-ing against the
+> current flat pill rather than trusting anyone's instinct, since the deck
+> already carries PostHog CTA events and takes paid traffic.
 
 Both run the same discharge engine and the same three-swells-then-flicker
 sequence. The roadside version adds a second, physically different emitter —
