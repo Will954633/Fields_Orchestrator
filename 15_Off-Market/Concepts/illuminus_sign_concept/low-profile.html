@@ -225,7 +225,22 @@ body{margin:0; background:#000; color:var(--ink); font-family:var(--sans);
 .lead   {stroke:#2A2724; stroke-width:2; opacity:.9}
 .housing{fill:#141210; stroke:#2A2724; stroke-width:1}
 
-.word{display:grid; place-items:center; position:relative; z-index:1}
+/* ---- the directional arrow ----------------------------------------------
+   A real animated neon arrow is not a gradient wipe. It is several SEPARATE
+   tubes, each on its own switched supply, fired in sequence — which is why the
+   travel looks stepped rather than smooth, and why each step arrives instantly.
+   Each <g class="seg"> is one tube and carries its own --s (emission) and --sb
+   (halo), set per frame from the same discharge model as the border.        */
+.a-glass{stroke:var(--glass); stroke-width:4.2; opacity:.34}
+.a-outer{stroke:var(--gas-deep); stroke-width:15;  filter:blur(11px);
+  opacity:calc(.60 * var(--sb,0))}
+.a-mid  {stroke:var(--gas); stroke-width:8;   filter:blur(4.5px); opacity:calc(.90 * var(--s,0))}
+.a-near {stroke:var(--gas); stroke-width:4.2; filter:blur(1.5px); opacity:calc(.96 * var(--s,0))}
+.a-core {stroke:#FFFFFF;    stroke-width:1.8; filter:blur(.4px);  opacity:calc(1 * var(--s,0))}
+
+/* Lifted off centre to leave the lower third of the face for the arrow. */
+.word{display:grid; place-items:center; position:relative; z-index:1;
+  transform:translateY(calc(var(--h) * -0.14))}
 .word > span{
   grid-area:1/1; white-space:nowrap; text-align:center;
   /* Sized against the face's LAYOUT width. Judging this by eye from a
@@ -233,8 +248,8 @@ body{margin:0; background:#000; color:var(--ink); font-family:var(--sans);
      reads ~25% narrower than the text actually is, so the type looks like it
      has room to grow when it is already overflowing the tube. Tighter tracking
      buys back the width needed to keep it legible. */
-  font-size:calc(var(--w) * .0345); font-weight:600;
-  letter-spacing:.08em; text-transform:uppercase; line-height:1.4;
+  font-size:calc(var(--w) * .062); font-weight:600;
+  letter-spacing:.11em; text-transform:uppercase; line-height:1.3;
   /* Thinner than before: at this size 1.7px read as a chunky drawn outline
      rather than bent glass. The brightness now comes from the glow, not from
      the weight of the stroke. */
@@ -310,8 +325,8 @@ body{margin:0; background:#000; color:var(--ink); font-family:var(--sans);
         <div class="face" id="face">
           <svg class="frame" id="frame" aria-hidden="true"></svg>
           <span class="word">
-            <span class="glass" aria-hidden="true">Build my complete selling strategy&#8202;&#8202;&#8594;</span>
-            <span class="lit">Build my complete selling strategy&#8202;&#8202;&#8594;</span>
+            <span class="glass" aria-hidden="true">Start building</span>
+            <span class="lit">Start building</span>
           </span>
         </div>
       </a>
@@ -411,10 +426,45 @@ let take=buildTake(20260803);
 let t0=performance.now(), prevT=0, bloom=0, warmS=0;
 let calm=matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+/* ---- arrow timing --------------------------------------------------------
+   Segments fire left to right, all hold lit, then all extinguish and it runs
+   again. ~130 ms between strikes is the classic arrow-sign cadence: fast
+   enough to read as travel, slow enough that each tube reads as a tube.     */
+const ARROW_SHAFT_SEGS = 5;
+const ARROW_SEGS = ARROW_SHAFT_SEGS + 1;      // + the head
+const SEG_STEP = 130, ARROW_HOLD = 620, ARROW_GAP = 320;
+const ARROW_CYCLE = ARROW_SEGS*SEG_STEP + ARROW_HOLD + ARROW_GAP;
+let arrowSegEls = [], segState = [];
+/* fixed per-segment phase so each tube's strike wobble differs but is stable */
+const SEG_PHASE = Array.from({length:ARROW_SEGS}, (_,i) => (i*2.399) % 6.283);
+
 /* The tube path is built in the face's OWN layout space. getBoundingClientRect
    would return the screen-space bounding box of a 3D-rotated element, which is
    not the face's geometry — offsetWidth/offsetHeight are the untransformed
    size and are what the SVG viewBox needs. */
+/* Arrow tubes, laid out under the lettering and pointing right. Returns one
+   path per SEGMENT — the head is a single segment so both of its arms strike
+   together, which is how a real arrow sign is wired. */
+function arrowSegments(w,h){
+  const ay = h*0.73;
+  const span = w*0.235;
+  const ax0 = w/2-span, ax1 = w/2+span;
+  const headLen = Math.min(46, span*0.40), headHalf = h*0.125;
+  const shaftEnd = ax1-headLen*0.55;
+  const n = ARROW_SHAFT_SEGS;
+  const segs = [];
+  for(let i=0;i<n;i++){
+    const x0 = ax0+(shaftEnd-ax0)*i/n;
+    const x1 = ax0+(shaftEnd-ax0)*(i+1)/n;
+    // Overlap so the shaft is continuous when every segment is lit. The slight
+    // brightening left at each join is wanted, not a defect: a real segmented
+    // arrow has an electrode pair at every tube end, and they run hotter.
+    segs.push(`M ${x0} ${ay} L ${x1+4} ${ay}`);
+  }
+  segs.push(`M ${ax1-headLen} ${ay-headHalf} L ${ax1} ${ay} L ${ax1-headLen} ${ay+headHalf}`);
+  return segs;
+}
+
 function drawFrame(){
   const w=face.offsetWidth, h=face.offsetHeight;
   if(!w||!h) return;
@@ -433,7 +483,17 @@ function drawFrame(){
     <path class="t-core" d="${d}"/>
     <line class="lead" x1="${L}" y1="${h}" x2="${L}" y2="${h+10}"/>
     <line class="lead" x1="${R}" y1="${h}" x2="${R}" y2="${h+10}"/>
-    <rect class="housing" x="${L-4}" y="${h+8}" width="${gap+8}" height="7" rx="2"/>`;
+    <rect class="housing" x="${L-4}" y="${h+8}" width="${gap+8}" height="7" rx="2"/>
+    ${arrowSegments(w,h).map(d =>
+      // unlit glass first so an extinguished segment is still a visible tube
+      `<path class="a-glass" d="${d}"/>`).join("")}
+    ${arrowSegments(w,h).map(d =>
+      `<g class="seg">
+         <path class="a-outer" d="${d}"/><path class="a-mid" d="${d}"/>
+         <path class="a-near"  d="${d}"/><path class="a-core" d="${d}"/>
+       </g>`).join("")}`;
+  arrowSegEls = [...frame.querySelectorAll(".seg")];
+  segState = arrowSegEls.map(() => ({ b:0 }));
 }
 
 function step(now){
@@ -442,6 +502,8 @@ function step(now){
     root.style.setProperty("--lvl","1");
     root.style.setProperty("--bloom","1");
     root.style.setProperty("--warm","0");
+    // reduced motion: the arrow is simply lit, not travelling
+    for(const g of arrowSegEls){ g.style.setProperty("--s","1"); g.style.setProperty("--sb","1"); }
     rPhase.textContent="reduced motion"; rLvl.textContent="100%";
     return;
   }
@@ -461,6 +523,29 @@ function step(now){
   root.style.setProperty("--lvl",lvl.toFixed(4));
   root.style.setProperty("--bloom",bloom.toFixed(4));
   root.style.setProperty("--warm",warmS.toFixed(4));
+  /* -- the arrow ----------------------------------------------------------
+     Separate tubes on the same transformer, so when the main tube drops out
+     mid-flicker these go with it — an arrow that kept chasing through a
+     dropout would give the whole illusion away. */
+  const powered = lvl > 0.06;
+  const ta = ((now - t0) % ARROW_CYCLE);
+  const allOn = ARROW_SEGS*SEG_STEP + ARROW_HOLD;
+  for(let i=0;i<arrowSegEls.length;i++){
+    const age = ta - i*SEG_STEP;                 // ms since this tube struck
+    const on  = powered && age >= 0 && ta < allOn;
+    let s = 0;
+    if(on){
+      // same streamer instability as the main tube, decaying over ~20 ms
+      const wob = 1 + 0.11*Math.sin(2*Math.PI*62*(age/1000)+SEG_PHASE[i])*Math.exp(-age/20);
+      s = Math.min(1, wob*ripple(t));
+    }
+    const st = segState[i];
+    const tau = s > st.b ? TAU_ATTACK : TAU_RELEASE;
+    st.b += (s - st.b)*(1 - Math.exp(-win/tau));
+    arrowSegEls[i].style.setProperty("--s",  s.toFixed(3));
+    arrowSegEls[i].style.setProperty("--sb", st.b.toFixed(3));
+  }
+
   rPhase.textContent=phase; rLvl.textContent=Math.round(lvl*100)+"%";
 }
 
