@@ -254,6 +254,36 @@ Three things that only matter once the sign is a solid:
   frame. The dark ground and the light pool are therefore separate planes, and
   the pool is small and pinned to the sign so it cannot drift.
 
+### The graphics pass
+
+Four things did most of the work of moving this from "render" to "photograph":
+
+- **Falloff via inset shadows, not a fat blurred stroke.** A wide, weakly
+  saturated SVG blur bleeding inward washed the whole panel brown — the single
+  biggest CG tell. Inset shadows follow the rounded-rect exactly and fall off
+  fast, which is what cabinet paint next to a tube actually does.
+- **The lettering is blown out.** Pure white at full alpha with a thin 1.25px
+  stroke. The previous warm off-white at partial alpha read as grey paint; the
+  brightness has to come from the glow, not the weight of the stroke.
+- **Specular lips.** A hard bright line where the top surface and end cap turn
+  past the tube. Their absence is what makes CSS boxes read as flat shading
+  rather than as surfaces.
+- **A lens, not just a scene.** Veiling glare (elongated and rotated along the
+  sign's on-screen axis, because the source is a long tube and not a point),
+  plus vignette and grain.
+
+Two traps worth remembering, both of which bit during this pass:
+
+- **`mix-blend-mode`, not `background-blend-mode`, for grain.** The latter only
+  blends an element's own background layers against each other; the element
+  still composites normally, so mid-grey noise at any real opacity lifts the
+  whole frame off black. It looked like fog.
+- **Size type against `offsetWidth`, never the bounding rect.** Same trap as
+  the SVG path, and I fell into it anyway: on the rotated face the on-screen
+  box reads ~25% narrower than the text really is, so the type looked like it
+  had room while it was already overflowing the tube by 95px and pushing the
+  arrow outside the glass.
+
 Open: the sign's proportions (currently 4.4:1) and exactly how much top surface
 shows are both guesses at Will's mental picture. A reference image would settle
 both faster than another round of description.
