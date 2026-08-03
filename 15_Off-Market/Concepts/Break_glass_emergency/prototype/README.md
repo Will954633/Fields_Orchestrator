@@ -5,6 +5,7 @@ away → the bail is revealed → drag it down → the latch throws → the pane
 opens.**
 
 **Preview:** `https://vm.fieldsestate.com.au/concepts/off-market/Break_glass_emergency/prototype/`
+**Porting it into the live site footer:** [PORTING-TO-FOOTER.md](PORTING-TO-FOOTER.md)
 
 Built from the four stills in the parent folder. No 3D, no video — the swing is a
 single CSS `rotateX` on a cut-out sprite, so it is drag-responsive and weighs
