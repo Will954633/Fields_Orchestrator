@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Break Glass — interaction prototype</title>
+<style>
+  :root{
+    --copper:#c9803f;
+    --ink:#0a0a0a;
+    --paper:#f4f2ee;
+    /* sprite geometry, measured from the source render (1149x1369) */
+    --spr-l:34.8129%; --spr-t:43.9737%; --spr-w:41.8625%; --spr-h:22.3521%;
+    --pivot:13.4%;              /* hinge axis inside the sprite */
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:#070707; color:var(--paper);
+    font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    display:flex; flex-direction:column; align-items:center;
+    padding:24px 16px 48px; gap:20px;
+  }
+  h1{font-size:15px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;opacity:.5;margin:0}
+
+  /* ---------- stage ---------- */
+  .stage{
+    position:relative; width:min(560px,92vw); aspect-ratio:1149/1369;
+    perspective:1500px; perspective-origin:50% 47%;
+    user-select:none; -webkit-user-select:none; touch-action:none;
+  }
+  .stage.shake{animation:shake .42s cubic-bezier(.36,.07,.19,.97)}
+  @keyframes shake{
+    10%{transform:translate(-7px,3px) rotate(-.5deg)}
+    25%{transform:translate(6px,-4px) rotate(.45deg)}
+    40%{transform:translate(-5px,2px) rotate(-.3deg)}
+    60%{transform:translate(3px,-2px) rotate(.2deg)}
+    80%{transform:translate(-2px,1px)}
+    100%{transform:none}
+  }
+  .layer{
+    position:absolute; inset:0; width:100%; height:100%;
+    object-fit:contain; pointer-events:none;
+    transition:opacity .45s ease;
+  }
+  #shards{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+
+  /* the swinging bail, cut from the source render */
+  #handle{
+    position:absolute;
+    left:var(--spr-l); top:var(--spr-t); width:var(--spr-w); height:var(--spr-h);
+    transform-origin:50% var(--pivot);
+    transform:rotateX(var(--angle,180deg));
+    backface-visibility:visible;
+    opacity:0; pointer-events:none;
+    will-change:transform;
+  }
+  /* light catches the bail as it whips through the camera plane */
+  #glint{
+    position:absolute; left:30%; top:44%; width:52%; height:9%;
+    background:radial-gradient(ellipse at 50% 50%,rgba(255,255,255,.85),rgba(255,255,255,0) 70%);
+    opacity:0; pointer-events:none; filter:blur(6px);
+  }
+  #flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;mix-blend-mode:screen}
+
+  /* ---------- hit targets ---------- */
+  .hit{position:absolute;border:0;background:transparent;padding:0;cursor:pointer}
+  #hit-glass{left:26%;top:9%;width:62%;height:82%;border-radius:4px}
+  #hit-handle{left:32%;top:40%;width:46%;height:30%;cursor:grab}
+  #hit-handle:active{cursor:grabbing}
+  .hit:focus-visible{outline:2px solid var(--copper);outline-offset:3px}
+
+  /* ---------- prompt ---------- */
+  #prompt{
+    position:absolute; left:50%; bottom:-6px; transform:translateX(-50%);
+    font-size:11px; letter-spacing:.28em; text-transform:uppercase;
+    color:var(--copper); white-space:nowrap; pointer-events:none;
+    transition:opacity .3s ease;
+  }
+  #prompt::after{content:"";display:block;height:1px;margin-top:7px;background:currentColor;opacity:.45}
+  .pulse{animation:pulse 1.9s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:.45}50%{opacity:1}}
+
+  /* ---------- reveal ---------- */
+  #reveal{
+    width:min(560px,92vw); border:1px solid rgba(201,128,63,.35);
+    background:linear-gradient(180deg,rgba(201,128,63,.10),rgba(201,128,63,0));
+    padding:26px 24px; text-align:center; border-radius:2px;
+    opacity:0; transform:translateY(14px); transition:opacity .6s ease,transform .6s ease;
+  }
+  #reveal.on{opacity:1;transform:none}
+  #reveal h2{margin:0 0 8px;font-size:13px;letter-spacing:.26em;text-transform:uppercase;color:var(--copper)}
+  #reveal p{margin:0;font-size:14px;opacity:.7;max-width:42ch;margin-inline:auto}
+
+  /* ---------- dev controls ---------- */
+  .dev{display:flex;gap:14px;align-items:center;flex-wrap:wrap;justify-content:center;
+       font-size:12px;letter-spacing:.08em;opacity:.6}
+  .dev button{font:inherit;letter-spacing:.14em;text-transform:uppercase;color:var(--paper);
+       background:transparent;border:1px solid rgba(244,242,238,.28);padding:7px 14px;
+       border-radius:2px;cursor:pointer}
+  .dev button:hover{border-color:var(--copper);color:var(--copper)}
+  .dev label{display:flex;gap:8px;align-items:center}
+  .dev input[type=range]{width:170px;accent-color:var(--copper)}
+
+  @media (prefers-reduced-motion:reduce){
+    .stage.shake{animation:none}
+    .layer{transition-duration:.01ms}
+  }
+</style>
+</head>
+<body>
+
+<h1>Break glass — interaction prototype</h1>
+
+<div class="stage" id="stage">
+  <img class="layer" id="l-intact"  src="assets/01_intact.webp"      alt="Sealed emergency case behind glass" style="opacity:1">
+  <img class="layer" id="l-broken"  src="assets/02_broken.webp"      alt="" style="opacity:0">
+  <img class="layer" id="l-plate"   src="assets/06_plate_clean.webp" alt="" style="opacity:0">
+  <img class="layer" id="l-up"      src="assets/03_handle_up.webp"   alt="" style="opacity:0">
+  <img class="layer" id="l-down"    src="assets/05_handle_down.webp" alt="" style="opacity:0">
+  <img id="handle" src="assets/07_handle_sprite.webp" alt="">
+  <div id="glint"></div>
+  <canvas id="shards"></canvas>
+  <div id="flash"></div>
+
+  <button class="hit" id="hit-glass"  aria-label="Break the glass"></button>
+  <button class="hit" id="hit-handle" aria-label="Pull the handle down" hidden></button>
+
+  <div id="prompt" class="pulse">Tap to break</div>
+</div>
+
+<div id="reveal">
+  <h2>Access released</h2>
+  <p>Placeholder for whatever sits behind the glass — the off-market panel, the address field, the report.</p>
+</div>
+
+<div class="dev">
+  <button id="reset">Reset</button>
+  <label>scrub swing <input type="range" id="scrub" min="0" max="180" value="180" step="1"></label>
+  <label><input type="checkbox" id="sound" checked> sound</label>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const stage=$('stage'), handle=$('handle'), prompt=$('prompt'), flash=$('flash'),
+        glint=$('glint'), reveal=$('reveal'), cv=$('shards'), ctx=cv.getContext('2d');
+  const L={intact:$('l-intact'),broken:$('l-broken'),plate:$('l-plate'),up:$('l-up'),down:$('l-down')};
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  let state='sealed';            // sealed -> armed -> pulled
+  let angle=180;                 // 180 = bail up, 0 = bail down
+
+  /* ---------------- audio (synthesised, no assets) ---------------- */
+  let ac;
+  const on = () => $('sound').checked;
+  const actx = () => (ac ||= new (window.AudioContext||window.webkitAudioContext)());
+  function noise(dur,type,f,q,g0,g1){
+    const a=actx(), n=Math.floor(a.sampleRate*dur), b=a.createBuffer(1,n,a.sampleRate), d=b.getChannelData(0);
+    for(let i=0;i<n;i++) d[i]=(Math.random()*2-1)*(1-i/n);
+    const s=a.createBufferSource(); s.buffer=b;
+    const filt=a.createBiquadFilter(); filt.type=type; filt.frequency.value=f; filt.Q.value=q;
+    const g=a.createGain();
+    g.gain.setValueAtTime(g0,a.currentTime);
+    g.gain.exponentialRampToValueAtTime(Math.max(g1,1e-4),a.currentTime+dur);
+    s.connect(filt).connect(g).connect(a.destination); s.start();
+  }
+  function tone(f,dur,type='sine',vol=.2){
+    const a=actx(), o=a.createOscillator(), g=a.createGain();
+    o.type=type; o.frequency.setValueAtTime(f,a.currentTime);
+    o.frequency.exponentialRampToValueAtTime(f*.55,a.currentTime+dur);
+    g.gain.setValueAtTime(vol,a.currentTime);
+    g.gain.exponentialRampToValueAtTime(1e-4,a.currentTime+dur);
+    o.connect(g).connect(a.destination); o.start(); o.stop(a.currentTime+dur);
+  }
+  const sfxSmash = () => { if(!on())return;
+    noise(.5,'highpass',2600,1,.55,.001);
+    for(let i=0;i<11;i++) setTimeout(()=>tone(2200+Math.random()*4200,.10+Math.random()*.14,'triangle',.06),Math.random()*260);
+    tone(120,.28,'sine',.28);
+  };
+  const sfxSweep = () => { if(!on())return; noise(.22,'bandpass',900,2.5,.16,.001); };
+  const sfxClunk = () => { if(!on())return;
+    noise(.16,'lowpass',420,1,.42,.001); tone(78,.34,'sine',.36); setTimeout(()=>tone(1500,.05,'square',.10),40);
+  };
+
+  /* ---------------- glass shards ---------------- */
+  let parts=[], raf=0;
+  function sizeCanvas(){ const r=stage.getBoundingClientRect(); cv.width=r.width*devicePixelRatio; cv.height=r.height*devicePixelRatio; }
+  addEventListener('resize',sizeCanvas); sizeCanvas();
+
+  function spawn(px,py){
+    const w=cv.width, h=cv.height;
+    parts=[];
+    for(let i=0;i<130;i++){
+      const a=Math.random()*Math.PI*2, sp=(Math.random()**2)*9+1;
+      parts.push({
+        x:px*w+(Math.random()-.5)*w*.5, y:py*h+(Math.random()-.5)*h*.5,
+        vx:Math.cos(a)*sp*.6, vy:Math.sin(a)*sp*.6-2,
+        r:Math.random()*Math.PI, vr:(Math.random()-.5)*.4,
+        s:(2+Math.random()*8)*devicePixelRatio, life:1, dl:.006+Math.random()*.01
+      });
+    }
+    cancelAnimationFrame(raf); raf=requestAnimationFrame(step);
+  }
+  function step(){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    let alive=0;
+    for(const p of parts){
+      if(p.life<=0) continue; alive++;
+      p.vy+=.42; p.x+=p.vx; p.y+=p.vy; p.r+=p.vr; p.life-=p.dl;
+      ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.r);
+      ctx.globalAlpha=Math.max(p.life,0)*.9;
+      ctx.fillStyle=`rgba(233,239,244,${.35+Math.random()*.35})`;
+      ctx.beginPath(); ctx.moveTo(0,-p.s); ctx.lineTo(p.s*.7,p.s*.6); ctx.lineTo(-p.s*.6,p.s*.5); ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
+    if(alive) raf=requestAnimationFrame(step); else ctx.clearRect(0,0,cv.width,cv.height);
+  }
+
+  /* ---------------- phase 1: break ---------------- */
+  function setPrompt(t){ prompt.textContent=t; prompt.style.opacity=t?1:0; }
+
+  function breakGlass(ev){
+    if(state!=='sealed') return;
+    state='breaking';
+    $('hit-glass').hidden=true;
+    const r=stage.getBoundingClientRect();
+    const px=ev&&ev.clientX ? (ev.clientX-r.left)/r.width : .5;
+    const py=ev&&ev.clientY ? (ev.clientY-r.top)/r.height : .5;
+
+    sfxSmash();
+    stage.classList.add('shake'); setTimeout(()=>stage.classList.remove('shake'),440);
+    flash.style.transition='none'; flash.style.opacity=.5;
+    requestAnimationFrame(()=>{ flash.style.transition='opacity .3s ease'; flash.style.opacity=0; });
+
+    L.broken.style.opacity=1;
+    setPrompt('');
+    spawn(px,py);
+
+    // glass falls away, revealing the bail
+    setTimeout(()=>{
+      L.up.style.opacity=1;
+      L.broken.style.transition='opacity .7s ease';
+      L.broken.style.opacity=0;
+      L.intact.style.opacity=0;
+      spawn(.5,.72);
+      sfxSweep();
+    }, 880);          // let the shattered pane register before it falls away
+
+    setTimeout(()=>{
+      state='armed';
+      const h=$('hit-handle'); h.hidden=false;
+      setPrompt('Pull down'); prompt.classList.add('pulse');
+    }, 1640);
+  }
+
+  /* ---------------- phase 2: pull ---------------- */
+  function render(a){
+    angle=a;
+    handle.style.setProperty('--angle', a+'deg');
+    // the bail is edge-on at 90deg: flash a specular streak + blur to cover the cheat
+    const edge = 1 - Math.min(Math.abs(a-90)/48, 1);
+    glint.style.opacity = (edge*edge*0.9).toFixed(3);
+    handle.style.filter = edge>0 ? `blur(${(edge*3.5).toFixed(2)}px)` : 'none';
+  }
+
+  function armSprite(){                       // swap the still for the live sprite
+    if(handle.style.opacity==='1') return;
+    L.plate.style.opacity=1; handle.style.opacity=1;
+    requestAnimationFrame(()=>{ L.up.style.transition='opacity .12s linear'; L.up.style.opacity=0; });
+  }
+
+  function settle(){
+    state='pulled';
+    sfxClunk();
+    L.down.style.opacity=1;
+    setTimeout(()=>{ handle.style.opacity=0; glint.style.opacity=0; },140);
+    stage.classList.add('shake'); setTimeout(()=>stage.classList.remove('shake'),440);
+    prompt.classList.remove('pulse'); setPrompt('');
+    $('hit-handle').hidden=true;
+    setTimeout(()=>reveal.classList.add('on'),260);
+  }
+
+  function autoPull(from){
+    if(state==='pulling'||state==='pulled') return;
+    state='pulling'; armSprite();
+    const t0=performance.now(), dur=reduce?200:520, a0=from;
+    (function tick(now){
+      const p=Math.min((now-t0)/dur,1);
+      // ease-in (gravity takes it) then a hard stop
+      const e = p<.82 ? Math.pow(p/.82,1.7)*.97 : .97+(p-.82)/.18*.03;
+      render(a0*(1-e));
+      if(p<1) requestAnimationFrame(tick); else { render(0); settle(); }
+    })(t0);
+  }
+
+  // drag the bail down; a short tap pulls it for you
+  const hh=$('hit-handle');
+  let dragging=false, y0=0, a0=180, downAt=0, moved=false;
+
+  hh.addEventListener('pointerdown', e=>{
+    if(state!=='armed') return;
+    dragging=true; moved=false; downAt=performance.now();
+    y0=e.clientY; a0=angle;
+    armSprite(); prompt.classList.remove('pulse');
+    hh.setPointerCapture(e.pointerId);
+  });
+  hh.addEventListener('pointermove', e=>{
+    if(!dragging) return;
+    if(Math.abs(e.clientY-y0)>4) moved=true;
+    const travel=stage.getBoundingClientRect().height*0.26;  // full swing over ~26% of stage height
+    render(Math.max(0,Math.min(180, a0 - (e.clientY-y0)/travel*180)));
+  });
+  function springBack(){
+    const t0=performance.now(), from=angle;
+    (function back(now){
+      const p=Math.min((now-t0)/260,1);
+      render(from+(180-from)*(1-Math.pow(1-p,3)));
+      if(p<1) requestAnimationFrame(back);
+    })(t0);
+  }
+  function endDrag(){
+    if(!dragging) return;
+    dragging=false;
+    const tap = !moved && performance.now()-downAt<250;
+    if(tap || angle<115) autoPull(angle);     // tapped, or dragged past the tipping point
+    else springBack();
+  }
+  hh.addEventListener('pointerup',endDrag);
+  hh.addEventListener('pointercancel',endDrag);
+  hh.addEventListener('keydown', e=>{
+    if((e.key==='Enter'||e.key===' ') && state==='armed'){ e.preventDefault(); armSprite(); autoPull(180); }
+  });
+
+  $('hit-glass').addEventListener('click',breakGlass);
+  $('hit-glass').addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){e.preventDefault();breakGlass();} });
+
+  /* ---------------- dev ---------------- */
+  $('scrub').addEventListener('input',e=>{
+    state='armed'; $('hit-glass').hidden=true; $('hit-handle').hidden=false;
+    L.intact.style.opacity=0; L.broken.style.opacity=0; L.down.style.opacity=0;
+    armSprite(); render(+e.target.value);
+  });
+  $('reset').addEventListener('click',()=>{
+    state='sealed'; angle=180; parts=[]; ctx.clearRect(0,0,cv.width,cv.height);
+    for(const k in L){ L[k].style.transition='opacity .3s ease'; L[k].style.opacity = k==='intact'?1:0; }
+    handle.style.opacity=0; glint.style.opacity=0; handle.style.filter='none';
+    render(180); $('scrub').value=180;
+    $('hit-glass').hidden=false; $('hit-handle').hidden=true;
+    reveal.classList.remove('on');
+    setPrompt('Tap to break'); prompt.classList.add('pulse');
+  });
+
+  render(180);
+})();
+</script>
+</body>
+</html>
