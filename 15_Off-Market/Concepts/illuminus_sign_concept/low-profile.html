@@ -374,8 +374,9 @@ body{margin:0; background:#000; color:var(--ink); font-family:var(--sans);
 <div class="panel">
   <button id="replay">Replay</button>
   <button id="reseed">New flicker</button>
-  <button id="safe" aria-pressed="true">Flash-safe</button>
-  <button id="calm" aria-pressed="false">Reduced motion</button>
+  <button id="safe"  aria-pressed="true">Flash-safe</button>
+  <button id="sound" aria-pressed="false">Sound</button>
+  <button id="calm"  aria-pressed="false">Reduced motion</button>
   <span class="ctrl">Yaw <input id="yaw" type="range" min="0" max="70" value="40"><b id="yawV">40°</b></span>
   <span class="ctrl">Pitch <input id="pitch" type="range" min="0" max="45" value="13"><b id="pitchV">17°</b></span>
   <span class="spacer"></span>
@@ -538,6 +539,9 @@ function step(now){
     for(let i=0;i<ARROW_SEGS;i++){
       frame.style.setProperty("--s"+i,"1"); frame.style.setProperty("--sb"+i,"1");
     }
+    // A steady hum is not motion, so reduced-motion keeps it — but with no
+    // strikes, because there is nothing striking.
+    audio.frame(1, []);
     rPhase.textContent="reduced motion"; rLvl.textContent="100%";
     return;
   }
@@ -564,6 +568,7 @@ function step(now){
   const powered = lvl > 0.06;
   const ta = ((now - t0) % ARROW_CYCLE);
   const allOn = ARROW_SEGS*SEG_STEP + ARROW_HOLD;
+  const struck = [];                 // segments igniting THIS frame, for the audio
   for(let i=0;i<segState.length;i++){
     const age = ta - i*SEG_STEP;                 // ms since this tube struck
     const on  = powered && age >= 0 && ta < allOn;
@@ -578,10 +583,96 @@ function step(now){
     st.b += (s - st.b)*(1 - Math.exp(-win/tau));
     frame.style.setProperty("--s"+i,  s.toFixed(3));
     frame.style.setProperty("--sb"+i, st.b.toFixed(3));
+    const nowOn = s > 0.12;                       // rising edge = this tube struck
+    if(nowOn && !st.on) struck.push(i);
+    st.on = nowOn;
   }
+  audio.frame(lvl, struck);
 
   rPhase.textContent=phase; rLvl.textContent=Math.round(lvl*100)+"%";
 }
+
+/* ==========================================================================
+   SOUND (opt-in)
+
+   A magnetic ballast hums at TWICE mains — 100 Hz here — because the core
+   magnetostricts once per half-cycle, not once per cycle. It is a buzz, not a
+   tone: the waveform is rich in odd harmonics, so a sawtooth through a gentle
+   lowpass is closer than a sine. Gain follows the tube's emission, so the hum
+   dies with the light during a dropout.
+
+   Every strike also ticks: a burst of filtered noise. The main tube is a low,
+   heavy clack; each arrow segment is a quieter, brighter click, because it is
+   a smaller tube on a smaller supply. During a flicker burst those stack into
+   the stutter you actually hear from a failing sign.
+
+   All of it is wrapped so that a machine with no audio device can never break
+   the page — this concept is primarily something to look at.
+   ========================================================================== */
+const audio = (()=>{
+  let ctx=null, master=null, humG=null, h3G=null, on=false, wasLit=false;
+
+  function build(){
+    try{
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if(!AC) return false;
+      ctx = new AC();
+      master = ctx.createGain(); master.gain.value = 1; master.connect(ctx.destination);
+      // shave the top off the sawtooth so it buzzes rather than rasps
+      const lp = ctx.createBiquadFilter();
+      lp.type="lowpass"; lp.frequency.value=1800; lp.Q.value=0.7; lp.connect(master);
+      const mk=f=>{
+        const o=ctx.createOscillator(), v=ctx.createGain();
+        o.type="sawtooth"; o.frequency.value=f; v.gain.value=0;
+        o.connect(v).connect(lp); o.start(); return v;
+      };
+      humG = mk(RIPPLE_HZ);        // 100 Hz — twice mains
+      h3G  = mk(RIPPLE_HZ*3);      // odd harmonic, adds the rattle
+      return true;
+    }catch(e){ ctx=null; return false; }
+  }
+
+  /** one filtered-noise burst: freq = brightness, decay in samples */
+  function tick(freq, gain, decay){
+    if(!ctx) return;
+    try{
+      const len = Math.min(2048, decay*10);
+      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for(let i=0;i<len;i++) d[i] = (Math.random()*2-1)*Math.exp(-i/decay);
+      const src = ctx.createBufferSource(); src.buffer = buf;
+      const bp = ctx.createBiquadFilter();
+      bp.type="bandpass"; bp.frequency.value=freq; bp.Q.value=1.1;
+      const g = ctx.createGain(); g.gain.value = gain;
+      src.connect(bp).connect(g).connect(master); src.start();
+    }catch(e){/* no device — silently skip */}
+  }
+
+  return {
+    get on(){ return on; },
+    toggle(){
+      if(!ctx && !build()) return false;
+      if(ctx.state === "suspended") ctx.resume();   // needs the user gesture
+      on = !on;
+      if(!on){ humG.gain.value = 0; h3G.gain.value = 0; }
+      return on;
+    },
+    mute(){ if(ctx && on){ humG.gain.value=0; h3G.gain.value=0; } },
+    /** called once per frame: lvl = main tube emission, struck = segment indices that just fired */
+    frame(lvl, struck){
+      if(!on || !ctx) return;
+      const g = Math.max(0, lvl);
+      humG.gain.setTargetAtTime(0.030*g, ctx.currentTime, 0.02);
+      h3G .gain.setTargetAtTime(0.010*g, ctx.currentTime, 0.02);
+      const lit = lvl > 0.12;
+      if(lit && !wasLit) tick(2400, 0.16, 140);              // main tube: heavy clack
+      wasLit = lit;
+      for(const i of struck) tick(3100 + i*190, 0.05, 80);   // arrow: light click
+    }
+  };
+})();
+// a sign humming from a tab you cannot see is just noise
+document.addEventListener("visibilitychange", ()=>{ if(document.hidden) audio.mute(); });
 
 /* ---- controls ------------------------------------------------------------ */
 function restart(seed){
@@ -593,8 +684,11 @@ document.getElementById("reseed").onclick=()=>restart((Math.random()*1e9)|0);
 document.getElementById("safe").onclick=e=>{
   SAFE=!SAFE; e.currentTarget.setAttribute("aria-pressed",String(SAFE)); restart();
 };
+document.getElementById("sound").onclick=e=>
+  e.currentTarget.setAttribute("aria-pressed", String(audio.toggle()));
 document.getElementById("calm").onclick=e=>{
-  calm=!calm; e.currentTarget.setAttribute("aria-pressed",String(calm)); if(!calm) restart();
+  calm=!calm; e.currentTarget.setAttribute("aria-pressed",String(calm));
+  if(calm) audio.mute(); else restart();     // a static sign does not stutter
 };
 const yaw=document.getElementById("yaw"), pitch=document.getElementById("pitch");
 const yawV=document.getElementById("yawV"), pitchV=document.getElementById("pitchV");
