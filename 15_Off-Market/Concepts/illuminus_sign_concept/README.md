@@ -6,6 +6,7 @@ Two versions:
 |---|---|
 | **Wall sign** — the tight pill, closest to the current CTA | [index.html](https://vm.fieldsestate.com.au/concepts/off-market/illuminus_sign_concept/index.html) |
 | **Roadside pylon** — marquee cabinet on posts, with chase bulbs | [roadside.html](https://vm.fieldsestate.com.au/concepts/off-market/illuminus_sign_concept/roadside.html) |
+| **Low monument** — long slab ~1 m up, seen from the left at 40° | [low-profile.html](https://vm.fieldsestate.com.au/concepts/off-market/illuminus_sign_concept/low-profile.html) |
 
 Both run the same discharge engine and the same three-swells-then-flicker
 sequence. The roadside version adds a second, physically different emitter —
@@ -219,6 +220,43 @@ Two things worth knowing about it: the cabinet is **squarer than a real pylon**
 to stay legible in a scroll deck, so the CTA is set over three lines), and the
 `FIELDS` plate settles a beat *before* the main tube, which is how a genuine
 multi-circuit sign wakes up.
+
+---
+
+## Low monument
+
+`low-profile.html` — an elongated rounded slab about a metre off the ground on
+two short legs, lighting the ground beneath it. Built to Will's brief: camera
+left of centre, slightly above, ~40° off the face, close enough to a level view
+that the narrow **top surface** reads as a surface rather than an edge. CTA text
+only — no `FIELDS` plate.
+
+This is the only version that is a genuine 3D object rather than a flat panel:
+a slab with a front face, a top, a left end cap and a back, assembled from CSS
+transforms and lit as one. Same discharge engine as the other two.
+
+**Camera is adjustable in the panel** — yaw and pitch sliders, reading out in
+degrees. Defaults are 40° / 13°. Dial it to what you actually pictured and tell
+me the numbers rather than describing it.
+
+Three things that only matter once the sign is a solid:
+
+- **The top surface is the brightest non-emitting part of the sign.** It sits
+  millimetres from the tube and faces up into its spill, so its front lip is
+  near-white while its back edge falls to bare metal. Getting that gradient
+  right is what makes the slab read as having thickness.
+- **The SVG tube path is built from `offsetWidth/offsetHeight`, not
+  `getBoundingClientRect`.** On a 3D-rotated element the rect returns the
+  screen-space bounding box, which is not the face's geometry — using it warps
+  the tube as the camera moves.
+- **A shallow pitch makes a large ground plane useless.** Viewed ~13° from
+  edge-on, a big horizontal plane projects into a skewed smear that wanders off
+  frame. The dark ground and the light pool are therefore separate planes, and
+  the pool is small and pinned to the sign so it cannot drift.
+
+Open: the sign's proportions (currently 4.4:1) and exactly how much top surface
+shows are both guesses at Will's mental picture. A reference image would settle
+both faster than another round of description.
 
 ---
 
