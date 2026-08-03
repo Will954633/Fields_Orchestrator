@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Illuminus Button — neon CTA, no scene</title>
+<style>
+/* ============================================================================
+   ILLUMINUS BUTTON — the neon tube and the words, and nothing else.
+
+   Strips everything that made low-profile.html read as a picture rather than a
+   control: no posts, no ground, no sky, no arrow, no perspective. What is left
+   is a flat, page-aligned pill at the size of an actual CTA.
+
+   Deliberate choices, all of them affordance rather than aesthetics:
+     - AXIS-ALIGNED. Nothing else on the site sits at an angle; rotated things
+       read as decoration.
+     - BUTTON-SIZED, not hero-sized. It should look like it belongs to the
+       page, not like a photograph placed on it.
+     - RESTRAINED LENS. No vignette, no glare, minimal grain — those are camera
+       artefacts, and a camera implies a photograph.
+     - STATIC AFFORDANCE. Most of this deck's traffic is phones, where hover
+       does not exist, so it has to read as pressable while doing nothing.
+
+   Discharge physics is identical to index.html — same engine, no scene.
+   ========================================================================== */
+:root{
+  --ink:#E6DDD2; --muted:#8C8177;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --gas:#F0793E; --gas-deep:#B2401A; --gas-cold:#FF9A7A;
+  --glass:#5C6157;          /* unlit tube: pale grey-green, always present */
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0; background:#000; color:var(--ink); font-family:var(--sans);
+  -webkit-font-smoothing:antialiased; display:grid; grid-template-rows:1fr auto; overflow:hidden}
+
+.stage{position:relative; display:grid; place-items:center; background:#000; overflow:hidden}
+
+/* Wall bounce. Kept because a neon tube genuinely lights what is behind it,
+   but small and soft — a big atmospheric wash starts rebuilding the "scene". */
+.bounce{
+  position:absolute; inset:0; pointer-events:none;
+  background:radial-gradient(30% 22% at 50% 50%,
+    rgb(240 121 62 / calc(.16 * var(--bloom,0))) 0%,
+    rgb(178 64 26  / calc(.07 * var(--bloom,0))) 42%, transparent 72%);
+}
+/* Just enough noise to stop the bounce banding on 8-bit panels. */
+.grain{
+  position:absolute; inset:0; pointer-events:none; mix-blend-mode:overlay; opacity:.045;
+  background-image:url("data:image/svg+xml;utf8,\
+<svg xmlns='http://www.w3.org/2000/svg' width='150' height='150'>\
+<filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3'/>\
+<feColorMatrix type='saturate' values='0'/></filter>\
+<rect width='150' height='150' filter='url(%23n)'/></svg>");
+}
+
+/* ---- the button ---------------------------------------------------------- */
+.btn{
+  position:relative; z-index:2;
+  display:inline-grid; place-items:center;
+  padding:clamp(1.5rem,4vw,2rem) clamp(2.6rem,7vw,3.6rem);
+  border-radius:999px;
+  text-decoration:none; cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+  /* the panel behind the tube, lit by it — same inset falloff as the sign */
+  background:linear-gradient(#101114,#0B0C0F 55%,#08090B);
+  box-shadow:
+    inset 0 0 calc(4px  + 3px  * var(--bloom,0)) rgb(255 214 180 / calc(.50 * var(--lvl,0))),
+    inset 0 0 calc(14px + 10px * var(--bloom,0)) rgb(240 121 62  / calc(.36 * var(--lvl,0))),
+    inset 0 0 calc(44px + 28px * var(--bloom,0)) rgb(200 82  35  / calc(.20 * var(--lvl,0))),
+    inset 0 0 60px rgb(0 0 0/.8);
+  transition:transform .18s cubic-bezier(.2,.7,.2,1), filter .18s ease;
+}
+.btn:hover{transform:translateY(-2px); filter:brightness(1.12)}
+.btn:active{transform:translateY(1px) scale(.995); filter:brightness(.95)}
+.btn:focus-visible{outline:2px solid var(--gas); outline-offset:10px}
+
+/* ---- the tube ------------------------------------------------------------
+   A neon tube is a CYLINDER of glass: seen head-on the centre line is blown
+   out to white and falls off across the tube's width to saturated gas at the
+   walls. So the stack is a cross-section, not "line plus blur". Widths all
+   derive from --tube, so a fatter tube is a one-number change.             */
+.frame{position:absolute; inset:0; overflow:visible; pointer-events:none; --tube:12px}
+.frame path{fill:none; stroke-linecap:round; stroke-linejoin:round}
+.t-glass{stroke:var(--glass); stroke-width:var(--tube); opacity:.32}
+.t-bloom{stroke:var(--gas-deep); stroke-width:calc(var(--tube)*2.5); filter:blur(18px);
+  opacity:calc(.52 * var(--bloom,0) * (1 - .65 * var(--warm,0)))}
+.t-halo {stroke:var(--gas); stroke-width:calc(var(--tube)*1.6);  filter:blur(9px);
+  opacity:calc(.80 * var(--lvl,0))}
+.t-body {stroke:var(--gas); stroke-width:var(--tube);            filter:blur(2.3px);
+  opacity:calc(.95 * var(--lvl,0))}
+.t-inner{stroke:#FFC89C;   stroke-width:calc(var(--tube)*.60);   filter:blur(1.4px);
+  opacity:calc(.95 * var(--lvl,0))}
+.t-core {stroke:#FFFFFF;   stroke-width:calc(var(--tube)*.30);   filter:blur(.55px);
+  opacity:calc(1 * var(--lvl,0))}
+
+/* ---- lettering ----
+   Two stacked copies: .glass is the unlit tube and never changes, .lit is the
+   discharge. Transparent fill with a stroke, because neon letters are bent
+   tube, not filled shapes. Blown out to pure white — the brightness has to
+   come from the glow, not from the weight of the stroke. */
+.word{display:grid; place-items:center; position:relative; z-index:1}
+.word > span{
+  grid-area:1/1; white-space:nowrap; text-align:center;
+  font-size:clamp(1.05rem,2.7vw,1.45rem); font-weight:600;
+  letter-spacing:.13em; text-transform:uppercase; line-height:1.25;
+  /* 2px, not the sign's 1.25px. The tube is brilliant because it has real
+     emitting AREA — a full-diameter body stroke in saturated gas. Hollow text
+     has only its outline, so at this size the outline has to carry more weight
+     or the letters read grey next to the frame. */
+  color:transparent; -webkit-text-stroke:2px var(--glass);
+}
+.glass{-webkit-text-stroke-color:rgb(92 97 87 / .45)}
+/* Radii stay generous. Tightening them to "match the type size" is exactly
+   wrong for stroke-only text: the glow has to be substantially wider than the
+   stroke to be visible OUTSIDE it, and narrow radii just get buried under the
+   outline. Wider and brighter, not tighter. */
+.lit{
+  -webkit-text-stroke-color:rgb(255 255 255 / calc(1 * var(--lvl,0)));
+  text-shadow:
+    0 0 calc(2px  + 1px  * var(--bloom,0)) rgb(255 255 255 / calc(1   * var(--lvl,0))),
+    0 0 calc(4px  + 2px  * var(--bloom,0)) rgb(255 244 230 / calc(1   * var(--lvl,0))),
+    0 0 calc(9px  + 5px  * var(--bloom,0)) rgb(255 186 128 / calc(1   * var(--lvl,0))),
+    0 0 calc(18px + 12px * var(--bloom,0)) rgb(240 121 62  / calc(.95 * var(--lvl,0))),
+    0 0 calc(36px + 24px * var(--bloom,0)) rgb(232 104 46  / calc(.62 * var(--bloom,0))),
+    0 0 calc(68px + 46px * var(--bloom,0)) rgb(178 64 26   / calc(.36 * var(--bloom,0) * (1 - .6 * var(--warm,0))));
+}
+
+.hint{position:absolute; left:0; right:0; bottom:clamp(1rem,5vh,2.4rem); margin:0;
+  text-align:center; font-size:.66rem; letter-spacing:.16em; text-transform:uppercase;
+  color:var(--muted); pointer-events:none}
+
+/* ---- panel --------------------------------------------------------------- */
+.panel{display:flex; flex-wrap:wrap; align-items:center; gap:.55rem;
+  padding:.8rem clamp(1rem,4vw,2rem) 1rem;
+  border-top:1px solid rgb(230 221 210/.09); background:#050403}
+.panel button{font:inherit; font-size:.74rem; letter-spacing:.1em; text-transform:uppercase;
+  color:#CABEB0; background:transparent; border:1px solid rgb(230 221 210/.18);
+  border-radius:999px; padding:.48rem .95rem; cursor:pointer;
+  transition:border-color .2s,color .2s,background .2s}
+.panel button:hover{border-color:var(--gas); color:var(--gas)}
+.panel button[aria-pressed="true"]{border-color:var(--gas); color:var(--gas);
+  background:rgb(240 121 62/.10)}
+.spacer{flex:1 1 1rem}
+.readout{font-size:.68rem; letter-spacing:.09em; text-transform:uppercase;
+  color:var(--muted); font-variant-numeric:tabular-nums}
+.readout b{color:#CABEB0}
+
+@media (prefers-reduced-motion:reduce){ .btn{transition:none} }
+</style>
+</head>
+<body>
+
+<main class="stage">
+  <div class="bounce"></div>
+  <div class="grain"></div>
+  <a class="btn" id="btn" href="#build-strategy">
+    <svg class="frame" id="frame" aria-hidden="true"></svg>
+    <span class="word">
+      <span class="glass" aria-hidden="true">Start building</span>
+      <span class="lit">Start building</span>
+    </span>
+  </a>
+  <p class="hint">Illuminus &middot; button</p>
+</main>
+
+<div class="panel">
+  <button id="replay">Replay</button>
+  <button id="reseed">New flicker</button>
+  <button id="safe"  aria-pressed="true">Flash-safe</button>
+  <button id="sound" aria-pressed="false">Sound</button>
+  <button id="calm"  aria-pressed="false">Reduced motion</button>
+  <span class="spacer"></span>
+  <span class="readout">Phase <b id="r-phase">—</b> &nbsp; Emission <b id="r-lvl">0%</b></span>
+</div>
+
+<script>
+"use strict";
+/* ==========================================================================
+   Discharge engine — identical to index.html / low-profile.html. In short: a
+   neon tube switches in microseconds with no afterglow, so the tube edge is a
+   hard step and only the halo lags; and every frame is the 1 kHz time-integral
+   of emission across that frame, so the 100 Hz mains ripple cannot alias into
+   a 20 Hz strobe at 60 fps. Full notes in README.md.
+   ========================================================================== */
+const MAINS_HZ=50, RIPPLE_HZ=MAINS_HZ*2, RIPPLE_DEPTH=0.14;
+const RIPPLE_NORM=1/(1-RIPPLE_DEPTH/2);
+const SUB_MS=1, TAU_ATTACK=12, TAU_RELEASE=55;
+const PULSES=3, PULSE_MS=1150, PULSE_FLOOR=0.30;
+/* Longer hold than the other concepts: this one is pretending to be a button,
+   so it should spend most of its life simply lit rather than performing. */
+const DARK_MS=420, HOLD_MS=5200, REST_MS=700;
+const SAFE_MIN_STRIKE_GAP=340;
+let SAFE=true;
+
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function buildTake(seed){
+  const rnd=mulberry32(seed); const seg=[]; let t=0;
+  const push=(d,o)=>{seg.push(Object.assign({t0:t,t1:t+d},o)); t+=d;};
+  push(DARK_MS,{kind:"dark",phase:"dark"});
+  for(let i=0;i<PULSES;i++) push(PULSE_MS,{kind:"pulse",phase:"pulse "+(i+1)+"/"+PULSES});
+  const n=7+Math.floor(rnd()*4);
+  for(let i=0;i<n;i++){
+    const last=i===n-1;
+    push(rnd()<0.22?180+rnd()*260:14+rnd()*95,{kind:"off",phase:"flicker"});
+    if(rnd()<0.55) push(5+rnd()*16,{kind:"partial",a:0.18+rnd()*0.28,phase:"flicker"});
+    let on=last?240+rnd()*120:28+rnd()*190;
+    if(SAFE) on=Math.max(on,SAFE_MIN_STRIKE_GAP);
+    push(on,{kind:"on",a:0.86+rnd()*0.14,ph:rnd()*6.283,phase:"flicker"});
+  }
+  push(HOLD_MS,{kind:"steady",phase:"steady"});
+  push(REST_MS,{kind:"dark",phase:"dark"});
+  return {seg,total:t,seed};
+}
+function ripple(t){
+  const ph=2*Math.PI*RIPPLE_HZ*(t/1000);
+  return (1-RIPPLE_DEPTH*(0.5-0.5*Math.cos(ph)))*RIPPLE_NORM;
+}
+function emit(take,t){
+  const T=take.total; t=((t%T)+T)%T;
+  let s=take.seg[take.seg.length-1];
+  for(let i=0;i<take.seg.length;i++){ if(t<take.seg[i].t1){ s=take.seg[i]; break; } }
+  const u=(t-s.t0)/(s.t1-s.t0);
+  switch(s.kind){
+    case "dark":    return {a:0,warm:0,phase:s.phase};
+    case "off":     return {a:0,warm:1,phase:s.phase};
+    case "partial": return {a:s.a,warm:1,phase:s.phase};
+    case "pulse":{
+      const a=PULSE_FLOOR+(1-PULSE_FLOOR)*Math.sin(Math.PI*u)**2;
+      return {a:Math.min(1,a*ripple(t)),warm:(1-a)*0.35,phase:s.phase};
+    }
+    case "on":{
+      const age=t-s.t0;
+      const wob=1+0.13*Math.sin(2*Math.PI*62*(age/1000)+s.ph)*Math.exp(-age/22);
+      return {a:Math.min(1,s.a*wob*ripple(t)),warm:0.25*Math.exp(-age/60),phase:s.phase};
+    }
+    case "steady":{
+      const drift=1+0.012*Math.sin(t/730)+0.007*Math.sin(t/271);
+      return {a:Math.min(1,ripple(t)*drift),warm:0,phase:s.phase};
+    }
+  }
+  return {a:0,warm:0,phase:"dark"};
+}
+
+/* ---- sound (opt-in) ------------------------------------------------------
+   A magnetic ballast hums at TWICE mains — 100 Hz — because the core
+   magnetostricts once per half-cycle. Sawtooth through a lowpass, because the
+   real thing is rich in odd harmonics. Every strike ticks. Wrapped so a
+   machine with no audio device can never break a page that is mainly visual. */
+const audio=(()=>{
+  let ctx=null,master=null,humG=null,h3G=null,on=false,wasLit=false;
+  function build(){
+    try{
+      const AC=window.AudioContext||window.webkitAudioContext; if(!AC) return false;
+      ctx=new AC();
+      master=ctx.createGain(); master.gain.value=1; master.connect(ctx.destination);
+      const lp=ctx.createBiquadFilter();
+      lp.type="lowpass"; lp.frequency.value=1800; lp.Q.value=0.7; lp.connect(master);
+      const mk=f=>{const o=ctx.createOscillator(),v=ctx.createGain();
+        o.type="sawtooth"; o.frequency.value=f; v.gain.value=0;
+        o.connect(v).connect(lp); o.start(); return v;};
+      humG=mk(RIPPLE_HZ); h3G=mk(RIPPLE_HZ*3);
+      return true;
+    }catch(e){ ctx=null; return false; }
+  }
+  function tick(freq,gain,decay){
+    if(!ctx) return;
+    try{
+      const len=Math.min(2048,decay*10);
+      const buf=ctx.createBuffer(1,len,ctx.sampleRate), d=buf.getChannelData(0);
+      for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.exp(-i/decay);
+      const src=ctx.createBufferSource(); src.buffer=buf;
+      const bp=ctx.createBiquadFilter(); bp.type="bandpass"; bp.frequency.value=freq; bp.Q.value=1.1;
+      const g=ctx.createGain(); g.gain.value=gain;
+      src.connect(bp).connect(g).connect(master); src.start();
+    }catch(e){}
+  }
+  return {
+    get on(){return on;},
+    toggle(){
+      if(!ctx && !build()) return false;
+      if(ctx.state==="suspended") ctx.resume();
+      on=!on; if(!on){humG.gain.value=0; h3G.gain.value=0;}
+      return on;
+    },
+    mute(){ if(ctx&&on){humG.gain.value=0; h3G.gain.value=0;} },
+    frame(lvl){
+      if(!on||!ctx) return;
+      const g=Math.max(0,lvl);
+      humG.gain.setTargetAtTime(0.030*g,ctx.currentTime,0.02);
+      h3G .gain.setTargetAtTime(0.010*g,ctx.currentTime,0.02);
+      const lit=lvl>0.12;
+      if(lit&&!wasLit) tick(2400,0.16,140);
+      wasLit=lit;
+    }
+  };
+})();
+document.addEventListener("visibilitychange",()=>{ if(document.hidden) audio.mute(); });
+
+/* ---- driver -------------------------------------------------------------- */
+const root=document.documentElement;
+const btn=document.getElementById("btn");
+const frame=document.getElementById("frame");
+const rPhase=document.getElementById("r-phase"), rLvl=document.getElementById("r-lvl");
+
+let take=buildTake(20260803);
+let t0=performance.now(), prevT=0, bloom=0, warmS=0;
+let calm=matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* Tube path from the button's own layout box. offsetWidth/offsetHeight, not
+   getBoundingClientRect — the rect includes any transform (the hover lift),
+   which would make the tube twitch on hover. */
+function drawFrame(){
+  const w=btn.offsetWidth, h=btn.offsetHeight;
+  if(!w||!h) return;
+  // 14px, not the sign's 22 — on a 350px pill a wide gap stops reading as a
+  // tube end and starts reading as a break in the shape.
+  const rad=h/2, gap=14;
+  const d=[`M ${w/2-gap/2} ${h}`,`H ${rad}`,`A ${rad} ${rad} 0 0 1 0 ${h-rad}`,
+    `V ${rad}`,`A ${rad} ${rad} 0 0 1 ${rad} 0`,`H ${w-rad}`,
+    `A ${rad} ${rad} 0 0 1 ${w} ${rad}`,`V ${h-rad}`,
+    `A ${rad} ${rad} 0 0 1 ${w-rad} ${h}`,`H ${w/2+gap/2}`].join(" ");
+  frame.setAttribute("viewBox",`0 0 ${w} ${h}`);
+  // Tube gap at bottom centre is kept — real tube has two ends — but the leads
+  // and transformer housing are dropped. They hang below the shape and start
+  // rebuilding the "object in a world" read this version exists to avoid.
+  frame.innerHTML=`
+    <path class="t-glass" d="${d}"/>
+    <path class="t-bloom" d="${d}"/><path class="t-halo" d="${d}"/>
+    <path class="t-body"  d="${d}"/>
+    <path class="t-inner" d="${d}"/><path class="t-core" d="${d}"/>`;
+}
+
+function step(now){
+  requestAnimationFrame(step);
+  if(calm){
+    root.style.setProperty("--lvl","1");
+    root.style.setProperty("--bloom","1");
+    root.style.setProperty("--warm","0");
+    audio.frame(1);
+    rPhase.textContent="reduced motion"; rLvl.textContent="100%";
+    return;
+  }
+  const t=now-t0;
+  const win=Math.min(t-prevT,120);
+  const steps=Math.max(1,Math.round(win/SUB_MS)), dt=win/steps;
+  let sum=0,warmSum=0,phase="";
+  for(let i=0;i<steps;i++){
+    const e=emit(take,prevT+dt*(i+0.5));
+    sum+=e.a; warmSum+=e.warm; phase=e.phase;
+    const tau=e.a>bloom?TAU_ATTACK:TAU_RELEASE;
+    bloom+=(e.a-bloom)*(1-Math.exp(-dt/tau));
+  }
+  prevT=t;
+  const lvl=sum/steps;
+  warmS+=(warmSum/steps-warmS)*0.25;
+  root.style.setProperty("--lvl",lvl.toFixed(4));
+  root.style.setProperty("--bloom",bloom.toFixed(4));
+  root.style.setProperty("--warm",warmS.toFixed(4));
+  audio.frame(lvl);
+  rPhase.textContent=phase; rLvl.textContent=Math.round(lvl*100)+"%";
+}
+
+/* ---- controls ------------------------------------------------------------ */
+function restart(seed){
+  take=buildTake(seed===undefined?take.seed:seed);
+  t0=performance.now(); prevT=0; bloom=0; warmS=0;
+}
+document.getElementById("replay").onclick=()=>restart();
+document.getElementById("reseed").onclick=()=>restart((Math.random()*1e9)|0);
+document.getElementById("safe").onclick=e=>{
+  SAFE=!SAFE; e.currentTarget.setAttribute("aria-pressed",String(SAFE)); restart();
+};
+document.getElementById("sound").onclick=e=>
+  e.currentTarget.setAttribute("aria-pressed",String(audio.toggle()));
+document.getElementById("calm").onclick=e=>{
+  calm=!calm; e.currentTarget.setAttribute("aria-pressed",String(calm));
+  if(calm) audio.mute(); else restart();
+};
+btn.addEventListener("click",e=>{e.preventDefault(); restart();});
+
+new ResizeObserver(drawFrame).observe(btn);
+addEventListener("resize",drawFrame);
+drawFrame();
+requestAnimationFrame(step);
+</script>
+</body>
+</html>
