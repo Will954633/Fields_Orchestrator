@@ -209,19 +209,31 @@ body{margin:0; background:#000; color:var(--ink); font-family:var(--sans);
 }
 
 /* ---- tube + lettering, both in the face's own local space ---------------- */
-.frame{position:absolute; inset:0; overflow:visible; pointer-events:none}
+.frame{position:absolute; inset:0; overflow:visible; pointer-events:none;
+  --tube:15px;      /* GLASS DIAMETER — every layer below derives from it */
+}
 .frame path,.frame line{fill:none; stroke-linecap:round; stroke-linejoin:round}
-.t-glass{stroke:var(--glass); stroke-width:5; opacity:.42}
-/* Tighter and more saturated than before. A wide, weakly-saturated blur reads
-   as brown haze; a narrow, strongly-saturated one reads as light. */
-.t-outer{stroke:var(--gas-deep); stroke-width:17; filter:blur(13px);
-  opacity:calc(.62 * var(--bloom,0) * (1 - .65 * var(--warm,0)))}
-.t-mid  {stroke:var(--gas); stroke-width:9;  filter:blur(5px);   opacity:calc(.9 * var(--lvl,0))}
-.t-near {stroke:var(--gas); stroke-width:4.6;filter:blur(1.8px); opacity:calc(.96 * var(--lvl,0))}
-/* The core is the glass itself and is blown out — at night your eye cannot
-   resolve colour in it, so it is white, not orange. */
-.t-core {stroke:#FFFFFF; stroke-width:1.9; filter:blur(.4px); opacity:calc(1 * var(--lvl,0))}
-.t-elec {stroke:var(--gas-cold); stroke-width:8.5; filter:blur(5px); opacity:calc(.75 * var(--lvl,0))}
+
+/* A neon tube is a CYLINDER of glass, and that is the whole trick to making it
+   read as round instead of as a drawn line. Seen head-on, the centre line is
+   blown out to white and the brightness falls off across the tube's width to
+   the saturated gas colour at the glass walls. So the stack is not "line plus
+   blur" — it is a cross-section: body at full diameter, a hotter band at ~60%,
+   a white core at ~30%, with the halo and bloom outside it. Widths are all
+   multiples of --tube, so a fatter tube is a one-number change. */
+.t-glass{stroke:var(--glass); stroke-width:var(--tube); opacity:.32}
+.t-bloom{stroke:var(--gas-deep); stroke-width:calc(var(--tube)*2.5); filter:blur(21px);
+  opacity:calc(.52 * var(--bloom,0) * (1 - .65 * var(--warm,0)))}
+.t-halo {stroke:var(--gas); stroke-width:calc(var(--tube)*1.6);  filter:blur(11px);
+  opacity:calc(.80 * var(--lvl,0))}
+.t-body {stroke:var(--gas); stroke-width:var(--tube);            filter:blur(2.6px);
+  opacity:calc(.95 * var(--lvl,0))}
+.t-inner{stroke:#FFC89C;   stroke-width:calc(var(--tube)*.60);   filter:blur(1.6px);
+  opacity:calc(.95 * var(--lvl,0))}
+.t-core {stroke:#FFFFFF;   stroke-width:calc(var(--tube)*.30);   filter:blur(.6px);
+  opacity:calc(1 * var(--lvl,0))}
+.t-elec {stroke:var(--gas-cold); stroke-width:calc(var(--tube)*.95); filter:blur(6px);
+  opacity:calc(.70 * var(--lvl,0))}
 .lead   {stroke:#2A2724; stroke-width:2; opacity:.9}
 .housing{fill:#141210; stroke:#2A2724; stroke-width:1}
 
@@ -231,12 +243,33 @@ body{margin:0; background:#000; color:var(--ink); font-family:var(--sans);
    travel looks stepped rather than smooth, and why each step arrives instantly.
    Each <g class="seg"> is one tube and carries its own --s (emission) and --sb
    (halo), set per frame from the same discharge model as the border.        */
-.a-glass{stroke:var(--glass); stroke-width:4.2; opacity:.34}
-.a-outer{stroke:var(--gas-deep); stroke-width:15;  filter:blur(11px);
-  opacity:calc(.60 * var(--sb,0))}
-.a-mid  {stroke:var(--gas); stroke-width:8;   filter:blur(4.5px); opacity:calc(.90 * var(--s,0))}
-.a-near {stroke:var(--gas); stroke-width:4.2; filter:blur(1.5px); opacity:calc(.96 * var(--s,0))}
-.a-core {stroke:#FFFFFF;    stroke-width:1.8; filter:blur(.4px);  opacity:calc(1 * var(--s,0))}
+/* Same cross-section treatment, on a thinner tube than the border — the arrow
+   is a secondary element and should not compete with the frame.
+
+   Paths are ordered BY LAYER across all segments (every bloom, then every
+   halo, ... then every core) rather than segment-by-segment. Stacking whole
+   segments meant the next segment's wide dark bloom painted over the previous
+   segment's white core, punching a visible notch at every join — it read as
+   gaps in the tube even though the geometry overlaps by 4px. Each path is
+   tagged with its segment index and picks up that segment's level below. */
+.frame{--atube:8.5px}
+.frame [data-seg="0"]{--s:var(--s0,0); --sb:var(--sb0,0)}
+.frame [data-seg="1"]{--s:var(--s1,0); --sb:var(--sb1,0)}
+.frame [data-seg="2"]{--s:var(--s2,0); --sb:var(--sb2,0)}
+.frame [data-seg="3"]{--s:var(--s3,0); --sb:var(--sb3,0)}
+.frame [data-seg="4"]{--s:var(--s4,0); --sb:var(--sb4,0)}
+.frame [data-seg="5"]{--s:var(--s5,0); --sb:var(--sb5,0)}
+.a-glass{stroke:var(--glass); stroke-width:var(--atube); opacity:.30}
+.a-bloom{stroke:var(--gas-deep); stroke-width:calc(var(--atube)*2.5); filter:blur(13px);
+  opacity:calc(.58 * var(--sb,0))}
+.a-halo {stroke:var(--gas); stroke-width:calc(var(--atube)*1.6);  filter:blur(6.5px);
+  opacity:calc(.82 * var(--s,0))}
+.a-body {stroke:var(--gas); stroke-width:var(--atube);            filter:blur(1.9px);
+  opacity:calc(.95 * var(--s,0))}
+.a-inner{stroke:#FFC89C;   stroke-width:calc(var(--atube)*.60);   filter:blur(1.1px);
+  opacity:calc(.95 * var(--s,0))}
+.a-core {stroke:#FFFFFF;   stroke-width:calc(var(--atube)*.32);   filter:blur(.5px);
+  opacity:calc(1 * var(--s,0))}
 
 /* Lifted off centre to leave the lower third of the face for the arrow. */
 .word{display:grid; place-items:center; position:relative; z-index:1;
@@ -434,7 +467,7 @@ const ARROW_SHAFT_SEGS = 5;
 const ARROW_SEGS = ARROW_SHAFT_SEGS + 1;      // + the head
 const SEG_STEP = 130, ARROW_HOLD = 620, ARROW_GAP = 320;
 const ARROW_CYCLE = ARROW_SEGS*SEG_STEP + ARROW_HOLD + ARROW_GAP;
-let arrowSegEls = [], segState = [];
+let segState = [];   /* per-segment halo state; levels go to --s0..--s5 on .frame */
 /* fixed per-segment phase so each tube's strike wobble differs but is stable */
 const SEG_PHASE = Array.from({length:ARROW_SEGS}, (_,i) => (i*2.399) % 6.283);
 
@@ -468,6 +501,7 @@ function arrowSegments(w,h){
 function drawFrame(){
   const w=face.offsetWidth, h=face.offsetHeight;
   if(!w||!h) return;
+  const aSegs = arrowSegments(w,h);
   const rad=Math.min(h/2,h/2), gap=26;
   const d=[`M ${w/2-gap/2} ${h}`,`H ${rad}`,`A ${rad} ${rad} 0 0 1 0 ${h-rad}`,
     `V ${rad}`,`A ${rad} ${rad} 0 0 1 ${rad} 0`,`H ${w-rad}`,
@@ -476,24 +510,22 @@ function drawFrame(){
   const L=w/2-gap/2, R=w/2+gap/2;
   frame.setAttribute("viewBox",`0 0 ${w} ${h}`);
   frame.innerHTML=`
-    <path class="t-glass" d="${d}"/><path class="t-outer" d="${d}"/>
-    <path class="t-mid" d="${d}"/><path class="t-near" d="${d}"/>
+    <path class="t-glass" d="${d}"/>
+    <path class="t-bloom" d="${d}"/><path class="t-halo" d="${d}"/>
+    <path class="t-body"  d="${d}"/>
     <line class="t-elec" x1="${L-16}" y1="${h}" x2="${L}" y2="${h}"/>
     <line class="t-elec" x1="${R}" y1="${h}" x2="${R+16}" y2="${h}"/>
-    <path class="t-core" d="${d}"/>
+    <path class="t-inner" d="${d}"/><path class="t-core" d="${d}"/>
     <line class="lead" x1="${L}" y1="${h}" x2="${L}" y2="${h+10}"/>
     <line class="lead" x1="${R}" y1="${h}" x2="${R}" y2="${h+10}"/>
     <rect class="housing" x="${L-4}" y="${h+8}" width="${gap+8}" height="7" rx="2"/>
-    ${arrowSegments(w,h).map(d =>
+    ${aSegs.map(d =>
       // unlit glass first so an extinguished segment is still a visible tube
       `<path class="a-glass" d="${d}"/>`).join("")}
-    ${arrowSegments(w,h).map(d =>
-      `<g class="seg">
-         <path class="a-outer" d="${d}"/><path class="a-mid" d="${d}"/>
-         <path class="a-near"  d="${d}"/><path class="a-core" d="${d}"/>
-       </g>`).join("")}`;
-  arrowSegEls = [...frame.querySelectorAll(".seg")];
-  segState = arrowSegEls.map(() => ({ b:0 }));
+    ${["a-bloom","a-halo","a-body","a-inner","a-core"].map(cls =>
+      aSegs.map((d,i) => `<path class="${cls}" data-seg="${i}" d="${d}"/>`).join("")
+    ).join("")}`;
+  segState = aSegs.map(() => ({ b:0 }));
 }
 
 function step(now){
@@ -503,7 +535,9 @@ function step(now){
     root.style.setProperty("--bloom","1");
     root.style.setProperty("--warm","0");
     // reduced motion: the arrow is simply lit, not travelling
-    for(const g of arrowSegEls){ g.style.setProperty("--s","1"); g.style.setProperty("--sb","1"); }
+    for(let i=0;i<ARROW_SEGS;i++){
+      frame.style.setProperty("--s"+i,"1"); frame.style.setProperty("--sb"+i,"1");
+    }
     rPhase.textContent="reduced motion"; rLvl.textContent="100%";
     return;
   }
@@ -530,7 +564,7 @@ function step(now){
   const powered = lvl > 0.06;
   const ta = ((now - t0) % ARROW_CYCLE);
   const allOn = ARROW_SEGS*SEG_STEP + ARROW_HOLD;
-  for(let i=0;i<arrowSegEls.length;i++){
+  for(let i=0;i<segState.length;i++){
     const age = ta - i*SEG_STEP;                 // ms since this tube struck
     const on  = powered && age >= 0 && ta < allOn;
     let s = 0;
@@ -542,8 +576,8 @@ function step(now){
     const st = segState[i];
     const tau = s > st.b ? TAU_ATTACK : TAU_RELEASE;
     st.b += (s - st.b)*(1 - Math.exp(-win/tau));
-    arrowSegEls[i].style.setProperty("--s",  s.toFixed(3));
-    arrowSegEls[i].style.setProperty("--sb", st.b.toFixed(3));
+    frame.style.setProperty("--s"+i,  s.toFixed(3));
+    frame.style.setProperty("--sb"+i, st.b.toFixed(3));
   }
 
   rPhase.textContent=phase; rLvl.textContent=Math.round(lvl*100)+"%";
