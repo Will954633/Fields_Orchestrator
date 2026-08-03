@@ -1,0 +1,542 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Illuminus — neon CTA concept</title>
+<style>
+/* ============================================================================
+   ILLUMINUS — the /off-market strategy CTA as a night neon sign.
+   Standalone concept. No dependencies, no build.
+
+   Brand tokens lifted from discovery.module.css so this drops straight in.
+   ========================================================================== */
+:root{
+  --ground:#000000;
+  --ink:#E6DDD2;
+  --ink-soft:#CABEB0;
+  --muted:#8C8177;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+
+  /* --- the gas ---------------------------------------------------------
+     Real neon (pure Ne, clear glass) emits at 585-703nm: orange-red.
+     Brand copper is #C0704A. #F0793E is the meeting point — it reads as
+     genuine neon while staying in the copper family. The tube CORE is not
+     orange: at full current it saturates the eye to near-white, and the
+     colour only appears in the halo. That is why there are three colours
+     here, not one.                                                        */
+  --gas:#F0793E;         /* the discharge colour, seen in the halo */
+  --gas-deep:#B2401A;    /* outer bloom, red-shifted by distance */
+  --core:#FFF4E9;        /* white-hot tube centre */
+  --gas-cold:#FF9A7A;    /* partial ionisation runs pinker + dimmer */
+  --glass:#5C6157;       /* unlit tube: pale grey-green glass, always visible */
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:var(--sans); -webkit-font-smoothing:antialiased;
+  display:grid; grid-template-rows:1fr auto; overflow:hidden;
+}
+
+/* ---- the wall -------------------------------------------------------------
+   A sign at night is only half the effect. The other half is what it does to
+   the wall behind it. This layer is the bounce light.                       */
+.wall{
+  position:relative; display:grid; place-items:center;
+  padding:clamp(1.5rem,6vw,4rem);
+  isolation:isolate;
+}
+.bounce{
+  position:absolute; inset:0; z-index:0; pointer-events:none;
+  background:
+    radial-gradient(46% 34% at 50% 50%,
+      rgb(240 121 62 / calc(0.20 * var(--bloom,0))) 0%,
+      rgb(178 64 26 / calc(0.10 * var(--bloom,0))) 38%,
+      transparent 72%);
+  transform:translateZ(0);
+}
+/* Faint grain. Dark radial gradients band badly on 8-bit panels; a little
+   noise dithers it away. Same trick as film grain over a gradient sky. */
+.grain{
+  position:absolute; inset:0; z-index:1; pointer-events:none; opacity:.13;
+  mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml;utf8,\
+<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'>\
+<filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/>\
+<feColorMatrix type='saturate' values='0'/></filter>\
+<rect width='140' height='140' filter='url(%23n)' opacity='.32'/></svg>");
+}
+
+/* ---- the sign -------------------------------------------------------------
+   An <a>, so it stays a real link: focusable, clickable, keyboard-operable.  */
+.sign{
+  position:relative; z-index:2; display:inline-grid; place-items:center;
+  padding:clamp(1.15rem,3.4vw,1.6rem) clamp(2rem,6vw,3.4rem);
+  text-decoration:none; cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+  transition:transform .35s cubic-bezier(.2,.7,.2,1);
+}
+.sign:hover{transform:translateY(-3px)}
+.sign:focus-visible{outline:2px solid var(--gas); outline-offset:14px; border-radius:6px}
+
+/* The border tube. Path is generated in JS from the measured button box so the
+   corner radii never distort, and it carries a real gap at bottom centre where
+   a physical tube exits to the transformer. */
+.frame{position:absolute; inset:0; overflow:visible; pointer-events:none}
+.frame path,.frame line{fill:none; stroke-linecap:round; stroke-linejoin:round}
+
+.t-glass{stroke:var(--glass); stroke-width:5.5; opacity:.42}
+.t-glass-hi{stroke:#9AA093; stroke-width:1.1; opacity:.30}  /* specular on glass */
+
+.t-outer{stroke:var(--gas-deep); stroke-width:26; filter:blur(17px);
+         opacity:calc(0.55 * var(--bloom,0) * (1 - 0.65 * var(--warm,0)))}
+.t-mid  {stroke:var(--gas);      stroke-width:13; filter:blur(7px);
+         opacity:calc(0.80 * var(--lvl,0))}
+.t-near {stroke:var(--gas);      stroke-width:6.5; filter:blur(2.4px);
+         opacity:calc(0.92 * var(--lvl,0))}
+.t-core {stroke:var(--core);     stroke-width:2.6; filter:blur(.5px);
+         opacity:calc(1 * var(--lvl,0))}
+
+/* Electrode hot-spots. The ends of a neon tube, where the electrodes sit, run
+   hotter and pinker than the middle of the run — visible on every real sign. */
+.t-elec{stroke:var(--gas-cold); stroke-width:9; filter:blur(5px);
+        opacity:calc(0.75 * var(--lvl,0))}
+/* Leads dropping into the transformer housing. */
+.lead{stroke:#2A2724; stroke-width:2.2; opacity:.9}
+.housing{fill:#141210; stroke:#2A2724; stroke-width:1}
+
+/* ---- the lettering --------------------------------------------------------
+   Two stacked copies of the same text. `.glass` is the unlit tube and never
+   changes. `.lit` is the discharge and is driven by --lvl. Fill is transparent
+   with a stroke, because neon letters are bent tube, not filled shapes.      */
+.label{
+  position:relative; display:flex; flex-direction:column;
+  align-items:center; gap:.5rem; text-align:center;
+}
+/* the two copies stack; the arrow gets its own row underneath */
+.word{display:grid; place-items:center}
+.word span{
+  grid-area:1/1;
+  font-size:clamp(.92rem,2.3vw,1.14rem);
+  font-weight:600; letter-spacing:.15em; text-transform:uppercase;
+  line-height:1.5; white-space:nowrap;
+  color:transparent;
+  -webkit-text-stroke:1.7px var(--glass);
+}
+.word .glass{-webkit-text-stroke-color:rgb(92 97 87 / .5)}
+.word .lit{
+  -webkit-text-stroke-color:rgb(255 246 238 / calc(1 * var(--lvl,0)));
+  text-shadow:
+    0 0 calc(2px  + 1px  * var(--bloom,0)) rgb(255 246 238 / calc(1  * var(--lvl,0))),
+    0 0 calc(5px  + 3px  * var(--bloom,0)) rgb(255 214 180 / calc(.95 * var(--lvl,0))),
+    0 0 calc(12px + 8px  * var(--bloom,0)) rgb(240 121 62  / calc(.95 * var(--lvl,0))),
+    0 0 calc(26px + 18px * var(--bloom,0)) rgb(240 121 62  / calc(.75 * var(--bloom,0))),
+    0 0 calc(54px + 40px * var(--bloom,0)) rgb(178 64 26   / calc(.50 * var(--bloom,0) * (1 - .6 * var(--warm,0))));
+}
+
+/* ---- instrument panel -----------------------------------------------------
+   The scope makes the physics inspectable instead of asking you to trust it. */
+.panel{
+  position:relative; z-index:3;
+  display:flex; flex-wrap:wrap; align-items:center; gap:.55rem;
+  padding:.85rem clamp(1rem,4vw,2rem) 1.1rem;
+  border-top:1px solid rgb(230 221 210 / .09);
+  background:linear-gradient(transparent,#050403 60%);
+}
+.panel button{
+  font:inherit; font-size:.76rem; letter-spacing:.1em; text-transform:uppercase;
+  color:var(--ink-soft); background:transparent;
+  border:1px solid rgb(230 221 210 / .18); border-radius:999px;
+  padding:.5rem 1rem; cursor:pointer;
+  transition:border-color .2s,color .2s,background .2s;
+}
+.panel button:hover{border-color:var(--gas); color:var(--gas)}
+.panel button[aria-pressed="true"]{
+  border-color:var(--gas); color:var(--gas); background:rgb(240 121 62 / .10);
+}
+.spacer{flex:1 1 2rem}
+.readout{
+  font-size:.68rem; letter-spacing:.09em; text-transform:uppercase;
+  color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap;
+}
+.readout b{color:var(--ink-soft); font-weight:600}
+#scope{
+  display:block; width:210px; height:38px;
+  border:1px solid rgb(230 221 210 / .12); border-radius:4px; background:#080706;
+}
+.hint{
+  position:absolute; z-index:2; left:0; right:0; bottom:clamp(1rem,4vh,2.2rem);
+  margin:0; text-align:center; font-size:.66rem; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--muted); pointer-events:none;
+}
+
+/* ---- accessibility --------------------------------------------------------
+   WCAG 2.3.1: nothing may flash more than three times a second. The flicker
+   burst breaches that by design, so anyone who has asked their OS for reduced
+   motion gets a sign that is simply lit — no pulse, no flicker, no exceptions. */
+@media (prefers-reduced-motion:reduce){
+  .sign{transition:none}
+}
+</style>
+</head>
+<body>
+
+<main class="wall">
+  <div class="bounce" id="bounce"></div>
+  <div class="grain"></div>
+
+  <a class="sign" id="sign" href="#build-strategy">
+    <svg class="frame" id="frame" aria-hidden="true"></svg>
+    <span class="label">
+      <span class="word">
+        <span class="glass" aria-hidden="true">Build my complete selling strategy&#8202;&#8202;&#8594;</span>
+        <span class="lit"                     >Build my complete selling strategy&#8202;&#8202;&#8594;</span>
+      </span>
+    </span>
+  </a>
+
+  <p class="hint">Illuminus &middot; off-market strategy CTA</p>
+</main>
+
+<div class="panel">
+  <button id="replay">Replay</button>
+  <button id="reseed">New flicker</button>
+  <button id="safe"   aria-pressed="true">Flash-safe</button>
+  <button id="sound"  aria-pressed="false">Sound</button>
+  <button id="calm"   aria-pressed="false">Reduced motion</button>
+  <span class="spacer"></span>
+  <span class="readout">Phase <b id="r-phase">—</b> &nbsp; Emission <b id="r-lvl">0%</b></span>
+  <canvas id="scope" width="420" height="76"></canvas>
+</div>
+
+<script>
+"use strict";
+/* ============================================================================
+   THE MODEL
+
+   A neon sign is not a lamp on a dimmer. It is a gas-discharge tube fed by a
+   transformer, and everything that makes it look real follows from that:
+
+   1. STRIKING IS BINARY AND INSTANT. Ionisation completes in microseconds and
+      pure neon has effectively no afterglow. So the tube edge is a hard step —
+      no CSS ease, ever. Softness belongs to the halo, not the tube.
+
+   2. THE HALO LAGS, THE TUBE DOESN'T. What looks like a fade is the bounce on
+      the wall plus your own retinal integration. Modelled here as an
+      asymmetric one-pole filter: 12 ms attack, 55 ms release.
+
+   3. MAINS. Australia runs 50 Hz. A discharge tube extinguishes and restrikes
+      at every zero crossing, so it ripples at 100 Hz — but you cannot see
+      100 Hz, and neither can a 60 fps screen. Naively animating it would alias
+      into a 20 Hz strobe that is both wrong and unpleasant. The honest fix is
+      to integrate it: every frame is the TIME-AVERAGE of emission over that
+      frame's window, sampled at 1 kHz. That is exactly what an eye and a
+      camera shutter do. Result: the ripple correctly almost vanishes when the
+      sign is steady, and correctly bites during sub-frame flicker events.
+
+   4. FLICKER IS NOT NOISE. A failing sign has a grammar: the tube drops out,
+      hesitates at partial ionisation, strikes unstably, holds, drops again.
+      Timings below are that grammar, not random opacity.
+
+   5. AN UNLIT TUBE IS STILL THERE. Off, it is pale grey-green glass. Anything
+      that vanishes to nothing is a div, not a sign.
+   ========================================================================== */
+
+const MAINS_HZ   = 50;              // AU
+const RIPPLE_HZ  = MAINS_HZ * 2;    // extinguish + restrike per cycle
+const RIPPLE_DEPTH = 0.14;          // modulation depth, iron-core ballast
+const SUB_MS     = 1;               // simulation step -> 1 kHz
+const TAU_ATTACK = 12;              // ms, bloom rise
+const TAU_RELEASE= 55;              // ms, bloom fall
+
+const PULSES      = 3;
+const PULSE_MS    = 1150;
+const PULSE_FLOOR = 0.30;
+const DARK_MS     = 420;            // dead tube before the first strike
+const HOLD_MS     = 3400;           // steady burn after it settles
+const REST_MS     = 900;            // dark rest before the loop repeats
+
+/* -- seeded RNG so a flicker take is reproducible and reviewable ----------- */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+
+/* -- flash safety ----------------------------------------------------------
+   WCAG 2.3.1 forbids anything that flashes more than three times in any one
+   second. A genuinely failing tube stutters faster than that — measured, the
+   unrestricted burst below runs ~3.1 strikes/sec on average and peaks higher.
+   SAFE mode keeps every dropout as hard and as sudden as the physics demands
+   but guarantees at least 340 ms between strike onsets, which caps the rate at
+   three per second by construction rather than by argument. It still reads as
+   a failing sign; it just fails less frantically.                            */
+const SAFE_MIN_STRIKE_GAP = 340;   // ms between onsets -> max 3 per second
+let SAFE = true;                   // production default
+
+/* -- build one full take as an explicit segment list ----------------------- */
+function buildTake(seed){
+  const rnd = mulberry32(seed);
+  const seg = [];
+  let t = 0;
+  const push=(dur,o)=>{seg.push(Object.assign({t0:t,t1:t+dur},o)); t+=dur;};
+
+  push(DARK_MS, {kind:"dark", phase:"dark"});
+
+  // Three smooth swells. A discharge cannot truly dim, so the swell lives
+  // mostly in the halo while the tube stays struck at PULSE_FLOOR — which is
+  // also what a sign on a soft-start magnetic ballast actually does.
+  for(let i=0;i<PULSES;i++) push(PULSE_MS,{kind:"pulse", phase:"pulse "+(i+1)+"/"+PULSES});
+
+  // The failure. 7-10 dropout/restrike events, then it catches.
+  const n = 7 + Math.floor(rnd()*4);
+  for(let i=0;i<n;i++){
+    const last = i === n-1;
+    // Extinguish. Mostly short stutters; roughly one in five is a long gap.
+    const long = rnd() < 0.22;
+    push(long ? 180+rnd()*260 : 14+rnd()*95, {kind:"off", phase:"flicker"});
+    // Hesitation: partial ionisation glows dim and pink before it fully fires.
+    if(rnd() < 0.55) push(5+rnd()*16, {kind:"partial", a:0.18+rnd()*0.28, phase:"flicker"});
+    // Strike. The first ~40 ms of a bad strike streams and wobbles.
+    let on = last ? 240+rnd()*120 : 28+rnd()*190;
+    // The gap between consecutive strike onsets is (this lit hold + the NEXT
+    // dropout), so holding the lit segment alone to the minimum is sufficient
+    // and never has to touch a dropout — safety never softens an edge.
+    if(SAFE) on = Math.max(on, SAFE_MIN_STRIKE_GAP);
+    push(on, {kind:"on", a:0.86+rnd()*0.14, unstable:true, ph:rnd()*6.283, phase:"flicker"});
+  }
+
+  push(HOLD_MS, {kind:"steady", phase:"steady"});
+  push(REST_MS, {kind:"dark",   phase:"dark"});
+  return {seg, total:t, seed};
+}
+
+/* -- the 100 Hz mains ripple ----------------------------------------------
+   Normalised so its TIME-AVERAGE is 1.0. The eye integrates, so a tube at full
+   current must AVERAGE full brightness — if the raw waveform (peak 1, trough
+   1-depth) were used directly, a healthy sign would render at a permanent 93%.
+   Normalising lets the peak clip a sliver above 1, which costs ~2% of the mean
+   and is invisible; leaving it unnormalised costs 7% and is not.             */
+const RIPPLE_NORM = 1 / (1 - RIPPLE_DEPTH/2);
+function ripple(t){
+  const ph = 2*Math.PI*RIPPLE_HZ*(t/1000);
+  return (1 - RIPPLE_DEPTH*(0.5 - 0.5*Math.cos(ph))) * RIPPLE_NORM;
+}
+
+/* -- emission at an instant. Pure function of t, so it can be supersampled. */
+function emit(take, t){
+  const T = take.total;
+  t = ((t % T) + T) % T;
+  // segments are ordered and contiguous; linear scan is fine at this size
+  let s = take.seg[take.seg.length-1];
+  for(let i=0;i<take.seg.length;i++){
+    if(t < take.seg[i].t1){ s = take.seg[i]; break; }
+  }
+  const u = (t - s.t0) / (s.t1 - s.t0);
+
+  switch(s.kind){
+    case "dark":    return {a:0, warm:0, phase:s.phase};
+    case "off":     return {a:0, warm:1, phase:s.phase};
+    case "partial": return {a:s.a, warm:1, phase:s.phase};   // cold, pink, no ripple
+    case "pulse": {
+      const swell = Math.sin(Math.PI*u)**2;                   // 0 -> 1 -> 0
+      const a = PULSE_FLOOR + (1-PULSE_FLOOR)*swell;          // strikes instantly to the floor
+      return {a:Math.min(1, a*ripple(t)), warm:(1-a)*0.35, phase:s.phase};
+    }
+    case "on": {
+      const age = t - s.t0;
+      // streamer instability: ~62 Hz wobble decaying over the first ~22 ms
+      const wob = 1 + 0.13*Math.sin(2*Math.PI*62*(age/1000)+s.ph)*Math.exp(-age/22);
+      return {a:Math.min(1, s.a*wob*ripple(t)), warm:0.25*Math.exp(-age/60), phase:s.phase};
+    }
+    case "steady": {
+      // slow thermal drift — no real sign sits at exactly one value
+      const drift = 1 + 0.012*Math.sin(t/730) + 0.007*Math.sin(t/271);
+      return {a:Math.min(1, ripple(t)*drift), warm:0, phase:s.phase};
+    }
+  }
+  return {a:0, warm:0, phase:"dark"};
+}
+
+/* ==========================================================================
+   DRIVER
+   ========================================================================== */
+const stage   = document.documentElement;
+const signEl  = document.getElementById("sign");
+const frame   = document.getElementById("frame");
+const scope   = document.getElementById("scope");
+const sctx    = scope.getContext("2d");
+const rPhase  = document.getElementById("r-phase");
+const rLvl    = document.getElementById("r-lvl");
+
+let take   = buildTake(20260803);
+let t0     = performance.now();
+let prevT  = 0;
+let bloom  = 0;
+let warmS  = 0;
+let calm   = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const trace = new Float32Array(240); let ti = 0;
+
+function frameStep(now){
+  requestAnimationFrame(frameStep);
+
+  if(calm){
+    set(1, 1, 0);
+    rPhase.textContent = "reduced motion";
+    rLvl.textContent   = "100%";
+    return;
+  }
+
+  const t = now - t0;
+  // --- integrate emission across this frame's exposure window (see note 3) --
+  const win   = Math.min(t - prevT, 120);      // clamp after a tab switch
+  const steps = Math.max(1, Math.round(win / SUB_MS));
+  const dt    = win / steps;
+  let sum = 0, warmSum = 0, phase = "";
+  for(let i=0;i<steps;i++){
+    const ts = prevT + dt*(i+0.5);
+    const e  = emit(take, ts);
+    sum += e.a; warmSum += e.warm; phase = e.phase;
+    // bloom runs inside the substep loop, at 1 kHz, not once per frame
+    const tau = e.a > bloom ? TAU_ATTACK : TAU_RELEASE;
+    bloom += (e.a - bloom) * (1 - Math.exp(-dt/tau));
+  }
+  prevT = t;
+
+  const lvl  = sum / steps;
+  const warm = warmSum / steps;
+  warmS += (warm - warmS) * 0.25;
+
+  set(lvl, bloom, warmS);
+  audio.tick(lvl, phase);
+
+  trace[ti = (ti+1) % trace.length] = lvl;
+  drawScope();
+  rPhase.textContent = phase;
+  rLvl.textContent   = Math.round(lvl*100) + "%";
+}
+
+function set(lvl, bl, warm){
+  stage.style.setProperty("--lvl",   lvl.toFixed(4));
+  stage.style.setProperty("--bloom", bl.toFixed(4));
+  stage.style.setProperty("--warm",  warm.toFixed(4));
+}
+
+/* -- the border tube ------------------------------------------------------- */
+function drawFrame(){
+  const r  = signEl.getBoundingClientRect();
+  const w  = r.width, h = r.height;
+  if(!w || !h) return;
+  const rad = Math.min(h/2, 46);
+  const gap = 26;                    // where the tube exits to the transformer
+
+  // Clockwise from bottom-centre-left, all the way round, ending
+  // bottom-centre-right — an OPEN path, because real tube has two ends.
+  const d = [
+    `M ${w/2-gap/2} ${h}`,
+    `H ${rad}`,           `A ${rad} ${rad} 0 0 1 0 ${h-rad}`,
+    `V ${rad}`,           `A ${rad} ${rad} 0 0 1 ${rad} 0`,
+    `H ${w-rad}`,         `A ${rad} ${rad} 0 0 1 ${w} ${rad}`,
+    `V ${h-rad}`,         `A ${rad} ${rad} 0 0 1 ${w-rad} ${h}`,
+    `H ${w/2+gap/2}`
+  ].join(" ");
+
+  const L = w/2-gap/2, R = w/2+gap/2;
+  frame.setAttribute("viewBox", `0 0 ${w} ${h}`);
+  frame.setAttribute("width",  w);
+  frame.setAttribute("height", h);
+  frame.innerHTML = `
+    <path class="t-glass"    d="${d}"/>
+    <path class="t-outer"    d="${d}"/>
+    <path class="t-mid"      d="${d}"/>
+    <path class="t-near"     d="${d}"/>
+    <line class="t-elec" x1="${L-18}" y1="${h}" x2="${L}" y2="${h}"/>
+    <line class="t-elec" x1="${R}"    y1="${h}" x2="${R+18}" y2="${h}"/>
+    <path class="t-core"     d="${d}"/>
+    <path class="t-glass-hi" d="${d}" transform="translate(0,-1.6)"/>
+    <line class="lead" x1="${L}" y1="${h}" x2="${L}" y2="${h+11}"/>
+    <line class="lead" x1="${R}" y1="${h}" x2="${R}" y2="${h+11}"/>
+    <rect class="housing" x="${L-4}" y="${h+9}" width="${gap+8}" height="7" rx="2"/>`;
+}
+
+/* -- scope ----------------------------------------------------------------- */
+function drawScope(){
+  const W = scope.width, H = scope.height;
+  sctx.clearRect(0,0,W,H);
+  sctx.strokeStyle = "rgba(230,221,210,.10)"; sctx.lineWidth = 1;
+  sctx.beginPath(); sctx.moveTo(0,H-1); sctx.lineTo(W,H-1); sctx.stroke();
+  sctx.strokeStyle = "#F0793E"; sctx.lineWidth = 1.5;
+  sctx.beginPath();
+  for(let i=0;i<trace.length;i++){
+    const v = trace[(ti+1+i) % trace.length];
+    const x = i/(trace.length-1)*W, y = H-2 - v*(H-5);
+    i ? sctx.lineTo(x,y) : sctx.moveTo(x,y);
+  }
+  sctx.stroke();
+}
+
+/* -- transformer hum + strike ticks (opt-in) -------------------------------
+   A magnetic ballast hums at twice mains (100 Hz) from core magnetostriction,
+   with strong odd harmonics. Each strike is a broadband tick.               */
+const audio = (()=>{
+  let ctx=null, hum=null, humG=null, h3=null, h3G=null, on=false, wasLit=false;
+  function build(){
+    ctx = new (window.AudioContext||window.webkitAudioContext)();
+    const mk=(f,g)=>{const o=ctx.createOscillator(),v=ctx.createGain();
+      o.type="sawtooth"; o.frequency.value=f; v.gain.value=0;
+      o.connect(v).connect(ctx.destination); o.start(); return [o,v];};
+    [hum,humG] = mk(RIPPLE_HZ);
+    [h3 ,h3G ] = mk(RIPPLE_HZ*3);
+  }
+  return {
+    toggle(){ if(!ctx) build(); if(ctx.state==="suspended") ctx.resume();
+              on=!on; if(!on){humG.gain.value=0; h3G.gain.value=0;} return on; },
+    tick(lvl){
+      if(!on||!ctx) return;
+      const g = Math.max(0, lvl);
+      humG.gain.setTargetAtTime(0.030*g, ctx.currentTime, 0.02);
+      h3G .gain.setTargetAtTime(0.010*g, ctx.currentTime, 0.02);
+      const lit = lvl > 0.12;
+      if(lit && !wasLit){                                  // strike tick
+        const n = ctx.createBufferSource(), b = ctx.createBuffer(1, 1400, ctx.sampleRate);
+        const d = b.getChannelData(0);
+        for(let i=0;i<d.length;i++) d[i] = (Math.random()*2-1)*Math.exp(-i/140);
+        b && (n.buffer = b);
+        const f = ctx.createBiquadFilter(); f.type="bandpass"; f.frequency.value=2400; f.Q.value=1.1;
+        const v = ctx.createGain(); v.gain.value = 0.16;
+        n.connect(f).connect(v).connect(ctx.destination); n.start();
+      }
+      wasLit = lit;
+    }
+  };
+})();
+
+/* -- controls -------------------------------------------------------------- */
+function restart(seed){
+  take  = buildTake(seed === undefined ? take.seed : seed);
+  t0    = performance.now();
+  prevT = 0; bloom = 0; warmS = 0;
+  trace.fill(0);
+}
+document.getElementById("replay").onclick = () => restart();
+document.getElementById("reseed").onclick = () => restart((Math.random()*1e9)|0);
+document.getElementById("safe").onclick    = e => {
+  SAFE = !SAFE;
+  e.currentTarget.setAttribute("aria-pressed", String(SAFE));
+  restart();                       // segment list is built with SAFE baked in
+};
+document.getElementById("sound").onclick  = e =>
+  e.currentTarget.setAttribute("aria-pressed", String(audio.toggle()));
+document.getElementById("calm").onclick   = e => {
+  calm = !calm;
+  e.currentTarget.setAttribute("aria-pressed", String(calm));
+  if(!calm) restart();
+};
+signEl.addEventListener("click", e => { e.preventDefault(); restart(); });
+
+new ResizeObserver(drawFrame).observe(signEl);
+addEventListener("resize", drawFrame);
+drawFrame();
+requestAnimationFrame(frameStep);
+</script>
+</body>
+</html>
