@@ -1,0 +1,598 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Illuminus Roadside — pylon sign concept</title>
+<style>
+/* ============================================================================
+   ILLUMINUS ROADSIDE — the /off-market strategy CTA as a highway pylon sign.
+
+   Same discharge engine as index.html, but a roadside sign is not one emitter,
+   it is TWO, and they obey different physics:
+
+     NEON   — instant strike, no afterglow, colour fixed by the gas.
+     BULBS  — tungsten filaments with thermal mass. They cannot switch. They
+              ramp, they coast, and they shift colour as they cool.
+
+   That second one is the whole reason a real chase looks like a real chase:
+   the trailing bulbs are still glowing dull red while the drive has already
+   moved on. Details in README.md.
+   ========================================================================== */
+:root{
+  --ink:#E6DDD2; --muted:#8C8177;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+
+  --gas:#F0793E;         /* the CTA tube: neon orange, in the copper family */
+  --gas-deep:#B2401A;
+  --core:#FFF6EE;
+  --gas-cold:#FF9A7A;
+  --glass:#5C6157;       /* unlit tube — pale grey-green, always present */
+  --gas-2:#BFE6FF;       /* the FIELDS plate: argon/mercury blue-white */
+  --gas-2-deep:#3E7FA8;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background:#000; color:var(--ink); font-family:var(--sans);
+  -webkit-font-smoothing:antialiased; display:grid; grid-template-rows:1fr auto;
+  overflow:hidden;
+}
+
+/* ---- night --------------------------------------------------------------- */
+.night{
+  position:relative; overflow:hidden;
+  display:grid; grid-template-rows:1fr auto; justify-items:center;
+  /* not black — a night sky retains a little atmospheric glow near the horizon */
+  background:linear-gradient(#04060B 0%, #060810 52%, #0B0C10 68%, #08080A 100%);
+}
+.stars{position:absolute; inset:0 0 34% 0; opacity:.5; pointer-events:none;
+  background-image:url("data:image/svg+xml;utf8,\
+<svg xmlns='http://www.w3.org/2000/svg' width='420' height='300'>\
+<g fill='%23ffffff'>\
+<circle cx='34' cy='42' r='.8' opacity='.7'/><circle cx='128' cy='22' r='.6' opacity='.5'/>\
+<circle cx='210' cy='66' r='.9' opacity='.8'/><circle cx='300' cy='30' r='.6' opacity='.45'/>\
+<circle cx='388' cy='88' r='.7' opacity='.6'/><circle cx='72' cy='120' r='.6' opacity='.4'/>\
+<circle cx='250' cy='140' r='.7' opacity='.55'/><circle cx='170' cy='180' r='.6' opacity='.35'/>\
+<circle cx='352' cy='196' r='.8' opacity='.5'/><circle cx='96' cy='232' r='.6' opacity='.3'/>\
+</g></svg>");}
+
+/* the road surface, which is mostly a thing for the sign to spill light onto */
+.ground{
+  position:absolute; left:0; right:0; bottom:0; height:34%;
+  background:linear-gradient(#0A0A0C, #0E0D0C 40%, #121110 100%);
+  border-top:1px solid rgb(230 221 210 / .05);
+}
+.pool{position:absolute; inset:0; pointer-events:none}  /* canvas: light on the road */
+
+/* ---- the pylon ----------------------------------------------------------- */
+.pylon{
+  position:relative; z-index:2; align-self:center;
+  display:grid; justify-items:center;
+  transform-origin:50% 100%;          /* sways from the footings, not the middle */
+  padding-top:clamp(1rem,4vh,3rem);
+}
+.sign{
+  position:relative; display:block; text-decoration:none; cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+  transition:filter .35s ease;
+}
+.sign:focus-visible{outline:2px solid var(--gas); outline-offset:16px; border-radius:8px}
+
+/* The cabinet. At night you barely read the metal — it is a silhouette plus
+   whatever its own bulbs throw back at it. */
+.cabinet{
+  position:relative;
+  width:min(80vw, 21.5rem);
+  padding:clamp(1.1rem,3vw,1.6rem);
+  border-radius:14px;
+  background:
+    linear-gradient(#15161A, #101114 55%, #0C0D10);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / .05),
+    inset 0 0 40px rgb(0 0 0 / .8),
+    0 30px 60px -20px rgb(0 0 0 / .9);
+  /* lit back by its own bulbs — driven from JS */
+  outline:1px solid rgb(240 121 62 / calc(.10 + .22 * var(--bulbAvg,0)));
+}
+.bulbs{position:absolute; inset:0; width:100%; height:100%; pointer-events:none}
+
+/* -- top plate: FIELDS, in a different gas ------------------------------- */
+.plate{
+  position:relative; text-align:center; padding:.15rem 0 .55rem;
+  border-bottom:1px solid rgb(230 221 210 / .07); margin-bottom:.7rem;
+}
+.plate .w{display:grid; place-items:center}
+.plate .w > span{
+  grid-area:1/1; font-family:var(--serif); font-style:italic;
+  font-size:clamp(1.5rem,5.5vw,2.05rem); letter-spacing:.02em; line-height:1.1;
+  color:transparent; -webkit-text-stroke:1.4px var(--glass);
+}
+.plate .glass{-webkit-text-stroke-color:rgb(92 97 87 / .5)}
+.plate .lit{
+  -webkit-text-stroke-color:rgb(245 252 255 / calc(1 * var(--lvl2,0)));
+  text-shadow:
+    0 0 calc(2px + 1px * var(--bloom2,0)) rgb(245 252 255 / calc(1  * var(--lvl2,0))),
+    0 0 calc(8px + 5px * var(--bloom2,0)) rgb(191 230 255 / calc(.9 * var(--lvl2,0))),
+    0 0 calc(24px + 16px * var(--bloom2,0)) rgb(62 127 168 / calc(.6 * var(--bloom2,0)));
+}
+.tag{
+  margin:.35rem 0 0; font-size:.6rem; letter-spacing:.34em; text-transform:uppercase;
+  color:rgb(191 230 255 / calc(.25 + .45 * var(--lvl2,0)));
+}
+
+/* -- main plate: the CTA, in neon over three lines ----------------------- */
+.main{position:relative; padding:.3rem 0 .2rem}
+.frame{position:absolute; inset:-2px; overflow:visible; pointer-events:none}
+.frame path,.frame line{fill:none; stroke-linecap:round; stroke-linejoin:round}
+.t-glass{stroke:var(--glass); stroke-width:4.5; opacity:.4}
+.t-outer{stroke:var(--gas-deep); stroke-width:22; filter:blur(15px);
+  opacity:calc(.5 * var(--bloom,0) * (1 - .65 * var(--warm,0)))}
+.t-mid  {stroke:var(--gas); stroke-width:11; filter:blur(6px); opacity:calc(.78 * var(--lvl,0))}
+.t-near {stroke:var(--gas); stroke-width:5.5; filter:blur(2.2px); opacity:calc(.9 * var(--lvl,0))}
+.t-core {stroke:var(--core); stroke-width:2.2; filter:blur(.5px); opacity:calc(1 * var(--lvl,0))}
+.t-elec {stroke:var(--gas-cold); stroke-width:8; filter:blur(4.5px); opacity:calc(.75 * var(--lvl,0))}
+.lead   {stroke:#2A2724; stroke-width:2; opacity:.9}
+.housing{fill:#141210; stroke:#2A2724; stroke-width:1}
+
+.word{display:grid; place-items:center; padding:.9rem .3rem}
+.word > span{
+  grid-area:1/1; text-align:center;
+  font-size:clamp(1.02rem,3.5vw,1.42rem); font-weight:700;
+  letter-spacing:.11em; text-transform:uppercase; line-height:1.62;
+  color:transparent; -webkit-text-stroke:1.7px var(--glass);
+}
+.glass{-webkit-text-stroke-color:rgb(92 97 87 / .5)}
+.lit{
+  -webkit-text-stroke-color:rgb(255 246 238 / calc(1 * var(--lvl,0)));
+  text-shadow:
+    0 0 calc(2px  + 1px  * var(--bloom,0)) rgb(255 246 238 / calc(1   * var(--lvl,0))),
+    0 0 calc(5px  + 3px  * var(--bloom,0)) rgb(255 214 180 / calc(.95 * var(--lvl,0))),
+    0 0 calc(12px + 8px  * var(--bloom,0)) rgb(240 121 62  / calc(.95 * var(--lvl,0))),
+    0 0 calc(26px + 18px * var(--bloom,0)) rgb(240 121 62  / calc(.7  * var(--bloom,0))),
+    0 0 calc(52px + 38px * var(--bloom,0)) rgb(178 64 26   / calc(.45 * var(--bloom,0) * (1 - .6 * var(--warm,0))));
+}
+
+/* -- arrow plate: chasing bulbs, the classic roadside pointer ------------ */
+.arrowPlate{position:relative; height:56px; margin-top:.55rem;
+  border-top:1px solid rgb(230 221 210 / .07)}
+
+/* -- structure ----------------------------------------------------------- */
+.posts{position:relative; width:min(80vw,21.5rem); height:clamp(90px,20vh,190px)}
+.posts::before,.posts::after{
+  content:""; position:absolute; top:-2px; bottom:0; width:16px;
+  background:linear-gradient(90deg,#0B0C0E,#232529 32%,#33363C 48%,#1A1C20 68%,#08090B);
+  box-shadow:0 0 16px rgb(240 121 62 / calc(.18 * var(--bulbAvg,0)));
+}
+.posts::before{left:24%} .posts::after{right:24%}
+/* the cross-brace every real pylon has */
+.brace{position:absolute; left:24%; right:24%; top:40%; height:6px;
+  background:linear-gradient(#2B2D32,#121316); opacity:.9}
+
+/* ---- panel --------------------------------------------------------------- */
+.panel{
+  display:flex; flex-wrap:wrap; align-items:center; gap:.55rem;
+  padding:.85rem clamp(1rem,4vw,2rem) 1.1rem;
+  border-top:1px solid rgb(230 221 210 / .09); background:#050403;
+}
+.panel button{
+  font:inherit; font-size:.76rem; letter-spacing:.1em; text-transform:uppercase;
+  color:#CABEB0; background:transparent; border:1px solid rgb(230 221 210 / .18);
+  border-radius:999px; padding:.5rem 1rem; cursor:pointer;
+  transition:border-color .2s,color .2s,background .2s;
+}
+.panel button:hover{border-color:var(--gas); color:var(--gas)}
+.panel button[aria-pressed="true"]{border-color:var(--gas); color:var(--gas);
+  background:rgb(240 121 62 / .10)}
+.spacer{flex:1 1 2rem}
+.readout{font-size:.68rem; letter-spacing:.09em; text-transform:uppercase;
+  color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap}
+.readout b{color:#CABEB0; font-weight:600}
+</style>
+</head>
+<body>
+
+<main class="night">
+  <div class="stars"></div>
+  <div class="ground"><canvas class="pool" id="pool"></canvas></div>
+
+  <div class="pylon" id="pylon">
+    <a class="sign" id="sign" href="#build-strategy">
+      <div class="cabinet" id="cabinet">
+        <canvas class="bulbs" id="bulbs"></canvas>
+
+        <div class="plate">
+          <span class="w">
+            <span class="glass" aria-hidden="true">Fields</span>
+            <span class="lit">Fields</span>
+          </span>
+          <p class="tag">Smarter with data</p>
+        </div>
+
+        <div class="main" id="main">
+          <svg class="frame" id="frame" aria-hidden="true"></svg>
+          <span class="word">
+            <span class="glass" aria-hidden="true">Build my<br>complete<br>selling strategy</span>
+            <span class="lit">Build my<br>complete<br>selling strategy</span>
+          </span>
+        </div>
+
+        <!-- spacer only: the arrow's bulbs are painted onto the cabinet-wide
+             canvas above, so their halos blend with the perimeter instead of
+             clipping against a small canvas of their own -->
+        <div class="arrowPlate" id="arrowPlate"></div>
+      </div>
+    </a>
+    <div class="posts"><div class="brace"></div></div>
+  </div>
+</main>
+
+<div class="panel">
+  <button id="replay">Replay</button>
+  <button id="reseed">New flicker</button>
+  <button id="safe"  aria-pressed="true">Flash-safe</button>
+  <button id="chase" aria-pressed="true">Chase</button>
+  <button id="calm"  aria-pressed="false">Reduced motion</button>
+  <span class="spacer"></span>
+  <span class="readout">Phase <b id="r-phase">—</b> &nbsp; Neon <b id="r-lvl">0%</b>
+    &nbsp; Filament <b id="r-fil">1500K</b></span>
+</div>
+
+<script>
+"use strict";
+/* ==========================================================================
+   PART 1 — THE DISCHARGE (unchanged from index.html; see that file's notes)
+   ========================================================================== */
+const MAINS_HZ=50, RIPPLE_HZ=MAINS_HZ*2, RIPPLE_DEPTH=0.14;
+const RIPPLE_NORM=1/(1-RIPPLE_DEPTH/2);
+const SUB_MS=1, TAU_ATTACK=12, TAU_RELEASE=55;
+const PULSES=3, PULSE_MS=1150, PULSE_FLOOR=0.30;
+const DARK_MS=420, HOLD_MS=3800, REST_MS=900;
+const SAFE_MIN_STRIKE_GAP=340;
+let SAFE=true;
+
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+
+function buildTake(seed){
+  const rnd=mulberry32(seed); const seg=[]; let t=0;
+  const push=(d,o)=>{seg.push(Object.assign({t0:t,t1:t+d},o)); t+=d;};
+  push(DARK_MS,{kind:"dark",phase:"dark"});
+  for(let i=0;i<PULSES;i++) push(PULSE_MS,{kind:"pulse",phase:"pulse "+(i+1)+"/"+PULSES});
+  const n=7+Math.floor(rnd()*4);
+  for(let i=0;i<n;i++){
+    const last=i===n-1;
+    push(rnd()<0.22 ? 180+rnd()*260 : 14+rnd()*95, {kind:"off",phase:"flicker"});
+    if(rnd()<0.55) push(5+rnd()*16,{kind:"partial",a:0.18+rnd()*0.28,phase:"flicker"});
+    let on=last?240+rnd()*120:28+rnd()*190;
+    if(SAFE) on=Math.max(on,SAFE_MIN_STRIKE_GAP);
+    push(on,{kind:"on",a:0.86+rnd()*0.14,ph:rnd()*6.283,phase:"flicker"});
+  }
+  push(HOLD_MS,{kind:"steady",phase:"steady"});
+  push(REST_MS,{kind:"dark",phase:"dark"});
+  return {seg,total:t,seed};
+}
+function ripple(t){
+  const ph=2*Math.PI*RIPPLE_HZ*(t/1000);
+  return (1-RIPPLE_DEPTH*(0.5-0.5*Math.cos(ph)))*RIPPLE_NORM;
+}
+function emit(take,t){
+  const T=take.total; t=((t%T)+T)%T;
+  let s=take.seg[take.seg.length-1];
+  for(let i=0;i<take.seg.length;i++){ if(t<take.seg[i].t1){ s=take.seg[i]; break; } }
+  const u=(t-s.t0)/(s.t1-s.t0);
+  switch(s.kind){
+    case "dark":    return {a:0,warm:0,phase:s.phase};
+    case "off":     return {a:0,warm:1,phase:s.phase};
+    case "partial": return {a:s.a,warm:1,phase:s.phase};
+    case "pulse":{
+      const a=PULSE_FLOOR+(1-PULSE_FLOOR)*Math.sin(Math.PI*u)**2;
+      return {a:Math.min(1,a*ripple(t)),warm:(1-a)*0.35,phase:s.phase};
+    }
+    case "on":{
+      const age=t-s.t0;
+      const wob=1+0.13*Math.sin(2*Math.PI*62*(age/1000)+s.ph)*Math.exp(-age/22);
+      return {a:Math.min(1,s.a*wob*ripple(t)),warm:0.25*Math.exp(-age/60),phase:s.phase};
+    }
+    case "steady":{
+      const drift=1+0.012*Math.sin(t/730)+0.007*Math.sin(t/271);
+      return {a:Math.min(1,ripple(t)*drift),warm:0,phase:s.phase};
+    }
+  }
+  return {a:0,warm:0,phase:"dark"};
+}
+
+/* ==========================================================================
+   PART 2 — THE FILAMENTS
+   A tungsten bulb is the opposite of a neon tube. It has thermal MASS, so it
+   cannot switch: it ramps over tens of ms and coasts down over ~100 ms. Two
+   consequences, both of which are what make a real chase read as real:
+
+     - the chase SMEARS. Trailing bulbs are still hot after the drive moved on.
+     - the smear is RED. Radiated colour follows filament temperature, so a
+       cooling bulb slides down the blackbody curve from warm white to dull
+       orange-red before it goes out.
+
+   Unlike the discharge, this needs no supersampling — the time constants are
+   many times longer than a frame, so per-frame integration is already exact
+   enough. Sub-frame detail matters for a tube that switches in microseconds;
+   it does not for a lump of hot metal.
+   ========================================================================== */
+const TAU_HEAT=45, TAU_COOL=115;     // ms
+const K_COLD=1500, K_HOT=2800;       // filament temperature range, kelvin
+
+/** Blackbody colour (Tanner Helland's approximation), 1000-4000 K. */
+function blackbody(K){
+  const t=K/100;
+  let r,g,b;
+  r = t<=66 ? 255 : 329.698727446*Math.pow(t-60,-0.1332047592);
+  g = t<=66 ? 99.4708025861*Math.log(t)-161.1195681661
+            : 288.1221695283*Math.pow(t-60,-0.0755148492);
+  b = t>=66 ? 255 : (t<=19 ? 0 : 138.5177312231*Math.log(t-10)-305.0447927307);
+  const c=v=>Math.max(0,Math.min(255,v))|0;
+  return [c(r),c(g),c(b)];
+}
+
+class Bulb{
+  constructor(x,y,i,rnd){
+    this.x=x; this.y=y; this.i=i;
+    this.T=0;                         // 0..1 filament temperature
+    this.dead   = rnd() < 0.045;      // every real sign has a couple out
+    this.failing= !this.dead && rnd() < 0.035;
+    this.ph = rnd()*6.283;
+  }
+  update(drive, dt, t){
+    if(this.dead){ this.T=0; return; }
+    if(this.failing){
+      // a dying bulb makes poor contact — its drive stutters
+      drive *= (Math.sin(t/37+this.ph) > 0.55 ? 0 : 1);
+    }
+    const tau = drive > this.T ? TAU_HEAT : TAU_COOL;
+    this.T += (drive - this.T) * (1 - Math.exp(-dt/tau));
+  }
+  /** Radiated luminance. Steeply superlinear in temperature. */
+  get L(){ return Math.pow(this.T, 3.5); }
+  get K(){ return K_COLD + (K_HOT-K_COLD)*this.T; }
+}
+
+/* ==========================================================================
+   PART 3 — DRIVER
+   ========================================================================== */
+const root=document.documentElement;
+const signEl=document.getElementById("sign");
+const cabinet=document.getElementById("cabinet");
+const mainEl=document.getElementById("main");
+const frame=document.getElementById("frame");
+const pylon=document.getElementById("pylon");
+const bulbCv=document.getElementById("bulbs"), bctx=bulbCv.getContext("2d");
+const arrowPlate=document.getElementById("arrowPlate");
+const poolCv=document.getElementById("pool"),  pctx=poolCv.getContext("2d");
+const rPhase=document.getElementById("r-phase"), rLvl=document.getElementById("r-lvl"),
+      rFil=document.getElementById("r-fil");
+
+let take=buildTake(20260803);
+let t0=performance.now(), prevT=0, bloom=0, warmS=0;
+let calm=matchMedia("(prefers-reduced-motion: reduce)").matches;
+let chaseOn=true;
+let bulbs=[], arrowBulbs=[], rnd=mulberry32(7);
+
+/* -- lay bulbs out along the cabinet perimeter ----------------------------- */
+function layout(){
+  const dpr=Math.min(devicePixelRatio||1,2);
+  const cb=cabinet.getBoundingClientRect();
+  if(!cb.width) return;
+
+  bulbCv.width=Math.round(cb.width*dpr); bulbCv.height=Math.round(cb.height*dpr);
+  bctx.setTransform(dpr,0,0,dpr,0,0);
+
+  // perimeter bulbs, spaced evenly along a rounded rect
+  const inset=9, r=12, w=cb.width-inset*2, h=cb.height-inset*2;
+  const per=2*(w+h)-8*r+2*Math.PI*r;
+  const n=Math.max(16, Math.round(per/32));
+  const rr=mulberry32(4242);
+  bulbs=[];
+  for(let i=0;i<n;i++){
+    const p=(i/n)*per; const [x,y]=pointOnRoundRect(p,w,h,r);
+    bulbs.push(new Bulb(x+inset,y+inset,i,rr));
+  }
+
+  // Arrow bulbs — a straight run pointing right, plus a chevron head. Laid out
+  // in CABINET coordinates so they share the perimeter's canvas.
+  const ap=arrowPlate.getBoundingClientRect();
+  const cy=(ap.top-cb.top)+ap.height/2;
+  const rr2=mulberry32(99); arrowBulbs=[];
+
+  const totalW  = cb.width*0.50;
+  const headHalf= ap.height/2-4;                 // stay inside the band
+  const headLen = Math.min(42, totalW*0.36);
+  const x0 = (cb.width-totalW)/2, tipX = x0+totalW, x1 = tipX-headLen;
+
+  // shaft, left to right
+  const cnt=5;
+  for(let i=0;i<cnt;i++) arrowBulbs.push(new Bulb(x0+(x1-x0)*i/(cnt-1), cy, i, rr2));
+  // Head: the tip is the RIGHTMOST bulb and the arms sweep BACK from it, so the
+  // arrow points right. Two arm steps, not three — at this scale three sit close
+  // enough together to merge into a blob rather than read as a chevron.
+  for(let k=2;k>=1;k--){
+    const x = tipX-(headLen*k/2), dy = headHalf*k/2, i = cnt+(2-k);
+    arrowBulbs.push(new Bulb(x, cy-dy, i, rr2));
+    arrowBulbs.push(new Bulb(x, cy+dy, i, rr2));
+  }
+  arrowBulbs.push(new Bulb(tipX, cy, cnt+2, rr2));
+
+  drawFrame();
+  const pr=poolCv.parentElement.getBoundingClientRect();
+  poolCv.width=Math.round(pr.width*dpr); poolCv.height=Math.round(pr.height*dpr);
+  pctx.setTransform(dpr,0,0,dpr,0,0);
+}
+function pointOnRoundRect(p,w,h,r){
+  const straightW=w-2*r, straightH=h-2*r, arc=Math.PI*r/2;
+  const legs=[straightW,arc,straightH,arc,straightW,arc,straightH,arc];
+  let i=0; while(p>legs[i]){ p-=legs[i]; i++; if(i>7){i=7;break;} }
+  const a=p/(legs[i]||1);
+  switch(i){
+    case 0: return [r+p, 0];
+    case 1: return [w-r+r*Math.sin(a*Math.PI/2), r-r*Math.cos(a*Math.PI/2)];
+    case 2: return [w, r+p];
+    case 3: return [w-r+r*Math.cos(a*Math.PI/2), h-r+r*Math.sin(a*Math.PI/2)];
+    case 4: return [w-r-p, h];
+    case 5: return [r-r*Math.sin(a*Math.PI/2), h-r+r*Math.cos(a*Math.PI/2)];
+    case 6: return [0, h-r-p];
+    default:return [r-r*Math.cos(a*Math.PI/2), r-r*Math.sin(a*Math.PI/2)];
+  }
+}
+
+/* -- the CTA tube ---------------------------------------------------------- */
+function drawFrame(){
+  const r=mainEl.getBoundingClientRect(); const w=r.width+4, h=r.height+4;
+  if(!w||!h) return;
+  const rad=Math.min(h/2,18), gap=22;
+  const d=[`M ${w/2-gap/2} ${h}`,`H ${rad}`,`A ${rad} ${rad} 0 0 1 0 ${h-rad}`,
+    `V ${rad}`,`A ${rad} ${rad} 0 0 1 ${rad} 0`,`H ${w-rad}`,
+    `A ${rad} ${rad} 0 0 1 ${w} ${rad}`,`V ${h-rad}`,
+    `A ${rad} ${rad} 0 0 1 ${w-rad} ${h}`,`H ${w/2+gap/2}`].join(" ");
+  const L=w/2-gap/2, R=w/2+gap/2;
+  frame.setAttribute("viewBox",`0 0 ${w} ${h}`);
+  frame.innerHTML=`
+    <path class="t-glass" d="${d}"/><path class="t-outer" d="${d}"/>
+    <path class="t-mid" d="${d}"/><path class="t-near" d="${d}"/>
+    <line class="t-elec" x1="${L-14}" y1="${h}" x2="${L}" y2="${h}"/>
+    <line class="t-elec" x1="${R}" y1="${h}" x2="${R+14}" y2="${h}"/>
+    <path class="t-core" d="${d}"/>
+    <line class="lead" x1="${L}" y1="${h}" x2="${L}" y2="${h+9}"/>
+    <line class="lead" x1="${R}" y1="${h}" x2="${R}" y2="${h+9}"/>
+    <rect class="housing" x="${L-4}" y="${h+7}" width="${gap+8}" height="6" rx="2"/>`;
+}
+
+/* -- render one bulb: hot core + halo, additively blended ------------------ */
+function paintBulbs(ctx, list, cv){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.globalCompositeOperation="source-over";
+  for(const b of list){                       // cold glass, always present
+    ctx.beginPath(); ctx.arc(b.x,b.y,3.1,0,6.284);
+    ctx.fillStyle = b.dead ? "#1A1A1C" : "#25262A"; ctx.fill();
+    ctx.strokeStyle="rgba(255,255,255,.05)"; ctx.lineWidth=.8; ctx.stroke();
+  }
+  ctx.globalCompositeOperation="lighter";     // light adds; it does not composite
+  for(const b of list){
+    const L=b.L; if(L<0.004) continue;
+    const [r,g,bl]=blackbody(b.K);
+    const hal=ctx.createRadialGradient(b.x,b.y,0,b.x,b.y,15+16*L);
+    hal.addColorStop(0,`rgba(${r},${g},${bl},${0.55*L})`);
+    hal.addColorStop(.45,`rgba(${r},${g},${bl},${0.16*L})`);
+    hal.addColorStop(1,`rgba(${r},${g},${bl},0)`);
+    ctx.fillStyle=hal;
+    ctx.beginPath(); ctx.arc(b.x,b.y,15+16*L,0,6.284); ctx.fill();
+    ctx.beginPath(); ctx.arc(b.x,b.y,2.5,0,6.284);
+    ctx.fillStyle=`rgba(${Math.min(255,r+60)},${Math.min(255,g+50)},${Math.min(255,bl+40)},${Math.min(1,L*1.3)})`;
+    ctx.fill();
+  }
+}
+
+/* -- the sign throws light onto the road ---------------------------------- */
+function paintPool(total){
+  pctx.clearRect(0,0,poolCv.width,poolCv.height);
+  if(total<0.01) return;
+  const w=poolCv.clientWidth, h=poolCv.clientHeight;
+  const g=pctx.createRadialGradient(w/2,-h*0.05,0,w/2,-h*0.05,h*1.6);
+  g.addColorStop(0,`rgba(240,145,85,${0.30*total})`);
+  g.addColorStop(.45,`rgba(205,95,45,${0.12*total})`);
+  g.addColorStop(1,"rgba(0,0,0,0)");
+  pctx.fillStyle=g; pctx.fillRect(0,0,w,h);
+}
+
+/* -- main loop ------------------------------------------------------------- */
+function step(now){
+  requestAnimationFrame(step);
+  const t = now - t0;
+  const dtFrame = Math.min(t - prevT, 120);
+
+  let lvl, warm, phase;
+  if(calm){ lvl=1; warm=0; phase="reduced motion"; bloom=1; prevT=t; }
+  else{
+    // discharge: supersample at 1 kHz and box-integrate across the frame
+    const steps=Math.max(1,Math.round(dtFrame/SUB_MS)), dt=dtFrame/steps;
+    let sum=0, warmSum=0;
+    for(let i=0;i<steps;i++){
+      const e=emit(take, prevT+dt*(i+0.5));
+      sum+=e.a; warmSum+=e.warm; phase=e.phase;
+      const tau=e.a>bloom?TAU_ATTACK:TAU_RELEASE;
+      bloom += (e.a-bloom)*(1-Math.exp(-dt/tau));
+    }
+    prevT=t; lvl=sum/steps; warm=warmSum/steps;
+  }
+  warmS += (warm-warmS)*0.25;
+
+  root.style.setProperty("--lvl",lvl.toFixed(4));
+  root.style.setProperty("--bloom",bloom.toFixed(4));
+  root.style.setProperty("--warm",warmS.toFixed(4));
+  // the FIELDS plate is a separate transformer — it settles a beat before the
+  // main tube, which is exactly how a multi-circuit sign wakes up
+  const l2 = calm ? 1 : Math.min(1, Math.max(0, (t-DARK_MS-300)/900)) * (lvl>0.02?1:0.85);
+  root.style.setProperty("--lvl2",l2.toFixed(4));
+  root.style.setProperty("--bloom2",l2.toFixed(4));
+
+  // -- filaments ----------------------------------------------------------
+  // Marquee chase: classic one-in-three, stepping ~7 positions/sec.
+  const powered = calm ? 1 : (lvl>0.06 || bloom>0.25) ? 1 : 0;
+  const stepIdx = Math.floor(t/140);
+  let sumT=0;
+  for(const b of bulbs){
+    const drive = !powered ? 0
+      : (calm || !chaseOn) ? 1
+      : (((b.i + stepIdx) % 3) === 0 ? 1 : 0);
+    b.update(drive, dtFrame, t); sumT += b.T;
+  }
+  // The arrow runs its own sweep, shaft to tip, so it reads as direction.
+  // Cycle length is driven by the highest INDEX (bulbs share indices in the
+  // head, where two arms light together), not by the bulb count.
+  const maxI = arrowBulbs.length ? arrowBulbs[arrowBulbs.length-1].i : 0;
+  const seg = Math.floor(t/110) % (maxI+5);
+  for(const b of arrowBulbs){
+    b.update(!powered ? 0 : (calm||!chaseOn) ? 1 : (b.i<=seg && b.i>seg-4 ? 1 : 0), dtFrame, t);
+  }
+  const bulbAvg = bulbs.length ? sumT/bulbs.length : 0;
+  root.style.setProperty("--bulbAvg", bulbAvg.toFixed(3));
+
+  paintBulbs(bctx, bulbs.concat(arrowBulbs), bulbCv);
+  paintPool(Math.min(1, bloom*0.7 + bulbAvg*0.6));
+
+  // -- wind ---------------------------------------------------------------
+  if(!calm){
+    const sway = 0.16*Math.sin(t/2300) + 0.07*Math.sin(t/970+1.3);
+    pylon.style.transform = `rotate(${sway.toFixed(3)}deg)`;
+  } else pylon.style.transform = "none";
+
+  rPhase.textContent = phase;
+  rLvl.textContent   = Math.round(lvl*100)+"%";
+  rFil.textContent   = Math.round(K_COLD+(K_HOT-K_COLD)*bulbAvg)+"K";
+}
+
+/* -- controls -------------------------------------------------------------- */
+function restart(seed){
+  take=buildTake(seed===undefined?take.seed:seed);
+  t0=performance.now(); prevT=0; bloom=0; warmS=0;
+  for(const b of bulbs) b.T=0;
+  for(const b of arrowBulbs) b.T=0;
+}
+document.getElementById("replay").onclick=()=>restart();
+document.getElementById("reseed").onclick=()=>restart((Math.random()*1e9)|0);
+document.getElementById("safe").onclick=e=>{
+  SAFE=!SAFE; e.currentTarget.setAttribute("aria-pressed",String(SAFE)); restart();
+};
+document.getElementById("chase").onclick=e=>{
+  chaseOn=!chaseOn; e.currentTarget.setAttribute("aria-pressed",String(chaseOn));
+};
+document.getElementById("calm").onclick=e=>{
+  calm=!calm; e.currentTarget.setAttribute("aria-pressed",String(calm)); if(!calm) restart();
+};
+signEl.addEventListener("click",e=>{e.preventDefault(); restart();});
+
+new ResizeObserver(layout).observe(cabinet);
+addEventListener("resize",layout);
+layout();
+requestAnimationFrame(step);
+</script>
+</body>
+</html>
