@@ -1,0 +1,96 @@
+/* NeonCta — see ../README.md for the physics.
+   Scoped to .sign so the gas tokens never leak into the rest of the deck. */
+
+.sign {
+  --gas: #F0793E;        /* the discharge colour, seen in the halo */
+  --gas-deep: #B2401A;   /* outer bloom, red-shifted by distance */
+  --core: #FFF6EE;       /* white-hot tube centre */
+  --gas-cold: #FF9A7A;   /* partial ionisation runs pinker and dimmer */
+  --glass: #5C6157;      /* unlit tube: pale grey-green glass, always visible */
+
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  margin-top: 2rem;
+  padding: clamp(1.05rem, 3.2vw, 1.5rem) clamp(1.9rem, 5.5vw, 3.1rem);
+  text-decoration: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform .35s cubic-bezier(.2, .7, .2, 1);
+}
+.sign:hover { transform: translateY(-3px); }
+.sign:focus-visible { outline: 2px solid var(--gas); outline-offset: 14px; border-radius: 6px; }
+
+/* Bounce light on the wall behind. Half the effect of a sign at night is what
+   it does to the surface behind it. */
+.sign::before {
+  content: "";
+  position: absolute;
+  inset: -180% -40%;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(46% 34% at 50% 50%,
+    rgb(240 121 62 / calc(0.18 * var(--bloom, 0))) 0%,
+    rgb(178 64 26 / calc(0.09 * var(--bloom, 0))) 38%,
+    transparent 72%);
+}
+
+/* ---- the border tube ---- */
+.frame { position: absolute; inset: 0; overflow: visible; pointer-events: none; }
+.frame path, .frame line { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+
+.tGlass   { stroke: var(--glass); stroke-width: 5.5; opacity: .42; }
+.tGlassHi { stroke: #9AA093; stroke-width: 1.1; opacity: .30; }   /* specular on the glass */
+
+.tOuter { stroke: var(--gas-deep); stroke-width: 26; filter: blur(17px);
+          opacity: calc(0.55 * var(--bloom, 0) * (1 - 0.65 * var(--warm, 0))); }
+.tMid   { stroke: var(--gas); stroke-width: 13; filter: blur(7px);
+          opacity: calc(0.80 * var(--lvl, 0)); }
+.tNear  { stroke: var(--gas); stroke-width: 6.5; filter: blur(2.4px);
+          opacity: calc(0.92 * var(--lvl, 0)); }
+.tCore  { stroke: var(--core); stroke-width: 2.6; filter: blur(.5px);
+          opacity: calc(1 * var(--lvl, 0)); }
+
+/* The tube ends, where the electrodes sit, run hotter and pinker than the
+   middle of the run — visible on every real sign. */
+.tElec { stroke: var(--gas-cold); stroke-width: 9; filter: blur(5px);
+         opacity: calc(0.75 * var(--lvl, 0)); }
+.lead    { stroke: #2A2724; stroke-width: 2.2; opacity: .9; }
+.housing { fill: #141210; stroke: #2A2724; stroke-width: 1; }
+
+/* ---- lettering ----
+   Two stacked copies: .glass is the unlit tube and never changes, .lit is the
+   discharge. Fill is transparent with a stroke, because neon letters are bent
+   tube, not filled shapes. */
+.word { display: grid; place-items: center; }
+.word > span {
+  grid-area: 1 / 1;
+  font-family: var(--sans);
+  font-size: clamp(.88rem, 2.2vw, 1.08rem);
+  font-weight: 600;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  line-height: 1.5;
+  white-space: nowrap;
+  color: transparent;
+  -webkit-text-stroke: 1.7px var(--glass);
+}
+.glass { -webkit-text-stroke-color: rgb(92 97 87 / .5); }
+.lit {
+  -webkit-text-stroke-color: rgb(255 246 238 / calc(1 * var(--lvl, 0)));
+  text-shadow:
+    0 0 calc(2px  + 1px  * var(--bloom, 0)) rgb(255 246 238 / calc(1   * var(--lvl, 0))),
+    0 0 calc(5px  + 3px  * var(--bloom, 0)) rgb(255 214 180 / calc(.95 * var(--lvl, 0))),
+    0 0 calc(12px + 8px  * var(--bloom, 0)) rgb(240 121 62  / calc(.95 * var(--lvl, 0))),
+    0 0 calc(26px + 18px * var(--bloom, 0)) rgb(240 121 62  / calc(.75 * var(--bloom, 0))),
+    0 0 calc(54px + 40px * var(--bloom, 0)) rgb(178 64 26   / calc(.50 * var(--bloom, 0) * (1 - .6 * var(--warm, 0))));
+}
+
+/* On a narrow phone the label wraps rather than overflowing the tube. */
+@media (max-width: 30rem) {
+  .word > span { white-space: normal; text-align: center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sign { transition: none; }
+}
