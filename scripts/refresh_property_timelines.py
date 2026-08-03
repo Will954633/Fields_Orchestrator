@@ -140,16 +140,23 @@ def _fetch_timeline_once(url: str) -> list[dict] | None:
         if isinstance(sale_meta, dict) and "__ref" in sale_meta:
             sale_meta = apollo.get(sale_meta["__ref"], sale_meta)
 
-        is_sold = (
-            category == "Sale"
-            or (isinstance(sale_meta, dict) and sale_meta.get("isSold"))
+        # Domain's `category` is "Sale" for ANY sale-related event, including campaigns that
+        # ended without a sale — those carry priceDescription "Listed - not sold". Treating
+        # category alone as proof of sale flagged every unsold listing as sold (94 of 94 in the
+        # 2026-08-03 sweep). Currently harmless for days-on-market because unsold campaigns in our
+        # data are almost all historical and fall outside the backfill's 60-day match window — but
+        # it would bite precisely in the relist-then-sell case, which is the pattern we suspect
+        # realestate.com.au counts and we do not. Rentals are already safe (category "Rental").
+        price_desc = entry.get("priceDescription", "")
+        explicitly_unsold = str(price_desc).strip().lower() == "listed - not sold"
+        is_sold = (not explicitly_unsold) and (
+            (isinstance(sale_meta, dict) and sale_meta.get("isSold"))
+            or category == "Sale"
         )
 
         agency = entry.get("agency") or {}
         if isinstance(agency, dict) and "__ref" in agency:
             agency = apollo.get(agency["__ref"], agency)
-
-        price_desc = entry.get("priceDescription", "")
 
         timeline.append({
             "date": date_str,
