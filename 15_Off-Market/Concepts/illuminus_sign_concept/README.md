@@ -1,46 +1,59 @@
 # Illuminus — the off-market CTA as a night neon sign
 
-Two versions:
+Four variants:
 
 | | View |
 |---|---|
 | **Wall sign** — the tight pill, closest to the current CTA | [index.html](https://vm.fieldsestate.com.au/concepts/off-market/illuminus_sign_concept/index.html) |
 | **Roadside pylon** — marquee cabinet on posts, with chase bulbs | [roadside.html](https://vm.fieldsestate.com.au/concepts/off-market/illuminus_sign_concept/roadside.html) |
 | **Low monument** — long slab ~1 m up, seen from the left at 40° | [low-profile.html](https://vm.fieldsestate.com.au/concepts/off-market/illuminus_sign_concept/low-profile.html) |
-| **Button** — tube + words only, no scene. The affordance-first option | [button.html](https://vm.fieldsestate.com.au/concepts/off-market/illuminus_sign_concept/button.html) |
+| ⭐ **Button** — tube + words only, no scene | [button.html](https://vm.fieldsestate.com.au/concepts/off-market/illuminus_sign_concept/button.html) |
 
-> **Affordance note.** The more photographic these got, the less they read as
-> something you can click — a scene with ground, posts and lens artefacts looks
-> like a picture of a sign, not a control. `button.html` is the deliberate
-> reversal: flat, axis-aligned, CTA-sized, no scene. Worth A/B-ing against the
-> current flat pill rather than trusting anyone's instinct, since the deck
-> already carries PostHog CTA events and takes paid traffic.
+> ⭐ **`button.html` is the preferred option for the /off-market V3 redesign**
+> (`15_Off-Market/Page_Redesign_V3`) — Will, 2026-08-04. The other three are
+> reference only.
+>
+> **Why, and the tension behind it.** The more photographic these got, the less
+> they read as something you can click: a scene with ground, posts and lens
+> artefacts looks like a picture of a sign, not a control. Realism and
+> affordance pull against each other, and every graphics pass made the sign
+> versions prettier and less pressable. `button.html` is the deliberate
+> reversal — flat, axis-aligned, CTA-sized, no scene — and it keeps the tube
+> and lighting work the sign versions paid for.
+>
+> Still worth A/B-ing against the current flat copper pill before it ships as
+> the default; the deck already carries PostHog CTA events and takes paid
+> traffic.
 
-Both run the same discharge engine and the same three-swells-then-flicker
+All four run the same discharge engine and the same three-swells-then-flicker
 sequence. The roadside version adds a second, physically different emitter —
 see [Roadside](#roadside) below.
 
 ---
 
-## Status — paused 2026-08-03
+## Status — 2026-08-04
 
-**Concept stage. Nothing is live.** Both versions are built, measured and
-viewable; neither is wired into the site.
+**Direction chosen, nothing live yet.** `button.html` is the preferred CTA for
+the **/off-market V3 redesign**. All four variants are built, measured and
+viewable; none is wired into the site.
 
 | | |
 |---|---|
-| Built + verified | Wall sign, roadside pylon, React port of the wall sign |
+| **Chosen** | `button.html` → /off-market V3 (`15_Off-Market/Page_Redesign_V3`) |
+| Built + verified | All four variants; React port of the **wall sign** |
 | **Not** wired in | `DiscoveryDeck.tsx:278` still renders the original flat pill |
 | **Not** tested | Any real phone. Headless Chrome only, desktop viewport |
-| **Not** built | React port of the roadside version (it's a scene, not a button — see below) |
-| Blocked on | Will's four decisions in [Open decisions](#open-decisions) |
+| **Not** built | React port of `button.html` — `port/` targets the wall sign and needs reworking |
+| Next | Rework `port/` to the button, then A/B against the flat copper pill |
 
 ### Files
 
 ```
-index.html          wall sign — standalone, no build
-roadside.html       roadside pylon — standalone, no build
-port/NeonCta.tsx    drop-in React component for the wall sign
+button.html         ⭐ CHOSEN — tube + words, no scene, standalone
+low-profile.html    low monument sign, 3D slab — reference
+roadside.html       roadside pylon, chase bulbs — reference
+index.html          wall sign — reference; the original pill treatment
+port/NeonCta.tsx    React port of the WALL SIGN (not the button — see below)
 port/NeonCta.module.css
 verify/verify.js    reproduces every measured number in this README
 verify/shots/       screenshots it writes (regenerated, not source)
@@ -328,11 +341,22 @@ tracking is unaffected.
 
 Nothing goes further until these are settled. Ordered by how much they change.
 
-**1. Which version?** The wall sign is an element — it drops into the existing
-strategy card and the React port is already written. The roadside pylon is a
-*scene*: sky, road, structure. It would have to become the whole final card of
-the deck, and it needs a port built from scratch. That is the real fork; the
-rest are details.
+**1. Which version? — SETTLED (2026-08-04): `button.html`,** as the CTA for the
+**/off-market V3 redesign** (`15_Off-Market/Page_Redesign_V3`). Will's call.
+
+It won on affordance, not on looks — the scene versions are the better *images*
+and the worse *controls*. `low-profile.html` and `roadside.html` stay in the
+folder as reference and as the source of the tube/lighting work that
+`button.html` inherits; neither is a candidate for V3.
+
+Consequences that follow from picking it:
+- The React port in `port/` targets the **wall sign**, not this. It needs
+  reworking to `button.html`'s geometry and type — the engine and the
+  scroll-into-view/park-lit behaviour carry over unchanged, the styling does
+  not.
+- Still worth A/B-ing against the current flat copper pill before it becomes
+  the default. Choosing it over the diorama is not the same as proving it beats
+  the plain control, and the deck already carries PostHog CTA events.
 
 **2. Flash-safe or raw?** → *Recommend safe.* Raw physics peaks at 8 strikes in
 a one-second window against WCAG's limit of 3. The difference is barely
