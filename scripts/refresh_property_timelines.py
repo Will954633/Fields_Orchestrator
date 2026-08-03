@@ -26,8 +26,10 @@ import time
 from datetime import datetime, timedelta
 from pymongo import MongoClient
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from shared.domain_fetch import fetch_html
+from job_status import job_run  # noqa: E402
 
 TARGET_SUBURBS = ["robina", "burleigh_waters", "varsity_lakes"]
 DOMAIN_PROFILE_BASE = "https://www.domain.com.au/property-profile"
@@ -57,6 +59,7 @@ RATE_LIMIT_DELAY = 6.0  # seconds between Domain requests — 2.0s let per-reque
                          # confirmed 2026-07-23), consistent with Bright Data account-level
                          # rate limiting under sustained load rather than a content bug
 COSMOS_RETRY_DELAY = 5.0
+
 
 
 def get_db():
@@ -242,9 +245,17 @@ def refresh_suburb(gc_db, suburb, limit=None, dry_run=False, stale_only=False, s
     skipped = 0
     failed = 0
 
-    cursor = coll.find(query, {"address": 1, "url_slug": 1, "_id": 1}).limit(limit or 0)
+    # MATERIALISE THE CURSOR FIRST. Every run of this job died with
+    # `pymongo.errors.CursorNotFound: cursor id ... not found (code 43)`: the loop below holds the
+    # cursor open while doing a Bright Data fetch plus a rate-limit sleep per document, which on a
+    # few hundred properties is far longer than Cosmos will keep an idle cursor alive. The
+    # projection is three small fields, so pulling the whole batch into memory costs almost nothing
+    # and removes the failure mode entirely. Found 2026-08-03 — the job had never completed a run,
+    # which is why 89% of sold records had never had their timeline refreshed.
+    docs = list(coll.find(query, {"address": 1, "url_slug": 1, "_id": 1}).limit(limit or 0))
+    print(f"    Fetched {len(docs)} candidate docs into memory (cursor closed)")
 
-    for i, doc in enumerate(cursor):
+    for i, doc in enumerate(docs):
         address = doc.get("address", "")
         url = build_profile_url(address)
 
@@ -315,20 +326,35 @@ def main():
     gc_db = client["Gold_Coast"]
 
     suburbs = [args.suburb] if args.suburb else TARGET_SUBURBS
-    total_updated = 0
 
-    for suburb in suburbs:
-        updated = refresh_suburb(
-            gc_db, suburb,
-            limit=args.limit,
-            dry_run=args.dry_run,
-            stale_only=args.stale_only,
-            sold_since_days=args.sold_since_days,
-            houses_only=args.houses_only,
-            skip_refreshed=args.skip_refreshed,
-        )
-        total_updated += updated
-        time.sleep(5)  # Pause between suburbs
+    # Rule 7 heartbeat. This job has now been broken TWICE without anyone noticing — first a
+    # missing `cd` in the crontab (fixed 2026-07-22), then CursorNotFound on every run (fixed
+    # 2026-08-03). Both were invisible because nothing self-reported. The Domain timeline is the
+    # only source of a true sale date and a real days-listed figure, so a silent failure here
+    # degrades medians, quarter assignment and days-on-market simultaneously.
+    def _run():
+        total = 0
+        for suburb in suburbs:
+            total += refresh_suburb(
+                gc_db, suburb,
+                limit=args.limit,
+                dry_run=args.dry_run,
+                stale_only=args.stale_only,
+                sold_since_days=args.sold_since_days,
+                houses_only=args.houses_only,
+                skip_refreshed=args.skip_refreshed,
+            )
+            time.sleep(5)  # Pause between suburbs
+        return total
+
+    if args.dry_run:
+        total_updated = _run()
+    else:
+        with job_run("refresh_property_timelines", cadence_hours=24 * 7,
+                     title="Domain property timelines refresh") as beat:
+            total_updated = _run()
+            beat.detail = f"{total_updated} timelines refreshed across {len(suburbs)} suburbs"
+            beat.metrics = {"updated": total_updated, "suburbs": len(suburbs)}
 
     print(f"\nDone. Total updated: {total_updated}")
     client.close()
