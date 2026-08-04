@@ -1093,13 +1093,29 @@ _REGISTRY_LOG_JOBS = [
     ("Policy research fetch (monthly)", "Market Intelligence", "policy-research.log", 35),
     ("Price-tier liquidity precompute (monthly)", "Market Intelligence",
      "precompute-price-tier-liquidity.log", 35),
-    ("Monthly market precompute chain", "Market Intelligence", "monthly-market-precompute.log", 35),
-    ("Market Pulse reminder (1st)", "Market Content", "pulse-reminder.log", 35),
-    ("Market Pulse auto-fallback (3rd)", "Market Content", "market-pulse-auto.log", 35),
+    # The consolidated wrapper was created 2026-08-02, i.e. AFTER that month's 1st,
+    # so its log legitimately does not exist yet — first run is 1 Sep. not_before
+    # keeps that reading "awaiting first run" instead of MISSING/broken.
+    ("Monthly market precompute chain", "Market Intelligence", "monthly-market-precompute.log", 35,
+     "2026-09-01"),
+    # Market Pulse reminder (1st) + auto-fallback (3rd) are NOT log-freshness rows:
+    # both wrappers append to the SHARED logs/market-pulse.log, so mtime cannot tell
+    # which of the two ran (they pointed at per-job logs that never existed and read
+    # MISSING forever). Both now self-report via record_job_result and are rendered
+    # automatically by collect_self_reported_jobs — see run_pulse_reminder.sh and
+    # run_market_pulse.sh.
     ("Brain 3 ops nightly", "Knowledge Base", "/home/fields/brain3_ops/nightly.log", 1),
     ("Samantha action-log harvest (hourly)", "Samantha", "samantha/actionlog.log", 1),
     ("for-sale-v3 keep-warm", "Website", "keep-warm-forsale.log", 1),
-    ("VM heartbeat writer", "Infra", "/tmp/vm-heartbeat.log", 1),
+    # Probe the file the script actually rewrites every minute (`date > $TMP`), NOT
+    # its cron redirect: write_heartbeat.sh sends all of its own output to /dev/null,
+    # so /tmp/vm-heartbeat.log is only ever touched on an unhandled error and its
+    # mtime is meaningless (it read STALE for 3d while the writer was perfectly
+    # healthy). Scope note: this row answers "is the local writer still running".
+    # End-to-end liveness of the uploaded GCS object gs://fields-vm-watchdog/
+    # vm-heartbeat.txt is the OFF-VM watchdog's job — it alerts Will directly, so
+    # duplicating it here would add no coverage.
+    ("VM heartbeat writer", "Infra", "/tmp/vm-heartbeat.txt", 1),
 ]
 _REGISTRY_ALREADY_COVERED = [
     ("Sitemap regen (daily push)", "Website/SEO", "Sitemap tab"),
@@ -1333,9 +1349,20 @@ def collect_process_registry(add):
     PG = "Process Registry"
     orch_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-    for name, category, log_name, cadence_days in _REGISTRY_LOG_JOBS:
+    for entry in _REGISTRY_LOG_JOBS:
+        name, category, log_name, cadence_days = entry[:4]
+        # Optional 5th element: an ISO date before which this job has not yet had its
+        # first scheduled run (e.g. a monthly wrapper created after this month's run
+        # date). Until then a missing log is EXPECTED, not a failure — render it as a
+        # KNOWN-GAP saying so rather than MISSING, which reads as broken.
+        not_before = entry[4] if len(entry) > 4 else None
         log_path = log_name if log_name.startswith("/") else os.path.join(orch_dir, "logs", log_name)
         st, dt, mtime = log_freshness_check(log_path, cadence_days)
+        if st == MISSING and not_before and datetime.now(timezone.utc).date().isoformat() < not_before:
+            add(PG, name, category, "not yet due", GAP, "", None,
+                f"awaiting first scheduled run (due {not_before}) — no log yet is expected",
+                info=True)
+            continue
         add(PG, name, category, mtime.date().isoformat() if mtime else None, st, "log mtime", mtime, dt)
 
     for name, category, note in _REGISTRY_ALREADY_COVERED:

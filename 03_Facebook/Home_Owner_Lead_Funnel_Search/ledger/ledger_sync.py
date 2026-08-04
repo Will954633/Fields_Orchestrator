@@ -1,5 +1,24 @@
 #!/usr/bin/env python3
 """
+*** RETIRED 2026-08-05 (Will) — cron commented out, heartbeat deleted. DO NOT RE-CRON AS-IS. ***
+
+Both halves had stopped being useful:
+
+  FB half   : its only campaign (120251771274010134, "Leads TEST: Home Owner Hooks — SEQ ex-GC v2")
+              has been PAUSED since 2026-07-30 with the rest of the Home Owner funnel. The ledger
+              froze at data dates 2026-07-28..30 and every hourly run since just re-upserted the
+              same 120 ad_stats rows, changing only `updated_at` (~15x/day, reporting success).
+  PostHog   : never worked at all. `lab_*` events have NEVER been fired — verified against PostHog
+    half      all-time with no filters, while the same query returns real data for other events.
+              The EVENT_SPINE below was designed but the instrumentation was never shipped onto the
+              landing pages, so funnel_event rows have always been 0.
+
+If the Home Owner funnel is revived, note that reviving THIS script only restores ad-level numbers.
+The per-step drop-out analysis it was built for needs the `lab_*` instrumentation to exist first —
+check that events are actually arriving in PostHog before trusting the funnel_event side.
+
+See fix-history [HEALTH-BOARD-PAUSED-VS-DEAD] / [MONITOR-FITNESS-PROBES]. Original docs follow.
+-----------------------------------------------------------------------------------------------
 ledger_sync.py — populate the funnel ledger from its two sources (build 6A).
 
   FB side  : Graph API ad-level insights (per variant/day) -> ad_stats rows.
