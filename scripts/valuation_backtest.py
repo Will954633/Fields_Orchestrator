@@ -477,6 +477,14 @@ def backtest_single_property(db, subject_doc, all_sold_in_suburb, sold_by_suburb
         'n_included': len(included_points),
         'n_total_comps': len(all_enriched_points),
         'cv': confidence_result.get('cv'),
+        # The per-comparable detail — each point carries adjustment_result (the
+        # itemised dollar adjustments and adjusted_price), verification and
+        # weight. The accuracy metrics don't need it, but anything that wants to
+        # SHOW the working does, and this is the only code path that builds a
+        # comp set with the subject and its future sales correctly excluded.
+        'included_points': included_points,
+        'all_points': all_enriched_points,
+        'subject_features': subject_features,
     }
 
 
