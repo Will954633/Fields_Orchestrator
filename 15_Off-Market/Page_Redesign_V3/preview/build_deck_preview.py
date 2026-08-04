@@ -55,6 +55,34 @@ OUT = HERE / "deck.html"
 SMS_NUMBER = "+61440131629"            # E.164, what the sms: link dials
 SMS_NUMBER_DISPLAY = "0440 131 629"    # what a human reads
 SMS_NUMBER_IS_PLACEHOLDER = False
+
+# THE DISCOVERY INDEX IS WIDER THAN THE SERVICE AREA. Discovery covers Nerang;
+# the mini-site builder does not, so a Nerang reader could watch the whole
+# sequence, be told "Your website is ready", and text in for a site that
+# `analyse-your-home-submit` will refuse with a 400. The claim step — and the
+# offer card that leads to it — is therefore only built for served suburbs.
+#
+# Read from the website's own source rather than copied, because a hardcoded
+# second copy of a service area is a list that goes stale silently. The literal
+# below is only the fallback for when that file cannot be read.
+SERVICE_AREA_FILE = Path(
+    "/home/fields/Feilds_Website/01_Website/netlify/functions/analyse-your-home-submit.mjs")
+SERVICE_AREA_FALLBACK = {"robina", "burleigh_waters", "varsity_lakes", "merrimac",
+                         "mudgeeraba", "reedy_creek", "worongary"}
+
+
+def served_suburb_keys() -> set[str]:
+    """The suburbs the mini-site builder will actually build for."""
+    try:
+        src = SERVICE_AREA_FILE.read_text()
+        block = re.search(r"SERVICE_AREA_SUBURB_KEYS\s*=\s*new Set\(\[(.*?)\]\)", src, re.S)
+        keys = set(re.findall(r"'([a-z_]+)'", block.group(1))) if block else set()
+        if keys:
+            return keys
+        print("  ! SERVICE_AREA_SUBURB_KEYS not parsed — using the fallback list")
+    except OSError:
+        print("  ! website source unreadable — using the fallback service-area list")
+    return set(SERVICE_AREA_FALLBACK)
 TOKENS = HERE / "tokens.json"
 
 # land_prestige, so the retriever appears and its ball can demonstrate the
@@ -465,14 +493,14 @@ def renumber(card_html: str, n: int, total: int) -> str:
         card_html, count=1)
 
 
-def build_deck_html(doc: dict, em: dict | None) -> str:
+def build_deck_html(doc: dict, em: dict | None, served: bool = True) -> str:
     by_type = {c["type"]: c for c in doc["cards"]}
-    # Count what will actually render, +1 for the offer card, BEFORE emitting —
-    # the denominator has to be right on card 01.
+    # Count what will actually render BEFORE emitting — the denominator has to be
+    # right on card 01. The offer card only counts when we can honour it.
     total = (sum(1 for t in ("recognition", "hook", "reveal", "explanation")
                  if t in by_type)
              + sum(1 for c in doc["cards"] if c["type"] in RENDERERS)
-             + 1)
+             + (1 if served else 0))
     seq = 0
     out = ['<main id="deck">\n',
            # CARD 00 — headline only, unnumbered on purpose. The matrix ends on a
@@ -498,8 +526,12 @@ def build_deck_html(doc: dict, em: dict | None) -> str:
         if fn:
             seq += 1
             out.append(renumber(fn(card, total), seq, total))
-    seq += 1
-    out.append(render_11(seq, total))
+    # No offer card outside the service area. The deck still does its job — it
+    # shows a reader their own street — it just stops rather than promising a
+    # website that cannot be built. Better a deck that ends than one that lies.
+    if served:
+        seq += 1
+        out.append(render_11(seq, total))
     out.append("</main>\n")
     return "".join(out)
 
@@ -567,26 +599,31 @@ def build_one(slug: str, out_path: Path, cfg: dict) -> dict:
     rel = "../" if out_path.parent != HERE else ""
     css = (HERE / "deck.css").read_text()
     js = (HERE / "deck.js").read_text()
-    deck = build_deck_html(doc, em).replace('src="media/', f'src="{rel}media/') \
-                                   .replace('data-src="media/', f'data-src="{rel}media/')
+    served = (doc.get("suburb_key") or "").lower() in served_suburb_keys()
+    deck = build_deck_html(doc, em, served).replace('src="media/', f'src="{rel}media/') \
+                                          .replace('data-src="media/', f'data-src="{rel}media/')
     cfg_js = ('<script>window.__FIELDS_INTRO = {'
               f' street: {json.dumps(doc.get("address_short"))},'
               f' locality: {json.dumps(locality_of(doc))},'
               f' tokens: {tok} }};</script>\n')
-    js += "<script>\n" + (HERE / "neon_cta.js").read_text() + "</script>\n"
 
-    # The outro. Assets resolve against the DOCUMENT, so the base has to be set
-    # before crack.js and signal-bed.js load — the deck sits two directories
-    # below them.
-    outro = ROOT / "outro"
-    js += (f'<script>window.FIELDS_OUTRO_BASE = "{rel}../outro/";</script>\n'
-           + "<script>\n" + (outro / "glass-audio.js").read_text() + "</script>\n"
-           + "<script>\n" + (outro / "signal-bed.js").read_text() + "</script>\n"
-           + "<script>\n" + (outro / "crack.js").read_text() + "</script>\n"
-           + "<script>\n" + (outro / "outro-deck.js").read_text() + "</script>\n"
-           + claim_config(doc)
-           + "<script>\n" + (outro / "claim.js").read_text() + "</script>\n"
-           + OUTRO_WIRE)
+    # No offer card means no neon, no shatter, no claim — and none of their
+    # weight either. That is ~2.5MB of crack assets and six modules a reader
+    # outside the service area has no reason to download.
+    if served:
+        js += "<script>\n" + (HERE / "neon_cta.js").read_text() + "</script>\n"
+        # The outro. Assets resolve against the DOCUMENT, so the base has to be
+        # set before crack.js and signal-bed.js load — the deck sits two
+        # directories below them.
+        outro = ROOT / "outro"
+        js += (f'<script>window.FIELDS_OUTRO_BASE = "{rel}../outro/";</script>\n'
+               + "<script>\n" + (outro / "glass-audio.js").read_text() + "</script>\n"
+               + "<script>\n" + (outro / "signal-bed.js").read_text() + "</script>\n"
+               + "<script>\n" + (outro / "crack.js").read_text() + "</script>\n"
+               + "<script>\n" + (outro / "outro-deck.js").read_text() + "</script>\n"
+               + claim_config(doc)
+               + "<script>\n" + (outro / "claim.js").read_text() + "</script>\n"
+               + OUTRO_WIRE)
 
     # The fruit leaving the tree only exists for the pandanus. The other seven
     # emblems have nothing that could plausibly detach, so they get no script at
@@ -606,7 +643,7 @@ def build_one(slug: str, out_path: Path, cfg: dict) -> dict:
     return {"slug": slug, "suburb": doc.get("suburb_display"),
             "address": doc.get("address_short"), "angle": doc.get("lead_angle"),
             "emblem": em["stem"] if em else None, "cards": len(doc["cards"]),
-            "kb": round(out_path.stat().st_size / 1024)}
+            "served": served, "kb": round(out_path.stat().st_size / 1024)}
 
 
 def main() -> None:
@@ -634,9 +671,17 @@ def main() -> None:
             continue
         rows.append(r)
         print(f"  {r['address']:<26} {r['suburb']:<16} {r['angle']:<15} "
-              f"{r['emblem'] or '—':<9} {r['cards']:>2} cards  {r['kb']:>3} KB")
+              f"{r['emblem'] or '—':<9} {r['cards']:>2} cards  {r['kb']:>3} KB"
+              f"{'' if r['served'] else '   [no claim step — outside service area]'}")
     (HERE / "examples" / "index.json").write_text(json.dumps(rows, indent=2))
     print(f"\nwrote {len(rows)} examples to preview/examples/")
+    # Say it out loud rather than letting a silently shortened deck look normal.
+    unserved = [r for r in rows if not r["served"]]
+    if unserved:
+        subs = sorted({r["suburb"] for r in unserved})
+        print(f"{len(unserved)} deck(s) end at the last card with no offer — "
+              f"{', '.join(subs)} are outside the mini-site service area "
+              f"({', '.join(sorted(served_suburb_keys()))}).")
 
 
 if __name__ == "__main__":
