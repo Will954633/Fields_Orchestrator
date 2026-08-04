@@ -1,0 +1,484 @@
+/* ============================================================================
+   fridge.css — the black-and-white fridge door.
+
+   There is NO fridge artwork. Every surface here is a CSS gradient. The only
+   two image assets on the page are the magnet twin (a downscale of the real
+   print file) and a 128px grain tile that stops the large gradients banding
+   on OLED.
+
+   Everything is driven by ONE animated custom property, --open (0 → 1):
+   door angle, face luminance, light wedge, shadow length, option opacity.
+   That is what makes the motion interruptible and draggable.
+
+   Palette: a monochrome ramp derived from the brand grass hue (147°), NOT
+   neutral grey and NOT #000 — src/styles/theme.css:41 forbids invented
+   near-blacks. Held at ~7% saturation: the first pass used the full 24% of the
+   theme ramp and the screenshot came back unmistakably green, which is not
+   what "black and white" means.
+   ========================================================================== */
+
+@property --open {
+  syntax: '<number>';
+  initial-value: 0;
+  inherits: true;
+}
+
+:root {
+  /* Grass hue (147°) held at ~7% saturation — reads as neutral black-and-white
+     to the eye, but is not an invented near-black. theme.css:41. */
+  --m-950: #070908;   /* room, deepest */
+  --m-900: #0d100e;
+  --m-850: #141816;
+  --m-800: #191d1b;
+  --m-700: #212623;
+  --m-600: #2b312d;
+  --m-500: #353c38;
+  --m-400: #434b46;
+  --m-300: #5c655f;
+  --m-200: #8d968f;
+  --m-100: #c4ccc7;
+  --m-050: #e8e4dd;
+  --lamp:  #f7f4ee;
+
+  --copper: #dd8f6d;  /* = --copper-on-dark. The only colour in the sequence. */
+
+  /* 104°, not 78°. Projected door width is W·cos(θ): at 78° the door still
+     covers 21% of the opening and cuts the option text in half (caught by
+     screenshot, not by reading the code). Past 90° it swings clear of the
+     cavity entirely. */
+  --depth: 14px;
+  --angle: 100deg;
+
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--m-950);
+  font-family: var(--font);
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* the room the fridge stands in — a faint pool of light on the floor */
+.room {
+  position: relative;
+  width: 100%;
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+  padding: max(24px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+  background:
+    radial-gradient(120% 60% at 50% 108%, rgba(138,151,143,.10), transparent 70%),
+    radial-gradient(80% 50% at 50% -10%, rgba(138,151,143,.06), transparent 70%);
+}
+
+/* grain over everything — the anti-banding layer */
+.room::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url('assets/grain.png');
+  background-size: 128px 128px;
+  opacity: .035;
+  mix-blend-mode: overlay;
+  pointer-events: none;
+  z-index: 90;
+}
+
+/* ── stage ────────────────────────────────────────────────────────────── */
+
+.stage {
+  perspective: 1250px;
+  perspective-origin: 46% 44%;
+  width: min(340px, 90vw);
+  aspect-ratio: 340 / 620;
+  max-height: min(620px, 82svh);
+  position: relative;
+}
+
+.fridge {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+}
+
+/* the light the open door throws onto the floor */
+.wedge {
+  position: absolute;
+  left: 4%;
+  bottom: -6%;
+  width: calc(30% + var(--open) * 78%);
+  height: 14%;
+  background: linear-gradient(100deg,
+              rgba(246,241,233,.30), rgba(246,241,233,.06) 55%, transparent 78%);
+  filter: blur(9px);
+  opacity: calc(var(--open) * .9);
+  transform: skewX(-26deg);
+  pointer-events: none;
+}
+
+/* ── cavity (the interior) ────────────────────────────────────────────── */
+
+.cavity {
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  /* Seat the interior BEHIND the door's hinge plane. Without this the cavity
+     sits at Z=0, exactly coplanar with the door's inner panel, and the two
+     z-fight — mid-swing the door renders translucent with the option text
+     showing through it. Only visible in a frame between 0 and 1, which is why
+     it survived reading the code and died on the first mid-swing screenshot. */
+  transform: translateZ(-8px);
+  background:
+    linear-gradient(180deg, var(--m-700) 0%, var(--m-850) 42%, var(--m-900) 100%);
+  /* the gasket frame — a real fridge cavity is inset behind a moulded lip */
+  box-shadow:
+    inset 0 0 0 7px var(--m-800),
+    inset 0 0 0 8px rgba(0,0,0,.55),
+    inset 0 0 60px rgba(0,0,0,.85);
+}
+
+/* The interior lamp: a real one is a small fitting under the top lip, throwing
+   light DOWN the back wall. The first pass used a broad radial and read as a
+   light leak rather than a lamp. */
+.lamp {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 100%;
+  height: 100%;
+  transform: translateX(-50%);
+  /* Radials only. The first pass mixed in a linear-gradient on an 84%-wide box
+     and the box's own edge showed as a hard vertical seam in the screenshot. */
+  background:
+    radial-gradient(ellipse 46% 15% at 50% 3%,  rgba(247,244,238,.60), transparent 70%),
+    radial-gradient(ellipse 78% 34% at 50% 2%,  rgba(247,244,238,.26), transparent 72%),
+    radial-gradient(ellipse 96% 62% at 50% 10%, rgba(247,244,238,.10), transparent 76%);
+  animation: breathe 6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes breathe {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: .955; }
+}
+
+/* the cavity is dark until the door lets light past it */
+.cavity::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--m-950);
+  /* clears by ~40% of the swing: the spill of light is the payload of the
+     whole sequence, and at 1.35 it was still half-black at mid-swing */
+  opacity: calc(1 - var(--open) * 2.5);
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* ── shelves + options ────────────────────────────────────────────────── */
+
+.shelves {
+  position: absolute;
+  inset: 13% 0 8%;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  z-index: 4;
+}
+
+.eyebrow {
+  position: absolute;
+  top: 5.5%;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 10px;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: rgba(230,221,210,.42);
+  z-index: 4;
+  opacity: clamp(0, (var(--open) - .35) * 3, 1);
+}
+
+.shelf {
+  position: relative;
+  padding: 0 18px 13px;
+  /* each shelf lights as the door angle reaches it — top shelf first */
+  opacity: clamp(0, (var(--open) - var(--t)) * 3.4, 1);
+  transform: translateY(calc((1 - clamp(0, (var(--open) - var(--t)) * 3.4, 1)) * 7px));
+}
+.shelf:nth-child(1) { --t: .34; }
+.shelf:nth-child(2) { --t: .42; }
+.shelf:nth-child(3) { --t: .50; }
+.shelf:nth-child(4) { --t: .58; }
+
+/* the wire rail the option sits on */
+.shelf::after {
+  content: '';
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 0;
+  height: 3px;
+  border-radius: 2px;
+  background: linear-gradient(180deg,
+              rgba(230,221,210,.34), rgba(230,221,210,.10) 45%, rgba(0,0,0,.5));
+  box-shadow: 0 4px 10px rgba(0,0,0,.55);
+}
+
+.shelf a {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  text-decoration: none;
+  padding: 9px 4px 11px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.shelf .label {
+  font-size: 15px;
+  line-height: 1.25;
+  font-weight: 500;
+  letter-spacing: -.005em;
+  color: var(--m-050);
+  text-shadow: 0 1px 12px rgba(0,0,0,.6);
+}
+
+.shelf .sub {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: .01em;
+  color: rgba(232,228,221,.52);
+}
+
+/* the single point where colour is allowed back in */
+.shelf .go {
+  flex: none;
+  font-size: 14px;
+  color: rgba(232,228,221,.42);
+  transition: color .18s ease, transform .18s ease;
+}
+.shelf a:hover .go,
+.shelf a:focus-visible .go,
+.shelf a:active .go { color: var(--copper); transform: translateX(3px); }
+.shelf a:focus-visible { outline: 2px solid var(--copper); outline-offset: 4px; border-radius: 6px; }
+
+/* ── door ─────────────────────────────────────────────────────────────── */
+
+.door {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  transform-origin: left center;
+  transform: rotateY(calc(var(--open) * var(--angle) * -1));
+  will-change: transform;
+}
+
+.face, .back {
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  backface-visibility: hidden;
+}
+
+/* outer face — brushed steel, lit from the upper left */
+.face {
+  transform: translateZ(var(--depth));
+  background:
+    linear-gradient(104deg,
+      rgba(255,255,255,.10) 0%, rgba(255,255,255,0) 22%,
+      rgba(255,255,255,.045) 46%, rgba(255,255,255,0) 62%),
+    linear-gradient(168deg, var(--m-400) 0%, var(--m-500) 30%, var(--m-700) 72%, var(--m-800) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.14),
+    inset -1px 0 0 rgba(255,255,255,.05),
+    0 30px 60px rgba(0,0,0,.6);
+}
+
+/* the specular sheen that drifts during the recognition beat */
+.face::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  background: linear-gradient(112deg,
+              transparent 34%, rgba(255,255,255,.09) 48%,
+              rgba(255,255,255,.02) 56%, transparent 66%);
+  animation: sheen 7s ease-in-out infinite;
+}
+@keyframes sheen {
+  0%, 100% { transform: translateX(-14%); opacity: .5; }
+  50%      { transform: translateX(14%);  opacity: 1; }
+}
+
+/* Lambert falloff — the face darkens as it turns off the front light */
+.face::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  background: #050806;
+  opacity: calc(var(--open) * .5);
+  pointer-events: none;
+}
+
+/* the door's thickness — without this it reads as paper, not an appliance */
+.edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: var(--depth);
+  transform-origin: 100% 50%;
+  transform: rotateY(-90deg);
+  background: linear-gradient(180deg, var(--m-600), var(--m-800) 60%, var(--m-850));
+  box-shadow: inset 1px 0 0 rgba(255,255,255,.06);
+  border-radius: 2px;
+}
+
+/* Inner face of the door. rotateY(180deg) so it faces INTO the cavity — with
+   backface-visibility:hidden, an un-rotated .back points the same way as .face
+   and both vanish once the door passes 90°, leaving a hole. */
+.back {
+  transform: translateZ(0) rotateY(180deg);
+  background: linear-gradient(174deg, var(--m-600) 0%, var(--m-800) 60%, var(--m-850) 100%);
+  box-shadow: inset 0 0 40px rgba(0,0,0,.6);
+}
+.back::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  background: linear-gradient(90deg, rgba(246,241,233,.18), transparent 62%);
+  opacity: var(--open);
+}
+
+/* door shelves — the natural home for secondary actions */
+.doorShelf {
+  position: absolute;
+  left: 9%;
+  right: 9%;
+  height: 5px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, rgba(230,221,210,.20), rgba(0,0,0,.45));
+  box-shadow: 0 3px 8px rgba(0,0,0,.5);
+  opacity: calc(var(--open) * .9);
+}
+.doorShelf.a { top: 30%; }
+.doorShelf.b { top: 56%; }
+.doorShelf.c { top: 80%; }
+
+/* handle — a vertical bar on the leading edge */
+.handle {
+  position: absolute;
+  right: 13px;
+  top: 20%;
+  height: 30%;
+  width: 9px;
+  border-radius: 5px;
+  transform: translateZ(calc(var(--depth) + 7px));
+  background: linear-gradient(90deg, #7d8b83, #b9c3bc 38%, #6d7a72 70%, #3f4c45);
+  box-shadow: 0 3px 10px rgba(0,0,0,.65), inset 0 1px 0 rgba(255,255,255,.4);
+}
+
+/* our magnet, on the door — the same card they just scanned */
+.magnet {
+  position: absolute;
+  left: 15%;
+  top: 44%;
+  width: 46%;
+  height: auto;
+  transform: translateZ(calc(var(--depth) + 2px)) rotate(-2.4deg);
+  border-radius: 3px;
+  filter: grayscale(.72) contrast(1.04) brightness(.94);
+  box-shadow: 0 6px 16px rgba(0,0,0,.6);
+}
+
+/* the hairline of light at the seam, before the door breaks free */
+.seam {
+  position: absolute;
+  top: 5%;
+  bottom: 5%;
+  right: 0;
+  width: 2px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, transparent, var(--lamp) 22%, var(--lamp) 78%, transparent);
+  filter: blur(1.4px);
+  opacity: 0;
+  transform: translateZ(calc(var(--depth) + 1px));
+  animation: seam .85s ease-in .15s forwards;
+}
+@keyframes seam {
+  to { opacity: .55; }
+}
+.fridge.is-open .seam { opacity: 0; transition: opacity .12s linear; animation: none; }
+
+/* ── the swing ────────────────────────────────────────────────────────── */
+
+/* Animate --open on .fridge, NOT on .door.
+
+   --open inherits, and .cavity (which holds the shelves and the option rows) is
+   a SIBLING of .door — so animating it on the door leaves every shelf at
+   --open: 0 forever. The door swung correctly and the options never appeared.
+   Invisible in a frozen-frame screenshot, because forcing --open on the parent
+   to pose the geometry is exactly what masks it. Only the live 3-second run
+   caught it. */
+.fridge.is-open {
+  animation: swing 1.75s forwards;
+}
+
+@keyframes swing {
+  /* the gasket resists, then lets go — this beat is what makes it a fridge
+     and not a kitchen cupboard */
+  0%   { --open: 0;    animation-timing-function: cubic-bezier(.34,0,.68,1); }
+  8%   { --open: .085; animation-timing-function: cubic-bezier(.11,.7,.15,1); }
+  100% { --open: 1; }
+}
+
+/* ── prompt ───────────────────────────────────────────────────────────── */
+
+.prompt {
+  position: absolute;
+  left: 0; right: 0;
+  bottom: -34px;
+  text-align: center;
+  font-size: 11px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: rgba(230,221,210,.34);
+  animation: promptIn .6s ease-out .35s both, pulse 2.4s ease-in-out 1.2s infinite;
+  pointer-events: none;
+}
+@keyframes promptIn { from { opacity: 0 } to { opacity: 1 } }
+@keyframes pulse { 0%,100% { opacity: .34 } 50% { opacity: .72 } }
+/* sibling combinator: .prompt lives in .stage next to .fridge, not inside it,
+   so a descendant selector (.is-open .prompt) silently never matches */
+.fridge.is-open ~ .prompt { opacity: 0; transition: opacity .25s ease; animation: none; }
+
+/* ── reduced motion: the door is simply already open ──────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .fridge { --open: 1; }
+  .is-open .door,
+  .face::before,
+  .lamp { animation: none; }
+  .door { transform: rotateY(calc(var(--angle) * -1)); }
+  .seam, .prompt { display: none; }
+}
+
+/* ── landscape / wide: a left-hinged door across a wide viewport looks
+      wrong, so keep the fridge portrait and let the room fall away ─────── */
+@media (orientation: landscape) and (max-height: 560px) {
+  .stage { width: min(300px, 46vw); max-height: 88svh; }
+}
