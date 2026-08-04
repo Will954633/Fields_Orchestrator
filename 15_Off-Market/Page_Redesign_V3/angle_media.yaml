@@ -1,0 +1,111 @@
+# angle_media.yaml — which drawing a home gets, and what it does.
+#
+# Keyed on `lead_angle`, which every deck doc already carries at the top level
+# (emit_json.py:307) and which React currently ignores. No builder change is
+# needed to know which emblem a home should show.
+#
+# Several angles legitimately share a drawing, and several deliberately have
+# none — see `text_only` at the bottom.
+#
+# `detach` is the element that leaves the finished drawing, travels across the
+# page and comes to rest beside the card-04 copy. It is what carries the reader
+# from 03 to 04. Only three emblems have one; the rest need a different
+# transition (open question in PLAN.md).
+
+version: 1
+
+# Sub-routing. `parkland` and `water_adjacent` cover visually different things
+# depending on the OSM feature kind that triggered them, so they route on
+# green_space.premium.kind before falling back to the angle default.
+kind_routes:
+  parkland:
+    golf course:      golfflag
+    bushland:         banksia
+    nature reserve:   banksia
+    # park, reserve, open space, gardens all fall through to the angle default
+  water_adjacent:
+    creek:            reeds
+    river:            reeds
+    # lake, wetland fall through to the angle default
+
+angles:
+
+  beachside:                      # 9.3%  · 1,689 decks
+    emblem: pandanus
+    detach: fruit
+    caption: Pandanus · the coastal marker
+
+  parkland:                       # 32.4% · 5,862 decks (park / reserve / open space)
+    emblem: bushbirds
+    detach: null                  # needed: a single leaf, or one bird taking off
+    caption: The bushland at your boundary
+
+  water_adjacent:                 # 12.6% · 2,271 decks (lake / wetland)
+    emblem: reeds
+    detach: null                  # needed: a seed head
+    caption: Lakeside reeds · the edge that stays open
+
+  land_prestige:                  # 12.4% · 2,235 decks
+    emblem: dog
+    detach: ball
+    caption: Room to run · what the block actually buys
+
+  school_walk:                    # 12.8% · 2,310 decks
+    emblem: satchel
+    detach: null                  # no plausible element
+    caption: The walk, not the drive
+
+  water_views:                    # ~0% today — the angle rarely fires
+    emblem: whale
+    detach: null
+    caption: The outlook · what the window is worth
+
+# Reached only through kind_routes above, but declared so the mapping is
+# readable in one place.
+emblems_by_kind:
+  golfflag:
+    caption: The flag · a fairway that can't be subdivided
+    detach: ball
+  banksia:
+    caption: Banksia · the bushland at your boundary
+    detach: null                  # needed: a seed
+
+# Angles that get NO drawing, on purpose. Each is abstract — there is no object
+# to draw — and the deck carries no decoration anywhere else, so an image on a
+# card that is not claiming a physical feature would be the only decorative
+# element on the page.
+text_only:
+  - market_context        # 8.3% · 1,493 decks — the generic fallback
+  - scarcity              # 2.1%
+  - thin_competition      # 2.0%
+  - scale                 # long tail
+  - prestige_value        # long tail
+  - renovation_upside     # long tail
+
+# Coverage: 87% of the 18,070 built decks carry an emblem.
+
+# --- reveal behaviour, per emblem -------------------------------------------
+# Mirrors reveals/build_reveal.py REVEALS. Repeated here because the front end
+# needs the mode (it decides the caption's "Replay" wording and the timing) and
+# should not have to read a Python file.
+reveals:
+  pandanus: { mode: growth,  seconds: 6.0 }
+  bushbirds: { mode: growth, seconds: 6.0 }
+  reeds:    { mode: growth,  seconds: 6.0 }
+  banksia:  { mode: growth,  seconds: 6.0 }
+  golfflag: { mode: growth,  seconds: 6.0 }
+  dog:      { mode: develop, seconds: 5.0 }
+  satchel:  { mode: develop, seconds: 5.0 }
+  whale:    { mode: develop, seconds: 5.0 }
+
+# --- layout, from the beach-card reference ----------------------------------
+# Concepts/Near_beach_palm_reveal/offmarket_beach_card.html
+layout:
+  # Cards 02/03/04 widen from the deck's single 40rem column to a two-column
+  # grid. Card 02 keeps an EMPTY right cell so the text column's left edge does
+  # not jump between cards — without that the copy slides sideways and the
+  # drawing reads as a layout change rather than as something arriving.
+  grid_max_width: 68rem
+  media_delay_ms: 1250      # after the copy starts revealing, so it lands last
+  attach_on: scroll-intent  # not on load: card 02 IS the view at load, so an
+                            # IntersectionObserver there defers nothing

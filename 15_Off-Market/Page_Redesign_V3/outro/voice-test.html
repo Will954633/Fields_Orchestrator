@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>The ship's computer — voice check</title>
+<style>
+  :root{--ground:#000;--ink:#E6DDD2;--ink-soft:#CABEB0;--muted:#8C8177;
+        --line:rgba(230,221,210,.13);--accent:#C0704A;--gold:#D28C5E;
+        --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+        --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);
+       line-height:1.55;padding:3rem clamp(1.25rem,5vw,4rem) 5rem}
+  h1{font-family:var(--serif);font-weight:500;font-size:clamp(1.6rem,4vw,2.3rem);margin:0 0 .4rem}
+  .sub{color:var(--muted);max-width:64ch;margin:0 0 2.4rem}
+  .row{display:flex;align-items:center;gap:1.1rem;padding:1rem 0;
+       border-bottom:1px solid var(--line);max-width:52rem}
+  .play{flex:none;width:2.6rem;height:2.6rem;border-radius:999px;cursor:pointer;
+        background:none;border:1px solid var(--accent);color:var(--accent);font:inherit}
+  .play:hover{background:color-mix(in srgb,var(--accent) 16%,transparent)}
+  .txt{font:15px/1.6 ui-monospace,Menlo,Consolas,monospace;color:#8FE9A8;
+       text-shadow:0 0 10px rgba(80,255,140,.3)}
+  .meta{margin-left:auto;color:var(--muted);font-size:.76rem;letter-spacing:.1em;
+        text-transform:uppercase;font-variant-numeric:tabular-nums}
+  .all{margin:2rem 0 0;padding:.85rem 1.5rem;border-radius:999px;background:var(--accent);
+       color:#140d09;border:none;font:inherit;font-size:1rem;cursor:pointer}
+  .all:hover{background:var(--gold)}
+  footer{margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(--line);
+         color:var(--muted);font-size:.85rem;max-width:70ch}
+  code{color:var(--ink-soft);font-size:.86em}
+</style>
+</head>
+<body>
+
+<h1>The ship's computer</h1>
+<p class="sub">The four lines on their own, so the voice can be judged without sitting
+through the shatter. Generated once by <code>build_voice.py</code>; the treatment is
+band-limiting, a light chorus and a small hard-surfaced room. If it is close but not
+right, the levers are named in that file.</p>
+
+<div id="rows"></div>
+<button class="all" id="all">Play all in sequence →</button>
+
+<footer id="foot"></footer>
+
+<script>
+(() => {
+  "use strict";
+  const rows = document.getElementById("rows");
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  let meta = null, audio = {};
+
+  fetch("voice/index.json").then((r) => r.json()).then((m) => {
+    meta = m;
+    for (const l of m.lines) {
+      const a = new Audio("voice/" + l.file);
+      a.preload = "auto";
+      audio[l.id] = a;
+
+      const row = document.createElement("div");
+      row.className = "row";
+      const btn = document.createElement("button");
+      btn.className = "play"; btn.type = "button"; btn.textContent = "▶";
+      btn.setAttribute("aria-label", "Play: " + l.text);
+      btn.addEventListener("click", () => { a.currentTime = 0; a.play(); });
+      const txt = document.createElement("div");
+      txt.className = "txt"; txt.textContent = l.text;
+      const mt = document.createElement("div");
+      mt.className = "meta"; mt.textContent = `${l.seconds.toFixed(2)}s · ${l.kb} KB`;
+      row.append(btn, txt, mt);
+      rows.appendChild(row);
+    }
+    const total = m.lines.reduce((s, l) => s + l.kb, 0);
+    document.getElementById("foot").textContent =
+      `Voice ${m.voice}. ${m.lines.length} lines, ${total.toFixed(1)} KB total — ` +
+      `generated at build time, so it is the same voice on every device and there ` +
+      `is no key in the browser and no per-view cost.`;
+  }).catch(() => {
+    rows.textContent = "voice/index.json not found — run build_voice.py";
+  });
+
+  document.getElementById("all").addEventListener("click", async () => {
+    if (!meta) return;
+    for (const l of meta.lines) {
+      const a = audio[l.id];
+      a.currentTime = 0; a.play();
+      await wait(l.seconds * 1000 + 450);
+    }
+  });
+})();
+</script>
+</body>
+</html>

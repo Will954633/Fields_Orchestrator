@@ -1,0 +1,57 @@
+{
+  "voice": "en-GB-Studio-C",
+  "note": "",
+  "rate": 1.0,
+  "filter": "highpass=f=180,lowpass=f=6800,chorus=0.6:0.9:14:0.35:0.25:2,aecho=0.42:0.85:38:0.16,acompressor=threshold=-18dB:ratio=3:attack=8:release=180,loudnorm=I=-18:TP=-2:LRA=9",
+  "lines": [
+    {
+      "id": "01",
+      "text": "Analysing selling strategy.",
+      "file": "01.mp3",
+      "seconds": 2.16,
+      "kb": 17.1
+    },
+    {
+      "id": "02",
+      "text": "Construction sequence initiated.",
+      "file": "02.mp3",
+      "seconds": 2.47,
+      "kb": 19.5
+    },
+    {
+      "id": "03",
+      "text": "Approaching completion in T minus 3 seconds.",
+      "file": "03.mp3",
+      "seconds": 3.07,
+      "kb": 24.2
+    },
+    {
+      "id": "c3",
+      "text": "Three.",
+      "file": "c3.mp3",
+      "seconds": 0.65,
+      "kb": 5.3
+    },
+    {
+      "id": "c2",
+      "text": "Two.",
+      "file": "c2.mp3",
+      "seconds": 0.62,
+      "kb": 5.1
+    },
+    {
+      "id": "c1",
+      "text": "One.",
+      "file": "c1.mp3",
+      "seconds": 0.5,
+      "kb": 4.2
+    },
+    {
+      "id": "04",
+      "text": "Construction completed.",
+      "file": "04.mp3",
+      "seconds": 1.61,
+      "kb": 12.8
+    }
+  ]
+}

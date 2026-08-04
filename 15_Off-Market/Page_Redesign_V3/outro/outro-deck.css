@@ -1,0 +1,61 @@
+  /* ---- the outro: cracked glass, code behind, the ship's computer ----------
+     Injected into the deck by build_deck_preview.py. The elements themselves are
+     created by outro-deck.js only when the button is actually pressed, so a
+     reader who never presses it carries none of this. */
+
+  /* The deck goes when the pane starts falling — not before. The copy has to
+     stay readable THROUGH the cracked glass; that is the whole idea. */
+  #deck { transition:opacity .5s ease, filter .5s ease; }
+  #deck.fx-gone { opacity:0; filter:blur(2px); pointer-events:none; }
+
+  /* The whole world shakes, so the wrapper moves and not the layers inside it. */
+  #fx-world { position:fixed; inset:0; z-index:80; will-change:transform;
+              pointer-events:none; }
+  #fx-behind { position:fixed; inset:0; opacity:0; transition:opacity .9s ease; }
+  #fx-behind.on { opacity:1; }
+  #fx-rain { position:absolute; inset:0; display:block; width:100%; height:100%; }
+
+  /* The recoil: one short sharp kick at contact — the impact energy arriving,
+     not the sustained earthquake that comes later with the typed lines. */
+  .jolt { animation:jolt .22s cubic-bezier(.2,.9,.3,1) 1; }
+  @keyframes jolt{
+    0%{transform:translate(0,0) scale(1)}
+    18%{transform:translate(-6px,7px) scale(1.006)}
+    44%{transform:translate(4px,-4px) scale(1.002)}
+    72%{transform:translate(-2px,2px) scale(1)}
+    100%{transform:translate(0,0) scale(1)}}
+  .quake-1 { animation:q1 .16s linear infinite; }
+  .quake-2 { animation:q2 .09s linear infinite; }
+  @keyframes q1{
+    0%{transform:translate(0,0)}25%{transform:translate(-3px,2px)}
+    50%{transform:translate(2px,-3px)}75%{transform:translate(-2px,-1px)}
+    100%{transform:translate(0,0)}}
+  @keyframes q2{
+    0%{transform:translate(0,0) rotate(0)}20%{transform:translate(-9px,6px) rotate(-.35deg)}
+    40%{transform:translate(8px,-7px) rotate(.3deg)}60%{transform:translate(-7px,-5px) rotate(-.2deg)}
+    80%{transform:translate(6px,8px) rotate(.25deg)}100%{transform:translate(0,0) rotate(0)}}
+
+  #fx-msg { position:fixed; left:clamp(1.2rem,6vw,4rem); top:50%;
+            transform:translateY(-50%);
+            font:14px/1.9 ui-monospace,Menlo,Consolas,monospace; letter-spacing:.06em;
+            color:#8FE9A8; text-shadow:0 0 10px rgba(80,255,140,.35); white-space:pre; }
+  #fx-msg .ok { color:#CFF6DA; }
+
+  /* The countdown. The whole line pulses on each number and the digit goes
+     further — it is the thing actually changing. Retriggered by removing the
+     class and forcing a reflow, same as .jolt. */
+  #fx-msg .beat { animation:cdBeat .92s ease-out; }
+  #fx-msg .beat .n { animation:cdNum .92s ease-out; display:inline-block; }
+  @keyframes cdBeat{
+    0%  {opacity:1;   text-shadow:0 0 26px rgba(80,255,140,.95),0 0 6px rgba(80,255,140,.8)}
+    30% {opacity:.62; text-shadow:0 0 10px rgba(80,255,140,.35)}
+    100%{opacity:1;   text-shadow:0 0 10px rgba(80,255,140,.35)}}
+  @keyframes cdNum{
+    0%  {transform:scale(1.75);color:#FFF}
+    45% {transform:scale(1);   color:#8FE9A8}
+    100%{transform:scale(1);   color:#8FE9A8}}
+
+  @media (prefers-reduced-motion:reduce){
+    #fx-msg .beat, #fx-msg .beat .n { animation:none; }
+    .jolt, .quake-1, .quake-2 { animation:none; }
+  }

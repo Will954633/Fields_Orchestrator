@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Every version of the retriever</title>
+<style>
+  :root {
+    --ground:#000; --ink:#E6DDD2; --ink-soft:#CABEB0; --muted:#8C8177;
+    --line:rgba(230,221,210,.13); --accent:#C0704A; --gold:#D28C5E;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);
+       line-height:1.55;padding:3rem clamp(1.25rem,5vw,4rem) 5rem}
+  h1{font-family:var(--serif);font-weight:500;font-size:clamp(1.8rem,4.5vw,2.6rem);margin:0 0 .5rem}
+  .sub{color:var(--muted);max-width:66ch;margin:0 0 2.5rem}
+  h2{font-family:var(--serif);font-weight:500;font-size:1.3rem;margin:3rem 0 .25rem}
+  h2 + p{color:var(--muted);margin:0 0 1.25rem;max-width:76ch;font-size:.92rem}
+  img.sheet{width:100%;height:auto;border:1px solid var(--line);border-radius:8px;margin:1rem 0 2rem}
+  table{border-collapse:collapse;width:100%;font-size:.88rem;margin-bottom:1rem}
+  th,td{text-align:left;padding:.55rem .7rem;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:500;font-size:.74rem;letter-spacing:.12em;text-transform:uppercase}
+  td.n{color:var(--muted);font-variant-numeric:tabular-nums;width:2.4rem}
+  a{color:var(--accent)}
+  a:hover{color:var(--gold)}
+  .live{color:#8FBF8F}
+  .bad{color:#C97A6A}
+  code{font-size:.86em;color:var(--ink-soft)}
+  .note{border-left:2px solid var(--accent);padding:.9rem 1.1rem;background:rgba(230,221,210,.04);
+        border-radius:0 8px 8px 0;margin:1.5rem 0;max-width:76ch}
+  footer{margin-top:4rem;padding-top:1.5rem;border-top:1px solid var(--line);
+         color:var(--muted);font-size:.85rem;max-width:76ch}
+</style>
+</head>
+<body>
+
+<h1>Every version of the retriever</h1>
+<p class="sub">Thirteen renders across three source drawings, 2–3 August 2026. Each row links to
+the live reveal, already set to the deck's theme. Two of the earliest were overwritten during the
+session and have been rebuilt from their source at the original settings.</p>
+
+<img class="sheet" src="dogs/all_dogs.png"
+     alt="Contact sheet of thirteen renders of the retriever, grouped by source drawing">
+
+<h2>Source A — <code>Large_block_dog.png</code></h2>
+<p>Delivered 2 Aug 20:47. Transparent cutout, <strong>dark ink on white paper</strong>, pale-bodied
+subject. 70% of the frame is alpha 0.</p>
+<table>
+  <tr><th>#</th><th>Treatment</th><th>Outcome</th><th>Look</th></tr>
+  <tr><td class="n">1</td><td><code>invert</code></td>
+      <td class="bad">Rejected. Pale fur means little ink means nothing painted, so the coat went
+      dark and only the stroke edges lit. Will sent this back as "too much of its hair is blacked in".</td>
+      <td><a href="dogs/dogA_inv.html?mode=develop&amp;paper=%23000000&amp;ink=%23E6DDD2&amp;grain=0&amp;vignette=0&amp;dur=6000">open</a></td></tr>
+  <tr><td class="n">2</td><td><code>positive</code></td>
+      <td>Approved 2 Aug. Prompted building the polarity option in the first place.</td>
+      <td><a href="dogs/dogA_pos.html?mode=develop&amp;paper=%23000000&amp;ink=%23E6DDD2&amp;grain=0&amp;vignette=0&amp;dur=6000">open</a></td></tr>
+  <tr><td class="n">3</td><td><code>growth</code> @ paw</td>
+      <td>Tested, not adopted — head arrives last.</td>
+      <td><a href="dogs/doggrow.html?mode=growth&amp;paper=%23000000&amp;ink=%23E6DDD2&amp;grain=0&amp;vignette=0&amp;dur=6000">open</a></td></tr>
+  <tr><td class="n">4</td><td><code>invert</code> γ0.45</td>
+      <td class="bad">Retested 3 Aug when Will asked whether this source inverted better. It does not
+      — identical failure, bright eyes and nose.</td>
+      <td><a href="dogs/dv1_0.45.html?mode=develop&amp;paper=%23000000&amp;ink=%23E6DDD2&amp;grain=0&amp;vignette=0&amp;dur=6000">open</a></td></tr>
+</table>
+
+<h2>Source B — <code>Large_block_dog_v2.png</code></h2>
+<p>Delivered 3 Aug 07:41. Opaque scratchboard — <strong>light strokes on a dark ground</strong>.
+The opposite construction to the golf flag, which is dark hatch on light cloth, despite the two
+looking alike at a glance.</p>
+<table>
+  <tr><th>#</th><th>Treatment</th><th>Outcome</th><th>Look</th></tr>
+  <tr><td class="n">5</td><td><code>invert_cutout</code> γ0.8</td>
+      <td class="bad">First attempt, applying the flag's treatment. Wrong — flipped a scratchboard
+      drawing that was already the right way round.</td>
+      <td><a href="dogs/dogink.html?mode=develop&amp;paper=%23000000&amp;ink=%23E6DDD2&amp;grain=0&amp;vignette=0&amp;dur=6000">open</a></td></tr>
+  <tr><td class="n">6</td><td><code>positive</code> γ0.8 + ground cut</td>
+      <td>Correct polarity. The ground cut was added here — mapping the modal dark tone to zero left
+      the mottled charcoal painting a faint grey wash across the deck.</td>
+      <td><a href="dogs/dogpos.html?mode=develop&amp;paper=%23000000&amp;ink=%23E6DDD2&amp;grain=0&amp;vignette=0&amp;dur=6000">open</a></td></tr>
+  <tr><td class="n">7</td><td><code>growth</code> @ paw</td>
+      <td>Headless torso for most of the animation.</td>
+      <td><a href="dogs/doggrow2.html?mode=growth&amp;paper=%23000000&amp;ink=%23E6DDD2&amp;grain=0&amp;vignette=0&amp;dur=6000">open</a></td></tr>
+  <tr><td class="n">8</td><td><code>growth</code> @ chest</td>
+      <td>Same. Confirmed <code>develop</code> is right for a subject with no base to grow from.</td>
+      <td><a href="dogs/doggrow3.html?mode=growth&amp;paper=%23000000&amp;ink=%23E6DDD2&amp;grain=0&amp;vignette=0&amp;dur=6000">open</a></td></tr>
+  <tr><td class="n">9</td><td><code>invert_cutout</code> γ0.6</td>
+      <td class="bad">Built on Will's instruction to use the banksia's treatment. Brightness matched
+      (mean-lit 106 vs 111) but the eyes and nose come up white and the ball disappears.</td>
+      <td><a href="dogs/di_0.6.html?mode=develop&amp;paper=%23000000&amp;ink=%23E6DDD2&amp;grain=0&amp;vignette=0&amp;dur=6000">open</a></td></tr>
+  <tr><td class="n">10</td><td><code>positive</code> γ1.6</td>
+      <td>The texture fix — gamma holding back mid-tones so black shows between the hairs. Briefly live.</td>
+      <td><a href="dogs/dp_1.6.html?mode=develop&amp;paper=%23000000&amp;ink=%23E6DDD2&amp;grain=0&amp;vignette=0&amp;dur=6000">open</a></td></tr>
+  <tr><td class="n">11</td><td><code>positive</code> γ2.4</td>
+      <td>Too sparse — the coat starts breaking up.</td>
+      <td><a href="dogs/dp_2.4.html?mode=develop&amp;paper=%23000000&amp;ink=%23E6DDD2&amp;grain=0&amp;vignette=0&amp;dur=6000">open</a></td></tr>
+</table>
+
+<h2>Source C — <code>dog_v3.png</code></h2>
+<p>Delivered 3 Aug 08:10, against <code>ARTIST_BRIEF_DOG.md</code>. Scratchboard again, but with the
+strokes drawn separated and the ground much darker (corners at 11 against v2's 31).</p>
+<table>
+  <tr><th>#</th><th>Treatment</th><th>Outcome</th><th>Look</th></tr>
+  <tr><td class="n">12</td><td><code>positive</code> γ1.06</td>
+      <td>Tonally correct — pale coat, dark eyes, ball readable. No gamma correction needed; the
+      separation is drawn in rather than forced in software. Superseded by 14, kept buildable as
+      <code>dog_positive</code>.</td>
+      <td><a href="dogs/d3_1.06.html?mode=develop&amp;paper=%23000000&amp;ink=%23E6DDD2&amp;grain=0&amp;vignette=0&amp;dur=6000">open</a></td></tr>
+  <tr><td class="n">13</td><td><code>positive</code> γ1.3</td>
+      <td>Slightly moodier variant of 12.</td>
+      <td><a href="dogs/d3_1.3.html?mode=develop&amp;paper=%23000000&amp;ink=%23E6DDD2&amp;grain=0&amp;vignette=0&amp;dur=6000">open</a></td></tr>
+  <tr><td class="n">14</td><td><code>invert_cutout</code> γ1.06</td>
+      <td class="live"><strong>LIVE.</strong> Version 1's process on the v3 art — chosen after seeing
+      all thirteen together. Plain <code>invert</code> will not do it: v3 is opaque where Source A was
+      a cutout, so inversion reads the ground as ink and lights the whole frame (99.5% coverage, a
+      cream rectangle with a dark dog on it). Cutting the ground first is what makes it the same
+      operation.</td>
+      <td><a href="dogs/dogC_inv.html?mode=develop&amp;paper=%23000000&amp;ink=%23E6DDD2&amp;grain=0&amp;vignette=0&amp;dur=6000">open</a></td></tr>
+</table>
+
+
+<h2>Illumination ladder</h2>
+<p>Will, on version 1: <em>"this is the correct render I want, I just want more of the coat showing
+or illuminated, too much of the dog is black."</em> Under inversion the pale coat carries very little
+ink, so at the default gamma only the stroke edges light up. <strong>Gamma below 1 raises the faint
+ink</strong> — which is exactly the coat — without touching the shadows or the character of the
+render. Both sources, five steps each.</p>
+<img class="sheet" src="dogs/dog_ladder.png"
+     alt="Gamma ladder: the retriever inverted at five gamma values, on two source drawings">
+<table>
+  <tr><th>Gamma</th><th>Effect</th><th colspan="2">Open</th></tr>
+  <tr><td class="n">γ1.06</td><td>as shipped — version 1's default. Coat mostly black.</td><td><a href="dogs/LA_1.06.html?mode=develop&amp;paper=%23000000&amp;ink=%23E6DDD2&amp;grain=0&amp;vignette=0&amp;dur=6000">Source A</a></td><td><a href="dogs/LC_1.06.html?mode=develop&amp;paper=%23000000&amp;ink=%23E6DDD2&amp;grain=0&amp;vignette=0&amp;dur=6000">v3</a></td></tr>
+  <tr><td class="n">γ0.7</td><td>first real lift</td><td><a href="dogs/LA_0.7.html?mode=develop&amp;paper=%23000000&amp;ink=%23E6DDD2&amp;grain=0&amp;vignette=0&amp;dur=6000">Source A</a></td><td><a href="dogs/LC_0.7.html?mode=develop&amp;paper=%23000000&amp;ink=%23E6DDD2&amp;grain=0&amp;vignette=0&amp;dur=6000">v3</a></td></tr>
+  <tr><td class="n">γ0.5</td><td><strong>LIVE (Source A).</strong> Whole coat readable, shadows and glowing edges intact.</td><td><a href="dogs/LA_0.5.html?mode=develop&amp;paper=%23000000&amp;ink=%23E6DDD2&amp;grain=0&amp;vignette=0&amp;dur=6000">Source A</a></td><td><a href="dogs/LC_0.5.html?mode=develop&amp;paper=%23000000&amp;ink=%23E6DDD2&amp;grain=0&amp;vignette=0&amp;dur=6000">v3</a></td></tr>
+  <tr><td class="n">γ0.35</td><td>brighter again</td><td><a href="dogs/LA_0.35.html?mode=develop&amp;paper=%23000000&amp;ink=%23E6DDD2&amp;grain=0&amp;vignette=0&amp;dur=6000">Source A</a></td><td><a href="dogs/LC_0.35.html?mode=develop&amp;paper=%23000000&amp;ink=%23E6DDD2&amp;grain=0&amp;vignette=0&amp;dur=6000">v3</a></td></tr>
+  <tr><td class="n">γ0.25</td><td>brightest — starts flattening the shadows</td><td><a href="dogs/LA_0.25.html?mode=develop&amp;paper=%23000000&amp;ink=%23E6DDD2&amp;grain=0&amp;vignette=0&amp;dur=6000">Source A</a></td><td><a href="dogs/LC_0.25.html?mode=develop&amp;paper=%23000000&amp;ink=%23E6DDD2&amp;grain=0&amp;vignette=0&amp;dur=6000">v3</a></td></tr>
+</table>
+<p style="color:var(--muted);font-size:.88rem;max-width:76ch">Measured on Source A: mean brightness
+of the lit pixels goes 84 → 94 → 105 → 119 → 134 across the ladder, while the share of the frame
+that is lit barely moves (25% → 34%). That is the point — it is lighting the coat that is already
+there, not spreading the dog.</p>
+
+<div class="note">
+<strong>Chosen: Source A inverted at γ0.5</strong> — version 1's treatment, coat lifted (see the ladder above). Earlier in the session this was v3 inverted at γ1.06. It is a tonal negative — the
+coat reads dark and the eyes come up bright — and that is the look, taken deliberately over the
+tonally-correct 12. Everything below still holds; it explains what the choice costs, not that it was
+the wrong one.
+</div>
+
+<div class="note">
+<strong>The one finding worth keeping.</strong> Numbers 1, 4, 5 and 9 all fail the same way, across
+two different source drawings and both polarities. That is not a drawing problem — it is the
+subject. A golden retriever has a tonal arrangement everyone recognises: pale coat, dark eyes, black
+nose, light ball. Inverting any honest drawing of that produces a dark coat, white eyes, white nose
+and a vanished ball. And a source drawn so that it inverts <em>correctly</em> would be a photographic
+negative — which, inverted, returns the same picture as simply not inverting a normal drawing. The
+two routes are the same image by definition. So the retriever cannot be inverted, and no drawing
+technique changes that. Plants and flags carry no such expectation, which is why the banksia and the
+flag invert beautifully.
+</div>
+
+<footer>
+Fix-history: <code>[V3-REVEAL-POLARITY]</code> (2 Aug) ·
+<code>[V3-DOG-V2-SCRATCHBOARD]</code> (3 Aug).
+Registry: <code>reveals/build_reveal.py</code> · brief: <code>ARTIST_BRIEF_DOG.md</code> ·
+rules: <code>SOURCE_ART_SPEC.md</code>.
+The whole emblem set is at <a href="reveals.html">reveals.html</a>.
+</footer>
+
+</body>
+</html>

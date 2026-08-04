@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>V3 deck — ten worked examples</title>
+<style>
+  :root {
+    --ground:#000; --ink:#E6DDD2; --ink-soft:#CABEB0; --muted:#8C8177;
+    --line:rgba(230,221,210,.13); --accent:#C0704A; --gold:#D28C5E;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);
+       line-height:1.55;padding:3rem clamp(1rem,4vw,3rem) 6rem}
+  h1{font-family:var(--serif);font-weight:500;font-size:clamp(1.8rem,4.5vw,2.6rem);margin:0 0 .4rem}
+  .sub{color:var(--muted);max-width:70ch;margin:0 0 2rem}
+  nav{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:3rem;
+      padding-bottom:1.5rem;border-bottom:1px solid var(--line)}
+  nav a{color:var(--ink-soft);text-decoration:none;font-size:.85rem;
+        border:1px solid var(--line);border-radius:999px;padding:.35rem .8rem}
+  nav a:hover{border-color:var(--accent);color:var(--accent)}
+  .prop{margin:0 0 4.5rem;scroll-margin-top:1rem}
+  .prop header{margin-bottom:1.1rem}
+  h2{font-family:var(--serif);font-weight:500;font-size:1.6rem;margin:0;
+     display:flex;align-items:baseline;gap:.8rem;flex-wrap:wrap}
+  h2 small{font-family:var(--sans);font-size:.85rem;color:var(--muted);
+           letter-spacing:.12em;text-transform:uppercase}
+  .meta{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.6rem}
+  .chip{font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
+        border:1px solid var(--line);border-radius:999px;padding:.28rem .7rem}
+  .chip.angle{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 45%,transparent)}
+  .chip.none{color:#8C8177;font-style:italic;text-transform:none;letter-spacing:.04em}
+  .chip.live{color:var(--gold);border-color:color-mix(in srgb,var(--gold) 45%,transparent);
+             text-decoration:none}
+  .chip.live:hover{background:color-mix(in srgb,var(--gold) 12%,transparent)}
+  .grid{border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .head,.row{display:grid;grid-template-columns:11rem 1fr 22rem;gap:1rem;align-items:start}
+  .head{padding:.7rem 1rem;background:rgba(230,221,210,.04);color:var(--muted);
+        font-size:.7rem;letter-spacing:.14em;text-transform:uppercase}
+  .row{padding:1rem;border-top:1px solid var(--line)}
+  .rowLabel{color:var(--ink-soft);font-size:.9rem;display:flex;gap:.6rem;align-items:baseline}
+  .rowLabel .n{color:var(--accent);font-variant-numeric:tabular-nums;font-size:.78rem}
+  .shot{display:block;line-height:0}
+  .shot img{width:100%;height:auto;border:1px solid var(--line);border-radius:6px;
+            background:#000}
+  .shot.m img{max-width:20rem}
+  @media (max-width:900px){
+    .head{display:none}
+    .row{grid-template-columns:1fr;gap:.6rem}
+  }
+  footer{margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(--line);
+         color:var(--muted);font-size:.85rem;max-width:76ch}
+  code{color:var(--ink-soft);font-size:.86em}
+</style>
+</head>
+<body>
+
+<h1>V3 deck — 10 worked examples</h1>
+<p class="sub">Every card of every example, desktop and mobile. These are the real decks:
+copy comes from each home's <code>offmarket_discovery</code> document and the drawing is
+chosen by its <code>lead_angle</code>, so this is what the reader gets. Shots are clipped to
+the whole card, not the viewport — several cards run taller than one phone screen, and a
+viewport crop would hide the bottom of them. Click any shot for full size, or open the
+live deck to see the intro and the reveals move.</p>
+
+<nav><a href="#23-bellbird-avenue-burleigh-waters">23 Bellbird Avenue</a><a href="#5-comet-court-burleigh-waters">5 Comet Court</a><a href="#10-belmore-close-robina">10 Belmore Close</a><a href="#115-newport-drive-robina">115 Newport Drive</a><a href="#2-longueville-court-robina">2 Longueville Court</a><a href="#27-protea-court-robina">27 Protea Court</a><a href="#8-corina-close-robina">8 Corina Close</a><a href="#13-imperia-crescent-varsity-lakes">13 Imperia Crescent</a><a href="#17-placid-court-varsity-lakes">17 Placid Court</a><a href="#27-south-bay-drive-varsity-lakes">27 South Bay Drive</a></nav>
+
+  <section class="prop" id="23-bellbird-avenue-burleigh-waters">
+    <header>
+      <h2>23 Bellbird Avenue<small>Burleigh Waters</small></h2>
+      <div class="meta"><span class="chip angle">beachside</span><span class="chip">pandanus</span><span class="chip">10 cards</span><a class="chip live" href="examples/23-bellbird-avenue-burleigh-waters.html" target="_blank" rel="noopener">open the deck →</a></div>
+    </header>
+    <div class="grid">
+      <div class="head"><span></span><span>Desktop · 1440×900</span><span>Mobile · 390×844</span></div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">00</span>The hand-off</div>
+        <a class="shot d" href="shots/23-bellbird-avenue-burleigh-waters/desktop-00-card-00.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/23-bellbird-avenue-burleigh-waters/desktop-00-card-00.png" alt="desktop"></a>
+        <a class="shot m" href="shots/23-bellbird-avenue-burleigh-waters/mobile-00-card-00.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/23-bellbird-avenue-burleigh-waters/mobile-00-card-00.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">01</span>Recognition</div>
+        <a class="shot d" href="shots/23-bellbird-avenue-burleigh-waters/desktop-01-card-01.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/23-bellbird-avenue-burleigh-waters/desktop-01-card-01.png" alt="desktop"></a>
+        <a class="shot m" href="shots/23-bellbird-avenue-burleigh-waters/mobile-01-card-01.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/23-bellbird-avenue-burleigh-waters/mobile-01-card-01.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">02</span>The hook</div>
+        <a class="shot d" href="shots/23-bellbird-avenue-burleigh-waters/desktop-02-card-02.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/23-bellbird-avenue-burleigh-waters/desktop-02-card-02.png" alt="desktop"></a>
+        <a class="shot m" href="shots/23-bellbird-avenue-burleigh-waters/mobile-02-card-02.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/23-bellbird-avenue-burleigh-waters/mobile-02-card-02.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">03</span>The reveal</div>
+        <a class="shot d" href="shots/23-bellbird-avenue-burleigh-waters/desktop-03-card-03.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/23-bellbird-avenue-burleigh-waters/desktop-03-card-03.png" alt="desktop"></a>
+        <a class="shot m" href="shots/23-bellbird-avenue-burleigh-waters/mobile-03-card-03.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/23-bellbird-avenue-burleigh-waters/mobile-03-card-03.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">04</span>Why it matters</div>
+        <a class="shot d" href="shots/23-bellbird-avenue-burleigh-waters/desktop-04-card-04.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/23-bellbird-avenue-burleigh-waters/desktop-04-card-04.png" alt="desktop"></a>
+        <a class="shot m" href="shots/23-bellbird-avenue-burleigh-waters/mobile-04-card-04.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/23-bellbird-avenue-burleigh-waters/mobile-04-card-04.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">05</span>Competition</div>
+        <a class="shot d" href="shots/23-bellbird-avenue-burleigh-waters/desktop-05-card-05.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/23-bellbird-avenue-burleigh-waters/desktop-05-card-05.png" alt="desktop"></a>
+        <a class="shot m" href="shots/23-bellbird-avenue-burleigh-waters/mobile-05-card-05.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/23-bellbird-avenue-burleigh-waters/mobile-05-card-05.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">06</span>The comparable</div>
+        <a class="shot d" href="shots/23-bellbird-avenue-burleigh-waters/desktop-06-card-06.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/23-bellbird-avenue-burleigh-waters/desktop-06-card-06.png" alt="desktop"></a>
+        <a class="shot m" href="shots/23-bellbird-avenue-burleigh-waters/mobile-06-card-06.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/23-bellbird-avenue-burleigh-waters/mobile-06-card-06.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">07</span>Value drivers</div>
+        <a class="shot d" href="shots/23-bellbird-avenue-burleigh-waters/desktop-07-card-07.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/23-bellbird-avenue-burleigh-waters/desktop-07-card-07.png" alt="desktop"></a>
+        <a class="shot m" href="shots/23-bellbird-avenue-burleigh-waters/mobile-07-card-07.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/23-bellbird-avenue-burleigh-waters/mobile-07-card-07.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">08</span>The buyer</div>
+        <a class="shot d" href="shots/23-bellbird-avenue-burleigh-waters/desktop-08-card-08.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/23-bellbird-avenue-burleigh-waters/desktop-08-card-08.png" alt="desktop"></a>
+        <a class="shot m" href="shots/23-bellbird-avenue-burleigh-waters/mobile-08-card-08.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/23-bellbird-avenue-burleigh-waters/mobile-08-card-08.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">09</span>Valuation</div>
+        <a class="shot d" href="shots/23-bellbird-avenue-burleigh-waters/desktop-09-card-09.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/23-bellbird-avenue-burleigh-waters/desktop-09-card-09.png" alt="desktop"></a>
+        <a class="shot m" href="shots/23-bellbird-avenue-burleigh-waters/mobile-09-card-09.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/23-bellbird-avenue-burleigh-waters/mobile-09-card-09.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">10</span>The strategy</div>
+        <a class="shot d" href="shots/23-bellbird-avenue-burleigh-waters/desktop-10-card-10.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/23-bellbird-avenue-burleigh-waters/desktop-10-card-10.png" alt="desktop"></a>
+        <a class="shot m" href="shots/23-bellbird-avenue-burleigh-waters/mobile-10-card-10.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/23-bellbird-avenue-burleigh-waters/mobile-10-card-10.png" alt="mobile"></a>
+      </div>
+    </div>
+  </section>
+  <section class="prop" id="5-comet-court-burleigh-waters">
+    <header>
+      <h2>5 Comet Court<small>Burleigh Waters</small></h2>
+      <div class="meta"><span class="chip angle">beachside</span><span class="chip">pandanus</span><span class="chip">9 cards</span><a class="chip live" href="examples/5-comet-court-burleigh-waters.html" target="_blank" rel="noopener">open the deck →</a></div>
+    </header>
+    <div class="grid">
+      <div class="head"><span></span><span>Desktop · 1440×900</span><span>Mobile · 390×844</span></div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">00</span>The hand-off</div>
+        <a class="shot d" href="shots/5-comet-court-burleigh-waters/desktop-00-card-00.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/5-comet-court-burleigh-waters/desktop-00-card-00.png" alt="desktop"></a>
+        <a class="shot m" href="shots/5-comet-court-burleigh-waters/mobile-00-card-00.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/5-comet-court-burleigh-waters/mobile-00-card-00.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">01</span>Recognition</div>
+        <a class="shot d" href="shots/5-comet-court-burleigh-waters/desktop-01-card-01.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/5-comet-court-burleigh-waters/desktop-01-card-01.png" alt="desktop"></a>
+        <a class="shot m" href="shots/5-comet-court-burleigh-waters/mobile-01-card-01.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/5-comet-court-burleigh-waters/mobile-01-card-01.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">02</span>The hook</div>
+        <a class="shot d" href="shots/5-comet-court-burleigh-waters/desktop-02-card-02.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/5-comet-court-burleigh-waters/desktop-02-card-02.png" alt="desktop"></a>
+        <a class="shot m" href="shots/5-comet-court-burleigh-waters/mobile-02-card-02.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/5-comet-court-burleigh-waters/mobile-02-card-02.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">03</span>The reveal</div>
+        <a class="shot d" href="shots/5-comet-court-burleigh-waters/desktop-03-card-03.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/5-comet-court-burleigh-waters/desktop-03-card-03.png" alt="desktop"></a>
+        <a class="shot m" href="shots/5-comet-court-burleigh-waters/mobile-03-card-03.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/5-comet-court-burleigh-waters/mobile-03-card-03.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">04</span>Why it matters</div>
+        <a class="shot d" href="shots/5-comet-court-burleigh-waters/desktop-04-card-04.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/5-comet-court-burleigh-waters/desktop-04-card-04.png" alt="desktop"></a>
+        <a class="shot m" href="shots/5-comet-court-burleigh-waters/mobile-04-card-04.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/5-comet-court-burleigh-waters/mobile-04-card-04.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">05</span>Competition</div>
+        <a class="shot d" href="shots/5-comet-court-burleigh-waters/desktop-05-card-05.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/5-comet-court-burleigh-waters/desktop-05-card-05.png" alt="desktop"></a>
+        <a class="shot m" href="shots/5-comet-court-burleigh-waters/mobile-05-card-05.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/5-comet-court-burleigh-waters/mobile-05-card-05.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">06</span>Value drivers</div>
+        <a class="shot d" href="shots/5-comet-court-burleigh-waters/desktop-06-card-07.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/5-comet-court-burleigh-waters/desktop-06-card-07.png" alt="desktop"></a>
+        <a class="shot m" href="shots/5-comet-court-burleigh-waters/mobile-06-card-07.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/5-comet-court-burleigh-waters/mobile-06-card-07.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">07</span>The buyer</div>
+        <a class="shot d" href="shots/5-comet-court-burleigh-waters/desktop-07-card-08.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/5-comet-court-burleigh-waters/desktop-07-card-08.png" alt="desktop"></a>
+        <a class="shot m" href="shots/5-comet-court-burleigh-waters/mobile-07-card-08.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/5-comet-court-burleigh-waters/mobile-07-card-08.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">08</span>Valuation</div>
+        <a class="shot d" href="shots/5-comet-court-burleigh-waters/desktop-08-card-09.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/5-comet-court-burleigh-waters/desktop-08-card-09.png" alt="desktop"></a>
+        <a class="shot m" href="shots/5-comet-court-burleigh-waters/mobile-08-card-09.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/5-comet-court-burleigh-waters/mobile-08-card-09.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">09</span>The strategy</div>
+        <a class="shot d" href="shots/5-comet-court-burleigh-waters/desktop-09-card-10.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/5-comet-court-burleigh-waters/desktop-09-card-10.png" alt="desktop"></a>
+        <a class="shot m" href="shots/5-comet-court-burleigh-waters/mobile-09-card-10.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/5-comet-court-burleigh-waters/mobile-09-card-10.png" alt="mobile"></a>
+      </div>
+    </div>
+  </section>
+  <section class="prop" id="10-belmore-close-robina">
+    <header>
+      <h2>10 Belmore Close<small>Robina</small></h2>
+      <div class="meta"><span class="chip angle">school_walk</span><span class="chip">satchel</span><span class="chip">9 cards</span><a class="chip live" href="examples/10-belmore-close-robina.html" target="_blank" rel="noopener">open the deck →</a></div>
+    </header>
+    <div class="grid">
+      <div class="head"><span></span><span>Desktop · 1440×900</span><span>Mobile · 390×844</span></div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">00</span>The hand-off</div>
+        <a class="shot d" href="shots/10-belmore-close-robina/desktop-00-card-00.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/10-belmore-close-robina/desktop-00-card-00.png" alt="desktop"></a>
+        <a class="shot m" href="shots/10-belmore-close-robina/mobile-00-card-00.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/10-belmore-close-robina/mobile-00-card-00.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">01</span>Recognition</div>
+        <a class="shot d" href="shots/10-belmore-close-robina/desktop-01-card-01.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/10-belmore-close-robina/desktop-01-card-01.png" alt="desktop"></a>
+        <a class="shot m" href="shots/10-belmore-close-robina/mobile-01-card-01.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/10-belmore-close-robina/mobile-01-card-01.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">02</span>The hook</div>
+        <a class="shot d" href="shots/10-belmore-close-robina/desktop-02-card-02.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/10-belmore-close-robina/desktop-02-card-02.png" alt="desktop"></a>
+        <a class="shot m" href="shots/10-belmore-close-robina/mobile-02-card-02.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/10-belmore-close-robina/mobile-02-card-02.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">03</span>The reveal</div>
+        <a class="shot d" href="shots/10-belmore-close-robina/desktop-03-card-03.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/10-belmore-close-robina/desktop-03-card-03.png" alt="desktop"></a>
+        <a class="shot m" href="shots/10-belmore-close-robina/mobile-03-card-03.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/10-belmore-close-robina/mobile-03-card-03.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">04</span>Why it matters</div>
+        <a class="shot d" href="shots/10-belmore-close-robina/desktop-04-card-04.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/10-belmore-close-robina/desktop-04-card-04.png" alt="desktop"></a>
+        <a class="shot m" href="shots/10-belmore-close-robina/mobile-04-card-04.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/10-belmore-close-robina/mobile-04-card-04.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">05</span>Competition</div>
+        <a class="shot d" href="shots/10-belmore-close-robina/desktop-05-card-05.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/10-belmore-close-robina/desktop-05-card-05.png" alt="desktop"></a>
+        <a class="shot m" href="shots/10-belmore-close-robina/mobile-05-card-05.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/10-belmore-close-robina/mobile-05-card-05.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">06</span>The comparable</div>
+        <a class="shot d" href="shots/10-belmore-close-robina/desktop-06-card-06.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/10-belmore-close-robina/desktop-06-card-06.png" alt="desktop"></a>
+        <a class="shot m" href="shots/10-belmore-close-robina/mobile-06-card-06.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/10-belmore-close-robina/mobile-06-card-06.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">07</span>The buyer</div>
+        <a class="shot d" href="shots/10-belmore-close-robina/desktop-07-card-08.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/10-belmore-close-robina/desktop-07-card-08.png" alt="desktop"></a>
+        <a class="shot m" href="shots/10-belmore-close-robina/mobile-07-card-08.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/10-belmore-close-robina/mobile-07-card-08.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">08</span>Valuation</div>
+        <a class="shot d" href="shots/10-belmore-close-robina/desktop-08-card-09.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/10-belmore-close-robina/desktop-08-card-09.png" alt="desktop"></a>
+        <a class="shot m" href="shots/10-belmore-close-robina/mobile-08-card-09.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/10-belmore-close-robina/mobile-08-card-09.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">09</span>The strategy</div>
+        <a class="shot d" href="shots/10-belmore-close-robina/desktop-09-card-10.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/10-belmore-close-robina/desktop-09-card-10.png" alt="desktop"></a>
+        <a class="shot m" href="shots/10-belmore-close-robina/mobile-09-card-10.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/10-belmore-close-robina/mobile-09-card-10.png" alt="mobile"></a>
+      </div>
+    </div>
+  </section>
+  <section class="prop" id="115-newport-drive-robina">
+    <header>
+      <h2>115 Newport Drive<small>Robina</small></h2>
+      <div class="meta"><span class="chip angle">parkland</span><span class="chip">tree</span><span class="chip">10 cards</span><a class="chip live" href="examples/115-newport-drive-robina.html" target="_blank" rel="noopener">open the deck →</a></div>
+    </header>
+    <div class="grid">
+      <div class="head"><span></span><span>Desktop · 1440×900</span><span>Mobile · 390×844</span></div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">00</span>The hand-off</div>
+        <a class="shot d" href="shots/115-newport-drive-robina/desktop-00-card-00.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/115-newport-drive-robina/desktop-00-card-00.png" alt="desktop"></a>
+        <a class="shot m" href="shots/115-newport-drive-robina/mobile-00-card-00.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/115-newport-drive-robina/mobile-00-card-00.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">01</span>Recognition</div>
+        <a class="shot d" href="shots/115-newport-drive-robina/desktop-01-card-01.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/115-newport-drive-robina/desktop-01-card-01.png" alt="desktop"></a>
+        <a class="shot m" href="shots/115-newport-drive-robina/mobile-01-card-01.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/115-newport-drive-robina/mobile-01-card-01.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">02</span>The hook</div>
+        <a class="shot d" href="shots/115-newport-drive-robina/desktop-02-card-02.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/115-newport-drive-robina/desktop-02-card-02.png" alt="desktop"></a>
+        <a class="shot m" href="shots/115-newport-drive-robina/mobile-02-card-02.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/115-newport-drive-robina/mobile-02-card-02.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">03</span>The reveal</div>
+        <a class="shot d" href="shots/115-newport-drive-robina/desktop-03-card-03.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/115-newport-drive-robina/desktop-03-card-03.png" alt="desktop"></a>
+        <a class="shot m" href="shots/115-newport-drive-robina/mobile-03-card-03.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/115-newport-drive-robina/mobile-03-card-03.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">04</span>Why it matters</div>
+        <a class="shot d" href="shots/115-newport-drive-robina/desktop-04-card-04.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/115-newport-drive-robina/desktop-04-card-04.png" alt="desktop"></a>
+        <a class="shot m" href="shots/115-newport-drive-robina/mobile-04-card-04.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/115-newport-drive-robina/mobile-04-card-04.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">05</span>Competition</div>
+        <a class="shot d" href="shots/115-newport-drive-robina/desktop-05-card-05.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/115-newport-drive-robina/desktop-05-card-05.png" alt="desktop"></a>
+        <a class="shot m" href="shots/115-newport-drive-robina/mobile-05-card-05.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/115-newport-drive-robina/mobile-05-card-05.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">06</span>The comparable</div>
+        <a class="shot d" href="shots/115-newport-drive-robina/desktop-06-card-06.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/115-newport-drive-robina/desktop-06-card-06.png" alt="desktop"></a>
+        <a class="shot m" href="shots/115-newport-drive-robina/mobile-06-card-06.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/115-newport-drive-robina/mobile-06-card-06.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">07</span>Value drivers</div>
+        <a class="shot d" href="shots/115-newport-drive-robina/desktop-07-card-07.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/115-newport-drive-robina/desktop-07-card-07.png" alt="desktop"></a>
+        <a class="shot m" href="shots/115-newport-drive-robina/mobile-07-card-07.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/115-newport-drive-robina/mobile-07-card-07.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">08</span>The buyer</div>
+        <a class="shot d" href="shots/115-newport-drive-robina/desktop-08-card-08.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/115-newport-drive-robina/desktop-08-card-08.png" alt="desktop"></a>
+        <a class="shot m" href="shots/115-newport-drive-robina/mobile-08-card-08.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/115-newport-drive-robina/mobile-08-card-08.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">09</span>Valuation</div>
+        <a class="shot d" href="shots/115-newport-drive-robina/desktop-09-card-09.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/115-newport-drive-robina/desktop-09-card-09.png" alt="desktop"></a>
+        <a class="shot m" href="shots/115-newport-drive-robina/mobile-09-card-09.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/115-newport-drive-robina/mobile-09-card-09.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">10</span>The strategy</div>
+        <a class="shot d" href="shots/115-newport-drive-robina/desktop-10-card-10.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/115-newport-drive-robina/desktop-10-card-10.png" alt="desktop"></a>
+        <a class="shot m" href="shots/115-newport-drive-robina/mobile-10-card-10.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/115-newport-drive-robina/mobile-10-card-10.png" alt="mobile"></a>
+      </div>
+    </div>
+  </section>
+  <section class="prop" id="2-longueville-court-robina">
+    <header>
+      <h2>2 Longueville Court<small>Robina</small></h2>
+      <div class="meta"><span class="chip angle">parkland</span><span class="chip">tree</span><span class="chip">10 cards</span><a class="chip live" href="examples/2-longueville-court-robina.html" target="_blank" rel="noopener">open the deck →</a></div>
+    </header>
+    <div class="grid">
+      <div class="head"><span></span><span>Desktop · 1440×900</span><span>Mobile · 390×844</span></div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">00</span>The hand-off</div>
+        <a class="shot d" href="shots/2-longueville-court-robina/desktop-00-card-00.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/2-longueville-court-robina/desktop-00-card-00.png" alt="desktop"></a>
+        <a class="shot m" href="shots/2-longueville-court-robina/mobile-00-card-00.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/2-longueville-court-robina/mobile-00-card-00.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">01</span>Recognition</div>
+        <a class="shot d" href="shots/2-longueville-court-robina/desktop-01-card-01.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/2-longueville-court-robina/desktop-01-card-01.png" alt="desktop"></a>
+        <a class="shot m" href="shots/2-longueville-court-robina/mobile-01-card-01.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/2-longueville-court-robina/mobile-01-card-01.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">02</span>The hook</div>
+        <a class="shot d" href="shots/2-longueville-court-robina/desktop-02-card-02.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/2-longueville-court-robina/desktop-02-card-02.png" alt="desktop"></a>
+        <a class="shot m" href="shots/2-longueville-court-robina/mobile-02-card-02.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/2-longueville-court-robina/mobile-02-card-02.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">03</span>The reveal</div>
+        <a class="shot d" href="shots/2-longueville-court-robina/desktop-03-card-03.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/2-longueville-court-robina/desktop-03-card-03.png" alt="desktop"></a>
+        <a class="shot m" href="shots/2-longueville-court-robina/mobile-03-card-03.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/2-longueville-court-robina/mobile-03-card-03.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">04</span>Why it matters</div>
+        <a class="shot d" href="shots/2-longueville-court-robina/desktop-04-card-04.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/2-longueville-court-robina/desktop-04-card-04.png" alt="desktop"></a>
+        <a class="shot m" href="shots/2-longueville-court-robina/mobile-04-card-04.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/2-longueville-court-robina/mobile-04-card-04.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">05</span>Competition</div>
+        <a class="shot d" href="shots/2-longueville-court-robina/desktop-05-card-05.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/2-longueville-court-robina/desktop-05-card-05.png" alt="desktop"></a>
+        <a class="shot m" href="shots/2-longueville-court-robina/mobile-05-card-05.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/2-longueville-court-robina/mobile-05-card-05.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">06</span>The comparable</div>
+        <a class="shot d" href="shots/2-longueville-court-robina/desktop-06-card-06.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/2-longueville-court-robina/desktop-06-card-06.png" alt="desktop"></a>
+        <a class="shot m" href="shots/2-longueville-court-robina/mobile-06-card-06.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/2-longueville-court-robina/mobile-06-card-06.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">07</span>Value drivers</div>
+        <a class="shot d" href="shots/2-longueville-court-robina/desktop-07-card-07.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/2-longueville-court-robina/desktop-07-card-07.png" alt="desktop"></a>
+        <a class="shot m" href="shots/2-longueville-court-robina/mobile-07-card-07.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/2-longueville-court-robina/mobile-07-card-07.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">08</span>The buyer</div>
+        <a class="shot d" href="shots/2-longueville-court-robina/desktop-08-card-08.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/2-longueville-court-robina/desktop-08-card-08.png" alt="desktop"></a>
+        <a class="shot m" href="shots/2-longueville-court-robina/mobile-08-card-08.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/2-longueville-court-robina/mobile-08-card-08.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">09</span>Valuation</div>
+        <a class="shot d" href="shots/2-longueville-court-robina/desktop-09-card-09.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/2-longueville-court-robina/desktop-09-card-09.png" alt="desktop"></a>
+        <a class="shot m" href="shots/2-longueville-court-robina/mobile-09-card-09.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/2-longueville-court-robina/mobile-09-card-09.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">10</span>The strategy</div>
+        <a class="shot d" href="shots/2-longueville-court-robina/desktop-10-card-10.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/2-longueville-court-robina/desktop-10-card-10.png" alt="desktop"></a>
+        <a class="shot m" href="shots/2-longueville-court-robina/mobile-10-card-10.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/2-longueville-court-robina/mobile-10-card-10.png" alt="mobile"></a>
+      </div>
+    </div>
+  </section>
+  <section class="prop" id="27-protea-court-robina">
+    <header>
+      <h2>27 Protea Court<small>Robina</small></h2>
+      <div class="meta"><span class="chip angle">parkland</span><span class="chip">tree</span><span class="chip">10 cards</span><a class="chip live" href="examples/27-protea-court-robina.html" target="_blank" rel="noopener">open the deck →</a></div>
+    </header>
+    <div class="grid">
+      <div class="head"><span></span><span>Desktop · 1440×900</span><span>Mobile · 390×844</span></div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">00</span>The hand-off</div>
+        <a class="shot d" href="shots/27-protea-court-robina/desktop-00-card-00.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-protea-court-robina/desktop-00-card-00.png" alt="desktop"></a>
+        <a class="shot m" href="shots/27-protea-court-robina/mobile-00-card-00.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-protea-court-robina/mobile-00-card-00.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">01</span>Recognition</div>
+        <a class="shot d" href="shots/27-protea-court-robina/desktop-01-card-01.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-protea-court-robina/desktop-01-card-01.png" alt="desktop"></a>
+        <a class="shot m" href="shots/27-protea-court-robina/mobile-01-card-01.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-protea-court-robina/mobile-01-card-01.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">02</span>The hook</div>
+        <a class="shot d" href="shots/27-protea-court-robina/desktop-02-card-02.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-protea-court-robina/desktop-02-card-02.png" alt="desktop"></a>
+        <a class="shot m" href="shots/27-protea-court-robina/mobile-02-card-02.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-protea-court-robina/mobile-02-card-02.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">03</span>The reveal</div>
+        <a class="shot d" href="shots/27-protea-court-robina/desktop-03-card-03.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-protea-court-robina/desktop-03-card-03.png" alt="desktop"></a>
+        <a class="shot m" href="shots/27-protea-court-robina/mobile-03-card-03.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-protea-court-robina/mobile-03-card-03.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">04</span>Why it matters</div>
+        <a class="shot d" href="shots/27-protea-court-robina/desktop-04-card-04.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-protea-court-robina/desktop-04-card-04.png" alt="desktop"></a>
+        <a class="shot m" href="shots/27-protea-court-robina/mobile-04-card-04.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-protea-court-robina/mobile-04-card-04.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">05</span>Competition</div>
+        <a class="shot d" href="shots/27-protea-court-robina/desktop-05-card-05.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-protea-court-robina/desktop-05-card-05.png" alt="desktop"></a>
+        <a class="shot m" href="shots/27-protea-court-robina/mobile-05-card-05.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-protea-court-robina/mobile-05-card-05.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">06</span>The comparable</div>
+        <a class="shot d" href="shots/27-protea-court-robina/desktop-06-card-06.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-protea-court-robina/desktop-06-card-06.png" alt="desktop"></a>
+        <a class="shot m" href="shots/27-protea-court-robina/mobile-06-card-06.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-protea-court-robina/mobile-06-card-06.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">07</span>Value drivers</div>
+        <a class="shot d" href="shots/27-protea-court-robina/desktop-07-card-07.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-protea-court-robina/desktop-07-card-07.png" alt="desktop"></a>
+        <a class="shot m" href="shots/27-protea-court-robina/mobile-07-card-07.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-protea-court-robina/mobile-07-card-07.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">08</span>The buyer</div>
+        <a class="shot d" href="shots/27-protea-court-robina/desktop-08-card-08.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-protea-court-robina/desktop-08-card-08.png" alt="desktop"></a>
+        <a class="shot m" href="shots/27-protea-court-robina/mobile-08-card-08.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-protea-court-robina/mobile-08-card-08.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">09</span>Valuation</div>
+        <a class="shot d" href="shots/27-protea-court-robina/desktop-09-card-09.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-protea-court-robina/desktop-09-card-09.png" alt="desktop"></a>
+        <a class="shot m" href="shots/27-protea-court-robina/mobile-09-card-09.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-protea-court-robina/mobile-09-card-09.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">10</span>The strategy</div>
+        <a class="shot d" href="shots/27-protea-court-robina/desktop-10-card-10.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-protea-court-robina/desktop-10-card-10.png" alt="desktop"></a>
+        <a class="shot m" href="shots/27-protea-court-robina/mobile-10-card-10.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-protea-court-robina/mobile-10-card-10.png" alt="mobile"></a>
+      </div>
+    </div>
+  </section>
+  <section class="prop" id="8-corina-close-robina">
+    <header>
+      <h2>8 Corina Close<small>Robina</small></h2>
+      <div class="meta"><span class="chip angle">parkland</span><span class="chip">tree</span><span class="chip">10 cards</span><a class="chip live" href="examples/8-corina-close-robina.html" target="_blank" rel="noopener">open the deck →</a></div>
+    </header>
+    <div class="grid">
+      <div class="head"><span></span><span>Desktop · 1440×900</span><span>Mobile · 390×844</span></div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">00</span>The hand-off</div>
+        <a class="shot d" href="shots/8-corina-close-robina/desktop-00-card-00.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/8-corina-close-robina/desktop-00-card-00.png" alt="desktop"></a>
+        <a class="shot m" href="shots/8-corina-close-robina/mobile-00-card-00.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/8-corina-close-robina/mobile-00-card-00.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">01</span>Recognition</div>
+        <a class="shot d" href="shots/8-corina-close-robina/desktop-01-card-01.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/8-corina-close-robina/desktop-01-card-01.png" alt="desktop"></a>
+        <a class="shot m" href="shots/8-corina-close-robina/mobile-01-card-01.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/8-corina-close-robina/mobile-01-card-01.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">02</span>The hook</div>
+        <a class="shot d" href="shots/8-corina-close-robina/desktop-02-card-02.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/8-corina-close-robina/desktop-02-card-02.png" alt="desktop"></a>
+        <a class="shot m" href="shots/8-corina-close-robina/mobile-02-card-02.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/8-corina-close-robina/mobile-02-card-02.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">03</span>The reveal</div>
+        <a class="shot d" href="shots/8-corina-close-robina/desktop-03-card-03.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/8-corina-close-robina/desktop-03-card-03.png" alt="desktop"></a>
+        <a class="shot m" href="shots/8-corina-close-robina/mobile-03-card-03.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/8-corina-close-robina/mobile-03-card-03.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">04</span>Why it matters</div>
+        <a class="shot d" href="shots/8-corina-close-robina/desktop-04-card-04.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/8-corina-close-robina/desktop-04-card-04.png" alt="desktop"></a>
+        <a class="shot m" href="shots/8-corina-close-robina/mobile-04-card-04.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/8-corina-close-robina/mobile-04-card-04.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">05</span>Competition</div>
+        <a class="shot d" href="shots/8-corina-close-robina/desktop-05-card-05.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/8-corina-close-robina/desktop-05-card-05.png" alt="desktop"></a>
+        <a class="shot m" href="shots/8-corina-close-robina/mobile-05-card-05.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/8-corina-close-robina/mobile-05-card-05.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">06</span>The comparable</div>
+        <a class="shot d" href="shots/8-corina-close-robina/desktop-06-card-06.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/8-corina-close-robina/desktop-06-card-06.png" alt="desktop"></a>
+        <a class="shot m" href="shots/8-corina-close-robina/mobile-06-card-06.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/8-corina-close-robina/mobile-06-card-06.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">07</span>Value drivers</div>
+        <a class="shot d" href="shots/8-corina-close-robina/desktop-07-card-07.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/8-corina-close-robina/desktop-07-card-07.png" alt="desktop"></a>
+        <a class="shot m" href="shots/8-corina-close-robina/mobile-07-card-07.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/8-corina-close-robina/mobile-07-card-07.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">08</span>The buyer</div>
+        <a class="shot d" href="shots/8-corina-close-robina/desktop-08-card-08.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/8-corina-close-robina/desktop-08-card-08.png" alt="desktop"></a>
+        <a class="shot m" href="shots/8-corina-close-robina/mobile-08-card-08.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/8-corina-close-robina/mobile-08-card-08.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">09</span>Valuation</div>
+        <a class="shot d" href="shots/8-corina-close-robina/desktop-09-card-09.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/8-corina-close-robina/desktop-09-card-09.png" alt="desktop"></a>
+        <a class="shot m" href="shots/8-corina-close-robina/mobile-09-card-09.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/8-corina-close-robina/mobile-09-card-09.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">10</span>The strategy</div>
+        <a class="shot d" href="shots/8-corina-close-robina/desktop-10-card-10.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/8-corina-close-robina/desktop-10-card-10.png" alt="desktop"></a>
+        <a class="shot m" href="shots/8-corina-close-robina/mobile-10-card-10.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/8-corina-close-robina/mobile-10-card-10.png" alt="mobile"></a>
+      </div>
+    </div>
+  </section>
+  <section class="prop" id="13-imperia-crescent-varsity-lakes">
+    <header>
+      <h2>13 Imperia Crescent<small>Varsity Lakes</small></h2>
+      <div class="meta"><span class="chip angle">parkland</span><span class="chip">tree</span><span class="chip">9 cards</span><a class="chip live" href="examples/13-imperia-crescent-varsity-lakes.html" target="_blank" rel="noopener">open the deck →</a></div>
+    </header>
+    <div class="grid">
+      <div class="head"><span></span><span>Desktop · 1440×900</span><span>Mobile · 390×844</span></div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">00</span>The hand-off</div>
+        <a class="shot d" href="shots/13-imperia-crescent-varsity-lakes/desktop-00-card-00.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/13-imperia-crescent-varsity-lakes/desktop-00-card-00.png" alt="desktop"></a>
+        <a class="shot m" href="shots/13-imperia-crescent-varsity-lakes/mobile-00-card-00.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/13-imperia-crescent-varsity-lakes/mobile-00-card-00.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">01</span>Recognition</div>
+        <a class="shot d" href="shots/13-imperia-crescent-varsity-lakes/desktop-01-card-01.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/13-imperia-crescent-varsity-lakes/desktop-01-card-01.png" alt="desktop"></a>
+        <a class="shot m" href="shots/13-imperia-crescent-varsity-lakes/mobile-01-card-01.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/13-imperia-crescent-varsity-lakes/mobile-01-card-01.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">02</span>The hook</div>
+        <a class="shot d" href="shots/13-imperia-crescent-varsity-lakes/desktop-02-card-02.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/13-imperia-crescent-varsity-lakes/desktop-02-card-02.png" alt="desktop"></a>
+        <a class="shot m" href="shots/13-imperia-crescent-varsity-lakes/mobile-02-card-02.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/13-imperia-crescent-varsity-lakes/mobile-02-card-02.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">03</span>The reveal</div>
+        <a class="shot d" href="shots/13-imperia-crescent-varsity-lakes/desktop-03-card-03.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/13-imperia-crescent-varsity-lakes/desktop-03-card-03.png" alt="desktop"></a>
+        <a class="shot m" href="shots/13-imperia-crescent-varsity-lakes/mobile-03-card-03.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/13-imperia-crescent-varsity-lakes/mobile-03-card-03.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">04</span>Why it matters</div>
+        <a class="shot d" href="shots/13-imperia-crescent-varsity-lakes/desktop-04-card-04.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/13-imperia-crescent-varsity-lakes/desktop-04-card-04.png" alt="desktop"></a>
+        <a class="shot m" href="shots/13-imperia-crescent-varsity-lakes/mobile-04-card-04.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/13-imperia-crescent-varsity-lakes/mobile-04-card-04.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">05</span>Competition</div>
+        <a class="shot d" href="shots/13-imperia-crescent-varsity-lakes/desktop-05-card-05.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/13-imperia-crescent-varsity-lakes/desktop-05-card-05.png" alt="desktop"></a>
+        <a class="shot m" href="shots/13-imperia-crescent-varsity-lakes/mobile-05-card-05.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/13-imperia-crescent-varsity-lakes/mobile-05-card-05.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">06</span>The comparable</div>
+        <a class="shot d" href="shots/13-imperia-crescent-varsity-lakes/desktop-06-card-06.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/13-imperia-crescent-varsity-lakes/desktop-06-card-06.png" alt="desktop"></a>
+        <a class="shot m" href="shots/13-imperia-crescent-varsity-lakes/mobile-06-card-06.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/13-imperia-crescent-varsity-lakes/mobile-06-card-06.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">07</span>The buyer</div>
+        <a class="shot d" href="shots/13-imperia-crescent-varsity-lakes/desktop-07-card-08.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/13-imperia-crescent-varsity-lakes/desktop-07-card-08.png" alt="desktop"></a>
+        <a class="shot m" href="shots/13-imperia-crescent-varsity-lakes/mobile-07-card-08.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/13-imperia-crescent-varsity-lakes/mobile-07-card-08.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">08</span>Valuation</div>
+        <a class="shot d" href="shots/13-imperia-crescent-varsity-lakes/desktop-08-card-09.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/13-imperia-crescent-varsity-lakes/desktop-08-card-09.png" alt="desktop"></a>
+        <a class="shot m" href="shots/13-imperia-crescent-varsity-lakes/mobile-08-card-09.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/13-imperia-crescent-varsity-lakes/mobile-08-card-09.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">09</span>The strategy</div>
+        <a class="shot d" href="shots/13-imperia-crescent-varsity-lakes/desktop-09-card-10.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/13-imperia-crescent-varsity-lakes/desktop-09-card-10.png" alt="desktop"></a>
+        <a class="shot m" href="shots/13-imperia-crescent-varsity-lakes/mobile-09-card-10.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/13-imperia-crescent-varsity-lakes/mobile-09-card-10.png" alt="mobile"></a>
+      </div>
+    </div>
+  </section>
+  <section class="prop" id="17-placid-court-varsity-lakes">
+    <header>
+      <h2>17 Placid Court<small>Varsity Lakes</small></h2>
+      <div class="meta"><span class="chip angle">water_adjacent</span><span class="chip">reeds</span><span class="chip">10 cards</span><a class="chip live" href="examples/17-placid-court-varsity-lakes.html" target="_blank" rel="noopener">open the deck →</a></div>
+    </header>
+    <div class="grid">
+      <div class="head"><span></span><span>Desktop · 1440×900</span><span>Mobile · 390×844</span></div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">00</span>The hand-off</div>
+        <a class="shot d" href="shots/17-placid-court-varsity-lakes/desktop-00-card-00.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/17-placid-court-varsity-lakes/desktop-00-card-00.png" alt="desktop"></a>
+        <a class="shot m" href="shots/17-placid-court-varsity-lakes/mobile-00-card-00.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/17-placid-court-varsity-lakes/mobile-00-card-00.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">01</span>Recognition</div>
+        <a class="shot d" href="shots/17-placid-court-varsity-lakes/desktop-01-card-01.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/17-placid-court-varsity-lakes/desktop-01-card-01.png" alt="desktop"></a>
+        <a class="shot m" href="shots/17-placid-court-varsity-lakes/mobile-01-card-01.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/17-placid-court-varsity-lakes/mobile-01-card-01.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">02</span>The hook</div>
+        <a class="shot d" href="shots/17-placid-court-varsity-lakes/desktop-02-card-02.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/17-placid-court-varsity-lakes/desktop-02-card-02.png" alt="desktop"></a>
+        <a class="shot m" href="shots/17-placid-court-varsity-lakes/mobile-02-card-02.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/17-placid-court-varsity-lakes/mobile-02-card-02.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">03</span>The reveal</div>
+        <a class="shot d" href="shots/17-placid-court-varsity-lakes/desktop-03-card-03.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/17-placid-court-varsity-lakes/desktop-03-card-03.png" alt="desktop"></a>
+        <a class="shot m" href="shots/17-placid-court-varsity-lakes/mobile-03-card-03.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/17-placid-court-varsity-lakes/mobile-03-card-03.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">04</span>Why it matters</div>
+        <a class="shot d" href="shots/17-placid-court-varsity-lakes/desktop-04-card-04.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/17-placid-court-varsity-lakes/desktop-04-card-04.png" alt="desktop"></a>
+        <a class="shot m" href="shots/17-placid-court-varsity-lakes/mobile-04-card-04.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/17-placid-court-varsity-lakes/mobile-04-card-04.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">05</span>Competition</div>
+        <a class="shot d" href="shots/17-placid-court-varsity-lakes/desktop-05-card-05.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/17-placid-court-varsity-lakes/desktop-05-card-05.png" alt="desktop"></a>
+        <a class="shot m" href="shots/17-placid-court-varsity-lakes/mobile-05-card-05.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/17-placid-court-varsity-lakes/mobile-05-card-05.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">06</span>The comparable</div>
+        <a class="shot d" href="shots/17-placid-court-varsity-lakes/desktop-06-card-06.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/17-placid-court-varsity-lakes/desktop-06-card-06.png" alt="desktop"></a>
+        <a class="shot m" href="shots/17-placid-court-varsity-lakes/mobile-06-card-06.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/17-placid-court-varsity-lakes/mobile-06-card-06.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">07</span>Value drivers</div>
+        <a class="shot d" href="shots/17-placid-court-varsity-lakes/desktop-07-card-07.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/17-placid-court-varsity-lakes/desktop-07-card-07.png" alt="desktop"></a>
+        <a class="shot m" href="shots/17-placid-court-varsity-lakes/mobile-07-card-07.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/17-placid-court-varsity-lakes/mobile-07-card-07.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">08</span>The buyer</div>
+        <a class="shot d" href="shots/17-placid-court-varsity-lakes/desktop-08-card-08.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/17-placid-court-varsity-lakes/desktop-08-card-08.png" alt="desktop"></a>
+        <a class="shot m" href="shots/17-placid-court-varsity-lakes/mobile-08-card-08.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/17-placid-court-varsity-lakes/mobile-08-card-08.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">09</span>Valuation</div>
+        <a class="shot d" href="shots/17-placid-court-varsity-lakes/desktop-09-card-09.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/17-placid-court-varsity-lakes/desktop-09-card-09.png" alt="desktop"></a>
+        <a class="shot m" href="shots/17-placid-court-varsity-lakes/mobile-09-card-09.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/17-placid-court-varsity-lakes/mobile-09-card-09.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">10</span>The strategy</div>
+        <a class="shot d" href="shots/17-placid-court-varsity-lakes/desktop-10-card-10.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/17-placid-court-varsity-lakes/desktop-10-card-10.png" alt="desktop"></a>
+        <a class="shot m" href="shots/17-placid-court-varsity-lakes/mobile-10-card-10.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/17-placid-court-varsity-lakes/mobile-10-card-10.png" alt="mobile"></a>
+      </div>
+    </div>
+  </section>
+  <section class="prop" id="27-south-bay-drive-varsity-lakes">
+    <header>
+      <h2>27 South Bay Drive<small>Varsity Lakes</small></h2>
+      <div class="meta"><span class="chip angle">scale</span><span class="chip none">no emblem · text-only angle</span><span class="chip">10 cards</span><a class="chip live" href="examples/27-south-bay-drive-varsity-lakes.html" target="_blank" rel="noopener">open the deck →</a></div>
+    </header>
+    <div class="grid">
+      <div class="head"><span></span><span>Desktop · 1440×900</span><span>Mobile · 390×844</span></div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">00</span>The hand-off</div>
+        <a class="shot d" href="shots/27-south-bay-drive-varsity-lakes/desktop-00-card-00.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-south-bay-drive-varsity-lakes/desktop-00-card-00.png" alt="desktop"></a>
+        <a class="shot m" href="shots/27-south-bay-drive-varsity-lakes/mobile-00-card-00.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-south-bay-drive-varsity-lakes/mobile-00-card-00.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">01</span>Recognition</div>
+        <a class="shot d" href="shots/27-south-bay-drive-varsity-lakes/desktop-01-card-01.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-south-bay-drive-varsity-lakes/desktop-01-card-01.png" alt="desktop"></a>
+        <a class="shot m" href="shots/27-south-bay-drive-varsity-lakes/mobile-01-card-01.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-south-bay-drive-varsity-lakes/mobile-01-card-01.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">02</span>The hook</div>
+        <a class="shot d" href="shots/27-south-bay-drive-varsity-lakes/desktop-02-card-02.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-south-bay-drive-varsity-lakes/desktop-02-card-02.png" alt="desktop"></a>
+        <a class="shot m" href="shots/27-south-bay-drive-varsity-lakes/mobile-02-card-02.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-south-bay-drive-varsity-lakes/mobile-02-card-02.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">03</span>The reveal</div>
+        <a class="shot d" href="shots/27-south-bay-drive-varsity-lakes/desktop-03-card-03.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-south-bay-drive-varsity-lakes/desktop-03-card-03.png" alt="desktop"></a>
+        <a class="shot m" href="shots/27-south-bay-drive-varsity-lakes/mobile-03-card-03.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-south-bay-drive-varsity-lakes/mobile-03-card-03.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">04</span>Why it matters</div>
+        <a class="shot d" href="shots/27-south-bay-drive-varsity-lakes/desktop-04-card-04.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-south-bay-drive-varsity-lakes/desktop-04-card-04.png" alt="desktop"></a>
+        <a class="shot m" href="shots/27-south-bay-drive-varsity-lakes/mobile-04-card-04.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-south-bay-drive-varsity-lakes/mobile-04-card-04.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">05</span>Competition</div>
+        <a class="shot d" href="shots/27-south-bay-drive-varsity-lakes/desktop-05-card-05.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-south-bay-drive-varsity-lakes/desktop-05-card-05.png" alt="desktop"></a>
+        <a class="shot m" href="shots/27-south-bay-drive-varsity-lakes/mobile-05-card-05.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-south-bay-drive-varsity-lakes/mobile-05-card-05.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">06</span>The comparable</div>
+        <a class="shot d" href="shots/27-south-bay-drive-varsity-lakes/desktop-06-card-06.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-south-bay-drive-varsity-lakes/desktop-06-card-06.png" alt="desktop"></a>
+        <a class="shot m" href="shots/27-south-bay-drive-varsity-lakes/mobile-06-card-06.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-south-bay-drive-varsity-lakes/mobile-06-card-06.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">07</span>Value drivers</div>
+        <a class="shot d" href="shots/27-south-bay-drive-varsity-lakes/desktop-07-card-07.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-south-bay-drive-varsity-lakes/desktop-07-card-07.png" alt="desktop"></a>
+        <a class="shot m" href="shots/27-south-bay-drive-varsity-lakes/mobile-07-card-07.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-south-bay-drive-varsity-lakes/mobile-07-card-07.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">08</span>The buyer</div>
+        <a class="shot d" href="shots/27-south-bay-drive-varsity-lakes/desktop-08-card-08.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-south-bay-drive-varsity-lakes/desktop-08-card-08.png" alt="desktop"></a>
+        <a class="shot m" href="shots/27-south-bay-drive-varsity-lakes/mobile-08-card-08.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-south-bay-drive-varsity-lakes/mobile-08-card-08.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">09</span>Valuation</div>
+        <a class="shot d" href="shots/27-south-bay-drive-varsity-lakes/desktop-09-card-09.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-south-bay-drive-varsity-lakes/desktop-09-card-09.png" alt="desktop"></a>
+        <a class="shot m" href="shots/27-south-bay-drive-varsity-lakes/mobile-09-card-09.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-south-bay-drive-varsity-lakes/mobile-09-card-09.png" alt="mobile"></a>
+      </div>
+      <div class="row">
+        <div class="rowLabel"><span class="n">10</span>The strategy</div>
+        <a class="shot d" href="shots/27-south-bay-drive-varsity-lakes/desktop-10-card-10.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-south-bay-drive-varsity-lakes/desktop-10-card-10.png" alt="desktop"></a>
+        <a class="shot m" href="shots/27-south-bay-drive-varsity-lakes/mobile-10-card-10.png" target="_blank" rel="noopener"><img loading="lazy" src="shots/27-south-bay-drive-varsity-lakes/mobile-10-card-10.png" alt="mobile"></a>
+      </div>
+    </div>
+  </section>
+
+
+<footer>
+Built by <code>build_deck_preview.py --all</code>, shot by <code>shoot_examples.js</code>,
+indexed by <code>build_examples_index.py</code>. Angle→drawing mapping is
+<code>angle_media.yaml</code>; the emblem set is at <a href="reveals.html">reveals.html</a>.
+</footer>
+
+</body>
+</html>

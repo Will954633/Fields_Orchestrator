@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Neon sound — what your phone can actually play</title>
+<style>
+  :root{--ink:#E6DDD2;--muted:#8C8177;--line:rgba(230,221,210,.14);--accent:#C0704A;
+        --green:#8FE9A8;--red:#E0765C;
+        --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  *{box-sizing:border-box}
+  body{margin:0;background:#000;color:var(--ink);font-family:var(--sans);line-height:1.5;
+       padding:1.6rem 1.1rem 4rem;-webkit-font-smoothing:antialiased}
+  h1{font-size:1.25rem;margin:0 0 .3rem;font-weight:600}
+  .sub{color:var(--muted);font-size:.9rem;margin:0 0 1.4rem}
+  .state{border:1px solid var(--line);border-radius:10px;padding:.8rem .9rem;margin-bottom:1.4rem;
+         font:12px/1.7 ui-monospace,Menlo,Consolas,monospace;color:var(--muted)}
+  .state b{color:var(--green)}
+  .state b.bad{color:var(--red)}
+  button.t{display:block;width:100%;text-align:left;margin:0 0 .7rem;padding:1rem 1.1rem;
+           background:#0C0C0E;border:1px solid var(--line);border-radius:12px;color:var(--ink);
+           font:inherit;font-size:1rem;cursor:pointer}
+  button.t:active{background:#16161a}
+  button.t b{display:block;font-weight:600;margin-bottom:.15rem}
+  button.t span{display:block;color:var(--muted);font-size:.82rem}
+  .n{display:inline-block;width:1.6rem;color:var(--accent);font-variant-numeric:tabular-nums}
+  #log{margin-top:1.4rem;border-top:1px solid var(--line);padding-top:1rem;
+       font:11px/1.7 ui-monospace,Menlo,Consolas,monospace;color:var(--muted);
+       white-space:pre-wrap;word-break:break-word}
+  .note{margin-top:1.6rem;color:var(--muted);font-size:.85rem;border-left:2px solid var(--accent);
+        padding-left:.9rem}
+</style>
+</head>
+<body>
+
+<h1>Neon sound test</h1>
+<p class="sub">Tap each one in order and tell me the <strong>numbers you can hear</strong>.
+Turn the volume up. On Android make sure it is the <em>media</em> volume, not the ringer —
+they are separate, and the buttons only change whichever one last played.</p>
+
+<div class="state" id="state">tap anything to start</div>
+
+<button class="t" id="t1"><b><span class="n">1.</span>Plain beep — 440&nbsp;Hz</b>
+  <span>Loud and mid-range. If you cannot hear this, nothing else will work.</span></button>
+
+<button class="t" id="t2"><b><span class="n">2.</span>Glass impact</b>
+  <span>The exact sound the shattering uses — the one you told me already works.</span></button>
+
+<button class="t" id="t3"><b><span class="n">3.</span>Neon hum, as shipped</b>
+  <span>The real recipe at the real level: 100/300/500/700&nbsp;Hz, gains 0.030–0.009.</span></button>
+
+<button class="t" id="t4"><b><span class="n">4.</span>Neon hum &times;8</b>
+  <span>Same thing, much louder. If 3 is silent and this is not, it is simply too quiet.</span></button>
+
+<button class="t" id="t5"><b><span class="n">5.</span>100&nbsp;Hz only</b>
+  <span>The original fundamental, on its own. Most phone speakers cannot produce this at all.</span></button>
+
+<button class="t" id="t6"><b><span class="n">6.</span>700&nbsp;Hz only</b>
+  <span>The harmonic I added. A phone speaker should manage this easily.</span></button>
+
+<button class="t" id="t7"><b><span class="n">7.</span>Strike tick</b>
+  <span>2400&nbsp;Hz noise burst — the click when the tube strikes.</span></button>
+
+<div class="note">
+  What each answer tells me:<br>
+  <strong>1 silent</strong> → the audio path is blocked, nothing else matters.<br>
+  <strong>2 works, 3 silent, 4 works</strong> → the hum is just too quiet; I raise it.<br>
+  <strong>2 works, 3 and 4 both silent</strong> → something specific to the hum's build.<br>
+  <strong>5 silent, 6 audible</strong> → confirms the speaker cannot do bass, as I suspected.
+</div>
+
+<div id="log"></div>
+
+<script src="../outro/glass-audio.js"></script>
+<script>
+(() => {
+  "use strict";
+  const logEl = document.getElementById("log");
+  const stateEl = document.getElementById("state");
+  const log = (m) => { logEl.textContent += m + "\n"; };
+
+  let ctx = null, bornInGesture = false;
+
+  // Exactly what neon_cta.js does, so this is a real test of it and not a
+  // lookalike: build inside the gesture, resume, then play a silent buffer.
+  function ensure(inGesture) {
+    if (!ctx && inGesture) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      ctx = new AC();
+      bornInGesture = true;
+      log("context created inside a gesture · " + ctx.sampleRate + "Hz");
+    }
+    if (!ctx) return null;
+    if (ctx.state === "suspended") ctx.resume();
+    if (inGesture) {
+      try { const b = ctx.createBuffer(1, 1, ctx.sampleRate);
+        const s = ctx.createBufferSource(); s.buffer = b;
+        s.connect(ctx.destination); s.start(0); } catch (e) {}
+    }
+    show();
+    return ctx;
+  }
+  function show() {
+    stateEl.innerHTML = ctx
+      ? `state <b class="${ctx.state === "running" ? "" : "bad"}">${ctx.state}</b>` +
+        ` · rate <b>${ctx.sampleRate}</b>` +
+        ` · born in gesture <b>${bornInGesture}</b>` +
+        ` · out latency <b>${(ctx.outputLatency || 0).toFixed(3)}s</b>`
+      : "no context yet";
+  }
+
+  /** A bank of sawtooths through a lowpass — neon_cta.js's ballast, verbatim. */
+  function hum(parts, lpHz, seconds, scale) {
+    const c = ensure(true); if (!c) return;
+    const master = c.createGain(); master.gain.value = 1; master.connect(c.destination);
+    const lp = c.createBiquadFilter();
+    lp.type = "lowpass"; lp.frequency.value = lpHz; lp.Q.value = 0.7; lp.connect(master);
+    const t = c.currentTime;
+    let peak = 0;
+    for (const [f, g] of parts) {
+      const o = c.createOscillator(), v = c.createGain();
+      o.type = "sawtooth"; o.frequency.value = f;
+      v.gain.value = 0;
+      v.gain.setTargetAtTime(g * scale, t, 0.02);
+      v.gain.setTargetAtTime(0, t + seconds - 0.25, 0.06);
+      o.connect(v).connect(lp);
+      o.start(t); o.stop(t + seconds + 0.4);
+      peak += g * scale;
+    }
+    log(`played ${parts.map(p => p[0]).join("/")}Hz · summed gain ${peak.toFixed(3)} · ${seconds}s`);
+  }
+
+  const SHIPPED = [[100, 0.030], [300, 0.014], [500, 0.013], [700, 0.009]];
+
+  document.getElementById("t1").onclick = () => {
+    const c = ensure(true); if (!c) return;
+    const o = c.createOscillator(), g = c.createGain();
+    o.frequency.value = 440; g.gain.value = 0.2;
+    o.connect(g).connect(c.destination);
+    o.start(); o.stop(c.currentTime + 1.0);
+    log("played 440Hz sine · gain 0.200 · 1.0s");
+  };
+  document.getElementById("t2").onclick = () => {
+    show();
+    try { FieldsGlassAudio.arm(); FieldsGlassAudio.impact();
+          setTimeout(() => FieldsGlassAudio.shatter(1400), 120);
+          log("played glass impact + shatter (its own context)"); }
+    catch (e) { log("glass FAILED: " + e.message); }
+  };
+  document.getElementById("t3").onclick = () => hum(SHIPPED, 2600, 3, 1);
+  document.getElementById("t4").onclick = () => hum(SHIPPED, 2600, 3, 8);
+  document.getElementById("t5").onclick = () => hum([[100, 0.030]], 2600, 3, 1);
+  document.getElementById("t6").onclick = () => hum([[700, 0.009]], 2600, 3, 1);
+  document.getElementById("t7").onclick = () => {
+    const c = ensure(true); if (!c) return;
+    const len = 1400, buf = c.createBuffer(1, len, c.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / 140);
+    const s = c.createBufferSource(); s.buffer = buf;
+    const bp = c.createBiquadFilter(); bp.type = "bandpass";
+    bp.frequency.value = 2400; bp.Q.value = 1.1;
+    const g = c.createGain(); g.gain.value = 0.16;
+    s.connect(bp).connect(g).connect(c.destination); s.start();
+    log("played strike tick · 2400Hz · gain 0.160");
+  };
+
+  show();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Digital Rain — Local Recognition Sequence</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; background: #000; overflow: hidden; }
+
+  #stage { position: fixed; inset: 0; background: #000; z-index: 100;
+           transition: opacity .85s ease, visibility 0s linear .85s; }
+  /* Hand-off: the field fades and stops taking input. visibility rather than
+     display so the fade actually runs. */
+  #stage.done { opacity: 0; visibility: hidden; pointer-events: none; }
+  /* The host adds this to <html> while the intro owns the screen, so the deck
+     cannot be scrolled out from under it. finish() removes it. */
+  html.intro-locked, html.intro-locked body { overflow: hidden; }
+  #shake { position: absolute; inset: 0; will-change: transform; }
+
+  #rain  { position: absolute; inset: 0; display: block; }
+  #bloom {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    mix-blend-mode: screen; opacity: .85; pointer-events: none;
+  }
+  #bloom.css-blur { filter: blur(7px) brightness(1.3); }
+
+  #scanlines {
+    position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(to bottom,
+      rgba(0,0,0,0) 0px, rgba(0,0,0,0) 2px,
+      rgba(0,0,0,.13) 3px, rgba(0,0,0,.13) 4px);
+  }
+  #vignette {
+    position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse 78% 72% at 50% 50%,
+      rgba(0,0,0,0) 40%, rgba(0,0,0,.55) 82%, rgba(0,0,0,.9) 100%);
+  }
+  #alarm {
+    position: absolute; inset: 0; pointer-events: none; opacity: 0;
+    background: radial-gradient(ellipse 90% 80% at 50% 50%,
+      rgba(255,0,0,.20) 0%, rgba(255,0,0,.06) 55%, rgba(120,0,0,.34) 100%);
+    mix-blend-mode: screen;
+  }
+  #alarm.pulse { animation: alarm 1.5s ease-out 2; }
+  @keyframes alarm { 0% { opacity: 0 } 12% { opacity: 1 } 100% { opacity: 0 } }
+
+  #shake.glitch { animation: shake .5s steps(2) 2; }
+  @keyframes shake {
+    0%   { transform: translate(0,0) }
+    25%  { transform: translate(-5px, 2px) }
+    50%  { transform: translate(4px,-3px) }
+    75%  { transform: translate(-3px,-1px) }
+    100% { transform: translate(0,0) }
+  }
+
+  #hint {
+    position: absolute; bottom: 18px; right: 20px; z-index: 9;
+    font: 10px/1 ui-monospace, Menlo, Consolas, monospace;
+    letter-spacing: .16em; text-transform: uppercase;
+    color: rgba(0,255,70,.34); text-shadow: 0 0 8px rgba(0,255,70,.3);
+    transition: opacity 1.2s ease; pointer-events: none;
+  }
+  #hint.gone { opacity: 0 }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div id="shake">
+    <canvas id="rain"></canvas>
+    <canvas id="bloom"></canvas>
+  </div>
+  <div id="scanlines"></div>
+  <div id="vignette"></div>
+  <div id="alarm"></div>
+  <div id="hint">tap to skip</div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  // ── Glyph set ────────────────────────────────────────────────────────────
+  // Rain pool: the raw material of a property record. Digits dominate.
+  const POOL =
+    '0123456789' + '0123456789' + '0123456789' +
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZ' +
+    '$%.,:/-+=<>#*·▲▼²';
+  // Text-only glyphs. In the atlas but never chosen by random churn, so the
+  // rain keeps its uppercase/numeric character while the message can use
+  // ordinary sentence case.
+  const EXTRA = "abcdefghijklmnopqrstuvwxyz'!? ";
+  const GLYPHS = (POOL + EXTRA).split('');
+  const G = GLYPHS.length;
+  const RAND_G = POOL.length;                 // random churn picks below this
+  const SPACE = GLYPHS.indexOf(' ');
+  const GIDX = new Map(GLYPHS.map((c, i) => [c, i]));
+
+  // ── Recognition tiers ────────────────────────────────────────────────────
+  // The rain starts as pure noise and gets progressively more personal. Each
+  // tier unlocks at `from` seconds; later tiers are weighted higher so the mix
+  // keeps shifting toward the viewer's own street rather than just adding to it.
+  //
+  // Street names are REAL, taken from Gold_Coast.burleigh_waters cadastral
+  // records and ordered by true distance from the subject property. House
+  // numbers are invented — see README.
+  // The concept ran 11.2s before the message, for a reader who chose to watch
+  // it. Here it is the first thing between someone and their report, so the
+  // whole ramp scales by SPEED: the curtain (T_OPEN), the tier unlock times
+  // and the density ramp all multiply by it. Shortening the curtain alone
+  // would run the field out of new words and leave it repeating.
+  // ?speed=1 is the concept's original pace.
+  const qs = new URLSearchParams(location.search);
+  // strip control characters; glyphs are looked up per char, never HTML
+  const clip = (s, n) => String(s).replace(/[\u0000-\u001F]/g, '').slice(0, n);
+
+  // Where the address comes from, in priority order:
+  //   1. window.__FIELDS_INTRO — how the deck supplies it, and the shape the
+  //      React port will pass as props. Must be set before this script runs.
+  //   2. ?street= / ?locality= — for opening the intro on its own to tune it.
+  //   3. the sample home.
+  // Whichever wins is still control-character stripped, length capped, and
+  // written a glyph at a time — never as HTML.
+  const CFG = (typeof window !== 'undefined' && window.__FIELDS_INTRO) || {};
+  const STREET   = clip(CFG.street   || qs.get('street')   || '3 Avocet Avenue', 44);
+  const LOCALITY = clip(CFG.locality || qs.get('locality') || 'Burleigh Waters, QLD 4220', 44);
+
+  const SPEED      = Math.min(2, Math.max(0.2, parseFloat(
+                       new URLSearchParams(location.search).get('speed')) || 0.40));
+
+  const TOKEN_TIERS_RAW = [
+    { from: 0.0, items: [            // the suburb, and the language of listings
+      'BURLEIGH WATERS', 'GOLD COAST', '4220', 'QLD', 'SOLD', 'LISTED',
+      'FOR SALE', 'WITHDRAWN', 'UNDER OFFER', 'PRIVATE TREATY', 'APPRAISAL',
+      'DAYS ON MARKET', 'SETTLED', 'COMPARABLE', 'MEDIAN', 'VALUATION'
+    ]},
+    { from: 2.4, items: [            // the wider area: roads, POIs, neighbours
+      'CHRISTINE AVE', 'BERMUDA ST', 'REEDY CREEK RD', 'WEST BURLEIGH RD',
+      'GOLD COAST HWY', 'TALLEBUDGERA CREEK', 'BURLEIGH HEADS', 'JAMES ST',
+      'BURLEIGH HILL', 'STOCKLAND BURLEIGH', 'TREETOPS PLAZA', 'THE PINES',
+      'MARYMOUNT COLLEGE', 'CANINGERABA', 'DAVID FLEAY', 'BURLEIGH GOLF',
+      'MIAMI', 'MERMAID WATERS', 'PALM BEACH', 'VARSITY LAKES', 'ELANORA',
+      'JUST LISTED', 'RELISTED', 'PRICE REDUCED', 'UNDER CONTRACT',
+      'OFF MARKET', 'SOLD 23 DAYS', 'SOLD 41 DAYS', 'DOM 29'
+    ]},
+    { from: 4.8, items: [            // the actual street grid around the home
+      'AVOCET AVE', 'JABIRU AVE', 'FANTAIL CRT', 'BURLEIGH ST', 'CORELLA AVE',
+      'BLUEJAY ST', 'SKUA ST', 'BITTERN AVE', 'DUNLIN DR', 'ACANTHUS AVE',
+      'CURLEW CRES', 'AUK AVE', 'WAGTAIL CRT', 'BANKSIA BWY', 'SANDPIPER DR',
+      'TURACO CRT', 'RAZORBILL ST', 'PINTAIL CRES', 'BELLBIRD AVE', 'KESTREL DR',
+      '4 BED 2 BATH', '612M2', '219M2 FLOOR', 'FREEHOLD'
+    ]},
+    { from: 7.2, items: [            // their own block, and their own thoughts
+      '3 AVOCET AVE', '11 JABIRU AVE', '6 FANTAIL CRT', '24 CORELLA AVE',
+      '9 BLUEJAY ST', '18 SKUA ST', '7 BITTERN AVE', '52 DUNLIN DR',
+      '14 CURLEW CRES', '27 WAGTAIL CRT', '31 ACANTHUS AVE',
+      'WHAT IS IT WORTH', 'WHERE WOULD I GO', 'CAN I GET BACK IN',
+      'WILL I MISTIME IT', 'JUST CURIOUS', 'WE HAD OUR RUN',
+      'NOBODY IS BUYING', 'NOBODY IS SELLING', 'IS THE NUMBER REAL',
+      'FEWER HOMES SOLD', 'HOLDING COSTS', 'MY STREET', 'MY HOME'
+    ]}
+  ];
+
+  // How much of the field is carrying recognisable text, over time. The
+  // curtain lands already readable; what changes is how *local* it gets.
+  // Nearly the whole field carries real records. The "code" texture comes from
+  // dataChunk()'s lot/plan/area/DOM fragments rather than from random glyphs,
+  // so raising this does not flatten the look — it just removes the gibberish.
+  // Per-home tokens, generated by intro/intro_tokens.py and supplied on
+  // window.__FIELDS_INTRO.tokens. Without them the field falls back to the
+  // built-in Burleigh Waters list above, which is only correct for Burleigh
+  // Waters — a Robina owner would watch AVOCET AVE rain past and then see their
+  // Robina address print, which inverts the whole point of the sequence.
+  const TOK = CFG.tokens || null;
+  const TOKEN_TIERS = (TOK
+      ? [["tier1", 0.0], ["tier2", 2.4], ["tier3", 4.8], ["tier4", 7.2]]
+          .map(([k, from]) => ({ from, items: (TOK[k] || []).map(t => clip(t, 40)) }))
+          .filter(t => t.items.length)
+      : TOKEN_TIERS_RAW
+    ).map(t => ({ ...t, from: t.from * SPEED }));
+
+  const RAMP = [[0,0.62], [2.4,0.78], [4.8,0.88], [7.2,0.94], [11.2,0.98]]
+                 .map(([t, v]) => [t * SPEED, v]);
+
+  function tokenChanceAt(t) {
+    if (t <= RAMP[0][0]) return RAMP[0][1];
+    for (let i = 1; i < RAMP.length; i++) {
+      if (t <= RAMP[i][0]) {
+        const [t0, v0] = RAMP[i - 1], [t1, v1] = RAMP[i];
+        return v0 + (v1 - v0) * ((t - t0) / (t1 - t0));
+      }
+    }
+    return RAMP[RAMP.length - 1][1];
+  }
+
+  // Pick from the unlocked tiers, biased hard toward the newest — that bias is
+  // what makes the field feel like it is closing in rather than just filling up.
+  // Streets nearest the subject property, for generated mock addresses.
+  const NEAR_STREETS = [
+    'AVOCET AVE', 'JABIRU AVE', 'FANTAIL CRT', 'BURLEIGH ST', 'CORELLA AVE',
+    'BLUEJAY ST', 'SKUA ST', 'BITTERN AVE', 'DUNLIN DR', 'ACANTHUS AVE',
+    'CURLEW CRES', 'AUK AVE', 'WAGTAIL CRT', 'SANDPIPER DR', 'RAZORBILL ST',
+    'PINTAIL CRES', 'BELLBIRD AVE', 'KESTREL DR', 'BANKSIA BWY', 'TURACO CRT'
+  ];
+  const rnd = n => (Math.random() * n) | 0;
+
+  // Built fresh each time rather than drawn from a list, so no two columns run
+  // the same string and the field never reads as a loop.
+  function dataChunk() {
+    switch (rnd(10)) {
+      case 0:  return `LOT ${100 + rnd(700)}`;
+      case 1:  return `RP${100000 + rnd(99999)}`;          // real QLD plan format
+      case 2:  return `${380 + rnd(640)}M2`;
+      case 3:  return `DOM ${11 + rnd(70)}`;
+      case 4:  return `${3 + rnd(3)} BED ${1 + rnd(3)} BATH`;
+      case 5:  return `SOLD ${13 + rnd(62)} DAYS`;
+      case 6:  return `${1 + rnd(90)} ${NEAR_STREETS[rnd(NEAR_STREETS.length)]}`;
+      case 7:  return `BUILT ${1978 + rnd(45)}`;
+      case 8:  return `${2 + rnd(3)} CAR`;
+      default: return `${100 + rnd(800)}M2 LOT`;
+    }
+  }
+
+  // A stream never repeats one phrase. Each time it finishes a chunk it pulls
+  // a different one, so a column reads as a run of varied records.
+  // Set alongside every nextChunk() call: is this phrase one of the ones that
+  // should catch the owner's eye — their own streets, their block, their own
+  // questions — as opposed to background texture.
+  let lastHot = false;
+  // Phrases that light white at any tier — this owner's own street and suburb.
+  // Built from the supplied tokens, escaped, so an address with regex-special
+  // characters cannot break or widen the pattern.
+  const esc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const HOT_RE = (TOK && (TOK.hot || []).length)
+    ? new RegExp(TOK.hot.map(esc).join("|"))
+    : /AVOCET|BURLEIGH WATERS|MY HOME|MY STREET/;
+
+  function nextChunk(t) {
+    if (Math.random() < 0.45) { lastHot = false; return dataChunk(); }
+    const pick = pickToken(t);
+    if (!pick) { lastHot = false; return dataChunk(); }
+    // tier 2 = the streets around them, tier 3 = their own block and thoughts.
+    // HOT_RE also catches the few phrases that are personal at any tier, so the
+    // highlight is present from the opening rather than only after ~5s.
+    lastHot = pick.tier >= 2 || HOT_RE.test(pick.text);
+    return pick.text;
+  }
+
+  function pickToken(t) {
+    let pool = [], total = 0;
+    for (let i = 0; i < TOKEN_TIERS.length; i++) {
+      if (t >= TOKEN_TIERS[i].from) { const w = (i + 1) * (i + 1); pool.push([i, w]); total += w; }
+    }
+    if (!pool.length) return null;
+    let r = Math.random() * total;
+    for (const [idx, w] of pool) {
+      r -= w;
+      if (r <= 0) return { text: TOKEN_TIERS[idx].items[(Math.random() * TOKEN_TIERS[idx].items.length) | 0], tier: idx };
+    }
+    const last = pool[pool.length - 1][0];
+    return { text: TOKEN_TIERS[last].items[0], tier: last };
+  }
+  const cfg = {
+    // speed was 95 in the concept. Eased back so the columns read as falling
+    // text rather than a blur — at 95 the eye catches the motion but not the
+    // words, which defeats a sequence whose whole point is that the reader
+    // recognises their own street in it.
+    size: 21, speed: 78, density: 68, trail: 26, mutate: 34, glow: 85
+  };
+
+  // ── Palettes ─────────────────────────────────────────────────────────────
+  // One atlas per palette so the message can shift colour while still being
+  // drawn as grid glyphs — the same pipeline as the rain, not an overlay.
+  const PALETTES = {
+    rain:  { deep: [  0,100, 28], core: [  0,240, 64], bright: [ 90,255,120], head: [205,255,210] },
+    dim:   { deep: [  0, 90, 26], core: [ 20,225, 70], bright: [110,255,140], head: [200,255,210] },
+    ok:    { deep: [ 20,120, 45], core: [ 90,255,140], bright: [170,255,195], head: [230,255,238] },
+    addr:  { deep: [ 60,130, 80], core: [200,255,215], bright: [235,255,242], head: [255,255,255] },
+    warn:  { deep: [ 80, 42,  0], core: [255,160, 30], bright: [255,200, 95], head: [255,235,180] },
+    err:   { deep: [ 70,  6,  4], core: [255, 46, 34], bright: [255,105, 88], head: [255,190,180] },
+    abort: { deep: [ 90,  8,  5], core: [255, 60, 44], bright: [255,130,110], head: [255,215,205] },
+    // keywords about THIS owner — white-green, clearly apart from the field
+    hot:   { deep: [110,200,140], core: [205,255,220], bright: [240,255,246], head: [255,255,255] }
+  };
+  const PAL_KEYS = Object.keys(PALETTES);
+  const PAL_IDX  = Object.fromEntries(PAL_KEYS.map((k, i) => [k, i]));
+  const TIERS = 24;
+
+  // ── Timeline ─────────────────────────────────────────────────────────────
+  // 'top'   — every column enters from the top at once, one curtain of code
+  // 'sweep' — the older left-to-right switch-on
+  const OPENING    = 'top';
+  const OPEN_MODE  = OPENING === 'top' ? 'top' : 'seed';
+  // Extra seconds of rain before the field collapses, ON TOP of the scaled
+  // ramp. Deliberately not multiplied by SPEED: this is "let it fall for a
+  // beat longer" in real seconds, not a proportion of the sequence.
+  // Will took this from 1.5 to 3.0 on 2026-08-03 — the rain is the part that
+  // earns the recognition, so it gets the time. The tier
+  // unlocks still finish well inside the ramp, so the extra time is spent in
+  // the closest tier — their own street grid — which is the part worth
+  // lingering on.
+  const RAIN_HOLD  = 3.0;
+  const T_OPEN     = 11.2 * SPEED + RAIN_HOLD;  // curtain, ramp, then the hold
+  const T_SWEEP    = 1.4;   // only used when OPENING === 'sweep'
+  const T_SHUTDOWN = 2.2 * SPEED;   // field switches OFF right -> left
+  // Fraction of columns still raining once the field has collapsed. 0 = the
+  // field switches off completely and the message prints to a clear screen.
+  // If raised, the message is pushed clear of the surviving band (see layout)
+  // so type is never printed over live rain.
+  const SURVIVOR   = 0;
+  const COL_FADE   = 0.45;  // seconds a column takes to extinguish
+
+
+  // The deck version stops at the address. 'Found it' is dropped because card 01
+  // is the recognition beat, and the whole "There's a problem / ERROR / ABORT"
+  // tail is dropped because the reader is about to be handed a report, not a
+  // warning.
+  // One `searching...`, then the address. The concept ran it twice to stretch
+  // the beat; the rain hold does that job now, and the repeat just cost a
+  // second. STREET is the house and street, LOCALITY the suburb, state and
+  // postcode — never the full address again, or the field prints it twice.
+  const SCRIPT = [
+    { t: 'searching...',         pal: 'dim',   pause: 0.30 },
+    { t: STREET,                 pal: 'addr',  pause: 0.90 },
+    { t: LOCALITY,               pal: 'addr',  pause: 0.12 }
+  ];
+  // The concept's ellipsis crawl (380ms a dot) and 4.2s end hold were paced for
+  // something you sit and watch. Here they were most of the wait — the address
+  // is legible the instant it stops typing, so the hold only has to let it
+  // register before the deck takes over.
+  //
+  // SPEED scales the typing too, or it becomes the floor: at the concept's
+  // pace the four lines cost ~7.5s no matter how short the curtain is. Typing
+  // is held back to a half-strength scale, because below roughly 30ms a
+  // character it stops reading as something being typed and just appears.
+  const TYPE_SCALE = 0.5 + 0.5 * SPEED;
+  const CPS_MS  = 55 * TYPE_SCALE;
+  const DOT_MS  = 240 * SPEED;
+  const HOLD_MS = 1300;
+  // A page intro plays once. Replay stays on `R` for review.
+  let   loop    = false;
+
+  // ── Canvas ───────────────────────────────────────────────────────────────
+  const rain  = document.getElementById('rain');
+  const bloom = document.getElementById('bloom');
+  const ctx   = rain.getContext('2d', { alpha: false });
+  const bctx  = bloom.getContext('2d');
+  const BLOOM_DIV = 5;
+  const canvasBlur = typeof bctx.filter === 'string';
+  if (!canvasBlur) bloom.classList.add('css-blur');
+
+  const stage = document.getElementById('stage');
+  const alarm = document.getElementById('alarm');
+  const shake = document.getElementById('shake');
+  const hint  = document.getElementById('hint');
+
+  let W = 0, H = 0, dpr = 1, cellW = 0, cellH = 0, cols = 0, rows = 0;
+  let atlases = [], aCellW = 0, aCellH = 0;
+
+  let sCol, sY, sSpeed, sLen, sDim, sWait, sTok, sPos, sRow, sHot;
+  let streamMax = 0, streamCount = 0;
+  let cell, churn, spark, bright, lock, hot;
+  // message layer, in the same grid: brightness + palette per cell
+  let textB, textP;
+
+  let openT = 0;               // seconds since the field opened, drives the ramp
+  let colLife;                 // per-column on/off, 0..1
+  let liveCols = 0;            // columns still eligible for new streams
+  let surge = 0;
+
+  // ── Atlases ──────────────────────────────────────────────────────────────
+  const lerp = (a, b, t) => a + (b - a) * t;
+
+  function ramp(p, v) {
+    let c, a;
+    if (v > 0.94)      { const t=(v-0.94)/0.06; c=[lerp(p.bright[0],p.head[0],t),lerp(p.bright[1],p.head[1],t),lerp(p.bright[2],p.head[2],t)]; a=1; }
+    else if (v > 0.78) { const t=(v-0.78)/0.16; c=[lerp(p.core[0],p.bright[0],t),lerp(p.core[1],p.bright[1],t),lerp(p.core[2],p.bright[2],t)]; a=1; }
+    else               { const t=v/0.78;        c=[lerp(p.deep[0],p.core[0],t),  lerp(p.deep[1],p.core[1],t),  lerp(p.deep[2],p.core[2],t)];   a=Math.pow(t,1.45); }
+    return `rgba(${c[0]|0},${c[1]|0},${c[2]|0},${a.toFixed(3)})`;
+  }
+
+  function buildAtlases() {
+    const fontPx = cfg.size * dpr;
+    const family = `ui-monospace, SFMono-Regular, Menlo, Consolas, "DejaVu Sans Mono", monospace`;
+    const probe = document.createElement('canvas').getContext('2d');
+    probe.font = `${fontPx}px ${family}`;
+
+    let maxW = 0;
+    for (const g of GLYPHS) maxW = Math.max(maxW, probe.measureText(g).width);
+    aCellW = Math.max(2, Math.round(maxW * 1.10));
+    aCellH = Math.max(2, Math.round(fontPx * 1.06));
+    cellW = aCellW / dpr;
+    cellH = aCellH / dpr;
+
+    atlases = PAL_KEYS.map(key => {
+      const p = PALETTES[key];
+      const cv = document.createElement('canvas');
+      cv.width = aCellW * G;
+      cv.height = aCellH * TIERS;
+      const a = cv.getContext('2d');
+      a.font = `${fontPx}px ${family}`;
+      a.textAlign = 'center';
+      a.textBaseline = 'middle';
+      for (let t = 0; t < TIERS; t++) {
+        a.fillStyle = ramp(p, t / (TIERS - 1));
+        for (let g = 0; g < G; g++) {
+          a.fillText(GLYPHS[g], g * aCellW + aCellW / 2, t * aCellH + aCellH / 2);
+        }
+      }
+      return cv;
+    });
+  }
+
+  // ── Layout ───────────────────────────────────────────────────────────────
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    rain.width = Math.round(W * dpr); rain.height = Math.round(H * dpr);
+    rain.style.width = W + 'px'; rain.style.height = H + 'px';
+    bloom.width  = Math.max(1, Math.round(W / BLOOM_DIV));
+    bloom.height = Math.max(1, Math.round(H / BLOOM_DIV));
+    if (canvasBlur) bctx.filter = `blur(${(7 / BLOOM_DIV).toFixed(2)}px)`;
+
+    buildAtlases();
+    cols = Math.ceil(W / cellW);
+    rows = Math.ceil(H / cellH) + 2;
+    liveCols = cols;
+
+    streamMax = cols * 3;
+    sCol = new Int32Array(streamMax); sY = new Float32Array(streamMax);
+    sSpeed = new Float32Array(streamMax); sLen = new Float32Array(streamMax);
+    sDim = new Float32Array(streamMax); sWait = new Float32Array(streamMax);
+    sTok = new Array(streamMax).fill(null);
+    sPos = new Int32Array(streamMax); sRow = new Int32Array(streamMax);
+    sHot = new Uint8Array(streamMax);
+
+    const n = cols * rows;
+    cell = new Uint8Array(n); churn = new Float32Array(n);
+    spark = new Float32Array(n); bright = new Float32Array(n);
+    lock = new Uint8Array(n); textB = new Float32Array(n); textP = new Uint8Array(n);
+    hot = new Float32Array(n);   // 0 = plain, else 1 + index of the char in its phrase
+    colLife = new Float32Array(cols);
+
+    for (let i = 0; i < n; i++) cell[i] = (Math.random() * RAND_G) | 0;
+
+    streamCount = Math.min(streamMax, Math.round(cols * (cfg.density / 100) * 1.9));
+    for (let i = 0; i < streamCount; i++) spawn(i, OPEN_MODE);
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+  }
+
+  // mode: 'top'     every column enters together, just above the top edge
+  //       'recycle' a spent stream re-enters on its own stagger
+  //       'seed'    placed mid-flight, for a field that opens already raining
+  function spawn(i, mode) {
+    sCol[i]   = (Math.random() * Math.max(1, liveCols)) | 0;
+    sLen[i]   = cfg.trail * (0.45 + Math.random() * 1.35);
+    const s   = Math.pow(Math.random(), 1.7);
+    sSpeed[i] = (cfg.speed * (0.45 + s * 1.75)) / cellH;
+    sDim[i]   = 0.42 + Math.random() * 0.58;
+    if (mode === 'seed') {
+      sY[i] = Math.random() * (rows + sLen[i]);
+      sWait[i] = 0;
+    } else if (mode === 'top') {
+      // barely above the top edge, near-zero stagger: the field arrives as one
+      // curtain, then spreads out naturally because the speeds differ
+      sY[i] = -Math.random() * 4;
+      sWait[i] = Math.random() * 0.12;
+    } else {
+      sY[i] = -Math.random() * 6;
+      sWait[i] = Math.random() * 2.2;
+    }
+    sTok[i] = null;
+    sPos[i] = 0;
+    sRow[i] = Math.floor(sY[i]) - 1;
+    if (Math.random() < tokenChanceAt(openT)) assignToken(i);
+  }
+
+  function assignToken(i) {
+    const tok = nextChunk(openT);
+    if (!tok) return;
+    sTok[i] = tok + '  ';
+    sHot[i] = lastHot ? 1 : 0;
+    if (sHot[i]) sLen[i] = Math.max(sLen[i], tok.length + 12);
+    sDim[i] = 0.85 + Math.random() * 0.15;      // readable text rides brighter
+    // guarantee the whole phrase is lit at once, or it can never be read
+    sLen[i] = Math.max(sLen[i], tok.length + 4);
+    sPos[i] = 0;
+    sRow[i] = Math.floor(sY[i]) - 1;
+  }
+
+  // One character of this stream's feed, advancing to a NEW chunk when the
+  // current one runs out. Always advances, even when the character is dropped,
+  // so the phrase stays aligned to the rows it was stamped into.
+  let feedIdx = 0, feedHot = false;
+
+  function feedChar(i) {
+    if (sPos[i] >= sTok[i].length) {
+      const next = nextChunk(openT) + '  ';
+      sTok[i] = next;
+      sPos[i] = 0;
+      sHot[i] = lastHot ? 1 : 0;
+      sLen[i] = Math.max(sLen[i], next.length + (sHot[i] ? 12 : 3));
+    }
+    feedIdx = sPos[i];
+    feedHot = sHot[i] === 1;
+    return sTok[i][sPos[i]++];
+  }
+
+  // Spawning alone ramps too slowly: the opening curtain fills the screen in
+  // one go and those streams take ~9s to clear. So each frame, top up the
+  // number of token streams by converting ones still near the top of the fall.
+  function maintainTokens() {
+    const target = Math.round(streamCount * tokenChanceAt(openT));
+    let have = 0;
+    for (let i = 0; i < streamCount; i++) if (sTok[i]) have++;
+    let need = target - have;
+    for (let i = 0; i < streamCount && need > 0; i++) {
+      if (!sTok[i] && sY[i] < rows * 0.25) { assignToken(i); need--; }
+    }
+  }
+
+  // ── Simulation ───────────────────────────────────────────────────────────
+  function step(dt) {
+    bright.fill(0);
+    const spd = 1 + surge * 1.4;
+
+    for (let i = 0; i < streamCount; i++) {
+      if (sWait[i] > 0) { sWait[i] -= dt; continue; }
+      sY[i] += sSpeed[i] * dt * spd;
+      const y = sY[i], len = sLen[i], c = sCol[i], d = sDim[i];
+      if (y - len > rows) { spawn(i, 'recycle'); continue; }
+      const base = c * rows;
+
+      if (sTok[i]) {
+        const hr = Math.floor(y);
+        if (hr > sRow[i]) {
+          for (let r = Math.max(sRow[i] + 1, 0); r <= hr; r++) {
+            const ch = feedChar(i);
+            if (r >= 0 && r < rows) {
+              const jt = base + r;
+              // never overwrite a cell the message owns — token streams fall
+              // straight through the printed words without eating characters
+              if (textB[jt] === 0) {
+                cell[jt] = GIDX.has(ch) ? GIDX.get(ch) : SPACE;
+                lock[jt] = 1;
+                hot[jt] = feedHot ? 1 + Math.min(200, feedIdx) : 0;
+              }
+            }
+          }
+          sRow[i] = hr;
+        }
+      }
+
+      const top = Math.max(0, Math.ceil(y - len));
+      const bot = Math.min(rows - 1, Math.floor(y));
+      for (let r = top; r <= bot; r++) {
+        const dist = y - r;
+        let v;
+        if (dist < 1) v = 1;
+        else {
+          const k = 1 - (dist - 1) / len;
+          if (k <= 0) continue;
+          v = Math.pow(k, 1.3) * d;
+        }
+        const j = base + r;
+        if (v > bright[j]) bright[j] = v;
+      }
+    }
+
+    const churnRate = (cfg.mutate / 100) * 24;
+    const n = bright.length;
+    for (let j = 0; j < n; j++) {
+      if (spark[j] > 0) spark[j] -= dt;
+      if (bright[j] <= 0.02) { lock[j] = 0; hot[j] = 0; continue; }
+      if (lock[j] || textB[j] > 0) continue;   // token or message char: hold
+      churn[j] -= dt * churnRate * (0.3 + Math.random());
+      if (churn[j] <= 0) {
+        cell[j] = (Math.random() * RAND_G) | 0;
+        churn[j] = 0.4 + Math.random() * 2.4;
+        if (Math.random() < 0.035) spark[j] = 0.05 + Math.random() * 0.12;
+      }
+    }
+    if (surge > 0) surge = Math.max(0, surge - dt * 1.6);
+  }
+
+  function draw(now) {
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, W, H);
+    const tMax = TIERS - 1;
+    const wob = 0.94 + 0.06 * Math.sin(now * 0.011) * Math.sin(now * 0.0037);
+    const rainAtlas = atlases[PAL_IDX.rain];
+    const hotAtlas  = atlases[PAL_IDX.hot];
+
+    for (let c = 0; c < cols; c++) {
+      const base = c * rows, x = c * cellW, life = colLife[c];
+
+      for (let r = 0; r < rows; r++) {
+        const j = base + r;
+        const tb = textB[j];
+        let v, at;
+
+        if (tb > 0) {
+          // message cells own their glyph outright — the rain cannot recolour
+          // or overwrite them, so the words stay stable as code streams past
+          v = tb;
+          at = atlases[textP[j]];
+        } else {
+          v = bright[j] * life;
+          if (v <= 0.02) continue;
+          v = spark[j] > 0 ? Math.max(v, 0.97) : v * wob;
+          const h = hot[j];
+          if (h > 0) {
+            // Three things at once, because brightness alone is invisible in a
+            // field that is already full of bright heads:
+            //  1. a floor, so the phrase stays lit while the code around it
+            //     decays — the contrast comes from the surroundings dimming;
+            //  2. a hard crest sweeping down it (offset per character);
+            //  3. a whiter palette, so it differs in hue as well as level.
+            const floor = Math.min(0.7, bright[j] * life * 4.2);   // tails off, never pops
+            let vv = Math.max(v, floor);
+            const wave = Math.sin(now * 0.004 - (h - 1) * 0.35);
+            const crest = wave > 0 ? wave * wave * wave : 0;
+            v = vv + (1 - vv) * crest;
+            at = hotAtlas;
+          } else {
+            at = rainAtlas;
+          }
+        }
+
+        const tier = Math.min(tMax, (v * tMax) | 0);   // boosted cells must not overrun the atlas
+        if (tier <= 0) continue;
+        ctx.drawImage(at, cell[j] * aCellW, tier * aCellH, aCellW, aCellH,
+                      x, r * cellH, cellW, cellH);
+      }
+    }
+
+    // block cursor, drawn as a grid cell
+    if (cursor.on && Math.floor(now / 530) % 2 === 0) {
+      const p = PALETTES[cursor.pal];
+      ctx.fillStyle = `rgb(${p.bright[0]},${p.bright[1]},${p.bright[2]})`;
+      ctx.fillRect(cursor.c * cellW + cellW * 0.08, cursor.r * cellH + cellH * 0.1,
+                   cellW * 0.84, cellH * 0.8);
+    }
+
+    if (cfg.glow > 0) {
+      bctx.globalCompositeOperation = 'source-over';
+      bctx.clearRect(0, 0, bloom.width, bloom.height);
+      bctx.drawImage(rain, 0, 0, bloom.width, bloom.height);
+      bctx.globalCompositeOperation = 'lighter';
+      bctx.globalAlpha = 0.45;
+      bctx.drawImage(rain, 0, 0, bloom.width, bloom.height);
+      bctx.globalAlpha = 1;
+    }
+  }
+
+  // ── Message, written into the grid ───────────────────────────────────────
+  const cursor = { on: false, r: 0, c: 0, pal: 'dim' };
+  let textCells = [];          // every cell the message owns, for teardown
+
+  function stampChar(r, c, ch, pal) {
+    if (r < 0 || r >= rows || c < 0 || c >= cols) return;
+    const j = c * rows + r;
+    cell[j]  = GIDX.has(ch) ? GIDX.get(ch) : SPACE;
+    textP[j] = PAL_IDX[pal];
+    textB[j] = 1;                                  // lands white-hot...
+    textCells.push(j);
+    setTimeout(() => { if (textB[j] > 0) textB[j] = 0.84; }, 90);  // ...then settles
+  }
+
+  function clearText() {
+    for (const j of textCells) { textB[j] = 0; lock[j] = 0; }
+    textCells = [];
+    cursor.on = false;
+  }
+
+  // ── Sequence ─────────────────────────────────────────────────────────────
+  let phase = 'open', phaseT = 0, timers = [];
+  const wait = ms => new Promise(res => timers.push(setTimeout(res, ms)));
+  const clearTimers = () => { timers.forEach(clearTimeout); timers = []; };
+
+  function layout() {
+    // keep the message clear of any columns still raining, so type is never
+    // printed over live code
+    const survivors = Math.round(cols * SURVIVOR);
+    const startCol = Math.max(1, Math.round(cols * 0.055), survivors + 2);
+    const startRow = Math.max(1, Math.round((rows - SCRIPT.length) / 2) - 1);
+    return { startCol, startRow };
+  }
+
+  async function typeLine(line, row, startCol) {
+    cursor.on = true; cursor.r = row; cursor.pal = line.pal;
+    for (let i = 0; i < line.t.length; i++) {
+      cursor.c = startCol + i;
+      stampChar(row, startCol + i, line.t[i], line.pal);
+      await wait(line.t[i] === '.' ? DOT_MS : CPS_MS + Math.random() * 26);
+    }
+    cursor.c = startCol + line.t.length;
+  }
+
+  async function runSequence() {
+    phase = 'open'; phaseT = 0;
+    await wait((OPENING === 'top' ? T_OPEN : T_SWEEP + 2.6) * 1000);
+
+    phase = 'shutdown'; phaseT = 0;
+    await wait(T_SHUTDOWN * 1000 + 300);
+
+    phase = 'print';
+    const { startCol, startRow } = layout();
+    for (let i = 0; i < SCRIPT.length; i++) {
+      const line = SCRIPT[i];
+      await wait(line.pause * SPEED * 1000);
+      await typeLine(line, startRow + i, startCol);
+      if (line.pal === 'err') { alarm.classList.remove('pulse'); void alarm.offsetWidth; alarm.classList.add('pulse'); }
+      if (line.pal === 'abort') {
+        surge = 1;
+        shake.classList.add('glitch');
+        alarm.classList.add('pulse');
+      }
+    }
+
+    // Address is up, field already dark. Long enough to read once, then hand off.
+    await wait(HOLD_MS);
+    if (loop) { restart(); return; }
+    finish();
+  }
+
+  // ── Hand-off ─────────────────────────────────────────────────────────────
+  // Fires exactly once, whether the sequence ran to the end, the reader skipped
+  // it, or reduced motion sent us straight here. The host decides what happens
+  // next: standalone this just fades, inside the deck it scrolls to card 01.
+  const bootedAt = performance.now();
+  let handedOff = false;
+  function finish() {
+    if (handedOff) return;
+    handedOff = true;
+    // The one number that decides whether this intro is worth having.
+    console.info(`[intro] hand-off at ${((performance.now() - bootedAt) / 1000).toFixed(1)}s `
+                 + `(speed=${SPEED})`);
+    stage.classList.add('done');
+    stage.setAttribute('aria-hidden', 'true');
+    // Unlock BEFORE announcing. A host that scrolls on this event would
+    // otherwise be scrolling a document that is still overflow:hidden, and the
+    // scroll would be silently dropped.
+    document.documentElement.classList.remove('intro-locked');
+    dispatchEvent(new CustomEvent('fields:intro-done'));
+  }
+
+  // Skip. Nobody who has seen it once should be made to sit through it again.
+  ['pointerdown', 'wheel', 'touchmove'].forEach(ev =>
+    addEventListener(ev, () => finish(), { once: true, passive: true }));
+  addEventListener('keydown', e => {
+    if (e.key === 'Escape' || e.key === ' ' || e.key === 'Enter') finish();
+  });
+
+  function restart() {
+    clearTimers();
+    clearText();
+    alarm.classList.remove('pulse');
+    shake.classList.remove('glitch');
+    liveCols = cols; surge = 0; openT = 0;
+    colLife.fill(OPENING === 'top' ? 1 : 0);
+    for (let i = 0; i < streamCount; i++) spawn(i, OPEN_MODE);
+    runSequence();
+  }
+
+  // ── Frame ────────────────────────────────────────────────────────────────
+  let last = performance.now();
+
+  function frame(now) {
+    const dt = Math.min((now - last) / 1000, 0.05);
+    last = now;
+    phaseT += dt;
+    if (phase === 'open') { openT += dt; maintainTokens(); }
+
+    if (phase === 'open' && OPENING === 'sweep') {
+      // switch the field ON, left -> right
+      const front = (phaseT / T_SWEEP) * cols;
+      for (let c = 0; c < cols; c++) {
+        const target = c <= front ? 1 : 0;
+        if (target > colLife[c]) colLife[c] = Math.min(1, colLife[c] + dt / COL_FADE);
+      }
+    } else if (phase === 'shutdown') {
+      // switch it OFF, right -> left, down to the surviving band
+      const keep = Math.round(cols * SURVIVOR);      // may be 0 — full collapse
+      const k = Math.min(1, phaseT / T_SHUTDOWN);
+      const e = 1 - Math.pow(1 - k, 2.2);
+      const front = cols - (cols - keep) * e;
+      liveCols = Math.max(1, Math.round(front));     // spawn() needs >= 1
+      for (let c = 0; c < cols; c++) {
+        if (c >= front) colLife[c] = Math.max(0, colLife[c] - dt / COL_FADE);
+      }
+    } else if (phase === 'print') {
+      // Keep draining. The sweep front reaches its target at the very end of
+      // the shutdown phase, so without this the last columns freeze part-way
+      // through their fade and sit on screen as a lit stripe.
+      const keep = Math.round(cols * SURVIVOR);
+      for (let c = keep; c < cols; c++) {
+        if (colLife[c] > 0) colLife[c] = Math.max(0, colLife[c] - dt / COL_FADE);
+      }
+    }
+
+    step(dt);
+    draw(now);
+    requestAnimationFrame(frame);
+  }
+
+  // ── Boot ─────────────────────────────────────────────────────────────────
+  addEventListener('keydown', e => {
+    const k = e.key.toLowerCase();
+    if (k === 'r') restart();
+    else if (k === 'l') loop = !loop;
+    else if (k === 'f') {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else document.documentElement.requestFullscreen?.();
+    }
+  });
+
+  let rt;
+  addEventListener('resize', () => {
+    clearTimeout(rt);
+    // Rebuilding the grid mid-sequence needs a restart, but after hand-off a
+    // phone rotation would otherwise replay the whole intro over the deck.
+    rt = setTimeout(() => { resize(); if (!handedOff) restart(); }, 160);
+  });
+
+  // Tuning hook: what share of the field is actually carrying real text right
+  // now, versus random filler. window.__rainStats() in the console.
+  window.__rainStats = () => {
+    let withText = 0;
+    for (let i = 0; i < streamCount; i++) if (sTok[i]) withText++;
+    let hotStreams = 0, hotCells = 0;
+    for (let i = 0; i < streamCount; i++) if (sHot[i]) hotStreams++;
+    for (let j = 0; j < hot.length; j++) if (hot[j] > 0) hotCells++;
+    return { t: +openT.toFixed(2), streams: streamCount, withText,
+             actual: +(withText / streamCount).toFixed(3),
+             target: +tokenChanceAt(openT).toFixed(3), hotStreams, hotCells };
+  };
+
+  const boot = () => {
+    resize();
+    colLife.fill(OPENING === 'top' ? 1 : 0);
+    // A full screen of falling code is precisely what a motion-sensitivity
+    // setting is asking us not to do. Print the address on a dark screen and
+    // hand off — same information, none of the movement.
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      phase = 'print';
+      liveCols = 0; colLife.fill(0);
+      const { startCol, startRow } = layout();
+      SCRIPT.forEach((line, i) => {
+        for (let k = 0; k < line.t.length; k++) {
+          stampChar(startRow + i, startCol + k, line.t[k], line.pal);
+        }
+      });
+      requestAnimationFrame(frame);
+      setTimeout(finish, 2600);
+      return;
+    }
+    requestAnimationFrame(frame);
+    runSequence();
+  };
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(boot); else boot();
+  setTimeout(() => hint.classList.add('gone'), 6000);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,3367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>16 Moorabbin Place, Robina — Fields</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; background: #000; overflow: hidden; }
+
+  #stage { position: fixed; inset: 0; background: #000; z-index: 100;
+           transition: opacity .85s ease, visibility 0s linear .85s; }
+  /* Hand-off: the field fades and stops taking input. visibility rather than
+     display so the fade actually runs. */
+  #stage.done { opacity: 0; visibility: hidden; pointer-events: none; }
+  /* The host adds this to <html> while the intro owns the screen, so the deck
+     cannot be scrolled out from under it. finish() removes it. */
+  html.intro-locked, html.intro-locked body { overflow: hidden; }
+  #shake { position: absolute; inset: 0; will-change: transform; }
+
+  #rain  { position: absolute; inset: 0; display: block; }
+  #bloom {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    mix-blend-mode: screen; opacity: .85; pointer-events: none;
+  }
+  #bloom.css-blur { filter: blur(7px) brightness(1.3); }
+
+  #scanlines {
+    position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(to bottom,
+      rgba(0,0,0,0) 0px, rgba(0,0,0,0) 2px,
+      rgba(0,0,0,.13) 3px, rgba(0,0,0,.13) 4px);
+  }
+  #vignette {
+    position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse 78% 72% at 50% 50%,
+      rgba(0,0,0,0) 40%, rgba(0,0,0,.55) 82%, rgba(0,0,0,.9) 100%);
+  }
+  #alarm {
+    position: absolute; inset: 0; pointer-events: none; opacity: 0;
+    background: radial-gradient(ellipse 90% 80% at 50% 50%,
+      rgba(255,0,0,.20) 0%, rgba(255,0,0,.06) 55%, rgba(120,0,0,.34) 100%);
+    mix-blend-mode: screen;
+  }
+  #alarm.pulse { animation: alarm 1.5s ease-out 2; }
+  @keyframes alarm { 0% { opacity: 0 } 12% { opacity: 1 } 100% { opacity: 0 } }
+
+  #shake.glitch { animation: shake .5s steps(2) 2; }
+  @keyframes shake {
+    0%   { transform: translate(0,0) }
+    25%  { transform: translate(-5px, 2px) }
+    50%  { transform: translate(4px,-3px) }
+    75%  { transform: translate(-3px,-1px) }
+    100% { transform: translate(0,0) }
+  }
+
+  #hint {
+    position: absolute; bottom: 18px; right: 20px; z-index: 9;
+    font: 10px/1 ui-monospace, Menlo, Consolas, monospace;
+    letter-spacing: .16em; text-transform: uppercase;
+    color: rgba(0,255,70,.34); text-shadow: 0 0 8px rgba(0,255,70,.3);
+    transition: opacity 1.2s ease; pointer-events: none;
+  }
+  #hint.gone { opacity: 0 }
+</style>
+<style>
+  /* Deck tokens, lifted from discovery.module.css so the preview is the real
+     thing rather than an approximation of it. */
+  :root {
+    --ground:#000; --ground-2:#0A0807; --surface:#16110E;
+    --ink:#E6DDD2; --ink-soft:#CABEB0; --muted:#8C8177;
+    --line:rgba(230,221,210,.13); --line-soft:rgba(230,221,210,.055);
+    --accent:#C0704A; --accent-deep:#8A4E37; --gold:#D28C5E;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --pad:clamp(1.5rem,6vw,4rem); --ease:cubic-bezier(.2,.7,.2,1);
+  }
+
+  /* The standalone intro is a full-screen animation and locks the page:
+     `html, body { height:100%; overflow:hidden }`. Correct there, fatal here —
+     it silently pins the document to one viewport, so the deck below cannot be
+     reached at all. Undo it; the temporary lock during the intro is
+     .intro-locked, which the hand-off removes. */
+  html, body { height:auto; overflow:visible; }
+  html { scroll-behavior:smooth; }
+  body { margin:0; background:var(--ground); color:var(--ink);
+         font-family:var(--sans); line-height:1.55; -webkit-font-smoothing:antialiased; }
+
+  /* Standalone the field is a fixed overlay that fades. In the deck it is a real
+     section at the top of the document, so the page scrolls DOWN off it onto
+     card 00 — and a reader who scrolls early leaves it the ordinary way. It
+     stays visible: scroll back up and the address is still there. */
+  #stage { position:relative; height:100svh; z-index:0; }
+  #stage.done { opacity:1; visibility:visible; transition:none; pointer-events:none; }
+
+  #deck { position:relative; z-index:1; }
+  .card {
+    /* .mediaGlow is inset -10% horizontally, which pushes past the card on a
+       phone and gives the document a few px of horizontal scroll. `clip` kills
+       it without creating a scroll container the way `hidden` would. */
+    overflow-x:hidden; overflow-x:clip;
+    min-height:100vh; min-height:100svh;
+    display:flex; flex-direction:column; justify-content:center;
+    padding:max(6rem,12svh) var(--pad) max(5rem,10svh);
+    position:relative; border-top:1px solid var(--line-soft);
+  }
+  .card:first-child { border-top:none; }
+
+  .inner { width:100%; max-width:40rem; margin:0 auto; }
+  /* The two-column primitive — text left, drawing right. Cards 02/03/04 all use
+     it, card 02 with an empty right cell, so the text column keeps the same left
+     edge across the scroll. Without that the copy jumps sideways between cards
+     and the emblem reads as a layout change rather than as something arriving. */
+  .innerWide { width:100%; max-width:68rem; margin:0 auto; display:grid;
+               gap:clamp(2rem,5vw,4rem); align-items:center; }
+  @media (min-width:900px) {
+    .innerWide { grid-template-columns:minmax(0,1.05fr) minmax(0,0.95fr); }
+  }
+  .colText { min-width:0; max-width:40rem; }
+  .colEmpty { display:none; }
+  @media (min-width:900px) { .colEmpty { display:block; } }
+
+  /* CARD 00 — the hand-off. The matrix ends on a machine statement: an address
+     printed in code. This is the human voice arriving, and it only carries that
+     if nothing shares the screen with it. Unnumbered and off the rail — it is
+     the landing of the intro, not a chapter of the deck. */
+  #card-00 .inner { max-width:34rem; }
+  #card-00 h1 { font-size:clamp(2.6rem,8vw,5rem); }
+  #card-01 .glow { display:none; }   /* the copper radial marks card 00 now */
+  .glow { position:absolute; inset:0; pointer-events:none; z-index:-1;
+          background:radial-gradient(40% 35% at 50% 42%,
+                     color-mix(in srgb, var(--accent) 11%, transparent), transparent 70%); }
+
+  /* ---- type ---- */
+  .chapter { font-size:.7rem; letter-spacing:.22em; text-transform:uppercase;
+             color:var(--accent); margin-bottom:1.6rem; }
+  .place { font-family:var(--serif); font-size:clamp(1rem,2.6vw,1.15rem);
+           color:var(--ink-soft); margin:0 0 .9rem; }
+  h1 { font-family:var(--serif); font-weight:500; letter-spacing:-.01em;
+       font-size:clamp(2.1rem,6vw,3.4rem); line-height:1.06; margin:0; text-wrap:balance; }
+  h2 { font-family:var(--serif); font-weight:500; letter-spacing:-.01em; text-wrap:balance;
+       margin:0; font-size:clamp(1.9rem,5.4vw,3rem); line-height:1.08; }
+  h2 em { color:var(--accent); font-style:normal; }
+  .lede { color:var(--ink-soft); font-size:clamp(1rem,2.6vw,1.12rem); margin:1.2rem 0 0; }
+  .answer { color:var(--muted); font-size:clamp(.95rem,2.4vw,1.05rem);
+            margin:0 0 1rem; font-style:italic; }
+  .p { margin:1.1rem 0 0; color:var(--ink-soft); font-size:clamp(1rem,2.6vw,1.12rem); }
+  .insight { margin:1.4rem 0 0; color:var(--muted); font-size:.98rem; font-style:italic; }
+  .next { margin-top:2.6rem; color:var(--accent); font-size:.98rem; font-style:italic;
+          display:inline-flex; align-items:center; gap:.6rem; }
+  /* deck.js swaps these spans for anchors pointing at the next card. Only the
+     link affordances go here — no transform on hover, because `.stagger > *`
+     owns transform for the reveal and the two would fight. */
+  a.next { text-decoration:none; cursor:pointer; transition:color .2s var(--ease); }
+  a.next:hover { color:var(--gold); }
+  a.next:focus-visible { outline:2px solid var(--accent); outline-offset:6px;
+                         border-radius:6px; }
+  .label { font-size:.72rem; letter-spacing:.16em; text-transform:uppercase;
+           color:var(--muted); margin:1.8rem 0 .6rem; }
+
+  .cred { list-style:none; padding:0; margin:2.4rem 0 0; display:grid; gap:.9rem; }
+  .cred li { display:flex; align-items:baseline; gap:.9rem; color:var(--ink-soft); }
+  .fig { font-family:var(--serif); font-size:1.5rem; color:var(--ink);
+         font-variant-numeric:tabular-nums; min-width:4.5ch; }
+
+  .ticks { list-style:none; padding:0; margin:1.4rem 0 0; display:grid; gap:.7rem; }
+  .ticks li { display:flex; align-items:center; gap:.8rem; color:var(--ink-soft); }
+  .ticks li::before {
+    content:""; width:1.1rem; height:1.1rem; flex:none; border-radius:999px; background:var(--accent);
+    -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23000' d='M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z'/%3E%3C/svg%3E") center/contain no-repeat;
+    mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23000' d='M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z'/%3E%3C/svg%3E") center/contain no-repeat;
+  }
+  .rare { margin:1.8rem 0 0; padding:1.1rem 1.3rem; border-left:2px solid var(--accent);
+          background:var(--line-soft); border-radius:0 8px 8px 0;
+          color:var(--ink-soft); font-size:1.02rem; }
+  .rare b { color:var(--ink); font-family:var(--serif); font-size:1.15em;
+            font-variant-numeric:tabular-nums; }
+  .doorstep { list-style:none; padding:0; margin:.4rem 0 0; display:grid; gap:.55rem; }
+  .doorstep li { color:var(--muted); font-size:.98rem; display:flex; gap:.7rem; }
+  .doorstep li b { color:var(--ink-soft); font-weight:500;
+                   font-variant-numeric:tabular-nums; min-width:4.6ch; }
+  .weight { margin:2.2rem 0 0; padding-top:1.6rem; border-top:1px solid var(--line-soft); }
+  .weight p { margin:0; font-family:var(--serif); font-size:clamp(1.15rem,2.9vw,1.45rem);
+              line-height:1.3; color:var(--ink); text-wrap:balance; }
+  .weight small { display:block; margin-top:.8rem; font-family:var(--sans);
+                  font-size:.95rem; color:var(--muted); font-style:italic; }
+
+  /* ---- the drawing ---- */
+  /* No border and no panel: rendered on the same #000 as the page, so it reads
+     as the drawing appearing rather than as a video playing inside a frame. */
+  .media { margin:0; position:relative; opacity:0; transform:translateY(30px) scale(.965);
+           transition:opacity 1.1s var(--ease), transform 1.1s var(--ease); }
+  .media.mediaIn { opacity:1; transform:none; }
+  .mediaFrame { position:relative; overflow:hidden; background:var(--ground); }
+  /* Portrait emblems (the gum, the reeds, the flag) are far taller than they
+     are wide. At width:100% the gum overflowed a 900px-tall desktop viewport and
+     was cut off at the trunk. Cap the height and let width follow. */
+  .mediaFrame video { display:block; width:100%; height:auto;
+                      max-height:66svh; width:auto; max-width:100%; margin:0 auto; }
+  .mediaGlow { position:absolute; inset:-14% -10%; z-index:-1; pointer-events:none;
+               background:radial-gradient(50% 45% at 50% 45%,
+                          color-mix(in srgb, var(--accent) 13%, transparent), transparent 70%); }
+  .caption { display:flex; align-items:baseline; justify-content:space-between; gap:1rem;
+             margin-top:.9rem; font-size:.72rem; letter-spacing:.16em;
+             text-transform:uppercase; color:var(--muted); }
+  .replay { background:none; border:none; padding:0; font:inherit; letter-spacing:inherit;
+            text-transform:inherit; color:var(--accent); cursor:pointer; }
+  .replay:hover { color:var(--gold); }
+  /* Autoplay refused (Low Power Mode, Data Saver) — make it obviously tappable
+     rather than leaving a blank rectangle. */
+  .media.needsTap .mediaFrame::after {
+    content:"▶ Tap to play"; position:absolute; left:50%; top:50%;
+    transform:translate(-50%,-50%); color:var(--accent); font-size:.8rem;
+    letter-spacing:.16em; text-transform:uppercase; pointer-events:none;
+    border:1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+    border-radius:999px; padding:.6rem 1.1rem;
+  }
+  /* ---- card 03 drawing, mobile ---- */
+  /* Moved beneath the headline by deck.js — see there for why the node moves
+     rather than being restyled. Full width: the reader meets the drawing as
+     soon as the claim is made, and the reveal is on screen when it fires. */
+  @media (max-width:899px) {
+    #card-03 .media { margin:1.4rem 0 .4rem; }
+  }
+
+  /* .colFruit is styled with the fruit rules at the end of this file. */
+
+  /* ---- reveal on scroll ---- */
+  /* The live deck applies this to `.reveal > *`, whose only child is `.inner`,
+     so the whole block moves as one unit and the nth-child ladder never bites.
+     On the two-column cards the ladder IS the point: the copy has to arrive line
+     by line before the drawing does. `.media` is deliberately outside it — its
+     timing comes from JS. */
+  .reveal > .inner { opacity:0; transform:translateY(26px);
+                     transition:opacity .9s var(--ease), transform .9s var(--ease); }
+  .revealIn > .inner { opacity:1; transform:none; }
+  .reveal .stagger > * { opacity:0; transform:translateY(26px);
+                         transition:opacity .9s var(--ease), transform .9s var(--ease); }
+  .revealIn .stagger > * { opacity:1; transform:none; }
+  .revealIn .stagger > *:nth-child(1) { transition-delay:.04s }
+  .revealIn .stagger > *:nth-child(2) { transition-delay:.10s }
+  .revealIn .stagger > *:nth-child(3) { transition-delay:.16s }
+  .revealIn .stagger > *:nth-child(4) { transition-delay:.22s }
+  .revealIn .stagger > *:nth-child(5) { transition-delay:.28s }
+  .revealIn .stagger > *:nth-child(6) { transition-delay:.34s }
+  .revealIn .stagger > *:nth-child(7) { transition-delay:.40s }
+  .revealIn .stagger > *:nth-child(8) { transition-delay:.46s }
+  .revealIn .stagger > *:nth-child(9) { transition-delay:.52s }
+  .revealIn .stagger > *:nth-child(10) { transition-delay:.58s }
+  .revealIn .stagger > *:nth-child(11) { transition-delay:.64s }
+
+  /* Card 03 carries far more than a stock card — the lead, the feature ticks,
+     the rarity callout and the doorstep list. At the stock rhythm that runs past
+     the fold on a laptop and buries the one line the card exists to deliver. */
+  #card-03 { padding-top:max(4.5rem,9svh); padding-bottom:max(4rem,8svh); }
+  #card-03 h2 { font-size:clamp(1.7rem,4.2vw,2.5rem); }
+  #card-03 .label { margin-top:1.15rem; }
+  #card-03 .ticks { margin-top:1rem; gap:.5rem; }
+  #card-03 .rare { margin-top:1.25rem; padding:.95rem 1.15rem; }
+  #card-03 .doorstep { gap:.45rem; }
+  #card-03 .next { margin-top:1.5rem; }
+
+
+  /* ---- 05 competition: the funnel ---- */
+  .funnel { margin:2rem 0 0; display:grid; gap:.5rem; }
+  .tier { display:flex; align-items:baseline; justify-content:space-between; gap:1.5rem;
+          padding:.85rem 1.1rem; border:1px solid var(--line); border-radius:8px;
+          background:var(--line-soft); }
+  .tier .k { color:var(--muted); font-size:.95rem; }
+  .tier .v { font-family:var(--serif); font-size:1.35rem; color:var(--ink);
+             font-variant-numeric:tabular-nums; }
+  /* The last step is the point of the card — everything above it is the funnel
+     narrowing, so it gets the copper. */
+  .tier.final { border-color:color-mix(in srgb, var(--accent) 55%, transparent);
+                background:color-mix(in srgb, var(--accent) 9%, transparent); }
+  .tier.final .v { color:var(--accent); font-size:1.7rem; }
+  .drop { text-align:center; color:var(--accent-deep); font-size:.9rem; line-height:1; }
+
+  /* ---- 06 comparable ---- */
+  .comp { margin:1.6rem 0 0; padding:1.1rem 1.3rem; border:1px solid var(--line);
+          border-radius:10px; background:var(--line-soft); }
+  .compHead { display:flex; align-items:baseline; justify-content:space-between;
+              gap:1rem; flex-wrap:wrap; }
+  .compHead .addr { font-family:var(--serif); font-size:1.15rem; color:var(--ink); }
+  .compHead .price { font-family:var(--serif); font-size:1.35rem; color:var(--accent);
+                     font-variant-numeric:tabular-nums; }
+  .compMeta { margin-top:.35rem; color:var(--muted); font-size:.8rem;
+              letter-spacing:.1em; text-transform:uppercase; }
+  .deltas { list-style:none; padding:0; margin:.8rem 0 0; display:grid; gap:.55rem; }
+  .deltas li { color:var(--ink-soft); font-size:.98rem; display:flex; gap:.7rem; }
+  .deltas li::before { content:"−"; color:var(--accent); flex:none; }
+
+  /* ---- 07 value drivers ---- */
+  .drivers { display:grid; gap:1.6rem; margin:1.8rem 0 0; }
+  @media (min-width:720px) { .drivers { grid-template-columns:1fr 1fr; } }
+  .drv ul { list-style:none; padding:0; margin:.2rem 0 0; display:grid; gap:.55rem; }
+  .drv li { color:var(--ink-soft); display:flex; gap:.7rem; align-items:baseline; }
+  .drv.up li::before   { content:"↑"; color:#8FBF8F; flex:none; }
+  .drv.down li::before { content:"↓"; color:var(--accent); flex:none; }
+
+  /* ---- 09 valuation ---- */
+  /* The one figure the deck has been building toward. Deliberately the largest
+     type on the page — and a RANGE sits under it, never a single number alone. */
+  .anchor { font-family:var(--serif); font-size:clamp(2.2rem,7vw,3.6rem); color:var(--gold);
+            line-height:1.05; margin:.2rem 0 0; font-variant-numeric:tabular-nums; }
+  .range { font-family:var(--serif); font-size:clamp(1.3rem,3.6vw,1.9rem); color:var(--ink);
+           font-variant-numeric:tabular-nums; margin:.2rem 0 0; }
+  .rangeNote { margin:.9rem 0 0; color:var(--muted); font-size:.92rem; max-width:46rem; }
+
+  /* ---- 10 strategy ---- */
+  .avoid { list-style:none; padding:0; margin:.4rem 0 0; display:grid; gap:.5rem; }
+  .avoid li { color:var(--muted); text-decoration:line-through;
+              text-decoration-color:var(--accent-deep); }
+  .cta { display:inline-block; margin-top:2.4rem; padding:.85rem 1.5rem;
+         border:1px solid var(--accent); border-radius:999px; color:var(--accent);
+         text-decoration:none; font-size:1rem; transition:background .25s, color .25s; }
+  .cta:hover { background:var(--accent); color:#0A0807; }
+
+  #card-rest { min-height:40svh; }
+  #card-rest .answer { text-align:center; }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior:auto; }
+    .reveal > .inner, .reveal .stagger > *, .media {
+      opacity:1 !important; transform:none !important; transition:none !important; }
+  }
+
+
+  /* ---- card 04: the pandanus fruit, after it has rolled in ---- */
+  /* Beachside decks only. fruit_roll.js animates on a canvas and then hands off
+     to this image, so the rest state is a normal element that reflows, prints
+     and survives a resize without a permanent rAF loop behind it. */
+  .fruitCanvas { position:fixed; inset:0; z-index:60; pointer-events:none; }
+  .colFruit { display:flex; justify-content:center; align-items:center; }
+  /* On a phone `.innerWide` is a single column and the fruit's cell is FIRST in
+     the DOM (it is the left column on desktop). `order` drops it below the copy
+     so the fruit comes to rest under the words rather than above them, which is
+     also the reading order — you get told why the distance matters, then the
+     thing that fell out of the tree arrives underneath it. */
+  @media (max-width:899px) {
+    /* Left-biased, not centred, and that is about the ROLL rather than the
+       composition. The fruit starts at ~54% of the frame (where it hangs in the
+       crown) so a centred rest gives it 4% of travel — and since the rotation is
+       distance/radius, 4% is not a roll, it is a drop. Resting at ~28% buys real
+       lateral distance in a narrow viewport. Matches the concept's mobile x. */
+    .colFruit { order:2; margin-top:2.2rem; justify-content:flex-start;
+                padding-left:6vw; }
+  }
+  .fruitRest { display:block; width:170px; height:auto; opacity:0;
+               transition:opacity .45s var(--ease); }
+  .fruitRest.on { opacity:1; }
+  @media (prefers-reduced-motion:reduce) { .fruitRest { transition:none; } }
+
+  /* Covers the drawn fruit the instant its copy detaches. JS sets the box from
+     the video's own rect — `max-height` letterboxes the clip inside the frame,
+     so a CSS percentage of the frame would drift off the fruit. */
+  .fruitPatch { position:absolute; opacity:0; pointer-events:none;
+                transition:opacity .18s linear; }
+  .fruitPatch.on { opacity:1; }
+  @media (prefers-reduced-motion:reduce) { .fruitPatch { transition:none; } }
+
+  /* ---- card 11: the offer ---- */
+  /* The one card that asks for something, so it gets a little more air than the
+     analysis cards and the tick list is the visual centre. */
+  #card-11 .ticks { margin-top:.9rem; }
+  /* Two of these wrap to a second line on a phone, and a centred tick then
+     floats between the lines instead of marking the item. Top-align, nudged
+     down to sit on the first line's baseline. */
+  #card-11 .ticks li { align-items:flex-start; }
+  #card-11 .ticks li::before { margin-top:.22rem; }
+  #card-11 .label { margin-top:1.9rem; }
+  .ready { margin:2.1rem 0 0; font-family:var(--serif);
+           font-size:clamp(1.1rem,2.7vw,1.35rem); line-height:1.35;
+           color:var(--ink); text-wrap:balance; }
+  .buildTime { margin:.85rem 0 0; font-size:.9rem; letter-spacing:.04em;
+               color:var(--muted); display:flex; align-items:center; gap:.55rem; }
+  /* Drawn, not typed: U+23F1 renders as a tofu box wherever the font stack has
+     no stopwatch glyph. Same mask technique as .ticks. */
+  .buildTime::before {
+    content:""; width:1rem; height:1rem; flex:none; background:var(--accent);
+    -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' d='M12 22a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 8v5l3 2M9 2h6'/%3E%3C/svg%3E") center/contain no-repeat;
+    mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' d='M12 22a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 8v5l3 2M9 2h6'/%3E%3C/svg%3E") center/contain no-repeat;
+  }
+  #card-11 .cta { margin-top:1.9rem; }
+
+  /* ---- card 11 CTA: the neon tube ----------------------------------------
+     Ported from Concepts/illuminus_sign_concept/button.html. Every var below is
+     driven by neon_cta.js at ~60fps — --lvl is the tube (a hard step, no
+     easing anywhere) and --bloom is the halo (which lags, by 12ms up and 55ms
+     down). Do not add a transition to anything that reads --lvl: the whole
+     point is that a discharge tube switches instantly and only its glow fades.
+     Scoped to .neonWrap, not :root — this is a component on a page. */
+  /* `width:max-content` + auto side margins, NOT inline-grid. An inline-level
+     box cannot be centred by auto margins, so the button sat at the left edge of
+     the (already centred) 40rem text column and read as off-centre on the page.
+     Sizing the wrapper to its contents also keeps .neonBounce's percentage inset
+     tied to the button rather than to the full column width. */
+  .neonWrap { position:relative; display:grid; place-items:center;
+              width:max-content; margin:2.2rem auto 0;
+              --lvl:0; --bloom:0; --warm:0; }
+
+  /* A tube genuinely lights what is behind it. Small and soft: a big
+     atmospheric wash starts rebuilding the "photograph of a sign" read that
+     this variant exists to avoid. */
+  .neonBounce { position:absolute; inset:-70% -35%; pointer-events:none; z-index:0;
+    background:radial-gradient(42% 40% at 50% 50%,
+      rgb(240 121 62 / calc(.17 * var(--bloom))) 0%,
+      rgb(178 64 26  / calc(.08 * var(--bloom))) 42%, transparent 72%); }
+
+  .neon { position:relative; z-index:1; display:inline-grid; place-items:center;
+    padding:clamp(1.15rem,3.2vw,1.5rem) clamp(2.2rem,6vw,3.1rem);
+    border-radius:999px; text-decoration:none; cursor:pointer;
+    -webkit-tap-highlight-color:transparent;
+    background:linear-gradient(#101114,#0B0C0F 55%,#08090B);
+    box-shadow:
+      inset 0 0 calc(4px  + 3px  * var(--bloom)) rgb(255 214 180 / calc(.50 * var(--lvl))),
+      inset 0 0 calc(14px + 10px * var(--bloom)) rgb(240 121 62  / calc(.36 * var(--lvl))),
+      inset 0 0 calc(44px + 28px * var(--bloom)) rgb(200 82  35  / calc(.20 * var(--lvl))),
+      inset 0 0 60px rgb(0 0 0/.8);
+    transition:transform .18s cubic-bezier(.2,.7,.2,1), filter .18s ease; }
+  .neon:hover { transform:translateY(-2px); filter:brightness(1.12); }
+  .neon:active { transform:translateY(1px) scale(.995); filter:brightness(.95); }
+  .neon:focus-visible { outline:2px solid #F0793E; outline-offset:10px; }
+
+  /* The tube is a CYLINDER of glass: head-on, the centre line is blown out to
+     white and falls off across its width to saturated gas at the walls. So this
+     stack is a cross-section, not "line plus blur". Widths derive from --tube,
+     so a fatter tube is a one-number change. */
+  .neonFrame { position:absolute; inset:0; overflow:visible; pointer-events:none; --tube:11px; }
+  .neonFrame path { fill:none; stroke-linecap:round; stroke-linejoin:round; }
+  .neonFrame .t-glass { stroke:#5C6157; stroke-width:var(--tube); opacity:.32; }
+  .neonFrame .t-bloom { stroke:#B2401A; stroke-width:calc(var(--tube)*2.5); filter:blur(18px);
+    opacity:calc(.52 * var(--bloom) * (1 - .65 * var(--warm))); }
+  .neonFrame .t-halo  { stroke:#F0793E; stroke-width:calc(var(--tube)*1.6); filter:blur(9px);
+    opacity:calc(.80 * var(--lvl)); }
+  .neonFrame .t-body  { stroke:#F0793E; stroke-width:var(--tube); filter:blur(2.3px);
+    opacity:calc(.95 * var(--lvl)); }
+  .neonFrame .t-inner { stroke:#FFC89C; stroke-width:calc(var(--tube)*.60); filter:blur(1.4px);
+    opacity:calc(.95 * var(--lvl)); }
+  .neonFrame .t-core  { stroke:#FFFFFF; stroke-width:calc(var(--tube)*.30); filter:blur(.55px);
+    opacity:calc(1 * var(--lvl)); }
+
+  /* Neon letters are bent tube, not filled shapes — transparent fill, stroked
+     outline. Blown out to pure white: the brightness has to come from the glow,
+     not from the weight of the stroke. */
+  .neonWord { display:grid; place-items:center; position:relative; z-index:1; }
+  .neonWord > span { grid-area:1/1; white-space:nowrap; text-align:center;
+    font-family:var(--sans); font-size:clamp(.95rem,2.4vw,1.2rem); font-weight:600;
+    letter-spacing:.13em; text-transform:uppercase; line-height:1.25;
+    color:transparent; -webkit-text-stroke:2px #5C6157; }
+  /* `.neonWord > span` sets the stroke SHORTHAND, which is specificity (0,1,1);
+     a bare `.neonLit` is (0,1,0) and loses, so the lit copy was being drawn in
+     the unlit glass grey and never went white at any level. The concept has
+     this bug too — its `.lit` computes to rgb(92,97,87) at --lvl:1 — which is
+     why its README reaches for a thicker stroke to stop the letters "reading
+     grey next to the frame". That was treating the symptom. Child selectors
+     here so the lit/unlit colours actually win. */
+  .neonWord > .neonGlass { -webkit-text-stroke-color:rgb(92 97 87 / .45); }
+  /* Radii stay generous. Tightening them to "match the type size" is exactly
+     wrong for stroke-only text — the glow has to be wider than the stroke to be
+     visible outside it, or it just gets buried under the outline. */
+  .neonWord > .neonLit {
+    -webkit-text-stroke-color:rgb(255 255 255 / calc(1 * var(--lvl)));
+    text-shadow:
+      0 0 calc(2px  + 1px  * var(--bloom)) rgb(255 255 255 / calc(1   * var(--lvl))),
+      0 0 calc(4px  + 2px  * var(--bloom)) rgb(255 244 230 / calc(1   * var(--lvl))),
+      0 0 calc(9px  + 5px  * var(--bloom)) rgb(255 186 128 / calc(1   * var(--lvl))),
+      0 0 calc(18px + 12px * var(--bloom)) rgb(240 121 62  / calc(.95 * var(--lvl))),
+      0 0 calc(36px + 24px * var(--bloom)) rgb(232 104 46  / calc(.62 * var(--bloom))),
+      0 0 calc(68px + 46px * var(--bloom)) rgb(178 64 26   / calc(.36 * var(--bloom) * (1 - .6 * var(--warm)))); }
+
+  @media (prefers-reduced-motion:reduce) { .neon { transition:none; } }
+
+  /* ---- the outro: cracked glass, code behind, the ship's computer ----------
+     Injected into the deck by build_deck_preview.py. The elements themselves are
+     created by outro-deck.js only when the button is actually pressed, so a
+     reader who never presses it carries none of this. */
+
+  /* The deck goes when the pane starts falling — not before. The copy has to
+     stay readable THROUGH the cracked glass; that is the whole idea. */
+  #deck { transition:opacity .5s ease, filter .5s ease; }
+  #deck.fx-gone { opacity:0; filter:blur(2px); pointer-events:none; }
+
+  /* The whole world shakes, so the wrapper moves and not the layers inside it. */
+  #fx-world { position:fixed; inset:0; z-index:80; will-change:transform;
+              pointer-events:none; }
+  #fx-behind { position:fixed; inset:0; opacity:0; transition:opacity .9s ease; }
+  #fx-behind.on { opacity:1; }
+  #fx-rain { position:absolute; inset:0; display:block; width:100%; height:100%; }
+
+  /* The recoil: one short sharp kick at contact — the impact energy arriving,
+     not the sustained earthquake that comes later with the typed lines. */
+  .jolt { animation:jolt .22s cubic-bezier(.2,.9,.3,1) 1; }
+  @keyframes jolt{
+    0%{transform:translate(0,0) scale(1)}
+    18%{transform:translate(-6px,7px) scale(1.006)}
+    44%{transform:translate(4px,-4px) scale(1.002)}
+    72%{transform:translate(-2px,2px) scale(1)}
+    100%{transform:translate(0,0) scale(1)}}
+  .quake-1 { animation:q1 .16s linear infinite; }
+  .quake-2 { animation:q2 .09s linear infinite; }
+  @keyframes q1{
+    0%{transform:translate(0,0)}25%{transform:translate(-3px,2px)}
+    50%{transform:translate(2px,-3px)}75%{transform:translate(-2px,-1px)}
+    100%{transform:translate(0,0)}}
+  @keyframes q2{
+    0%{transform:translate(0,0) rotate(0)}20%{transform:translate(-9px,6px) rotate(-.35deg)}
+    40%{transform:translate(8px,-7px) rotate(.3deg)}60%{transform:translate(-7px,-5px) rotate(-.2deg)}
+    80%{transform:translate(6px,8px) rotate(.25deg)}100%{transform:translate(0,0) rotate(0)}}
+
+  #fx-msg { position:fixed; left:clamp(1.2rem,6vw,4rem); top:50%;
+            transform:translateY(-50%);
+            font:14px/1.9 ui-monospace,Menlo,Consolas,monospace; letter-spacing:.06em;
+            color:#8FE9A8; text-shadow:0 0 10px rgba(80,255,140,.35); white-space:pre; }
+  #fx-msg .ok { color:#CFF6DA; }
+
+  /* The countdown. The whole line pulses on each number and the digit goes
+     further — it is the thing actually changing. Retriggered by removing the
+     class and forcing a reflow, same as .jolt. */
+  #fx-msg .beat { animation:cdBeat .92s ease-out; }
+  #fx-msg .beat .n { animation:cdNum .92s ease-out; display:inline-block; }
+  @keyframes cdBeat{
+    0%  {opacity:1;   text-shadow:0 0 26px rgba(80,255,140,.95),0 0 6px rgba(80,255,140,.8)}
+    30% {opacity:.62; text-shadow:0 0 10px rgba(80,255,140,.35)}
+    100%{opacity:1;   text-shadow:0 0 10px rgba(80,255,140,.35)}}
+  @keyframes cdNum{
+    0%  {transform:scale(1.75);color:#FFF}
+    45% {transform:scale(1);   color:#8FE9A8}
+    100%{transform:scale(1);   color:#8FE9A8}}
+
+  @media (prefers-reduced-motion:reduce){
+    #fx-msg .beat, #fx-msg .beat .n { animation:none; }
+    .jolt, .quake-1, .quake-2 { animation:none; }
+  }
+
+  /* Card 11 is the LAST card, and the neon sits at the bottom of it — so the
+     document simply ran out and the sign could never be scrolled higher than
+     ~90% of screen height. Measured: scrollIntoView({block:"center"}) left it at
+     92%. It therefore lit and played out in a sliver at the very bottom edge
+     while the reader was still scrolling toward it, which is why the sequence
+     was never seen or heard properly. Space below gives it somewhere to rise to. */
+  #card-11 { padding-bottom:26svh; }
+  @media (max-width:899px) { #card-11 { padding-bottom:38svh; } }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div id="shake">
+    <canvas id="rain"></canvas>
+    <canvas id="bloom"></canvas>
+  </div>
+  <div id="scanlines"></div>
+  <div id="vignette"></div>
+  <div id="alarm"></div>
+  <div id="hint">tap to skip</div>
+</div>
+
+<script>window.__FIELDS_INTRO = { street: "16 Moorabbin Place", locality: "Robina, QLD 4226", tokens: {"tier1":["ROBINA","4226","QLD","GOLD COAST","SOLD","LISTED","FOR SALE","WITHDRAWN","UNDER OFFER","PRIVATE TREATY","APPRAISAL","DAYS ON MARKET","SETTLED","COMPARABLE","MEDIAN","VALUATION","JUST LISTED","RELISTED","PRICE REDUCED","UNDER CONTRACT","OFF MARKET"],"tier2":["LAVER DR","RIVERWALK AVE","RON PENHALIGON WAY","LAKE ORR DR","EASTHILL DR","GLENSIDE DR","ROBINA TOWN CENTRE DR","UNIVERSITY DR","VARSITY LAKES","MERRIMAC","MUDGEERABA","CLEAR ISLAND WATERS","BURLEIGH WATERS","REEDY CREEK","MOORABBIN PARK","MOORABIN PARK","ROBINA STATE SCHOOL","DOM 29","SOLD 23 DAYS","SOLD 41 DAYS"],"tier3":["MOORABBIN PL","TULLAMARINE DR","ROBINA PWY","MORNINGTON TCE","GLEN IRIS PL","PARKSIDE CCT","STEPNEY CL","MORDIALLOC PL","TEMPLESTOWE CRT","TUGGERAH CL","CAMBERWELL CCT","DANDENONG TCE"],"tier4":["WHAT IS IT WORTH","IS THE NUMBER REAL","WHERE WOULD I GO","WHO IS ASKING","MY HOME","MY STREET","NOT SELLING YET","JUST CURIOUS","WHAT DID NEXT DOOR GET","4 BEDROOMS","936 M\u00b2 OF LAND","A POOL","SINGLE-LEVEL LIVING"],"hot":["MOORABBIN PLACE","MY STREET","MY HOME","ROBINA"],"_meta":{"slug":"16-moorabbin-place-robina","suburb":"ROBINA","coords":[-28.06401033,153.39713234],"nearest":["MOORABBIN PL","TULLAMARINE DR","ROBINA PWY","MORNINGTON TCE","GLEN IRIS PL"]}} };</script>
+<script>
+(() => {
+  'use strict';
+
+  // ── Glyph set ────────────────────────────────────────────────────────────
+  // Rain pool: the raw material of a property record. Digits dominate.
+  const POOL =
+    '0123456789' + '0123456789' + '0123456789' +
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZ' +
+    '$%.,:/-+=<>#*·▲▼²';
+  // Text-only glyphs. In the atlas but never chosen by random churn, so the
+  // rain keeps its uppercase/numeric character while the message can use
+  // ordinary sentence case.
+  const EXTRA = "abcdefghijklmnopqrstuvwxyz'!? ";
+  const GLYPHS = (POOL + EXTRA).split('');
+  const G = GLYPHS.length;
+  const RAND_G = POOL.length;                 // random churn picks below this
+  const SPACE = GLYPHS.indexOf(' ');
+  const GIDX = new Map(GLYPHS.map((c, i) => [c, i]));
+
+  // ── Recognition tiers ────────────────────────────────────────────────────
+  // The rain starts as pure noise and gets progressively more personal. Each
+  // tier unlocks at `from` seconds; later tiers are weighted higher so the mix
+  // keeps shifting toward the viewer's own street rather than just adding to it.
+  //
+  // Street names are REAL, taken from Gold_Coast.burleigh_waters cadastral
+  // records and ordered by true distance from the subject property. House
+  // numbers are invented — see README.
+  // The concept ran 11.2s before the message, for a reader who chose to watch
+  // it. Here it is the first thing between someone and their report, so the
+  // whole ramp scales by SPEED: the curtain (T_OPEN), the tier unlock times
+  // and the density ramp all multiply by it. Shortening the curtain alone
+  // would run the field out of new words and leave it repeating.
+  // ?speed=1 is the concept's original pace.
+  const qs = new URLSearchParams(location.search);
+  // strip control characters; glyphs are looked up per char, never HTML
+  const clip = (s, n) => String(s).replace(/[\u0000-\u001F]/g, '').slice(0, n);
+
+  // Where the address comes from, in priority order:
+  //   1. window.__FIELDS_INTRO — how the deck supplies it, and the shape the
+  //      React port will pass as props. Must be set before this script runs.
+  //   2. ?street= / ?locality= — for opening the intro on its own to tune it.
+  //   3. the sample home.
+  // Whichever wins is still control-character stripped, length capped, and
+  // written a glyph at a time — never as HTML.
+  const CFG = (typeof window !== 'undefined' && window.__FIELDS_INTRO) || {};
+  const STREET   = clip(CFG.street   || qs.get('street')   || '3 Avocet Avenue', 44);
+  const LOCALITY = clip(CFG.locality || qs.get('locality') || 'Burleigh Waters, QLD 4220', 44);
+
+  const SPEED      = Math.min(2, Math.max(0.2, parseFloat(
+                       new URLSearchParams(location.search).get('speed')) || 0.40));
+
+  const TOKEN_TIERS_RAW = [
+    { from: 0.0, items: [            // the suburb, and the language of listings
+      'BURLEIGH WATERS', 'GOLD COAST', '4220', 'QLD', 'SOLD', 'LISTED',
+      'FOR SALE', 'WITHDRAWN', 'UNDER OFFER', 'PRIVATE TREATY', 'APPRAISAL',
+      'DAYS ON MARKET', 'SETTLED', 'COMPARABLE', 'MEDIAN', 'VALUATION'
+    ]},
+    { from: 2.4, items: [            // the wider area: roads, POIs, neighbours
+      'CHRISTINE AVE', 'BERMUDA ST', 'REEDY CREEK RD', 'WEST BURLEIGH RD',
+      'GOLD COAST HWY', 'TALLEBUDGERA CREEK', 'BURLEIGH HEADS', 'JAMES ST',
+      'BURLEIGH HILL', 'STOCKLAND BURLEIGH', 'TREETOPS PLAZA', 'THE PINES',
+      'MARYMOUNT COLLEGE', 'CANINGERABA', 'DAVID FLEAY', 'BURLEIGH GOLF',
+      'MIAMI', 'MERMAID WATERS', 'PALM BEACH', 'VARSITY LAKES', 'ELANORA',
+      'JUST LISTED', 'RELISTED', 'PRICE REDUCED', 'UNDER CONTRACT',
+      'OFF MARKET', 'SOLD 23 DAYS', 'SOLD 41 DAYS', 'DOM 29'
+    ]},
+    { from: 4.8, items: [            // the actual street grid around the home
+      'AVOCET AVE', 'JABIRU AVE', 'FANTAIL CRT', 'BURLEIGH ST', 'CORELLA AVE',
+      'BLUEJAY ST', 'SKUA ST', 'BITTERN AVE', 'DUNLIN DR', 'ACANTHUS AVE',
+      'CURLEW CRES', 'AUK AVE', 'WAGTAIL CRT', 'BANKSIA BWY', 'SANDPIPER DR',
+      'TURACO CRT', 'RAZORBILL ST', 'PINTAIL CRES', 'BELLBIRD AVE', 'KESTREL DR',
+      '4 BED 2 BATH', '612M2', '219M2 FLOOR', 'FREEHOLD'
+    ]},
+    { from: 7.2, items: [            // their own block, and their own thoughts
+      '3 AVOCET AVE', '11 JABIRU AVE', '6 FANTAIL CRT', '24 CORELLA AVE',
+      '9 BLUEJAY ST', '18 SKUA ST', '7 BITTERN AVE', '52 DUNLIN DR',
+      '14 CURLEW CRES', '27 WAGTAIL CRT', '31 ACANTHUS AVE',
+      'WHAT IS IT WORTH', 'WHERE WOULD I GO', 'CAN I GET BACK IN',
+      'WILL I MISTIME IT', 'JUST CURIOUS', 'WE HAD OUR RUN',
+      'NOBODY IS BUYING', 'NOBODY IS SELLING', 'IS THE NUMBER REAL',
+      'FEWER HOMES SOLD', 'HOLDING COSTS', 'MY STREET', 'MY HOME'
+    ]}
+  ];
+
+  // How much of the field is carrying recognisable text, over time. The
+  // curtain lands already readable; what changes is how *local* it gets.
+  // Nearly the whole field carries real records. The "code" texture comes from
+  // dataChunk()'s lot/plan/area/DOM fragments rather than from random glyphs,
+  // so raising this does not flatten the look — it just removes the gibberish.
+  // Per-home tokens, generated by intro/intro_tokens.py and supplied on
+  // window.__FIELDS_INTRO.tokens. Without them the field falls back to the
+  // built-in Burleigh Waters list above, which is only correct for Burleigh
+  // Waters — a Robina owner would watch AVOCET AVE rain past and then see their
+  // Robina address print, which inverts the whole point of the sequence.
+  const TOK = CFG.tokens || null;
+  const TOKEN_TIERS = (TOK
+      ? [["tier1", 0.0], ["tier2", 2.4], ["tier3", 4.8], ["tier4", 7.2]]
+          .map(([k, from]) => ({ from, items: (TOK[k] || []).map(t => clip(t, 40)) }))
+          .filter(t => t.items.length)
+      : TOKEN_TIERS_RAW
+    ).map(t => ({ ...t, from: t.from * SPEED }));
+
+  const RAMP = [[0,0.62], [2.4,0.78], [4.8,0.88], [7.2,0.94], [11.2,0.98]]
+                 .map(([t, v]) => [t * SPEED, v]);
+
+  function tokenChanceAt(t) {
+    if (t <= RAMP[0][0]) return RAMP[0][1];
+    for (let i = 1; i < RAMP.length; i++) {
+      if (t <= RAMP[i][0]) {
+        const [t0, v0] = RAMP[i - 1], [t1, v1] = RAMP[i];
+        return v0 + (v1 - v0) * ((t - t0) / (t1 - t0));
+      }
+    }
+    return RAMP[RAMP.length - 1][1];
+  }
+
+  // Pick from the unlocked tiers, biased hard toward the newest — that bias is
+  // what makes the field feel like it is closing in rather than just filling up.
+  // Streets nearest the subject property, for generated mock addresses.
+  const NEAR_STREETS = [
+    'AVOCET AVE', 'JABIRU AVE', 'FANTAIL CRT', 'BURLEIGH ST', 'CORELLA AVE',
+    'BLUEJAY ST', 'SKUA ST', 'BITTERN AVE', 'DUNLIN DR', 'ACANTHUS AVE',
+    'CURLEW CRES', 'AUK AVE', 'WAGTAIL CRT', 'SANDPIPER DR', 'RAZORBILL ST',
+    'PINTAIL CRES', 'BELLBIRD AVE', 'KESTREL DR', 'BANKSIA BWY', 'TURACO CRT'
+  ];
+  const rnd = n => (Math.random() * n) | 0;
+
+  // Built fresh each time rather than drawn from a list, so no two columns run
+  // the same string and the field never reads as a loop.
+  function dataChunk() {
+    switch (rnd(10)) {
+      case 0:  return `LOT ${100 + rnd(700)}`;
+      case 1:  return `RP${100000 + rnd(99999)}`;          // real QLD plan format
+      case 2:  return `${380 + rnd(640)}M2`;
+      case 3:  return `DOM ${11 + rnd(70)}`;
+      case 4:  return `${3 + rnd(3)} BED ${1 + rnd(3)} BATH`;
+      case 5:  return `SOLD ${13 + rnd(62)} DAYS`;
+      case 6:  return `${1 + rnd(90)} ${NEAR_STREETS[rnd(NEAR_STREETS.length)]}`;
+      case 7:  return `BUILT ${1978 + rnd(45)}`;
+      case 8:  return `${2 + rnd(3)} CAR`;
+      default: return `${100 + rnd(800)}M2 LOT`;
+    }
+  }
+
+  // A stream never repeats one phrase. Each time it finishes a chunk it pulls
+  // a different one, so a column reads as a run of varied records.
+  // Set alongside every nextChunk() call: is this phrase one of the ones that
+  // should catch the owner's eye — their own streets, their block, their own
+  // questions — as opposed to background texture.
+  let lastHot = false;
+  // Phrases that light white at any tier — this owner's own street and suburb.
+  // Built from the supplied tokens, escaped, so an address with regex-special
+  // characters cannot break or widen the pattern.
+  const esc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const HOT_RE = (TOK && (TOK.hot || []).length)
+    ? new RegExp(TOK.hot.map(esc).join("|"))
+    : /AVOCET|BURLEIGH WATERS|MY HOME|MY STREET/;
+
+  function nextChunk(t) {
+    if (Math.random() < 0.45) { lastHot = false; return dataChunk(); }
+    const pick = pickToken(t);
+    if (!pick) { lastHot = false; return dataChunk(); }
+    // tier 2 = the streets around them, tier 3 = their own block and thoughts.
+    // HOT_RE also catches the few phrases that are personal at any tier, so the
+    // highlight is present from the opening rather than only after ~5s.
+    lastHot = pick.tier >= 2 || HOT_RE.test(pick.text);
+    return pick.text;
+  }
+
+  function pickToken(t) {
+    let pool = [], total = 0;
+    for (let i = 0; i < TOKEN_TIERS.length; i++) {
+      if (t >= TOKEN_TIERS[i].from) { const w = (i + 1) * (i + 1); pool.push([i, w]); total += w; }
+    }
+    if (!pool.length) return null;
+    let r = Math.random() * total;
+    for (const [idx, w] of pool) {
+      r -= w;
+      if (r <= 0) return { text: TOKEN_TIERS[idx].items[(Math.random() * TOKEN_TIERS[idx].items.length) | 0], tier: idx };
+    }
+    const last = pool[pool.length - 1][0];
+    return { text: TOKEN_TIERS[last].items[0], tier: last };
+  }
+  const cfg = {
+    // speed was 95 in the concept. Eased back so the columns read as falling
+    // text rather than a blur — at 95 the eye catches the motion but not the
+    // words, which defeats a sequence whose whole point is that the reader
+    // recognises their own street in it.
+    size: 21, speed: 78, density: 68, trail: 26, mutate: 34, glow: 85
+  };
+
+  // ── Palettes ─────────────────────────────────────────────────────────────
+  // One atlas per palette so the message can shift colour while still being
+  // drawn as grid glyphs — the same pipeline as the rain, not an overlay.
+  const PALETTES = {
+    rain:  { deep: [  0,100, 28], core: [  0,240, 64], bright: [ 90,255,120], head: [205,255,210] },
+    dim:   { deep: [  0, 90, 26], core: [ 20,225, 70], bright: [110,255,140], head: [200,255,210] },
+    ok:    { deep: [ 20,120, 45], core: [ 90,255,140], bright: [170,255,195], head: [230,255,238] },
+    addr:  { deep: [ 60,130, 80], core: [200,255,215], bright: [235,255,242], head: [255,255,255] },
+    warn:  { deep: [ 80, 42,  0], core: [255,160, 30], bright: [255,200, 95], head: [255,235,180] },
+    err:   { deep: [ 70,  6,  4], core: [255, 46, 34], bright: [255,105, 88], head: [255,190,180] },
+    abort: { deep: [ 90,  8,  5], core: [255, 60, 44], bright: [255,130,110], head: [255,215,205] },
+    // keywords about THIS owner — white-green, clearly apart from the field
+    hot:   { deep: [110,200,140], core: [205,255,220], bright: [240,255,246], head: [255,255,255] }
+  };
+  const PAL_KEYS = Object.keys(PALETTES);
+  const PAL_IDX  = Object.fromEntries(PAL_KEYS.map((k, i) => [k, i]));
+  const TIERS = 24;
+
+  // ── Timeline ─────────────────────────────────────────────────────────────
+  // 'top'   — every column enters from the top at once, one curtain of code
+  // 'sweep' — the older left-to-right switch-on
+  const OPENING    = 'top';
+  const OPEN_MODE  = OPENING === 'top' ? 'top' : 'seed';
+  // Extra seconds of rain before the field collapses, ON TOP of the scaled
+  // ramp. Deliberately not multiplied by SPEED: this is "let it fall for a
+  // beat longer" in real seconds, not a proportion of the sequence.
+  // Will took this from 1.5 to 3.0 on 2026-08-03 — the rain is the part that
+  // earns the recognition, so it gets the time. The tier
+  // unlocks still finish well inside the ramp, so the extra time is spent in
+  // the closest tier — their own street grid — which is the part worth
+  // lingering on.
+  const RAIN_HOLD  = 3.0;
+  const T_OPEN     = 11.2 * SPEED + RAIN_HOLD;  // curtain, ramp, then the hold
+  const T_SWEEP    = 1.4;   // only used when OPENING === 'sweep'
+  const T_SHUTDOWN = 2.2 * SPEED;   // field switches OFF right -> left
+  // Fraction of columns still raining once the field has collapsed. 0 = the
+  // field switches off completely and the message prints to a clear screen.
+  // If raised, the message is pushed clear of the surviving band (see layout)
+  // so type is never printed over live rain.
+  const SURVIVOR   = 0;
+  const COL_FADE   = 0.45;  // seconds a column takes to extinguish
+
+
+  // The deck version stops at the address. 'Found it' is dropped because card 01
+  // is the recognition beat, and the whole "There's a problem / ERROR / ABORT"
+  // tail is dropped because the reader is about to be handed a report, not a
+  // warning.
+  // One `searching...`, then the address. The concept ran it twice to stretch
+  // the beat; the rain hold does that job now, and the repeat just cost a
+  // second. STREET is the house and street, LOCALITY the suburb, state and
+  // postcode — never the full address again, or the field prints it twice.
+  const SCRIPT = [
+    { t: 'searching...',         pal: 'dim',   pause: 0.30 },
+    { t: STREET,                 pal: 'addr',  pause: 0.90 },
+    { t: LOCALITY,               pal: 'addr',  pause: 0.12 }
+  ];
+  // The concept's ellipsis crawl (380ms a dot) and 4.2s end hold were paced for
+  // something you sit and watch. Here they were most of the wait — the address
+  // is legible the instant it stops typing, so the hold only has to let it
+  // register before the deck takes over.
+  //
+  // SPEED scales the typing too, or it becomes the floor: at the concept's
+  // pace the four lines cost ~7.5s no matter how short the curtain is. Typing
+  // is held back to a half-strength scale, because below roughly 30ms a
+  // character it stops reading as something being typed and just appears.
+  const TYPE_SCALE = 0.5 + 0.5 * SPEED;
+  const CPS_MS  = 55 * TYPE_SCALE;
+  const DOT_MS  = 240 * SPEED;
+  const HOLD_MS = 1300;
+  // A page intro plays once. Replay stays on `R` for review.
+  let   loop    = false;
+
+  // ── Canvas ───────────────────────────────────────────────────────────────
+  const rain  = document.getElementById('rain');
+  const bloom = document.getElementById('bloom');
+  const ctx   = rain.getContext('2d', { alpha: false });
+  const bctx  = bloom.getContext('2d');
+  const BLOOM_DIV = 5;
+  const canvasBlur = typeof bctx.filter === 'string';
+  if (!canvasBlur) bloom.classList.add('css-blur');
+
+  const stage = document.getElementById('stage');
+  const alarm = document.getElementById('alarm');
+  const shake = document.getElementById('shake');
+  const hint  = document.getElementById('hint');
+
+  let W = 0, H = 0, dpr = 1, cellW = 0, cellH = 0, cols = 0, rows = 0;
+  let atlases = [], aCellW = 0, aCellH = 0;
+
+  let sCol, sY, sSpeed, sLen, sDim, sWait, sTok, sPos, sRow, sHot;
+  let streamMax = 0, streamCount = 0;
+  let cell, churn, spark, bright, lock, hot;
+  // message layer, in the same grid: brightness + palette per cell
+  let textB, textP;
+
+  let openT = 0;               // seconds since the field opened, drives the ramp
+  let colLife;                 // per-column on/off, 0..1
+  let liveCols = 0;            // columns still eligible for new streams
+  let surge = 0;
+
+  // ── Atlases ──────────────────────────────────────────────────────────────
+  const lerp = (a, b, t) => a + (b - a) * t;
+
+  function ramp(p, v) {
+    let c, a;
+    if (v > 0.94)      { const t=(v-0.94)/0.06; c=[lerp(p.bright[0],p.head[0],t),lerp(p.bright[1],p.head[1],t),lerp(p.bright[2],p.head[2],t)]; a=1; }
+    else if (v > 0.78) { const t=(v-0.78)/0.16; c=[lerp(p.core[0],p.bright[0],t),lerp(p.core[1],p.bright[1],t),lerp(p.core[2],p.bright[2],t)]; a=1; }
+    else               { const t=v/0.78;        c=[lerp(p.deep[0],p.core[0],t),  lerp(p.deep[1],p.core[1],t),  lerp(p.deep[2],p.core[2],t)];   a=Math.pow(t,1.45); }
+    return `rgba(${c[0]|0},${c[1]|0},${c[2]|0},${a.toFixed(3)})`;
+  }
+
+  function buildAtlases() {
+    const fontPx = cfg.size * dpr;
+    const family = `ui-monospace, SFMono-Regular, Menlo, Consolas, "DejaVu Sans Mono", monospace`;
+    const probe = document.createElement('canvas').getContext('2d');
+    probe.font = `${fontPx}px ${family}`;
+
+    let maxW = 0;
+    for (const g of GLYPHS) maxW = Math.max(maxW, probe.measureText(g).width);
+    aCellW = Math.max(2, Math.round(maxW * 1.10));
+    aCellH = Math.max(2, Math.round(fontPx * 1.06));
+    cellW = aCellW / dpr;
+    cellH = aCellH / dpr;
+
+    atlases = PAL_KEYS.map(key => {
+      const p = PALETTES[key];
+      const cv = document.createElement('canvas');
+      cv.width = aCellW * G;
+      cv.height = aCellH * TIERS;
+      const a = cv.getContext('2d');
+      a.font = `${fontPx}px ${family}`;
+      a.textAlign = 'center';
+      a.textBaseline = 'middle';
+      for (let t = 0; t < TIERS; t++) {
+        a.fillStyle = ramp(p, t / (TIERS - 1));
+        for (let g = 0; g < G; g++) {
+          a.fillText(GLYPHS[g], g * aCellW + aCellW / 2, t * aCellH + aCellH / 2);
+        }
+      }
+      return cv;
+    });
+  }
+
+  // ── Layout ───────────────────────────────────────────────────────────────
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    rain.width = Math.round(W * dpr); rain.height = Math.round(H * dpr);
+    rain.style.width = W + 'px'; rain.style.height = H + 'px';
+    bloom.width  = Math.max(1, Math.round(W / BLOOM_DIV));
+    bloom.height = Math.max(1, Math.round(H / BLOOM_DIV));
+    if (canvasBlur) bctx.filter = `blur(${(7 / BLOOM_DIV).toFixed(2)}px)`;
+
+    buildAtlases();
+    cols = Math.ceil(W / cellW);
+    rows = Math.ceil(H / cellH) + 2;
+    liveCols = cols;
+
+    streamMax = cols * 3;
+    sCol = new Int32Array(streamMax); sY = new Float32Array(streamMax);
+    sSpeed = new Float32Array(streamMax); sLen = new Float32Array(streamMax);
+    sDim = new Float32Array(streamMax); sWait = new Float32Array(streamMax);
+    sTok = new Array(streamMax).fill(null);
+    sPos = new Int32Array(streamMax); sRow = new Int32Array(streamMax);
+    sHot = new Uint8Array(streamMax);
+
+    const n = cols * rows;
+    cell = new Uint8Array(n); churn = new Float32Array(n);
+    spark = new Float32Array(n); bright = new Float32Array(n);
+    lock = new Uint8Array(n); textB = new Float32Array(n); textP = new Uint8Array(n);
+    hot = new Float32Array(n);   // 0 = plain, else 1 + index of the char in its phrase
+    colLife = new Float32Array(cols);
+
+    for (let i = 0; i < n; i++) cell[i] = (Math.random() * RAND_G) | 0;
+
+    streamCount = Math.min(streamMax, Math.round(cols * (cfg.density / 100) * 1.9));
+    for (let i = 0; i < streamCount; i++) spawn(i, OPEN_MODE);
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+  }
+
+  // mode: 'top'     every column enters together, just above the top edge
+  //       'recycle' a spent stream re-enters on its own stagger
+  //       'seed'    placed mid-flight, for a field that opens already raining
+  function spawn(i, mode) {
+    sCol[i]   = (Math.random() * Math.max(1, liveCols)) | 0;
+    sLen[i]   = cfg.trail * (0.45 + Math.random() * 1.35);
+    const s   = Math.pow(Math.random(), 1.7);
+    sSpeed[i] = (cfg.speed * (0.45 + s * 1.75)) / cellH;
+    sDim[i]   = 0.42 + Math.random() * 0.58;
+    if (mode === 'seed') {
+      sY[i] = Math.random() * (rows + sLen[i]);
+      sWait[i] = 0;
+    } else if (mode === 'top') {
+      // barely above the top edge, near-zero stagger: the field arrives as one
+      // curtain, then spreads out naturally because the speeds differ
+      sY[i] = -Math.random() * 4;
+      sWait[i] = Math.random() * 0.12;
+    } else {
+      sY[i] = -Math.random() * 6;
+      sWait[i] = Math.random() * 2.2;
+    }
+    sTok[i] = null;
+    sPos[i] = 0;
+    sRow[i] = Math.floor(sY[i]) - 1;
+    if (Math.random() < tokenChanceAt(openT)) assignToken(i);
+  }
+
+  function assignToken(i) {
+    const tok = nextChunk(openT);
+    if (!tok) return;
+    sTok[i] = tok + '  ';
+    sHot[i] = lastHot ? 1 : 0;
+    if (sHot[i]) sLen[i] = Math.max(sLen[i], tok.length + 12);
+    sDim[i] = 0.85 + Math.random() * 0.15;      // readable text rides brighter
+    // guarantee the whole phrase is lit at once, or it can never be read
+    sLen[i] = Math.max(sLen[i], tok.length + 4);
+    sPos[i] = 0;
+    sRow[i] = Math.floor(sY[i]) - 1;
+  }
+
+  // One character of this stream's feed, advancing to a NEW chunk when the
+  // current one runs out. Always advances, even when the character is dropped,
+  // so the phrase stays aligned to the rows it was stamped into.
+  let feedIdx = 0, feedHot = false;
+
+  function feedChar(i) {
+    if (sPos[i] >= sTok[i].length) {
+      const next = nextChunk(openT) + '  ';
+      sTok[i] = next;
+      sPos[i] = 0;
+      sHot[i] = lastHot ? 1 : 0;
+      sLen[i] = Math.max(sLen[i], next.length + (sHot[i] ? 12 : 3));
+    }
+    feedIdx = sPos[i];
+    feedHot = sHot[i] === 1;
+    return sTok[i][sPos[i]++];
+  }
+
+  // Spawning alone ramps too slowly: the opening curtain fills the screen in
+  // one go and those streams take ~9s to clear. So each frame, top up the
+  // number of token streams by converting ones still near the top of the fall.
+  function maintainTokens() {
+    const target = Math.round(streamCount * tokenChanceAt(openT));
+    let have = 0;
+    for (let i = 0; i < streamCount; i++) if (sTok[i]) have++;
+    let need = target - have;
+    for (let i = 0; i < streamCount && need > 0; i++) {
+      if (!sTok[i] && sY[i] < rows * 0.25) { assignToken(i); need--; }
+    }
+  }
+
+  // ── Simulation ───────────────────────────────────────────────────────────
+  function step(dt) {
+    bright.fill(0);
+    const spd = 1 + surge * 1.4;
+
+    for (let i = 0; i < streamCount; i++) {
+      if (sWait[i] > 0) { sWait[i] -= dt; continue; }
+      sY[i] += sSpeed[i] * dt * spd;
+      const y = sY[i], len = sLen[i], c = sCol[i], d = sDim[i];
+      if (y - len > rows) { spawn(i, 'recycle'); continue; }
+      const base = c * rows;
+
+      if (sTok[i]) {
+        const hr = Math.floor(y);
+        if (hr > sRow[i]) {
+          for (let r = Math.max(sRow[i] + 1, 0); r <= hr; r++) {
+            const ch = feedChar(i);
+            if (r >= 0 && r < rows) {
+              const jt = base + r;
+              // never overwrite a cell the message owns — token streams fall
+              // straight through the printed words without eating characters
+              if (textB[jt] === 0) {
+                cell[jt] = GIDX.has(ch) ? GIDX.get(ch) : SPACE;
+                lock[jt] = 1;
+                hot[jt] = feedHot ? 1 + Math.min(200, feedIdx) : 0;
+              }
+            }
+          }
+          sRow[i] = hr;
+        }
+      }
+
+      const top = Math.max(0, Math.ceil(y - len));
+      const bot = Math.min(rows - 1, Math.floor(y));
+      for (let r = top; r <= bot; r++) {
+        const dist = y - r;
+        let v;
+        if (dist < 1) v = 1;
+        else {
+          const k = 1 - (dist - 1) / len;
+          if (k <= 0) continue;
+          v = Math.pow(k, 1.3) * d;
+        }
+        const j = base + r;
+        if (v > bright[j]) bright[j] = v;
+      }
+    }
+
+    const churnRate = (cfg.mutate / 100) * 24;
+    const n = bright.length;
+    for (let j = 0; j < n; j++) {
+      if (spark[j] > 0) spark[j] -= dt;
+      if (bright[j] <= 0.02) { lock[j] = 0; hot[j] = 0; continue; }
+      if (lock[j] || textB[j] > 0) continue;   // token or message char: hold
+      churn[j] -= dt * churnRate * (0.3 + Math.random());
+      if (churn[j] <= 0) {
+        cell[j] = (Math.random() * RAND_G) | 0;
+        churn[j] = 0.4 + Math.random() * 2.4;
+        if (Math.random() < 0.035) spark[j] = 0.05 + Math.random() * 0.12;
+      }
+    }
+    if (surge > 0) surge = Math.max(0, surge - dt * 1.6);
+  }
+
+  function draw(now) {
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, W, H);
+    const tMax = TIERS - 1;
+    const wob = 0.94 + 0.06 * Math.sin(now * 0.011) * Math.sin(now * 0.0037);
+    const rainAtlas = atlases[PAL_IDX.rain];
+    const hotAtlas  = atlases[PAL_IDX.hot];
+
+    for (let c = 0; c < cols; c++) {
+      const base = c * rows, x = c * cellW, life = colLife[c];
+
+      for (let r = 0; r < rows; r++) {
+        const j = base + r;
+        const tb = textB[j];
+        let v, at;
+
+        if (tb > 0) {
+          // message cells own their glyph outright — the rain cannot recolour
+          // or overwrite them, so the words stay stable as code streams past
+          v = tb;
+          at = atlases[textP[j]];
+        } else {
+          v = bright[j] * life;
+          if (v <= 0.02) continue;
+          v = spark[j] > 0 ? Math.max(v, 0.97) : v * wob;
+          const h = hot[j];
+          if (h > 0) {
+            // Three things at once, because brightness alone is invisible in a
+            // field that is already full of bright heads:
+            //  1. a floor, so the phrase stays lit while the code around it
+            //     decays — the contrast comes from the surroundings dimming;
+            //  2. a hard crest sweeping down it (offset per character);
+            //  3. a whiter palette, so it differs in hue as well as level.
+            const floor = Math.min(0.7, bright[j] * life * 4.2);   // tails off, never pops
+            let vv = Math.max(v, floor);
+            const wave = Math.sin(now * 0.004 - (h - 1) * 0.35);
+            const crest = wave > 0 ? wave * wave * wave : 0;
+            v = vv + (1 - vv) * crest;
+            at = hotAtlas;
+          } else {
+            at = rainAtlas;
+          }
+        }
+
+        const tier = Math.min(tMax, (v * tMax) | 0);   // boosted cells must not overrun the atlas
+        if (tier <= 0) continue;
+        ctx.drawImage(at, cell[j] * aCellW, tier * aCellH, aCellW, aCellH,
+                      x, r * cellH, cellW, cellH);
+      }
+    }
+
+    // block cursor, drawn as a grid cell
+    if (cursor.on && Math.floor(now / 530) % 2 === 0) {
+      const p = PALETTES[cursor.pal];
+      ctx.fillStyle = `rgb(${p.bright[0]},${p.bright[1]},${p.bright[2]})`;
+      ctx.fillRect(cursor.c * cellW + cellW * 0.08, cursor.r * cellH + cellH * 0.1,
+                   cellW * 0.84, cellH * 0.8);
+    }
+
+    if (cfg.glow > 0) {
+      bctx.globalCompositeOperation = 'source-over';
+      bctx.clearRect(0, 0, bloom.width, bloom.height);
+      bctx.drawImage(rain, 0, 0, bloom.width, bloom.height);
+      bctx.globalCompositeOperation = 'lighter';
+      bctx.globalAlpha = 0.45;
+      bctx.drawImage(rain, 0, 0, bloom.width, bloom.height);
+      bctx.globalAlpha = 1;
+    }
+  }
+
+  // ── Message, written into the grid ───────────────────────────────────────
+  const cursor = { on: false, r: 0, c: 0, pal: 'dim' };
+  let textCells = [];          // every cell the message owns, for teardown
+
+  function stampChar(r, c, ch, pal) {
+    if (r < 0 || r >= rows || c < 0 || c >= cols) return;
+    const j = c * rows + r;
+    cell[j]  = GIDX.has(ch) ? GIDX.get(ch) : SPACE;
+    textP[j] = PAL_IDX[pal];
+    textB[j] = 1;                                  // lands white-hot...
+    textCells.push(j);
+    setTimeout(() => { if (textB[j] > 0) textB[j] = 0.84; }, 90);  // ...then settles
+  }
+
+  function clearText() {
+    for (const j of textCells) { textB[j] = 0; lock[j] = 0; }
+    textCells = [];
+    cursor.on = false;
+  }
+
+  // ── Sequence ─────────────────────────────────────────────────────────────
+  let phase = 'open', phaseT = 0, timers = [];
+  const wait = ms => new Promise(res => timers.push(setTimeout(res, ms)));
+  const clearTimers = () => { timers.forEach(clearTimeout); timers = []; };
+
+  function layout() {
+    // keep the message clear of any columns still raining, so type is never
+    // printed over live code
+    const survivors = Math.round(cols * SURVIVOR);
+    const startCol = Math.max(1, Math.round(cols * 0.055), survivors + 2);
+    const startRow = Math.max(1, Math.round((rows - SCRIPT.length) / 2) - 1);
+    return { startCol, startRow };
+  }
+
+  async function typeLine(line, row, startCol) {
+    cursor.on = true; cursor.r = row; cursor.pal = line.pal;
+    for (let i = 0; i < line.t.length; i++) {
+      cursor.c = startCol + i;
+      stampChar(row, startCol + i, line.t[i], line.pal);
+      await wait(line.t[i] === '.' ? DOT_MS : CPS_MS + Math.random() * 26);
+    }
+    cursor.c = startCol + line.t.length;
+  }
+
+  async function runSequence() {
+    phase = 'open'; phaseT = 0;
+    await wait((OPENING === 'top' ? T_OPEN : T_SWEEP + 2.6) * 1000);
+
+    phase = 'shutdown'; phaseT = 0;
+    await wait(T_SHUTDOWN * 1000 + 300);
+
+    phase = 'print';
+    const { startCol, startRow } = layout();
+    for (let i = 0; i < SCRIPT.length; i++) {
+      const line = SCRIPT[i];
+      await wait(line.pause * SPEED * 1000);
+      await typeLine(line, startRow + i, startCol);
+      if (line.pal === 'err') { alarm.classList.remove('pulse'); void alarm.offsetWidth; alarm.classList.add('pulse'); }
+      if (line.pal === 'abort') {
+        surge = 1;
+        shake.classList.add('glitch');
+        alarm.classList.add('pulse');
+      }
+    }
+
+    // Address is up, field already dark. Long enough to read once, then hand off.
+    await wait(HOLD_MS);
+    if (loop) { restart(); return; }
+    finish();
+  }
+
+  // ── Hand-off ─────────────────────────────────────────────────────────────
+  // Fires exactly once, whether the sequence ran to the end, the reader skipped
+  // it, or reduced motion sent us straight here. The host decides what happens
+  // next: standalone this just fades, inside the deck it scrolls to card 01.
+  const bootedAt = performance.now();
+  let handedOff = false;
+  function finish() {
+    if (handedOff) return;
+    handedOff = true;
+    // The one number that decides whether this intro is worth having.
+    console.info(`[intro] hand-off at ${((performance.now() - bootedAt) / 1000).toFixed(1)}s `
+                 + `(speed=${SPEED})`);
+    stage.classList.add('done');
+    stage.setAttribute('aria-hidden', 'true');
+    // Unlock BEFORE announcing. A host that scrolls on this event would
+    // otherwise be scrolling a document that is still overflow:hidden, and the
+    // scroll would be silently dropped.
+    document.documentElement.classList.remove('intro-locked');
+    dispatchEvent(new CustomEvent('fields:intro-done'));
+  }
+
+  // Skip. Nobody who has seen it once should be made to sit through it again.
+  ['pointerdown', 'wheel', 'touchmove'].forEach(ev =>
+    addEventListener(ev, () => finish(), { once: true, passive: true }));
+  addEventListener('keydown', e => {
+    if (e.key === 'Escape' || e.key === ' ' || e.key === 'Enter') finish();
+  });
+
+  function restart() {
+    clearTimers();
+    clearText();
+    alarm.classList.remove('pulse');
+    shake.classList.remove('glitch');
+    liveCols = cols; surge = 0; openT = 0;
+    colLife.fill(OPENING === 'top' ? 1 : 0);
+    for (let i = 0; i < streamCount; i++) spawn(i, OPEN_MODE);
+    runSequence();
+  }
+
+  // ── Frame ────────────────────────────────────────────────────────────────
+  let last = performance.now();
+
+  function frame(now) {
+    const dt = Math.min((now - last) / 1000, 0.05);
+    last = now;
+    phaseT += dt;
+    if (phase === 'open') { openT += dt; maintainTokens(); }
+
+    if (phase === 'open' && OPENING === 'sweep') {
+      // switch the field ON, left -> right
+      const front = (phaseT / T_SWEEP) * cols;
+      for (let c = 0; c < cols; c++) {
+        const target = c <= front ? 1 : 0;
+        if (target > colLife[c]) colLife[c] = Math.min(1, colLife[c] + dt / COL_FADE);
+      }
+    } else if (phase === 'shutdown') {
+      // switch it OFF, right -> left, down to the surviving band
+      const keep = Math.round(cols * SURVIVOR);      // may be 0 — full collapse
+      const k = Math.min(1, phaseT / T_SHUTDOWN);
+      const e = 1 - Math.pow(1 - k, 2.2);
+      const front = cols - (cols - keep) * e;
+      liveCols = Math.max(1, Math.round(front));     // spawn() needs >= 1
+      for (let c = 0; c < cols; c++) {
+        if (c >= front) colLife[c] = Math.max(0, colLife[c] - dt / COL_FADE);
+      }
+    } else if (phase === 'print') {
+      // Keep draining. The sweep front reaches its target at the very end of
+      // the shutdown phase, so without this the last columns freeze part-way
+      // through their fade and sit on screen as a lit stripe.
+      const keep = Math.round(cols * SURVIVOR);
+      for (let c = keep; c < cols; c++) {
+        if (colLife[c] > 0) colLife[c] = Math.max(0, colLife[c] - dt / COL_FADE);
+      }
+    }
+
+    step(dt);
+    draw(now);
+    requestAnimationFrame(frame);
+  }
+
+  // ── Boot ─────────────────────────────────────────────────────────────────
+  addEventListener('keydown', e => {
+    const k = e.key.toLowerCase();
+    if (k === 'r') restart();
+    else if (k === 'l') loop = !loop;
+    else if (k === 'f') {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else document.documentElement.requestFullscreen?.();
+    }
+  });
+
+  let rt;
+  addEventListener('resize', () => {
+    clearTimeout(rt);
+    // Rebuilding the grid mid-sequence needs a restart, but after hand-off a
+    // phone rotation would otherwise replay the whole intro over the deck.
+    rt = setTimeout(() => { resize(); if (!handedOff) restart(); }, 160);
+  });
+
+  // Tuning hook: what share of the field is actually carrying real text right
+  // now, versus random filler. window.__rainStats() in the console.
+  window.__rainStats = () => {
+    let withText = 0;
+    for (let i = 0; i < streamCount; i++) if (sTok[i]) withText++;
+    let hotStreams = 0, hotCells = 0;
+    for (let i = 0; i < streamCount; i++) if (sHot[i]) hotStreams++;
+    for (let j = 0; j < hot.length; j++) if (hot[j] > 0) hotCells++;
+    return { t: +openT.toFixed(2), streams: streamCount, withText,
+             actual: +(withText / streamCount).toFixed(3),
+             target: +tokenChanceAt(openT).toFixed(3), hotStreams, hotCells };
+  };
+
+  const boot = () => {
+    resize();
+    colLife.fill(OPENING === 'top' ? 1 : 0);
+    // A full screen of falling code is precisely what a motion-sensitivity
+    // setting is asking us not to do. Print the address on a dark screen and
+    // hand off — same information, none of the movement.
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      phase = 'print';
+      liveCols = 0; colLife.fill(0);
+      const { startCol, startRow } = layout();
+      SCRIPT.forEach((line, i) => {
+        for (let k = 0; k < line.t.length; k++) {
+          stampChar(startRow + i, startCol + k, line.t[k], line.pal);
+        }
+      });
+      requestAnimationFrame(frame);
+      setTimeout(finish, 2600);
+      return;
+    }
+    requestAnimationFrame(frame);
+    runSequence();
+  };
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(boot); else boot();
+  setTimeout(() => hint.classList.add('gone'), 6000);
+})();
+</script>
+<main id="deck">
+  <section class="card reveal" id="card-00">
+    <span class="glow" aria-hidden="true"></span>
+    <div class="inner"><h1>We found your home.</h1></div>
+  </section>
+  <section class="card reveal" id="card-01" data-n="1">
+    <div class="inner">
+      <div class="chapter">01&nbsp;&nbsp;/&nbsp;&nbsp;10</div>
+      <p class="place">16 Moorabbin Place, Robina</p>
+      <h1>Then we went to work.</h1>
+      <p class="lede">We've analysed it.
+
+The results were interesting.</p>
+      <ul class="cred">
+        <li><span class="fig">33</span> property characteristics analysed</li>
+        <li><span class="fig">2,922</span> recent sales reviewed</li>
+        <li><span class="fig">12,000+</span> nearby homes compared</li>
+      </ul>
+      <span class="next">↓ What was interesting?</span>
+    </div>
+  </section>
+  <section class="card reveal" id="card-02" data-n="2">
+    <div class="innerWide">
+      <div class="colText stagger">
+        <div class="chapter">02&nbsp;&nbsp;/&nbsp;&nbsp;10</div>
+        <p class="answer">Here's what stood out.</p>
+        <h2>There's one number attached to your home that runs far larger than most around it — and it quietly lifts where you sit in the market.</h2>
+        <p class="p">Most property websites compare homes on basic features — beds, baths, a price guess.
+
+We looked deeper.</p>
+        <span class="next">↓ So what did you find?</span>
+      </div>
+      <div class="colEmpty" aria-hidden="true"></div>
+    </div>
+  </section>
+  <section class="card reveal" id="card-03" data-n="3">
+    <div class="innerWide">
+      <div class="colText stagger">
+        <div class="chapter">03&nbsp;&nbsp;/&nbsp;&nbsp;10</div>
+        <p class="answer">The land is what sets it apart.</p>
+        <h2>Your 936m² block is larger than most homes competing for the same buyer.</h2>
+        <div class="label">What sits on it:</div>
+        <ul class="ticks"><li>4 bedrooms</li><li>936 m² of land</li><li>422 m² of internal living</li><li>a pool</li><li>single-level living</li></ul>
+        <div class="label">And at your doorstep:</div>
+        <ul class="doorstep"><li><b>102m</b> Moorabbin Park</li><li><b>156m</b> Moorabin Park</li><li><b>849m</b> Robina State School</li><li><b>741m</b> Robina First Early Learning Centre</li><li>a short drive to Woolworths Robina North (1.7km)</li></ul>
+        <span class="next">↓ Why does that matter?</span>
+      </div>
+      <figure class="media" id="media">
+        <div class="mediaGlow" aria-hidden="true"></div>
+        <div class="mediaFrame">
+          <video id="emblem" muted playsinline preload="none"
+                 data-src="media/dog.mp4"
+                 aria-label="Room to run · what the block actually buys"></video>
+        </div>
+        <figcaption class="caption"><span>Room to run · what the block actually buys</span>
+          <button class="replay" id="replay" type="button">Replay</button>
+        </figcaption>
+      </figure>
+    </div>
+  </section>
+  <section class="card reveal" id="card-04" data-n="4">
+    <div class="innerWide">
+      <div class="colFruit" aria-hidden="true"></div>
+      <div class="colText stagger">
+        <div class="chapter">04&nbsp;&nbsp;/&nbsp;&nbsp;10</div>
+        <p class="answer">Why the land matters</p>
+        <h2>A buyer can update a kitchen or add a bathroom. They can't add land.</h2>
+        <p class="p">Big blocks like yours are a fixed and shrinking supply — and buyers know it.</p>
+        <div class="weight"><p>And a buyer can't just wait for the next one.</p><small>Across the area, 4-bedroom homes on 900m²+ blocks have sold about twice a year over the past year.</small></div>
+        <span class="next">↓ So who am I actually competing with?</span>
+      </div>
+    </div>
+  </section>
+  <section class="card reveal" id="card-05" data-n="5">
+      <div class="inner stagger">
+        <div class="chapter">05&nbsp;&nbsp;/&nbsp;&nbsp;10</div>
+        <p class="answer">The homes competing with yours are not what you think.</p>
+        <h2>Most real estate finds three similar sales.
+
+We find the homes buyers would actually choose instead.</h2>
+        <div class="funnel"><div class="tier"><span class="k">Homes in Robina</span><span class="v">12,000</span></div><div class="drop" aria-hidden="true">↓</div><div class="tier"><span class="k">For sale across the area</span><span class="v">230</span></div><div class="drop" aria-hidden="true">↓</div><div class="tier final"><span class="k">Comparable to yours</span><span class="v">2</span></div></div>
+        <span class="next">↓ But what about that sale down the road that looks just like mine?</span>
+      </div>
+  </section>
+  <section class="card reveal" id="card-07" data-n="7">
+      <div class="inner stagger">
+        <div class="chapter">06&nbsp;&nbsp;/&nbsp;&nbsp;10</div>
+        <p class="answer">Here's what carries the price.</p>
+        <div class="drivers"><div class="drv up"><div class="label">What strengthens your position:</div><ul><li>bedroom count</li><li>land</li><li>internal floor area</li></ul></div><div class="drv down"><div class="label">Where a buyer may focus:</div><ul><li>no pool</li></ul></div></div>
+        <p class="p">Knowing both is how you hold your number.</p>
+        <span class="next">↓ And who is that buyer?</span>
+      </div>
+  </section>
+  <section class="card reveal" id="card-08" data-n="8">
+      <div class="inner stagger">
+        <div class="chapter">07&nbsp;&nbsp;/&nbsp;&nbsp;10</div>
+        <p class="answer">Someone is already looking for a home like yours.</p>
+        <h2>A family who has outgrown their current home but wants the space and backyard to stay in Robina for the long haul.</h2>
+        <p class="p">What a cheaper home can't give them: the 936m² block to grow into and the morning walk to Robina State School.</p>
+        <div class="weight"><p>Right now it's your home. To them, it's the one they've been waiting for.</p></div>
+        <span class="next">↓ So where does that put its value?</span>
+      </div>
+  </section>
+  <section class="card reveal" id="card-09" data-n="9">
+      <div class="inner stagger">
+        <div class="chapter">08&nbsp;&nbsp;/&nbsp;&nbsp;10</div>
+        <p class="answer">Based on everything we've analysed...</p>
+        <div class="label">Most likely selling position</div>
+        <div class="anchor">Around $1.85 million</div>
+        <div class="label">Most comparable homes sold between</div>
+        <div class="range">$1,551,062 – $2,201,100</div>
+        <p class="rangeNote">This range reflects homes with similar characteristics after adjusting for differences in land, floor area, condition, features and current market competition.</p>
+        <p class="rangeNote">This home isn't currently listed, so we have no interior photography to assess. We've built the range from what we can verify — land size, floor area, bedroom and bathroom count, position, and recent comparable sales nearby, supported by aerial and street-level imagery of the exterior. What a desk can't see is the inside: renovation quality, interior condition, and layout — among the largest factors in a final figure. That's why this range is deliberately wide and the confidence is marked lower.</p>
+        <div class="label">Based on</div><ul class="ticks"><li>13 adjusted comparable sales</li><li>the competing homes buyers would actually consider</li><li>feature-by-feature adjustments</li><li>current market conditions</li></ul>
+        <p class="p">Our analysis identifies where your home is most likely to sit in today's market. A property visit allows us to refine that position by assessing the things no database can see.</p>
+        <span class="next">↓ If I ever did sell — how would you position it?</span>
+      </div>
+  </section>
+  <section class="card reveal" id="card-10" data-n="10">
+      <div class="inner stagger">
+        <div class="chapter">09&nbsp;&nbsp;/&nbsp;&nbsp;10</div>
+        <p class="answer">If you decided to sell, here's what we'd do.</p>
+        <h2>A Robina land-and-lifestyle family home.</h2>
+        <p class="p">We'd lead on the land, the internal space and the pool — and let the right buyer see themselves in it.</p>
+        <span class="next">↓ What else is there?</span>
+      </div>
+  </section>
+  <section class="card reveal" id="card-11" data-n="10">
+      <div class="inner stagger">
+        <div class="chapter">10&nbsp;&nbsp;/&nbsp;&nbsp;10</div>
+        <p class="answer">You&rsquo;ve just seen the discoveries that stood out first.</p>
+        <h2>Would you like to go deeper?</h2>
+        <p class="p">We&rsquo;ll now build a private website dedicated entirely to your home.</p>
+        <p class="p">It takes around 3 minutes because every section is generated specifically for your property&mdash;not loaded from a template.</p>
+        <div class="label">Inside you&rsquo;ll find:</div><ul class="ticks"><li>Every photo analysed</li><li>Your strongest buyer groups</li><li>Updated competing homes</li><li>Full valuation with every adjustment explained</li><li>The buyers most likely to compete for your home</li><li>Your recommended selling strategy</li><li>Answers to the major selling decisions</li><li>A private message line with Will</li></ul>
+        <p class="ready">We&rsquo;re now ready to build your home&rsquo;s private website.</p>
+        <p class="buildTime">Estimated build time: around 3 minutes</p>
+        <div class="neonWrap">
+          <span class="neonBounce" aria-hidden="true"></span>
+          <a class="neon" href="#build-strategy">
+            <svg class="neonFrame" aria-hidden="true"></svg>
+            <span class="neonWord">
+              <span class="neonGlass" aria-hidden="true">Start building</span>
+              <span class="neonLit">Start building</span>
+            </span>
+          </a>
+        </div>
+      </div>
+  </section>
+</main>
+<script>
+(() => {
+  "use strict";
+
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+
+  const landing = document.getElementById("card-00");
+
+  // Lock the page while the intro owns the screen. Set from script, not in the
+  // markup, so the deck stays scrollable if the intro fails to boot.
+  document.documentElement.classList.add("intro-locked");
+
+  // ── hand-off ───────────────────────────────────────────────────────────────
+  // Card 00 standalone (Will, 2026-08-03): "We found your home." gets a viewport
+  // to itself, unnumbered and off the rail — it is the landing of the intro, not
+  // a chapter of the deck.
+  addEventListener("fields:intro-done", () => {
+    // Scroll first, reveal on arrival. Revealing up front would run the whole
+    // .9s transition while card 00 is still below the fold, so the reader
+    // arrives at copy that has already finished animating.
+    landing.scrollIntoView({ behavior: "smooth", block: "start" });
+    setTimeout(() => landing.classList.add("revealIn"), 420);
+  }, { once: true });
+
+  // ── the drawing ────────────────────────────────────────────────────────────
+  // Set up BEFORE the observer, and default to a no-op. Six of the twelve lead
+  // angles are text-only, so those decks have no <video> at all — and when the
+  // media block bailed out early with `return`, the observer still fired and
+  // called into it, hitting `let fired` in its temporal dead zone:
+  // "Cannot access 'fired' before initialization". It only showed on the one
+  // text-only example in the set.
+  let revealEmblem = () => {};
+
+  const media = document.getElementById("media");
+  const video = document.getElementById("emblem");
+  const replay = document.getElementById("replay");
+
+  // On mobile the drawing moves directly beneath the headline (Will's call,
+  // 2026-08-03). Left at the end of the card it sat most of a screen below the
+  // fold, so the reader met the argument and the evidence a screen apart.
+  // The figure has to be INSIDE the text column for that, which no amount of
+  // CSS can do from a sibling grid cell — so move the node, rather than render
+  // a second <video> and download the clip twice.
+  // Desktop is unaffected: the two-column grid already puts it beside the copy.
+  if (media && matchMedia("(max-width:899px)").matches) {
+    const col = document.querySelector("#card-03 .colText");
+    const h2 = col && col.querySelector("h2");
+    if (h2) h2.insertAdjacentElement("afterend", media);
+  }
+
+  if (media && video) {
+
+  // How long after the copy starts arriving before the drawing does. The
+  // stagger runs .04s -> .64s with a .9s transition, so the last line has
+  // settled by ~1.5s. 1250ms lands the drawing just as the copy finishes,
+  // rather than leaving a dead beat between the two.
+  const MEDIA_DELAY_MS = 1250;
+
+  // Attach the clip on the reader's first sign of intent, not on load. Hanging
+  // it off an IntersectionObserver on card 02 is no deferral at all — card 02 is
+  // within the first screens, so it intersects almost immediately. This way
+  // someone who opens the page and leaves never downloads ~2MB, and anyone who
+  // scrolls gets a full card of lead time, far longer than it needs to buffer.
+  function ensureSrc() {
+    if (video.src) return;
+    video.src = video.dataset.src;
+    video.load();
+  }
+  ["wheel", "touchmove", "keydown", "pointerdown"].forEach((ev) =>
+    addEventListener(ev, ensureSrc, { once: true, passive: true }));
+
+  function play() {
+    media.classList.add("mediaIn");
+    ensureSrc();
+    if (reduced) { video.controls = true; return; }
+    try { video.currentTime = 0; } catch (_) {}
+    // Muted + playsinline satisfies iOS and Android, but Low Power Mode and
+    // Data Saver refuse regardless. Fall back to a tappable video rather than
+    // leaving a blank rectangle.
+    video.play().catch(() => { video.controls = true; media.classList.add("needsTap"); });
+  }
+
+  let fired = false;
+  revealEmblem = () => {
+    if (fired) return;
+    fired = true;
+    if (reduced) return play();
+    setTimeout(play, MEDIA_DELAY_MS);
+  };
+
+  if (replay) replay.addEventListener("click", play);
+
+  // Trigger on the DRAWING entering view, not the card. Card 03 runs 1.4-1.8
+  // phone screens tall, so on mobile the drawing sits half a screen below the
+  // fold — firing on the card meant the 5-6s reveal had usually finished before
+  // the reader ever scrolled to it, and they met a static picture. On desktop
+  // the drawing is beside the copy and enters with the card anyway, so this is
+  // the same moment there.
+  new IntersectionObserver((es, obs) => {
+    for (const e of es) if (e.isIntersecting) { obs.disconnect(); revealEmblem(); }
+  }, { threshold: 0.35 }).observe(media);
+  }
+
+  // ── always start at the beginning ─────────────────────────────────────────
+  // Browsers restore scroll position on reload. On a scroll NARRATIVE that is
+  // simply wrong — the intro plays and then drops the reader into card 9 — and
+  // it had a second, invisible cost: a restored position could put the neon on
+  // screen at load, so its take ran and burnt itself out before the reader had
+  // touched anything, which on a phone means it played in silence and never
+  // played again.
+  if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+
+  // ── the scroll cues are links ─────────────────────────────────────────────
+  // "↓ So what did you find?" reads as an invitation, so it should behave like
+  // one.
+  //
+  // The target comes from DOM ORDER, not from incrementing the card number. The
+  // builder drops cards it has no data for, so the ids genuinely have holes — a
+  // nine-card deck runs card-05 straight to card-07 — and arithmetic would send
+  // that cue to an element that does not exist.
+  //
+  // Replaced with a real <a> rather than given a click handler on the span: it
+  // is then keyboard-operable, announces itself as a link, and inherits the
+  // page's smooth scrolling without any script. Swapping the node preserves its
+  // position among its siblings, so the stagger's nth-child delays still line up.
+  for (const cue of [...document.querySelectorAll(".next")]) {
+    const card = cue.closest(".card");
+    const next = card && card.nextElementSibling;
+    if (!next || !next.id) continue;
+    const a = document.createElement("a");
+    a.className = cue.className;
+    a.href = "#" + next.id;
+    while (cue.firstChild) a.appendChild(cue.firstChild);
+    cue.replaceWith(a);
+  }
+
+  // ── cards reveal on approach ───────────────────────────────────────────────
+  const io = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (!e.isIntersecting) continue;
+      e.target.classList.add("revealIn");
+      io.unobserve(e.target);
+
+    }
+  }, { threshold: 0.15 });
+  document.querySelectorAll(".card").forEach((c) => { if (c !== landing) io.observe(c); });
+})();
+</script>
+<script>
+/**
+ * neon_cta.js — card 11's "Start building" as a neon tube.
+ *
+ * Port of `Concepts/illuminus_sign_concept/button.html`, which Will chose over
+ * the three scene variants on 2026-08-04. It won on affordance rather than
+ * looks: the more photographic the sign versions got, the less they read as
+ * something you can press. This one is flat, axis-aligned and CTA-sized, and
+ * keeps the tube and lighting work the scene versions paid for.
+ *
+ * THE DISCHARGE PHYSICS IS UNCHANGED FROM THE CONCEPT. Do not "simplify" it —
+ * every constant is there for a reason and the reasons are measured. The short
+ * version, with the full argument in that folder's README:
+ *
+ *   Striking is BINARY. Ionisation completes in microseconds and neon has no
+ *   afterglow, so the tube edge is a hard step. There is no easing on it. What
+ *   reads as softness is the halo, not the tube.
+ *
+ *   The halo LAGS. Bounce light plus retinal integration, modelled as an
+ *   asymmetric one-pole filter — 12ms attack, 55ms release — run at 1kHz.
+ *
+ *   Mains is 50Hz, so a tube ripples at 100Hz. THIS IS THE TRAP: you cannot see
+ *   100Hz and neither can a 60fps screen, so sampling it naively aliases it
+ *   into a 20Hz strobe. Every frame is therefore the time-INTEGRAL of emission
+ *   across that frame's exposure window, supersampled at 1kHz — which is what
+ *   an eye and a shutter actually do.
+ *
+ *   Flicker has a grammar: drop out, hesitate at partial ionisation (dimmer and
+ *   pinker, because a cold discharge runs pink), strike with streamer
+ *   instability, hold, drop again.
+ *
+ * Four deliberate differences from the concept page:
+ *
+ *   PLAYS ONCE. The take runs when the card scrolls into view and then parks
+ *   lit. A sign flickering forever under a CTA is obnoxious, and this deck's
+ *   traffic is mostly phones.
+ *
+ *   THE rAF STOPS. On reaching steady, and whenever the card is off-screen.
+ *   Nothing runs behind the rest of the page.
+ *
+ *   VARS ARE SCOPED TO THE BUTTON, not to `:root`. The concept owns its whole
+ *   document; this one is a component on a page with ten other cards.
+ *
+ *   THE LINK STILL WORKS. The concept swallows its own click to replay. Here it
+ *   stays a real anchor — focusable, keyboard-operable, and it does not
+ *   preventDefault.
+ *
+ * Flash safety: WCAG 2.3.1 forbids more than three flashes in any one second.
+ * Raw physics peaks at 8. SAFE pads only the LIT holds to a 340ms minimum
+ * between strike onsets — it never softens an edge, it just makes the sign fail
+ * less frantically. On by default and it should stay on: this page takes paid
+ * traffic.
+ */
+(function () {
+  "use strict";
+
+  const MAINS_HZ = 50, RIPPLE_HZ = MAINS_HZ * 2, RIPPLE_DEPTH = 0.14;
+  const RIPPLE_NORM = 1 / (1 - RIPPLE_DEPTH / 2);
+  const SUB_MS = 1, TAU_ATTACK = 12, TAU_RELEASE = 55;
+  const PULSES = 3, PULSE_MS = 1150, PULSE_FLOOR = 0.30;
+  const DARK_MS = 420;
+  const SAFE_MIN_STRIKE_GAP = 340;
+  const SAFE = true;
+  const TUBE_GAP = 14;      // px of tube missing at bottom centre — it has ends
+
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      let t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  /** One failure, authored end to end. Ends AT steady — there is no loop. */
+  function buildTake(seed) {
+    const rnd = mulberry32(seed), seg = [];
+    let t = 0;
+    const push = (d, o) => { seg.push(Object.assign({ t0: t, t1: t + d }, o)); t += d; };
+    push(DARK_MS, { kind: "dark", phase: "dark" });
+    for (let i = 0; i < PULSES; i++) push(PULSE_MS, { kind: "pulse", phase: "pulse" });
+    const n = 7 + Math.floor(rnd() * 4);
+    for (let i = 0; i < n; i++) {
+      const last = i === n - 1;
+      push(rnd() < 0.22 ? 180 + rnd() * 260 : 14 + rnd() * 95, { kind: "off", phase: "flicker" });
+      if (rnd() < 0.55) push(5 + rnd() * 16, { kind: "partial", a: 0.18 + rnd() * 0.28, phase: "flicker" });
+      let on = last ? 240 + rnd() * 120 : 28 + rnd() * 190;
+      if (SAFE) on = Math.max(on, SAFE_MIN_STRIKE_GAP);
+      push(on, { kind: "on", a: 0.86 + rnd() * 0.14, ph: rnd() * 6.283, phase: "flicker" });
+    }
+    return { seg, total: t, seed };
+  }
+
+  function ripple(t) {
+    const ph = 2 * Math.PI * RIPPLE_HZ * (t / 1000);
+    return (1 - RIPPLE_DEPTH * (0.5 - 0.5 * Math.cos(ph))) * RIPPLE_NORM;
+  }
+
+  function emit(take, t) {
+    if (t >= take.total) return { a: 1, warm: 0, done: true };
+    let s = take.seg[take.seg.length - 1];
+    for (let i = 0; i < take.seg.length; i++) {
+      if (t < take.seg[i].t1) { s = take.seg[i]; break; }
+    }
+    const u = (t - s.t0) / (s.t1 - s.t0);
+    switch (s.kind) {
+      case "dark": return { a: 0, warm: 0 };
+      case "off": return { a: 0, warm: 1 };
+      case "partial": return { a: s.a, warm: 1 };
+      case "pulse": {
+        const a = PULSE_FLOOR + (1 - PULSE_FLOOR) * Math.sin(Math.PI * u) ** 2;
+        return { a: Math.min(1, a * ripple(t)), warm: (1 - a) * 0.35 };
+      }
+      case "on": {
+        const age = t - s.t0;
+        const wob = 1 + 0.13 * Math.sin(2 * Math.PI * 62 * (age / 1000) + s.ph) * Math.exp(-age / 22);
+        return { a: Math.min(1, s.a * wob * ripple(t)), warm: 0.25 * Math.exp(-age / 60) };
+      }
+    }
+    return { a: 0, warm: 0 };
+  }
+
+  /* ---- sound -----------------------------------------------------------
+     A magnetic ballast hums at TWICE mains — 100Hz — because the core
+     magnetostricts once per half-cycle. Sawtooth through a lowpass, because the
+     real thing is rich in odd harmonics. Every strike ticks.
+
+     Two things about running it on a real page rather than a concept demo:
+
+     AUTHORISE EARLY, PLAY ON THE SCROLL CUE. The graph is built the moment the
+     page loads and we ask to resume it three times: at load, on the first real
+     input (whenever that happens), and again the instant the sign scrolls into
+     view. Wherever the browser permits audio — desktop Chrome with media
+     engagement, anything with a relaxed policy, or any reader who has tapped so
+     much as the intro's "skip" — the context is already running by the time the
+     sign strikes and the sound just plays.
+
+     Where it does NOT permit it, nothing can help. User activation is defined as
+     only being triggerable by events with `isTrusted === true` — events the
+     browser itself generated from real input. A synthetic click fired from an
+     IntersectionObserver is `isTrusted: false` and is excluded by definition;
+     that exclusion IS the autoplay policy. Scroll can trigger any amount of
+     GRAPHICS (the fruit on card 04 is proof of that) because drawing pixels
+     needs no permission. Audio is the one thing on the page behind a gate, and
+     the gate does not care what triggered the sequence — only whether real
+     input authorised playback. On iOS in particular, a reader who scrolls the
+     whole deck without touching anything will hear nothing, and no amount of
+     code changes that.
+
+     IT FADES OUT AFTER THE SIGN SETTLES. A real transformer hums forever; a web
+     page doing that is intrusive and burns battery. You hear it strike and
+     settle, then it goes quiet. FADE_OUT is the one number to change if it
+     should hold.
+
+     Everything is wrapped: a machine with no audio device must never break a
+     page that is mainly visual. */
+  const FADE_OUT = 1.8;
+  // Overall ballast level. Will confirmed the recipe at x1 is audible on his
+  // phone as a sustained tone and x8 is loud, so x3 sits between "present on a
+  // handset" and "obtrusive on a laptop". One number to retune.
+  const LEVEL = 3;
+
+  const audio = (() => {
+    let ctx = null, master = null, ready = false, wasLit = false;
+    let humG = null, h3G = null, h5G = null, h7G = null;
+    let bornInGesture = false;
+    // Counters for the on-page readout (?audiodebug=1). Cheap, and this took
+    // four wrong guesses to diagnose without them.
+    const stat = { arms: 0, rebuilds: 0, frames: 0, lastGain: 0, settled: false };
+
+    /**
+     * IS THERE A LIVE USER ACTIVATION RIGHT NOW — not "did an input event fire".
+     *
+     * These are not the same thing and the difference is the entire bug. Chrome
+     * on Android does NOT grant activation on `touchstart` or `pointerdown` from
+     * a finger: a touch that goes down might be the start of a scroll, so the
+     * browser withholds activation until the gesture resolves as a tap. Desktop
+     * pointerdown activates immediately; touch does not.
+     *
+     * So on a phone, the very first scroll fired `touchstart` -> arm(true) ->
+     * a context was rebuilt with no activation to honour it, and `bornInGesture`
+     * latched TRUE on a lie. From that moment the rebuild path was dead: every
+     * later gesture, including real taps on the chapter cues, found
+     * `bornInGesture === true` and rebuilt nothing. The context sat suspended (or
+     * "running" and mute) for the rest of the session and could never recover.
+     *
+     * `navigator.userActivation.isActive` is the browser's own answer, so ask it
+     * instead of inferring from the event type. Where it does not exist
+     * (Safari < 16.4) fall back to trusting the caller, which is today's
+     * behaviour and no worse.
+     */
+    function activationLive(inGesture) {
+      if (!inGesture) return false;
+      const ua = navigator.userActivation;
+      return ua ? !!ua.isActive : true;
+    }
+    function teardown() {
+      try { if (ctx) ctx.close(); } catch (e) {}
+      ctx = master = humG = h3G = h5G = h7G = null;
+      ready = false;
+    }
+    /** The mobile unlock. `resume()` alone is not enough — a context created
+     *  outside a gesture will happily report state "running" and produce NO
+     *  OUTPUT on a handset. Playing a buffer inside the gesture is what actually
+     *  opens the audio path. */
+    function unlock() {
+      if (!ctx) return;
+      try {
+        const b = ctx.createBuffer(1, 1, ctx.sampleRate);
+        const s = ctx.createBufferSource();
+        s.buffer = b; s.connect(ctx.destination); s.start(0);
+      } catch (e) {}
+    }
+    function build() {
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return false;
+        ctx = new AC();
+        master = ctx.createGain(); master.gain.value = 1;
+        master.connect(ctx.destination);
+        const lp = ctx.createBiquadFilter();
+        lp.type = "lowpass"; lp.frequency.value = 2600; lp.Q.value = 0.7;
+        lp.connect(master);
+        const mk = (f) => {
+          const o = ctx.createOscillator(), v = ctx.createGain();
+          o.type = "sawtooth"; o.frequency.value = f; v.gain.value = 0;
+          o.connect(v).connect(lp); o.start(); return v;
+        };
+        // ODD HARMONICS, AND ENOUGH OF THEM TO BE HEARD ON A PHONE.
+        // A magnetic ballast is rich in odd harmonics and the first version only
+        // had two of them — 100Hz and 300Hz. A phone speaker rolls off hard
+        // below ~500Hz and physically cannot reproduce 100Hz at any useful
+        // level, so on a handset the hum was inaudible and only the 2400Hz
+        // strike ticks came through. It read as "no sound" while measuring
+        // perfectly healthy. The 5th and 7th put real energy in the band a small
+        // speaker can actually move, and they are MORE faithful to a ballast,
+        // not less — the low end is still there for headphones and laptops.
+        humG = mk(RIPPLE_HZ);          // 100Hz  — body, on decent speakers
+        h3G = mk(RIPPLE_HZ * 3);       // 300Hz
+        h5G = mk(RIPPLE_HZ * 5);       // 500Hz  — the lowest a phone really gives
+        h7G = mk(RIPPLE_HZ * 7);       // 700Hz  — where the buzz lives on a handset
+        return true;
+      } catch (e) { ctx = null; return false; }
+    }
+    function tick(freq, gain, decay) {
+      if (!ctx) return;
+      try {
+        const len = Math.min(2048, decay * 10);
+        const buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
+        for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / decay);
+        const src = ctx.createBufferSource(); src.buffer = buf;
+        const bp = ctx.createBiquadFilter();
+        bp.type = "bandpass"; bp.frequency.value = freq; bp.Q.value = 1.1;
+        const g = ctx.createGain(); g.gain.value = gain;
+        src.connect(bp).connect(g).connect(master); src.start();
+      } catch (e) {}
+    }
+    return {
+      get ready() { return ready; },
+      /** Live means the context exists AND the browser is letting it run. */
+      get live() { return ready && ctx && ctx.state === "running"; },
+      get born() { return bornInGesture; },
+      /**
+       * Safe to call as often as you like. Pass true when this is running inside
+       * a REAL user-input handler.
+       *
+       * The rebuild is the whole point. Building at load gets sound on desktop
+       * with no tap, which is what we want — but a context born outside a
+       * gesture is dead on a phone: it reports "running" after a later resume()
+       * and emits nothing. That is exactly what happened here — the glass and
+       * the voice worked on Android because their context is created inside the
+       * press, and only the neon, built at load, was silent. So the first time a
+       * real gesture arrives, if this context was not born in one, throw it away
+       * and build a fresh one right here where the browser will honour it.
+       */
+      stat,
+      snapshot() {
+        return {
+          ctx: ctx ? ctx.state : "none",
+          born: bornInGesture,
+          master: ctx && master ? +master.gain.value.toFixed(4) : null,
+          hum: ctx && humG ? +humG.gain.value.toFixed(4) : null,
+          arms: stat.arms, rebuilds: stat.rebuilds, frames: stat.frames,
+          lastGain: +stat.lastGain.toFixed(4), settled: stat.settled,
+          // The browser's own view of activation, which is the thing that was
+          // being inferred wrongly. `ever` false at the sign means the reader
+          // has genuinely not tapped anything and no code can produce sound.
+          act: navigator.userActivation
+            ? (navigator.userActivation.isActive ? "live" : "-") +
+              "/" + (navigator.userActivation.hasBeenActive ? "ever" : "never")
+            : "unsupported",
+        };
+      },
+      arm(inGesture) {
+        stat.arms++;
+        const real = activationLive(inGesture);
+
+        // Rebuild on the first REAL activation if this context was not born in
+        // one — and also if it was, but is not actually running. The second
+        // clause is the safety net: a context that never got permission stays
+        // suspended forever, and there is no reason to keep a dead one just
+        // because we once believed in it.
+        if (ready && real && (!bornInGesture || !ctx || ctx.state !== "running")) {
+          teardown(); stat.rebuilds++;
+        }
+        if (!ready) {
+          if (!build()) return;
+          ready = true;
+          bornInGesture = real;
+        }
+        if (ctx && ctx.state === "suspended") {
+          try { const r = ctx.resume(); if (r && r.catch) r.catch(() => {}); } catch (e) {}
+        }
+        if (real) unlock();
+      },
+      frame(lvl) {
+        if (!ready || !ctx || ctx.state !== "running") return;
+        // THE BALLAST DOES NOT FLICKER — THE TUBE DOES.
+        //
+        // This was gated straight off emission, so the hum vanished through
+        // every dropout and only ever reached full gain on the brightest
+        // frames. Averaged over a take that is mostly dark and flicker, it sat
+        // far below the level of the isolated tone Will could hear perfectly
+        // well on the same handset — audible in a test, inaudible in place.
+        //
+        // A real transformer is energised the whole time the sign is powered.
+        // It hums continuously and the discharge stutters on top of it. So:
+        // a constant floor with the emission riding over it, which is both more
+        // faithful and the thing that makes it survive a phone speaker.
+        const g = 0.55 + 0.45 * Math.max(0, Math.min(1, lvl));
+        const t = ctx.currentTime;
+        stat.frames++; stat.lastGain = LEVEL * 0.030 * g;
+        humG.gain.setTargetAtTime(LEVEL * 0.030 * g, t, 0.02);
+        h3G.gain.setTargetAtTime(LEVEL * 0.014 * g, t, 0.02);
+        h5G.gain.setTargetAtTime(LEVEL * 0.013 * g, t, 0.02);
+        h7G.gain.setTargetAtTime(LEVEL * 0.009 * g, t, 0.02);
+        const lit = lvl > 0.12;
+        if (lit && !wasLit) tick(2400, 0.16, 140);
+        wasLit = lit;
+      },
+      /** A plain beep through THIS graph — same context, same master, same
+       *  destination as the hum. If the isolated test page is audible and this
+       *  is not, the difference is the graph, not the recipe. */
+      beep() {
+        if (!ctx || !master) return "no context";
+        try {
+          const o = ctx.createOscillator(), g = ctx.createGain();
+          o.frequency.value = 440; g.gain.value = 0.25;
+          o.connect(g).connect(master);
+          o.start(); o.stop(ctx.currentTime + 0.8);
+          return "played 440Hz @0.25 · ctx " + ctx.state + " · master " + master.gain.value;
+        } catch (e) { return "FAILED " + e.message; }
+      },
+      settle() {
+        if (!ready || !ctx) return;
+        stat.settled = true;
+        const t = ctx.currentTime;
+        master.gain.cancelScheduledValues(t);
+        master.gain.setValueAtTime(master.gain.value, t);
+        master.gain.linearRampToValueAtTime(0, t + FADE_OUT);
+      },
+      mute() {
+        if (!ready || !ctx) return;
+        for (const g of [humG, h3G, h5G, h7G]) if (g) g.gain.value = 0;
+        wasLit = false;
+      },
+    };
+  })();
+
+  function init() {
+    const wrap = document.querySelector(".neonWrap");
+    const btn = wrap && wrap.querySelector(".neon");
+    const frame = btn && btn.querySelector(".neonFrame");
+    if (!wrap || !btn || !frame) return;
+
+    const set = (k, v) => wrap.style.setProperty(k, v);
+    const park = () => { set("--lvl", "1"); set("--bloom", "1"); set("--warm", "0"); };
+
+    // The tube path is generated from the button's OWN layout box, so the
+    // corner radii cannot distort at any width. offsetWidth/offsetHeight, not
+    // getBoundingClientRect — the rect includes the hover lift transform, which
+    // would make the tube twitch under the pointer.
+    function drawFrame() {
+      const w = btn.offsetWidth, h = btn.offsetHeight;
+      if (!w || !h) return;
+      const rad = h / 2, gap = TUBE_GAP;
+      const d = [`M ${w / 2 - gap / 2} ${h}`, `H ${rad}`,
+                 `A ${rad} ${rad} 0 0 1 0 ${h - rad}`, `V ${rad}`,
+                 `A ${rad} ${rad} 0 0 1 ${rad} 0`, `H ${w - rad}`,
+                 `A ${rad} ${rad} 0 0 1 ${w} ${rad}`, `V ${h - rad}`,
+                 `A ${rad} ${rad} 0 0 1 ${w - rad} ${h}`, `H ${w / 2 + gap / 2}`].join(" ");
+      frame.setAttribute("viewBox", `0 0 ${w} ${h}`);
+      frame.innerHTML =
+        `<path class="t-glass" d="${d}"/>` +
+        `<path class="t-bloom" d="${d}"/><path class="t-halo" d="${d}"/>` +
+        `<path class="t-body"  d="${d}"/>` +
+        `<path class="t-inner" d="${d}"/><path class="t-core" d="${d}"/>`;
+    }
+
+    new ResizeObserver(drawFrame).observe(btn);
+    addEventListener("resize", drawFrame);
+    drawFrame();
+
+    if (reduced) {
+      // Not a shortened sequence — none of it, and no sound either. A CTA
+      // strobing and buzzing at someone who asked the OS for less motion is
+      // exactly what that setting is for.
+      park();
+      return;
+    }
+
+    // 1. At load. Builds the graph and asks to run. On a permissive browser this
+    //    alone is enough and the sign will have sound with no tap at all.
+    audio.arm();
+
+    // 2. On the first real input, whenever it comes — including the intro's
+    //    "tap to skip" and the chapter cues, which are in this same document.
+    //    Passive so it can never delay a scroll. Left attached rather than
+    //    once-only: if the first ask was refused, every later gesture is
+    //    another chance, and arm() now checks with the browser each time rather
+    //    than latching on the first one.
+    //
+    //    THE LIST MATTERS. `touchstart` grants no activation on Android — a
+    //    finger going down may be the start of a scroll, so Chrome waits to see
+    //    whether the gesture resolves as a tap. `touchend`, `pointerup` and
+    //    `click` are where activation actually lands on a phone, and they were
+    //    all missing. Listening to the down-events alone meant that on a
+    //    handset we asked at the one moment the answer is always no.
+    for (const t of ["pointerdown", "pointerup", "touchstart", "touchend",
+                     "click", "keydown", "keyup"]) {
+      addEventListener(t, () => audio.arm(true), { passive: true });
+    }
+
+    const take = buildTake(20260804);
+    let elapsed = 0, last = 0, bloom = 0, warmS = 0, raf = 0, running = false, done = false;
+
+    function step(now) {
+      if (!running) return;
+      const dtWall = Math.min(now - last, 120);   // cap, so a tab switch cannot
+      last = now;                                  // fast-forward the whole take
+      const prev = elapsed;
+      elapsed += dtWall;
+
+      // Integrate emission across THIS frame's exposure window at 1kHz. This is
+      // the line that stops the 100Hz ripple aliasing into a 20Hz strobe.
+      const steps = Math.max(1, Math.round(dtWall / SUB_MS)), dt = dtWall / steps;
+      let sum = 0, warmSum = 0, finished = false;
+      for (let i = 0; i < steps; i++) {
+        const e = emit(take, prev + dt * (i + 0.5));
+        sum += e.a; warmSum += e.warm;
+        if (e.done) finished = true;
+        const tau = e.a > bloom ? TAU_ATTACK : TAU_RELEASE;
+        bloom += (e.a - bloom) * (1 - Math.exp(-dt / tau));
+      }
+      const lvl = sum / steps;
+      warmS += (warmSum / steps - warmS) * 0.25;
+      set("--lvl", lvl.toFixed(4));
+      set("--bloom", bloom.toFixed(4));
+      set("--warm", warmS.toFixed(4));
+
+      audio.frame(lvl);
+
+      if (finished) {
+        done = true; running = false; park();
+        window.__neonTake = "finished";
+        audio.settle();          // heard it strike; now let it go quiet
+        return;
+      }
+      raf = requestAnimationFrame(step);
+    }
+
+    function start() {
+      if (done || running) return;
+      // 3. The scroll cue itself. If activation happened anywhere earlier in the
+      //    deck, this is where it gets used.
+      audio.arm();
+      // THE SIGN NEVER WAITS FOR SOUND. An earlier version held the take until
+      // the audio was provably usable, so that a take could not be spent in
+      // silence — and the cost was a sign that sat dark on arrival, which is far
+      // worse than a sign that strikes quietly. The visual runs on schedule and
+      // the audio joins the moment it can; `frame()` simply no-ops until then.
+      //
+      // What made the hold unnecessary is `history.scrollRestoration = "manual"`
+      // in deck.js: the reader now always starts at the top, so on a phone they
+      // MUST scroll to reach the sign, and that scroll is the gesture that makes
+      // the audio real. The hold was guarding against a case that no longer
+      // happens.
+      window.__neonTake = "running";
+      running = true;
+      last = performance.now();
+      raf = requestAnimationFrame(step);
+    }
+    function stop() {
+      running = false;
+      cancelAnimationFrame(raf);
+      audio.mute();              // scrolled away mid-take — do not hum offscreen
+    }
+
+    // Runs when the card arrives, pauses if the reader scrolls away mid-take and
+    // picks up where it left off — `elapsed` is the clock, not wall time.
+    window.FieldsNeon = { audio: () => audio.snapshot(), beep: () => audio.beep() };
+
+    const io = new IntersectionObserver((es) => {
+      for (const e of es) {
+        if (e.isIntersecting) { window.__neonTake = "running"; start(); }
+        else { window.__neonTake = "paused (offscreen)"; stop(); }
+      }
+      if (done) io.disconnect();
+      // Fire only when the sign is properly ON SCREEN, not when it clips the
+      // edge. `threshold: 0.35` alone triggered the moment a third of the button
+      // crossed the bottom of the viewport — measured on a phone, the take
+      // STARTED with the button's centre at 90% of screen height and FINISHED at
+      // 87%, so the whole seven seconds played out in a sliver at the bottom
+      // edge while the reader was still scrolling toward it. They then arrived
+      // at a sign that was already parked lit with its audio faded out, which
+      // reads exactly as "it lights up but makes no sound".
+      //
+      // Shrinking the root to the middle half of the viewport means the take
+      // cannot start until the sign is somewhere the reader is actually looking.
+    // Only the BOTTOM edge is pulled in. Shrinking both sides to the middle half
+    // stopped it firing at all. The problem was only ever the bottom: the take
+    // began with the button's centre at 90% of screen height and ended at 87%,
+    // so it ran out in a sliver at the edge while the reader scrolled toward it.
+    }, { threshold: 0.5, rootMargin: "0px 0px -18% 0px" });
+    io.observe(btn);
+
+    // A backgrounded tab still fires rAF on some platforms; stop rather than
+    // burn a phone battery on a sign nobody is looking at.
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) stop();
+      else if (!done && btn.getBoundingClientRect().top < innerHeight) start();
+    });
+  }
+
+  if (document.readyState === "loading") {
+    addEventListener("DOMContentLoaded", init, { once: true });
+  } else init();
+
+  // ── on-page readout ────────────────────────────────────────────────────────
+  // ?audiodebug=1 only. The neon's audio failed on a handset while every local
+  // measurement said it was healthy, and it cost four wrong fixes to find out
+  // why. This is how the next one gets answered in a single message.
+  if (/audiodebug/.test(location.search)) {
+    const box = document.createElement("div");
+    box.style.cssText = "position:fixed;left:0;right:0;top:0;z-index:999;background:#000e;" +
+      "color:#8FE9A8;font:11px/1.6 ui-monospace,Menlo,Consolas,monospace;padding:.5rem .6rem;" +
+      "border-bottom:1px solid #8FE9A855;white-space:pre-wrap";
+    const btn2 = document.createElement("button");
+    btn2.textContent = "TAP FOR TEST TONE (neon's own graph)";
+    btn2.style.cssText = "display:block;width:100%;margin-top:.4rem;padding:.7rem;" +
+      "background:#132;border:1px solid #8FE9A8;color:#8FE9A8;border-radius:8px;" +
+      "font:inherit;font-size:12px";
+    const out = document.createElement("div");
+    out.style.cssText = "color:#CFF6DA;margin-top:.3rem";
+    btn2.onclick = () => { out.textContent = window.FieldsNeon
+      ? window.FieldsNeon.beep() : "module not ready"; };
+    // Attach NOW if the document is already parsed. This script is injected at
+    // the end of <body>, so DOMContentLoaded has usually fired before it runs
+    // and a listener for it never gets called — the panel's button silently
+    // never appeared.
+    // The readout goes in its OWN node. Writing box.textContent replaces every
+    // child, so the button and its output were being deleted 8 times a second.
+    const lines = document.createElement("div");
+    const attach = () => { document.body.append(box); box.append(lines, btn2, out); };
+    if (document.readyState === "loading") {
+      addEventListener("DOMContentLoaded", attach, { once: true });
+    } else attach();
+    setInterval(() => {
+      const a = (window.FieldsNeon && window.FieldsNeon.audio()) || {};
+      const w = document.querySelector(".neonWrap");
+      lines.textContent =
+        `ctx ${a.ctx}  born-in-gesture ${a.born}  rebuilds ${a.rebuilds}
+` +
+        `activation ${a.act}
+` +
+        `master ${a.master}  humGain ${a.hum}  lastWrite ${a.lastGain}
+` +
+        `arms ${a.arms}  frames ${a.frames}  settled ${a.settled}
+` +
+        `--lvl ${w ? w.style.getPropertyValue("--lvl") || "0" : "?"}  ` +
+        `take ${window.__neonTake || "waiting"}`;
+    }, 120);
+  }
+})();
+</script>
+<script>window.FIELDS_OUTRO_BASE = "../outro/";</script>
+<script>
+/**
+ * glass-audio.js — breaking glass, synthesised. No sample, no licence, no bytes.
+ *
+ *   FieldsGlassAudio.arm();           // inside the click handler, always
+ *   FieldsGlassAudio.impact();
+ *   FieldsGlassAudio.crackle(900);
+ *   FieldsGlassAudio.shatter(3800);
+ *
+ * Why synthesised rather than a recording:
+ *   - Licensing. A commercial site cannot use a stock sample without checking
+ *     its terms, and "we found it on a free sounds site" is not a licence.
+ *   - Weight. This effect already ships ~2MB of artwork; a decent glass sample
+ *     is another 200-400KB.
+ *   - Timing. A recording is one fixed shape. This has to land on OUR beats —
+ *     impact, a crackle that runs as long as the fracture takes, and a tinkle
+ *     that lasts exactly as long as the pieces fall — and those change every
+ *     time we retune the animation.
+ *
+ * What breaking glass actually is, acoustically, and what this reproduces:
+ *   - the IMPACT is a broadband noise transient with a very fast decay, plus a
+ *     brief low thump as the pane flexes
+ *   - a CRACK running is a sparse train of tiny clicks, not a continuous sound
+ *   - the TINKLE is the giveaway: dozens of small shards, each a poorly damped
+ *     resonator ringing at 1.5-8kHz for 30-250ms, arriving in a dense scatter.
+ *     Get the scatter and the decay right and the ear accepts it as glass.
+ */
+(function (global) {
+  "use strict";
+
+  let ctx = null, master = null, muted = false;
+
+  /** Must be called from inside a user gesture — every browser blocks audio
+   *  until one. The CTA click is that gesture, which is the ideal case: the
+   *  sound is a response to something the reader deliberately did. */
+  function arm() {
+    if (ctx) { if (ctx.state === "suspended") ctx.resume(); return ctx; }
+    const AC = global.AudioContext || global.webkitAudioContext;
+    if (!AC) return null;
+    ctx = new AC();
+    master = ctx.createGain();
+    master.gain.value = 0.55;
+    // A gentle high shelf: glass lives up top, and without a lid the tinkle is
+    // fatiguing on laptop speakers, which is where most of this will be heard.
+    const shelf = ctx.createBiquadFilter();
+    shelf.type = "highshelf"; shelf.frequency.value = 6000; shelf.gain.value = -6;
+    master.connect(shelf).connect(ctx.destination);
+    return ctx;
+  }
+
+  function noiseBuffer(seconds) {
+    const n = Math.max(1, Math.floor(ctx.sampleRate * seconds));
+    const b = ctx.createBuffer(1, n, ctx.sampleRate);
+    const d = b.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+    return b;
+  }
+
+  /** A burst of filtered noise: the fracture itself, not the shards. */
+  function burst(at, dur, freq, q, gain, type) {
+    const src = ctx.createBufferSource();
+    src.buffer = noiseBuffer(dur + 0.02);
+    const f = ctx.createBiquadFilter();
+    f.type = type || "bandpass"; f.frequency.value = freq; f.Q.value = q;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, at);
+    g.gain.linearRampToValueAtTime(gain, at + 0.0015);          // near-instant
+    g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+    src.connect(f).connect(g).connect(master);
+    src.start(at); src.stop(at + dur + 0.02);
+  }
+
+  /** One shard ringing. The pitch drops slightly as it decays, which is what
+   *  separates glass from a synthesised bell. */
+  function shard(at, freq, dur, gain) {
+    const o = ctx.createOscillator();
+    o.type = Math.random() < 0.35 ? "triangle" : "sine";
+    o.frequency.setValueAtTime(freq, at);
+    o.frequency.exponentialRampToValueAtTime(freq * 0.86, at + dur);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, at);
+    g.gain.linearRampToValueAtTime(gain, at + 0.002);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+    // a touch of stereo spread so the cloud has width rather than sitting in
+    // the middle of your head
+    const pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+    if (pan) { pan.pan.value = (Math.random() * 2 - 1) * 0.7; o.connect(g).connect(pan).connect(master); }
+    else o.connect(g).connect(master);
+    o.start(at); o.stop(at + dur + 0.02);
+  }
+
+  function impact() {
+    if (!ctx || muted) return;
+    const t = ctx.currentTime;
+    // the strike: broadband, gone in 90ms
+    burst(t, 0.09, 3200, 0.7, 0.9, "highpass");
+    burst(t + 0.004, 0.05, 6500, 1.2, 0.55);
+    // the pane flexing — felt more than heard, but its absence is felt too
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = "sine";
+    o.frequency.setValueAtTime(180, t);
+    o.frequency.exponentialRampToValueAtTime(70, t + 0.18);
+    g.gain.setValueAtTime(0.55, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+    o.connect(g).connect(master); o.start(t); o.stop(t + 0.22);
+    // first few shards thrown at the point of contact
+    for (let i = 0; i < 9; i++) {
+      shard(t + Math.random() * 0.14, 2200 + Math.random() * 4500,
+            0.05 + Math.random() * 0.12, 0.10 + Math.random() * 0.10);
+    }
+  }
+
+  /** A crack running is a sparse train of clicks, and it accelerates. */
+  function crackle(ms) {
+    if (!ctx || muted) return;
+    const t = ctx.currentTime, dur = ms / 1000;
+    const n = Math.round(26 * (dur / 0.9));
+    for (let i = 0; i < n; i++) {
+      // biased toward the end: the fracture front speeds up as it goes
+      const at = t + Math.pow(Math.random(), 0.65) * dur;
+      burst(at, 0.012 + Math.random() * 0.02, 1800 + Math.random() * 5200,
+            2 + Math.random() * 6, 0.10 + Math.random() * 0.16);
+    }
+  }
+
+  /** The tinkle. Dense at first, thinning as the last pieces land. */
+  function shatter(ms) {
+    if (!ctx || muted) return;
+    const t = ctx.currentTime, dur = ms / 1000;
+    // the pane letting go
+    burst(t, 0.22, 2600, 0.6, 0.6, "highpass");
+    const n = Math.round(150 * Math.min(2, dur / 3.8));
+    for (let i = 0; i < n; i++) {
+      // front-loaded: most of the glass goes early, then stragglers
+      const k = Math.pow(Math.random(), 1.9);
+      const at = t + k * dur;
+      const life = 1 - k;
+      shard(at, 1500 + Math.random() * 6500,
+            0.03 + Math.random() * 0.22,
+            (0.05 + Math.random() * 0.12) * (0.45 + life * 0.55));
+      // the odd larger piece landing
+      if (Math.random() < 0.09) {
+        burst(at, 0.05 + Math.random() * 0.08, 700 + Math.random() * 900,
+              1.5, 0.10 + Math.random() * 0.10);
+      }
+    }
+  }
+
+  function setMuted(v) {
+    muted = !!v;
+    if (master) master.gain.value = muted ? 0 : 0.55;
+  }
+
+  global.FieldsGlassAudio = {
+    arm, impact, crackle, shatter, setMuted,
+    get muted() { return muted; },
+    get available() { return !!(global.AudioContext || global.webkitAudioContext); },
+  };
+})(window);
+</script>
+<script>
+/**
+ * signal-bed.js — the Cassini recording, under the final scene.
+ *
+ * Saturn's radio emissions, recorded by Cassini's plasma-wave instrument and
+ * shifted into hearing range. NASA audio is public domain, so unlike the film's
+ * own signal there is nothing to licence. It plays under the code rain while the
+ * ship's computer reads the build sequence.
+ *
+ *   FieldsSignalBed.fetch();                 // at page load — network only
+ *   FieldsSignalBed.arm(ctx);                // inside the gesture — decode
+ *   FieldsSignalBed.start({ fadeIn: 1.5 });  // 1s after the rain starts
+ *   FieldsSignalBed.duck(0.5, 0.25);         // under each spoken line
+ *   FieldsSignalBed.stop(0.2);               // on "Construction completed."
+ *
+ * Two decisions worth knowing about:
+ *
+ *   WEB AUDIO, NOT <audio>. An <audio> element's `volume` can only be stepped
+ *   from a timer, which makes a 1.5s fade audibly steppy. A GainNode ramp is
+ *   sample-accurate. It also means the fade-out on the last line is a true
+ *   200ms ramp rather than a hard cut, which would click on a bed this loud.
+ *
+ *   DECODED, NOT STREAMED. The clip loops seamlessly as an AudioBuffer, and the
+ *   sequence timing has drifted repeatedly during this build — the clip is 13.2s
+ *   and the scene currently needs ~11.9s of it, which is too little headroom to
+ *   assume. Looping means a slow device can never run the bed out.
+ */
+(function (global) {
+  "use strict";
+
+  // Same reason as crack.js: this runs from the demo folder and from the deck.
+  const URL_ = (window.FIELDS_OUTRO_BASE || "") + "../audio/nasa/saturn-radio.mp3";
+
+  let raw = null;          // ArrayBuffer, fetched at page load
+  let buf = null;          // decoded, once there is a context
+  let ctx = null, bus = null, src = null;
+  let level = 1.0, ducked = false;
+
+  /** Network at load time, so the gesture only has to decode. */
+  function fetch_() {
+    if (raw || !global.fetch) return;
+    global.fetch(URL_)
+      .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(r.status))))
+      .then((b) => { raw = b; })
+      .catch(() => { raw = null; });      // silence is an acceptable failure here
+  }
+
+  /** Must be given a context created inside a user gesture. */
+  function arm(context) {
+    if (!context) return;
+    ctx = context;
+    if (!bus) {
+      bus = ctx.createGain();
+      bus.gain.value = 0;
+      // Straight to the destination, NOT through the glass master — that bus
+      // carries a -6dB shelf above 6kHz tuned for the tinkle, which would take
+      // the top off a recording whose whole character is up there.
+      bus.connect(ctx.destination);
+    }
+    if (buf || !raw) return;
+    // decodeAudioData is callback-style on older Safari, hence both forms.
+    try {
+      const p = ctx.decodeAudioData(raw.slice(0), (b) => { buf = b; }, () => {});
+      if (p && p.then) p.then((b) => { buf = b; }).catch(() => {});
+    } catch (_) {}
+  }
+
+  function start(opts) {
+    const o = opts || {};
+    level = o.level === undefined ? 1.0 : o.level;
+    const fade = o.fadeIn === undefined ? 1.5 : o.fadeIn;
+    if (!ctx || !bus || !buf || src) return false;
+    src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;                      // insurance, see the header note
+    src.connect(bus);
+    const t = ctx.currentTime;
+    // From effectively silent, not from zero: an exponential ramp cannot start
+    // at 0, and a linear one from 0 has a duller knee than this.
+    bus.gain.cancelScheduledValues(t);
+    bus.gain.setValueAtTime(0.0015, t);
+    bus.gain.exponentialRampToValueAtTime(level, t + fade);
+    src.start();
+    return true;
+  }
+
+  /** Pull it down under a spoken line, then let it back up. */
+  function duck(to, seconds) {
+    if (!ctx || !bus || !src) return;
+    ducked = true;
+    ramp(level * (to === undefined ? 0.5 : to), seconds === undefined ? 0.25 : seconds);
+  }
+  function unduck(seconds) {
+    if (!ctx || !bus || !src || !ducked) return;
+    ducked = false;
+    ramp(level, seconds === undefined ? 0.4 : seconds);
+  }
+  function ramp(v, seconds) {
+    const t = ctx.currentTime;
+    bus.gain.cancelScheduledValues(t);
+    bus.gain.setValueAtTime(Math.max(0.0015, bus.gain.value), t);
+    bus.gain.exponentialRampToValueAtTime(Math.max(0.0015, v), t + seconds);
+  }
+
+  /** Short fade rather than a hard stop — a bed this loud clicks if cut. */
+  function stop(seconds) {
+    if (!ctx || !bus || !src) return;
+    const s = seconds === undefined ? 0.2 : seconds;
+    const t = ctx.currentTime, node = src;
+    src = null; ducked = false;
+    bus.gain.cancelScheduledValues(t);
+    bus.gain.setValueAtTime(Math.max(0.0015, bus.gain.value), t);
+    bus.gain.exponentialRampToValueAtTime(0.0015, t + s);
+    try { node.stop(t + s + 0.02); } catch (_) {}
+  }
+
+  global.FieldsSignalBed = {
+    fetch: fetch_, arm, start, duck, unduck, stop,
+    get playing() { return !!src; },
+    get ready() { return !!buf; },
+  };
+})(window);
+</script>
+<script>
+/**
+ * crack.js — the screen cracks, then the glass falls away and leaves the code.
+ *
+ *   FieldsCrack.strike(x, y, { reveal: rainCanvas, onOpenStart, onDone });
+ *
+ * Two pieces of artwork and one piece of geometry:
+ *
+ *   cracked-glass.png      the impact chip. Dense, irregular, full of light —
+ *                          the part that has to be drawn, because two rounds of
+ *                          generating it in code read as a spider web.
+ *   cracked-glass-v4.png   the whole-pane network, scaled over the screen.
+ *   glass_pieces.json      that network cut into 75 tiling polygons by
+ *                          cut_glass.py. Asking a generator for 200 shards gives
+ *                          200 that do not fit; cutting one master image gives
+ *                          pieces bounded by cracks that were actually drawn.
+ *
+ * Beats:
+ *   1. IMPACT   chip under the pointer, one small hole, code visible through it
+ *   2. EXTEND   a crack creeps then runs to the top
+ *   3. GASH     that crack separates — two edges, widening, more code showing
+ *   4. NETWORK  the fracture races across the whole pane, fast, like lightning
+ *   5. FALL     pieces let go in waves from the impact outward, revealing the
+ *               code that has been running behind the whole time
+ *
+ * The two-layer rule holds throughout: glass in front, code behind, and the
+ * code is only ever visible where there is no glass.
+ */
+(function (global) {
+  "use strict";
+
+  // Assets resolve against the DOCUMENT, and this now runs from two places: the
+  // demo in this folder, and the deck two directories away. Set
+  // window.FIELDS_OUTRO_BASE before loading to point at this folder; the default
+  // of "" keeps the demo working unchanged.
+  const BASE = (global.FIELDS_OUTRO_BASE || "");
+  const CHIP_SRC = BASE + "cracked-glass.png";
+  const NET_SRC = BASE + "cracked-glass-v4.png";
+  const PIECES_SRC = BASE + "glass_pieces.json";
+  // The same cut, simplified: 886 vertices against 2178, for the same 67-odd
+  // pieces. Vertex count is what the per-frame path cost scales with, and on a
+  // phone the difference between a 29-sided shard and a 13-sided one is
+  // invisible while it is tumbling.
+  const PIECES_LO_SRC = BASE + "glass_pieces_lo.json";
+  const SMALL_SCREEN = Math.min(innerWidth, innerHeight) < 520;
+  const TAU = Math.PI * 2;
+
+  function rng(seed) {
+    let s = seed >>> 0 || 1;
+    return function () {
+      s ^= s << 13; s >>>= 0; s ^= s >> 17; s ^= s << 5; s >>>= 0;
+      return s / 4294967296;
+    };
+  }
+
+  // ── assets ────────────────────────────────────────────────────────────────
+  // Each PNG is opaque black with bright cracks, so `source-in` against it
+  // would keep everything. Rebuild once as white-with-alpha-from-luminance.
+  function toMask(img) {
+    const c = document.createElement("canvas");
+    c.width = img.naturalWidth; c.height = img.naturalHeight;
+    const g = c.getContext("2d");
+    g.drawImage(img, 0, 0);
+    const d = g.getImageData(0, 0, c.width, c.height), px = d.data;
+    for (let i = 0; i < px.length; i += 4) {
+      const l = (px[i] * 0.299 + px[i + 1] * 0.587 + px[i + 2] * 0.114) / 255;
+      px[i] = px[i + 1] = px[i + 2] = 255;
+      px[i + 3] = Math.round(Math.min(1, Math.pow(l, 0.75) * 1.25) * 255);
+    }
+    g.putImageData(d, 0, 0);
+    return c;
+  }
+  const loadImg = (src) => new Promise((res, rej) => {
+    const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src;
+  });
+
+  let ASSETS = null, assetsReady = null;
+  function loadAssets() {
+    if (assetsReady) return assetsReady;
+    assetsReady = Promise.all([
+      loadImg(CHIP_SRC), loadImg(NET_SRC),
+      fetch(SMALL_SCREEN ? PIECES_LO_SRC : PIECES_SRC).then((r) => r.json()),
+    ]).then(([chip, net, pieces]) => {
+      ASSETS = { chip: toMask(chip), net: toMask(net), pieces };
+      return ASSETS;
+    });
+    return assetsReady;
+  }
+  // NOT called at module load any more. Doing so downloaded 1.9MB of PNGs and
+  // decoded two 1254x1254 images into canvases the instant any deck opened —
+  // before the reader had seen card 00, and for every reader including the ones
+  // who never reach the button. On a phone that is real bandwidth and real
+  // memory pressure. `strike()` loads them itself if they are not ready, so
+  // preload() is purely an optimisation: the deck calls it when card 11 comes
+  // into view, which is early enough to be ready and late enough to be free.
+
+  function jaggedRay(cx, cy, angle, len, rand, steps) {
+    const pts = [[cx, cy]];
+    let a = angle;
+    const n = steps || Math.max(6, Math.round(len / 26));
+    for (let i = 1; i <= n; i++) {
+      const t = i / n;
+      a += (rand() - 0.5) * 0.26 * t;
+      pts.push([cx + Math.cos(a) * len * t, cy + Math.sin(a) * len * t]);
+    }
+    return pts;
+  }
+
+  /** A path offset into a band with near-parallel edges — a separated crack. */
+  function band(pts, w0) {
+    const n = pts.length, left = [], right = [];
+    for (let i = 0; i < n; i++) {
+      const t = i / Math.max(1, n - 1);
+      const p = pts[i];
+      const q = pts[Math.min(n - 1, i + 1)], r = pts[Math.max(0, i - 1)];
+      let dx = q[0] - r[0], dy = q[1] - r[1];
+      const L = Math.hypot(dx, dy) || 1; dx /= L; dy /= L;
+      const w = w0 * (0.55 + 0.45 * (1 - t));   // never vanishes at the tip
+      left.push([p[0] - dy * w, p[1] + dx * w]);
+      right.push([p[0] + dy * w, p[1] - dx * w]);
+    }
+    return { poly: left.concat(right.reverse()), left, right };
+  }
+
+  function tracePoly(ctx, poly) {
+    ctx.moveTo(poly[0][0], poly[0][1]);
+    for (let i = 1; i < poly.length; i++) ctx.lineTo(poly[i][0], poly[i][1]);
+    ctx.closePath();
+  }
+
+  /**
+   * Fines. Only 75 large pieces fall, which on its own reads like cut paper —
+   * real breakage throws a cloud of fragments far smaller and far faster than
+   * the panes, plus a puff of dust at the strike. Cheap, and it is most of the
+   * difference between "graphic" and "that just broke".
+   */
+  function burst(list, x, y, n, speed, rand, spread) {
+    for (let i = 0; i < n; i++) {
+      const a = rand() * TAU;
+      const v = speed * (0.25 + rand() * rand() * 1.6);   // long tail: a few go far
+      list.push({
+        x, y,
+        vx: Math.cos(a) * v * (spread || 1),
+        vy: Math.sin(a) * v * (spread || 1) - v * 0.25,   // slight upward bias
+        r: 0.5 + rand() * 1.9,
+        life: 0, ttl: 0.5 + rand() * 1.1,
+        spin: (rand() - 0.5) * 8,
+        dust: rand() < 0.42,
+      });
+    }
+  }
+
+  function stepParticles(list, dt) {
+    for (let i = list.length - 1; i >= 0; i--) {
+      const q = list[i];
+      q.life += dt;
+      if (q.life > q.ttl) { list.splice(i, 1); continue; }
+      q.vy += 1500 * dt;               // gravity
+      q.vx *= 0.995; q.vy *= 0.995;
+      q.x += q.vx * dt; q.y += q.vy * dt;
+    }
+  }
+
+  function drawParticles(ctx, list) {
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    for (const q of list) {
+      const k = 1 - q.life / q.ttl;
+      if (q.dust) {
+        ctx.globalAlpha = k * 0.16;
+        ctx.fillStyle = "rgba(190,215,240,1)";
+        ctx.beginPath(); ctx.arc(q.x, q.y, q.r * 5, 0, TAU); ctx.fill();
+      } else {
+        ctx.globalAlpha = k * 0.95;
+        ctx.fillStyle = "rgba(255,255,255,1)";
+        ctx.fillRect(q.x - q.r / 2, q.y - q.r / 2, q.r, q.r * (1 + k));
+      }
+    }
+    ctx.restore();
+  }
+
+  // ── strike ────────────────────────────────────────────────────────────────
+
+  function strike(x, y, o) {
+    o = o || {};
+    const W = innerWidth, H = innerHeight;
+    // Two full-screen canvases at 2x on a phone is 2.6M pixels a frame before
+    // anything is drawn into them. 1.5x is indistinguishable here — this is a
+    // dark field of thin bright lines, not type — and it drops the fill cost by
+    // over 40%.
+    const small = Math.min(W, H) < 520;
+    const dpr = Math.min(small ? 1.5 : 2, devicePixelRatio || 1);
+    const rand = rng(o.seed || ((Date.now() ^ (x * 73856093)) >>> 0));
+    const DIAG = Math.hypot(W, H);
+
+    const host = document.createElement("div");
+    host.className = "fx-crack";
+    host.setAttribute("aria-hidden", "true");
+    const cv = document.createElement("canvas");
+    cv.width = W * dpr; cv.height = H * dpr;
+    cv.style.cssText =
+      "position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:40";
+    host.appendChild(cv);
+    (o.mount || document.body).appendChild(host);
+    const ctx = cv.getContext("2d");
+    ctx.scale(dpr, dpr);
+
+    const chip0 = o.radius || Math.max(150, Math.min(W, H) * 0.20);
+    const start = [x + (rand() - 0.5) * chip0 * 0.3, y - chip0 * 0.42];
+    const runner = jaggedRay(start[0], start[1],
+      -Math.PI / 2 + (rand() - 0.5) * 0.18, start[1] + 30, rand, 34);
+
+    // The hole punched at the impact — the only thing you can see through until
+    // the gash opens. The surrounding fractures are cracks, not gaps.
+    const voidR = Math.max(11, chip0 * 0.09);
+    const voidPoly = [];
+    for (let i = 0; i < 11; i++) {
+      const a = (i / 11) * TAU, rr = voidR * (0.5 + rand() * 0.85);
+      voidPoly.push([x + Math.cos(a) * rr, y + Math.sin(a) * rr]);
+    }
+
+    // The whole-pane network is centred on the impact and scaled so it reaches
+    // every corner, whichever corner the reader happened to press nearest.
+    const reach = Math.max(
+      Math.hypot(x, y), Math.hypot(W - x, y),
+      Math.hypot(x, H - y), Math.hypot(W - x, H - y)) * 2.05;
+    const px = (u) => x + (u - 0.5) * reach;
+    const py = (v) => y + (v - 0.5) * reach;
+
+    // `skipGash` runs impact -> network -> fall only, dropping the crack that
+    // travels to the top and the gap that opens along it. They are two separate
+    // ideas and they muddle each other when both play in one strike.
+    const SKIP = !!o.skipGash;
+    const IMPACT_HOLD = o.impactHold == null ? 1000 : o.impactHold;
+    const EXTEND_MS   = SKIP ? 0 : (o.extendMs == null ? 1900 : o.extendMs);
+    const GASH_MS     = SKIP ? 0 : (o.gashMs   == null ? 2600 : o.gashMs);
+    const NETWORK_MS  = o.networkMs  == null ?  900 : o.networkMs;   // lightning
+    const SETTLE_MS   = o.settleMs   == null ?  500 : o.settleMs;
+    const FALL_MS     = o.fallMs     == null ? 3800 : o.fallMs;
+    const easeRun = (t) => Math.pow(t, 3.2);
+
+    // A phone has a fraction of the fill rate and every particle is a draw
+    // call. Two thirds of them there is invisible; the frame rate is not.
+    const FINES_IMPACT = small ? 55 : 130;
+    const FINES_PER_PIECE = small ? 2 : 5;
+    // Both artworks were being scaled from 1254x1254 up to the screen EVERY
+    // frame, under `lighter`, twice. Profiling put the pre-fall phases at 11-13
+    // fps against the fall's 38 - the opposite of what I assumed. Pre-render
+    // them to screen-sized layers once and blit 1:1 thereafter.
+    let chipLayer = null, netLayer = null;
+    function prerender() {
+      const mk = () => {
+        const c = document.createElement("canvas");
+        c.width = W * dpr; c.height = H * dpr;
+        const g = c.getContext("2d"); g.scale(dpr, dpr);
+        return { c, g };
+      };
+      const a = mk(), b2 = mk(), cw = chip0 * 2;
+      a.g.drawImage(ASSETS.chip, x - cw / 2, y - cw / 2, cw, cw);
+      b2.g.drawImage(ASSETS.net, px(0), py(0), reach, reach);
+      chipLayer = a.c; netLayer = b2.c;
+    }
+
+    let pieces = null, gashBand = null, fines = [], lastT = 0;
+    const perf = { frames: 0, worst: 0, fallFrames: 0, fallMs: 0,
+                   byPhase: {}, worstAt: null };
+    global.__crackPerf = perf;
+    let netCalled = false, doneCalled = false, openCalled = false,
+        fallCalled = false, t0 = null;
+
+    // Adaptive degrade. The crack itself is cheap now; the fall is 67 tumbling
+    // polygons and a particle field, and on a genuinely slow device that lands
+    // at 18-30fps however much it is tuned. Rather than ship a stutter, measure
+    // the opening second on the actual device and, if it cannot hold up, keep
+    // the fracture — which is the good part — and swap the fall for a quick
+    // dissolve. Decided from real frames, not a user-agent guess.
+    let degraded = false;
+    function checkBudget() {
+      const c = perf.byPhase.chip;
+      if (!c || c.n < 8) return;
+      degraded = (c.ms / c.n) > 34;      // slower than ~29fps
+    }
+
+    function initPieces() {
+      const r2 = rng(0x51ed270b);
+      pieces = ASSETS.pieces.pieces.map((p) => {
+        const cx = px(p.c[0]), cy = py(p.c[1]);
+        const d = Math.hypot(cx - x, cy - y) || 1;
+        return {
+          poly: p.poly.map(([u, v]) => [px(u), py(v)]),
+          cx, cy,
+          // Waves outward from the impact, and bigger pieces sooner — the order
+          // real safety glass releases in, rather than everything at once.
+          delay: Math.min(0.7, (d / (reach * 0.55)) * 0.55)
+                 + (1 - Math.min(1, p.a / 0.03)) * 0.12 + r2() * 0.10,
+          spin: (r2() - 0.5) * 3.4,
+          phase: r2() * TAU,
+          drift: (r2() - 0.5) * 240,
+          fall: 900 + r2() * 900,
+        };
+      });
+    }
+
+    function draw(phase, runT, open, net, fall, flash) {
+      ctx.clearRect(0, 0, W, H);
+      const chipW = chip0 * 2;
+
+      if (phase === "fall") {
+        // The pane is over the code now. Pieces that have not let go are still
+        // glass; the ones that have are tumbling away, and what they leave
+        // behind is what was always running underneath.
+        // Black, not the reveal canvas. The code deliberately does not start
+        // until the glass has completely gone, so through the whole fall the
+        // reveal IS a blank black canvas — blitting a full-screen canvas every
+        // frame to paint black was pure cost.
+        ctx.fillStyle = "#000";
+        ctx.fillRect(0, 0, W, H);
+        for (const p of pieces) {
+          const t = Math.max(0, Math.min(1, (fall - p.delay) / (1 - p.delay || 1)));
+          if (t >= 0.53) continue;          // fully faded (1 - t*1.9 <= 0)
+          if (t > 0 && !p.threw) {
+            // a puff as each piece lets go, not one burst for the whole pane
+            p.threw = true;
+            burst(fines, p.cx, p.cy, FINES_PER_PIECE, 210, rand, 0.8);
+          }
+          ctx.save();
+          let lit = 1;
+          if (t > 0) {
+            const e = t * t;                       // gravity, not linear
+            ctx.translate(p.drift * e, p.fall * e);
+            const ang = p.spin * e;
+            ctx.translate(p.cx, p.cy); ctx.rotate(ang); ctx.translate(-p.cx, -p.cy);
+            // Glass flashes as a facet swings through the light. Constant
+            // brightness while tumbling is what made the pieces read as flat.
+            lit = small ? 1 : 0.55 + 0.45 * Math.abs(Math.cos(ang * 1.6 + p.phase));
+            // Fade out hard enough to be gone before the phase ends — at 1.25
+            // they were still ghosting across the screen when the code arrived.
+            ctx.globalAlpha = Math.max(0, 1 - t * 1.9);
+          }
+          ctx.beginPath(); tracePoly(ctx, p.poly);
+          if (small) {
+            // One paint per piece instead of two. A stroke on a phone is a
+            // second full path traversal for a hairline nobody can resolve.
+            ctx.fillStyle = "rgba(165,195,225,0.16)"; ctx.fill();
+          } else {
+            ctx.fillStyle = `rgba(150,180,210,${0.06 + 0.09 * lit})`; ctx.fill();
+            ctx.strokeStyle = `rgba(255,255,255,${0.25 + 0.5 * lit})`;
+            ctx.lineWidth = 1; ctx.stroke();
+          }
+          ctx.restore();
+        }
+        // The chip is the best-looking thing in the whole effect and it was
+        // switching off at the exact moment of most drama. It goes with the
+        // pieces around it instead.
+        ctx.save();
+        ctx.globalCompositeOperation = "lighter";
+        ctx.globalAlpha = Math.max(0, 0.95 - fall * 1.6);
+        ctx.drawImage(chipLayer, 0, 0, W, H);
+        ctx.restore();
+        drawParticles(ctx, fines);
+        return;
+      }
+
+      // --- the holes ------------------------------------------------------
+      // Filled black, directly. The code deliberately does not start until the
+      // glass has completely gone, so throughout the break every hole looks
+      // into darkness - which meant the mask-and-composite dance (clear an
+      // offscreen, fill it, source-in the reveal, blit it back) was three
+      // full-screen operations a frame just to paint black.
+      ctx.fillStyle = "#000";
+      ctx.beginPath();
+      tracePoly(ctx, voidPoly);
+      if (open > 0 && !SKIP) {
+        const w = open < 0.66
+          ? 1 + Math.pow(open / 0.66, 1.5) * 95
+          : 95 + Math.pow((open - 0.66) / 0.34, 2.4) * DIAG * 0.55;
+        gashBand = band([[x, y]].concat(runner), w);
+        tracePoly(ctx, gashBand.poly);
+      }
+      ctx.fill();
+
+      // --- the pane ---------------------------------------------------------
+      // Black glass over a black background is invisible. `destination-over`
+      // lays this UNDER what is already drawn, so it tints the glass and never
+      // the holes: the glass reads as faintly smoky, the holes as true black
+      // with code in them.
+      ctx.save();
+      ctx.globalCompositeOperation = "destination-over";
+      ctx.fillStyle = "rgba(140,170,200,0.075)";
+      ctx.fillRect(0, 0, W, H);
+      ctx.restore();
+
+      // --- the fractures ----------------------------------------------------
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.globalAlpha = 0.95;
+      ctx.drawImage(chipLayer, 0, 0, W, H);
+      if (net > 0) {
+        // Clipped to a growing disc, so the fracture PROPAGATES out from the
+        // impact rather than fading in everywhere at once.
+        ctx.save();
+        ctx.beginPath(); ctx.arc(x, y, reach * 0.5 * net, 0, TAU); ctx.clip();
+        ctx.globalAlpha = 0.9;
+        ctx.drawImage(netLayer, 0, 0, W, H);
+        ctx.restore();
+      }
+      // The flash. Two frames of it, no more — long enough to register as an
+      // impact, short enough that you do not consciously see a white circle.
+      if (flash > 0) {
+        const g = ctx.createRadialGradient(x, y, 0, x, y, chipW * 0.9 * (1 + flash));
+        g.addColorStop(0, `rgba(255,255,255,${0.85 * flash})`);
+        g.addColorStop(0.4, `rgba(210,235,255,${0.3 * flash})`);
+        g.addColorStop(1, "rgba(255,255,255,0)");
+        ctx.globalAlpha = 1; ctx.fillStyle = g;
+        ctx.fillRect(0, 0, W, H);
+      }
+      ctx.globalAlpha = 0.92;
+      ctx.strokeStyle = "rgba(255,255,255,0.95)";
+      ctx.lineWidth = 1.3; ctx.lineCap = "round";
+      if (open > 0 && gashBand && !SKIP) {
+        // Once it has separated there is no single crack any more — there are
+        // two edges with a gap between them, and both have to be drawn.
+        for (const side of [gashBand.left, gashBand.right]) {
+          ctx.beginPath();
+          ctx.moveTo(side[0][0], side[0][1]);
+          for (let i = 1; i < side.length; i++) ctx.lineTo(side[i][0], side[i][1]);
+          ctx.stroke();
+        }
+      } else if (runT > 0 && !SKIP) {
+        const n = Math.max(2, Math.ceil(runner.length * runT));
+        ctx.beginPath();
+        ctx.moveTo(runner[0][0], runner[0][1]);
+        for (let i = 1; i < n; i++) ctx.lineTo(runner[i][0], runner[i][1]);
+        ctx.stroke();
+      }
+      ctx.restore();
+      drawParticles(ctx, fines);
+    }
+
+    const T1 = IMPACT_HOLD, T2 = T1 + EXTEND_MS, T3 = T2 + GASH_MS,
+          T4 = T3 + NETWORK_MS, T5 = T4 + SETTLE_MS, T6 = T5 + FALL_MS;
+
+    function frame(now) {
+      if (t0 == null) {
+        t0 = now; lastT = now;
+        // dust and fines thrown at the moment of contact
+        burst(fines, x, y, FINES_IMPACT, 520, rand, 1);
+        o.onImpact && o.onImpact();
+      }
+      const t = now - t0;
+      const dtMs = now - lastT;
+      perf.frames++;
+      const ph = t < T1 ? "chip" : t < T4 ? "network" : t < T5 ? "settle"
+               : t < T6 ? "fall" : "done";
+      const rec = perf.byPhase[ph] || (perf.byPhase[ph] = { n: 0, ms: 0, worst: 0 });
+      rec.n++; rec.ms += dtMs;
+      if (perf.frames > 3) {
+        rec.worst = Math.max(rec.worst, dtMs);
+        if (dtMs > perf.worst) { perf.worst = dtMs; perf.worstAt = ph + "@" + Math.round(t) + "ms"; }
+      }
+      if (t >= T5 && t < T6) { perf.fallFrames++; perf.fallMs += dtMs; }
+      stepParticles(fines, Math.min(0.05, dtMs / 1000));
+      lastT = now;
+      if (t < T1)      draw("chip", 0, 0, 0, 0, Math.max(0, 1 - t / 150));
+      else if (t < T2) draw("chip", easeRun((t - T1) / EXTEND_MS), 0, 0, 0);
+      else if (t < T3) {
+        if (!openCalled) { openCalled = true; o.onOpenStart && o.onOpenStart(); }
+        draw("gash", 1, (t - T2) / GASH_MS, 0, 0);
+      } else if (t < T4) {
+        if (!netCalled) {
+          netCalled = true; checkBudget();
+          if (!degraded) initPieces();     // no point building 67 pieces to skip
+          o.onNetwork && o.onNetwork();
+        }
+        draw("gash", 1, 1, Math.pow((t - T3) / NETWORK_MS, 0.55), 0);
+      } else if (t < T5) {
+        draw("gash", 1, 1, 1, 0);                    // it holds, then lets go
+      } else if (degraded) {
+        // Too slow for the fall. Dissolve the pane instead — the fracture is
+        // still what the reader remembers, and a clean dissolve beats a
+        // stuttering shatter.
+        if (!fallCalled) { fallCalled = true; o.onFall && o.onFall(); }
+        const k = Math.min(1, (t - T5) / 700);
+        ctx.globalAlpha = 1 - k;
+        draw("gash", 1, 1, 1, 0);
+        ctx.globalAlpha = 1;
+        if (k >= 1) {
+          ctx.clearRect(0, 0, W, H);
+          host.style.display = "none";
+          if (!doneCalled) { doneCalled = true; o.onDone && o.onDone(); }
+          return;
+        }
+      } else if (t < T6) {
+        if (!fallCalled) { fallCalled = true; o.onFall && o.onFall(); }
+        draw("fall", 1, 1, 1, (t - T5) / FALL_MS);
+      } else {
+        // The glass is gone. Stand down completely rather than holding a final
+        // frame — the code only starts once there is nothing left in front of it.
+        ctx.clearRect(0, 0, W, H);
+        host.style.display = "none";
+        if (!doneCalled) { doneCalled = true; o.onDone && o.onDone(); }
+        return;
+      }
+      requestAnimationFrame(frame);
+    }
+
+    // Motion sensitivity. A screen that appears to shatter is close to the top
+    // of the list of things this setting exists to prevent, so the whole
+    // sequence is skipped rather than shortened: the reader gets a straight cut
+    // to what is behind it, and every callback still fires in order so the host
+    // does not have to know which path it took.
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches && !o.forceMotion) {
+      host.style.transition = "opacity .45s ease";
+      o.onImpact && o.onImpact();
+      o.onFall && o.onFall();
+      setTimeout(() => {
+        host.style.display = "none";
+        o.onDone && o.onDone();
+      }, 480);
+      return { host, canvas: cv, cancel: () => host.remove(), reduced: true };
+    }
+
+    loadAssets().then(() => { prerender(); requestAnimationFrame(frame); })
+                .catch(() => { o.onOpenStart && o.onOpenStart();
+                               o.onDone && o.onDone(); });
+
+    return { host, canvas: cv, cancel: () => host.remove() };
+  }
+
+  global.FieldsCrack = {
+    preload: () => loadAssets().catch(() => {}), strike, loadAssets };
+})(window);
+</script>
+<script>
+/**
+ * outro-deck.js — the shatter sequence, packaged for the real deck.
+ *
+ * Everything `crack-demo.html` does, minus the demo's own chrome (the stand-in
+ * page, the replay button, the sound toggle, the build stamp). Pressing card
+ * 11's neon runs it:
+ *
+ *   the screen cracks where the finger landed -> the fracture races across the
+ *   pane -> 67 pieces fall away -> the code rain is revealed -> the ship's
+ *   computer reads the build sequence over Cassini's Saturn recording, counting
+ *   down T-3 - 2 - 1 -> the signal cuts on "Construction completed."
+ *
+ *   FieldsOutro.play(clientX, clientY)
+ *
+ * Requires glass-audio.js, signal-bed.js and crack.js loaded first, and
+ * window.FIELDS_OUTRO_BASE pointing at the outro folder.
+ *
+ * Four things that are different here from the demo, and why:
+ *
+ *   THE DOM IS BUILT ON DEMAND. A reader who never presses the button should
+ *   carry none of this — no fixed overlays, no canvas, no rain loop. Everything
+ *   is created inside play().
+ *
+ *   THE PRESS IS THE GESTURE. Browsers block audio until real input, and this
+ *   press IS that input, so the glass, the voice and the signal are all armed
+ *   inside the click handler. It is the one moment in the deck where sound is
+ *   guaranteed to work.
+ *
+ *   SCROLL IS LOCKED for the duration. The reader has committed; letting them
+ *   scroll the deck out from under a full-screen shatter would be nonsense.
+ *
+ *   IT ENDS ON AN EVENT, NOT A DEAD STOP. `fields:strategy-built` fires when the
+ *   last line lands, for whatever comes next to hang off.
+ */
+(function (global) {
+  "use strict";
+
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  // Bump alongside build_voice.py — the filenames never change, so a cached clip
+  // would leave her saying the old line under the new caption.
+  const VOICE_V = "?v=20260803b";
+
+  const GLYPHS = ("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ$%.,:/-+=<>#*" +
+                  "0123456789").split("");
+  const WORDS = ["ANALYSING", "COMPARABLE", "ADJUSTING", "POSITION", "STRATEGY",
+                 "BUILDING", "SEQUENCE", "INDEXING", "VALUATION", "COMPILING",
+                 "SORTING", "MATCHING", "BUYER POOL", "PRICE BAND", "TIMING"];
+
+  const SCRIPT = [
+    { t: "Analysing selling strategy...", v: "01", after: () => quake(1) },
+    { t: "Construction sequence initiated..", v: "02", after: () => quake(1) },
+    { t: "Approaching completion in T-3 seconds...", v: "03", after: () => quake(2),
+      countdown: true },
+    { t: "Construction completed.", v: "04", after: () => quake(0), ok: true },
+  ];
+  const COUNT = ["c3", "c2", "c1"];
+
+  let world, behind, cv, ctx, msg, running = false;
+  const VOICE = {};
+
+  function el(tag, id) {
+    const n = document.createElement(tag);
+    if (id) n.id = id;
+    return n;
+  }
+
+  function quake(level) {
+    if (!world) return;
+    world.classList.remove("quake-1", "quake-2");
+    if (level && !reduced) world.classList.add("quake-" + level);
+  }
+
+  // ── the rain field ─────────────────────────────────────────────────────────
+  // Same look as the intro, but this one only has to fall and then switch off
+  // right to left — it carries no recognition tiers, because by this point the
+  // reader has already been shown their own street.
+  let W, H, cw, ch, cols, rowsN, colLife, streams = [], last = 0, rainOn = false, shutdown = -1;
+
+  function size() {
+    const dpr = Math.min(2, devicePixelRatio || 1);
+    W = innerWidth; H = innerHeight;
+    cv.width = W * dpr; cv.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.font = "16px ui-monospace, Menlo, Consolas, monospace";
+    cw = 13; ch = 19;
+    cols = Math.ceil(W / cw); rowsN = Math.ceil(H / ch);
+    colLife = new Float32Array(cols).fill(1);
+    streams = [];
+    for (let i = 0; i < cols; i++) {
+      const n = 1 + (Math.random() < 0.4 ? 1 : 0);
+      for (let k = 0; k < n; k++) streams.push(newStream(i, true));
+    }
+  }
+  function newStream(col, spread) {
+    return { col, y: spread ? -Math.random() * rowsN : -2,
+             speed: 5 + Math.random() * 11, len: 8 + Math.random() * 18,
+             word: Math.random() < 0.34 ? WORDS[(Math.random() * WORDS.length) | 0] : null,
+             seed: Math.random() * 1e6 };
+  }
+  function rainFrame(now) {
+    if (!rainOn) return;
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    ctx.fillStyle = "rgba(0,0,0,0.22)";
+    ctx.fillRect(0, 0, W, H);
+    if (shutdown >= 0) {
+      shutdown += dt / 3.0;
+      for (let i = 0; i < cols; i++) {
+        const edge = 1 - shutdown;
+        colLife[i] = i / cols > edge ? Math.max(0, colLife[i] - dt * 3.2) : colLife[i];
+      }
+    }
+    for (const s of streams) {
+      s.y += s.speed * dt;
+      const life = colLife[s.col] || 0;
+      if (life <= 0) continue;
+      for (let k = 0; k < s.len; k++) {
+        const y = Math.floor(s.y - k);
+        if (y < 0 || y > rowsN) continue;
+        const head = k === 0;
+        const a = (1 - k / s.len) * life;
+        let chr;
+        if (s.word && k < s.word.length) chr = s.word[s.word.length - 1 - k];
+        else chr = GLYPHS[(Math.floor(s.seed + y * 7 + k * 13 + now / 90) % GLYPHS.length + GLYPHS.length) % GLYPHS.length];
+        ctx.fillStyle = head ? `rgba(210,255,225,${a})` : `rgba(60,235,120,${a * 0.8})`;
+        ctx.fillText(chr, s.col * cw, y * ch);
+      }
+      if (s.y - s.len > rowsN) Object.assign(s, newStream(s.col, false));
+    }
+    requestAnimationFrame(rainFrame);
+  }
+
+  // ── the printed sequence ───────────────────────────────────────────────────
+  async function type(line) {
+    const row = document.createElement("div");
+    if (line.ok) row.className = "ok";
+    msg.appendChild(row);
+
+    // Pace the typing to the speech, not the other way round. A fixed
+    // characters-per-second either finishes early and leaves the voice talking
+    // to a static line, or lags behind it — and the mismatch is the thing that
+    // makes captioned voice look cheap.
+    const v = VOICE[line.v];
+    let per = 52, dot = 180, spoke = 0;
+    if (v) {
+      if (line.ok) FieldsSignalBed.stop(0.2);
+      else FieldsSignalBed.duck(0.5, 0.25);
+      try { v.audio.currentTime = 0; v.audio.play(); spoke = performance.now(); } catch (_) {}
+      const visible = line.t.replace(/\./g, "").length;
+      const dots = line.t.length - visible;
+      per = Math.max(24, (v.seconds * 1000 * 0.82 - dots * 120) / Math.max(1, visible));
+      dot = 120;
+    }
+    for (let i = 1; i <= line.t.length; i++) {
+      row.textContent = line.t.slice(0, i);
+      await wait(line.t[i - 1] === "." ? dot : per);
+    }
+
+    if (line.countdown) {
+      // The typing is paced to 82% of the clip, so the last character lands
+      // while she is still finishing the sentence. Every other line has a gap
+      // after it that absorbs this; the countdown chains straight on, so
+      // without an explicit hold "Three" starts on top of "...seconds".
+      if (v && spoke) {
+        await wait(Math.max(0, v.seconds * 1000 - (performance.now() - spoke) + 200));
+      }
+      line.after();                 // shake escalates THROUGH the count
+      await countdown(row, line.t);
+      return;
+    }
+    if (v && !line.ok) FieldsSignalBed.unduck(0.4);
+    line.after();
+  }
+
+  // Swap the "3" in "...T-3 seconds..." for a live digit and count it down. A
+  // flat 1s beat, so the countdown genuinely takes the three seconds she just
+  // promised — the clips are 0.5-0.65s, so each number lands and then hangs.
+  async function countdown(row, text) {
+    const at = text.indexOf("3");
+    row.textContent = "";
+    const n = document.createElement("span");
+    n.className = "n";
+    row.append(text.slice(0, at), n, text.slice(at + 1));
+    for (let i = 0; i < COUNT.length; i++) {
+      n.textContent = String(3 - i);
+      const c = VOICE[COUNT[i]];
+      if (c) { try { c.audio.currentTime = 0; c.audio.play(); } catch (_) {} }
+      row.classList.remove("beat"); void row.offsetWidth; row.classList.add("beat");
+      await wait(1000);
+    }
+    row.classList.remove("beat");
+  }
+
+  function loadVoice() {
+    const base = (global.FIELDS_OUTRO_BASE || "") + "voice/";
+    return fetch(base + "index.json" + VOICE_V)
+      .then((r) => r.json())
+      .then((m) => {
+        for (const l of m.lines) {
+          const a = new Audio(base + l.file + VOICE_V);
+          a.preload = "auto"; a.volume = 0.85;
+          VOICE[l.id] = { audio: a, seconds: l.seconds };
+        }
+      })
+      .catch(() => {});           // silence is survivable; a broken page is not
+  }
+
+  // ── the whole thing ────────────────────────────────────────────────────────
+  function build() {
+    world = el("div", "fx-world");
+    behind = el("div", "fx-behind");
+    cv = el("canvas", "fx-rain");
+    msg = el("div", "fx-msg");
+    behind.appendChild(cv);
+    world.append(behind, msg);
+    document.body.appendChild(world);
+    ctx = cv.getContext("2d", { alpha: false });
+    // Sized and filled black from the start: that black is what shows through
+    // the impact hole and through every gap the falling glass leaves.
+    size();
+    ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
+    addEventListener("resize", () => { if (rainOn) size(); });
+  }
+
+  async function play(x, y) {
+    if (running) return;
+    running = true;
+
+    // The press is a real user gesture, which is what makes any of this audible.
+    const actx = FieldsGlassAudio.arm();
+    FieldsSignalBed.arm(actx);
+    FieldsSignalBed.fetch();
+    loadVoice();
+
+    build();
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+
+    const deck = document.getElementById("deck");
+
+    FieldsCrack.strike(x, y, {
+      reveal: cv,
+      skipGash: true,
+      onImpact: () => {
+        if (reduced) return;
+        FieldsGlassAudio.impact();
+        world.classList.remove("jolt"); void world.offsetWidth;
+        world.classList.add("jolt");
+      },
+      // The deck stays readable THROUGH the cracked glass — that is the whole
+      // idea — and only goes when the pane starts falling.
+      onNetwork: () => { if (!reduced) FieldsGlassAudio.crackle(900); },
+      onFall: () => {
+        if (deck) deck.classList.add("fx-gone");
+        if (!reduced) FieldsGlassAudio.shatter(3800);
+      },
+      onDone: async () => {
+        // Now, and not before: the glass has completely gone, so the code starts
+        // on an empty screen rather than being glimpsed through it.
+        behind.classList.add("on");
+        rainOn = true; last = performance.now();
+        requestAnimationFrame(rainFrame);
+
+        // The signal comes up one second behind the code, over 1.5s. Arriving
+        // second, out of nothing, reads as something being picked up; arriving
+        // together reads as a cue.
+        if (!reduced) setTimeout(() => FieldsSignalBed.start({ fadeIn: 1.5 }), 1000);
+
+        await wait(2200);
+        shutdown = 0;                     // code switches off right to left
+        await wait(3000);
+        for (const line of SCRIPT) { await type(line); await wait(500); }
+        await wait(1600);
+        quake(0);
+        dispatchEvent(new CustomEvent("fields:strategy-built"));
+      },
+    });
+  }
+
+  global.FieldsOutro = { play, get running() { return running; } };
+})(window);
+</script>
+<script>
+(() => {
+  "use strict";
+  const cta = document.querySelector(".neon");
+  if (!cta) return;
+
+  // Fetch the 1.9MB of crack artwork when the offer card comes into view, not at
+  // page load. Ready by the time anyone presses; never downloaded at all by a
+  // reader who leaves earlier.
+  const card = document.getElementById("card-11");
+  if (card) {
+    const io = new IntersectionObserver((es) => {
+      for (const e of es) if (e.isIntersecting) { io.disconnect(); FieldsCrack.preload(); }
+    }, { rootMargin: "0px 0px 60% 0px" });
+    io.observe(card);
+  }
+  const go = (e) => {
+    e.preventDefault();
+    if (FieldsOutro.running) return;
+    // Strike where the finger actually landed. A keyboard activation has no
+    // coordinates, so fall back to the centre of the button itself.
+    const r = cta.getBoundingClientRect();
+    const x = e.clientX || (r.left + r.width / 2);
+    const y = e.clientY || (r.top + r.height / 2);
+    FieldsOutro.play(x, y);
+  };
+  cta.addEventListener("click", go);
+})();
+</script>
+</body>
+</html>
