@@ -178,6 +178,93 @@ metrics. Additive — existing callers unaffected.
 
 ---
 
+## 6. Proposed: prospective platform-valuation study (Will, 2026-08-05)
+
+**The idea.** Run a Python process over a large sample of **off-market** homes, capture
+the automated platform valuations for each (including screenshots as evidence of what
+was shown and when), and store our own adjusted-comparables range alongside them.
+Then set a trigger: when one of those homes later **lists or sells**, the captured
+estimates become a settled, out-of-sample test. Publish the results as editorial and
+marketing material.
+
+**Why it is methodologically strong.** Every accuracy claim we currently make is
+retrospective — we look back at what a platform said at listing. Capturing estimates
+*before* any listing exists removes every objection about hindsight, selection, or
+the platform having already seen the asking price. It is a **pre-registered study**,
+and that is a genuinely rare thing in this industry.
+
+### Most of the plumbing already exists
+
+Sold documents already carry `domain_valuation_at_listing` (`low`, `mid`, `high`,
+`accuracy` label, `date`, `captured_at`, `source`) and a post-sale
+`domain_valuation_accuracy` (`error_dollars`, `error_pct`, `within_range`). Coverage
+is 240/616 sold Robina docs. What is new in Will's proposal is (a) capturing for homes
+that are **not on the market**, (b) the screenshot as evidence, (c) storing *our*
+range at the same moment, and (d) the list/sell trigger.
+
+The trigger has a natural home: the off-market discovery pipeline already tracks these
+addresses nightly and already has a real-time listed-property guard.
+
+### ⚠ What the data already says — read this before planning the article
+
+We do not have to wait for the study to know roughly what it will find. Across **708**
+sold properties where we captured the platform estimate at listing:
+
+| Suburb | n | Platform MAE | Median AE | Within 10% | Sale inside its own stated range |
+|---|---|---|---|---|---|
+| Robina | 213 | 7.6% | 7.3% | 76% | 95% |
+| Burleigh Waters | 249 | 9.3% | 5.6% | 82% | 91% |
+| Varsity Lakes | 246 | 13.6% | 12.8% | 41% | **52%** |
+| **Combined** | **708** | **10.3%** | **7.7%** | **66%** | — |
+
+**The platform's combined MAE of 10.3% is better than ours (11.6% Robina, 12.1%
+across the June n=1,534 run).** An article premised on "automated platform valuations
+are inaccurate" would, run honestly on our own data, largely fail — and in our two
+biggest suburbs it would show them ahead of us. Pre-registering a study we lose, then
+publishing it, is worse than not running it.
+
+There is also a hard editorial rule in the way: `prompts/editorial_rules.md` forbids
+naming Domain or realestate.com.au in any public content — the permitted phrase is
+"automated platform valuation". So the article cannot single out a named competitor
+even if the numbers supported it.
+
+### The angle that IS supported — and it is better
+
+The real finding in that table is not accuracy. It is **calibration**:
+
+> A stated valuation *range* that the eventual sale price falls outside of **48% of
+> the time** (Varsity Lakes) is not a range in any useful sense.
+
+That is a category-wide problem, **and we have it too** — our own ±12% band captured
+only 45–57% of sale prices in the 5 August backtest, against a label that says 90%.
+
+So the defensible, and far stronger, article is:
+
+> *Automated valuation ranges — ours included — are systematically overconfident.
+> Here is a sample of homes, here is what the automated estimates said before they
+> sold, here is what they sold for, and here is how often each range actually
+> contained the answer. Including ours.*
+
+That is publishable, survives scrutiny, breaks no rule, requires no competitor to be
+named, and is a much rarer thing to say than "we're more accurate." It also creates
+the pressure to fix our own range calibration, which is already an open action item.
+
+### Preconditions before building
+
+1. **Fix our own range first.** Publishing a calibration study while our own "90%"
+   band runs at ~50% is self-inflicted. Recalibrate, then publish.
+2. **Pre-register the sample and publish every outcome.** Fix the address list and
+   the capture date up front. If we publish only the homes where the estimates
+   missed, the study is worthless and the first person to check will say so.
+3. **Legal review on the screenshots.** Capturing a competitor's page and
+   republishing it as evidence of their inaccuracy raises ToS, copyright and
+   misleading-conduct exposure — distinct from quoting a number. Note also that the
+   VM is Akamai-blocked from Domain and must fetch via `shared.domain_fetch`.
+4. **Include our own estimate in the same capture**, at the same timestamp, or the
+   study is not honest and cannot be defended.
+
+---
+
 ## Related
 
 - `scripts/valuation_backtest.py` — the accuracy harness and the safe comp-set builder
