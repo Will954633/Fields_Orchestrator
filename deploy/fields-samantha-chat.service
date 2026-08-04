@@ -1,0 +1,22 @@
+[Unit]
+Description=Samantha chat service (break-glass assistant, Claude Max / Opus 5)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=projects
+WorkingDirectory=/home/fields/Fields_Orchestrator/scripts/samantha_chat
+# The service reads /home/fields/Fields_Orchestrator/.env itself. It is NOT
+# given credentials via the environment here: the first deployment passed them
+# on the command line, the `sudo -u` switch dropped them, and six visitor
+# conversations were served with zero Telegram alerts and no error anywhere.
+ExecStart=/usr/bin/python3 /home/fields/Fields_Orchestrator/scripts/samantha_chat/service.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=samantha-chat
+
+[Install]
+WantedBy=multi-user.target
