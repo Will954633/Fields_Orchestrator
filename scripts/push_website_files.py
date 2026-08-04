@@ -44,8 +44,13 @@ VERIFY_ATTEMPTS = 4
 VERIFY_WAIT_S = 4
 
 
-def gh(args, payload=None):
-    """Call gh api. Payload is sent via --input to dodge arg-length limits."""
+def gh(args, payload=None, raw=False):
+    """Call gh api.
+
+    Payload goes via --input rather than --field to dodge arg-length limits on
+    large blobs. `raw=True` returns stdout verbatim — needed for `--jq`, which
+    emits a bare unquoted string that is not valid JSON.
+    """
     cmd = ["gh", "api"] + args
     if payload is not None:
         with open("/tmp/_ghpayload.json", "w") as fh:
@@ -53,7 +58,9 @@ def gh(args, payload=None):
         cmd += ["--input", "/tmp/_ghpayload.json"]
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode != 0:
-        raise RuntimeError(f"gh api {' '.join(args[:1])} failed: {r.stderr.strip()[:300]}")
+        raise RuntimeError(f"gh api {args[0]} failed: {r.stderr.strip()[:300]}")
+    if raw:
+        return r.stdout.strip()
     return json.loads(r.stdout) if r.stdout.strip() else {}
 
 
@@ -89,18 +96,13 @@ def push(repo, root, message, rel_paths, branch="main"):
     print()
     ok = True
     for rel in rel_paths:
+        remote = "?"
         for attempt in range(VERIFY_ATTEMPTS):
             try:
-                content = gh([f"repos/{repo}/contents/{rel}", "--jq", ".content"])
-            except RuntimeError:
-                content = None
-            # --jq returns a bare string; gh emits it unquoted, so json.loads
-            # above will have failed -> fall back to a raw read.
-            if content is None:
-                r = subprocess.run(["gh", "api", f"repos/{repo}/contents/{rel}", "--jq", ".content"],
-                                   capture_output=True, text=True)
-                content = r.stdout.strip() if r.returncode == 0 else ""
-            remote = hashlib.md5(base64.b64decode(content)).hexdigest() if content else "?"
+                content = gh([f"repos/{repo}/contents/{rel}", "--jq", ".content"], raw=True)
+                remote = hashlib.md5(base64.b64decode(content)).hexdigest() if content else "?"
+            except (RuntimeError, ValueError):
+                remote = "?"  # transient read failure; retry below
             if remote == local_md5[rel]:
                 print(f"  OK    {rel:<58} {local_md5[rel][:8]}")
                 break
