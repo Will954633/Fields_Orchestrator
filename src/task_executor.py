@@ -410,11 +410,23 @@ class TaskExecutor:
                 if proc.poll() is not None:
                     break
 
-            # Drain remaining output
+            # Drain remaining output.
+            # This tail must go to the per-step stdout.log as well as to memory and
+            # orchestrator.log. It did not until 2026-08-05, so every step silently
+            # lost whatever was still in the pipe when it exited — in practice the
+            # entire closing SUMMARY block (step 101's per-suburb totals, step 18's
+            # 233/307 counts, step 6's valuation result). There was no truncation
+            # marker, so logs/runs/*/stdout.log — the path CLAUDE.md documents for
+            # auditing — read as if the step had died mid-output. See fix-history
+            # [STEP-STDOUT-TRUNCATED].
             if proc.stdout is not None:
                 for remaining in proc.stdout.read().splitlines():
                     stdout_lines.append(remaining)
                     self.logger.info(f"[STEP {process.id} OUTPUT] {remaining}")
+                    if stdout_file:
+                        stdout_file.write(remaining + "\n")
+                if stdout_file:
+                    stdout_file.flush()
 
             try:
                 sel.close()
