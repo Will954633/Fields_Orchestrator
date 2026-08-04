@@ -1,9 +1,22 @@
 # The Fridge — what happens after someone scans the magnet
 
-**Status:** scoping only. Nothing built, nothing pushed, no route exists.
+**Status:** scoping + a **working prototype**. Nothing on the live site, no route
+exists yet.
 **Scope:** the landing experience at `https://fieldsestate.com.au/fridge` — a
 monochrome fridge door that opens to reveal a short list of things the owner can
 do next.
+
+> ### ▶ Look at it
+> **https://vm.fieldsestate.com.au/concepts/off-market/Fridge_Magnet_Concept/**
+>
+> Open it on a phone. It opens itself after 0.8 s, or on any touch. There is no
+> build step — edit `fridge.css` and refresh.
+>
+> **There is no fridge artwork and there is no video.** Every surface — door,
+> handle, gasket, shelves, lamp, thickness — is a CSS gradient. The only two
+> images on the page are the magnet twin (8.5 KB, a downscale of the real print
+> file) and a 128 px grain tile (12 KB) that stops the large gradients banding
+> on OLED. Total added weight: **~21 KB**.
 
 ---
 
@@ -660,12 +673,34 @@ QR classifier, the Discovery deck event schema, the BreakGlass `public/*.js`
 layout, and the puppeteer/verification harness all read from source in a
 separate pass.
 
-**Not verified, and load-bearing:** nothing has been built, so no claim here
-about how the animation *feels* is tested. The 4G timing in §9 is an estimate
-extrapolated from a measured byte count, not a measurement on a phone. No
-handset has been touched. Whether the recognition beat in phase 0 actually lands
-— the premise the whole concept rests on — is exactly the thing step 1 exists to
-find out, and it is entirely possible the answer is no.
+**Built and verified in headless Chrome:** the prototype renders at five frozen
+door angles and in a real 3-second live run at 390×844; all four option `<a>`
+hrefs present; no horizontal overflow; no console errors; the reduced-motion
+path renders the door already open. Three bugs were caught by looking rather
+than reading, and each is worth carrying into the port:
+
+1. **The palette was unmistakably green** at the theme ramp's own 24%
+   saturation. Held at ~7% it reads as black and white. Nobody would have
+   predicted the first number was wrong.
+2. **At 78° the door still covered 21% of the opening** and cut every option
+   label in half — projected width is `W·cos θ`, so it has to swing *past*
+   perpendicular (100°) to clear. Separately, the cavity sat exactly coplanar
+   with the door's inner panel and the two z-fought, rendering the door
+   translucent mid-swing. Both invisible at the endpoints.
+3. **The shelves never appeared in the real run.** `--open` was animated on
+   `.door`, but the shelves live in `.cavity` — a *sibling* — so they inherited
+   nothing. The frozen screenshots hid this precisely because posing a frame
+   means setting `--open` on the parent. The same mistake had also silently
+   killed the prompt's fade-out (`.is-open .prompt` can't match a sibling).
+   **Frozen frames verify geometry; only a live run verifies the sequence.**
+
+**Not verified, and load-bearing:** no claim here about how the animation
+*feels* is tested. **No handset has been touched** — headless Chrome has no
+speaker, grants user activation cold, and cannot tell you whether the
+recognition beat lands. The 4G timing in §9 is extrapolated from a measured byte
+count, not measured on a phone. Whether phase 0 is worth its 0.8 s — the premise
+the whole concept rests on — is exactly what showing it to Will is for, and it
+is entirely possible the answer is no.
 
 ---
 
@@ -673,9 +708,17 @@ find out, and it is entirely possible the answer is no.
 
 | File | What |
 |---|---|
+| `index.html` | The page. The four options are real `<a>`s in the markup, occluded by the door — that is the §9 contract, not a detail. |
+| `fridge.css` | The entire fridge. One animated custom property (`--open`) drives door angle, face luminance, light, shadow and option opacity. |
+| `fridge.js` | Decides *when* the door opens. Nothing else — delete it and the sequence still runs. |
+| `assets/magnet.webp` | 8.5 KB. Downscale of `Fields_BusinessCard_90x55_QR_GREEN_300dpi.png`. |
+| `assets/grain.png` | 12 KB, 128×128 tileable luminance noise. Anti-banding. |
+| `verify/shots.mjs` | Renders five frozen door angles. Geometry checks. |
+| `verify/live.mjs` | Real 3-second run + reduced-motion emulation. **This is the one that catches sequence bugs.** |
+| `verify/*.png` | Output, regenerated — not source. |
 | `README.md` | This document |
 
-Nothing else yet. Related: [[concept_previews_path]] for how to make step 1
+Related: [[concept_previews_path]] for how to make step 1
 viewable, [[illuminus_neon_cta]] for the realism-vs-affordance trap,
 [[two_glass_shatter_engines]] for the CSS-rotation precedent,
 [[web_audio_user_activation_touch]] before any audio,
