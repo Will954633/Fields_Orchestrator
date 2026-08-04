@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Fields — the fridge</title>
+<link rel="stylesheet" href="fridge.css">
+</head>
+<body>
+
+<!--
+  Concept prototype for the /fridge landing page.
+
+  The four <a> elements below are real links, present in the initial HTML and
+  merely occluded by the door. That is deliberate and it is the contract: on the
+  real site the door has to paint and swing from SSR HTML + CSS alone, because
+  the current destination ships 219 KB of JS before React can animate anything.
+  JS here only decides WHEN to open — never whether the content exists.
+-->
+
+<main class="room">
+  <div class="stage">
+    <div class="fridge" id="fridge">
+
+      <!-- interior -->
+      <div class="cavity">
+        <div class="lamp"></div>
+        <p class="eyebrow">Burleigh Waters</p>
+        <ul class="shelves">
+          <li class="shelf">
+            <a href="https://fieldsestate.com.au/market-intelligence/burleigh-waters">
+              <span class="label">What's happening in Burleigh Waters
+                <span class="sub">Prices, supply and days on market</span></span>
+              <span class="go" aria-hidden="true">→</span>
+            </a>
+          </li>
+          <li class="shelf">
+            <a href="https://fieldsestate.com.au/sold">
+              <span class="label">What sold near you recently
+                <span class="sub">Every settled sale, with the actual price</span></span>
+              <span class="go" aria-hidden="true">→</span>
+            </a>
+          </li>
+          <li class="shelf">
+            <a href="https://fieldsestate.com.au/for-sale">
+              <span class="label">What's for sale nearby
+                <span class="sub">Everything currently on the market</span></span>
+              <span class="go" aria-hidden="true">→</span>
+            </a>
+          </li>
+          <li class="shelf">
+            <a href="https://fieldsestate.com.au/analyse-your-home">
+              <span class="label">What's my home worth
+                <span class="sub">A comparable range, and how we got there</span></span>
+              <span class="go" aria-hidden="true">→</span>
+            </a>
+          </li>
+        </ul>
+      </div>
+
+      <!-- door -->
+      <div class="door" aria-hidden="true">
+        <div class="back">
+          <span class="doorShelf a"></span>
+          <span class="doorShelf b"></span>
+          <span class="doorShelf c"></span>
+        </div>
+        <div class="edge"></div>
+        <div class="face">
+          <img class="magnet" src="assets/magnet.webp" width="440" height="280" alt="">
+          <span class="handle"></span>
+          <span class="seam"></span>
+        </div>
+      </div>
+
+    </div>
+    <p class="prompt" aria-hidden="true">Open</p>
+  </div>
+</main>
+
+<script src="fridge.js"></script>
+</body>
+</html>
