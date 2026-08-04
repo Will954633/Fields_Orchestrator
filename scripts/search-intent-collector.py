@@ -1808,12 +1808,22 @@ def _backfill_reddit_scores(sm_db):
 # ---------------------------------------------------------------------------
 _SRC_ERR_HINT = {"auto": "autocomplete", "ads": "google-ads"}
 
+# Sources where "0 rows and no error" is a legitimate answer rather than a
+# failure. Google Ads search terms only exist while a campaign is actually
+# serving; every Fields campaign is currently PAUSED/REMOVED, so the report
+# correctly returns nothing and the job was crying ERROR every run (2026-08-05
+# health-board audit). Every real ads failure — missing creds, GoogleAdsException
+# — appends a "google-ads:" entry to all_errors, so an empty error list really
+# does mean "the API answered, there was just nothing to report".
+_SRC_EMPTY_OK = {"ads": "no enabled Google Ads campaigns (expected while paused)"}
+
 
 def _emit_source_heartbeats(selected, results_by_src, all_errors):
     """Per-source health beat → system_monitor.job_runs so a silently-dead source
     (e.g. the expired GSC token that stopped 2026-06-10) surfaces on the Fields
     Systems Health sheet instead of rotting unnoticed for weeks. Each source that
-    was actually attempted this run reports success (rows>0) or error (0 rows)."""
+    was actually attempted this run reports success (rows>0) or error (0 rows),
+    except for _SRC_EMPTY_OK sources where an empty-but-clean result is fine."""
     try:
         from job_status import record_job_result
     except Exception:
@@ -1823,9 +1833,14 @@ def _emit_source_heartbeats(selected, results_by_src, all_errors):
             continue  # source not attempted this run — don't touch its heartbeat
         hint = _SRC_ERR_HINT.get(src, src)
         src_errs = [e for e in all_errors if hint in e.lower()]
-        status = "success" if results else "error"
-        detail = (f"{len(results)} rows" if status == "success"
-                  else (src_errs[0][:180] if src_errs else "0 rows collected"))
+        empty_ok = src in _SRC_EMPTY_OK and not src_errs
+        status = "success" if (results or empty_ok) else "error"
+        if results:
+            detail = f"{len(results)} rows"
+        elif empty_ok:
+            detail = f"0 rows — {_SRC_EMPTY_OK[src]}"
+        else:
+            detail = src_errs[0][:180] if src_errs else "0 rows collected"
         try:
             record_job_result(
                 f"search_intent_{src}", status, detail=detail,

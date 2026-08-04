@@ -242,7 +242,11 @@ def _report_batch(sent, failed, skipped, dry):
               else f"{len(sent)} shortlists delivered")
     try:
         from job_status import record_job_result
+        # Cron: Fri 09:00 AEST, weekly. stale_hours=192 (8d) so one missed
+        # Friday flags rather than waiting the default 10.5d.
         record_job_result("fpf_friday_batch", status, detail=detail,
+                          cadence_hours=168, stale_hours=192,
+                          title="Five Property Friday — Friday shortlist batch",
                           sent=len(sent), failed=len(failed), skipped=skipped)
     except Exception as e:
         print(f"(job_status record failed: {e})")

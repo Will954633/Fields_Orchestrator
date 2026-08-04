@@ -2,6 +2,23 @@
 """
 ssd_quota_autoresize.py
 =======================
+*** RETIRED 2026-08-05 — DO NOT RE-CRON. Kept for reference only. ***
+
+Superseded by hardware: rather than wait on the SSD quota grant, a separate
+750 GB `blobs-hdd` disk was attached and /data/blobs moved onto it (/dev/sdc,
+738 G usable, 43% used). That is already well past this script's TARGET_BLOB of
+700 GB, so there is nothing left for it to do. It also still points at
+DEV=/dev/sdb (the old 400 GB `fields-blob-storage`), which is no longer the
+volume serving blobs — running it now would grow the wrong disk.
+
+Its cron line was lost in the 2026-07-30 [OPS-CRONTAB-WIPE] restore and has
+deliberately NOT been reinstated; its system_monitor.job_runs heartbeat was
+deleted in the same pass, so it no longer occupies a STALE row on the Fields
+Systems Health board. To genuinely revive this, first re-point DEV at the disk
+actually mounted at /data/blobs.
+
+Original purpose follows.
+---------------------------------------------------------------------------
 Watcher that finishes the SSD-headroom job automatically once Google grants the
 quota increase we filed 2026-07-30 (australia-southeast1 SSD_TOTAL_GB 500 -> 1000,
 pending manual approval — the prior 600 request sat ungranted for 9 days).

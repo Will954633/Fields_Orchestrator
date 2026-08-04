@@ -61,8 +61,12 @@ def main():
     # best-effort self-report (watchdog can confirm the pre-flight ran)
     try:
         from job_status import record_job_result
+        # Cron: Thu 18:00 AEST, weekly. stale_hours=192 (8d) so a single
+        # missed Thursday flags rather than waiting the default 10.5d.
         record_job_result("fpf_preflight_gmail",
-                          "success" if status == "alive" else "error", detail=f"{status}: {detail}")
+                          "success" if status == "alive" else "error", detail=f"{status}: {detail}",
+                          cadence_hours=168, stale_hours=192,
+                          title="Five Property Friday — Gmail token pre-flight")
     except Exception as e:
         print(f"(job_status record failed: {e})")
 

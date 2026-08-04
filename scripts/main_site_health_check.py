@@ -1198,6 +1198,53 @@ def collect_process_registry(add):
 
 
 # ---- Self-reported jobs (generic: any process that calls job_status.job_run) --
+#
+# Jobs switched off ON PURPOSE. A paused job keeps its last heartbeat forever, so
+# without this it ages into STALE (or freezes on a final ERROR) and screams on the
+# board every day — which is exactly how 28 deliberately-paused rows came to bury
+# the 3 real failures in the 2026-08-05 audit (Process Registry sat at 67%).
+#
+# This is the heartbeat-side twin of _REGISTRY_DISABLED and carries the same
+# contract: an entry is a HUMAN ACKNOWLEDGEMENT that the job is off on purpose,
+# so it renders as KNOWN-GAP (severity 0, info=True) instead of an alarm.
+#
+# Rules:
+#   - Every entry MUST give the reason and the date it was paused.
+#   - Pausing a job is not "done" until its cron line is actually commented out
+#     AND its name is listed here. Delete the entry when the job is un-paused.
+#   - Safety valve: if a listed job reports a run INSIDE its cadence it is
+#     obviously live again, so it is rendered normally and the stale entry is
+#     called out — the registry can hide a broken job only while it is genuinely
+#     silent, never while it is running.
+_RL_PAUSE = "paused 2026-07-30 [RL-AGENTS-PAUSE] — all autonomous RL/agent crons off for the GC rebuild"
+_HOF_PAUSE = "paused 2026-07-30 — Home Owner out-of-market funnel loop stopped for the GC rebuild"
+_PAUSED_JOBS = {
+    # General RL (16_General_Reinforcement_Learning) — self-pacing dispatchers
+    "geo_dispatch": _RL_PAUSE, "seo_dispatch": _RL_PAUSE, "ads_dispatch": _RL_PAUSE,
+    "articles_dispatch": _RL_PAUSE, "onsite_dispatch": _RL_PAUSE,
+    # …their analyst cycles
+    "geo_cycle": _RL_PAUSE, "seo_cycle": _RL_PAUSE, "ads_cycle": _RL_PAUSE,
+    "articles_cycle": _RL_PAUSE, "onsite_cycle": _RL_PAUSE, "conductor_cycle": _RL_PAUSE,
+    # …their sensors + meta layer
+    "rl_geo_signal": _RL_PAUSE, "rl_seo_signal": _RL_PAUSE, "rl_ads_signal": _RL_PAUSE,
+    "rl_articles_signal": _RL_PAUSE, "rl_onsite_signal": _RL_PAUSE,
+    "rl_onsite_friction": _RL_PAUSE, "rl_reward_ledger": _RL_PAUSE,
+    "rl_personalization_policy": _RL_PAUSE, "rl_conductor": _RL_PAUSE,
+    "rl_arm_grades": _RL_PAUSE, "rl_selftest": _RL_PAUSE, "cycle_organizer": _RL_PAUSE,
+    # Off-Market RL (15_Off-Market/Reinforcement_Learning)
+    "offmarket_rl_cycle": _RL_PAUSE,
+    "offmarket_coverage_scraper": _RL_PAUSE,
+    "offmarket_sitemap_release": _RL_PAUSE,
+    # Home Owner Lead Funnel (03_Facebook/Home_Owner_Lead_Funnel_Search)
+    "home_owner_funnel_checkpoint": _HOF_PAUSE,
+    "home_owner_wakeup": _HOF_PAUSE,
+    # Samantha's weekly SEO-improvement agent (scripts/samantha/run_seo_weekly.sh).
+    # NB: distinct from run_seo_pilot_review.sh, which is still live every Monday.
+    "samantha_seo_improvement":
+        "disabled 2026-07-29 (Will) — whole weekly SEO-improvement process off",
+}
+
+
 def collect_self_reported_jobs(add, sm, now_utc):
     """GENERIC heartbeat renderer — the mechanism behind Mandatory Rule 7
     ("no process fails silently"). Any ongoing script that wraps its run in
@@ -1228,6 +1275,18 @@ def collect_self_reported_jobs(add, sm, now_utc):
         age_h = (now_utc - ts).total_seconds() / 3600 if ts else None
         last_status = d.get("status")
         detail = d.get("detail") or ""
+        # Deliberately-paused jobs render as KNOWN-GAP, not as an alarm — but only
+        # while they are actually silent. A run inside cadence means the job is
+        # live again and the registry entry is stale, so fall through to the
+        # normal judging and say so.
+        paused_reason = _PAUSED_JOBS.get(job)
+        if paused_reason and (age_h is None or age_h > cadence_h):
+            add(PG, name, "Paused", "paused", GAP, "run_at", ts,
+                f"{paused_reason} (last ran {ts.date() if ts else 'never'})", info=True)
+            continue
+        if paused_reason:
+            detail = (f"LISTED AS PAUSED but ran {age_h:.1f}h ago — un-pause was not "
+                      f"recorded; remove it from _PAUSED_JOBS. {detail}")
         if last_status == "error":
             st = ERROR
             msg = f"last run FAILED: {detail}"[:200] or "last run errored"

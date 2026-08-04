@@ -504,6 +504,10 @@ def main():
         "fetch_macro_indicators",
         "success" if written > 0 else "error",
         detail=f"{written}/{total_sources} sources fresh" + (f"; failed: {', '.join(failed)}" if failed else ""),
+        # Cron: Mon 03:15 AEST, weekly. stale_hours=192 (8d) so one missed
+        # Monday flags rather than the default 10.5d.
+        cadence_hours=168, stale_hours=192,
+        title="Macro indicators fetch (oil, rates, CPI, national prices)",
         indicators_written=written, indicators_total=total_sources,
     )
 
@@ -512,5 +516,7 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as e:
-        record_job_result("fetch_macro_indicators", "error", detail=f"crashed: {e}")
+        record_job_result("fetch_macro_indicators", "error", detail=f"crashed: {e}",
+                          cadence_hours=168, stale_hours=192,
+                          title="Macro indicators fetch (oil, rates, CPI, national prices)")
         raise

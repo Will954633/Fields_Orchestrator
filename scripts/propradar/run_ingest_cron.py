@@ -70,11 +70,15 @@ def main():
         detail = (f"stats+sold refreshed + charts recalibrated; ingested {total_recs}, "
                   f"linked {total_linked}, gaps {total_gaps} [{'; '.join(per)}]")
         record_job_result(JOB, "success", detail, records=total_recs,
+                          cadence_hours=168, stale_hours=192,
+                          title="PropRadar weekly ingest (stats + sold + chart recalibration)",
                           linked=total_linked, gaps=total_gaps, suburbs=len(SUBURBS))
         print("OK:", detail)
     except Exception as e:
         detail = f"{type(e).__name__}: {e}"
-        record_job_result(JOB, "error", detail[:300], suburbs=len(SUBURBS))
+        record_job_result(JOB, "error", detail[:300], suburbs=len(SUBURBS),
+                          cadence_hours=168, stale_hours=192,
+                          title="PropRadar weekly ingest (stats + sold + chart recalibration)")
         _alert(f"⚠️ PropRadar ingest FAILED\n{detail}")
         print("FAILED:", detail)
         traceback.print_exc()

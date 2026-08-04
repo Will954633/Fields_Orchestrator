@@ -648,9 +648,15 @@ if __name__ == "__main__":
                 "fetch_abs_market_signals",
                 "success" if written > 0 else "error",
                 detail=f"{written}/{total} ABS indicators resolved",
+                # Cron: Mon 03:00 AEST, weekly. stale_hours=192 (8d) so one
+                # missed Monday flags rather than the default 10.5d.
+                cadence_hours=168, stale_hours=192,
+                title="ABS market signals fetch",
                 indicators_written=written, indicators_total=total,
             )
     except Exception as e:
         if not args.dry_run:
-            record_job_result("fetch_abs_market_signals", "error", detail=str(e))
+            record_job_result("fetch_abs_market_signals", "error", detail=str(e),
+                              cadence_hours=168, stale_hours=192,
+                              title="ABS market signals fetch")
         raise

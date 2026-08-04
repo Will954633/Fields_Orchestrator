@@ -484,11 +484,19 @@ def build_contact_doc(distinct_id: str, v: dict, existing: dict | None = None) -
         "probable_address_source": (existing or {}).get("probable_address_source"),
         "probable_address_label": (existing or {}).get("probable_address_label"),
         "probable_address_at": (existing or {}).get("probable_address_at"),
+        # Sub-doc fields, carried forward as {} rather than None. Their writers
+        # use dotted $set paths ("offmarket_home.address", "physical_scan.at"),
+        # and Mongo cannot create a field inside an explicit null — it raises
+        # WriteError code 28. A plain .get() stores null for every contact that
+        # has never had one, which broke offmarket_home_signal.py nightly
+        # (2026-08-05). {} is falsy, so every existing truthiness check on these
+        # fields behaves identically.
         # Off-market google owner-lookup signal (written by offmarket_home_signal.py).
-        "offmarket_home": (existing or {}).get("offmarket_home"),
+        "offmarket_home": (existing or {}).get("offmarket_home") or {},
         # User-confirmed home from the recognition modal (written by my-home-confirm.mjs).
-        "home_confirmed": (existing or {}).get("home_confirmed"),
-        "physical_scan": (existing or {}).get("physical_scan"),
+        "home_confirmed": (existing or {}).get("home_confirmed") or {},
+        # Physical scan reconciliation (written by minisite-visit.mjs).
+        "physical_scan": (existing or {}).get("physical_scan") or {},
         "communications": (existing or {}).get("communications", []),
         "owner": (existing or {}).get("owner", "will"),
         "lead_quality": (existing or {}).get("lead_quality"),

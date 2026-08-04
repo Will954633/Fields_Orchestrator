@@ -96,6 +96,18 @@ def main() -> None:
 
         # 3) Upsert each contact's dedicated offmarket_home sub-doc.
         now = datetime.now(timezone.utc)
+
+        # crm_sync.py's hourly whole-doc REPLACE carries `offmarket_home`
+        # forward with .get(), which stores an explicit null when the contact
+        # has never had one. Mongo cannot create a dotted path inside a null
+        # ("Cannot create field 'address' in element {offmarket_home: null}",
+        # code 28), so every $set below would raise. crm_sync now carries it
+        # forward as {} instead; this clears the nulls already on disk and
+        # keeps the job robust if any other writer reintroduces one.
+        db["crm_contacts"].update_many(
+            {"offmarket_home": None}, {"$unset": {"offmarket_home": ""}}
+        )
+
         contacts_updated = 0
         for did, slug_set in all_slugs.items():
             primary_slug = latest.get(did, (sorted(slug_set)[0], ""))[0]
