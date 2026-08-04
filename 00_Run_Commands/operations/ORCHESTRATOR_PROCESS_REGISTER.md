@@ -577,6 +577,55 @@ still live in a parallel path feeding the ops dashboard.
 
 ---
 
+## 6.5 Monitoring reconciliation (2026-08-05)
+
+Every process in this register was reconciled against the **Fields Systems Health** sheet
+(`1Oa7uZv0shzsxftDYJJ3WErxhr7OZMf_SOxRFawbSgTk`, rebuilt nightly at 01:00 by
+`scripts/main_site_health_to_sheet.py`).
+
+**How each class of process is watched:**
+
+| Class | Mechanism | Where |
+|---|---|---|
+| Nightly pipeline — did it run | newest `logs/runs/` dir vs the expected 20:30 trigger | Pipeline Processes |
+| Nightly pipeline — did a step crash | `result.json.success` per step | Pipeline Processes |
+| **Nightly pipeline — did a step lose work** | **`_STEP_OUTCOME_CHECKS` (new)** | Pipeline Processes |
+| **Step defined but unreachable by scheduler** | **schedule-membership drift check (new)** | Pipeline Processes |
+| **Terminal-state accumulation** | **`under_contract` backlog check (new)** | Pipeline Processes |
+| Suburb coverage vs Domain | `system_monitor.scraper_health` (step 109 → write-scraper-health) | Pipeline Processes |
+| Vision provider credit | live Anthropic/OpenAI probe | Pipeline Processes |
+| Cron jobs that self-report | `job_run()` heartbeat → `system_monitor.job_runs` | Process Registry |
+| Cron jobs that don't | log-file freshness vs cadence | Process Registry |
+| Deliberately paused jobs | `_PAUSED_JOBS` / `_REGISTRY_DISABLED` → renders KNOWN-GAP, not alarm | Process Registry |
+| Daemons | `systemctl is-active` per unit | Process Registry |
+| The checker itself | `check_systems_health_ran.py`, separate 07:00 cron, Telegrams directly | Process Registry (Meta) |
+
+**Gaps closed on 2026-08-05:**
+- **Outcome blindness.** The page judged steps purely on exit code. Since every step exits 0 while
+  absorbing failures, a night that lost 11 listings' photo analyses, valued 1 property of 25, failed 73/73
+  profile scrapes and cleared 303 valuations rendered as "26 ok / 0 failed". Added
+  `collect_pipeline_integrity()` with per-step outcome assertions for steps 6, 12, 18, 105, 106, 111, 113.
+  A step whose log no longer matches its pattern renders **UNKNOWN ("cannot verify"), never a silent OK**.
+- **Schedule drift.** A step in `execution_order` but in no `schedule_manager.py` set produces no
+  `result.json` and therefore produced no row at all — how step 121 went 15 days unnoticed. Now an ERROR
+  naming the orphan.
+- **Terminal states.** The 117 frozen `under_contract` listings had no check anywhere.
+- **`fields-samantha-chat`** was active and enabled but absent from the monitored systemd list.
+- **9 active cron jobs** had no heartbeat, no registry row and no other coverage: policy research fetch,
+  price-tier liquidity precompute, monthly market precompute chain, Market Pulse reminder + auto-fallback,
+  Brain 3 ops nightly, Samantha action-log harvest, for-sale-v3 keep-warm, VM heartbeat writer.
+- **Log truncation.** `src/task_executor.py` never wrote the drained stdout tail to the per-step log, so
+  the summary block the outcome checks read was being discarded. Fixed — see `[STEP-STDOUT-TRUNCATED]`.
+
+**Effect:** Pipeline Processes moved **64% → 38% (4 → 11 errors)**. The score dropped because the board
+started telling the truth, not because anything got worse.
+
+**Still unwatched (accepted, low value):** per-suburb enrichment-coverage ratios (§4.3) and the four
+competing "target market" definitions are documented here but not alarmed — they are scope decisions for
+Will, not failures.
+
+---
+
 ## 7. Open issues — priority order
 
 | # | Sev | Where | Issue |
