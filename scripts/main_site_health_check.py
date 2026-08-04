@@ -1087,6 +1087,19 @@ _REGISTRY_LOG_JOBS = [
     ("GCS blob backup (gsutil rsync)", "Infra/Backup", "/var/log/blob-backup/daily-sync.log", 1),
     ("KB Lite ingest (Brain 3)", "Knowledge Base", "kb-lite-ingest.log", 1),
     ("VM resource metrics writer", "Infra", "/tmp/vm_metrics.log", 1),
+    # Added 2026-08-05 reconciliation. Each of these is an active cron entry that
+    # was covered by NOTHING — no heartbeat, no registry row, no other tab — so a
+    # silent stop would have gone unnoticed indefinitely.
+    ("Policy research fetch (monthly)", "Market Intelligence", "policy-research.log", 35),
+    ("Price-tier liquidity precompute (monthly)", "Market Intelligence",
+     "precompute-price-tier-liquidity.log", 35),
+    ("Monthly market precompute chain", "Market Intelligence", "monthly-market-precompute.log", 35),
+    ("Market Pulse reminder (1st)", "Market Content", "pulse-reminder.log", 35),
+    ("Market Pulse auto-fallback (3rd)", "Market Content", "market-pulse-auto.log", 35),
+    ("Brain 3 ops nightly", "Knowledge Base", "/home/fields/brain3_ops/nightly.log", 1),
+    ("Samantha action-log harvest (hourly)", "Samantha", "samantha/actionlog.log", 1),
+    ("for-sale-v3 keep-warm", "Website", "keep-warm-forsale.log", 1),
+    ("VM heartbeat writer", "Infra", "/tmp/vm-heartbeat.log", 1),
 ]
 _REGISTRY_ALREADY_COVERED = [
     ("Sitemap regen (daily push)", "Website/SEO", "Sitemap tab"),
@@ -1128,7 +1141,187 @@ _REGISTRY_SYSTEMD_UNITS = [
     "fields-ai-analysis-poller", "fields-appraisal-poller", "fields-bridge-sync",
     "fields-offmarket-intel-poller", "fields-offmarket-processor", "fields-property-report-poller",
     "fields-tracking", "fields-voice-agent",
+    # Added 2026-08-05 reconciliation: active + enabled on the VM but absent from
+    # this list, so an outage would not have surfaced anywhere.
+    "fields-samantha-chat",
 ]
+
+
+# ---- Pipeline integrity: the "exited 0 but lost work" class -------------------
+#
+# The Pipeline Processes page judged a step by `result.json.success`, i.e. its exit
+# code. The 2026-08-05 audit found that every one of the 26 nightly steps exits 0
+# while absorbing failures internally, so the board read 26/26 OK on a night when
+# step 105 wrote 11 listings with zero photo analyses, step 6 valued 1 property of
+# 25, step 12's Pass 3 failed 73/73, and step 18 cleared 303 published valuations.
+# None of that was visible anywhere.
+#
+# Each entry asserts an OUTCOME, parsed from the step's own log:
+#   (step_id, label, regex, extract->value, judge(value)->(status, detail))
+# A step whose log does not match its pattern is UNKNOWN, never silently OK — a
+# changed log format must surface as "cannot verify", not as success.
+_STEP_OUTCOME_CHECKS = [
+    # step, label, pattern(s) to count or capture, and the threshold that fails
+    ("105", "Photo analysis: dead-host image failures",
+     r"Failed to download image", "count",
+     lambda n: (ERROR, f"{n} image downloads failed — listings are being written with ZERO "
+                       f"photo analyses and marked processed, so they never retry") if n else (OK, "")),
+    ("106", "Floor plan: dead-host failures",
+     r"account is disabled|Failed to download and encode floor plan", "count",
+     lambda n: (ERROR, f"{n} floor-plan downloads failed on a retired blob host") if n else (OK, "")),
+    # Judge step 6 on FAILURES, not successes. "Successfully valued: 1" reads as a
+    # green 1 when the run actually queried 25 properties and lost 24 — a success
+    # count alone cannot distinguish a healthy quiet night from a total washout.
+    ("6", "Valuation model: properties that failed to value",
+     r"Failed:\s*(\d+)", "capture",
+     lambda n: (ERROR, f"{n} properties could not be valued") if n > 5
+     else ((STALE, f"{n} properties could not be valued") if n else (OK, ""))),
+    ("6", "Valuation model: OSM/Overpass errors",
+     r"API error: 406", "count",
+     lambda n: (ERROR, f"{n} Overpass 406s — OSM enrichment is a hard gate on valuation, "
+                       f"and 406 is not in the retry branch") if n else (OK, "")),
+    ("12", "Timeline Pass 3: profile scrapes",
+     r"Pass 3 complete: (\d+) transactions written", "capture",
+     lambda n: (ERROR, "Pass 3 wrote nothing — Domain profile scraping is failing "
+                       "(direct VM fetch is Akamai-blocked; blocks are mislabelled 404)")
+     if n == 0 else (OK, "")),
+    ("113", "Withdrawn detection: full sweep",
+     r"ABORTED EARLY: runtime budget exceeded", "count",
+     lambda n: (STALE, "aborted on its 40-min budget — part of the for-sale book went "
+                       "unchecked again this run") if n else (OK, "")),
+    ("18", "Valuation precompute: cleared valuations",
+     r"cleared existing valuation", "count",
+     lambda n: (ERROR, f"{n} properties had a published valuation wiped this run")
+     if n > 250 else ((STALE, f"{n} valuations cleared") if n > 100 else (OK, ""))),
+    # Reads the closing TOTAL line. Before the 2026-08-05 stdout-truncation fix that
+    # line never reached stdout.log, so this resolves to UNKNOWN ("cannot verify")
+    # on older runs rather than pretending the step succeeded.
+    ("111", "Sold backfill: records written",
+     r"TOTAL:.*?(\d+)\s+updated", "capture",
+     lambda n: (STALE, "sold backfill matched records but wrote none — the 7-day "
+                       "window may not be sweeping (page under-yield)") if n == 0 else (OK, "")),
+]
+
+
+def collect_pipeline_integrity(add, gc, sm, now_utc):
+    """Outcome-level checks for the nightly pipeline.
+
+    Complements the exit-code view already on this page. Three families:
+      1. schedule-membership drift  — a step defined but unreachable by the scheduler
+      2. per-step outcome assertions — a step that ran, exited 0, and lost work
+      3. terminal-state accumulation — records the pipeline can no longer reach
+    """
+    import re  # module-level `re` is not imported in this file; other collectors do the same
+
+    PG = "Pipeline Processes"
+    orch = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    # --- 1. Schedule-membership drift ------------------------------------------
+    # config/process_commands.yaml defines execution_order; src/schedule_manager.py
+    # holds the three sets that decide what actually runs. They are edited
+    # separately and nothing reconciles them, which is how step 121 (SEO sitemap
+    # resubmit) sat in execution_order from 2026-07-21 and NEVER ONCE executed —
+    # skipped nightly with the innocuous "not scheduled for today".
+    try:
+        pc = open(os.path.join(orch, "config", "process_commands.yaml")).read()
+        sm_src = open(os.path.join(orch, "src", "schedule_manager.py")).read()
+        m = re.search(r"^execution_order:\s*\[([^\]]+)\]", pc, re.M)
+        order = [int(x) for x in re.findall(r"\d+", m.group(1))] if m else []
+        scheduled = set()
+        for setname in ("target_market_processes", "other_suburbs_processes",
+                        "always_run_processes"):
+            sm_m = re.search(rf"self\.{setname}\s*=\s*\{{([^}}]*)\}}", sm_src)
+            if sm_m:
+                scheduled |= {int(x) for x in re.findall(r"\d+", sm_m.group(1))}
+        orphans = [i for i in order if i not in scheduled]
+        if not order or not scheduled:
+            add(PG, "Schedule membership", "execution_order vs schedule_manager", None,
+                UNKNOWN, "", None, "could not parse execution_order or the schedule sets")
+        elif orphans:
+            names = []
+            for i in orphans:
+                nm = re.search(rf"- id: {i}\s*\n\s*name:\s*\"([^\"]+)\"", pc)
+                names.append(f"{i} ({nm.group(1)})" if nm else str(i))
+            add(PG, "Schedule membership", "execution_order vs schedule_manager",
+                f"{len(orphans)} orphaned", ERROR, "", None,
+                "defined and ordered but in NO schedule set, so it can never run on any "
+                "day and is skipped as 'not scheduled for today': " + "; ".join(names))
+        else:
+            add(PG, "Schedule membership", "execution_order vs schedule_manager",
+                f"{len(order)} steps, all scheduled", OK, "", None, "")
+    except Exception as e:
+        add(PG, "Schedule membership", "execution_order vs schedule_manager", None,
+            UNKNOWN, "", None, f"check failed: {type(e).__name__}: {e}"[:160])
+
+    # --- 2. Per-step outcome assertions ----------------------------------------
+    runs_dir = os.path.join(orch, "logs", "runs")
+    try:
+        run_dirs = sorted(d for d in os.listdir(runs_dir)
+                          if os.path.isdir(os.path.join(runs_dir, d)) and not d.startswith("."))
+    except OSError:
+        run_dirs = []
+    if run_dirs:
+        run_dir = os.path.join(runs_dir, run_dirs[-1])
+        step_logs = {}
+        for step_dir in sorted(os.listdir(run_dir)):
+            sm_id = re.match(r"\d+_step_(\d+)_", step_dir)
+            p = os.path.join(run_dir, step_dir, "stdout.log")
+            if sm_id and os.path.exists(p):
+                try:
+                    step_logs[sm_id.group(1)] = open(p, errors="ignore").read()
+                except OSError:
+                    pass
+
+        for step_id, label, pattern, mode, judge_fn in _STEP_OUTCOME_CHECKS:
+            text = step_logs.get(step_id)
+            if text is None:
+                # Step did not run tonight (Sunday-only, skipped, or never scheduled).
+                # Not an error here — family 1 above owns "should have run but can't".
+                continue
+            if mode == "count":
+                val = len(re.findall(pattern, text))
+            else:
+                mm = re.search(pattern, text)
+                if mm is None:
+                    add(PG, f"Step {step_id} outcome", label, None, UNKNOWN, "", None,
+                        "log did not contain the expected result line — cannot verify "
+                        "this step actually did its work (log format changed?)")
+                    continue
+                val = int(mm.group(1))
+            st, detail = judge_fn(val)
+            add(PG, f"Step {step_id} outcome", label, str(val), st, "", None, detail)
+
+    # --- 3. Terminal-state accumulation ----------------------------------------
+    # `under_contract` is written by step 103 and read by nothing. Every downstream
+    # step filters listing_status="for_sale", so a flagged property is never
+    # re-priced, never withdrawn-checked, and can never be detected as sold.
+    try:
+        oldest, total = None, 0
+        for s in SUBS_ALL if "SUBS_ALL" in globals() else SUBS:
+            try:
+                n = gc[s].count_documents({"listing_status": "under_contract"})
+            except Exception:
+                continue
+            total += n
+            if n:
+                d = gc[s].find_one({"listing_status": "under_contract"},
+                                   sort=[("under_contract_detected_at", 1)])
+                ts = as_dt((d or {}).get("under_contract_detected_at"))
+                if ts and (oldest is None or ts < oldest):
+                    oldest = ts
+        age_d = (now_utc - oldest).days if oldest else None
+        if total == 0:
+            add(PG, "Terminal states", "under_contract backlog", "0", OK, "", None, "")
+        else:
+            st = ERROR if (age_d or 0) > 60 else (STALE if total > 20 else OK)
+            add(PG, "Terminal states", "under_contract backlog", str(total), st,
+                "under_contract_detected_at", oldest,
+                f"{total} listings flagged under_contract; oldest {age_d}d. Nothing reads "
+                f"this state — they are never re-priced, never withdrawn-checked, and "
+                f"cannot be detected as sold." if st != OK else "")
+    except Exception as e:
+        add(PG, "Terminal states", "under_contract backlog", None, UNKNOWN, "", None,
+            f"check failed: {type(e).__name__}: {e}"[:160])
 
 
 def collect_process_registry(add):
@@ -1830,6 +2023,7 @@ def collect(client, now_utc, prev_map):
     for page_name, fn, fn_args in [
         ("Process Registry", collect_process_registry, (add,)),
         ("Process Registry", collect_self_reported_jobs, (add, sm, now_utc)),
+        ("Pipeline Processes", collect_pipeline_integrity, (add, gc, sm, now_utc)),
         ("GitHub Actions", collect_github_actions, (add,)),
         ("Market Signals Fetch", collect_market_signals_fetch, (add, sm, now_utc)),
         ("PropRadar Ingest", collect_propradar_ingest, (add, sm, now_utc)),
