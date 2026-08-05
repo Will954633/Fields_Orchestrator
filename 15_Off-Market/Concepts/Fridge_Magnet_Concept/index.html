@@ -39,7 +39,25 @@
 
       <!-- interior -->
       <div class="cavity">
+        <!-- Behind everything: what the secret door reveals. A still, not a
+             live <iframe> — an iframe fires the homepage's own analytics, costs
+             a full page load per visit, and can reveal a BLANK box if it hasn't
+             painted, which would ruin the one moment it exists for.
+             Regenerate with assets/build_home_shot.mjs when the homepage
+             changes. -->
+        <div class="vault" aria-hidden="true"><img class="vaultShot" src="assets/home.webp" alt="" width="758" height="1640"></div>
+
+        <!-- Everything the fridge normally shows. Hinges down as one panel. -->
+        <div class="innerPanel">
         <div class="lamp"></div>
+        <!-- The secret button. It was on the inside of the DOOR, which turned
+             out to be impossible to see: on a portrait phone a left-hinged door
+             is edge-on at 90 degrees and swung out of frame past that (measured
+             — the inner face rendered 5px wide, then landed at screen x=-113).
+             So it lives where a real fridge puts its unlabelled controls: the
+             top of the cabinet beside the lamp. Small, no label, only reachable
+             once the door is open. -->
+        <button type="button" class="secret" id="secret" aria-label="Reveal what's behind the fridge"></button>
         <p class="eyebrow">Burleigh Waters</p>
         <ul class="shelves" id="shelves">
           <li class="shelf">
@@ -74,6 +92,7 @@
         <!-- Owns interior darkness AND the lamp strike. Must stay
              pointer-events:none — it sits above the option links. -->
         <div class="flick"></div>
+        </div><!-- /.innerPanel -->
       </div>
 
       <!-- door -->
@@ -93,6 +112,11 @@
             <img class="magnet ml" src="assets/magnet.webp" alt="" width="440" height="269">
             <img class="magnet mr" src="assets/magnet.webp" alt="" width="440" height="269">
           </div>
+          <!-- Manufacturer badge: the Fields icon debossed into the steel.
+               A CSS mask, so it is filled with the same metal as the door and
+               lit by the same light — an <img> would sit ON the door rather
+               than being part of it. -->
+          <span class="badge" aria-hidden="true"></span>
           <span class="handle"></span>
           <span class="seam"></span>
         </div>
