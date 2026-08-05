@@ -58,7 +58,21 @@
              top of the cabinet beside the lamp. Small, no label, only reachable
              once the door is open. -->
         <button type="button" class="secret" id="secret" aria-label="Reveal what's behind the fridge"></button>
-        <p class="eyebrow" id="eyebrow"></p>
+        <!-- Only three suburbs have market pages (Robina, Varsity Lakes,
+             Burleigh Waters) plus a Gold Coast aggregate for everyone else.
+             A native <select> rather than custom pills: it gives a proper OS
+             picker on a phone, is accessible for free, and doubles as "change
+             it" once a suburb is known. -->
+        <div class="who">
+          <label class="whoLabel" for="suburbPick">Your suburb</label>
+          <select class="whoPick" id="suburbPick">
+            <option value="">Choose…</option>
+            <option value="robina">Robina</option>
+            <option value="varsity-lakes">Varsity Lakes</option>
+            <option value="burleigh-waters">Burleigh Waters</option>
+            <option value="gold-coast">Elsewhere on the Gold Coast</option>
+          </select>
+        </div>
         <ul class="shelves" id="shelves">
           <li class="shelf">
             <a href="https://fieldsestate.com.au/market-intelligence" id="optMarket">
