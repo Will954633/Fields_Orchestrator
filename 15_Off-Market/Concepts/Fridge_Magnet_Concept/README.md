@@ -13,10 +13,16 @@ do next.
 > build step — edit `fridge.css` and refresh.
 >
 > **There is no fridge artwork and there is no video.** Every surface — door,
-> handle, gasket, shelves, lamp, thickness — is a CSS gradient. The only two
-> images on the page are the magnet twin (8.5 KB, a downscale of the real print
-> file) and a 128 px grain tile (12 KB) that stops the large gradients banding
-> on OLED. Total added weight: **~21 KB**.
+> handle, gasket, shelves, lamp, thickness — is a CSS gradient. The images are
+> the magnet twin (8.5 KB, a downscale of the real print file), a 128 px grain
+> tile (12 KB) that stops the large gradients banding on OLED, and the child's
+> drawing (49 KB gzipped SVG). Total added weight: **~70 KB**.
+>
+> | Param | |
+> |---|---|
+> | `?art=mono` | drawing in greyscale instead of colour |
+> | `?sound=0` | silent |
+> | `?debug=1` | log events + audio state to the console |
 
 ---
 
@@ -182,12 +188,14 @@ Total to fully open: **~2.6 s**, with the first meaningful frame immediate.
 
 | # | Phase | Duration | What happens |
 |---|---|---|---|
-| 0 | **Recognition** | 0.0 → 0.8 s | Closed door, dead centre. Our magnet is on it — the same green card they just scanned. Faint specular sheen drifts across the steel. Nothing else. |
-| 1 | **Seal** | 0.8 → 1.1 s | A hairline of warm light appears down the hinge seam. The promise: there is something lit in there. Handle picks up a highlight. |
-| 2 | **Break** | 1.1 → 1.25 s | The gasket lets go. Door jumps ~6° fast — this is the beat that makes it a fridge and not a cupboard. Optional thunk. |
-| 3 | **Swing** | 1.25 → 2.4 s | Heavy deceleration through to ~72°. Light wedge widens across the floor. Door face darkens as it turns off-axis. |
-| 4 | **Reveal** | 1.6 → 2.6 s | Shelves light in sequence as the light reaches them — top shelf first. Each option row fades up on a 90 ms stagger, overlapping the swing. |
-| 5 | **Rest** | 2.6 s → | Door held open. Compressor hum, if audio survived. Interior lamp breathes ±3% on a slow 6 s cycle so the frame is never dead. |
+| 0 | **Recognition** | 0.0 → 0.8 s | Closed door, dead centre. A child's drawing pinned up by **two of our magnets** — the same green card they just scanned. Faint specular sheen drifts across the steel. |
+| 1 | **Seal** | — | A hairline of warm light down the hinge seam. The promise: something is lit in there. |
+| 2 | **Break** | 0.8 → 0.95 s | The gasket lets go. Fast initial movement, then the door's mass takes over. |
+| 3 | **Swing** | 0.95 → 2.5 s | Heavy deceleration through to 100°. Light wedge widens across the floor. |
+| 4 | **Strike** | 1.06 → 2.2 s | **The lamp strikes and stutters** — 6 dropouts over ~1.1 s, then catches and holds. Every edge is a hard step. |
+| 5 | **Reveal** | 1.4 → 2.5 s | Shelves light in sequence, top first, on a 90 ms stagger driven by the same door angle. |
+| 6 | **Rest** | 2.5 s → | Door held open. Lamp breathes ±3% on a 6 s cycle. Compressor hum, if the tap earned audio. |
+| — | **Close** | 1.02 s | Reversed easing: you push it, the gasket *snatches* it shut. The light stays on until the door seats, then cuts. |
 
 Two deliberate choices in that table:
 
@@ -199,24 +207,28 @@ resolving.
 **The magnet is on the door in phase 0.** This is the whole idea and it costs one
 image. If it gets cut for time, cut something else.
 
-### Pull, or open by itself?
-
-Both — in that order.
+### Pull, or open by itself? Both — and it closes again
 
 - The door responds to **any touch anywhere**, not a handle hitbox. Asking
   someone to find a 40 px handle on a phone in a kitchen is a failure mode with
   no upside.
 - If untouched, it **auto-opens at 0.8 s**. Nobody may be left staring at a
   closed fridge wondering whether the page is broken.
+- **It closes again.** Tapping the room around the fridge — or the prompt below
+  it, which swaps to "Close" — shuts the door. Being able to shut it and open it
+  again is most of what makes the thing feel like an object rather than an
+  intro animation, and it costs nothing.
+- **A tap inside the cavity does *not* close it.** Otherwise people lose the
+  menu while reaching for an option. The interior is deliberately inert; only
+  the door and the room are close targets.
 - A real touch is worth capturing separately (`fridge_pulled` vs `fridge_auto`) —
   it's a genuine engagement signal, and it is the **only** way to get the user
-  activation that any audio needs (§10).
+  activation that audio needs (§10).
 
-Optionally the swing tracks the finger while held (`pointermove` → angle), which
-is what made the Break Glass handle land — Will's verdict there was "perfect",
-and it was a single CSS rotation, not a video. Same technique applies exactly.
-
----
+> ⚠ **Measured, not assumed:** once open at 100°, the door's own hit area is only
+> **~25 px wide**. That is far too small to be the sole close affordance, which
+> is why the prompt stays on screen and swaps its copy. Found with
+> `document.elementFromPoint`, not by looking at it.
 
 ## 5. How it's built
 
@@ -386,7 +398,8 @@ byte is a byte that has to arrive over kitchen 4G before the moment works.
 
 | # | Asset | Format | Est. size | Source |
 |---|---|---|---|---|
-| 1 | **Magnet twin** — the green card as it appears on the door | WebP, ~400 px wide, 2× | ~12 KB | Derive from existing `Fields_BusinessCard_90x55_QR_GREEN_300dpi.png`. Downscale + slight desaturate so it sits in the monochrome world without going grey. |
+| 0 | **The child's drawing** — `assets/artwork.svg`, generated by `build_artwork.py` | SVG | 49 KB gzip | **The single best thing on the door.** Generated so it scales and can be recoloured; drop in a real photo as `assets/artwork.jpg` to replace it. |
+| 1 | **Magnet twin** — ×2, straddling the drawing's top edge | WebP, ~400 px wide, 2× | ~12 KB | Derive from existing `Fields_BusinessCard_90x55_QR_GREEN_300dpi.png`. Downscale + slight desaturate so it sits in the monochrome world without going grey. |
 | 2 | **Grain tile** — tileable luminance noise | PNG, 128×128, 8-bit grey | ~8 KB | Generated. **Not optional** — large smooth gradients band severely on phone OLED, and this door is nothing but large smooth gradients. |
 | 3 | Door face, handle, edge slab, hinges | CSS gradients | **0 B** | Built, not drawn |
 | 4 | Shelves, wire grid, interior walls | CSS (`repeating-linear-gradient`) | **0 B** | Built |
@@ -402,16 +415,23 @@ byte is a byte that has to arrive over kitchen 4G before the moment works.
 | 9 | Silhouette shelf items (bottle, jar, carton) | Inline SVG paths | ~2 KB ea | Depth and life at the edges of frame. Silhouettes only — no detail, no colour. |
 | 10 | Handwritten "note under a magnet" | SVG | ~4 KB | The natural treatment for the **personalised** shelf at v1.5. Charming precisely because it's the one hand-made thing. |
 
-### Audio — build it, ship it disabled
+### Audio — **synthesised, zero bytes**
 
-| # | Asset | Format | Est. size | Note |
-|---|---|---|---|---|
-| 11 | Gasket release thunk | MP3 mono 64 kbps | ~15 KB | Freesound, as with Break Glass |
-| 12 | Compressor hum loop | MP3 mono | ~25 KB | Under the rest phase |
-| 13 | Door close clunk | MP3 mono | ~15 KB | Only if close is ever wired |
+No sound files. `fridgeAudio.js` builds all three events in Web Audio, which is
+how the rest of this site does sound (`glass-audio.js`, `whaleAudio.ts`,
+`powerAudio.js`). Nothing to license, nothing to download, and the timbre is
+tunable without a re-export.
 
-**Read §10 before writing a line of audio code.** There is an unsolved Android
-audio bug on this site that has already cost five rounds of fixes.
+| Event | How it's built | Why |
+|---|---|---|
+| **Open** | Band-passed noise sweeping 1500→320 Hz, then a 92→46 Hz sine thump | The gasket *peels* first and the mass releases second. Getting that order right matters more than the timbre. |
+| **Close** | 130→42 Hz impact + a high-passed click transient, then the seal sucking in behind it | Heavier and quicker. The impact is the loudest thing on the page. |
+| **Rest** | 99.5 Hz sawtooth through a 220 Hz lowpass, gain 0.014 | The compressor. Deliberately near-inaudible — it should register as "the room isn't silent", never as a tone. |
+
+⚠ **The auto-open is silent, and must stay silent.** No gesture has happened, so
+there is no user activation; on Android the context would be created without it,
+report `state:"running"`, and emit nothing — with no way for us to tell. Sound
+belongs to the pull. See §10.1.
 
 ### Not needed — worth saying explicitly
 
@@ -657,6 +677,20 @@ animation; Will needs a URL on a handset.
    one-line change and it is the difference between magnet scans appearing in
    the physical-attribution data or not. Worth doing independently of whether
    this concept ever gets built.
+7. **Should the drawing be in colour?** It currently is — and it is the only
+   colour in the whole sequence, which is a far better place to spend a single
+   accent than on a CTA. But it is arguably a departure from "black and white".
+   Compare on your phone with `?art=mono`. My view: keep the colour. A
+   monochrome child's drawing is a sad object, and the point of it is warmth.
+8. **Is the close affordance discoverable enough?** The door's hit area once
+   open is only ~25 px, so closing is done by tapping the room or the prompt.
+   It works, but nobody is *told*. The alternative — letting a tap anywhere
+   inside the fridge close it — risks shutting the menu on someone reaching for
+   an option.
+9. **Whose drawing?** The one shipped is generated. Using a real child's drawing
+   is warmer, but if it is a real client's child that is a permission question,
+   and if it is Will's own it ties the brand to his family. Worth a decision
+   before this goes near production.
 
 ---
 
@@ -693,6 +727,11 @@ than reading, and each is worth carrying into the port:
    means setting `--open` on the parent. The same mistake had also silently
    killed the prompt's fade-out (`.is-open .prompt` can't match a sibling).
    **Frozen frames verify geometry; only a live run verifies the sequence.**
+4. **Every option link was untappable.** `.fridge` is a full-bleed box at Z=0
+   and `.cavity` sits at Z−8 behind it, so in a `preserve-3d` context the
+   *parent* won hit-testing and swallowed every pointer event. The render was
+   pixel-perfect throughout. Only `document.elementFromPoint()` over the open
+   fridge exposed it — a menu you cannot tap, one push from shipping.
 
 **Not verified, and load-bearing:** no claim here about how the animation
 *feels* is tested. **No handset has been touched** — headless Chrome has no
@@ -714,7 +753,11 @@ is entirely possible the answer is no.
 | `assets/magnet.webp` | 8.5 KB. Downscale of `Fields_BusinessCard_90x55_QR_GREEN_300dpi.png`. |
 | `assets/grain.png` | 12 KB, 128×128 tileable luminance noise. Anti-banding. |
 | `verify/shots.mjs` | Renders five frozen door angles. Geometry checks. |
+| `fridgeAudio.js` | All three door sounds, synthesised. No audio files. |
+| `assets/build_artwork.py` | Generates the drawing. Re-run it for a different one (change the seed). |
+| `assets/artwork.svg` | The drawing. Replaceable with a real photo. |
 | `verify/live.mjs` | Real 3-second run + reduced-motion emulation. **This is the one that catches sequence bugs.** |
+| `verify/toggle.mjs` | Open → close → reopen, plus the "a tap inside must not close it" rule. |
 | `verify/*.png` | Output, regenerated — not source. |
 | `README.md` | This document |
 
