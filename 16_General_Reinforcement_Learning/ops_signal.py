@@ -54,6 +54,74 @@ PAGES = ("Process Registry", "Pipeline Processes")
 ACTIONABLE = ("ERROR", "STALE", "MISSING", "UNKNOWN-FRESHNESS")
 
 
+def _evidence(row, sm, log_paths):
+    """Attach the FACTS that discriminate between superficially-identical rows.
+
+    Rationale (first ops cycle, 2026-08-05): three rows were all tagged RAISING and
+    all three turned out to be different things — one genuine transient, one whose
+    log merely predated a fix that had already landed, and one probe-window artefact.
+    The keyword hint could not tell them apart and the agent had to open three logs
+    to find out.
+
+    The single fact that separates them is the job's OWN heartbeat: if job_runs says
+    the last run succeeded while the board says ERROR, the probe is looking at stale
+    evidence, not a live failure. That is a fact, not a guess, so it belongs here
+    rather than in the hint.
+    """
+    ev = {}
+    name = (row.get("name") or "").strip()
+    scope = (row.get("scope") or "").strip()
+
+    # Self-reported rows render under their heartbeat `title` — an EXACT match is
+    # safe. Deliberately no fuzzy/stem matching: a wrongly-paired heartbeat would
+    # assert "this job is actually fine" about a different job, which is worse
+    # than attaching nothing (checked 2026-08-05 — log-stem matching mispaired
+    # "Brain 3 ops nightly" onto nightly_lead_chain).
+    if scope == "self-reported (auto)":
+        try:
+            hb = sm["job_runs"].find_one({"title": name})
+        except Exception:
+            hb = None
+        if hb:
+            ev["heartbeat"] = {"job": hb.get("job"), "status": hb.get("status"),
+                               "run_at": str(hb.get("run_at"))}
+
+    # For log-freshness rows the discriminator is IN the log and needs no mapping:
+    # did the job recover after its last traceback? That single fact separates the
+    # three cases that all render identically as "Traceback found in last run's log
+    # tail" — a live failure, a job that has since self-healed, and a log whose last
+    # write predates a fix that already landed.
+    cand = log_paths.get(name)
+    if cand:
+        p = cand if cand.startswith("/") else os.path.join(ORCH, "logs", cand)
+        if os.path.exists(p):
+            ev["log_path"] = p
+            mt = datetime.fromtimestamp(os.path.getmtime(p), tz=timezone.utc)
+            ev["log_mtime"] = mt.isoformat()
+            ev["log_age_hours"] = round((datetime.now(timezone.utc) - mt).total_seconds() / 3600, 1)
+            try:
+                with open(p, "rb") as f:
+                    f.seek(max(0, os.path.getsize(p) - 60000), os.SEEK_SET)
+                    tail = f.read().decode("utf-8", errors="ignore").splitlines()
+                last_tb = max((i for i, l in enumerate(tail)
+                               if "Traceback (most recent call last)" in l), default=None)
+                if last_tb is not None:
+                    after = tail[last_tb:]
+                    ev["lines_after_last_traceback"] = len(after) - 1
+                    # Deliberately broad: any of these appearing AFTER the last
+                    # traceback is evidence of a subsequent completed run. It is a
+                    # POINTER, not proof — the agent must still read the log.
+                    ev["completion_markers_after_last_traceback"] = sum(
+                        1 for l in after[1:] if any(m in l for m in (
+                            "Done:", "Done.", "OK:", "complete", "Complete",
+                            "success", "updated", "refreshed", "saved")))
+            except Exception:
+                pass
+    if scope:
+        ev["scope"] = scope
+    return ev
+
+
 def _classify(name, scope, detail):
     """Coarse mechanical triage hint. Keyword-based and intentionally dumb — the agent
     must confirm against the real log before acting on any of these."""
@@ -82,6 +150,9 @@ def collect():
     rows = hc.collect(client, now, {})
 
     sm = client["system_monitor"]
+    # Row-name -> log file, straight from the health check's own registry, so the
+    # sensor never drifts from what the probe is actually reading.
+    log_paths = {e[0]: e[2] for e in getattr(hc, "_REGISTRY_LOG_JOBS", []) if len(e) > 2}
     # last_changed per field key ("Page::Name::Scope") tells us how long a row has
     # been in its current state — the difference between "broke last night" and
     # "has been red for three weeks and nobody noticed".
@@ -112,13 +183,15 @@ def collect():
                 days = round((now - ts).total_seconds() / 86400, 1)
             except Exception:
                 pass
-        items.append({
+        item = {
             "page": page, "name": name, "scope": scope, "status": st,
             "detail": (r.get("detail") or "")[:400],
             "failing_since": str(lc) if lc else None,
             "failing_days": days,
             "repair_class": _classify(name, scope, r.get("detail")),
-        })
+        }
+        item["evidence"] = _evidence(item, sm, log_paths)
+        items.append(item)
 
     # Worst first, then longest-broken first.
     order = {"ERROR": 0, "MISSING": 1, "STALE": 2, "UNKNOWN-FRESHNESS": 3}
@@ -150,7 +223,14 @@ def main():
     print(f"  by class : {doc['actionable_by_class']}")
     for i in doc["items"]:
         age = f"{i['failing_days']}d" if i["failing_days"] is not None else "?"
-        print(f"  [{i['status']:8}] {i['repair_class']:13} {age:>6}  {i['name']} :: {i['detail'][:70]}")
+        e = i.get("evidence") or {}
+        note = ""
+        if e.get("completion_markers_after_last_traceback"):
+            note = (f"  [log shows {e['completion_markers_after_last_traceback']} completion marker(s) "
+                    f"AFTER the last traceback — may have self-healed]")
+        elif e.get("log_age_hours") is not None and e["log_age_hours"] > 48:
+            note = f"  [log last written {e['log_age_hours'] / 24:.1f}d ago — may predate a fix]"
+        print(f"  [{i['status']:8}] {i['repair_class']:13} {age:>6}  {i['name']} :: {i['detail'][:70]}{note}")
 
     if args.dry_run:
         return 0

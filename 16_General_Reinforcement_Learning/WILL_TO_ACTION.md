@@ -436,3 +436,95 @@ heartbeat, exactly as `[MONITOR-FITNESS-PROBES]` did for the two Market Pulse ro
 already carries the right cadence semantics for a weekly job. One-line deletion; restore the tuple to undo.
 **Do not action before 2026-08-09** if you would rather first watch the Sunday cron clear it naturally — that
 is also a valid confirmation that the CursorNotFound fix holds under the full weekly load.
+
+## [WTA-OPS-005] 57% of the for-sale book cannot be valued — 223 blocked on floor area alone — raised 2026-08-05 — [ops] — status: OPEN
+**Blocks:** Pipeline Processes row "Step 18 outcome / Valuation precompute: cleared valuations" — ERROR.
+
+**Symptom:** the row reads *"303 properties had a published valuation wiped this run"*.
+
+**Root cause (proven) — the row's wording is wrong, but what it points at is worse than it says.**
+The probe counts the string `cleared existing valuation`, printed at
+`/home/fields/Feilds_Website/07_Valuation_Comps/precompute_valuations.py:3736`. That line fires
+**unconditionally whenever `exclusion_reason` is set** — it does not check whether a valuation existed
+beforehand. So "wiped this run" is not what happened.
+
+What is actually happening is steady state, and it has been for at least 12 nights:
+```
+2026-07-24 cleared=290 total=538 success=244
+2026-07-29 cleared=299 total=530 success=227
+2026-08-04 cleared=303 total=540 success=233   <- the run that raised the row
+```
+Confirmed against the DB directly (all 9 `shared/db.py` target suburbs, `listing_status:"for_sale"`):
+```
+for_sale total: 540
+valued OK  : 233   (43%)
+excluded   : 307   (57%)  missing_floor_area 223 · misclassified_dwelling 28 ·
+                          acreage 23 · insufficient_comparables 17 · missing_land_size 16
+no valuation_data at all: 0
+```
+So no data is being destroyed nightly. Instead **57% of the live for-sale book has never had a valuation**,
+and `missing_floor_area` alone accounts for 223 of 540 listings (41% of everything we list). Sampled
+excluded doc: `71 EASTHILL DRIVE, Robina` — `property_type: House`, `bedrooms: 3`, no floor-area field at all.
+The gap is also **widening, not closing**: `missing_floor_area` went 209 → 223 in 12 days while the
+successfully-valued count sat flat at ~232, i.e. essentially every listing added in that window landed
+excluded.
+
+**Why this matters more than the row suggests:** the valuation IS the product. Two in five listings we
+publish cannot carry the thing we exist to provide, and nothing before today reported it — step 18 exits 0
+every night.
+
+**Needs a human because:** the fix is a code/sourcing decision on the valuation pipeline (where floor area
+comes from for units and older listings), not a re-run, and its blast radius is the public property pages.
+
+**Proposed (two separable pieces):**
+1. *Product* — treat `missing_floor_area` as a data-sourcing backlog, not an exclusion to live with.
+   223 listings is a finite, named list. Worth deciding whether floor area can be derived from the
+   floor-plan analysis (step 106) or the Domain payload before excluding.
+2. *Board wording* — `main_site_health_check.py:1208-1211` should judge this as a **level** ("57% of the
+   book is unvaluable"), not an **event** ("wiped this run"), and probably on a delta vs the previous run.
+   As written it will read ERROR every night forever regardless of whether anything changed, which is the
+   wolf-crying pattern `[HEALTH-BOARD-PAUSED-VS-DEAD]` just finished removing. Monitoring code is read-only
+   to me, so I have not touched it. One-block change, trivially reversible.
+**I did NOT verify** whether the frontend hides an excluded property's valuation panel gracefully or shows
+an empty state — worth one look, but it needs a rendered page, not a DB query.
+
+## [WTA-OPS-006] Photo analysis is silently losing listings to a deleted Azure storage account — raised 2026-08-05 — [ops] — status: OPEN
+**Blocks:** Pipeline Processes row "Step 105 outcome / Photo analysis: dead-host image failures" — ERROR.
+
+**Symptom:** *"158 image downloads failed — listings are being written with ZERO photo analyses and marked
+processed, so they never retry"* (run `2026-08-04T20-30-16`).
+
+**Root cause (proven, live, this cycle):** the blob host **no longer exists in DNS**. Every one of the 158
+failures is the same error:
+```
+Failed to resolve 'fieldspropertyimages.blob.core.windows.net' ([Errno -2] Name or service not known)
+```
+Verified independently of the VM's resolver — `dig +short @8.8.8.8 fieldspropertyimages.blob.core.windows.net`
+returns **nothing** (NXDOMAIN at Google's public resolver, not a local DNS fault), and a live
+`curl` of one of the failed URLs returns `http=000` in 26 ms. The storage account has been deleted or
+renamed; this is not a transient outage and no number of re-runs will fix it. That is why I took no Tier 1
+action here.
+
+**Scope:** 158 failed downloads across **11 distinct listings**, each of which logged
+`Analyzed 0 images in 0.0s` and was then marked processed — so they are permanently photo-blind unless
+something re-queues them.
+
+**The part I could not prove — and it is the important part:** why *now*. The nightly counts are
+`Jul 30: 15 · Jul 31: 90 · Aug 1: 0 · Aug 2: 0 · Aug 3: 1 · Aug 4: 158`. A dead DNS name does not produce
+zeros on Aug 1-2, so most listings are evidently already on a different image host and only a subset still
+carry stale `fieldspropertyimages…` URLs in the DB. I do **not** know whether Aug 4's 158 is a one-off batch
+of 11 stale-URL listings or the leading edge of a re-processing sweep that will keep re-hitting the dead
+host. To answer it I would need to identify what wrote those 11 documents' `image_urls` and when — a bigger
+sweep than this cycle had room for.
+
+**Needs a human because:** the fix is a data migration decision (repoint the 11 listings' image URLs to the
+live host, then re-queue them through step 105) plus a code change to stop marking a listing processed when
+it analysed zero images. Both are outside Tier 1.
+
+**Proposed:**
+1. Find every `for_sale` doc whose image URLs still point at `fieldspropertyimages.blob.core.windows.net`
+   and repoint them at the current host (`[[gcs_blob_backup]]` / `[[azure_blob_serving]]` describe the
+   migration). Reversible — it is a URL rewrite, originals recoverable from the run logs.
+2. Harden step 105: a listing that analysed **zero** images must not be marked processed. Right now
+   "everything failed" and "nothing to do" are indistinguishable to the pipeline, which is exactly how 11
+   listings became permanently photo-blind after one bad night.

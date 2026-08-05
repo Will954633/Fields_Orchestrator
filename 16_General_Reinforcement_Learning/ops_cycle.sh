@@ -39,6 +39,12 @@ python3 "$DIR/ops_signal.py" >> "$LOG" 2>&1
 SIG_RC=$?
 echo "[$STAMP] ops_signal rc=$SIG_RC" >> "$LOG"
 
+# Integrity baseline. The cheapest way to green a board is to silence the check
+# rather than fix anything; the prompt forbids that, but a guard that relies on the
+# guarded party honouring it is not a guard. Snapshot BEFORE the agent runs.
+SNAP="/tmp/ops_integrity_${STAMP}.json"
+python3 "$DIR/ops_integrity.py" before "$SNAP" >> "$LOG" 2>&1
+
 set +e
 timeout -k 60 2400 claude --model claude-opus-5 -p "$(cat "$DIR/ops_prompt.md")" \
   --allowedTools "Bash,Read,Write,Edit,Glob,Grep,WebSearch,WebFetch,TodoWrite" \
@@ -46,6 +52,13 @@ timeout -k 60 2400 claude --model claude-opus-5 -p "$(cat "$DIR/ops_prompt.md")"
 RC=$?
 set -e 2>/dev/null || true
 echo "[$STAMP] ===== ops cycle end (rc=$RC) =====" >> "$LOG"
+
+# Verify she fixed rather than silenced. Telegrams Will + records an ERROR heartbeat
+# on any violation, so a tampering cycle is LOUDER than a merely failing one.
+python3 "$DIR/ops_integrity.py" after "$SNAP" >> "$LOG" 2>&1
+INTEG_RC=$?
+echo "[$STAMP] ops_integrity rc=$INTEG_RC" >> "$LOG"
+rm -f "$SNAP"
 
 python3 - "$RC" <<'PY' 2>/dev/null || true
 import sys

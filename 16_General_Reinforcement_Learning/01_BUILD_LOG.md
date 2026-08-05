@@ -482,3 +482,19 @@ Board: 16 actionable · ERROR=14 STALE=1 UNKNOWN-FRESHNESS=1 · KNOWN-GAP=44.
   last night. Step 18 (303 published valuations wiped in one run) and the 117-listing `under_contract` backlog
   are the two to take to ground next.
 - Nothing silenced: no monitoring code, `job_runs`, crontab, cron/unit/step, or KNOWN-GAP touched.
+
+## 2026-08-05 11:12 AEST — ops cycle (Samantha, standalone)
+Board: 16 actionable · raw ERROR=14 STALE=1 UNKNOWN-FRESHNESS=1 KNOWN-GAP=44.
+**Tier 1 repairs: 0** — nothing red was transient, so nothing was re-runnable. Reported as such.
+**Tier 3 raised: 2**
+- `WTA-OPS-005` step 18 — the "303 valuations wiped this run" row is mis-worded (the log line fires
+  unconditionally on exclusion, no data is lost; 287–303 every night for 12 nights). Underneath it sits a
+  bigger real finding: 307/540 for-sale listings are unvaluable, 223 on `missing_floor_area` alone, and
+  widening. Proposed a product fix + a board fix (judge level/delta, not per-run event).
+- `WTA-OPS-006` step 105 — all 158 image failures are NXDOMAIN on a **deleted** Azure storage account
+  (`dig @8.8.8.8` empty, `curl` http=000). 11 listings analysed 0 images and were marked processed.
+  Not re-runnable by construction; flagged the "why now" as explicitly unproven rather than guessing.
+10 further rows deliberately left alone with reasons recorded in the cycle doc — 8 already covered by
+WTA-OPS-001..004, and Brain2 + step 111 are red on evidence that predates their fixes and clear tonight.
+No monitoring code, crontab, heartbeat or log was touched.
+Cycle doc: `cycles/2026-W32/2026-08-05/ops_cycle_20260805_1112.md`

@@ -52,9 +52,52 @@ def send_message(text: str, chat_id: str = None, parse_mode: str = "Markdown"):
         data = resp.json()
     if not data.get("ok"):
         print(f"ERROR: {data}")
+        _record_send(cid, text, ok=False, error=str(data)[:300])
         raise TelegramSendError(str(data))
     print(f"Message sent to {cid}")
+    _record_send(cid, text, ok=True,
+                 message_id=(data.get("result") or {}).get("message_id"))
     return data
+
+
+def _record_send(chat_id, text, ok, error=None, message_id=None):
+    """Audit every outbound message to system_monitor.telegram_sends.
+
+    Autonomous agents report "Telegram sent" in their own cycle docs, and until
+    2026-08-05 there was NO way to check that claim from this side: nothing
+    recorded outbound messages and ceo_chat_messages stores only INBOUND. An
+    agent's most load-bearing output was therefore the one thing it could not be
+    held to. This closes that — the claim is now falsifiable.
+
+    Best-effort and never raises: an audit-write failure must not turn a
+    delivered message into a crashed caller (same reasoning as TelegramSendError
+    being a normal Exception).
+    """
+    try:
+        import sys as _sys
+        from datetime import timezone
+        _sys.path.insert(0, "/home/fields/Fields_Orchestrator")
+        from shared.db import get_client
+        doc = {
+            "sent_at": datetime.now(timezone.utc),
+            "chat_id": str(chat_id),
+            "ok": bool(ok),
+            "chars": len(text or ""),
+            # Full text, not a preview: the point is to be able to confirm WHAT
+            # was claimed to have been sent, not merely that something was.
+            "text": text,
+            # Who sent it — argv[0] is the entry point, so an agent cycle is
+            # distinguishable from a cron reminder without extra plumbing.
+            "sender": os.path.basename(_sys.argv[0] or "?"),
+            "caller_env": os.environ.get("CYCLE_STAMP") or None,
+        }
+        if message_id is not None:
+            doc["message_id"] = message_id
+        if error:
+            doc["error"] = error
+        get_client()["system_monitor"]["telegram_sends"].insert_one(doc)
+    except Exception as e:
+        print(f"(telegram send-audit failed: {e})")
 
 
 def market_pulse_reminder():
