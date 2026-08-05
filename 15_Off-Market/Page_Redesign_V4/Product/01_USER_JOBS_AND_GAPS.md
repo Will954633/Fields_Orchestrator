@@ -74,6 +74,19 @@ An **84% spread** on one house. The stated outcome is not "I picked one." It is 
 
 A seventh estimate adds nothing to that person's life. **The unmet job is a defensible reason to prefer one figure — a method problem, not a data problem, and exactly what adjusted comparables with visible workings can do and a black-box AVM structurally cannot.**
 
+**We hold a worked proof that our method does exactly this job.** `11_House_Mini_Site/_shared/Adjusted-Comparables-Evidence.md` (2026-08-05) — subject **26 Moorabbin Place, Robina**, sold 6 July 2026 for **$1,620,000**; 8 comparables selected from 32, every one sold *before* the subject, the subject's own sale excluded:
+
+| | Low | High | Spread |
+|---|---|---|---|
+| Raw sale prices | $1,300,000 | $1,910,000 | **$610,000** |
+| Adjusted for property differences | $1,398,872 | $1,673,126 | **$274,254** |
+
+A **55% narrowing**, with the actual sale price falling inside the adjusted band. The sharpest illustration: the cheapest and dearest raw comparables — **$610,000 apart** — land **$43,939 apart** once adjusted (12 Kilburn Street $1,300,000 → $1,521,873; 31 Huntingdale Crescent $1,910,000 → $1,565,812), and every adjustment is itemised in dollars: one more bedroom +$113,110, 53 sqm more floor area +$95,034, better renovation −$96,032, extra bathroom −$89,036, second storey −$50,000.
+
+> *"Three bedrooms, two bathrooms, sold nearby" is a match on labels. It gave a $610,000 range. Pricing what is actually different between the houses narrowed it to $274,000.*
+
+**This is a statement about method, and only about method.** See C10/C11 in §5 — it is **n=1**, it compares our method against naive label-matching rather than against any portal, and a tighter spread is precision, not accuracy. Do not let it drift into a superiority claim.
+
 Corroborated three independent ways:
 - **PropertyChat's controlled comparison.** Two near-identical adjacent apartments; the *smaller* one valued **$137k higher** by REA, and the two portals rank them in opposite orders (`ADDENDUM_propertychat` §1 [V]).
 - **Autocomplete's trust hedges.** `actually worth`, `really worth`, `fair market value` — distrust encoded into the query. Plus a distinctively Australian habit of naming an institution: `domain`, `corelogic`/`cotality`, `westpac`, `commbank`, `anz` (`research_intent/D` [P]).
@@ -333,6 +346,9 @@ Any superiority claim must survive this list. Every item is from our own records
 | C7 | **PostHog holds zero break-glass events** since launch despite `BreakGlass.tsx` calling `phCapture` | `own_address_search_intent` §8 | A feature shipped to learn something cannot report |
 | C8 | All off-market behavioural rates rest on **17 days**, n=266 people | `research_intent/C` | Nothing about the deck is statistically settled, including the arm gap |
 | C9 | `sale_price` stored as a **string**; confidence values are `very_low` with an underscore, plus `directional` | `first_party_fields_data` §5 [B] | Numeric Mongo predicates silently match nothing |
+| **C10** | **Domain's estimate is more accurate than ours in our two most important suburbs** — Robina **11.6% Fields vs 6.9% Domain**; Burleigh Waters **13.7% vs 8.1%**. Across 708 sold properties the platform's MAE is **10.3%** (Robina 7.6%, Burleigh Waters 9.3%, Varsity Lakes 13.6%) | `Adjusted-Comparables-Evidence.md` §3, leave-one-out run 2026-08-05 [B] | **The single most important disconfirming fact in this folder, and it is our own data.** Our argument is *auditability and adjudication*, never accuracy. Any superiority framing is falsifiable from our own numbers. The supported angle is **calibration**, not accuracy: platform ranges miss the sale price up to 48% of the time — and ours miss 43–55%. "Automated ranges, ours included, are overconfident" is rarer, safer and true |
+| **C11** | The 55% narrowing is **n=1** and the two adjustments are **not composed** | `Adjusted-Comparables-Evidence.md` §5 | Before any campaign: run across all 262 eligible sold homes and quote the **median** narrowing, not this example. The $274,254 figure is feature adjustment on the *raw* price; time adjustment alone narrows $610,000 → $402,335; **the composed figure is unverified and must not be quoted** |
+| **C12** | Our own stated error rate is unsettled — **11.1%** appears in the mini-site session copy, **11.6%** in the 2026-08-05 Robina backtest | `GTP_market_analysis`; `Adjusted-Comparables-Evidence.md` §3 | Pin one figure, with its sample and date, before publishing any of it (claims register A1). Relativities move — re-check against the latest weekly backtest |
 
 ---
 
