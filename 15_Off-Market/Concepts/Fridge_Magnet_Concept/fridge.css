@@ -372,19 +372,48 @@ body {
   z-index: 4;
 }
 
-.eyebrow {
+/* who this fridge belongs to — the suburb control */
+.who {
   position: absolute;
-  top: 5.5%;
-  left: 0;
-  right: 0;
-  text-align: center;
-  font-size: 10px;
-  letter-spacing: .22em;
-  text-transform: uppercase;
-  color: rgba(230,221,210,.42);
+  top: 4.4%;
+  /* clears the secret button in the top-right corner — they overlapped */
+  left: 0; right: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   z-index: 4;
   opacity: clamp(0, (var(--open) - .35) * 3, 1);
 }
+.whoLabel {
+  font-size: 9.5px;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: rgba(232,228,221,.34);
+}
+.whoPick {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0;
+  border-bottom: 1px solid rgba(232,228,221,.22);
+  border-radius: 0;
+  background: transparent;
+  color: var(--m-050);
+  font: 500 12.5px/1 var(--font);
+  letter-spacing: .04em;
+  padding: 3px 16px 4px 2px;
+  cursor: pointer;
+  /* the caret, drawn rather than imported */
+  background-image:
+    linear-gradient(45deg, transparent 50%, rgba(232,228,221,.5) 50%),
+    linear-gradient(135deg, rgba(232,228,221,.5) 50%, transparent 50%);
+  background-position: right 6px top 8px, right 2px top 8px;
+  background-size: 4px 4px, 4px 4px;
+  background-repeat: no-repeat;
+}
+.whoPick:focus-visible { outline: 2px solid var(--copper); outline-offset: 3px; }
+/* the OS renders the open list, so the options need a surface it can read */
+.whoPick option { background: var(--m-800); color: var(--m-050); }
 
 .shelf {
   position: relative;
