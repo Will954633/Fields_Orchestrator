@@ -67,7 +67,14 @@ class ScheduleManager:
         # fix-history [CATBOOST-RETIRE]. It is also `enabled: false` in
         # process_commands.yaml, which is what actually stops it; dropping it
         # here too keeps this set honest about what runs.
-        self.always_run_processes = {11, 12, 13, 14, 15, 16, 17, 18, 19, 109, 107, 110, 114, 116, 120}  # Backend Enrichment + Pre-computation + Coverage Check + Audit + Image Archival + URL Slugs + Data Quality Validator + AI Editorial
+        # 121 added 2026-08-05 (WTA-OPS-002). It was in execution_order and the YAML
+        # comments claimed it was scheduled, but the schedule lives HERE, not in YAML —
+        # so it had never run once. It resubmits sitemap.xml to Google after step 120's
+        # nightly editorial auto-publish. Cheap: --resubmit uses the GSC Sitemaps API,
+        # not the Indexing API's 200/day quota, and it passes --sample 0 so it burns no
+        # URL-Inspection quota either. Without it the resubmit only happens on the
+        # Monday 07:00 cron, i.e. up to 7 days of lag on newly published property pages.
+        self.always_run_processes = {11, 12, 13, 14, 15, 16, 17, 18, 19, 109, 107, 110, 114, 116, 120, 121}  # Backend Enrichment + Pre-computation + Coverage Check + Audit + Image Archival + URL Slugs + Data Quality Validator + AI Editorial + SEO Sitemap Resubmit
         
         self.logger.info(f"Schedule Manager initialized")
         self.logger.info(f"Target market suburbs: {len(self.target_market_suburbs)}")
