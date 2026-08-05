@@ -1517,6 +1517,13 @@ def collect_self_reported_jobs(add, sm, now_utc):
         else:
             st = OK
             msg = detail[:200]
+        # A job may declare doc_url=… in its job_run(...) call; surface it here so
+        # whoever is looking at a STALE/ERROR row has the context to act on it
+        # without having to go find the script first. Appended after the 200-char
+        # detail cap so a chatty detail can never truncate the link away.
+        doc_url = d.get("doc_url")
+        if doc_url:
+            msg = f"{msg} · docs: {doc_url}" if msg else f"docs: {doc_url}"
         val = f"ran {ts.date()}" if ts else "never"
         add(PG, name, "self-reported (auto)", val, st, "run_at", ts, msg)
 
