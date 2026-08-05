@@ -121,7 +121,13 @@ body {
      document.elementFromPoint() over the open fridge exposed it. */
   pointer-events: none;
 }
-.cavity, .door { pointer-events: auto; }
+.cavity { pointer-events: auto; }
+/* .door has to be none for the same reason .fridge does: its own un-rotated box
+   covers the whole stage and wins hit-testing against its 3D-transformed
+   children, which made the secret button unclickable. The faces carry the
+   events instead — they cover the door visually anyway. */
+.door { pointer-events: none; }
+.face, .back, .edge { pointer-events: auto; }
 
 /* the light the open door throws onto the floor */
 .wedge {
@@ -145,6 +151,11 @@ body {
   inset: 0;
   border-radius: 12px;
   overflow: hidden;
+  /* Its own perspective, so .innerPanel can hinge in 3D inside an
+     overflow:hidden box (preserve-3d and overflow:hidden fight; perspective on
+     the parent does not). */
+  perspective: 900px;
+  perspective-origin: 50% 42%;
   /* Seat the interior BEHIND the door's hinge plane. Without this the cavity
      sits at Z=0, exactly coplanar with the door's inner panel, and the two
      z-fight — mid-swing the door renders translucent with the option text
@@ -247,6 +258,97 @@ body {
   28%       { filter: brightness(1.15); }
   45%, 100% { filter: brightness(1); }
 }
+
+/* ── the secret door ──────────────────────────────────────────────────────
+   Everything the fridge normally shows lives on .innerPanel, which hinges down
+   from its bottom edge like a drawbridge and takes the shelves, the options and
+   the light with it. What is behind is the Fields homepage. */
+
+.innerPanel {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 100%;
+  transform: rotateX(0deg);
+  transition: transform 1.15s cubic-bezier(.62,.02,.3,1);
+  backface-visibility: hidden;
+  z-index: 2;
+}
+.fridge.is-vault .innerPanel { transform: rotateX(-97deg); }
+
+.vault {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--m-950);
+  z-index: 1;
+}
+.vaultShot {
+  position: absolute;
+  top: 0; left: 50%;
+  width: 100%;                 /* fit the opening — 118% cropped the headline */
+  height: auto;
+  transform: translateX(-50%) scale(.98);
+  transform-origin: 50% 0;
+  /* held back until the panel is most of the way down, then it comes up to
+     full — the reveal is the light arriving, not the image sliding */
+  opacity: .25;
+  filter: brightness(.5) saturate(.8);
+  transition: opacity .75s ease .35s, filter .9s ease .35s, transform 1.2s ease .2s;
+}
+.fridge.is-vault .vaultShot {
+  opacity: 1;
+  filter: brightness(1) saturate(1);
+  transform: translateX(-50%) scale(1);
+}
+/* light spilling out of the opening as the false back drops */
+.vault::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 90% 50% at 50% 106%, rgba(247,244,238,.55), transparent 70%);
+  opacity: 0;
+  transition: opacity .5s ease .35s;
+  pointer-events: none;
+}
+.fridge.is-vault .vault::after { opacity: 1; }
+
+/* The unlabelled control every fridge has near its lamp — a switch plunger or
+   a thermostat spindle. Recessed, low contrast, no label.
+
+   It started on the door's inner face, per the brief. That face cannot be seen:
+   on a portrait phone a left-hinged door is edge-on at 90 degrees (the button
+   rendered 5px wide) and swung clear out of frame past that (the whole panel
+   measured screen x -113..25 at 100 degrees). Camera dollies and narrower
+   stages were tried and measured; none got the target above 17px. The geometry
+   simply doesn't allow it, so it moved inside the cabinet instead. */
+.secret {
+  position: absolute;
+  right: 8%;
+  top: 6.2%;
+  width: 19px; height: 19px;
+  padding: 0; border: 0;
+  border-radius: 50%;
+  z-index: 5;
+  background: radial-gradient(circle at 38% 32%, var(--m-500), var(--m-850) 74%);
+  box-shadow:
+    inset 0 1px 1px rgba(255,255,255,.10),
+    inset 0 -1px 2px rgba(0,0,0,.75),
+    0 1px 3px rgba(0,0,0,.6);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  /* only there once the light is on it */
+  opacity: clamp(0, (var(--open) - .45) * 3, 1);
+  transition: transform .12s ease, box-shadow .12s ease;
+}
+/* a genuinely usable touch target without a visibly big button */
+.secret::before {
+  content: '';
+  position: absolute;
+  inset: -13px;
+  border-radius: 50%;
+}
+.secret:active { transform: translateY(1px) scale(.94); box-shadow: inset 0 2px 3px rgba(0,0,0,.8); }
+.secret:focus-visible { outline: 2px solid var(--copper); outline-offset: 3px; }
 
 /* ── shelves + options ────────────────────────────────────────────────── */
 
@@ -532,6 +634,32 @@ body {
 
 body.art-mono .artSheet { filter: grayscale(1) brightness(.86) contrast(1.02); }
 
+/* Manufacturer badge — the Fields icon DEBOSSED into the door.
+
+   A CSS mask rather than an <img>, so the glyph is filled with the same metal
+   gradient as the door and lit by the same light: an image would sit on top of
+   the door, this is cut into it. Debossed, not embossed — for a shape lit from
+   above that means shadow along the TOP edge and a highlight along the BOTTOM,
+   which is the opposite of a raised badge. Deliberately low contrast; a
+   manufacturer mark is something you notice second, not first. */
+.badge {
+  position: absolute;
+  left: 8.5%;
+  top: 4.6%;
+  width: 8.5%;
+  aspect-ratio: 1;
+  /* shorthand order is <image> <position> / <size> <repeat> — putting
+     no-repeat before the position makes the whole declaration invalid */
+  -webkit-mask: url('assets/fields-icon-mask.png') center / contain no-repeat;
+          mask: url('assets/fields-icon-mask.png') center / contain no-repeat;
+  background: linear-gradient(158deg, var(--m-500) 0%, var(--m-600) 55%, var(--m-500) 100%);
+  filter:
+    drop-shadow(0 1px 0 rgba(255,255,255,.14))
+    drop-shadow(0 -1px 1px rgba(0,0,0,.6));
+  opacity: .7;
+  pointer-events: none;
+}
+
 /* the hairline of light at the seam, before the door breaks free */
 .seam {
   position: absolute;
@@ -622,6 +750,21 @@ body.art-mono .artSheet { filter: grayscale(1) brightness(.86) contrast(1.02); }
    far too small to be the only way to close it. pointer-events stays none so
    the tap falls through to .room, which is already a close target. */
 .fridge.is-open ~ .prompt { animation: promptIn .4s ease-out both; opacity: .34; }
+/* Nothing to tap once the back has dropped — we are leaving.
+   `animation: none` is load-bearing: the .is-open rule above applies promptIn
+   with fill-mode both, and a running/filling animation OUTRANKS a normal
+   declaration in the cascade, so `opacity: 0` alone was silently ignored and
+   the prompt stayed at full opacity through the reveal. */
+.fridge.is-vault ~ .prompt,
+.fridge.is-vault .secret,
+body.is-vaulting .muteBtn {   /* .muteBtn is not a sibling of .fridge — it sits
+                                 outside .stage, so a ~ combinator cannot reach
+                                 it. Driven from a body class instead. */
+  opacity: 0;
+  animation: none;
+  transition: opacity .3s ease;
+  pointer-events: none;
+}
 
 /* ── reduced motion ───────────────────────────────────────────────────────
    The door still OPENS AND CLOSES — reduced motion means state changes without
