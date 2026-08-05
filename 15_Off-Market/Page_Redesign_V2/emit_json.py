@@ -277,6 +277,47 @@ def _attach_insight(card, b, card_key):
 _EMITTERS = [_recognition, _hook, _reveal, _explanation, _competition,
              _comparable, _value_drivers, _buyer, _valuation, _strategy]
 
+# The question that INTRODUCES each card is the `opens` of the card before it in
+# the canonical sequence — the deck is written as one continuous Q&A.
+_ENTRY_QUESTION = {
+    "hook":          "card_01_recognition",
+    "reveal":        "card_02_hook",
+    "explanation":   "card_03_rarity",
+    "competition":   "card_04_explanation",
+    "comparable":    "card_05_competition",
+    "value_drivers": "card_06_comparable",
+    "buyer":         "card_07_value_drivers",
+    "valuation":     "card_08_buyer",
+    "strategy":      "card_09_valuation",
+}
+
+
+def _rechain(cards, c):
+    """Re-point each card's closing question at the card that ACTUALLY follows.
+
+    Every emitter returns None when its data is missing, and those gaps are
+    common — `comparable` needs an obvious comp with a price, `value_drivers`
+    needs the positioning engine. But each card took its `next` statically from
+    its own copy block, which assumes the full ten-card sequence. Drop a card and
+    the previous one asks a question nothing answers: card 05 closes with "But
+    what about that sale down the road that looks just like mine?" and, with
+    `comparable` absent, the reader lands on the buyer card instead. Measured on
+    the live fleet, not hypothetical — every deck missing `comparable` had it.
+
+    Re-pointing after the filter keeps the thread intact through any combination
+    of gaps. The last card loses its question entirely: DeckV3 hardcodes the
+    hand-off into the offer card on the strategy case, so a question here would
+    either duplicate it or dangle when strategy itself is one of the gaps.
+    """
+    for i, card in enumerate(cards[:-1]):
+        key = _ENTRY_QUESTION.get(cards[i + 1].get("type"))
+        question = (c.get(key) or {}).get("opens") if key else None
+        if question:
+            card["next"] = question
+    if cards:
+        cards[-1].pop("next", None)
+    return cards
+
 
 def _strip_md(v):
     """Remove markdown bold (**…**) from every string in the tree — React styles
@@ -297,7 +338,7 @@ def emit_json(slug):
     b["_discovery"] = disc
     b["_insights"] = A._select_insights(b, c)
     cards = [_strip_md(f(b, c)) for f in _EMITTERS]
-    cards = [c_ for c_ in cards if c_]
+    cards = _rechain([c_ for c_ in cards if c_], c)
     return {
         "slug": b["slug"],
         "suburb_key": b.get("suburb_key"),
