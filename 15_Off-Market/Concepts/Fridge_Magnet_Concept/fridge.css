@@ -72,6 +72,15 @@ body {
   display: grid;
   place-items: center;
   padding: max(24px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+  /* Kill every way a phone can interpret a tap as something other than a tap:
+     double-tap-zoom delay, text selection, and — the one that actually bit —
+     the iOS image callout. The door face carries three <img> elements (the
+     drawing and two magnets) and they are the most tappable-looking things on
+     screen, so a finger lands on an image far more often than on bare steel. */
+  touch-action: manipulation;
+  -webkit-user-select: none;
+          user-select: none;
+  -webkit-touch-callout: none;
   background:
     radial-gradient(120% 60% at 50% 108%, rgba(138,151,143,.10), transparent 70%),
     radial-gradient(80% 50% at 50% -10%, rgba(138,151,143,.06), transparent 70%);
@@ -467,6 +476,11 @@ body {
 
    The magnet is sized as a percentage of the sheet, so it stays correct at any
    door size for free — it was already 30%. */
+/* Decorative: taps must fall THROUGH to the door, never be consumed by an
+   image. Without this, tapping the drawing behaves differently from tapping
+   the steel beside it. */
+.art, .art img, .handle, .seam { pointer-events: none; }
+
 .art {
   position: absolute;
   left: 26%;              /* a shade left of centre — nobody hangs it dead-on */
@@ -565,6 +579,27 @@ body.art-mono .artSheet { filter: grayscale(1) brightness(.86) contrast(1.02); }
   transition: --open 1.7s cubic-bezier(.42,.03,.28,1);      /* opening */
 }
 
+
+/* ── nudge ────────────────────────────────────────────────────────────────
+   Nothing opens on a timer any more (the first open has to be a tap, so that it
+   can have sound). After 4s of nothing, the door cracks and settles back: it
+   says "this opens" without spending the reveal. Silent — a silent nudge is a
+   much smaller loss than a silent reveal. */
+.fridge.is-nudging { animation: nudge 1s cubic-bezier(.36,0,.3,1); }
+@keyframes nudge {
+  0%        { --open: 0; }
+  34%       { --open: .11; }
+  48%       { --open: .105; }
+  100%      { --open: 0; }
+}
+/* let a sliver of light out with it — the tease is the light, not the gap */
+.fridge.is-nudging .flick { animation: nudgeLight 1s cubic-bezier(.36,0,.3,1); }
+@keyframes nudgeLight {
+  0%        { opacity: 1; }
+  34%       { opacity: .82; }
+  48%       { opacity: .84; }
+  100%      { opacity: 1; }
+}
 
 /* ── prompt ───────────────────────────────────────────────────────────── */
 
