@@ -18,10 +18,12 @@ const snap = () => p.evaluate(()=>{
 });
 const wait = ms => new Promise(r=>setTimeout(r,ms));
 
-await wait(300);  console.log('t=0.3s closed  ', JSON.stringify(await snap()));
-await wait(700);  console.log('t=1.0s opening ', JSON.stringify(await snap()));
+// the door no longer auto-opens — the first open must be a tap, so that it has sound
+await wait(300);  console.log('t=0.3s shut     ', JSON.stringify(await snap()));
+await p.mouse.click(195, 400);
+await wait(700);  console.log('t+0.7s opening ', JSON.stringify(await snap()));
 await p.screenshot({path:'verify/t_flicker.png'});
-await wait(1800); console.log('t=2.8s open    ', JSON.stringify(await snap()));
+await wait(1800); console.log('t+2.5s open    ', JSON.stringify(await snap()));
 await p.screenshot({path:'verify/t_open.png'});
 
 // tap the PROMPT / room below the fridge -> should close
