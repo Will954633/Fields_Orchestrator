@@ -1,16 +1,21 @@
 # The Fridge — what happens after someone scans the magnet
 
-**Status:** scoping + a **working prototype**. Nothing on the live site, no route
-exists yet.
+**Status:** ✅ **LIVE in production** since 2026-08-05 (commit `88bf0ec8`).
+Scanning the real magnet lands here.
 **Scope:** the landing experience at `https://fieldsestate.com.au/fridge` — a
 monochrome fridge door that opens to reveal a short list of things the owner can
 do next.
 
-> ### ▶ Look at it
-> **https://vm.fieldsestate.com.au/concepts/off-market/Fridge_Magnet_Concept/**
+> ### ▶ Scan the magnet, or open it directly
+> **https://fieldsestate.com.au/fridge** — what the printed QR now lands on.
+> Workbench copy (no build step, edit and refresh):
+> `https://vm.fieldsestate.com.au/concepts/off-market/Fridge_Magnet_Concept/`
 >
-> Open it on a phone. It opens itself after 0.8 s, or on any touch. There is no
-> build step — edit `fridge.css` and refresh.
+> It opens itself after 0.8 s, or on any touch, and closes again.
+>
+> **Never edit `public/fridge.html` in the website repo** — it is generated.
+> Edit this folder and run `python3 deploy.py`, then push with
+> `scripts/push_website_files.py` (one commit, one Netlify build).
 >
 > **There is no fridge artwork and there is no video.** Every surface — door,
 > handle, gasket, shelves, lamp, thickness — is a CSS gradient. The images are
@@ -58,8 +63,25 @@ inverted it, and that is the one to treat as current.
 **This is the most valuable thing in the whole file.** The QR encodes a short
 link, not a page. Whoever set that up bought the ability to change the
 destination forever without reprinting a single magnet. The fridge animation
-does not require new artwork, a new QR, or a reprint — it requires repointing
+did not require new artwork, a new QR, or a reprint — it required repointing
 one redirect.
+
+**As shipped 2026-08-05**, that block is now:
+
+```toml
+[[redirects]]
+  from = "/fridge"
+  to = "/fridge.html"
+  status = 200
+  force = true
+```
+
+`200`, not `301`, and static HTML, not a React route — same pattern as
+`/privacy` and `/seller-guide`. Two measured reasons: the app ships **219 KB**
+of compressed JS before it can animate anything, and a 301 costs an extra round
+trip on exactly the connection that matters. Attribution is not lost — the page
+registers `utm_source`/`utm_medium`/`utm_campaign` as PostHog super properties
+on load, which filter identically to URL-parsed ones.
 
 Two consequences worth stating before anything is designed:
 
@@ -831,6 +853,8 @@ is entirely possible the answer is no.
 | `verify/toggle.mjs` | Open → close → reopen, plus the "a tap inside must not close it" rule. |
 | `verify/audio.mjs` | Files fetch, decode, hum arms on gesture, ducks with the door, mutes. |
 | `verify/*.png` | Output, regenerated — not source. |
+| `deploy.py` | **The only way files move to production.** Generates `public/fridge.html` (adds `<base href="/fridge/">`, PostHog, meta) and copies the rest. Prototype and production cannot drift. |
+| `verify/prod.mjs` | Checks the LIVE page: links in raw HTML, hit-testing, audio decode, no 4xx. |
 | `README.md` | This document |
 
 Related: [[concept_previews_path]] for how to make step 1
