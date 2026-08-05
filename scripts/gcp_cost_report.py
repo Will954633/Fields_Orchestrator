@@ -13,6 +13,9 @@ Usage:
   python3 scripts/gcp_cost_report.py --by resource      # per-resource (detailed export only)
   python3 scripts/gcp_cost_report.py --by project
 
+Also serves as the query layer for scripts/gcp_cost_monitor.py, so the
+functions here raise CostDataUnavailable rather than calling sys.exit().
+
 Note: the export is not retroactive — it only holds data from the day it was
 switched on in the Cloud Console. See docs/GCP_BILLING_EXPORT.md.
 """
@@ -30,6 +33,16 @@ _SUFFIX = BILLING_ACCOUNT.replace("-", "_")
 STANDARD_TABLE = f"gcp_billing_export_v1_{_SUFFIX}"
 DETAILED_TABLE = f"gcp_billing_export_resource_v1_{_SUFFIX}"
 
+NOT_ENABLED_HINT = (
+    f"No export tables in {PROJECT}:{DATASET} yet. The Cloud Billing export still "
+    "needs to be switched on in the Cloud Console — it is Console-only, there is no "
+    "API for it. See docs/GCP_BILLING_EXPORT.md. Tables appear ~24h after enabling."
+)
+
+
+class CostDataUnavailable(RuntimeError):
+    """The billing export isn't enabled yet, or the needed table is missing."""
+
 
 def bq(args):
     return subprocess.run(
@@ -41,16 +54,37 @@ def bq(args):
 def existing_tables():
     r = bq(["ls", "--max_results=1000", f"{PROJECT}:{DATASET}"])
     if r.returncode != 0:
-        sys.exit(f"Cannot list {PROJECT}:{DATASET} — {r.stderr.strip()}")
+        raise CostDataUnavailable(f"Cannot list {PROJECT}:{DATASET} — {r.stderr.strip()}")
     if not r.stdout.strip():
         return []
     return [t["tableReference"]["tableId"] for t in json.loads(r.stdout)]
 
 
+def pick_table(tables, need_resource=False):
+    """Choose the best available export table, preferring the detailed one."""
+    if not tables:
+        raise CostDataUnavailable(NOT_ENABLED_HINT)
+    if need_resource:
+        if DETAILED_TABLE not in tables:
+            raise CostDataUnavailable(
+                "Per-resource costs need the DETAILED export, which isn't enabled "
+                f"(found: {', '.join(tables)}). Enable 'Detailed usage cost' in the "
+                "Cloud Console — Standard stops at the SKU and cannot attribute a "
+                "cost to an individual disk or VM."
+            )
+        return DETAILED_TABLE
+    for t in (DETAILED_TABLE, STANDARD_TABLE):
+        if t in tables:
+            return t
+    raise CostDataUnavailable(
+        f"Expected {STANDARD_TABLE} or {DETAILED_TABLE}; found: {', '.join(tables)}"
+    )
+
+
 def query(sql):
     r = bq(["query", "--use_legacy_sql=false", "--max_rows=500", sql])
     if r.returncode != 0:
-        sys.exit(f"Query failed:\n{r.stderr.strip()}")
+        raise CostDataUnavailable(f"Query failed: {r.stderr.strip()}")
     return json.loads(r.stdout) if r.stdout.strip() else []
 
 
@@ -69,8 +103,45 @@ DIMENSIONS = {
     "service": "service.description",
     "sku": "sku.description",
     "project": "IFNULL(project.name, '(unattributed)')",
-    "resource": "IFNULL(resource.name, '(no resource)')",
+    # Non-resource SKUs (egress, support) carry no resource. The export uses
+    # NULL, but an empty string turns up too — collapse both.
+    "resource": "IFNULL(NULLIF(resource.name, ''), '(no resource)')",
 }
+
+
+def breakdown(month, by="service", limit=30, table=None):
+    """Return [{name, net_cost, currency}, ...] for `month`, largest first."""
+    if table is None:
+        table = pick_table(existing_tables(), need_resource=(by == "resource"))
+    start, end = month_bounds(month)
+    return query(f"""
+        SELECT {DIMENSIONS[by]} AS name,
+               {NET_COST} AS net_cost,
+               ANY_VALUE(currency) AS currency
+        FROM `{PROJECT}.{DATASET}.{table}`
+        WHERE DATE(usage_start_time) >= '{start}'
+          AND DATE(usage_start_time) < '{end}'
+        GROUP BY name
+        HAVING ROUND(net_cost, 2) != 0
+        ORDER BY net_cost DESC
+        LIMIT {limit}
+    """)
+
+
+def daily_totals(days=30, table=None):
+    """Return [{day, net_cost, currency}, ...] oldest first, for trend/anomaly work."""
+    if table is None:
+        table = pick_table(existing_tables())
+    rows = query(f"""
+        SELECT DATE(usage_start_time) AS day,
+               {NET_COST} AS net_cost,
+               ANY_VALUE(currency) AS currency
+        FROM `{PROJECT}.{DATASET}.{table}`
+        WHERE DATE(usage_start_time) >= DATE_SUB(CURRENT_DATE(), INTERVAL {days} DAY)
+        GROUP BY day
+        ORDER BY day
+    """)
+    return rows
 
 
 def main():
@@ -82,51 +153,20 @@ def main():
     p.add_argument("--limit", type=int, default=30)
     args = p.parse_args()
 
-    tables = existing_tables()
-    if not tables:
-        sys.exit(
-            f"No export tables in {PROJECT}:{DATASET} yet.\n"
-            "The export still needs to be switched on in the Cloud Console — see\n"
-            "docs/GCP_BILLING_EXPORT.md. Tables appear within ~24h of enabling it."
-        )
-
-    if args.by == "resource":
-        if DETAILED_TABLE not in tables:
-            sys.exit(
-                "--by resource needs the DETAILED export, which isn't enabled.\n"
-                f"Found only: {', '.join(tables)}\n"
-                "Enable 'Detailed usage cost' in the Cloud Console."
-            )
-        table = DETAILED_TABLE
-    else:
-        table = DETAILED_TABLE if DETAILED_TABLE in tables else STANDARD_TABLE
-        if table not in tables:
-            sys.exit(f"Expected {STANDARD_TABLE} or {DETAILED_TABLE}; found: {', '.join(tables)}")
-
-    start, end = month_bounds(args.month)
-    dim = DIMENSIONS[args.by]
-    rows = query(f"""
-        SELECT {dim} AS name,
-               {NET_COST} AS net_cost,
-               ANY_VALUE(currency) AS currency
-        FROM `{PROJECT}.{DATASET}.{table}`
-        WHERE DATE(usage_start_time) >= '{start}'
-          AND DATE(usage_start_time) < '{end}'
-        GROUP BY name
-        HAVING ROUND(net_cost, 2) != 0
-        ORDER BY net_cost DESC
-        LIMIT {args.limit}
-    """)
+    try:
+        rows = breakdown(args.month, args.by, args.limit)
+    except CostDataUnavailable as e:
+        sys.exit(str(e))
 
     if not rows:
-        sys.exit(f"No usage rows for {args.month} in {table}. "
+        sys.exit(f"No usage rows for {args.month}. "
                  "If the export was enabled after that month, the data won't exist.")
 
     total = sum(float(r["net_cost"]) for r in rows)
     currency = rows[0]["currency"] or ""
     width = max(len(r["name"]) for r in rows)
 
-    print(f"\n{args.month} — cost by {args.by}  (net of credits, from {table})\n")
+    print(f"\n{args.month} — cost by {args.by}  (net of credits)\n")
     for r in rows:
         cost = float(r["net_cost"])
         print(f"  {r['name']:<{width}}  {cost:>10,.2f} {currency}  {cost / total * 100:5.1f}%")
