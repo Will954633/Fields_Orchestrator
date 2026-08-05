@@ -52,7 +52,8 @@
   'use strict';
 
   var BASE = 'assets/';
-  var CLIPS = { open: 'fridge-open.m4a', close: 'fridge-close.m4a', hum: 'fridge-hum.m4a' };
+  var CLIPS = { open: 'fridge-open.m4a', close: 'fridge-close.m4a',
+                latch: 'fridge-latch.m4a', hum: 'fridge-hum.m4a' };
 
   /* Measured alignment — see header. Seconds after the tap. */
   var OPEN_AT  = 0.094;
@@ -154,6 +155,10 @@
       if (pending) { try { pending.stop(); } catch (e) {} pending = null; }
       fire('open', OPEN_AT);
     },
+
+    /* the secret button. Fires immediately — a button click has no travel to
+       wait for, unlike the door. */
+    latch: function () { fire('latch', 0); },
 
     /* door closed: the impact is scheduled to land as the door seats */
     close: function () {
