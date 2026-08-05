@@ -2,8 +2,11 @@
 """
 On-Demand Property Valuation Script
 
-Runs the full CatBoost ML valuation pipeline for a single property, triggered
+Runs the comparable-sales valuation pipeline for a single property, triggered
 by the Netlify analyse-property function via a MongoDB request queue.
+
+(Was a CatBoost pipeline until 2026-08-05; that model is retired — see
+fix-history [CATBOOST-RETIRE].)
 
 Usage:
     python3 scripts/on_demand_valuation.py --suburb robina --property-id 690bd7da8b8f546592602972
@@ -14,12 +17,9 @@ Steps:
     2. Resolve coordinates (cadastral DB → Nominatim fallback)
     3. Enrich with OSM features if missing
     4. GPT Vision enrichment (if property has photos but no analysis)
-    5. Run ComprehensiveFeatureCalculator (126 features)
-    6. Run FeatureAligner (fill missing with defaults)
-    7. Run CatBoost model prediction → iteration_08_valuation
-    8. Run precompute_valuations logic → valuation_data (NPUI, comparables,
+    5. Run precompute_valuations logic → valuation_data (NPUI, comparables,
        confidence intervals, adjustment rates, verification)
-    9. Store all fields on the property document
+    6. Store all fields on the property document
 """
 
 import argparse
@@ -54,9 +54,6 @@ from pymongo.errors import OperationFailure
 # Production valuation imports
 import config
 from osm_enrichment import OSMEnricher
-from feature_calculator_v2 import ComprehensiveFeatureCalculator
-from feature_aligner import FeatureAligner
-from catboost import CatBoostRegressor
 
 # Precompute valuation imports
 from precompute_valuations import (
@@ -267,7 +264,7 @@ def run_gpt_enrichment(doc, collection):
         processing_status["external_floor_area_sqm"] = external.get("value")
         processing_status["total_floor_area_sqm"] = total.get("value")
 
-    # Write to DB immediately (so CatBoost can use the enriched data)
+    # Write to DB immediately so downstream steps see the enriched data
     update_set = {
         "property_valuation_data": photo_result,
         "processing_status": processing_status,
@@ -558,48 +555,6 @@ def resolve_coordinates(doc, db, suburb_key):
     return None, None
 
 
-def run_catboost_valuation(doc, mongo_client):
-    """Run CatBoost model prediction. Returns iteration_08_valuation dict or None."""
-    logger.info('  Running CatBoost feature calculation...')
-
-    # Initialize components
-    feature_calculator = ComprehensiveFeatureCalculator(mongo_client)
-    feature_aligner = FeatureAligner()
-
-    model_path = config.MODEL_DIR / config.MODEL_FILE
-    if not model_path.exists():
-        logger.error(f'Model file not found: {model_path}')
-        return None
-
-    model = CatBoostRegressor()
-    model.load_model(str(model_path))
-
-    # Calculate all 126 features
-    features = feature_calculator.calculate_all_features(doc)
-    summary = feature_calculator.get_feature_summary(features)
-    logger.info(f'  Calculated {summary["total_features"]} features ({summary["coverage_pct"]:.1f}% coverage)')
-
-    # Align features to model expectations
-    aligned = feature_aligner.align_features(features)
-    feature_df = feature_aligner.features_to_dataframe(aligned)
-
-    # Predict
-    predicted_value = float(model.predict(feature_df)[0])
-    logger.info(f'  CatBoost predicted value: ${predicted_value:,.0f}')
-
-    return {
-        'predicted_value': predicted_value,
-        'confidence': 'medium',
-        'model_version': 'iteration_08_phase1',
-        'valuation_date': datetime.now(),
-        'feature_coverage': {
-            'total_features': summary['total_features'],
-            'populated_features': summary['non_null_features'],
-            'coverage_pct': round(summary['coverage_pct'], 1),
-        },
-    }
-
-
 def run_precompute_valuation(db, doc, suburb_key, sold_by_suburb,
                               gc_coord_lookup, gc_timeline_lookup):
     """Run the full precompute valuation pipeline. Returns valuation_data dict or None."""
@@ -759,7 +714,7 @@ def valuate_single_property(suburb_key, property_id_str):
         try:
             gpt_result = run_gpt_enrichment(doc, db[suburb_key])
             if gpt_result:
-                # Re-read the doc from DB to get the enriched fields for CatBoost
+                # Re-read the doc from DB to pick up the enriched fields
                 doc = db[suburb_key].find_one({'_id': oid})
                 doc['LATITUDE'] = lat
                 doc['LONGITUDE'] = lon
@@ -771,10 +726,9 @@ def valuate_single_property(suburb_key, property_id_str):
     else:
         logger.info('  No photos available — skipping GPT enrichment')
 
-    # Step 4: CatBoost valuation — skip for on-demand (too slow, queries all 98 collections)
-    # The website displays reconciled_valuation from precompute, not CatBoost
-    catboost_result = None
-    logger.info('  Skipping CatBoost (on-demand mode — precompute valuation is primary)')
+    # Step 4 (CatBoost valuation) removed 2026-08-05 — model retired, see
+    # fix-history [CATBOOST-RETIRE]. It was already inert here: the result was
+    # hard-set to None so the iteration_08_valuation write below never ran.
 
     # Step 5: Precompute valuation data (NPUI, comparables, confidence intervals)
     # Only load sold records from nearby suburbs (not all 82 collections)
@@ -808,9 +762,6 @@ def valuate_single_property(suburb_key, property_id_str):
         'last_valuation_date': datetime.now(),
         'on_demand_valuation': True,
     }
-
-    if catboost_result:
-        update_fields['iteration_08_valuation'] = catboost_result
 
     if valuation_data:
         update_fields['valuation_data'] = valuation_data
