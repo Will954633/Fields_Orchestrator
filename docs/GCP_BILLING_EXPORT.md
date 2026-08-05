@@ -82,11 +82,47 @@ Negligible. BigQuery storage is ~$0.02/GB/month and this account generates on
 the order of a few hundred MB per year; the first 1 TB of query per month is
 free.
 
-## Not scheduled
+## The automated job
 
-`gcp_cost_report.py` is an on-demand tool, so it carries no `job_run`
-heartbeat. If it is ever put on a cron — e.g. a monthly cost summary to the
-health board — it must be wrapped per CLAUDE.md Rule 7 before that lands.
+`scripts/gcp_cost_monitor.py` runs daily at **07:40 AEST** and:
+
+1. Snapshots month-to-date cost by service and by resource into
+   `system_monitor.gcp_costs`
+2. Telegrams on a daily spike (> `GCP_COST_SPIKE_FACTOR`, default 1.6× the
+   trailing 7-day median, with a `GCP_COST_SPIKE_FLOOR` of $8 so a quiet day
+   can't page on a few dollars) and on a month-end forecast above
+   `GCP_COST_MONTHLY_CEILING` (default 500)
+3. Pulls Recommender findings — idle disks, idle IPs, VM rightsizing — with
+   their dollar amounts
+
+It self-registers via `job_run(cadence_hours=24)` per CLAUDE.md Rule 7 and
+appears on the Process Registry page of the Fields Systems Health sheet.
+
+`gcp_cost_report.py` stays an on-demand CLI; the monitor imports its query
+layer rather than duplicating it.
+
+### It will show ERROR until the export is enabled
+
+That is deliberate. A monitor that shrugs when its data source is missing is
+exactly the silent failure Rule 7 exists to prevent, so the job raises rather
+than recording a misleading success. It is a quiet failure — the Telegram path
+lives past the point where it raises, so there is no daily message, just a red
+row on the health board that clears itself the day after the export starts
+producing tables.
+
+### Auth, and why it isn't a service account
+
+The job runs on the gcloud **user** credentials in
+`/home/projects/.config/gcloud`. The VM's attached service account
+(`419034603899-compute@developer.gserviceaccount.com`) cannot be used: its
+scopes are `devstorage.read_only`, `logging.write`, `monitoring.write`,
+`pubsub`, `service.management.readonly`, `servicecontrol`, `trace.append` —
+no BigQuery, and **changing a VM's scopes requires stopping the VM**.
+
+If those user credentials ever lapse, the job errors rather than reporting
+$0, so it surfaces on the health board instead of going quiet. If it becomes a
+recurring nuisance, the fix is a dedicated service account with BigQuery Job
+User plus Data Viewer on the dataset, keyed via `.env` — not a VM restart.
 
 ## Dead end, recorded so it isn't retried
 
