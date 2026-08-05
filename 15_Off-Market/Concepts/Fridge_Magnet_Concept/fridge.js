@@ -73,7 +73,7 @@
       srToggle.textContent = next ? 'Close the fridge' : 'Open the fridge';
     }
     var prompt = document.querySelector('.prompt');
-    if (prompt) prompt.textContent = next ? 'Close' : 'Open';
+    if (prompt) prompt.textContent = next ? 'Tap to close' : 'Tap to open';
 
     /* Sound and haptics belong to the PULL only.
        The auto-open has no user activation behind it, so on Android the context
@@ -110,26 +110,43 @@
     if (t && t.closest && t.closest('.srToggle, .muteBtn')) return;  // own handlers
 
     interacted = true;
-    clearTimeout(autoTimer);
+    clearTimeout(autoTimer); clearTimeout(nudgeTimer);
 
     if (!isOpen) { setOpen(true, 'pulled'); return; }
     if (t && t.closest && t.closest('.cavity')) return;    // reading, not closing
     setOpen(false, 'pulled');
   }
 
-  document.addEventListener('pointerup', onTap, { passive: true });
+  /* Bound to THREE event types, not one.
+
+     A single physical tap delivers pointerup -> touchend -> click within ~10ms
+     (measured), so listening to all three costs nothing but means the door
+     still opens if any one of them is swallowed — which is what "I closed it
+     and then couldn't open it again" looks like from the outside. The dedupe
+     window makes the redundancy safe: without it, one tap would toggle three
+     times and land back where it started, which is the same symptom. */
+  var lastTap = 0;
+  function onTapDeduped(e) {
+    var now = e.timeStamp || performance.now();
+    if (now - lastTap < 450) return;
+    lastTap = now;
+    onTap(e);
+  }
+  document.addEventListener('pointerup', onTapDeduped, { passive: true });
+  document.addEventListener('touchend',  onTapDeduped, { passive: true });
+  document.addEventListener('click',     onTapDeduped);
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Enter' && e.key !== ' ') return;
     if (document.activeElement && document.activeElement.closest &&
         document.activeElement.closest('.shelf a, .srToggle')) return;
-    interacted = true; clearTimeout(autoTimer);
+    interacted = true; clearTimeout(autoTimer); clearTimeout(nudgeTimer);
     setOpen(!isOpen, 'pulled');
   });
 
   if (muteBtn && audio) {
     muteBtn.addEventListener('click', function (e) {
       e.stopPropagation();
-      var m = audio.setMuted(!audio.isMuted(), isOpen);
+      var m = audio.setMuted(!audio.isMuted());
       muteBtn.setAttribute('aria-pressed', String(m));
       muteBtn.setAttribute('aria-label', m ? 'Unmute the fridge' : 'Mute the fridge');
       muteBtn.innerHTML = m ? '&#9835;\u0338' : '&#9834;';
@@ -139,18 +156,43 @@
 
   if (srToggle) {
     srToggle.addEventListener('click', function () {
-      interacted = true; clearTimeout(autoTimer);
+      interacted = true; clearTimeout(autoTimer); clearTimeout(nudgeTimer);
       setOpen(!isOpen, 'pulled');
     });
   }
 
-  /* ── Auto-open, so nobody is left staring at a closed fridge ───────────
-     Under reduced motion, immediately — the 0.8s beat exists to be watched, and
-     if the motion is switched off there is nothing to watch. */
+  /* ── The door WAITS for a tap. It does not auto-open. ─────────────────
+     It used to open itself at 0.8s, and that made the single most important
+     moment on the page — the first opening — permanently silent, because no
+     gesture had happened and audible autoplay is blocked everywhere. The first
+     sound a visitor got was the door CLOSING. Backwards.
+
+     So the open is now always earned by a tap, which means it always has the
+     gasket, the hum starting, and the haptic. Two safety nets, both silent,
+     because a silent nudge is better than a silent reveal:
+
+       4s   NUDGE  — the door cracks ~11% and settles back. Says "this opens"
+                     without spending the reveal.
+       12s  OPEN   — give up and show the options anyway. Nobody who waited
+                     this long should be left with a closed box.
+
+     Reduced motion still opens immediately: the beat exists to be watched, and
+     if motion is off there is nothing to watch. */
+  var NUDGE_MS = 4000, GIVE_UP_MS = 12000;
+  var nudgeTimer = null;
+
+  function nudge() {
+    if (interacted || isOpen) return;
+    fridge.classList.add('is-nudging');
+    setTimeout(function () { fridge.classList.remove('is-nudging'); }, 1000);
+    emit('fridge_nudge', {});
+  }
+
   if (reduce) {
     setOpen(true, 'auto');
   } else {
-    autoTimer = setTimeout(function () { if (!interacted) setOpen(true, 'auto'); }, 800);
+    nudgeTimer = setTimeout(nudge, NUDGE_MS);
+    autoTimer  = setTimeout(function () { if (!interacted) setOpen(true, 'auto'); }, GIVE_UP_MS);
   }
 
   /* ── Measurement ──────────────────────────────────────────────────────
@@ -204,10 +246,10 @@
      keeps running behind a backgrounded tab. */
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState === 'hidden') {
-      if (audio) audio.suspend(isOpen);     // never leave a fridge humming behind a dead tab
+      if (audio) audio.suspend();     // never leave a fridge humming behind a dead tab
       emit('fridge_exit', { opened: isOpen, interacted: interacted, ms: Math.round(performance.now() - t0) });
     } else if (audio && interacted) {
-      audio.wake(isOpen);
+      audio.wake();
     }
   });
 })();
