@@ -38,6 +38,14 @@ one_shot () {   # $1=in $2=start $3=dur $4=out
 one_shot "fridge_opening.m4a" 1.80 0.72 fridge-open.m4a
 one_shot "fridge_closing.m4a" 2.10 0.72 fridge-close.m4a
 
+# The secret button's latch. Isolated from the CLOSE recording's contact
+# transient (onset 2.135s, peak 2.160s) — 0.16s only, high-passed at 900Hz so
+# the low thud of the door mass is gone and just the plastic click survives.
+ffmpeg -v error -y -ss 2.130 -t 0.16 -i "$S/fridge_closing.m4a" \
+  -ac 1 -ar 44100 \
+  -af "highpass=f=900,afade=t=in:st=0:d=0.004,afade=t=out:st=0.10:d=0.06,loudnorm=I=-17:TP=-2:LRA=11" \
+  -c:a aac -b:a 96k fridge-latch.m4a
+
 # ── the running bed: a SEAMLESS, LEVEL-FLAT loop ────────────────────────────
 # Two separate traps here, and the first one shipped a broken loop.
 #
@@ -155,8 +163,8 @@ ffmpeg -v error -y \
   -filter_complex "[0:a][1:a]acrossfade=d=$C:c1=qsin:c2=qsin[out]" \
   -map "[out]" -ar 44100 -c:a aac -b:a 80k fridge-hum.m4a
 
-ls -l fridge-open.m4a fridge-close.m4a fridge-hum.m4a
-for f in fridge-open.m4a fridge-close.m4a fridge-hum.m4a; do
+ls -l fridge-open.m4a fridge-close.m4a fridge-latch.m4a fridge-hum.m4a
+for f in fridge-open.m4a fridge-close.m4a fridge-latch.m4a fridge-hum.m4a; do
   printf "%-20s %ss\n" "$f" "$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$f")"
 done
 
