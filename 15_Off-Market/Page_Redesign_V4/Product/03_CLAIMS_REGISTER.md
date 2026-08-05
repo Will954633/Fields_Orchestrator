@@ -10,6 +10,8 @@
 
 **State our own position. Do not characterise the market.**
 
+**Scope.** Claims for the `/off-market/:slug` Home Hub — addressed to **the owner of a home that is not for sale**. Nothing here covers price guides, underquoting, auction rules or listing pricing; those belong to a for-sale product. See the SCOPE block in `01_USER_JOBS_AND_GAPS.md`.
+
 ---
 
 ## Tier A — defensible now, with citation
@@ -22,10 +24,9 @@ Safe for public copy as written, provided the citation travels with it.
 | A2 | "We show which sales the estimate was built from — how many were reviewed and how many were used." | e.g. 41 reviewed, 8 retained | The count is safe; the per-comparable adjustment block is **not renderable yet** (C4) |
 | A3 | "Nobody calls unless you ask." | — | ⚠ **Only if it is an operational rule.** If any path leads to outbound contact, this cannot be said at all |
 | A4 | "Fields is not paid by agents. No one pays to rank here." | Our own business model | True and verifiable about us. Do **not** extend it into a claim about them |
-| A5 | Comparable **ranges** and **gaps** — "comps say $1.75M–$1.98M", "$98K between asking and comparables" | CLAUDE.md Rule 5, updated 2026-07-27 | Ranges and differences permitted. A single figure as "what your home is worth" is not |
+| A5 | Comparable **ranges** — "comps say $1.75M–$1.98M" | CLAUDE.md Rule 5, updated 2026-07-27 | Ranges permitted; a single figure as "what your home is worth" is not. ⚠ **Gap framing against an asking price is out of Hub scope** — an off-market home has none |
 | A6 | Address-specific hard facts — "Last recorded sale $175,000, Oct 1990, held 35.7 yrs" | Our own data | This exact snippet ranked us **#3 above Domain**. Specific and checkable beats persuasive |
 | A7 | Flood/hazard context with source and limitations named | `config/flood_context_burleigh_waters.md` | Rule 5: data, source, limitation. No advice, no reassurance |
-| A8 | "Queensland law prohibits an agent from giving a price guide for a property going to auction." | *Property Occupations Act 2014* | ⚠ **Important honesty check:** in our own market, no-price is often a *legislative* artefact, not a portal choice. Never imply the portal is hiding it |
 
 ---
 
@@ -84,3 +85,4 @@ True on current evidence, but sourced from forum testimony, snippets, or absence
 | Date | Change |
 |---|---|
 | 2026-08-06 | Created from the eleven research files in `../Research/`. C10 recorded against currently-shipped copy |
+| 2026-08-06 | Rescoped to the owner of a not-for-sale home. A5 narrowed (no asking-price gap framing); A8 removed (QLD auction price guides — listing-side) |
