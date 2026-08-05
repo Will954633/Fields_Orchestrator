@@ -20,13 +20,29 @@ Safe for public copy as written, provided the citation travels with it.
 
 | # | Claim | Basis | Note |
 |---|---|---|---|
-| A1 | "We publish our method's historical error rate." | 11.1%, internal | State the figure, the sample and the limits. Never as a comparison |
+| A1 | "We publish our method's historical error rate." | 11.1% in mini-site copy; **11.6%** Robina in the 2026-08-05 backtest | ⚠ **Pin one figure with its sample and date before use.** State the limits. Never as a comparison — see C1 |
 | A2 | "We show which sales the estimate was built from — how many were reviewed and how many were used." | e.g. 41 reviewed, 8 retained | The count is safe; the per-comparable adjustment block is **not renderable yet** (C4) |
+| A2b | "Comparable sales that look $610,000 apart can be $44,000 apart once you price the differences between the houses." | `Adjusted-Comparables-Evidence.md` §3, approved sayable | A **method** claim. Never extend it to accuracy — see C1 and dossier C10 |
+| A2c | "We adjust each comparable for land, floor area, condition, renovation, kitchen, pool, storeys, cladding, age, beach distance and street — and we show every adjustment in dollars." | same | Describes what we do. Safe |
 | A3 | "Nobody calls unless you ask." | — | ⚠ **Only if it is an operational rule.** If any path leads to outbound contact, this cannot be said at all |
 | A4 | "Fields is not paid by agents. No one pays to rank here." | Our own business model | True and verifiable about us. Do **not** extend it into a claim about them |
 | A5 | Comparable **ranges** — "comps say $1.75M–$1.98M" | CLAUDE.md Rule 5, updated 2026-07-27 | Ranges permitted; a single figure as "what your home is worth" is not. ⚠ **Gap framing against an asking price is out of Hub scope** — an off-market home has none |
 | A6 | Address-specific hard facts — "Last recorded sale $175,000, Oct 1990, held 35.7 yrs" | Our own data | This exact snippet ranked us **#3 above Domain**. Specific and checkable beats persuasive |
 | A7 | Flood/hazard context with source and limitations named | `config/flood_context_burleigh_waters.md` | Rule 5: data, source, limitation. No advice, no reassurance |
+
+---
+
+### ⚠ Unresolved conflict between two internal documents — needs Will
+
+`Adjusted-Comparables-Evidence.md` §3 lists this among its **approved sayable claims**:
+
+> *"We publish our error rate. We have not found another agency or portal that publishes theirs."* *(this is the approved comparative line — it is about disclosure, not accuracy)*
+
+The mini-site session review told us to **delete that exact sentence**: *"This is an open-ended market-wide claim and shifts the card from disclosure into self-promotion."* It is **C2** below — never say.
+
+**The two documents disagree, and one of them is wrong.** Recommendation: **the session review wins.** The claim rests on our having failed to find something, which cannot be checked by a reader or defended if challenged; and `EVIDENCE_consumer_voice.md` §4.1 reaches the same finding by a different route while explicitly warning it gives us **no external benchmark**. The safe replacement is already drafted: *"We publish ours so you can judge the range with its limitations attached."*
+
+**Action if accepted:** amend §3 of `Adjusted-Comparables-Evidence.md` so the two documents stop contradicting each other. Not done here — it is Will's marketing material, in another project area.
 
 ---
 
@@ -49,7 +65,8 @@ True on current evidence, but sourced from forum testimony, snippets, or absence
 
 | # | Claim | Why |
 |---|---|---|
-| C1 | "More accurate than Domain / PropTrack / CoreLogic" | **No incumbent publishes an accuracy figure**, so the claim is unfalsifiable and unsafe. Standing memory rule (`valuation_backtest_claim_constraints`) |
+| C1 | "More accurate than Domain / PropTrack / CoreLogic" | Two independent reasons. (a) **No incumbent publishes an accuracy figure**, so the claim is unfalsifiable — standing memory rule `valuation_backtest_claim_constraints`. (b) **It is false on our own data**: Robina **11.6% Fields vs 6.9% Domain**, Burleigh Waters **13.7% vs 8.1%** (leave-one-out, 2026-08-05). Our argument is auditability, never accuracy |
+| C1b | Any framing of the 55% comparable-narrowing as beating a portal | It compares our method against **naive label-matching**, not against anyone. It is **n=1**, and a tighter spread is precision, not accuracy — a narrow range can be narrowly wrong |
 | C2 | "No other portal publishes their error rate" / "no one in Australia does this" | Open-ended market-wide claim we cannot verify — the exact line the session review told us to cut. Also **false** for owner dashboards: REA has 3M tracked properties |
 | C3 | "Portals hide information from you" | `structural_conflict` is explicit that this does **not** follow from the revenue model and no document supports it. The narrower, documented claims — ranking by payment, lead monetisation — are stronger *and* true |
 | C4 | "They inflate estimates to trigger seller leads" | **No evidence found.** Do not assert or imply |
@@ -86,3 +103,4 @@ True on current evidence, but sourced from forum testimony, snippets, or absence
 |---|---|
 | 2026-08-06 | Created from the eleven research files in `../Research/`. C10 recorded against currently-shipped copy |
 | 2026-08-06 | Rescoped to the owner of a not-for-sale home. A5 narrowed (no asking-price gap framing); A8 removed (QLD auction price guides — listing-side) |
+| 2026-08-06 | Folded in `Adjusted-Comparables-Evidence.md` (26 Moorabbin Place). Added A2b/A2c; C1 strengthened with our own backtest; C1b added; unresolved conflict logged against that document's §3 |
