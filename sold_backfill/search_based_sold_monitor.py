@@ -399,6 +399,26 @@ class SearchBasedSoldMonitor:
                     "sold_detection_date": now,
                     "last_updated": now,
                 }
+                # EDITORIAL HANDOVER ON SALE (2026-08-05).
+                #
+                # `ai_analysis` is written while the home is ON THE MARKET and
+                # nothing here ever retired it, so a sold home kept its
+                # present-tense campaign copy indefinitely — 21 Indooroopilly
+                # Court settled 2026-05-05 and was still described as "an auction
+                # with no price guide" three months later.
+                #
+                # Only touch it when it is actually published: a dotted `$set` on
+                # a doc with no `ai_analysis` would CREATE the sub-document
+                # (`{status: "archived_on_sale"}`) on homes that never had
+                # editorial, which is the same null/dotted-path trap that has bitten
+                # crm_sync.py. The website also gates on listing_status, so this is
+                # the durable record rather than the only defence.
+                if (doc.get("ai_analysis") or {}).get("status") == "published":
+                    update_fields["ai_analysis.status"] = "archived_on_sale"
+                    update_fields["ai_analysis.archived_at"] = now
+                    update_fields["ai_analysis.archived_reason"] = "listing sold"
+                    print("      Editorial archived (on-market copy retired)")
+
                 # Preserve listing price and compute vendor discount
                 listing_price_text = doc.get("price")
                 update_fields["listing_price"] = listing_price_text

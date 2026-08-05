@@ -238,6 +238,22 @@ def run_withdrawn_detection(suburbs, dry_run=False):
                         "withdrawn_last_checked_at": now_iso,
                     }
 
+                    # EDITORIAL HANDOVER (2026-08-05) — same reasoning as sold
+                    # detection. A withdrawn listing is no longer on the market,
+                    # so its on-market editorial ("the asking price picks the
+                    # lower half") stops being true the moment it comes down.
+                    # Unlike a sale there is no sold_analysis to replace it, so
+                    # the page falls back to its data-driven content — and because
+                    # the website's noindex gate keys off `has_ai_analysis`, these
+                    # pages also stop inviting indexation, which is right: they are
+                    # in no sitemap and describe a listing that no longer exists.
+                    # Guarded on "published" so the dotted $set can't fabricate an
+                    # ai_analysis sub-document on homes that never had one.
+                    if ((full_doc or {}).get("ai_analysis") or {}).get("status") == "published":
+                        update_fields["ai_analysis.status"] = "archived_on_withdrawal"
+                        update_fields["ai_analysis.archived_at"] = now_iso
+                        update_fields["ai_analysis.archived_reason"] = "listing withdrawn"
+
                     # Append final "withdrawn" entry to price_history
                     if listing_price:
                         sys.path.insert(0, '/home/fields/Fields_Orchestrator/scripts')

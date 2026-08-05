@@ -89,6 +89,59 @@ def pctile(v, arr):
 def quarter(d):
     return f"Q{(d.month - 1)//3 + 1} {d.year}"
 
+# ---------------------------------------------------------------- prose helpers
+# Copy rewrite 2026-08-05 (Will: "that doesn't make sense... sounds like a
+# template"). Every string a reader sees is written as a sentence a person would
+# say out loud. The numbers are unchanged — only the words around them.
+#
+# House style (CLAUDE.md + the property editorial prompt):
+#   - "typically sell for", not "median" — the precise word stays on the evidence
+#     line under each sentence, where it is labelled and unambiguous.
+#   - Spell small numbers in prose ("four bedrooms"), keep figures for money.
+#   - Australian quarter names ("the June quarter of 2025", not "Q2 2025").
+NUM_WORDS = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five",
+             6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten"}
+
+def numword(n):
+    """Spell out 1-10; larger numbers stay as digits."""
+    try:
+        i = int(n)
+    except (TypeError, ValueError):
+        return str(n)
+    return NUM_WORDS.get(i, str(i))
+
+# Australian convention names a quarter by its LAST month (ABS style).
+_QUARTER_MONTH = {1: "March", 2: "June", 3: "September", 4: "December"}
+
+def quarter_phrase(d):
+    """'the June quarter of 2025' — how an Australian reader says Q2 2025."""
+    return f"the {_QUARTER_MONTH[(d.month - 1)//3 + 1]} quarter of {d.year}"
+
+# (plural, singular) per bed-band. Both forms are written out rather than derived,
+# because naive singularisation produced "the typical five-bedroom and larger
+# house in Varsity Lakes".
+_BANDS = {
+    "2 bed or fewer": ("two-bedroom and smaller houses", "two-bedroom or smaller house"),
+    "3 bed":          ("three-bedroom houses",           "three-bedroom house"),
+    "4 bed":          ("four-bedroom houses",            "four-bedroom house"),
+    "5+ bed":         ("five-bedroom-plus houses",       "five-bedroom-plus house"),
+}
+
+def band_phrase(band, suburb_disp, singular=False):
+    """'four-bedroom houses in Robina' — the bed-band as readable English.
+
+    Replaces the old "4 bed Robina houses", a noun pile no one would say.
+    """
+    plural, single = _BANDS.get(band, ("houses", "house"))
+    return f"{single if singular else plural} in {suburb_disp}"
+
+def singularise_segment(label):
+    """'four-bedroom houses in Robina' -> 'four-bedroom house in Robina'."""
+    for plural, single in _BANDS.values():
+        if label.startswith(plural + " in "):
+            return label.replace(plural + " in ", single + " in ", 1)
+    return label.replace("houses in ", "house in ", 1)
+
 # ---------------------------------------------------------------- benchmark layer
 def build_benchmarks(db, suburb):
     """Compute suburb + bed-band price benchmarks from our own sold House corpus."""
@@ -125,13 +178,17 @@ def build_benchmarks(db, suburb):
     }
 
 def segment_for(p, bench):
-    """Return (label, array) — bed-band if it has enough samples, else all-houses."""
+    """Return (label, array) — bed-band if it has enough samples, else all-houses.
+
+    The label is a readable noun phrase ("four-bedroom houses in Robina"), so it
+    drops straight into a sentence.
+    """
+    disp = bench["suburb"].replace("_", " ").title()
     bb = bed_band(p.get("bedrooms"))
     arr = bench["by_band"].get(bb) if bb else None
     if arr and len(arr) >= MIN_SEGMENT_N:
-        return f"{bb} Robina houses".replace("Robina", bench["suburb"].replace("_", " ").title()), sorted(arr)
-    disp = bench["suburb"].replace("_", " ").title()
-    return f"{disp} houses", bench["prices"]
+        return band_phrase(bb, disp), sorted(arr)
+    return f"houses in {disp}", bench["prices"]
 
 # ---------------------------------------------------------------- insight modules
 # Each: (property, bench) -> Insight dict {type,text,evidence,tier,score} or None.
@@ -145,29 +202,42 @@ def m_price_vs_market(p, bench):
     med = st.median(arr)
     delta = price - med
     pc = pctile(price, arr)
+    # "51st percentile of 179 comparable sales" is analyst shorthand. A reader
+    # who has never seen a percentile still understands "51% of them sold for
+    # less" — same number, no glossary required.
     if abs(delta) < max(0.02 * med, 15000):
-        rel = f"in line with the {label} median of {money(med)}"
+        lead = (f"At {money(price)}, it sold within {money(abs(delta))} of what "
+                f"{label} typically go for — {money(med)}.")
     else:
-        rel = f"{money(abs(delta))} {'above' if delta > 0 else 'below'} the {label} median of {money(med)}"
-    text = (f"Sold for {money(price)} — {rel} "
-            f"({ordinal(pc)} percentile of {len(arr)} comparable sales).")
+        lead = (f"At {money(price)}, it sold {money(abs(delta))} "
+                f"{'above' if delta > 0 else 'below'} the {money(med)} that "
+                f"{label} typically go for.")
+    text = f"{lead} Of the {len(arr)} comparable sales we hold, {pc}% went for less."
+    # Base score sits above every other module's ceiling (campaign_speed tops out
+    # at 55) so the price ALWAYS leads. This is the one fact the page exists to
+    # answer — a reader who searched the address wants the sale price first, not
+    # how long the campaign ran. Before this, a fast campaign could out-score the
+    # price and 48 Tullamarine Drive opened with "It found a buyer in 2 days".
     return {"type": "price_vs_market", "text": text,
             "evidence": {"price": price, "median": med, "delta": delta,
-                         "percentile": pc, "n": len(arr)},
-            "tier": 1, "score": 40 + abs(delta) / max(med, 1) * 60}
+                         "percentile": pc, "n": len(arr), "segment": label},
+            "tier": 1, "score": 60 + abs(delta) / max(med, 1) * 60}
 
 def m_campaign_speed(p, bench):
     dom = p.get("days_on_market")
     if not isinstance(dom, (int, float)) or not bench["dom_median"]:
         return None
     med = bench["dom_median"]
+    disp = bench["suburb"].replace("_", " ").title()
     if dom <= med * 0.6:
-        frame = f"notably faster than the suburb-wide median of {med:.0f} days"
+        text = (f"It found a buyer in {int(dom)} days. The typical {disp} house "
+                f"takes {med:.0f}.")
     elif dom >= med * 1.5:
-        frame = f"a longer campaign than the suburb-wide median of {med:.0f} days"
+        text = (f"It took {int(dom)} days to sell, against {med:.0f} for the "
+                f"typical {disp} house.")
     else:
-        frame = f"close to the suburb-wide median of {med:.0f} days"
-    text = f"On the market {int(dom)} days before selling — {frame}."
+        text = (f"It took {int(dom)} days to sell — about the same as the typical "
+                f"{disp} house, at {med:.0f}.")
     return {"type": "campaign_speed", "text": text,
             "evidence": {"dom": int(dom), "dom_median": med},
             "tier": 2, "score": 25 + abs(dom - med) / max(med, 1) * 30}
@@ -177,15 +247,22 @@ def m_configuration(p, bench):
     car = p.get("carspaces", p.get("car_spaces"))
     if not beds:
         return None
-    parts = [f"{int(beds)} bed"]
-    if baths: parts.append(f"{int(baths)} bath")
-    if car: parts.append(f"{int(car)} car")
-    cfg = " / ".join(parts)
+    # "A 4 bed / 2 bath / 2 car home." is listing-portal shorthand. Written out,
+    # it reads like a sentence instead of a spec line.
+    parts = [f"{numword(beds)} bedroom{'s' if int(beds) != 1 else ''}"]
+    if baths:
+        parts.append(f"{numword(baths)} bathroom{'s' if int(baths) != 1 else ''}")
+    if car:
+        parts.append(f"parking for {numword(car)}")
+    if len(parts) > 1:
+        cfg = ", ".join(parts[:-1]) + f" and {parts[-1]}"
+    else:
+        cfg = parts[0]
     fa = (p.get("floor_plan_analysis") or {}).get("internal_floor_area")
     tail = ""
     if isinstance(fa, (int, float)) and fa > 30 and bench["sqm"]:
-        tail = f" across {fa:.0f} sqm of internal living"
-    text = f"A {cfg} home{tail}."
+        tail = f", across {fa:.0f} sqm of internal living"
+    text = f"{cfg[0].upper()}{cfg[1:]}{tail}."
     return {"type": "configuration", "text": text,
             "evidence": {"bedrooms": int(beds), "bathrooms": int(baths) if baths else None},
             "tier": 1, "score": 15}
@@ -200,28 +277,40 @@ def m_condition_finish(p, bench):
     score = po.get("overall_condition_score") or cs.get("overall_score")
     if score is None and not reno:
         return None
-    facts = []
+    # "Photo analysis shows a partially updated home, laminate kitchen benchtops,
+    # and an overall condition of 7/10." — three unlike things in one list, led by
+    # a machine noun. Split into what the photos showed, then what we scored it.
     lvl = reno.get("overall_renovation_level")
-    RENO = {"fully_renovated": "a fully renovated home",
-            "extensively_renovated": "an extensively renovated home",
-            "cosmetically_updated": "a cosmetically updated home",
-            "partially_renovated": "a partially updated home",
-            "original": "a home in original condition with scope to update"}
-    if lvl in RENO:
-        facts.append(RENO[lvl])
-    if kit.get("benchtop_material") and kit.get("benchtop_material") != "unknown":
-        km = kit["benchtop_material"]
-        facts.append(f"{km} kitchen benchtops" + (" with premium appliances"
-                     if kit.get("appliances_quality") == "premium" else ""))
+    RENO = {"fully_renovated": "a fully renovated house",
+            "extensively_renovated": "an extensively renovated house",
+            "cosmetically_updated": "a cosmetically updated house",
+            "partially_renovated": "a partially updated house",
+            "original": "a house in original condition, with room to update"}
+    km = kit.get("benchtop_material")
+    if km in (None, "", "unknown", "other"):
+        km = None
+    kitchen = None
+    if km:
+        kitchen = f"{km} kitchen benchtops"
+        if kit.get("appliances_quality") == "premium":
+            kitchen += " and premium appliances"
+
+    sentences = []
+    if lvl in RENO and kitchen:
+        sentences.append(f"The listing photos show {RENO[lvl]}, with {kitchen}.")
+    elif lvl in RENO:
+        sentences.append(f"The listing photos show {RENO[lvl]}.")
+    elif kitchen:
+        sentences.append(f"The listing photos show {kitchen}.")
     if score:
-        facts.append(f"an overall condition of {int(score)}/10")
-    if not facts:
+        # "We scored" — says who made the judgement, which the old phrasing hid.
+        sentences.append(
+            f"We scored its overall condition {int(score)} out of 10"
+            + (" from those photos." if sentences else " from the listing photos.")
+        )
+    if not sentences:
         return None
-    if len(facts) == 1:
-        body = facts[0]
-    else:
-        body = ", ".join(facts[:-1]) + f", and {facts[-1]}"
-    text = "Photo analysis shows " + body + "."
+    text = " ".join(sentences)
     # notability: strong (renovated / high score) OR clear update-opportunity both interesting
     notable = (score or 5)
     return {"type": "condition_finish", "text": text,
@@ -232,12 +321,15 @@ def m_character(p, bench):
     po = (p.get("property_valuation_data") or {}).get("property_overview") or {}
     style = po.get("architectural_style")
     stories = po.get("number_of_stories")
-    if not style or style == "unknown":
+    # "other" is what the classifier stores when it cannot tell — it was reaching
+    # the page as "Single-level other home." Skip rather than publish a placeholder.
+    if not style or style in ("unknown", "other", "unspecified"):
         return None
-    bits = f"{style} home"
-    if stories:
-        bits = f"{'single' if stories == 1 else 'two' if stories == 2 else stories}-level {style} home"
-    text = f"{bits[0].upper()}{bits[1:]}."
+    levels = {1: "single-level", 2: "two-level", 3: "three-level"}.get(stories)
+    if levels:
+        text = f"It's a {levels} {style} house."
+    else:
+        text = f"It's a {style} house."
     return {"type": "character", "text": text,
             "evidence": {"architectural_style": style, "stories": stories},
             "tier": 3, "score": 8}
@@ -252,8 +344,12 @@ def m_market_timing(p, bench):
         return None
     med = st.median(qarr)
     disp = bench["suburb"].replace("_", " ").title()
-    text = (f"Transacted in {q}, when the {disp} house median sat around "
-            f"{money(med)} across {len(qarr)} recorded sales.")
+    # "Transacted in Q2 2025" is trade-speak on both counts.
+    # "typically", not "on average" — the figure is a median, and the two are not
+    # the same thing. Every plain-English substitution still has to be true.
+    text = (f"The sale went through in {quarter_phrase(sd)}, when houses in {disp} "
+            f"were typically selling for {money(med)}, across {len(qarr)} "
+            f"recorded sales.")
     return {"type": "market_timing", "text": text,
             "evidence": {"quarter": q, "quarter_median": med, "n": len(qarr)},
             "tier": 2, "score": 12}
@@ -263,22 +359,48 @@ MODULES = [m_price_vs_market, m_campaign_speed, m_configuration,
 
 # ---------------------------------------------------------------- assembly
 def build_headline(top, p):
+    """The page's H1. The address sits directly beneath it, so the headline must
+    add something the address doesn't.
+
+    The old at-or-below-median headline was "Sold for $1,550,000 in Robina" —
+    which Will flagged, correctly. The suburb is already in the dateline, the
+    address line and the breadcrumb directly around it, so "in Robina" was both
+    redundant and awkwardly hung off the end. Replacing the place with the DATE
+    fixes the sentence and adds real information: how current this sale is, which
+    is the first thing anyone judging a comparable wants to know.
+    """
     price = parse_price(p.get("sale_price"), p.get("listing_price"))
+    if not price:
+        return f"Sold in {(p.get('suburb') or '').strip()}".strip()
+
+    sd = parse_date(p.get("sold_date"))
+    when = f" in {sd.strftime('%B %Y')}" if sd else ""
+
     if top and top["type"] == "price_vs_market":
         ev = top["evidence"]
         suburb_disp = (p.get("suburb") or "").strip()
-        # Only lead the headline with a delta when it's positive (above median).
-        # At/below median → neutral price headline (objective delta stays in the body).
+        # Lead with the delta ONLY when it is positive. A seller reading their own
+        # page should not be met with an H1 announcing they sold under the median
+        # — the figure is still reported, objectively, in the body. This is the
+        # value-framing rule, and the rewrite preserves it deliberately.
         if ev["delta"] > max(0.02 * ev["median"], 15000):
-            return f"Sold for {money(price)} — {money(ev['delta'])} above the {suburb_disp} house median"
-        return f"Sold for {money(price)} in {suburb_disp}"
-    if price:
-        return f"Sold for {money(price)}"
-    return f"Sold in {p.get('suburb','')}"
+            # Name the segment the delta was ACTUALLY measured against. It is the
+            # bed-band ("three-bedroom houses in Varsity Lakes") whenever that has
+            # enough samples, so the old "the typical Varsity Lakes house" was
+            # comparing against one number and crediting it to another.
+            seg = ev.get("segment") or f"houses in {suburb_disp}"
+            return (f"Sold for {money(price)} — {money(ev['delta'])} above the "
+                    f"typical {singularise_segment(seg)}")
+    return f"Sold for {money(price)}{when}"
 
 def build_summary(selected):
-    # stitch top insights into a short objective paragraph
-    return " ".join(s["text"] for s in selected[:3])
+    """Two sentences, used as the page's meta description.
+
+    Kept to the top two insights: the on-page renderer suppresses the summary
+    when it merely repeats them, so this exists to be a good SERP snippet rather
+    than a second copy of the page.
+    """
+    return " ".join(s["text"] for s in selected[:2])
 
 def analyse(p, bench):
     insights = [ins for m in MODULES if (ins := m(p, bench))]
@@ -287,7 +409,7 @@ def analyse(p, bench):
     completeness = round(len([i for i in insights]) / len(MODULES), 2)
     top = insights[0] if insights else None
     analysis = {
-        "version": 1,
+        "version": 2,          # v2 = 2026-08-05 copy rewrite (prose, not templates)
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "generator": "generate_sold_analysis.py",
         "status": "published",
