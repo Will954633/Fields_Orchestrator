@@ -50,6 +50,10 @@ HEARTBEAT_OBJECT = os.environ.get("HEARTBEAT_OBJECT", "vm-heartbeat.txt")
 STATE_OBJECT = os.environ.get("STATE_OBJECT", "vm-watchdog-state.json")
 
 STALE_MIN = int(os.environ.get("STALE_MIN", "8"))          # heartbeat age -> stale
+# Prolonged staleness = wedged EVEN IF ports answer. See the 2026-08-06 lockup:
+# nginx/sshd stayed up for hours while the guest was unusable. 20 min is 20 missed
+# once-a-minute heartbeats — far beyond any plausible transient cron/network blip.
+HARD_STALE_MIN = int(os.environ.get("HARD_STALE_MIN", "20"))
 ALERT_COOLDOWN_MIN = int(os.environ.get("ALERT_COOLDOWN_MIN", "20"))
 RESET_COOLDOWN_MIN = int(os.environ.get("RESET_COOLDOWN_MIN", "30"))
 
@@ -152,11 +156,21 @@ def vm_watcher(request):
     any_port_up = any(ports.values())
     stale = (age is None) or (age >= STALE_MIN)
 
+    # Ports-up does NOT mean usable. On 2026-08-06 a runaway ugrep drove the box
+    # into disk thrash: the workbench was dead and the heartbeat cron had stopped
+    # running for hours, but nginx kept answering 443 and sshd 22 until the very
+    # end. The old rule ("stale AND all ports dead") classified that as merely
+    # "degraded" and sent a note saying "likely a cron issue, NOT a hang" — the
+    # opposite of the truth, so no real alert ever fired. A healthy VM rewrites
+    # the heartbeat every 60 s; if it has not managed that in HARD_STALE_MIN, the
+    # guest is not healthy no matter what the TCP probes say.
     status = "ok"
     if stale and not any_port_up:
         status = "wedged"
+    elif (age is not None and age >= HARD_STALE_MIN) or (age is None and stale):
+        status = "wedged"          # prolonged silence = wedged even with ports up
     elif stale and any_port_up:
-        status = "degraded"
+        status = "degraded"        # brief gap, ports fine -> probably just the cron
 
     state = _state_get()
     prev = state.get("last_status", "ok")
