@@ -224,8 +224,16 @@ processes:
   # ============================================================================
     
   - id: 6
-    name: "Property Valuation Model"
-    description: "Runs iteration_08 valuation model to predict property values and stores in iteration_08_valuation.predicted_value"
+    name: "Property Valuation Model (RETIRED - CatBoost)"
+    description: >-
+      RETIRED 2026-08-05. Ran the iteration_08 CatBoost model and wrote
+      iteration_08_valuation.predicted_value. Two valuation systems were running
+      in parallel; the comparable-sales method (step 18) is now the only one.
+      reconciled_valuation never depended on this model, so retiring it changed
+      no valuation. Left here disabled rather than deleted so the nightly log
+      shows "SKIPPED (disabled)" and the decision stays visible.
+      See fix-history [CATBOOST-RETIRE].
+    enabled: false
     phase: "valuation"
     command: "python3 batch_valuate_with_tracking.py"
     working_dir: "/home/fields/Property_Valuation/04_Production_Valuation"
