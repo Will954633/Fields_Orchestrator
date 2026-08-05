@@ -2,11 +2,19 @@
 """
 Compare two comparable-sales methods on ONE sold property.
 
-  METHOD A — "basic"   : label matching. Same property type, same bedroom count,
-                         same bathroom count, land size within +/- a tolerance.
-                         Raw sale prices. No adjustments of any kind.
+  METHOD A — "agent"   : what a real estate agent valuation gives you. THREE
+                         comparable sales, same property type, same bedroom count,
+                         same bathroom count, roughly similar lot size. Raw sale
+                         prices, no adjustments of any kind. (Three comps is also
+                         the statutory Statement of Information standard in VIC and
+                         the incoming NSW regime.)
   METHOD B — "Fields"  : the production adjusted-comparables method, via
                          valuation_backtest.backtest_single_property().
+
+With only three comps the answer depends heavily on WHICH three. Rather than pick a
+flattering triple, this enumerates EVERY combination of three from the qualifying
+pool and reports the distribution — best case, median case, worst case — plus two
+named picks an agent might plausibly make (three most recent, three closest on land).
 
 Both methods are held to the SAME fairness rules, or the comparison is worthless:
   * the subject is excluded from its own comparable pool (by _id)
@@ -33,6 +41,7 @@ import os
 import re
 import sys
 from datetime import datetime, timedelta
+from itertools import combinations
 from statistics import median
 
 sys.path.insert(0, "/home/fields/Fields_Orchestrator/scripts")
@@ -114,11 +123,21 @@ def basic_method(subject, pool, land_tolerance, window_months):
     return comps, dropped
 
 
+def triple_stats(triple):
+    """Range low/high/width and derived midpoint for a set of raw comps."""
+    prices = [c[1] for c in triple]
+    lo, hi = min(prices), max(prices)
+    return lo, hi, hi - lo, (lo + hi) / 2
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--suburb", default="robina", choices=SUBURBS)
     ap.add_argument("--match", default="Moorabbin",
                     help="address regex to pick the subject")
+    ap.add_argument("--n-comps", type=int, default=3,
+                    help="basic method: how many comparables (default 3, the "
+                         "agent / Statement of Information standard)")
     ap.add_argument("--land-tolerance", type=float, default=0.20,
                     help="basic method: +/- fraction on land size (default 0.20)")
     ap.add_argument("--window-months", type=int, default=12,
@@ -179,25 +198,71 @@ def main():
                                   args.window_months)
     win = f"last {args.window_months} months" if args.window_months else "all prior sales"
     print("\n" + "-" * 78)
-    print(f"METHOD A — BASIC LABEL MATCH  "
+    print(f"METHOD A — AGENT VALUATION: {args.n_comps} COMPS  "
           f"({subject.get('bedrooms')} bed, {subject.get('bathrooms')} bath, "
           f"land ±{args.land_tolerance:.0%}, {win})")
     print("-" * 78)
 
-    if not comps:
-        print(f"  No comparables found. Dropped: {dropped}")
-        a_low = a_high = a_mid = None
+    a_low = a_high = a_mid = None
+    a_dist = None
+
+    if len(comps) < args.n_comps:
+        print(f"  Only {len(comps)} qualifying sales — need {args.n_comps}. "
+              f"Dropped: {dropped}")
     else:
+        print(f"  Qualifying pool ({len(comps)} sales, "
+              f"choose {args.n_comps} = "
+              f"{len(list(combinations(range(len(comps)), args.n_comps)))} "
+              f"possible selections):")
         for addr, price, land, d in comps:
-            print(f"  {money(price):>12}  {d}  {str(land) + ' sqm':>10}  {addr}")
-        prices = [c[1] for c in comps]
-        a_low, a_high = min(prices), max(prices)
-        a_mid = (a_low + a_high) / 2
-        print(f"\n  n = {len(comps)}   (pool {len(pool)}; dropped {dropped})")
-        print(f"  Range     : {money(a_low)}  ->  {money(a_high)}   "
-              f"width {money(a_high - a_low)}")
-        print(f"  Midpoint  : {money(a_mid)}")
-        print(f"  Median    : {money(median(prices))}")
+            print(f"    {money(price):>12}  {d}  {str(land) + ' sqm':>10}  {addr}")
+        print(f"  (pool {len(pool)}; dropped {dropped})")
+
+        # Every possible selection of n_comps — the honest spread
+        rows = []
+        for triple in combinations(comps, args.n_comps):
+            lo, hi, width, mid = triple_stats(triple)
+            e = (mid - actual) / actual * 100 if actual else None
+            rows.append((abs(e) if e is not None else 9e9, e, lo, hi, width, mid, triple))
+        rows.sort()
+
+        best, worst = rows[0], rows[-1]
+        med = rows[len(rows) // 2]
+        a_dist = {"best": best, "median": med, "worst": worst, "n": len(rows)}
+
+        print(f"\n  ALL {len(rows)} possible {args.n_comps}-comp selections, "
+              f"scored on midpoint error:")
+        print(f"    {'':<14}{'RANGE WIDTH':>14}{'MIDPOINT':>14}{'ERROR':>10}")
+        for label, r in (("best case", best), ("median case", med),
+                         ("worst case", worst)):
+            print(f"    {label:<14}{money(r[4]):>14}{money(r[5]):>14}{pct(r[1]):>10}")
+
+        widths = sorted(r[4] for r in rows)
+        errs = sorted(abs(r[1]) for r in rows)
+        print(f"    median range width {money(widths[len(widths) // 2])}   "
+              f"median |error| {errs[len(errs) // 2]:.1f}%")
+
+        # Two selections an agent might plausibly defend
+        by_recent = sorted(comps, key=lambda c: c[3], reverse=True)[:args.n_comps]
+        s_land = resolve_land_size(subject)
+        by_land = sorted(
+            [c for c in comps if c[2] is not None],
+            key=lambda c: abs(c[2] - s_land))[:args.n_comps] if s_land else []
+
+        print(f"\n  Two selections an agent could defend:")
+        for label, sel in (("3 most recent", by_recent),
+                           ("3 closest on land", by_land)):
+            if len(sel) < args.n_comps:
+                continue
+            lo, hi, width, mid = triple_stats(sel)
+            e = (mid - actual) / actual * 100 if actual else None
+            print(f"    {label:<20}{money(lo)} -> {money(hi)}   "
+                  f"mid {money(mid)}   {pct(e)}")
+            for addr, price, land, d in sel:
+                print(f"        {money(price):>12}  {d}  {addr}")
+
+        # Headline Method A figure = the MEDIAN case, not the best case.
+        _, _, a_low, a_high, _, a_mid, _ = med
 
     # ---- METHOD B ----------------------------------------------------------
     print("\n" + "-" * 78)
@@ -243,7 +308,7 @@ def main():
     print(f"SCOREBOARD   actual sale price {money(actual)}")
     print("=" * 78)
     print(f"{'':<26}{'RANGE WIDTH':>16}{'MIDPOINT':>16}{'MIDPOINT ERR':>16}")
-    print(f"{'A  basic label match':<26}"
+    print(f"{'A  agent, median case':<26}"
           f"{money(a_high - a_low) if a_low else 'n/a':>16}"
           f"{money(a_mid):>16}{pct(err(a_mid)):>16}")
     print(f"{'B  Fields adjusted':<26}"
