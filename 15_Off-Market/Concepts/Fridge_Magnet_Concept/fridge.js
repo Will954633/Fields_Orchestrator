@@ -40,6 +40,10 @@
      re-darkens while the door is still visibly swinging. */
   var CLOSE_MS = 1020;
 
+  /* Absolute, so it works identically from the concepts workbench (a different
+     host) and from /fridge in production. */
+  var HOME = 'https://fieldsestate.com.au/';
+
   var isOpen = false;
   var interacted = false;
   var autoTimer = null;
@@ -107,7 +111,7 @@
   function onTap(e) {
     var t = e.target;
     if (t && t.closest && t.closest('.shelf a')) return;   // let the link work
-    if (t && t.closest && t.closest('.srToggle, .muteBtn')) return;  // own handlers
+    if (t && t.closest && t.closest('.srToggle, .muteBtn, .secret')) return;  // own handlers
 
     interacted = true;
     clearTimeout(autoTimer); clearTimeout(nudgeTimer);
@@ -158,6 +162,35 @@
     srToggle.addEventListener('click', function () {
       interacted = true; clearTimeout(autoTimer); clearTimeout(nudgeTimer);
       setOpen(!isOpen, 'pulled');
+    });
+  }
+
+  /* ── The secret door ──────────────────────────────────────────────────
+     A small unlabelled button on the inside of the door. Press it and the
+     false back of the fridge hinges down, the Fields homepage is behind it,
+     and then we go there.
+
+     The navigation waits for the reveal to finish. Leaving before the panel
+     lands would make the whole thing a slow redirect instead of a reveal —
+     the point is that they SEE what is behind before they are taken to it. */
+  var VAULT_MS = 1500;
+  var secret = document.getElementById('secret');
+  if (secret) {
+    secret.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (fridge.classList.contains('is-vault')) return;
+      interacted = true;
+      clearTimeout(autoTimer); clearTimeout(nudgeTimer); clearTimeout(idleTimer);
+
+      if (audio && audio.arm()) audio.latch();
+      if (navigator.vibrate) { try { navigator.vibrate([8, 40, 22]); } catch (err) {} }
+
+      fridge.classList.add('is-vault');
+      document.body.classList.add('is-vaulting');
+      secret.disabled = true;
+      emit('fridge_secret', { ms_since_load: Math.round(performance.now() - t0) });
+
+      setTimeout(function () { window.location.href = HOME; }, VAULT_MS);
     });
   }
 
