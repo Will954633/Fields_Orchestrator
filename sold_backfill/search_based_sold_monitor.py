@@ -353,9 +353,17 @@ class SearchBasedSoldMonitor:
         domain_sold = self.get_recently_sold_from_domain(suburb_name, postcode)
         print(f"  {suburb_name}: {len(domain_sold)} recently sold on Domain")
 
-        # Get our active listings (include valuation fields for margin of error calc)
+        # Get our active listings (include valuation fields for margin of error calc).
+        #
+        # under_contract MUST be included here (fixed 2026-08-05, WTA-OPS-006 follow-up).
+        # Previously this queried for_sale only, which made under_contract a ONE-WAY
+        # TRAP: the moment a listing was flagged it left the set this check looks at, so
+        # it could never afterwards be detected as sold. 163 listings had accumulated,
+        # 43 of them over 120 days old, and because they still count toward the PUBLIC
+        # absorption-rate metric (market-insights.mjs) they were overstating Robina's
+        # rate at 15.1% against 9.8% on fresh data alone.
         our_active = list(retry_db(lambda: list(collection.find(
-            {"listing_status": "for_sale"},
+            {"listing_status": {"$in": ["for_sale", "under_contract"]}},
             {"listing_url": 1, "address": 1, "_id": 1, "price": 1,
              "domain_valuation_at_listing": 1, "scraped_data.valuation": 1}
         ))))
@@ -513,9 +521,11 @@ class SearchBasedSoldMonitor:
         uc_listings = self.get_under_contract_from_domain(suburb_name, postcode)
         print(f"  {suburb_name}: {len(uc_listings)} under contract/offer on Domain")
 
-        # Get our active listings
+        # Get our active listings — for_sale AND under_contract. Including the latter
+        # lets a listing that is no longer on Domain's under-offer list be re-evaluated
+        # instead of being stranded in the state forever (see the note above).
         our_active = list(retry_db(lambda: list(collection.find(
-            {"listing_status": "for_sale"},
+            {"listing_status": {"$in": ["for_sale", "under_contract"]}},
             {"listing_url": 1, "address": 1, "_id": 1, "listing_status": 1}
         ))))
 
