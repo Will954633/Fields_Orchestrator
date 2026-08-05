@@ -1,189 +1,190 @@
 /* ============================================================================
-   fridgeAudio.js — the door sounds, synthesised. No audio files.
+   fridgeAudio.js — Will's own fridge, recorded.
 
-   Why synthesised rather than a sample: zero bytes over the wire, no licensing,
-   tunable without a re-export, and it matches how the rest of this site does
-   sound (public/off-market-v3/glass-audio.js, components/WhaleMoment/
-   whaleAudio.ts, BreakGlass/powerAudio.js all synthesise).
+   Three real recordings (assets/source/, processed by assets/build_audio.sh):
+     fridge-open.m4a    0.72s  the gasket peeling off the frame
+     fridge-close.m4a   0.72s  the door landing and the seal snatching shut
+     fridge-hum.m4a     4.00s  the compressor, as a SEAMLESS loop
 
-   A fridge door is three distinct events, and getting the ORDER right matters
-   more than the timbre:
+   ── Timing: the sounds are scheduled, not fired ──────────────────────────
+   Both clips have their transient somewhere in the middle, and the door takes
+   over a second to move. Playing either one on the tap would desynchronise it
+   from the picture. Measured, then aligned:
 
-     opening  the magnetic gasket peels off the frame (a filtered noise "shhk"
-              that starts broad and closes down), then the door mass releases
-              (a soft low thump). Peel first, thump second.
-     closing  the reverse and heavier: the door swings in and lands (a hard
-              low-frequency impact + a click transient where the plastic meets
-              the frame), and THEN the gasket snatches shut behind it.
-     resting  a compressor hum, very quiet, only while the door is open.
+     open   peel peaks 0.130s into the clip; the door breaks its seal at
+            0.224s (solved from cubic-bezier(.42,.03,.28,1) over 1.70s)
+            -> start the clip at 0.094s
 
-   ⚠ USER ACTIVATION — read before touching this.
-   On Android Chrome, `touchstart`/`pointerdown` grant NO user activation: a
-   finger going down may be the start of a scroll, so the browser withholds
-   activation until the gesture resolves as a tap. Activation lands on
-   `pointerup` / `touchend` / `click`. A context armed without activation
-   reports state:"running" and emits SILENCE — which is the bug still open on
-   the V3 neon sign after five rounds of fixes (see
-   Page_Redesign_V3/NEON_SOUND_UNSOLVED.md).
+     close  impact peaks 0.060s into the clip; the door SEATS at 1.015s
+            (cubic-bezier(.42,.02,.86,.62) over 1.02s)
+            -> start the clip at 0.955s
 
-   Consequences enforced below:
-     - arm() is only ever called from a real pointerup/click handler
-     - we ask navigator.userActivation.isActive rather than trusting the caller
-     - THE AUTO-OPEN AT 0.8s IS SILENT, and must stay silent: no gesture has
-       happened, so there is no activation to honour. Sound belongs to the pull.
-     - headless Chrome grants activation cold and has no speaker, so none of
-       this is verifiable without a real handset.
+   Fire the close sound on the tap instead and you hear the slam a full second
+   before the door arrives. That is the whole reason these are numbers and not
+   guesses — change either CSS easing and these must be recomputed.
+
+   ── The hum ───────────────────────────────────────────────────────────────
+   Runs continuously once audio is available, open or shut — a fridge does not
+   stop when you close the door. It lifts when the door opens, because you are
+   then hearing into the cabinet rather than through it.
+
+   ⚠ It CANNOT start before the visitor touches the screen. That is browser
+   autoplay policy, not a bug and not something to work around: audible sound
+   without user activation is blocked everywhere. We create and decode up front
+   so the context is warm, then resume on the first real gesture — so the hum
+   begins the instant they touch, with no load delay.
+
+   ⚠ USER ACTIVATION — the rest of the rule.
+   On Android Chrome `touchstart`/`pointerdown` grant NO activation: a finger
+   going down may be the start of a scroll, so the browser withholds it until
+   the gesture resolves as a tap. It lands on pointerup / touchend / click. A
+   context armed without activation reports state:"running" and emits SILENCE —
+   the bug still open on the V3 neon sign after five rounds. Hence: arm() only
+   from pointerup, ask navigator.userActivation rather than trusting ourselves,
+   and THE AUTO-OPEN AT 0.8s IS SILENT because no gesture has happened yet.
+   Headless Chrome grants activation cold and has no speaker, so none of this
+   is verifiable without a real handset.
    ========================================================================== */
 (function (global) {
   'use strict';
 
-  var ctx = null;
-  var master = null;
-  var hum = null;
-  var enabled = true;
+  var BASE = 'assets/';
+  var CLIPS = { open: 'fridge-open.m4a', close: 'fridge-close.m4a', hum: 'fridge-hum.m4a' };
+
+  /* Measured alignment — see header. Seconds after the tap. */
+  var OPEN_AT  = 0.094;
+  var CLOSE_AT = 0.955;
+
+  var HUM_SHUT = 0.10;   // background bed, door closed
+  var HUM_OPEN = 0.28;   // hearing into the cabinet
+  var ONESHOT  = 0.85;
+
+  var ctx = null, master = null, humGain = null, oneGain = null;
+  var buf = {}, humSrc = null, pending = null;
+  var enabled = true, muted = false, loading = null;
 
   function hasActivation() {
     try {
       if (navigator.userActivation) return !!navigator.userActivation.isActive;
     } catch (e) {}
-    return true;                        // older engines: trust the caller
+    return true;                            // older engines: trust the caller
   }
 
-  /* Create or revive the context. MUST be called synchronously inside a
-     gesture handler. Also rebuilds anything we believed in that is not
-     actually running. */
-  function arm() {
-    if (!enabled) return false;
-    try {
-      var AC = global.AudioContext || global.webkitAudioContext;
-      if (!AC) return false;
-      if (!ctx || ctx.state === 'closed') {
-        ctx = new AC();
-        master = ctx.createGain();
-        master.gain.value = 0.9;
-        master.connect(ctx.destination);
-      }
-      if (ctx.state !== 'running') ctx.resume();
-      return ctx.state === 'running' || hasActivation();
-    } catch (e) { return false; }
+  /* Build the graph and decode. Safe to call on page load — a context created
+     without a gesture simply starts suspended, and decodeAudioData works fine
+     while suspended. Doing it early is what makes the hum instant on first
+     touch instead of a fetch away. */
+  function preload() {
+    if (loading) return loading;
+    var AC = global.AudioContext || global.webkitAudioContext;
+    if (!AC) return (loading = Promise.reject(new Error('no WebAudio')));
+    try { ctx = new AC(); } catch (e) { return (loading = Promise.reject(e)); }
+
+    master  = ctx.createGain(); master.gain.value = 1;
+    humGain = ctx.createGain(); humGain.gain.value = 0;
+    oneGain = ctx.createGain(); oneGain.gain.value = ONESHOT;
+    humGain.connect(master); oneGain.connect(master); master.connect(ctx.destination);
+
+    loading = Promise.all(Object.keys(CLIPS).map(function (k) {
+      return fetch(BASE + CLIPS[k])
+        .then(function (r) { if (!r.ok) throw new Error(CLIPS[k] + ' ' + r.status); return r.arrayBuffer(); })
+        .then(function (ab) {
+          return new Promise(function (res, rej) {
+            // callback form: Safari still doesn't reliably return a promise here
+            ctx.decodeAudioData(ab, function (b) { buf[k] = b; res(); }, rej);
+          });
+        });
+    }));
+    return loading;
   }
 
-  function noiseBuffer(seconds) {
-    var n = Math.floor(ctx.sampleRate * seconds);
-    var b = ctx.createBuffer(1, n, ctx.sampleRate);
-    var d = b.getChannelData(0);
-    for (var i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
-    return b;
+  function startHum() {
+    if (humSrc || !buf.hum || !ctx) return;
+    humSrc = ctx.createBufferSource();
+    humSrc.buffer = buf.hum;
+    humSrc.loop = true;              // buffer is crossfade-joined; no click
+    humSrc.connect(humGain);
+    humSrc.start(0);
   }
 
-  /* A band-passed noise burst — the gasket. sweep moves the filter over the
-     life of the burst, which is what makes it read as rubber peeling off metal
-     rather than as static. */
-  function peel(t0, dur, f0, f1, q, gain) {
-    var src = ctx.createBufferSource();
-    src.buffer = noiseBuffer(dur + 0.05);
-    var bp = ctx.createBiquadFilter();
-    bp.type = 'bandpass';
-    bp.Q.value = q;
-    bp.frequency.setValueAtTime(f0, t0);
-    bp.frequency.exponentialRampToValueAtTime(Math.max(40, f1), t0 + dur);
-    var g = ctx.createGain();
-    g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(gain, t0 + dur * 0.16);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-    src.connect(bp); bp.connect(g); g.connect(master);
-    src.start(t0); src.stop(t0 + dur + 0.05);
+  function ramp(g, to, secs) {
+    if (!ctx) return;
+    var t = ctx.currentTime;
+    g.gain.cancelScheduledValues(t);
+    g.gain.setValueAtTime(g.gain.value, t);
+    g.gain.linearRampToValueAtTime(to, t + secs);
   }
 
-  /* Low-frequency body thump. A door is heavy and mostly inaudible above
-     200Hz — the pitch drop is the mass settling. */
-  function thump(t0, f0, f1, dur, gain) {
-    var o = ctx.createOscillator();
-    o.type = 'sine';
-    o.frequency.setValueAtTime(f0, t0);
-    o.frequency.exponentialRampToValueAtTime(f1, t0 + dur * 0.8);
-    var g = ctx.createGain();
-    g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(gain, t0 + 0.012);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-    o.connect(g); g.connect(master);
-    o.start(t0); o.stop(t0 + dur + 0.02);
-  }
-
-  /* The hard contact transient — plastic on plastic. Very short, high-passed. */
-  function click(t0, gain) {
-    var src = ctx.createBufferSource();
-    src.buffer = noiseBuffer(0.05);
-    var hp = ctx.createBiquadFilter();
-    hp.type = 'highpass';
-    hp.frequency.value = 1400;
-    var g = ctx.createGain();
-    g.gain.setValueAtTime(gain, t0);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.045);
-    src.connect(hp); hp.connect(g); g.connect(master);
-    src.start(t0); src.stop(t0 + 0.06);
+  function fire(name, at) {
+    if (!ctx || !buf[name] || !enabled || muted) return null;
+    var s = ctx.createBufferSource();
+    s.buffer = buf[name];
+    s.connect(oneGain);
+    s.start(ctx.currentTime + at);
+    return s;
   }
 
   var A = {
-    /* Call from a gesture handler. Returns false if audio is genuinely
-       unavailable, so the caller can stop pretending it worked. */
-    arm: arm,
+    preload: preload,
+
+    /* Call ONLY from a real pointerup/click handler. */
+    arm: function () {
+      if (!enabled) return false;
+      if (!ctx) preload();
+      if (!ctx) return false;
+      if (ctx.state !== 'running') ctx.resume();
+      startHum();
+      return ctx.state === 'running' || hasActivation();
+    },
 
     available: function () { return !!ctx && ctx.state === 'running'; },
 
-    enable: function (on) { enabled = !!on; if (!on) A.hum(false); },
-
-    /* gasket peels, then the door lets go */
+    /* door opened: peel, and lift the bed */
     open: function () {
-      if (!ctx || !enabled) return;
-      var t = ctx.currentTime + 0.01;
-      peel(t, 0.20, 1500, 320, 3.2, 0.16);   // the shhk of the seal releasing
-      peel(t + 0.05, 0.13, 520, 190, 5.5, 0.11);
-      thump(t + 0.07, 92, 46, 0.20, 0.20);   // mass releasing
+      if (pending) { try { pending.stop(); } catch (e) {} pending = null; }
+      fire('open', OPEN_AT);
+      ramp(humGain, muted ? 0 : HUM_OPEN, 0.9);
     },
 
-    /* the door lands, then the gasket snatches it shut */
+    /* door closed: the impact is scheduled to land as the door seats */
     close: function () {
-      if (!ctx || !enabled) return;
-      var t = ctx.currentTime + 0.01;
-      thump(t, 130, 42, 0.30, 0.42);         // impact — the heaviest sound here
-      click(t + 0.004, 0.09);                // frame contact
-      peel(t + 0.02, 0.17, 900, 150, 4.0, 0.13);  // seal sucking in behind it
-      thump(t + 0.10, 58, 34, 0.24, 0.14);   // the low settle
+      if (pending) { try { pending.stop(); } catch (e) {} }
+      pending = fire('close', CLOSE_AT);
+      ramp(humGain, muted ? 0 : HUM_SHUT, 1.2);
     },
 
-    /* compressor drone while the door is open. Deliberately near-inaudible —
-       it should register as "the room is not silent", never as a tone. */
-    hum: function (on) {
-      if (!ctx || !enabled) { return; }
-      if (on && !hum) {
-        var o = ctx.createOscillator();
-        o.type = 'sawtooth';
-        o.frequency.value = 99.5;
-        var lp = ctx.createBiquadFilter();
-        lp.type = 'lowpass';
-        lp.frequency.value = 220;
-        var g = ctx.createGain();
-        g.gain.setValueAtTime(0.0001, ctx.currentTime);
-        g.gain.linearRampToValueAtTime(0.014, ctx.currentTime + 1.2);
-        o.connect(lp); lp.connect(g); g.connect(master);
-        o.start();
-        hum = { o: o, g: g };
-      } else if (!on && hum) {
-        var h = hum; hum = null;
-        h.g.gain.cancelScheduledValues(ctx.currentTime);
-        h.g.gain.setValueAtTime(h.g.gain.value, ctx.currentTime);
-        h.g.gain.linearRampToValueAtTime(0.0001, ctx.currentTime + 0.5);
-        setTimeout(function () { try { h.o.stop(); } catch (e) {} }, 700);
-      }
+    /* the hum never stops on its own — a fridge doesn't. Only mute or a
+       backgrounded tab silences it. */
+    setMuted: function (on, doorOpen) {
+      muted = !!on;
+      ramp(humGain, muted ? 0 : (doorOpen ? HUM_OPEN : HUM_SHUT), 0.25);
+      return muted;
     },
+    isMuted: function () { return muted; },
+
+    /* tab hidden: drop the bed to zero but leave the source running, so coming
+       back is instant and we never leave a fridge humming behind a dead tab */
+    suspend: function (doorOpen) {
+      if (!ctx) return;
+      ramp(humGain, 0, 0.2);
+      setTimeout(function () { if (ctx && ctx.state === 'running') ctx.suspend(); }, 250);
+    },
+    wake: function (doorOpen) {
+      if (!ctx || muted) return;
+      if (ctx.state !== 'running') ctx.resume();
+      ramp(humGain, doorOpen ? HUM_OPEN : HUM_SHUT, 0.6);
+    },
+
+    enable: function (on) { enabled = !!on; if (!on) ramp(humGain, 0, 0.1); },
 
     state: function () {
       return {
         ctx: ctx ? ctx.state : 'none',
+        decoded: Object.keys(buf),
+        humming: !!humSrc,
+        humGain: humGain ? +humGain.gain.value.toFixed(3) : null,
         activation: hasActivation(),
-        enabled: enabled,
-        humming: !!hum
+        muted: muted, enabled: enabled
       };
     }
   };
