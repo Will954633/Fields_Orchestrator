@@ -1,0 +1,105 @@
+/* MOBILE APP BAR + CHAPTER MENU — mockup layer for the V3 deck.
+   Injected into a copy of deck.html by build_mobile_menu_mockup.py. Nothing here
+   touches the deck's own rules: every selector is prefixed `fx-nav`, and the bar
+   is fixed, so the deck's scroll behaviour and card layout are untouched.
+
+   REVEAL: the bar is display-none until <html> gains `.fx-nav-ready`, which the
+   script adds on `fields:intro-done` — the same event the React MatrixIntro
+   listens for. So it is never on screen during the matrix sequence, and arrives
+   with card 00. */
+
+.fx-navbar {
+  position: fixed; inset: 0 0 auto 0; z-index: 60;
+  display: none;
+  align-items: center; justify-content: space-between;
+  padding: 0 clamp(1rem, 5vw, 2rem);
+  height: 54px;
+  /* Transparent over card 00's black. The tint only arrives once the reader has
+     scrolled past the hero, so the opening frame stays a logo on black. */
+  background: transparent;
+  transition: background .35s ease, border-color .35s ease, backdrop-filter .35s ease;
+  border-bottom: 1px solid transparent;
+}
+html.fx-nav-ready .fx-navbar { display: flex; }
+
+/* Arrives with card 00 rather than snapping in: 500ms fade + 8px settle, after
+   a 700ms hold so "We found your home." owns the screen alone first. */
+html.fx-nav-ready .fx-navbar { animation: fxNavIn .5s var(--ease, ease) .7s both; }
+@keyframes fxNavIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+
+.fx-navbar.fx-scrolled {
+  background: rgba(8, 6, 5, .82);
+  -webkit-backdrop-filter: saturate(140%) blur(14px);
+  backdrop-filter: saturate(140%) blur(14px);
+  border-bottom-color: var(--line-soft, rgba(230, 221, 210, .055));
+}
+
+.fx-navbar img { height: 17px; width: auto; display: block; opacity: .92; }
+
+/* ---- burger ---- */
+.fx-burger {
+  -webkit-appearance: none; appearance: none;
+  background: none; border: 0; padding: 10px 0 10px 16px; margin: 0;
+  cursor: pointer; display: block;
+}
+.fx-burger span {
+  display: block; width: 23px; height: 1.5px; border-radius: 2px;
+  background: var(--ink, #E6DDD2);
+  transition: transform .28s var(--ease, ease), opacity .18s ease;
+}
+.fx-burger span + span { margin-top: 6px; }
+.fx-burger[aria-expanded="true"] span:nth-child(1) { transform: translateY(7.5px) rotate(45deg); }
+.fx-burger[aria-expanded="true"] span:nth-child(2) { opacity: 0; }
+.fx-burger[aria-expanded="true"] span:nth-child(3) { transform: translateY(-7.5px) rotate(-45deg); }
+
+/* ---- panel ---- */
+.fx-navpanel {
+  position: fixed; inset: 54px 0 auto 0; z-index: 59;
+  max-height: calc(100dvh - 54px); overflow-y: auto;
+  background: rgba(8, 6, 5, .96);
+  -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
+  border-bottom: 1px solid var(--line, rgba(230, 221, 210, .13));
+  padding: .4rem 0 1.1rem;
+  transform: translateY(-8px); opacity: 0; pointer-events: none;
+  transition: opacity .22s ease, transform .28s var(--ease, ease);
+}
+.fx-navpanel.fx-open { transform: none; opacity: 1; pointer-events: auto; }
+
+.fx-navpanel .fx-eyebrow {
+  font-size: .62rem; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--muted, #8C8177);
+  padding: .9rem clamp(1rem, 5vw, 2rem) .5rem;
+}
+.fx-navpanel a {
+  display: flex; align-items: baseline; gap: .75rem;
+  padding: .62rem clamp(1rem, 5vw, 2rem);
+  color: var(--ink-soft, #CABEB0); text-decoration: none;
+  font-size: 1rem; line-height: 1.35;
+}
+.fx-navpanel a .fx-n {
+  font-variant-numeric: tabular-nums; font-size: .72rem;
+  color: var(--muted, #8C8177); min-width: 1.6em;
+}
+.fx-navpanel a:active { background: rgba(230, 221, 210, .05); }
+/* The card being read. Marked, not selected — the reader is already there. */
+.fx-navpanel a[aria-current="true"] { color: var(--gold, #D28C5E); }
+.fx-navpanel a[aria-current="true"] .fx-n { color: var(--accent, #C0704A); }
+/* The offer sits apart: it is the only line that asks for something. */
+.fx-navpanel a.fx-offer { color: var(--gold, #D28C5E); }
+
+.fx-navpanel hr {
+  border: 0; border-top: 1px solid var(--line-soft, rgba(230, 221, 210, .055));
+  margin: .7rem clamp(1rem, 5vw, 2rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.fx-nav-ready .fx-navbar { animation-duration: .01ms; }
+  .fx-navpanel, .fx-burger span { transition-duration: .01ms; }
+}
+
+/* Desktop keeps the same bar — nothing here is phone-only except the sizing,
+   which already scales. Widen the gutters and let it breathe. */
+@media (min-width: 900px) {
+  .fx-navbar { height: 64px; }
+  .fx-navpanel { inset: 64px 0 auto auto; width: 360px; border-left: 1px solid var(--line, rgba(230,221,210,.13)); }
+}
