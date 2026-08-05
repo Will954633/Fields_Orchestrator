@@ -3,7 +3,23 @@
 The evidence and positioning phase of the `/off-market/:slug` redesign. `../Research/` holds the eleven
 input files; this folder holds what we concluded from them.
 
-**Created:** 2026-08-06
+**Created:** 2026-08-06 · **Rescoped:** 2026-08-06
+
+---
+
+## Scope — the boundary these documents work inside
+
+`/off-market/:slug` is a landing page for **one address**, and its only job is to convert **the owner of
+that home** into claiming it and creating their **Home Hub**.
+
+**Out of scope:** buyer jobs, listing jobs, anything about homes that are on the market — availability,
+asking prices, "is this listing overpriced", price guides, underquoting, search filters, depth tiers.
+The premise of the page is a home that is *not* for sale; the moment a job assumes an asking price or a
+buyer, it is describing a different product.
+
+**One bounded exception:** listing-side evidence is admitted only where it establishes *who pays the
+incumbents and what that buys*, because that is the argument for why an owner shouldn't trust them about
+their own home. It lives in dossier §1.3 and matrix §A2, and never becomes a user job.
 
 ---
 
@@ -11,8 +27,8 @@ input files; this folder holds what we concluded from them.
 
 | # | Document | What it is |
 |---|---|---|
-| 1 | **`01_USER_JOBS_AND_GAPS.md`** | The dossier. Eight user jobs, what competitors give them today, where it fails, what Fields can do about each — with an honest register of what we cannot do yet |
-| 2 | `02_COMPETITOR_CAPABILITY_MATRIX.md` | The table. AU incumbents vs Fields, overseas benchmarks, and the four capabilities where we can be genuinely differentiated |
+| 1 | **`01_USER_JOBS_AND_GAPS.md`** | The dossier. Seven **owner** jobs, what competitors give them today, where it fails, what Fields can do about each — with an honest register of what we cannot do yet |
+| 2 | `02_COMPETITOR_CAPABILITY_MATRIX.md` | The table. Owner-facing capabilities (§A1), listing-side evidence of who pays (§A2), overseas benchmarks, and the four capabilities where we can be genuinely differentiated |
 | 3 | `03_CLAIMS_REGISTER.md` | The gate between internal evidence and public copy. Tier A (say it), Tier B (verify first), Tier C (never) |
 
 Start with the dossier's §0 and §1 — three findings constrain everything else.
