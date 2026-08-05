@@ -221,7 +221,18 @@ def _obvious_comp(subject_feat: dict, recent_sales: list, gc=None,
               and _short_address(c.get("address") or "").lower() != saddr]
     if not priced:
         return None
-    comp = min(priced, key=lambda c: c.get("distance_km", 9e9))
+    # `.get(k, default)` returns the DEFAULT only when the key is absent — a key
+    # present with an explicit None still yields None, and min() then compares
+    # None against floats and raises. That killed the WHOLE build for the home
+    # (no deck at all -> back to the classic page), not just this card: 4 homes in
+    # the first 9,200 of the 2026-08-05 rebuild. Comps carry a null distance
+    # whenever the comp's own coordinates are missing, so treat null as "furthest"
+    # rather than trusting the default to fire.
+    def _dist(c):
+        d = c.get("distance_km")
+        return d if isinstance(d, (int, float)) else 9e9
+
+    comp = min(priced, key=_dist)
     cf = (comp.get("features") or {}).get("basic", {}) or {}
     deltas = []
 
