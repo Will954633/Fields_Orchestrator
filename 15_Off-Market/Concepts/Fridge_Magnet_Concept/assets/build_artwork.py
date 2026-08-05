@@ -145,8 +145,11 @@ for k in range(11):
     stroke([(620 + random.uniform(-14, 14), 1020 + k * 8),
             (1420 + random.uniform(-14, 14), 1012 + k * 8)], "#8d8d92", w=8, passes=1, amp=3, op=0.7)
 
-svg = f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1560 1100" width="1560" height="1100">
-<rect width="1560" height="1100" fill="#fdfbf6"/>
+# A4 LANDSCAPE, exactly: 297 x 210mm = 1.41429. At width 1560 that is height
+# 1103, not 1100 — a 0.3% error nobody would see, but the sheet is supposed to
+# BE a sheet of A4, so it may as well be one.
+svg = f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1560 1103" width="1560" height="1103">
+<rect width="1560" height="1103" fill="#fdfbf6"/>
 <g>{''.join(out)}</g>
 </svg>'''
 
