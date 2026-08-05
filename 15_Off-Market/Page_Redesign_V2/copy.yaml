@@ -242,10 +242,17 @@ card_05_competition:
   # Always shown as a three-tier funnel with real numbers. Labels make the scope
   # explicit and honest: tier 1 is the suburb, tiers 2-3 are the wider area (the
   # competitor engine looks across nearby suburbs, since buyers shop across them).
+  # Tier 3 says "on the market now" for a reason. These three tiers are all
+  # ACTIVE LISTINGS (n_compete = funnel.close_tier over active_total), but card 09
+  # separately cites "N adjusted comparable SALES" — a different quantity from a
+  # different source. Labelled just "Comparable to yours", the two collided on the
+  # same page: "Comparable to yours 1" above "Based on 59 adjusted comparable
+  # sales" reads as the page contradicting itself, on the one card carrying a
+  # dollar figure. Naming the tense fixes it without touching either number.
   funnel_labels:
     - "Homes in {suburb}"
     - "For sale across the area"
-    - "Comparable to yours"
+    - "Comparable to yours, on the market now"
   none_note: "Not one listing on the market gives your buyer the same combination. They either choose your home — or they compromise."
   opens: "But what about that sale down the road that looks just like mine?"
 
