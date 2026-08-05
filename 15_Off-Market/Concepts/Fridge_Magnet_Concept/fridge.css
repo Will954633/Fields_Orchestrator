@@ -455,11 +455,23 @@ body {
    colour — which is a far better place to spend the single colour accent than
    on a CTA. Compare with ?art=mono. */
 
+/* ── scale ────────────────────────────────────────────────────────────────
+   The sheet is a real A4 at a real size, not "about right".
+
+     stage         340 x 620 px
+     door width    700 mm   (standard AU single fridge door)
+     => scale      2.06 mm per px, so the door reads as 700 x 1276 mm
+
+     A4 landscape  297 mm  ->  297/700 = 42.4% of door width
+     magnet         90 mm  ->   90/297 = 30.3% of SHEET width
+
+   The magnet is sized as a percentage of the sheet, so it stays correct at any
+   door size for free — it was already 30%. */
 .art {
   position: absolute;
-  left: 12%;
-  top: 27%;
-  width: 74%;
+  left: 26%;              /* a shade left of centre — nobody hangs it dead-on */
+  top: 30%;
+  width: 42.4%;           /* = A4 landscape on a 700mm door */
   transform: translateZ(calc(var(--depth) + 1px)) rotate(-1.2deg);
 }
 
@@ -483,7 +495,7 @@ body {
 .art .magnet {
   position: absolute;
   top: -13.5%;
-  width: 30%;
+  width: 30.4%;   /* 90mm / 296.5mm — the TRIMMED card, not the bleed artboard */
   height: auto;
   border-radius: 2px;
   /* pushed further to greyscale than the drawing so the drawing keeps the
@@ -498,8 +510,8 @@ body {
 .art::after {
   content: '';
   position: absolute;
-  left: 6%; right: 6%; bottom: -10px;
-  height: 14px;
+  left: 6%; right: 6%; bottom: -5px;
+  height: 8px;
   background: radial-gradient(ellipse at 50% 0%, rgba(0,0,0,.5), transparent 72%);
   pointer-events: none;
 }
