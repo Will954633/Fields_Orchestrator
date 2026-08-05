@@ -264,9 +264,19 @@ body {
    from its bottom edge like a drawbridge and takes the shelves, the options and
    the light with it. What is behind is the Fields homepage. */
 
+/* The panel carries the interior surface itself, because it IS the false back.
+   It had no background of its own, so the vault behind it showed faintly
+   through the whole menu — the reveal was spoiled before the button was ever
+   pressed. */
 .innerPanel {
   position: absolute;
   inset: 0;
+  background:
+    linear-gradient(180deg, var(--m-700) 0%, var(--m-850) 42%, var(--m-900) 100%);
+  box-shadow:
+    inset 0 0 0 7px var(--m-800),
+    inset 0 0 0 8px rgba(0,0,0,.55),
+    inset 0 0 60px rgba(0,0,0,.85);
   transform-origin: 50% 100%;
   transform: rotateX(0deg);
   transition: transform 1.15s cubic-bezier(.62,.02,.3,1);
@@ -289,10 +299,10 @@ body {
   height: auto;
   transform: translateX(-50%) scale(.98);
   transform-origin: 50% 0;
-  /* held back until the panel is most of the way down, then it comes up to
-     full — the reveal is the light arriving, not the image sliding */
-  opacity: .25;
-  filter: brightness(.5) saturate(.8);
+  /* Zero until the button is pressed. Nothing behind the false back may be
+     even faintly visible — if you can see it coming, it is not a reveal. */
+  opacity: 0;
+  filter: brightness(.45) saturate(.75);
   transition: opacity .75s ease .35s, filter .9s ease .35s, transform 1.2s ease .2s;
 }
 .fridge.is-vault .vaultShot {
