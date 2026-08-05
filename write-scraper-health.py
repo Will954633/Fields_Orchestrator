@@ -12,6 +12,7 @@ Called with: python3 write-scraper-health.py
 Designed to run as a post-step hook from the orchestrator after process 101/102.
 """
 
+import os
 import sys
 import logging
 from datetime import datetime, timezone
@@ -24,6 +25,39 @@ from shared.env import load_env  # type: ignore
 from shared.db import get_client, get_db, TARGET_SUBURBS  # type: ignore
 
 load_env()
+
+
+def scraped_suburbs():
+    """The suburbs the pipeline ACTUALLY scrapes — read from config/settings.yaml,
+    not from shared.db.TARGET_SUBURBS.
+
+    Why (2026-08-05, WTA-OPS-001): the two lists silently diverged. settings.yaml is
+    the real scrape list (6 suburbs — Merrimac/Carrara commented out, Burleigh Heads
+    absent) after `run_other_suburbs_weekly` was disabled on 2026-05-13 to stop Akamai
+    rate-limit blocks. TARGET_SUBURBS still listed 9, so this job wrote a health doc
+    every night for 3 suburbs nothing scrapes. Their last_scraped_at froze at
+    2026-05-10 and, since status is derived purely from age (>50h => critical), they
+    were permanently critical BY CONSTRUCTION — 3 of the longest-running red rows on
+    the board, unfixable by any amount of scraping.
+
+    Reading the scrape list at its source makes that class of drift impossible: if a
+    suburb is not scraped it is not health-checked. Falls back to TARGET_SUBURBS only
+    if settings.yaml cannot be parsed, so a config problem degrades to the old
+    behaviour rather than silently checking nothing.
+    """
+    try:
+        import yaml
+        with open(os.path.join(REPO_ROOT, "config", "settings.yaml")) as fh:
+            cfg = yaml.safe_load(fh) or {}
+        raw = (cfg.get("target_market") or {}).get("suburbs") or []
+        subs = [str(s).split(":")[0].strip().lower().replace(" ", "_") for s in raw]
+        subs = [s for s in subs if s]
+        if subs:
+            return subs
+        log.warning("settings.yaml target_market.suburbs empty — falling back to TARGET_SUBURBS")
+    except Exception as e:
+        log.warning(f"could not read settings.yaml ({e}) — falling back to TARGET_SUBURBS")
+    return TARGET_SUBURBS
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [scraper-health] %(levelname)s %(message)s")
 log = logging.getLogger("scraper-health")
@@ -38,10 +72,13 @@ def main():
         log.error(f"Failed to connect to MongoDB: {e}")
         sys.exit(1)
 
+    SUBURBS = scraped_suburbs()
+    log.info(f"health-checking the {len(SUBURBS)} suburbs actually scraped: {', '.join(SUBURBS)}")
+
     checked_at = datetime.now(timezone.utc)
     saved = 0
 
-    for suburb in TARGET_SUBURBS:
+    for suburb in SUBURBS:
         try:
             col = data_db[suburb]
             total = col.count_documents({"listing_status": "for_sale"})
@@ -100,7 +137,7 @@ def main():
         except Exception as e:
             log.error(f"Failed for {suburb}: {e}")
 
-    log.info(f"Done. Saved {saved}/{len(TARGET_SUBURBS)} suburbs.")
+    log.info(f"Done. Saved {saved}/{len(SUBURBS)} suburbs.")
 
 
 if __name__ == "__main__":

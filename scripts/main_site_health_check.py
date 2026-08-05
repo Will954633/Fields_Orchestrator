@@ -1205,10 +1205,18 @@ _STEP_OUTCOME_CHECKS = [
      r"ABORTED EARLY: runtime budget exceeded", "count",
      lambda n: (STALE, "aborted on its 40-min budget — part of the for-sale book went "
                        "unchecked again this run") if n else (OK, "")),
-    ("18", "Valuation precompute: cleared valuations",
+    # The log line is "⚠️ Excluded (missing_floor_area) — cleared existing valuation",
+    # which fires on EVERY exclusion whether or not a valuation existed. Reading it as
+    # "N valuations wiped" was wrong (2026-08-05 ops cycle): DB confirms zero data loss
+    # — every for-sale doc still carries its valuation_data. It is an EXCLUSION COUNT,
+    # i.e. how much of the book we cannot value, and it is ~stable at 287-303 nightly.
+    # Judged on LEVEL, not on the fact that it happened, or it alarms every night forever.
+    ("18", "Valuation precompute: listings excluded from valuation",
      r"cleared existing valuation", "count",
-     lambda n: (ERROR, f"{n} properties had a published valuation wiped this run")
-     if n > 250 else ((STALE, f"{n} valuations cleared") if n > 100 else (OK, ""))),
+     lambda n: (ERROR, f"{n} for-sale listings could not be valued this run (~{n * 100 // 540}% "
+                       f"of the book) — dominant cause is missing_floor_area; see WTA-OPS-005")
+     if n > 320 else ((STALE, f"{n} listings excluded from valuation (baseline ~290-305)")
+                      if n > 320 else (OK, f"{n} excluded — within the known baseline"))),
     # Reads the closing TOTAL line. Before the 2026-08-05 stdout-truncation fix that
     # line never reached stdout.log, so this resolves to UNKNOWN ("cannot verify")
     # on older runs rather than pretending the step succeeded.
@@ -1308,9 +1316,19 @@ def collect_pipeline_integrity(add, gc, sm, now_utc):
             add(PG, f"Step {step_id} outcome", label, str(val), st, "", None, detail)
 
     # --- 3. Terminal-state accumulation ----------------------------------------
-    # `under_contract` is written by step 103 and read by nothing. Every downstream
-    # step filters listing_status="for_sale", so a flagged property is never
-    # re-priced, never withdrawn-checked, and can never be detected as sold.
+    # `under_contract` is a ONE-WAY TRAP. search_based_sold_monitor.py queries
+    # {"listing_status": "for_sale"} for BOTH sold detection (line ~358) and
+    # under-contract detection (line ~518), so the moment a listing is flagged it
+    # leaves the set either check looks at: never re-priced, never withdrawn-checked,
+    # and it can never be detected as sold.
+    #
+    # CORRECTION (2026-08-05): an earlier version of this comment said the state is
+    # "read by nothing". That is wrong and it understated the impact. It IS read —
+    # netlify/functions/market-insights.mjs counts listing_status="under_contract"
+    # for the ABSORPTION RATE, which renders publicly in AbsorptionRateChart.tsx.
+    # So stale entries do not just sit there; they inflate a published market metric,
+    # which makes this an editorial-accuracy problem (CLAUDE.md Rule 5), not just
+    # untidy data. brain2/address_category.py also folds it into current_listing.
     try:
         oldest, total = None, 0
         for s in SUBS_ALL if "SUBS_ALL" in globals() else SUBS:
@@ -1332,9 +1350,10 @@ def collect_pipeline_integrity(add, gc, sm, now_utc):
             st = ERROR if (age_d or 0) > 60 else (STALE if total > 20 else OK)
             add(PG, "Terminal states", "under_contract backlog", str(total), st,
                 "under_contract_detected_at", oldest,
-                f"{total} listings flagged under_contract; oldest {age_d}d. Nothing reads "
-                f"this state — they are never re-priced, never withdrawn-checked, and "
-                f"cannot be detected as sold." if st != OK else "")
+                f"{total} listings flagged under_contract; oldest {age_d}d. One-way trap: "
+                f"sold- and under-contract-detection both query for_sale only, so these can "
+                f"never be re-priced, withdrawn-checked or detected as sold — while still "
+                f"counting toward the PUBLIC absorption-rate metric." if st != OK else "")
     except Exception as e:
         add(PG, "Terminal states", "under_contract backlog", None, UNKNOWN, "", None,
             f"check failed: {type(e).__name__}: {e}"[:160])
@@ -1914,15 +1933,28 @@ def collect(client, now_utc, prev_map):
                 f"{j.get('attempts')} attempts, {int(dur)}s", ERROR, "end_time",
                 as_dt(j.get("end_time")), err[:160])
 
-    # Vision provider credit — Claude is the primary engine for steps
-    # 105/106/108/112/117 since 2026-06; OpenAI is a dormant fallback only,
-    # so it is reported as info (visible, not alarmed).
+    # Metered Anthropic API — NO LONGER A PIPELINE DEPENDENCY, so this is info, not
+    # an alarm. The old comment here ("Claude is the primary engine for steps
+    # 105/106/108/112/117") went stale: 108/112/117 export ANTHROPIC_BACKEND=openrouter,
+    # 120 uses USE_CLAUDE_MAX=1, and vision routes to Gemini-via-Vertex. The account is
+    # out of credit by design — Will moved to the upgraded Max subscription — so alarming
+    # on it red-lined the board for 18 days over a bill nobody intends to pay.
+    #
+    # It is kept VISIBLE rather than deleted because a 2026-08-05 sweep of all 100 cron
+    # targets found exactly one script still calling the metered key directly and with no
+    # fallback routing: scripts/fb-photo-manager.py:461 (`anthropic.Anthropic(api_key=...)`,
+    # caption generation, no try/except). That path is NOT on the daily `sync` cron, only
+    # on the posting path, so it is latent rather than currently breaking — but if photo
+    # captions start failing, this row is the reason. Migrate it to Max and this row can go.
     try:
         import api_health_monitor as ahm
         a_st, a_det, _ = ahm.probe_anthropic("ANTHROPIC_API_KEY")
-        add(PG, "Vision provider", "Anthropic (primary)", a_st,
-            OK if a_st == "OK" else ERROR, "", None,
-            a_det if a_st != "OK" else "")
+        add(PG, "Metered LLM API", "Anthropic (retired — Max/OpenRouter now)", a_st,
+            OK, "", None,
+            (f"{a_det} — expected: metered API retired, pipeline runs on Claude Max + "
+             f"OpenRouter, vision on Gemini/Vertex. Sole remaining direct caller is "
+             f"fb-photo-manager.py caption generation (latent).") if a_st != "OK" else "",
+            info=True)
         o_st, o_det, _ = ahm.probe_openai("OPENAI_API_KEY")
         add(PG, "Vision provider", "OpenAI (fallback only)", o_st, OK, "", None,
             (o_det or "") + " — fallback only, not alarmed", info=True)
