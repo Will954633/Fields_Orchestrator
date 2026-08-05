@@ -28,6 +28,14 @@
   if (q.get('art') === 'mono') document.body.classList.add('art-mono');
   if (audio && q.get('sound') === '0') audio.enable(false);
 
+  /* Decode the three recordings up front. A context created without a gesture
+     starts suspended, and decodeAudioData works fine suspended — so this costs
+     nothing and means the hum starts the instant the visitor first touches,
+     rather than a fetch later. */
+  if (audio) { try { audio.preload(); } catch (e) {} }
+
+  var muteBtn = document.getElementById('muteBtn');
+
   /* Must match the CSS transition durations. Out of sync and the interior
      re-darkens while the door is still visibly swinging. */
   var CLOSE_MS = 1020;
@@ -71,11 +79,12 @@
        The auto-open has no user activation behind it, so on Android the context
        would be created without activation, report running, and emit nothing —
        and we'd have no idea. Better to be deliberately silent than silently
-       broken. */
+       broken. The hum therefore also begins at the first touch, never on load:
+       audible autoplay is blocked everywhere, and that is policy, not a bug. */
     if (method === 'pulled' && audio) {
       if (audio.arm()) {
-        if (next) { audio.open(); audio.hum(true); }
-        else      { audio.close(); audio.hum(false); }
+        if (next) audio.open(); else audio.close();
+        if (muteBtn) muteBtn.classList.add('on');
       }
       if (navigator.vibrate) { try { navigator.vibrate(next ? 12 : 18); } catch (e) {} }
     }
@@ -98,7 +107,7 @@
   function onTap(e) {
     var t = e.target;
     if (t && t.closest && t.closest('.shelf a')) return;   // let the link work
-    if (t && t.closest && t.closest('.srToggle')) return;  // button has its own handler
+    if (t && t.closest && t.closest('.srToggle, .muteBtn')) return;  // own handlers
 
     interacted = true;
     clearTimeout(autoTimer);
@@ -116,6 +125,17 @@
     interacted = true; clearTimeout(autoTimer);
     setOpen(!isOpen, 'pulled');
   });
+
+  if (muteBtn && audio) {
+    muteBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var m = audio.setMuted(!audio.isMuted(), isOpen);
+      muteBtn.setAttribute('aria-pressed', String(m));
+      muteBtn.setAttribute('aria-label', m ? 'Unmute the fridge' : 'Mute the fridge');
+      muteBtn.innerHTML = m ? '&#9835;\u0338' : '&#9834;';
+      emit('fridge_mute', { muted: m });
+    });
+  }
 
   if (srToggle) {
     srToggle.addEventListener('click', function () {
@@ -163,8 +183,11 @@
      deck_exit pattern in DiscoveryDeck.tsx:331-343. Also kill the hum, or it
      keeps running behind a backgrounded tab. */
   document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState !== 'hidden') return;
-    if (audio) audio.hum(false);
-    emit('fridge_exit', { opened: isOpen, interacted: interacted, ms: Math.round(performance.now() - t0) });
+    if (document.visibilityState === 'hidden') {
+      if (audio) audio.suspend(isOpen);     // never leave a fridge humming behind a dead tab
+      emit('fridge_exit', { opened: isOpen, interacted: interacted, ms: Math.round(performance.now() - t0) });
+    } else if (audio && interacted) {
+      audio.wake(isOpen);
+    }
   });
 })();
