@@ -357,12 +357,22 @@ rather than a moment:
 
 | Shelf | Label | Destination | Verified |
 |---|---|---|---|
-| Top (lit first) | What's happening in *your suburb* | `/market-intelligence/:suburb` | `200` |
-| 2 | What sold near you recently | `/sold` | `200` |
-| 3 | What's for sale nearby | `/for-sale` | `200` |
-| 4 | What's my home worth | `/analyse-your-home` | `200` |
+| Top (lit first) | What's happening in *their suburb*, or "your market" | `/market-intelligence/:suburb` → falls back to `/market-intelligence` | renders |
+| 2 | What sold near you recently | `/recently-sold` | renders |
+| 3 | What's for sale nearby | `/for-sale` | renders (**slow — see below**) |
+| 4 | What's my home worth | `/analyse-your-home` | renders |
 
-All four destinations were fetched live and return 200. `/analyse-your-home` is
+⚠ **"Renders", not "200".** These were originally signed off on a `curl -I`
+returning 200, and one of them — `/sold` — **returns HTTP 200 while rendering
+the Not Found page.** React Router's catch-all (`$.tsx`) has no loader, so a
+soft 404 is indistinguishable from a real page by status code. It shipped
+broken and was only caught by clicking it. The route is `/recently-sold`.
+`verify/links.sh` now opens every destination in a browser and checks the
+rendered text; run it before shipping any link change.
+
+⚠ `/for-sale` renders its shell fast but the listings take **7–20 s** to
+appear — a fridge visitor sits on skeleton placeholders. Not caused by this
+page and not fixed here, but it is the weakest of the four landings. `/analyse-your-home` is
 last deliberately — it is the current destination and the conversion page, and
 putting the ask at the bottom of a list of free things is the buyer-first
 sequencing the business already runs on.
@@ -875,7 +885,11 @@ is entirely possible the answer is no.
 | `assets/artwork.svg` | The drawing. Replaceable with a real photo. |
 | `verify/live.mjs` | Real 3-second run + reduced-motion emulation. **This is the one that catches sequence bugs.** |
 | `verify/toggle.mjs` | Open → close → reopen, plus the "a tap inside must not close it" rule. |
-| `verify/audio.mjs` | Files fetch, decode, hum arms on gesture, ducks with the door, mutes. |
+| `verify/audio.mjs` | Files fetch, decode, hum arms on gesture, mutes. |
+| `verify/links.sh` | **Opens every destination and checks it RENDERS.** Guards against soft 404s. |
+| `verify/vault.mjs` | Badge, secret button hit-testing, the drop, the navigation. |
+| `verify/timing.mjs` | No auto-open, nudge at 4 s, give-up at 12 s, hum constant. |
+| `verify/reopen.mjs` | Counts events per physical tap; open → close → reopen. |
 | `verify/*.png` | Output, regenerated — not source. |
 | `deploy.py` | **The only way files move to production.** Generates `public/fridge.html` (adds `<base href="/fridge/">`, PostHog, meta) and copies the rest. Prototype and production cannot drift. |
 | `verify/prod.mjs` | Checks the LIVE page: links in raw HTML, hit-testing, audio decode, no 4xx. |
