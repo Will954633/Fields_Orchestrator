@@ -24,6 +24,8 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent.parent))
 sys.path.insert(0, str(HERE.parent.parent / "scripts"))
+# The matrix intro's word field lives in the V3 tree; see _write_intro_tokens().
+sys.path.insert(0, str(HERE.parent / "Page_Redesign_V3" / "intro"))
 
 import fact_bundle
 import emit_json as EJ
@@ -54,11 +56,57 @@ def build_one(slug, suburb=None, rebuild=True):
     return doc
 
 
-def upsert(doc):
+def _write_intro_tokens(slug, force=False):
+    """Give the deck its matrix-intro word field. Returns True if written.
+
+    DeckV3 skips the intro entirely when `intro_tokens` is absent (no tokens
+    would mean raining someone else's streets), so a doc without them ships a
+    deck that opens cold on "We found your home." Until 2026-08-05 the ONLY
+    producer was Page_Redesign_V3/intro/backfill_intro_tokens.py, run by hand —
+    the nightly wrote them nowhere. That was invisible because upsert() $sets
+    named fields only, so rebuilds of existing docs preserve whatever the
+    backfill wrote; only genuinely NEW homes lost the intro, and there were none
+    until the sale-history filter was relaxed. Building them here closes that.
+
+    Called AFTER the upsert on purpose: intro_tokens.build() reads the deck doc
+    back out of Mongo for the home's suburb/coords, so it needs the doc to exist.
+
+    Skipped when tokens are already present — they depend on the street grid, not
+    the deck content, so recomputing 14k of them nightly is ~0.8s/home of waste.
+    Pass force=True to rewrite.
+
+    Never raises: the intro is a flourish, the deck is the point. Note SystemExit
+    is caught explicitly — intro_tokens.build() raises it for a missing doc, and
+    the nightly's per-home `except Exception` would NOT catch that, so one bad
+    home would otherwise abort the entire run. KeyboardInterrupt still propagates.
+    """
+    coll = _mongo()
+    if not force:
+        cur = coll.find_one({"slug": slug}, {"intro_tokens": 1})
+        if cur and cur.get("intro_tokens"):
+            return False
+    try:
+        import intro_tokens
+        tok = intro_tokens.build(slug)
+        if not tok:
+            return False
+        from src.mongo_client_factory import cosmos_retry
+        cosmos_retry(lambda: coll.update_one({"slug": slug},
+                                             {"$set": {"intro_tokens": tok}}))
+        return True
+    except (Exception, SystemExit) as exc:
+        # Deliberately not re-raised: a deck with no intro is still a good page.
+        print(f"  ! intro_tokens {slug}: {type(exc).__name__}: {exc}", file=sys.stderr)
+        return False
+
+
+def upsert(doc, intro=True):
     coll = _mongo()
     from src.mongo_client_factory import cosmos_retry
     cosmos_retry(lambda: coll.update_one({"slug": doc["slug"]},
                                          {"$set": doc}, upsert=True))
+    if intro:
+        _write_intro_tokens(doc["slug"])
 
 
 def main():
