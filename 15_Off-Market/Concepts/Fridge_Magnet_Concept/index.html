@@ -17,9 +17,21 @@
   real site the door has to paint and swing from SSR HTML + CSS alone, because
   the current destination ships 219 KB of JS before React can animate anything.
   JS here only decides WHEN to open — never whether the content exists.
+
+  Query params for comparing on a handset without a rebuild:
+    ?art=mono   drawing in greyscale instead of colour
+    ?sound=0    silent
+    ?debug=1    log events + audio state to the console
 -->
 
 <main class="room">
+
+  <!-- Keyboard/screen-reader control. The door is decorative; the options below
+       are reachable regardless of whether it ever opens. -->
+  <button type="button" class="srToggle" id="srToggle" aria-expanded="false" aria-controls="shelves">
+    Open the fridge
+  </button>
+
   <div class="stage">
     <div class="fridge" id="fridge">
 
@@ -27,7 +39,7 @@
       <div class="cavity">
         <div class="lamp"></div>
         <p class="eyebrow">Burleigh Waters</p>
-        <ul class="shelves">
+        <ul class="shelves" id="shelves">
           <li class="shelf">
             <a href="https://fieldsestate.com.au/market-intelligence/burleigh-waters">
               <span class="label">What's happening in Burleigh Waters
@@ -57,6 +69,9 @@
             </a>
           </li>
         </ul>
+        <!-- Owns interior darkness AND the lamp strike. Must stay
+             pointer-events:none — it sits above the option links. -->
+        <div class="flick"></div>
       </div>
 
       <!-- door -->
@@ -68,7 +83,14 @@
         </div>
         <div class="edge"></div>
         <div class="face">
-          <img class="magnet" src="assets/magnet.webp" width="440" height="280" alt="">
+          <!-- A child's drawing, held up by two Fields magnets. Swap
+               artwork.svg for a real photo (assets/artwork.jpg) and it just
+               works — the sheet is sized by its own aspect ratio. -->
+          <div class="art">
+            <img class="artSheet" src="assets/artwork.svg" alt="" width="1560" height="1100">
+            <img class="magnet ml" src="assets/magnet.webp" alt="" width="440" height="280">
+            <img class="magnet mr" src="assets/magnet.webp" alt="" width="440" height="280">
+          </div>
           <span class="handle"></span>
           <span class="seam"></span>
         </div>
@@ -79,6 +101,7 @@
   </div>
 </main>
 
+<script src="fridgeAudio.js"></script>
 <script src="fridge.js"></script>
 </body>
 </html>
