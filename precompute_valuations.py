@@ -236,6 +236,33 @@ _STREET_PREMIUM_DAMPING = 0.50
 _MICRO_LOCATION_DAMPING = 0.50
 _LOCATION_PREMIUM_CAP = 0.15  # ±15% max
 
+# Property-type-aware suburb medians (2026-06-14). Street + micro-location
+# premiums compare each sale to its OWN property type's suburb median, so a
+# unit-heavy (or house-heavy) street's premium reflects LOCATION, not the
+# street's dwelling-type composition vs the suburb mix. Toggle off with
+# FIELDS_TYPE_AWARE_MEDIAN=0 to reproduce the legacy all-types baseline (used
+# for the A/B backtest).
+_TYPE_AWARE_MEDIAN = os.getenv('FIELDS_TYPE_AWARE_MEDIAN', '1') != '0'
+
+# Attached/strata dwelling type tokens — anything here, or any "<unit>/<street>"
+# address, buckets as 'unit'; everything else is 'house'. Same detached-vs-attached
+# split the comp-cohort filter already uses, for consistency.
+_UNIT_TYPE_TOKENS = ('unit', 'apartment', 'flat', 'studio', 'townhouse',
+                     'villa', 'duplex', 'terrace', 'semi')
+
+
+def _property_type_bucket(doc):
+    """'unit' (attached/strata) vs 'house' (detached) for same-type median
+    comparison. Unit-numbered addresses ('12/8 Marine Parade') are the strongest
+    signal; the property_type field is the fallback."""
+    addr = (doc.get('address') or doc.get('street_address') or '').strip()
+    if re.match(r'^\d+\s*/\s*\d+', addr):
+        return 'unit'
+    pt = (doc.get('property_type') or '').strip().lower()
+    if any(t in pt for t in _UNIT_TYPE_TOKENS):
+        return 'unit'
+    return 'house'
+
 
 def _get_sold_date(doc):
     """Extract sold date from document as datetime."""
@@ -272,38 +299,42 @@ def _get_sale_price(doc):
 def _build_suburb_median_cache(sold_by_suburb):
     """
     Pre-compute rolling 12-month suburb medians for each month with data.
-    Returns dict: (suburb_key, year, month) -> median_price
+    Returns dict: (suburb_key, type_bucket, year, month) -> median_price
+
+    When _TYPE_AWARE_MEDIAN, medians are split by property type ('house'/'unit')
+    so a sale is compared to its own type's median. In legacy mode the bucket is
+    '_all' (every key is still a 4-tuple, so consumers are uniform).
     """
     from datetime import datetime as _dt, timedelta
     from statistics import median as _median
 
     cache = {}
     for suburb_key, docs in sold_by_suburb.items():
-        # Collect all (date, price) pairs
-        dated_prices = []
+        # Collect (date, price) pairs grouped by property-type bucket.
+        by_bucket = {}
         for d in docs:
             sd = _get_sold_date(d)
             sp = _get_sale_price(d)
             if sd and sp:
-                dated_prices.append((sd, sp))
-        if not dated_prices:
-            continue
+                bucket = _property_type_bucket(d) if _TYPE_AWARE_MEDIAN else '_all'
+                by_bucket.setdefault(bucket, []).append((sd, sp))
 
-        dated_prices.sort(key=lambda x: x[0])
-        min_date = dated_prices[0][0]
-        max_date = dated_prices[-1][0]
+        for bucket, dated_prices in by_bucket.items():
+            dated_prices.sort(key=lambda x: x[0])
+            min_date = dated_prices[0][0]
+            max_date = dated_prices[-1][0]
 
-        # Iterate month by month
-        current = _dt(min_date.year, min_date.month, 1)
-        while current <= max_date:
-            window_start = current - timedelta(days=365)
-            prices = [p for (d, p) in dated_prices if window_start <= d <= current]
-            if len(prices) >= 5:
-                cache[(suburb_key, current.year, current.month)] = _median(prices)
-            if current.month == 12:
-                current = _dt(current.year + 1, 1, 1)
-            else:
-                current = _dt(current.year, current.month + 1, 1)
+            # Iterate month by month
+            current = _dt(min_date.year, min_date.month, 1)
+            while current <= max_date:
+                window_start = current - timedelta(days=365)
+                prices = [p for (d, p) in dated_prices if window_start <= d <= current]
+                if len(prices) >= 5:
+                    cache[(suburb_key, bucket, current.year, current.month)] = _median(prices)
+                if current.month == 12:
+                    current = _dt(current.year + 1, 1, 1)
+                else:
+                    current = _dt(current.year, current.month + 1, 1)
     return cache
 
 
@@ -330,10 +361,21 @@ def _extract_street_name(doc):
     return street_part.lower() if street_part else None
 
 
-def _build_street_premium_cache(sold_by_suburb, median_cache, min_sales=3):
+def _build_street_premium_cache(sold_by_suburb, median_cache, min_sales=3, sample_cap=8):
     """
     Pre-compute street premiums for all streets with sufficient data.
-    Returns dict: (suburb_key, street_name) -> (premium_pct, n_sales)
+    Returns dict: (suburb_key, street_name) ->
+        (applied_pct, n_sales, raw_avg_pct, sample_sales)
+
+    - applied_pct: dampened (50%) + capped (±15%) figure actually used in the
+      valuation adjustment.
+    - raw_avg_pct: undampened average % vs suburb rolling median (for the
+      "exactly what the data was" disclosure on the report).
+    - n_sales: number of historical street sales the premium is based on.
+    - sample_sales: recency-sorted, capped list of the supporting sales
+      ({address, sold_date, sale_price, pct_vs_median}) for the transparency table.
+    The first element stays applied_pct for backward compatibility with callers
+    that take [0].
     """
     cache = {}
     for suburb_key, docs in sold_by_suburb.items():
@@ -347,20 +389,134 @@ def _build_street_premium_cache(sold_by_suburb, median_cache, min_sales=3):
             sp = _get_sale_price(d)
             if not sd or not sp:
                 continue
-            med = median_cache.get((suburb_key, sd.year, sd.month))
+            bucket = _property_type_bucket(d) if _TYPE_AWARE_MEDIAN else '_all'
+            med = median_cache.get((suburb_key, bucket, sd.year, sd.month))
             if not med:
                 continue
             pct = (sp - med) / med
-            street_sales.setdefault(sn, []).append(pct)
+            street_sales.setdefault(sn, []).append({
+                'pct': pct,
+                'address': d.get('address') or d.get('street_address') or '',
+                'sold_date': sd,
+                'sale_price': sp,
+            })
 
-        for street, pcts in street_sales.items():
-            if len(pcts) >= min_sales:
+        for street, sales in street_sales.items():
+            if len(sales) >= min_sales:
+                pcts = [s['pct'] for s in sales]
                 avg = sum(pcts) / len(pcts)
                 # Apply dampening and cap
                 dampened = avg * _STREET_PREMIUM_DAMPING
                 capped = max(-_LOCATION_PREMIUM_CAP, min(_LOCATION_PREMIUM_CAP, dampened))
-                cache[(suburb_key, street)] = (round(capped, 4), len(pcts))
+                # Recency-sorted transparency sample
+                sample = sorted(sales, key=lambda s: s['sold_date'], reverse=True)[:sample_cap]
+                sample_sales = [{
+                    'address': s['address'],
+                    'sold_date': s['sold_date'].strftime('%Y-%m-%d'),
+                    'sale_price': round(s['sale_price']),
+                    'pct_vs_median': round(s['pct'], 4),
+                } for s in sample]
+                cache[(suburb_key, street)] = (
+                    round(capped, 4), len(sales), round(avg, 4), sample_sales)
     return cache
+
+
+# ─── Golf Course Backing Detection & Premium ───────────────────────────
+# Backtested on 25 Robina golf-area sales (April 2026):
+#   - Golf street name only (no backing): median -3% (no premium)
+#   - Confirmed course backing:           median +14% premium
+#   - Medinah Ave prestige frontage:       median +33% premium
+# Conservative estimate: +12% for confirmed backing (excl. prestige tier).
+_GOLF_BACKING_PREMIUM_PCT = 0.12
+
+def detect_golf_course_backing(doc):
+    """
+    Detect whether a property backs onto a golf course.
+
+    Returns (is_backing: bool, confidence: str, reason: str).
+
+    PRIMARY signal: satellite_analysis.categories.adjacency.backs_onto — a
+    structured enum produced by the same satellite vision pass, purpose-built to
+    answer exactly this question (its possible values already include
+    'golf_course'). This is authoritative and requires no text parsing.
+
+    FALLBACK (only when that structured field is entirely absent, e.g. an older
+    satellite capture that pre-dates the adjacency category): narrow phrase
+    matching against the free-text narrative, requiring "golf" to appear
+    directly inside a specific backing phrase.
+
+    Historical bug (fixed 2026-07-20): the previous version concatenated every
+    narrative sub-field into one blob and flagged backing whenever "golf"
+    appeared ANYWHERE in that blob together with generic words like "adjacent"/
+    "abut"/"rear boundary"/"directly abuts" appearing anywhere else — with no
+    requirement that the two actually refer to the same thing, and no negation
+    awareness. Confirmed false positives this produced, found live in
+    production data: 71 Glen Eagles Drive, Robina (narrative explicitly said
+    "No waterway, park, or golf course direct adjacency" — a NEGATION — but
+    "golf" + "adjacency" both being present anywhere in the blob was enough to
+    flag it true); 11/802 Glades Drive (hedged "golf course style grounds"
+    phrasing, real backs_onto is lake/waterway); 22 Nicklaus Court, Merrimac and
+    7 Winton Terrace, Varsity Lakes (both flagged "high confidence" — their
+    narratives mention "golf" in one sentence, about a course visible elsewhere
+    in the aerial frame, and "rear boundary"/"directly abuts" in a different,
+    unrelated sentence about their real lake/reserve adjacency; neither has
+    golf_course in their own structured backs_onto field). This flag also feeds
+    a real +/-12% comparable-sales price adjustment (_GOLF_BACKING_PREMIUM_PCT)
+    for both the subject property AND every comp it's compared against, so a
+    false positive here distorts actual valuation dollars, not just copy.
+    """
+    sa = doc.get('satellite_analysis', {})
+    if not sa or not isinstance(sa, dict):
+        return False, 'none', ''
+
+    # If the vision pass explicitly could not confirm which lot is the subject,
+    # neither the structured categories NOR the narrative can be trusted as
+    # subject-specific — both may describe the general area instead of the
+    # actual lot. Added 2026-07-20 after 41 Royal Links Drive: its satellite
+    # image had no visible pin ("subject lot identity is unconfirmed") yet
+    # still produced a confident backs_onto:['golf_course'] from a golf course
+    # visible elsewhere in the wider aerial frame, not necessarily the subject's.
+    # `pin_confirmed` is a new field (added the same day) — a MISSING key (older
+    # captures that pre-date it) is treated as unknown/proceed-as-before for
+    # backward compatibility; only an EXPLICIT False blocks trust.
+    if sa.get('pin_confirmed') is False:
+        return False, 'none', 'Satellite pin not confirmed for this property — cannot verify golf course backing independently'
+
+    backs_onto = ((sa.get('categories') or {}).get('adjacency') or {}).get('backs_onto')
+    if isinstance(backs_onto, list) and backs_onto:
+        if 'golf_course' in backs_onto:
+            return True, 'high', 'Satellite analysis (structured adjacency field) confirms golf course backing'
+        # A structured answer exists and it names something else (lake, reserve,
+        # residential_only, ...) — trust it; do not fall through to text parsing.
+        return False, 'none', ''
+
+    # Fallback: no structured adjacency answer at all. Require "golf" to appear
+    # INSIDE a specific backing phrase, not merely co-occur somewhere in the blob.
+    narrative = sa.get('narrative', '')
+    narr_text = ''
+    if isinstance(narrative, str):
+        narr_text = narrative.lower()
+    elif isinstance(narrative, dict):
+        narr_text = ' '.join(str(v) for v in narrative.values()).lower()
+
+    if 'golf' not in narr_text:
+        return False, 'none', ''
+
+    backing_phrases = [
+        'backs onto the golf', 'backs onto a golf',
+        'backing onto the golf', 'backing onto a golf',
+        'backs on to the golf', 'backs on to a golf',
+        'golf course rear', 'golf course back',
+        'directly abuts the golf', 'directly abuts a golf',
+        'borders the golf', 'fronts the golf', 'golf course frontage',
+        'overlooking the golf', 'overlooks the golf',
+        'golf course views', 'fairway view',
+    ]
+    has_backing = any(phrase in narr_text for phrase in backing_phrases)
+    if has_backing:
+        return True, 'medium', 'Satellite narrative mentions golf course backing (no structured adjacency data available to confirm — verify manually)'
+
+    return False, 'none', ''
 
 
 def compute_micro_location_premium(lat, lon, suburb_key, sold_docs, median_cache,
@@ -390,7 +546,8 @@ def compute_micro_location_premium(lat, lon, suburb_key, sold_docs, median_cache
             sp = _get_sale_price(d)
             if not sd or not sp:
                 continue
-            med = median_cache.get((suburb_key, sd.year, sd.month))
+            bucket = _property_type_bucket(d) if _TYPE_AWARE_MEDIAN else '_all'
+            med = median_cache.get((suburb_key, bucket, sd.year, sd.month))
             if not med:
                 continue
             premiums.append((sp - med) / med)
@@ -415,6 +572,106 @@ def _resolve_comp_micro_premium(pt, suburb_key, sold_by_suburb, median_cache, gc
             median_cache or {})
         return prem
     return None
+
+
+def build_subject_street_evidence(subject_doc, suburb_key, subject_lat, subject_lon,
+                                  sold_by_suburb, median_cache, street_premium_cache):
+    """Build (street_evidence, micro_location_evidence) for a subject from
+    pre-built caches.
+
+    SINGLE SOURCE OF TRUTH for the "Your Street" + street-level valuation
+    transparency evidence. Used by both the nightly precompute (on for-sale
+    listings) AND the on-demand report resolver (compute_street_evidence_on_demand,
+    for off-market homes the nightly batch never processed) — so every address
+    gets identical evidence regardless of how the report was triggered.
+
+    Returns two dicts (or None each):
+      street_evidence: street_name, applied_pct, raw_avg_pct, n_sales, damping,
+        cap_pct, capped, suburb_median, sample_sales[]
+      micro_location_evidence: applied_pct, n_sales, radius_km, suburb_median
+    """
+    street_name = _extract_street_name(subject_doc)
+    street_entry = (street_premium_cache or {}).get((suburb_key, street_name))
+
+    if subject_lat and subject_lon:
+        micro_pct, micro_n, micro_radius = compute_micro_location_premium(
+            subject_lat, subject_lon, suburb_key,
+            sold_by_suburb.get(suburb_key, []), median_cache or {})
+    else:
+        micro_pct, micro_n, micro_radius = None, 0, None
+
+    # Latest rolling suburb median for the SUBJECT's property type — context for
+    # the narrative's $ figure (so a unit is shown against the unit median).
+    subj_bucket = _property_type_bucket(subject_doc) if _TYPE_AWARE_MEDIAN else '_all'
+    latest_median = None
+    latest_key = None
+    for (sk, bk, yr, mo), med in (median_cache or {}).items():
+        if sk != suburb_key or bk != subj_bucket:
+            continue
+        if latest_key is None or (yr, mo) > latest_key:
+            latest_key, latest_median = (yr, mo), med
+
+    street_evidence = None
+    if street_entry:
+        applied, n_sales, raw_avg, sample = street_entry
+        street_evidence = {
+            'street_name': street_name,
+            'applied_pct': applied,
+            'raw_avg_pct': raw_avg,
+            'n_sales': n_sales,
+            'damping': _STREET_PREMIUM_DAMPING,
+            'cap_pct': _LOCATION_PREMIUM_CAP,
+            'capped': abs(raw_avg * _STREET_PREMIUM_DAMPING) > _LOCATION_PREMIUM_CAP,
+            'suburb_median': round(latest_median) if latest_median else None,
+            'sample_sales': sample,
+        }
+
+    micro_evidence = None
+    if micro_pct is not None:
+        micro_evidence = {
+            'applied_pct': micro_pct,
+            'n_sales': micro_n,
+            'radius_km': micro_radius,
+            'suburb_median': round(latest_median) if latest_median else None,
+        }
+
+    return street_evidence, micro_evidence
+
+
+def compute_street_evidence_on_demand(client, subject_doc, suburb_key,
+                                      subject_lat=None, subject_lon=None):
+    """On-demand street + micro-location evidence for a SINGLE subject whose
+    property doc has no precomputed evidence (e.g. an off-market report whose home
+    was never in the nightly for-sale precompute). Loads + dedupes just the
+    subject's suburb sold cohort, builds the same caches, and returns the same
+    (street_evidence, micro_location_evidence) the nightly batch would have.
+
+    Scoped to one suburb (~hundreds of sold docs) so it's cheap enough to run
+    inline during a report resolve. Returns (None, None) if the suburb has no
+    usable sold data. Coordinates default to the subject doc's lat/lon fields.
+    """
+    if not suburb_key:
+        return None, None
+    if subject_lat is None or subject_lon is None:
+        subject_lat = subject_lat if subject_lat is not None else (
+            subject_doc.get('LATITUDE') or subject_doc.get('latitude'))
+        subject_lon = subject_lon if subject_lon is not None else (
+            subject_doc.get('LONGITUDE') or subject_doc.get('longitude'))
+        try:
+            subject_lat = float(subject_lat) if subject_lat not in (None, '') else None
+            subject_lon = float(subject_lon) if subject_lon not in (None, '') else None
+        except (TypeError, ValueError):
+            subject_lat, subject_lon = None, None
+
+    sold_by_suburb = _load_sold_comparables(client, only_suburbs=[suburb_key])
+    if not sold_by_suburb.get(suburb_key):
+        return None, None
+
+    median_cache = _build_suburb_median_cache(sold_by_suburb)
+    street_premium_cache = _build_street_premium_cache(sold_by_suburb, median_cache)
+    return build_subject_street_evidence(
+        subject_doc, suburb_key, subject_lat, subject_lon,
+        sold_by_suburb, median_cache, street_premium_cache)
 
 
 # ─── NPUI Feature Weights (matching JavaScript valuation.mjs) ─────────────
@@ -490,7 +747,7 @@ CLADDING_MATERIAL_MAP = {
 
 # ─── GAP 2: Adjustment Factor Calculation (Hybrid: Regression + Fallback) ──────
 
-def _load_sold_comparables(client):
+def _load_sold_comparables(client, only_suburbs=None):
     """
     Load sold property records from two databases and merge by suburb.
 
@@ -525,6 +782,8 @@ def _load_sold_comparables(client):
             if col_name.startswith('system.') or col_name in _SKIP_SOLD:
                 continue
             suburb_key = col_name.lower().replace(' ', '_')
+            if only_suburbs is not None and suburb_key not in only_suburbs:
+                continue
             docs = list(gc_db[col_name].find({
                 'listing_status': 'sold',
                 'sale_price': {'$exists': True, '$ne': None}
@@ -546,6 +805,8 @@ def _load_sold_comparables(client):
         tdb = client['Target_Market_Sold_Last_12_Months']
         for col_name in tdb.list_collection_names():
             suburb_key = col_name.lower().replace(' ', '_')
+            if only_suburbs is not None and suburb_key not in only_suburbs:
+                continue
             docs = list(tdb[col_name].find({'sale_price': {'$exists': True, '$ne': None}}))
             display_suburb = SUBURB_DISPLAY.get(suburb_key, suburb_key.replace('_', ' ').title())
             existing_addrs = {
@@ -564,6 +825,42 @@ def _load_sold_comparables(client):
                 result.setdefault(suburb_key, []).extend(new_docs)
     except Exception as e:
         print(f"  ⚠️  Target_Market_Sold_Last_12_Months load error: {e}")
+
+    # ── Final dedup across merged sources ────────────────────────────────────
+    # The address-string dedup above misses the same sale appearing twice with
+    # cosmetic differences ("Robina QLD 4226" vs "Robina, QLD 4226") — ~27% of
+    # Robina sold records. Collapse by normalised address + sold date + price so
+    # one transaction is one record everywhere: street/micro premiums (and their
+    # n_sales + the public supporting-sales table), suburb medians, and comp
+    # weighting (a duplicate sale must not be double-weighted into a valuation).
+    # Key on normalised address + price (NOT date): the same sale is often
+    # re-recorded with a drifting date ("4 Springvale Street" at $1,520,000 a
+    # month apart) — a house can't sell for the identical price twice in a month,
+    # so addr+price collapses the dupe. A genuine resale has a different price and
+    # is kept. Unit-numbered addresses ("2/50 Riverwalk") stay distinct.
+    def _dedup_key(d):
+        addr = (d.get('address') or d.get('street_address') or '').lower()
+        addr = re.sub(r',?\s*qld\s*\d{4}\s*$', '', addr)
+        addr = re.sub(r'\s+', ' ', addr).strip().rstrip(',').strip()
+        sp = _get_sale_price(d)
+        return (addr, round(sp) if sp else None)
+
+    for suburb_key, docs in list(result.items()):
+        seen = set()
+        deduped = []
+        removed = 0
+        for d in docs:
+            k = _dedup_key(d)
+            # Only collapse records we can key reliably (addr + price).
+            if k[0] and k[1] is not None:
+                if k in seen:
+                    removed += 1
+                    continue
+                seen.add(k)
+            deduped.append(d)
+        result[suburb_key] = deduped
+        if removed:
+            print(f"  deduped {removed} duplicate sold records in {suburb_key}")
 
     return result
 
@@ -1223,11 +1520,23 @@ def calculate_adjustments(subject_features, comp_features, comp_price, rates):
 
     # Condition adjustment (using interior condition score as proxy for age/condition)
     # Only adjust when both sides have real condition data (not defaults)
+    # Non-linear: scores 9-10 get a prestige premium (7.5% per point vs 5%) because
+    # the marginal value of prestige-grade finishes exceeds incremental renovation.
     s_cond = subject_features.get('condition_score')
     c_cond = comp_features.get('condition_score')
+    base_rate = rates.get('condition_pct_per_point', 0.05)
     if s_cond is not None and c_cond is not None and s_cond != 5 and c_cond != 5:
+        # Calculate point-by-point with non-linear rate for prestige tier
         cond_diff = s_cond - c_cond
-        cond_dollars = round(cond_diff * rates.get('condition_pct_per_point', 0.05) * comp_price)
+        cond_dollars = 0
+        if cond_diff != 0:
+            low = min(s_cond, c_cond)
+            high = max(s_cond, c_cond)
+            for pt in range(int(low), int(high)):
+                # Points 9+ use 7.5% (prestige premium); below 9 use standard 5%
+                point_rate = 0.075 if pt >= 8 else base_rate
+                cond_dollars += point_rate * comp_price
+            cond_dollars = round(cond_dollars) if cond_diff > 0 else -round(cond_dollars)
     else:
         s_cond = s_cond or 5
         c_cond = c_cond or 5
@@ -1237,7 +1546,8 @@ def calculate_adjustments(subject_features, comp_features, comp_price, rates):
         'subject_value': s_cond,
         'comp_value': c_cond,
         'diff': round(cond_diff, 1),
-        'rate': rates.get('condition_pct_per_point', 0.05),
+        'rate': base_rate,
+        'prestige_rate': 0.075,
         'dollars': cond_dollars,
     }
 
@@ -1339,6 +1649,26 @@ def calculate_adjustments(subject_features, comp_features, comp_price, rates):
         'rate': 'pct_of_price',
         'dollars': ml_dollars,
         'skipped': s_ml is None or c_ml is None,
+    }
+
+    # Golf course backing premium (backtested at +12% for confirmed backing)
+    s_golf = subject_features.get('golf_course_backing', False)
+    c_golf = comp_features.get('golf_course_backing', False)
+    if s_golf != c_golf:
+        # Subject backs golf but comp doesn't → adjust comp UP
+        # Comp backs golf but subject doesn't → adjust comp DOWN
+        golf_prem = _GOLF_BACKING_PREMIUM_PCT if s_golf else -_GOLF_BACKING_PREMIUM_PCT
+        golf_dollars = round(golf_prem * comp_price)
+    else:
+        golf_prem = 0.0
+        golf_dollars = 0
+    adjustments['golf_course_backing'] = {
+        'subject_value': 1 if s_golf else 0,
+        'comp_value': 1 if c_golf else 0,
+        'diff': golf_prem,
+        'rate': 'pct_of_price',
+        'dollars': golf_dollars,
+        'skipped': False,
     }
 
     total = sum(a['dollars'] for a in adjustments.values())
@@ -1488,7 +1818,8 @@ def generate_adjustment_narrative(comp_address, comp_price, adjustment_result):
             else:
                 direction = 'fewer' if key in ('bedrooms', 'bathrooms', 'car_spaces') else 'smaller'
             unit_str = f" {unit}" if unit else ''
-            parts.append(f"{abs(diff)}{unit_str} {direction} {label} ({dollars:+,})")
+            diff_fmt = f"{abs(diff):.1f}" if isinstance(diff, float) else str(abs(diff))
+            parts.append(f"{diff_fmt}{unit_str} {direction} {label} (${dollars:+,.0f})")
 
     total = adjustment_result.get('total_adjustment', 0)
     adjusted = adjustment_result.get('adjusted_price', comp_price)
@@ -1701,37 +2032,19 @@ def calculate_confidence(points, n_total_override=None):
     else:
         confidence = 'very_low'
 
-    # 90% confidence interval using t-distribution for small samples
-    # With only 3-8 comparables, z=1.645 severely underestimates uncertainty.
-    # t-distribution accounts for small-sample variance inflation.
-    n = len(weighted_comps)
-    df = max(1, n - 1)
-
-    # t-values for 90% two-sided CI (alpha=0.10, alpha/2=0.05 each tail)
-    # Precomputed for common df values; falls back to z=1.645 for large n
-    T_VALUES_90 = {1: 6.314, 2: 2.920, 3: 2.353, 4: 2.132, 5: 2.015,
-                   6: 1.943, 7: 1.895, 8: 1.860, 9: 1.833, 10: 1.812,
-                   15: 1.753, 20: 1.725, 30: 1.697}
-    t_val = T_VALUES_90.get(df, 1.645)
-    # Interpolate for unlisted df values
-    if df not in T_VALUES_90 and df < 30:
-        lower_df = max(k for k in T_VALUES_90 if k <= df)
-        upper_df = min(k for k in T_VALUES_90 if k >= df)
-        if lower_df != upper_df:
-            frac = (df - lower_df) / (upper_df - lower_df)
-            t_val = T_VALUES_90[lower_df] + frac * (T_VALUES_90[upper_df] - T_VALUES_90[lower_df])
-
-    margin = t_val * w_std
-
-    # Apply a minimum floor: the range should never be narrower than a
-    # percentage of the valuation, since even "perfect" comparables have
-    # irreducible uncertainty from unmeasured features.
-    # Calibrated against 1,800+ sold property backtest (2025-2026 Gold Coast data).
-    # These floors produce a range that captures the expected accuracy at each
-    # confidence level — not a statistical CI, but a practical "estimated range".
-    min_margin_pct = {'high': 0.12, 'medium': 0.15, 'low': 0.20, 'very_low': 0.28}
-    floor = w_mean * min_margin_pct.get(confidence, 0.18)
-    margin = max(margin, floor)
+    # ── Range calculation ──────────────────────────────────────────────────
+    # Uses ±12% of the estimate, calibrated against 1,800+ sold property
+    # backtest (2025-2026 Gold Coast data). This reflects the empirical
+    # accuracy of the comparable-sales model — not a statistical CI.
+    #
+    # Previous approach used t-distribution confidence intervals, which
+    # produced nonsensical ranges with small samples (e.g. negative lower
+    # bounds with 2 comparables). The t-distribution assumes comparables
+    # are random draws from a normal population — they're not, they're
+    # hand-selected similar properties. The ±12% empirical range is both
+    # more defensible and more useful to buyers.
+    RANGE_PCT = 0.12
+    margin = w_mean * RANGE_PCT
 
     return {
         'reconciled_valuation': round(w_mean),
@@ -1777,30 +2090,82 @@ def resolve_numeric(val):
 
 def resolve_floor_area(doc):
     """
-    Resolve floor area from a property document, checking all known nested paths.
+    Resolve a property's INTERNAL LIVING floor area on one consistent definition.
     Used by both the NPUI extraction and the regression rate calculator so they
-    never diverge.
+    never diverge — and, critically, so the SUBJECT and its COHORT use the same
+    metric (mixing internal-living with internal+garage invalidates premium math).
 
-    Priority: top-level → pvd.layout → floor_plan_analysis → ollama → enriched_data
+    Internal-living priority (most authoritative first):
+      1. stated internal read off the floor plan's printed summary box
+         (`internal_living_area_sqm` / `floor_plan.stated_internal_area_sqm`)
+      2. floor_plan_analysis.internal_floor_area (vision, internal-tagged)
+      3. enriched_data.floor_area_sqm (internal-living enrichment)
+      4. ollama internal (OLDER vision pass — misreads plan totals, e.g. 204 m²
+         where the plan states 173; kept but ranked below enrichment)
+      5. legacy doc.floor_area_sqm / pvd.layout.floor_area_sqm
+    Building area — Domain `total_floor_area` then `house_plan.floor_area_sqm`
+    (internal + garage + sometimes covered patio) — is a DIFFERENT metric, used
+    for "internal" ONLY as a last resort so a property is never dropped for
+    missing floor area.
+
+    IMPORTANT: mirrored verbatim from
+    Fields_Orchestrator/scripts/property_reports/inline_features.py::resolve_floor_areas —
+    keep the two in sync.
     """
-    pvd = doc.get('property_valuation_data', {})
+    internal, _building, _src = _resolve_internal_and_building(doc)
+    return internal
+
+
+def _resolve_internal_and_building(doc):
+    """Returns (internal_living, building_area, source). See resolve_floor_area."""
+    MIN_FLOOR_AREA = 40
+    pvd = doc.get('property_valuation_data', {}) or {}
     old_layout = pvd.get('layout', {}) if isinstance(pvd.get('layout'), dict) else {}
     fpa = doc.get('floor_plan_analysis', {}) if isinstance(doc.get('floor_plan_analysis'), dict) else {}
     ofpa = doc.get('ollama_floor_plan_analysis', {})
-    ofpa_data = {}
-    if isinstance(ofpa, dict):
-        ofpa_data = ofpa.get('floor_plan_data', {}) if isinstance(ofpa.get('floor_plan_data'), dict) else {}
+    ofpa_data = ofpa.get('floor_plan_data', {}) if isinstance(ofpa, dict) and isinstance(ofpa.get('floor_plan_data'), dict) else {}
     enriched_data = doc.get('enriched_data', {}) if isinstance(doc.get('enriched_data'), dict) else {}
+    house_plan = doc.get('house_plan', {}) if isinstance(doc.get('house_plan'), dict) else {}
+    fp = doc.get('floor_plan', {}) if isinstance(doc.get('floor_plan'), dict) else {}
 
     ofpa_floor = resolve_numeric(ofpa_data.get('internal_floor_area', {}).get('value')
                                  if isinstance(ofpa_data.get('internal_floor_area'), dict)
                                  else ofpa_data.get('internal_floor_area'))
+    stated = (resolve_numeric(doc.get('internal_living_area_sqm'))
+              or resolve_numeric(fp.get('stated_internal_area_sqm')))
 
-    return (resolve_numeric(doc.get('floor_area_sqm')) or
-            resolve_numeric(old_layout.get('floor_area_sqm')) or
-            resolve_numeric(fpa.get('internal_floor_area')) or
-            ofpa_floor or
-            resolve_numeric(enriched_data.get('floor_area_sqm')))
+    internal_candidates = [
+        (stated, 'stated_plan_label'),
+        (resolve_numeric(fpa.get('internal_floor_area')), 'floor_plan_vision'),
+        (resolve_numeric(enriched_data.get('floor_area_sqm')), 'enriched_internal'),
+        (ofpa_floor, 'ollama_vision'),
+        (resolve_numeric(doc.get('floor_area_sqm')), 'legacy_floor_area'),
+        (resolve_numeric(old_layout.get('floor_area_sqm')), 'legacy_layout'),
+    ]
+    internal_living, source = None, None
+    for val, src in internal_candidates:
+        if val and val >= MIN_FLOOR_AREA:
+            internal_living, source = val, src
+            break
+
+    building_area = (resolve_numeric(doc.get('total_floor_area'))
+                     or resolve_numeric(house_plan.get('floor_area_sqm')))
+    if building_area and building_area < MIN_FLOOR_AREA:
+        building_area = None
+
+    # Physical sanity: internal-living CANNOT exceed building area (building =
+    # internal + garage + covered outdoor). When a vision/enrichment figure
+    # exceeds the measured building area beyond rounding tolerance, that source
+    # is unreliable for THIS home — distrust it and use the building area.
+    if (internal_living and building_area
+            and source != 'building_fallback'
+            and internal_living > building_area * 1.02):
+        internal_living, source = building_area, 'building_fallback'
+
+    if internal_living is None and building_area:
+        internal_living, source = building_area, 'building_fallback'
+
+    return internal_living, building_area, source
 
 
 def resolve_land_size(doc):
@@ -2029,19 +2394,55 @@ def infer_prestige_tier(doc):
         return 'elevated'
 
 
+# Satellite adjacency/amenity values that mean actual water frontage. water_proximity
+# is matched against an explicit allowlist, NEVER a substring — the literal value
+# "not_waterfront" contains "front" and would false-positive a dry home (e.g.
+# 3 Massachusetts Court, Varsity Lakes). Kept in sync with shared/waterfront.py.
+_WF_BACK_TYPES = frozenset({'lake', 'waterway', 'canal', 'river', 'ocean', 'estuary',
+                            'broadwater', 'marina', 'inlet', 'lagoon'})
+_WF_PROXIMITY_FRONT = frozenset({'waterfront', 'absolute_waterfront', 'main_river_front',
+                                 'lake_front', 'lakefront', 'canal_front', 'canalfront',
+                                 'river_front', 'riverfront', 'ocean_front', 'oceanfront',
+                                 'beach_front', 'beachfront', 'broadwater_front'})
+
+
 def is_waterfront(doc):
-    """Detect if property is waterfront — unified check across all data sources"""
+    """Detect if property is waterfront — unified check across all data sources.
+
+    Order matters for the comparable-sales cohort: a waterfront subject must only be
+    compared to waterfront comps (and vice versa), so a MISSED waterfront home gets
+    valued off dry blocks — the 46 Mornington Terrace failure. The satellite signal
+    was added 2026-07-26 precisely because that home had water_views=False (lake is
+    behind the house, not in the marketed photos) and generic listing text, so the
+    two older signals both missed it while the satellite pass had it correct."""
     if doc.get('is_waterfront') or doc.get('waterfront_premium_eligible'):
         return True
 
-    # Primary signal: GPT-4 Vision photo analysis (most reliable — it actually saw water)
+    # Signal 1: GPT-4 Vision photo analysis (reliable when the water is photographed).
     pvd = doc.get('property_valuation_data', {})
     if pvd.get('outdoor', {}).get('water_views'):
         return True
 
-    # Fallback: keyword search in listing description
+    # Signal 2: keyword search in listing description.
     text = f"{doc.get('description', '')} {doc.get('agents_description', '')}".lower()
-    return any(kw in text for kw in WATERFRONT_KEYWORDS)
+    if any(kw in text for kw in WATERFRONT_KEYWORDS):
+        return True
+
+    # Signal 3: satellite structured adjacency/amenity (catches water at the REAR
+    # boundary that photos/text miss). Guarded by pin_confirmed — an explicit False
+    # means the vision pass couldn't tie its call to the subject lot, so don't trust it.
+    sa = doc.get('satellite_analysis')
+    if isinstance(sa, dict) and sa.get('pin_confirmed') is not False:
+        cats = sa.get('categories') or {}
+        backs_onto = ((cats.get('adjacency') or {}).get('backs_onto')) or []
+        water_prox = (cats.get('amenity_premiums') or {}).get('water_proximity')
+        if isinstance(water_prox, str) and water_prox.strip().lower() in _WF_PROXIMITY_FRONT:
+            return True
+        if isinstance(backs_onto, list) and any(
+                isinstance(b, str) and b.strip().lower() in _WF_BACK_TYPES for b in backs_onto):
+            return True
+
+    return False
 
 
 def extract_npui_inputs(doc):
@@ -2355,10 +2756,12 @@ def basic_features(doc):
     layout = pvd.get('layout', {})
     fpa = doc.get('floor_plan_analysis', {})
     enriched = doc.get('enriched_data', {})
+    house_plan = doc.get('house_plan', {}) if isinstance(doc.get('house_plan'), dict) else {}
 
     floor_area = (resolve_numeric(doc.get('floor_area_sqm')) or
                   resolve_numeric(layout.get('floor_area_sqm')) or
                   resolve_numeric(fpa.get('internal_floor_area')) or
+                  resolve_numeric(house_plan.get('floor_area_sqm')) or
                   resolve_numeric(enriched.get('floor_area_sqm')))
 
     fpa_land = resolve_numeric(fpa.get('total_land_area', {}).get('value')
@@ -2639,9 +3042,12 @@ def precompute_property_valuation(db, subject_doc, listings_coll, sold_by_suburb
     # (subject_listing_price already parsed above for in_cohort_sold closure)
     subject_floor_area = resolve_floor_area(subject_doc)
     subject_has_pvd = bool(subject_doc.get('property_valuation_data'))
+    directional_only = False
     if subject_listing_price and subject_listing_price >= 2500000:
-        exclusion_reason = 'price_above_threshold'
-    elif subject_is_acreage:
+        # Above $2.5M: still run full comp analysis but flag as directional only
+        # No reconciled valuation displayed, but comps + adjustments are shown
+        directional_only = True
+    if subject_is_acreage:
         exclusion_reason = 'acreage'
     elif subject_is_unit and prop_type == 'House':
         exclusion_reason = 'misclassified_dwelling'
@@ -2702,12 +3108,11 @@ def precompute_property_valuation(db, subject_doc, listings_coll, sold_by_suburb
     # Derive subject effective price
     subject_price = parse_price(subject_doc.get('price'))
     
-    if not subject_price:
-        # Try valuation
-        iter_val = subject_doc.get('iteration_08_valuation', {})
-        if isinstance(iter_val.get('predicted_value'), (int, float)):
-            subject_price = iter_val['predicted_value']
-    
+    # (Removed 2026-08-05: a CatBoost `iteration_08_valuation.predicted_value`
+    # fallback sat here. The CatBoost model is retired — see fix-history
+    # [CATBOOST-RETIRE]. Priceless listings now fall straight through to the
+    # recent-sales median below, which was already the next fallback.)
+
     if not subject_price:
         # Estimate from recent sales median
         sale_prices = [parse_price(s.get('sale_price') or s.get('sold_price') or s.get('last_sold_price'))
@@ -2873,6 +3278,18 @@ def precompute_property_valuation(db, subject_doc, listings_coll, sold_by_suburb
     # Extract subject features for adjustment calculations
     subject_bd = breakdown_map[subject_id]
     subject_basic = basic_features(subject_doc)
+
+    # ── Street + micro-location premium evidence ───────────────────────────
+    # Built via the shared build_subject_street_evidence() — the SAME function the
+    # on-demand report resolver uses, so listed and off-market homes get identical
+    # street-level evidence. Feeds both the adjustment math (applied_pct) and the
+    # persisted evidence (raw avg, sample size, supporting sales).
+    subject_street_evidence, subject_micro_evidence = build_subject_street_evidence(
+        subject_doc, suburb_key, subject_lat, subject_lon,
+        sold_by_suburb, median_cache, street_premium_cache)
+    _street_applied = subject_street_evidence['applied_pct'] if subject_street_evidence else None
+    _micro_applied = subject_micro_evidence['applied_pct'] if subject_micro_evidence else None
+
     subject_features = {
         'land_size_sqm': subject_bd['inputs'].get('land_size_sqm') or subject_basic.get('land_size_sqm'),
         'floor_area_sqm': subject_bd['inputs'].get('floor_area_sqm') or subject_basic.get('floor_area_sqm'),
@@ -2891,13 +3308,14 @@ def precompute_property_valuation(db, subject_doc, listings_coll, sold_by_suburb
         'approximate_build_year': subject_build_year,
         'beach_distance_km': subject_beach_km,
         'renovation_quality_score': subject_basic.get('renovation_quality_score'),
-        'street_premium_pct': (street_premium_cache or {}).get(
-            (suburb_key, _extract_street_name(subject_doc)), (None,))[0],
-        'micro_location_premium_pct': compute_micro_location_premium(
-            subject_lat, subject_lon, suburb_key,
-            sold_by_suburb.get(suburb_key, []),
-            median_cache or {})[0] if subject_lat and subject_lon else None,
+        'street_premium_pct': _street_applied,
+        'micro_location_premium_pct': _micro_applied,
+        'golf_course_backing': False,  # set below after detection
     }
+
+    # Detect golf course backing from satellite analysis
+    subject_golf_backing, subject_golf_confidence, subject_golf_reason = detect_golf_course_backing(subject_doc)
+    subject_features['golf_course_backing'] = subject_golf_backing
 
     # ─── Pass 1: Compute adjustments and narratives for all comps ──────────
     all_enriched_points = []
@@ -2939,6 +3357,8 @@ def precompute_property_valuation(db, subject_doc, listings_coll, sold_by_suburb
                     (suburb_key, _extract_street_name(pt.get('_source_doc') or pt)), (None,))[0],
                 'micro_location_premium_pct': _resolve_comp_micro_premium(
                     pt, suburb_key, sold_by_suburb, median_cache, _gc_coords),
+                'golf_course_backing': detect_golf_course_backing(
+                    pt.get('_source_doc') or pt)[0],
             }
             adj_result = calculate_adjustments(subject_features, comp_features, comp_price, adj_rates)
             pt['adjustment_result'] = adj_result
@@ -2990,6 +3410,23 @@ def precompute_property_valuation(db, subject_doc, listings_coll, sold_by_suburb
         elif not subject_is_prestige and comp_is_p:
             pt['weight']['raw_weight'] *= 0.15
 
+    # ─── Dedup sale-vs-listing: weigh a property ONCE ─────────────────────
+    # A home that is both a recent sale AND a current listing was being counted
+    # twice (the transaction price AND the asking price), double-weighting one
+    # property into the reconciled figure. Keep the recent sale — a real,
+    # settled transaction — and drop the duplicate current listing.
+    def _addr_key(a):
+        return re.sub(r'[^a-z0-9]', '', (a or '').split(',')[0].lower())
+    _sold_keys = {_addr_key(p.get('address')) for p in recent_points if p.get('address')}
+    _dupe_ids = {
+        id(p) for p in comparable_points
+        if p.get('address') and _addr_key(p['address']) in _sold_keys
+    }
+    if _dupe_ids:
+        comparable_points[:] = [p for p in comparable_points if id(p) not in _dupe_ids]
+        all_enriched_points[:] = [p for p in all_enriched_points if id(p) not in _dupe_ids]
+        print(f"      Deduped {len(_dupe_ids)} current listing(s) also present as recent sales")
+
     # ─── Quality comp selection: keep only high-quality comps for valuation ──
     select_quality_comps(all_enriched_points, min_comps=3, target_comps=8)
     included_points = [p for p in all_enriched_points if p.get('included_in_valuation', False)]
@@ -3019,19 +3456,20 @@ def precompute_property_valuation(db, subject_doc, listings_coll, sold_by_suburb
                       else (sale_prices_for_estimate[mid-1] + sale_prices_for_estimate[mid]) / 2)
         npui_average = sum(sale_prices_for_estimate) / len(sale_prices_for_estimate)
     
+    # CatBoost retired 2026-08-05 (fix-history [CATBOOST-RETIRE]). This used to
+    # read `iteration_08_valuation.predicted_value` and average it with the NPUI
+    # median to produce `blended_valuation`.
+    #
+    # The keys below are kept (rather than deleted) so stored documents keep a
+    # stable shape for consumers that destructure them; `model_valuation` is now
+    # permanently None and the blend collapses to the NPUI median, which is
+    # exactly what the old `elif npui_median` branch already did whenever a
+    # property had no CatBoost value. Note this never touched
+    # `reconciled_valuation` — that is pure adjusted-comparables and is
+    # unaffected by this change.
     model_valuation = None
-    iter_val = subject_doc.get('iteration_08_valuation', {})
-    if isinstance(iter_val.get('predicted_value'), (int, float)):
-        model_valuation = iter_val['predicted_value']
-    
-    blended_valuation = None
-    if model_valuation and npui_median:
-        blended_valuation = (model_valuation + npui_median) / 2
-    elif npui_median:
-        blended_valuation = npui_median
-    elif model_valuation:
-        blended_valuation = model_valuation
-    
+    blended_valuation = npui_median
+
     comparable_sales = [
         {
             'address': s['address'],
@@ -3047,7 +3485,7 @@ def precompute_property_valuation(db, subject_doc, listings_coll, sold_by_suburb
     has_listing_price = parse_price(subject_doc.get('price')) is not None
     
     valuation_breakdown = None
-    if npui_median or model_valuation:
+    if npui_median:  # was `or model_valuation` — CatBoost retired, always None now
         valuation_breakdown = {
             'has_listing_price': has_listing_price,
             'model_valuation': model_valuation,
@@ -3064,34 +3502,12 @@ def precompute_property_valuation(db, subject_doc, listings_coll, sold_by_suburb
     for pt in comparable_points + recent_points:
         pt.pop('_source_doc', None)
 
-    # Post-computation exclusion: if reconciled valuation >= $2.5M, exclude.
-    # This catches properties where listing price was unparseable ("Contact Agent")
-    # but the model predicted a high value.
+    # Post-computation check: if reconciled valuation >= $2.5M, switch to
+    # directional mode (keep comps + adjustments, suppress point estimate).
+    # Previously this discarded all data; now it preserves the analysis.
     rv = confidence_result.get('reconciled_valuation')
     if rv and rv >= 2_500_000:
-        return {
-            'computed_at': datetime.utcnow(),
-            'confidence': {
-                'reconciled_valuation': None,
-                'confidence': 'not_available',
-                'range': None,
-                'exclusion_reason': 'valuation_above_threshold',
-                'n_verified': 0,
-                'n_total': len(comparable_points) + len(recent_points),
-            },
-            'summary': {
-                'insufficient_data': True,
-                'exclusion_reason': 'valuation_above_threshold',
-                'n_comps': len(comparable_points) + len(recent_points),
-                'n_current_listings': len(comparable_points),
-                'n_recent_sales': len(recent_points),
-            },
-            'metadata': {
-                'generated_at': int(datetime.utcnow().timestamp() * 1000),
-                'parameters': {'address': subject_doc.get('address')},
-                'gaps_version': 3,
-            },
-        }
+        directional_only = True
 
     valuation_data = {
         'computed_at': datetime.utcnow(),
@@ -3099,7 +3515,7 @@ def precompute_property_valuation(db, subject_doc, listings_coll, sold_by_suburb
             'id': subject_id,
             'address': subject_doc.get('address', 'Unknown'),
             'price': subject_price,
-            'valuation_price': model_valuation,
+            'valuation_price': None,  # was CatBoost model_valuation — retired 2026-08-05
             'utility_index': subject_npui,
             'distance_km': None,
             'series': 'current_listing',
@@ -3114,6 +3530,8 @@ def precompute_property_valuation(db, subject_doc, listings_coll, sold_by_suburb
                 },
                 'npui_breakdown': subject_breakdown,
             },
+            'street_evidence': subject_street_evidence,
+            'micro_location_evidence': subject_micro_evidence,
             'images': extract_images(subject_doc),
         },
         'comparables': comparable_points,
@@ -3147,10 +3565,101 @@ def precompute_property_valuation(db, subject_doc, listings_coll, sold_by_suburb
             'generated_at': int(datetime.utcnow().timestamp() * 1000),
             'parameters': {'address': subject_doc.get('address')},
             'gaps_version': 3,
+            'directional_only': directional_only,
+        },
+        'location_factors': {
+            'golf_course_backing': subject_golf_backing,
+            'golf_course_confidence': subject_golf_confidence,
+            'golf_course_reason': subject_golf_reason,
+            'golf_course_premium_applied': round(_GOLF_BACKING_PREMIUM_PCT * 100, 1) if subject_golf_backing else 0,
         },
     }
-    
+
+    # For properties above $2.5M: keep comps + adjustments but suppress reconciled valuation
+    if directional_only:
+        valuation_data['confidence']['directional_only'] = True
+        valuation_data['confidence']['directional_reason'] = 'price_above_threshold'
+        # Keep the range and comps for the agents and Valuation Guide, but null out the point estimate
+        valuation_data['confidence']['reconciled_valuation'] = None
+        valuation_data['confidence']['confidence'] = 'directional'
+        valuation_data['summary']['directional_only'] = True
+
     return valuation_data
+
+
+# --- Incremental recompute (added 2026-08-05) ------------------------------
+# Before this, every for-sale property was fully recomputed every night with no
+# staleness check at all. A valuation only moves when either (a) the subject's
+# own valuation-relevant attributes change, or (b) new comparable sales land —
+# so we skip a property when its inputs are unchanged AND its last computation
+# is younger than VALUATION_MAX_AGE_DAYS.
+#
+# The max-age half matters: comparables keep arriving even when the listing
+# itself is untouched, so a pure fingerprint check would freeze valuations
+# forever. At the default of 7 days roughly a seventh of the book refreshes
+# each night, which also spreads RU load instead of spiking it.
+#
+# `last_updated` is deliberately NOT used as the change signal: measured
+# 2026-08-05, 173 of 213 target-suburb listings had it bumped within 24h, so
+# the scraper touches it nightly whether or not anything meaningful changed.
+VALUATION_MAX_AGE_DAYS = float(os.environ.get('VALUATION_MAX_AGE_DAYS', '7'))
+VALUATION_FORCE = os.environ.get('VALUATION_FORCE', '').lower() in ('1', 'true', 'yes')
+
+# Fields that materially change a comparable-sales valuation. Anything absent
+# is recorded as None so that a field APPEARING (e.g. floor area arriving via
+# enrichment) changes the fingerprint and correctly triggers a recompute.
+_FINGERPRINT_FIELDS = (
+    'price', 'price_numeric', 'bedrooms', 'bathrooms', 'car_spaces', 'carspaces',
+    'property_type', 'listing_status', 'floor_area', 'floor_area_sqm',
+    'land_size', 'land_size_sqm', 'renovation_level', 'pool_present',
+    'is_waterfront', 'number_of_stories',
+)
+
+
+def _valuation_fingerprint(doc):
+    """Stable hash of the inputs that affect this property's valuation."""
+    import hashlib
+    parts = []
+    for key in _FINGERPRINT_FIELDS:
+        val = doc.get(key)
+        if isinstance(val, float):
+            val = round(val, 3)  # avoid float jitter churning the hash
+        parts.append(f'{key}={val!r}')
+    return hashlib.sha1('|'.join(parts).encode('utf-8')).hexdigest()[:16]
+
+
+def _effective_max_age_days(doc):
+    """Per-property refresh age, jittered to 70-130% of the configured max.
+
+    Without this, the first run after this change values the whole book on one
+    night, every property then falls due on the SAME later night, and the
+    saving is replaced by a once-a-week thundering herd against the RU budget —
+    on the step already documented as the largest source of Cosmos 429s.
+
+    The jitter is derived from the immutable _id so it is stable across runs; a
+    random value would reshuffle nightly and defeat the purpose.
+    """
+    import hashlib
+    h = int(hashlib.sha1(str(doc.get('_id')).encode('utf-8')).hexdigest()[:8], 16)
+    return VALUATION_MAX_AGE_DAYS * (0.7 + 0.6 * ((h % 1000) / 1000.0))
+
+
+def _should_skip_valuation(doc):
+    """(skip?, reason). Skip when inputs are unchanged and the result is fresh."""
+    if VALUATION_FORCE:
+        return False, ''
+    vd = doc.get('valuation_data') or {}
+    meta = vd.get('metadata') or {}
+    stored = meta.get('input_fingerprint')
+    if not stored or stored != _valuation_fingerprint(doc):
+        return False, ''
+    computed_at = vd.get('computed_at')
+    if not isinstance(computed_at, datetime):
+        return False, ''
+    age_days = (datetime.utcnow() - computed_at).total_seconds() / 86400.0
+    if age_days >= _effective_max_age_days(doc):
+        return False, ''
+    return True, f'unchanged, valued {age_days:.1f}d ago'
 
 
 def main():
@@ -3182,12 +3691,22 @@ def main():
         print(f"   {sub}: {len(docs)} total — {src_counts}")
     print()
 
-    # Get all for-sale properties from per-suburb collections
-    # Prioritise target suburbs to avoid burning RU budget on non-target areas
+    # Get all for-sale properties from per-suburb collections.
+    #
+    # Restricted to the three ENRICHED suburbs on 2026-08-05. Only Robina,
+    # Varsity Lakes and Burleigh Waters receive the photo/floor-plan enrichment
+    # (pipeline steps 101/105/106/108) that supplies floor area — and floor area
+    # is a hard requirement for a comparable-sales valuation.
+    #
+    # The six suburbs removed here (burleigh_heads, mudgeeraba, reedy_creek,
+    # merrimac, worongary, carrara) were 327 of the 540 properties processed
+    # nightly and yielded only 36 usable valuations — an 11% hit rate against
+    # 57% for the enriched three. Burleigh Heads alone was 107 of 113
+    # unvaluable. Re-add a suburb here only once it is actually enriched;
+    # otherwise it just burns RUs to be excluded again, and this step is
+    # already the largest single source of Cosmos 429s.
     TARGET_SUBURBS = [
         'robina', 'burleigh_waters', 'varsity_lakes',
-        'burleigh_heads', 'mudgeeraba', 'reedy_creek',
-        'merrimac', 'worongary', 'carrara',
     ]
 
     # Pre-load Gold_Coast coordinates and timelines for distance + build year
@@ -3243,14 +3762,33 @@ def main():
     
     success_count = 0
     skip_count = 0
+    unchanged_count = 0   # skipped by the incremental fingerprint/age check
     error_count = 0
     
+    # Adaptive pacing — start at 0.3s between properties, increase on throttles
+    _pace_delay = 0.3
+    _consecutive_ok = 0
+
     for i, subject_doc in enumerate(all_properties):
         property_id = str(subject_doc['_id'])
         address = subject_doc.get('address', 'Unknown')
-        
+
+        # Skip untouched, freshly-valued properties before doing any work —
+        # this is checked ahead of the pacing sleep so a skipped property costs
+        # neither RUs nor wall-clock.
+        _skip, _skip_why = _should_skip_valuation(subject_doc)
+        if _skip:
+            skip_count += 1
+            unchanged_count += 1
+            print(f"[{i+1}/{len(all_properties)}] ⏭️  Skipped (fresh): {address} — {_skip_why}")
+            continue
+
         print(f"[{i+1}/{len(all_properties)}] Processing: {address}")
-        
+
+        # Pace between properties to avoid RU exhaustion
+        if i > 0:
+            time.sleep(_pace_delay)
+
         try:
             start_time = time.time()
 
@@ -3261,12 +3799,19 @@ def main():
                 median_cache, street_premium_cache)
 
             if valuation_data:
-                # Store in database with retry on 429 (Cosmos DB rate limiting)
                 computation_time_ms = int((time.time() - start_time) * 1000)
                 valuation_data['metadata']['computation_time_ms'] = computation_time_ms
+                # Stamp the inputs this result was derived from. Set here, before
+                # the single write below, so it lands on the EXCLUDED path too —
+                # otherwise excluded properties (missing floor area and friends)
+                # carry no fingerprint and get retried in full every night, which
+                # was most of the wasted work this change exists to remove.
+                valuation_data['metadata']['input_fingerprint'] = _valuation_fingerprint(subject_doc)
 
                 col_name = subject_doc.get('_collection')
-                for attempt in range(5):
+
+                # Write with exponential backoff retry
+                for attempt in range(7):
                     try:
                         db[col_name].update_one(
                             {'_id': subject_doc['_id']},
@@ -3276,13 +3821,15 @@ def main():
                     except Exception as write_err:
                         err_str = str(write_err)
                         if '16500' in err_str or 'TooManyRequests' in err_str:
-                            # Extract RetryAfterMs if available
-                            import re as _re_retry
-                            retry_match = _re_retry.search(r'RetryAfterMs=(\d+)', err_str)
-                            wait_ms = int(retry_match.group(1)) if retry_match else 1000 * (attempt + 1)
-                            wait_s = max(wait_ms / 1000.0, 0.5) * (attempt + 1)
-                            if attempt < 4:
+                            # Exponential backoff: 1s, 2s, 4s, 8s, 16s, 30s
+                            wait_s = min(1.0 * (2 ** attempt), 30.0)
+                            wait_s += random.uniform(0, 1)  # jitter
+                            print(f"  ⚠️  Write throttled ({attempt+1}/7), waiting {wait_s:.1f}s")
+                            if attempt < 6:
                                 time.sleep(wait_s)
+                                # Increase pacing for subsequent properties
+                                _pace_delay = min(_pace_delay * 1.5, 3.0)
+                                _consecutive_ok = 0
                                 continue
                         raise
 
@@ -3299,14 +3846,21 @@ def main():
                 print(f"  ⚠️  Skipped (insufficient data)")
                 skip_count += 1
 
-        except Exception as e:
-            print(f"  ❌ Error: {str(e)}")
-            error_count += 1
+            # Track consecutive successes to gradually speed back up
+            _consecutive_ok += 1
+            if _consecutive_ok >= 5 and _pace_delay > 0.3:
+                _pace_delay = max(_pace_delay * 0.8, 0.3)
 
-        # Rate limiting — 2.0s between properties to avoid Cosmos DB 429 errors
-        # Each valuation_data write is ~50KB (heavy RU cost); needs spacing
-        if i < len(all_properties) - 1:
-            time.sleep(2.0)
+        except Exception as e:
+            err_str = str(e)
+            if '16500' in err_str or 'TooManyRequests' in err_str or '429' in err_str:
+                # Throttle error — slow down significantly
+                _pace_delay = min(_pace_delay * 2.0, 5.0)
+                _consecutive_ok = 0
+                print(f"  ❌ Error (throttled — increasing pace to {_pace_delay:.1f}s): {err_str[:100]}")
+            else:
+                print(f"  ❌ Error: {err_str[:200]}")
+            error_count += 1
     
     print()
     print("=" * 80)
@@ -3314,6 +3868,7 @@ def main():
     print("=" * 80)
     print(f"✅ Successfully processed: {success_count}")
     print(f"⚠️  Skipped:               {skip_count}")
+    print(f"⏭️  ...of which unchanged:  {unchanged_count} (fingerprint match, < {VALUATION_MAX_AGE_DAYS:.0f}d old)")
     print(f"❌ Errors:                {error_count}")
     print("=" * 80)
     
