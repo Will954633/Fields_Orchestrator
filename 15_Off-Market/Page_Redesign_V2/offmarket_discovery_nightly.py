@@ -282,7 +282,13 @@ def run(limit=None, rebuild_all=False, dry_run=False, shard=None, reachable=Fals
     # Skip job_run heartbeat for shard workers (a shard isn't "the job"); the
     # unsharded nightly run owns the heartbeat.
     if shard is not None:
-        homes = sorted(indexed_homes())
+        # Must honour --reachable exactly as the unsharded path does. It did not
+        # until 2026-08-05: this branch called indexed_homes() unconditionally, so
+        # `--reachable --shard i/N` would silently rebuild only the 14,255 indexed
+        # homes and skip every reachable-only one — the parallel path quietly
+        # building a different set from the sequential one, with nothing to catch
+        # it (shard workers deliberately skip the coverage assertion).
+        homes = sorted(reachable_homes() if reachable else indexed_homes())
         have = existing_generated_at()
         todo = [(s, le, sub) for (s, le, sub) in homes if _needs_build(s, le, have, rebuild_all)]
         i, N = shard
