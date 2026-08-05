@@ -187,10 +187,37 @@ class PropertyProcessingVerifier:
         return ok, msg, {"field": found, "has_completed_marker": has_completed_marker}
 
     def _verify_valuation(self, doc: Dict[str, Any]) -> Tuple[bool, str, Dict[str, Any]]:
-        val = _get_nested(doc, "iteration_08_valuation.predicted_value")
-        ok = isinstance(val, (int, float))
-        msg = "ok" if ok else "missing iteration_08_valuation.predicted_value"
-        return ok, msg, {"predicted_value": val}
+        """Verify the comparable-sales valuation step ran for this property.
+
+        Repointed 2026-08-05 from the retired CatBoost model
+        (`iteration_08_valuation.predicted_value`) to `valuation_data` — see
+        fix-history [CATBOOST-RETIRE]. Left asserting the old field, this would
+        have reported EVERY property as missing once step 6 was disabled.
+
+        Deliberately asserts only that the step RAN (`computed_at` present), not
+        that it produced a figure. A large share of the book is legitimately
+        excluded — no floor area, acreage, insufficient comparables — and those
+        are correct outcomes, not failures. Asserting a number here would turn
+        an accurate exclusion into a false alarm every night. The outcome is
+        still reported in the detail so the distinction stays visible.
+        """
+        computed_at = _get_nested(doc, "valuation_data.computed_at")
+        ok = computed_at is not None
+        reconciled = _get_nested(doc, "valuation_data.confidence.reconciled_valuation")
+        directional = _get_nested(doc, "valuation_data.confidence.directional_only")
+        exclusion = _get_nested(doc, "valuation_data.summary.exclusion_reason")
+
+        if reconciled:
+            outcome = "reconciled"
+        elif directional:
+            outcome = "directional_range"
+        elif exclusion:
+            outcome = f"excluded:{exclusion}"
+        else:
+            outcome = "no_result"
+
+        msg = "ok" if ok else "missing valuation_data (step 18 did not run for this property)"
+        return ok, msg, {"computed_at": computed_at, "outcome": outcome}
 
     def _verify_backend_enrichment(self, doc: Dict[str, Any]) -> Tuple[bool, str, Dict[str, Any]]:
         # We expect these scripts to write a variety of fields.
