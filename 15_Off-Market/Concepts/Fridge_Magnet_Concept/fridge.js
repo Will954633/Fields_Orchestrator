@@ -1,42 +1,88 @@
 /* ============================================================================
-   fridge.js — decides WHEN the door opens. Nothing else.
+   fridge.js — decides WHEN the door opens and closes. Nothing else.
 
-   The door, the light, the shelves and the options are all CSS + HTML and work
-   with this file deleted. That is the point: on the real site the sequence has
-   to run before 219 KB of app JavaScript has necessarily landed over a kitchen
-   4G connection.
+   The door, the light, the drawing, the shelves and the options are all CSS +
+   HTML and work with this file deleted. That is the point: on the real site the
+   sequence has to run before 219 KB of app JavaScript has necessarily landed
+   over a kitchen 4G connection.
 
-   Deliberately plain .js, no build step — so this exact file can be served
-   from public/fridge/ in production and loaded here at the concepts URL, and
+   Deliberately plain .js, no build step — so this exact file can be served from
+   public/fridge/ in production and loaded here at the concepts URL, and
    prototype and production cannot drift. Same reason src/components/BreakGlass
    keeps its 3,000 lines of behaviour in public/ rather than in .tsx.
+
+   Query params: ?art=mono  ?sound=0  ?debug=1
    ========================================================================== */
 (function () {
   'use strict';
 
   var fridge = document.getElementById('fridge');
+  var srToggle = document.getElementById('srToggle');
   if (!fridge) { console.warn('[fridge] no #fridge element — nothing to do'); return; }
 
+  var q = new URLSearchParams(location.search);
+  var DEBUG = q.has('debug');
   var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (reduce) return;               // CSS already renders it open
+  var audio = window.fridgeAudio || null;
 
-  var opened = false;
+  if (q.get('art') === 'mono') document.body.classList.add('art-mono');
+  if (audio && q.get('sound') === '0') audio.enable(false);
+
+  /* Must match the CSS transition durations. Out of sync and the interior
+     re-darkens while the door is still visibly swinging. */
+  var CLOSE_MS = 1020;
+
+  var isOpen = false;
+  var interacted = false;
+  var autoTimer = null;
+  var closingTimer = null;
   var t0 = performance.now();
-  var timer = null;
 
-  function open(method) {
-    if (opened) return;
-    opened = true;
-    clearTimeout(timer);
-    fridge.classList.add('is-open');
-    teardown();
+  function emit(name, props) {
+    if (window.posthog && window.posthog.capture) window.posthog.capture(name, props);
+    if (DEBUG) console.log('[fridge]', name, JSON.stringify(props), audio ? JSON.stringify(audio.state()) : '');
+  }
 
-    // Haptic on a real pull. Android only; iOS ignores it silently.
-    if (method === 'pulled' && navigator.vibrate) { try { navigator.vibrate(12); } catch (e) {} }
+  function setOpen(next, method) {
+    if (next === isOpen) return;
+    isOpen = next;
+    clearTimeout(closingTimer);
 
-    emit('fridge_open', {
-      method: method,                                  // 'pulled' | 'auto'
-      ms_to_open: Math.round(performance.now() - t0)   // 0 for auto
+    if (next) {
+      fridge.classList.remove('is-closing');
+      fridge.classList.add('is-open');
+    } else {
+      fridge.classList.remove('is-open');
+      fridge.classList.add('is-closing');
+      /* is-closing drives the "light stays on until it seats" keyframe. It has
+         to be taken off again afterwards or the next open starts from the
+         extinguish end-state. */
+      closingTimer = setTimeout(function () { fridge.classList.remove('is-closing'); }, CLOSE_MS);
+    }
+
+    if (srToggle) {
+      srToggle.setAttribute('aria-expanded', String(next));
+      srToggle.textContent = next ? 'Close the fridge' : 'Open the fridge';
+    }
+    var prompt = document.querySelector('.prompt');
+    if (prompt) prompt.textContent = next ? 'Close' : 'Open';
+
+    /* Sound and haptics belong to the PULL only.
+       The auto-open has no user activation behind it, so on Android the context
+       would be created without activation, report running, and emit nothing —
+       and we'd have no idea. Better to be deliberately silent than silently
+       broken. */
+    if (method === 'pulled' && audio) {
+      if (audio.arm()) {
+        if (next) { audio.open(); audio.hum(true); }
+        else      { audio.close(); audio.hum(false); }
+      }
+      if (navigator.vibrate) { try { navigator.vibrate(next ? 12 : 18); } catch (e) {} }
+    }
+
+    emit(next ? 'fridge_open' : 'fridge_close', {
+      method: method,
+      ms_since_load: Math.round(performance.now() - t0)
     });
   }
 
@@ -44,62 +90,81 @@
      Not a handle hitbox. Asking someone to find a 40px handle on a phone in a
      kitchen is a failure mode with no upside.
 
-     Bound on pointerup / touchend / click, NEVER pointerdown: on Android
-     Chrome a finger going down may be the start of a scroll, so the browser
-     withholds user activation until the gesture resolves as a tap. Anything
-     that later wants to make a sound needs that activation, and latching off
-     pointerdown is exactly the bug still open on the V3 neon sign.
-     See memory web_audio_user_activation_touch.                            */
-  function onPointerUp() { open('pulled'); }
-  function onKey(e) { if (e.key === 'Enter' || e.key === ' ') open('pulled'); }
+     Bound on pointerup / click, NEVER pointerdown — see the activation note in
+     fridgeAudio.js. Closing has a tighter rule than opening: a tap inside the
+     cavity must NOT close the door, or people lose the menu while reaching for
+     an option. So the close targets are the door itself and the room around
+     it, and the interior is inert. */
+  function onTap(e) {
+    var t = e.target;
+    if (t && t.closest && t.closest('.shelf a')) return;   // let the link work
+    if (t && t.closest && t.closest('.srToggle')) return;  // button has its own handler
 
-  function teardown() {
-    document.removeEventListener('pointerup', onPointerUp);
-    document.removeEventListener('touchend', onPointerUp);
-    document.removeEventListener('keydown', onKey);
+    interacted = true;
+    clearTimeout(autoTimer);
+
+    if (!isOpen) { setOpen(true, 'pulled'); return; }
+    if (t && t.closest && t.closest('.cavity')) return;    // reading, not closing
+    setOpen(false, 'pulled');
   }
 
-  document.addEventListener('pointerup', onPointerUp, { passive: true });
-  document.addEventListener('touchend', onPointerUp, { passive: true });
-  document.addEventListener('keydown', onKey);
+  document.addEventListener('pointerup', onTap, { passive: true });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    if (document.activeElement && document.activeElement.closest &&
+        document.activeElement.closest('.shelf a, .srToggle')) return;
+    interacted = true; clearTimeout(autoTimer);
+    setOpen(!isOpen, 'pulled');
+  });
 
-  /* ── Auto-open, so nobody is left staring at a closed fridge ─────────── */
-  timer = setTimeout(function () { t0 = performance.now(); open('auto'); }, 800);
+  if (srToggle) {
+    srToggle.addEventListener('click', function () {
+      interacted = true; clearTimeout(autoTimer);
+      setOpen(!isOpen, 'pulled');
+    });
+  }
+
+  /* ── Auto-open, so nobody is left staring at a closed fridge ───────────
+     Under reduced motion, immediately — the 0.8s beat exists to be watched, and
+     if the motion is switched off there is nothing to watch. */
+  if (reduce) {
+    setOpen(true, 'auto');
+  } else {
+    autoTimer = setTimeout(function () { if (!interacted) setOpen(true, 'auto'); }, 800);
+  }
 
   /* ── Measurement ──────────────────────────────────────────────────────
      On the site this becomes phCapture() from src/utils/posthog.ts.
-     Names are namespaced fridge_* on purpose — reusing the deck's
-     offmarket_report_view / card_viewed / deck_exit would silently corrupt
-     the off-market funnel metrics, which are shared between two arms and feed
-     the RL reward ledger.                                                  */
-  function emit(name, props) {
-    if (window.posthog && window.posthog.capture) window.posthog.capture(name, props);
-    if (location.search.indexOf('debug') > -1) console.log('[fridge]', name, props);
+     Namespaced fridge_* on purpose — reusing the deck's offmarket_report_view /
+     card_viewed / deck_exit would silently corrupt the off-market funnel
+     metrics, which are shared between two arms and feed the RL reward ledger. */
+  var idleTimer = null;
+  function armIdle() {
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(function () {
+      if (isOpen) emit('fridge_idle', { seconds: 15 });
+    }, 15000);
   }
-
-  var idle = null;
+  armIdle();
 
   document.addEventListener('click', function (e) {
     var a = e.target.closest && e.target.closest('.shelf a');
     if (!a) return;
-    clearTimeout(idle);
-    var shelves = Array.prototype.slice.call(document.querySelectorAll('.shelf a'));
+    clearTimeout(idleTimer);
+    var all = Array.prototype.slice.call(document.querySelectorAll('.shelf a'));
     emit('fridge_option_click', {
       href: a.getAttribute('href'),
-      shelf_index: shelves.indexOf(a) + 1,
-      ms_since_open: Math.round(performance.now() - t0)
+      shelf_index: all.indexOf(a) + 1,
+      ms_since_load: Math.round(performance.now() - t0)
     });
   });
 
-  // The failure mode to design against: door open, nothing tapped.
-  setTimeout(function () {
-    idle = setTimeout(function () { emit('fridge_idle', { seconds: 15 }); }, 15000);
-  }, 800);
-
-  // Terminal event — sendBeacon so it survives the tab closing, matching the
-  // deck_exit pattern in DiscoveryDeck.tsx:331-343.
+  /* Terminal event — sendBeacon so it survives the tab closing, matching the
+     deck_exit pattern in DiscoveryDeck.tsx:331-343. Also kill the hum, or it
+     keeps running behind a backgrounded tab. */
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState !== 'hidden') return;
-    emit('fridge_exit', { opened: opened, ms: Math.round(performance.now() - t0) });
+    if (audio) audio.hum(false);
+    emit('fridge_exit', { opened: isOpen, interacted: interacted, ms: Math.round(performance.now() - t0) });
   });
 })();
