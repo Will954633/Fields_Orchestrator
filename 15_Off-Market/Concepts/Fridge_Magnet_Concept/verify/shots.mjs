@@ -11,10 +11,13 @@ await p.goto(URL, { waitUntil: 'networkidle0' });
 for (const o of [0, 0.085, 0.35, 0.62, 1]) {
   await p.evaluate((v) => {
     const f = document.getElementById('fridge');
-    f.classList.remove('is-open');
+    f.classList.remove('is-open','is-closing');
+    // kill the transition or setting --open just animates toward it and the
+    // 120ms settle captures a frame from the middle of a 1.02s ease
+    f.style.transition = 'none';
     f.style.setProperty('--open', v);
-    document.querySelector('.door').style.animation = 'none';
-    document.querySelector('.seam').style.opacity = v === 0 ? '.55' : '0';
+    document.querySelector('.flick').style.animation = 'none';
+    document.querySelector('.flick').style.opacity = v < 0.15 ? '1' : '0';
     document.querySelector('.prompt').style.opacity = v === 0 ? '1' : '0';
   }, o);
   await new Promise(r => setTimeout(r, 120));
