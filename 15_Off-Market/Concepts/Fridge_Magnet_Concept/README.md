@@ -210,13 +210,13 @@ Total to fully open: **~2.6 s**, with the first meaningful frame immediate.
 
 | # | Phase | Duration | What happens |
 |---|---|---|---|
-| 0 | **Recognition** | 0.0 → 0.8 s | Closed door, dead centre. A child's drawing pinned up by **two of our magnets** — the same green card they just scanned. Faint specular sheen drifts across the steel. |
+| 0 | **Recognition** | 0.0 s → **the tap** | Closed door, dead centre. A child's drawing pinned up by **two of our magnets** — the same green card they just scanned. Faint specular sheen drifts across the steel. |
 | 1 | **Seal** | — | A hairline of warm light down the hinge seam. The promise: something is lit in there. |
-| 2 | **Break** | 0.8 → 0.95 s | The gasket lets go. Fast initial movement, then the door's mass takes over. |
-| 3 | **Swing** | 0.95 → 2.5 s | Heavy deceleration through to 100°. Light wedge widens across the floor. |
-| 4 | **Strike** | 1.06 → 2.2 s | **The lamp strikes and stutters** — 6 dropouts over ~1.1 s, then catches and holds. Every edge is a hard step. |
-| 5 | **Reveal** | 1.4 → 2.5 s | Shelves light in sequence, top first, on a 90 ms stagger driven by the same door angle. |
-| 6 | **Rest** | 2.5 s → | Door held open. Lamp breathes ±3% on a 6 s cycle. Compressor hum, if the tap earned audio. |
+| 2 | **Break** | tap → +0.22 s | The gasket lets go. Fast initial movement, then the door's mass takes over. |
+| 3 | **Swing** | +0.22 → +1.7 s | Heavy deceleration through to 100°. Light wedge widens across the floor. |
+| 4 | **Strike** | +0.24 → +1.4 s | **The lamp strikes and stutters** — 6 dropouts over ~1.1 s, then catches and holds. Every edge is a hard step. |
+| 5 | **Reveal** | +0.6 → +1.7 s | Shelves light in sequence, top first, on a 90 ms stagger driven by the same door angle. |
+| 6 | **Rest** | +1.7 s → | Door held open. Lamp breathes ±3% on a 6 s cycle. Compressor hum, if the tap earned audio. |
 | — | **Close** | 1.02 s | Reversed easing: you push it, the gasket *snatches* it shut. The light stays on until the door seats, then cuts. |
 
 Two deliberate choices in that table:
@@ -229,13 +229,26 @@ resolving.
 **The magnet is on the door in phase 0.** This is the whole idea and it costs one
 image. If it gets cut for time, cut something else.
 
-### Pull, or open by itself? Both — and it closes again
+### The door waits for a tap. It does not open by itself.
+
+**This changed after the first handset test, and the reason is the whole point
+of the page.** It used to auto-open at 0.8 s — which meant the single most
+important moment, the first opening, was **guaranteed silent**: no gesture had
+happened, and audible autoplay is blocked in every browser. The first sound
+anyone heard was the door *closing*. Backwards.
+
+So the open is always earned by a tap, and therefore always has the gasket
+peel, the hum starting and the haptic. Two safety nets, both silent, because a
+silent nudge is a far smaller loss than a silent reveal:
+
+| | |
+|---|---|
+| **4 s** | **Nudge** — the door cracks ~11%, lets a sliver of light out, and settles back. Says "this opens" without spending the reveal. |
+| **12 s** | **Give up** — open it anyway. Nobody who waited that long should be left with a closed box. |
 
 - The door responds to **any touch anywhere**, not a handle hitbox. Asking
   someone to find a 40 px handle on a phone in a kitchen is a failure mode with
   no upside.
-- If untouched, it **auto-opens at 0.8 s**. Nobody may be left staring at a
-  closed fridge wondering whether the page is broken.
 - **It closes again.** Tapping the room around the fridge — or the prompt below
   it, which swaps to "Close" — shuts the door. Being able to shut it and open it
   again is most of what makes the thing feel like an object rather than an
@@ -507,9 +520,11 @@ either curve or duration and the sound desynchronises.** The open easing was
 retuned to `cubic-bezier(.42,.03,.28,1)` in the process: the old curve left the
 door visually motionless for **433 ms** after a tap, which reads as a dead page.
 
-**The hum runs continuously**, open or shut — a fridge doesn't stop when you
-close the door — and lifts from 0.10 to 0.28 gain when the door opens, because
-you're then hearing into the cabinet rather than through it.
+**The hum runs continuously and at a constant level**, open or shut — a fridge
+doesn't stop when you close the door, and it doesn't get louder either. It
+briefly ducked 0.10 shut → 0.28 open on the theory that you hear into the
+cabinet; on a real phone that read as the sound **fading in and out** rather
+than as a room tone. A room tone that moves stops being a room tone.
 
 ⚠ **It cannot start before the visitor touches the screen.** Audible autoplay is
 blocked in every browser; that is policy, not a bug and not something to work
@@ -605,13 +620,22 @@ Each of these has already cost this codebase real time. None is hypothetical.
    and let the room fall away either side.
 7. **Double-scan.** iOS camera preview means people commonly scan twice. Dedupe
    in analytics or the denominator is inflated.
-8. **A pointer-driven door cannot be tested with a synthetic click.** BreakGlass
+8. **One tap must reach the handler exactly once — via more than one route.**
+   Taps are bound to `pointerup` **and** `touchend` **and** `click` behind a
+   450 ms dedupe. Redundancy, because a swallowed event strands the door shut
+   and looks like "I closed it and now it won't open"; dedupe, because without
+   it one tap toggles three times and lands back where it started, which looks
+   identical. Related: the door's three `<img>` children (drawing + two magnets)
+   are `pointer-events: none`, with `touch-callout` and `user-select` off — they
+   are the most tappable-looking things on screen, so a finger lands on an image
+   far more often than on bare steel, and it must behave the same.
+9. **A pointer-driven door cannot be tested with a synthetic click.** BreakGlass
    binds `pointerdown`/`move`/`up` and **no** `click` listener
    (`breakGlassEngine.js:268`); its README records that synthetic clicks
    silently do nothing and this has produced false "the feature is broken"
    readings more than once. If drag-to-open is built, the test must dispatch a
    real pointer sequence.
-9. **`git status` is unreliable in this repo** ([[git_local_drift_gh_api]]) —
+10. **`git status` is unreliable in this repo** ([[git_local_drift_gh_api]]) —
    verify what's actually deployed with `gh api`, and push with
    `scripts/push_website_files.py`, never a loop of `gh api contents` calls
    ([[batched_website_push_tool]]).
