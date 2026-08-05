@@ -47,6 +47,31 @@ RENOVATION_LEVEL_MAP = {
     "premium_renovation": 5,
 }
 
+def _plain(v):
+    """Unwrap a PVD field that arrived as {"value": …, "confidence": …}.
+
+    The GPT photo pass normally writes bare scalars, but occasionally emits the
+    confidence-wrapped shape instead — measured 2026-08-05 on exactly one doc of
+    12,015 carrying cladding_material (248 Easthill Drive, Robina:
+    {'value': 'render', 'confidence': 0.8}). Feeding that straight to a dict
+    lookup raises `TypeError: unhashable type: 'dict'`, and because the three
+    callers of derive_features_basic() all sit behind
+    `except Exception: traceback.print_exc()`, the home silently loses scarcity,
+    POI rarity AND positioning — i.e. its competition, reveal, value_drivers,
+    buyer and strategy cards — with nothing but stderr noise to show for it.
+
+    Returns the inner value for that shape, the value unchanged when it is
+    already hashable, and None for anything else that can't be a dict key.
+    """
+    if isinstance(v, dict):
+        v = v.get("value")
+    try:
+        hash(v)
+    except TypeError:
+        return None
+    return v
+
+
 CLADDING_MATERIAL_MAP = {
     "weatherboard": 1,
     "fibre_cement": 1,
@@ -299,7 +324,7 @@ def derive_features_basic(doc: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         if not renovation_level_raw and sv_condition in sv_condition_to_level:
             renovation_level_raw = sv_condition
 
-    cladding_raw = exterior.get("cladding_material") if exterior else None
+    cladding_raw = _plain(exterior.get("cladding_material") if exterior else None)
     cladding_level = CLADDING_MATERIAL_MAP.get(cladding_raw, None)
     if cladding_level is None:
         # Street View cladding fallback. Note the field name on SV is
