@@ -1,7 +1,9 @@
-# Competitor Capability Matrix — address-level products
+# Competitor Capability Matrix — owner-facing address products
 
-**Status:** Internal. **Compiled:** 2026-08-06. **Companion to:** `01_USER_JOBS_AND_GAPS.md`
+**Status:** Internal. **Compiled:** 2026-08-06 · **Rescoped:** 2026-08-06. **Companion to:** `01_USER_JOBS_AND_GAPS.md`
 **Purpose:** One table, maintained separately from the dossier because it will be referenced constantly and edited independently.
+
+**Scope.** Capabilities aimed at **the owner of a home that is not for sale**. Listing-side capabilities — price guides, depth tiers, search ranking — are confined to §A2 and admitted only as evidence of *who pays the incumbents*. See the SCOPE block in `01_USER_JOBS_AND_GAPS.md`.
 
 **Ownership note before reading any row.** `realestate.com.au`, `property.com.au` and `PropTrack` are **all REA Group** [P — REA FY25 / H1 FY26 ASX announcements]. `onthehouse.com.au` and `propertyvalue.com.au` are **both Cotality** (formerly CoreLogic, rebranded 24 Mar 2025). `domain.com.au` has been **CoStar-owned since 27 Aug 2025**. So the five Australian "second opinions" a homeowner might consult are **three companies**, and a consumer checking "another site" for a second view on an REA-listed property may well be checking REA's own data again.
 
@@ -9,7 +11,7 @@
 
 ---
 
-## A. Australian incumbents vs Fields
+## A1. Owner-facing capabilities — Australian incumbents vs Fields
 
 | Capability | REA (realestate + property.com.au) | Domain | Cotality (onthehouse / propertyvalue) | **Fields today** | **Fields possible** | Evidence |
 |---|---|---|---|---|---|---|
@@ -23,16 +25,27 @@
 | Show the comparable set used | ❌ | ❌ | ❌ | ◐ set shown; per-comp adjustments **not persisted** | ✅ | `GTP_market_analysis` L1051–1066 |
 | Explain why the estimate moved | ❌ tracking shows movement, never the reason | ❌ | ❌ | ❌ | ✅ **"the living answer is defensible"** | `GTP_market_analysis` L1582 |
 | Estimate-stability metric | ❌ | ❌ | ❌ | ❌ (data exists) | ✅ | `consumer_voice` §5.4 |
-| **Flag a listing as overpriced vs comparables** | ⚠ never — agents fund the platform | ⚠ | ⚠ | ❌ | ✅ **globally absent; structurally off-limits to incumbents** | `international_comparison` §5.4 |
-| Estimate remains visible once the home lists | ❌ reportedly withdrawn — *"They all just happen to hide it. Every one of them."* ⚠ **unverified** | ❌ same | n/a | ✅ | ✅ | `ADDENDUM` §3 |
-| Address-level flood / hazard | ❌ Domain publishes flood *research*, not per-listing risk | ❌ | ❌ | ◐ suburb context for Burleigh Waters | ✅ where council data allows | `international_comparison` §6.4 |
+| **Tell an owner whether a number they've been given is supportable** (agent appraisal, bank valuation) | ❌ — supplies another unexplained number | ❌ | ❌ | ◐ where comps allow | ✅ **the sharpest fit for our method** | dossier J2 |
+| Address-level flood / hazard | ❌ Domain publishes flood *research*, not address-level risk | ❌ | ❌ | ◐ suburb context for Burleigh Waters | ✅ where council data allows | `international_comparison` §6.4 |
 | Running costs (rates, water, energy) | ❌ | ❌ | ❌ | ❌ | ◐ rates derivable; energy needs a rating regime | `international_comparison` §6.3, §7 |
-| Full address-keyed listing history | ◐ undermined by "price withheld" / "contact agent" | ◐ | ◐ | ◐ | ✅ **better than Redfin** — keying to address defeats the delist-and-relist reset | `international_comparison` §7 |
-| Price shown on every listing | ◐ REA shipped an "only show properties with a price" filter (2024) ⚠ **dates one of our criticisms** | ◐ | n/a | n/a | n/a | `ADDENDUM` §5.6 |
-| Search order determined by who paid | ✅ Standard→Feature→Highlight→Premiere→Premiere+→Luxe; default sort "Featured", formula unpublished | ✅ Basic→Branded→Silver→Gold→Platinum→Platinum Edge | n/a | n/a — no advertising revenue | — | `structural_conflict` A4 |
-| Paid placement labelled to the consumer | ❌ no label found ⚠ **absence-of-evidence — verify in a browser** | ❌ same | n/a | n/a | — | `structural_conflict` A4 |
+| Full address-keyed history of the home | ◐ undermined by "price withheld" | ◐ | ◐ | ◐ | ✅ **better than Redfin** — keying to the address defeats the delist-and-relist reset | `international_comparison` §7 |
 | **Owner's use of the estimate sold as a lead** | ✅ seller leads +55% FY25; *"valuable seller leads delivered to our customers"*; Pro tier gets **36% more** | ✅ same model | ◐ | ⚠ **never — this is the positioning** | — | `structural_conflict` C3 |
 | Consumer-paid revenue line | ❌ **none exists** | ❌ | — | — | — | `structural_conflict` A1 |
+
+---
+
+## A2. Listing-side — admitted only as evidence of who pays
+
+**Not capabilities we compete on.** These rows exist because they establish the incentive structure behind everything in A1 — the argument for why an owner should not trust an incumbent about their own home. **Do not turn any of these into a Hub feature or a user job.**
+
+| Fact | REA | Domain | Why it's here |
+|---|---|---|---|
+| Search order determined by who paid | Standard→Feature→Highlight→Premiere→Premiere+→Luxe; default sort "Featured", formula unpublished | Basic→Branded→Silver→Gold→Platinum→Platinum Edge | The clearest evidenced form of "the customer is the agent" |
+| Paid placement labelled to the consumer | ❌ no label found ⚠ **absence-of-evidence — verify in a browser** | ❌ same | Ranking by payment is undisclosed at the point of use |
+| Owner's estimate withdrawn once the home lists | reportedly — *"They all just happen to hide it. Every one of them."* ⚠ **unverified** | same | The estimate disappears at the moment it matters most to the person who lives there. Owner-relevant, but a *listing* event — out of Hub scope until verified |
+| "Only show properties with a price" filter | ✅ shipped 2024 | ◐ | ⚠ **dates one of our criticisms.** Do not claim portals won't let you filter out no-price listings |
+
+**Explicitly dropped from this matrix as out of scope:** flagging a *listing* as overpriced against comparables. It remains a real, globally absent, structurally incumbent-proof capability (`international_comparison` §5.4) — but an off-market home has no asking price, so it belongs to a for-sale product, not the Hub. Recorded here so it isn't lost.
 
 ---
 
@@ -56,12 +69,12 @@
 
 Filtered to those that are (i) feasible for us, (ii) absent from Australian incumbents, and (iii) structurally hard for an agent-funded business to ship.
 
-| Rank | Capability | Why incumbents won't | Our blocker |
-|---|---|---|---|
-| **1** | **Flag a home as priced above / below its comparables** | Every major portal worldwide is funded by the agents who set those prices. Absent in **every market** | Coverage — a range exists on 44% of for-sale. Rule 5 forces gap-framing, not advice |
-| **2** | **A claim that doesn't sell you** — correction pathway, no lead resale, no contact unless asked | REA reports owner engagement to shareholders *as* seller-lead growth. They cannot give this up; it is the revenue | Requires "nobody calls unless you ask" to be an operational rule, not copy |
-| **3** | **Published, calibrated accuracy** | Their estimate accuracy is their loudest complaint and they publish nothing about it. Publishing would be publishing how wrong they are | Labels currently inverted in the backtest — **must be calibrated first** |
-| **4** | **Explain why the number moved** | Their tracking product shows movement without explanation and monetises the visit, not the answer | Not built. Historical runs exist |
+| Rank | Capability | Owner job | Why incumbents won't | Our blocker |
+|---|---|---|---|---|
+| **1** | **A claim that doesn't sell you** — correction pathway, no lead resale, no contact unless asked | J4, J6 | REA reports owner engagement to shareholders *as* seller-lead growth. They cannot give this up; it is the revenue | Requires "nobody calls unless you ask" to be an operational rule, not copy |
+| **2** | **Adjudicate a number someone else gave the owner** — show the comparable set and the adjustments | J1, J2 | A black-box AVM structurally cannot do it, and showing the working invites the accuracy question they don't answer | Coverage (7% of sold addresses); `adjusted_price` not persisted |
+| **3** | **Published, calibrated accuracy** | J1, J2 | Their estimate accuracy is their loudest complaint and they publish nothing about it. Publishing would be publishing how wrong they are | Labels currently inverted in the backtest — **must be calibrated first** |
+| **4** | **Explain why the number moved** | J3 | Their tracking product shows movement without explanation and monetises the visit, not the answer | Not built. Historical runs exist |
 
 **Deliberately excluded from this list:** crime data (withdrawn by both major US portals on fairness grounds); ownership/occupancy surfaces (zero demand evidence — 260 `who owns` autocompletes, all corporate; 0 of 4,349 Reddit posts); energy ratings (needs an assessment regime we cannot create).
 
