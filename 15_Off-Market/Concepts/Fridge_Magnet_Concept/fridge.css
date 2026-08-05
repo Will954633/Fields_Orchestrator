@@ -195,7 +195,7 @@ body {
 
 .fridge.is-open .flick {
   opacity: 0;
-  animation: strike 1.15s steps(1, end) .26s both;
+  animation: strike 1.15s steps(1, end) .24s both;
 }
 
 /* The light stays on through most of the close — a real fridge's switch only
@@ -228,7 +228,7 @@ body {
 
 /* the glow itself surges as it strikes — filter, not opacity, so it composes
    with .lamp's own slow breathe rather than fighting it */
-.fridge.is-open .lamp { animation: breathe 6s ease-in-out 1.4s infinite, surge 1.15s steps(1,end) .26s both; }
+.fridge.is-open .lamp { animation: breathe 6s ease-in-out 1.4s infinite, surge 1.15s steps(1,end) .24s both; }
 @keyframes surge {
   0%, 6%    { filter: brightness(.2); }
   7%        { filter: brightness(1.7); }
@@ -556,7 +556,13 @@ body.art-mono .artSheet { filter: grayscale(1) brightness(.86) contrast(1.02); }
 }
 .fridge.is-open {
   --open: 1;
-  transition: --open 1.7s cubic-bezier(.83,.015,.2,1);      /* opening */
+  /* .42,.03,.28,1 — NOT .83,.015,.2,1. The old curve left the door visually
+     motionless for 433ms after the tap, which reads as an unresponsive page.
+     This breaks the seal at 224ms, which is also what a real gasket does.
+     ⚠ fridgeAudio.js schedules both clips against these two curves. Change an
+     easing or a duration and the sound desynchronises from the picture — the
+     numbers are in that file's header. */
+  transition: --open 1.7s cubic-bezier(.42,.03,.28,1);      /* opening */
 }
 
 
@@ -604,6 +610,29 @@ body.art-mono .artSheet { filter: grayscale(1) brightness(.86) contrast(1.02); }
 /* ── keyboard / screen-reader toggle ──────────────────────────────────────
    Visually hidden but focusable — NOT display:none, which would remove it from
    the tab order and leave keyboard users with no way to work the door. */
+/* Ambient audio that runs continuously needs a visible way to stop it. Small,
+   low-contrast, bottom-right, out of the way of everything else. */
+.muteBtn {
+  position: fixed;
+  right: max(14px, env(safe-area-inset-right));
+  bottom: max(14px, env(safe-area-inset-bottom));
+  z-index: 100;
+  width: 38px; height: 38px;
+  display: grid; place-items: center;
+  border: 0; border-radius: 50%;
+  background: rgba(232,228,221,.06);
+  color: rgba(232,228,221,.42);
+  font: 400 15px/1 var(--font);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: color .2s ease, background .2s ease, opacity .3s ease;
+  opacity: 0;                 /* only appears once audio is actually running */
+  pointer-events: none;
+}
+.muteBtn.on { opacity: 1; pointer-events: auto; }
+.muteBtn:hover, .muteBtn:focus-visible { color: var(--m-050); background: rgba(232,228,221,.12); }
+.muteBtn:focus-visible { outline: 2px solid var(--copper); outline-offset: 2px; }
+
 .srToggle {
   position: absolute;
   width: 1px; height: 1px;
