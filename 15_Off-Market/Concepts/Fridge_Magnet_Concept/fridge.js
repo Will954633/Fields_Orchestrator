@@ -111,7 +111,7 @@
   function onTap(e) {
     var t = e.target;
     if (t && t.closest && t.closest('.shelf a')) return;   // let the link work
-    if (t && t.closest && t.closest('.srToggle, .muteBtn, .secret')) return;  // own handlers
+    if (t && t.closest && t.closest('.srToggle, .muteBtn, .secret, .who')) return;  // own handlers
 
     interacted = true;
     clearTimeout(autoTimer); clearTimeout(nudgeTimer);
@@ -178,32 +178,61 @@
 
      ?suburb=<slug> overrides both — for testing, and for the per-magnet codes
      in the scoping doc's v2 rung. */
-  var SUBURBS = {
-    'robina': 'Robina',
-    'varsity-lakes': 'Varsity Lakes',
-    'burleigh-waters': 'Burleigh Waters',
-    'burleigh-heads': 'Burleigh Heads',
-    'mermaid-waters': 'Mermaid Waters',
-    'miami': 'Miami',
-    'palm-beach': 'Palm Beach'
-  };
+  /* Only three suburbs have market pages, plus a Gold Coast aggregate for
+     everyone else. The URL slug is Title-Case ON PURPOSE: the page echoes the
+     slug straight into its own <title>, so /market-intelligence/robina renders
+     "robina Market Intelligence". Lowercase renders, it just looks broken. */
+  var SUBURBS = [
+    { key: 'robina',          slug: 'Robina',          name: 'Robina' },
+    { key: 'varsity-lakes',   slug: 'Varsity-Lakes',   name: 'Varsity Lakes' },
+    { key: 'burleigh-waters', slug: 'Burleigh-Waters', name: 'Burleigh Waters' },
+    { key: 'gold-coast',      slug: 'Gold-Coast',      name: 'the Gold Coast' }
+  ];
+  var PICK_KEY = 'fields_fridge_suburb';
+  var picker = document.getElementById('suburbPick');
 
-  function setSuburb(slug, source) {
-    var name = SUBURBS[slug];
-    if (!name) return false;
-    var eb = document.getElementById('eyebrow');
+  function findSuburb(key) {
+    for (var i = 0; i < SUBURBS.length; i++) if (SUBURBS[i].key === key) return SUBURBS[i];
+    return null;
+  }
+
+  function setSuburb(key, source) {
+    var sub = findSuburb(key);
+    if (!sub) return false;
     var a  = document.getElementById('optMarket');
     var lb = document.getElementById('optMarketLabel');
-    if (eb) eb.textContent = name;
-    if (a)  a.href = 'https://fieldsestate.com.au/market-intelligence/' + slug;
-    if (lb) lb.childNodes[0].nodeValue = "What's happening in " + name + ' ';
-    emit('fridge_suburb', { suburb: slug, source: source });
+    if (a)  a.href = 'https://fieldsestate.com.au/market-intelligence/' + sub.slug;
+    if (lb) lb.childNodes[0].nodeValue = "What's happening in " + sub.name + ' ';
+    if (picker && picker.value !== key) picker.value = key;
+    emit('fridge_suburb', { suburb: key, source: source });
     return true;
   }
 
+  /* An explicit choice outranks everything and is remembered. */
+  if (picker) {
+    picker.addEventListener('change', function (e) {
+      e.stopPropagation();
+      var v = picker.value;
+      if (!v) return;
+      try { localStorage.setItem(PICK_KEY, v); } catch (err) {}
+      setSuburb(v, 'chosen');
+    });
+    /* the picker sits inside the cavity, where taps are inert by design —
+       but a <select> must still receive its own events */
+    picker.addEventListener('pointerup', function (e) { e.stopPropagation(); });
+  }
+
+  /* Precedence: ?suburb= (testing / future per-magnet codes) > what they chose
+     last time > who my-home thinks they are > nothing, and we say "your
+     market". Never guess a suburb at somebody. */
   (function resolveSuburb() {
     var forced = q.get('suburb');
     if (forced && setSuburb(forced.toLowerCase(), 'url')) return;
+
+    var saved = null;
+    try { saved = localStorage.getItem(PICK_KEY); } catch (e) {}
+    if (saved && setSuburb(saved, 'remembered')) return;
+
     if (!window.posthog || !window.posthog.get_distinct_id) return;
     var did;
     try { did = window.posthog.get_distinct_id(); } catch (e) { return; }
@@ -218,7 +247,8 @@
         /* the resolver returns an ADDRESS slug (14-fern-street-burleigh-waters),
            so take the suburb off the tail rather than inventing a parser */
         var slug = String(d.home.slug);
-        for (var k in SUBURBS) {
+        for (var i = 0; i < SUBURBS.length; i++) {
+          var k = SUBURBS[i].key;
           if (slug.length > k.length && slug.slice(-(k.length + 1)) === '-' + k) {
             setSuburb(k, d.home.source || 'my_home');
             emit('fridge_recognised', { confidence: d.home.confidence, source: d.home.source });
