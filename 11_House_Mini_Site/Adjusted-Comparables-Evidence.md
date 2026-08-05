@@ -265,6 +265,110 @@ the pressure to fix our own range calibration, which is already an open action i
 
 ---
 
+## 7. Proposed: the cost of a listing price set without adjusted comparables (Will, 2026-08-05)
+
+**The idea.** Find real campaigns where the asking price looks like it was set by
+label-matching rather than by adjusted comparables, and show what it cost. Three
+shapes:
+
+- **Listed too high** — sold well below the asking price after a long campaign, where
+  adjusted comparables computed *at listing date* already said the price was outside
+  the evidence.
+- **Listed too low** — sold quickly at or above asking, where the comparables
+  supported more.
+- **Withdrawn** — the campaign that never produced a sale at all. Will's instinct that
+  this is the strongest case is right: it is the least ambiguous outcome.
+
+This is the consequence story rather than the method story, and it is more persuasive
+for exactly that reason.
+
+### The signal is real
+
+Sold properties in the three suburbs with at least two recorded priced events:
+
+| | n | Median days on market |
+|---|---|---|
+| Reduced the asking price | 21 | **68** |
+| Did not reduce | 11 | **37** |
+
+Campaigns that cut their price ran **84% longer**. Strongest current examples:
+
+| Property | First asked | Reduced to | Sold | Days |
+|---|---|---|---|---|
+| 16 Collingwood Avenue, Robina | $1,949,000 | $1,749,000 | $1,700,000 | **127** |
+| 2 Sugarleaf Court, Burleigh Waters | $1,595,000 | $1,390,000 | $1,330,000 | 49 |
+| 20 Tropicana Circuit, Burleigh Waters | $1,995,000 | $1,800,000 | $1,780,000 | 66 |
+
+### ⚠ The wake-up call — we already published one of these as a success story
+
+We published **"$1,700,000 in Robina: How 16 Collingwood Avenue Beat the Suburb Median
+by 11.8%"**. That home was first asked at **$1,949,000**, cut to $1,749,000, and sold
+for $1,700,000 after **127 days**. The published article:
+
+- never mentions the 127-day campaign
+- never mentions the original $1,949,000 asking price
+- refers to $1,749,000 as "the guide" (9 mentions of "guide"), i.e. treats the
+  *reduced* price as if it were the original
+
+Every sentence is arguably true and the overall impression is wrong. The current
+article format can turn a struggling campaign into a win, because it only ever sees
+the final guide. **That is the best argument for building this concept**, and it is
+also an immediate fix to make in the How It Sold pipeline: read `price_history`, not
+just `listing_price`.
+
+### Data available
+
+- `price_history[]` on each doc: `{price_text, price_numeric, recorded_at, run_id,
+  event: initial|change}`. Present on 270/1,549 sold docs; **32** currently have two
+  or more *priced* events (many first events are "Auction" or "Expressions of
+  Interest" with a null price).
+- **64 withdrawn** properties across the three suburbs, **48** with at least one
+  priced event. Note `days_on_market` is null on withdrawn docs — campaign length must
+  be derived from `price_history` timestamps (first `recorded_at` to last seen).
+
+### ⚠ Constraints — this one has the most ways to go wrong
+
+**1. The sample is small and time-limited, but it grows.** Price tracking only began
+around March 2026, so n=32 is five months of accrual, not a ceiling. This is a
+"instrument now, publish in six months" concept. It also means the price-history
+collector must not be allowed to silently stop.
+
+**2. The comparables must be computed as at the LISTING date — not the sale date.**
+Different cutoff from §4. Claiming "the comparables already said this was too high"
+requires the comp set to contain only sales before the property was *listed*.
+`sold_before_subject()` would need the listing date passed in instead.
+
+**3. Our own error rate sets the bar for what counts as a miss.** At 11–12% MAE we
+cannot call an 8% overprice a mistake — it is inside our noise. Only gaps well outside
+our own error (say 20%+) are defensible, and the article must state our error rate in
+the same breath.
+
+**4. Pre-commit the selection rule or this is cherry-picking.** Hunting for cases where
+our method looks prescient, and publishing only those, is the fastest way to destroy
+the credibility the rest of this document is built on. Define the rule first (e.g.
+"every sold or withdrawn property in the band with ≥2 priced events"), run it over
+everything, and report how often our comparables *failed* to anticipate the outcome.
+
+**5. This one has real legal and relationship exposure.** An article saying a named
+address was overpriced is implicitly criticising an identifiable agent and agency, and
+touches a vendor's financial affairs. There is currently **no vendor or agent privacy
+rule anywhere in the editorial prompts** — this concept makes that gap acute. Before
+building: decide whether properties are de-identified (suburb and type only), get a
+view on naming agencies, and keep the mindset brief's framing — the angle is the
+pricing evidence, never a judgement of the people. "Be fair to the vendor. Circumstances
+change."
+
+### Suggested sequence
+
+1. Fix the How It Sold pipeline to read `price_history` so current articles stop
+   presenting a reduced price as the original guide. Cheap, and it removes an active
+   accuracy problem.
+2. Add a listing-date comp cutoff.
+3. Run the full pre-committed set, measure the hit rate honestly, and only then decide
+   whether there is an article.
+
+---
+
 ## Related
 
 - `scripts/valuation_backtest.py` — the accuracy harness and the safe comp-set builder
