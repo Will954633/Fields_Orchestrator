@@ -444,23 +444,62 @@ composition rescales together.
 | 9 | Silhouette shelf items (bottle, jar, carton) | Inline SVG paths | ~2 KB ea | Depth and life at the edges of frame. Silhouettes only — no detail, no colour. |
 | 10 | Handwritten "note under a magnet" | SVG | ~4 KB | The natural treatment for the **personalised** shelf at v1.5. Charming precisely because it's the one hand-made thing. |
 
-### Audio — **synthesised, zero bytes**
+### Audio — **Will's own fridge, recorded**
 
-No sound files. `fridgeAudio.js` builds all three events in Web Audio, which is
-how the rest of this site does sound (`glass-audio.js`, `whaleAudio.ts`,
-`powerAudio.js`). Nothing to license, nothing to download, and the timbre is
-tunable without a re-export.
+The synthesised version is gone. Will recorded his actual fridge; the raw files
+are in `assets/source/` and `assets/build_audio.sh` turns them into web assets.
 
-| Event | How it's built | Why |
+| Ships as | From | Size |
 |---|---|---|
-| **Open** | Band-passed noise sweeping 1500→320 Hz, then a 92→46 Hz sine thump | The gasket *peels* first and the mass releases second. Getting that order right matters more than the timbre. |
-| **Close** | 130→42 Hz impact + a high-passed click transient, then the seal sucking in behind it | Heavier and quicker. The impact is the loudest thing on the page. |
-| **Rest** | 99.5 Hz sawtooth through a 220 Hz lowpass, gain 0.014 | The compressor. Deliberately near-inaudible — it should register as "the room isn't silent", never as a tone. |
+| `fridge-open.m4a` — the gasket peeling off the frame | `fridge_opening.m4a` (6.19 s) | 11 KB |
+| `fridge-close.m4a` — the door landing, seal snatching shut | `fridge_closing.m4a` (5.59 s) | 13 KB |
+| `fridge-hum.m4a` — the compressor, **seamless 4 s loop** | `Fridge Running.m4a` (10.97 s) | 42 KB |
 
-⚠ **The auto-open is silent, and must stay silent.** No gesture has happened, so
-there is no user activation; on Android the context would be created without it,
-report `state:"running"`, and emit nothing — with no way for us to tell. Sound
-belongs to the pull. See §10.1.
+Three things the processing had to solve, none of them obvious:
+
+**1. The events are buried in silence.** Measured with a 5 ms RMS envelope, not
+guessed: the open transient peaks at **1.930 s** into its recording and the
+close impact at **2.160 s**. Each door event is under 0.4 s. Shipping the 6 s
+files would put half a second between the tap and the sound.
+
+**2. The hum recording ramps in level** end to end — mic AGC settling — so the
+first half is unusable as a bed and a naive loop pumps. We take the steady tail
+from 6 s, even it with `dynaudnorm`, then build a genuinely seamless loop: for a
+loop of length *L* from a source of *L+C*, `acrossfade(S[C..L+C], S[0..C], d=C)`
+ends in a crossfade into `S[0..C]`, whose tail lands on `S[C]` — exactly where
+the output begins. **Verified: the wrap-point sample delta is 1, against a
+median step of 107 inside the loop.** No click.
+
+**3. The sounds are scheduled, not fired.** Both clips have their transient in
+the middle, and the door takes over a second to move — so playing either on the
+tap desynchronises it from the picture. Solved from the CSS easing curves:
+
+| | transient is | door reaches | so the clip starts at |
+|---|---|---|---|
+| Open | 0.130 s into the clip | seal breaks at 0.224 s | **0.094 s** after the tap |
+| Close | 0.060 s into the clip | seats at 1.015 s | **0.955 s** after the tap |
+
+Fire the close sound on the tap and you hear the slam a full second before the
+door arrives. ⚠ **These numbers are solved against the two CSS easings — change
+either curve or duration and the sound desynchronises.** The open easing was
+retuned to `cubic-bezier(.42,.03,.28,1)` in the process: the old curve left the
+door visually motionless for **433 ms** after a tap, which reads as a dead page.
+
+**The hum runs continuously**, open or shut — a fridge doesn't stop when you
+close the door — and lifts from 0.10 to 0.28 gain when the door opens, because
+you're then hearing into the cabinet rather than through it.
+
+⚠ **It cannot start before the visitor touches the screen.** Audible autoplay is
+blocked in every browser; that is policy, not a bug and not something to work
+around. What we *can* do, and do: create the context and decode all three clips
+on load (a context made without a gesture starts suspended, and `decodeAudioData`
+works fine suspended), so the hum begins the instant they first touch rather
+than a fetch later. The 0.8 s auto-open is therefore **silent by design** — no
+gesture has happened, so on Android the context would report `running` and emit
+nothing, with no way for us to detect it.
+
+Ambient audio that runs continuously needs an off switch, so there's a small
+mute control bottom-right. It only appears once audio is actually running.
 
 ### Not needed — worth saying explicitly
 
@@ -782,11 +821,15 @@ is entirely possible the answer is no.
 | `assets/magnet.webp` | 8.5 KB. Downscale of `Fields_BusinessCard_90x55_QR_GREEN_300dpi.png`. |
 | `assets/grain.png` | 12 KB, 128×128 tileable luminance noise. Anti-banding. |
 | `verify/shots.mjs` | Renders five frozen door angles. Geometry checks. |
-| `fridgeAudio.js` | All three door sounds, synthesised. No audio files. |
+| `fridgeAudio.js` | Loads, schedules and ducks the three recordings. |
+| `assets/build_audio.sh` | Raw recordings → trimmed, normalised, seamlessly-looped web audio. |
+| `assets/source/*.m4a` | **Will's original recordings.** Never served; the only copies besides GitHub. |
+| `assets/fridge-{open,close,hum}.m4a` | What ships. 66 KB total. |
 | `assets/build_artwork.py` | Generates the drawing. Re-run it for a different one (change the seed). |
 | `assets/artwork.svg` | The drawing. Replaceable with a real photo. |
 | `verify/live.mjs` | Real 3-second run + reduced-motion emulation. **This is the one that catches sequence bugs.** |
 | `verify/toggle.mjs` | Open → close → reopen, plus the "a tap inside must not close it" rule. |
+| `verify/audio.mjs` | Files fetch, decode, hum arms on gesture, ducks with the door, mutes. |
 | `verify/*.png` | Output, regenerated — not source. |
 | `README.md` | This document |
 
