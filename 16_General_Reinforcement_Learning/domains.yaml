@@ -8,3 +8,4 @@ domains:
   articles: { sensor: articles_signal.py, sphere: upstream, status: live   , note: "topic selection by conversion (M2b)" }
   onsite:   { sensor: onsite_signal.py,   sphere: onsite,   status: live   , note: "per-user hot-lead surfacing (M3)" }
   conductor: { sensor: conductor.py,     sphere: meta,     status: live,      note: "NEW Samantha — meta-conductor agent over all domains + Will inbox" }
+  ops:      { sensor: ops_signal.py,     sphere: meta,     status: live,      note: "health-board triage — Process Registry + Pipeline Processes; STANDALONE runner ops_cycle.sh on Opus 5, not rl_cycle.sh" }
