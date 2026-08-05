@@ -165,6 +165,70 @@
     });
   }
 
+  /* ── Whose fridge is this? ────────────────────────────────────────────
+     The suburb used to be hardcoded to Burleigh Waters, which was arbitrary and
+     wrong for two thirds of the target market. There is no suburb-neutral
+     market page either — /market-intelligence 301s to Robina, which is just
+     somebody else's arbitrary choice.
+
+     So: ask. /api/v1/my-home is read-only and address-only, and recognises
+     anyone who has used Analyse Your Home or landed on their own /off-market
+     page from Google. If it resolves we name their suburb; if it doesn't we say
+     "your market" and let the site pick. Never guess a suburb at them.
+
+     ?suburb=<slug> overrides both — for testing, and for the per-magnet codes
+     in the scoping doc's v2 rung. */
+  var SUBURBS = {
+    'robina': 'Robina',
+    'varsity-lakes': 'Varsity Lakes',
+    'burleigh-waters': 'Burleigh Waters',
+    'burleigh-heads': 'Burleigh Heads',
+    'mermaid-waters': 'Mermaid Waters',
+    'miami': 'Miami',
+    'palm-beach': 'Palm Beach'
+  };
+
+  function setSuburb(slug, source) {
+    var name = SUBURBS[slug];
+    if (!name) return false;
+    var eb = document.getElementById('eyebrow');
+    var a  = document.getElementById('optMarket');
+    var lb = document.getElementById('optMarketLabel');
+    if (eb) eb.textContent = name;
+    if (a)  a.href = 'https://fieldsestate.com.au/market-intelligence/' + slug;
+    if (lb) lb.childNodes[0].nodeValue = "What's happening in " + name + ' ';
+    emit('fridge_suburb', { suburb: slug, source: source });
+    return true;
+  }
+
+  (function resolveSuburb() {
+    var forced = q.get('suburb');
+    if (forced && setSuburb(forced.toLowerCase(), 'url')) return;
+    if (!window.posthog || !window.posthog.get_distinct_id) return;
+    var did;
+    try { did = window.posthog.get_distinct_id(); } catch (e) { return; }
+    if (!did || did.length < 8) return;
+    var tok = '';
+    try { tok = localStorage.getItem('fields_device_token') || ''; } catch (e) {}
+    fetch('/api/v1/my-home?distinct_id=' + encodeURIComponent(did) +
+          (tok ? '&device_token=' + encodeURIComponent(tok) : ''))
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!d || !d.ok || !d.home || !d.home.slug) return;
+        /* the resolver returns an ADDRESS slug (14-fern-street-burleigh-waters),
+           so take the suburb off the tail rather than inventing a parser */
+        var slug = String(d.home.slug);
+        for (var k in SUBURBS) {
+          if (slug.length > k.length && slug.slice(-(k.length + 1)) === '-' + k) {
+            setSuburb(k, d.home.source || 'my_home');
+            emit('fridge_recognised', { confidence: d.home.confidence, source: d.home.source });
+            return;
+          }
+        }
+      })
+      .catch(function () { /* never let recognition break the page */ });
+  })();
+
   /* ── The secret door ──────────────────────────────────────────────────
      A small unlabelled button on the inside of the door. Press it and the
      false back of the fridge hinges down, the Fields homepage is behind it,
