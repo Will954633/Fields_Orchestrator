@@ -36,8 +36,8 @@ WEB  = "/home/fields/Feilds_Website/01_Website"
 
 # What ships. Deliberately NOT: assets/source/ (Will's raw recordings),
 # build_*.py|sh, verify/, README.md.
-ASSETS = ["grain.png", "magnet.webp", "artwork.svg",
-          "fridge-open.m4a", "fridge-close.m4a", "fridge-hum.m4a"]
+ASSETS = ["grain.png", "magnet.webp", "artwork.svg", "fields-icon-mask.png", "home.webp",
+          "fridge-open.m4a", "fridge-close.m4a", "fridge-latch.m4a", "fridge-hum.m4a"]
 CODE   = ["fridge.css", "fridge.js", "fridgeAudio.js"]
 
 POSTHOG = """
