@@ -1,0 +1,24 @@
+# MongoDB log rotation.
+#
+# Added 2026-08-05. There was NO rotation config at all — mongod.conf sets
+# logAppend:true with nothing pruning it, so mongod.log grew unbounded from
+# 12 Apr to 5.0 GB on a boot disk that was 77% full.
+#
+# copytruncate (rather than the usual rename + SIGUSR1) is deliberate:
+# applying mongod.conf's `logRotate: reopen` needs a mongod restart, and this
+# mongod backs the live website. copytruncate rotates with no signal and no
+# restart. The tradeoff is a small race where log lines written during the
+# copy can be lost — acceptable for this log, and the file is now small enough
+# that the copy is near-instant.
+/var/log/mongodb/mongod.log {
+    daily
+    rotate 7
+    maxsize 500M
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+    su mongodb mongodb
+    create 600 mongodb mongodb
+}
