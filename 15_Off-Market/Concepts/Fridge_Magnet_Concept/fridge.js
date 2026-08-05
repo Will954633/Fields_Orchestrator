@@ -158,6 +158,26 @@
      Namespaced fridge_* on purpose — reusing the deck's offmarket_report_view /
      card_viewed / deck_exit would silently corrupt the off-market funnel
      metrics, which are shared between two arms and feed the RL reward ledger. */
+  /* The scan itself is only observable as an arrival on this page, so
+     fridge_land is the denominator for everything else. Attribution is
+     REGISTERED rather than carried in the URL: /fridge is now the landing page
+     itself, not a 301 that appends utm_*, which saves a round trip on exactly
+     the connection that matters (a kitchen, on 4G). PostHog filters registered
+     super properties identically to parsed ones. */
+  if (window.posthog && window.posthog.register) {
+    window.posthog.register({
+      utm_source: 'fridge_magnet',
+      utm_medium: 'print',
+      utm_campaign: 'fridge_magnet_bizcard',
+      fridge_arm: 'v1'
+    });
+  }
+  emit('fridge_land', {
+    reduced_motion: reduce,
+    referrer: document.referrer || null,
+    suburb: (document.querySelector('.eyebrow') || {}).textContent || null
+  });
+
   var idleTimer = null;
   function armIdle() {
     clearTimeout(idleTimer);
