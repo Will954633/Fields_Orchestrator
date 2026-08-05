@@ -105,6 +105,11 @@ def target_suburbs(gc=None):
 # Crossing it raises -> status=error on the Systems Health Process Registry.
 COVERAGE_GAP_TOLERANCE = 25
 
+# Decks missing `intro_tokens` (no matrix intro — the page opens cold on card 00).
+# Steady state is 0 now that tokens are written at build time; a small allowance
+# absorbs per-home token failures without turning the whole job red.
+INTRO_GAP_TOLERANCE = 50
+
 # Mirror generate-sitemap.mjs getOffMarketUrls() EXACTLY so deck coverage == index.
 NON_HOUSE_TYPES = [
     "Townhouse", "Apartment", "Apartment / Unit / Flat", "Unit", "Flat",
@@ -140,6 +145,55 @@ def indexed_query():
              "sold_date": {"$lte": cutoff}},
         ],
     }
+
+
+def reachable_query():
+    """Every off-market home a PERSON can reach, indexed or not.
+
+    indexed_query() is deliberately the exact sitemap mirror, and its sale-history
+    `$or` is an INDEXING rule: getOffMarketUrls() only submits homes with a
+    recorded sale. But the deck builder never reads sale history at all (no
+    reference to `transactions` in emit_json.py or fact_bundle.py), so that
+    clause was excluding ~8.6k homes the deck renders perfectly well — and
+    /off-market/<slug> stays reachable for every one of them via QR, direct mail,
+    an ad or a manual lookup. Those visitors were served the pre-V3 classic page
+    (found 2026-08-05 on 34 Banksia Broadway, which has an empty transactions
+    array while every neighbour has sales).
+
+    Dropping only the `$or` and keeping every other filter means these homes get
+    decks WITHOUT entering the sitemap: generate-sitemap.mjs is untouched, so they
+    stay noindex exactly as before. Nothing about what Google sees changes.
+
+    Kept separate from indexed_query() on purpose. That function feeds the
+    COVERAGE_GAP_TOLERANCE assertion, whose whole meaning is "indexed → deck";
+    widening it in place would silently redefine the invariant that caught the
+    2026-07-29 Nerang drift. Two queries, two jobs.
+    """
+    q = indexed_query()
+    q.pop("$or", None)
+    # STREET-LEVEL RECORDS, not homes. Dropping the sale-history clause also drops
+    # the thing that was incidentally excluding them: a cadastral row for a whole
+    # street ("cheltenham-drive-robina", "laurel-oak-drive-robina-2") has no
+    # transactions, so the `$or` filtered it out for free. 407 of them surface in
+    # the reachable set and ZERO in the indexed set — measured, not assumed.
+    # A deck for one opens "We found your home." over a street name with no house
+    # number, and its intro has no tier-3 grid to close in on. Require a leading
+    # house number. Deliberately here and not in indexed_query(), which must stay
+    # a byte-for-byte mirror of getOffMarketUrls().
+    q["url_slug"] = dict(q.get("url_slug") or {}, **{"$regex": r"^\d"})
+    return q
+
+
+def reachable_homes():
+    """Same shape as indexed_homes(), over the wider reachable set."""
+    gc = _gc()
+    q = reachable_query()
+    for c in target_suburbs(gc):
+        for r in gc[c].find(q, {"url_slug": 1, "enriched_data.last_enriched": 1}):
+            slug = r.get("url_slug")
+            if not slug:
+                continue
+            yield slug, (r.get("enriched_data") or {}).get("last_enriched"), c
 
 
 def indexed_homes():
@@ -221,7 +275,7 @@ def _build_loop(todo, tag=""):
     return built, failed, int(time.time() - t0)
 
 
-def run(limit=None, rebuild_all=False, dry_run=False, shard=None):
+def run(limit=None, rebuild_all=False, dry_run=False, shard=None, reachable=False):
     # shard = (i, N): process only homes whose position ≡ i (mod N). Lets us run
     # N parallel processes (each its own Mongo client — separate processes, no
     # fork) to cut the initial ~14.6k backfill from latency-bound hours to ~1/N.
@@ -237,13 +291,18 @@ def run(limit=None, rebuild_all=False, dry_run=False, shard=None):
         return
     with job_run("offmarket_discovery_nightly", cadence_hours=24,
                  title="Off-Market Discovery Deck (full indexed coverage)") as beat:
+        # `homes` stays the INDEXED set — the coverage assertion below is defined
+        # on it and must keep meaning "indexed → deck". --reachable only widens
+        # what gets BUILT (see reachable_query), never what gets asserted.
         homes = list(indexed_homes())
+        build_pool = list(reachable_homes()) if reachable else homes
         have = existing_generated_at()
-        todo = [(s, le, sub) for (s, le, sub) in homes if _needs_build(s, le, have, rebuild_all)]
+        todo = [(s, le, sub) for (s, le, sub) in build_pool if _needs_build(s, le, have, rebuild_all)]
         if limit:
             todo = todo[:limit]
         total_indexed = len(homes)
-        print(f"indexed={total_indexed}  have_docs={len(have)}  to_build={len(todo)}"
+        print(f"indexed={total_indexed}  reachable={len(build_pool) if reachable else '-'}  "
+              f"have_docs={len(have)}  to_build={len(todo)}"
               + (f"  (capped {limit})" if limit else ""), file=sys.stderr)
         if dry_run:
             beat.detail = f"dry-run: {len(todo)} to build of {total_indexed} indexed"
@@ -271,15 +330,32 @@ def run(limit=None, rebuild_all=False, dry_run=False, shard=None):
         beat.detail = (f"built {built}, failed {failed}; "
                        f"{len(indexed_slugs) - len(missing)}/{len(indexed_slugs)} indexed have decks"
                        + (f"; {len(missing)} MISSING ({sample})" if missing else ""))
+        # INTRO-TOKENS ASSERTION (2026-08-05) — a deck without `intro_tokens`
+        # silently skips the matrix intro and opens cold on card 00. Nothing
+        # watched this until a newly-built home shipped intro-less and it was
+        # caught by eye, so it gets a number here. Steady state is 0: tokens are
+        # now written at creation by ODB._write_intro_tokens(); anything above
+        # the tolerance means that producer has broken again rather than a
+        # handful of per-home failures.
+        no_intro = ODB._mongo().count_documents({"intro_tokens": {"$exists": False}})
         beat.metrics = {"indexed": total_indexed, "built": built, "failed": failed,
                         "coverage": cov, "missing": len(missing), "seconds": dt,
+                        "no_intro_tokens": no_intro,
                         "suburbs": target_suburbs(),
                         "frozen": frozen_suburbs()}
+        if no_intro:
+            beat.detail += f"; {no_intro} deck(s) w/o intro tokens"
         if len(missing) > COVERAGE_GAP_TOLERANCE:
             raise RuntimeError(
                 f"off-market deck coverage gap: {len(missing)} indexed homes have no "
                 f"discovery doc and are serving the OLD classic page (e.g. {sample}). "
                 f"Suburbs built: {', '.join(target_suburbs())}.")
+        if no_intro > INTRO_GAP_TOLERANCE:
+            raise RuntimeError(
+                f"off-market intro-token gap: {no_intro} decks have no intro_tokens and "
+                f"open cold on card 00 instead of playing the matrix intro. Repair with "
+                f"Page_Redesign_V3/intro/backfill_intro_tokens.py, then find why "
+                f"_write_intro_tokens() stopped writing them at build time.")
 
 
 if __name__ == "__main__":
@@ -288,9 +364,14 @@ if __name__ == "__main__":
     ap.add_argument("--rebuild-all", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--shard", default=None, help='"i/N" — build only homes where index%%N==i (parallel workers)')
+    ap.add_argument("--reachable", action="store_true",
+                    help="build every off-market home a person can reach, not just the "
+                         "sitemap-indexed set (adds homes with no recorded sale; they stay "
+                         "noindex — see reachable_query)")
     args = ap.parse_args()
     shard = None
     if args.shard:
         i, N = args.shard.split("/")
         shard = (int(i), int(N))
-    run(limit=args.limit, rebuild_all=args.rebuild_all, dry_run=args.dry_run, shard=shard)
+    run(limit=args.limit, rebuild_all=args.rebuild_all, dry_run=args.dry_run, shard=shard,
+        reachable=args.reachable)
