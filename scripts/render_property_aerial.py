@@ -50,7 +50,11 @@ BRAND = {
     "gold":   (0xD2, 0x8C, 0x5E),      # --gold          — the deck's warm gold
     "copper": (0xB7, 0x67, 0x49),      # --fields-copper — the deepest of the three
 }
-LOGO = Path(ORCH) / "templates" / "fields-logo-white.png"
+# The real Fields mark. Birch (light) on the photo: Grass is a dark green and
+# disappears against a dark aerial, which is the same legibility problem that
+# ruled out copper for the boundary. The page header uses Grass, on the birch
+# background where it belongs.
+LOGO = Path(ORCH) / "00_Run_Commands" / "Logo_Files" / "logo_pack" / "2-Birch" / "\u2022 PNG" / "2-Fields-FullName-Birch.png"
 TILE = 256
 
 
