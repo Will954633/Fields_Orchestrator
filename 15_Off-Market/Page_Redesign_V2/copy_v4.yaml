@@ -46,6 +46,23 @@ card_01_range:
     We hold its land size and its last recorded sale, but not enough of the rest to
     stand behind a range. A range built without it would look exactly like one built
     with it, which is the problem.
+  # Out-of-envelope suppression (2026-08-06). DISTINCT from no_range_reason
+  # above: that one is for thin data. This one is the opposite — we hold plenty
+  # on this home, and the METHOD cannot use it. Saying "not enough data" here
+  # would be false and would blame the home for a limit of ours.
+  no_range_envelope_intro: "We're not putting a range on this home."
+  no_range_envelope_reason: >
+    Our comparable-sales method is built for detached houses between $1 million and
+    $2 million, where enough genuinely similar sales exist to adjust between. The sales
+    around this home place it outside that band.
+  no_range_envelope_why: >
+    Outside it the method has too few close comparisons to work from and drifts toward
+    the middle of the market — so it would return a confident-looking figure built on
+    thinner evidence than the figure implies. We would rather show you the sales and
+    the adjustments and let them speak, than publish a number we cannot stand behind.
+  no_range_envelope_close: >
+    The comparable sales are below, with every adjustment itemised. That part does not
+    change.
   opens: "How did you get to that?"
 
 card_02_evidence:
@@ -99,9 +116,16 @@ card_05_method:
   #
   # Median AND mean, deliberately: the median describes the reader's home, the
   # mean carries the tail. Quoting the median alone is the flattering half.
-  # SIGNED OFF by Will 2026-08-06.
+  # SIGNED OFF by Will 2026-08-06 — but ⚠ CORRECTED IMMEDIATELY AFTER.
+  # The signed wording said "333 homes in these three suburbs". It was 333
+  # homes in ROBINA ONLY: `--limit 400` sliced the first 400 candidates and
+  # they were all Robina (the summary's own `by_suburb` has a single key).
+  # Robina is not a neutral choice — the 2026-06 run had Robina at 11.1% MAE
+  # and Burleigh Waters at 13.7%, our worst suburb, so a Robina-only figure
+  # flatters us. Varsity Lakes + Burleigh Waters are being backtested now;
+  # widen the claim back to three suburbs only once that lands.
   error_rate: >
-    Tested against 333 homes in these three suburbs that have since sold: half the time
+    Tested against 333 homes in Robina that have since sold: half the time
     the estimate landed within 9.3% of the eventual sale price, and the average miss was
     12.3%. Those homes sold, which this one has not — so treat it as the method's track
     record, not a promise about this address.
