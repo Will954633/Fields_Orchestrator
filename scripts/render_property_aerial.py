@@ -54,7 +54,7 @@ BRAND = {
 # disappears against a dark aerial, which is the same legibility problem that
 # ruled out copper for the boundary. The page header uses Grass, on the birch
 # background where it belongs.
-LOGO = Path(ORCH) / "00_Run_Commands" / "Logo_Files" / "logo_pack" / "2-Birch" / "\u2022 PNG" / "2-Fields-FullName-Birch.png"
+LOGO = Path(ORCH) / "00_Run_Commands" / "Logo_Files" / "logo_pack" / "2-Birch" / "\u2022 PNG" / "5-Fields-Icon-Birch.png"
 TILE = 256
 
 
@@ -188,7 +188,11 @@ def stamp_logo(img, scale, opacity=0.55):
     if not LOGO.exists():
         return img
     logo = Image.open(LOGO).convert("RGBA")
-    target_w = int(img.size[0] * 0.20)
+    # ⚠ The mark is the square ICON now, not the wordmark. Sizing to a share of
+    # the image WIDTH (which suited a 3.3:1 wordmark) would render it about five
+    # times too large. Size off the image HEIGHT so the stamp stays constant
+    # whatever aspect the aerial is rendered at.
+    target_w = int(img.size[1] * 0.115)
     logo = logo.resize((target_w, max(1, int(logo.size[1] * target_w / logo.size[0]))),
                        Image.LANCZOS)
     a = logo.split()[3].point(lambda v: int(v * opacity))
