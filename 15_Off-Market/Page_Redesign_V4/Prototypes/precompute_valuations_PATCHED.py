@@ -1418,18 +1418,31 @@ def calculate_adjustments(subject_features, comp_features, comp_price, rates):
         }
 
     # Pool adjustment (binary: has pool vs no pool)
-    s_pool = 1 if subject_features.get('pool_present') else 0
-    c_pool = 1 if comp_features.get('pool_present') else 0
-    pool_diff = s_pool - c_pool
-    pool_rate = rates.get('per_pool', 50000)
-    pool_dollars = round(pool_diff * pool_rate)
-    adjustments['pool'] = {
-        'subject_value': s_pool,
-        'comp_value': c_pool,
-        'diff': pool_diff,
-        'rate': pool_rate,
-        'dollars': pool_dollars,
-    }
+    # ⚠ UNKNOWN != NO POOL. `pool_present` comes from the GPT photo analysis; 16%
+    # of off-market houses have never been analysed, and 45.5% of those that HAVE
+    # been analysed do have a pool. Treating unknown as False penalised roughly
+    # 894 homes the full pool rate (~$75k) against every comparable that has one —
+    # the same defect class as the zero-bedroom default fixed the same day.
+    # Skip the adjustment entirely when either side is unknown.
+    s_pool_raw = subject_features.get('pool_present')
+    c_pool_raw = comp_features.get('pool_present')
+    if s_pool_raw is None or c_pool_raw is None:
+        adjustments['pool'] = {
+            'subject_value': s_pool_raw, 'comp_value': c_pool_raw, 'diff': 0,
+            'rate': rates.get('per_pool', 50000), 'dollars': 0, 'skipped': True,
+        }
+    else:
+        s_pool = 1 if s_pool_raw else 0
+        c_pool = 1 if c_pool_raw else 0
+        pool_diff = s_pool - c_pool
+        pool_rate = rates.get('per_pool', 50000)
+        adjustments['pool'] = {
+            'subject_value': s_pool,
+            'comp_value': c_pool,
+            'diff': pool_diff,
+            'rate': pool_rate,
+            'dollars': round(pool_diff * pool_rate),
+        }
 
     # Storey adjustment (structural premium beyond floor area)
     s_stories = subject_features.get('number_of_stories') or 1
@@ -2782,7 +2795,8 @@ def basic_features(doc):
     # Pool and storey count from GPT photo analysis
     outdoor = pvd.get('outdoor', {})
     overview = pvd.get('property_overview', {})
-    pool_present = outdoor.get('pool_present', False) if outdoor else False
+    # None when the photo analysis never ran — see calculate_adjustments().
+    pool_present = outdoor.get('pool_present') if outdoor else None
     number_of_stories = overview.get('number_of_stories') if overview else None
     # Fallback storey count from floor plan analysis
     if not number_of_stories:
@@ -2818,7 +2832,7 @@ def basic_features(doc):
         'car_spaces': doc.get('car_spaces') or doc.get('carspaces') or doc.get('parking'),
         'floor_area_sqm': floor_area,
         'land_size_sqm': land_size,
-        'pool_present': bool(pool_present),
+        'pool_present': (None if pool_present is None else bool(pool_present)),
         'number_of_stories': number_of_stories,
         'renovation_level': renovation_level,
         'renovation_level_raw': renovation_level_raw,
@@ -3308,7 +3322,7 @@ def precompute_property_valuation(db, subject_doc, listings_coll, sold_by_suburb
                        else subject_doc.get('carspaces')),
         'condition_score': subject_bd['inputs'].get(
             'interior.overall_interior_condition_score', 5),
-        'pool_present': subject_basic.get('pool_present', False),
+        'pool_present': subject_basic.get('pool_present'),   # None = unknown
         'number_of_stories': subject_basic.get('number_of_stories'),
         'renovation_level': subject_basic.get('renovation_level', 3),
         'water_views': subject_basic.get('water_views', False),
@@ -3353,7 +3367,7 @@ def precompute_property_valuation(db, subject_doc, listings_coll, sold_by_suburb
                 'car_spaces': basic.get('car_spaces') or 0,
                 'condition_score': comp_bd_inputs.get(
                     'interior.overall_interior_condition_score', 5),
-                'pool_present': basic.get('pool_present', False),
+                'pool_present': basic.get('pool_present'),   # None = unknown
                 'number_of_stories': basic.get('number_of_stories'),
                 'renovation_level': basic.get('renovation_level', 3),
                 'water_views': basic.get('water_views', False),
