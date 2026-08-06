@@ -71,7 +71,7 @@ Filtered to those that are (i) feasible for us, (ii) absent from Australian incu
 
 | Rank | Capability | Owner job | Why incumbents won't | Our blocker |
 |---|---|---|---|---|
-| **1** | **A claim that doesn't sell you** — correction pathway, no lead resale, no contact unless asked | J4, J6 | REA reports owner engagement to shareholders *as* seller-lead growth. They cannot give this up; it is the revenue | Requires "nobody calls unless you ask" to be an operational rule, not copy |
+| **1** | **A claim that doesn't sell you on** — correction pathway, no lead resale | J4, J6 | REA reports owner engagement to shareholders *as* seller-lead growth, and Pro-tier agents receive 36% more. They cannot give this up; it is the revenue. **Fields is the agency, so nobody else is handed the address** | None — this survives the lead model intact |
 | **2** | **Adjudicate a number someone else gave the owner** — show the comparable set and the adjustments | J1, J2 | A black-box AVM structurally cannot do it, and showing the working invites the accuracy question they don't answer | Coverage (7% of sold addresses); `adjusted_price` not persisted |
 | **3** | **Published, calibrated accuracy** | J1, J2 | Their estimate accuracy is their loudest complaint and they publish nothing about it. Publishing would be publishing how wrong they are | Labels currently inverted in the backtest — **must be calibrated first** |
 | **4** | **Explain why the number moved** | J3 | Their tracking product shows movement without explanation and monetises the visit, not the answer | Not built. Historical runs exist |
