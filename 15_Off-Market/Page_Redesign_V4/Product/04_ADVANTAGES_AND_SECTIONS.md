@@ -71,7 +71,8 @@ can't be falsified by a backtest · **PENDING** = real but blocked on a fix.
 | **A3** | **You can see every sale we used and what each was adjusted for, in dollars.** 12 Kilburn St $1,300,000 → $1,521,873: one more bedroom +$113,110, 53 sqm more floor +$95,034, comparable better renovated −$48,016 | **STRUCTURAL** | `Adjusted-Comparables-Evidence.md`; Moorabbin run | §4 "the working" |
 | **A4** | **Adjusting narrows the range ~40%**, and narrows it at all **nine times in ten** (median 38.8%, 91.0% narrow, median $351,000 → $204,805) | **EARNED** | `RESULT_dispersion_512.md` §3b, n=512 | §4 |
 | **A5** | **We publish our error rate.** No Australian consumer portal publishes one; Zillow and Redfin both do | **STRUCTURAL** | `international_comparison` §6.5 | §5 "what we get wrong" |
-| **A6** | **Nobody is paying to change what you see, and nothing here becomes a lead.** REA reports owner engagement to shareholders as *"valuable seller leads delivered to our customers"*; Pro-tier agents get **36% more** | **STRUCTURAL** | `structural_conflict` C3 [P] | §6 claim step |
+| **A6** | **Nobody is paying to change what you see, and your interest in your own home is not sold on.** REA reports owner engagement to shareholders as *"valuable seller leads delivered to our customers"*; Pro-tier agents get **36% more**. Fields is the agency, so there is no third party being handed the address | **STRUCTURAL** | `structural_conflict` C3 [P] | §9 |
+| | ⚠ **Revised 2026-08-06.** Previously read *"nothing here becomes a lead"*. The page **is** a lead surface and the business depends on it; outreach is physical mail to the property, not cold calling. **No promise about contact is made in either direction.** The differentiator was never *"we won't contact you"* — it is *"we don't sell you to whoever pays most"*, which survives the model intact | | | |
 | **A7** | **Wrong facts can be corrected, and you see the number move.** Nobody offers this — *"over 20 emails and they wouldn't change it"* | **STRUCTURAL** (unbuilt) | `consumer_voice` §3.9 | §6 claim step |
 | **A8** | **An estimate that's dated and re-anchored.** Portal estimates carry no computed-on date; *"Domain estimates and REA always lag (3-4 months)"* | **PENDING** | `ADDENDUM_propertychat` §1; our own lag analysis | §2 / §5 |
 | **A9** | Address-level flood and hazard context | **PENDING** | `does burleigh waters flood` = most persistent suggestion in our corpus, 546, 2.5× the next | §5 |
@@ -144,7 +145,7 @@ thing they see** — 47–57% never advance past the first, 87.5% are single-pag
 | **3** | **The sales we used, and what we changed** | Traceability made visible. Every comp, every adjustment, in dollars | That anyone reads it — see §4 below | A3, A4 |
 | **4** | **What we get wrong** | Publish the error rate and the limits. Pre-empts the attack and is the thing no AU portal does | A confidence label | A5 |
 | **5** | **What a model can't see about this address** | Flood/hazard, position, the address-specific facts. Rule 5: data, source, limitation, no advice | Council data exists everywhere — it doesn't | A9 |
-| **6** | **Claim it** | Correction + control + an explicit, operationally true "nobody calls unless you ask" | That claiming is the price of entry — it never is | A6, A7 |
+| **6** | **Claim it** | Correction + control + "we don't sell you to anyone" (no contact promise — see the decision note) | That claiming is the price of entry — it never is | A6, A7 |
 
 **The spine, in one line:** §2 earns the right to §3. Dispersion is *why how a number was
 made matters*; the working is *what we do about it*. Without §2, §3 is a boast; with it,
@@ -246,8 +247,7 @@ the privacy line and the range lands a layer later. Decide deliberately.
    or confidence in §1/§4.
 3. **Persist `adjusted_price` + component adjustments** — §3 cannot render without it.
    Currently a stated release blocker.
-4. **Make "nobody calls unless you ask" an operational rule** — otherwise A6 and §6 are
-   unsayable.
+4. ~~Make "nobody calls unless you ask" an operational rule~~ — **withdrawn 2026-08-06.** ⚠ **DECISION 2026-08-06 (Will): the page makes NO promise about contact, in either direction.** The page is a lead surface and the business depends on it. A promise the model cannot keep is worse than no promise — and `offmarket-intent-alert.mjs` already fires on reaching the end of a deck. Outreach is **physical mail to the property address**, not cold calling. What replaces the promise is stronger and stays true: **"we don't sell you to whoever pays most"** — REA books owner engagement as a *"seller lead delivered to our customers"* with Pro-tier agents getting 36% more, and Fields is the agency, so there is no third party being handed the address.
 5. **Correct the Domain accuracy article** — currently live, and §4's credibility depends on
    us not having a broken accuracy claim published elsewhere.
 6. **Fix address search** — no whitespace/typo tolerance; ~⅓ of typed addresses are outside
