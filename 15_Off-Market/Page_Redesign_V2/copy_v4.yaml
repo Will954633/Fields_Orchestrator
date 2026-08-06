@@ -90,10 +90,24 @@ card_05_method:
   we_do: >
     We take sales of homes near this one, adjust each for the ways it differs, weight
     them by how good a comparison they are, and publish the spread.
-  # ⚠ BLOCKED: one figure, one sample, one date, and a stated definition — mean
-  # absolute error of the range centre, of the nearest edge, or the containment
-  # rate. Two figures circulate (11.1%, 11.6%) and neither carries a definition.
-  error_rate: null
+  # Measured 2026-08-06, n=333 sold homes, leave-one-out, NO price-proximity
+  # filter — i.e. the pool this page actually gets, since 0.0% of off-market
+  # homes carry a listing price. See Product/09_ACCURACY_AND_CALIBRATION.md.
+  #
+  # The 11.6% previously in circulation was measured with the subject's OWN SALE
+  # PRICE inside the comparable filter. Do not reinstate it.
+  #
+  # Median AND mean, deliberately: the median describes the reader's home, the
+  # mean carries the tail. Quoting the median alone is the flattering half.
+  # ⚠ PENDING WILL'S SIGN-OFF before this arm goes live.
+  error_rate: >
+    Tested against 333 homes in these three suburbs that have since sold: half the time
+    the estimate landed within 9.3% of the eventual sale price, and the average miss was
+    12.3%. Those homes sold, which this one has not — so treat it as the method's track
+    record, not a promise about this address.
+  # ⚠ NEVER add a "90% confidence" claim here or anywhere in this arm. The range
+  # is built as 1.645 sigma but empirically contains the sale price 61% of the
+  # time (203/333). Finding 2 in the doc above.
   opens: "Then why do the other numbers disagree?"
 
 card_06_dispersion:
