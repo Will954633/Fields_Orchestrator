@@ -45,6 +45,18 @@ def money(v):
         return None
 
 
+def money_m(v):
+    """Consumer-facing money: millions to 2dp. A range precise to the dollar
+    reads as algorithmic output and contradicts "the width is the honest part"."""
+    try:
+        f = float(v)
+    except Exception:
+        return None
+    if f >= 1_000_000:
+        return "$" + f"{f/1_000_000:.2f}".rstrip("0").rstrip(".") + " million"
+    return f"${int(round(f)):,}"
+
+
 def anchor(low, high, point=None):
     """assemble._anchor — rounded to $50k, spelled in millions. Deliberately
     approximate: an exact central figure reads as false precision."""
@@ -151,21 +163,24 @@ def s0_arrival(b, ls):
     if bits:
         out.append(" · ".join(bits))
     if ls:
-        y = held_years(ls.get("date"))
-        line = f"**Last recorded sale {money(ls['price'])}, {str(ls.get('date'))[:7]}."
-        if y:
-            line += f" Held {y} years since.**"
-        else:
-            line += "**"
-        out += ["", line]
+        # ⚠ Never say "held X years" — we do not know the current owner bought it,
+        # and telling someone their own history wrongly is unrecoverable.
+        d = str(ls.get("date"))[:10]
+        try:
+            human = datetime.fromisoformat(d).strftime("%B %Y")
+        except Exception:
+            human = d[:7]
+        out += ["", f"**Last recorded sale: {money(ls['price'])} in {human}.** "
+                    f"No later market sale is recorded."]
     else:
         out += ["", skip("§0 last-sale fact", "no priced sale in property_timeline")]
     out += ["",
             "**You may be trying to answer three questions privately.**", "",
             "Is the number attached to this home real? Is this the wrong time to move? "
             "And if you sold, where would you go next?", "",
-            "This is a private walkthrough of the first of them. Nothing here starts a "
-            "selling process, and **nobody calls unless you ask**.", "",
+            "This page starts with the first: what the sales around this home actually "
+            "support. Nothing here starts a selling process, and **nobody calls unless "
+            "you ask**.", "",
             "*↓ So what is it worth?*"]
     return "\n".join(out)
 
@@ -183,13 +198,17 @@ def s1_range(b):
             "and why. Saying why a number is absent is worth more than the number.*",
         ]
         return "\n".join(out)
-    out += [f"**{money(lo)} – {money(hi)}**", ""]
-    out.append(f"Most likely position: **around {anchor(lo, hi, v.get('point'))}** — "
-               f"rounded, deliberately, to the nearest $50,000.")
-    n = v.get("n_comps") or (b.get("credibility") or {}).get("comps")
-    if n:
-        out.append(f"\nBuilt from {n} sales, each adjusted for how it differs from this home.")
-    out += ["", "That's a range, not a figure, and the width of it is the honest part."]
+    out += [f"**{money_m(lo)} – {money_m(hi)}**", ""]
+    out.append(f"The evidence centres around **{anchor(lo, hi, v.get('point'))}** — rounded "
+               f"deliberately, because the width is the honest part.")
+    n = v.get("n_comps")
+    shown = len(globals().get("_PERSISTED") or [])
+    if n and shown:
+        out.append(f"\n{n} sales were close enough to influence the range. The {shown} "
+                   f"strongest comparisons are shown below.")
+    elif n:
+        out.append(f"\n{n} sales were close enough to influence the range.")
+    out += [""]
     # The engine already writes the honest-limits paragraph for exterior-only
     # subjects (`confidence_reason`). It is better than anything written here and
     # it is generated per property — use it rather than re-authoring it.
@@ -202,20 +221,32 @@ def s1_range(b):
 def s2_working(b, adjusted):
     out = ["## The sales behind that range, and what we changed about each one", ""]
     cred = b.get("credibility") or {}
-    funnel = [x for x in (
-        (f"{cred.get('sales_reviewed')} recent sales reviewed" if cred.get("sales_reviewed") else None),
-        (f"{cred.get('homes_compared')} nearby homes compared" if cred.get("homes_compared") else None),
-        (f"{cred.get('characteristics')} property characteristics analysed" if cred.get("characteristics") else None),
+    # A funnel must NARROW. The old line read
+    # "2,999 sales reviewed → 7,066 homes compared" — more homes than sales, so it
+    # read as scale rather than selection. The persuasive act is REJECTION.
+    v = b.get("valuation") or {}
+    steps = [x for x in (
+        (f"{cred['sales_reviewed']:,} recent sales searched" if cred.get("sales_reviewed") else None),
+        (f"{v['n_comps']} relevant sales retained" if v.get("n_comps") else None),
+        (f"{len(adjusted)} strongest comparisons shown" if adjusted else None),
     ) if x]
-    if funnel:
-        out += ["> " + "  →  ".join(funnel), ""]
+    if steps:
+        out += ["> " + "  →  ".join(steps), ""]
+        if cred.get("characteristics"):
+            out += [f"> *{cred['characteristics']} property characteristics considered "
+                    f"for each.*", ""]
 
     if adjusted:
-        out.append("| Comparable | Sold | Adjusted to | Move |")
-        out.append("|---|---|---|---|")
-        for p in sorted(adjusted, key=lambda x: x["adj"]):
-            pct = f"{p['pct']*100:+.1f}%" if p.get("pct") is not None else ""
-            out.append(f"| {p['address']} | {money(p['raw'])} | **{money(p['adj'])}** | {pct} |")
+        out.append("| Comparable | Sold | Adjusted position |")
+        out.append("|---|---|---|")
+        for p in sorted(adjusted, key=lambda x: x["adj"])[:3]:
+            when = f" · {p['when']}" if p.get("when") else ""
+            out.append(f"| {p['address']}{when} | {money_m(p['raw'])} | "
+                       f"**about {money_m(p['adj'])}** |")
+        if len(adjusted) > 3:
+            out.append("")
+            out.append(f"▸ **REVEAL —** *See all {len(adjusted)} comparisons and every "
+                       f"adjustment* (the full per-feature dollar working)")
         out.append("")
     else:
         out.append(skip("§2 adjusted comparables",
@@ -224,14 +255,15 @@ def s2_working(b, adjusted):
 
     oc = b.get("obvious_comp")
     if oc and oc.get("price"):
-        out += ["", "### That sale up the road isn't your comparison", "",
+        out += ["", "### That sale up the road is not this home's answer", "",
                 f"**{oc['address']} — sold {money(oc['price'])}"
                 + (f", {oc.get('distance_m')}m away.**" if oc.get("distance_m") else ".**"),
                 "", "Looks like the same home. But against yours:"]
         for d in (oc.get("deltas") or []):
             out.append(f"- {d}")
-        out += ["", "**Same street, different home. The headline number was never the "
-                    "comparison.**"]
+        out += ["", "It is still evidence — it sits in the comparison set above. But once "
+                    "those differences are accounted for, the headline price is not the "
+                    "number that transfers to this home."]
     else:
         out.append(skip("§2 obvious comparable", "no priced nearby sale found"))
 
@@ -250,7 +282,7 @@ def s2_working(b, adjusted):
                         f"{len(anchors)} anchor(s) ({share:.0%} of the market). "
                         f"Rarity copy would be false here"))
     elif n_match is not None:
-        out += ["", "### Why it sits where it does in that range", "",
+        out += ["", "### What makes this home less common among today's listings", "",
                 f"{sc.get('active_matching')} of the {sc.get('active_total')} homes on the "
                 f"market right now match this one on {_humanise_query(sc.get('query'))}."]
         feats = (pr.get("features") or [])
@@ -262,9 +294,9 @@ def s2_working(b, adjusted):
             out.append(f"\nOf the {pr['physical_matching']} homes nearby that share your core "
                        f"combination, only **{best['matching']}** {verb} also this close to "
                        f"{phrase} — all at once.")
-        out += ["", "**What this means:** the range isn't wide because we're hedging. It's "
-                    "wide because homes with this combination don't come up often enough to "
-                    "pin it tighter."]
+        out += ["", "**What this means:** that does not set a price by itself. It affects "
+                    "how many close substitutes a buyer can choose from — and part of the "
+                    "range's width comes from how few recent sales share the combination."]
     else:
         out.append(skip("§2 scarcity", "no scarcity result from compute_intel"))
 
@@ -278,8 +310,10 @@ def s2_working(b, adjusted):
         if levers:
             out.append("\n**Where a buyer may focus:** " + ", ".join(f"↓ {l}" for l in levers))
         # "Knowing both" is only true when both sides rendered.
-        out.append("\n**Knowing both is how you hold your number.**" if (carries and levers)
-                   else "\n**Knowing where it is strong is how you hold your number.**")
+        out.append("\n**Both matter: they are why nearby sales cannot be read across "
+                   "without adjustment.**" if (carries and levers)
+                   else "\n**That is one reason nearby sales cannot be read across without "
+                        "adjustment.**")
     out += ["", "*↓ So how wrong could you be?*"]
     return "\n".join(out)
 
@@ -313,22 +347,21 @@ def s4_dispersion():
 You just watched a sale become a different number once we priced the differences. That is what
 choosing a different set of sales does to the answer.
 
-Most valuations are built on three of them.
+A valuation built from only three selected sales is highly sensitive to which three are chosen —
+and three comparable sales is the statutory Statement of Information standard in Victoria and
+the incoming NSW regime, so it is not a straw man.
 
 We tested what that produces. We took 512 homes that have since sold, found every set of three
 comparable sales that could reasonably have been chosen, and worked out what each set said.
 
-**The gap between the highest and lowest defensible answer was a median of $469,000 — about a
-third of the home's value.** On 77% of homes it was more than 20% of the value.
+**The median gap between the highest and lowest defensible result was $469,000.**
 
-**What this means:** two honest people, working from the same sales, can hand you numbers half a
-million dollars apart and both be following standard practice.
+**What this means:** that does not make any one estimate dishonest. It means three sales are
+often too small a sample to show which comparison deserves the most weight.
 
-The part that surprised us: a near-perfect comparable — one landing within 2% of the eventual
-sale price — was sitting in the available sales on **73.6%** of those homes. The worst choice
-available was more than 20% out on **73.4%**.
-
-**The right answer is nearly always there. Three sales just can't tell you which one it is.**
+▸ **REVEAL —** *See what the test found*
+  (a close answer was present in the available evidence on 73.6% of those homes — identifiable
+  only with hindsight; the worst available choice was more than 20% out on 73.4%)
 
 *↓ What has it actually done for me?*"""
 
@@ -365,9 +398,11 @@ def s5_gain(ls, ms, suburb_display):
             f"({span_start}) to {money(last.get('median_price'))} ({span_end}).",
         ]
         if ms.get("ten_year_growth_pct") and ms.get("ten_year_start_price"):
-            out += ["", f"Over ten years: {money(ms['ten_year_start_price'])} → "
-                        f"{money(ms.get('ten_year_end_price'))}, "
-                        f"{ms['ten_year_growth_pct']}%."]
+            out += ["", f"We do hold a broader ten-year suburb series, which moved from "
+                        f"{money_m(ms['ten_year_start_price'])} to "
+                        f"{money_m(ms.get('ten_year_end_price'))} — about "
+                        f"{round(ms['ten_year_growth_pct'])}%. Two different series, stated "
+                        f"separately rather than spliced."]
         out += ["", "**What this means:** the gap between what you paid and what the sales say "
                     "today is real, but it isn't one we can draw as a single line — and a line "
                     "we can't evidence is worth less than saying so."]
@@ -383,16 +418,11 @@ def s6_lender(b):
     v = b.get("valuation") or {}
     if not v.get("high"):
         return skip("§6 lender", "no range, so no upper bound to state")
-    return f"""## Bank valuations, and why they're usually lower
+    return """▸ **REVEAL —** *My bank gave me a lower number — why?*
 
-If you've had a figure from a lender, it probably sat below this range. That's normal, and it
-isn't a comment on your home.
-
-A lender isn't asking *what would this sell for*. It's asking *what could we recover if we had
-to sell it in a hurry*. Those are different questions, and the second is deliberately
-conservative.
-
-**The top of this range is {money(v['high'])}.**
+A lender is assessing the property as security for a loan, not preparing a selling strategy.
+The instructions, assumptions and risk tolerance are different, and that commonly produces a
+more conservative result than an open-market estimate. It is not a comment on the home.
 
 *↓ And what's happening around it now?*"""
 
@@ -401,10 +431,11 @@ def s7_moving(b):
     out = ["## What's changed around this home", ""]
     comp = b.get("competition") or {}
     if comp.get("n_compete") is not None:
-        n = comp["n_compete"]
-        out.append(f"**{n} home{'' if n == 1 else 's'} {'is' if n == 1 else 'are'} competing "
-                   f"with this one right now**, of {comp.get('n_total')} on the market in the "
-                   f"catchment.")
+        # ⚠ ONE count, from ONE source. An earlier build printed compute_intel's
+        # n_compete (4), then len(closest_active) (6), then listed 4 — three
+        # numbers for the same thing. A visible arithmetic contradiction voids
+        # every careful figure above it.
+        pass
     else:
         out.append(skip("§7 competitors", "no competition result"))
     buyer = b.get("buyer") or {}
@@ -416,10 +447,16 @@ def s7_moving(b):
     active = comps.get("closest_active") or []
     events = rep.get("comparable_events") or []
     if active:
-        out += ["", f"**{len(active)} home{'' if len(active)==1 else 's'} a buyer would be "
-                    f"choosing between**"]
-        for a in active[:4]:
-            bits = [x for x in (a.get("address"), a.get("price"),
+        # This home is NOT on the market — it cannot be "competing".
+        out += ["", f"**{len(active)} homes a buyer could compare with this one if it came to "
+                    f"market today**"]
+        for a in active:
+            price = a.get("price")
+            # ⚠ Source price strings are free text and some are malformed
+            # ("Offers over $1.449"). Show only what parses cleanly.
+            if price and re.search(r"\$\s*\d+\.\d{1,3}\s*$", str(price).strip()):
+                price = None
+            bits = [x for x in (a.get("address"), price,
                                 f"{a.get('bedrooms')} bed" if a.get("bedrooms") else None) if x]
             line = " · ".join(str(x) for x in bits)
             diff = a.get("differenceVsSubject") or a.get("difference_vs_subject")
@@ -427,6 +464,11 @@ def s7_moving(b):
         # The aperture label is an honesty device: it says how far we had to look.
         if comps.get("aperture_label"):
             out.append(f"\n*Comparison set: {comps['aperture_label']}.*")
+        if (globals().get("_MS") or {}).get("active_listings") is not None:
+            ms_ = globals()["_MS"]
+            out.append(f"*{ms_['active_listings']} houses are on the market in "
+                       f"{b.get('suburb_display')}; {(b.get('scarcity') or {}).get('active_total')} "
+                       f"across the wider comparison catchment.*")
     if events:
         out += ["", "### What's moved recently", ""]
         for e in events[:5]:
@@ -442,8 +484,7 @@ def s7_moving(b):
                 f"Homes here are selling **{'faster' if faster else 'more slowly'}** than a year "
                 f"ago — a median of **{now_i} days**, against **{prev_i}** twelve months "
                 f"earlier"
-                + (f", and {ms['dom_quick_sales_pct']}% still move quickly."
-                   if ms.get("dom_quick_sales_pct") else ".")]
+                + "."]
         if ms.get("active_listings") is not None and ms.get("active_listings_mom_pct") is not None:
             out.append(f"\nBut there is less to choose from: **{ms['active_listings']} homes** are "
                        f"on the market, {abs(ms['active_listings_mom_pct'])}% "
@@ -462,8 +503,13 @@ def s7_moving(b):
             # direction onto a consumer page. Keep the reason, drop the order.
             raw = str(ms["qoq_suppressed_reason"])
             reason = re.split(r"(?i)\.\s*(?:do not|don't|never)\b", raw)[0].rstrip(". ")
-            out += ["", f"*{reason}. We're not showing a quarter-on-quarter figure for that "
-                        f"reason.*"]
+            import re as _re
+            ns = _re.findall(r"n=(\d+)", raw)
+            human = (f"We're not showing a quarter-on-quarter price change. Only {ns[0]} and "
+                     f"{ns[1]} sales sit behind the two quarters — too few to separate a real "
+                     f"movement from ordinary variation." if len(ns) >= 2
+                     else f"{reason}. We're not showing a quarter-on-quarter figure.")
+            out += ["", f"*{human}*"]
         basis = ms.get("current_median_price_basis")
         out += ["", f"`Source: {basis or 'Fields analysis of sold records'} · "
                     f"Last reviewed: {str(ms.get('data_date'))[:10]}`"]
@@ -482,7 +528,15 @@ def s8_exposure(b):
     return "## Flood and overlays\n\n[flood context for this address]"
 
 
-def s9_control():
+def s9_control(b):
+    gaps = b.get("gaps") or []
+    ask = ""
+    if any("bathroom" in g for g in gaps):
+        ask = ("\n\n### One thing we could not verify: the bathroom count\n\n"
+               "Is it 2, 3, or something else?\n\n"
+               "*[ 2 ] [ 3 ] [ 4 ] [ other ]* → *Updated. Rebuilding the comparison now…*\n\n"
+               "A specific gap is a better invitation than a blank box — and it is a real one: "
+               "the range above was built without a bathroom adjustment.")
     return """## This is your home's page. You can change it.
 
 Everything here was built from public records and sales data. Some of it will be wrong — a
@@ -492,8 +546,13 @@ renovation we don't know about, a room count out of date, a sale that shouldn't 
 
 Tell us what's wrong, and we'll fix it and rebuild the figure in front of you.
 
-**Nobody calls unless you ask.** No agent is paying to appear here, and nothing you do on this
-page becomes a lead."""
+**Corrections update this property record. They are not treated as a request for contact, and
+nobody calls unless you ask.** No agent is paying to appear here.
+
+⚠ *The blanket "nothing you do on this page becomes a lead" has been removed. It is not
+literally true while `offmarket-intent-alert.mjs` fires a Telegram alert when a visitor reaches
+the end of a deck having asked for nothing. The wording above is precise and operationally
+enforceable; the broader promise cannot ship until that alert rule is ratified.*""" + ask
 
 
 # ── main ────────────────────────────────────────────────────────────────────
@@ -538,6 +597,8 @@ def main():
     ap.add_argument("--backtest", action="store_true",
                     help="sold homes only — adds per-comparable adjusted prices")
     ap.add_argument("--out", default=None)
+    ap.add_argument("--audit", action="store_true",
+                    help="append the dev coverage audit — NEVER for a homeowner-facing render")
     args = ap.parse_args()
 
     b = fact_bundle.build(args.slug, args.suburb)
@@ -552,7 +613,8 @@ def main():
         if _ac:
             globals()["_PERSISTED"] = [
                 {"address": c.get("address"), "raw": c.get("sale_price"),
-                 "adj": c.get("adjusted_price"), "pct": c.get("total_adjustment_pct")}
+                 "adj": c.get("adjusted_price"), "pct": c.get("total_adjustment_pct"),
+                 "when": (str(c.get("sale_date"))[:7] if c.get("sale_date") else None)}
                 for c in _ac if c.get("adjusted_price")]
     gc = get_mongo_client()["Gold_Coast"]
     ls = last_sale(gc, b["suburb_key"], b["address"])
@@ -570,18 +632,21 @@ def main():
     parts = [s0_arrival(b, ls), s1_range(b), s2_working(b, adjusted), s3_method(),
              s4_dispersion(), s5_gain(ls, globals()["_MS"], b["suburb_display"]),
              s6_lender(b), s7_moving(b),
-             s8_exposure(b), s9_control()]
+             s8_exposure(b), s9_control(b)]
     md = "\n\n---\n\n".join(parts)
 
-    md += "\n\n---\n\n## Coverage audit\n\n"
-    if MISSING:
-        md += f"**{len(MISSING)} block(s) did not render:**\n\n"
-        for sec, why in MISSING:
-            md += f"- **{sec}** — {why}\n"
-    else:
-        md += "Everything rendered.\n"
-    if b.get("gaps"):
-        md += "\n**fact_bundle gaps:** " + "; ".join(b["gaps"]) + "\n"
+    # ⚠ DEV INSTRUMENTATION ONLY. "Coverage audit" and "fact_bundle gaps" must
+    # never render to a homeowner. Gated behind --audit.
+    if args.audit:
+        md += "\n\n---\n\n## Coverage audit\n\n"
+        if MISSING:
+            md += f"**{len(MISSING)} block(s) did not render:**\n\n"
+            for sec, why in MISSING:
+                md += f"- **{sec}** — {why}\n"
+        else:
+            md += "Everything rendered.\n"
+        if b.get("gaps"):
+            md += "\n**fact_bundle gaps:** " + "; ".join(b["gaps"]) + "\n"
 
     out = args.out or os.path.join(HERE, f"report_{args.slug}.md")
     with open(out, "w") as fh:
