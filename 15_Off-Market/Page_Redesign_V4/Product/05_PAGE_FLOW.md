@@ -1,333 +1,409 @@
-# `/off-market/:slug` — the flow
+# `/off-market/:slug` — the flow, in copy
 
-**Status:** Draft flow for V4. **Compiled:** 2026-08-06.
-**Reads with:** `04_ADVANTAGES_AND_SECTIONS.md` (advantages A1–A12, limitations L1–L3, kill list) and `03_CLAIMS_REGISTER.md` (what may be said publicly).
+**Status:** Draft copy for V4. **Compiled:** 2026-08-06. Supersedes the spec-form version.
+**Reads with:** `04_ADVANTAGES_AND_SECTIONS.md` (advantages, limitations, kill list) · `03_CLAIMS_REGISTER.md` (what may be said publicly) · `01_USER_JOBS_AND_GAPS.md` (the evidence).
 
-**The job, in one sentence** — the best formulation in the research:
-
-> *"Show me what my home may be worth, explain why, and help me understand what that could mean for my options — privately, without assuming I am ready to sell."*
-
-**How they arrive.** One entrance: **93.6% Google, 0% internal referral.** A bare address with no qualifier — because Google never offers one (89.5% of address autocompletes return empty, zero semantic qualifiers). **The page must answer without being asked.** No menu, no tabs.
+Copy is written out in full. `{braces}` are per-property values. Every section carries **why
+it works** and, where there is one, **the ask** — a chance for the reader to request something
+that opens a conversation.
 
 ---
 
-## Coverage — which sections can always run
+## The voice
 
-The hardest design problem is what the page does when per-address data is thin. It resolves
-better than expected: **three sections are universal and never fail.**
+**Steady, not exciting.** The strongest tonal finding in the research: *"Every emotional
+reaction to a value in the corpus is negative or anxious… Zero delight."* Nobody arrives
+pleased. They arrive uncertain and slightly braced. Copy that performs enthusiasm will read as
+a pitch; copy that is calm and specific will read as competence.
 
-| § | Section | Depends on | Coverage |
-|---|---|---|---|
-| 0 | This is your home | address + last sale | ~100% / **70–91%** |
-| 1 | What it may be worth | attributes + on-demand build | **65–94%**, ~30–90s |
-| **2** | **Why the numbers disagree** | **nothing per-address** | **100%** ✅ |
-| 3 | The sales we used | §1 | follows §1 |
-| **4** | **How this was made, how wrong it can be** | **nothing per-address** | **100%** ✅ |
-| 5 | Why a lender's number differs | §1 + category explainer | follows §1 |
-| **6** | **What's changed in this market** | suburb-level | **100%** ✅ |
-| 7 | Is this home exposed | council/hazard data | Burleigh Waters only |
-| 8 | Claim it | nothing | 100% |
+**Short sentences. Real numbers. No adjectives doing work a figure could do.** Banned:
+stunning, nestled, boasting, rare opportunity, robust market. Never a single valuation figure
+as a headline. Never advice. Never a prediction.
 
-**So the page always has substance.** §2, §4 and §6 carry it when the address is thin.
+**The arc:** recognise → unsettle → resolve → prove → apply → widen → protect → hand over
+control. Each section ends on a question the next one actually answers. Forward cues must be
+honest — a promise the next section doesn't keep is the fastest way to lose someone who is
+already sceptical.
 
 ---
 
-# The flow
+# §0 — Arrival
 
-## §0 — This is your home
-**First screen. Must stand alone: 47–57% never advance past it.**
-
-Four things, in this order:
-
-1. **The address, confirmed.** Not *"we found your home"* — see below.
-2. **One hard, checkable, address-specific fact.** *"Last recorded sale $175,000, October 1990. Held 35.7 years."* This exact snippet ranked us **#3, above Domain at #4**; a boilerplate snippet on a comparable page ranked #6. Specific and checkable beats persuasive.
-3. **What's coming** — one line, because the valuation is building behind this screen.
-4. **"Nobody calls unless you ask."**
-
-> ⚠ **Two hard rules here.**
-> **Never "We found your home"** — currently shipped as card 0. Across 5,685 Reddit posts there is **not one positive reaction** to an unsolicited "we noticed your property" approach; there are three hostility artefacts, including a 62-comment thread asking *"are they allowed to grab our PII from public land records?"* The owner should feel they **arrived**, not that they were located.
-> **The privacy line belongs here, not at the end.** The anxiety is present on arrival — *"Am I declaring that I am selling?"* Reassurance in the claim step reassures nobody: 87.5% of sessions are a single pageview. **This is only sayable if it is an operational rule, not copy.**
-
----
-
-## §1 — What we can say it may be worth
-**A range, never a single figure (Rule 5). Built on demand while they read §0 and §2.**
-
-- The adjusted-comparables range, with the number of sales behind it.
-- The **date it was computed** — portals never state one, and *"Domain estimates and REA always lag (3-4 months)"* (A8).
-- Median age of the comparable set. Ours have averaged 7.6 months; we hold every date and never show it.
-
-**No confidence label.** `high` 56.0% vs `medium` 57.5% range-hit — non-discriminating (C12).
-
-**When it can't run** (attributes too thin, build fails or overruns): say so plainly and go
-to §2, which needs nothing. Do not fake a number and do not apologise at length.
-
----
-
-## §2 — Why the numbers you've seen disagree
-**The pivot of the whole page, and it never fails.**
-
-They have already seen three automated estimates before clicking — all four off-market SERPs
-we captured carried them (property.com.au $1,836,000; propertyvalue.com.au $1,800,000–$2,000,000).
-This section explains why those numbers, and any appraisal they've had, disagree.
-
-The measured content (n=512 sold homes):
-
-- **Three comparable sales can justify valuations a third of a home's value apart** — median spread **32.9%**, a median **$469,000** — and that spread exceeds 20% of the home's value on **77%** of properties.
-- **A near-perfect comparable is usually already in the set.** A draw within 2% of the eventual sale price exists on **73.6%** of homes; the worst available draw is more than 20% wrong on **73.4%**. *The right answer is nearly always there. The method just can't tell you which one it is.*
-
-**This earns everything after it.** Without §2, §3 is a boast; with it, §3 is the obvious response.
-
-> ⚠ **Tone.** This criticises a *method*, never people — and Fields is a licensed agency that
-> could use that method. Frame as *"here is why we don't do it that way."* Never *"agents are
-> unreliable."* It also names nobody and uses only public sales data.
-> ⚠ Do **not** pair this with any accuracy claim. Against the agent method we are a dead heat
-> (a random three-comp draw beats us **exactly 50.0%** of the time). The claim is
-> **determinacy**, not accuracy.
-
----
-
-## §3 — The sales we used, and what we changed
-**Traceability made visible. Its job is to be seen to exist, not to be read.**
-
-- Every comparable, with its sale price and its adjusted price.
-- Every adjustment as a dollar line: *one more bedroom +$113,110 · 53 sqm more floor area +$95,034 · comparable better renovated −$48,016*.
-- **"8 included of 32 assessed"** (A12) — the honest form of "we looked at everything".
-- **Adjusting narrows the range about 40%**, and narrows it at all **nine times in ten** (median 38.8%, n=512). Never quote the $610,000 → $274,000 example as typical — it is the 73rd percentile.
-
-> ⚠ **Design.** Only 13.9% of visitors click anything; cards are skimmed at 1.5–2.3s. The
-> *visible existence* of the working, one click away, does the persuading. A step-by-step wall
-> gets scrolled past by exactly the people it was written for.
-> ⚠ **Blocked:** `adjusted_price` and component adjustments are **not persisted** — a stated
-> release blocker. This section cannot render until they are.
-> ⚠ **L3:** no radius filter exists; comparables have reached 2.57 km. Do not write "near your
-> street" unless the distance supports it — show the distance instead.
-
----
-
-## §4 — How this was made, and how wrong it can be
-**Universal. The only demand signal we have validated in market.**
-
-Your own article on estimate accuracy outperformed on Facebook — that is real, tested
-appetite for this exact topic. Plus 85 autocomplete suggestions for tool/mechanics
-(`house valuation how does it work`, `what do they check`), the Tool Shopper persona (~21),
-and the trust hedges (`actually worth`, `really worth`).
-
-Content:
-
-- **How the method works**, plainly. What a comparable is, why it gets adjusted.
-- **No hindsight (A11)** — comparables are drawn only from sales *before* the subject; nobody states this, and it is the exact flaw that invalidated our own Domain benchmark.
-- **Our error rate, published.** No Australian consumer portal publishes one; Zillow and Redfin both do.
-- **What this is not** — *"an online estimate isn't a valuation — they're price estimates and they provide indicative averages"* (Vince Mangioni, UTS, via CHOICE). The distinction between an automated estimate, an agent appraisal and a certified valuation. This is the safest available framing of our own output **and** a liability boundary for the probate / divorce / CGT / aged-pension use cases (33 suggestions).
-
-> ⚠ Pin one error-rate figure with its sample and date before publishing — 11.1% and 11.6%
-> are both in circulation. Never frame as better than any portal (C1).
-
----
-
-## §5 — Why a lender's number is different from this one
-**Serves the largest persona in the research — on what it actually asks for.**
-
-The **Equity Checker is the single largest Reddit persona (~115 posts)**. Read what they
-actually say:
-
-> *"Check the upper end value of your home on sites like domain and property. Call your bank
-> and request an updated AVM. **Try to hit the maximum number the bank will accept**… you may
-> have changed your LVR which may in turn allow you to negotiate better rates."*
-
-> *"Anyone else had an experience where **the bank undervalued their property**? And not by
-> just 1-3% but by a lot?… an apartment in our building — IDENTICAL to ours — sold for $100k
-> more than our recent bank valuation."*
-
-> *"Right now I'm pulling loan balances manually and using Domain estimates to get a rough
-> equity figure… **how often are you actually updating your property valuations?**"*
-
-Their job is **current and prospective**: get a defensible number, check it against what a
-lender said, know how fresh it is. So this section is:
-
-- **The upper bound of the range, stated plainly** — not buried. It is the number they came for.
-- **The computed-on date**, answering *"how often are you actually updating"* (A8).
-- **Why a lender's figure differs** — a bank AVM answers a different question (security against a loan, deliberately conservative) than a market appraisal. This is a **category explainer**, so it needs no information about their finances at all.
-
-> ⚠ **The privacy boundary runs through here.** Their equity, loan balance or LVR is
-> **derived financial inference — banned (C11)**. The one clear privacy violation in the whole
-> corpus was exactly this: *"what absolutely floored me was they had even estimated **what we
-> owe on it**."* We explain the *category difference*. We never compute their position.
-
-### ⚠ On `CapitalGainChart.tsx` — built, and NOT justified by this persona
-
-`CapitalGainChart.tsx` exists and is good work: a fan chart from purchase price to today's
-low/high range, shaped by the suburb's real quarterly index growth, straight segments between
-actual quarterly points because curve-fitting *"would imply false precision."* It is wired
-into `OffMarketDeck` (the ladder), not the live `DiscoveryDeck`. Data coverage is fine —
-`scraped_data.property_timeline`, **70.4% / 83.2% / 90.8%**.
-
-**But it answers a retrospective question — "how much has my home grown since I bought it" —
-and not one of the ~115 Equity Checker posts asks it.** They ask for a current number, a
-check against a lender, and how fresh it is. An earlier draft of this document justified the
-chart with this persona; that was reaching for a component because it was available rather
-than because it was wanted.
-
-**It is in the same category as the buyer/competition card: a Fields-invented interest with
-no independent support.** The nearest evidence is sale history (144 autocomplete suggestions,
-`history` 4× in Google refinements, our #3-above-Domain snippet) — but per
-`own_address_search_intent` §6.3 the working hypothesis is that history performs because it
-is *specific and checkable*, not because history is the job. Extending a single last-sale fact
-into a growth narrative is a further step with nothing behind it.
-
-**Recommendation:** keep the last-sale fact in §0 where it is evidenced. Do not ship the chart
-as a section in V4 on this rationale. If it ships, ship it as a stated test — like the buyer
-card — not as an answer to a known want.
-
----
-
-## §6 — What's changed, and where this market is heading
-**Universal, and the largest adjacent topic by a distance.**
-
-Persistence in our stored corpus: `gold coast property market forecast` **219**,
-`forecast for next 5 years` **183**, `crash prediction` **147**, `crash` **121** — roughly
-**670 combined**, rivalling flood.
-
-This is also the "living answer" — the reason to come back. *"The static answer is valuable;
-the living answer is defensible."* And it directly answers the loudest volatility grievance:
-*"dropped 40k increased 50k and dropped 40k, is this even possible."*
-
-> ⚠ **Rule 5 binds hardest here.** Report indicators. Use conditional language. **Never** a
-> prediction, never "prices will fall", never advice. The demand is for a forecast; what we
-> may supply is evidence. Say which is which.
-
----
-
-## §7 — Is this home exposed
-`does burleigh waters flood` is the **most persistent suggestion in our entire corpus at 546
-— 2.5× the next item** — and the only question-form entry near the top. Plus 71 hazard
-suggestions (`is my house in a flood zone`, bushfire, heritage, asbestos).
-
-This also resolves an apparent contradiction: `consumer_voice` §4.5 found *no* consumer
-complaining that a listing omitted flood risk. They don't complain to the portal — **they go
-to Google instead.**
-
-Rule 5: data, source, limitation. No advice, no reassurance. Burleigh Waters only for now
-(`config/flood_context_burleigh_waters.md`).
-
-> ⚠ Precedent worth respecting: Trulia built crime layers, showcased them at the White House
-> in 2012, and withdrew them in early 2022 on fairness grounds. Flood is defensible on
-> measurement grounds where crime is not — but the source and its limits go on the page.
-
----
-
-## §8 — Claim it
-Correction, control, and nothing extracted.
-
-- **Fix what's wrong and watch the number move (A7).** Nobody offers this — *"over 20 emails and they wouldn't change it"*; a seller with an undervalued estimate was told to go hire an agent.
-- **Nothing here becomes a lead (A6).** REA reports owner engagement to shareholders as *"valuable seller leads delivered to our customers"*, with Pro-tier agents receiving **36% more**. Claiming with us contacts no one. Defensible entirely from their own filings.
-- **Claiming is never the price of entry.** The page has already answered by this point.
-
----
-
-## → The deeper path
-Only once the address question is genuinely answered:
-
-> *"The selling journey is not the initial product. It is the deeper path that becomes
-> relevant once Fields has answered the address search better than anyone else."*
-
-Hands off to the mini-site V2 sessions. **The Hub is the utility; the mini-site is the
-on-ramp; the handoff is here** — which also settles the utility-vs-seller-funnel question.
-
----
-
-## Layout and gating — DECIDED 2026-08-06
-
-**The pattern.** Each section runs two columns: **left** answers a researched grievance using
-this property's real data; **right** shows what claiming adds. Precedent exists in the locked
-rows on the Fields home page. On mobile the columns stack, so left/right becomes
-value-then-prompt — **prototype that before committing**, given 87.5% single-pageview and
-1.5–2.3s skim rates.
-
-### Why the gate is narrow — this is measured, not assumed
-
-Lifetime volume of every capture mechanism Fields has built:
-
-| Mechanism | Records |
-|---|---|
-| `lead_signups` — source `for_sale_gate` | **2** |
-| `subscribers` (footer) | 4 |
-| `five_property_friday_subscribers` | 3 |
-| `launch_leads` | 4 |
-| `analyse_leads` | 11 |
-| `sms_claims` | 12 |
-| `leads` (incl. `offmarket_ladder_post`) | 31 |
-
-**A gate already exists on `/for-sale` and has converted two people.** That is the experiment,
-already run. Combined with the standing finding that the public will not give phone or email
-(`contact_capture_reality_and_address_mail_strategy`) and postal reach of **176 vs 29 for
-email**, a login wall is the highest-friction, lowest-yield option available.
-
-### The rule
-
-**Gate only where claiming is functionally necessary or genuinely protective. Never where it
-is merely commercially convenient.**
-
-| Gate | Don't gate |
-|---|---|
-| **Actions on their home** — request a valuation review, correct a fact, alerts when the estimate moves. These *require* knowing it's theirs | Anything that is public record, or our analysis of public record |
-| **Counterparty-sensitive analysis** — what the evidence suggests it would transact at vs what owners here tend to ask; weaknesses a buyer would negotiate on; timing | The range, the comparables, the adjustments, the methodology, the error rate |
-
-> ⚠ **"Sensitive — homeowner only" is only usable where it is true.** Comparable sales, land
-> size, sale history and our adjustments are public record. Labelling them sensitive to justify
-> a lead gate is a false claim, and if a claimer discovers it we destroy the trust the page just
-> built at the exact moment they identified themselves. **See C15 in the claims register.**
+> ## {street_number} {street_name}
+> ### {suburb}, QLD {postcode}
 >
-> ✅ **The honest version is stronger.** These pages are publicly indexed and **buyers read
-> them** — Google's #1 refinement on a bare address is `for sale`, and **5 of 8 of those were
-> on addresses that are not for sale**. *"We won't show this to whoever types your address"* is
-> true, checkable, protective rather than extractive, and the only framing that keeps gating
-> consistent with A6 instead of in tension with it.
+> {land_size} m² · {property_type}
+>
+> **Last recorded sale ${last_sale_price}, {last_sale_month} {last_sale_year}. Held
+> {years_held} years since.**
+>
+> We've put together what the sales around it say it would be worth today, and shown our
+> working. It takes about a minute to build.
+>
+> *Nobody calls unless you ask.*
 
-### Capture: post or SMS, never a login
+**Why this works.** The reader typed a bare address, so the first job is to confirm they are
+in the right place, then immediately prove we hold something real about it. The last-sale line
+is the exact fact that ranked us **#3 on Google, above Domain at #4**, while a page opening
+with marketing copy ranked #6. Specific and checkable beats persuasive.
 
-- **Post it to the property.** They are standing on their own address page. It is **self-verifying** — only the owner receives mail at that address, so ownership is proved without asking anyone to prove anything — and it is the channel with 6× the reach.
-- **SMS claim.** Already built and live (`sms_claims`, JustCall inbound webhook). One tap on a phone, and it **yields a phone number by construction** — the contact detail we otherwise never get.
-- **Not** an account, not an email wall. That is what converted 2.
+The privacy line is here, not at the end, because the anxiety arrives with them — *"Am I
+declaring that I am selling?"* — and 87.5% of sessions never reach a second page. Reassurance
+at the end reassures nobody.
 
-### Applied per section
+**"It takes about a minute to build"** is doing two jobs: it sets an honest expectation for a
+valuation that genuinely takes 30–90 seconds, and it makes the wait feel like work being done
+rather than a page being slow.
 
-| § | Left (free) | Right (claim) |
-|---|---|---|
-| 0 | Address, last-sale fact, "nobody calls unless you ask" | — nothing. Never gate the opening |
-| 1 | **The range, in full.** It is the answer they came for | Alerts when it moves; the computed-on date kept current |
-| 2 | Dispersion, in full — costs nothing, scarce to no one | — |
-| 3 | Every comparable, every adjustment | **Request a valuation review** — the single best unlock: needs identity, and answers the dominant "no recourse" grievance |
-| 4 | Methodology and error rate, in full | — |
-| 5 | Range upper bound, computed-on date, why a lender differs | — |
-| 6 | Market indicators | Notify me when this changes |
-| 7 | Hazard and exposure with sources | — |
-| 8 | — | Correct a fact and watch the number move |
-| — | — | **Counterparty-sensitive analysis**, framed as protection |
-
-**Never gate §1's range.** It is what the query was for, three competing estimates already sit
-above us on the same results page, and hiding ours is the most reliable way to lose them
-before they ever consider claiming.
+> ⚠ **Never "We found your home."** Zero positive reactions to that framing across 5,685
+> Reddit posts, and three hostility artefacts. The reader must feel they arrived, not that
+> they were located.
+> ⚠ **No ask here.** Never gate or interrupt the opening.
 
 ---
 
-## What is built, and what blocks it
+# §1 — The range
 
-| | State |
-|---|---|
-| §0 hard fact | Built — already ranking |
-| §1 range | On-demand path works; **10 requests in its lifetime, needs load testing** |
-| §2 dispersion | **Measured, not built** — `RESULT_dispersion_512.md` |
-| §3 working | **Blocked** — `adjusted_price` not persisted |
-| §4 methodology | Error rate exists; **figure needs pinning**, labels must be stripped |
-| §5 lender explainer | **Not built.** `CapitalGainChart.tsx` exists but is not justified by this persona — see §5 |
-| §6 market direction | Data exists; Rule 5 framing needed |
-| §7 flood | Burleigh Waters context file exists; other suburbs absent |
-| §8 claim | **Not built**, and needs "nobody calls" to be an operational rule |
+> ## What the sales around it say
+>
+> **${range_low} – ${range_high}**
+>
+> Built from {n_comps} sales, each adjusted for how it differs from this home.
+> Worked out {computed_date}. The sales behind it are a median of {median_comp_age} months
+> old.
+>
+> That's a range, not a figure — and the width of it is the honest part.
 
-## Open questions
+**Why this works.** They came for a number and we give it immediately. Three competing
+automated estimates already sit above us on the same Google results page, so withholding ours
+loses them for nothing.
 
-1. **Pre-warm or on-load build?** GPT wants the range on the first screen; the build takes 30–90s. §0+§2 as the loading state is the cheap answer, pre-warming the better one.
+The two lines nobody else writes are the **date it was worked out** and the **age of the
+evidence**. Portal estimates carry neither, and *"Domain estimates and REA always lag (3-4
+months)"* is a live complaint. Stating both costs us nothing and quietly raises a question
+about every other number they've seen.
+
+**No confidence label.** Ours don't discriminate — `high` 56.0% versus `medium` 57.5%.
+
+**When the build can't run:** say so in one line and move on. *"We don't hold enough detail on
+this home to build a range yet — here's what we can tell you."* Then §2, which needs nothing.
+
+> ### The ask
+> **"Post the full report to this address"**
+> One field, already filled with the address they're looking at. It goes in the mail.
+>
+> This is the highest-yield, lowest-friction ask on the page, and it is **self-verifying** —
+> only the owner receives post at that address, so ownership is proved without asking anyone
+> to prove anything. Postal reach is 176 against 29 for email.
+
+---
+
+# §2 — Why the numbers disagree
+
+> ## You've probably seen a few different numbers
+>
+> Most valuations are built the same way: pick three similar sales nearby, and see where the
+> home sits between them.
+>
+> We tested what that method actually produces. We took 512 homes that have since sold, found
+> every set of three comparable sales an agent could reasonably have chosen, and worked out
+> what each set would have said.
+>
+> **The gap between the highest and lowest defensible answer was a median of $469,000 — about
+> a third of the home's value.** On 77% of homes it was more than 20% of the value.
+>
+> Here's the part that surprised us. A near-perfect comparable — one that would have landed
+> within 2% of the eventual sale price — was sitting in the available sales on **73.6%** of
+> those homes. The worst choice available was more than 20% out on **73.4%**.
+>
+> **The right answer is nearly always there. Three sales just can't tell you which one it is.**
+
+**Why this works.** This is the pivot of the page, and the one section that never fails — it
+needs no data about their home at all.
+
+It reframes the thing they came for. They arrived asking *what is my home worth*; they leave
+this section asking *how was that number made* — which is the only question we can answer
+better than anyone. Everything after it is the answer. Without §2, §3 is a boast. With it, §3
+is the obvious next thing.
+
+It also names nobody, uses only public sales data, and criticises a **method** rather than
+people.
+
+> ⚠ **Tone check.** Fields is a licensed agency that could use that method. Write it as *"here
+> is why we don't do it that way"* — never *"agents are unreliable."*
+> ⚠ **Do not attach an accuracy claim.** Against that method we are a dead heat: a randomly
+> chosen set of three beats us **exactly 50.0%** of the time. The claim is that our answer
+> doesn't move depending on who picked the sales. It is about **determinacy**, not accuracy.
+
+> ### The ask
+> **"Show me the eight we used"** — not a request, just the way into §3. No gate.
+
+---
+
+# §3 — The working
+
+> ## The sales we used, and what we changed about each one
+>
+> We looked at {n_assessed} sales and kept {n_comps}.
+>
+> No sale is a match. Each one differs from this home in ways that are worth money, so we
+> price those differences and adjust.
+>
+> **{comp_address}** — sold ${comp_price}, {comp_date}, {comp_distance} away
+> One more bedroom here **+${adj_bed}**
+> {sqm_diff} m² more floor area **+${adj_floor}**
+> That home is better renovated **−${adj_reno}**
+> **Adjusted to ${comp_adjusted}**
+>
+> *[each comparable, the same way]*
+>
+> Across the homes we've tested, adjusting narrows the spread by about 40%, and narrows it at
+> all nine times out of ten.
+>
+> Every line is here because you should be able to disagree with one.
+
+**Why this works.** It converts an assertion into an argument. You can't argue with
+"$1,550,000". You can argue with "one more bedroom, +$113,110" — and being able to argue with
+it is exactly what makes it trustworthy. That is the thing a black-box estimate structurally
+cannot offer.
+
+**Its job is to be seen to exist, not to be read.** Only 13.9% of visitors click anything and
+cards get skimmed in under two seconds. Show one comparable fully expanded and the rest
+collapsed. The visible existence of the working does the persuading; a wall of it gets scrolled
+past by the very people it was written for.
+
+> ⚠ Blocked: `adjusted_price` and the component adjustments are **not persisted**. This
+> section cannot render until they are.
+> ⚠ Show the **distance** on every comparable. There is no radius filter — comparables have
+> reached 2.57 km. Never write "near your street" unless the number supports it.
+
+> ### The ask — the most important one on the page
+> **"Ask us to review this"**
+> *If something here looks wrong — a sale we shouldn't have used, a feature we've got wrong, a
+> comparison that doesn't hold — tell us and a person will look at it.*
+>
+> This is the strongest thing we can put behind a claim, because it **genuinely requires
+> knowing it's your home**, and because nobody offers it. The dominant grievance in the
+> research is having no recourse: *"I contacted them to get a true reflection and after over 20
+> emails back and forward they said they couldn't or wouldn't change it."* A homeowner whose
+> estimate was too low was told to go and hire an agent.
+>
+> It is also the best possible conversation starter — they open it by telling us something
+> specific about their own home.
+
+---
+
+# §4 — How it's made, and how wrong it can be
+
+> ## What this is, and what it isn't
+>
+> This is an estimate built from comparable sales. It is not a formal valuation, and it isn't
+> an appraisal — a valuer inspects the property and carries professional liability for the
+> figure. Nobody has been inside this home.
+>
+> **What we do:** take sales of homes near this one, adjust each for the ways it differs, weight
+> them by how good a comparison they are, and publish the spread.
+>
+> **What we won't do:** use anything that happened after the fact. Every sale behind this figure
+> closed *before* today. That sounds obvious; it is the single easiest way for a number like
+> this to flatter itself, and it's worth knowing that we've ruled it out.
+>
+> **How wrong we are:** across {backtest_n} homes we've tested, our estimate is a median
+> {error_rate}% away from what the home actually sold for. We publish that because a number
+> without an error rate is just a number.
+
+**Why this works.** This is the only topic on the page with **validated market demand** — the
+Fields article on estimate accuracy outperformed on Facebook. Add 85 autocomplete searches for
+how valuation works and what gets checked, plus the trust hedges people type: `actually worth`,
+`really worth`.
+
+Publishing the error rate is also armour. Zillow's defence when it was sued over its estimates
+was its own published accuracy. Nobody in Australia publishes one.
+
+And *"what this isn't"* does double duty — it is the safest framing of our own output, and it
+is the boundary for the people searching valuations for probate, divorce, capital gains or an
+aged pension assessment.
+
+> ⚠ Pin **one** error-rate figure with its sample and date. Both 11.1% and 11.6% are in
+> circulation.
+> ⚠ Never frame it as better than any portal or agent. We have no valid comparison, in either
+> direction.
+
+> ### The ask
+> **"Send me the method in full"** — the long-form explanation, posted or emailed. Low
+> commitment, high signal: someone who requests this is telling us they're doing real research.
+
+---
+
+# §5 — If someone else has given you a number
+
+> ## Bank valuations, and why they're usually lower
+>
+> If you've had a figure from a lender, it probably sat below this range. That's normal, and
+> it isn't a comment on your home.
+>
+> A lender isn't asking *what would this sell for*. It's asking *what could we recover if we
+> had to sell it in a hurry*. Those are different questions, and the second one is deliberately
+> conservative.
+>
+> **The top of this range is ${range_high}**, worked out {computed_date}.
+>
+> If you're taking a figure to a lender or a broker, the number matters less than being able to
+> show where it came from — which is what the previous section is for.
+
+**Why this works.** The **Equity Checker is the single largest group in the research (~115
+posts)** and nothing currently serves them. What they say, almost word for word: *"Anyone else
+had an experience where the bank undervalued their property? And not by just 1-3% but by a
+lot?"* and *"Try to hit the maximum number the bank will accept."*
+
+They need the **upper bound stated plainly**, the **date**, and an explanation for the gap.
+This section gives all three and needs to know nothing about their finances.
+
+> ⚠ **The privacy line runs through here.** Their equity, loan balance or LVR is derived
+> financial inference and is banned. The one clear privacy violation in the whole corpus was
+> exactly this: *"what absolutely floored me was they had even estimated what we owe on it."*
+> Explain the category difference. Never compute their position.
+
+> ### The ask
+> **"Send this in writing"** — the range, the date, and the sales behind it, as a document they
+> can hand to a broker. Genuinely useful, and a strong reason to give us an address.
+
+---
+
+# §6 — What's moving
+
+> ## What's changed around this home
+>
+> {n_sales} homes like this one have sold in {suburb} in the last twelve months, at a median of
+> ${suburb_median}. Twelve months earlier it was ${suburb_median_prior}.
+>
+> Homes here are taking a median of {dom} days to sell, against {dom_prior} a year ago.
+>
+> {n_active} are on the market now. {n_matching} are close enough to this home to be competing
+> for the same buyer.
+>
+> We're not going to tell you where this goes next — nobody knows, and anyone who says
+> otherwise is guessing. What we can do is show you the same indicators we watch, and tell you
+> when they move.
+
+**Why this works.** The largest adjacent topic by a distance — roughly **670** persistence
+across `gold coast property market forecast`, `forecast for next 5 years`, `crash prediction`
+and `crash`.
+
+It's also the *living* answer, and the reason to come back: a static number is worth
+something, a number that explains its own movement is worth returning to. It speaks directly
+to the loudest volatility complaint: *"In the last 3 months my house has dropped 40k increased
+50k and dropped 40k, is this even possible."*
+
+> ⚠ **Rule 5 binds hardest here.** Report indicators. Conditional language only. Never a
+> forecast, never "prices will fall", never advice. The demand is for a prediction; what we may
+> supply is evidence — and saying so plainly is itself differentiating.
+
+> ### The ask
+> **"Tell me when this changes"** — an alert when the range moves, with the reason it moved.
+> Requires somewhere to send it, so it's an honest reason to ask.
+
+---
+
+# §7 — What sits under it
+
+> ## Flood and overlays
+>
+> {flood_status_line}
+>
+> Source: {source}, {source_date}. {limitation_line}
+>
+> This is what the public mapping shows for this address. It isn't a survey, and it doesn't
+> account for work done since. What it's for is knowing which questions to ask.
+
+**Why this works.** `does burleigh waters flood` is the **most persistent search suggestion in
+our entire corpus at 546 — two and a half times the next item** — and the only question-form
+entry near the top. Plus 71 further hazard searches: flood zone, bushfire, heritage, asbestos.
+
+It also resolves an apparent contradiction in our own research. No consumer was ever found
+complaining that a listing omitted flood risk — because they don't complain to the portal.
+**They go to Google instead.** Absence of complaint was mistaken for absence of demand.
+
+> ⚠ Data, source, limitation. No advice, no reassurance. Burleigh Waters only for now.
+> ⚠ Precedent: Trulia built crime layers, showed them off at the White House in 2012, and
+> withdrew them in 2022 on fairness grounds. Flood stands up on measurement grounds where crime
+> doesn't — but the source and its limits go on the page.
+
+> ### The ask
+> **"Send me the detail for this address"** — the underlying mapping and what it means here.
+
+---
+
+# §8 — What you can do about any of it
+
+> ## This is your home's page. You can change it.
+>
+> Everything here was built from public records and sales data. Some of it will be wrong — a
+> renovation we don't know about, a room count that's out of date, a sale that shouldn't have
+> been used.
+>
+> Tell us, and we'll fix it and rebuild the figure in front of you.
+>
+> **Nobody calls unless you ask.** No agent is paying to appear here, and nothing you do on
+> this page becomes a lead.
+
+**Why this works.** *"It's wrong about my house and there's no way to fix it"* is a dominant,
+repeatedly evidenced grievance — *"Our home is stunning and has everything you could ever want,
+yet it still shows as vacant land."* Every reviewer in that cluster reports that nobody replied.
+
+Correction is also the one thing that genuinely **requires** knowing it's their home, which
+makes claiming a functional necessity rather than a toll.
+
+And the last line is the sharpest contrast we own, defensible entirely from REA's own filings:
+they report homeowner engagement to shareholders as *"valuable seller leads delivered to our
+customers"*, with better-paying agents receiving **36% more** of them.
+
+> ### The ask
+> **"Correct something"** · **"Claim this page"**
+> Claiming is offered *here*, at the end, after the page has already answered — never as the
+> price of entry.
+
+---
+
+# The asks, collected
+
+Nine sections, six asks. Each is a reason to talk, not a toll gate.
+
+| § | The ask | What it gives us | Why they'd do it |
+|---|---|---|---|
+| 1 | Post the report to this address | **A verified owner + postal address** | Self-verifying, one field, 6× the reach of email |
+| 3 | **Ask us to review this** | An opened conversation, in their words | Nobody else will fix a number about their home |
+| 4 | Send me the method in full | A research-stage contact | Low commitment, high intent signal |
+| 5 | Send this in writing | An address, and a live financial context | Genuinely useful to a broker |
+| 6 | Tell me when this changes | A durable channel | The only page that explains its own movement |
+| 7 | Send me the detail for this address | An address | 546 persistence says they want it |
+
+**Capture by post or SMS — never a login.** The gate on `/for-sale` has converted **2 people**
+in its lifetime. The SMS claim path already exists, works, and yields a phone number by
+construction.
+
+**Never gated:** the range, the comparables, the adjustments, the methodology, the error rate,
+the market indicators, the hazard data. All of it is public record or our analysis of it, and
+calling any of it "sensitive" to justify a gate would be a false claim (C15).
+
+---
+
+## Build state
+
+| § | Copy | Data | Blocked by |
+|---|---|---|---|
+| 0 | ✅ ready | ✅ | — |
+| 1 | ✅ ready | on-demand, 30–90s | load testing |
+| 2 | ✅ ready | ✅ measured | — **ship first** |
+| 3 | ✅ ready | ❌ | `adjusted_price` not persisted |
+| 4 | ✅ ready | error rate exists | pin one figure |
+| 5 | ✅ ready | ✅ | — |
+| 6 | ✅ ready | ✅ | Rule 5 review |
+| 7 | ✅ ready | Burleigh Waters only | other suburbs |
+| 8 | ✅ ready | ❌ | review flow; "nobody calls" as an operational rule |
+
+## Open
+
+1. **Mobile.** Nine value-then-ask blocks stacked could read as nine paywalls. Prototype before committing.
 2. **Does §2 land as honest or as attack?** It criticises a method Fields is licensed to use.
-3. **Does the capital gain chart have a home at all?** Built, unjustified by the Equity Checker, no independent support. Park it or ship it as a labelled test. Separately, renovation and condition are explicit dollar lines (A10), so "come back when you've done the kitchen" is available as a return hook — also untested.
-4. **Does the corrected accuracy story** (estimates are undated, not systematically wrong) carry the Facebook demand the original article did?
+3. **"Nobody calls unless you ask"** appears twice and is load-bearing both times. It cannot ship until it is an operational rule.
