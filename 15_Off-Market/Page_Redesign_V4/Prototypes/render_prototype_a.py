@@ -27,6 +27,7 @@ from pathlib import Path
 
 V2 = Path("/home/fields/Fields_Orchestrator/15_Off-Market/Page_Redesign_V2")
 OUT = Path("/home/fields/Fields_Orchestrator/15_Off-Market/Concepts/V4_Private_Report")
+ORCH_ROOT = "/home/fields/Fields_Orchestrator"
 sys.path.insert(0, str(V2))
 sys.path.insert(0, "/home/fields/Fields_Orchestrator")
 
@@ -60,96 +61,107 @@ def money(v):
     return f"${int(round(v)):,}"
 
 
-def hero_image(doc, suburb_key, slug):
-    """The hero visual.
+def hero_image(doc, suburb_key, slug, boundary_colour="sun"):
+    """The hero: a satellite aerial with the TRUE cadastral boundary drawn on it.
 
-    ⚠ `domain_hero_image_url` is NOT usable. It 404s in a browser — the URLs were
-    scraped 2026-02 and Domain expires them — and curl would not have told us
-    that (see memory image_url_verification_orb: curl is not a browser). A broken
-    <img> is worse than no image at all.
+    ⚠ Not a listing photo. `domain_hero_image_url` 404s in a browser once a home
+    comes off the market — Domain expires them on delisting — and curl will not
+    tell you (memory image_url_verification_orb: curl is not a browser). A broken
+    <img> is worse than no image.
 
-    So: a satellite aerial at the property's own coordinates, which is the
-    brief's stated fallback and is arguably the RIGHT primary for an off-market
-    home anyway — a years-old listing photo from a past campaign is not what a
-    "private report" should open with.
+    The boundary is not decoration. Will: "a reader looking at a block of roofs
+    cannot tell which one is theirs." Geometry is the real parcel, fetched by
+    LOT/PLAN from Queensland's public cadastre and cached on the document, so the
+    outline follows the actual fence lines rather than a guessed rectangle.
 
-    Fetched server-side and written next to the HTML, so no API key ever reaches
-    the page.
+    Colour default is `sun` (#fec66f) rather than the primary copper: measured on
+    28 Wedgebill, copper and gold sit in the same hue family as the terracotta
+    roofs that dominate these suburbs and start to disappear into the roofline.
+    Legibility beat brand primacy.
     """
     import os
-    import urllib.request
-    sys.path.insert(0, "/home/fields/Feilds_Website/07_Valuation_Comps")
-    key = os.getenv("GOOGLE_MAPS_STATIC_API_KEY")
-    if not key:
-        return None
+    sys.path.insert(0, os.path.join(ORCH_ROOT, "scripts"))
     try:
-        import precompute_valuations as pv
-        cl = get_mongo_client()
-        lat, lon = pv._resolve_coordinates(
-            doc, pv._preload_gc_coordinates(cl, [suburb_key]), suburb_key)
+        import render_property_aerial as ra
     except Exception:
         return None
-    if not lat or not lon:
+    dest = OUT / f"{slug}-aerial-{boundary_colour}.png"
+    if dest.exists():
+        return dest.name
+    try:
+        gc = get_mongo_client()["Gold_Coast"]
+        out, _note = ra.render(gc, suburb_key, doc, boundary_colour, str(OUT),
+                               width=640, height=420, scale=2)
+        return out.name if out else None
+    except Exception:
         return None
-    name = f"{slug}-aerial.png"
-    dest = OUT / name
-    if not dest.exists():
-        url = ("https://maps.googleapis.com/maps/api/staticmap?"
-               f"center={lat},{lon}&zoom=19&size=640x400&scale=2&maptype=satellite&key={key}")
-        try:
-            with urllib.request.urlopen(url, timeout=25) as r:
-                data = r.read()
-            if len(data) < 5000:          # an error tile, not a photo
-                return None
-            dest.write_bytes(data)
-        except Exception:
-            return None
-    return name
 
 
 def scarcity_map(doc, bundle, slug):
-    """A map that answers exactly one question: what sits within walking distance.
+    """The homes that share this combination, plotted.
 
-    Deliberately NOT a listings map. We hold no coordinates for active listings
-    (0 of 58 for-sale docs in Burleigh Waters carry a latitude), so plotting
-    "the 5 that match" would mean inventing positions. Instead it plots the
-    amenities that define the cluster, which we DO have surveyed coordinates for.
+    The first version plotted AMENITIES, because active listings appeared to
+    carry no coordinates — 0 of 58 in Burleigh Waters. That was a bad query, not
+    a data gap: the coordinates live in `LATITUDE`/`LONGITUDE` (uppercase, from
+    the cadastral dataset), and lowercase `latitude` does not exist on these
+    documents. All 21 matching listings resolve.
+
+    The matching set comes from `scarcity_features.find_active_matches`, which
+    mirrors the counter's query exactly, so the dots can never disagree with the
+    number printed beside them.
+
+    Google auto-fits the viewport to the markers when center and zoom are
+    omitted — which is right here, because the honest picture is how far a buyer
+    must travel to find a substitute, and that is a different distance for every
+    home.
     """
     import os
     import urllib.request
+    sys.path.insert(0, os.path.join(ORCH_ROOT, "scripts"))
     key = os.getenv("GOOGLE_MAPS_STATIC_API_KEY")
-    prox = bundle.get("proximity") or {}
     if not key:
-        return None
+        return None, None
     try:
+        from property_reports.scarcity_features import (
+            find_active_matches, identify_features, compute_cohort_medians,
+            DEFAULT_CATCHMENT, _features_from_subject, resolve_listing_coords)
         import precompute_valuations as pv
         cl = get_mongo_client()
+        gc = cl["Gold_Coast"]
         lat, lon = pv._resolve_coordinates(
             doc, pv._preload_gc_coordinates(cl, [bundle["suburb_key"]]), bundle["suburb_key"])
+        if lat is None or lon is None:
+            lat, lon = resolve_listing_coords(doc)
+        fb = _features_from_subject(doc)
+        if not fb or lat is None:
+            return None, None
+        anchors, _ = identify_features(fb, compute_cohort_medians(gc, DEFAULT_CATCHMENT))
+        matches = find_active_matches(gc, anchors, fb)
     except Exception:
-        return None
-    if not lat or not lon:
-        return None
-    pins = [f"markers=color:0xB4643F%7Clabel:H%7C{lat},{lon}"]
-    for kind in ("primary_school", "supermarket", "park"):
-        p_ = prox.get(kind) or {}
-        if p_.get("latitude") and p_.get("longitude"):
-            pins.append(f"markers=color:0x7D7469%7Csize:small%7C{p_['latitude']},{p_['longitude']}")
-    name = f"{slug}-cluster.png"
+        return None, None
+    if not matches:
+        return None, None
+
+    pins = [f"markers=color:0xfec66f%7Clabel:H%7C{lat},{lon}"]
+    # Grouped into one marker declaration so the URL stays short — Static Maps
+    # rejects requests over ~8k characters.
+    others = "%7C".join(f"{m['lat']},{m['lon']}" for m in matches[:40])
+    pins.append(f"markers=color:0x4A443E%7Csize:small%7C{others}")
+
+    name = f"{slug}-matches.png"
     dest = OUT / name
     if not dest.exists():
         url = ("https://maps.googleapis.com/maps/api/staticmap?"
-               f"size=640x420&scale=2&maptype=roadmap&center={lat},{lon}&zoom=15&"
-               + "&".join(pins) + f"&key={key}")
+               "size=640x440&scale=2&maptype=roadmap&" + "&".join(pins) + f"&key={key}")
         try:
-            with urllib.request.urlopen(url, timeout=25) as r:
+            with urllib.request.urlopen(url, timeout=30) as r:
                 data = r.read()
             if len(data) < 5000:
-                return None
+                return None, None
             dest.write_bytes(data)
         except Exception:
-            return None
-    return name
+            return None, None
+    return name, len(matches)
 
 
 # Event kinds that may appear in the homeowner-facing timeline. This is an
@@ -545,8 +557,13 @@ def render(slug, proto="a"):
     add('<div class="eyebrow">Private property report · Updated today</div>')
     img = hero_image(doc, b["suburb_key"], slug)
     if img:
-        add(f'<img class="shot" src="{E(img)}" alt="Aerial view of {E(short)}" loading="eager">')
-        add('<div class="fine" style="margin-top:6px">Aerial imagery · Google</div>')
+        add(f'<img class="shot" src="{E(img)}" alt="Aerial view of {E(short)} with its '
+            f'title boundary marked" loading="eager">')
+        poly = doc.get("cadastral_polygon") or {}
+        area = poly.get("lot_area_sqm")
+        add('<div class="fine" style="margin-top:6px">Title boundary from the Queensland cadastre'
+            + (f' — lot {E(str(poly.get("lotplan")))}, {area:,.0f} m²' if area else '')
+            + '. Aerial imagery · Google</div>')
     add(f'<div class="addr">{E(short)}</div>')
     add(f'<div class="sub">{E(b.get("suburb_display",""))}, QLD</div>')
 
@@ -744,12 +761,13 @@ def render(slug, proto="a"):
         add('<p class="fine">That does not set a price by itself. It reduces the number of close '
             'substitutes a buyer can choose from.</p>')
         if B:
-            mp = scarcity_map(doc, b, slug)
+            mp, n_pins = scarcity_map(doc, b, slug)
             if mp:
                 add(f'<img class="shot" style="aspect-ratio:16/10;margin:20px 0 6px" src="{E(mp)}" '
-                    f'alt="What sits within walking distance of {E(short)}" loading="lazy">')
-                add('<div class="fine">The home in orange; the school, park and supermarket that '
-                    'define the combination in grey. Mapping · Google</div>')
+                    f'alt="Homes sharing this combination near {E(short)}" loading="lazy">')
+                add(f'<div class="fine">This home in yellow; the {n_pins} homes currently on the '
+                    f'market that share the combination in grey. How far a buyer would have to go '
+                    f'to find a substitute. Mapping · Google</div>')
         if feats:
             add('<details' + (' open' if B else '') + '><summary>See the distances</summary><div class="body">')
             for f in feats:
