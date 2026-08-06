@@ -19,7 +19,7 @@
 # Bump schema_version on any change to definitions, paths, or thresholds —
 # the version is stamped onto every golden record for reproducibility.
 
-schema_version: 1
+schema_version: 3   # 2026-08-06 — bathrooms/land chains; floor_area REORDERED; dead paths removed
 
 # Confidence assigned to a resolved value based on HOW it was derived.
 # measured floor-plan > listed-by-agent > photo-inferred > aerial-inferred > derived.
@@ -52,11 +52,16 @@ attributes:
 
   bathrooms:
     definition: Number of bathrooms as listed on Domain.
-    # Same fallback chain as bedrooms — 56% of the 5,148 missing are recoverable.
     unit: count
     type: int
     source_priority:
       - {path: bathrooms, method: scraped}
+      # Added 2026-08-06. The top-level field is null on 5,148 off-market houses;
+      # 56% carry the count below. `scraped_data_v2` agrees with the top-level
+      # field 99.1% of the time where both exist (n=551, Burleigh Waters).
+      - {path: scraped_data_v2.bathrooms, method: scraped}
+      - {path: scraped_data.features.bathrooms, method: scraped}
+      - {path: property_valuation_data.layout.number_of_bathrooms, method: gpt_floorplan}
 
   car_spaces:
     definition: Covered/uncovered car spaces as listed on Domain.
@@ -65,7 +70,7 @@ attributes:
     source_priority:
       - {path: car_spaces, method: scraped}
       - {path: carspaces, method: scraped}
-      - {path: parking, method: scraped}
+      # `parking` declared but never present in 1,200 sampled docs — removed 2026-08-06.
 
   floor_area_sqm:
     definition: >
@@ -76,13 +81,33 @@ attributes:
     # A scraped floor_area > 500 with no land is a known Domain anomaly (land
     # captured into floor_area) — the resolver applies a sanity flip.
     sanity: floor_area_land_flip
+    # ⚠ REORDERED 2026-08-06 — this chain was INVERTED against the engine.
+    #
+    # `precompute_valuations.resolve_floor_area()` is explicit:
+    #   "Building area — Domain `total_floor_area` then `house_plan.floor_area_sqm`
+    #    (internal + garage + sometimes covered patio) — is a DIFFERENT metric,
+    #    used for 'internal' ONLY as a last resort."
+    #
+    # This file had `house_plan.floor_area_sqm` FIRST — the building-area metric
+    # the engine deliberately ranks last. Measured on 38 docs holding both, it runs
+    # ~1.5x the internal figure (median ratio 0.67 internal:building; −96 m², −106 m²,
+    # −97 m² on individual homes). Anything resolving through this config got a
+    # materially larger number than the valuation engine used, and mixing the two
+    # metrics across a subject and its cohort invalidates the premium maths.
+    #
+    # Now mirrors resolve_floor_area()'s stated priority: internal-living first,
+    # building-area last-resort so a property is never dropped for a missing figure.
     source_priority:
+      - {path: internal_living_area_sqm,                  method: gpt_floorplan_measured}
+      - {path: floor_plan.stated_internal_area_sqm,       method: gpt_floorplan_measured}
+      - {path: floor_plan_analysis.internal_floor_area,   method: gpt_floorplan}
+      - {path: enriched_data.floor_area_sqm,              method: derived}
+      - {path: property_valuation_data.layout.floor_area_sqm, method: gpt_photo}
+      # ── below here: BUILDING area (internal + garage + patio). Different metric.
+      #    Last resort only, and never mix with the above inside one cohort.
+      - {path: total_floor_area,                          method: scraped}
       - {path: house_plan.floor_area_sqm,                 method: gpt_floorplan_measured}
       - {path: processing_status.total_floor_area_sqm,    method: gpt_floorplan}
-      - {path: floor_plan_analysis.internal_floor_area,   method: gpt_floorplan}
-      - {path: property_valuation_data.layout.floor_area_sqm, method: gpt_photo}
-      - {path: total_floor_area,                          method: scraped}
-      - {path: enriched_data.floor_area_sqm,              method: derived}
     scarcity_thresholds:
       - {key: floor_large, label: "Large internal (250m²+)", gte: 250}
 
@@ -92,8 +117,11 @@ attributes:
     type: float
     source_priority:
       - {path: lot_size_sqm,                              method: cadastral}
+      # lot_size_calc_sqm is present on 95.5% and differs from lot_size_sqm by a
+      # median of 0.1% (max 5%) — it is a rounding variant, not a rival fact.
+      - {path: lot_size_calc_sqm, method: cadastral}
       - {path: land_size_sqm,                             method: scraped}
-      - {path: property_valuation_data.layout.land_size_sqm, method: gpt_photo}
+      # `property_valuation_data.layout.land_size_sqm` never present — removed 2026-08-06.
       - {path: enriched_data.lot_size_sqm,                method: derived}
     scarcity_thresholds:
       - {key: land_large,       label: "Large block (900m²+)",        gte: 900}
@@ -151,7 +179,7 @@ attributes:
     type: float
     source_priority:
       - {path: georeference_data.summary_stats.closest_beach_km, method: derived}
-      - {path: enriched_data.beach_distance_km, method: derived}
+      # `enriched_data.beach_distance_km` never present — removed 2026-08-06.
     scarcity_thresholds:
       - {key: near_beach_2km, label: "Within 2km of a beach", lte: 2.0, gt: 0}
       - {key: near_beach_1km, label: "Within 1km of a beach", lte: 1.0, gt: 0, supersedes: near_beach_2km}
