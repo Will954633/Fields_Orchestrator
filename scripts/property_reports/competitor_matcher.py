@@ -685,10 +685,54 @@ def _within_price_guard(subject: Dict[str, Any], cand: Dict[str, Any]) -> bool:
     return abs(cprice - anchor) / anchor <= PRICE_GUARD_BAND
 
 
+# Hosts a browser refuses to render, and the one that works.
+#
+# ⚠ Measured in a REAL BROWSER 2026-08-07 (curl reports 200 for all of them —
+# these are Opaque Response Blocking / CORS failures, invisible to curl):
+#     fieldspropertyimages.blob.core.windows.net   1,602 listings   ✗ blocked
+#     bucket-api.domain.com.au                       711 listings   ✗ blocked
+#     blobs.fieldsestate.com.au                      492 listings   ✓ loads
+# i.e. 82% of active listings carried a first image that would render broken.
+# The CDN fronts the same blob store, so the Azure rewrite is a pure host swap —
+# verified: the identical path returns a 1600px image via the CDN.
+_BLOB_HOST = "fieldspropertyimages.blob.core.windows.net"
+_CDN_HOST = "blobs.fieldsestate.com.au"
+
+
+def servable_image_url(url: Optional[str]) -> Optional[str]:
+    """Rewrite to a host a browser will actually load, or drop it.
+
+    Domain's `bucket-api` host is ORB-blocked and has no working equivalent we
+    have found (`b.domainstatic.com.au` does not serve the /v1/bucket/image/
+    path), so those are returned as-is rather than silently dropped — callers
+    that need a guaranteed-renderable image should prefer our own store, which
+    `_hero_image` now does.
+    """
+    if not url or not isinstance(url, str):
+        return None
+    if _BLOB_HOST in url:
+        return url.replace(_BLOB_HOST, _CDN_HOST)
+    return url
+
+
 def _hero_image(doc: Dict[str, Any]) -> Optional[str]:
+    # ⚠ OUR blob first, Domain second (2026-08-06). Domain retains images only
+    # while a listing is live and expires them on delisting, so a
+    # `domain_hero_image_url` captured at scrape time rots the moment the home
+    # comes off the market — verified: the URL on an off-market home 404s in a
+    # browser while a live listing's returns 200. Our own store does not rot and
+    # has better coverage anyway: 237 of 238 active listings carry
+    # `property_images` (100%) against 89 (37%) with a Domain hero.
+    imgs = doc.get("property_images")
+    if isinstance(imgs, list) and imgs:
+        first = imgs[0]
+        if isinstance(first, str):
+            return servable_image_url(first)
+        if isinstance(first, dict) and (first.get("url") or first.get("src")):
+            return servable_image_url(first.get("url") or first.get("src"))
     if doc.get("domain_hero_image_url"):
-        return doc["domain_hero_image_url"]
-    imgs = doc.get("domain_image_urls") or doc.get("property_images")
+        return servable_image_url(doc["domain_hero_image_url"])
+    imgs = doc.get("domain_image_urls")
     if isinstance(imgs, list) and imgs:
         first = imgs[0]
         if isinstance(first, str):
@@ -881,7 +925,16 @@ def resolve_competitor_map(
             "features": sorted(_signature_features(c)),
             "combinatorialMatch": is_close,
             "listingUrl": c.get("listing_url"),
-            "imageSrc": _hero_image(c) if is_close else None,
+            # ⚠ was `_hero_image(c) if is_close else None` (fixed 2026-08-06).
+            # Gating the PHOTO on a combinatorial match meant a competitor card
+            # rendered without an image whenever the match was merely close
+            # rather than exact — which is most of them. It looked like missing
+            # photography and was diagnosed as such: the same listing (8 Rice
+            # Place) carried an image in one report and none in another built 37
+            # seconds later, purely because `is_close` differed per subject.
+            # `differenceVsSubject` still gates on is_close, correctly — that is
+            # a CLAIM about similarity. A photograph is not.
+            "imageSrc": _hero_image(c),
             "differenceVsSubject": _difference_line(subject, c) if is_close else None,
             "_score": round(c["_score"], 4),
         })
