@@ -41,9 +41,18 @@ attributes:
     type: int
     source_priority:
       - {path: bedrooms, method: scraped}
+      # Added 2026-08-06. The top-level field is null on 4,941 off-market houses
+      # across the three target suburbs, and 72% of those carry the count in
+      # scraped_data_v2. A missing bedroom count silently disables the competitor
+      # matcher, collapses the scarcity anchor stack, and (until the same-day fix)
+      # made the valuation engine treat the home as having ZERO bedrooms.
+      - {path: scraped_data_v2.bedrooms, method: scraped}
+      - {path: scraped_data.features.bedrooms, method: scraped}
+      - {path: property_valuation_data.layout.number_of_bedrooms, method: vision}
 
   bathrooms:
     definition: Number of bathrooms as listed on Domain.
+    # Same fallback chain as bedrooms — 56% of the 5,148 missing are recoverable.
     unit: count
     type: int
     source_priority:
