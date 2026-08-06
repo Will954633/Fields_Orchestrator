@@ -85,6 +85,27 @@ def _short_address(address: str) -> str:
     return (address or "").split(",")[0].strip()
 
 
+def _spf(sp: dict, key, default=None):
+    """Read a subject feature from valuation_data.subject_property.
+
+    ⚠ The features live at `subject_property.features.basic`, NOT on
+    `subject_property` itself — that level carries only address/id/price/
+    images/utility_index/evidence. Reading `sp.get("pool_present")` returns
+    None for EVERY property, silently.
+
+    Found 2026-08-06 on 28 Wedgebill Parade: the deck claimed "a pool" (scarcity,
+    reading the correct path) while value-drivers said "no pool" (this file,
+    reading the wrong one). Eight fields were affected — pool, renovation_level,
+    build year, cladding, stories, kitchen and both quality scores — so the deck
+    was under-claiming real, vision-verified features across the board.
+    """
+    basic = (sp.get("features") or {}).get("basic") or {}
+    v = basic.get(key)
+    if v is None:
+        v = sp.get(key)          # tolerate a flattened shape
+    return default if v is None else v
+
+
 def _subject_features(subject: dict) -> dict:
     """Best-effort physical attributes from the Gold_Coast doc + valuation_data."""
     vd = subject.get("valuation_data") or {}
@@ -96,7 +117,7 @@ def _subject_features(subject: dict) -> dict:
     # which made Card 06's floor delta apples-to-oranges.
     floor = (sp.get("floor_area_sqm") or subject.get("floor_area_sqm")
              or subject.get("internal_living_area_sqm"))
-    stories = _int(sp.get("number_of_stories") or subject.get("number_of_stories"))
+    stories = _int(_spf(sp, "number_of_stories") or subject.get("number_of_stories"))
     return {
         "bedrooms": _int(subject.get("bedrooms") or sp.get("bedrooms")),
         "bathrooms": _int(subject.get("bathrooms") or sp.get("bathrooms")),
@@ -105,15 +126,15 @@ def _subject_features(subject: dict) -> dict:
         "floor_sqm": _int(floor),
         "property_type": subject.get("property_type"),
         "year_built": _int(subject.get("year_built")),
-        "build_year": _int(sp.get("approximate_build_year") or subject.get("year_built")),
+        "build_year": _int(_spf(sp, "approximate_build_year") or subject.get("year_built")),
         "stories": stories,
         "single_level": stories == 1 if stories else None,
-        "pool": bool(sp.get("pool_present") or subject.get("pool")),
-        "water_views": bool(sp.get("water_views")),
+        "pool": bool(_spf(sp, "pool_present") or subject.get("pool")),
+        "water_views": bool(_spf(sp, "water_views")),
         # GPT-4 vision reads (present only where the property was vision-analysed;
         # None otherwise → we make NO finish/renovation claim for that home).
-        "renovation_level": sp.get("renovation_level"),
-        "renovation_quality_score": sp.get("renovation_quality_score"),
+        "renovation_level": _spf(sp, "renovation_level"),
+        "renovation_quality_score": _spf(sp, "renovation_quality_score"),
     }
 
 
