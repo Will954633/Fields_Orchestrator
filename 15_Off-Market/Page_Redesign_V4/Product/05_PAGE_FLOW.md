@@ -236,6 +236,81 @@ on-ramp; the handoff is here** — which also settles the utility-vs-seller-funn
 
 ---
 
+## Layout and gating — DECIDED 2026-08-06
+
+**The pattern.** Each section runs two columns: **left** answers a researched grievance using
+this property's real data; **right** shows what claiming adds. Precedent exists in the locked
+rows on the Fields home page. On mobile the columns stack, so left/right becomes
+value-then-prompt — **prototype that before committing**, given 87.5% single-pageview and
+1.5–2.3s skim rates.
+
+### Why the gate is narrow — this is measured, not assumed
+
+Lifetime volume of every capture mechanism Fields has built:
+
+| Mechanism | Records |
+|---|---|
+| `lead_signups` — source `for_sale_gate` | **2** |
+| `subscribers` (footer) | 4 |
+| `five_property_friday_subscribers` | 3 |
+| `launch_leads` | 4 |
+| `analyse_leads` | 11 |
+| `sms_claims` | 12 |
+| `leads` (incl. `offmarket_ladder_post`) | 31 |
+
+**A gate already exists on `/for-sale` and has converted two people.** That is the experiment,
+already run. Combined with the standing finding that the public will not give phone or email
+(`contact_capture_reality_and_address_mail_strategy`) and postal reach of **176 vs 29 for
+email**, a login wall is the highest-friction, lowest-yield option available.
+
+### The rule
+
+**Gate only where claiming is functionally necessary or genuinely protective. Never where it
+is merely commercially convenient.**
+
+| Gate | Don't gate |
+|---|---|
+| **Actions on their home** — request a valuation review, correct a fact, alerts when the estimate moves. These *require* knowing it's theirs | Anything that is public record, or our analysis of public record |
+| **Counterparty-sensitive analysis** — what the evidence suggests it would transact at vs what owners here tend to ask; weaknesses a buyer would negotiate on; timing | The range, the comparables, the adjustments, the methodology, the error rate |
+
+> ⚠ **"Sensitive — homeowner only" is only usable where it is true.** Comparable sales, land
+> size, sale history and our adjustments are public record. Labelling them sensitive to justify
+> a lead gate is a false claim, and if a claimer discovers it we destroy the trust the page just
+> built at the exact moment they identified themselves. **See C15 in the claims register.**
+>
+> ✅ **The honest version is stronger.** These pages are publicly indexed and **buyers read
+> them** — Google's #1 refinement on a bare address is `for sale`, and **5 of 8 of those were
+> on addresses that are not for sale**. *"We won't show this to whoever types your address"* is
+> true, checkable, protective rather than extractive, and the only framing that keeps gating
+> consistent with A6 instead of in tension with it.
+
+### Capture: post or SMS, never a login
+
+- **Post it to the property.** They are standing on their own address page. It is **self-verifying** — only the owner receives mail at that address, so ownership is proved without asking anyone to prove anything — and it is the channel with 6× the reach.
+- **SMS claim.** Already built and live (`sms_claims`, JustCall inbound webhook). One tap on a phone, and it **yields a phone number by construction** — the contact detail we otherwise never get.
+- **Not** an account, not an email wall. That is what converted 2.
+
+### Applied per section
+
+| § | Left (free) | Right (claim) |
+|---|---|---|
+| 0 | Address, last-sale fact, "nobody calls unless you ask" | — nothing. Never gate the opening |
+| 1 | **The range, in full.** It is the answer they came for | Alerts when it moves; the computed-on date kept current |
+| 2 | Dispersion, in full — costs nothing, scarce to no one | — |
+| 3 | Every comparable, every adjustment | **Request a valuation review** — the single best unlock: needs identity, and answers the dominant "no recourse" grievance |
+| 4 | Methodology and error rate, in full | — |
+| 5 | Range upper bound, computed-on date, why a lender differs | — |
+| 6 | Market indicators | Notify me when this changes |
+| 7 | Hazard and exposure with sources | — |
+| 8 | — | Correct a fact and watch the number move |
+| — | — | **Counterparty-sensitive analysis**, framed as protection |
+
+**Never gate §1's range.** It is what the query was for, three competing estimates already sit
+above us on the same results page, and hiding ours is the most reliable way to lose them
+before they ever consider claiming.
+
+---
+
 ## What is built, and what blocks it
 
 | | State |
