@@ -18,8 +18,11 @@ one Mongo read and the API is hit once per property, ever.
     python3 scripts/render_property_aerial.py --suburb burleigh_waters --limit 5 --colour sun
     python3 scripts/render_property_aerial.py --slug 28-wedgebill-parade-burleigh-waters
 
-Colours are the Fields brand tokens:
-    sun #fec66f · gold #D28C5E · copper #b76749
+Boundary colour is **Fields sun #fec66f** — decided 2026-08-07 on legibility:
+gold (#D28C5E) and copper (#b76749) sit in the same hue family as the terracotta
+roofs common in these suburbs and the line disappears into the roofline. Both
+remain selectable via --colour for comparison, but sun is the default and the
+one the report uses.
 """
 import argparse
 import json
@@ -230,7 +233,11 @@ def main():
     ap.add_argument("--slug")
     ap.add_argument("--suburb", default="burleigh_waters")
     ap.add_argument("--limit", type=int, default=1)
-    ap.add_argument("--colour", choices=["sun", "gold", "copper", "all"], default="all")
+    # DECIDED 2026-08-07 (Will): Fields sun. Gold and copper share a hue family
+    # with the terracotta roofs that dominate these suburbs and dissolve into the
+    # roofline; sun holds against roof, lawn, concrete and pool alike. `all` is
+    # kept only for re-running the comparison, never for production output.
+    ap.add_argument("--colour", choices=["sun", "gold", "copper", "all"], default="sun")
     ap.add_argument("--refetch", action="store_true", help="ignore the cached polygon")
     ap.add_argument("--out", default="/home/fields/Fields_Orchestrator/15_Off-Market/"
                                      "Concepts/V4_Private_Report/aerials")
