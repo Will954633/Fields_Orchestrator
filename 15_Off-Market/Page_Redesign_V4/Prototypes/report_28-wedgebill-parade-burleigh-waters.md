@@ -154,8 +154,18 @@ conservative.
 ## What's changed around this home
 
 **4 homes are competing with this one right now**, of 188 on the market in the catchment.
-> *[§7 change log — not rendered: durable change log runs off system_monitor.property_reports — not minted for off-market slugs]*
 
+**6 homes a buyer would be choosing between**
+- 16 Montserrat Court · Contact agent · 5 bed
+- 8 Rice Place · Offers above $1,395,000 · 4 bed
+- 6 Key Biscayne · Contact agent · 5 bed
+- 14 Key Biscayne · $2,495,000 · 5 bed
+
+*Comparison set: houses in your suburb and its neighbours within one bedroom of yours.*
+
+### What's moved recently
+
+- **2026-07-14** — 8 Rice Place just listed at $1,395,000
 
 ### Two true things that point in different directions
 
@@ -201,8 +211,6 @@ page becomes a lead.
 
 ## Coverage audit
 
-**1 block(s) did not render:**
-
-- **§7 change log** — durable change log runs off system_monitor.property_reports — not minted for off-market slugs
+Everything rendered.
 
 **fact_bundle gaps:** bathrooms unknown
