@@ -3,13 +3,13 @@
 
 603 m² · 5 bed
 
-**Last recorded sale $175,000, 1990-10. Held 35.8 years since.**
+**Last recorded sale: $175,000 in October 1990.** No later market sale is recorded.
 
 **You may be trying to answer three questions privately.**
 
 Is the number attached to this home real? Is this the wrong time to move? And if you sold, where would you go next?
 
-This is a private walkthrough of the first of them. Nothing here starts a selling process, and **nobody calls unless you ask**.
+This page starts with the first: what the sales around this home actually support. Nothing here starts a selling process, and **nobody calls unless you ask**.
 
 *↓ So what is it worth?*
 
@@ -17,13 +17,12 @@ This is a private walkthrough of the first of them. Nothing here starts a sellin
 
 ## What the sales around it say
 
-**$1,753,450 – $2,231,664**
+**$1.75 million – $2.23 million**
 
-Most likely position: **around $2 million** — rounded, deliberately, to the nearest $50,000.
+The evidence centres around **$2 million** — rounded deliberately, because the width is the honest part.
 
-Built from 28 sales, each adjusted for how it differs from this home.
+28 sales were close enough to influence the range. The 8 strongest comparisons are shown below.
 
-That's a range, not a figure, and the width of it is the honest part.
 
 *↓ How did you get to that?*
 
@@ -31,21 +30,20 @@ That's a range, not a figure, and the width of it is the honest part.
 
 ## The sales behind that range, and what we changed about each one
 
-> 2999 recent sales reviewed  →  7066 nearby homes compared  →  36 property characteristics analysed
+> 2,999 recent sales searched  →  28 relevant sales retained  →  8 strongest comparisons shown
 
-| Comparable | Sold | Adjusted to | Move |
-|---|---|---|---|
-| 5 Bluejay Street, Burleigh Waters, QLD 4220 | $2,200,000 | **$1,840,701** | -16.3% |
-| 20 Silkyoak Court, Burleigh Waters, QLD 4220 | $1,550,000 | **$1,859,817** | +20.0% |
-| 56 Banksia Broadway, Burleigh Waters, QLD 4220 | $1,965,000 | **$1,958,115** | -0.4% |
-| 9 Skua Street, Burleigh Waters, QLD 4220 | $2,700,000 | **$1,983,411** | -26.5% |
-| 25 Dotterel Drive, Burleigh Waters QLD 4220 | $2,325,000 | **$1,996,856** | -14.1% |
-| 6 Maitland Street, Burleigh Waters QLD 4220 | $2,135,000 | **$2,026,129** | -5.1% |
-| 7 Cassowary Drive, Burleigh Waters QLD 4220 | $1,950,000 | **$2,105,918** | +8.0% |
-| 23 Kestrel Drive, Burleigh Waters QLD 4220 | $2,210,000 | **$2,112,682** | -4.4% |
+> *36 property characteristics considered for each.*
+
+| Comparable | Sold | Adjusted position |
+|---|---|---|
+| 5 Bluejay Street, Burleigh Waters, QLD 4220 · 2026-05 | $2.2 million | **about $1.84 million** |
+| 20 Silkyoak Court, Burleigh Waters, QLD 4220 · 2026-07 | $1.55 million | **about $1.86 million** |
+| 56 Banksia Broadway, Burleigh Waters, QLD 4220 · 2026-06 | $1.97 million | **about $1.96 million** |
+
+▸ **REVEAL —** *See all 8 comparisons and every adjustment* (the full per-feature dollar working)
 
 
-### That sale up the road isn't your comparison
+### That sale up the road is not this home's answer
 
 **25 Dotterel Drive — sold $2,325,000, 590m away.**
 
@@ -53,21 +51,21 @@ Looks like the same home. But against yours:
 - 4 bedrooms vs your 5
 - no parkland behind it
 
-**Same street, different home. The headline number was never the comparison.**
+It is still evidence — it sits in the comparison set above. But once those differences are accounted for, the headline price is not the number that transfers to this home.
 
-### Why it sits where it does in that range
+### What makes this home less common among today's listings
 
 21 of the 188 homes on the market right now match this one on 5 bedrooms and a pool.
 
 Of the 21 homes nearby that share your core combination, only **8** are also this close to a school, a park and a supermarket — all at once.
 
-**What this means:** the range isn't wide because we're hedging. It's wide because homes with this combination don't come up often enough to pin it tighter.
+**What this means:** that does not set a price by itself. It affects how many close substitutes a buyer can choose from — and part of the range's width comes from how few recent sales share the combination.
 
 ### What carries the price
 
 **What strengthens your position:** ↑ bedroom count
 
-**Knowing where it is strong is how you hold your number.**
+**That is one reason nearby sales cannot be read across without adjustment.**
 
 *↓ So how wrong could you be?*
 
@@ -101,22 +99,21 @@ are both in circulation.]
 You just watched a sale become a different number once we priced the differences. That is what
 choosing a different set of sales does to the answer.
 
-Most valuations are built on three of them.
+A valuation built from only three selected sales is highly sensitive to which three are chosen —
+and three comparable sales is the statutory Statement of Information standard in Victoria and
+the incoming NSW regime, so it is not a straw man.
 
 We tested what that produces. We took 512 homes that have since sold, found every set of three
 comparable sales that could reasonably have been chosen, and worked out what each set said.
 
-**The gap between the highest and lowest defensible answer was a median of $469,000 — about a
-third of the home's value.** On 77% of homes it was more than 20% of the value.
+**The median gap between the highest and lowest defensible result was $469,000.**
 
-**What this means:** two honest people, working from the same sales, can hand you numbers half a
-million dollars apart and both be following standard practice.
+**What this means:** that does not make any one estimate dishonest. It means three sales are
+often too small a sample to show which comparison deserves the most weight.
 
-The part that surprised us: a near-perfect comparable — one landing within 2% of the eventual
-sale price — was sitting in the available sales on **73.6%** of those homes. The worst choice
-available was more than 20% out on **73.4%**.
-
-**The right answer is nearly always there. Three sales just can't tell you which one it is.**
+▸ **REVEAL —** *See what the test found*
+  (a close answer was present in the available evidence on 73.6% of those homes — identifiable
+  only with hindsight; the worst available choice was more than 20% out on 73.4%)
 
 *↓ What has it actually done for me?*
 
@@ -128,7 +125,7 @@ That was **35.8 years ago**. We can't trace a line from it to today: our quarter
 
 What we can say is what the suburb has done over the window we do hold — the Burleigh Waters median moved from $1,800,000 (Q3 2024) to $1,877,775 (Q2 2026).
 
-Over ten years: $707,000 → $1,877,775, 165.6%.
+We do hold a broader ten-year suburb series, which moved from $707,000 to $1.88 million — about 166%. Two different series, stated separately rather than spliced.
 
 **What this means:** the gap between what you paid and what the sales say today is real, but it isn't one we can draw as a single line — and a line we can't evidence is worth less than saying so.
 
@@ -136,16 +133,11 @@ Over ten years: $707,000 → $1,877,775, 165.6%.
 
 ---
 
-## Bank valuations, and why they're usually lower
+▸ **REVEAL —** *My bank gave me a lower number — why?*
 
-If you've had a figure from a lender, it probably sat below this range. That's normal, and it
-isn't a comment on your home.
-
-A lender isn't asking *what would this sell for*. It's asking *what could we recover if we had
-to sell it in a hurry*. Those are different questions, and the second is deliberately
-conservative.
-
-**The top of this range is $2,231,664.**
+A lender is assessing the property as security for a loan, not preparing a selling strategy.
+The instructions, assumptions and risk tolerance are different, and that commonly produces a
+more conservative result than an open-market estimate. It is not a comment on the home.
 
 *↓ And what's happening around it now?*
 
@@ -153,15 +145,17 @@ conservative.
 
 ## What's changed around this home
 
-**4 homes are competing with this one right now**, of 188 on the market in the catchment.
 
-**6 homes a buyer would be choosing between**
+**6 homes a buyer could compare with this one if it came to market today**
 - 16 Montserrat Court · Contact agent · 5 bed
 - 8 Rice Place · Offers above $1,395,000 · 4 bed
 - 6 Key Biscayne · Contact agent · 5 bed
 - 14 Key Biscayne · $2,495,000 · 5 bed
+- 6 Campelles Avenue · 5 bed
+- 21 Olympus Drive · Contact agent · 5 bed
 
 *Comparison set: houses in your suburb and its neighbours within one bedroom of yours.*
+*32 houses are on the market in Burleigh Waters; 188 across the wider comparison catchment.*
 
 ### What's moved recently
 
@@ -169,7 +163,7 @@ conservative.
 
 ### Two true things that point in different directions
 
-Homes here are selling **faster** than a year ago — a median of **29 days**, against **37** twelve months earlier, and 51.3% still move quickly.
+Homes here are selling **faster** than a year ago — a median of **29 days**, against **37** twelve months earlier.
 
 But there is less to choose from: **32 homes** are on the market, 27.3% fewer than a month ago.
 
@@ -181,7 +175,7 @@ Both readings are true and they support opposite conclusions, which is why a sin
 | Median days on market | 29 |
 | Same quarter a year earlier | 37 |
 
-*Q2 2026 vs Q1 2026: confidence interval too wide to support a quarter-on-quarter claim (n=42 and n=44). We're not showing a quarter-on-quarter figure for that reason.*
+*We're not showing a quarter-on-quarter price change. Only 42 and 44 sales sit behind the two quarters — too few to separate a real movement from ordinary variation.*
 
 `Source: 12-month rolling median (Domain ∪ onthehouse) · Last reviewed: 2026-08-02`
 
@@ -204,8 +198,21 @@ renovation we don't know about, a room count out of date, a sale that shouldn't 
 
 Tell us what's wrong, and we'll fix it and rebuild the figure in front of you.
 
-**Nobody calls unless you ask.** No agent is paying to appear here, and nothing you do on this
-page becomes a lead.
+**Corrections update this property record. They are not treated as a request for contact, and
+nobody calls unless you ask.** No agent is paying to appear here.
+
+⚠ *The blanket "nothing you do on this page becomes a lead" has been removed. It is not
+literally true while `offmarket-intent-alert.mjs` fires a Telegram alert when a visitor reaches
+the end of a deck having asked for nothing. The wording above is precise and operationally
+enforceable; the broader promise cannot ship until that alert rule is ratified.*
+
+### One thing we could not verify: the bathroom count
+
+Is it 2, 3, or something else?
+
+*[ 2 ] [ 3 ] [ 4 ] [ other ]* → *Updated. Rebuilding the comparison now…*
+
+A specific gap is a better invitation than a blank box — and it is a real one: the range above was built without a bathroom adjustment.
 
 ---
 
