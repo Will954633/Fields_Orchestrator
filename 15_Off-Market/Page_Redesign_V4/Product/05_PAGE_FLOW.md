@@ -418,8 +418,19 @@ This section gives all three and needs to know nothing about their finances.
 >
 > Homes here are taking a median of {dom} days to sell, against {dom_prior} a year ago.
 >
-> {n_active} are on the market now. {n_matching} are close enough to this home to be competing
-> for the same buyer.
+> **{n_matching} homes are competing with this one right now.**
+>
+> *[the closest active listings — photo, address, price, beds/baths, and for each one an
+> explicit line: how it differs from this home]*
+>
+> **What this means:** these are the homes a buyer shopping in this band would be choosing
+> between. Not a list of what's for sale nearby — a list of the substitutes.
+>
+> ### What's moved in the last 30 days
+>
+> {change_log_items} — price changes, new listings, withdrawals, sales.
+>
+> {aperture_note}
 >
 > **Two true things that point in different directions.**
 >
@@ -454,6 +465,41 @@ name the ambiguity, give both readings, let the reader draw the inference. Its r
 > say so — `market_pulse.data_snapshot.qoq_suppressed_reason` already holds the reason.
 > ⚠ **Staleness trap:** read `data_snapshot` only. `summary` and `narrative.pillars` go stale
 > independently and a partial `$set` touches only what it names (CLAUDE.md Rule 6).
+
+### ✅ Both halves of this are already live — corrected 2026-08-06
+
+An earlier draft folded competition into two lines and scoped "what's changed" as a post-claim
+feature, on the assumption both were unbuilt. **They are running nightly.**
+
+`scripts/refresh_property_reports.py` → `refresh_comparables_for_doc()` is described in its own
+docstring as **"config-free, EVERY report"**. Only the legacy market/article timeline is
+hard-coded to one Merrimac demo slug. The generic path:
+
+- Re-runs the competitor matcher against tonight's freshly-scraped listings — **"cheap, DB-only — no vision / Opus / scraping"**
+- Produces `closest_active` and `closest_sold`
+- **Diffs into a durable change log** — *"re-running the matcher is what makes the 'what changed' stream actually accumulate over time: it picks up price drops, method switches, withdrawals, and sales since the prior snapshot"*
+- Carries an **aperture ring** and label, so it can state honestly when it had to widen the search to find any activity at all
+
+Evidence it works: **all 70 `property_reports` carry activity items** (2–12 each), and
+`price_change_events` holds **760** records.
+
+**The important design consequence — the change log accrues per property whether or not anyone
+ever claims.** So it splits cleanly:
+
+| | Gated? |
+|---|---|
+| *"What's moved in the last 30 days"* | **No.** Free, ungated, works on first visit |
+| *"What's changed **since you last looked**"* | **Yes** — genuinely requires knowing who they are |
+
+That is a much better claim benefit than anything I had listed: it needs identity by
+construction, it improves the longer they leave it, and it is already built
+(`WhatChangedBanner` handles both the first-load digest and the return delta).
+
+> ⚠ **The one real dependency.** The job iterates `system_monitor.property_reports` — 70 docs,
+> created on `/analyse-your-home` submission. Running this for off-market addresses needs either
+> report docs minted for those slugs, or `SlotResolver` pointed at off-market subjects directly.
+> Because it is DB-only and cheap, unlike the 30–90s valuation, it could plausibly run nightly at
+> scale **or** on demand fast enough to be invisible.
 
 > ### The ask
 > **"Tell me when this changes"** — an alert when the range moves, with the reason it moved.
@@ -563,8 +609,8 @@ calling any of it "sensitive" to justify a gate would be a false claim (C15).
 | Candidate | Evidence | Verdict |
 |---|---|---|
 | **Who would buy this home** (the `buyer` card) | Absent from autocomplete categories, stored persistence, Google refinements and the Reddit personas. The only support was deck dwell, which is position-confounded and survivorship-biased | **Cut, or ship as a labelled test.** A Fields-invented interest, not a user-expressed one |
-| **What's competing with it right now** | GPT reasoning only; no independent data support. But `offmarket_intel` holds it (224 active, 26 matching) | **Folded into §7 as two lines**, not given a section of its own |
-| **"What's changed since you last looked"** | GPT calls this *"a major opportunity… the static answer is valuable; the living answer is defensible."* REA positions owner tracking exactly this way | **Not a page section — a post-claim feature.** It requires knowing who they are, which makes it a genuine reason to claim rather than a toll |
+| ~~**What's competing with it right now**~~ | ⚠ **Reassessed.** Live and generic in `refresh_comparables_for_doc` — `closest_active` with a per-home difference line. Independent *search* demand is still absent, but like scarcity this is an **explanation, not a searched topic** | **Promoted** — a full beat in §7 with the substitute framing from `MatchCards` |
+| **"What's changed since you last looked"** | GPT: *"a major opportunity… the static answer is valuable; the living answer is defensible."* **Already accumulating** in the durable change log | **Split.** The 30-day movement is ungated and in §7; *"since you last looked"* is the claim benefit — it needs identity by construction |
 | **The deeper journey** — what selling could make possible, where they'd go next, launch number, method, preparation, buyer competition, the Fields process | GPT's own list, and it maps one-to-one onto mini-site V2 sessions 1–7 | **Not this page.** *"The selling journey is not the initial product. It is the deeper path that becomes relevant once Fields has answered the address search better than anyone else."* |
 
 ---
