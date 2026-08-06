@@ -286,7 +286,7 @@ The portal's remedy for a wrong number about your home was to route you into its
 **What this means for a claim-your-home product.** Claiming is, by construction, identifying yourself — the thing this job is trying to avoid. Survivable only if claiming **confers control instead of extracting it**:
 
 - **The page answers first, in full, before any ask.** Claiming is never the price of entry.
-- **"Nobody calls unless you ask" must be an operational rule, not copy.** *"May be one of the most commercially valuable lines in the entire Fields experience — provided it is absolutely true operationally."*
+- ~~**"Nobody calls unless you ask" must be an operational rule**~~ — **withdrawn.** ⚠ **DECISION 2026-08-06 (Will): the page makes NO promise about contact, in either direction.** The page is a lead surface and the business depends on it. A promise the model cannot keep is worse than no promise — and `offmarket-intent-alert.mjs` already fires on reaching the end of a deck. Outreach is **physical mail to the property address**, not cold calling. What replaces the promise is stronger and stays true: **"we don't sell you to whoever pays most"** — REA books owner engagement as a *"seller lead delivered to our customers"* with Pro-tier agents getting 36% more, and Fields is the agency, so there is no third party being handed the address. J6 is now answered by *behaviour* rather than promise: no form, no login, no account, nothing asked before the answer.
 - **Public-record side of the line only.** No equity estimate, no implied mortgage balance.
 - **Change the opening.** The owner should feel they arrived, not that they were located.
 
@@ -394,7 +394,7 @@ Each is a measured or quoted conflict with `offmarket_discovery` / `disc-v1`.
 1. **Is the Hub a persistent homeowner utility or a seller on-ramp?** Recommendation in §4: persistent utility that is *also* the on-ramp.
 2. **How do we unblock Reddit?** Three options in G2.
 3. **Do we do the incumbent-dashboard teardown (G1) before writing public copy?** Recommendation: yes. It is the missing spine.
-4. **Does "nobody calls unless you ask" become an operational rule?** If yes, possibly the most valuable line in the product. If no, it cannot be said at all.
+4. ~~Does "nobody calls unless you ask" become an operational rule?~~ **Resolved 2026-08-06 — no promise, either way.** ⚠ **DECISION 2026-08-06 (Will): the page makes NO promise about contact, in either direction.** The page is a lead surface and the business depends on it. A promise the model cannot keep is worse than no promise — and `offmarket-intent-alert.mjs` already fires on reaching the end of a deck. Outreach is **physical mail to the property address**, not cold calling. What replaces the promise is stronger and stays true: **"we don't sell you to whoever pays most"** — REA books owner engagement as a *"seller lead delivered to our customers"* with Pro-tier agents getting 36% more, and Fields is the agency, so there is no third party being handed the address.
 
 ---
 
