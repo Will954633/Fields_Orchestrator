@@ -93,6 +93,10 @@ def _extras(b):
         "last_sale": last,
         "market": (sm["market_pulse"].find_one({"suburb": b["suburb_key"]}) or {}).get("data_snapshot") or {},
         "report": sm["property_reports"].find_one({"slug": b["slug"]}) or {},
+        # Why a range is absent, when it is. `above_design_ceiling` /
+        # `below_design_floor` mean the method declined, not that the data is
+        # thin — those need different copy and the wrong one would be a lie.
+        "directional": ((vd.get("confidence") or {}).get("directional_reason")),
     }
 
 
@@ -114,6 +118,13 @@ def c01_range(b, c, x):
     k = c["card_01_range"]
     v = b.get("valuation") or {}
     if not (v.get("low") and v.get("high")):
+        if x.get("directional") in ("above_design_ceiling", "below_design_floor"):
+            return {"type": "valuation", "answer": k["answer"],
+                    "no_range": k["no_range_envelope_intro"],
+                    "no_range_reason": k["no_range_envelope_reason"],
+                    "no_range_why": k["no_range_envelope_why"],
+                    "no_range_close": k["no_range_envelope_close"],
+                    "next": k["opens"]}
         return {"type": "valuation", "answer": k["answer"],
                 "no_range": k["no_range_intro"], "no_range_reason": k["no_range_reason"],
                 "next": k["opens"]}
