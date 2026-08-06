@@ -140,7 +140,7 @@ first. **One per page, at most, and only after the proof.**
 > where would you go next?
 >
 > This is a private walkthrough of the first of them. Nothing here starts a selling process,
-> and **nobody calls unless you ask**.
+> There is nothing to fill in and no account to create — the whole page is here.
 >
 > We're building it from the sales around this home now. It takes about a minute.
 
@@ -694,8 +694,9 @@ complaining that a listing omitted flood risk — because they don't complain to
 >
 > Tell us what's wrong, and we'll fix it and rebuild the figure in front of you.
 >
-> **Nobody calls unless you ask.** No agent is paying to appear here, and nothing you do on
-> this page becomes a lead.
+> **No agent is paying to appear on this page, and your interest in your own home is not sold
+> to anyone.** Fields is the agency that built it — there is no third party being handed your
+> address.
 
 **Why this works.** *"It's wrong about my house and there's no way to fix it"* is a dominant,
 repeatedly evidenced grievance — *"Our home is stunning and has everything you could ever want,
@@ -756,7 +757,7 @@ calling any of it "sensitive" to justify a gate would be a false claim (C15).
 | 5 | ✅ ready | ✅ | — |
 | 6 | ✅ ready | ✅ | Rule 5 review |
 | 7 | ✅ ready | Burleigh Waters only | other suburbs |
-| 8 | ✅ ready | ❌ | review flow; "nobody calls" as an operational rule |
+| 8 | ✅ ready | ❌ | review flow |
 
 ## What is deliberately NOT a section
 
@@ -840,4 +841,4 @@ bait-and-switch cues in the V2 sessions and treated every one as a defect.
    Where the build can't run, go §0 → §1 (plainly: not enough detail) → **§4** → §6. The page
    still has substance, but the arc inverts — say why numbers differ before we can show ours.
 2. **Does §2 land as honest or as attack?** It criticises a method Fields is licensed to use.
-3. **"Nobody calls unless you ask"** appears twice and is load-bearing both times. It cannot ship until it is an operational rule.
+3. ~~"Nobody calls unless you ask"~~ — **withdrawn 2026-08-06.** ⚠ **DECISION 2026-08-06 (Will): the page makes NO promise about contact, in either direction.** The page is a lead surface and the business depends on it. A promise the model cannot keep is worse than no promise — and `offmarket-intent-alert.mjs` already fires on reaching the end of a deck. Outreach is **physical mail to the property address**, not cold calling. What replaces the promise is stronger and stays true: **"we don't sell you to whoever pays most"** — REA books owner engagement as a *"seller lead delivered to our customers"* with Pro-tier agents getting 36% more, and Fields is the agency, so there is no third party being handed the address.
