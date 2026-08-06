@@ -201,6 +201,39 @@ def full_date(d):
         return str(d)[:10]
 
 
+FIELDS_SMS_NUMBER = "+61416529481"
+
+
+def report_qr(short_address, slug):
+    """QR encoding the SAME user-initiated SMS deep link the live deck uses.
+
+    `sms:+61416529481?&body=…` — matching
+    `DiscoveryDeck.tsx`/`OffMarketDeck.tsx` exactly rather than inventing a
+    second mechanism. Nothing is typed by the visitor and no contact field is
+    collected: they send a message, which opens a two-way channel because THEY
+    started it. That is what keeps "nobody calls unless you ask" true.
+
+    Rendered to an inline SVG data URI — no network request, no external QR
+    service seeing our addresses, and it stays crisp at any size.
+    """
+    import io
+    import base64
+    import urllib.parse
+    try:
+        import qrcode
+        import qrcode.image.svg
+    except Exception:
+        return None, None
+    body = f"Download report for {short_address}"
+    uri = f"sms:{FIELDS_SMS_NUMBER}?&body={urllib.parse.quote(body)}"
+    img = qrcode.make(uri, image_factory=qrcode.image.svg.SvgPathImage,
+                      box_size=10, border=2)
+    buf = io.BytesIO()
+    img.save(buf)
+    data = "data:image/svg+xml;base64," + base64.b64encode(buf.getvalue()).decode()
+    return data, uri
+
+
 def month_year(d):
     """'2026-03' rendered raw on the first pass. Comparables are evidence; a
     machine-formatted date undercuts that."""
@@ -320,6 +353,35 @@ header.top.stuck{border-bottom-color:var(--line)}
      white-space:nowrap}
 .stickyaddr{font-size:.86rem;color:var(--ink-2);opacity:0;transition:opacity .25s}
 header.top.stuck .stickyaddr{opacity:1}
+
+/* header right: tag + burger */
+.hright{display:flex;align-items:center;gap:12px}
+.burger{appearance:none;background:transparent;border:1px solid var(--line);border-radius:4px;
+  width:34px;height:30px;display:flex;flex-direction:column;justify-content:center;align-items:center;
+  gap:4px;cursor:pointer;padding:0;transition:border-color .18s}
+.burger:hover{border-color:var(--accent)}
+.burger span{display:block;width:15px;height:1.5px;background:var(--ink);border-radius:2px;
+  transition:transform .22s,opacity .18s}
+.burger[aria-expanded="true"] span:nth-child(1){transform:translateY(5.5px) rotate(45deg)}
+.burger[aria-expanded="true"] span:nth-child(2){opacity:0}
+.burger[aria-expanded="true"] span:nth-child(3){transform:translateY(-5.5px) rotate(-45deg)}
+
+/* the menu */
+.menu{border-top:1px solid var(--line);background:var(--paper);
+  max-height:min(72vh,640px);overflow-y:auto;-webkit-overflow-scrolling:touch}
+.menuin{max-width:1120px;margin:0 auto;padding:18px 22px 26px}
+.secnav{display:grid;grid-template-columns:1fr;gap:0;margin:8px 0 4px}
+.secnav a{display:flex;align-items:baseline;gap:12px;padding:11px 0;text-decoration:none;
+  color:var(--ink);border-bottom:1px solid var(--line-2);font-size:.98rem}
+.secnav a:hover{color:var(--accent)}
+.secnav .i{font-size:.72rem;letter-spacing:.08em;color:var(--muted);min-width:20px}
+.dl{margin-top:20px;padding-top:18px;border-top:1px solid var(--line)}
+.qr{width:132px;height:132px;display:block;margin:10px 0 8px;background:#fff;
+  border:1px solid var(--line-2);border-radius:6px;padding:8px}
+.taponly{display:none}
+@media(max-width:719px){.qr,.qronly{display:none}.taponly{display:inline-block}
+  .dl .taponly.fine{display:block;margin-top:8px}}
+@media(min-width:720px){.secnav{grid-template-columns:1fr 1fr;column-gap:28px}}
 
 /* hero */
 .hero{padding-top:26px}
@@ -524,6 +586,16 @@ footer{padding:44px 0 70px;border-top:1px solid var(--line-2);color:var(--muted)
 
 JS = """
 const h=document.querySelector('header.top');
+// Burger. Plain hidden/aria toggle — no library, no scroll lock: the brief asks
+// for normal vertical scrolling and locking the page to open a menu is a small
+// version of the scroll-jacking it rules out.
+const bg=document.getElementById('burger'), mn=document.getElementById('menu');
+if(bg&&mn){
+  const setOpen=o=>{bg.setAttribute('aria-expanded',o?'true':'false');mn.hidden=!o;};
+  bg.addEventListener('click',()=>setOpen(mn.hidden));
+  mn.addEventListener('click',e=>{if(e.target.closest('a[href^="#"]'))setOpen(false);});
+  addEventListener('keydown',e=>{if(e.key==='Escape')setOpen(false);});
+}
 addEventListener('scroll',()=>h.classList.toggle('stuck',scrollY>240),{passive:true});
 document.querySelectorAll('.choice').forEach(b=>b.addEventListener('click',()=>{
   const g=b.closest('.choices');
@@ -575,10 +647,11 @@ def render(slug, proto="full"):
     add = P.append
 
     # ── header ──
-    add(f'''<header class="top"><div class="topin">
-      <img class="brand" src="brand/fields-fullname-grass.png" alt="Fields">
-      <span class="stickyaddr">{E(short)}</span>
-      <span class="tag">Private report</span></div></header>''')
+    # Header is composed AFTER the body, so the section menu can be built from the
+    # sections that actually rendered. Hard-coding the list would leave dead links
+    # pointing at blocks that omitted themselves on a thin property.
+    header_placeholder = "<!--HEADER-->"
+    add(header_placeholder)
 
     # ── 1 · recognition ─────────────────────────────────────────────
     add('<section class="hero"><div class="wrap">')
@@ -1113,12 +1186,53 @@ def render(slug, proto="full"):
         'This is not a formal valuation or an appraisal; nobody has been inside this home.</div>'
         '</div></footer>')
 
+    import re as _re
+    body = "".join(P)
+
+    # Sections that actually rendered, in document order, labelled by their eyebrow.
+    secs = []
+    for m in _re.finditer(r'<section id="([^"]+)"[^>]*>.*?<div class="eyebrow">([^<]{2,44})',
+                          body, _re.S):
+        sid, label = m.group(1), m.group(2).strip()
+        label = _re.sub(r"\s*·.*$", "", label).strip()      # drop "· Updated today"
+        secs.append((sid, label))
+    nav = "".join(f'<a href="#{sid}"><span class="i">{i+1:02d}</span>{E(label)}</a>'
+                  for i, (sid, label) in enumerate(secs))
+
+    qr_data, qr_uri = report_qr(short, slug)
+    qr_block = ""
+    if qr_data:
+        # ⚠ A QR is useless on the device displaying it — you cannot scan your own
+        # screen. Desktop gets the code; mobile gets the same deep link as a tap.
+        # One action, the affordance each device can actually use.
+        qr_block = (
+            '<div class="dl"><div class="label">Download this report</div>'
+            f'<img class="qr" src="{qr_data}" alt="Scan to text for this report">'
+            '<p class="fine qronly">Scan with your phone. It opens a text to Fields — '
+            'nothing is filled in by us and nothing is sent until you send it.</p>'
+            f'<a class="btn taponly" href="{E(qr_uri)}">Text me this report</a>'
+            '<p class="fine taponly">Opens your messages app with the request written. '
+            'Nothing sends until you do.</p></div>')
+
+    header = (
+        '<header class="top"><div class="topin">'
+        '<img class="brand" src="brand/fields-fullname-grass.png" alt="Fields">'
+        f'<span class="stickyaddr">{E(short)}</span>'
+        '<div class="hright"><span class="tag">Private report</span>'
+        '<button class="burger" id="burger" aria-expanded="false" aria-controls="menu" '
+        'aria-label="Sections and download"><span></span><span></span><span></span>'
+        '</button></div></div>'
+        f'<div class="menu" id="menu" hidden><div class="menuin">'
+        f'<div class="label">Sections</div><nav class="secnav">{nav}</nav>{qr_block}'
+        '</div></div></header>')
+    body = body.replace(header_placeholder, header, 1)
+
     return f"""<!doctype html><html lang="en-AU"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex">
 <title>{E(short)} — private property report</title>
 <style>{CSS}</style></head><body>
-{''.join(P)}
+{body}
 <script>{JS}</script></body></html>"""
 
 
