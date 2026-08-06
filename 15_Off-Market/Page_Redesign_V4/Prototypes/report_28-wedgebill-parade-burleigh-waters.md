@@ -1,7 +1,7 @@
 # 28 Wedgebill Parade
 ### Burleigh Waters, QLD
 
-603 m²
+603 m² · 5 bed
 
 **Last recorded sale $175,000, 1990-10. Held 35.8 years since.**
 
@@ -17,11 +17,11 @@ This is a private walkthrough of the first of them. Nothing here starts a sellin
 
 ## What the sales around it say
 
-**$1,702,859 – $2,167,275**
+**$1,753,450 – $2,231,664**
 
-Most likely position: **around $1.95 million** — rounded, deliberately, to the nearest $50,000.
+Most likely position: **around $2 million** — rounded, deliberately, to the nearest $50,000.
 
-Built from 46 sales, each adjusted for how it differs from this home.
+Built from 28 sales, each adjusted for how it differs from this home.
 
 That's a range, not a figure, and the width of it is the honest part.
 
@@ -31,32 +31,43 @@ That's a range, not a figure, and the width of it is the honest part.
 
 ## The sales behind that range, and what we changed about each one
 
-> 2999 recent sales reviewed  →  7066 nearby homes compared  →  34 property characteristics analysed
+> 2999 recent sales reviewed  →  7066 nearby homes compared  →  36 property characteristics analysed
 
 | Comparable | Sold | Adjusted to | Move |
 |---|---|---|---|
-| 20 Silkyoak Court, Burleigh Waters, QLD 4220 | $1,550,000 | **$1,774,817** | +14.5% |
-| 56 Banksia Broadway, Burleigh Waters, QLD 4220 | $1,965,000 | **$1,873,115** | -4.7% |
-| 10 Oriole Court, Burleigh Waters QLD 4220 | $1,660,000 | **$1,903,188** | +14.6% |
-| 25 Dotterel Drive, Burleigh Waters QLD 4220 | $2,325,000 | **$1,911,856** | -17.8% |
-| 6 Maitland Street, Burleigh Waters QLD 4220 | $2,135,000 | **$1,941,129** | -9.1% |
-| 6 Skua Street, Burleigh Waters, QLD 4220 | $2,000,000 | **$2,017,124** | +0.9% |
-| 7 Cassowary Drive, Burleigh Waters QLD 4220 | $1,950,000 | **$2,020,918** | +3.6% |
-| 23 Kestrel Drive, Burleigh Waters QLD 4220 | $2,210,000 | **$2,027,682** | -8.2% |
+| 5 Bluejay Street, Burleigh Waters, QLD 4220 | $2,200,000 | **$1,840,701** | -16.3% |
+| 20 Silkyoak Court, Burleigh Waters, QLD 4220 | $1,550,000 | **$1,859,817** | +20.0% |
+| 56 Banksia Broadway, Burleigh Waters, QLD 4220 | $1,965,000 | **$1,958,115** | -0.4% |
+| 9 Skua Street, Burleigh Waters, QLD 4220 | $2,700,000 | **$1,983,411** | -26.5% |
+| 25 Dotterel Drive, Burleigh Waters QLD 4220 | $2,325,000 | **$1,996,856** | -14.1% |
+| 6 Maitland Street, Burleigh Waters QLD 4220 | $2,135,000 | **$2,026,129** | -5.1% |
+| 7 Cassowary Drive, Burleigh Waters QLD 4220 | $1,950,000 | **$2,105,918** | +8.0% |
+| 23 Kestrel Drive, Burleigh Waters QLD 4220 | $2,210,000 | **$2,112,682** | -4.4% |
 
 
 ### That sale up the road isn't your comparison
 
-**10 Oriole Court — sold $1,660,000, 320m away.**
+**25 Dotterel Drive — sold $2,325,000, 590m away.**
 
 Looks like the same home. But against yours:
-- 80m² less land
-- 30m² more floor area
+- 4 bedrooms vs your 5
 - no parkland behind it
 
 **Same street, different home. The headline number was never the comparison.**
-> *[§2 scarcity — not rendered: claim not supported — 101/188 match on 1 anchor(s) (54% of the market). Rarity copy would be false here]*
 
+### Why it sits where it does in that range
+
+21 of the 188 homes on the market right now match this one on 5 bedrooms and a pool.
+
+Of the 21 homes nearby that share your core combination, only **8** are also this close to a school, a park and a supermarket — all at once.
+
+**What this means:** the range isn't wide because we're hedging. It's wide because homes with this combination don't come up often enough to pin it tighter.
+
+### What carries the price
+
+**What strengthens your position:** ↑ bedroom count
+
+**Knowing where it is strong is how you hold your number.**
 
 *↓ So how wrong could you be?*
 
@@ -134,7 +145,7 @@ A lender isn't asking *what would this sell for*. It's asking *what could we rec
 to sell it in a hurry*. Those are different questions, and the second is deliberately
 conservative.
 
-**The top of this range is $2,167,275.**
+**The top of this range is $2,231,664.**
 
 *↓ And what's happening around it now?*
 
@@ -142,8 +153,7 @@ conservative.
 
 ## What's changed around this home
 
-> *[§7 competitors — not rendered: no competition result]*
-
+**4 homes are competing with this one right now**, of 188 on the market in the catchment.
 > *[§7 change log — not rendered: durable change log runs off system_monitor.property_reports — not minted for off-market slugs]*
 
 
@@ -191,10 +201,8 @@ page becomes a lead.
 
 ## Coverage audit
 
-**3 block(s) did not render:**
+**1 block(s) did not render:**
 
-- **§2 scarcity** — claim not supported — 101/188 match on 1 anchor(s) (54% of the market). Rarity copy would be false here
-- **§7 competitors** — no competition result
 - **§7 change log** — durable change log runs off system_monitor.property_reports — not minted for off-market slugs
 
-**fact_bundle gaps:** bedrooms unknown; bathrooms unknown; competition count unavailable
+**fact_bundle gaps:** bathrooms unknown
