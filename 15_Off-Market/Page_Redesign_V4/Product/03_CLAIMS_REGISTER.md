@@ -80,6 +80,7 @@ True on current evidence, but sourced from forum testimony, snippets, or absence
 | C12 | Any confidence label — "high accuracy", "medium confidence" | **Labels are inverted in parts of the backtest.** A Domain band labelled "high accuracy" that excluded the actual sale price is the exact failure we are criticising. Calibrate first |
 | C13 | Any per-address claim about who owns or occupies a home | Zero demand evidence (260 `who owns` autocompletes, all corporate; 0 of 4,349 Reddit posts) and a direct privacy trigger |
 | C14 | Forbidden words: stunning · nestled · boasting · rare opportunity · robust market | Rule 5 |
+| **C15** | **"Sensitive — homeowner only" applied to public-record data**, or to our analysis of it | Comparable sales, land size, sale history and our adjustments are public record. Calling them sensitive to justify a lead gate is a **false claim**, and a claimer who discovers it loses trust at the exact moment they identified themselves — the worst possible point. ✅ **The honest version is permitted and stronger:** analysis that would disadvantage the owner if the *counterparty* read it, on a page buyers demonstrably do read (Google's #1 bare-address refinement is `for sale`, 5 of 8 on homes that aren't for sale). *"We won't show this to whoever types your address"* is true and checkable. See `05_PAGE_FLOW.md` — Layout and gating |
 
 ---
 
