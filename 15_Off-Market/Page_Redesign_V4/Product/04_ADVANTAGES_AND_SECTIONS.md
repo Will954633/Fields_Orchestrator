@@ -75,6 +75,17 @@ can't be falsified by a backtest · **PENDING** = real but blocked on a fix.
 | **A7** | **Wrong facts can be corrected, and you see the number move.** Nobody offers this — *"over 20 emails and they wouldn't change it"* | **STRUCTURAL** (unbuilt) | `consumer_voice` §3.9 | §6 claim step |
 | **A8** | **An estimate that's dated and re-anchored.** Portal estimates carry no computed-on date; *"Domain estimates and REA always lag (3-4 months)"* | **PENDING** | `ADDENDUM_propertychat` §1; our own lag analysis | §2 / §5 |
 | **A9** | Address-level flood and hazard context | **PENDING** | `does burleigh waters flood` = most persistent suggestion in our corpus, 546, 2.5× the next | §5 |
+| **A10** | **We price renovation and condition explicitly, in dollars.** On Moorabbin: renovation level 4 vs 2 = **−$96,032**; interior condition 8 vs 7 = **−$95,500**. That is a direct answer to *"does this work add value?"* — the Reno Payback persona (~21 posts) and `house valuation after renovation` | **STRUCTURAL** | Moorabbin adjustment lines; `research_intent/D` cat A, `B` P4 | §4, and a natural return-visit hook |
+| **A11** | **No hindsight.** Comparables are drawn only from sales dated *before* the subject, and the subject is excluded by `_id`. Nobody states this, and it is the difference between a forecast and a recollection — the exact flaw that invalidated our own Domain benchmark | **STRUCTURAL** | `valuation_backtest.sold_before_subject()`; fix-history `[DOMAIN-BENCHMARK-CONTAMINATED]` | §4 / §5 |
+| **A12** | **The selection is shown, not just the selection's output** — "8 included of 32 assessed". Evidence of work, and the honest form of "we looked at everything" | **STRUCTURAL** | backtest returns `included_points` + `all_points` | §3 |
+
+### ⚠ L — limitations that bound the claims above
+
+| # | Limitation | Bounds |
+|---|---|---|
+| **L1** | **Our comparable pool is Domain-derived and inherits its under-capture.** Sold sources in the pool are `domain_sold_listings_backfill`, `selenium_sold_scraper_12months`, `curlffi_suburb_scraper`, `parallel_suburb_scraper` — all Domain-origin, deduped. Domain captures roughly **53–66%** of actual sales (`data_source_undercapture_reset`). The onthehouse union applies to **medians**, not to the comp pool | **Bounds A2 directly.** "The right answer is usually already in the comp set" is measured *within our pool*. Where the true best comparable was never captured, neither method could have found it. Do not claim comprehensiveness |
+| **L2** | Time adjustment is computed but **not composed** with feature adjustments | Bounds A4 — the 38.8% median narrowing is feature-adjustment only. Composing time in would move it, direction unknown |
+| **L3** | **No radius filter exists** — distance is only a weight, decaying to zero at 5 km. Comps have reached **2.57 km** while copy said "near your street" | Bounds A3 and any "nearby" language |
 
 ## 1b. Kill list — do not build a section on any of these
 
@@ -105,6 +116,18 @@ Ordered by evidence strength. "Validated" marks needs with independent demand si
 | **"Will an agent call me? Am I declaring I'm selling?"** | `GTP_market_analysis` L1617; 62-comment PII thread | Answer first, ask nothing, never contact | A6 |
 | **"Is my home exposed?"** flood, bushfire, heritage, asbestos | `does burleigh waters flood` 546 persistence | Address-level hazard with source + limits | A9 |
 | **"What could I actually walk away with?"** Equity Checker ~115 posts | Reddit personas | ⚠ **Out of scope for launch** — collides with the privacy line (derived financial inference) | — |
+
+### Added by the 2026-08-06 completeness audit — valuation needs the framework was missing
+
+| Need, in their words | Evidence | What answers it | Advantage | Status |
+|---|---|---|---|---|
+| **"How does a valuation actually work? What do they check?"** | `research_intent/D` cat K = **85** suggestions; `house valuation how does it work`, `house valuation what do they check` | A plain explainer of the method **as a topic**, separate from this home's working. People want to understand the process before they trust an output of it | A3, A11, A12 | **GAP — no section owns this.** Candidate: fold into §3 as a short "how this was done" preamble |
+| **"Why does the bank's number differ from the market number?"** | **Equity Checker is the single largest persona (~115)**; the named-institution pattern (`westpac`, `commbank`, `anz`, `corelogic`) is *"the most AU-distinctive pattern found"* | Explain that a lender AVM answers a different question (security for a loan) than a market appraisal. **No derived financial inference needed** — this is a category explainer, not their equity | A1, A11 | **GAP.** Answers the biggest persona without crossing the privacy line that put J7 out of scope |
+| **"Does this renovation add value?"** | Reno Payback ~21; `house valuation after renovation` | We already price renovation level and interior condition as explicit dollar lines | **A10** | **GAP — and it is a strong return-visit hook** |
+| **"I need a valuation *for* something"** — probate, divorce, separation, CGT, capital gains, aged pension, mortgage | `research_intent/D` cat D = 33; *"Life-event triggers are explicit"* | State plainly what this is and is not usable for. Links to `statutory_cma_layer` | — | **GAP.** Also a liability boundary, not just a content gap |
+| **"Which estimate site is least bad?"** | Tool Shopper ~21 | Partly answered by §2 (dispersion), but never addressed directly | A1, A5 | Partial |
+| **"Is an online estimate even a valuation?"** | CHOICE / Vince Mangioni (UTS): *"an online estimate isn't a valuation — rather, they're price estimates and they provide indicative averages"* | Name the difference between an AVM, an agent appraisal, and a certified valuation. Protects us and answers a real confusion | A5 | **GAP — and the safest possible framing for our own output** |
+| **"How current is this evidence?"** | `Rique`: *"Domain estimates and REA always lag (3-4 months)"*; our own comps averaged **7.6 months** old | Show comp dates and the set's median age. Cheap, and it is exactly the disclosure A8 is about | A8, L2 | **GAP — trivially available, we already hold the dates** |
 
 ---
 
