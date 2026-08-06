@@ -118,6 +118,12 @@ about every other number they've seen.
 
 **No confidence label.** Ours don't discriminate — `high` 56.0% versus `medium` 57.5%.
 
+**While it builds**, reuse `PendingPlaceholder` — a designed wait state with a status eyebrow
+and an ETA line, rather than a spinner. Its mini-site copy reads *"Consultant review in
+progress · Live within 3 business days"*; ours is seconds, not days, so the ETA line changes
+but the pattern holds. A named, dated wait reads as work happening; an unnamed one reads as a
+slow page.
+
 **When the build can't run — state why, precisely, and treat it as a credential.** Taken from
 the mini-site's suppression rule: *"saying why a number is missing is worth more than the
 number. Every competitor draws the line anyway. **Refusing to is a credential.**"*
@@ -144,6 +150,19 @@ invent numbers.**
 > This is the highest-yield, lowest-friction ask on the page, and it is **self-verifying** —
 > only the owner receives post at that address, so ownership is proved without asking anyone
 > to prove anything. Postal reach is 176 against 29 for email.
+>
+> **What gets posted is already specified** (mini-site Session 1 print edition): A4 folded to
+> A5, four sides, and — the load-bearing rule — **no CTA anywhere**. *"This reaches an owner who
+> did not ask for it; the moment it mentions appraisals or selling services it reads as
+> solicitation."* Every number carries its source and review date **on the same side**. No
+> "tap", "scroll" or "click". The on-screen expansion becomes a printed side, because on paper
+> there is nothing to open — the proof is simply printed.
+>
+> ⚠ **If the printed piece carries a QR that invites a reply, fix the token gap first.** Writes
+> are gated on a `device_token` in localStorage; a reader arriving from print has none, so the
+> answer is **silently discarded while they are shown a success state**. Until a signed
+> `?plan_token=` is accepted server-side, no printed piece may present a question as answerable
+> online.
 
 ---
 
@@ -418,6 +437,8 @@ This section gives all three and needs to know nothing about their finances.
 >
 > Homes here are taking a median of {dom} days to sell, against {dom_prior} a year ago.
 >
+> `● Live — competitor set re-checked nightly, last {last_checked}`
+>
 > **{n_matching} homes are competing with this one right now.**
 >
 > *[the closest active listings — photo, address, price, beds/baths, and for each one an
@@ -544,7 +565,9 @@ complaining that a listing omitted flood risk — because they don't complain to
 > renovation we don't know about, a room count that's out of date, a sale that shouldn't have
 > been used.
 >
-> Tell us, and we'll fix it and rebuild the figure in front of you.
+> **[ See everything we hold on this home ]**
+>
+> Tell us what's wrong, and we'll fix it and rebuild the figure in front of you.
 >
 > **Nobody calls unless you ask.** No agent is paying to appear here, and nothing you do on
 > this page becomes a lead.
@@ -555,6 +578,12 @@ yet it still shows as vacant land."* Every reviewer in that cluster reports that
 
 Correction is also the one thing that genuinely **requires** knowing it's their home, which
 makes claiming a functional necessity rather than a toll.
+
+**Pair it with `DataRecordDrawer`** — the shipped slide-in listing *"every data point Fields
+holds on a home, grouped and sourced… every group prints its source so each row stays
+auditable."* You can only correct what you can see, so the drawer is the precondition for the
+ask, not an extra. It is also the most complete answer we have to *"what do you actually know
+about my house"*, and it renders straight off existing data.
 
 And the last line is the sharpest contrast we own, defensible entirely from REA's own filings:
 they report homeowner engagement to shareholders as *"valuable seller leads delivered to our
@@ -637,9 +666,21 @@ calling any of it "sensitive" to justify a gate would be a false claim (C15).
 | **`PendingPlaceholder`** | §1 build wait | `PendingPlaceholder.tsx` |
 | **Print spec — no CTA anywhere** | §1 postal ask | Session 1 print edition |
 
-**Not taken:** the four-card `PositionAtAGlance` opener (questions 2 and 3 are the
-buyer/competition angles with no independent support); the seven-session seller journey; the
-three broken charts; confidence grades.
+| **`MatchCards`** — each competitor carries an explicit *how it differs* line | §7 | `MatchCards.tsx` |
+| **`LiveMarketStatus`** — "live, checked nightly" status bar | §7 | `LiveMarketStatus.tsx` |
+| **Durable change log**, ungated 30-day / gated since-you-last-looked | §7 + claim | `refresh_comparables_for_doc()` |
+| **Aperture-widening honesty line** | §7 | same |
+
+**Considered and not taken, with reasons:**
+
+| Component | Why not |
+|---|---|
+| `PositionAtAGlance` four-card opener | Two of its four questions are the buyer and competition angles, which have no independent *search* support. The shape is good; adopting it would import those two questions unexamined |
+| `SeasonalityStrip` | Timing is a seller-journey question — the mini-site itself places it on the Process tab. Our reader is not necessarily selling. Belongs downstream |
+| `ShareMoment` | A share card built around the strongest scarcity claim. **Off-register here:** 94% of these visitors view exactly one address — *"the signature of a private self-check rather than browsing."* Sharing assumes an audience this reader is deliberately avoiding |
+| The seven-session seller journey | GPT is explicit it is the deeper path, not the initial product |
+| `ch7-1-buyer-pool`, `ch7-4-portal-traffic`, `ch7-3-marketing-benefit` | Inverted, drifted and unsourced respectively |
+| Confidence grades | Non-discriminating on our own measurement (C12) |
 
 ---
 
