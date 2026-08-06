@@ -356,6 +356,86 @@ def identify_features(
     return anchors, diffs
 
 
+def find_active_matches(
+    db: Database,
+    anchors: List[Dict[str, str]],
+    features_basic: Dict[str, Any],
+    catchment: Optional[List[str]] = None,
+    limit_per_suburb: int = 60,
+) -> List[Dict[str, Any]]:
+    """The matching listings themselves, with coordinates — for mapping.
+
+    WHY THIS EXISTS (2026-08-06). `count_active_matches` below uses
+    `count_documents`, so the matching set was never retained and nothing
+    downstream could place those homes on a map. The V4 scarcity map had to plot
+    amenities instead of the homes the section is actually about.
+
+    This mirrors that function's query EXACTLY — same `base`, same anchor
+    clauses — so the map can never disagree with the count beside it. It is a
+    separate function rather than a flag on the counter because the count is the
+    load-bearing honest number and must not change shape.
+
+    Coordinates: `LATITUDE`/`LONGITUDE` (uppercase, from the cadastral dataset)
+    is the primary and most complete source; `geocoded_coordinates` and
+    `georeference_data` are fallbacks. Lowercase `latitude` does NOT exist on
+    these documents — querying it returns zero, which is exactly the wrong
+    conclusion drawn on 2026-08-06.
+    """
+    catchment = catchment or DEFAULT_CATCHMENT
+    rule_by_key = {r["key"]: r for r in FEATURE_RULES}
+
+    and_clauses: List[Dict[str, Any]] = []
+    for a in anchors:
+        rule = rule_by_key.get(a["key"])
+        if not rule:
+            continue
+        try:
+            clause = rule["count_clause"](features_basic)
+        except Exception:
+            clause = None
+        if clause:
+            and_clauses.append(clause)
+    if not and_clauses:
+        return []
+
+    base = {"listing_status": "for_sale", f"{_F}.bedrooms": {"$exists": True}}
+    proj = {"address": 1, "price": 1, "bedrooms": 1, "LATITUDE": 1, "LONGITUDE": 1,
+            "geocoded_coordinates": 1, "georeference_data": 1, "listing_url": 1}
+
+    out: List[Dict[str, Any]] = []
+    for suburb in catchment:
+        try:
+            cur = db[suburb].find({**base, "$and": and_clauses}, proj).limit(limit_per_suburb)
+        except Exception as e:
+            logger.debug(f"  match fetch failed for {suburb}: {e}")
+            continue
+        for d in cur:
+            lat, lon = resolve_listing_coords(d)
+            if lat is None or lon is None:
+                continue
+            out.append({"address": d.get("address"), "suburb": suburb,
+                        "price": d.get("price"), "bedrooms": d.get("bedrooms"),
+                        "lat": lat, "lon": lon, "listing_url": d.get("listing_url")})
+    return out
+
+
+def resolve_listing_coords(doc: Dict[str, Any]) -> Tuple[Optional[float], Optional[float]]:
+    """Ordered fallback across the three places coordinates actually live."""
+    lat, lon = doc.get("LATITUDE"), doc.get("LONGITUDE")
+    if lat not in (None, "") and lon not in (None, ""):
+        try:
+            return float(lat), float(lon)
+        except (TypeError, ValueError):
+            pass
+    gc_ = doc.get("geocoded_coordinates") or {}
+    if gc_.get("latitude") is not None and gc_.get("longitude") is not None:
+        return float(gc_["latitude"]), float(gc_["longitude"])
+    gr = ((doc.get("georeference_data") or {}).get("coordinates") or {})
+    if gr.get("latitude") is not None and gr.get("longitude") is not None:
+        return float(gr["latitude"]), float(gr["longitude"])
+    return None, None
+
+
 def count_active_matches(
     db: Database,
     anchors: List[Dict[str, str]],
