@@ -18,7 +18,10 @@
 | Within 20% | 80% |
 | Worst over / under | +68.6% / −47.2% |
 
-**Recommended published figure — median, not mean:** *"Tested against 333 homes in these three
+⚠ **SUPERSEDED by the addendum below** — the sample was Robina-only, and the published figure is
+now per-suburb and scoped to the design envelope. Kept for the record.
+
+**Originally recommended:** *"Tested against 333 homes in these three
 suburbs that have since sold: half the time the estimate landed within 9.3% of the eventual sale
 price. The average miss was 12.3%."*
 
@@ -54,10 +57,20 @@ too — so the filter rarely fires anywhere. It is close to dead code with a mis
 
 > **203 of 333 (61%) of actual sale prices fell inside the predicted range.**
 
-The range is computed as `1.645 × weighted_std_dev` — the 90% interval under a normal
-assumption. Empirically it is a **61% interval**. The published range is roughly **three times
-too narrow** to mean what its construction claims (61% containment implies z ≈ 0.86, so true
-dispersion is ~1.9× the estimate; reaching 90% would need ~3.1× the current half-width).
+⚠ **CORRECTED, same day.** This section first claimed the range is `1.645 × weighted_std_dev`.
+**It is not, and has not been for some time.** That description survives in CLAUDE.md (now fixed)
+and in memory, but the code uses a deliberate flat **±12%** and its own comment says so: *"This
+reflects the empirical accuracy of the comparable-sales model — not a statistical CI."* The
+t-distribution approach was abandoned because it produced negative lower bounds on 2 comparables.
+That was a sound decision, documented honestly, and I misread it.
+
+Verified directly: **all 9,232 published ranges are exactly ±12.0%. One distinct value.** The
+range carries no property-specific information at all — same width whether we found 3 comparables
+or 30, whether they agreed or scattered.
+
+So the corrected picture: ±12% is empirically a **~60% interval** (measured 61%, and 67% inside
+the design envelope). A genuine 90% band needs **±26.4%** — the measured P90 error, i.e. 2.2×, not
+the 3.1× I derived from normal theory the code does not use.
 
 **This is a live claim risk, not a modelling nicety.** §1's entire argument is *"the width is the
 honest part"* — and the width currently understates our own uncertainty.
