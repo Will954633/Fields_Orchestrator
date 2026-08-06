@@ -69,6 +69,16 @@ often discussing it with a partner — not sitting down to a desktop dashboard.
 The visible main path stays concise. All analytical depth remains available, one tap deeper.
 
 ### 1 — Recognition and privacy
+
+> **DECIDED 2026-08-07 — the hero is an aerial with the title boundary drawn on it, in Fields sun
+> `#fec66f`.** Geometry is the real parcel from the Queensland cadastre, matched by lot/plan and
+> cached on the property document; the fetched area is checked against the stored land size, so a
+> wrong-parcel lookup cannot pass silently. Gold and copper were rejected on legibility — they
+> share a hue family with the terracotta roofs common in these suburbs and the outline dissolves
+> into the roofline. Semi-transparent Fields logo top-left over a soft vignette.
+> `scripts/render_property_aerial.py`. Comparison:
+> `/concepts/off-market/V4_Private_Report/aerials/`.
+
 Occupies most of the first mobile screen. Small logo, discreet "Private property report", date. No
 nav clutter. Real property image, else aerial/elegant map — **never a generic house image**. Address,
 facts, last recorded sale. Then the three private questions and the privacy promise: *"Nothing here
