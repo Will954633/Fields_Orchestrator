@@ -1,0 +1,42 @@
+{
+  "_comment": "Macro block for the owner-subject article. HUMAN-MAINTAINED. Every stat carries its own source and date. The generator REFUSES to render the macro section if as_at is older than max_age_days -- a stale macro block silently misrepresents the market, so it fails loud instead. Update after each monthly Cotality release / RBA decision.",
+  "as_at": "2026-08-01",
+  "max_age_days": 45,
+  "stats": [
+    {
+      "id": "cotality_monthly",
+      "text": "Cotality's five-city aggregate fell -0.9% in July 2026 and -2.0% over the July quarter, with Sydney down -3.7%, Melbourne down -3.0% and Brisbane down -0.1%",
+      "source": "Cotality",
+      "period": "July 2026",
+      "numbers": [-0.9, -2.0, -3.7, -3.0, -0.1]
+    },
+    {
+      "id": "rba_cash_rate",
+      "text": "The RBA cash rate stands at 4.35%, raised in February, March and May 2026 and held at the 16 June meeting",
+      "source": "RBA",
+      "period": "16 June 2026",
+      "numbers": [4.35]
+    },
+    {
+      "id": "abs_cpi",
+      "text": "Headline CPI rose 3.8% over the year to June 2026 and the trimmed mean 3.6%",
+      "source": "ABS",
+      "period": "June quarter 2026",
+      "numbers": [3.8, 3.6]
+    },
+    {
+      "id": "westpac_expectations",
+      "text": "The Westpac-Melbourne Institute House Price Expectations Index fell -8% in July 2026 to a three-year low, though 47% of respondents still expected rises",
+      "source": "Westpac-Melbourne Institute",
+      "period": "July 2026",
+      "numbers": [-8, 47]
+    }
+  ],
+  "auction_note": {
+    "text": "the capital-city average clearance rate was 46.0% for the week ending 5 July 2026, with Brisbane at 23.5%",
+    "source": "Cotality",
+    "period": "week ending 5 July 2026",
+    "numbers": [46.0, 23.5],
+    "caveat": "homes in these suburbs sell predominantly by private treaty, so that figure measures a different sale process"
+  }
+}
