@@ -724,7 +724,7 @@ def render(slug, proto="full"):
                     + adjustment_rows(c) + '</div></details>')
             add('</div>')
         if B and len(adj) > 3:
-            add(f'<details open><summary>All {len(adj)} strongest comparisons</summary><div class="body">')
+            add(f'<details><summary>See all {len(adj)} strongest comparisons</summary><div class="body">')
             add('<div class="ctable">')
             for c in adj:
                 w = c.get("weight")
@@ -797,7 +797,7 @@ def render(slug, proto="full"):
                     f'market that share the combination in grey. How far a buyer would have to go '
                     f'to find a substitute. Mapping · Google</div>')
         if feats:
-            add('<details' + (' open' if B else '') + '><summary>See the distances</summary><div class="body">')
+            add('<details><summary>See the distances</summary><div class="body">')
             for f in feats:
                 add(f'<div style="display:flex;justify-content:space-between;padding:6px 0;'
                     f'border-bottom:1px solid var(--line-2)"><span>{E(f["label"])}</span>'
