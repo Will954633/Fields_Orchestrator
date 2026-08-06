@@ -20,8 +20,10 @@ a pitch; copy that is calm and specific will read as competence.
 stunning, nestled, boasting, rare opportunity, robust market. Never a single valuation figure
 as a headline. Never advice. Never a prediction.
 
-**The arc:** recognise → unsettle → resolve → prove → apply → widen → protect → hand over
-control. Each section ends on a question the next one actually answers. Forward cues must be
+**The arc:** recognise → answer → prove → explain → apply → widen → protect → hand over
+control. The reader is given the number early, then shown the working, and only then told why
+other numbers differ. Proof before criticism — leading with why everyone else is unreliable,
+before demonstrating our own method, is the weaker position and reads as defensive. Each section ends on a question the next one actually answers. Forward cues must be
 honest — a promise the next section doesn't keep is the fastest way to lose someone who is
 already sceptical.
 
@@ -86,7 +88,8 @@ about every other number they've seen.
 **No confidence label.** Ours don't discriminate — `high` 56.0% versus `medium` 57.5%.
 
 **When the build can't run:** say so in one line and move on. *"We don't hold enough detail on
-this home to build a range yet — here's what we can tell you."* Then §2, which needs nothing.
+this home to build a range yet — here's what we can tell you."* Then jump to §4, which needs
+nothing about this home at all.
 
 > ### The ask
 > **"Post the full report to this address"**
@@ -98,56 +101,14 @@ this home to build a range yet — here's what we can tell you."* Then §2, whic
 
 ---
 
-# §2 — Why the numbers disagree
+# §2 — The working
 
-> ## You've probably seen a few different numbers
->
-> Most valuations are built the same way: pick three similar sales nearby, and see where the
-> home sits between them.
->
-> We tested what that method actually produces. We took 512 homes that have since sold, found
-> every set of three comparable sales an agent could reasonably have chosen, and worked out
-> what each set would have said.
->
-> **The gap between the highest and lowest defensible answer was a median of $469,000 — about
-> a third of the home's value.** On 77% of homes it was more than 20% of the value.
->
-> Here's the part that surprised us. A near-perfect comparable — one that would have landed
-> within 2% of the eventual sale price — was sitting in the available sales on **73.6%** of
-> those homes. The worst choice available was more than 20% out on **73.4%**.
->
-> **The right answer is nearly always there. Three sales just can't tell you which one it is.**
-
-**Why this works.** This is the pivot of the page, and the one section that never fails — it
-needs no data about their home at all.
-
-It reframes the thing they came for. They arrived asking *what is my home worth*; they leave
-this section asking *how was that number made* — which is the only question we can answer
-better than anyone. Everything after it is the answer. Without §2, §3 is a boast. With it, §3
-is the obvious next thing.
-
-It also names nobody, uses only public sales data, and criticises a **method** rather than
-people.
-
-> ⚠ **Tone check.** Fields is a licensed agency that could use that method. Write it as *"here
-> is why we don't do it that way"* — never *"agents are unreliable."*
-> ⚠ **Do not attach an accuracy claim.** Against that method we are a dead heat: a randomly
-> chosen set of three beats us **exactly 50.0%** of the time. The claim is that our answer
-> doesn't move depending on who picked the sales. It is about **determinacy**, not accuracy.
-
-> ### The ask
-> **"Show me the eight we used"** — not a request, just the way into §3. No gate.
-
----
-
-# §3 — The working
-
-> ## The sales we used, and what we changed about each one
+> ## The sales behind that range, and what we changed about each one
 >
 > We looked at {n_assessed} sales and kept {n_comps}.
 >
-> No sale is a match. Each one differs from this home in ways that are worth money, so we
-> price those differences and adjust.
+> No sale is a match. Each one differs from this home in ways that are worth money, so we price
+> those differences and adjust.
 >
 > **{comp_address}** — sold ${comp_price}, {comp_date}, {comp_distance} away
 > One more bedroom here **+${adj_bed}**
@@ -157,20 +118,24 @@ people.
 >
 > *[each comparable, the same way]*
 >
-> Across the homes we've tested, adjusting narrows the spread by about 40%, and narrows it at
-> all nine times out of ten.
->
 > Every line is here because you should be able to disagree with one.
 
-**Why this works.** It converts an assertion into an argument. You can't argue with
-"$1,550,000". You can argue with "one more bedroom, +$113,110" — and being able to argue with
-it is exactly what makes it trustworthy. That is the thing a black-box estimate structurally
-cannot offer.
+**Why this works, and why it comes second.** The moment someone is handed a number, *"why
+should I believe that?"* is automatic. This answers it directly, with their own home's
+figures, before we say a word about anybody else.
+
+It converts an assertion into an argument. You can't argue with "$1,550,000". You can argue
+with *"one more bedroom, +$113,110"* — and being able to argue with it is what makes it
+trustworthy. That is precisely what a black-box estimate cannot offer.
+
+It also does the work that §4 would otherwise have to do by assertion: watching a $1,300,000
+sale become $1,521,873 **is** the demonstration that method moves a number by hundreds of
+thousands of dollars. §4 then generalises something they have already seen happen.
 
 **Its job is to be seen to exist, not to be read.** Only 13.9% of visitors click anything and
-cards get skimmed in under two seconds. Show one comparable fully expanded and the rest
-collapsed. The visible existence of the working does the persuading; a wall of it gets scrolled
-past by the very people it was written for.
+cards are skimmed in under two seconds. Show one comparable fully expanded, the rest collapsed.
+The visible existence of the working does the persuading; a wall of it gets scrolled past by
+the very people it was written for.
 
 > ⚠ Blocked: `adjusted_price` and the component adjustments are **not persisted**. This
 > section cannot render until they are.
@@ -182,18 +147,18 @@ past by the very people it was written for.
 > *If something here looks wrong — a sale we shouldn't have used, a feature we've got wrong, a
 > comparison that doesn't hold — tell us and a person will look at it.*
 >
-> This is the strongest thing we can put behind a claim, because it **genuinely requires
-> knowing it's your home**, and because nobody offers it. The dominant grievance in the
-> research is having no recourse: *"I contacted them to get a true reflection and after over 20
-> emails back and forward they said they couldn't or wouldn't change it."* A homeowner whose
-> estimate was too low was told to go and hire an agent.
+> The strongest thing we can put behind a claim: it **genuinely requires knowing it's your
+> home**, and nobody offers it. The dominant grievance in the research is having no recourse —
+> *"I contacted them to get a true reflection and after over 20 emails back and forward they
+> said they couldn't or wouldn't change it."* A homeowner whose estimate was too low was told
+> to go and hire an agent.
 >
-> It is also the best possible conversation starter — they open it by telling us something
+> It is also the best conversation starter we have: they open it by telling us something
 > specific about their own home.
 
 ---
 
-# §4 — How it's made, and how wrong it can be
+# §3 — How it's made, and how wrong it can be
 
 > ## What this is, and what it isn't
 >
@@ -206,23 +171,26 @@ past by the very people it was written for.
 >
 > **What we won't do:** use anything that happened after the fact. Every sale behind this figure
 > closed *before* today. That sounds obvious; it is the single easiest way for a number like
-> this to flatter itself, and it's worth knowing that we've ruled it out.
+> this to flatter itself, and it's worth knowing we've ruled it out.
 >
-> **How wrong we are:** across {backtest_n} homes we've tested, our estimate is a median
-> {error_rate}% away from what the home actually sold for. We publish that because a number
-> without an error rate is just a number.
+> **Across the homes we've tested, adjusting narrows the spread by about 40%, and narrows it at
+> all nine times out of ten.**
+>
+> **How wrong we are:** across {backtest_n} homes, our estimate is a median {error_rate}% away
+> from what the home actually sold for. We publish that because a number without an error rate
+> is just a number.
 
-**Why this works.** This is the only topic on the page with **validated market demand** — the
-Fields article on estimate accuracy outperformed on Facebook. Add 85 autocomplete searches for
-how valuation works and what gets checked, plus the trust hedges people type: `actually worth`,
-`really worth`.
+**Why this works.** The only topic on the page with **validated market demand** — the Fields
+article on estimate accuracy outperformed on Facebook. Add 85 autocomplete searches for how
+valuation works and what gets checked, plus the trust hedges people actually type: `actually
+worth`, `really worth`.
 
 Publishing the error rate is also armour. Zillow's defence when it was sued over its estimates
 was its own published accuracy. Nobody in Australia publishes one.
 
-And *"what this isn't"* does double duty — it is the safest framing of our own output, and it
-is the boundary for the people searching valuations for probate, divorce, capital gains or an
-aged pension assessment.
+*"What this isn't"* does double duty — the safest framing of our own output, and the boundary
+for people searching valuations for probate, divorce, capital gains or an aged pension
+assessment.
 
 > ⚠ Pin **one** error-rate figure with its sample and date. Both 11.1% and 11.6% are in
 > circulation.
@@ -230,8 +198,54 @@ aged pension assessment.
 > direction.
 
 > ### The ask
-> **"Send me the method in full"** — the long-form explanation, posted or emailed. Low
-> commitment, high signal: someone who requests this is telling us they're doing real research.
+> **"Send me the method in full"** — the long-form explanation, posted. Low commitment, high
+> signal: someone who requests this is doing real research.
+
+---
+
+# §4 — Why you've seen other numbers
+
+> ## Why the other estimates say something different
+>
+> You've almost certainly seen other figures for this home. Here's what explains the gap.
+>
+> You just watched a sale at $1,300,000 become $1,521,873 once we priced the differences. That
+> is what choosing a different set of sales does to the answer.
+>
+> Most valuations are built on three of them. Pick three similar sales nearby, see where the
+> home sits between them.
+>
+> We tested what that actually produces. We took 512 homes that have since sold, found every
+> set of three comparable sales that could reasonably have been chosen, and worked out what
+> each set would have said.
+>
+> **The gap between the highest and lowest defensible answer was a median of $469,000 — about a
+> third of the home's value.** On 77% of homes it was more than 20% of the value.
+>
+> The part that surprised us: a near-perfect comparable — one landing within 2% of the eventual
+> sale price — was sitting in the available sales on **73.6%** of those homes. The worst choice
+> available was more than 20% out on **73.4%**.
+>
+> **The right answer is nearly always there. Three sales just can't tell you which one it is.**
+
+**Why this works here rather than earlier.** By this point they have watched our method move a
+number in their own home's figures. This section generalises what they have already seen —
+it is confirmation, not setup.
+
+That also fixes the tone. Placed before our own working it reads as pre-emptive criticism;
+placed after, it is an explanation of something they genuinely want explained — the competing
+estimates already sitting above us on the same Google results page.
+
+It names nobody, uses only public sales data, and criticises a **method** rather than people.
+
+> ⚠ **Tone check.** Fields is a licensed agency that could use that method. Write it as *"here
+> is why we don't do it that way"* — never *"agents are unreliable."*
+> ⚠ **Do not attach an accuracy claim.** Against that method we are a dead heat: a randomly
+> chosen set of three beats us **exactly 50.0%** of the time. The claim is that our answer
+> doesn't move depending on who picked the sales — **determinacy**, not accuracy.
+
+> ### The ask
+> None. This section's job is to land, then hand over to §5.
 
 ---
 
@@ -372,8 +386,8 @@ Nine sections, six asks. Each is a reason to talk, not a toll gate.
 | § | The ask | What it gives us | Why they'd do it |
 |---|---|---|---|
 | 1 | Post the report to this address | **A verified owner + postal address** | Self-verifying, one field, 6× the reach of email |
-| 3 | **Ask us to review this** | An opened conversation, in their words | Nobody else will fix a number about their home |
-| 4 | Send me the method in full | A research-stage contact | Low commitment, high intent signal |
+| 2 | **Ask us to review this** | An opened conversation, in their words | Nobody else will fix a number about their home |
+| 3 | Send me the method in full | A research-stage contact | Low commitment, high intent signal |
 | 5 | Send this in writing | An address, and a live financial context | Genuinely useful to a broker |
 | 6 | Tell me when this changes | A durable channel | The only page that explains its own movement |
 | 7 | Send me the detail for this address | An address | 546 persistence says they want it |
@@ -394,9 +408,9 @@ calling any of it "sensitive" to justify a gate would be a false claim (C15).
 |---|---|---|---|
 | 0 | ✅ ready | ✅ | — |
 | 1 | ✅ ready | on-demand, 30–90s | load testing |
-| 2 | ✅ ready | ✅ measured | — **ship first** |
-| 3 | ✅ ready | ❌ | `adjusted_price` not persisted |
-| 4 | ✅ ready | error rate exists | pin one figure |
+| 2 | ✅ ready | ❌ | `adjusted_price` not persisted |
+| 3 | ✅ ready | error rate exists | pin one figure |
+| 4 | ✅ ready | ✅ measured | — **the one thing blocked by nothing** |
 | 5 | ✅ ready | ✅ | — |
 | 6 | ✅ ready | ✅ | Rule 5 review |
 | 7 | ✅ ready | Burleigh Waters only | other suburbs |
@@ -405,5 +419,8 @@ calling any of it "sensitive" to justify a gate would be a false claim (C15).
 ## Open
 
 1. **Mobile.** Nine value-then-ask blocks stacked could read as nine paywalls. Prototype before committing.
+1b. **Fallback order when there is no range.** §2 and §3 depend on a valuation; §4 does not.
+   Where the build can't run, go §0 → §1 (plainly: not enough detail) → **§4** → §6. The page
+   still has substance, but the arc inverts — say why numbers differ before we can show ours.
 2. **Does §2 land as honest or as attack?** It criticises a method Fields is licensed to use.
 3. **"Nobody calls unless you ask"** appears twice and is load-bearing both times. It cannot ship until it is an operational rule.
