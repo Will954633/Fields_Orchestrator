@@ -436,9 +436,25 @@ def main():
     args = ap.parse_args()
 
     b = fact_bundle.build(args.slug, args.suburb)
+    # Prefer the engine's own persisted adjusted comparables (added to
+    # valuation_data 2026-08-06) over the backtest path — it works for unsold
+    # subjects, which is the actual off-market surface.
+    if not args.backtest:
+        _gc = get_mongo_client()["Gold_Coast"]
+        _d = _gc[b["suburb_key"]].find_one({"address": b["address"]},
+                                           {"valuation_data.adjusted_comparables": 1})
+        _ac = ((_d or {}).get("valuation_data") or {}).get("adjusted_comparables") or []
+        if _ac:
+            globals()["_PERSISTED"] = [
+                {"address": c.get("address"), "raw": c.get("sale_price"),
+                 "adj": c.get("adjusted_price"), "pct": c.get("total_adjustment_pct")}
+                for c in _ac if c.get("adjusted_price")]
     gc = get_mongo_client()["Gold_Coast"]
     ls = last_sale(gc, b["suburb_key"], b["address"])
-    adjusted = get_adjusted(args.slug, b["suburb_key"]) if args.backtest else None
+    adjusted = (get_adjusted(args.slug, b["suburb_key"]) if args.backtest
+                else globals().get("_PERSISTED"))
+    adjusted = (get_adjusted(args.slug, b["suburb_key"]) if args.backtest
+                else globals().get("_PERSISTED"))
 
     parts = [s0_arrival(b, ls), s1_range(b), s2_working(b, adjusted), s3_method(),
              s4_dispersion(), s5_gain(ls), s6_lender(b), s7_moving(b),
