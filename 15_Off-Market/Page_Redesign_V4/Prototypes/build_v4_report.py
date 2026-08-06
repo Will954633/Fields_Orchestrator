@@ -277,10 +277,12 @@ def s2_working(b, adjusted):
     anchors = [x for x in str(sc.get("query") or "").split("·") if x.strip()]
     share = (n_match / n_tot) if (n_match and n_tot) else None
     if n_match is not None and (share is None or share > 0.25 or len(anchors) < 2):
+        # n_tot / share can be None when compute_intel returns a partial result —
+        # never format a None into the reason string.
+        detail = (f"{n_match}/{n_tot} match on {len(anchors)} anchor(s)"
+                  + (f" ({share:.0%} of the market)" if share is not None else ""))
         out.append(skip("§2 scarcity",
-                        f"claim not supported — {n_match}/{n_tot} match on "
-                        f"{len(anchors)} anchor(s) ({share:.0%} of the market). "
-                        f"Rarity copy would be false here"))
+                        f"claim not supported — {detail}. Rarity copy would be false here"))
     elif n_match is not None:
         out += ["", "### What makes this home less common among today's listings", "",
                 f"{sc.get('active_matching')} of the {sc.get('active_total')} homes on the "
