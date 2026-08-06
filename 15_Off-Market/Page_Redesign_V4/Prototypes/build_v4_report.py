@@ -179,8 +179,8 @@ def s0_arrival(b, ls):
             "Is the number attached to this home real? Is this the wrong time to move? "
             "And if you sold, where would you go next?", "",
             "This page starts with the first: what the sales around this home actually "
-            "support. Nothing here starts a selling process, and **nobody calls unless "
-            "you ask**.", "",
+            "support. There is nothing to fill in and no account to create — the whole "
+            "page is here.", "",
             "*↓ So what is it worth?*"]
     return "\n".join(out)
 
@@ -546,13 +546,21 @@ renovation we don't know about, a room count out of date, a sale that shouldn't 
 
 Tell us what's wrong, and we'll fix it and rebuild the figure in front of you.
 
-**Corrections update this property record. They are not treated as a request for contact, and
-nobody calls unless you ask.** No agent is paying to appear here.
+**No agent is paying to appear on this page, and your interest in your own home is not sold to
+anyone.** Fields is the agency that built it — there is no third party being handed your
+address.
 
-⚠ *The blanket "nothing you do on this page becomes a lead" has been removed. It is not
-literally true while `offmarket-intent-alert.mjs` fires a Telegram alert when a visitor reaches
-the end of a deck having asked for nothing. The wording above is precise and operationally
-enforceable; the broader promise cannot ship until that alert rule is ratified.*""" + ask
+⚠ *DECISION 2026-08-06 (Will): the page carries NO promise about contact, in either direction.
+"Nobody calls unless you ask" is removed from §0 and §9. Rationale: the page is a lead surface
+and the business depends on it; a promise the model cannot keep is worse than no promise, and
+`offmarket-intent-alert.mjs` already fires on reaching the end of a deck. Outreach is physical
+mail to the property address — not cold calling.*
+
+⚠ *What replaces it is stronger and stays true: REA books a homeowner's engagement with its own
+estimate as a "seller lead delivered to our customers", with Pro-tier agents receiving 36% more
+of them. The differentiator was never "we won't contact you" — it is **"we don't sell you to
+whoever pays most."** That survives the business model intact, and it is defensible from REA's
+own filings.*""" + ask
 
 
 # ── main ────────────────────────────────────────────────────────────────────
