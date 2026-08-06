@@ -113,8 +113,15 @@ available was more than 20% out on **73.4%**.
 
 ## Bought 1990-10 for $175,000
 
-> *[§5 index trajectory — not rendered: suburb index series not wired into this prototype — needs the quarterly median series applied to the purchase price]*
+That was **35.8 years ago**. We can't trace a line from it to today: our quarterly median series for Burleigh Waters starts at Q3 2024, and everything before that is outside what we can measure.
 
+What we can say is what the suburb has done over the window we do hold — the Burleigh Waters median moved from $1,800,000 (Q3 2024) to $1,877,775 (Q2 2026).
+
+Over ten years: $707,000 → $1,877,775, 165.6%.
+
+**What this means:** the gap between what you paid and what the sales say today is real, but it isn't one we can draw as a single line — and a line we can't evidence is worth less than saying so.
+
+*↓ The bank said something lower — why?*
 
 ---
 
@@ -139,8 +146,24 @@ conservative.
 
 > *[§7 change log — not rendered: durable change log runs off system_monitor.property_reports — not minted for off-market slugs]*
 
-> *[§7 market indicators — not rendered: market_pulse.data_snapshot not wired here]*
 
+### Two true things that point in different directions
+
+Homes here are selling **faster** than a year ago — a median of **29 days**, against **37** twelve months earlier, and 51.3% still move quickly.
+
+But there is less to choose from: **32 homes** are on the market, 27.3% fewer than a month ago.
+
+Both readings are true and they support opposite conclusions, which is why a single market headline can't settle anything about this home.
+
+| 12-month median | $1,925,000 |
+|---|---|
+| Year on year | +6.9% |
+| Median days on market | 29 |
+| Same quarter a year earlier | 37 |
+
+*Q2 2026 vs Q1 2026: confidence interval too wide to support a quarter-on-quarter claim (n=42 and n=44). We're not showing a quarter-on-quarter figure for that reason.*
+
+`Source: 12-month rolling median (Domain ∪ onthehouse) · Last reviewed: 2026-08-02`
 
 *↓ Is there anything under it I should know?*
 
@@ -168,12 +191,10 @@ page becomes a lead.
 
 ## Coverage audit
 
-**5 block(s) did not render:**
+**3 block(s) did not render:**
 
 - **§2 scarcity** — claim not supported — 101/188 match on 1 anchor(s) (54% of the market). Rarity copy would be false here
-- **§5 index trajectory** — suburb index series not wired into this prototype — needs the quarterly median series applied to the purchase price
 - **§7 competitors** — no competition result
 - **§7 change log** — durable change log runs off system_monitor.property_reports — not minted for off-market slugs
-- **§7 market indicators** — market_pulse.data_snapshot not wired here
 
 **fact_bundle gaps:** bedrooms unknown; bathrooms unknown; competition count unavailable
