@@ -5,30 +5,57 @@
 
 ---
 
-## 0. The constraint that shapes everything
+## 0. The constraint that shapes everything — it is LATENCY, not coverage
 
-**We have a valuation for 0.3–0.7% of off-market homes.**
+> ⚠ **Corrected 2026-08-06.** An earlier version of this section said we hold a valuation
+> for only 0.3–0.7% of off-market homes and that a range-led page would be "blank on 99.4%
+> of addresses". **Both halves were wrong.** The 0.3–0.7% is a *cache-hit rate*, not a
+> capability limit — **valuations are built on demand** (`fields-valuation-api` +
+> `fields-valuation-poller`, both running). And the follow-up attribute check that appeared
+> to show ~0% coverage was a query bug: fields were projected away that the resolvers read.
+> Measured on full documents, coverage is good.
 
-| Suburb | Off-market houses | With `valuation_data` | |
-|---|---|---|---|
-| Robina | 5,402 | 36 | 0.7% |
-| Varsity Lakes | 2,903 | 8 | 0.3% |
-| Burleigh Waters | 3,973 | 12 | 0.3% |
+**Attribute coverage — can we value it at all?** (400-doc sample per suburb, off-market houses)
 
-56 of 12,278. Meanwhile **26,297 discovery decks are already built.**
+| Suburb | Land size | Floor area | Both | + beds & baths |
+|---|---|---|---|---|
+| Robina | 99.0% | 83.8% | **83.5%** | 52.5% |
+| Varsity Lakes | 98.8% | 65.2% | **65.2%** | 70.0% |
+| Burleigh Waters | 100.0% | 93.8% | **93.8%** | 65.2% |
 
-This is worse than the 7%-of-sold-pages figure in the dossier and it is the single biggest
-input to the design. **A page built around "here is your range" is blank on 99.4% of
-addresses today.** Two ways out, and they lead to different pages:
+**Most off-market homes can be valued.** Beds/baths is the thinner field (52–70%) and is
+what the agent-method comparison in §2 would need; land and floor area, which the
+adjustment engine needs, are near-universal.
 
-- **(a) Compute first.** The production engine *is* correct for unsold subjects — an
-  unsold home has no sale to leak — so this is a build task, not a data ceiling. Until it
-  runs, the range-led page does not exist.
-- **(b) Design the no-range state as the primary state**, with the range as an upgrade
-  when present.
+**The real constraint is how long it takes.** All 10 on-demand requests ever made:
 
-**Recommend (b) now and (a) in parallel.** (b) ships against reality; (a) makes it better.
-Do not schedule a design that depends on (a) landing first.
+| | Range | Typical |
+|---|---|---|
+| Queue wait | 3–31s (one 30-hour outlier, poller down) | ~15s |
+| Compute | 23–98s | ~50s |
+| **End to end** | | **~30–90 seconds** |
+
+Historical success 6/10 — but the four failures were all March 2026 and the four most
+recent all completed. **n=10 total. The path works and is essentially unexercised.**
+
+**So the design question is not "do we have a number", it is "will they wait a minute".**
+And the behavioural answer is no: median final dwell **6.3s**, 87.5% single-pageview,
+47–57% never advance past the first card.
+
+**The resolution, and it is a happy one: fire the build on page load, not on a press.**
+§0 and §2 then *are* the loading state — and §2 ("why the numbers you've seen disagree")
+is both the content the visitor needs to be shown before a range means anything, and
+roughly a minute of reading. The narrative requirement and the technical requirement
+coincide. Precedent exists: the V3 deck already starts a mini-site build on the neon press
+(`[V3-BUILD-STARTS-ON-PRESS]`), and `property_build_requests` is an async build-and-poll
+queue already in production.
+
+**What this does still require:**
+- A defined state for the 6–35% with insufficient attributes, and for a build that fails
+  or overruns. That state is a minority, not the majority — but it is not rare.
+- Load testing. Ten requests in the service's lifetime is not evidence it survives traffic,
+  and a page that fires a ~50s compute on every arrival is a different load profile
+  entirely.
 
 ---
 
@@ -89,7 +116,7 @@ thing they see** — 47–57% never advance past the first, 87.5% are single-pag
 | § | Section | Its one job | Must not assume | Advantage |
 |---|---|---|---|---|
 | **0** | **This is your home, and here is a hard fact about it** | Resolve the entity and prove we know something specific and checkable. *"Last recorded sale $175,000, Oct 1990. Held 35.7 years."* This exact snippet ranked us **#3, above Domain**; our boilerplate page ranked #6 | A valuation. Any "we found you" framing | — |
-| **1** | **What we can say about its value** | The range *if we have one*; otherwise the honest substitute — what it last sold for, what's sold near it, what we'd need to go further | **That a range exists — it doesn't, on 99.4%** | A3 |
+| **1** | **What we can say about its value** | The range — built on demand, arriving while they read §2. Honest substitute where attributes are too thin or the build fails | That it is ready instantly (~30–90s), or that attributes exist (6–35% too thin) | A3 |
 | **2** | **Why the numbers you've seen disagree** | The dispersion story. Three comparable sales can justify valuations **a third of a home's value apart**. This is the "why it matters" that earns everything after it | That they've had an agent appraisal — many haven't | A1, A2 |
 | **3** | **The sales we used, and what we changed** | Traceability made visible. Every comp, every adjustment, in dollars | That anyone reads it — see §4 below | A3, A4 |
 | **4** | **What we get wrong** | Publish the error rate and the limits. Pre-empts the attack and is the thing no AU portal does | A confidence label | A5 |
@@ -123,8 +150,8 @@ made matters*; the working is *what we do about it*. Without §2, §3 is a boast
 
 ## 5. Dependencies, in build order
 
-1. **Compute valuations for off-market homes at scale** — unblocks §1 for more than 0.6% of
-   addresses. Production engine is already correct for unsold subjects.
+1. **Load-test the on-demand valuation path** — it has served 10 requests in its lifetime;
+   the page would fire a ~50s compute on every arrival. Also decide pre-warm vs on-load.
 2. **Fix calibration** — 56.8% range-hit, labels non-discriminating. Blocks any stated range
    or confidence in §1/§4.
 3. **Persist `adjusted_price` + component adjustments** — §3 cannot render without it.
