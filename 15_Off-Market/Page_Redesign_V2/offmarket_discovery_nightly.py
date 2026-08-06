@@ -189,11 +189,13 @@ def reachable_homes():
     gc = _gc()
     q = reachable_query()
     for c in target_suburbs(gc):
-        for r in gc[c].find(q, {"url_slug": 1, "enriched_data.last_enriched": 1}):
+        for r in gc[c].find(q, {"url_slug": 1, "enriched_data.last_enriched": 1,
+                               "valuation_data.computed_at": 1}):
             slug = r.get("url_slug")
             if not slug:
                 continue
-            yield slug, (r.get("enriched_data") or {}).get("last_enriched"), c
+            yield (slug, (r.get("enriched_data") or {}).get("last_enriched"), c,
+                   (r.get("valuation_data") or {}).get("computed_at"))
 
 
 def indexed_homes():
@@ -208,12 +210,14 @@ def indexed_homes():
     gc = _gc()
     q = indexed_query()
     for c in target_suburbs(gc):
-        for r in gc[c].find(q, {"url_slug": 1, "enriched_data.last_enriched": 1}):
+        for r in gc[c].find(q, {"url_slug": 1, "enriched_data.last_enriched": 1,
+                               "valuation_data.computed_at": 1}):
             slug = r.get("url_slug")
             if not slug:
                 continue
             le = (r.get("enriched_data") or {}).get("last_enriched")
-            yield slug, le, c
+            va = (r.get("valuation_data") or {}).get("computed_at")
+            yield slug, le, c, va
 
 
 def frozen_released_slugs(gc=None):
@@ -243,15 +247,39 @@ def existing_generated_at():
             for d in coll.find({}, {"slug": 1, "generated_at": 1})}
 
 
-def _needs_build(slug, last_enriched, have, rebuild_all):
+def _stamp(v):
+    """Normalise a freshness marker to a comparable ISO string.
+
+    `last_enriched` is an ISO string, `valuation_data.computed_at` a datetime,
+    `generated_at` an isoformat+Z string. Comparing them raw is fragile."""
+    if v is None:
+        return ""
+    if hasattr(v, "isoformat"):
+        return v.isoformat()
+    return str(v)
+
+
+def _needs_build(slug, last_enriched, have, rebuild_all, valued_at=None):
+    """Rebuild when the deck is older than any input that feeds it.
+
+    ⚠ `valued_at` added 2026-08-06. Until then this compared ONLY
+    `enriched_data.last_enriched`. Writing `valuation_data` does not touch that
+    field, so a home that gained a valuation never triggered a rebuild — and
+    `fact_bundle._obvious_comp` reads `valuation_data.recent_sales`, so the
+    "that sale up the road isn't your comparison" card could never appear.
+
+    Measured on the live fleet: `comparable` rendered on 22 of 400 decks (5.5%),
+    and 0 of 29 cached bundles in a seeded sample carried an `obvious_comp` while
+    23 of those 29 documents already held the recent sales it needs.
+    """
     if rebuild_all:
         return True
     gen = have.get(slug)
     if gen is None:            # no doc yet
         return True
-    if last_enriched and str(last_enriched) > str(gen):  # re-enriched since build
-        return True
-    return False
+    gen_s = _stamp(gen)
+    newest_input = max(_stamp(last_enriched), _stamp(valued_at))
+    return bool(newest_input and newest_input > gen_s)
 
 
 def _build_loop(todo, tag=""):
@@ -290,7 +318,8 @@ def run(limit=None, rebuild_all=False, dry_run=False, shard=None, reachable=Fals
         # it (shard workers deliberately skip the coverage assertion).
         homes = sorted(reachable_homes() if reachable else indexed_homes())
         have = existing_generated_at()
-        todo = [(s, le, sub) for (s, le, sub) in homes if _needs_build(s, le, have, rebuild_all)]
+        todo = [(s, le, sub) for (s, le, sub, va) in homes
+                if _needs_build(s, le, have, rebuild_all, va)]
         i, N = shard
         todo = [t for k, t in enumerate(todo) if k % N == i]
         _build_loop(todo, tag=f"shard{i}/{N}")
@@ -303,7 +332,8 @@ def run(limit=None, rebuild_all=False, dry_run=False, shard=None, reachable=Fals
         homes = list(indexed_homes())
         build_pool = list(reachable_homes()) if reachable else homes
         have = existing_generated_at()
-        todo = [(s, le, sub) for (s, le, sub) in build_pool if _needs_build(s, le, have, rebuild_all)]
+        todo = [(s, le, sub) for (s, le, sub, va) in build_pool
+                if _needs_build(s, le, have, rebuild_all, va)]
         if limit:
             todo = todo[:limit]
         total_indexed = len(homes)
