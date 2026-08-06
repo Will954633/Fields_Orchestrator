@@ -303,6 +303,23 @@ def _build_loop(todo, tag=""):
     return built, failed, int(time.time() - t0)
 
 
+# ⚠ NIGHTLY BUILD CAP (added 2026-08-06).
+#
+# Deck rebuilds cost ~2.1s each (measured on five real properties). Historically
+# `to_build` was 0-2 a night because staleness keyed off `enriched_data.last_enriched`,
+# which rarely changes. Two same-day changes altered that: `_needs_build` now also
+# triggers on `valuation_data.computed_at`, and `scripts/batch_value_offmarket.py`
+# writes a fresh valuation to the whole off-market book. Both are correct, and
+# together they make the backlog ~10,000 decks — about 6 hours in one run, holding
+# Cosmos RUs through the morning crons on a serverless tier.
+#
+# So the nightly takes the OLDEST decks first and stops at the cap. Homes not
+# reached tonight keep serving their existing deck — exactly what they would have
+# done anyway — and the backlog drains over several nights. Self-healing: each run
+# takes the next oldest slice. Raise with --limit, disable with --limit 0.
+DEFAULT_NIGHTLY_CAP = 3000
+
+
 def run(limit=None, rebuild_all=False, dry_run=False, shard=None, reachable=False):
     # shard = (i, N): process only homes whose position ≡ i (mod N). Lets us run
     # N parallel processes (each its own Mongo client — separate processes, no
@@ -334,15 +351,23 @@ def run(limit=None, rebuild_all=False, dry_run=False, shard=None, reachable=Fals
         have = existing_generated_at()
         todo = [(s, le, sub) for (s, le, sub, va) in build_pool
                 if _needs_build(s, le, have, rebuild_all, va)]
-        if limit:
-            todo = todo[:limit]
+        # Oldest deck first, so a capped run drains the backlog deterministically
+        # instead of rebuilding whichever homes happen to sort first. Decks with
+        # no doc yet (`have` miss) go to the front — they render nothing today.
+        todo.sort(key=lambda t: _stamp(have.get(t[0])) or "")
+        cap = DEFAULT_NIGHTLY_CAP if limit is None else limit
+        backlog = len(todo)
+        if cap and backlog > cap:
+            todo = todo[:cap]
         total_indexed = len(homes)
         print(f"indexed={total_indexed}  reachable={len(build_pool) if reachable else '-'}  "
-              f"have_docs={len(have)}  to_build={len(todo)}"
-              + (f"  (capped {limit})" if limit else ""), file=sys.stderr)
+              f"have_docs={len(have)}  backlog={backlog}  to_build={len(todo)}"
+              + (f"  (capped at {cap}; {backlog - len(todo):,} deferred to later runs)"
+                 if backlog > len(todo) else ""), file=sys.stderr)
         if dry_run:
             beat.detail = f"dry-run: {len(todo)} to build of {total_indexed} indexed"
-            beat.metrics = {"indexed": total_indexed, "have": len(have), "to_build": len(todo)}
+            beat.metrics = {"indexed": total_indexed, "have": len(have),
+                            "to_build": len(todo), "backlog": backlog}
             return
 
         built, failed, dt = _build_loop(todo, tag="main")
