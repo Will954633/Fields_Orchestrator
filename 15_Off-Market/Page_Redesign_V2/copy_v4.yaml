@@ -124,11 +124,39 @@ card_05_method:
   # and Burleigh Waters at 13.7%, our worst suburb, so a Robina-only figure
   # flatters us. Varsity Lakes + Burleigh Waters are being backtested now;
   # widen the claim back to three suburbs only once that lands.
-  error_rate: >
-    Tested against 333 homes in Robina that have since sold: half the time
-    the estimate landed within 9.3% of the eventual sale price, and the average miss was
-    12.3%. Those homes sold, which this one has not — so treat it as the method's track
-    record, not a promise about this address.
+  # Per-suburb, NOT blended (2026-08-06). The spread between suburbs (10.5% to
+  # 13.8% MAE) is LARGER than the gain from scoping to the envelope (12.3% ->
+  # 11.7%), so a single blended figure misdescribes two of the three markets —
+  # it would overstate our accuracy to a Varsity Lakes owner by 2.1pp and
+  # understate it to a Robina owner. The page knows the address, so it can say
+  # the true thing for that home.
+  #
+  # Scoped to detached houses $1M-$2M — the design envelope. Measured
+  # 2026-08-06, leave-one-out, --price-filter none.
+  error_rate_by_suburb:
+    robina: >
+      Tested against 278 houses in Robina in this price range that have since sold: half
+      the time the estimate landed within 8.2% of the eventual sale price, and the average
+      miss was 10.5%.
+    burleigh_waters: >
+      Tested against 155 houses in Burleigh Waters in this price range that have since sold:
+      half the time the estimate landed within 9.8% of the eventual sale price, and the
+      average miss was 11.2%.
+    varsity_lakes: >
+      Tested against 207 houses in Varsity Lakes in this price range that have since sold:
+      half the time the estimate landed within 13.4% of the eventual sale price, and the
+      average miss was 13.8%. Varsity Lakes is our least accurate market of the three, and
+      our estimates there have run low — by 10.6% on average.
+  # Shown INSTEAD of the error rate when the range came from a fallback method.
+  method_not_measured: >
+    The range above wasn't built by the method described here — this home sits outside the
+    band our comparable-sales model was built for, so we've used a wider approach based on
+    what can be verified from the outside. We publish a measured error rate for the
+    comparable-sales method; we don't have one for this fallback, so we're not quoting a
+    number we haven't earned.
+  error_rate_close: >
+    Those homes sold, which this one has not — so treat it as the method's track record,
+    not a promise about this address.
   # ⚠ NEVER add a "90% confidence" claim here or anywhere in this arm. The range
   # is built as 1.645 sigma but empirically contains the sale price 61% of the
   # time (203/333). Finding 2 in the doc above.
