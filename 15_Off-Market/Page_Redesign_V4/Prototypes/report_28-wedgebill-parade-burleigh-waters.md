@@ -17,15 +17,13 @@ This is a private walkthrough of the first of them. Nothing here starts a sellin
 
 ## What the sales around it say
 
-**$1,670,790 – $2,385,800**
+**$1,702,859 – $2,167,275**
 
-Most likely position: **around $2 million** — rounded, deliberately, to the nearest $50,000.
+Most likely position: **around $1.95 million** — rounded, deliberately, to the nearest $50,000.
 
-Built from 57 sales, each adjusted for how it differs from this home.
+Built from 46 sales, each adjusted for how it differs from this home.
 
 That's a range, not a figure, and the width of it is the honest part.
-
-> This home isn't currently listed, so we have no interior photography to assess. We've built the range from what we can verify — land size, floor area, bedroom and bathroom count, position, and recent comparable sales nearby, supported by aerial and street-level imagery of the exterior. What a desk can't see is the inside: renovation quality, interior condition, and layout — among the largest factors in a final figure. That's why this range is deliberately wide and the confidence is marked lower.
 
 *↓ How did you get to that?*
 
@@ -33,21 +31,32 @@ That's a range, not a figure, and the width of it is the honest part.
 
 ## The sales behind that range, and what we changed about each one
 
-> 2999 recent sales reviewed  →  7066 nearby homes compared  →  28 property characteristics analysed
+> 2999 recent sales reviewed  →  7066 nearby homes compared  →  34 property characteristics analysed
 
-> *[§2 adjusted comparables — not rendered: no adjusted comp set — run with --backtest (sold homes) or precompute for an unsold subject]*
+| Comparable | Sold | Adjusted to | Move |
+|---|---|---|---|
+| 20 Silkyoak Court, Burleigh Waters, QLD 4220 | $1,550,000 | **$1,774,817** | +14.5% |
+| 56 Banksia Broadway, Burleigh Waters, QLD 4220 | $1,965,000 | **$1,873,115** | -4.7% |
+| 10 Oriole Court, Burleigh Waters QLD 4220 | $1,660,000 | **$1,903,188** | +14.6% |
+| 25 Dotterel Drive, Burleigh Waters QLD 4220 | $2,325,000 | **$1,911,856** | -17.8% |
+| 6 Maitland Street, Burleigh Waters QLD 4220 | $2,135,000 | **$1,941,129** | -9.1% |
+| 6 Skua Street, Burleigh Waters, QLD 4220 | $2,000,000 | **$2,017,124** | +0.9% |
+| 7 Cassowary Drive, Burleigh Waters QLD 4220 | $1,950,000 | **$2,020,918** | +3.6% |
+| 23 Kestrel Drive, Burleigh Waters QLD 4220 | $2,210,000 | **$2,027,682** | -8.2% |
 
-> *[§2 obvious comparable — not rendered: no priced nearby sale found]*
 
+### That sale up the road isn't your comparison
+
+**10 Oriole Court — sold $1,660,000, 320m away.**
+
+Looks like the same home. But against yours:
+- 80m² less land
+- 30m² more floor area
+- no parkland behind it
+
+**Same street, different home. The headline number was never the comparison.**
 > *[§2 scarcity — not rendered: claim not supported — 101/188 match on 1 anchor(s) (54% of the market). Rarity copy would be false here]*
 
-
-### What carries the price
-
-
-**Where a buyer may focus:** ↓ no pool
-
-**Knowing both is how you hold your number.**
 
 *↓ So how wrong could you be?*
 
@@ -118,7 +127,7 @@ A lender isn't asking *what would this sell for*. It's asking *what could we rec
 to sell it in a hurry*. Those are different questions, and the second is deliberately
 conservative.
 
-**The top of this range is $2,385,800.**
+**The top of this range is $2,167,275.**
 
 *↓ And what's happening around it now?*
 
@@ -159,14 +168,12 @@ page becomes a lead.
 
 ## Coverage audit
 
-**7 block(s) did not render:**
+**5 block(s) did not render:**
 
-- **§2 adjusted comparables** — no adjusted comp set — run with --backtest (sold homes) or precompute for an unsold subject
-- **§2 obvious comparable** — no priced nearby sale found
 - **§2 scarcity** — claim not supported — 101/188 match on 1 anchor(s) (54% of the market). Rarity copy would be false here
 - **§5 index trajectory** — suburb index series not wired into this prototype — needs the quarterly median series applied to the purchase price
 - **§7 competitors** — no competition result
 - **§7 change log** — durable change log runs off system_monitor.property_reports — not minted for off-market slugs
 - **§7 market indicators** — market_pulse.data_snapshot not wired here
 
-**fact_bundle gaps:** bedrooms unknown; bathrooms unknown; no comparable sale; competition count unavailable
+**fact_bundle gaps:** bedrooms unknown; bathrooms unknown; competition count unavailable
