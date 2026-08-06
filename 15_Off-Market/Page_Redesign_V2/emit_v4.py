@@ -125,7 +125,20 @@ def c01_range(b, c, x):
     if v.get("n_comps") and x["adjusted"]:
         card["basis"] = k["basis"].format(n_comps=v["n_comps"], n_shown=len(x["adjusted"]))
     if v.get("method") and v["method"] != "engine":
-        card["tier_caveat"] = v.get("confidence_reason") or v.get("confidence")
+        # ⚠ `confidence_reason` ONLY — never fall back to the bare tier
+        # (2026-08-06). The one-word level is not calibrated: measured on 333
+        # sold homes, within-10% ran high 55%, medium 46%, low 56%, very_low
+        # 61%. It is not monotonic in either direction, and `very_low` beat
+        # `high`. A reader shown "high confidence" infers the range is more
+        # trustworthy, and we cannot demonstrate that it is.
+        #
+        # `confidence_reason` states WHY (how many comparables, how close) —
+        # that is a fact and survives. The tier is an unearned confidence
+        # signal, which is the exact thing this page argues against; shipping
+        # it would be self-refuting. Product/09_ACCURACY_AND_CALIBRATION.md.
+        reason = v.get("confidence_reason")
+        if reason:
+            card["tier_caveat"] = reason
     return card
 
 
