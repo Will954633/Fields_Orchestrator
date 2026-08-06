@@ -576,7 +576,7 @@ def render(slug, proto="full"):
 
     # ── header ──
     add(f'''<header class="top"><div class="topin">
-      <img class="brand" src="brand/fields-hero-grass.png" alt="Fields">
+      <img class="brand" src="brand/fields-fullname-grass.png" alt="Fields">
       <span class="stickyaddr">{E(short)}</span>
       <span class="tag">Private report</span></div></header>''')
 
@@ -1178,7 +1178,7 @@ ul.idx .go{{font-size:.86rem;color:var(--accent);white-space:nowrap}}
 ul.idx a:hover .go{{text-decoration:underline}}
 </style></head><body>
 <header class="top"><div class="topin">
-<img class="brand" src="brand/fields-hero-grass.png" alt="Fields">
+<img class="brand" src="brand/fields-fullname-grass.png" alt="Fields">
 <span class="tag">Private report</span></div></header>
 <section><div class="wrap">
 <div class="eyebrow">Off-market page redesign · V4</div>
