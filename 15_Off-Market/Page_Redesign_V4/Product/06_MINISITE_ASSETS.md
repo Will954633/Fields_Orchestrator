@@ -1,191 +1,168 @@
-# What the house mini-site already holds that the V4 flow should take
+# What the shipped mini-site holds that the V4 flow should take
 
-**Compiled:** 2026-08-06. **Source:** `11_House_Mini_Site/` — V1 shipped, V2 specified.
+**Compiled:** 2026-08-06. **Source:** `/your-home/<slug>` — the report that loads after an
+address is submitted at `/analyse-your-home`. Code: `01_Website/src/pages/YourHomePage/`.
 **For:** `05_PAGE_FLOW.md`.
 
-Mini-site **Session 1** ("Where your home stands right now") answers almost exactly the job
-`/off-market/:slug` answers — *"Is the number real, and what is happening around my home?"* It
-is further developed than our flow in several places. This is the salvage list.
+This is a **shipped, working product** covering much of the same ground as our flow. Several
+components solve problems `05_PAGE_FLOW.md` currently lists as open. Reuse, don't rebuild.
 
 ---
 
-## 1. Copy devices worth taking outright
+## 1. `SoWhat` — the rule that most improves our copy
 
-### 1.1 "The three questions" — a stronger opening than our §0
-
-> **You may be trying to answer three questions privately.**
+> *"The consultant's core diagnosis: the product is data-first when the seller is fear-first.
+> Every number, chart, table or comparison must answer 'why should a seller care?' in plain
+> language. This is that line."*
 >
-> Is the number attached to this home real? Is this the wrong time to move? And if you sold,
-> where would you go next?
+> **Product rule: no stat tile, comp count, scarcity figure or competitor number ships without
+> a paired `<SoWhat>`.** One or two sentences — *"the translation of evidence into
+> risk-reduction, not a second paragraph."*
+
+**Our draft copy fails this test repeatedly.** §4 hands the reader $469,000, 77%, 73.6% and
+73.4% in a single block with no translation. §7 gives medians and days-on-market unattached to
+meaning.
+
+**Adopt the rule wholesale, and the component with it.** It also stays inside our editorial
+constraints by design: *"Describe what the data means; never instruct."*
+
+## 2. `FearSection` — Will's two-column pattern, already built, with a better split
+
+```
+HEADLINE  ─── fear restated in the seller's own words
+SUBHEAD   ─── reframe in one sentence, with a number
+┌──────────────────────────┬──────────────────────────┐
+│ THESIS                   │ APPLIED TO YOUR HOME     │
+│ the general finding      │ the same data, anchored  │
+│ + chart                  │ to this property         │
+└──────────────────────────┴──────────────────────────┘
+CITATION STRIP
+```
+
+*"The pattern matches the V4 print system's six spreads — left page thesis, right page
+applied."*
+
+**This is the two-column idea, shipped — but split thesis/applied rather than free/locked.**
+That is the better axis. The right-hand column becomes *more* personal as you move across, not
+less accessible, so the page reads as deepening rather than withholding. It maps exactly onto
+our §4: the 512-home dispersion finding is the thesis; their eight comparables are the applied.
+
+**Recommendation: adopt thesis/applied as the primary column split, and let the ask sit
+underneath rather than occupying the right column.**
+
+## 3. `PositionAtAGlance` — a shipped opener answering four questions in five seconds
+
+> *"A seller must feel the product is useful within five seconds. Replace the data-heavy opener
+> with four cards that answer the four questions every seller actually wakes up with:"*
 >
-> This is a private walkthrough of those questions for **{address}**. Nothing here starts a
-> selling process, and nobody calls unless you ask.
+> 1. What is my home likely worth?
+> 2. How many homes truly compete with mine?
+> 3. Who is most likely to pay the top of the range?
+> 4. What decisions could change my result?
 
-Our §0 confirms the address and states a fact. This does that **and names what they came for**
-without making them say it. It is the better opening.
+Directly comparable to our §0/§1, and it has the five-second constraint already designed in —
+which matches our measured 2-second time-to-first-scroll better than our current opener does.
 
-**Its rules travel with it:**
-- **"You may be" is load-bearing and may not be strengthened.** The psychological read is *"a hypothesis, not a finding"* — hedging is how a hypothesis is offered, and a reader who doesn't recognise themselves reads past it harmlessly. **Never** *"we know how stressful this is"*, never *"it's natural to feel uncertain"*.
-- **Never make the reader admit intent.** The card deliberately does not ask whether they are selling, and nothing later may either. **Our flow never stated this rule and should.**
+> ⚠ Note honestly: questions 2 and 3 are the competition and buyer angles that our independent
+> evidence audit found **no** support for. They are here as a Fields product decision, and
+> GPT's reasoning agrees — but that is not the same as user evidence. Adopting the four-card
+> shape does not import evidence for questions 2 and 3.
 
-### 1.2 "Two true things that point in different directions" — better than our §7
+## 4. `ValuationEvidence` — our §2, already built, in three layers
 
-> **The median Robina house sold in 34 days last quarter, and 45.7% of sales still moved
-> quickly. But far fewer homes are selling at all, and the median took 24.5 days a year
-> earlier.**
->
-> Both readings are true, and they support opposite conclusions — which is why a single market
-> headline cannot resolve the decision for this home.
+> **L1 Evidence card** — strength badge, range bar, how many sales it's built from, how tightly
+> they agree (CV), rate provenance.
+> **L2 Comparable cards** — each included sale: SOLD → ADJUSTED, distance, recency, weight %,
+> verified flag, plain-English adjustment narrative.
+> **L3 Adjustment grid** — per comp, feature-by-feature.
 
-Our §7 says *"we're not going to tell you where this goes next"*, which is a refusal. This is
-better: it **shows** the ambiguity rather than announcing that we won't resolve it. Name it,
-give both readings, let the reader draw the inference.
+Rendered *"from the engine's own output (no recomputation)"*.
 
-Its rule: **never characterise the market** — cooling, softening, holding up, resilient are
-predictions in disguise, and "robust market" is a banned phrase.
+**This is §2 of our flow, shipped.** It already carries the distance-per-comparable that L3 of
+our limitations demands, and a plain-English narrative per adjustment.
 
-### 1.3 Suppression as a credential — this solves our hardest problem
+> ⚠ Worth checking: our §2 is marked blocked because `adjusted_price` isn't persisted. This
+> component renders adjusted prices today for `/your-home`, so the blocker may be specific to
+> the off-market path rather than universal. **Verify before treating it as a blocker.**
 
-> Quarterly figures for Robina are not shown. The recent quarters hold too few sales to carry
-> a quarter-on-quarter claim.
+## 5. `RankedComparison` — "honest theatre" we should steal for §2
 
-And the rule behind it: *"saying why a number is missing is worth more than the number. Every
-competitor draws the line anyway. **Refusing to is a credential.**"*
+> A **funnel** reconciling `active_total → in_band → ranked → close_tier`, *"animated on open so
+> the seller watches the filtering happen. **Honest theatre: every step is a computation the
+> matcher genuinely ran.**"*
 
-**This reframes the no-range state entirely.** Our §1 currently says *"we don't hold enough
-detail on this home to build a range yet"* and moves on apologetically. The mini-site's posture
-is the opposite: **stating precisely why a figure is absent is itself the demonstration of
-method.** That converts the majority state from an embarrassment into the strongest possible
-proof that we don't make numbers up.
+Our §2 states "we looked at 32 sales and kept 8" as a flat line. **Showing the filtering happen
+is far stronger than reporting its output** — and the phrase *honest theatre* is the right
+standard: theatre is fine where every frame is a real computation.
 
-Rewrite §1's fallback in this register.
+## 6. `CitationStrip` + `DataRecordDrawer` — the traceability layer
 
-### 1.4 Confirmations of things we already had
+**`CitationStrip`:** *"It is the trust mechanism: **if a claim doesn't have a source, the block
+should not have rendered.**"* Adopt as a rule.
 
-- *"Forty-one sales reviewed; eight close enough to use"* — *"beats any claim about thousands of records."* Confirms A12.
-- The error-rate card is *"the single most powerful trust asset we hold"* — publishing that the method has been out by 11.1%, and that this is *why* a band is given rather than a figure, *"demonstrates institutional honesty rather than marketing confidence."* Confirms §3.
-- **94% of these visitors view exactly one address** — *"the signature of a private self-check rather than browsing."*
-- Recorded search behaviour is decision-rehearsal: *"should I sell now or wait 2026"*, *"cost of selling a house QLD"*.
+**`DataRecordDrawer`:** a slide-in panel listing *"every data point Fields holds on a home,
+grouped and sourced… every group prints its source so each row stays auditable (mini-site
+principle: every claim names its source)."*
 
----
+That drawer is a strong answer to *"what do you actually know about my house"* and it is
+already built. It also pairs naturally with our §9 correction ask — you can only correct what
+you can see.
 
-## 2. ⚠ The operational landmine — read before shipping "nobody calls unless you ask"
+## 7. ⚠ `StatutoryCMA` — a compliance question our flow has not answered
 
-**`offmarket-intent-alert.mjs` already fires a Telegram alert to Will when a visitor merely
-reaches the end of a deck, having asked for nothing.**
+> *"Property Occupations Act 2014 (Qld) s 215 + Sch 2: when a seller asks an agent for a likely
+> sale price, the agent must provide a CMA comparing the home with at least 3 properties SOLD
+> within the previous 6 months, of similar standard, within 5 km — or, if a CMA can't be
+> prepared, a written explanation of how market value was decided."*
 
-The mini-site spec is unambiguous about what that means:
+**Our §1 gives a homeowner a likely sale price for their home, and Fields is a licensed
+agency.** Whether that triggers s 215 is a real question and the mini-site has already built
+the answer: a CMA of record with an *"as at / valid until"* stamp, and an s 215 written-
+explanation notice when a compliant CMA can't be prepared — *"it never implies a CMA we don't
+actually meet."*
 
-> *"The alert does not break this promise; **acting on it would.** This line commits Fields to
-> a rule: an intent alert is not permission to make contact. It must be ratified before this
-> card ships. Every commitment must be operationally true before real traffic, and this is the
-> one a reader would feel most betrayed by."*
+**Do not ship §1 without resolving this.** It also independently reinforces our decision to
+date the estimate: the six-month window makes the stamp mandatory.
 
-**"Nobody calls unless you ask" appears twice in our flow and is load-bearing both times.** It
-is our single strongest differentiator (A6). A live system currently tells Will when someone
-reads to the end. **The promise is only true if he does not act on it, and that has to be a
-ratified rule, not an intention.**
+## 8. `WhatChangedBanner` — GPT's missing layer, already built
 
----
+> *"First visit: frames the curated starting view. Return visit: summarises the deltas since
+> the seller's previous login — new listings, price changes, selling-method changes, sales —
+> with an honest sub-line when the comparative aperture had to be widened to surface activity."*
 
-## 3. The print edition — a ready-made spec for our §1 ask
+This is *"what has changed since I last checked"*, which GPT calls the major opportunity and
+which I scoped as a post-claim feature. **It exists.** The honest-widening sub-line is a nice
+touch: it admits when we had to look further afield to find anything to report.
 
-Our §1 ask is *"post the full report to this address."* The mini-site has already designed
-exactly that artefact, and its constraints are hard-won:
+## 9. Smaller pieces worth reusing
 
-**A4 folded to A5, four sides. No CTA anywhere.**
-
-> *"This reaches an owner who did not ask for it; the moment it mentions appraisals or selling
-> services it reads as solicitation."*
-
-| Side | Contents |
+| Component | What it gives us |
 |---|---|
-| 1 (front) | The three questions, then the address. **QR-HOME** lower right |
-| 2 | The home, and the band as the largest type on the page |
-| 3 | The full sale table with distances; the two-true-things pair as a stat block |
-| 4 (back) | The three readings and the limit. **QR-NEXT** centred |
-
-**Print rules that transfer directly:**
-- No single valuation figure anywhere, headline included. The band travels alone.
-- The on-screen expansion becomes a printed side — on paper there is nothing to tap, so the proof is simply printed.
-- Every number carries its source and review date **on the same side**.
-- No "tap", "scroll" or "click".
-- **No QR-ANSWER where the piece asks nothing** — see the defect below.
+| `PendingPlaceholder` | A designed wait state with an ETA line. Ours needs one for the 30–90s build — different duration, same pattern |
+| `MatchCards` | Carries an explicit `differenceVsSubject` line, *"frames the row as COMPARISON, not as a list of alternatives"* |
+| `SeasonalityStrip` | *"This is a pattern, never a prediction."* Same register §7 needs |
+| `SummaryStrip`, `StatusBadge`, `TabHero` | Layout primitives already consistent with the house style |
 
 ---
 
-## 4. The reader-question model — and the defect that would break our loop
+## 10. From the V2 session spec (not shipped, but specified)
 
-V2 defines ten whitelisted `questionId`s, stored at
-`property_reports.selling_plan.answers.<questionId>` in `property-plan-submit.mjs`.
+Covered in more detail in the previous revision of this file; the four that matter most:
 
-**⚠ The defect we would inherit.** Writes are gated on a `device_token` in localStorage:
-
-> *"A reader arriving from a printed QR code has no token, so `PlanQuestion.persist()` returns
-> early and the answer is **silently discarded** — the reader sees the option highlight and
-> believes it saved."*
-
-**This is exactly our post → QR → respond loop.** If we post a report with a QR and invite a
-reply, the reply is dropped on the floor and the reader is shown a success state. Until a
-signed `?plan_token=` is accepted server-side, **no printed piece may present a question as
-answerable online.**
-
-**Two design rules worth adopting:**
-- **One question maximum per unit.** Sessions 1, 3 and 7 ask nothing at all. Our flow currently has six asks across ten sections — that is probably too many, and §1, §3 and §5 are the weakest of them.
-- **Never ask the owner to design the campaign.** `open-homes-cadence` and `marketing-channels` were retired for exactly this: *"these asked the owner to design the campaign."* Ours must not drift the same way.
-
----
-
-## 5. Data already wired
-
-`market_pulse.data_snapshot` carries everything §7 needs: `current_median_price`,
-`yoy_growth_pct`, `dom_median`, `dom_yoy_prev`, `dom_quick_sales_pct`, and —
-usefully — **`qoq_suppressed_reason`**. The data model already supports stating *why* a figure
-is withheld.
-
-> ⚠ **Staleness trap.** `summary`, `data_snapshot` and `narrative.pillars` go stale
-> independently, and a partial `$set` touches only what it names. Read `data_snapshot` only;
-> anything from `narrative.*` must be verified live per CLAUDE.md Rule 6.
-
----
-
-## 6. The gap the mini-site diagnosed, which we share
-
-Its four conclusions the reader must reach:
-
-| # | Conclusion | Mini-site state | **Our flow** |
-|---|---|---|---|
-| 1 | "They understand my exact property" | Very strong | **Strong** — §0, §2, §5 |
-| 2 | "They tell me the truth even when it weakens their argument" | Strongest aspect | **Strong** — §3, §4, and the suppression posture |
-| 3 | "They understand what is happening in my life" | **The major missing layer** | **Missing** |
-| 4 | "They have a clear process and will protect me" | **Not yet built** | **Missing** |
-
-*"The sessions as drafted are exceptionally credible, but more analytical than emotionally
-guided."* **That diagnosis applies to our flow unchanged.** Conclusions 1 and 2 are close to
-done; 3 and 4 are absent.
-
-For `/off-market` this is less damaging than for a seller product — the reader is not
-necessarily selling, so conclusion 4 belongs downstream. But **conclusion 3 is the reason "the
-three questions" opening works**, and it is the cheapest available fix: naming what someone is
-privately weighing is understanding their life without claiming to.
-
----
-
-## 7. What NOT to take
-
-- **The seven-session seller journey.** GPT is explicit that it is the deeper path, not the initial product. It stays in the mini-site.
-- **Three charts, all unusable:** `ch7-1-buyer-pool` inverted, `ch7-4-portal-traffic` drifted, `ch7-3-marketing-benefit` unsourced.
-- **Confidence grades.** The owner draft prints "confidence grade: high"; our measurement says the label is non-discriminating. Already C12.
+1. **"The three questions" opening** — *"You may be trying to answer three questions privately."* Names what they came for without making them admit intent. Better than our §0. The hedge *"You may be"* is load-bearing and may not be strengthened.
+2. **"Two true things that point in different directions"** — show the ambiguity rather than announcing we won't resolve it. Better than our §7.
+3. **Suppression as a credential** — *"saying why a number is missing is worth more than the number… Every competitor draws the line anyway. Refusing to is a credential."* **This reframes our no-range fallback from apology to proof.**
+4. ⚠ **`offmarket-intent-alert.mjs` already alerts Will when a visitor reaches the end of a deck having asked for nothing.** *"The alert does not break this promise; acting on it would."* "Nobody calls unless you ask" appears twice in our copy and cannot ship until that rule is ratified.
 
 ---
 
 ## Actions for `05_PAGE_FLOW.md`
 
-1. Replace the §0 opening with **the three questions**, hedging rules intact.
-2. Add **"never make the reader admit intent"** to the voice section.
-3. Rewrite §7 as **two true things that point in different directions**.
-4. Rewrite §1's no-range fallback as a **credential**, not an apology.
-5. **Ratify the intent-alert rule** before "nobody calls unless you ask" ships anywhere.
-6. Adopt the **print spec** for the §1 ask, including *no CTA anywhere*.
-7. Fix the **`device_token` defect** before any posted QR invites a reply.
-8. Reconsider **six asks across ten sections** against the one-per-unit rule.
+1. **Adopt the `SoWhat` rule** — every number gets a translation line. Our §4 and §7 currently fail it.
+2. **Switch the column split to thesis / applied-to-your-home**, with the ask beneath rather than in the right column.
+3. **Replace §2's flat "32 assessed, 8 kept" with the animated funnel** from `RankedComparison`.
+4. **Adopt `CitationStrip`'s rule:** if a claim has no source, the block doesn't render.
+5. **Resolve the s 215 CMA question before §1 ships.**
+6. **Reuse `ValuationEvidence` for §2** — and verify whether the `adjusted_price` blocker is really universal.
+7. **Reuse `WhatChangedBanner`** as the post-claim returning-visitor layer.
+8. **Reuse `DataRecordDrawer`** as the companion to the §9 correction ask.
