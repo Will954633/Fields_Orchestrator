@@ -112,7 +112,7 @@ def get_sold_date(doc):
 def backtest_single_property(db, subject_doc, all_sold_in_suburb, sold_by_suburb,
                               gc_coord_lookup, gc_timeline_lookup,
                               median_cache=None, street_premium_cache=None,
-                              no_new_factors=False):
+                              no_new_factors=False, price_filter="sale"):
     """
     Run the valuation pipeline on a single sold property, using other sold
     properties as comparables. Returns the reconciled_valuation or None.
@@ -197,13 +197,33 @@ def backtest_single_property(db, subject_doc, all_sold_in_suburb, sold_by_suburb
         comp_is_acreage = comp_land is not None and comp_land > 5000
         if subject_is_acreage != comp_is_acreage:
             return False
-        # Price proximity: comp sale price must be within ±40% of subject sale price
-        subject_sale_price = extract_sale_price(subject_doc)
-        if subject_sale_price:
-            comp_price = parse_price(doc.get('sale_price') or doc.get('sold_price'))
-            if comp_price:
-                if comp_price < subject_sale_price * 0.60 or comp_price > subject_sale_price * 1.40:
-                    return False
+        # Price proximity, ±40%. WHICH PRICE ANCHORS THIS DECIDES WHETHER THE
+        # WHOLE BACKTEST IS HONEST (2026-08-06).
+        #
+        #   "sale"    — anchors on the subject's ACTUAL SALE PRICE. That is the
+        #               value being predicted, so it is target leakage: the pool
+        #               is pruned using the answer. Production can never do this.
+        #               Retained ONLY so the size of the leak can be measured.
+        #   "listing" — anchors on the subject's advertised price. This is what
+        #               production does (precompute_valuations.py in_cohort_sold).
+        #               Valid for FOR-SALE homes.
+        #   "none"    — no price filter. This is what production ACTUALLY does on
+        #               an off-market home, because `price` is absent on 12,275 of
+        #               12,278 of them (0.0%), so the production filter never
+        #               fires. This is the only honest setting for any figure
+        #               published on /off-market.
+        #
+        # The production comment claiming this filter "reduces MAE from 12.7% →
+        # 11.7%" was measured under "sale", i.e. the gain is a leakage artefact,
+        # and it justified a filter that is inert on the off-market book.
+        if price_filter != "none":
+            anchor = (extract_sale_price(subject_doc) if price_filter == "sale"
+                      else parse_price(subject_doc.get('price')))
+            if anchor:
+                comp_price = parse_price(doc.get('sale_price') or doc.get('sold_price'))
+                if comp_price:
+                    if comp_price < anchor * 0.60 or comp_price > anchor * 1.40:
+                        return False
         return True
 
     filtered_sales = [s for s in comparable_sold if in_cohort(s)]
@@ -544,6 +564,11 @@ def main():
     parser.add_argument("--verbose", action="store_true", help="Show each property result")
     parser.add_argument("--min-price", type=int, default=300000, help="Minimum sale price to include")
     parser.add_argument("--max-price", type=int, default=5000000, help="Maximum sale price to include")
+    parser.add_argument("--price-filter", choices=["sale", "listing", "none"],
+                        default="none",
+                        help="Which price anchors the +/-40%% comparable filter. "
+                             "'sale' LEAKS the target and is for measurement only; "
+                             "'none' matches the off-market production path (default).")
     parser.add_argument("--no-new-factors", action="store_true",
                         help="Disable renovation quality, street premium, and micro-location factors for A/B comparison")
     parser.add_argument("--save-results", action="store_true",
@@ -667,7 +692,8 @@ def main():
                 db, doc, all_sold_in_suburb, sold_by_suburb,
                 gc_coord_lookup, gc_timeline_lookup,
                 median_cache, street_premium_cache,
-                no_new_factors=args.no_new_factors
+                no_new_factors=args.no_new_factors,
+                price_filter=args.price_filter
             )
         except Exception as e:
             if args.verbose:
