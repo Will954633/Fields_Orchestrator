@@ -1,0 +1,188 @@
+# copy_v4.yaml — the V4 off-market sequence.
+#
+# Sits ALONGSIDE copy.yaml, which drives the 26,297 live decks. Nothing here
+# changes a live deck: emit_v4.py writes to a separate arm.
+#
+# The spine (Product/05_PAGE_FLOW.md): recognise -> answer -> prove -> explain ->
+# apply -> widen -> protect -> hand over control. The number comes EARLY (V3 held
+# it to card 07 of 9; on our funnel that is ~1 session in 7), and the curiosity
+# gap moves onto the FEATURE, which is what the hook was always about.
+#
+# Copy rules carried from the review:
+#   * every number gets a translation line (`means`) — no stat ships bare
+#   * no promise about contact, in either direction (decision 2026-08-06)
+#   * ranges in millions, never to the dollar — the width is the honest part
+#   * never assume the reader bought the home ("no later market sale is recorded")
+#   * a claim with no source should not render at all
+#
+# `opens` is the reader's OWN next question. emit_v4 re-chains these after the
+# gap filter, so a dropped card never leaves a question unanswered.
+
+version: 4
+
+card_00_arrival:
+  questions_intro: "You may be trying to answer three questions privately."
+  questions:
+    - "Is the number attached to this home real?"
+    - "Is this the wrong time to move?"
+    - "And if you sold, where would you go next?"
+  frame: >
+    This page starts with the first: what the sales around this home actually support.
+    There is nothing to fill in and no account to create — the whole page is here.
+  last_sale: "Last recorded sale: {price} in {month}."
+  last_sale_note: "No later market sale is recorded."
+  opens: "So what is it worth?"
+
+card_01_range:
+  answer: "What the sales around it say."
+  range: "{val_low} – {val_high}"
+  anchor_intro: "The evidence centres around"
+  anchor_note: "rounded deliberately, because the width is the honest part"
+  basis: "{n_comps} sales were close enough to influence the range. The {n_shown} strongest are below."
+  no_range_intro: "We can't put a range on this home yet."
+  # Suppression as a credential — saying WHY a figure is absent is worth more
+  # than the figure. This is the majority state on thin addresses.
+  no_range_reason: >
+    We hold its land size and its last recorded sale, but not enough of the rest to
+    stand behind a range. A range built without it would look exactly like one built
+    with it, which is the problem.
+  opens: "How did you get to that?"
+
+card_02_evidence:
+  answer: "The sales behind that range."
+  funnel_intro: "Every step below is a computation that actually ran."
+  considered: "{n} property characteristics considered for each"
+  table_note: "Sold price, then what it adjusts to once the differences are priced."
+  means: >
+    No sale is a match. Each one differs from this home in ways that are worth money,
+    so we price those differences rather than averaging past them.
+  opens: "But that place up the road sold for more?"
+
+card_03_comparable:
+  answer: "That sale up the road is not this home's answer."
+  headline: "{comp_address} — sold {comp_price}, {comp_distance_m}m away."
+  looks: "Looks like the same home."
+  reveal_intro: "But against yours:"
+  close: >
+    It is still evidence — it sits in the set above. But once those differences are
+    accounted for, the headline price is not the number that transfers to this home.
+  opens: "So what makes this one different?"
+
+card_04_rarity:
+  answer: "What makes this home less common among today's listings."
+  line: "{matching} of the {total} homes on the market right now match this one on {query}."
+  poi_line: "Of the {physical_matching} that share the combination, only {matching} {verb} also this close to {phrase} — all at once."
+  means: >
+    That does not set a price by itself. It affects how many close substitutes a buyer
+    can choose from — and part of the range's width comes from how few recent sales
+    share the combination.
+  drivers_intro: "What strengthens its position:"
+  levers_intro: "Where a buyer may focus:"
+  drivers_close: "Both matter: they are why nearby sales cannot be read across without adjustment."
+  opens: "So how wrong could you be?"
+
+card_05_method:
+  answer: "What this is, and what it isn't."
+  is_not: >
+    This is an estimate built from comparable sales. It is not a formal valuation and
+    it isn't an appraisal — a valuer inspects the property and carries professional
+    liability for the figure. Nobody has been inside this home.
+  we_do: >
+    We take sales of homes near this one, adjust each for the ways it differs, weight
+    them by how good a comparison they are, and publish the spread.
+  # Measured 2026-08-06, n=333 sold homes, leave-one-out, NO price-proximity
+  # filter — i.e. the pool this page actually gets, since 0.0% of off-market
+  # homes carry a listing price. See Product/09_ACCURACY_AND_CALIBRATION.md.
+  #
+  # The 11.6% previously in circulation was measured with the subject's OWN SALE
+  # PRICE inside the comparable filter. Do not reinstate it.
+  #
+  # Median AND mean, deliberately: the median describes the reader's home, the
+  # mean carries the tail. Quoting the median alone is the flattering half.
+  # SIGNED OFF by Will 2026-08-06.
+  error_rate: >
+    Tested against 333 homes in these three suburbs that have since sold: half the time
+    the estimate landed within 9.3% of the eventual sale price, and the average miss was
+    12.3%. Those homes sold, which this one has not — so treat it as the method's track
+    record, not a promise about this address.
+  # ⚠ NEVER add a "90% confidence" claim here or anywhere in this arm. The range
+  # is built as 1.645 sigma but empirically contains the sale price 61% of the
+  # time (203/333). Finding 2 in the doc above.
+  opens: "Then why do the other numbers disagree?"
+
+card_06_dispersion:
+  answer: "Why the other estimates say something different."
+  setup: >
+    A valuation built from only three selected sales is highly sensitive to which three
+    are chosen — and three comparable sales is the statutory Statement of Information
+    standard in Victoria and the incoming NSW regime, so it is not a straw man.
+  test: >
+    We took 512 homes that have since sold, found every set of three comparable sales
+    that could reasonably have been chosen, and worked out what each set said.
+  finding: "The median gap between the highest and lowest defensible result was $469,000."
+  means: >
+    That does not make any one estimate dishonest. It means three sales are often too
+    small a sample to show which comparison deserves the most weight.
+  reveal_label: "See what the test found"
+  reveal_body: >
+    A close answer was present in the available evidence on 73.6% of those homes —
+    identifiable only with hindsight. The worst available choice was more than 20% out
+    on 73.4%.
+  opens: "What has it actually done for me?"
+
+card_07_gain:
+  answer: "Since the last recorded sale."
+  bought: "Last recorded sale {price}, {month}."
+  # Only rendered when the index series can actually reach the purchase date.
+  since: "The {suburb} median has moved from {then} ({then_period}) to {now} ({now_period})."
+  # When it cannot — which is most homes, because the series is short.
+  cannot_reach: >
+    Our quarterly median series for {suburb} starts at {start_period}. Everything before
+    that is outside what we can measure, so we are not drawing a line across it.
+  ten_year: "Over ten years the suburb moved from {then} to {now} — about {pct}%."
+  means: >
+    The gap between what was last paid and what the sales say today is real, but it is
+    not one we can draw as a single line — and a line we can't evidence is worth less
+    than saying so.
+  opens: "And what's happening around it now?"
+
+card_08_competition:
+  answer: "What's moving around this home."
+  live_bar: "Live — competitor set re-checked nightly, last {checked}."
+  # This home is NOT on the market. It cannot be "competing".
+  substitutes: "{n} homes a buyer could compare with this one if it came to market today."
+  aperture: "Comparison set: {label}."
+  geography: "{suburb_n} houses are on the market in {suburb}; {catchment_n} across the wider comparison catchment."
+  changed_intro: "What's moved recently"
+  two_true_intro: "Two true things that point in different directions."
+  two_true: >
+    Homes here are selling {direction} than a year ago — a median of {dom} days, against
+    {dom_prev} twelve months earlier. But there is less to choose from: {active} homes are
+    on the market, {active_delta}% {fewer_more} than a month ago.
+  two_true_close: >
+    Both readings are true and they support opposite conclusions, which is why a single
+    market headline can't settle anything about this home.
+  opens: "Who would actually want it?"
+
+card_09_buyer:
+  answer: "Who that combination suits."
+  fit: "What a cheaper home can't give them: {drivers}."
+  reframe: "Right now it's your home. To them, it's the one they've been waiting for."
+  opens: "What if something here is wrong?"
+
+card_10_control:
+  answer: "This is your home's page. You can change it."
+  body: >
+    Everything here was built from public records and sales data. Some of it will be
+    wrong — a renovation we don't know about, a room count out of date, a sale that
+    shouldn't have been used.
+  see_record: "See everything we hold on this home"
+  correct: "Tell us what's wrong, and we'll fix it and rebuild the figure in front of you."
+  # No promise about contact, either direction. This is the claim that survives
+  # the lead model and is defensible from REA's own filings.
+  not_sold_on: >
+    No agent is paying to appear on this page, and your interest in your own home is not
+    sold to anyone. Fields is the agency that built it — there is no third party being
+    handed your address.
+  # A specific gap is a better invitation than a blank box.
+  gap_ask: "One thing we could not verify: {gap}."
