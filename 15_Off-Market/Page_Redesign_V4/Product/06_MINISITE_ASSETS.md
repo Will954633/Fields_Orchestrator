@@ -134,6 +134,73 @@ This is *"what has changed since I last checked"*, which GPT calls the major opp
 which I scoped as a post-claim feature. **It exists.** The honest-widening sub-line is a nice
 touch: it admits when we had to look further afield to find anything to report.
 
+## 8b. Scarcity — built in both products, and I judged it by the wrong test
+
+### ⚠ A correction
+
+My earlier audit put "who would buy this home / what competes" on the no-independent-support
+list because it is absent from the autocomplete categories, the stored persistence, Google's
+refinements and the Reddit personas. **That test was wrong for scarcity.**
+
+Scarcity is not a *topic users search for*. It is an **explanation we supply** — nobody googles
+*"how rare is my house"*, just as nobody googles *"the reasoning behind my valuation"*. Judging
+it by search demand is the same mistake as judging our working by search demand.
+
+The right test is whether it serves a **needed job**, and it plainly does: **J1 — "six numbers
+and no way to choose"** — whose unmet need is *a defensible reason to prefer one figure*.
+*"Only 6 of 198 active listings match your combination"* is exactly such a reason. **Scarcity
+belongs inside §2 as part of the working, not as a standalone "who would buy" section.**
+
+That verdict is unchanged for *buyer profiling* as a topic in its own right — which is what the
+`buyer` card actually is. Scarcity and buyer-profiling were being treated as one thing; they
+aren't.
+
+### What is already built
+
+**`scripts/property_reports/scarcity_features.py`** — the production engine, rewritten
+2026-06-07. Its design premise is the interesting part:
+
+> *"The value of a home is rarely one rare feature — it is a **COMBINATION** of mostly-common
+> features that together suit one buyer."*
+
+- **Anchors** — the mainstream, big-ticket features buyers screen on (land, floor area, pool, beds), chosen **relative to the suburb cohort, not a fixed bar**: *"an 813 m² block can be an anchor in a suburb whose median is 600 m² even though it never clears a fixed 900 m²+ line."*
+- **Differentiators** — single-level living, premium finish, walk-to-school — **deliberately not counted**, they only add prose colour.
+- The load-bearing number is `active_matching_full_stack`, matched on anchors only.
+- ⚠ The honesty guarantee, built into the engine: *"We do NOT fold sparse-coverage features into the count, **so the ratio can never be inflated by missing data**."*
+- Reads the **same** `valuation_data.subject_property.features.basic` that drives the valuation — so scarcity and the range cannot drift apart.
+
+**In the shipped mini-site** (`MarketTab`): *"What makes your home rare — measured"*, a headline
+scarcity claim, the combinatorial query result, and `soldCohortPremiums` — **each feature priced
+against the suburb's last-24-month sold cohort**. Plus the standard it sets for itself:
+
+> *"Scarcity, when it is real, is the single most reliable lever in property marketing. Most
+> agencies describe it."* … *"Always visible — the scarcity claim is only persuasive if it's
+> defensible."*
+
+**In the off-market build:** `offmarket_intel.scarcity` (`active_total`, `active_matching`,
+`notable`, `query`), plus `Page_Redesign_V2/poi_rarity.py` — a prototype for **conditional
+rarity**:
+
+> *"6 share your combination — only 2 are also within a 5-minute walk of a park."*
+
+That is the best intrigue device in either product. It narrows honestly, in one sentence, and
+it converts a common physical combination into a genuinely rarer one without overstating
+anything. Still a standalone harness — *"promotion into the production engine is a separate,
+deliberate step."*
+
+### How it should sit in our flow
+
+Inside **§2, as the reason the range sits where it does** — the bridge between the comparables
+and the figure. It pairs naturally with `soldCohortPremiums`, which gives the dollar value of
+each anchor feature, and with A10 (we already price renovation and condition in dollars).
+
+> ⚠ **The scaling constraint.** In the mini-site, scarcity is gated behind `slotStatus` and a
+> `ConsultantBadge` — a human approves it before it renders. That does not scale to 26,297
+> off-market pages. Either the unapproved state is designed honestly, or the claim is written so
+> it never needs approval.
+
+---
+
 ## 9. Smaller pieces worth reusing
 
 | Component | What it gives us |
@@ -166,3 +233,7 @@ Covered in more detail in the previous revision of this file; the four that matt
 6. **Reuse `ValuationEvidence` for §2** — and verify whether the `adjusted_price` blocker is really universal.
 7. **Reuse `WhatChangedBanner`** as the post-claim returning-visitor layer.
 8. **Reuse `DataRecordDrawer`** as the companion to the §9 correction ask.
+9. **Fold scarcity into §2** as the reason the range sits where it does — using
+   `scarcity_features.py` and `soldCohortPremiums`. Promote `poi_rarity.py`'s conditional-rarity
+   line (*"6 share your combination — only 2 are also within a 5-minute walk of a park"*), and
+   design the un-approved state, since consultant approval cannot scale to 26,297 pages.
