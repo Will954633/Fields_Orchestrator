@@ -564,6 +564,10 @@ def main():
     parser.add_argument("--verbose", action="store_true", help="Show each property result")
     parser.add_argument("--min-price", type=int, default=300000, help="Minimum sale price to include")
     parser.add_argument("--max-price", type=int, default=5000000, help="Maximum sale price to include")
+    parser.add_argument("--property-type", default=None,
+                        help="Restrict the TEST SET to one property_type (e.g. House). "
+                             "The comparable pool is already type-matched per subject; "
+                             "this scopes which homes are graded.")
     parser.add_argument("--price-filter", choices=["sale", "listing", "none"],
                         default="none",
                         help="Which price anchors the +/-40%% comparable filter. "
@@ -633,6 +637,8 @@ def main():
             if not actual_price:
                 continue
             if actual_price < args.min_price or actual_price > args.max_price:
+                continue
+            if args.property_type and doc.get("property_type") != args.property_type:
                 continue
             doc['_collection'] = suburb
             test_properties.append(doc)
