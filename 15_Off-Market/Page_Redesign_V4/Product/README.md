@@ -63,8 +63,9 @@ should sit alongside this one.
 2. How do we unblock Reddit? *(Bright Data KYC / paid PullPush / official Reddit API)*
 3. Do we tear down REA's and Domain's owner dashboards before writing public copy? *(recommendation: yes —
    nobody has looked inside them, and it is the spine of the comparison)*
-4. Does "nobody calls unless you ask" become an operational rule? *(if yes, possibly the most valuable line
-   in the product; if no, it cannot be said at all)*
+4. ~~Does "nobody calls unless you ask" become an operational rule?~~ **Resolved 2026-08-06 — the page
+   makes no contact promise either way.** Outreach is physical mail to the property address. The
+   surviving claim is *"we don't sell you to whoever pays most"*, which is true regardless.
 
 **Blocking verification** before anything public ships: the seven items in the matrix's verification queue,
 and the calibration of confidence labels — currently inverted in parts of the backtest.
