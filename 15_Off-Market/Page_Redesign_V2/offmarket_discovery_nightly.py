@@ -199,7 +199,7 @@ def reachable_homes():
 
 
 def indexed_homes():
-    """Yield (slug, last_enriched, suburb) for every indexed off-market home.
+    """Yield (slug, last_enriched, suburb, valuation_computed_at) per indexed home.
 
     The suburb is carried through to build_one() rather than left to
     fact_bundle's fallback scan (offmarket_intel_poller.TARGET_SUBURBS) — that
@@ -382,7 +382,10 @@ def run(limit=None, rebuild_all=False, dry_run=False, shard=None, reachable=Fals
         cov = len(after)
         # Frozen suburbs are not built, but their released slice is still reachable from
         # the sitemap — so it is still covered by this assertion. Watch ⊇ build.
-        indexed_slugs = {s for s, _le, _sub in homes} | frozen_released_slugs()
+        # `s for s, *_` not `s, _le, _sub` — indexed_homes() yields 4-tuples
+        # (slug, last_enriched, suburb, valuation_computed_at). Unpacking a fixed
+        # width here crashed the whole run AFTER all 3000 decks had built.
+        indexed_slugs = {s for s, *_ in homes} | frozen_released_slugs()
         missing = sorted(indexed_slugs - set(after))
         sample = ", ".join(missing[:5]) + (" …" if len(missing) > 5 else "")
         gap = f"; GAP {len(missing)} indexed w/o deck ({sample})" if missing else ""
