@@ -239,15 +239,45 @@ def _humanise(q):
 
 
 def c05_method(b, c, x):
-    """NEW TYPE."""
+    """NEW TYPE. What the method is, what it isn't, and how often it misses.
+
+    The error rate is PER SUBURB, never blended. The spread between our three
+    markets (10.5% MAE in Robina to 13.8% in Varsity Lakes) is larger than the
+    gain from scoping to the design envelope at all, so one averaged figure
+    would overstate our accuracy to a Varsity Lakes owner by 2.1pp and
+    understate it to a Robina owner. The page knows the address; it can say the
+    true thing.
+
+    There is deliberately NO fallback to a blended number for an unmeasured
+    suburb — lending a market someone else's track record is precisely the
+    unearned-confidence move this page exists to argue against. Unmeasured
+    means the block does not render.
+    """
     k = c["card_05_method"]
     card = {"type": "method", "answer": k["answer"], "is_not": k["is_not"],
             "we_do": k["we_do"], "next": k["opens"]}
-    if k.get("error_rate"):
-        card["error_rate"] = k["error_rate"]
+    # ⚠ The error rate describes the COMPARABLE-SALES ENGINE and nothing else.
+    # When a home falls outside the design envelope the engine declines, and
+    # fact_bundle falls through to `exterior_evidence` or `thin` — different
+    # methods, with their own accuracy that we have never measured. Attaching
+    # the engine's 10.5% to an exterior-evidence range would lend an unmeasured
+    # method someone else's track record, which is the same error as lending
+    # one suburb another's. Measured method only.
+    v = b.get("valuation") or {}
+    rate = None
+    if v.get("method") == "engine":
+        rate = (k.get("error_rate_by_suburb") or {}).get(b.get("suburb_key"))
+    if rate:
+        card["error_rate"] = rate.strip()
+        if k.get("error_rate_close"):
+            card["error_rate_close"] = k["error_rate_close"].strip()
+    elif v.get("method") and v["method"] != "engine":
+        # Not a gap to fill later — the honest statement for this home.
+        caveat = (k.get("method_not_measured") or "").strip()
+        if caveat:
+            card["method_caveat"] = caveat
     else:
-        card["blocked"] = ("error rate unpinned — one figure, one sample, one date, "
-                           "and a definition")
+        card["blocked"] = f"no measured error rate for {b.get('suburb_key')}"
     return card
 
 
