@@ -276,12 +276,13 @@ News | Market Intelligence | Properties | Analyse Your Home | Why Fields? | Subs
 
 | Route | Page | Purpose |
 |-------|------|---------|
-| `/` | MarketIntelligencePage | Newspaper-style articles by suburb (nav: "News") |
-| `/market-metrics/:suburb` | MarketMetricsPage | Data charts by category (nav: "Market Intelligence") |
+| `/` | MarketIntelligencePage | News & Research: newspaper-style articles (nav: "News and Research") |
+| `/news/:suburb` | MarketIntelligencePage | News & Research, explicit suburb (was `/market-intelligence/:suburb` until 2026-07-31) |
+| `/market-intelligence/:suburb/:category?` | MarketMetricsPage | Data charts by category (nav: "Market Intelligence"). Moved here from `/market-metrics` on 2026-07-31 |
+| `/market-metrics/:suburb/:category?` | — | Legacy → **301 redirect** to `/market-intelligence/:suburb/:category?` |
 | `/for-sale` | ForSalePage | Active property listings |
 | `/property/:id` | PropertyPage | Property detail + editorial + valuation |
 | `/analyse-your-home` | AnalyseYourHomePage | Conversion landing page |
-| `/market-intelligence/:suburb` | MarketIntelligencePage | Same as homepage, explicit suburb |
 | `/articles/:slug` | ArticlePage | Self-hosted articles |
 | `/discover` | DiscoverPage | Swipe/scroll property feed |
 | `/ops` | OpsPage | System monitor dashboard |
@@ -314,7 +315,10 @@ The figure shown on property pages is the **`reconciled_valuation`** — a weigh
 - **Script:** `/home/fields/Feilds_Website/07_Valuation_Comps/precompute_valuations.py`
 - **Method:** Select 3-8 high-quality comparable sales → adjust each for floor area, condition, location → weighted mean
 - **Weights:** adjustment quality, accuracy, proximity, verification, recency, data quality
-- **Confidence:** 90% CI via `1.645 * weighted_std_dev`, level = High/Medium/Low/Very Low
+- **⚠ DESIGN ENVELOPE — detached houses, $1,000,000–$2,000,000.** The method cannot leave this band: a weighted mean of adjusted comparables can never exceed its priciest comparable, and the pool is dominated by mid-market sales, so it regresses to the middle. Measured 2026-08-06 over 9,232 valued houses: **our highest valuation of all 9,232 was $2,494,914**, while real sold houses reach $5,100,000 and 7.5% of sales clear $2.5M. Outside the envelope `precompute_valuations.py` sets `directional_only` and suppresses **both** the point estimate and the range (`_ENVELOPE_MIN`/`_ENVELOPE_MAX`); comps and per-feature adjustments are kept. A ceiling-pinned home is indistinguishable from a correct one in our own output, so never infer one from the number.
+- **Range:** a flat **±12%** of the estimate — NOT a statistical CI, and the code says so. It contains the actual sale price **61%** of the time across all bands (67% inside the envelope), so **never call it a "90% confidence range"** or say "~10% fall outside". A true 90% band needs ±26.4% (the measured P90 error).
+- **Confidence level** (High/Medium/Low/Very Low) is **not calibrated across all bands** — within-10% ran high 55%, medium 46%, low 56%, very_low 61%, i.e. non-monotonic. It behaves better *inside* the envelope (high 61% vs medium 56%). Do not render the bare tier to a reader; `confidence_reason` states the why and is a fact.
+- **⚠ Accuracy figures:** always run the backtest with `--price-filter none` for off-market work. The default `sale` anchor prunes comparables using the subject's own sale price — target leakage. Scoped to the envelope: **MAE 10.5%, median 8.2%, within-10% 59%** (Robina, n=278). Unscoped/all-types: 12.3% / 9.3% / 52%.
 - **Stored:** `valuation_data.confidence` field on each property document
 - **Display:** `ConfidenceDisplay` component in `HowToValuePage`
 - The CatBoost `iteration_08_valuation` is a separate, inferior model — do not confuse them
@@ -357,7 +361,7 @@ Multi-agent pipeline generating editorial content for property pages.
 ### Facebook
 - **Ad Account:** `act_1463563608441065`, **Page:** `889412530933297`
 - **Token:** `.env` as `FACEBOOK_ADS_TOKEN` (expires ~60 days)
-- **Pixels:** `1491613936314260` (Fields, primary) + `137811233253065` (Content, passive)
+- **Pixels:** `1491613936314260` (Fields, primary) — the only one. `137811233253065` (Content) was dropped from CAPI 2026-07-15 (token lacks permission, every call 400'd) and removed from the browser 2026-08-05.
 - **Metrics:** `fb-metrics-collector.py` (2x/day at 12:00 + 23:00 AEST)
 - **Ad experimentation:** MUST follow `fb_ads_experimentation_playbook.md` (memory file)
 - **Established learnings (do not re-test):** Sell-focused content dead, lifestyle photos dead, OFFSITE_CONVERSIONS is the #1 lever, broad targeting beats custom audiences
