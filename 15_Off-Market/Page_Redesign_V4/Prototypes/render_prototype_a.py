@@ -498,6 +498,19 @@ details .body{padding-top:12px;font-size:.94rem;color:var(--ink-2)}
 
 @media(min-width:760px){.rail{grid-auto-columns:31%}}
 
+
+/* value drivers (buyer section) */
+.drivers{display:grid;grid-template-columns:1fr;gap:12px;margin:20px 0}
+.drv{background:var(--paper-2);border:1px solid var(--line-2);border-radius:4px;padding:16px 18px}
+.drv ul{list-style:none;margin:8px 0 0;padding:0}
+.drv li{padding:5px 0 5px 16px;position:relative;color:var(--ink)}
+.drv li:before{content:"";position:absolute;left:0;top:14px;width:7px;height:1px;background:var(--accent)}
+@media(min-width:760px){.drivers{grid-template-columns:1fr 1fr}}
+
+/* the five owner-only questions */
+.qs2{margin:14px 0 6px;padding-left:20px}
+.qs2 li{font-family:var(--serif);font-size:1.04rem;padding:6px 0;color:var(--ink)}
+
 footer{padding:44px 0 70px;border-top:1px solid var(--line-2);color:var(--muted);font-size:.85rem}
 
 @media(min-width:760px){
@@ -534,6 +547,15 @@ def render(slug, proto="full"):
     vd = doc.get("valuation_data") or {}
     adj = [c for c in (vd.get("adjusted_comparables") or []) if c.get("adjusted_price")]
     adj.sort(key=lambda c: abs((c.get("adjusted_price") or 0) - (b.get("valuation") or {}).get("point", 0)))
+
+    # The emitter already builds `gain` and `buyer` from this bundle. Import them
+    # rather than re-deriving: two implementations of the same section is how the
+    # page and the emitter end up disagreeing about the same home.
+    try:
+        import emit_v4
+        _cards = {c["type"]: c for c in emit_v4.emit_v4(slug)["cards"]}
+    except Exception:
+        _cards = {}
 
     s, v = b.get("subject") or {}, b.get("valuation") or {}
     cred, oc = b.get("credibility") or {}, b.get("obvious_comp") or {}
@@ -855,7 +877,31 @@ def render(slug, proto="full"):
         add('<div class="src">Fields analysis · n=512 · tested 6 August 2026</div>')
         add('</div></section>')
 
-    # ── 7 · what is changing now ────────────────────────────────────
+    # ── 7 · since the last recorded sale ────────────────────────────
+    g = _cards.get("gain") or {}
+    if g.get("bought"):
+        add('<section id="since"><div class="wrap">')
+        add('<div class="eyebrow">Since then</div>')
+        add('<h2>What has happened since the last recorded sale</h2>')
+        add(f'<div class="anchor">{E(str(g["bought"]))}</div>')
+        # ⚠ ORDER IS LOAD-BEARING, as on the deck card. `bought` can be a sale from
+        # decades ago while `ten_year` covers a ten-year window; rendered adjacent
+        # with nothing between them a reader does arithmetic across both and gets
+        # a number we have not evidenced. `cannot_reach` — which states outright
+        # where our series starts — goes BETWEEN them.
+        if g.get("cannot_reach"):
+            add(f'<p class="rangeNote">{E(str(g["cannot_reach"]).strip())}</p>')
+        if g.get("since"):
+            add(f'<p>{E(str(g["since"]).strip())}</p>')
+        if g.get("ten_year"):
+            add('<div class="label">The last ten years</div>')
+            add(f'<p>{E(str(g["ten_year"]).strip())}</p>')
+        if g.get("means"):
+            add(f'<div class="weight"><p>{E(str(g["means"]).strip())}</p></div>')
+        add('<a class="cue" href="#now">And what\'s happening around it now? ↓</a>')
+        add('</div></section>')
+
+    # ── 8 · what is changing now ────────────────────────────────────
     mkt = ((get_mongo_client()["system_monitor"]["market_pulse"]
             .find_one({"suburb": b["suburb_key"]}) or {}).get("data_snapshot") or {})
     comp = b.get("competition") or {}
@@ -945,7 +991,34 @@ def render(slug, proto="full"):
         add('<a class="cue" href="#correct">What if something here is wrong? ↓</a>')
         add('</div></section>')
 
-    # ── 8 · correct the home ────────────────────────────────────────
+    # ── 9 · who would actually want it ──────────────────────────────
+    by = _cards.get("buyer") or {}
+    bb = b.get("buyer") or {}
+    vd_ = b.get("value_drivers") or {}
+    if bb.get("headline") or by.get("fit"):
+        add('<section id="buyer"><div class="wrap">')
+        add('<div class="eyebrow">The buyer</div>')
+        add(f'<h2>{E(str(bb.get("headline") or "Who that combination suits"))}</h2>')
+        if bb.get("body"):
+            add(f'<p class="lede">{E(str(bb["body"]).strip())}</p>')
+        carries, attracts = vd_.get("carries_price") or [], vd_.get("attracts_buyer") or []
+        if carries or attracts:
+            add('<div class="drivers">')
+            if carries:
+                add('<div class="drv"><div class="label">What carries the price</div><ul>'
+                    + "".join(f'<li>{E(str(x))}</li>' for x in carries) + '</ul></div>')
+            if attracts:
+                add('<div class="drv"><div class="label">What draws them in</div><ul>'
+                    + "".join(f'<li>{E(str(x))}</li>' for x in attracts) + '</ul></div>')
+            add('</div>')
+            add('<p class="fine">Both matter, and they are not the same thing: one sets what a '
+                'buyer will pay, the other decides whether they come at all.</p>')
+        if by.get("reframe"):
+            add(f'<div class="weight"><p>{E(str(by["reframe"]).strip())}</p></div>')
+        add('<a class="cue" href="#correct">What if something here is wrong? ↓</a>')
+        add('</div></section>')
+
+    # ── 10 · correct the home ───────────────────────────────────────
     gaps = b.get("gaps") or []
     add('<section id="correct"><div class="wrap">')
     add('<div class="eyebrow">Your home</div>')
@@ -980,6 +1053,43 @@ def render(slug, proto="full"):
     add('<p class="fine">No agent is paying to appear on this page, and your interest in your own '
         'home is not sold to anyone.</p>')
     add('</div></div></section>')
+
+    # ── 11 · a private working plan ─────────────────────────────────
+    # Product/05_PAGE_FLOW.md section 10, prototyped in Prototypes/build_working_plan.py.
+    # §0 opens by naming three questions; the page answered the first and
+    # gestured at the second. This is the only section that demonstrates
+    # JUDGEMENT rather than computation — what we would DO — which is the thing
+    # an agent actually sells.
+    #
+    # The rule that makes it defensible: decisions only the owner can answer, we
+    # ASK; decisions needing inspection and judgement, we RECOMMEND. Reflecting
+    # someone's own button presses back at them demonstrates nothing.
+    add('<section id="plan"><div class="wrap">')
+    add('<div class="eyebrow">If you ever did move</div>')
+    add('<h2>What a move would actually involve</h2>')
+    add('<p class="lede">You don\'t need to be planning to sell. This brings the decisions '
+        'together privately — what would have to happen, what we\'d recommend, and what '
+        'genuinely can\'t be decided without seeing the home.</p>')
+    add('<div class="sim"><div class="simtag">Concept — not wired</div>')
+    add('<ol class="qs2">')
+    for q in ["What would a move need to work around?",
+              "How much preparation would feel reasonable?",
+              "What matters most?",
+              "What access could a campaign reasonably have?",
+              "Anything else we\u2019d need to work around?"]:
+        add(f'<li>{E(q)}</li>')
+    add('</ol>')
+    add('<p class="fine">Five questions only you can answer. Everything else — the method, the '
+        'launch price, the campaign shape, which preparation actually pays — is ours to recommend, '
+        'and every recommendation states what would change it.</p>')
+    add('</div>')
+    add('<h3 style="margin-top:26px">The part that needs someone to walk through it</h3>')
+    add('<p>The final launch price · whether styling would change how the rooms photograph · '
+        'the photography package · which preparation work would return more than it costs · '
+        'settlement structure.</p>')
+    add('<p class="fine">That list is the honest part. Anyone who hands you a complete plan from '
+        'public records alone is guessing at the half that needs seeing.</p>')
+    add('</div></section>')
 
     # ── closing · the next private question ─────────────────────────
     add('<section id="next"><div class="wrap"><div class="closing">')
