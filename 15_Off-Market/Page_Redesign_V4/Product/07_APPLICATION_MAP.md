@@ -127,7 +127,7 @@ Every element that survives, where it lands, why, and whether it can be built to
 
 | # | Blocker | Blocks |
 |---|---|---|
-| 1 | **Ratify the intent-alert rule.** `offmarket-intent-alert.mjs` already tells Will when someone reaches the end having asked for nothing. *"The alert does not break this promise; acting on it would."* | §0 and §9 — *"nobody calls unless you ask"* appears twice and is load-bearing both times |
+| 1 | ~~Ratify the intent-alert rule~~ — **no longer blocking, 2026-08-06.** The page makes no contact promise, so the alert breaks nothing. The alert stays; outreach is physical mail to the property | — |
 | 2 | **`device_token` write gap** — a reader from a printed QR has no token, so the answer is silently discarded while they see a success state | Any posted piece that invites a reply |
 | 3 | **s 215 CMA question** | §1 |
 | 4 | **Confidence-label calibration** | Any stated confidence |
