@@ -249,7 +249,49 @@ It names nobody, uses only public sales data, and criticises a **method** rather
 
 ---
 
-# §5 — If someone else has given you a number
+# §5 — What it's done since you bought it
+
+> ## Bought {last_sale_month} {last_sale_year} for ${last_sale_price}
+>
+> {years_held} years. Over that time the sales evidence in {suburb} has moved from
+> ${suburb_index_then} to ${suburb_index_now} for homes of this type.
+>
+> Applied to what you paid, that puts this home somewhere in the **${range_low} – ${range_high}**
+> we arrived at from the sales themselves — two different routes to a similar place.
+>
+> *[fan chart: purchase price → today's low/high, stepped by real quarterly index points]*
+>
+> The line isn't smoothed. Each step is an actual quarter, because a smooth curve would suggest
+> we know more about the years in between than we do.
+
+**Why this works.** *"Has it gone up since we bought it? By how much?"* is the first question
+GPT lists after the number itself, and *"Did buying this home turn out to be a good decision?"*
+is the emotional version of it. Independent support is moderate — **144 autocomplete searches**
+in the sale-history category, `history` appearing **4×** in Google's own refinements, and our
+own #3-above-Domain result on exactly this fact.
+
+It also does something no other section does: **it corroborates the range by a second route.**
+Comparable sales and an index applied to their purchase price are independent methods, and
+showing them land in the same place is a stronger proof than either alone.
+
+`CapitalGainChart.tsx` is already built — a fan chart from purchase price to today's range,
+stepped by real quarterly index points, deliberately unsmoothed because curve-fitting *"would
+imply false precision."* It is wired into `OffMarketDeck` (the ladder), not the live deck.
+Data: `scraped_data.property_timeline`, **70.4% Robina / 83.2% Varsity Lakes / 90.8% Burleigh
+Waters**.
+
+> ⚠ **The privacy line runs through here.** Purchase price → today's range is public-record
+> arithmetic and is fine. Their equity, loan balance or LVR is derived financial inference and
+> is **banned** (C11) — the one clear privacy violation in the whole corpus was exactly this:
+> *"what absolutely floored me was they had even estimated what we owe on it."*
+> ⚠ Evidence here is **moderate, not strong** (`own_address_search_intent` §6.3). Instrument it.
+
+> ### The ask
+> None. This section's job is to reassure and corroborate, then hand to §6.
+
+---
+
+# §6 — If someone else has given you a number
 
 > ## Bank valuations, and why they're usually lower
 >
@@ -284,7 +326,7 @@ This section gives all three and needs to know nothing about their finances.
 
 ---
 
-# §6 — What's moving
+# §7 — What's moving
 
 > ## What's changed around this home
 >
@@ -319,7 +361,7 @@ to the loudest volatility complaint: *"In the last 3 months my house has dropped
 
 ---
 
-# §7 — What sits under it
+# §8 — What sits under it
 
 > ## Flood and overlays
 >
@@ -348,7 +390,7 @@ complaining that a listing omitted flood risk — because they don't complain to
 
 ---
 
-# §8 — What you can do about any of it
+# §9 — What you can do about any of it
 
 > ## This is your home's page. You can change it.
 >
@@ -381,16 +423,16 @@ customers"*, with better-paying agents receiving **36% more** of them.
 
 # The asks, collected
 
-Nine sections, six asks. Each is a reason to talk, not a toll gate.
+Ten sections, six asks. Each is a reason to talk, not a toll gate.
 
 | § | The ask | What it gives us | Why they'd do it |
 |---|---|---|---|
 | 1 | Post the report to this address | **A verified owner + postal address** | Self-verifying, one field, 6× the reach of email |
 | 2 | **Ask us to review this** | An opened conversation, in their words | Nobody else will fix a number about their home |
 | 3 | Send me the method in full | A research-stage contact | Low commitment, high intent signal |
-| 5 | Send this in writing | An address, and a live financial context | Genuinely useful to a broker |
-| 6 | Tell me when this changes | A durable channel | The only page that explains its own movement |
-| 7 | Send me the detail for this address | An address | 546 persistence says they want it |
+| 6 | Send this in writing | An address, and a live financial context | Genuinely useful to a broker |
+| 7 | Tell me when this changes | A durable channel | The only page that explains its own movement |
+| 8 | Send me the detail for this address | An address | 546 persistence says they want it |
 
 **Capture by post or SMS — never a login.** The gate on `/for-sale` has converted **2 people**
 in its lifetime. The SMS claim path already exists, works, and yields a phone number by
@@ -416,9 +458,20 @@ calling any of it "sensitive" to justify a gate would be a false claim (C15).
 | 7 | ✅ ready | Burleigh Waters only | other suburbs |
 | 8 | ✅ ready | ❌ | review flow; "nobody calls" as an operational rule |
 
+## What is deliberately NOT a section
+
+| Candidate | Evidence | Verdict |
+|---|---|---|
+| **Who would buy this home** (the `buyer` card) | Absent from autocomplete categories, stored persistence, Google refinements and the Reddit personas. The only support was deck dwell, which is position-confounded and survivorship-biased | **Cut, or ship as a labelled test.** A Fields-invented interest, not a user-expressed one |
+| **What's competing with it right now** | GPT reasoning only; no independent data support. But `offmarket_intel` holds it (224 active, 26 matching) | **Folded into §7 as two lines**, not given a section of its own |
+| **"What's changed since you last looked"** | GPT calls this *"a major opportunity… the static answer is valuable; the living answer is defensible."* REA positions owner tracking exactly this way | **Not a page section — a post-claim feature.** It requires knowing who they are, which makes it a genuine reason to claim rather than a toll |
+| **The deeper journey** — what selling could make possible, where they'd go next, launch number, method, preparation, buyer competition, the Fields process | GPT's own list, and it maps one-to-one onto mini-site V2 sessions 1–7 | **Not this page.** *"The selling journey is not the initial product. It is the deeper path that becomes relevant once Fields has answered the address search better than anyone else."* |
+
+---
+
 ## Open
 
-1. **Mobile.** Nine value-then-ask blocks stacked could read as nine paywalls. Prototype before committing.
+1. **Mobile.** Ten value-then-ask blocks stacked could read as nine paywalls. Prototype before committing.
 1b. **Fallback order when there is no range.** §2 and §3 depend on a valuation; §4 does not.
    Where the build can't run, go §0 → §1 (plainly: not enough detail) → **§4** → §6. The page
    still has substance, but the arc inverts — say why numbers differ before we can show ours.
