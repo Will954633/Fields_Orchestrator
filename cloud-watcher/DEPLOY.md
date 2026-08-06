@@ -4,7 +4,11 @@
 VM and alert Will, with an optional one-tap reset. Removes "reset from my laptop" from
 the loop. See `main.py` for design.
 
-## Status — Tier A is LIVE (deployed 2026-07-27)
+## Status — Tier A is LIVE (deployed 2026-07-27, redeployed 2026-08-06)
+> **2026-08-06 redeploy:** detection logic fixed (see below) + `HARD_STALE_MIN=20` added.
+> Verified live: ports-up-but-stale now returns `wedged`. All other env vars and the
+> `tg-bot-token` secret binding were preserved by using `--update-env-vars`.
+
 Deployed by Claude while authenticated as `will.simpson@blueoceans.com.au` on the VM.
 Everything below Tier A is already running; the commands are recorded for
 reproduce/teardown. **Tier B (phone reset button) is not yet set up** — it needs a
@@ -25,11 +29,35 @@ Telegram bot only Will can create (see bottom).
 > egress, so a Cosmos-based heartbeat returned null from the function. GCS is always
 > reachable from GCP and decouples the safety net from both the VM and Cosmos.
 
-### Detection logic
-`wedged` = heartbeat older than `STALE_MIN` (8) **AND** at least one of ports 22/443
-dead → Telegram alert (never auto-resets). `degraded` = heartbeat stale but ports up
-(heartbeat cron/write issue, VM alive) → soft note. Requiring both signals avoids
-false alarms from a transient blip.
+### Detection logic (revised 2026-08-06 — the old rule missed a real wedge)
+- `wedged` = heartbeat older than `STALE_MIN` (8) **AND** a port dead → Telegram alert
+  (never auto-resets).
+- `wedged` = heartbeat older than **`HARD_STALE_MIN` (20)**, *regardless of ports*.
+- `degraded` = heartbeat stale 8–20 min but ports up → soft note, probably just the cron.
+
+**Why the second rule exists.** On 2026-08-01 and 2026-08-06 a runaway `ugrep` drove the
+box into disk thrash: the workbench was dead and SSH eventually unusable, but nginx/443
+and sshd/22 kept accepting connections. The old "stale **AND** dead port" rule classified
+that as merely `degraded` and sent a note saying *"likely a cron issue, NOT a hang"* — the
+exact opposite of the truth — so no real alert ever fired and the box sat wedged for 9
+hours. **Ports answering does not mean the guest is usable.** A healthy VM rewrites the
+heartbeat every 60 s; 20 consecutive misses is not a blip.
+
+**The heartbeat is now a liveness+usability signal.** `scripts/write_heartbeat.sh` probes
+`/healthz` first and *withholds* the heartbeat if the workbench is not serving, so a
+"ports up but wedged" box goes stale on purpose. Fail-safe direction: withholding can
+only ever cause an alert, never a false all-clear.
+
+⚠ **Probe `/healthz` with `curl -sL`, never bare `/`.** A bare `curl http://127.0.0.1:8080/`
+returns 302 in ~27 ms even when completely wedged (that handler never touches the
+extension host), and `systemctl is-active code-server` stays `active` throughout. Both
+gave a false all-clear on 2026-08-06.
+
+**Verifying the ports-up path without paging Will:** pre-set the state object to
+`{"last_status":"wedged"}` (alerts only fire on *transitions*), redeploy with
+`--update-env-vars=HARD_STALE_MIN=0`, invoke, and confirm the response is
+`{"status": "wedged", ..., "ports": {"22": true, "443": true}}`. Then restore
+`HARD_STALE_MIN=20` and reset the state to `{"last_status":"ok"}`. Done live 2026-08-06.
 
 ---
 
@@ -65,7 +93,7 @@ gcloud functions deploy vm-watcher --gen2 --runtime=python312 --region=australia
   --source=. --entry-point=vm_watcher --trigger-http --no-allow-unauthenticated \
   --memory=256Mi --timeout=30s \
   --set-secrets='TELEGRAM_BOT_TOKEN=tg-bot-token:latest' \
-  --set-env-vars='TELEGRAM_CHAT_ID=PASTE_CHAT_ID,VM_IP=34.40.230.132,VM_INSTANCE=fields-orchestrator-vm,VM_ZONE=australia-southeast1-b,VM_PROJECT=fields-estate,STALE_MIN=8,HEARTBEAT_BUCKET=fields-vm-watchdog,HEARTBEAT_OBJECT=vm-heartbeat.txt,STATE_OBJECT=vm-watchdog-state.json'
+  --set-env-vars='TELEGRAM_CHAT_ID=PASTE_CHAT_ID,VM_IP=34.40.230.132,VM_INSTANCE=fields-orchestrator-vm,VM_ZONE=australia-southeast1-b,VM_PROJECT=fields-estate,STALE_MIN=8,HARD_STALE_MIN=20,HEARTBEAT_BUCKET=fields-vm-watchdog,HEARTBEAT_OBJECT=vm-heartbeat.txt,STATE_OBJECT=vm-watchdog-state.json'
 RUN_URL=$(gcloud functions describe vm-watcher --region=australia-southeast1 --gen2 --format='value(serviceConfig.uri)')
 
 # 6. Scheduler every 3 min (OIDC)
