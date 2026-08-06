@@ -75,6 +75,38 @@ the one thing we can claim without an accuracy contest we would lose.
 
 ---
 
+## 3b. Spread narrowing — closes `Article_Prototypes/README.md` open issue 3
+
+That README asks for the narrowing distribution across the eligible set before the
+$610,000 → $274,000 figure carries any marketing claim, noting it was 55% on Moorabbin
+but **5%** on Heidelberg. Measured here on the same 512 homes — raw comp prices vs the
+**same** comps adjusted (our method vs naive label-matching on identical sales):
+
+| | Narrowing |
+|---|---|
+| min | −634.2% |
+| p10 | 3.7% |
+| p25 | 23.8% |
+| **median** | **38.8%** |
+| p75 | 56.2% |
+| p90 | 68.4% |
+| max | 88.5% |
+
+- Narrows at all: **91.0%** of properties · widens: **8.6%**
+- Narrows by more than 50%: 32.6%
+- **Median raw spread $351,000 → median adjusted spread $204,805**
+
+**The Moorabbin 55% sits at the 73rd percentile — flattering but not an outlier. The
+Heidelberg 5% is the outlier, at the 11th.** The README had it backwards.
+
+**The defensible claim is the median: adjusting comparables narrows the range by about
+40%, and narrows it at all in nine cases out of ten.** Quote that, not $610,000 → $274,000.
+
+⚠ This is a *precision* result, not accuracy — see §1. And it measures our method against
+un-adjusting our own comp set, not against the agent 3-comp method in §2.
+
+---
+
 ## 4. ⚠ Our own calibration is bad, and the confidence labels are worse than useless
 
 Measured on the same 512 homes:
