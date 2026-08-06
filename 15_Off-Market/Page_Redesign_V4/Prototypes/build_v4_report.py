@@ -277,7 +277,9 @@ def s2_working(b, adjusted):
             out.append("**What strengthens your position:** " + ", ".join(f"↑ {c}" for c in carries))
         if levers:
             out.append("\n**Where a buyer may focus:** " + ", ".join(f"↓ {l}" for l in levers))
-        out.append("\n**Knowing both is how you hold your number.**")
+        # "Knowing both" is only true when both sides rendered.
+        out.append("\n**Knowing both is how you hold your number.**" if (carries and levers)
+                   else "\n**Knowing where it is strong is how you hold your number.**")
     out += ["", "*↓ So how wrong could you be?*"]
     return "\n".join(out)
 
