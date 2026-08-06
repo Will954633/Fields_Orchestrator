@@ -152,6 +152,73 @@ made matters*; the working is *what we do about it*. Without §2, §3 is a boast
 
 ---
 
+## 3b. What comes next, after the valuation layer
+
+### ⚠ First, a rule about our own data
+
+**Deck dwell and funnel figures cannot be used as evidence of topic preference.** They are
+confounded three ways and `research_intent/C` §limitation 6 says so itself:
+
+1. **Position is ours, not theirs.** The card order was chosen by us. Content and position
+   cannot be separated.
+2. **Survivorship.** `buyer` (9.0s) and `valuation` (11.7s) sit at positions 6–8, reached by
+   ~15% of sessions. The dwell is measured on the most engaged minority.
+3. **Dwell is ambiguous** — long can mean dense or confusing as easily as interesting.
+
+They remain valid for *"did this card get read at all"* and for comparing arms of the same
+position. **They are not a ranking of what users want to know.** Any sequencing claim must
+rest on evidence that never touched our page.
+
+### Independent evidence only
+
+| Topic | Autocomplete category (`D`) | Stored persistence | Google refinements (`A`, n=22) | Reddit personas (`B`) | Other |
+|---|---|---|---|---|---|
+| **Valuation** | **432 — dominant** | — | price 2 | Comparable Hunter ~53, Agent-Number Sceptic ~39, AVM Sceptic ~16 | trust hedges `actually/really worth` |
+| **How valuation works / how accurate** | 85 (tool/mechanics) | — | — | Tool Shopper ~21 | ✅ **our own FB article on this outperformed** |
+| **Market direction** | 36 | **~670** — forecast 219, next-5-years 183, crash prediction 147, crash 121 | — | — | — |
+| **Risk / hazard** | 71 | **546** — `does burleigh waters flood`, 2.5× the next item | — | Flood/Overlay ~11 | — |
+| **Sale history** | 144 | — | history 4 | ⚠ **zero** stated demand | ✅ our history snippet ranked **#3, above Domain** |
+| **Equity / lender numbers** | 25 | — | — | **Equity Checker ~115 — largest persona** | named-institution pattern |
+| **Buyer / who competes** | ❌ **not a category** | ❌ none | ❌ none | ❌ **not a persona** | only the discredited dwell figure |
+
+### The order the independent evidence supports
+
+1. **How the number was made, and how accurate it is.** Still the valuation layer, not a new
+   one — 85 tool/mechanics suggestions, the Tool Shopper persona, the trust hedges, and the
+   one demand signal we have actually validated in market (the Facebook article).
+2. **What's changed, and where this market is heading.** The largest adjacent topic by
+   persistence (~670). ⚠ Rule 5: report indicators, never forecast.
+3. **Is this home exposed** — flood and hazard, 546 persistence plus 71 suggestions.
+4. **Sale history** — strong *ranking* and *credibility* value, weak stated demand. Per
+   `own_address_search_intent` §6.3 the working hypothesis is that it performs because it is
+   specific and checkable, not because history is the job. Use it as the §0 hard fact rather
+   than as a section.
+5. **Then the selling path** — GPT: *"The selling journey is not the initial product. It is
+   the deeper path that becomes relevant once Fields has answered the address search better
+   than anyone else."*
+
+### ⚠ The buyer / competition layer has no independent support
+
+It is absent from the autocomplete categories, the stored corpus, Google's refinements and
+the Reddit personas. **The only evidence for it was the deck dwell figure, which is
+discredited above.** It may still be good product — it is differentiating and it feeds the
+seller path — but **it is a Fields-invented interest, not a user-expressed one**, and it must
+not be described as research-backed. If it stays, it should be positioned as a test with a
+stated hypothesis, not as an answer to a known want.
+
+### One correction GPT gets right and this document had wrong
+
+**Privacy belongs on the first screen.** GPT's opening layer includes *"This is private and
+no one calls unless asked"*. §6 in the framework below puts it in the claim step — where
+87.5% of visitors never arrive. The anxiety is present at arrival (*"Am I declaring that I am
+selling?"*), so reassurance at the end reassures nobody. **Move it to §0.**
+
+⚠ GPT's first screen also wants the value range immediately, which collides with the 30–90s
+build (§0 of this document). Either pre-warm, or the first screen carries the hard fact plus
+the privacy line and the range lands a layer later. Decide deliberately.
+
+---
+
 ## 4. Design rules the behaviour data imposes
 
 1. **Answer without being asked.** No menu, no tabs. `offmarket_menu_*` has fired **9 times
