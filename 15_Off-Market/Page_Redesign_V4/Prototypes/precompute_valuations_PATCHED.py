@@ -1995,6 +1995,15 @@ def select_quality_comps(all_enriched_points, min_comps=3, target_comps=8):
 
 # ─── GAP 6: Confidence Intervals ──────────────────────────────────────────────
 
+# ── Design envelope ───────────────────────────────────────────────────────
+# The comparable-sales method was designed for DETACHED HOUSES in this band and
+# cannot produce a figure outside it (see the long note at the post-computation
+# check). Outside these bounds the valuation is marked directional_only and both
+# the point estimate and the range are suppressed.
+_ENVELOPE_MIN = 1_000_000
+_ENVELOPE_MAX = 2_000_000
+
+
 def calculate_confidence(points, n_total_override=None):
     """
     GAP 6: Calculate weighted mean valuation and confidence interval
@@ -3526,12 +3535,40 @@ def precompute_property_valuation(db, subject_doc, listings_coll, sold_by_suburb
     for pt in comparable_points + recent_points:
         pt.pop('_source_doc', None)
 
-    # Post-computation check: if reconciled valuation >= $2.5M, switch to
-    # directional mode (keep comps + adjustments, suppress point estimate).
-    # Previously this discarded all data; now it preserves the analysis.
+    # ── DESIGN ENVELOPE ───────────────────────────────────────────────────
+    # This method was designed for DETACHED HOUSES BETWEEN $1M AND $2M, and it
+    # is structurally incapable of leaving that band: a weighted mean of
+    # adjusted comparables cannot exceed its priciest comparable, and the comp
+    # pool is dominated by mid-market sales, so the estimate regresses toward
+    # the middle.
+    #
+    # Measured 2026-08-06 across 9,232 valued off-market houses in Robina,
+    # Varsity Lakes and Burleigh Waters:
+    #     our highest valuation of all 9,232 : $2,494,914
+    #     real sold houses, max              : $5,100,000
+    #     real sales >= $2.5M                : 71 of 945  (7.5%)
+    #     our valuations >= $2.5M            : 0          (0.0%)
+    # The top ten valuations all sit at $2.47-2.49M. That is a ceiling, not a
+    # distribution — and it is emergent, not configured. Accuracy collapses
+    # against it: the $2M+ band runs 17.9% MAE and 29% within-10%, versus
+    # 10.5% / 62% in $1.5-2M.
+    #
+    # The consequence is the dangerous part. A genuinely $3.5M home is not
+    # given a wide, honest range — it is told ~$2.4M +/- 12%, a confident
+    # $2.1M-$2.7M that excludes the truth entirely. And a ceiling-pinned home
+    # is INDISTINGUISHABLE from a correct one in our own output, so we cannot
+    # identify them after the fact.
+    #
+    # The previous threshold was $2.5M, which the model can never reach — so
+    # this check had fired ZERO times across 9,232 homes. Same defect shape as
+    # the price-proximity filter above: a guard keyed to a value that never
+    # occurs. Ceiling and floor now both sit on the design envelope.
     rv = confidence_result.get('reconciled_valuation')
-    if rv and rv >= 2_500_000:
+    if rv and not (_ENVELOPE_MIN <= rv < _ENVELOPE_MAX):
         directional_only = True
+        envelope_breach = 'above_design_ceiling' if rv >= _ENVELOPE_MAX else 'below_design_floor'
+    else:
+        envelope_breach = None
 
     valuation_data = {
         'computed_at': datetime.utcnow(),
@@ -3623,13 +3660,21 @@ def precompute_property_valuation(db, subject_doc, listings_coll, sold_by_suburb
         },
     }
 
-    # For properties above $2.5M: keep comps + adjustments but suppress reconciled valuation
+    # Outside the design envelope: keep comps + adjustments, suppress BOTH the
+    # point estimate and the range.
     if directional_only:
         valuation_data['confidence']['directional_only'] = True
-        valuation_data['confidence']['directional_reason'] = 'price_above_threshold'
-        # Keep the range and comps for the agents and Valuation Guide, but null out the point estimate
+        valuation_data['confidence']['directional_reason'] = envelope_breach or 'price_above_threshold'
         valuation_data['confidence']['reconciled_valuation'] = None
         valuation_data['confidence']['confidence'] = 'directional'
+        # ⚠ The RANGE goes too (changed 2026-08-06). It previously survived
+        # "for the agents and Valuation Guide" — but the range is a flat +/-12%
+        # of the point estimate, so on a ceiling-pinned home it is a narrow
+        # band around a number we have just declared unusable. That is worse
+        # than no range: it looks identical to a range built on solid ground.
+        # The comps and per-feature adjustments remain, which is the evidence
+        # a human can actually reason from.
+        valuation_data['confidence']['range'] = None
         valuation_data['summary']['directional_only'] = True
 
     return valuation_data
