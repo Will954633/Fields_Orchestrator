@@ -794,6 +794,88 @@ bait-and-switch cues in the V2 sessions and treated every one as a defect.
 
 ---
 
+# §10 — What a move would actually involve
+
+> ## You've seen what it's worth. Here's what moving would involve.
+>
+> You don't need to be planning to sell. This just brings the decisions together privately —
+> what would have to happen, what we'd recommend, and what genuinely can't be decided without
+> seeing the home.
+>
+> **[ Build a private working plan ]**
+>
+> *[five cards, one question each — what a move would need to work around · how much
+> preparation feels reasonable · what matters most · what access a campaign could have ·
+> anything we'd need to work around]*
+>
+> *[then the plan, rendered inline]*
+
+**Why this is here, and why it is last.** §0 opens by naming three questions — *is the number
+real, is this the wrong time to move, and if you sold where would you go next?* The page answers
+the first, gestures at the second, and until now never touched the third. By our own rule —
+forward cues must be honest — that was a bait-and-switch. This answers it.
+
+**And it is the only section that demonstrates judgement rather than computation.** Everything
+above proves we can calculate: the range, the comparables, the dispersion finding, the error
+rate. This is the one place we show what we'd *do*, which is the thing an agent is actually
+selling.
+
+**Prototyped and working** — `Prototypes/build_working_plan.py`, run against 28 Wedgebill.
+
+### The rule that makes it work
+
+**Decisions only the owner can answer → ask them.** What a move must work around, appetite for
+preparation, what matters most, what access is realistic, the household situation.
+
+**Decisions needing inspection and judgement → we recommend.** Sale method, listing price,
+channel mix, open-home cadence, photography, staging, settlement structure, which preparation
+work actually pays.
+
+The owner supplies constraints; Fields supplies the recommendation. That is the bargain that
+makes an agent useful, and reflecting someone's button presses back at them demonstrates nothing.
+
+> ⚠ **The recommendation must be selected BY their priority, never asserted at them.** The
+> shipped `processPlan.ts` argues hard for private treaty and then asks the owner to pick the
+> method — *"not a neutral decision interface; effectively asking the owner to endorse the
+> conclusion."* Here, "a predictable result" selects a defined offers period, "privacy" selects
+> inspections by appointment, and each carries its own reasoning.
+> ⚠ **Every recommendation states what would change it.** That is what makes it a working plan
+> rather than a verdict.
+> ⚠ **No question may assume a listing decision.** `processPlan.ts` asks *"which month are you
+> planning to list?"* and *"which preparation work will you take on?"* — both presuppose
+> commitment. The V2 review already retired four of those eight questions under Rule 9,
+> *"these asked the owner to design the campaign."*
+
+### The section that earns the inspection
+
+> These need someone to walk through the property: the final launch price · whether styling
+> would change how the rooms photograph · the photography package · which preparation work
+> would return more than it costs · settlement structure.
+>
+> *That list is the honest part. Anyone who hands you a complete plan from public records alone
+> is guessing at the half that needs seeing.*
+
+Admitting what we cannot know is the argument for a walkthrough — made by demonstration rather
+than by asking.
+
+### The ask
+
+**"Post this plan to the property."** The strongest ask on the page, and it belongs here rather
+than at §1: they have just watched it assemble from their own answers, and it goes to an address
+only they receive mail at. Self-verifying, and a far better reason to hand over an address than
+a generic report offer.
+
+> ⚠ **Honest internal note.** This is the page's most commercially loaded element. Even framed
+> as hypothetical, someone answering *"buying another home first"* has told us something
+> valuable — it is a lead-qualification instrument that happens to be genuinely useful. That is
+> fine given the 2026-08-06 decision that the page is a lead surface, but it should never be
+> described internally as anything else.
+> ⚠ **Blocked on the `device_token` defect.** Answers submitted without a token are silently
+> discarded while the reader sees a success state. Must be fixed before any printed QR invites
+> a reply.
+
+---
+
 ## Taken from the shipped mini-site
 
 | Concept | Where it lands | Source |
