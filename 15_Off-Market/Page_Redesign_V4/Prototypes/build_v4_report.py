@@ -411,9 +411,28 @@ def s7_moving(b):
     if buyer.get("portrait"):
         out += ["", "### Who that combination suits", "", f"**{buyer['portrait']}**", "",
                 "**Right now it's your home. To them, it's the one they've been waiting for.**"]
-    out.append(skip("§7 change log",
-                    "durable change log runs off system_monitor.property_reports — "
-                    "not minted for off-market slugs"))
+    rep = globals().get("_REPORT") or {}
+    comps = rep.get("comparables") or {}
+    active = comps.get("closest_active") or []
+    events = rep.get("comparable_events") or []
+    if active:
+        out += ["", f"**{len(active)} home{'' if len(active)==1 else 's'} a buyer would be "
+                    f"choosing between**"]
+        for a in active[:4]:
+            bits = [x for x in (a.get("address"), a.get("price"),
+                                f"{a.get('bedrooms')} bed" if a.get("bedrooms") else None) if x]
+            line = " · ".join(str(x) for x in bits)
+            diff = a.get("differenceVsSubject") or a.get("difference_vs_subject")
+            out.append(f"- {line}" + (f" — *{diff}*" if diff else ""))
+        # The aperture label is an honesty device: it says how far we had to look.
+        if comps.get("aperture_label"):
+            out.append(f"\n*Comparison set: {comps['aperture_label']}.*")
+    if events:
+        out += ["", "### What's moved recently", ""]
+        for e in events[:5]:
+            out.append(f"- **{str(e.get('date'))[:10]}** — {e.get('headline') or e.get('kind')}")
+    if not active and not events:
+        out.append(skip("§7 change log", "no competitor set or events for this address"))
     ms = globals().get("_MS") or {}
     if ms.get("dom_median") and ms.get("dom_yoy_prev"):
         now, prev = ms["dom_median"], ms["dom_yoy_prev"]
@@ -540,9 +559,13 @@ def main():
     adjusted = (get_adjusted(args.slug, b["suburb_key"]) if args.backtest
                 else globals().get("_PERSISTED"))
     globals()["_MS"] = market_snapshot(b["suburb_key"])
+    globals()["_REPORT"] = (get_mongo_client()["system_monitor"]["property_reports"]
+                            .find_one({"slug": args.slug}) or {})
     adjusted = (get_adjusted(args.slug, b["suburb_key"]) if args.backtest
                 else globals().get("_PERSISTED"))
     globals()["_MS"] = market_snapshot(b["suburb_key"])
+    globals()["_REPORT"] = (get_mongo_client()["system_monitor"]["property_reports"]
+                            .find_one({"slug": args.slug}) or {})
 
     parts = [s0_arrival(b, ls), s1_range(b), s2_working(b, adjusted), s3_method(),
              s4_dispersion(), s5_gain(ls, globals()["_MS"], b["suburb_display"]),
