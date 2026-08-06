@@ -115,6 +115,18 @@ def last_sale(gc, suburb_key, address):
     return s
 
 
+def market_snapshot(suburb_key):
+    """market_pulse.data_snapshot for this suburb.
+
+    ⚠ Read `data_snapshot` ONLY. `summary` and `narrative.pillars` go stale
+    independently and a partial $set touches only what it names (CLAUDE.md Rule 6).
+    """
+    from pymongo import MongoClient
+    c = MongoClient(os.environ["COSMOS_CONNECTION_STRING"], retryWrites=False)
+    d = c["system_monitor"]["market_pulse"].find_one({"suburb": suburb_key})
+    return (d or {}).get("data_snapshot") or {}
+
+
 def held_years(date_str):
     try:
         d = datetime.fromisoformat(str(date_str)[:10])
@@ -319,13 +331,50 @@ available was more than 20% out on **73.4%**.
 *↓ What has it actually done for me?*"""
 
 
-def s5_gain(ls):
+def s5_gain(ls, ms, suburb_display):
     if not ls:
         return skip("§5 gain trajectory", "no prior sale on record")
-    return (f"## Bought {str(ls.get('date'))[:7]} for {money(ls['price'])}\n\n"
-            + skip("§5 index trajectory",
-                   "suburb index series not wired into this prototype — needs the quarterly "
-                   "median series applied to the purchase price"))
+    hist = ms.get("median_price_history") or []
+    out = [f"## Bought {str(ls.get('date'))[:7]} for {money(ls['price'])}", ""]
+    y = held_years(ls.get("date"))
+    if not hist:
+        out.append(skip("§5 trajectory", "no median_price_history for this suburb"))
+        return "\n".join(out)
+
+    first, last = hist[0], hist[-1]
+    span_start, span_end = first.get("period"), last.get("period")
+    # Can the index actually reach back to the purchase? Usually not.
+    try:
+        buy_year = int(str(ls["date"])[:4])
+    except Exception:
+        buy_year = None
+    idx_start_year = int(str(span_start).split()[-1]) if span_start else None
+
+    if buy_year and idx_start_year and buy_year < idx_start_year:
+        # ⚠ Do NOT index a purchase the series cannot reach. Say so — per the
+        # suppression rule, why a figure is missing is worth more than the figure.
+        out += [
+            f"That was **{y} years ago**. We can't trace a line from it to today: our quarterly "
+            f"median series for {suburb_display} starts at {span_start}, and everything before "
+            f"that is outside what we can measure.",
+            "",
+            f"What we can say is what the suburb has done over the window we do hold — the "
+            f"{suburb_display} median moved from {money(first.get('median_price'))} "
+            f"({span_start}) to {money(last.get('median_price'))} ({span_end}).",
+        ]
+        if ms.get("ten_year_growth_pct") and ms.get("ten_year_start_price"):
+            out += ["", f"Over ten years: {money(ms['ten_year_start_price'])} → "
+                        f"{money(ms.get('ten_year_end_price'))}, "
+                        f"{ms['ten_year_growth_pct']}%."]
+        out += ["", "**What this means:** the gap between what you paid and what the sales say "
+                    "today is real, but it isn't one we can draw as a single line — and a line "
+                    "we can't evidence is worth less than saying so."]
+    else:
+        out += [f"Since then the {suburb_display} median has moved from "
+                f"{money(first.get('median_price'))} ({span_start}) to "
+                f"{money(last.get('median_price'))} ({span_end})."]
+    out += ["", "*↓ The bank said something lower — why?*"]
+    return "\n".join(out)
 
 
 def s6_lender(b):
@@ -363,7 +412,42 @@ def s7_moving(b):
     out.append(skip("§7 change log",
                     "durable change log runs off system_monitor.property_reports — "
                     "not minted for off-market slugs"))
-    out.append(skip("§7 market indicators", "market_pulse.data_snapshot not wired here"))
+    ms = globals().get("_MS") or {}
+    if ms.get("dom_median") and ms.get("dom_yoy_prev"):
+        now, prev = ms["dom_median"], ms["dom_yoy_prev"]
+        now_i = int(round(float(now))); prev_i = int(round(float(prev)))
+        faster = now < prev
+        out += ["", "### Two true things that point in different directions", "",
+                f"Homes here are selling **{'faster' if faster else 'more slowly'}** than a year "
+                f"ago — a median of **{now_i} days**, against **{prev_i}** twelve months "
+                f"earlier"
+                + (f", and {ms['dom_quick_sales_pct']}% still move quickly."
+                   if ms.get("dom_quick_sales_pct") else ".")]
+        if ms.get("active_listings") is not None and ms.get("active_listings_mom_pct") is not None:
+            out.append(f"\nBut there is less to choose from: **{ms['active_listings']} homes** are "
+                       f"on the market, {abs(ms['active_listings_mom_pct'])}% "
+                       f"{'fewer' if ms['active_listings_mom_pct'] < 0 else 'more'} than a month ago.")
+        out += ["", "Both readings are true and they support opposite conclusions, which is why "
+                    "a single market headline can't settle anything about this home."]
+        if ms.get("current_median_price") and ms.get("yoy_growth_pct") is not None:
+            out += ["", f"| 12-month median | {money(ms['current_median_price'])} |",
+                    "|---|---|",
+                    f"| Year on year | {ms['yoy_growth_pct']:+}% |",
+                    f"| Median days on market | {now_i} |",
+                    f"| Same quarter a year earlier | {prev_i} |"]
+        if ms.get("qoq_suppressed_reason"):
+            # ⚠ The stored value mixes the REASON with an editorial INSTRUCTION to
+            # us ("Do not state a QoQ change"). Rendering it whole leaks internal
+            # direction onto a consumer page. Keep the reason, drop the order.
+            raw = str(ms["qoq_suppressed_reason"])
+            reason = re.split(r"(?i)\.\s*(?:do not|don't|never)\b", raw)[0].rstrip(". ")
+            out += ["", f"*{reason}. We're not showing a quarter-on-quarter figure for that "
+                        f"reason.*"]
+        basis = ms.get("current_median_price_basis")
+        out += ["", f"`Source: {basis or 'Fields analysis of sold records'} · "
+                    f"Last reviewed: {str(ms.get('data_date'))[:10]}`"]
+    else:
+        out.append(skip("§7 market indicators", "no market_pulse snapshot for this suburb"))
     out += ["", "*↓ Is there anything under it I should know?*"]
     return "\n".join(out)
 
@@ -453,11 +537,14 @@ def main():
     ls = last_sale(gc, b["suburb_key"], b["address"])
     adjusted = (get_adjusted(args.slug, b["suburb_key"]) if args.backtest
                 else globals().get("_PERSISTED"))
+    globals()["_MS"] = market_snapshot(b["suburb_key"])
     adjusted = (get_adjusted(args.slug, b["suburb_key"]) if args.backtest
                 else globals().get("_PERSISTED"))
+    globals()["_MS"] = market_snapshot(b["suburb_key"])
 
     parts = [s0_arrival(b, ls), s1_range(b), s2_working(b, adjusted), s3_method(),
-             s4_dispersion(), s5_gain(ls), s6_lender(b), s7_moving(b),
+             s4_dispersion(), s5_gain(ls, globals()["_MS"], b["suburb_display"]),
+             s6_lender(b), s7_moving(b),
              s8_exposure(b), s9_control()]
     md = "\n\n---\n\n".join(parts)
 
