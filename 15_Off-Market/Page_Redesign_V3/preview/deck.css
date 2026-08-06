@@ -507,8 +507,11 @@
     color:#8FE9A8; text-shadow:0 0 10px rgba(80,255,140,.3); min-height:1.75em; }
   #fx-claim .c-l2 { color:#6FCE8C; }
 
-  /* Fades up only once the lines have finished typing — a button sitting there
-     through the type-in invites a press before the offer has been made. */
+  /* Fades up WITH the panel, not after the typing. It used to wait for all three
+     lines, which put the button 32.9s behind the CTA press and cost the deck its
+     first real reader (6 Aug 2026 — see claim.js). `.ready` is now added at the
+     same moment as `.in`; this stays a separate class only so the fade reads as
+     the action arriving rather than the panel popping in fully formed. */
   #fx-claim .c-act { margin-top:1.7rem; opacity:0; transform:translateY(8px);
                      transition:opacity .6s ease, transform .6s ease; }
   #fx-claim.ready .c-act { opacity:1; transform:none; }

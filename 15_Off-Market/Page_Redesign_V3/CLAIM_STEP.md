@@ -37,9 +37,17 @@ vendor, one fewer failure mode, no rate-limiting or brute-force surface.
 
 ## What is built
 
-- `outro/claim.js` — listens for `fields:strategy-built`, pans the camera, types
-  the three lines in the same hand as the opening sequence, then fades the action
-  up last so nobody can press before the offer has been made.
+- `outro/claim.js` — listens for `fields:strategy-built`, pans the camera, brings
+  the action up with the panel, and types the three lines above it in the same
+  hand as the opening sequence. It captures `claim_panel_shown` and
+  `claim_sms_pressed` (slug/suburb/arm/surface, `sendBeacon`).
+
+  ⚠ The action used to fade up **last**, after all three lines. That put the
+  button 32.9s behind the CTA press, and on 6 Aug 2026 the first real reader in
+  the deck's history sat through all of it — the page stopped 0.4s before the
+  reveal, so the only person who has ever pressed "Start building" never saw a
+  pressable button. Do not move it back: the offer is accepted at the CTA, not
+  at the end of the typing.
 - `preview/deck.css` — `#fx-claim` and the pan. Both layers travel the same
   distance in the same direction at the same time, which is what makes it read as
   one camera move rather than a crossfade.
@@ -191,12 +199,31 @@ separate decision, not a default.
 
 ---
 
-## One question that turned out not to be a problem
+## The address-uniqueness question — and the check that was wrong
 
 `SEND 27 Protea Court` carries no suburb, so the obvious worry is two homes with
-the same street address in different suburbs. **Checked: zero collisions across
-all 17,775 addresses in `system_monitor.offmarket_discovery`** — Robina,
-Varsity Lakes, Burleigh Waters and Nerang. The copy works exactly as written.
+the same street address in different suburbs. That checked out: **zero addresses
+appear in more than one suburb** across all 17,775 in
+`system_monitor.offmarket_discovery` (Robina, Varsity Lakes, Burleigh Waters,
+Nerang). The copy works exactly as written.
+
+**But that was the wrong question, and reporting it as "zero collisions" was
+wrong.** It measured cross-suburb collisions only. The index also holds
+**297 duplicate documents across 226 addresses** — the same house indexed twice,
+the second copy carrying a suffixed slug (`...-burleigh-waters-4bf6`). One
+address has eight. Because the per-suburb set had size 1, every one of those was
+invisible to the check.
+
+It broke a real claim: `SEND 23 Bellbird Avenue` on 2026-08-04 at 14:47 was
+rejected as `ambiguous` and got no reply, because two documents matched — the
+same house, twice. Fixed by grouping matches by suburb before judging: duplicates
+of one home are not ambiguity, two suburbs are. The reply URL never used the
+discovery slug anyway (submit derives it from the full address), so which
+duplicate wins only decides which `address` string is handed over — newest wins.
+
+**The duplicates themselves are not fixed.** 226 addresses with more than one
+off-market document is a discovery-pipeline problem in its own right — duplicate
+public pages, duplicate content for search — and it is separate from this step.
 
 **But that is a fact about today's coverage, not a property of the design.**
 Street names repeat across the Gold Coast, and the index is already four suburbs

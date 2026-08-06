@@ -36,8 +36,8 @@
  * that fails leaves you with nothing.
  *
  * Config arrives as `window.__FIELDS_CLAIM` from the deck builder — address,
- * number, and the prebuilt QR. No config, no panel: this must never be the thing
- * that breaks the ending.
+ * number, the prebuilt QR, and the deck's own analytics keys (slug/suburb/arm).
+ * No config, no panel: this must never be the thing that breaks the ending.
  */
 (function (global) {
   "use strict";
@@ -58,6 +58,33 @@
 
   function smsHref(number, body) {
     return "sms:" + number + (isIOS ? "&" : "?") + "body=" + encodeURIComponent(body);
+  }
+
+  /** THE LAST STEP HAS TO BE MEASURED LIKE EVERY OTHER ONE.
+   *
+   *  This file shipped with no analytics at all, so the single most important
+   *  moment in the deck — whether the reader actually opened their SMS app —
+   *  was invisible. The first real press (6 Aug 2026, 11 Highgate Lane) could
+   *  only be reconstructed by pulling a session replay apart mutation by
+   *  mutation, and even then we could not have told a press from a non-press.
+   *
+   *  Same props as the deck's own `base` (slug/suburb/arm), so these join
+   *  straight onto card_viewed and deck_exit without a lookup.
+   *
+   *  `sendBeacon` on the press: the click navigates to `sms:`, which on Android
+   *  backgrounds the browser immediately. An ordinary XHR loses the race. */
+  function track(event, cfg, extra) {
+    try {
+      if (!global.posthog || !global.posthog.capture) return;
+      global.posthog.capture(event, Object.assign({
+        slug: cfg.slug || null,
+        suburb: cfg.suburb || null,
+        arm: cfg.arm || "v3",
+        surface: isPhone ? "phone" : "desktop",
+      }, extra || {}), { transport: "sendBeacon" });
+    } catch (_) {
+      /* analytics must never break the ending */
+    }
   }
 
   async function typeInto(node, text, per) {
@@ -92,6 +119,10 @@
         el.classList.add("sent");
         const note = el.querySelector(".c-note");
         if (note) note.textContent = "Your message is ready — press send, and the link comes straight back.";
+        // Fired here rather than on the SMS arriving, because those are two
+        // different questions. This one is "did the mechanic work"; the reply
+        // rate against it is "were they willing to send it".
+        track("claim_sms_pressed", cfg, { address: cfg.address });
       });
       act.appendChild(a);
       const note = document.createElement("p");
@@ -101,10 +132,15 @@
     } else {
       // Desktop. The QR is the primary path and the printed text is the backup;
       // both encode exactly the same thing.
-      const wrap = document.createElement("div");
-      wrap.className = "c-qr";
-      wrap.innerHTML = cfg.qr || "";
-      act.appendChild(wrap);
+      // Only when there IS one. The React deck has no QR generator yet, and an
+      // empty white plate reads as a broken image rather than as an absent
+      // feature — the printed number below is a complete fallback on its own.
+      if (cfg.qr) {
+        const wrap = document.createElement("div");
+        wrap.className = "c-qr";
+        wrap.innerHTML = cfg.qr;
+        act.appendChild(wrap);
+      }
       const note = document.createElement("p");
       note.className = "c-note";
       note.innerHTML = "Scan with your phone to open the message.<br>" +
@@ -129,24 +165,47 @@
     await wait(reduced ? 0 : 1400);
     if (msg) msg.classList.add("gone");
     panel.classList.add("in");
+    track("claim_panel_shown", cfg, { address: cfg.address });
     await wait(reduced ? 0 : 900);
 
     const h = panel.querySelector(".c-h");
     const l1 = panel.querySelector(".c-l1");
     const l2 = panel.querySelector(".c-l2");
+    /** THE ACTION COMES UP ON THE HEADLINE, NOT AFTER ALL THREE LINES.
+     *
+     *  It used to fade up last, on the reasoning that a button sitting there
+     *  through the type-in invites a press before the offer has been made. That
+     *  reasoning was half right and wholly expensive.
+     *
+     *  Expensive: it put the button 32.9s behind the CTA press, of which the
+     *  last 6.5s were this panel alone. On 6 Aug 2026 the first real reader in
+     *  the deck's history sat through every one of them and the page stopped
+     *  0.4s before that line ran — so the only person who has ever pressed
+     *  "Start building" never saw a pressable button.
+     *
+     *  Half right: revealing it with the panel was tried and looks wrong — a
+     *  lone button with three empty lines above it for 1.5s, the payoff of the
+     *  whole 27-second sequence still unwritten. "Your website is ready." IS
+     *  the offer; the two lines below it are elaboration, and they type in
+     *  under a button that is already live. Coherent at every frame, and 3.1s
+     *  earlier than before.
+     *
+     *  Do not move this back down. If it needs to move at all, it moves UP. */
+    const reveal = () => { panel.classList.add("ready"); };
+
     if (reduced) {
       h.textContent = "Your website is ready.";
+      reveal();
       l1.textContent = "Now claim your private access.";
       l2.textContent = "We'll send a secure link to your mobile.";
     } else {
       await typeInto(h, "Your website is ready.", 46);
+      reveal();
       await wait(420);
       await typeInto(l1, "Now claim your private access.", 30);
       await wait(240);
       await typeInto(l2, "We'll send a secure link to your mobile.", 26);
-      await wait(360);
     }
-    panel.classList.add("ready");        // the action fades up last
   }
 
   if (CFG && CFG.address && CFG.number) {
