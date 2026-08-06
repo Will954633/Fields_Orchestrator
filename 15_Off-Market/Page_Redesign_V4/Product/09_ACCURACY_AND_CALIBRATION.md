@@ -122,3 +122,58 @@ against. Shipping it would be self-refuting.
   `valuation_backtest_claim_constraints`, and because Domain revises valuations after listing, so
   its figure is contaminated by look-ahead. It is recorded here only so nobody re-derives it and
   believes it. **It does not belong on the page in either direction.**
+
+
+---
+
+# Addendum — the design envelope, and why the figure is per-suburb (2026-08-06, later)
+
+**Will:** *"our comparables valuation was only designed for detached houses in that range. its
+not cherry picking."* That constraint was recorded nowhere. It is now — see
+[[valuation_design_envelope]] and CLAUDE.md.
+
+## Scoped to the envelope: detached houses, $1M–$2M
+
+| suburb | n | MAE | median AE | within 10% | containment | bias |
+|---|---|---|---|---|---|---|
+| Robina | 278 | **10.5%** | 8.2% | 59% | 67% | — |
+| Burleigh Waters | 155 | 11.2% | 9.8% | 52% | 60% | −3.7% |
+| **Varsity Lakes** | 207 | **13.8%** | 13.4% | **36%** | **41%** | **−10.6%** |
+| blended | 640 | ~11.7% | ~10.3% | ~50% | ~57% | |
+
+**Scoping works** — 12.3% → 11.7% blended, containment 61% → 57%… but read the next line before
+celebrating.
+
+## Why the claim is per-suburb and not blended
+
+**The spread between suburbs (10.5% → 13.8%) is larger than the entire gain from scoping
+(12.3% → 11.7%).** A single blended figure would overstate our accuracy to a Varsity Lakes owner
+by 2.1pp and understate it to a Robina owner. The page knows the address, so it can say the true
+thing. `copy_v4.yaml:error_rate_by_suburb`, with **no blended fallback** — an unmeasured suburb
+renders nothing rather than borrowing another's record.
+
+## The finding that should worry us most
+
+**Varsity Lakes carries a −10.6% systematic bias.** Not noise — a consistent undervaluation, on
+a page whose job is to earn a homeowner's trust. Telling Varsity Lakes owners their home is worth
+10.6% less than it is, is the worst available direction to be wrong in. Containment there is 41%
+against Robina's 67%.
+
+This is a **model defect, not a disclosure problem**, and no amount of honest labelling fixes it.
+Recommend it blocks the V4 arm in Varsity Lakes specifically.
+
+## Two more things the envelope work turned up
+
+**The fallback chain saved us, then nearly tripped us.** When the engine declines,
+`fact_bundle` falls through to `exterior_evidence` → `thin`. For 30 Whitehead Drive that produced
+a point of **$2,507,000 — above the comps ceiling entirely** — and a range $852K wide against the
+±12% band's $500K, carrying its own "Lower — exterior evidence only" explanation. That is the
+right answer for an out-of-envelope home.
+
+But `card_05` would have attached the **engine's** measured error rate to a range built by a
+different, never-measured method. Fixed: the error rate renders only when
+`valuation.method == "engine"`; otherwise a caveat says so plainly.
+
+**A hard threshold has a soft edge.** A home valued at $1.99M passes and gets a ±12% band running
+to $2.23M — whose upper half sits outside the envelope the method is built for. Inherent to any
+cut-off, worth knowing, not worth over-engineering today.
