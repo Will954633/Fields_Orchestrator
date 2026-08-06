@@ -53,14 +53,22 @@ the direction; the decimal-place match is luck on 4-a-side halves.
 
 ## Open issues — blocking either workflow
 
-1. **Confidence label is not trustworthy.** Robina `high` 11.7% MAE vs `medium` 11.4%;
-   Burleigh Waters `high` 16.4% vs `medium` 9.4% — inverted. The owner draft currently
-   prints "confidence grade: high". Strip it or fix the label.
+1. **Confidence label is not trustworthy — CONFIRMED AND WORSE, 2026-08-06.** Measured
+   across 512 sold homes: `high` range-hit **56.0%** vs `medium` **57.5%**, median error
+   10.1% vs 9.7%. The label is not merely inverted, it is **non-discriminating** — high
+   and medium are the same number. Also: **our stated range contains the actual sale price
+   only 56.8% of the time.** Strip the label. Do not print a confidence grade anywhere
+   until it is recalibrated. (`Page_Redesign_V4/Prototypes/RESULT_dispersion_512.md` §4)
 2. **No radius filter exists** — distance is only a weight (linear decay to 0 at 5 km).
    Comps reached 2.57 km while the copy said "near your street".
-3. **Spread-narrowing varies wildly** — 55% on Moorabbin, **5%** on Heidelberg. The
-   $610,000 → $274,000 example is an outlier. Measure the distribution across the 262
-   eligible homes before it carries any marketing claim.
+3. ~~**Spread-narrowing varies wildly**~~ — **CLOSED 2026-08-06.** Measured across 512
+   eligible sold homes: **median narrowing 38.8%** (p25 23.8%, p75 56.2%); narrows at all
+   in **91.0%** of cases, widens in 8.6%. Median raw spread **$351,000 → $204,805**.
+   **The README had the outlier backwards** — Moorabbin's 55% is the **73rd** percentile
+   (flattering, not exceptional); Heidelberg's 5% is the **11th**. Quotable claim is the
+   median: *adjusting comparables narrows the range by about 40%, and narrows it at all
+   nine times in ten.* Never quote $610,000 → $274,000 as typical.
+   (`Page_Redesign_V4/Prototypes/RESULT_dispersion_512.md` §3b)
 4. **No numeric fact-check pass.** A draft shipped "four of the eight" when it was six.
 5. **Time adjustment is computed but not composed** with the feature adjustments.
 
