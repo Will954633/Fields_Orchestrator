@@ -48,6 +48,84 @@ already sceptical.
 
 ---
 
+## The mechanics — taken from the live V3 deck
+
+The shipped deck is more crafted than this document was. Four devices carry it, and all four
+transfer. **Nothing from the Matrix intro or the glass-shatter outro comes across.**
+
+### M1 · The chained question — the strongest structural device in the deck
+
+Every card closes with **the reader's own next question, in their voice**, and the next card
+opens by answering it:
+
+> *…What was interesting?* → **"Here's what stood out."**
+> *…So what did you find?* → **"Your backdrop is the story."**
+> *…Why does that matter?* → **"A buyer can renovate a house. They can't manufacture a park at the back fence."**
+> *…So what will buyers actually pay for in mine?* → **"Here's what carries the price."**
+> *…And who is that buyer?* → **"Someone is already looking for a home like yours."**
+> *…So where does that put its value?* → **"Based on everything we've analysed…"**
+
+Each card is a closed loop — `answer` → `headline` → `next`. The reader is never deciding
+whether to continue; they are being handed the question they already had. **This document had
+"each section ends on a question the next answers" as a rule and never wrote the questions.
+They must be written, in the reader's voice, not ours.**
+
+### M2 · The curiosity gap — name that something exists, withhold what it is
+
+Card 02 never says what it found:
+
+> *"There's one thing right at your boundary that very few homes nearby can claim — and it
+> keeps quietly removing your competition."*
+
+Card 03 reveals it. This is a textbook information gap: curiosity is strongest when you know an
+answer exists and don't have it. It is per-angle — `copy.yaml` carries a distinct hook line for
+all twelve `lead_angle` values, so the tease is specific without being the answer.
+
+> ⚠ **Apply the gap to the FEATURE, not the valuation.** V3 delays the number to card 07 of 9,
+> which on our measured funnel — 47–57% never advance past the first card — is seen by roughly
+> one session in seven. The reader came for the range. **Give the range at §1 and put the
+> curiosity gap on the feature that explains where in the range they sit.** The hook was always
+> about the boundary, not the number.
+
+### M3 · The emblem system — personalisation at scale, and it is already built
+
+`angle_media.yaml` maps `lead_angle` → drawing → caption → detach element. **87% of 18,070 built
+decks carry an emblem.**
+
+| Angle | Share | Emblem | Caption |
+|---|---|---|---|
+| parkland | 32.4% | bushbirds | *The bushland at your boundary* |
+| school_walk | 12.8% | satchel | *The walk, not the drive* |
+| water_adjacent | 12.6% | reeds | *Lakeside reeds · the edge that stays open* |
+| land_prestige | 12.4% | dog | *Room to run · what the block actually buys* |
+| beachside | 9.3% | pandanus | *Pandanus · the coastal marker* |
+
+Plus `kind_routes` sub-routing — a golf course gets a flag, bushland gets banksia — off
+`green_space.premium.kind`.
+
+**The detach mechanic is the best bit.** One element leaves the finished drawing, travels the
+page, and comes to rest beside the next card's copy: the pandanus fruit, the dog's ball, the
+golf ball. It carries the reader from 03 to 04 physically, so the scroll feels authored rather
+than paginated. Only three emblems have one — the rest are an open question in `PLAN.md`.
+
+**And the restraint is as good as the ornament.** Six angles are declared `text_only` on
+purpose — `market_context`, `scarcity`, `thin_competition`, `scale`, `prestige_value`,
+`renovation_upside` — because *"there is no object to draw, and the deck carries no decoration
+anywhere else, so an image on a card that is not claiming a physical feature would be the only
+decorative element on the page."* Keep that rule.
+
+### M4 · The reframe — the emotional peak, and it costs nothing
+
+Card 06 ends:
+
+> **"Right now it's your home. To them, it's the one they've been waiting for."**
+
+A perspective shift: the reader sees their own home through someone else's eyes. It is the one
+line in the deck that isn't data, and it earns its place because six cards of evidence came
+first. **One per page, at most, and only after the proof.**
+
+---
+
 # §0 — Arrival
 
 > ## {street_number} {street_name}
@@ -105,7 +183,9 @@ rather than a page being slow.
 > Worked out {computed_date}. The sales behind it are a median of {median_comp_age} months
 > old.
 >
-> That's a range, not a figure — and the width of it is the honest part.
+> Most likely position: **around {anchor}** — rounded, deliberately, to the nearest $50,000.
+>
+> That's a range, not a figure, and the width of it is the honest part.
 
 **Why this works.** They came for a number and we give it immediately. Three competing
 automated estimates already sit above us on the same Google results page, so withholding ours
@@ -115,6 +195,12 @@ The two lines nobody else writes are the **date it was worked out** and the **ag
 evidence**. Portal estimates carry neither, and *"Domain estimates and REA always lag (3-4
 months)"* is a live complaint. Stating both costs us nothing and quietly raises a question
 about every other number they've seen.
+
+**The anchor is shipped** (`assemble._anchor`): the central figure is rounded to the nearest
+$50,000 and spelled in millions — *"around $1.65 million"*. A deliberately approximate number
+reads as a considered position; an exact one reads as false precision. It also keeps us clear of
+Rule 5, which bars a single valuation figure as a **headline** — the range is the headline, the
+anchor sits under it.
 
 **No confidence label.** Ours don't discriminate — `high` 56.0% versus `medium` 57.5%.
 
@@ -188,6 +274,15 @@ invent numbers.**
 >
 > Every line is here because you should be able to disagree with one.
 >
+> ### That sale up the road isn't your comparison
+>
+> **{comp_address} — sold {comp_price}, {comp_distance}m away.**
+>
+> Looks like the same home. But against yours:
+> • {delta_land}  • {delta_floor}  • {delta_build_year}
+>
+> **Same street, different home. The headline number was never the comparison.**
+>
 > ### Why it sits where it does in that range
 >
 > {n_matching} of the {n_active} homes on the market right now match this one on
@@ -216,6 +311,19 @@ the very people it was written for.
 **The funnel is taken from `RankedComparison`**, which animates the filtering *"so the seller
 watches it happen."* Its standard is the right one: **honest theatre — every step is a
 computation that genuinely ran.** Showing the filtering beats reporting its output.
+
+**The obvious-comparable card is shipped and it is the sharpest device in the deck**
+(`fact_bundle._obvious_comp`). It picks the **closest sale by distance** — the one a layperson
+would seize on, and very likely the one already in the reader's head — then computes the
+material differences arithmetically: land at ≥50 m², floor area at ≥20 m², build year at ≥8
+years, plus any green-boundary difference. It pre-empts the objection they arrived with, and it
+demonstrates the method on the single comparison they care most about. **It belongs here, ahead
+of the general dispersion argument in §4.**
+
+**Two-sided value drivers**, also shipped: *"What strengthens your position: ↑ land. Where a
+buyer may focus: ↓ no pool. **Knowing both is how you hold your number.**"* Volunteering the
+weakness is the trust move, and *"hold your number"* reframes it as something to prepare for
+rather than a flaw.
 
 **Scarcity is taken from `scarcity_features.py`**, and it belongs *here* rather than in a
 section of its own. It is not a topic anyone searches for; it is the **explanation for where in
@@ -447,6 +555,15 @@ This section gives all three and needs to know nothing about their finances.
 > **What this means:** these are the homes a buyer shopping in this band would be choosing
 > between. Not a list of what's for sale nearby — a list of the substitutes.
 >
+> ### Who that combination suits
+>
+> **{buyer_portrait}** — e.g. *"A family who'd rather walk the kids to Robina State School than
+> drive, and settle into Robina for good."*
+>
+> What a cheaper home can't give them: {drivers}.
+>
+> **Right now it's your home. To them, it's the one they've been waiting for.**
+>
 > ### What's moved in the last 30 days
 >
 > {change_log_items} — price changes, new listings, withdrawals, sales.
@@ -486,6 +603,14 @@ name the ambiguity, give both readings, let the reader draw the inference. Its r
 > say so — `market_pulse.data_snapshot.qoq_suppressed_reason` already holds the reason.
 > ⚠ **Staleness trap:** read `data_snapshot` only. `summary` and `narrative.pillars` go stale
 > independently and a partial `$set` touches only what it names (CLAUDE.md Rule 6).
+
+**On the buyer portrait, honestly.** The earlier audit found no independent *search* support for
+"who would buy this home" as a topic, and that stands. But the shipped version is not a topic —
+it is **the expression of the scarcity finding**: *this combination suits this person*. It is
+a sentence about a behaviour, not a demographic, and it is generated from the same POI and
+feature data as the rarity line (`_buyer_portrait`, `_persona_fit`). Will reports it resonating.
+**Keep it as the human form of the scarcity result, never as a standalone section**, and
+instrument it.
 
 ### ✅ Both halves of this are already live — corrected 2026-08-06
 
@@ -641,6 +766,30 @@ calling any of it "sensitive" to justify a gate would be a false claim (C15).
 | ~~**What's competing with it right now**~~ | ⚠ **Reassessed.** Live and generic in `refresh_comparables_for_doc` — `closest_active` with a per-home difference line. Independent *search* demand is still absent, but like scarcity this is an **explanation, not a searched topic** | **Promoted** — a full beat in §7 with the substitute framing from `MatchCards` |
 | **"What's changed since you last looked"** | GPT: *"a major opportunity… the static answer is valuable; the living answer is defensible."* **Already accumulating** in the durable change log | **Split.** The 30-day movement is ungated and in §7; *"since you last looked"* is the claim benefit — it needs identity by construction |
 | **The deeper journey** — what selling could make possible, where they'd go next, launch number, method, preparation, buyer competition, the Fields process | GPT's own list, and it maps one-to-one onto mini-site V2 sessions 1–7 | **Not this page.** *"The selling journey is not the initial product. It is the deeper path that becomes relevant once Fields has answered the address search better than anyone else."* |
+
+---
+
+## The chained questions, written out
+
+Each section closes on the reader's next question, in their voice. Written here so they are
+designed as a sequence rather than improvised per section.
+
+| § | Closes on | Next section opens |
+|---|---|---|
+| 0 | *…So what is it worth?* | **What the sales around it say** |
+| 1 | *…How did you get to that?* | **The sales behind that range** |
+| 2 | *…But that place up the road sold for more?* | *(answered inside §2 — the obvious comparable)* |
+| 2 | *…So how wrong could you be?* | **What this is, and what it isn't** |
+| 3 | *…Then why do the other numbers disagree?* | **Why the other estimates say something different** |
+| 4 | *…What has it actually done for me?* | **Bought {month} {year} for ${price}** |
+| 5 | *…The bank said something lower — why?* | **Bank valuations, and why they're usually lower** |
+| 6 | *…And what's happening around it now?* | **What's changed around this home** |
+| 7 | *…Is there anything under it I should know?* | **Flood and overlays** |
+| 8 | *…What if something here is wrong?* | **This is your home's page. You can change it.** |
+
+⚠ **The forward cue must be honest.** A question the next section doesn't actually answer is
+the fastest way to lose someone already sceptical — the mini-site review found four
+bait-and-switch cues in the V2 sessions and treated every one as a defect.
 
 ---
 
