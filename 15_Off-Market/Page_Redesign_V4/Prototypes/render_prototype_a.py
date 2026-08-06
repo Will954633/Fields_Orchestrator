@@ -107,6 +107,88 @@ def hero_image(doc, suburb_key, slug):
     return name
 
 
+def scarcity_map(doc, bundle, slug):
+    """A map that answers exactly one question: what sits within walking distance.
+
+    Deliberately NOT a listings map. We hold no coordinates for active listings
+    (0 of 58 for-sale docs in Burleigh Waters carry a latitude), so plotting
+    "the 5 that match" would mean inventing positions. Instead it plots the
+    amenities that define the cluster, which we DO have surveyed coordinates for.
+    """
+    import os
+    import urllib.request
+    key = os.getenv("GOOGLE_MAPS_STATIC_API_KEY")
+    prox = bundle.get("proximity") or {}
+    if not key:
+        return None
+    try:
+        import precompute_valuations as pv
+        cl = get_mongo_client()
+        lat, lon = pv._resolve_coordinates(
+            doc, pv._preload_gc_coordinates(cl, [bundle["suburb_key"]]), bundle["suburb_key"])
+    except Exception:
+        return None
+    if not lat or not lon:
+        return None
+    pins = [f"markers=color:0xB4643F%7Clabel:H%7C{lat},{lon}"]
+    for kind in ("primary_school", "supermarket", "park"):
+        p_ = prox.get(kind) or {}
+        if p_.get("latitude") and p_.get("longitude"):
+            pins.append(f"markers=color:0x7D7469%7Csize:small%7C{p_['latitude']},{p_['longitude']}")
+    name = f"{slug}-cluster.png"
+    dest = OUT / name
+    if not dest.exists():
+        url = ("https://maps.googleapis.com/maps/api/staticmap?"
+               f"size=640x420&scale=2&maptype=roadmap&center={lat},{lon}&zoom=15&"
+               + "&".join(pins) + f"&key={key}")
+        try:
+            with urllib.request.urlopen(url, timeout=25) as r:
+                data = r.read()
+            if len(data) < 5000:
+                return None
+            dest.write_bytes(data)
+        except Exception:
+            return None
+    return name
+
+
+# Event kinds that may appear in the homeowner-facing timeline. This is an
+# ALLOWLIST, not a denylist: a new event kind is hidden until someone decides it
+# is safe, rather than appearing the moment it is invented.
+#
+# ⚠ Why (2026-08-06). `property_reports.activity` is shared with the appraisal
+# flow and carries internal process events — `data_resolved`, `stub_created`,
+# `valuation`, `review_request`. One of them rendered on the Robina page as
+# "We pulled your property's data ... A property consultant will refine these
+# into the final valuation range." **180 activity entries across the collection
+# contain that kind of contact promise.** On the appraisal product that promise
+# is true. On THIS page it directly contradicts the one thing the page promises
+# — "nobody calls unless you ask" — and it was one render from shipping.
+# `market_state` is excluded separately: it carries internal jargon ("FCI 102").
+TIMELINE_KINDS = {"new_listing", "comp_price_change"}
+
+# Second guard, independent of kind. Belt and braces: if a headline or detail
+# implies someone will make contact, it does not belong on this page whatever
+# it is labelled.
+_CONTACT_PROMISE = ("consultant", "will refine", "will be in touch", "we'll call",
+                    "will call", "our team will", "get in touch", "reach out")
+
+
+def timeline_safe(a):
+    if (a.get("kind") or a.get("type")) not in TIMELINE_KINDS:
+        return False
+    blob = f"{a.get('headline','')} {a.get('detail','')} {a.get('body','')}".lower()
+    return not any(t in blob for t in _CONTACT_PROMISE)
+
+
+def full_date(d):
+    from datetime import datetime
+    try:
+        return datetime.fromisoformat(str(d)[:10]).strftime("%-d %B %Y")
+    except Exception:
+        return str(d)[:10]
+
+
 def month_year(d):
     """'2026-03' rendered raw on the first pass. Comparables are evidence; a
     machine-formatted date undercuts that."""
@@ -351,6 +433,56 @@ details[open] summary::after{content:" ↓"}
 details .body{padding-top:12px;font-size:.94rem;color:var(--ink-2)}
 .src{margin-top:26px;padding-top:14px;border-top:1px solid var(--line-2);font-size:.8rem;color:var(--muted)}
 
+
+/* full comparable table (B) */
+.ctable{margin-top:6px}
+.crow{display:grid;grid-template-columns:1fr auto auto;gap:4px 12px;padding:12px 0 6px;
+      border-bottom:1px solid var(--line-2);align-items:baseline}
+.crow .ca{grid-column:1/-1}
+.crow .cs{color:var(--muted);font-size:.9rem}
+.crow .cj{font-family:var(--serif);color:var(--accent)}
+.crow .cw{grid-column:1/-1;height:2px;background:var(--stone);border-radius:2px;margin-top:4px}
+.crow .cw span{display:block;height:100%;background:var(--accent);border-radius:2px}
+.crow .cv{grid-column:1/-1}
+.cwork{padding:2px 0 16px 0;border-bottom:1px solid var(--line-2);margin-bottom:4px}
+
+/* competitor rail (C) */
+.rail{display:grid;grid-auto-flow:column;grid-auto-columns:78%;gap:12px;overflow-x:auto;
+      scroll-snap-type:x mandatory;margin:20px -22px;padding:0 22px 6px;
+      -webkit-overflow-scrolling:touch}
+.rail::-webkit-scrollbar{height:0}
+.lcard{scroll-snap-align:start;background:var(--paper-2);border:1px solid var(--line-2);
+       border-radius:4px;overflow:hidden;display:flex;flex-direction:column}
+.lcard img{width:100%;aspect-ratio:16/10;object-fit:cover;display:block;background:var(--stone)}
+.lcard .b{padding:14px 16px}
+.lcard .a{font-family:var(--serif);font-size:1.02rem;margin-bottom:2px}
+.lcard .pr{font-family:var(--serif);color:var(--accent);margin-top:8px}
+.pill{display:inline-block;margin-top:10px;font-size:.72rem;letter-spacing:.06em;
+      text-transform:uppercase;color:var(--muted);border:1px solid var(--line);
+      border-radius:99px;padding:3px 10px}
+.pill.hot{color:var(--accent);border-color:var(--accent)}
+
+/* timeline (C) */
+.tl{list-style:none;margin:16px 0;padding:0}
+.tl li{padding:0 0 18px 20px;border-left:1px solid var(--line);position:relative}
+.tl li:last-child{border-left-color:transparent}
+.tl li:before{content:"";position:absolute;left:-4px;top:7px;width:7px;height:7px;
+              border-radius:99px;background:var(--accent)}
+.tl .d{font-size:.74rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.tl .h{font-family:var(--serif);font-size:1.06rem;margin:2px 0 3px}
+
+/* simulated state (C) — must never read as working */
+.sim{margin:24px 0;padding:20px;border:1px dashed var(--line);border-radius:4px;background:transparent}
+.simtag{display:inline-block;font-size:.66rem;letter-spacing:.13em;text-transform:uppercase;
+        color:var(--accent);border:1px solid var(--accent);border-radius:99px;
+        padding:2px 9px;margin-bottom:10px}
+.sim h3{margin-bottom:6px}
+.ticks{list-style:none;padding:0;margin:10px 0}
+.ticks li{padding:6px 0 6px 18px;position:relative;color:var(--ink-2)}
+.ticks li:before{content:"";position:absolute;left:0;top:15px;width:7px;height:1px;background:var(--accent)}
+
+@media(min-width:760px){.rail{grid-auto-columns:31%}}
+
 footer{padding:44px 0 70px;border-top:1px solid var(--line-2);color:var(--muted);font-size:.85rem}
 
 @media(min-width:760px){
@@ -375,7 +507,9 @@ document.querySelectorAll('.choice').forEach(b=>b.addEventListener('click',()=>{
 """
 
 
-def render(slug):
+def render(slug, proto="a"):
+    B = proto in ("b", "c")   # deeper evidence
+    C = proto == "c"          # living page
     b = json.loads((A.BUNDLE_DIR / f"{slug}.json").read_text())
     gc = get_mongo_client()["Gold_Coast"]
     doc = gc[b["suburb_key"]].find_one({"address": b["address"]}) or {}
@@ -544,7 +678,29 @@ def render(slug):
                 add('<details><summary>See the adjustment</summary><div class="body">'
                     + adjustment_rows(c) + '</div></details>')
             add('</div>')
-        if len(adj) > 3:
+        if B and len(adj) > 3:
+            add(f'<details open><summary>All {len(adj)} strongest comparisons</summary><div class="body">')
+            add('<div class="ctable">')
+            for c in adj:
+                w = c.get("weight")
+                add('<div class="crow">'
+                    f'<div class="ca">{E(str(c.get("address","")).split(",")[0])}'
+                    f'<span class="fine"> · {E(month_year(c.get("sale_date")) or "—")}'
+                    + (f' · {c["distance_km"]:.1f} km' if c.get("distance_km") else '')
+                    + '</span></div>'
+                    f'<div class="cs">{E(exact(c.get("sale_price")) or "—")}</div>'
+                    f'<div class="cj">{E(money(c["adjusted_price"]))}</div>'
+                    + (f'<div class="cw"><span style="width:{min(100, w*100):.0f}%"></span></div>'
+                       if isinstance(w, (int, float)) else '<div class="cw"></div>')
+                    + (f'<div class="cv fine">{E(str(c.get("verification")))}</div>'
+                       if c.get("verification") else '<div class="cv"></div>')
+                    + '</div>')
+                add('<div class="cwork">' + adjustment_rows(c) + '</div>')
+            add('</div>')
+            add('<p class="fine">Weight reflects how good a comparison each sale is — adjustment '
+                'quality, proximity, recency and how much of it we could verify.</p>')
+            add('</div></details>')
+        elif len(adj) > 3:
             add(f'<details><summary>See all {len(adj)} strongest comparisons</summary><div class="body">')
             for c in adj:
                 if c in fresh[:3]:
@@ -587,8 +743,15 @@ def render(slug):
                 f'<b>{cl["matching"]}</b> sit this close to {E(names)} — all at once.</p>')
         add('<p class="fine">That does not set a price by itself. It reduces the number of close '
             'substitutes a buyer can choose from.</p>')
+        if B:
+            mp = scarcity_map(doc, b, slug)
+            if mp:
+                add(f'<img class="shot" style="aspect-ratio:16/10;margin:20px 0 6px" src="{E(mp)}" '
+                    f'alt="What sits within walking distance of {E(short)}" loading="lazy">')
+                add('<div class="fine">The home in orange; the school, park and supermarket that '
+                    'define the combination in grey. Mapping · Google</div>')
         if feats:
-            add('<details><summary>See the distances</summary><div class="body">')
+            add('<details' + (' open' if B else '') + '><summary>See the distances</summary><div class="body">')
             for f in feats:
                 add(f'<div style="display:flex;justify-content:space-between;padding:6px 0;'
                     f'border-bottom:1px solid var(--line-2)"><span>{E(f["label"])}</span>'
@@ -644,6 +807,30 @@ def render(slug):
             'stand behind either way.</p>')
     add('</div></section>')
 
+    # ── 6b · why the other estimates disagree (Prototype B) ─────────
+    if B:
+        add('<section id="dispersion"><div class="wrap">')
+        add('<div class="eyebrow">The other numbers</div>')
+        add('<h2>Why the other estimates say something different</h2>')
+        add('<p>A valuation built from only three selected sales is highly sensitive to which three '
+            'are chosen — and three comparable sales is the statutory Statement of Information '
+            'standard in Victoria and the incoming NSW regime, so it is not a straw man.</p>')
+        add('<p>We took 512 homes that have since sold, found every set of three comparable sales '
+            'that could reasonably have been chosen, and worked out what each set said.</p>')
+        add('<div class="finding">The median gap between the highest and lowest defensible result '
+            'was $469,000.</div>')
+        add('<p>That does not make any one estimate dishonest. It means three sales are often too '
+            'small a sample to show which comparison deserves the most weight.</p>')
+        add('<details><summary>See what the test found</summary><div class="body">'
+            '<p>A close answer was present in the available evidence on 73.6% of those homes — '
+            'identifiable only with hindsight. The worst available choice was more than 20% out '
+            'on 73.4%.</p>'
+            '<p class="fine">This is a property of the three-sale method, measured on our own data. '
+            'It is not a claim about any particular provider, and we have not tested anyone '
+            'else\'s figures.</p></div></details>')
+        add('<div class="src">Fields analysis · n=512 · tested 6 August 2026</div>')
+        add('</div></section>')
+
     # ── 7 · what is changing now ────────────────────────────────────
     mkt = ((get_mongo_client()["system_monitor"]["market_pulse"]
             .find_one({"suburb": b["suburb_key"]}) or {}).get("data_snapshot") or {})
@@ -652,9 +839,40 @@ def render(slug):
         add('<section id="now"><div class="wrap">')
         add('<div class="eyebrow">Right now</div>')
         add('<h2>What is moving around this home</h2>')
+        rep = (get_mongo_client()["system_monitor"]["property_reports"]
+               .find_one({"slug": slug}) or {})
+        actives = ((rep.get("comparables") or {}).get("closest_active") or [])
         if comp.get("n_compete"):
             add(f'<p>{comp["n_compete"]} homes a buyer could compare with this one if it came to '
                 f'market today, from {comp.get("n_total","—")} on the market across the wider area.</p>')
+        if C and actives:
+            ap_ = (rep.get("comparables") or {}).get("aperture_label")
+            if ap_:
+                add(f'<p class="fine">Comparison set: {E(str(ap_))}. Some sit outside '
+                    f'{E(b.get("suburb_display",""))} — that is the catchment a buyer at this price '
+                    f'actually shops across, not a suburb boundary.</p>')
+            add('<div class="rail">')
+            for a_ in actives[:4]:
+                add('<article class="lcard">')
+                if a_.get("image_src"):
+                    add(f'<img src="{E(str(a_["image_src"]))}" alt="" loading="lazy">')
+                add(f'<div class="b"><div class="a">{E(str(a_.get("address","")))}</div>')
+                meta = [x for x in [a_.get("suburb"),
+                                    f'{a_["bedrooms"]} bed' if a_.get("bedrooms") else None,
+                                    f'{a_["distance_km"]:.1f} km away' if a_.get("distance_km") else None]
+                        if x]
+                add(f'<div class="fine">{E(" · ".join(str(m) for m in meta))}</div>')
+                if a_.get("price"):
+                    add(f'<div class="pr">{E(str(a_["price"]))}</div>')
+                dom_ = a_.get("days_on_market")
+                if dom_:
+                    fresh_ = dom_ <= 14
+                    add(f'<div class="pill{" hot" if fresh_ else ""}">'
+                        + ("New this week" if dom_ <= 7 else f"Listed {int(dom_)} days ago") + '</div>')
+                if a_.get("difference_vs_subject"):
+                    add(f'<div class="fine" style="margin-top:8px">{E(str(a_["difference_vs_subject"]))}</div>')
+                add('</div></article>')
+            add('</div>')
         dom, dom_p = mkt.get("dom_median"), mkt.get("dom_yoy_prev")
         act, act_d = mkt.get("active_listings"), mkt.get("active_listings_mom_pct")
         if dom and dom_p and act:
@@ -668,6 +886,37 @@ def render(slug):
             add('</div>')
             add('<p>Both readings are true and they support opposite conclusions, which is why a '
                 'single market headline cannot settle anything about this home.</p>')
+        if C:
+            acts = [a for a in (rep.get("activity") or []) if timeline_safe(a)]
+            if acts:
+                add('<h3 style="margin-top:32px">What changed recently</h3>')
+                add('<ol class="tl">')
+                for a_ in acts[:6]:
+                    add(f'<li><span class="d">{E(month_year(a_.get("date")) or "")}</span>'
+                        f'<div class="h">{E(str(a_.get("headline","")))}</div>'
+                        + (f'<div class="fine">{E(str(a_["detail"]))}</div>' if a_.get("detail") else '')
+                        + '</li>')
+                add('</ol>')
+                when = rep.get("comparables_refreshed_at") or rep.get("activity_refreshed_at")
+                if when:
+                    add(f'<div class="fine">Competitor set re-checked nightly · last checked '
+                        f'{E(full_date(when))}</div>')
+            # ⚠ SIMULATED. There is no visitor identity on this page yet, and the
+            # device_token defect means a submission would be silently discarded.
+            # Shown so the CONCEPT can be judged; labelled so it is never mistaken
+            # for working plumbing.
+            add('<div class="sim">')
+            add('<div class="simtag">Concept — not wired</div>')
+            add('<h3>Since you last looked</h3>')
+            add('<p>On a return visit this is where the page would open: what moved since the last '
+                'time this address was viewed, rather than making someone re-read what they have '
+                'already seen.</p>')
+            add('<ul class="ticks"><li>One new home came to market in the comparison set</li>'
+                '<li>One asking price changed</li>'
+                '<li>The range did not move</li></ul>')
+            add('<p class="fine">Requires a visitor token this page does not yet issue. Nothing '
+                'here is stored today.</p>')
+            add('</div>')
         add('<div class="src">Fields analysis of active listings · re-checked nightly</div>')
         add('<a class="cue" href="#correct">What if something here is wrong? ↓</a>')
         add('</div></section>')
@@ -693,7 +942,15 @@ def render(slug):
                        ("Something else", "Thanks — we'll look at this one by hand.")]:
             add(f'<button class="choice" aria-pressed="false" data-result="{E(res)}">{E(n)}</button>')
         add('</div><div class="result"></div>')
-        add('<p class="fine" style="margin-top:18px">Prototype — selections are not saved yet.</p>')
+        if C:
+            add('<div class="sim" style="margin-top:18px">')
+            add('<div class="simtag">Concept — not wired</div>')
+            add('<p style="margin:0">Once saved, a correction would persist against this address '
+                'and the page would open with it already applied — including the note of what it '
+                'changed, so the revision stays visible rather than quietly folded in.</p>')
+            add('</div>')
+        else:
+            add('<p class="fine" style="margin-top:18px">Prototype — selections are not saved yet.</p>')
     add('<p class="fine" style="margin-top:18px">Corrections update this property record. They are '
         'not treated as a request for contact. Nobody calls unless you ask.</p>')
     add('<p class="fine">No agent is paying to appear on this page, and your interest in your own '
@@ -734,13 +991,77 @@ def render(slug):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--slug", default="28-wedgebill-parade-burleigh-waters")
+    ap.add_argument("--index", action="store_true", help="rebuild the contact sheet only")
+    ap.add_argument("--prototype", choices=["a", "b", "c"], default="a",
+                    help="a = five-minute spine · b = + deeper evidence · c = + living page")
     args = ap.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
-    path = OUT / f"{args.slug}.html"
-    path.write_text(render(args.slug))
+    if args.index:
+        n = build_index()
+        print(f"index rebuilt — {n} addresses")
+        print("https://vm.fieldsestate.com.au/concepts/off-market/V4_Private_Report/index.html")
+        return 0
+    suffix = "" if args.prototype == "a" else f"-{args.prototype}"
+    path = OUT / f"{args.slug}{suffix}.html"
+    path.write_text(render(args.slug, args.prototype))
     print(f"wrote {path}  ({path.stat().st_size:,} bytes)")
-    print(f"https://vm.fieldsestate.com.au/concepts/off-market/V4_Private_Report/{args.slug}.html")
+    build_index()
+    print(f"https://vm.fieldsestate.com.au/concepts/off-market/V4_Private_Report/{path.name}")
     return 0
+
+
+
+
+def build_index():
+    """A contact sheet for review. Not part of the product — a way in."""
+    import re
+    rows = {}
+    for f in sorted(OUT.glob("*.html")):
+        if f.name == "index.html":
+            continue
+        m = re.match(r"^(.*?)(?:-([bc]))?\.html$", f.name)
+        slug, proto = m.group(1), (m.group(2) or "a")
+        rows.setdefault(slug, {})[proto] = f.name
+    body = []
+    for slug, protos in sorted(rows.items()):
+        pretty = slug.replace("-", " ").title()
+        links = " ".join(
+            f'<a href="{protos[p]}">{lab}</a>' if p in protos else f'<span>{lab}</span>'
+            for p, lab in (("a", "A · spine"), ("b", "B · evidence"), ("c", "C · living")))
+        body.append(f'<li><div class="n">{pretty}</div><div class="l">{links}</div></li>')
+    OUT.joinpath("index.html").write_text(f"""<!doctype html><html lang="en-AU"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex"><title>V4 private report — prototypes</title>
+<style>{CSS}
+ul.idx{{list-style:none;padding:0;margin:26px 0}}
+ul.idx li{{padding:16px 0;border-bottom:1px solid var(--line-2)}}
+ul.idx .n{{font-family:var(--serif);font-size:1.14rem;margin-bottom:8px}}
+ul.idx .l a,ul.idx .l span{{display:inline-block;margin-right:8px;font-size:.86rem;
+  border:1px solid var(--line);border-radius:3px;padding:7px 12px;text-decoration:none;color:var(--ink)}}
+ul.idx .l a:hover{{border-color:var(--accent);background:var(--accent-soft)}}
+ul.idx .l span{{opacity:.35}}
+</style></head><body>
+<header class="top"><div class="topin"><span class="brand">Fields</span>
+<span class="tag">V4 prototypes</span></div></header>
+<section><div class="wrap">
+<div class="eyebrow">Off-market page redesign · V4</div>
+<h1>The private property report</h1>
+<p class="lede">Three depths of the same page, rendered from live data for five real addresses.
+Answer first, prove it gradually, ask almost nothing.</p>
+<p class="fine"><b>A</b> is the five-minute spine. <b>B</b> adds the deeper evidence — full
+comparable table with per-feature working, the walking-distance map, and the three-sale
+experiment. <b>C</b> adds the living layer — competitor set, change timeline, and the
+return-visit and saved-correction concepts, which are labelled where they are not wired.</p>
+<ul class="idx">{''.join(body)}</ul>
+<p class="fine"><b>30 Whitehead Drive</b> is deliberately included: it sits above the $2,000,000
+design ceiling, so the comparable-sales method declines and the page falls back to a wider
+exterior-evidence range — and correctly refuses to quote an error rate it has not earned for that
+method. <b>11 Placid Court</b> is Varsity Lakes, our least accurate market.</p>
+</div></section>
+<footer><div class="wrap">Rendered {__import__('datetime').date.today().strftime('%-d %B %Y')} ·
+every figure read live from the property record · noindex</div></footer>
+</body></html>""")
+    return len(rows)
 
 
 if __name__ == "__main__":
