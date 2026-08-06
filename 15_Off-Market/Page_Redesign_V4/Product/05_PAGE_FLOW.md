@@ -20,6 +20,25 @@ a pitch; copy that is calm and specific will read as competence.
 stunning, nestled, boasting, rare opportunity, robust market. Never a single valuation figure
 as a headline. Never advice. Never a prediction.
 
+**Never make the reader admit intent.** Inherited from the mini-site. Nothing on this page asks
+whether they are selling, and no section may imply it. Where we name what they might be
+weighing, we hedge — *"You may be…"* — because it is offered as a hypothesis. **The hedge is
+load-bearing and may not be strengthened.** Never *"we know how stressful this is."*
+
+**Every number gets a translation line** (`SoWhat`, shipped in the mini-site). Its rule: *no
+stat tile, comp count, scarcity figure or competitor number ships without one.* One or two
+sentences saying why a reader should care — *"the translation of evidence into risk-reduction,
+not a second paragraph."* The diagnosis behind it applies to us unchanged: **the product is
+data-first when the reader is fear-first.**
+
+**Every claim names its source** (`CitationStrip`). Its rule is absolute: *if a claim doesn't
+have a source, the block should not have rendered.*
+
+**Columns run thesis → applied, not free → locked.** The shipped `FearSection` splits the
+general finding on the left and the same data anchored to this home on the right. Moving right
+gets **more** personal, so the page reads as deepening rather than withholding. Asks sit
+beneath, never in the right column.
+
 **The arc:** recognise → answer → prove → explain → apply → widen → protect → hand over
 control. The reader is given the number early, then shown the working, and only then told why
 other numbers differ. Proof before criticism — leading with why everyone else is unreliable,
@@ -34,20 +53,32 @@ already sceptical.
 > ## {street_number} {street_name}
 > ### {suburb}, QLD {postcode}
 >
-> {land_size} m² · {property_type}
+> {land_size} m² · {property_type} · **Last recorded sale ${last_sale_price},
+> {last_sale_month} {last_sale_year}. Held {years_held} years since.**
 >
-> **Last recorded sale ${last_sale_price}, {last_sale_month} {last_sale_year}. Held
-> {years_held} years since.**
+> **You may be trying to answer three questions privately.**
 >
-> We've put together what the sales around it say it would be worth today, and shown our
-> working. It takes about a minute to build.
+> Is the number attached to this home real? Is this the wrong time to move? And if you sold,
+> where would you go next?
 >
-> *Nobody calls unless you ask.*
+> This is a private walkthrough of the first of them. Nothing here starts a selling process,
+> and **nobody calls unless you ask**.
+>
+> We're building it from the sales around this home now. It takes about a minute.
 
-**Why this works.** The reader typed a bare address, so the first job is to confirm they are
-in the right place, then immediately prove we hold something real about it. The last-sale line
-is the exact fact that ranked us **#3 on Google, above Domain at #4**, while a page opening
-with marketing copy ranked #6. Specific and checkable beats persuasive.
+**Why this works.** The reader typed a bare address, so the first job is to confirm they are in
+the right place, then immediately prove we hold something real about it. The last-sale line is
+the exact fact that ranked us **#3 on Google, above Domain at #4**, while a page opening with
+marketing copy ranked #6. Specific and checkable beats persuasive.
+
+**The three questions are taken from the mini-site**, where they open Session 1. They name what
+the reader came for without making them say it — and they do the one thing our evidence says we
+were missing: *"they understand what is happening in my life."* Naming what someone is privately
+weighing is understanding their situation without claiming to.
+
+**Only the first question is promised here**, because it is the only one this page answers.
+Naming the other two is honest and it is the hand-off to the mini-site. Never promise what a
+later section doesn't keep.
 
 The privacy line is here, not at the end, because the anxiety arrives with them — *"Am I
 declaring that I am selling?"* — and 87.5% of sessions never reach a second page. Reassurance
@@ -87,9 +118,24 @@ about every other number they've seen.
 
 **No confidence label.** Ours don't discriminate — `high` 56.0% versus `medium` 57.5%.
 
-**When the build can't run:** say so in one line and move on. *"We don't hold enough detail on
-this home to build a range yet — here's what we can tell you."* Then jump to §4, which needs
-nothing about this home at all.
+**When the build can't run — state why, precisely, and treat it as a credential.** Taken from
+the mini-site's suppression rule: *"saying why a number is missing is worth more than the
+number. Every competitor draws the line anyway. **Refusing to is a credential.**"*
+
+> We can't put a range on this home. We hold its land size and its last sale, but not the
+> internal floor area — and floor area is one of the two figures every adjustment depends on.
+> A range built without it would look the same as one built with it, which is the problem.
+
+Then jump to §4, which needs nothing about this home at all. **This is the majority state on
+off-market addresses. Written this way it is the strongest proof on the page that we don't
+invent numbers.**
+
+> ⚠ **Unresolved: does this trigger s 215?** Property Occupations Act 2014 (Qld) s 215 — when a
+> seller asks an agent for a likely sale price, the agent must supply a CMA of at least three
+> sales inside six months, similar standard, within 5 km, or a written explanation. **Fields is
+> a licensed agency and §1 gives a homeowner a likely sale price.** `StatutoryCMA.tsx` already
+> implements the compliant form, including the *"as at / valid until"* stamp the six-month
+> window makes mandatory. **Resolve before §1 ships.**
 
 > ### The ask
 > **"Post the full report to this address"**
@@ -105,7 +151,10 @@ nothing about this home at all.
 
 > ## The sales behind that range, and what we changed about each one
 >
-> We looked at {n_assessed} sales and kept {n_comps}.
+> *[funnel, animating on open: {catchment_total} sales in the catchment → {in_band} in the
+> price band → {ranked} ranked for similarity → **{n_comps} close enough to use**]*
+>
+> We looked at {n_assessed} and kept {n_comps}.
 >
 > No sale is a match. Each one differs from this home in ways that are worth money, so we price
 > those differences and adjust.
@@ -119,6 +168,14 @@ nothing about this home at all.
 > *[each comparable, the same way]*
 >
 > Every line is here because you should be able to disagree with one.
+>
+> ### Why it sits where it does in that range
+>
+> {n_matching} of the {n_active} homes on the market right now match this one on
+> {scarcity_query}. {conditional_rarity_line}
+>
+> **What this means:** the range isn't wide because we're hedging. It's wide because homes
+> with this combination don't come up often enough to pin it tighter.
 
 **Why this works, and why it comes second.** The moment someone is handed a number, *"why
 should I believe that?"* is automatic. This answers it directly, with their own home's
@@ -136,6 +193,25 @@ thousands of dollars. §4 then generalises something they have already seen happ
 cards are skimmed in under two seconds. Show one comparable fully expanded, the rest collapsed.
 The visible existence of the working does the persuading; a wall of it gets scrolled past by
 the very people it was written for.
+
+**The funnel is taken from `RankedComparison`**, which animates the filtering *"so the seller
+watches it happen."* Its standard is the right one: **honest theatre — every step is a
+computation that genuinely ran.** Showing the filtering beats reporting its output.
+
+**Scarcity is taken from `scarcity_features.py`**, and it belongs *here* rather than in a
+section of its own. It is not a topic anyone searches for; it is the **explanation for where in
+the range this home sits** — which is J1, the best-evidenced need we have. The engine counts
+anchors only (land, floor, beds, pool), chosen relative to the suburb cohort, and deliberately
+excludes sparse-coverage features *"so the ratio can never be inflated by missing data."*
+`poi_rarity.py` supplies the conditional line — *"6 share your combination — only 2 are also
+within a 5-minute walk of a park"* — the strongest narrowing device in either product.
+
+> ⚠ In the mini-site, scarcity renders only behind a `ConsultantBadge` — a human approves it.
+> That cannot scale to 26,297 pages. Either design the un-approved state or write the claim so
+> it never needs approval.
+> ⚠ Reuse `ValuationEvidence` (L1 evidence card / L2 comparable cards / L3 adjustment grid).
+> It renders adjusted prices on `/your-home` today, so **verify whether the `adjusted_price`
+> blocker is specific to the off-market path** before treating it as universal.
 
 > ⚠ Blocked: `adjusted_price` and the component adjustments are **not persisted**. This
 > section cannot render until they are.
@@ -222,11 +298,18 @@ assessment.
 > **The gap between the highest and lowest defensible answer was a median of $469,000 — about a
 > third of the home's value.** On 77% of homes it was more than 20% of the value.
 >
+> **What this means:** two honest people, working from the same sales, can hand you numbers
+> half a million dollars apart and both be following standard practice.
+>
 > The part that surprised us: a near-perfect comparable — one landing within 2% of the eventual
 > sale price — was sitting in the available sales on **73.6%** of those homes. The worst choice
 > available was more than 20% out on **73.4%**.
 >
 > **The right answer is nearly always there. Three sales just can't tell you which one it is.**
+>
+> **What this means:** the problem isn't a shortage of evidence. It's that three sales can't
+> carry the weight of choosing between them — which is why we use eight and show you all of
+> them.
 
 **Why this works here rather than earlier.** By this point they have watched our method move a
 number in their own home's figures. This section generalises what they have already seen —
@@ -338,9 +421,17 @@ This section gives all three and needs to know nothing about their finances.
 > {n_active} are on the market now. {n_matching} are close enough to this home to be competing
 > for the same buyer.
 >
-> We're not going to tell you where this goes next — nobody knows, and anyone who says
-> otherwise is guessing. What we can do is show you the same indicators we watch, and tell you
-> when they move.
+> **Two true things that point in different directions.**
+>
+> Homes here are still selling quickly — a median of {dom} days. But far fewer are selling at
+> all, and a year ago the median was {dom_prior} days.
+>
+> Both readings are true and they support opposite conclusions, which is why a single market
+> headline can't settle anything about this home.
+>
+> {qoq_suppressed_reason}
+>
+> `Source: Fields analysis of {suburb} sold records · Last reviewed: {review_date}`
 
 **Why this works.** The largest adjacent topic by a distance — roughly **670** persistence
 across `gold coast property market forecast`, `forecast for next 5 years`, `crash prediction`
@@ -351,9 +442,18 @@ something, a number that explains its own movement is worth returning to. It spe
 to the loudest volatility complaint: *"In the last 3 months my house has dropped 40k increased
 50k and dropped 40k, is this even possible."*
 
+**The structure is taken from the mini-site**, which is stronger than announcing a refusal:
+name the ambiguity, give both readings, let the reader draw the inference. Its rule —
+*"the reader draws the inference. We never state it."*
+
 > ⚠ **Rule 5 binds hardest here.** Report indicators. Conditional language only. Never a
-> forecast, never "prices will fall", never advice. The demand is for a prediction; what we may
-> supply is evidence — and saying so plainly is itself differentiating.
+> forecast, never "prices will fall", never advice.
+> ⚠ **Never characterise the market** — cooling, softening, holding up, resilient are
+> predictions in disguise. "Robust market" is banned outright.
+> ⚠ **State suppressions on the card.** Where a quarter-on-quarter figure is too thin to carry,
+> say so — `market_pulse.data_snapshot.qoq_suppressed_reason` already holds the reason.
+> ⚠ **Staleness trap:** read `data_snapshot` only. `summary` and `narrative.pillars` go stale
+> independently and a partial `$set` touches only what it names (CLAUDE.md Rule 6).
 
 > ### The ask
 > **"Tell me when this changes"** — an alert when the range moves, with the reason it moved.
@@ -466,6 +566,34 @@ calling any of it "sensitive" to justify a gate would be a false claim (C15).
 | **What's competing with it right now** | GPT reasoning only; no independent data support. But `offmarket_intel` holds it (224 active, 26 matching) | **Folded into §7 as two lines**, not given a section of its own |
 | **"What's changed since you last looked"** | GPT calls this *"a major opportunity… the static answer is valuable; the living answer is defensible."* REA positions owner tracking exactly this way | **Not a page section — a post-claim feature.** It requires knowing who they are, which makes it a genuine reason to claim rather than a toll |
 | **The deeper journey** — what selling could make possible, where they'd go next, launch number, method, preparation, buyer competition, the Fields process | GPT's own list, and it maps one-to-one onto mini-site V2 sessions 1–7 | **Not this page.** *"The selling journey is not the initial product. It is the deeper path that becomes relevant once Fields has answered the address search better than anyone else."* |
+
+---
+
+## Taken from the shipped mini-site
+
+| Concept | Where it lands | Source |
+|---|---|---|
+| **"The three questions"** opening, with the load-bearing *"You may be"* hedge | §0 | Session 1 `s1-open` |
+| **Never make the reader admit intent** | Voice | Session 1, Rule 11 |
+| **`SoWhat`** — no number ships without a translation line | Voice; applied in §4 | `SoWhat.tsx` |
+| **`CitationStrip`** — no source, no block | Voice | `CitationStrip.tsx` |
+| **Thesis / applied column split** (not free/locked) | Voice | `FearSection.tsx` |
+| **Suppression as a credential** | §1 no-range fallback | Session 1 `s1-market` |
+| **s 215 CMA obligation** | §1, unresolved | `StatutoryCMA.tsx` |
+| **Honest-theatre funnel** — watch the filtering happen | §2 | `RankedComparison.tsx` |
+| **Scarcity as range-explanation**, anchors-only, cohort-relative | §2 | `scarcity_features.py` |
+| **Conditional rarity** — *"only 2 are also within a 5-minute walk of a park"* | §2 | `poi_rarity.py` |
+| **`ValuationEvidence`** L1/L2/L3 | §2 | `ValuationEvidence.tsx` |
+| **"Two true things that point in different directions"** | §7 | Session 1 `s1-market` |
+| **`qoq_suppressed_reason`** stated on the card | §7 | `market_pulse.data_snapshot` |
+| **`WhatChangedBanner`** | post-claim | `WhatChangedBanner.tsx` |
+| **`DataRecordDrawer`** | §9 correction ask | `DataRecordDrawer.tsx` |
+| **`PendingPlaceholder`** | §1 build wait | `PendingPlaceholder.tsx` |
+| **Print spec — no CTA anywhere** | §1 postal ask | Session 1 print edition |
+
+**Not taken:** the four-card `PositionAtAGlance` opener (questions 2 and 3 are the
+buyer/competition angles with no independent support); the seven-session seller journey; the
+three broken charts; confidence grades.
 
 ---
 
