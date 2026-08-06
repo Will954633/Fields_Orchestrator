@@ -164,6 +164,23 @@ def main():
             se = sorted(errs)
             sm = sorted(mids)
 
+            # Spread narrowing: raw comp prices vs the same comps adjusted.
+            # This is the claim in Adjusted-Comparables-Evidence.md (55% on
+            # Moorabbin) and Article_Prototypes README open issue 3 (5% on
+            # Heidelberg). Measured on the Fields comp set only — it is our
+            # method vs naive label-matching on the SAME sales, not vs the agent
+            # 3-comp method above.
+            raws = [p["price"] for p in res["included_points"] if p.get("price")]
+            adjs = [p["adjustment_result"]["adjusted_price"]
+                    for p in res["included_points"]
+                    if p.get("adjustment_result", {}).get("adjusted_price")]
+            narrowing = raw_spread = adj_spread = None
+            if len(raws) >= 2 and len(adjs) >= 2:
+                raw_spread = max(raws) - min(raws)
+                adj_spread = max(adjs) - min(adjs)
+                if raw_spread > 0:
+                    narrowing = (1 - adj_spread / raw_spread) * 100
+
             rec = {
                 "id": sid,
                 "address": subject.get("address"),
@@ -185,6 +202,9 @@ def main():
                 "fields_val": f_val,
                 "fields_err": f_err,
                 "fields_conf": res.get("confidence"),
+                "raw_spread": raw_spread,
+                "adj_spread": adj_spread,
+                "narrowing_pct": narrowing,
                 "fields_n_comps": res.get("n_included"),
                 "fields_in_range": bool(res.get("range_low") and res.get("range_high")
                                         and res["range_low"] <= actual <= res["range_high"]),
