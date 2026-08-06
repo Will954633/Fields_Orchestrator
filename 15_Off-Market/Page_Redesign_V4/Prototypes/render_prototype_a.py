@@ -91,7 +91,7 @@ def hero_image(doc, suburb_key, slug, boundary_colour="sun"):
     try:
         gc = get_mongo_client()["Gold_Coast"]
         out, _note = ra.render(gc, suburb_key, doc, boundary_colour, str(OUT),
-                               width=640, height=420, scale=2)
+                               width=640, height=400, scale=2)
         return out.name if out else None
     except Exception:
         return None
@@ -315,14 +315,17 @@ header.top{position:sticky;top:0;z-index:50;background:rgba(247,245,241,.94);
 header.top.stuck{border-bottom-color:var(--line)}
 .topin{max-width:1120px;margin:0 auto;padding:12px 22px;display:flex;justify-content:space-between;
        align-items:center;gap:14px}
-.brand{font-family:var(--serif);font-size:1.02rem;letter-spacing:.02em}
-.tag{font-size:.68rem;letter-spacing:.13em;text-transform:uppercase;color:var(--muted)}
+.brand{display:block;height:24px;width:auto}
+.tag{font-size:.64rem;letter-spacing:.11em;text-transform:uppercase;color:var(--muted);
+     white-space:nowrap}
 .stickyaddr{font-size:.86rem;color:var(--ink-2);opacity:0;transition:opacity .25s}
 header.top.stuck .stickyaddr{opacity:1}
 
 /* hero */
 .hero{padding-top:26px}
-.shot{width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:3px;background:var(--stone);
+/* Generous rounding, per the reference. 3px read as a square photo with its
+   corners knocked off; the reference is unmistakably a rounded card. */
+.shot{width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:14px;background:var(--stone);
       display:block;border:1px solid var(--line-2)}
 .addr{font-family:var(--serif);font-size:1.85rem;line-height:1.2;margin:18px 0 4px}
 .sub{color:var(--muted);margin-bottom:14px}
@@ -519,9 +522,12 @@ document.querySelectorAll('.choice').forEach(b=>b.addEventListener('click',()=>{
 """
 
 
-def render(slug, proto="a"):
-    B = proto in ("b", "c")   # deeper evidence
-    C = proto == "c"          # living page
+def render(slug, proto="full"):
+    # A/B/C were build stages (spine -> +evidence -> +living), never reader-facing
+    # variants. `full` is the whole flow as presented and is the default; the
+    # stage flags remain only for isolating one layer during development.
+    B = proto in ("b", "c", "full")   # deeper evidence
+    C = proto in ("c", "full")        # living page
     b = json.loads((A.BUNDLE_DIR / f"{slug}.json").read_text())
     gc = get_mongo_client()["Gold_Coast"]
     doc = gc[b["suburb_key"]].find_one({"address": b["address"]}) or {}
@@ -548,7 +554,7 @@ def render(slug, proto="a"):
 
     # ── header ──
     add(f'''<header class="top"><div class="topin">
-      <span class="brand">Fields</span>
+      <img class="brand" src="brand/fields-hero-grass.png" alt="Fields">
       <span class="stickyaddr">{E(short)}</span>
       <span class="tag">Private report</span></div></header>''')
 
@@ -1010,8 +1016,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--slug", default="28-wedgebill-parade-burleigh-waters")
     ap.add_argument("--index", action="store_true", help="rebuild the contact sheet only")
-    ap.add_argument("--prototype", choices=["a", "b", "c"], default="a",
-                    help="a = five-minute spine · b = + deeper evidence · c = + living page")
+    ap.add_argument("--prototype", choices=["full", "a", "b", "c"], default="full",
+                    help="full = the complete page (default). a/b/c isolate a build "
+                         "stage for development only.")
     args = ap.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
     if args.index:
@@ -1019,7 +1026,7 @@ def main():
         print(f"index rebuilt — {n} addresses")
         print("https://vm.fieldsestate.com.au/concepts/off-market/V4_Private_Report/index.html")
         return 0
-    suffix = "" if args.prototype == "a" else f"-{args.prototype}"
+    suffix = "" if args.prototype == "full" else f"-{args.prototype}"
     path = OUT / f"{args.slug}{suffix}.html"
     path.write_text(render(args.slug, args.prototype))
     print(f"wrote {path}  ({path.stat().st_size:,} bytes)")
@@ -1031,50 +1038,52 @@ def main():
 
 
 def build_index():
-    """A contact sheet for review. Not part of the product — a way in."""
+    """A way in for review. One link per address — the complete page.
+
+    It previously listed A/B/C per property. Those are build stages, not
+    variants: nobody would ever be shown "the spine" instead of the page. Three
+    links implied a choice that does not exist and made the finished thing hard
+    to find.
+    """
     import re
-    rows = {}
+    rows = []
     for f in sorted(OUT.glob("*.html")):
-        if f.name == "index.html":
+        if f.name == "index.html" or re.search(r"-[abc]\.html$", f.name):
             continue
-        m = re.match(r"^(.*?)(?:-([bc]))?\.html$", f.name)
-        slug, proto = m.group(1), (m.group(2) or "a")
-        rows.setdefault(slug, {})[proto] = f.name
-    body = []
-    for slug, protos in sorted(rows.items()):
-        pretty = slug.replace("-", " ").title()
-        links = " ".join(
-            f'<a href="{protos[p]}">{lab}</a>' if p in protos else f'<span>{lab}</span>'
-            for p, lab in (("a", "A · spine"), ("b", "B · evidence"), ("c", "C · living")))
-        body.append(f'<li><div class="n">{pretty}</div><div class="l">{links}</div></li>')
+        slug = f.stem
+        rows.append((slug.replace("-", " ").title(), f.name))
+    body = "".join(
+        f'<li><a href="{fn}"><span class="n">{name}</span>'
+        f'<span class="go">Open the report →</span></a></li>' for name, fn in rows)
     OUT.joinpath("index.html").write_text(f"""<!doctype html><html lang="en-AU"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex"><title>V4 private report — prototypes</title>
+<meta name="robots" content="noindex"><title>The private property report</title>
 <style>{CSS}
 ul.idx{{list-style:none;padding:0;margin:26px 0}}
-ul.idx li{{padding:16px 0;border-bottom:1px solid var(--line-2)}}
-ul.idx .n{{font-family:var(--serif);font-size:1.14rem;margin-bottom:8px}}
-ul.idx .l a,ul.idx .l span{{display:inline-block;margin-right:8px;font-size:.86rem;
-  border:1px solid var(--line);border-radius:3px;padding:7px 12px;text-decoration:none;color:var(--ink)}}
-ul.idx .l a:hover{{border-color:var(--accent);background:var(--accent-soft)}}
-ul.idx .l span{{opacity:.35}}
+ul.idx li{{border-bottom:1px solid var(--line-2)}}
+ul.idx a{{display:flex;justify-content:space-between;align-items:baseline;gap:14px;
+  padding:18px 0;text-decoration:none;color:var(--ink)}}
+ul.idx .n{{font-family:var(--serif);font-size:1.16rem}}
+ul.idx .go{{font-size:.86rem;color:var(--accent);white-space:nowrap}}
+ul.idx a:hover .go{{text-decoration:underline}}
 </style></head><body>
-<header class="top"><div class="topin"><span class="brand">Fields</span>
-<span class="tag">V4 prototypes</span></div></header>
+<header class="top"><div class="topin">
+<img class="brand" src="brand/fields-hero-grass.png" alt="Fields">
+<span class="tag">Private report</span></div></header>
 <section><div class="wrap">
 <div class="eyebrow">Off-market page redesign · V4</div>
 <h1>The private property report</h1>
-<p class="lede">Three depths of the same page, rendered from live data for five real addresses.
-Answer first, prove it gradually, ask almost nothing.</p>
-<p class="fine"><b>A</b> is the five-minute spine. <b>B</b> adds the deeper evidence — full
-comparable table with per-feature working, the walking-distance map, and the three-sale
-experiment. <b>C</b> adds the living layer — competitor set, change timeline, and the
-return-visit and saved-correction concepts, which are labelled where they are not wired.</p>
-<ul class="idx">{''.join(body)}</ul>
-<p class="fine"><b>30 Whitehead Drive</b> is deliberately included: it sits above the $2,000,000
-design ceiling, so the comparable-sales method declines and the page falls back to a wider
-exterior-evidence range — and correctly refuses to quote an error rate it has not earned for that
-method. <b>11 Placid Court</b> is Varsity Lakes, our least accurate market.</p>
+<p class="lede">The complete page, rendered from live data for {len(rows)} real addresses.
+Answer first, prove it gradually, surprise them periodically, ask almost nothing.</p>
+<ul class="idx">{body}</ul>
+<p class="fine"><b>30 Whitehead Drive</b> is included deliberately: it sits above the $2,000,000
+ceiling the comparable-sales method was built for, so the method declines, the page falls back to
+a wider exterior-evidence range, and it refuses to quote an error rate it has not earned for that
+method. <b>11 Placid Court</b> is Varsity Lakes, our least accurate market — and one carrying a
+&minus;10.6% systematic bias that should be understood before the arm ships there.</p>
+<p class="fine">Sections that depend on a property report — the competitor set and the change
+timeline — are empty where no report exists (103 of 12,278 addresses have one). They omit
+themselves rather than render half-filled.</p>
 </div></section>
 <footer><div class="wrap">Rendered {__import__('datetime').date.today().strftime('%-d %B %Y')} ·
 every figure read live from the property record · noindex</div></footer>
