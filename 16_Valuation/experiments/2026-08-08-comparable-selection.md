@@ -5,7 +5,13 @@
 
 ---
 
-## The pool is fine. The selector is not.
+## The pool is fine. A second filter on top of the selector is not.
+
+⚠ **Read the correction in "What using the whole pool actually buys" before quoting this section.**
+The selector proper — which *candidates* are eligible — works on property similarity exactly as the
+methodology intends: bedroom band, dwelling type, water cohort, prestige tier, distance. It is not
+the problem, and it measurably earns its keep. The problem is a **second, post-adjustment filter**
+described below.
 
 | | |
 |---|---|
@@ -17,9 +23,21 @@
 **The pool reaches higher than it needs to.** Coverage is not the constraint here — the selector
 discards the top of a perfectly adequate pool.
 
-## ⚠ The mechanism — selection on the dependent variable
+## ⚠ The mechanism — a post-adjustment filter keyed to the answer
 
-`calculate_weight()`, factor 2, worth 20% of the weight:
+Two places, both scoring a comparable on how far its **adjusted price** sits from the cohort median.
+
+`verify_comparable()` — the stronger of the two, because `select_quality_comps` takes verified
+comparables first:
+
+```python
+accuracy_pct = (adjusted_price - median_adj) / median_adj
+if abs(accuracy_pct) > 0.15:
+    is_verified = False          # relegated out of the top tier
+# plus a z-score outlier test on the same quantity
+```
+
+and `calculate_weight()`, factor 2, worth 20% of the weight:
 
 ```python
 # Factor 2: Adjusted price accuracy (how close to cohort median)
@@ -27,9 +45,15 @@ acc_pct = comp.get('verification', {}).get('accuracy_pct')
 adj_accuracy = max(0, 1 - abs(acc_pct) / 0.20)
 ```
 
-**A comparable is scored on how close its adjusted price is to the cohort median — the very quantity
-the comparables exist to estimate.** Comps that disagree with the median are penalised and dropped,
-so the surviving set agrees with itself *by construction*.
+**A comparable is judged on how close its adjusted price is to the cohort median — the very quantity
+the comparables exist to estimate.** Comps that disagree are demoted, so the surviving set agrees
+with itself *by construction*.
+
+**The intent is defensible and stated in the docstring:** after adjustment all comps *should*
+converge, so a survivor that disagrees has "unexplained variance — motivated seller, special
+conditions, errors". **The flaw is that it assumes our adjustment is correct.** When adjustment is
+imperfect, a comparable that disagrees may be disagreeing *because we adjusted it badly* — and the
+comps we adjust worst are the ones most different from the subject, which skew dear.
 
 That single line explains the noise-floor result directly. Our comparables agree within ±8.3% not
 because the method is precise, but because **we select for agreement**. Their tight agreement is
