@@ -196,11 +196,19 @@ class VmAgent:
         if argv[0] in READERS and any(SECRET_FILES.search(a) for a in argv[1:]):
             return ("DENIED: that path holds credentials. Its existence and name are visible to "
                     "you; its contents are not. Describe what you needed from it instead.")
+        # Recursive greps repeatedly burned tool calls on timeouts against node_modules,
+        # .git and __pycache__. Inject the exclusions rather than making the model
+        # remember them — it has a finite call budget and this wasted several per run.
+        if argv[0] in ("grep", "rg") and any(f in argv for f in ("-r", "-R", "-rn", "-rln", "-rl")):
+            for ex in ("node_modules", ".git", "__pycache__", ".venv", "dist", "build"):
+                if not any(ex in a for a in argv):
+                    argv.append(f"--exclude-dir={ex}")
         try:
-            p = subprocess.run(argv, capture_output=True, text=True, timeout=30, cwd=self.cwd)
+            p = subprocess.run(argv, capture_output=True, text=True, timeout=60, cwd=self.cwd)
             out = (p.stdout + p.stderr)
         except subprocess.TimeoutExpired:
-            return "TIMEOUT after 30s — narrow the path or pattern. Recursive greps from the repo root time out."
+            return ("TIMEOUT after 60s — narrow the path or pattern. A recursive grep from the repo "
+                    "root is too broad; target a subdirectory such as scripts/ or src/.")
         except FileNotFoundError:
             return f"DENIED: '{argv[0]}' is not installed on this VM."
         if len(out) > 8000:
@@ -231,9 +239,13 @@ class VmAgent:
                     return "DENIED: $out/$merge are writes."
                 docs = list(coll.aggregate(pipe, maxTimeMS=45000))
             else:
+                # pymongo's find() takes snake_case max_time_ms; only count_documents and
+                # aggregate take camelCase maxTimeMS. Passing maxTimeMS here raised
+                # "Cursor.__init__() got an unexpected keyword argument" on every find and
+                # silently cost three of the first four audits their database access.
                 docs = list(coll.find(a.get("filter") or {}, a.get("projection") or None,
                                       sort=[tuple(s) for s in a["sort"]] if a.get("sort") else None,
-                                      limit=limit, maxTimeMS=45000))
+                                      limit=limit, max_time_ms=45000))
             out = json.dumps(docs, default=str, indent=1)
             if len(out) > 8000:
                 out = out[:8000] + f"\n… [truncated of {len(docs)} docs — use a projection]"
@@ -265,6 +277,66 @@ class VmAgent:
 
     # ---------------- loop ----------------
 
+    def _create(self, **kw):
+        """
+        Responses.create with backoff on 429.
+
+        The org TPM ceiling is 500,000 tokens/min. A tool-using run resends its whole
+        history each turn, so by call ~45 a single agent is pushing 60-70k tokens per
+        request — four concurrent agents blew the ceiling and the SDK's default 2 retries
+        were not enough. Hence explicit, patient backoff, and prefer serial runs.
+        """
+        import time
+        from openai import RateLimitError, APIStatusError
+        delay = 8.0
+        for attempt in range(8):
+            try:
+                return self._client.responses.create(**kw)
+            except RateLimitError as e:
+                if "insufficient_quota" in str(e) or "credit" in str(e).lower():
+                    raise  # out of money is not a wait-and-retry condition
+                if attempt == 7:
+                    raise
+                print(f"    [rate-limited, sleeping {delay:.0f}s]", flush=True)
+                time.sleep(delay)
+                delay = min(delay * 1.6, 90)
+            except APIStatusError as e:
+                if e.status_code not in (500, 502, 503, 504, 529) or attempt == 7:
+                    raise
+                time.sleep(delay)
+                delay = min(delay * 1.6, 90)
+        raise RuntimeError("unreachable")
+
+    def finalize_from_transcript(self, task: str, jsonl: Path | str,
+                                 label: str = "finalized") -> Result:
+        """
+        Recover a crashed run: replay its recorded tool calls as context and ask only for
+        the final answer, no tools. Cheaper than re-running and keeps the work already paid
+        for. Used after the TPM crash killed four runs at ~45 calls each.
+        """
+        rows = [json.loads(l) for l in Path(jsonl).read_text().splitlines() if l.strip()]
+        steps = [r for r in rows if "call" in r]
+        replay = "\n\n".join(
+            f"### tool call {r['call']}: {r['tool']}({json.dumps(r['args'])[:300]})\n"
+            f"```\n{r['out'][:2500]}\n```" for r in steps)
+        prompt = (
+            f"{task}\n\n---\n\nYou already carried out this investigation. Below is the complete "
+            f"record of your {len(steps)} tool calls and their output. You have NO further tool "
+            f"access, so work only from this evidence.\n\nWrite your final answer now, in the exact "
+            f"format the brief specifies. Any claim you cannot support from the record below must be "
+            f"dropped or marked INFERRED.\n\n{replay}")
+        r = self._create(model=self.model,
+                         input=[{"role": "system", "content": self.system},
+                                {"role": "user", "content": prompt}],
+                         max_output_tokens=16000, store=False)
+        res = Result(answer=r.output_text, calls=len(steps),
+                     tokens_in=r.usage.input_tokens, tokens_out=r.usage.output_tokens)
+        (self.run_dir / f"{label}.md").write_text(
+            f"# {label}\n\nModel `{self.model}` via {self.route} · recovered from "
+            f"{len(steps)} recorded tool calls · {res.tokens_in:,} in / {res.tokens_out:,} out · "
+            f"~${res.cost_usd:.2f}\n\n{res.answer}\n")
+        return res
+
     def investigate(self, task: str, max_calls: int = 40, max_output_tokens: int = 12000,
                     label: str = "investigate", verbose: bool = True) -> Result:
         tools = self._tool_specs()
@@ -276,8 +348,8 @@ class VmAgent:
         # Turn cap is generous but finite: each turn resends history, so cost grows
         # quadratically in tool calls. That is the real budget constraint, not thinking.
         for _ in range(max_calls + 12):
-            r = self._client.responses.create(model=self.model, input=items, tools=tools,
-                                              max_output_tokens=max_output_tokens, store=False)
+            r = self._create(model=self.model, input=items, tools=tools,
+                             max_output_tokens=max_output_tokens, store=False)
             res.tokens_in += r.usage.input_tokens
             res.tokens_out += r.usage.output_tokens
             items = items + [o.model_dump(exclude_none=True) for o in r.output]
@@ -287,6 +359,13 @@ class VmAgent:
                 res.answer = r.output_text
                 break
             if res.calls >= max_calls:
+                # EVERY function_call must get a function_call_output or the next request
+                # 400s with "No tool output found for function call". The first version of
+                # this branch appended only the nudge and killed four runs at ~45 calls,
+                # after all the expensive work was done.
+                for fc in fcs:
+                    items.append({"type": "function_call_output", "call_id": fc.call_id,
+                                  "output": f"DENIED: tool budget of {max_calls} calls exhausted."})
                 items.append({"role": "user", "content":
                               f"Tool budget of {max_calls} calls is exhausted. Give your final "
                               "answer now from what you have, and state explicitly what you "
