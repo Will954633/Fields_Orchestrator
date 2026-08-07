@@ -508,6 +508,58 @@ def backtest_single_property(db, subject_doc, all_sold_in_suburb, sold_by_suburb
     }
 
 
+
+def _comp_spread(points, predicted):
+    """Per-property dispersion of the adjusted comparables.
+
+    This is the candidate signal for an ADAPTIVE range: if the adjusted comps
+    agree closely, the estimate deserves a narrow band; if they disagree, a
+    flat +/-12% is a promise the evidence does not support.
+    """
+    import statistics as _st
+    out = {"adj_iqr_pct": None, "adj_cv": None, "top_weight": None,
+           "comp_months": None, "dist_km": None,
+           "adj_max": None, "adj_min": None, "raw_max": None}
+    if not points or not predicted:
+        return out
+    vals = [(p.get("adjustment_result") or {}).get("adjusted_price") for p in points]
+    vals = [v for v in vals if v]
+    if len(vals) >= 4:
+        q = _st.quantiles(vals, n=4)
+        out["adj_iqr_pct"] = (q[2] - q[0]) / predicted * 100
+    if len(vals) >= 2:
+        out["adj_cv"] = _st.pstdev(vals) / _st.mean(vals) * 100
+    ws = [(p.get("weight") or {}).get("normalized_weight") for p in points]
+    ws = [w for w in ws if w]
+    if ws:
+        out["top_weight"] = max(ws) * (100 if max(ws) <= 1 else 1)
+    ms = [p.get("months_ago") for p in points if p.get("months_ago") is not None]
+    if ms:
+        out["comp_months"] = _st.median(ms)
+    if vals:
+        out["adj_max"] = max(vals)
+        out["adj_min"] = min(vals)
+    raws = [p.get("price") for p in points if p.get("price")]
+    if raws:
+        out["raw_max"] = max(raws)
+    ds = [p.get("distance_km") for p in points if p.get("distance_km") is not None]
+    if ds:
+        out["dist_km"] = _st.median(ds)
+    return out
+
+
+def _stage_median(points, raw=True):
+    import statistics as _st
+    if not points:
+        return None
+    if raw:
+        vals = [p.get("price") for p in points if p.get("price")]
+    else:
+        vals = [(p.get("adjustment_result") or {}).get("adjusted_price") for p in points]
+        vals = [v for v in vals if v]
+    return _st.median(vals) if vals else None
+
+
 def compute_metrics(results):
     """Compute accuracy metrics from a list of result dicts."""
     if not results:
@@ -564,6 +616,11 @@ def main():
     parser.add_argument("--verbose", action="store_true", help="Show each property result")
     parser.add_argument("--min-price", type=int, default=300000, help="Minimum sale price to include")
     parser.add_argument("--max-price", type=int, default=5000000, help="Maximum sale price to include")
+    parser.add_argument("--dump-errors", default=None,
+                        help="Write every signed error to this JSON path. Needed to compute "
+                             "empirical prediction intervals, which the summary metrics cannot "
+                             "give you — they report ABSOLUTE error, and a coverage band has to "
+                             "be built from the signed distribution and is rarely symmetric.")
     parser.add_argument("--property-type", default=None,
                         help="Restrict the TEST SET to one property_type (e.g. House). "
                              "The comparable pool is already type-matched per subject; "
@@ -734,6 +791,13 @@ def main():
             "n_comps": result['n_included'],
             "range_low": result.get('range_low'),
             "range_high": result.get('range_high'),
+            # Stage medians, computed here because `included_points` is not kept
+            # on the entry. These are what reveal WHERE the bias enters: a
+            # comparable pool that already sits low, or adjustments that
+            # under-correct on the way to the estimate.
+            "raw_comp_median": _stage_median(result.get('included_points'), raw=True),
+            "adj_comp_median": _stage_median(result.get('included_points'), raw=False),
+            **_comp_spread(result.get('included_points'), predicted),
         }
 
         fields_results.append(entry)
@@ -873,6 +937,23 @@ def main():
     print(f"{'=' * 70}")
 
     # === Save results to MongoDB if --save-results flag is set ===
+    if args.dump_errors and fields_results:
+        import json as _json
+        with open(args.dump_errors, "w") as fh:
+            _json.dump([{"address": r.get("address"), "suburb": r.get("suburb"),
+                         "actual": r.get("actual"), "predicted": r.get("predicted"),
+                         "error_pct": r.get("error_pct"),
+                         "raw_comp_median": r.get("raw_comp_median"),
+                         "adj_comp_median": r.get("adj_comp_median"),
+                         "n_comps": r.get("n_comps"),
+                         "confidence": r.get("confidence"),
+                         "range_low": r.get("range_low"), "range_high": r.get("range_high"),
+                         **{k: r.get(k) for k in ("adj_iqr_pct", "adj_cv", "top_weight",
+                                                  "comp_months", "dist_km",
+                                                  "adj_max", "adj_min", "raw_max")}}
+                        for r in fields_results], fh)
+        print(f"\nwrote {len(fields_results)} signed errors to {args.dump_errors}")
+
     if args.save_results and fields_results:
         print("\nSaving results to MongoDB (system_monitor.valuation_accuracy)...")
         sm_db = client["system_monitor"]
