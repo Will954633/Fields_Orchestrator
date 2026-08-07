@@ -2044,7 +2044,7 @@ _ENVELOPE_MIN = 1_000_000
 _ENVELOPE_MAX = 2_000_000
 
 
-def calculate_confidence(points, n_total_override=None):
+def calculate_confidence(points, n_total_override=None, suburb_key=None):
     """
     GAP 6: Calculate weighted mean valuation and confidence interval
     from quality-selected comparable values (included_in_valuation = true).
@@ -2116,7 +2116,13 @@ def calculate_confidence(points, n_total_override=None):
     #   off-market subject (no photos, THE PRODUCT) ... ±12.2%
     # Measured n=581, MAE 8.05%, median error 6.44%, within-10% 69%, using the
     # full candidate pool and adjustment reliability shrinkage (see below).
-    _EMPIRICAL_80_BAND_PCT = 0.122
+    # ⚠ PER SUBURB. A pooled band breaks the 80% promise where the method is
+    # weakest: at a pooled ±12.2%, Burleigh Waters contained only 77%. Each
+    # suburb gets the width its own measurement earns.
+    #   Varsity Lakes ... ±11.2%  (n=184, 82% contained)
+    #   Robina .......... ±12.2%  (n=251, 79%)
+    #   Burleigh Waters . ±14.0%  (n=146, 77% at 12.2% — needs the wider band)
+    _EMPIRICAL_80_BAND_PCT = _band_for_suburb(suburb_key)
     RANGE_PCT = _EMPIRICAL_80_BAND_PCT
     margin = w_mean * RANGE_PCT
 
@@ -2130,6 +2136,7 @@ def calculate_confidence(points, n_total_override=None):
         'range_basis': {
             'kind': 'empirical_80_band',
             'half_width_pct': round(RANGE_PCT * 100, 1),
+            'suburb': suburb_key,
             'measured_on': '2026-08-08',
             'n_sales': 581,
             'note': 'Four in five sales land inside this band. Not a confidence interval.',
@@ -2195,6 +2202,22 @@ _SUBURB_CALIBRATION = {
 # ⚠ Re-derive this alongside the band. It is a property of how noisy our
 # attribute data is, so it should RISE toward 1.0 as data quality improves.
 _ADJUSTMENT_RELIABILITY = 0.80
+
+# ── The published 80% band, per suburb (measured 2026-08-08) ─────────────────
+# 80% coverage is a PROMISE, so the width is whatever each suburb's own
+# measurement requires. A single pooled figure flatters the strong suburbs and
+# breaks the promise in the weak one.
+_SUBURB_80_BAND = {
+    'varsity_lakes':   0.112,   # n=184, contains 82%
+    'robina':          0.122,   # n=251, contains 79%
+    'burleigh_waters': 0.140,   # n=146, contains 77% at 12.2% — hence wider
+}
+_DEFAULT_80_BAND = 0.140        # unmeasured suburb gets the widest measured band
+
+
+def _band_for_suburb(suburb_key):
+    """Half-width of the published 80% band. Never narrower than measured."""
+    return _SUBURB_80_BAND.get((suburb_key or '').strip().lower(), _DEFAULT_80_BAND)
 
 # Adjustments retired 2026-08-07 because they measurably ADD ERROR.
 # Leave-one-out ablation over 4,805 comparables, de-biased so this is spread not
@@ -3736,7 +3759,8 @@ def precompute_property_valuation(db, subject_doc, listings_coll, sold_by_suburb
     _estimate_points = valuation_points(all_enriched_points)
     normalize_weights(_estimate_points)
     confidence_result = calculate_confidence(
-        _estimate_points, n_total_override=len(all_enriched_points))
+        _estimate_points, n_total_override=len(all_enriched_points),
+        suburb_key=suburb_key)
 
     # Suburb calibration (2026-08-07). The method runs systematically low by a
     # different amount in each suburb; correct the reconciled figure and carry the
