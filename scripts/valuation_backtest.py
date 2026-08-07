@@ -114,7 +114,8 @@ def get_sold_date(doc):
 def backtest_single_property(db, subject_doc, all_sold_in_suburb, sold_by_suburb,
                               gc_coord_lookup, gc_timeline_lookup,
                               median_cache=None, street_premium_cache=None,
-                              no_new_factors=False, price_filter="sale"):
+                              no_new_factors=False, price_filter="sale",
+                              blind_subject=False):
     """
     Run the valuation pipeline on a single sold property, using other sold
     properties as comparables. Returns the reconciled_valuation or None.
@@ -393,6 +394,14 @@ def backtest_single_property(db, subject_doc, all_sold_in_suburb, sold_by_suburb
             if subject_lat and subject_lon and compute_micro_location_premium else None),
     }
 
+    # Blind the subject to everything only a photograph could tell us. An off-market
+    # home has no marketing photos, so valuing a sold home WITH them measures a
+    # property we would never actually meet. `calculate_adjustments` already skips an
+    # attribute when either side is None, so nulling the subject is sufficient.
+    if blind_subject:
+        for _attr in _PHOTO_DERIVED_SUBJECT_ATTRS:
+            subject_features[_attr] = None
+
     # Pass 1: Compute adjustments for all comparables
     all_enriched_points = []
     for pt in recent_points:
@@ -526,6 +535,20 @@ _ATTACHED_TYPES = {
     "unit", "apartment", "townhouse", "villa", "duplex", "semi-detached",
     "terrace", "studio", "flat", "unitblock", "block of units", "unit block",
 }
+
+
+# Subject attributes that come from PHOTO analysis. Sold and for-sale homes have
+# marketing photos, so these are populated ~89% of the time. Off-market homes have
+# none — measured 2026-08-07 over 900 off-market houses, all three are present 0% of
+# the time. Since the off-market report IS the product, a backtest run only on sold
+# subjects measures a richer property than the one we actually value, and reports an
+# accuracy we cannot deliver off-market. `--blind-subject` strips them so the two
+# populations can be compared honestly.
+_PHOTO_DERIVED_SUBJECT_ATTRS = (
+    'renovation_quality_score',
+    'kitchen_score',
+    'number_of_stories',
+)
 
 
 def is_attached_dwelling(doc):
@@ -689,6 +712,11 @@ def main():
     parser.add_argument("--verbose", action="store_true", help="Show each property result")
     parser.add_argument("--min-price", type=int, default=300000, help="Minimum sale price to include")
     parser.add_argument("--max-price", type=int, default=5000000, help="Maximum sale price to include")
+    parser.add_argument("--blind-subject", action="store_true",
+                        help="Strip photo-derived attributes (renovation_quality_score, "
+                             "kitchen_score, number_of_stories) from the SUBJECT, so the test "
+                             "matches what we actually know about an off-market home. Sold "
+                             "subjects carry these ~89%% of the time; off-market subjects 0%%.")
     parser.add_argument("--include-attached", action="store_true",
                         help="Keep attached dwellings (units, townhouses, duplexes) in the test "
                              "set. OFF by default: the comparable-sales method is for detached "
@@ -847,7 +875,8 @@ def main():
                 gc_coord_lookup, gc_timeline_lookup,
                 median_cache, street_premium_cache,
                 no_new_factors=args.no_new_factors,
-                price_filter=args.price_filter
+                price_filter=args.price_filter,
+                blind_subject=args.blind_subject
             )
         except Exception as e:
             if args.verbose:
