@@ -99,6 +99,21 @@ VERSIONS = {
 }
 LATEST = "v2"
 
+# ── Seasonality — the canonical source of truth ────────────────────────────
+# scripts/seasonality_analysis.py, 2010-2025 EXCLUDING 2019-2020 (COVID),
+# 18,978 sales, 375 strata. CATCHMENT level: per-suburb months are too thin to
+# publish and must never be presented as suburb-specific.
+#
+# ⚠ These exact figures matter. The `december-listing-paradox` article was
+# published overstated (Dec +6.05% against the real +2.81%; a Jan -3.83% that
+# was a COVID artefact) and had to be corrected and republished. Do not
+# re-derive these from another file — re-run the script.
+SEASONALITY = [("Jan", -1.37), ("Feb", -1.36), ("Mar", 0.85), ("Apr", -0.30),
+               ("May", -0.47), ("Jun", 1.60), ("Jul", -0.04), ("Aug", 2.30),
+               ("Sep", 2.50), ("Oct", 2.61), ("Nov", 3.29), ("Dec", 2.81)]
+SEASONALITY_N = 18978
+SEASONALITY_H1, SEASONALITY_H2 = -0.18, 2.25
+
 E = html.escape
 
 
@@ -285,6 +300,111 @@ def report_qr(short_address, slug):
     img.save(buf)
     data = "data:image/svg+xml;base64," + base64.b64encode(buf.getvalue()).decode()
     return data, uri
+
+
+def timing_answer(suburb_display, ms):
+    """The market paragraph, COMPUTED per suburb — never a fixed narrative.
+
+    ⚠ Why computed. The obvious story ("listings rising, prices holding firm")
+    is true in Varsity Lakes (+43.8%) and Robina (+5.5%) and FALSE in Burleigh
+    Waters, where active listings are DOWN 27.3%. Days on market moves in
+    different directions too — faster in Burleigh Waters, slower in the other
+    two. One paragraph asserting a single trend would be contradicted by our own
+    data on one suburb in three.
+
+    Editorial constraints this must survive (Home_Owner_Perspective brief, s8):
+      · no advice, no prediction, no urgency, no framing of timing
+      · report the numbers; the reader draws the inference
+      · attribute macro claims, never adopt a view
+      · "the market is strong / holding up / resilient" is a prediction in
+        disguise and is banned outright
+      · no quarter-on-quarter claims for Robina or Burleigh Waters — our own
+        quarterly figures move around more than the underlying market does
+    """
+    dom, dom_prev = ms.get("dom_median"), ms.get("dom_yoy_prev")
+    act, act_d = ms.get("active_listings"), ms.get("active_listings_mom_pct")
+    paras = []
+
+    # 1 · the macro the reader has already absorbed, reported and attributed.
+    paras.append(
+        "The honest answer is that nobody can tell you, and the people whose job it is to "
+        "forecast have spent this year disagreeing in public. In July, Westpac was tipping two "
+        "more rate rises; by the end of the month it had withdrawn that call, and all four major "
+        "banks now expect the Reserve Bank to hold. National figures show home values falling "
+        "for three consecutive months \u2014 though Brisbane is close to flat rather than falling, "
+        "and the Gold Coast is a different market again.")
+
+    # 2 · what our own data says about THIS suburb. Two readings, both true.
+    if dom and dom_prev and act is not None:
+        faster = dom < dom_prev
+        bits = [f"Homes in {suburb_display} that sold last quarter took a median of "
+                f"{dom:.0f} days, against {dom_prev:.0f} a year earlier"]
+        if act_d is not None:
+            direction = "fewer" if act_d < 0 else "more"
+            bits.append(f"and there are {act:.0f} homes on the market now, "
+                        f"{abs(act_d):.0f}% {direction} than a month ago")
+        else:
+            bits.append(f"and there are {act:.0f} homes on the market now")
+        # ⚠ Test BOTH directions. The first version said "those two readings do
+        # not point the same way" whenever the case wasn't faster-and-fewer —
+        # which made it FALSE for Robina (slower AND more listings) and Varsity
+        # Lakes (slower AND more), i.e. wrong on two suburbs in three. State
+        # which way each moved and whether they agree; never characterise that
+        # as strength or weakness, which would be a prediction in disguise.
+        more = (act_d or 0) > 0
+        if faster and not more:
+            tail = ("Both readings moved the same way: selling took less time than it did a "
+                    "year ago, and there is less on the market than there was a month ago.")
+        elif (not faster) and more:
+            tail = ("Both readings moved the same way: selling took longer than it did a year "
+                    "ago, and there is more on the market than there was a month ago.")
+        else:
+            tail = ("Those two readings do not point the same way, which is common, and is why "
+                    "a single market headline settles nothing about one home.")
+        paras.append(bits[0] + " \u2014 " + bits[1] + ". " + tail)
+
+    # 3 · seasonality — CATCHMENT, and labelled as such.
+    paras.append(
+        f"There is a seasonal pattern underneath all of it. Across {SEASONALITY_N:,} sales in "
+        f"this catchment between 2010 and 2025, prices achieved in the second half of the year "
+        f"ran about {SEASONALITY_H2:.2f}% above the annual average and the first half about "
+        f"{abs(SEASONALITY_H1):.2f}% below it, with November the strongest month. That is an "
+        f"average across fifteen years, not a forecast for this one, and the gap is small next "
+        f"to the difference between two individual homes.")
+
+    paras.append(
+        "None of that tells you what to do, and we are not going to. It is the same evidence we "
+        "would want if it were our own home.")
+    return paras
+
+
+def seasonality_svg():
+    """Twelve bars, drawn from the canonical figures. Inline SVG so there is no
+    charting dependency and nothing to load."""
+    W, H, pad = 680, 150, 22
+    vals = [v for _, v in SEASONALITY]
+    lo, hi = min(vals), max(vals)
+    span = hi - lo or 1
+    bw = (W - pad * 2) / len(SEASONALITY)
+    zero_y = pad + (hi / span) * (H - pad * 2)
+    bars = []
+    for i, (m, v) in enumerate(SEASONALITY):
+        x = pad + i * bw + bw * 0.18
+        w = bw * 0.64
+        y = pad + ((hi - v) / span) * (H - pad * 2)
+        h = abs(zero_y - y) or 1
+        top = min(y, zero_y)
+        peak = v == hi
+        fill = "var(--accent)" if peak else ("#C9B79E" if v > 0 else "#B9AEA1")
+        bars.append(f'<rect x="{x:.1f}" y="{top:.1f}" width="{w:.1f}" height="{h:.1f}" '
+                    f'rx="1.5" fill="{fill}"/>')
+        bars.append(f'<text x="{x + w/2:.1f}" y="{H - 4}" text-anchor="middle" '
+                    f'font-size="9.5" fill="var(--muted)">{m}</text>')
+    return (f'<svg viewBox="0 0 {W} {H}" width="100%" height="auto" role="img" '
+            f'aria-label="Average sale price by month against the annual average, '
+            f'{SEASONALITY_N:,} catchment sales 2010-2025">'
+            f'<line x1="{pad}" x2="{W-pad}" y1="{zero_y:.1f}" y2="{zero_y:.1f}" '
+            f'stroke="var(--line)" stroke-width="1"/>' + "".join(bars) + '</svg>')
 
 
 def month_year(d):
@@ -625,6 +745,12 @@ details .body{padding-top:12px;font-size:.94rem;color:var(--ink-2)}
 /* the five owner-only questions */
 .qs2{margin:14px 0 6px;padding-left:20px}
 .qs2 li{font-family:var(--serif);font-size:1.04rem;padding:6px 0;color:var(--ink)}
+
+
+/* seasonality */
+.season{margin:24px 0 6px;padding:18px 16px 10px;background:var(--paper-2);
+  border:1px solid var(--line-2);border-radius:6px}
+.season svg{display:block;margin:10px 0 2px}
 
 footer{padding:44px 0 70px;border-top:1px solid var(--line-2);color:var(--muted);font-size:.85rem}
 
@@ -1048,6 +1174,29 @@ def render(slug, proto="full", version=LATEST):
         if g.get("means"):
             add(f'<div class="weight"><p>{E(str(g["means"]).strip())}</p></div>')
         add('<a class="cue" href="#now">And what\'s happening around it now? ↓</a>')
+        add('</div></section>')
+
+    # ── 7b · is now the right time? ─────────────────────────────────
+    if mkt_for_timing := ((get_mongo_client()["system_monitor"]["market_pulse"]
+                           .find_one({"suburb": b["suburb_key"]}) or {}).get("data_snapshot") or {}):
+        add('<section id="timing"><div class="wrap">')
+        add('<div class="eyebrow">The second question</div>')
+        # Deliberately the reader's own words from the top of the page, verbatim.
+        add('<h2>Is now the right time to be selling, or should I wait?</h2>')
+        paras = timing_answer(b.get("suburb_display", ""), mkt_for_timing)
+        for i, para in enumerate(paras):
+            cls = ' class="lede"' if i == 0 else ''
+            add(f'<p{cls}>{E(para)}</p>')
+        add('<div class="season">')
+        add('<div class="label">Average sale price by month, against the annual average</div>')
+        add(seasonality_svg())
+        add(f'<div class="fine">{SEASONALITY_N:,} sales across this catchment, 2010\u20132025, '
+            f'excluding 2019\u20132020. A catchment-wide pattern \u2014 individual suburbs have too '
+            f'few sales in any one month to show a reliable pattern of their own.</div>')
+        add('</div>')
+        add('<div class="src">Fields analysis of Gold Coast sale records \u00b7 rate and national '
+            'price figures as reported by the RBA, Westpac and Cotality</div>')
+        add('<a class="cue" href="#now">What\'s moving around this home right now? \u2193</a>')
         add('</div></section>')
 
     # ── 8 · what is changing now ────────────────────────────────────
