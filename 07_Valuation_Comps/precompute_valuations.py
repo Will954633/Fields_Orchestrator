@@ -76,6 +76,14 @@ import re
 import numpy as np
 from math import radians, cos, sin, asin, sqrt
 
+# Canonical water detection lives in the orchestrator tree so the editorial gate,
+# the sitemap gate and this engine all agree. Do NOT re-implement it here — the
+# whole point of shared/waterfront.py is that there is exactly one answer.
+_ORCH_ROOT = "/home/fields/Fields_Orchestrator"
+if _ORCH_ROOT not in sys.path:
+    sys.path.insert(0, _ORCH_ROOT)
+from shared.waterfront import classify_water_relationship, WATERFRONT, WATER_VIEW, DRY
+
 
 # ─── Haversine Distance ──────────────────────────────────────────────────────
 
@@ -3044,6 +3052,30 @@ def precompute_property_valuation(db, subject_doc, listings_coll, sold_by_suburb
     prop_type = subject_doc.get('property_type', 'House')
     subject_is_waterfront = is_waterfront(subject_doc)
 
+    # ── Water COHORT class (2026-08-07) ───────────────────────────────────────
+    # `is_waterfront()` above still drives the publish/suppress gate and stays
+    # broad — a false positive there is cheap. It is the WRONG authority for
+    # cohort selection, where a false positive pools a lake-VIEW home against
+    # genuine water-frontage sales and over-values it badly.
+    #
+    # Signal 1 of that detector is `outdoor.water_views`, a GPT-4 Vision read of
+    # the marketing photographs. It answers "can you see water from here?", not
+    # "does this parcel touch water?".
+    #
+    # Measured 2026-08-07, n=586 detached houses, with OSM water geometry on
+    # 100% of properties:
+    #     flag says waterfront, geometry AGREES ...... 23 homes, median +2.3%
+    #     flag says waterfront, geometry DISAGREES ... 30 homes (57%),
+    #                                                  median +10.3%, MAE 14.4%,
+    #                                                  83% over-valued
+    # By the three-way class, every cohort behaves:
+    #     waterfront ... 24, median +2.4%, MAE 10.5%
+    #     water_view ... 202, median -0.0%, MAE  8.6%   <- best of the three
+    #     dry .......... 360, median -0.2%, MAE  9.3%
+    #
+    # Geometry decides frontage; photographs decide views.
+    subject_water_class, subject_water_reason = classify_water_relationship(subject_doc)
+
     # Find comparable listings from the same suburb collection
     col_name = subject_doc.get('_collection') or (suburb.lower().replace(' ', '_') if suburb else None)
     comps_query = {
@@ -3146,10 +3178,12 @@ def precompute_property_valuation(db, subject_doc, listings_coll, sold_by_suburb
     bed_band = [max(1, subject_beds - 1), subject_beds + 1] if subject_beds is not None else None
 
     def in_cohort(doc):
-        # Waterfront filter
-        if subject_is_waterfront and not is_waterfront(doc):
-            return False
-        if not subject_is_waterfront and is_waterfront(doc):
+        # Water cohort filter. Waterfront is kept strictly separate — it is a
+        # different market. `water_view` and `dry` are allowed to mix, because
+        # they measured statistically indistinguishable (median -0.0% against
+        # -0.2%) and splitting them would thin every pool for no accuracy gain.
+        comp_water_class = classify_water_relationship(doc)[0]
+        if (subject_water_class == WATERFRONT) != (comp_water_class == WATERFRONT):
             return False
 
         # Prestige tier: soft filter — prestige homes prefer prestige comps but
