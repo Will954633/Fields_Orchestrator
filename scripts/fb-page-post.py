@@ -760,43 +760,24 @@ def get_market_context():
             "market_score": None,
         }
 
-        # --- Median price trend from suburb_median_prices ---
-        try:
-            median_col = db["suburb_median_prices"]
-            median_docs = list(query_with_retry(
-                median_col,
-                {"suburb": suburb, "property_type": "House"},
-                None,
-                max_retries=3,
-            ))
-            # Each doc may have quarterly data; extract the last 4 quarters
-            # suburb_median_prices stores one doc per suburb with quarterly arrays
-            if median_docs:
-                doc = median_docs[0]
-                quarterly = doc.get("quarterly_medians", doc.get("quarterly", []))
-                if isinstance(quarterly, list) and quarterly:
-                    # Sort by quarter string (e.g. "2025-Q3")
-                    quarterly.sort(key=lambda x: x.get("q", x.get("quarter", "")))
-                    last_4 = quarterly[-4:]
-                    entry["median_trend"] = [
-                        {
-                            "q": q.get("q", q.get("quarter", "")),
-                            "median": q.get("median", q.get("median_price", 0)),
-                            "count": q.get("count", q.get("sales_count", 0)),
-                        }
-                        for q in last_4
-                    ]
-                    if entry["median_trend"]:
-                        entry["latest_median"] = entry["median_trend"][-1]["median"]
-                    # YoY change: compare latest to 4 quarters ago if available
-                    if len(quarterly) >= 5:
-                        old_median = quarterly[-5].get("median", quarterly[-5].get("median_price", 0))
-                        if old_median and old_median > 0 and entry["latest_median"]:
-                            entry["yoy_change_pct"] = round(
-                                (entry["latest_median"] - old_median) / old_median * 100, 1
-                            )
-        except Exception as e:
-            print(f"  [market_context] median query failed for {suburb}: {e}")
+        # --- Median price trend: REMOVED 2026-08-07, it never worked ---
+        #
+        # This block read `doc["quarterly_medians"]` falling back to `doc["quarterly"]`.
+        # Neither field exists: `suburb_median_prices` documents are
+        # {_id, suburb, property_type, data[], last_updated}. So `quarterly` was always
+        # [], `median_trend` stayed [], and `latest_median` / `yoy_change_pct` stayed
+        # None for the lifetime of the code. Nothing downstream reads them beyond their
+        # initialisation above, so no post has ever carried a figure from here.
+        #
+        # It is deleted rather than repaired deliberately. `suburb_median_prices` is a
+        # Domain-only quarterly series (see its contract note in
+        # 08_Market_Narrative_Engine/generate_suburb_medians.py) and is valid for
+        # long-run TRAJECTORY only, never as a current median figure — quoting its
+        # latest quarter is exactly the bug fixed in [EDITORIAL-LEGACY-MEDIAN], where
+        # Burleigh Waters read $2,250,000 off 11 in-progress-quarter sales against a
+        # published $1,925,000. If a median trend is wanted in organic posts, it must
+        # read `precomputed_indexed_prices.rolling_12m_median_price` with its sample
+        # size, and the wording needs sign-off under editorial Rule 5.
 
         time.sleep(0.3)
 
