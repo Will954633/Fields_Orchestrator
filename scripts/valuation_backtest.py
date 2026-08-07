@@ -59,6 +59,7 @@ from precompute_valuations import (
     resolve_beach_distance,
     detect_golf_course_backing,
     apply_retired_adjustments,
+    _resolve_internal_and_building,
 )
 from shared.waterfront import classify_water_relationship, WATERFRONT
 
@@ -423,6 +424,13 @@ def backtest_single_property(db, subject_doc, all_sold_in_suburb, sold_by_suburb
 
         # Gap 2: Feature-by-feature adjustments
         basic = pt.get('features', {}).get('basic') or {}
+        # Record WHICH floor-area metric this comparable resolved to, so the
+        # subject/comparable "different rulers" hypothesis can be tested rather
+        # than assumed. internal-living and building-area differ by a median 22%.
+        try:
+            pt['_fa_source'] = _resolve_internal_and_building(pt.get('_source_doc') or pt)[2]
+        except Exception:
+            pt['_fa_source'] = None
         comp_features = {
             'land_size_sqm': comp_bd_inputs.get('land_size_sqm') or basic.get('land_size_sqm'),
             'floor_area_sqm': comp_bd_inputs.get('floor_area_sqm') or basic.get('floor_area_sqm'),
@@ -635,6 +643,7 @@ def _comp_spread(points, predicted):
     # without re-running the (9-minute) backtest for every hypothesis.
     out["comps"] = [{
         "price": p.get("price"),
+        "fa_source": p.get("_fa_source"),
         "adjusted": (p.get("adjustment_result") or {}).get("adjusted_price"),
         "total_adj": (p.get("adjustment_result") or {}).get("total_adjustment"),
         "weight": (p.get("weight") or {}).get("normalized_weight"),
@@ -927,6 +936,7 @@ def main():
             "raw_comp_median": _stage_median(result.get('included_points'), raw=True),
             "adj_comp_median": _stage_median(result.get('included_points'), raw=False),
             **_comp_spread(result.get('included_points'), predicted),
+            "subject_fa_source": _resolve_internal_and_building(doc)[2],
         }
 
         fields_results.append(entry)
@@ -1079,7 +1089,8 @@ def main():
                          "range_low": r.get("range_low"), "range_high": r.get("range_high"),
                          **{k: r.get(k) for k in ("adj_iqr_pct", "adj_cv", "top_weight",
                                                   "comp_months", "dist_km",
-                                                  "adj_max", "adj_min", "raw_max", "comps")}}
+                                                  "adj_max", "adj_min", "raw_max", "comps",
+                                                  "subject_fa_source")}}
                         for r in fields_results], fh)
         print(f"\nwrote {len(fields_results)} signed errors to {args.dump_errors}")
 
