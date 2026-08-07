@@ -191,3 +191,90 @@ def detect_waterfront(doc):
 def is_waterfront(doc):
     """Boolean convenience wrapper."""
     return detect_waterfront(doc)['is_waterfront']
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Water RELATIONSHIP classifier (added 2026-08-07)
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# `detect_waterfront()` above is deliberately BROAD because it drives a SUPPRESSION
+# gate — skip editorial, noindex, withhold the valuation. There, a false positive is
+# cheap: we stay quiet about a dry home. Keep it broad.
+#
+# The SAME flag is also read by precompute_valuations.py to pick the comparable
+# cohort, and there a false positive is expensive. A lake-VIEW home flagged waterfront
+# gets compared only to genuine water-frontage sales, which sell far higher.
+#
+# Measured 2026-08-07 over 625 backtested detached houses:
+#   flagged waterfront ....... 59 homes, median error  +8.0%, MAE 13.5%, 73% over-valued
+#   not flagged .............. 566 homes, median error -0.6%, MAE  9.4%, 48% over-valued
+# Splitting that flagged group by GEOMETRY rather than photographs:
+#   genuinely waterfront ..... 18 homes, median error  +1.6%, MAE 10.2%
+#   MISCLASSIFIED ............ 41 homes, median error +10.4%, MAE 14.9%, 78% over-valued
+#
+# The method handles real waterfront acceptably. It is the false positives that break
+# it — 69% of the flagged group. The cause is signal 1: `outdoor.water_views` is a
+# GPT-4 Vision read of the PHOTOS, and it answers "can you see water from here?", not
+# "does this parcel touch water?".
+#
+# 24 Brooklyn Crescent, Robina is the worked example. Its own OSM record already said
+#   distance_to_water_m 21.5 | waterfront_type "none" | canal_frontage False
+#   | waterfront_premium_eligible False | satellite backs_onto ["residential_only"]
+# and we flagged it waterfront anyway, off the photo signal, then over-valued it 56%.
+# The geometry was right there and was overridden.
+#
+# So: GEOMETRY decides frontage, PHOTOGRAPHS decide views.
+
+_WATER_BACKS_ONTO = ('canal', 'lake', 'river', 'ocean', 'water', 'waterway',
+                     'creek', 'lagoon', 'inlet', 'broadwater')
+
+WATERFRONT = 'waterfront'
+WATER_VIEW = 'water_view'
+DRY = 'dry'
+
+
+def classify_water_relationship(doc, view_distance_m=150):
+    """Return (class, reason) where class is waterfront | water_view | dry.
+
+    Use this for COMPARABLE COHORT SELECTION. Use `detect_waterfront()` for the
+    publish/suppress gate — the two answer different questions and a home can
+    legitimately be `water_view` here while still being suppressed there.
+
+    Frontage is decided by measurement, never by photographs:
+      1. OSM `water_features` — canal_frontage / waterfront_premium_eligible /
+         waterfront_type, the fields already computed per property.
+      2. Satellite structured adjacency — backs_onto naming a water body.
+      3. distance_to_water_m within 5 m (a parcel effectively touching water).
+    Only then do photographs get a say, and only to mark the VIEW class.
+
+    ⚠ Coverage: 332 of 625 backtested homes (53%) had no OSM `water_features` block
+    at all. Where geometry is absent this falls back to the photo signal and returns
+    reason='photo_view_no_geometry' — treat that as provisional, not as evidence of
+    dryness, and backfill the OSM pass rather than trusting the fallback.
+    """
+    wf = (doc.get('osm_location_features') or {}).get('water_features') or {}
+    adjacency = ((doc.get('satellite_analysis') or {}).get('categories') or {}).get('adjacency') or {}
+    backs = ' '.join(adjacency.get('backs_onto') or []).lower()
+
+    if wf.get('canal_frontage'):
+        return WATERFRONT, 'osm_canal_frontage'
+    if wf.get('waterfront_premium_eligible'):
+        return WATERFRONT, 'osm_waterfront_premium_eligible'
+    wtype = wf.get('waterfront_type')
+    if wtype and wtype != 'none':
+        return WATERFRONT, f'osm_waterfront_type:{wtype}'
+    if any(w in backs for w in _WATER_BACKS_ONTO):
+        return WATERFRONT, 'satellite_backs_onto_water'
+
+    dist = wf.get('distance_to_water_m')
+    if dist is not None and dist <= 5:
+        return WATERFRONT, 'osm_distance_to_water<=5m'
+
+    photo_view = bool(((doc.get('property_valuation_data') or {}).get('outdoor') or {}).get('water_views'))
+    if dist is not None:
+        if dist <= view_distance_m:
+            return WATER_VIEW, f'osm_distance_to_water:{dist:.0f}m'
+        return DRY, f'osm_distance_to_water:{dist:.0f}m'
+    if photo_view:
+        return WATER_VIEW, 'photo_view_no_geometry'
+    return DRY, 'no_water_signal'
