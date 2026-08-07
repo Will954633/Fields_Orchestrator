@@ -39,7 +39,19 @@ sys.path.insert(0, "/home/fields/Fields_Orchestrator")
 sys.path.insert(0, "/home/fields/Fields_Orchestrator/scripts")
 
 from shared.db import get_client, cosmos_retry  # noqa: E402
+from shared.env import load_env  # noqa: E402
 from job_status import job_run  # noqa: E402
+
+# Load .env HERE rather than trusting the caller. The cron line invoked this as
+# `source .env && python3 …` with no `set -a`, so nothing in .env was ever
+# EXPORTED into the child process. `shared.db` still connected (it falls back to
+# config/settings.yaml), which is exactly what made this invisible — but
+# BRIGHTDATA_API_KEY was absent, so run_curlffi_suburb_scrape.py:271
+# (`use_unlocker = bool(os.environ.get('BRIGHTDATA_API_KEY'))`) fetched Domain
+# directly from this Akamai-blocked VM IP, discovery returned 0 URLs, and every
+# queued build failed with "address not found among 0 live listings" — 11 for 11,
+# while job_run recorded success. See fix-history [BUILDER-ENV-EXPORT-GAP].
+load_env()
 
 SCRAPER_DIR = ("/home/fields/Property_Data_Scraping/03_Gold_Coast/"
                "Gold_Coast_Wide_Currently_For_Sale_AND_Recently_Sold")
@@ -117,6 +129,16 @@ def build_one(client, suburb_key: str, postcode: str, address: str) -> dict:
             match_url = u
             break
     if not match_url:
+        # ZERO discovered URLs is an INFRASTRUCTURE failure, not a fact about the
+        # address. A suburb we cover always has dozens of live listings, so an empty
+        # discovery means the scrape itself failed (Bright Data key missing, Akamai
+        # block, Domain layout change). Conflating the two is what let 11 consecutive
+        # failures read as "these addresses just aren't listed" for a week.
+        if not scraper.discovered_urls:
+            return {"ok": False, "slug": None, "infra": True,
+                    "detail": f"DISCOVERY FAILED for {name} — 0 live listings returned. "
+                              f"The scrape is broken, not the address. Check "
+                              f"BRIGHTDATA_API_KEY is exported and Domain is reachable."}
         return {"ok": False, "slug": None,
                 "detail": f"address not found among {len(scraper.discovered_urls)} live listings "
                           f"(may be under offer / just withdrawn / different suburb)"}
@@ -151,7 +173,7 @@ def build_one(client, suburb_key: str, postcode: str, address: str) -> dict:
     return {"ok": True, "slug": slug, "detail": f"listing scraped; {editorial_note}"}
 
 
-def process_request(client, req) -> None:
+def process_request(client, req) -> dict:
     sm = client["system_monitor"]
     coll = sm[QUEUE]
     _id = req["_id"]
@@ -177,13 +199,15 @@ def process_request(client, req) -> None:
             "error": res["detail"], "detail": res["detail"]}}),
             f"build-fail:{_id}")
         print(f"[build] {'FAILED' if terminal else 'retry'} {req['address']}: {res['detail']}")
+    return res
 
 
-def drain(once: bool = False) -> None:
+def drain(once: bool = False) -> dict:
     client = get_client()
     sm = client["system_monitor"]
     coll = sm[QUEUE]
     processed = 0
+    infra_failures = []
     while True:
         req = coll.find_one_and_update(
             {"status": "pending"},
@@ -191,11 +215,15 @@ def drain(once: bool = False) -> None:
             sort=[("requested_at", 1)])
         if not req:
             break
-        process_request(client, req)
+        res = process_request(client, req) or {}
+        if res.get("infra"):
+            infra_failures.append(f"{req.get('address')} ({req.get('suburb_key')})")
         processed += 1
         if once:
             break
-    print(f"[build] drain complete — {processed} request(s) processed")
+    print(f"[build] drain complete — {processed} request(s) processed, "
+          f"{len(infra_failures)} infrastructure failure(s)")
+    return {"processed": processed, "infra_failures": infra_failures}
 
 
 def main():
@@ -216,8 +244,20 @@ def main():
     # Drain mode always heartbeats (Rule 7) so a stopped cron is visible.
     with job_run("listed_property_builder", cadence_hours=1,
                  title="On-Demand Listed-Property Builder") as beat:
-        drain(once=args.once)
-        beat.detail = "queue drained"
+        summary = drain(once=args.once)
+        infra = summary["infra_failures"]
+        beat.metrics = {"processed": summary["processed"], "infra_failures": len(infra)}
+        if infra:
+            # RAISE so the heartbeat records ERROR on the health board. Previously this
+            # block set detail="queue drained" unconditionally, so 11 consecutive
+            # discovery failures were reported as success for a week. A heartbeat that
+            # cannot distinguish "did the work" from "ran to completion" is not
+            # monitoring — it is a liveness check wearing Rule 7's clothes.
+            raise RuntimeError(
+                f"Listing discovery returned 0 URLs for {len(infra)} request(s) — the scrape "
+                f"is broken, not the addresses: {', '.join(infra[:5])}"
+                + (f" (+{len(infra) - 5} more)" if len(infra) > 5 else ""))
+        beat.detail = f"queue drained — {summary['processed']} request(s), no discovery failures"
     return 0
 
 

@@ -363,16 +363,41 @@ def cmd_submit_new():
         service = build("indexing", "v3", credentials=creds)
 
         ok = 0
+        errors = []
         for i, url in enumerate(urls[:DAILY_QUOTA]):
             result = submit_url(service, url)
             if result["status"] == "ok":
                 ok += 1
+            else:
+                errors.append({"url": url, "error": result.get("error", "unknown")})
             if (i + 1) % 10 == 0:
-                print(f"  Submitted {i + 1}/{len(urls)}")
+                # Progress used to print the ATTEMPT count, so a run failing every
+                # single call still read as "Submitted 10/88 … 20/88" and only the
+                # final line revealed 0. Show successes against attempts.
+                print(f"  {ok} ok / {i + 1} attempted of {len(urls)}")
             time.sleep(BATCH_DELAY)
         print(f"Submitted {ok}/{len(urls)} URLs.")
 
-    # Save state
+        # NAME THE CAUSE. cmd_submit_all already does this; this path threw the error
+        # string away, which is why 9 consecutive nights of total failure (757 URLs)
+        # looked like silence. See fix-history [INDEXING-SILENT-ZERO].
+        if errors:
+            print(f"{len(errors)} error(s). First 10:")
+            for err in errors[:10]:
+                print(f"  {err['url']}: {err['error']}")
+
+        if ok == 0:
+            # Do NOT advance the watermark: that is what made each night's failure
+            # permanent, since the next run's "new/changed since last_run" window
+            # excluded everything this run just dropped. Leaving it unchanged means
+            # the next run retries the same set.
+            print(f"REFUSING to advance the watermark — 0 of {len(urls)} submitted. "
+                  f"These URLs stay in the next run's window.")
+            raise RuntimeError(
+                f"Google Indexing API accepted 0 of {len(urls)} URLs. "
+                f"First error: {errors[0]['error'] if errors else 'none captured'}")
+
+    # Save state — only reached when submissions succeeded (or there was nothing to do).
     os.makedirs(os.path.dirname(state_file), exist_ok=True)
     with open(state_file, "w") as f:
         json.dump({"last_run": datetime.now(timezone.utc).isoformat()}, f)
@@ -449,7 +474,15 @@ if __name__ == "__main__":
             sys.exit(1)
         cmd_submit(sys.argv[2])
     elif command == "submit-new":
-        cmd_submit_new()
+        # Rule 7: this is the nightly cron path and had NO heartbeat, which is the only
+        # reason 9 straight nights of zero submissions went unnoticed. job_run records
+        # error + traceback on the raise added in cmd_submit_new and re-raises.
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__))))
+        from job_status import job_run
+        with job_run("google_indexing_submit_new", cadence_hours=24,
+                     title="Google Indexing API — new/changed URLs") as beat:
+            beat.detail = "submit-new"
+            cmd_submit_new()
     elif command == "status":
         cmd_status()
     else:
