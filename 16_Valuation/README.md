@@ -47,8 +47,7 @@ back what the instrument was doing at the time.
 Read these before running any measurement. Each cost real time or produced a wrong published claim.
 
 1. **`--price-filter none` is mandatory for off-market work.** The default `sale` anchor prunes
-   comparables using the subject's own sale price — target leakage. See
-   `experiments/2026-08-06-backtest-target-leakage.md`.
+   comparables using the subject's own sale price — target leakage.
 2. **A backtest is only valid where its firing rates match production.** An attribute can fire on
    80% of backtest comparables and 0.2% of production ones; a conclusion about it is then meaningless.
    Check firing rates first, every time.
@@ -56,10 +55,14 @@ Read these before running any measurement. Each cost real time or produced a wro
    attributes (`renovation_quality_score`, `kitchen_score`, `number_of_stories`) ~89% of the time;
    off-market homes carry them **0%** of the time. Use `--blind-subject` for any figure that will be
    quoted about the off-market product.
-4. **The range is a flat ±12%, not a confidence interval.** It has never been a statistical band.
-   Two live pages claimed otherwise until 2026-08-07.
-5. **The design envelope is structural, not a policy choice.** A weighted mean of adjusted
-   comparables cannot exceed its priciest comparable, so the method cannot leave $1M–$2M.
+4. **The range is an EMPIRICAL 80% band (±12.2%), not a confidence interval.** It was a flat ±12%
+   until 2026-08-08, and two live pages described that as a "90% confidence interval" until
+   2026-08-07 — it contained the sale 58% of the time. That language must never return anywhere,
+   including appraisal PDFs and ad copy.
+5. **The design envelope is structural, not a policy choice.** The estimate cannot exceed its
+   priciest comparable, so the method cannot leave $1M–$2M.
+6. **`_EMPIRICAL_80_BAND_PCT` and `_ADJUSTMENT_RELIABILITY` are OUTPUTS of the backtest**, not
+   constants to tune. Re-derive both after any method change.
 
 ---
 
