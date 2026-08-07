@@ -675,9 +675,7 @@ def median_block(suburb_display, ms):
     mi = market_insights(suburb_display)
 
     out = [f'<h3 style="margin-top:30px">What the median has done in {E(suburb_display)}</h3>',
-           ported("MedianPriceChart",
-                  "this series with per-quarter confidence intervals \u2014 and is already "
-                  "imported by OffMarketPage/MarketCharts.tsx")]
+           ]
     lede = (f"Nationally, home values have fallen for three consecutive months. Over the same "
             f"period the rolling twelve-month median for houses in {suburb_display} sits at "
             f"<b>{exact(med)}</b>")
@@ -875,15 +873,32 @@ body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);
      line-height:1.6;-webkit-font-smoothing:antialiased;font-size:17px}
 .wrap{max-width:780px;margin:0 auto;padding:0 22px}
 .wide{max-width:1120px;margin:0 auto;padding:0 22px}
-section{padding:54px 0;border-top:1px solid var(--line-2)}
+section{padding:66px 0 58px;border-top:1px solid var(--line);position:relative}
 section:first-of-type{border-top:none}
-h1,h2,h3{font-family:var(--serif);font-weight:600;letter-spacing:-.01em;line-height:1.22;margin:0}
-h1{font-size:2rem}
-h2{font-size:1.62rem;margin-bottom:.6rem}
-h3{font-size:1.12rem}
+/* A short accent stub sitting on the rule — a visible "a new part starts
+   here" that costs no vertical space and no colour beyond the one accent. */
+section::before{content:"";position:absolute;top:-1px;left:0;width:34px;height:2px;
+  background:var(--accent);border-radius:2px}
+section:first-of-type::before{display:none}
+/* ── TYPE HIERARCHY ────────────────────────────────────────────────────
+   Two levels, told apart by FAMILY as well as size, because size alone was
+   not doing it: h3 previously had no font-size rule and inherited the h1/h2
+   group, so it rendered as a slightly smaller h2 in the same serif, same
+   weight, same letter-spacing. The reader could not tell a new section from a
+   sub-part of the one they were in.
+
+     SERIF  = a section of the page. One per section.
+     SANS   = a sub-part inside a section. Never starts a section.
+
+   The rule is absolute so it can be read at a glance rather than measured. */
+h1,h2{font-family:var(--serif);font-weight:600;letter-spacing:-.015em;line-height:1.18;margin:0}
+h1{font-size:2.1rem}
+h2{font-size:1.78rem;margin-bottom:.7rem}
+h3{font-family:var(--sans);font-size:.94rem;font-weight:650;letter-spacing:.005em;
+   line-height:1.4;margin:0 0 .5rem;color:var(--ink)}
 p{margin:0 0 1rem}
-.eyebrow{font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
-         font-weight:600;margin-bottom:1rem}
+.eyebrow{font-size:.68rem;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);
+         font-weight:700;margin-bottom:.85rem}
 .lede{font-size:1.12rem;color:var(--ink-2)}
 .fine{font-size:.86rem;color:var(--muted)}
 
@@ -1221,7 +1236,7 @@ footer{padding:44px 0 70px;border-top:1px solid var(--line-2);color:var(--muted)
 
 @media(min-width:760px){
   body{font-size:18px}
-  h1{font-size:2.5rem} h2{font-size:2rem} .addr{font-size:2.3rem}
+  h1{font-size:2.6rem} h2{font-size:2.15rem} h3{font-size:1rem} .addr{font-size:2.3rem}
   .split{grid-template-columns:1fr 1fr}
   .twotrue{grid-template-columns:1fr 1fr}
   section{padding:70px 0}
@@ -1593,35 +1608,35 @@ def render(slug, proto="full", version=LATEST):
                 add('</div>')
         add('<p style="margin-top:20px">No sale is a match. Each one differs from this home in ways '
             'that are worth money, so we price those differences rather than averaging past them.</p>')
+
+        # The mirror of the cards above: not why a headline price does not
+        # transfer, but why a nearby sale is not in the set at all. It is
+        # SUPPORTING evidence for the comparables, so it sits with them as a
+        # disclosure — as its own section it carried the same visual weight as
+        # the range itself and interrupted the run from evidence into what makes
+        # this home different.
+        exc = excluded_sale(doc.get("valuation_data") or {})
+        if exc:
+            add('<details class="disc"><summary>And the sale we left out</summary>'
+                '<div class="body">')
+            meta = E(exc["address"])
+            if exc.get("distance_km"):
+                meta += f' \u2014 {exc["distance_km"]:.1f} km away'
+            add(f'<div class="anchor" style="margin-bottom:6px">'
+                f'{E(exact(exc["price"]))}</div>')
+            add(f'<div class="fine" style="margin-bottom:10px">{meta}</div>')
+            add('<p>It is a real sale, and it is close enough that you would notice it. It was '
+                'considered and left out.</p>')
+            if exc["reasons"]:
+                add('<div class="label">Why</div>')
+                add('<ul class="ticks">' + "".join(f'<li>{E(r)}</li>' for r in exc["reasons"])
+                    + '</ul>')
+            add('<p class="fine">Leaving it in would have pulled the range toward a home this one '
+                'is not \u2014 the same judgement working in reverse when a low sale is left out, '
+                'and why the number of sales behind a range matters less than which ones.</p>')
+            add('</div></details>')
         add('<div class="src">Fields analysis of Queensland sales records · Government record</div>')
         add('<a class="cue" href="#different">So what makes this one different? ↓</a>')
-        add('</div></section>')
-
-    # ── 4b · the sale we did NOT use ────────────────────────────────
-    # Answers the mirror of the "sale up the road" card: not why a headline
-    # price does not transfer, but why a nearby sale is not in the set at all.
-    # Also removes a duplication — the range card already has a "See the
-    # strongest comparisons" button, so a forward cue pointing at the same
-    # section said the same thing twice.
-    exc = excluded_sale(doc.get("valuation_data") or {})
-    if exc and adj:
-        add('<section id="excluded"><div class="wrap">')
-        add('<div class="eyebrow">What we left out</div>')
-        add(f'<h2>A sale at {E(exact(exc["price"]))} that is not in that set</h2>')
-        meta = E(exc["address"])
-        if exc.get("distance_km"):
-            meta += f' \u2014 {exc["distance_km"]:.1f} km away'
-        add(f'<div class="anchor">{meta}</div>')
-        add('<p>It is a real sale, and it is close enough that you would notice it. It was '
-            'considered and left out.</p>')
-        if exc["reasons"]:
-            add('<div class="label">Why</div>')
-            add('<ul class="ticks">' + "".join(f'<li>{E(r)}</li>' for r in exc["reasons"])
-                + '</ul>')
-        add('<p class="fine">Leaving it in would have pulled the range toward a home this one is '
-            'not. That is the same judgement working in reverse when a low sale is left out, and '
-            'it is why the number of sales behind a range matters less than which ones.</p>')
-        add('<a class="cue" href="#different">So what makes this one different? \u2193</a>')
         add('</div></section>')
 
     # ── 5 · what makes this home different ──────────────────────────
@@ -1777,7 +1792,6 @@ def render(slug, proto="full", version=LATEST):
             add(f'<p{cls}>{E(para)}</p>')
         add(median_block(b.get("suburb_display", ""), mkt_for_timing))
         add('<h3 style="margin-top:30px">When does the southern Gold Coast sell for the most?</h3>')
-        add(ported("SeasonalityStrip", "this calendar, its tap-to-detail and its citations"))
         add(seasonality_strip())
         add('<div class="src">Fields analysis of Gold Coast sale records \u00b7 rate and national '
             'price figures as reported by the RBA, Westpac and Cotality</div>')
@@ -2012,7 +2026,6 @@ def render(slug, proto="full", version=LATEST):
         "answer": "See what the sales support \u2193",
         "nearby": "First, one sale nearby is worth looking at \u2193",
         "comps": "See the strongest sales \u2193",
-        "excluded": "And the sale we left out \u2193",
         "different": "So what makes this one different? \u2193",
         "reliable": "So how wrong could you be? \u2193",
         "dispersion": "Then why do the other numbers disagree? \u2193",
@@ -2043,9 +2056,14 @@ def render(slug, proto="full", version=LATEST):
         sec_end = body.find('</section>', m.start())
         sec_html = body[at:sec_end if sec_end > 0 else len(body)]
         already = set(_re.findall(r'class="btn" href="#([^"]+)"', sec_html))
-        nxt = next((sid for sid in order[order.index(cur) + 1:] if sid not in already), None)
+        nxt = next((sid for sid in order[order.index(cur) + 1:]), None)
         if not nxt:
             return ""                             # nothing follows — drop the cue entirely
+        # If a control in this section already leads to the next one, the cue is
+        # redundant: the button IS the affordance. Skipping ahead instead would
+        # vault the reader over a section.
+        if nxt in already:
+            return ""
         label = CUE.get(nxt) or ("Keep reading " + chr(0x2193))
         return f'{head}href="#{nxt}">{label}</a>'
 
