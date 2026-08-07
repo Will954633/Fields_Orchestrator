@@ -45,7 +45,9 @@ INTERNAL_IDS = {
     "019d03c0-df65-73a0-a156-8e0b18ba42a4",  # Will — 872 pageviews, /ops
     "019d102e-5fb2-7818-8e2a-99d81b4b4297",  # Will/wife — Balderstone St
     "019d24b3-da5e-7a72-9e6a-b34f118e64c7",  # Will — 86 pageviews, /ops
+    "019d24b3-da5d-73ac-af08-e9d16df636f2",  # Will (Android) — 1779 events, /ops ×26, for-sale-v2/v4b
 }
+# Mirrored in Website netlify/functions/offmarket-intent-alert.mjs — change both.
 
 # Qualification thresholds
 MIN_VISIT_DAYS = 2
