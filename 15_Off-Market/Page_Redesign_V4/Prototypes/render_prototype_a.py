@@ -380,19 +380,105 @@ def timing_answer(suburb_display, ms):
     return paras
 
 
+_INSIGHTS_CACHE = {}
+
+
+def market_insights(suburb_display):
+    """The same payload `MedianPriceChart.tsx` reads: /api/market-insights.
+
+    ⚠ Use this, do not rebuild from `market_pulse.median_price_history`. That
+    field holds 8 quarters; this endpoint returns 84 quarters of quarterly
+    median WITH per-quarter confidence intervals and a `reliable` flag, plus a
+    59-quarter rolling 12-month series and the in-progress quarter. Building a
+    second chart off the shorter field is what produced a bar chart that showed
+    two years where the live page shows thirty — and it is the second time in
+    one sitting I rebuilt a component that already existed (see the
+    SeasonalityStrip entry).
+    """
+    import urllib.parse
+    import urllib.request
+    if suburb_display in _INSIGHTS_CACHE:
+        return _INSIGHTS_CACHE[suburb_display]
+    url = ("https://fieldsestate.com.au/api/market-insights?suburb="
+           + urllib.parse.quote(suburb_display))
+    try:
+        with urllib.request.urlopen(url, timeout=40) as r:
+            data = json.loads(r.read())
+    except Exception:
+        data = {}
+    _INSIGHTS_CACHE[suburb_display] = data
+    return data
+
+
+def median_chart(mi):
+    """Quarterly median and the rolling 12-month median, full history.
+
+    Palette follows THIS page, not the market-intelligence page's blue/green:
+    the rolling median — the figure the copy tells the reader to trust — is in
+    the accent, and the noisier quarterly line is muted behind it. The colour
+    carries the same message as the words.
+    """
+    q = [x for x in (mi.get("medianPriceHistory") or []) if x.get("medianPrice")]
+    roll = [x for x in (mi.get("rollingMedianSeries") or mi.get("rolling12mMedianSeries") or [])
+            if x.get("rollingMedian")]
+    if len(q) < 8:
+        return ""
+    W, H = 680, 210
+    L, R, T, B = 46, 8, 12, 26
+    labels = [x["quarter"] for x in q]
+    idx = {lab: i for i, lab in enumerate(labels)}
+    vals = [x["medianPrice"] for x in q] + [x["rollingMedian"] for x in roll]
+    top = max(vals) * 1.06
+    n = len(q) - 1
+
+    def X(i):
+        return L + (i / n) * (W - L - R)
+
+    def Y(v):
+        return T + (1 - v / top) * (H - T - B)
+
+    def path(points):
+        return "M " + " L ".join(f"{X(i):.1f},{Y(v):.1f}" for i, v in points)
+
+    qp = path([(i, x["medianPrice"]) for i, x in enumerate(q)])
+    rp = path([(idx[x["quarter"]], x["rollingMedian"]) for x in roll if x["quarter"] in idx])
+
+    grid = []
+    step = 400_000 if top <= 2_200_000 else 500_000
+    v = 0
+    while v <= top:
+        grid.append(f'<line x1="{L}" x2="{W-R}" y1="{Y(v):.1f}" y2="{Y(v):.1f}" '
+                    f'stroke="var(--line-2)" stroke-width="1"/>'
+                    f'<text x="{L-6}" y="{Y(v)+3:.1f}" text-anchor="end" font-size="8.5" '
+                    f'fill="var(--muted)">${v/1000:.0f}k</text>')
+        v += step
+
+    ticks = []
+    for i in range(0, len(q), max(1, len(q) // 7)):
+        ticks.append(f'<text x="{X(i):.1f}" y="{H-8}" text-anchor="middle" font-size="8" '
+                     f'fill="var(--muted)">{E(str(labels[i]))}</text>')
+
+    return (
+        f'<div class="mchart"><svg viewBox="0 0 {W} {H}" width="100%" role="img" '
+        f'aria-label="Quarterly and rolling twelve-month median house price">'
+        + "".join(grid) + "".join(ticks)
+        + f'<path d="{qp}" fill="none" stroke="#C4B5A4" stroke-width="1.4"/>'
+        + (f'<path d="{rp}" fill="none" stroke="var(--accent)" stroke-width="2.4" '
+           f'stroke-linejoin="round"/>' if rp else "")
+        + '</svg>'
+        '<div class="mlegend"><span class="lq">Quarterly median</span>'
+        '<span class="lr">Rolling 12-month median</span></div></div>')
+
+
 def median_block(suburb_display, ms):
     """The suburb median, placed against the national picture.
 
     ⚠ Leads with the ROLLING 12-MONTH median, never the latest quarter. The data
     carries its own warning: `latest_quarter_median_price_basis` reads "name it
     as a quarterly figure wherever it appears, never as 'the median house
-    price'". And the quarters bounce — Robina runs $1,560k then $1,410k on
-    samples of 55 and 43 — which is why the mindset brief bars quarter-on-quarter
-    claims for Robina and Burleigh Waters. The bars are shown with their sample
-    counts and no line is drawn through them.
-
-    Year-on-year is only defensible in its rolling form with the basis attached,
-    which is how `yoy_growth_basis` states it.
+    price'". Robina runs $1,560k then $1,410k on samples of 55 and 43, which is
+    why the mindset brief bars quarter-on-quarter claims there and in Burleigh
+    Waters.
     """
     med = ms.get("median_12m")
     if not med:
@@ -400,12 +486,7 @@ def median_block(suburb_display, ms):
     lo, hi = ms.get("median_12m_ci_low"), ms.get("median_12m_ci_high")
     n = ms.get("median_12m_sample_n")
     yoy = ms.get("yoy_growth_pct")
-    hist = ms.get("median_price_history") or []
-    # ⚠ The stored basis is internal notation — "12-month rolling median
-    # (Domain ∪ onthehouse)". The set-union symbol is fine in a data dictionary
-    # and meaningless to a homeowner. Say it in words.
-    basis = ("a twelve-month rolling median, built from Domain and onthehouse "
-             "sale records combined")
+    mi = market_insights(suburb_display)
 
     out = [f'<h3 style="margin-top:30px">What the median has done in {E(suburb_display)}</h3>']
     lede = (f"Nationally, home values have fallen for three consecutive months. Over the same "
@@ -414,37 +495,29 @@ def median_block(suburb_display, ms):
     if yoy is not None:
         lede += (f", {abs(yoy):.1f}% {'above' if yoy >= 0 else 'below'} the twelve months before "
                  f"it")
-    lede += ". The two are not in conflict — a national index and one suburb measure different things."
+    lede += (". The two are not in conflict \u2014 a national index and one suburb measure "
+             "different things.")
     out.append(f'<p class="lede">{lede}</p>')
-
     if lo and hi and n:
         out.append(f'<p class="fine">That figure carries a range of {exact(lo)} to {exact(hi)} on '
-                   f'{n} sales \u2014 {E(basis)}.</p>')
+                   f'{n} sales \u2014 a twelve-month rolling median, built from Domain and '
+                   f'onthehouse sale records combined.</p>')
 
-    if hist:
-        vals = [h["median_price"] for h in hist]
-        top, bot = max(vals), min(vals)
-        span = (top - bot) or 1
-        bars = []
-        for h in hist:
-            v, cnt = h["median_price"], h.get("transaction_count") or 0
-            pct = 22 + (v - bot) / span * 74
-            thin = cnt < 50
-            bars.append(
-                f'<div class="qbar"><div class="qb" style="height:{pct:.0f}%'
-                + (';opacity:.45' if thin else '') + f'" title="{E(str(h["period"]))}"></div>'
-                f'<span class="qv">{v/1000:.0f}k</span>'
-                # ⚠ A real non-breaking space, not "&nbsp;". E() is html.escape,
-                # so an entity passed through it becomes "&amp;nbsp;" and the
-                # reader sees the literal markup.
-                f'<span class="qp">{E(str(h["period"]).replace(" ", chr(0xA0)))}</span>'
-                f'<span class="qn">{cnt}</span></div>')
-        out.append('<div class="qwrap"><div class="qchart">' + "".join(bars) + '</div>'
-                   '<div class="qkey"><span>Quarterly median, with the number of sales behind '
-                   'each. Faded bars are quarters with fewer than 50 sales.</span></div></div>')
-        out.append('<p class="fine">We have not drawn a line through those quarters. They move '
-                   'around more than the underlying market does, so the twelve-month figure above '
-                   'is the one worth reading.</p>')
+    chart = median_chart(mi)
+    if chart:
+        out.append(chart)
+        qs = [x["medianPrice"] for x in (mi.get("medianPriceHistory") or []) if x.get("medianPrice")]
+        if qs:
+            out.append(f'<div class="mstats">'
+                       f'<div><span class="k">Current (12 months)</span>'
+                       f'<span class="v">{exact(med)}</span></div>'
+                       f'<div><span class="k">Highest quarter</span>'
+                       f'<span class="v">{exact(max(qs))}</span></div>'
+                       f'<div><span class="k">Lowest quarter</span>'
+                       f'<span class="v">{exact(min(qs))}</span></div></div>')
+        out.append('<p class="fine">The quarterly line moves around more than the underlying '
+                   'market does \u2014 individual quarters can rest on very few sales. The '
+                   'twelve-month line is the one worth reading.</p>')
     return "".join(out)
 
 
@@ -857,18 +930,20 @@ details .body{padding-top:12px;font-size:.94rem;color:var(--ink-2)}
 .qs2 li{font-family:var(--serif);font-size:1.04rem;padding:6px 0;color:var(--ink)}
 
 
-/* quarterly median bars */
-.qwrap{margin:18px 0 8px;padding:16px 14px 12px;background:var(--paper-2);
+/* median price chart */
+.mchart{margin:18px 0 10px;padding:14px 12px 10px;background:var(--paper-2);
   border:1px solid var(--line-2);border-radius:8px}
-.qchart{display:grid;grid-template-columns:repeat(8,1fr);gap:5px;align-items:end;height:150px}
-.qbar{display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%;
-  position:relative}
-.qb{width:100%;background:var(--accent);border-radius:3px 3px 0 0;min-height:4px}
-.qv{font-size:.6rem;color:var(--ink-2);margin-top:4px;font-variant-numeric:tabular-nums}
-.qp{font-size:.54rem;letter-spacing:.02em;color:var(--muted);text-align:center;line-height:1.25}
-.qn{font-size:.52rem;color:var(--muted);opacity:.75}
-.qkey{margin-top:10px;font-size:.78rem;color:var(--muted)}
-@media(max-width:560px){.qv{font-size:.54rem}.qp{font-size:.48rem}}
+.mchart svg{display:block}
+.mlegend{display:flex;gap:16px;margin-top:8px;font-size:.76rem;color:var(--muted)}
+.mlegend span{display:flex;align-items:center;gap:6px}
+.mlegend span:before{content:"";width:16px;height:2px;border-radius:2px;background:#C4B5A4}
+.mlegend .lr:before{background:var(--accent);height:3px}
+.mstats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0 6px}
+.mstats>div{background:var(--paper-2);border:1px solid var(--line-2);border-radius:6px;
+  padding:12px 10px;text-align:center}
+.mstats .k{display:block;font-size:.62rem;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--muted);margin-bottom:4px}
+.mstats .v{font-family:var(--serif);font-size:1.02rem}
 
 /* seasonality — ported from YourHomePage/components/SeasonalityStrip */
 .season{margin:20px 0 10px;padding:18px 16px 14px;background:var(--paper-2);
