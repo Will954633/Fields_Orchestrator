@@ -105,3 +105,65 @@ If `total_floor_area` (internal + garage) is what 42% of listed comparables reso
 off-market subjects almost never have it, then **the comparables pool itself is internally
 inconsistent** — some comps measured one way, some the other, inside the same valuation. That should
 be measured before deciding which ruler to standardise on.
+
+
+---
+
+# ⚠ CORRECTION (2026-08-07, same day) — the ruler mismatch does NOT cause the error
+
+Everything above about subject and comparables being measured on different rulers is **factually
+true and materially irrelevant**. It was written as "the largest known remaining defect" **before it
+was tested**. It was then tested, and it failed.
+
+## The test
+
+Instrumented `--dump-errors` to record the floor-area source of the subject **and of every
+comparable**, then measured error against the share of comparables sitting on a different ruler.
+n = 581 off-market (blind) subjects.
+
+**The mismatch is extremely prevalent — a median 62% of comparables sit on a different ruler than
+their subject.** And it does not predict error:
+
+| comparables on a different ruler | n | MAE | median error |
+|---|---|---|---|
+| 0–25% (mostly matched) | 34 | 7.76% | −0.8% |
+| 25–50% | 143 | 7.86% | −0.6% |
+| 50–75% | 174 | 9.29% | −0.8% |
+| 75–100% (mostly mismatched) | 230 | 9.07% | +1.4% |
+
+**r = +0.027** against absolute error, **r = +0.069** signed. Non-monotonic across the middle bands.
+
+Error by the subject's own source shows the same absence of effect — `building_fallback` 8.5% MAE,
+`legacy_floor_area` 9.1%, `stated_plan_label` 9.5%, **all with median error ≈ 0**. If a systematic
+17–22% metric difference were flowing into the estimate, it would appear as a bias here. It does not.
+
+## Why it does not matter
+
+The adjustment **rates** are regressed from the same mixed pool the comparables come from. The model
+learns a dollars-per-m² on a blended metric and applies it consistently, so the unit error largely
+cancels rather than propagating. The docstring's warning is about mixing metrics *within a single
+comparison*; in practice the regression absorbs it.
+
+The weak 7.76% → 9.07% gradient is confounded: properties whose ruler matches their comparables are
+better-documented properties generally, and better documentation is what actually predicts accuracy.
+
+## What this means for the enrichment experiment
+
+**Do not spend the 30-home enrichment run on floor-area harmonisation.** Two hypotheses have now
+been tested and both came back negative:
+
+| hypothesis | result |
+|---|---|
+| satellite analysis lifts accuracy | **no** — 9.09% with vs 9.20% without |
+| ruler mismatch causes error | **no** — r = +0.027 |
+| photo-derived quality attributes help | **no** — blinding the subject *improved* MAE |
+
+Three separate enrichment hypotheses, all negative. The consistent signal across every test in this
+domain remains: **more measured facts about the property help (land size, floor area, location);
+more AI judgement about the property does not.**
+
+⚠ **The open question is now whether enrichment is the right lever at all.** Before commissioning a
+forced-enrichment run, the cheaper test is the one still not done: **leave-one-out inside the comp
+set** — how well the weighted mean of seven adjusted comparables predicts the eighth. That measures
+the method's irreducible noise floor. If it lands near the current ±13.7%, no amount of enrichment
+will narrow the band, and the remaining work is presentational rather than computational.
