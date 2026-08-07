@@ -324,16 +324,36 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--watch", action="store_true", help="Poll every 60s instead of running once")
     parser.add_argument("--refresh", action="store_true", help="Re-populate highlight_candidates on already-bridged records")
+    parser.add_argument("--refresh-every", type=int, default=60,
+                        help="With --watch --refresh: refresh on every Nth cycle (default 60, "
+                             "i.e. hourly). Refreshing every cycle full-scans the suburb "
+                             "collections and cost ~0.8 of a CPU core continuously.")
     parser.add_argument("--quiet", action="store_true", help="Suppress per-record logs")
     args = parser.parse_args()
 
     if args.watch:
-        print("Bridge sync — watch mode (60s poll)")
+        # `--refresh` on EVERY 60-second cycle was the single largest CPU consumer on this
+        # VM. It re-resolves all ~103 property_reports through a case-insensitive $regex
+        # inside an $or on two unindexed fields (`street_address`, `complete_address`), so
+        # each cycle full-scans the suburb collections. Measured 2026-08-08: mongod at 89%
+        # of one core since boot, 388 million documents examined in a partial day, 28,641
+        # seconds of slow-query time, 99.8% of it these three namespaces. It is also the
+        # proximate reason the VM was upsized 2 -> 4 vCPU on 2026-08-01.
+        #
+        # `sync_once`'s own docstring says refresh exists "when the cohort changes or the
+        # candidate ranker updates" — both at most daily. So refresh on a cycle interval
+        # rather than every cycle: the capability is unchanged, the cost falls ~60x.
+        refresh_every = max(1, args.refresh_every)
+        print(f"Bridge sync — watch mode (60s poll"
+              + (f", refresh every {refresh_every} cycles)" if args.refresh else ")"))
+        cycle = 0
         while True:
             t0 = time.time()
-            counts = sync_once(verbose=not args.quiet, refresh=args.refresh)
+            do_refresh = args.refresh and (cycle % refresh_every == 0)
+            counts = sync_once(verbose=not args.quiet, refresh=do_refresh)
             if counts["newly_bridged"] or counts["refreshed"]:
                 print(f"  {datetime.now().isoformat(timespec='seconds')} — synced {counts['newly_bridged']} new, {counts['refreshed']} refreshed ({time.time()-t0:.1f}s)")
+            cycle += 1
             sleep_for = max(60 - (time.time() - t0), 5)
             time.sleep(sleep_for)
     else:
