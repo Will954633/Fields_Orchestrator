@@ -76,14 +76,53 @@ Re-classified, all three cohorts behave:
 | water_view | 157 | +1.4% | 10.0% |
 | dry | 450 | −0.4% | 9.6% |
 
-## ⚠ The blocker before this can be the cohort authority
+## ✅ The blocker is closed (2026-08-07, same day)
 
-**332 of 625 homes (53%) have no OSM `water_features` block at all.** Where geometry is absent the
-classifier falls back to the photo signal and returns `reason='photo_view_no_geometry'`.
+The classifier could not originally be trusted, because **53% of homes had no OSM `water_features`
+block** — a geometry-first classifier with no geometry is a photo classifier wearing a better name.
 
-**That is provisional, not evidence of dryness.** Backfilling the OSM water pass across sold and
-off-market stock is a prerequisite — a geometry-first classifier with 53% missing geometry is a
-photo classifier wearing a better name.
+`scripts/backfill_osm_water_features.py` closed it: **coverage 53% → 100%**, 23,748 properties, 0
+failures. Homes falling back to the photo signal dropped from **332 of 625 to 2 of 586**.
+
+`classify_water_relationship()` is now wired into `in_cohort()` in `precompute_valuations.py` and is
+the cohort authority. Full record: `experiments/2026-08-07-water-geometry-backfill.md`.
+
+### The threshold is measured, not assumed
+
+30 m was first chosen by analogy to the river rule, then tested against 807 sold houses — median
+price per m² of floor area against distance to water:
+
+| 10–20 m | 20–30 m | **30–50 m** | 50–200 m | 400 m+ |
+|---|---|---|---|---|
+| **+13.6%** | **+12.4%** | **−9.0%** | ~+1% | — |
+
+**The premium is ~+13% inside 30 m and gone beyond it.**
+
+### Only waterfront is separated
+
+`water_view` and `dry` are **pooled**, not split. They measured statistically indistinguishable
+(median error −0.0% against −0.2%), the price data above shows no premium beyond 30 m, and splitting
+them would thin every pool for no accuracy gain.
+
+### ⚠ `lakefront` did not previously exist
+
+The original `extract_water_features()` set `waterfront_type` for canal, coastline and river only —
+a home **on a lake** scored `'none'`. Two of our three suburbs are lake suburbs. **1,817 properties
+(7.7%) are lakefront**, previously undetectable. `9 Laura Place, Varsity Lakes` — the worst outlier
+in the investigation at +87% — is one, and now correctly returns no figure instead of a wrong one.
+
+### ⚠ Watch the waterfront cohort size
+
+| suburb | waterfront | water_view | dry |
+|---|---|---|---|
+| Robina | 34 | 127 | 232 |
+| Varsity Lakes | **18** | 82 | 176 |
+| Burleigh Waters | 32 | 124 | 166 |
+
+Varsity Lakes has 18 waterfront comparables. Genuinely waterfront homes there will often fail the
+minimum-comps test and return nothing. That is intended while waterfront is out of scope — but if
+the refusal rate turns out to be material, the answer is a waterfront arm of the business, not a
+looser cohort.
 
 ## Which function to call
 
