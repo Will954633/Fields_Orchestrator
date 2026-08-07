@@ -100,19 +100,23 @@ VERSIONS = {
 LATEST = "v2"
 
 # ── Seasonality — the canonical source of truth ────────────────────────────
-# scripts/seasonality_analysis.py, 2010-2025 EXCLUDING 2019-2020 (COVID),
-# 18,978 sales, 375 strata. CATCHMENT level: per-suburb months are too thin to
-# publish and must never be presented as suburb-specific.
+# scripts/seasonality_analysis.py -> 08_Seller-Book/Market_Data/seasonality/
+# seasonality_monthly_summary.csv. 2010-2025 EXCLUDING 2019-2020 (COVID),
+# 18,978 sales. CATCHMENT level: per-suburb months are too thin to publish.
 #
-# ⚠ These exact figures matter. The `december-listing-paradox` article was
-# published overstated (Dec +6.05% against the real +2.81%; a Jan -3.83% that
-# was a COVID artefact) and had to be corrected and republished. Do not
-# re-derive these from another file — re-run the script.
-SEASONALITY = [("Jan", -1.37), ("Feb", -1.36), ("Mar", 0.85), ("Apr", -0.30),
-               ("May", -0.47), ("Jun", 1.60), ("Jul", -0.04), ("Aug", 2.30),
-               ("Sep", 2.50), ("Oct", 2.61), ("Nov", 3.29), ("Dec", 2.81)]
+# ⚠ Do not re-derive these. The `december-listing-paradox` article shipped
+# overstated (Dec +6.05% against the real +2.81% — that inflated figure is the
+# `article_pct` column in the CSV, kept only to document the correction) and had
+# to be republished.
+#
+# (month, premium %, sales behind that month)
+SEASONALITY = [("Jan", -1.37, 1331), ("Feb", -1.36, 1687), ("Mar", 0.85, 1584),
+               ("Apr", -0.30, 1470), ("May", -0.47, 1614), ("Jun", 1.60, 1403),
+               ("Jul", -0.04, 1493), ("Aug", 2.30, 1387), ("Sep", 2.50, 1543),
+               ("Oct", 2.61, 1497), ("Nov", 3.29, 1512), ("Dec", 2.81, 1151)]
 SEASONALITY_N = 18978
-SEASONALITY_H1, SEASONALITY_H2 = -0.18, 2.25
+SEASONALITY_SCOPE = "the southern Gold Coast"
+SEASONALITY_WINDOW = "2010\u20132025, excl. COVID 2019\u20132020"
 
 E = html.escape
 
@@ -363,14 +367,12 @@ def timing_answer(suburb_display, ms):
                     "a single market headline settles nothing about one home.")
         paras.append(bits[0] + " \u2014 " + bits[1] + ". " + tail)
 
-    # 3 · seasonality — CATCHMENT, and labelled as such.
+    # 3 · hand off to the strip rather than restating it. The strip carries the
+    #     figures, the window, the catchment caveat and the citations; saying it
+    #     twice in different words is how two numbers drift apart.
     paras.append(
-        f"There is a seasonal pattern underneath all of it. Across {SEASONALITY_N:,} sales in "
-        f"this catchment between 2010 and 2025, prices achieved in the second half of the year "
-        f"ran about {SEASONALITY_H2:.2f}% above the annual average and the first half about "
-        f"{abs(SEASONALITY_H1):.2f}% below it, with November the strongest month. That is an "
-        f"average across fifteen years, not a forecast for this one, and the gap is small next "
-        f"to the difference between two individual homes.")
+        "There is one pattern underneath all of it that does hold up, because it is measured "
+        "across fifteen years rather than forecast forward.")
 
     paras.append(
         "None of that tells you what to do, and we are not going to. It is the same evidence we "
@@ -378,33 +380,73 @@ def timing_answer(suburb_display, ms):
     return paras
 
 
-def seasonality_svg():
-    """Twelve bars, drawn from the canonical figures. Inline SVG so there is no
-    charting dependency and nothing to load."""
-    W, H, pad = 680, 150, 22
-    vals = [v for _, v in SEASONALITY]
-    lo, hi = min(vals), max(vals)
-    span = hi - lo or 1
-    bw = (W - pad * 2) / len(SEASONALITY)
-    zero_y = pad + (hi / span) * (H - pad * 2)
-    bars = []
-    for i, (m, v) in enumerate(SEASONALITY):
-        x = pad + i * bw + bw * 0.18
-        w = bw * 0.64
-        y = pad + ((hi - v) / span) * (H - pad * 2)
-        h = abs(zero_y - y) or 1
-        top = min(y, zero_y)
-        peak = v == hi
-        fill = "var(--accent)" if peak else ("#C9B79E" if v > 0 else "#B9AEA1")
-        bars.append(f'<rect x="{x:.1f}" y="{top:.1f}" width="{w:.1f}" height="{h:.1f}" '
-                    f'rx="1.5" fill="{fill}"/>')
-        bars.append(f'<text x="{x + w/2:.1f}" y="{H - 4}" text-anchor="middle" '
-                    f'font-size="9.5" fill="var(--muted)">{m}</text>')
-    return (f'<svg viewBox="0 0 {W} {H}" width="100%" height="auto" role="img" '
-            f'aria-label="Average sale price by month against the annual average, '
-            f'{SEASONALITY_N:,} catchment sales 2010-2025">'
-            f'<line x1="{pad}" x2="{W-pad}" y1="{zero_y:.1f}" y2="{zero_y:.1f}" '
-            f'stroke="var(--line)" stroke-width="1"/>' + "".join(bars) + '</svg>')
+def seasonality_strip():
+    """A port of `YourHomePage/components/SeasonalityStrip.tsx`, not a new chart.
+
+    That component is already built, already reconciled to the canonical dataset
+    and already carries the citations. Reproducing its treatment — month tiles
+    with the value on each, tinted copper above the annual average and teal
+    below, a below/above scale, the peak outlined, the current month dotted, and
+    a detail panel — keeps this page and the mini-site telling one story.
+    Inventing a second chart is how two surfaces end up disagreeing.
+
+    Editorial framing carried over verbatim: a recurring PATTERN, never a
+    prediction, and the spread is explained as buyer concentration rather than
+    as a best-time-to-sell recommendation.
+    """
+    from datetime import datetime
+    peak = max(range(len(SEASONALITY)), key=lambda i: SEASONALITY[i][1])
+    trough = min(range(len(SEASONALITY)), key=lambda i: SEASONALITY[i][1])
+    now = datetime.now().month - 1
+    cells = []
+    for i, (m, pct, n) in enumerate(SEASONALITY):
+        # Same tint maths as the component: intensity = min(|pct|/6, 1) * 0.55,
+        # copper (183,103,73) above the average, sky (160,209,201) below.
+        inten = min(abs(pct) / 6, 1) * 0.55
+        rgb = "183,103,73" if pct >= 0 else "160,209,201"
+        cls = "mcell" + (" peak" if i == peak else "")
+        dot = '<i class="nowdot" title="current month"></i>' if i == now else ""
+        cells.append(
+            f'<button class="{cls}" style="background:rgba({rgb},{inten:.3f})" '
+            f'data-i="{i}" aria-label="{E(m)}, {pct:+.1f} per cent versus the annual average">'
+            f'{dot}<span class="mm">{E(m)}</span>'
+            f'<span class="mp">{pct:+.1f}%</span></button>')
+
+    det = []
+    for i, (m, pct, n) in enumerate(SEASONALITY):
+        if i == peak:
+            tail = (f"{m} is the strongest month in the pattern \u2014 the months either side of "
+                    f"it carry most of the seasonal weight.")
+        elif i == trough:
+            tail = (f"{m} is the weakest month in the pattern, when buyer activity is most "
+                    f"thinly spread.")
+        elif pct >= 0:
+            tail = (f"{m} sits above the annual average, though short of the "
+                    f"{SEASONALITY[peak][0]} peak.")
+        else:
+            tail = f"{m} sits below the annual average for the catchment."
+        det.append(
+            f'<div class="mdet" data-i="{i}"{"" if i == peak else " hidden"}>'
+            f'<div class="mdh"><span class="mdm">{E(m)}</span>'
+            f'<span class="mdp">{pct:+.1f}% versus the annual average</span></div>'
+            f'<p class="mdb">{n:,} house sales in {E(SEASONALITY_SCOPE)} fall in {E(m)} across '
+            f'the sold record ({E(SEASONALITY_WINDOW)}). {E(tail)}</p></div>')
+
+    spread = SEASONALITY[peak][1] - SEASONALITY[trough][1]
+    return (
+        f'<p class="lede">Across {SEASONALITY_N:,} house sales in {E(SEASONALITY_SCOPE)} '
+        f'({E(SEASONALITY_WINDOW)}), the gap between the strongest month '
+        f'({E(SEASONALITY[peak][0])}) and the weakest ({E(SEASONALITY[trough][0])}) has run about '
+        f'{spread:.1f} percentage points, after controlling for each year\u2019s overall price '
+        f'growth. It is a recurring historical pattern, not a forecast.</p>'
+        f'<div class="season"><div class="mgrid">{"".join(cells)}</div>'
+        f'<div class="mscale"><span>Below average</span><i></i><span>Above average</span></div>'
+        f'<p class="fine">Tap any month for the sales behind it \u2014 the dot marks the current '
+        f'month.</p>{"".join(det)}</div>'
+        f'<p class="fine">The academic reading is that these patterns are driven by buyer '
+        f'concentration \u2014 more serious buyers in the market at once \u2014 rather than by seller '
+        f'scarcity (Ngai &amp; Tenreyro, 2014; Miller, Sklarz &amp; Real, 2014). A catchment-wide '
+        f'figure: per-suburb months are too thin to read.</p>')
 
 
 def month_year(d):
@@ -747,10 +789,30 @@ details .body{padding-top:12px;font-size:.94rem;color:var(--ink-2)}
 .qs2 li{font-family:var(--serif);font-size:1.04rem;padding:6px 0;color:var(--ink)}
 
 
-/* seasonality */
-.season{margin:24px 0 6px;padding:18px 16px 10px;background:var(--paper-2);
-  border:1px solid var(--line-2);border-radius:6px}
-.season svg{display:block;margin:10px 0 2px}
+/* seasonality — ported from YourHomePage/components/SeasonalityStrip */
+.season{margin:20px 0 10px;padding:18px 16px 14px;background:var(--paper-2);
+  border:1px solid var(--line-2);border-radius:8px}
+.mgrid{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+.mcell{position:relative;appearance:none;border:1px solid transparent;border-radius:6px;
+  padding:9px 4px 8px;cursor:pointer;font-family:var(--sans);text-align:center;
+  display:flex;flex-direction:column;gap:2px;transition:border-color .15s}
+.mcell:hover{border-color:var(--line)}
+.mcell.peak{border-color:var(--ink)}
+.mcell[aria-pressed="true"]{border-color:var(--accent)}
+.mcell .mm{font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.mcell .mp{font-family:var(--serif);font-size:.98rem;color:var(--ink)}
+.nowdot{position:absolute;top:5px;right:5px;width:5px;height:5px;border-radius:99px;
+  background:var(--accent)}
+.mscale{display:flex;align-items:center;gap:9px;margin:12px 0 6px;font-size:.68rem;color:var(--muted)}
+.mscale i{flex:1;height:3px;border-radius:2px;
+  background:linear-gradient(90deg,rgba(160,209,201,.85),rgba(247,245,241,1),rgba(183,103,73,.85))}
+.mdet{margin-top:12px;padding:14px 16px;background:rgba(254,198,111,.10);
+  border:1px solid rgba(183,103,73,.18);border-radius:6px}
+.mdh{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px;margin-bottom:5px}
+.mdm{font-family:var(--serif);font-size:1.12rem}
+.mdp{color:var(--accent);font-size:.86rem;font-weight:600}
+.mdb{margin:0;font-size:.92rem;color:var(--ink-2)}
+@media(min-width:720px){.mgrid{grid-template-columns:repeat(12,1fr)}}
 
 footer{padding:44px 0 70px;border-top:1px solid var(--line-2);color:var(--muted);font-size:.85rem}
 
@@ -776,6 +838,12 @@ if(bg&&mn){
   addEventListener('keydown',e=>{if(e.key==='Escape')setOpen(false);});
 }
 addEventListener('scroll',()=>h.classList.toggle('stuck',scrollY>240),{passive:true});
+// seasonality month tiles
+document.querySelectorAll('.mcell').forEach(c=>c.addEventListener('click',()=>{
+  const i=c.dataset.i;
+  document.querySelectorAll('.mcell').forEach(x=>x.setAttribute('aria-pressed',x===c?'true':'false'));
+  document.querySelectorAll('.mdet').forEach(d=>{d.hidden=d.dataset.i!==i;});
+}));
 document.querySelectorAll('.choice').forEach(b=>b.addEventListener('click',()=>{
   const g=b.closest('.choices');
   g.querySelectorAll('.choice').forEach(x=>x.setAttribute('aria-pressed','false'));
@@ -1187,13 +1255,8 @@ def render(slug, proto="full", version=LATEST):
         for i, para in enumerate(paras):
             cls = ' class="lede"' if i == 0 else ''
             add(f'<p{cls}>{E(para)}</p>')
-        add('<div class="season">')
-        add('<div class="label">Average sale price by month, against the annual average</div>')
-        add(seasonality_svg())
-        add(f'<div class="fine">{SEASONALITY_N:,} sales across this catchment, 2010\u20132025, '
-            f'excluding 2019\u20132020. A catchment-wide pattern \u2014 individual suburbs have too '
-            f'few sales in any one month to show a reliable pattern of their own.</div>')
-        add('</div>')
+        add('<h3 style="margin-top:30px">When does the southern Gold Coast sell for the most?</h3>')
+        add(seasonality_strip())
         add('<div class="src">Fields analysis of Gold Coast sale records \u00b7 rate and national '
             'price figures as reported by the RBA, Westpac and Cotality</div>')
         add('<a class="cue" href="#now">What\'s moving around this home right now? \u2193</a>')
