@@ -228,9 +228,29 @@ def is_waterfront(doc):
 _WATER_BACKS_ONTO = ('canal', 'lake', 'river', 'ocean', 'water', 'waterway',
                      'creek', 'lagoon', 'inlet', 'broadwater')
 
-WATERFRONT = 'waterfront'
+WATERFRONT = 'waterfront'      # canal / river / ocean frontage — SPECIALIST MARKET
+LAKEFRONT = 'lakefront'        # on or beside a lake — a normal home with a premium
 WATER_VIEW = 'water_view'
 DRY = 'dry'
+
+# ⚠ LAKEFRONT IS NOT "WATERFRONT". Learned the hard way 2026-08-08.
+#
+# The out-of-scope policy in detect_waterfront() is about markets that need
+# specialist expertise to price — canal frontage with a pontoon, river frontage,
+# absolute oceanfront. Water depth, navigability, jetty value, canal levies.
+#
+# A house 22 m from the edge of a Varsity Lakes lake is not that. It is an
+# ordinary detached house carrying a location premium, and the premium is
+# measurable and stable: +13.6% at 10-20 m, +12.4% at 20-30 m, gone by 30 m
+# (n=807 sold houses).
+#
+# Folding lake proximity into WATERFRONT reclassified **1,083 of 13,434 houses
+# (8.1%)** as out-of-scope in one change — including 11 Placid Court, which lost
+# its valuation entirely and returned `insufficient_comparables` with zero comps.
+# Robina 5.7%, Varsity Lakes 4.8%, Burleigh Waters 13.7%.
+#
+# So lakefront gets its own cohort: kept separate from dry stock for comparison
+# purposes (which is what fixed the over-valuation), but still VALUED.
 
 
 def classify_water_relationship(doc, view_distance_m=150):
@@ -256,18 +276,29 @@ def classify_water_relationship(doc, view_distance_m=150):
     adjacency = ((doc.get('satellite_analysis') or {}).get('categories') or {}).get('adjacency') or {}
     backs = ' '.join(adjacency.get('backs_onto') or []).lower()
 
+    wtype = wf.get('waterfront_type')
+
+    # Lake proximity first — it is the most common water relationship we have and
+    # it must NOT fall through into the specialist-frontage class below.
+    if wtype == 'lakefront':
+        return LAKEFRONT, 'osm_waterfront_type:lakefront'
+
     if wf.get('canal_frontage'):
         return WATERFRONT, 'osm_canal_frontage'
-    if wf.get('waterfront_premium_eligible'):
-        return WATERFRONT, 'osm_waterfront_premium_eligible'
-    wtype = wf.get('waterfront_type')
     if wtype and wtype != 'none':
         return WATERFRONT, f'osm_waterfront_type:{wtype}'
+    if wf.get('waterfront_premium_eligible'):
+        return WATERFRONT, 'osm_waterfront_premium_eligible'
     if any(w in backs for w in _WATER_BACKS_ONTO):
+        # A lake at the rear boundary is lakefront, not canal/ocean frontage.
+        if any(w in backs for w in ('lake', 'lagoon')):
+            return LAKEFRONT, 'satellite_backs_onto_lake'
         return WATERFRONT, 'satellite_backs_onto_water'
 
     dist = wf.get('distance_to_water_m')
     if dist is not None and dist <= 5:
+        if (wf.get('nearest_water_type') or '') in ('water_body', 'wetland'):
+            return LAKEFRONT, 'osm_distance_to_lake<=5m'
         return WATERFRONT, 'osm_distance_to_water<=5m'
 
     photo_view = bool(((doc.get('property_valuation_data') or {}).get('outdoor') or {}).get('water_views'))
