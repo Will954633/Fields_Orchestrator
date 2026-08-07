@@ -139,8 +139,52 @@ def shortlist_html(suburb_label, picks):
     return _wrap("".join(rows))
 
 
+# ---------------- opt-out ----------------
+# Every email footer says "Reply STOP to opt out" — this is what makes that true.
+# The list is email-keyed (not lead-keyed) so a fresh form submission from the same
+# person can never resurrect them: handle_lead and the Friday batch both check here,
+# and tracked_send checks again as a last-resort backstop.
+OPTOUT_COLL = "email_optouts"
+
+
+def is_opted_out(email):
+    if not email:
+        return False
+    return get_client()["system_monitor"][OPTOUT_COLL].find_one(
+        {"_id": email.strip().lower()}) is not None
+
+
+def record_optout(email, reason="replied STOP", source="manual", note=None):
+    """Suppress an address AND deactivate it on every list it currently sits on."""
+    key = email.strip().lower()
+    sm = get_client()["system_monitor"]
+    now = datetime.now(timezone.utc).isoformat()
+    sm[OPTOUT_COLL].update_one(
+        {"_id": key},
+        {"$set": {"email": key, "reason": reason, "source": source,
+                  "note": note, "opted_out_at": now}},
+        upsert=True)
+    leads = sm["fb_leads"].update_many(
+        {"fields.email": {"$regex": f"^{re.escape(key)}$", "$options": "i"}},
+        {"$set": {"fpf_status": "unsubscribed", "unsubscribed_at": now,
+                  "unsubscribe_reason": reason}}).modified_count
+    subs = sm[WEBSITE_SUBS_COLL].update_many(
+        {"email": {"$regex": f"^{re.escape(key)}$", "$options": "i"}},
+        {"$set": {"status": "unsubscribed", "unsubscribed_at": now,
+                  "unsubscribe_reason": reason}}).modified_count
+    crm = sm["crm_contacts"].update_many(
+        {"email": {"$regex": f"^{re.escape(key)}$", "$options": "i"}},
+        {"$set": {"do_not_email": True, "email_optout_at": now,
+                  "email_optout_reason": reason}}).modified_count
+    return {"fb_leads": leads, "website_subs": subs, "crm_contacts": crm}
+
+
 # ---------------- send ----------------
 def tracked_send(to, subject, html, type_, meta, dry):
+    # Backstop: nothing reaches an opted-out address, whatever the caller thought.
+    if is_opted_out(to):
+        print(f"  SUPPRESSED (opted out) → {to} | {type_}")
+        return {"ok": False, "suppressed": True, "error": "opted_out"}
     if dry:
         print(f"  [DRY] would send to {to} | {type_} | subj: {subject}")
         return {"ok": True, "dry": True}
@@ -165,6 +209,13 @@ def handle_lead(lead, dry=False, force_friday=None):
     email = (f.get("email") or "").strip()
     if not email:
         print("  no email — skip"); return
+    if is_opted_out(email):
+        # Same person, new form submission — an opt-out outlives the lead record.
+        print(f"  {email}: opted out — no send")
+        if not dry:
+            sm["fb_leads"].update_one({"_id": lead["_id"]},
+                                      {"$set": {"fpf_status": "unsubscribed"}})
+        return
     friday = is_friday() if force_friday is None else force_friday
     subs = target_suburbs(f.get("area"))
     sends = {}
@@ -273,6 +324,9 @@ def friday_batch(dry=False, force=False):
     sent, failed, skipped = [], [], 0
     for lead in sm["fb_leads"].find(q):
         f = lead.get("fields", {}) or {}
+        if is_opted_out(f.get("email")):
+            skipped += 1
+            continue                                # replied STOP — never mail again
         subs = target_suburbs(f.get("area"))
         if not subs:
             continue                                # no suburb → skip (awaiting reply)
@@ -316,6 +370,9 @@ def friday_batch(dry=False, force=False):
         email = (sub.get("email") or "").strip()
         if not email or email.lower() in fb_emails:
             continue                                # no email, or already sent via fb_leads
+        if is_opted_out(email):
+            skipped += 1
+            continue                                # replied STOP — never mail again
         if _aest_date(sub.get("last_shortlist_at")) == today:
             skipped += 1
             continue                                # already sent today — no double-send
@@ -348,8 +405,14 @@ def main():
     ap.add_argument("--friday-batch", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--force-friday", action="store_true", help="treat today as Friday (testing)")
+    ap.add_argument("--optout", metavar="EMAIL", help="suppress an address forever (they replied STOP)")
+    ap.add_argument("--reason", default="replied STOP", help="opt-out reason recorded against the address")
     args = ap.parse_args()
-    if args.friday_batch:
+    if args.optout:
+        res = record_optout(args.optout, reason=args.reason, source="manual")
+        print(f"opted out {args.optout.strip().lower()} — "
+              f"fb_leads {res['fb_leads']}, website_subs {res['website_subs']}, crm {res['crm_contacts']}")
+    elif args.friday_batch:
         friday_batch(dry=args.dry_run)
     elif args.lead_id:
         lead = get_client()["system_monitor"]["fb_leads"].find_one({"_id": args.lead_id})
