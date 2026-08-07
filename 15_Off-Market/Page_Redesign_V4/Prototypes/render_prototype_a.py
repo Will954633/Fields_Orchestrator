@@ -2201,11 +2201,13 @@ def render(slug, proto="full", version=LATEST):
             add('<p class="fine">We have no data on who is actually buying in this street. '
                 'What follows is inferred from this home\u2019s features and what the sales '
                 'above show buyers paying more for.</p>')
+        # The honesty line above already frames everything after it as inference,
+        # so the engine's sentence can stand as written. An earlier attempt spliced
+        # it into a longer clause and produced "the group most likely to stretch
+        # for this home is the one for whom local family upgraders carry the
+        # price" — grammatical mush. Frame once, then quote plainly.
         if bb.get("headline"):
-            _h = str(bb["headline"]).rstrip(".").strip()
-            _h = _h[0].lower() + _h[1:] if _h else _h
-            add(f'<p class="lede">On that basis, the group most likely to stretch for this '
-                f'home is the one for whom {E(_h)}.</p>')
+            add(f'<p class="lede">{E(str(bb["headline"]).rstrip("."))}.</p>')
         if bb.get("body"):
             add(f'<p class="lede">{E(str(bb["body"]).strip())}</p>')
         carries, attracts = vd_.get("carries_price") or [], vd_.get("attracts_buyer") or []
