@@ -351,3 +351,114 @@ with its reason rather than dropped silently.
 
 Rate recalibration adds nothing beyond the simple drop — same conclusion as Part 2, now on
 corrected instrumentation. **$603,574 → $483,264 on 627 detached houses.**
+
+---
+
+# Part 5 — Water views are being valued as waterfront (2026-08-07)
+
+**Will's observation from reviewing the outlier list: they had water views but were not waterfront.**
+That is exactly what is happening, and it is the largest single defect found in this investigation.
+
+## The mechanism — one flag, two jobs, opposite error costs
+
+`shared/waterfront.py::detect_waterfront()` is deliberately **broad**, because it drives a
+**suppression gate**: skip editorial, `noindex`, withhold the valuation. There a false positive is
+cheap — we simply stay quiet about a dry home. That design is correct and should not change.
+
+But `precompute_valuations.py` reads the **same flag** to pick the **comparable cohort** (lines
+3014–3016: a waterfront subject is compared only to waterfront comps). There a false positive is
+expensive — a lake-*view* home gets pooled against genuine water-frontage sales, which sell far
+higher.
+
+**Signal 1 of that detector is `property_valuation_data.outdoor.water_views`** — a GPT-4 Vision read
+of the marketing photos. It answers *"can you see water from here?"*, not *"does this parcel touch
+water?"*
+
+## Measured, n = 625 detached houses
+
+| group | n | median error | MAE | over-valued |
+|---|---|---|---|---|
+| flagged waterfront | 59 | **+8.0%** | **13.5%** | **73%** |
+| not flagged | 566 | −0.6% | 9.4% | 48% |
+
+Splitting the flagged group by **geometry** instead of photographs:
+
+| | n | median error | MAE | over-valued |
+|---|---|---|---|---|
+| genuinely waterfront | 18 | +1.6% | 10.2% | 61% |
+| **MISCLASSIFIED — 69% of the flagged group** | **41** | **+10.4%** | **14.9%** | **78%** |
+
+**The method handles real waterfront acceptably. It is the false positives that break it.**
+
+## The worked example — 24 Brooklyn Crescent, Robina
+
+Its own OSM record already said it was not waterfront:
+
+```
+distance_to_water_m          21.5
+waterfront_type              "none"
+canal_frontage               False
+waterfront_premium_eligible  False
+satellite backs_onto         ["residential_only"]
+photo outdoor.water_views    True     <- the only positive signal
+is_waterfront                True     <- set anyway
+```
+
+We had the correct measurement and overrode it with a photograph. Then valued the home **56% high**.
+
+## The methodology — geometry decides frontage, photographs decide views
+
+`shared/waterfront.py::classify_water_relationship(doc)` → `waterfront | water_view | dry`, built
+2026-08-07 from fields **we already compute per property**:
+
+1. OSM `water_features`: `canal_frontage`, `waterfront_premium_eligible`, `waterfront_type`
+2. Satellite structured adjacency: `backs_onto` naming a water body
+3. `distance_to_water_m <= 5` — a parcel effectively touching water
+
+Only then do photographs get a say, and only to mark the **view** class. Re-classified, all three
+cohorts behave:
+
+| class | n | median error | MAE |
+|---|---|---|---|
+| waterfront | 18 | +1.6% | 10.2% |
+| water_view | 157 | +1.4% | 10.0% |
+| dry | 450 | −0.4% | 9.6% |
+
+**Do not change `detect_waterfront()`** — the suppression gate should stay broad. Change only the
+**cohort selector** in `precompute_valuations.py` to use the new classifier, and give `water_view`
+its own cohort rather than folding it into either extreme.
+
+## ⚠ The blocker
+
+**332 of 625 homes (53%) have no OSM `water_features` block at all.** Where geometry is absent the
+classifier falls back to the photo signal and returns `reason='photo_view_no_geometry'`. That is
+provisional, not evidence of dryness. **Backfilling the OSM water pass across the sold and
+off-market stock is the prerequisite** — the classifier is only as good as its coverage, and at 53%
+missing it cannot yet be trusted as the sole cohort authority.
+
+---
+
+# Part 6 — Attached homes with a house address
+
+`--property-type House` and unit-number checks both missed **24 Brooklyn Crescent, Robina**: freehold
+tenure, no unit number, `property_type "House"`, `is_strata_title False`. It is a townhouse in a row.
+
+Two signals now catch it:
+
+**1. QLD plan type.** `GTP` / `BUP` / `CTS` / `SUP` prefixes are community or building-units title —
+attached by definition. Across 990 sold "Houses": 19 GTP, 8 BUP. `RP` (533) and `SP` (328) are
+freehold and prove nothing either way, so plan type alone is not sufficient.
+
+**2. Floor-to-land ratio.** A detached house needs setbacks, a driveway and some yard, so it cannot
+approach 1.0. 24 Brooklyn Crescent is 131 m² of land to 122.4 m² of floor — **0.93** — on a
+cadastral parcel measuring 5 m × 26 m. Across 833 sold houses with both figures, p50 is 0.32 and p90
+is 0.60, so **0.70** leaves clear air. Above it sit obvious townhouse rows (36 and 38 Evergreen View,
+adjacent; 1 and 55 Tours Way) **and** genuine data errors (7 Nypa Close at 495 m² floor on 495 m² of
+land) — both classes should be out of a detached-house valuation, so the rule earning double duty is
+a feature.
+
+Effect on the backtest: 39 homes excluded, MAE 9.78% → 9.58%, 80% band $504,247 → $485,508. Modest
+on accuracy, but these homes should never have been valued as detached houses at all.
+
+Both live in `is_attached_dwelling()` in `valuation_backtest.py`, on by default, each exclusion
+printed with its reason.
