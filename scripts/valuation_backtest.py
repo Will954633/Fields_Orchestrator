@@ -56,6 +56,8 @@ from precompute_valuations import (
     extract_images,
     resolve_land_size,
     resolve_floor_area,
+    resolve_beach_distance,
+    detect_golf_course_backing,
 )
 
 # These may be private — import with fallback
@@ -307,6 +309,11 @@ def backtest_single_property(db, subject_doc, all_sold_in_suburb, sold_by_suburb
             s_build_year = _resolve_build_year(s, gc_timeline_lookup or {}, suburb_key)
 
         sale_basic = basic_features(s)
+        # Mirror production: precompute_valuations resolves beach distance onto the
+        # comparable's basic features before adjustments run. Omitting it here made
+        # beach_proximity and golf_course_backing fire on 0% of backtest comparables
+        # while production fires them on 99.1% and 2.9%.
+        sale_basic['beach_distance_km'] = resolve_beach_distance(s, s_lat, s_lon)
         sale_basic['approximate_build_year'] = s_build_year
 
         recent_points.append({
@@ -372,6 +379,8 @@ def backtest_single_property(db, subject_doc, all_sold_in_suburb, sold_by_suburb
         'kitchen_score': subject_basic.get('kitchen_score'),
         'ac_ducted': subject_basic.get('ac_ducted', False),
         'approximate_build_year': subject_build_year,
+        'beach_distance_km': resolve_beach_distance(subject_doc, subject_lat, subject_lon),
+        'golf_course_backing': detect_golf_course_backing(subject_doc)[0],
         'renovation_quality_score': None if no_new_factors else subject_basic.get('renovation_quality_score'),
         'street_premium_pct': None if no_new_factors else (
             (street_premium_cache or {}).get(
@@ -420,6 +429,9 @@ def backtest_single_property(db, subject_doc, all_sold_in_suburb, sold_by_suburb
                 (street_premium_cache or {}).get(
                     (suburb_key, _extract_street_name(pt.get('_source_doc') or pt)), (None,))[0]
                 if _extract_street_name and street_premium_cache else None),
+            'beach_distance_km': basic.get('beach_distance_km'),
+            'golf_course_backing': detect_golf_course_backing(
+                pt.get('_source_doc') or pt)[0],
             'micro_location_premium_pct': None if no_new_factors else (
                 compute_micro_location_premium(
                     float(s_lat) if s_lat else None,
@@ -507,6 +519,37 @@ def backtest_single_property(db, subject_doc, all_sold_in_suburb, sold_by_suburb
         'subject_features': subject_features,
     }
 
+
+
+
+_ATTACHED_TYPES = {
+    "unit", "apartment", "townhouse", "villa", "duplex", "semi-detached",
+    "terrace", "studio", "flat", "unitblock", "block of units", "unit block",
+}
+
+
+def is_attached_dwelling(doc):
+    """True if the dwelling is attached (unit, townhouse, duplex, villa...).
+
+    The comparable-sales method is designed for DETACHED houses only
+    (see the design envelope). `property_type == "House"` does not exclude
+    attached stock on its own: measured 2026-08-07, 13 unit-numbered addresses
+    survived that filter and ran MAE 18.0% against 10.3% for the rest. Their
+    presence inflates every accuracy figure we publish.
+
+    Returns (is_attached, reason) so the exclusion is auditable rather than silent.
+    """
+    pt = (doc.get("property_type") or "").strip().lower()
+    if pt in _ATTACHED_TYPES:
+        return True, f"property_type={doc.get('property_type')}"
+    if doc.get("is_strata_title"):
+        return True, "is_strata_title"
+    if doc.get("UNIT_NUMBER") or doc.get("unit_number"):
+        return True, "unit number on cadastral record"
+    addr = (doc.get("address") or doc.get("street_address") or "").strip()
+    if re.match(r"^\s*[0-9]+[A-Za-z]?\s*/", addr):
+        return True, "unit-numbered address"
+    return False, None
 
 
 def _comp_spread(points, predicted):
@@ -626,6 +669,10 @@ def main():
     parser.add_argument("--verbose", action="store_true", help="Show each property result")
     parser.add_argument("--min-price", type=int, default=300000, help="Minimum sale price to include")
     parser.add_argument("--max-price", type=int, default=5000000, help="Maximum sale price to include")
+    parser.add_argument("--include-attached", action="store_true",
+                        help="Keep attached dwellings (units, townhouses, duplexes) in the test "
+                             "set. OFF by default: the comparable-sales method is for detached "
+                             "houses, and attached stock inflates every published accuracy figure.")
     parser.add_argument("--dump-errors", default=None,
                         help="Write every signed error to this JSON path. Needed to compute "
                              "empirical prediction intervals, which the summary metrics cannot "
@@ -696,6 +743,7 @@ def main():
     # Build test set: sold properties with known sale prices
     suburbs_to_test = [args.suburb] if args.suburb else SUBURBS
     test_properties = []
+    excluded_attached = []
 
     for suburb in suburbs_to_test:
         sold_docs = list(db[suburb].find({"listing_status": "sold"}))
@@ -707,8 +755,21 @@ def main():
                 continue
             if args.property_type and doc.get("property_type") != args.property_type:
                 continue
+            if not args.include_attached:
+                attached, why = is_attached_dwelling(doc)
+                if attached:
+                    excluded_attached.append((doc.get("address"), why))
+                    continue
             doc['_collection'] = suburb
             test_properties.append(doc)
+
+    if excluded_attached:
+        print(f"Excluded {len(excluded_attached)} attached dwelling(s) from the test set "
+              f"(pass --include-attached to keep them):")
+        for a, why in excluded_attached[:10]:
+            print(f"   - {a}  [{why}]")
+        if len(excluded_attached) > 10:
+            print(f"   ... and {len(excluded_attached) - 10} more")
 
     if args.limit:
         test_properties = test_properties[:args.limit]
