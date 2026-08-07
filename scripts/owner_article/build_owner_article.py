@@ -198,44 +198,59 @@ def select_comps(vd: dict) -> tuple[list[dict], float, bool]:
     return [], RADIUS_MAX_KM, True
 
 
-def suburb_median_series(client, suburb_key: str) -> dict | None:
-    """Rolling 12-month house median, and the 12 months before it.
+UNION_SOURCE = "domain_union_onthehouse"
 
-    Computed here from recorded sales rather than read from a cached series --
-    the rolling series is sparse and must never be indexed positionally
-    (memory: union_median_pipeline). Domain under-captures sold volume, so this
-    is a SAMPLE; the copy always states n alongside the figure.
+
+def suburb_median_series(client, suburb_key: str) -> dict | None:
+    """Rolling 12-month house median + YoY, read from the promoted union pipeline.
+
+    This used to recompute the median here from `Gold_Coast.<suburb>` sold records.
+    That was wrong in a way that mattered, because this article is POSTED to the
+    owner's address:
+
+      * it read Domain-only sold events, the source we know misses 40-50% of real
+        sales, while `precompute_union_prices.py` builds the median from the
+        Domain u onthehouse union (see memory `union_median_pipeline`);
+      * it classified dwellings by substring on `property_type`, a different
+        classifier from the union pipeline's, so it was a different population;
+      * it carried no CI and no provenance, and the copy called the result
+        "independently measured" -- which reads to an owner as corroborated when it
+        meant the opposite;
+      * `check_union_median_integrity.py` guards `precomputed_indexed_prices`, so a
+        green integrity check said nothing at all about this path.
+
+    The original docstring's reason was sound but over-applied: the rolling SERIES is
+    sparse and must never be indexed positionally, which argues against walking
+    `rolling_12m_median_series`, not against reading the promoted SCALARS that
+    `precompute_union_prices.py` writes precisely so consumers don't have to.
+
+    Provenance is gated. If `median_source` is not the union, or the scalars are
+    missing, this returns None and the caller omits the suburb-median passage
+    entirely. Omission is the correct failure mode here -- falling back to a weaker
+    median is how the $2,115,000 / +23.6% Burleigh Waters retraction happened.
     """
-    from precompute_valuations import _get_sale_price, _get_sold_date
-    gc = client["Gold_Coast"]
-    now = datetime.utcnow()
-    cur, prev = [], []
-    for d in gc[suburb_key].find(
-            {"listing_status": "sold"},
-            {"sold_date": 1, "sale_date": 1, "sold_price": 1, "sale_price": 1,
-             "price": 1, "property_type": 1, "bedrooms": 1}):
-        ptype = (d.get("property_type") or "").lower()
-        if ptype and ("unit" in ptype or "apartment" in ptype or "townhouse" in ptype):
-            continue
-        try:
-            price = _get_sale_price(d)
-            sold = parse_date(_get_sold_date(d))
-        except Exception:
-            continue
-        if not price or not sold:
-            continue
-        age = (now - sold).days
-        if 0 <= age <= 365:
-            cur.append(price)
-        elif 365 < age <= 730:
-            prev.append(price)
-    if len(cur) < 30 or len(prev) < 30:
+    doc = client["Gold_Coast"]["precomputed_indexed_prices"].find_one({"_id": suburb_key})
+    if not doc:
         return None
-    m_cur, m_prev = median(cur), median(prev)
+    if doc.get("median_source") != UNION_SOURCE:
+        # Something overwrote the union promotion. Do not publish a median off it.
+        return None
+
+    m_now = doc.get("rolling_12m_median_price")
+    n_now = doc.get("rolling_12m_median_sample_n")
+    yoy = doc.get("rolling_12m_yoy_pct")
+    if not m_now or not n_now or yoy is None:
+        return None
+
     return {
-        "median_now": m_cur, "n_now": len(cur),
-        "median_prev": m_prev, "n_prev": len(prev),
-        "yoy_pct": (m_cur - m_prev) / m_prev * 100.0,
+        "median_now": m_now,
+        "n_now": n_now,
+        "yoy_pct": yoy,
+        "ci_low": doc.get("rolling_12m_ci_low"),
+        "ci_high": doc.get("rolling_12m_ci_high"),
+        "ci_margin_pct": doc.get("rolling_12m_ci_margin_pct"),
+        "median_source": doc["median_source"],
+        "median_computed_at": doc.get("median_computed_at"),
     }
 
 
@@ -429,9 +444,12 @@ def compose(bundle: dict) -> tuple[str, FactBook]:
         gap_pp = abs(mv["pct"] - sm["yoy_pct"])
         close = same_dir and gap_pp <= 2.5
 
-        lead = (f"The independently measured {b['suburb_display']} rolling {window}-month "
-                f"house median moved **{yoy}** year-on-year, computed from {n_sales} "
-                f"recorded sales. ")
+        # NOT "independently measured" -- that read to an owner as corroborated, when the
+        # figure was in fact our weaker Domain-only recomputation. It now comes from the
+        # union pipeline, so the honest description is the one that names the sources.
+        lead = (f"The {b['suburb_display']} rolling {window}-month house median moved "
+                f"**{yoy}** year-on-year, across {n_sales} sales matched between Domain "
+                f"and onthehouse. ")
         if close:
             verdict = ("Both point the same way, and by a similar amount.")
         elif same_dir:
@@ -483,6 +501,12 @@ def compose(bundle: dict) -> tuple[str, FactBook]:
         limits += (f"The {b['suburb_display']} median rests on {fb.num('n_suburb_sales2', sm['n_now'])} "
                    f"recorded sales, which is a sample of the suburb's activity rather than "
                    f"all of it. ")
+        # The union pipeline carries a 90% CI. Now that we read it instead of recomputing
+        # a bare median, disclose it -- it is the honest width of that figure.
+        if sm.get("ci_low") and sm.get("ci_high"):
+            limits += (f"Its 90% confidence range runs "
+                       f"{fb.money('sub_ci_low', sm['ci_low'])} to "
+                       f"{fb.money('sub_ci_high', sm['ci_high'])}. ")
     limits += (f"Sales within {radius} km of one home, over "
                f"{fb.num('span_months', b['span_months'])} months, cannot show you a whole "
                f"market or what any single buyer would do.\n")

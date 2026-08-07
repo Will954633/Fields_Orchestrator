@@ -32,47 +32,65 @@ Design everything against that sentence.
 
 ---
 
-## 2. The asymmetry, and GPT's rebuttal to my first attempt
+## 2. Resolved: symmetric inspection, asymmetric privilege
 
 Claude has: filesystem, bash, Cosmos (~40k property records, precomputed suburb medians), web search,
-chart rendering, internal briefs. GPT has: an API endpoint and whatever Claude pastes.
+chart rendering, internal briefs. GPT originally had: an API endpoint and whatever Claude pasted.
 
 My first design said "roles are asymmetric but power is equal — GPT gets data requisitions and a veto."
-GPT rejected that as insufficient, and it was right:
+GPT rejected that, and it was right:
 
 > "A veto without guaranteed access to the underlying evidence is mostly a power to delay, not a power
 > to govern. […] I become either an obstructionist demanding endless paste-ins, or a ceremonial sceptic
 > who eventually accepts Claude's account because the alternative is stalling. Neither is peer review."
 
-So requisitions alone do not fix the asymmetry. Two things replace them.
+**So we removed the asymmetry instead of compensating for it.** `lib/vm_agent.py` gives GPT its own
+read-only view of this VM: allowlisted shell, read-only Mongo across `Gold_Coast` / `property_data` /
+`system_monitor`, and optional public HTTP GET. It inspects the code and the database itself.
 
-### 2.1 The evidence packet standard
+This was not a theoretical improvement. On its first real run — a 41-call audit of the market-data
+pipeline — GPT found that `scripts/owner_article/build_owner_article.py`, the article **posted to a
+homeowner's address**, was computing its own Domain-only suburb median and calling it "independently
+measured". It understated Burleigh Waters by $125,000 and Varsity Lakes by $100,000. Nothing in the
+blind-review design would have surfaced that, because I would never have thought to paste that file.
+Fixed; see fix-history `[OWNER-ARTICLE-MEDIAN-BYPASS]`.
 
-No claim capable of changing the article's conclusion reaches a draft without a packet containing:
+### 2.1 The privilege boundary
 
-- exact claim text
-- source, access date, source class
-- query / script / pipeline identifier
-- time window and geography
-- numerator, denominator, sample size, exclusions
-- the relevant raw output or a sufficiently complete tabular extract — **not a prose summary**
-- known limitations
-- classification: directly observed fact / calculated statistic / interpretation
-- a stable artifact path + hash, so a later reviewer can prove the input did not change
+Inspection is symmetric. **Privilege is deliberately not.**
 
-### 2.2 The omission log
+| | GPT | Claude |
+|---|---|---|
+| Read code, logs, database | yes | yes |
+| Public HTTP GET | yes (opt-in per run) | yes |
+| Write files, DB, git, deploy | **no** | yes, under the normal permission layer |
+| Arbitrary code execution | **no** (`python3` is off the allowlist by design) | yes |
+| Read credential file *contents* | **no** (paths and existence visible) | yes |
 
-Every packet ships with what is *missing*: sources searched, sources excluded and why, conflicting
-figures found, queries that failed, reliability warnings still unresolved. Without this, GPT is
-reviewing a curated record and cannot know it.
+The reason is not distrust of the model. It is that this VM holds the Cosmos URI, a GitHub PAT with
+write access, Facebook tokens and Google OAuth, and **GPT's context leaves the building to a
+third-party API**. So credential contents are blocked and every tool result is scrubbed for
+secret-shaped strings on the way back. Resource guards exist too — 30s command timeouts, capped
+output, forced Mongo limits — because this box has been wedged before by a runaway recursive grep.
 
-### 2.3 Provenance labels on GPT's own output
+When GPT wants something changed, it returns a `PROPOSED ACTION` and Claude executes it. That keeps a
+human able to see every mutation without reducing GPT to a commentator.
 
-GPT labels every approval `DIRECTLY INSPECTED` / `REPORTED BY CLAUDE` / `UNFULFILLED`. Only
-`DIRECTLY INSPECTED` may be described internally as reviewed. This stops the run from quietly
-accumulating false assurance — and it is GPT's own idea, which makes it likelier to be honoured.
+### 2.2 What this simplifies
 
-### 2.4 The median pipeline needs a machine-readable assertion
+The evidence-packet standard, omission log and `DIRECTLY INSPECTED` labels in the original design all
+existed to compensate for GPT being blind. With direct access, `DIRECTLY INSPECTED` becomes the
+default rather than the exception, and **epistemic laundering stops being the dominant risk** — GPT
+can go and look. What survives from that machinery is the lighter, still-useful part:
+
+- **Provenance still gets asserted** for any figure that reaches a reader (§2.3) — that is about the
+  data being right, not about who can see it.
+- **The omission log survives in weakened form**: whoever assembles the final evidence set still states
+  what was searched and excluded, because a *jointly* curated record can still be curated.
+- **The full packet standard is now reserved** for claims neither agent can verify from this VM —
+  external market data, third-party forecasts, anything from web research.
+
+### 2.3 The median pipeline needs a machine-readable assertion
 
 Our medians are valid only from the Domain ∪ onthehouse union pipeline, and a different script has
 silently overwritten them three times. So a median may not be consumed unless a provenance assertion
@@ -87,8 +105,10 @@ this; the harness calls it rather than trusting the field.
 **A. Sycophantic convergence.** Two models agreeing warmly, producing confident mush. Prompt
 exhortations ("be critical") do nothing. Only mechanism works — §4.
 
-**B. Epistemic laundering.** §1. Countered by the packet standard, the omission log and provenance
-labels.
+**B. Epistemic laundering.** §1. **Largely dissolved** by giving GPT direct read access (§2) — it no
+longer has to accept a narrated version of the system. The residue is that Claude still chooses the
+*brief*, and a question never asked is a blind spot no amount of tool access fixes. Countered by
+letting GPT propose its own audit targets rather than only answering ours.
 
 **C. Evidence-availability bias — the one I had not seen.** GPT's answer to "what am I not seeing":
 
@@ -264,27 +284,83 @@ postcodes. This will make the article look lopsided. Confirm that is acceptable.
 
 ---
 
-## 9. What is built
+## 9. The experiment battery — is the duo actually better?
+
+The article was the original test case, but article quality is a slow, taste-based signal. So the
+battery leads with domains where **the verdict is objective**, and treats article and ad quality as a
+separate, slower track.
+
+### The head-to-head design
+
+Each experiment has one brief (`experiments/_contract.md` + `experiments/<E>.md`) run by two arms with
+the *same* read-only access:
+
+- **GPT arm** — `gpt-5.6-terra` via `lib/vm_agent.py`
+- **Claude arm** — Opus 5, read-only, explicitly forbidden from seeing the GPT arm's output
+
+Both emit findings in an identical block format, so they can be diffed. That gives three metrics that
+answer "is the duo worth it?" without needing a taste judge:
+
+| Metric | What it tells us |
+|---|---|
+| **Overlap** | findings both arms independently found — the baseline either model gets alone |
+| **Complementarity** | verified findings only ONE arm found — the direct value of running both |
+| **Cross-examination kill rate** | how many of each arm's findings die when the other attacks them — the measure of how much confident-but-wrong output pairing prevents |
+
+Complementarity is the number that justifies the duo. Kill rate is the number that justifies the
+adversarial protocol rather than just concatenating two reports.
+
+### The battery
+
+| # | Domain | Why it is here | Grading |
+|---|---|---|---|
+| E1 | **Cost** — avoidable recurring spend | pre-revenue, finite runway | objective: a saving is real or it is not |
+| E2 | **Growth / leads** — what we should be doing and are not | the binding constraint is inbound enquiry | semi-objective: a dead funnel step is verifiable, a new idea is not |
+| E3 | **Correctness** — what is silently wrong right now | proven productive; found the owner-article bug | objective: reproduces or does not |
+| E4 | **Unrecognised assets** — what we have and have not realised | highest ceiling, highest hallucination risk | objective on existence, subjective on value |
+
+Queued, not yet run: SEO/indexation audit, website conversion-path audit, process simplification,
+code-quality/refactor, article head-to-head against an already-published piece, and Facebook ad
+head-to-head against our best performers. The last two need a blinded rubric and eventually real
+performance data, which is why they are not first.
+
+**Cost shape worth knowing:** each turn resends the whole history, so a tool-using run costs
+*quadratically* in tool calls, not linearly. The thinking is cheap; the 45-call trajectory is what you
+pay for. `Result.cost_usd` reports actuals per run so the economics stay visible.
+
+---
+
+## 10. What is built
 
 ```
 AI_Collaboration_Experiement/
 ├── 00_CONCEPT.md                     ← this file
-├── lib/gpt_peer.py                   ← GPT transport. Constitution injected every turn;
-│                                        every exchange appended to transcript.jsonl before return.
-│                                        --health-check probes at realistic prompt size.
+├── run_experiment.py                 ← run one arm of one experiment on the shared brief
+├── lib/gpt_peer.py                   ← plain GPT transport (no tools). Constitution injected every
+│                                        turn; --health-check probes at realistic prompt size.
+├── lib/vm_agent.py                   ← GPT + read-only VM surface (shell / Mongo / HTTP), guards,
+│                                        per-run cost accounting. The thing that made this work.
 ├── prompts/constitution.md           ← binding editorial + data-reliability rules, both agents
 ├── prompts/gpt_role.md               ← GPT's standing role and behavioural contract
-└── runs/000_design_review/
-    ├── transcript.jsonl
-    └── GPT_DESIGN_CRITIQUE.md        ← the critique this document is built from
+├── experiments/_contract.md          ← shared output format + verification rules, every arm
+├── experiments/E1_cost.md            ← the four briefs currently in the battery
+├── experiments/E2_growth.md
+├── experiments/E3_correctness.md
+├── experiments/E4_unknown.md
+└── runs/
+    ├── 000_design_review/            ← GPT_DESIGN_CRITIQUE.md — the critique this doc is built from
+    └── E*/                           ← BRIEF.md + <arm>.jsonl + <arm>.md per experiment
 ```
 
-**Route verified:** `gpt-5.6-terra` responding, ~17.5k-char reasoned output on a real prompt.
+**Verified:** route live; guard suite confirms credential contents, `python3`, `rm`, `gh`, `curl`,
+Mongo `$out`/`$merge` and private-range HTTP are all blocked while legitimate `grep -E` alternation
+still works.
 
 ### Not yet built
 
 - The conductor (`run_article.py`) that walks phases 0–11 and enforces sealing/hashing
-- Evidence-packet + omission-log schemas and the claim-ledger store
+- The cross-examination stage — each arm attacking the other's findings — which is where the kill-rate
+  metric comes from. Currently the two arms are compared by hand.
 - Mechanical compliance gate (regex for forbidden words, `$1,250,000` format, advice/prediction phrasings)
 - Dissent register store + blocking logic
 - `process_log.jsonl` writer and the blinded rubric evaluator
