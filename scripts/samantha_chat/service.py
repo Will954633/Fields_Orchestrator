@@ -294,13 +294,17 @@ def _redact_sources(reply: str) -> tuple[str, list[str]]:
 def _ask_max(messages: list[dict], context: dict) -> tuple[str, dict]:
     """One turn through the Max CLI. Returns (reply, meta)."""
     ctx_line = ""
-    if context.get("readout") and context.get("key") != "home":
+    # Prefer `label` (ordinary case) over `readout` (the uppercase screen form).
+    # She quotes the heading back, and quoting the caps means shouting the
+    # street name in every reply. Older clients send readout only.
+    heading = context.get("label") or context.get("readout")
+    if heading and context.get("key") != "home":
         # Deliberately careful wording. The earlier version said the readout was
         # "already loaded", and the model reasonably concluded it therefore HAD
         # that suburb's data — then produced it. Saying what is actually on
         # screen, and nothing more, removes the invitation.
         ctx_line = (f"\n\nPAGE CONTEXT: the visitor is on a {context.get('key')} page "
-                    f"headed '{context['readout']}'. That heading is all you know from "
+                    f"headed '{heading}'. That heading is all you know from "
                     f"the page — it is a label, not data. Do not ask them to repeat it.")
     elif context.get("key") == "home":
         ctx_line = "\n\nPAGE CONTEXT: no property is loaded. If they want an analysis, ask which address."
