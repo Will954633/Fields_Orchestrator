@@ -444,7 +444,15 @@ def cmd_status():
     creds = get_credentials()
     service = build("searchconsole", "v1", credentials=creds)
 
-    site_url = "sc-domain:fieldsestate.com.au"
+    # The DOMAIN property does not exist — Search Console offers DNS verification for
+    # `sc-domain:fieldsestate.com.au`, which means it was never created. The verified
+    # property is the URL-prefix form, confirmed 2026-08-08 via sites().list():
+    #   https://fieldsestate.com.au/ -> siteFullUser
+    # Trailing slash is significant; the API matches the verified string exactly.
+    # `scripts/brain2/seo_landing_performance.py:35` already probes both forms in order,
+    # which is why its GSC pull kept working while this one silently used a property that
+    # does not exist.
+    site_url = "https://fieldsestate.com.au/"
     # Try URL prefix if domain property doesn't work
     try:
         result = service.searchanalytics().query(
