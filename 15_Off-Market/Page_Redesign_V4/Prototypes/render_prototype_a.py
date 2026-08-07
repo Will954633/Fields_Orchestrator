@@ -411,12 +411,18 @@ def market_insights(suburb_display):
 
 
 def median_chart(mi):
-    """Quarterly median and the rolling 12-month median, full history.
+    """Quarterly median and the rolling 12-month median, full history, scrubable.
 
-    Palette follows THIS page, not the market-intelligence page's blue/green:
-    the rolling median — the figure the copy tells the reader to trust — is in
-    the accent, and the noisier quarterly line is muted behind it. The colour
+    Palette follows THIS page, not the market-intelligence blue/green: the
+    rolling median — the figure the copy tells the reader to trust — is in the
+    accent, and the noisier quarterly line is muted behind it, so the colour
     carries the same message as the words.
+
+    Interaction: a pointer guideline with the values at that quarter. `pointer*`
+    events cover mouse and touch in one path. `touch-action: pan-y` on the plot
+    lets a vertical swipe still scroll the page while a horizontal drag scrubs —
+    capturing both axes would trap the reader inside the chart, which is the
+    scroll-jacking the brief rules out.
     """
     q = [x for x in (mi.get("medianPriceHistory") or []) if x.get("medianPrice")]
     roll = [x for x in (mi.get("rollingMedianSeries") or mi.get("rolling12mMedianSeries") or [])
@@ -426,8 +432,8 @@ def median_chart(mi):
     W, H = 680, 210
     L, R, T, B = 46, 8, 12, 26
     labels = [x["quarter"] for x in q]
-    idx = {lab: i for i, lab in enumerate(labels)}
-    vals = [x["medianPrice"] for x in q] + [x["rollingMedian"] for x in roll]
+    rmap = {x["quarter"]: x["rollingMedian"] for x in roll}
+    vals = [x["medianPrice"] for x in q] + list(rmap.values())
     top = max(vals) * 1.06
     n = len(q) - 1
 
@@ -437,11 +443,9 @@ def median_chart(mi):
     def Y(v):
         return T + (1 - v / top) * (H - T - B)
 
-    def path(points):
-        return "M " + " L ".join(f"{X(i):.1f},{Y(v):.1f}" for i, v in points)
-
-    qp = path([(i, x["medianPrice"]) for i, x in enumerate(q)])
-    rp = path([(idx[x["quarter"]], x["rollingMedian"]) for x in roll if x["quarter"] in idx])
+    qp = "M " + " L ".join(f"{X(i):.1f},{Y(x['medianPrice']):.1f}" for i, x in enumerate(q))
+    rpts = [(i, rmap[lab]) for i, lab in enumerate(labels) if lab in rmap]
+    rp = ("M " + " L ".join(f"{X(i):.1f},{Y(v):.1f}" for i, v in rpts)) if rpts else ""
 
     grid = []
     step = 400_000 if top <= 2_200_000 else 500_000
@@ -452,20 +456,34 @@ def median_chart(mi):
                     f'<text x="{L-6}" y="{Y(v)+3:.1f}" text-anchor="end" font-size="8.5" '
                     f'fill="var(--muted)">${v/1000:.0f}k</text>')
         v += step
+    ticks = "".join(
+        f'<text x="{X(i):.1f}" y="{H-8}" text-anchor="middle" font-size="8" '
+        f'fill="var(--muted)">{E(str(labels[i]))}</text>'
+        for i in range(0, len(q), max(1, len(q) // 7)))
 
-    ticks = []
-    for i in range(0, len(q), max(1, len(q) // 7)):
-        ticks.append(f'<text x="{X(i):.1f}" y="{H-8}" text-anchor="middle" font-size="8" '
-                     f'fill="var(--muted)">{E(str(labels[i]))}</text>')
+    # Points the scrubber reads. Kept as data rather than re-derived in JS so the
+    # chart and the readout can never disagree about a quarter.
+    pts = [{"q": lab, "x": round(X(i), 1),
+            "qy": round(Y(q[i]["medianPrice"]), 1), "qv": q[i]["medianPrice"],
+            "ry": round(Y(rmap[lab]), 1) if lab in rmap else None,
+            "rv": rmap.get(lab)}
+           for i, lab in enumerate(labels)]
 
     return (
-        f'<div class="mchart"><svg viewBox="0 0 {W} {H}" width="100%" role="img" '
-        f'aria-label="Quarterly and rolling twelve-month median house price">'
-        + "".join(grid) + "".join(ticks)
+        f'<div class="mchart" data-pts=\'{json.dumps(pts)}\' data-h="{H}" data-w="{W}">'
+        f'<svg viewBox="0 0 {W} {H}" width="100%" role="img" '
+        f'aria-label="Quarterly and rolling twelve-month median house price, {labels[0]} to '
+        f'{labels[-1]}">'
+        + "".join(grid) + ticks
         + f'<path d="{qp}" fill="none" stroke="#C4B5A4" stroke-width="1.4"/>'
         + (f'<path d="{rp}" fill="none" stroke="var(--accent)" stroke-width="2.4" '
            f'stroke-linejoin="round"/>' if rp else "")
+        + f'<line class="scrub" x1="0" x2="0" y1="{T}" y2="{H-B}" stroke="var(--ink)" '
+          f'stroke-width="1" opacity="0"/>'
+          '<circle class="dotq" r="3.2" fill="#C4B5A4" opacity="0"/>'
+          '<circle class="dotr" r="4" fill="var(--accent)" opacity="0"/>'
         + '</svg>'
+        '<div class="mtip" hidden></div>'
         '<div class="mlegend"><span class="lq">Quarterly median</span>'
         '<span class="lr">Rolling 12-month median</span></div></div>')
 
@@ -933,7 +951,18 @@ details .body{padding-top:12px;font-size:.94rem;color:var(--ink-2)}
 /* median price chart */
 .mchart{margin:18px 0 10px;padding:14px 12px 10px;background:var(--paper-2);
   border:1px solid var(--line-2);border-radius:8px}
-.mchart svg{display:block}
+.mchart{position:relative}
+/* pan-y: a vertical swipe still scrolls the page, a horizontal drag scrubs.
+   Capturing both axes would trap the reader inside the chart. */
+.mchart svg{display:block;touch-action:pan-y;cursor:crosshair}
+.mtip{position:absolute;top:6px;transform:translateX(-50%);pointer-events:none;
+  background:var(--ink);color:var(--paper);border-radius:5px;padding:7px 10px;
+  font-size:.74rem;line-height:1.45;white-space:nowrap;z-index:2;
+  box-shadow:0 6px 18px rgba(34,56,44,.22)}
+.mtip b{display:block;font-family:var(--serif);font-size:.84rem;margin-bottom:2px}
+.mtip span{display:block}
+.mtip .tq{opacity:.72}
+.mtip .tr{color:var(--gold, #D28C5E)}
 .mlegend{display:flex;gap:16px;margin-top:8px;font-size:.76rem;color:var(--muted)}
 .mlegend span{display:flex;align-items:center;gap:6px}
 .mlegend span:before{content:"";width:16px;height:2px;border-radius:2px;background:#C4B5A4}
@@ -994,6 +1023,42 @@ if(bg&&mn){
   addEventListener('keydown',e=>{if(e.key==='Escape')setOpen(false);});
 }
 addEventListener('scroll',()=>h.classList.toggle('stuck',scrollY>240),{passive:true});
+// median chart scrubber — pointer events cover mouse and touch in one path.
+document.querySelectorAll('.mchart').forEach(box=>{
+  let pts; try{pts=JSON.parse(box.dataset.pts)}catch(e){return}
+  if(!pts||!pts.length) return;
+  const svg=box.querySelector('svg'), tip=box.querySelector('.mtip');
+  const line=box.querySelector('.scrub'), dq=box.querySelector('.dotq'), dr=box.querySelector('.dotr');
+  const W=+box.dataset.w, money=v=>'$'+Math.round(v).toLocaleString();
+  const show=(clientX)=>{
+    const r=svg.getBoundingClientRect();
+    const vx=(clientX-r.left)/r.width*W;               // client px -> viewBox units
+    let best=pts[0];
+    for(const p of pts) if(Math.abs(p.x-vx)<Math.abs(best.x-vx)) best=p;
+    line.setAttribute('x1',best.x); line.setAttribute('x2',best.x); line.setAttribute('opacity','.35');
+    dq.setAttribute('cx',best.x); dq.setAttribute('cy',best.qy); dq.setAttribute('opacity','1');
+    if(best.ry!=null){dr.setAttribute('cx',best.x);dr.setAttribute('cy',best.ry);dr.setAttribute('opacity','1');}
+    else dr.setAttribute('opacity','0');
+    tip.innerHTML='<b>'+best.q+'</b>'
+      +'<span class="tq">Quarterly '+money(best.qv)+'</span>'
+      +(best.rv!=null?'<span class="tr">12-month '+money(best.rv)+'</span>':'');
+    tip.hidden=false;
+    // Keep the tip inside the CARD. It is positioned against .mchart, which is
+    // padded, so clamping against the SVG's own width let it hang off the right
+    // edge — measure the offset rather than assuming they share an origin.
+    const cr=box.getBoundingClientRect();
+    const px=(r.left-cr.left)+best.x/W*r.width;
+    const half=tip.offsetWidth/2;
+    tip.style.left=Math.max(half+6,Math.min(cr.width-half-6,px))+'px';
+  };
+  const hide=()=>{tip.hidden=true;line.setAttribute('opacity','0');
+    dq.setAttribute('opacity','0');dr.setAttribute('opacity','0');};
+  svg.addEventListener('pointermove',e=>show(e.clientX));
+  svg.addEventListener('pointerdown',e=>show(e.clientX));
+  svg.addEventListener('pointerleave',hide);
+  svg.addEventListener('pointercancel',hide);
+});
+
 // seasonality month tiles
 document.querySelectorAll('.mcell').forEach(c=>c.addEventListener('click',()=>{
   const i=c.dataset.i;
@@ -1633,6 +1698,47 @@ def render(slug, proto="full", version=LATEST):
 
     import re as _re
     body = "".join(P)
+
+    # ── re-chain the forward cues ────────────────────────────────────
+    # Every cue was written pointing at the section the author expected to come
+    # next. Sections omit themselves on thin properties — 2 of 5 pages had a
+    # dead `#nearby` because the obvious-comparable section never rendered — so
+    # a hard-coded target is a link to nothing and a question the page never
+    # answers. This is the same job `emit_v4._rechain` does for the deck:
+    # re-point each cue at the section that ACTUALLY follows it, and take that
+    # section's own question with it.
+    CUE = {
+        "which": "So what do the sales say? \u2193",
+        "answer": "See what the sales support \u2193",
+        "nearby": "First, one sale nearby is worth looking at \u2193",
+        "comps": "See the strongest sales \u2193",
+        "different": "So what makes this one different? \u2193",
+        "reliable": "So how wrong could you be? \u2193",
+        "dispersion": "Then why do the other numbers disagree? \u2193",
+        "since": "What has it done since? \u2193",
+        "timing": "Is now the right time? \u2193",
+        "now": "What\u2019s moving around this home right now? \u2193",
+        "buyer": "Who would actually want it? \u2193",
+        "correct": "What if something here is wrong? \u2193",
+        "plan": "And if you ever did move? \u2193",
+        "next": "What else is there? \u2193",
+    }
+    order = _re.findall(r'<section id="([^"]+)"', body)
+
+    def _rechain(m):
+        head, target = m.group(1), m.group(2)
+        at = body.rfind('<section id=', 0, m.start())
+        here = _re.match(r'<section id="([^"]+)"', body[at:]) if at >= 0 else None
+        cur = here.group(1) if here else None
+        if target in order and order.index(target) > (order.index(cur) if cur in order else -1):
+            return m.group(0)                     # already points forward, leave it
+        nxt = next((sid for sid in order[order.index(cur) + 1:]), None) if cur in order else None
+        if not nxt:
+            return ""                             # nothing follows — drop the cue entirely
+        label = CUE.get(nxt) or ("Keep reading " + chr(0x2193))
+        return f'{head}href="#{nxt}">{label}</a>'
+
+    body = _re.sub(r'(<a class="cue" )href="#([^"]+)">.*?</a>', _rechain, body, flags=_re.S)
 
     # Sections that actually rendered, in document order, labelled by their eyebrow.
     secs = []
