@@ -78,7 +78,12 @@ VERSIONS = {
             "Is now the right time to be selling, or should I wait?",
             "If I sold, where would I go and what could I buy there?",
         ],
-        "promise": ("Nothing here starts a selling process, and nobody calls unless you ask."),
+        # Removed 2026-08-07 (Will). The claim still stands and still appears where
+        # it is earned — the correction section ("not treated as a request for
+        # contact") and the closing CTA ("no contact details required"). Stating
+        # it up front, before anything has been offered, answered a question the
+        # reader had not asked yet.
+        "promise": None,
         "preamble": {
             "heading": "Two property sites. Two different values for the same home. "
                        "Which one is right?",
@@ -744,7 +749,8 @@ def render(slug, proto="full", version=LATEST):
 
     add(f'<p class="lede" style="margin-top:26px">{E(V["questions_intro"])}</p>')
     add('<ul class="qs">' + "".join(f'<li>{E(q)}</li>' for q in V["questions"]) + '</ul>')
-    add(f'<div class="promise">{E(V["promise"])}</div>')
+    if V.get("promise"):
+        add(f'<div class="promise">{E(V["promise"])}</div>')
     add('</div></section>')
 
     # ── preamble · the two-portals problem, before any number of ours ────
@@ -1281,7 +1287,7 @@ def render(slug, proto="full", version=LATEST):
 
     header = (
         '<header class="top"><div class="topin">'
-        '<img class="brand" src="brand/fields-fullname-grass.png" alt="Fields">'
+        '<img class="brand" src="brand/fields-hero-grass.png" alt="Fields">'
         f'<span class="stickyaddr">{E(short)}</span>'
         '<div class="hright"><span class="tag">Private report</span>'
         '<button class="burger" id="burger" aria-expanded="false" aria-controls="menu" '
@@ -1362,7 +1368,7 @@ ul.idx .go{{font-size:.86rem;color:var(--accent);white-space:nowrap}}
 ul.idx a:hover .go{{text-decoration:underline}}
 </style></head><body>
 <header class="top"><div class="topin">
-<img class="brand" src="brand/fields-fullname-grass.png" alt="Fields">
+<img class="brand" src="brand/fields-hero-grass.png" alt="Fields">
 <span class="tag">Private report</span></div></header>
 <section><div class="wrap">
 <div class="eyebrow">Off-market page redesign · V4</div>
