@@ -144,14 +144,32 @@ def singularise_segment(label):
 
 # ---------------------------------------------------------------- benchmark layer
 def build_benchmarks(db, suburb):
-    """Compute suburb + bed-band price benchmarks from our own sold House corpus."""
+    """Compute suburb + bed-band price benchmarks from our own sold House corpus.
+
+    ⚠ `listing_price` is deliberately NOT in the price chain. It is the ASKING price, and
+    a sold analysis has no business treating one as a transaction — the same defect fixed
+    in the article path as [HOWITSOLD-ASKING-PRICE-CAMPAIGN] (2026-08-05) and missed here.
+    Measured cost of removing it: 3 documents in Robina, 3 in Burleigh Waters, 0 in
+    Varsity Lakes. Six records against a correctness defect on ~767 public pages.
+
+    The corpus is unbounded in time by design rather than by oversight: our sold records
+    only reach back about two years, so a window changes almost nothing while costing
+    samples. Measured 2026-08-08 — Robina all-time and 24-month medians are IDENTICAL
+    ($1,475,000, n=371 both); Burleigh Waters $1,860,000 vs $1,865,000; Varsity Lakes
+    $1,300,000 vs $1,350,000 on 71 fewer sales. So the fix is DISCLOSURE, not truncation:
+    the returned `period_from`/`period_to` let the copy state what the benchmark covers.
+    """
     prices, doms, sqm = [], [], []
     by_band, by_quarter = {}, {}
+    sold_dates = []
     for d in db[suburb].find({"listing_status": "sold", "property_type": "House"}):
-        p = parse_price(d.get("sale_price"), d.get("listing_price"), d.get("last_sale_price"))
+        p = parse_price(d.get("sale_price"), d.get("last_sale_price"))
         if not p:
             continue
         prices.append(p)
+        _sd = parse_date(d.get("sold_date"))
+        if _sd:
+            sold_dates.append(_sd)
         bb = bed_band(d.get("bedrooms"))
         if bb:
             by_band.setdefault(bb, []).append(p)
@@ -175,6 +193,10 @@ def build_benchmarks(db, suburb):
         "median": st.median(prices) if prices else None,
         "dom_median": st.median(doms) if doms else None,
         "sqm_median": st.median(sqm) if sqm else None,
+        # Actual span of the corpus behind every figure above, so the copy can say what it
+        # is rather than implying an open-ended market truth.
+        "period_from": min(sold_dates).strftime("%b %Y") if sold_dates else None,
+        "period_to": max(sold_dates).strftime("%b %Y") if sold_dates else None,
     }
 
 def segment_for(p, bench):
@@ -195,7 +217,10 @@ def segment_for(p, bench):
 # `score` = notability (higher floats to the top). `tier` = data richness.
 
 def m_price_vs_market(p, bench):
-    price = parse_price(p.get("sale_price"), p.get("listing_price"))
+    # NOT p["listing_price"] — the whole sentence below is "it SOLD for X". Falling back
+    # to the asking price would state an aspiration as a transaction. If we have no sale
+    # price for this home, there is no price-vs-market insight to write.
+    price = parse_price(p.get("sale_price"), p.get("last_sale_price"))
     if not price or not bench["prices"]:
         return None
     label, arr = segment_for(p, bench)
@@ -205,14 +230,21 @@ def m_price_vs_market(p, bench):
     # "51st percentile of 179 comparable sales" is analyst shorthand. A reader
     # who has never seen a percentile still understands "51% of them sold for
     # less" — same number, no glossary required.
+    # "typically go for" is present tense and reads as a claim about today's market. The
+    # corpus is historical and ours, so the verb is past and the span is stated.
     if abs(delta) < max(0.02 * med, 15000):
-        lead = (f"At {money(price)}, it sold within {money(abs(delta))} of what "
-                f"{label} typically go for — {money(med)}.")
+        lead = (f"At {money(price)}, it sold within {money(abs(delta))} of the median "
+                f"{label} have sold for — {money(med)}.")
     else:
         lead = (f"At {money(price)}, it sold {money(abs(delta))} "
-                f"{'above' if delta > 0 else 'below'} the {money(med)} that "
-                f"{label} typically go for.")
-    text = f"{lead} Of the {len(arr)} comparable sales we hold, {pc}% went for less."
+                f"{'above' if delta > 0 else 'below'} the {money(med)} median "
+                f"{label} have sold for.")
+    span = ""
+    if bench.get("period_from") and bench.get("period_to"):
+        span = (f" from {bench['period_from']}" if bench["period_from"] == bench["period_to"]
+                else f" from {bench['period_from']} to {bench['period_to']}")
+    text = (f"{lead} Of the {len(arr)} comparable sales we hold{span}, {pc}% went for "
+            f"less. That is the sales we record, not every sale in the suburb.")
     # Base score sits above every other module's ceiling (campaign_speed tops out
     # at 55) so the price ALWAYS leads. This is the one fact the page exists to
     # answer — a reader who searched the address wants the sale price first, not
@@ -369,7 +401,7 @@ def build_headline(top, p):
     fixes the sentence and adds real information: how current this sale is, which
     is the first thing anyone judging a comparable wants to know.
     """
-    price = parse_price(p.get("sale_price"), p.get("listing_price"))
+    price = parse_price(p.get("sale_price"), p.get("last_sale_price"))
     if not price:
         return f"Sold in {(p.get('suburb') or '').strip()}".strip()
 
@@ -405,7 +437,7 @@ def build_summary(selected):
 def analyse(p, bench):
     insights = [ins for m in MODULES if (ins := m(p, bench))]
     insights.sort(key=lambda x: x["score"], reverse=True)
-    price = parse_price(p.get("sale_price"), p.get("listing_price"))
+    price = parse_price(p.get("sale_price"), p.get("last_sale_price"))
     completeness = round(len([i for i in insights]) / len(MODULES), 2)
     top = insights[0] if insights else None
     analysis = {
@@ -443,7 +475,7 @@ def verify(analysis, p):
     if ADVICE.search(blob):
         problems.append("advice/prediction language detected")
     # price claim must parse back to the real sold price
-    real = parse_price(p.get("sale_price"), p.get("listing_price"))
+    real = parse_price(p.get("sale_price"), p.get("last_sale_price"))
     for ins in analysis["insights"]:
         if ins["type"] == "price_vs_market":
             if ins["evidence"]["price"] != real:
@@ -501,7 +533,7 @@ def main():
     write = args.backfill and not args.dry_run
     stats = {"published": 0, "needs_review": 0, "skipped_no_price": 0}
     for p in cur:
-        if not parse_price(p.get("sale_price"), p.get("listing_price")):
+        if not parse_price(p.get("sale_price"), p.get("last_sale_price")):
             stats["skipped_no_price"] += 1
             continue
         status, ok = process(db, args.suburb, p, bench, args.dry_run, write)
