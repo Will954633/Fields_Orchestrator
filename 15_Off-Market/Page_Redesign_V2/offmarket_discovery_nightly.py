@@ -132,10 +132,20 @@ def indexed_query():
         "listing_status": {"$nin": ["for_sale", "under_contract"]},
         "url_slug": {"$exists": True, "$nin": [None, ""]},
         "is_waterfront": {"$ne": True},
-        # Multi-lot street addresses (community-title schemes recorded one row per lot,
-        # no unit number) — see scripts/flag_multilot_offmarket.py. Must stay in lockstep
-        # with getOffMarketUrls() in generate-sitemap.mjs and meta() in off-market.$slug.tsx.
+        # Address-identity state, both written by scripts/flag_multilot_offmarket.py.
+        # Must stay in lockstep with getOffMarketUrls() in generate-sitemap.mjs and
+        # meta() in off-market.$slug.tsx.
+        #   offmarket_multilot          — another record IS the published entity
+        #                                 (duplicate/redundant; rename to
+        #                                 offmarket_entity_duplicate is planned)
+        #   offmarket_entity_unresolved — we cannot yet say which entity the
+        #                                 address-level content belongs to
+        # NOTE: this function answers "what is published NOW", so excluding both is
+        # correct here — but it must NEVER be used to discover flag candidates, or
+        # the reconciler cancels its own previous run (the 2026-08-07 oscillator).
+        # Use candidate_query() in that script instead.
         "offmarket_multilot": {"$ne": True},
+        "offmarket_entity_unresolved": {"$ne": True},
         "property_type": {"$nin": NON_HOUSE_TYPES},
         "building_type": {"$nin": NON_HOUSE_TYPES},
         "address": {"$not": UNIT_ADDR_RE},
