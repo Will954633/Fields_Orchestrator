@@ -1634,6 +1634,22 @@ def render(slug, proto="full", version=LATEST):
             when = str(tl[0]["date"])[:7]
         add(f'<p style="margin-top:16px" class="fine">Last recorded sale: '
             f'<b>{E(exact(tl[0]["price"]))}</b> in {E(when)}. No later market sale is recorded.</p>')
+        # The ten-year movement belongs BESIDE the fact that provokes the
+        # question, not two acts later as a section of its own. Act II then
+        # opens on the present, which is what its heading promises.
+        _g = _cards.get("gain") or {}
+        if _g.get("ten_year") or _g.get("cannot_reach"):
+            add('<details class="disc"><summary>See what has happened since</summary>'
+                '<div class="body">')
+            if _g.get("cannot_reach"):
+                add(f'<p class="fine">{E(str(_g["cannot_reach"]).strip())}</p>')
+            if _g.get("since"):
+                add(f'<p>{E(str(_g["since"]).strip())}</p>')
+            if _g.get("ten_year"):
+                add(f'<p>{E(str(_g["ten_year"]).strip())}</p>')
+            if _g.get("means"):
+                add(f'<p class="fine">{E(str(_g["means"]).strip())}</p>')
+            add('</div></details>')
 
     pre = V.get("preamble") or {}
     if pre.get("opener"):
@@ -1937,55 +1953,42 @@ def render(slug, proto="full", version=LATEST):
         add('<div class="src">Fields analysis · n=512 · tested 6 August 2026</div>')
         add('</div></section>')
 
-    # ── 7 · since the last recorded sale ────────────────────────────
-    g = _cards.get("gain") or {}
-    if g.get("bought"):
-        add('<section id="since"><div class="wrap">')
-        add('<div class="eyebrow">Since then</div>')
-        add('<h2>What has happened since the last recorded sale</h2>')
-        add(f'<div class="anchor">{E(str(g["bought"]))}</div>')
-        # ⚠ ORDER IS LOAD-BEARING, as on the deck card. `bought` can be a sale from
-        # decades ago while `ten_year` covers a ten-year window; rendered adjacent
-        # with nothing between them a reader does arithmetic across both and gets
-        # a number we have not evidenced. `cannot_reach` — which states outright
-        # where our series starts — goes BETWEEN them.
-        if g.get("cannot_reach"):
-            add(f'<p class="rangeNote">{E(str(g["cannot_reach"]).strip())}</p>')
-        if g.get("since"):
-            add(f'<p>{E(str(g["since"]).strip())}</p>')
-        if g.get("ten_year"):
-            add('<div class="label">The last ten years</div>')
-            add(f'<p>{E(str(g["ten_year"]).strip())}</p>')
-        if g.get("means"):
-            add(f'<div class="weight"><p>{E(str(g["means"]).strip())}</p></div>')
-        add('<a class="cue" href="#now">And what\'s happening around it now? ↓</a>')
-        add('</div></section>')
-
     # ── 5 · what makes this home different ──────────────────────────
     if sc.get("active_matching") and sc.get("active_total"):
         add('<section id="different"><div class="wrap">')
         add('<div class="eyebrow">This home</div>')
-        anchors = [n["phrase"] for n in (sc.get("notable") or []) if n.get("tier") == "anchor"]
-        if anchors:
-            add(f'<h2>{E(" and ".join(anchors).capitalize())} do not appear together often.</h2>')
-        add('<div class="attrs">')
+        # ⚠ Was assembled by string-joining anchors — "4 bedrooms and 914 m² of
+        # land and 255 m² of internal living and a pool do not appear together
+        # often." Machine-like, in the section that should be one of Act II's
+        # moments of recognition. Written as a sentence, with the counts doing
+        # the persuading rather than adjectives.
+        add("<h2>It isn't any one feature. It's the combination.</h2>")
+        feat = []
         if s.get("bedrooms"):
-            add(f'<div><div class="n">{int(s["bedrooms"])}</div><div class="l">bedrooms</div></div>')
+            feat.append(f'{int(s["bedrooms"])} bedrooms')
+        if s.get("land_sqm"):
+            feat.append(f'a {int(s["land_sqm"])} m\u00b2 block')
+        if s.get("floor_sqm"):
+            feat.append(f'around {int(s["floor_sqm"])} m\u00b2 of internal space')
         if s.get("pool"):
-            add('<div><div class="n">Pool</div><div class="l">on the block</div></div>')
+            feat.append('a pool')
+        if len(feat) > 1:
+            lead = feat[0]
+            add(f'<p class="lede">{E(lead[0].upper() + lead[1:])} is common enough here'
+                + ('. So is a pool' if s.get("pool") else '')
+                + '. But put ' + E(", ".join(feat[:-1])) + ' and ' + E(feat[-1])
+                + ' together, and the field gets much smaller.</p>')
+
+        # The counts do the work the adjectives used to.
         cl = (poi.get("cluster") or {})
-        if cl.get("matching"):
-            add(f'<div><div class="n">{cl["matching"]}</div><div class="l">share the position</div></div>')
-        add('</div>')
-        phrase = " and ".join(anchors) if anchors else None
-        if phrase:
-            add(f'<p>{sc["active_matching"]} of the {sc["active_total"]} homes on the market right '
-                f'now match this one on {E(phrase)}.</p>')
         feats = poi.get("features") or []
+        line = (f'Of the {sc["active_total"]} homes on the market across the comparison area, '
+                f'{sc["active_matching"]} broadly match that combination.')
         if cl.get("matching") and feats:
-            names = ", ".join(f["short"] for f in feats[:-1]) + " and " + feats[-1]["short"] if len(feats) > 1 else feats[0]["short"]
-            add(f'<p>Of the {poi.get("physical_matching")} that share the combination, only '
-                f'<b>{cl["matching"]}</b> sit this close to {E(names)} — all at once.</p>')
+            names = (", ".join(f["short"] for f in feats[:-1]) + " and " + feats[-1]["short"]
+                     if len(feats) > 1 else feats[0]["short"])
+            line += (f' Only {cl["matching"]} also sit this close to {names}.')
+        add(f'<p>{E(line)}</p>')
         add('<p class="fine">That does not set a price by itself. It reduces the number of close '
             'substitutes a buyer can choose from.</p>')
         if B:
@@ -1995,7 +1998,7 @@ def render(slug, proto="full", version=LATEST):
                     f'alt="Homes sharing this combination near {E(short)}" loading="lazy">')
                 add(f'<div class="fine">This home in yellow; the {n_pins} homes currently on the '
                     f'market that share the combination in grey. How far a buyer would have to go '
-                    f'to find a substitute. Mapping · Google</div>')
+                    f'to find a substitute. Mapping \u00b7 Google</div>')
         if feats:
             add('<details><summary>See the distances</summary><div class="body">')
             for f in feats:
@@ -2019,8 +2022,8 @@ def render(slug, proto="full", version=LATEST):
         for title, detail in knowables:
             add(f'<li><span class="kt">{E(title)}</span><span class="kd">{E(detail)}</span></li>')
         add('</ol>')
-        add('<p>The third usually matters more than whether a national index moves two per cent, '
-            'and it is the one the portals never touch.</p>')
+        add('<p>The third can matter more to the decision than a small movement in a national '
+            'index \u2014 and it is usually treated separately from your home\'s value online.</p>')
 
         # Everything that PROVES the above, for a reader who wants to check it.
         add('<details class="disc"><summary>What forecasters currently think</summary>'
@@ -2145,7 +2148,13 @@ def render(slug, proto="full", version=LATEST):
     if bb.get("headline") or by.get("fit"):
         add('<section id="buyer"><div class="wrap">')
         add('<div class="eyebrow">The buyer</div>')
-        add(f'<h2>{E(str(bb.get("headline") or "Who that combination suits"))}</h2>')
+        # ⚠ The engine's headline reads as fact ("Local family upgraders carry
+        # the price"). Without buyer-origin data that is an assertion, and it is
+        # noticeably more promotional than everything around it. Framed as what
+        # it is: one group likely to value this more than average.
+        add('<h2>One buyer group likely to value this combination more than average</h2>')
+        if bb.get("headline"):
+            add(f'<p class="lede">{E(str(bb["headline"]).rstrip("."))}.</p>')
         if bb.get("body"):
             add(f'<p class="lede">{E(str(bb["body"]).strip())}</p>')
         carries, attracts = vd_.get("carries_price") or [], vd_.get("attracts_buyer") or []
@@ -2160,8 +2169,10 @@ def render(slug, proto="full", version=LATEST):
             add('</div>')
             add('<p class="fine">Both matter, and they are not the same thing: one sets what a '
                 'buyer will pay, the other decides whether they come at all.</p>')
-        if by.get("reframe"):
-            add(f'<div class="weight"><p>{E(str(by["reframe"]).strip())}</p></div>')
+        # "To them, it's the one they've been waiting for" is advertising copy
+        # after an otherwise disciplined page. Replaced with the economic point.
+        add('<div class="weight"><p>Those are not just lifestyle details. They help explain which '
+            'buyers are likely to see more value here than the average buyer does.</p></div>')
         add('<a class="cue" href="#correct">What if something here is wrong? ↓</a>')
         add('</div></section>')
 
@@ -2235,19 +2246,27 @@ def render(slug, proto="full", version=LATEST):
         'the photography package · which preparation work would return more than it costs · '
         'settlement structure.</p>')
     add('<p class="fine">That list is the honest part. Anyone who hands you a complete plan from '
-        'public records alone is guessing at the half that needs seeing.</p>')
+        'public records alone is guessing at the part that needs seeing.</p>')
     add('</div></section>')
 
     # ── closing · the next private question ─────────────────────────
     add('<section id="next"><div class="wrap"><div class="closing">')
     add('<div class="eyebrow">The next question</div>')
     add('<h2>The value is only the first question</h2>')
+    # ⚠ The old summary listed only Act I — "where that comes from, what makes
+    # the home different, how far the method has been out" — and understated the
+    # journey by the time the reader reaches it. They have also seen today's
+    # alternatives, what the market can and cannot tell them, and which parts of
+    # a move depend on them. Naming the whole thing is what makes the last
+    # question feel like the only one left.
     if v.get("point"):
         rounded = round(v["point"] / 50_000) * 50_000
-        add(f'<p>The evidence around this home currently centres around approximately '
-            f'{E(money(rounded))}. We have shown where that comes from, what makes the home '
-            f'different, and how far the method has historically been out.</p>')
-    add('<p class="lede">The next question is more personal: if you sold, where would you actually go?</p>')
+        add(f'<p>You now know roughly what the evidence supports \u2014 around '
+            f'{E(money(rounded))} \u2014 where that figure comes from, where this home sits '
+            f'against today\'s alternatives, what the current market can and cannot tell you, '
+            f'and which parts of a move still depend on your circumstances.</p>')
+    add('<p>There is one question we haven\'t answered.</p>')
+    add('<p class="lede">If you sold, where would you actually go?</p>')
     add('<p class="fine">See the homes currently available around the same broad value band, what '
         'waiting changes, and what usually makes a move difficult to coordinate.</p>')
     add('<a class="cta" href="#">Explore where you could go next</a>')
@@ -2288,7 +2307,7 @@ def render(slug, proto="full", version=LATEST):
         # ACT II — opens once the value question has closure. "What has happened
         # since the last recorded sale" starts it: the first thing that is about
         # this home TODAY rather than about the number.
-        ("since",   "What it means now",
+        ("different", "What it means now",
          "You know what the evidence supports. Here is where this home sits in today's market."),
         # ACT III
         ("plan",    "What it would mean for you", None),
@@ -2326,12 +2345,12 @@ def render(slug, proto="full", version=LATEST):
         "nearby": "First, one sale nearby is worth looking at \u2193",
         "comps": "See the strongest sales \u2193",
         "different": "So what makes this one different? \u2193",
-        "reliable": "So how wrong could you be? \u2193",
+        "reliable": "So how wrong could this be? \u2193",
         "dispersion": "Then why do the other numbers disagree? \u2193",
         "since": "What has it done since? \u2193",
         "timing": "Is now the right time? \u2193",
         "now": "What\u2019s moving around this home right now? \u2193",
-        "buyer": "Who would actually want it? \u2193",
+        "buyer": "So who is most likely to value those things? \u2193",
         "correct": "What if something here is wrong? \u2193",
         "plan": "And if you ever did move? \u2193",
         "next": "What else is there? \u2193",
@@ -2343,10 +2362,10 @@ def render(slug, proto="full", version=LATEST):
         at = body.rfind('<section id=', 0, m.start())
         here = _re.match(r'<section id="([^"]+)"', body[at:]) if at >= 0 else None
         cur = here.group(1) if here else None
-        if target in order and order.index(target) > (order.index(cur) if cur in order else -1):
-            return m.group(0)                     # already points forward, leave it
         if cur not in order:
             return m.group(0)
+        # Always re-point at the section that ACTUALLY follows. "Forward" is not
+        # good enough — a cue pointing three sections ahead skips the answer.
         # ⚠ Skip any target this section ALREADY links from a control. The range
         # card carries a "See the strongest comparisons" button, so a cue landing
         # on the same section said the same thing twice — which is what Will
