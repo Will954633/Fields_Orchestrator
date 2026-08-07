@@ -1214,6 +1214,9 @@ details .body{padding-top:12px;font-size:.94rem;color:var(--ink-2)}
 .wbar i{display:block;height:100%;background:var(--accent)}
 .showall{margin-top:4px}
 
+
+.promiseline{font-weight:600;color:var(--ink)}
+
 footer{padding:44px 0 70px;border-top:1px solid var(--line-2);color:var(--muted);font-size:.85rem}
 
 @media(min-width:760px){
@@ -1476,7 +1479,12 @@ def render(slug, proto="full", version=LATEST):
         add('<div class="eyebrow">Why the numbers disagree</div>')
         add(f'<h2>{E(pre["heading"])}</h2>')
         for i, para in enumerate(pre["paras"]):
-            cls = ' class="lede"' if i == 0 else ""
+            # First para sets up the problem; the LAST one is the promise the
+            # rest of the page has to keep, so it carries the emphasis. Styled
+            # by class rather than markup in the copy, so the strings in
+            # VERSIONS stay plain text and keep being escaped.
+            cls = ' class="lede"' if i == 0 else (
+                ' class="promiseline"' if i == len(pre["paras"]) - 1 else "")
             add(f'<p{cls}>{E(para)}</p>')
         add('<a class="cue" href="#answer">See what the sales support ↓</a>')
         add('</div></section>')
