@@ -46,6 +46,54 @@ ACCURACY = {
     "varsity_lakes":   {"n": 207, "mae": 13.8, "median": 13.4, "within10": 36, "contain": 41},
 }
 
+# ── VERSIONS ───────────────────────────────────────────────────────────────
+# Copy that differs between takes lives here, so an earlier wording can be
+# re-rendered rather than reconstructed from memory or git. Anything NOT in this
+# dict is shared by every version — only put a key here when it actually varies,
+# or the versions drift apart in ways nobody intended.
+#
+#   v1  2026-08-06  the questions as Fields posed them, third person
+#   v2  2026-08-07  the owner's OWN words, first person — and a heading block
+#                   that names the two-portals problem before the range appears
+VERSIONS = {
+    "v1": {
+        "questions_intro": "You may be trying to answer three questions privately.",
+        "questions": [
+            "Is the number attached to this home real?",
+            "Is this the wrong time to move?",
+            "And if you sold, where would you go next?",
+        ],
+        "promise": ("This page starts with the first: what the sales around this home actually "
+                    "support. Nothing here starts a selling process, and nobody calls unless "
+                    "you ask."),
+        "preamble": None,
+    },
+    "v2": {
+        "questions_intro": "You may be turning over something like this.",
+        # First person, and phrased as the owner would say it rather than as we
+        # would ask it. The first is a worry, not a question — which is closer to
+        # why someone actually searches their own address.
+        "questions": [
+            "I'm worried online valuations are wrong.",
+            "Is now the right time to be selling, or should I wait?",
+            "If I sold, where would I go and what could I buy there?",
+        ],
+        "promise": ("Nothing here starts a selling process, and nobody calls unless you ask."),
+        "preamble": {
+            "heading": "Two property sites. Two different values for the same home. "
+                       "Which one is right?",
+            "paras": [
+                "The uncomfortable answer is that you can't tell from the number alone.",
+                "What matters is which sales were used, why they were chosen, and what was "
+                "changed to make them genuinely comparable to your home.",
+                "So rather than give you a third unexplained number, we'll show you the sales "
+                "behind ours.",
+            ],
+        },
+    },
+}
+LATEST = "v2"
+
 E = html.escape
 
 
@@ -607,10 +655,11 @@ document.querySelectorAll('.choice').forEach(b=>b.addEventListener('click',()=>{
 """
 
 
-def render(slug, proto="full"):
+def render(slug, proto="full", version=LATEST):
     # A/B/C were build stages (spine -> +evidence -> +living), never reader-facing
     # variants. `full` is the whole flow as presented and is the default; the
     # stage flags remain only for isolating one layer during development.
+    V = VERSIONS[version]
     B = proto in ("b", "c", "full")   # deeper evidence
     C = proto in ("c", "full")        # living page
     b = json.loads((A.BUNDLE_DIR / f"{slug}.json").read_text())
@@ -693,14 +742,30 @@ def render(slug, proto="full"):
         add(f'<p style="margin-top:16px" class="fine">Last recorded sale: '
             f'<b>{E(exact(tl[0]["price"]))}</b> in {E(when)}. No later market sale is recorded.</p>')
 
-    add('<p class="lede" style="margin-top:26px">You may be trying to answer three questions privately.</p>')
-    add('<ul class="qs"><li>Is the number attached to this home real?</li>'
-        '<li>Is this the wrong time to move?</li>'
-        '<li>And if you sold, where would you go next?</li></ul>')
-    add('<div class="promise">This page starts with the first: what the sales around this home '
-        'actually support. Nothing here starts a selling process, and nobody calls unless you ask.</div>')
-    add('<a class="cue" href="#answer">See what the sales support ↓</a>')
+    add(f'<p class="lede" style="margin-top:26px">{E(V["questions_intro"])}</p>')
+    add('<ul class="qs">' + "".join(f'<li>{E(q)}</li>' for q in V["questions"]) + '</ul>')
+    add(f'<div class="promise">{E(V["promise"])}</div>')
     add('</div></section>')
+
+    # ── preamble · the two-portals problem, before any number of ours ────
+    # Named BEFORE the range so the reader meets our figure already knowing the
+    # question is "which sales, and what was changed" rather than "which number
+    # is bigger". Without it our range is just a third unexplained number.
+    pre = V.get("preamble")
+    if pre:
+        add('<section id="which"><div class="wrap">')
+        add('<div class="eyebrow">Why the numbers disagree</div>')
+        add(f'<h2>{E(pre["heading"])}</h2>')
+        for i, para in enumerate(pre["paras"]):
+            cls = ' class="lede"' if i == 0 else ""
+            add(f'<p{cls}>{E(para)}</p>')
+        add('<a class="cue" href="#answer">See what the sales support ↓</a>')
+        add('</div></section>')
+    else:
+        # v1 carried the forward cue on the hero itself.
+        P[-1] = P[-1].replace('</div></section>',
+                              '<a class="cue" href="#answer">See what the sales support ↓</a>'
+                              '</div></section>')
 
     # ── 2 · the answer ──────────────────────────────────────────────
     if v.get("low") and v.get("high"):
@@ -1239,6 +1304,10 @@ def render(slug, proto="full"):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--slug", default="28-wedgebill-parade-burleigh-waters")
+    ap.add_argument("--version", choices=sorted(VERSIONS), default=LATEST,
+                    help=f"copy version (default {LATEST}). Older versions render "
+                         f"alongside rather than replacing, so a wording can be compared "
+                         f"or reverted to.")
     ap.add_argument("--index", action="store_true", help="rebuild the contact sheet only")
     ap.add_argument("--prototype", choices=["full", "a", "b", "c"], default="full",
                     help="full = the complete page (default). a/b/c isolate a build "
@@ -1251,8 +1320,9 @@ def main():
         print("https://vm.fieldsestate.com.au/concepts/off-market/V4_Private_Report/index.html")
         return 0
     suffix = "" if args.prototype == "full" else f"-{args.prototype}"
-    path = OUT / f"{args.slug}{suffix}.html"
-    path.write_text(render(args.slug, args.prototype))
+    vsuffix = "" if args.version == LATEST else f"--{args.version}"
+    path = OUT / f"{args.slug}{suffix}{vsuffix}.html"
+    path.write_text(render(args.slug, args.prototype, args.version))
     print(f"wrote {path}  ({path.stat().st_size:,} bytes)")
     build_index()
     print(f"https://vm.fieldsestate.com.au/concepts/off-market/V4_Private_Report/{path.name}")
@@ -1272,7 +1342,7 @@ def build_index():
     import re
     rows = []
     for f in sorted(OUT.glob("*.html")):
-        if f.name == "index.html" or re.search(r"-[abc]\.html$", f.name):
+        if f.name == "index.html" or re.search(r"(-[abc]|--v\d+)\.html$", f.name):
             continue
         slug = f.stem
         rows.append((slug.replace("-", " ").title(), f.name))
