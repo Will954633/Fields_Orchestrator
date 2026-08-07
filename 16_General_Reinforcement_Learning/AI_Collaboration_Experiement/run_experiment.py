@@ -16,10 +16,21 @@ EXP = Path(__file__).resolve().parent
 sys.path.insert(0, str(EXP / "lib"))
 
 
-def build_brief(name: str) -> str:
-    contract = (EXP / "experiments" / "_contract.md").read_text()
-    body = (EXP / "experiments" / f"{name}.md").read_text()
-    return f"{contract}\n\n---\n\n{body}"
+def build_brief(name: str, exclude_fixed: bool = True) -> str:
+    """Contract + experiment body, plus the already-fixed exclusion list.
+
+    Round 2 (2026-08-08) needs the exclusion list so the run measures INCREMENTAL
+    discovery. Without it both arms re-report the round-1 findings and the
+    complementarity number is meaningless — you cannot tell a new insight from a
+    restatement of one already acted on.
+    """
+    parts = [(EXP / "experiments" / "_contract.md").read_text()]
+    if exclude_fixed:
+        fixed = EXP / "experiments" / "_already_fixed.md"
+        if fixed.exists():
+            parts.append(fixed.read_text())
+    parts.append((EXP / "experiments" / f"{name}.md").read_text())
+    return "\n\n---\n\n".join(parts)
 
 
 def main() -> None:
@@ -28,10 +39,13 @@ def main() -> None:
     ap.add_argument("--arm", default="gpt", choices=["gpt"])
     ap.add_argument("--max-calls", type=int, default=45)
     ap.add_argument("--http", action="store_true")
+    ap.add_argument("--round", default="", help="suffix for the run dir, e.g. r2")
+    ap.add_argument("--include-fixed", action="store_true",
+                    help="omit the already-fixed exclusion list (round-1 behaviour)")
     a = ap.parse_args()
 
-    brief = build_brief(a.experiment)
-    run_dir = EXP / "runs" / a.experiment
+    brief = build_brief(a.experiment, exclude_fixed=not a.include_fixed)
+    run_dir = EXP / "runs" / (f"{a.experiment}_{a.round}" if a.round else a.experiment)
     (run_dir).mkdir(parents=True, exist_ok=True)
     (run_dir / "BRIEF.md").write_text(brief)
 
