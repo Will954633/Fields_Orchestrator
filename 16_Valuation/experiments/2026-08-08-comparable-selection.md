@@ -48,9 +48,25 @@ comparable but larger or better home needs a bigger adjustment, and is penalised
 | nearest 16 by distance only | 580 | 9.73% | 62% | 15.4% | $491,678 | 12% |
 | nearest 8 by distance only | 580 | 10.27% | 59% | 16.1% | $515,430 | 23% |
 
-**Using every candidate is better than selecting eight** — marginally on MAE (8.58% against 8.76%)
-and decisively on the ceiling (**42% → 5%**). The selector is not earning its keep; it is costing
-0.18pp and manufacturing a pathology.
+⚠ **CORRECTED — "the selector is not earning its keep" was wrong.** Measured against a fair
+baseline rather than against no-selection:
+
+| rule | MAE | within 10% | 80% band |
+|---|---|---|---|
+| **shipped selector — 8 comps** | **8.76%** | 66% | 13.7% |
+| random 8 from the same pool | 9.71% | 59% | 15.4% |
+| nearest 8 by distance | 10.27% | 59% | 16.1% |
+| random 20 from the same pool | 8.84% | 66% | 13.3% |
+| all candidates (~47) | 8.58% | 67% | 13.7% |
+
+**The selector is doing real work — 0.95pp better than a random 8, and it beats a random 20.** Using
+everything is 0.18pp better, which is close to noise. On ACCURACY the median-closeness rule costs
+almost nothing.
+
+**Its real cost is distributional.** It is why 42% of homes sell above every comparable in their own
+set against ~12% expected, and using the whole pool takes that to 5%. That matters because **the
+estimate is a weighted mean and can never exceed its priciest input** — so a home genuinely at the
+top of its cohort cannot be represented, no matter how wide the band around it is drawn.
 
 Distance-only selection produces an honest ceiling (12%, exactly fair) but is materially worse on
 accuracy — proximity alone is not enough.
@@ -85,8 +101,11 @@ per-property displacement that survives every intervention above.
 
 ## Recommendation — and why it is not shipped
 
-Use the **whole candidate pool for the calculation**, and keep the best eight **for display**. It is
-free, marginally more accurate, and removes a real pathology.
+Use the **whole candidate pool for the calculation**, and keep the best eight **for display**.
+
+⚠ **Not for the MAE** — that gain is 0.18pp and arguably noise. **For the distribution.** A method
+whose estimate cannot exceed its priciest comparable, combined with a selector that removes the
+priciest comparables, cannot value a home that sits at the top of its own cohort. 42% of homes do.
 
 ⚠ **Not shipped, because it changes the product surface.** The page shows "the 8 strongest
 comparisons", and the appraisal shows line-itemised receipts. Separating *what computes the number*
