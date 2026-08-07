@@ -2260,7 +2260,24 @@ def apply_adjustment_reliability(adjustment_result, reliability=None):
     if not total:
         return adjustment_result
     comp_price = (adjustment_result.get('adjusted_price', 0) or 0) - total
-    shrunk = round(total * lam)
+
+    # ⚠ SCALE THE LINE ITEMS TOO, not just the total.
+    # The receipts on the property and off-market pages list every adjustment and
+    # then a net figure. If the total is shrunk and the items are not, the
+    # itemisation does not add up — measured on 11 Placid Court, items summed to
+    # +$457,605 against a stated net of +$366,084. On a page whose entire claim is
+    # "here is the working", a receipt that does not reconcile is worse than no
+    # receipt. Each line shown must be the adjustment actually applied.
+    for entry in (adjustment_result.get('adjustments') or {}).values():
+        if entry and entry.get('dollars'):
+            entry['dollars_unshrunk'] = entry['dollars']
+            entry['dollars'] = round(entry['dollars'] * lam)
+
+    shrunk = sum((e or {}).get('dollars') or 0
+                 for e in (adjustment_result.get('adjustments') or {}).values())
+    if not (adjustment_result.get('adjustments') or {}):
+        shrunk = round(total * lam)
+
     adjustment_result['total_adjustment_unshrunk'] = total
     adjustment_result['reliability_applied'] = lam
     adjustment_result['total_adjustment'] = shrunk
