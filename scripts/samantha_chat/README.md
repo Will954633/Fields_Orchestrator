@@ -53,7 +53,30 @@ behaviour in sync. There is one copy now.
 
 ## Front end
 
-Nothing loads until it is needed. The footer renders on every route, so:
+### Where the box appears
+
+The footer renders on every route, but the box does not. `hasPageContext()` in
+`pageContext.js` gates it on the same path table that selects the voice line, so the
+pages and the line they get are declared together and cannot drift apart.
+
+Live on: **home**, **property** (`/property/`, `/sold/`), **suburb**
+(`/market-intelligence/`, `/market-metrics/`), **listings** (`/for-sale`), **articles**
+(`/news`, `/articles/`) — every context with a rendered `ctx_*.mp3`. Anywhere else
+(Contact, Analyse Your Home, Compare, Off-Market) there is no box, because the sequence
+would announce "no file selected" on a page that plainly has one.
+
+Widened from home-only on 2026-08-07. The contexts and their voice clips had shipped
+2026-08-04 and sat unreachable behind an `isHome` gate until then.
+
+**This changes what Samantha knows.** On home she opens on "no property is loaded" and
+has to ask which address. On a property page `service.py` hands her the address off the
+screen readout, so she starts already holding the file. That readout comes from
+`data-ovr-address` on the page, *not* the h1 — with published editorial the h1 is the
+headline, so the h1 fallback would have her name an article title as the property.
+
+### Loading
+
+Nothing loads until it is needed:
 
 - Six box frames (~840KB) — first one on `IntersectionObserver`, the rest on hover/focus
 - Sequence + chat + audio (~670KB) — **only on the lever pull**, via dynamic `import()`
@@ -62,7 +85,7 @@ A visitor who never touches the box pays for one image.
 
 ### Tunables, switchable without a deploy
 
-Will has not settled these. Append to the home page URL:
+Will has not settled these. Append to the URL of any page carrying the box:
 
 | Param | Values | Default |
 |---|---|---|
