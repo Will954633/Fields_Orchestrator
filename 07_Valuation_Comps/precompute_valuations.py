@@ -82,7 +82,8 @@ from math import radians, cos, sin, asin, sqrt
 _ORCH_ROOT = "/home/fields/Fields_Orchestrator"
 if _ORCH_ROOT not in sys.path:
     sys.path.insert(0, _ORCH_ROOT)
-from shared.waterfront import classify_water_relationship, WATERFRONT, WATER_VIEW, DRY
+from shared.waterfront import (classify_water_relationship, WATERFRONT, LAKEFRONT,
+                               WATER_VIEW, DRY)
 
 
 # ─── Haversine Distance ──────────────────────────────────────────────────────
@@ -2203,6 +2204,9 @@ _SUBURB_CALIBRATION = {
 # attribute data is, so it should RISE toward 1.0 as data quality improves.
 _ADJUSTMENT_RELIABILITY = 0.80
 
+# Set only inside the thin-lakefront-cohort fallback; see precompute_property_valuation.
+_WATER_WIDEN = False
+
 # ── The published 80% band, per suburb (measured 2026-08-08) ─────────────────
 # 80% coverage is a PROMISE, so the width is whatever each suburb's own
 # measurement requires. A single pooled figure flatters the strong suburbs and
@@ -3182,7 +3186,18 @@ def precompute_property_valuation(db, subject_doc, listings_coll, sold_by_suburb
     subject_water_class, subject_water_reason = classify_water_relationship(subject_doc)
 
     # Find comparable listings from the same suburb collection
-    col_name = subject_doc.get('_collection') or (suburb.lower().replace(' ', '_') if suburb else None)
+    # ⚠ Resolve the suburb from every source we have, not just `suburb`.
+    # Off-market/cadastral records carry LOCALITY ("ROBINA") and no `suburb` at
+    # all — measured 2026-08-08, only 59 of 12,332 off-market houses across the
+    # three suburbs have `suburb` set. Without a fallback the sold-comparable
+    # lookup silently returns [] and the property reports
+    # `insufficient_comparables` with zero comps, which is indistinguishable
+    # from a genuinely thin market. `_collection` is set by the for-sale loop
+    # but not by every caller.
+    col_name = (subject_doc.get('_collection')
+                or (suburb.lower().replace(' ', '_') if suburb else None)
+                or (str(subject_doc.get('LOCALITY') or '').strip().lower().replace(' ', '_') or None)
+                or (getattr(listings_coll, 'name', None) or None))
     comps_query = {
         '_id': {'$ne': subject_doc['_id']},
         'property_type': prop_type,
@@ -3287,9 +3302,19 @@ def precompute_property_valuation(db, subject_doc, listings_coll, sold_by_suburb
         # different market. `water_view` and `dry` are allowed to mix, because
         # they measured statistically indistinguishable (median -0.0% against
         # -0.2%) and splitting them would thin every pool for no accuracy gain.
+        # Three cohorts, not two. WATERFRONT (canal/river/ocean frontage) is a
+        # specialist market and is kept strictly apart. LAKEFRONT is an ordinary
+        # house carrying a measurable location premium (+12-14% inside 30 m), so
+        # it is kept apart from dry stock for comparison but still valued.
+        # water_view and dry are pooled — they measured indistinguishable
+        # (median error -0.0% against -0.2%) and there is no premium past 30 m.
         comp_water_class = classify_water_relationship(doc)[0]
-        if (subject_water_class == WATERFRONT) != (comp_water_class == WATERFRONT):
-            return False
+        if globals().get('_WATER_WIDEN') and subject_water_class == LAKEFRONT:
+            # Thin-cohort fallback: accept lakefront AND water_view together.
+            return comp_water_class in (LAKEFRONT, WATER_VIEW)
+        for _cls in (WATERFRONT, LAKEFRONT):
+            if (subject_water_class == _cls) != (comp_water_class == _cls):
+                return False
 
         # Prestige tier: soft filter — prestige homes prefer prestige comps but
         # don't hard-exclude non-prestige (cohort too small for hard split).
@@ -3332,6 +3357,36 @@ def precompute_property_valuation(db, subject_doc, listings_coll, sold_by_suburb
 
     filtered_comps = [c for c in comparable_docs if in_cohort(c)]
     filtered_sales = [s for s in recent_sales_docs if in_cohort_sold(s)]
+
+    # ⚠ Graceful degradation for thin water cohorts (2026-08-08).
+    # LAKEFRONT is a small cohort — 11 sold houses in Varsity Lakes, 21 in
+    # Robina, 29 in Burleigh Waters — and after the bedroom band and prestige
+    # tier are applied it can reach zero. 11 Placid Court, Varsity Lakes hit
+    # exactly that: a real lakefront home returning `insufficient_comparables`
+    # with no comps at all.
+    #
+    # A thinner cohort is a better outcome than no valuation, and the two classes
+    # are adjacent: the lake premium is ~+12% inside 30 m and the adjustment
+    # already carries micro-location and beach-proximity terms. So a lakefront
+    # subject falls back to lakefront + water_view rather than failing.
+    #
+    # WATERFRONT (canal/river/ocean frontage) does NOT degrade — it is a
+    # specialist market and is out of scope by decision, so returning nothing is
+    # the correct answer there.
+    _MIN_COHORT = 5
+    if subject_water_class == LAKEFRONT and len(filtered_sales) < _MIN_COHORT:
+        # Re-run the SAME filter with only the water rule relaxed, so every other
+        # similarity check (bedroom band, dwelling type, prestige, price
+        # proximity) still applies exactly as before.
+        globals()['_WATER_WIDEN'] = True
+        try:
+            widened = [s for s in recent_sales_docs if in_cohort_sold(s)]
+        finally:
+            globals()['_WATER_WIDEN'] = False
+        if len(widened) > len(filtered_sales):
+            print(f"    lakefront cohort thin ({len(filtered_sales)}); widened to "
+                  f"lakefront+water_view ({len(widened)})")
+            filtered_sales = widened
 
     # Check for exclusion criteria — return "not available" with reason
     exclusion_reason = None
