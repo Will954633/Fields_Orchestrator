@@ -331,8 +331,17 @@ def cmd_submit(url):
         print(f"Error submitting {url}: {result['error']}")
 
 
-def cmd_submit_new():
-    """Submit only URLs that changed since last run."""
+def cmd_submit_new(since: str | None = None, advance_watermark: bool = True):
+    """Submit only URLs that changed since last run.
+
+    `since` overrides the stored watermark for BACKFILL. This exists because the old
+    code advanced `indexing-last-run.json` on every run including total failures, so the
+    757 URLs dropped across the 9 nights of 2026-07-29 -> 2026-08-06 fell permanently
+    behind the watermark. Refusing to advance on failure (added today) prevents that
+    happening again but cannot undo it — recovering those needs an explicit earlier
+    window, which is what `--since` provides. Pair it with `--no-advance` so a backfill
+    over an old window does not drag the live watermark backwards.
+    """
     from googleapiclient.discovery import build
     from pymongo import MongoClient
 
@@ -344,6 +353,9 @@ def cmd_submit_new():
         with open(state_file) as f:
             data = json.load(f)
             last_run = data.get("last_run")
+    if since:
+        last_run = since
+        print(f"BACKFILL MODE — overriding stored watermark with --since {since}")
 
     uri = os.environ.get("COSMOS_CONNECTION_STRING")
     if not uri:
@@ -432,6 +444,11 @@ def cmd_submit_new():
                 f"First error: {errors[0]['error'] if errors else 'none captured'}")
 
     # Save state — only reached when submissions succeeded (or there was nothing to do).
+    # A backfill must NOT touch the watermark: it operates on an old window, and writing
+    # `now` would skip everything between that window and the real last run.
+    if not advance_watermark:
+        print("Watermark left unchanged (--no-advance).")
+        return
     os.makedirs(os.path.dirname(state_file), exist_ok=True)
     with open(state_file, "w") as f:
         json.dump({"last_run": datetime.now(timezone.utc).isoformat()}, f)
@@ -502,9 +519,15 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Usage: python3 scripts/google_indexing.py <command>")
         print("Commands: auth, submit-all, submit <url>, submit-new, status")
+        print("  submit-new [--since ISO8601] [--no-advance]   # --since backfills an "
+              "older window; pair with --no-advance so it does not move the live watermark")
         sys.exit(1)
 
     command = sys.argv[1]
+    since_arg = None
+    if "--since" in sys.argv:
+        since_arg = sys.argv[sys.argv.index("--since") + 1]
+    no_advance = "--no-advance" in sys.argv
 
     if command == "auth":
         cmd_auth()
@@ -524,7 +547,7 @@ if __name__ == "__main__":
         with job_run("google_indexing_submit_new", cadence_hours=24,
                      title="Google Indexing API — new/changed URLs") as beat:
             beat.detail = "submit-new"
-            cmd_submit_new()
+            cmd_submit_new(since=since_arg, advance_watermark=not no_advance)
     elif command == "status":
         cmd_status()
     else:
