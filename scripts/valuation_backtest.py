@@ -933,6 +933,15 @@ def main():
             # on the entry. These are what reveal WHERE the bias enters: a
             # comparable pool that already sits low, or adjustments that
             # under-correct on the way to the estimate.
+            # Every CANDIDATE the selector could have chosen, included or not.
+            # This is what tests whether the selector picks systematically cheap
+            # comparables out of an adequate pool, or whether the pool itself is low.
+            "pool": [{
+                "price": p.get("price"),
+                "adjusted": (p.get("adjustment_result") or {}).get("adjusted_price"),
+                "included": bool(p.get("included_in_valuation")),
+                "dist_km": p.get("distance_km"),
+            } for p in (result.get('all_points') or [])],
             "raw_comp_median": _stage_median(result.get('included_points'), raw=True),
             "adj_comp_median": _stage_median(result.get('included_points'), raw=False),
             **_comp_spread(result.get('included_points'), predicted),
@@ -1090,7 +1099,7 @@ def main():
                          **{k: r.get(k) for k in ("adj_iqr_pct", "adj_cv", "top_weight",
                                                   "comp_months", "dist_km",
                                                   "adj_max", "adj_min", "raw_max", "comps",
-                                                  "subject_fa_source")}}
+                                                  "subject_fa_source", "pool")}}
                         for r in fields_results], fh)
         print(f"\nwrote {len(fields_results)} signed errors to {args.dump_errors}")
 
