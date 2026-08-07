@@ -20,9 +20,12 @@ same policy in two places, in two languages, and nothing compared them.
 
 THE INVARIANTS
 --------------
-  A. Every URL in the sitemap is indexable.        (Google: put URLs you WANT indexed
-                                                    in the sitemap.)
-  B. Every indexable URL that earns impressions is in the sitemap.
+  A. Every URL in the sitemap is HEALTHY — 200 AND index,follow AND self-canonical
+     AND not a known empty-state template. A 200 alone is not health: 115 /property
+     URLs served 200 + "Property Not Found" + noindex on 2026-08-08.
+  B. Every URL earning impressions that is genuinely healthy+indexable is in the
+     sitemap. Confirmed against the LIVE page, so historical URLs that now 301/404/
+     noindex do not raise false alarms.
 
 A is checked by sampling the sitemap and reading the live robots tag. B is checked
 against Search Console — a URL Google already shows results for, which serves 200 and
@@ -69,6 +72,19 @@ DEFAULT_SAMPLE = 25
 # exhaustive (b_population records the true size).
 DEFAULT_B_CAP = 40
 ROBOTS_RE = re.compile(r'<meta[^>]+name="robots"[^>]+content="([^"]*)"', re.I)
+CANON_RE = re.compile(r'<link[^>]+rel="canonical"[^>]+href="([^"]*)"', re.I)
+TITLE_RE = re.compile(r"<title>([^<]*)</title>", re.I)
+
+# Known empty-state templates. A 200 alone is NOT health: on 2026-08-08, 115 /property
+# URLs served 200 + "Property Not Found" + noindex from a document that had resolved
+# fine, and 1 /article id did the same. Google eventually labels these soft 404s; this
+# catches them the same night they appear.
+EMPTY_STATE_TITLES = (
+    "property not found",
+    "article not found",
+    "off-market property |",   # meta()'s no-address fallback
+    "suburb not covered yet",
+)
 
 
 def family(path: str) -> str:
@@ -102,6 +118,27 @@ def robots_of(html: str) -> str:
     return (m.group(1).strip().lower() if m else "")
 
 
+def unhealthy(status, html, path) -> str:
+    """A sitemap URL is healthy only if it is 200 + indexable + self-canonical + real
+    content. Returns the reason it is not, or "" when healthy."""
+    if status != 200:
+        return f"http {status}"
+    r = robots_of(html)
+    if "noindex" in r:
+        return f"robots={r}"
+    title = (TITLE_RE.search(html).group(1).strip().lower() if TITLE_RE.search(html) else "")
+    for t in EMPTY_STATE_TITLES:
+        if t in title:
+            return f"empty-state template: {title[:48]!r}"
+    m = CANON_RE.search(html)
+    if not m:
+        return "no canonical"
+    canon = m.group(1).replace(SITE, "").split("?")[0].rstrip("/")
+    if canon != path.split("?")[0].rstrip("/"):
+        return f"canonical -> {canon}"
+    return ""
+
+
 def check_a(paths, per_family: int, rng) -> tuple[list, int]:
     """Invariant A — every sitemap URL is indexable."""
     by = defaultdict(list)
@@ -112,10 +149,11 @@ def check_a(paths, per_family: int, rng) -> tuple[list, int]:
         for p in rng.sample(ps, min(per_family, len(ps))):
             status, html = fetch(SITE + p)
             checked += 1
-            r = robots_of(html)
-            if status != 200 or "noindex" in r:
+            why = unhealthy(status, html, p)
+            if why:
                 violations.append({"invariant": "A", "family": fam, "path": p,
-                                   "status": status, "robots": r or "<none>"})
+                                   "status": status, "robots": robots_of(html) or "<none>",
+                                   "reason": why})
     return violations, checked
 
 
@@ -150,10 +188,13 @@ def check_b(paths, cap: int, rng) -> tuple[list, int, int]:
     for p in missing:
         status, html = fetch(SITE + p)
         checked += 1
-        if status == 200 and "noindex" not in robots_of(html):
-            # 200 + indexable + earning impressions + absent from sitemap.
+        # Only a violation once the LIVE page confirms a genuinely healthy, indexable,
+        # self-canonical page. Historical GSC URLs that now 301, 404, noindex or render
+        # an empty state are correctly absent and must not raise a false alarm.
+        if not unhealthy(status, html, p):
             violations.append({"invariant": "B", "family": family(p), "path": p,
-                               "status": status, "robots": robots_of(html) or "<none>"})
+                               "status": status, "robots": robots_of(html) or "<none>",
+                               "reason": "healthy+indexable but not in sitemap"})
     return violations, checked, population
 
 
@@ -189,7 +230,7 @@ def main():
         print(f"  A (sitemap URL is indexable):        checked {st['a_checked']:>4}  violations {st['a_violations']}")
         print(f"  B (indexable + ranking => in sitemap): checked {st['b_checked']:>4} of {st['b_population']} missing  violations {st['b_violations']}")
         for v in st["violations"]:
-            print(f"    [{v['invariant']}] {v['family']:<20} {v['path']}  status={v['status']} robots={v['robots']}")
+            print(f"    [{v['invariant']}] {v['family']:<20} {v['path']}\n          status={v['status']} robots={v['robots']} reason={v.get('reason','')}")
 
     if args.dry_run:
         report(run(args.sample, args.b_cap))
