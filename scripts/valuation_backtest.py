@@ -549,6 +549,26 @@ def is_attached_dwelling(doc):
     addr = (doc.get("address") or doc.get("street_address") or "").strip()
     if re.match(r"^\s*[0-9]+[A-Za-z]?\s*/", addr):
         return True, "unit-numbered address"
+
+    # QLD community/building-unit title plans are attached stock by definition,
+    # whatever property_type says. RP/SP are freehold and prove nothing either way.
+    plan = (doc.get("PLAN") or "").strip().upper()
+    m = re.match(r"^(GTP|BUP|CTS|SUP)", plan)
+    if m:
+        return True, f"plan {plan} ({m.group(1)} = community/building units title)"
+
+    # Floor-to-land ratio. A DETACHED house needs setbacks, a driveway and some yard,
+    # so it cannot approach 1.0; a townhouse in a row can exceed it outright.
+    # 24 Brooklyn Crescent, Robina is the worked case: 131 m2 of land, 122.4 m2 of
+    # floor (ratio 0.93), freehold, no unit number, property_type "House", and the
+    # cadastral parcel is a 5 m x 26 m strip. Every other signal missed it; we valued
+    # it 56% high. p90 of genuine sold houses is 0.60, so 0.70 leaves clear air.
+    land = doc.get("land_size_sqm") or doc.get("lot_size_sqm")
+    floor = doc.get("floor_area_sqm") or doc.get("total_floor_area")
+    if land and floor and land > 0:
+        ratio = floor / land
+        if ratio > 0.70:
+            return True, f"floor-to-land ratio {ratio:.2f} (>0.70 — attached or bad data)"
     return False, None
 
 
