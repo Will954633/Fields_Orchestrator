@@ -583,21 +583,80 @@ def build_room_assessments(pvd: dict) -> list[dict]:
 # ---------------------------------------------------------------------------
 # Market stats
 # ---------------------------------------------------------------------------
+UNION_SOURCE = "domain_union_onthehouse"
+
+
+def _market_context_line(suburb: str, ms: dict) -> str:
+    """One prompt line, honest about both the median's provenance and the count's limits."""
+    if ms.get("median_available"):
+        part = f"{suburb} rolling 12-month house median {ms['median']}"
+        if ms.get("median_n"):
+            part += f" from {ms['median_n']} sales"
+        if ms.get("median_ci_low") and ms.get("median_ci_high"):
+            part += f" (90% CI {fmt(ms['median_ci_low'])}–{fmt(ms['median_ci_high'])})"
+        part += ". Always state the sample size when quoting it."
+    else:
+        part = (f"No authoritative median is available for {suburb}. "
+                "You MUST NOT state a suburb median figure.")
+    # The sold count is OURS, not the market's — Domain under-captures by 40-50%, so it
+    # can support scarcity wording but never a supply/demand verdict or a complete count.
+    part += (f" We tracked {ms['houses_sold_12m']} house sales there in 12 months and "
+             f"{ms['currently_listed']} are listed now; these are OUR RECORDS, not a "
+             "complete count, and must not be used to characterise supply or demand.")
+    return part
+
+
 def get_market_stats(client, suburb):
+    """Suburb context for the appraisal. The median comes from the canonical pipeline.
+
+    This used to median `Gold_Coast[suburb]` sold houses inline over a 365-day window.
+    That is Domain-only — the source we know misses 40-50% of real sales — on a
+    different dwelling filter from the union pipeline's, with no CI and no provenance.
+    Measured 2026-08-07 it disagreed with the published figure on every suburb:
+
+        Varsity Lakes   $1,290,000 (n=168)  vs canonical $1,400,000 (n=111)  -7.9%
+        Robina          $1,410,000 (n=296)  vs canonical $1,490,000 (n=265)  -5.4%
+        Burleigh Waters $1,890,000 (n=163)  vs canonical $1,925,000 (n=167)  -1.8%
+
+    This document is emailed to a named homeowner, so a figure $110,000 below the one
+    on our own website is the discrepancy most likely to be checked and least
+    survivable. `median` is now the provenance-gated union scalar; when the gate fails
+    it is None and callers must omit the claim rather than substitute a weaker number.
+    """
     col = client["Gold_Coast"][suburb]
     for_sale = cosmos_retry(col.count_documents, {"listing_status": "for_sale"})
-    sold = cosmos_retry(lambda: list(col.find({"listing_status": "sold", "property_type": {"$regex": "house", "$options": "i"}})))
+
+    # NB this file's local cosmos_retry is `cosmos_retry(func, *args)` — it FORWARDS extra
+    # arguments to func, unlike mongo_client_factory.cosmos_retry which takes a label.
+    # Passing a label here made it a positional arg to the lambda and raised.
+    idx = cosmos_retry(
+        lambda: client["Gold_Coast"]["precomputed_indexed_prices"].find_one({"_id": suburb})) or {}
+    median_val = (idx.get("rolling_12m_median_price")
+                  if idx.get("median_source") == UNION_SOURCE else None)
+
+    # Retained for scarcity/context wording only. This is OUR TRACKED sold count, not
+    # a complete count of suburb sales — the prompt at :717 forbids implying otherwise.
+    sold = cosmos_retry(lambda: list(col.find(
+        {"listing_status": "sold", "property_type": {"$regex": "house", "$options": "i"}})))
     cutoff = (datetime.now(timezone.utc) - timedelta(days=365)).strftime("%Y-%m-%d")
-    prices = []
+    tracked = 0
     for s in sold:
-        date = str(s.get("sold_date", ""))
-        if date < cutoff:
+        if str(s.get("sold_date", "")) < cutoff:
             continue
-        p = _parse_price(s.get("sold_price") or s.get("sale_price") or s.get("last_sold_price"))
-        if p:
-            prices.append(int(p))
-    median = sorted(prices)[len(prices) // 2] if prices else 0
-    return {"median": fmt(median), "houses_sold_12m": str(len(prices)), "currently_listed": str(for_sale)}
+        if _parse_price(s.get("sold_price") or s.get("sale_price") or s.get("last_sold_price")):
+            tracked += 1
+
+    return {
+        "median": fmt(median_val) if median_val else None,
+        "median_available": bool(median_val),
+        "median_value": median_val,
+        "median_n": idx.get("rolling_12m_median_sample_n"),
+        "median_ci_low": idx.get("rolling_12m_ci_low"),
+        "median_ci_high": idx.get("rolling_12m_ci_high"),
+        "median_basis": idx.get("median_source"),
+        "houses_sold_12m": str(tracked),
+        "currently_listed": str(for_sale),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -709,7 +768,7 @@ COMPARABLE SALES WITH FULL ADJUSTMENT DETAIL:
 
 VALUATION RANGE: {fmt(val_low)} to {fmt(val_high)} (mid-point {fmt(val_mid)})
 
-MARKET CONTEXT: {suburb} median {market_stats['median']}. {market_stats['houses_sold_12m']} houses sold in 12m. {market_stats['currently_listed']} currently listed.
+MARKET CONTEXT: {_market_context_line(suburb, market_stats)}
 
 SAMPLE-RELATIVE POSITIONING FACTS (measured against our indicative sample of {scarcity_total} Domain-scraped sold properties — NOT a census of every sale. Cite these to back feature_positioning entries, but you MUST carry the sample disclosure when you do, and you MUST NOT reword them into census claims):
 {scarcity_block}
@@ -948,8 +1007,20 @@ def _minimal_editorial(prop: dict, top_comps: list, market_stats: dict) -> dict:
     comp_addresses = [c["address"] for c in top_comps]
     comp_cite = " and ".join(comp_addresses[:2]) if len(comp_addresses) >= 2 else comp_addresses[0] if comp_addresses else "comparable sales"
 
+    # `median` is None when the provenance gate fails, so the old inline
+    # int(market_stats.get('median','$0').replace(...)) would raise. Compare against the
+    # numeric value and drop the median clause entirely when we have no authoritative one.
+    median_val = market_stats.get("median_value")
+    if median_val:
+        position = "above" if val_mid > median_val else "around"
+        headline = (f"Based on {len(top_comps)} adjusted comparable sales, this property sits "
+                    f"{position} the {suburb} median of {market_stats['median']}")
+    else:
+        headline = (f"Based on {len(top_comps)} adjusted comparable sales, the adjusted range for "
+                    f"this property is {fmt(val_low)} to {fmt(val_high)}")
+
     return {
-        "headline": f"Based on {len(top_comps)} adjusted comparable sales, this property sits {'above' if val_mid > int(market_stats.get('median', '$0').replace('$', '').replace(',', '') or 0) else 'around'} the {suburb} median of {market_stats['median']}",
+        "headline": headline,
         "sub_headline": f"A {beds}-bedroom {pool} property with an adjusted comparable range of {fmt(val_low)} to {fmt(val_high)}",
         "verdict": f"Based on {len(top_comps)} adjusted comparable sales — {comp_cite} — ranging from {fmt(val_low)} to {fmt(val_high)}, we estimate a selling range of {fmt(val_low)} to {fmt(val_high)}, with a recommended listing range of {fmt(round(val_mid * 0.97 / 5000) * 5000)} to {fmt(round(val_mid * 1.03 / 5000) * 5000)}, subject to property analyst inspection.",
         "strengths": strengths,
@@ -957,8 +1028,22 @@ def _minimal_editorial(prop: dict, top_comps: list, market_stats: dict) -> dict:
         "value_equations": value_equations,
         "buyer_profiles": [
             {"name": f"Families seeking {beds} bedrooms in {suburb}", "description": f"Buyers looking for a {beds}-bedroom home in {suburb} with proximity to local schools and amenities. This property's specification matches the most active buyer segment in the suburb."},
-            {"name": "Upgraders from smaller homes", "description": f"Owners of 2-3 bedroom properties in the southern Gold Coast corridor looking to upsize. {suburb}'s median of {market_stats['median']} offers value relative to beachside suburbs."},
-            {"name": "Investors seeking rental yield", "description": f"With {market_stats.get('currently_listed', '?')} properties currently listed and {market_stats.get('houses_sold_12m', '?')} sales in the last 12 months, {suburb} shows balanced supply and demand."},
+            {"name": "Upgraders from smaller homes",
+             "description": (f"Owners of 2-3 bedroom properties in the southern Gold Coast corridor "
+                             f"looking to upsize."
+                             + (f" {suburb}'s rolling 12-month house median is {market_stats['median']}"
+                                f" across {market_stats.get('median_n')} recorded sales."
+                                if median_val else ""))},
+            # WAS: "{suburb} shows balanced supply and demand" — a supply/demand VERDICT
+            # derived from our own tracked counts, which miss 40-50% of sales. This file's
+            # own prompt forbids any wording implying a complete count of sales, and a
+            # balanced/tight/oversupplied judgement is exactly that inference. State the
+            # counts as ours and let the reader draw the conclusion (editorial Rule 5).
+            {"name": "Investors seeking rental yield",
+             "description": (f"We currently track {market_stats.get('currently_listed', '?')} listed "
+                             f"properties in {suburb} and {market_stats.get('houses_sold_12m', '?')} "
+                             f"house sales over the last 12 months. These are the transactions we "
+                             f"record, not a complete count of the suburb's activity.")},
         ],
         "scarcity_count": market_stats.get("houses_sold_12m", "?"),
         "scarcity_statement": f"{beds}-bedroom houses sold in {suburb} in the last 12 months",
