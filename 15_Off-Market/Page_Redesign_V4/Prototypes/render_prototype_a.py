@@ -119,6 +119,17 @@ SEASONALITY_N = 18978
 SEASONALITY_SCOPE = "the southern Gold Coast"
 SEASONALITY_WINDOW = "2010\u20132025, excl. COVID 2019\u20132020"
 
+PORTED_NOTE = ("This section is a placeholder. It will be the existing "
+               "<code>{comp}</code> component, which already renders "
+               "{what}. Not being designed here.")
+
+
+def ported(comp, what):
+    return (f'<div class="ported"><span class="ptag">Ported component</span>'
+            f'<span>Placeholder \u2014 ships as <code>{comp}</code>, which already renders '
+            f'{what}. Not being designed in this prototype.</span></div>')
+
+
 E = html.escape
 
 
@@ -552,7 +563,10 @@ def median_block(suburb_display, ms):
     yoy = ms.get("yoy_growth_pct")
     mi = market_insights(suburb_display)
 
-    out = [f'<h3 style="margin-top:30px">What the median has done in {E(suburb_display)}</h3>']
+    out = [f'<h3 style="margin-top:30px">What the median has done in {E(suburb_display)}</h3>',
+           ported("MedianPriceChart",
+                  "this series with per-quarter confidence intervals \u2014 and is already "
+                  "imported by OffMarketPage/MarketCharts.tsx")]
     lede = (f"Nationally, home values have fallen for three consecutive months. Over the same "
             f"period the rolling twelve-month median for houses in {suburb_display} sits at "
             f"<b>{exact(med)}</b>")
@@ -1045,6 +1059,15 @@ details .body{padding-top:12px;font-size:.94rem;color:var(--ink-2)}
 .mdb{margin:0;font-size:.92rem;color:var(--ink-2)}
 @media(min-width:720px){.mgrid{grid-template-columns:repeat(12,1fr)}}
 
+
+/* placeholder marker for sections that ship as an existing component */
+.ported{display:flex;gap:10px;align-items:flex-start;margin:14px 0 18px;padding:11px 13px;
+  border:1px dashed var(--line);border-radius:5px;background:transparent;
+  font-size:.8rem;color:var(--muted);line-height:1.5}
+.ptag{flex:none;font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);
+  border:1px solid var(--accent);border-radius:99px;padding:2px 8px;margin-top:1px}
+.ported code{font-size:.78rem;color:var(--ink-2)}
+
 footer{padding:44px 0 70px;border-top:1px solid var(--line-2);color:var(--muted);font-size:.85rem}
 
 @media(min-width:760px){
@@ -1358,6 +1381,10 @@ def render(slug, proto="full", version=LATEST):
         add('<section id="comps"><div class="wrap">')
         add('<div class="eyebrow">The evidence</div>')
         add('<h2>The sales behind that range</h2>')
+        add(ported("ValuationEvidence",
+                   "photo strips with a lightbox, weight percentages, verified flags, the "
+                   "per-feature adjustment grid, the full weighted calculation and an evidence "
+                   "map"))
         add('<div class="funnel">')
         steps = []
         if cred.get("sales_reviewed"):
@@ -1610,6 +1637,7 @@ def render(slug, proto="full", version=LATEST):
             add(f'<p{cls}>{E(para)}</p>')
         add(median_block(b.get("suburb_display", ""), mkt_for_timing))
         add('<h3 style="margin-top:30px">When does the southern Gold Coast sell for the most?</h3>')
+        add(ported("SeasonalityStrip", "this calendar, its tap-to-detail and its citations"))
         add(seasonality_strip())
         add('<div class="src">Fields analysis of Gold Coast sale records \u00b7 rate and national '
             'price figures as reported by the RBA, Westpac and Cotality</div>')
