@@ -267,3 +267,87 @@ refused** rather than valued badly. That would be the third exclusion, and on th
 worth more than any remaining calibration work.
 
 **Property-by-property list for manual review: [[12_OUTLIER_LIST]] (50 worst, with links).**
+
+---
+
+# Part 4 — CORRECTION: the proximity adjustments were never broken in production
+
+**2026-08-07.** Part 3 reported `beach_proximity` and `golf_course_backing` as "dead code" firing on
+0 of 4,916 comparables. **That was wrong, and it was my instrumentation at fault, not the pipeline.**
+
+Production, measured over **11,921** adjusted comparables in `valuation_data.adjusted_comparables`:
+
+| attribute | backtest (before) | **production** | median $ when it fires |
+|---|---|---|---|
+| beach_proximity | 0.0% | **99.1%** | $13,840 |
+| golf_course_backing | 0.0% | **2.9%** | **$207,000** |
+| renovation_quality | 79.9% | **0.2%** | $16,200 |
+
+`valuation_backtest.py` builds its **own** `comp_features`/`subject_features` dicts rather than
+reusing the production builders, and those dicts omitted `beach_distance_km` and
+`golf_course_backing` entirely — so `calculate_adjustments()` took the `skipped` branch every time.
+
+⚠ **This also invalidates part of the Part 2 ablation.** `renovation_quality` fired on 79.9% of
+backtest comparables against **0.2%** in production. The finding that it "carries no signal" was
+measured on a field production barely uses. `kitchen` (63% vs 83%) and `street_premium` (30% vs 19%)
+also diverged. **Any backtest conclusion about an attribute is only valid if that attribute's firing
+rate matches production — check it first.**
+
+## Fixed
+
+`valuation_backtest.py` now mirrors production: it imports `resolve_beach_distance` and
+`detect_golf_course_backing`, resolves beach distance onto each comparable's basic features, and
+passes both keys through to `calculate_adjustments`. Firing rates after the fix:
+
+| attribute | backtest now | production | agreement |
+|---|---|---|---|
+| beach_proximity | 99.0% | 99.1% | ✓ |
+| golf_course_backing | 2.2% | 2.9% | ✓ |
+| water_views | 1.1% | 0.8% | ✓ |
+| micro_location | 98.2% | 97.8% | ✓ |
+| land_size | 98.8% | 98.4% | ✓ |
+| floor_area | 99.8% | 99.6% | ✓ |
+
+## Their independent contribution, now measurable
+
+A 2%-firing adjustment is invisible in a full-sample average, so each is also measured **scoped to
+the homes it actually touches**:
+
+| attribute | homes it touches | MAE with | MAE without | verdict | best multiplier |
+|---|---|---|---|---|---|
+| **beach_proximity** | 626 | 10.48% | 10.70% | **earns its keep** | **1.50 — we under-adjust** |
+| **water_views** | 24 | **9.79%** | 10.92% | **strongest of any attribute** | 1.00 — calibrated |
+| street_premium | 367 | 10.42% | 11.67% | earns its keep | 1.25 |
+| **golf_course_backing** | 46 | 10.99% | **10.76%** | **hurts on the homes it touches** | **0.00** |
+
+**Beach proximity is real and under-powered** — it fires on 99% of comparables and the optimal
+multiplier is 1.5×. **Water views are the single most valuable adjustment we have** on the 24 homes
+they touch (+1.13pp), perfectly calibrated, and firing on only 1.1%.
+
+⚠ **Golf is the awkward one, and n = 46.** The adjustment is enormous ($190,800 median, $288,000
+max) and on the homes it touches, removing it *improves* MAE by 0.23pp. But it does move the centre
+the right way — signed error +2.0% with it against +4.0% without. So it is correcting bias while
+adding variance, on a sample too small to be confident about. **Do not act on the 0.00 multiplier
+yet** — 46 homes is not enough to retire a $190K adjustment. It needs a bigger sample, and the
+detector (5.9% of properties with satellite analysis, `high` confidence, on real golf streets —
+Merion Court, Legend Trail, Oakmont Street) is clearly working.
+
+## Attached dwellings now excluded by default
+
+`is_attached_dwelling()` catches units, townhouses, villas, duplexes via `property_type`,
+`is_strata_title`, a cadastral `UNIT_NUMBER`, or a unit-numbered address. **`--property-type House`
+alone did not exclude them** — 14 survived it across the three suburbs and ran MAE 18.0% against
+10.3%. Exclusion is on by default (`--include-attached` to override) and every exclusion is printed
+with its reason rather than dropped silently.
+
+## Where this leaves the numbers
+
+| | MAE | within 10% | flat ±12% covers | honest 80% band on $1.6M |
+|---|---|---|---|---|
+| attached excluded, proximity wired | 10.47% | 59% | 67% | $572,000 |
+| + per-suburb offsets | 9.78% | 60% | 69% | $504,000 |
+| **+ drop 3 subjective adjustments** | **9.23%** | **63%** | **72%** | **$483,000** |
+| + rate recalibration on top | 9.35% | 62% | 71% | $481,000 |
+
+Rate recalibration adds nothing beyond the simple drop — same conclusion as Part 2, now on
+corrected instrumentation. **$603,574 → $483,264 on 627 detached houses.**
