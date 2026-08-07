@@ -100,8 +100,19 @@ def build(dry_run=False):
     dom_doc = {"_id": "gold_coast_days_on_market", "scope": "tracked_suburbs", "timeline": dom_timeline}
 
     # --- active listings (sum of core) ---
-    total_listings = sum(int((lst_docs.get(s) or {}).get("active_listings") or
-                             (lst_docs.get(s) or {}).get("count") or 0) for s in CORE)
+    # `precomputed_active_listings` per-suburb docs store a `snapshots` ARRAY (see the
+    # consumer at 01_Website/src/lib/db.server.ts:701-712); there is no top-level
+    # `active_listings`/`count` scalar. Reading those keys therefore summed to 0 on every
+    # run while the heartbeat reported success — a Rule 7b sibling. Take the newest
+    # snapshot per suburb instead.
+    def _latest_listings(doc):
+        snaps = (doc or {}).get("snapshots") or []
+        if snaps:
+            newest = max(snaps, key=lambda s: str(s.get("date") or s.get("snapshot_date") or ""))
+            return int(newest.get("active_listings") or newest.get("count") or 0)
+        return int((doc or {}).get("active_listings") or (doc or {}).get("count") or 0)
+
+    total_listings = sum(_latest_listings(lst_docs.get(s)) for s in CORE)
     lst_doc = {"_id": "gold_coast", "scope": "tracked_suburbs", "active_listings": total_listings,
                "tracked_suburbs": CORE}
 
@@ -114,6 +125,11 @@ def build(dry_run=False):
         db["precomputed_market_charts"].replace_one({"_id": "gold_coast_days_on_market"}, dom_doc, upsert=True)
         db["precomputed_active_listings"].replace_one({"_id": "gold_coast"}, lst_doc, upsert=True)
         print("written to Gold_Coast precomputed collections.")
+    # Underscore-prefixed keys are for the caller's Rule 7b assertions only — they are
+    # attached after the DB writes above, so they never reach the stored document.
+    price_doc["_listings"] = total_listings
+    price_doc["_quarters"] = len(indexed_series)
+    price_doc["_constituent_yoys"] = [y for y, _ in yoy_pairs]
     return price_doc
 
 
@@ -130,6 +146,29 @@ def main():
                      title="Gold-Coast market aggregate (WTA-013)") as beat:
             d = build(dry_run=False)
             beat.detail = f"median={d['latest_price']} yoy={d['rolling_12m_yoy_pct']}%"
+            beat.metrics = {"median": d.get("latest_price"), "yoy": d.get("rolling_12m_yoy_pct"),
+                            "listings": d.get("_listings"), "quarters": d.get("_quarters"),
+                            "txn": d.get("transaction_count")}
+
+            # Rule 7b — assert the OUTPUT, not just a clean exit. This job ran monthly
+            # reporting success while publishing rolling_12m_yoy_pct = 17.0 on
+            # /market-intelligence/Gold-Coast, against a recomputed 7.1 from its own
+            # inputs (robina 5.8, burleigh_waters 6.9, varsity_lakes 10.2). A
+            # transaction-weighted mean CANNOT fall outside the range of its inputs, so
+            # this is a total-cost-zero arithmetic tripwire that would have caught it the
+            # day it happened. Cause: the job read pre-promote suburb docs, i.e. the
+            # [UNION-MEDIANS-REVERTED-NIGHTLY] state preserved in a second consumer that
+            # check_union_median_integrity.py cannot see.
+            yoys = [y for y in (d.get("_constituent_yoys") or []) if y is not None]
+            got = d.get("rolling_12m_yoy_pct")
+            if yoys and got is not None and not (min(yoys) - 0.05 <= got <= max(yoys) + 0.05):
+                raise RuntimeError(
+                    f"Aggregate YoY {got}% is outside its constituents' range "
+                    f"[{min(yoys)}, {max(yoys)}] — a weighted mean cannot do that. The "
+                    f"suburb docs were almost certainly read before the union promote.")
+            if not d.get("_listings"):
+                raise RuntimeError(
+                    "active_listings summed to 0 — the per-suburb snapshots were not read.")
     else:
         build(dry_run=args.dry_run)
 
