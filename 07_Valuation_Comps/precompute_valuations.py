@@ -2081,10 +2081,10 @@ def calculate_confidence(points, n_total_override=None):
     # Measured 2026-08-07, n = 588 detached houses $1M–$2M across Robina,
     # Varsity Lakes and Burleigh Waters, with per-suburb offsets applied and the
     # three subjective adjustments dropped:
-    #   off-market subject (no photos, THE PRODUCT) ... ±14.3%
-    #   sold / for-sale subject (has photos) .......... ±14.7%
-    # We publish the wider of the two rather than flatter our own product.
-    _EMPIRICAL_80_BAND_PCT = 0.147
+    #   off-market subject (no photos, THE PRODUCT) ... ±13.7%
+    # Re-measured after the geometry-led cohort change with the backtest mirroring
+    # production (n=581, MAE 8.76%, within-10% 66%).
+    _EMPIRICAL_80_BAND_PCT = 0.137
     RANGE_PCT = _EMPIRICAL_80_BAND_PCT
     margin = w_mean * RANGE_PCT
 
@@ -2134,10 +2134,13 @@ def calculate_confidence(points, n_total_override=None):
 # with Domain sold records missing 40–50% of transactions. Correcting the output
 # is a patch over that, not a fix for it. See
 # 16_Valuation/experiments/2026-08-07-band-width-investigation.md.
+# Re-derived 2026-08-07 AFTER the geometry-led cohort change, which moved 30
+# mis-flagged homes out of the waterfront pool and shrank Robina's and Burleigh
+# Waters' offsets. Measured on off-market (blind) subjects, n=581.
 _SUBURB_CALIBRATION = {
-    'robina': 1.0239,
-    'burleigh_waters': 1.0307,
-    'varsity_lakes': 1.1333,
+    'robina': 1.0194,           # measured -1.9% low
+    'burleigh_waters': 1.0256,  # measured -2.5% low
+    'varsity_lakes': 1.1338,    # measured -11.8% low
 }
 
 # Adjustments retired 2026-08-07 because they measurably ADD ERROR.
