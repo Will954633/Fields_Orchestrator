@@ -192,3 +192,78 @@ surface for the same result.
   "sells above dearest adjusted comp" from 45% to 39% — against 12% expected. Most of the
   compression is elsewhere.
 - **The irreducible-noise ceiling** — leave-one-out within the comp set.
+
+---
+
+# Part 3 — Outliers, coverage gaps, and what is actually excludable (2026-08-07)
+
+## ⚠ Two adjustments are dead code
+
+Firing rate across 4,916 comparables:
+
+| attribute | fires on | median $ when it fires |
+|---|---|---|
+| **beach_proximity** | **0 (0.0%)** | never |
+| **golf_course_backing** | **0 (0.0%)** | never |
+| water_views | 52 (1.1%) | $228,668 |
+| micro_location | 4,830 (98.3%) | $56,934 |
+| land_size | 4,817 (98.0%) | $12,544 |
+
+Their earlier "no signal" ablation reading was meaningless — they never fire. And `water_views` is
+worth a median **$228,668** on the 1.1% of comps where it does fire, far too rare for ablation to
+detect. **We are not capturing proximity value at all.**
+
+## Outliers dominate the headline number
+
+| drop the worst… | remaining | MAE | 80% band on $1.6M |
+|---|---|---|---|
+| nothing | 641 | 10.5% | $524,000 |
+| 5% | 609 | 9.0% | $481,000 |
+| 10% | 577 | 8.0% | $430,000 |
+| 15% | 545 | 7.3% | $383,000 |
+
+**The worst 10% carry 31% of all absolute error**, and **49 of those 64 are homes we valued too
+HIGH** — the opposite direction to the median error. Most homes come in slightly under; the big
+misses overshoot.
+
+## What the outliers have in common — mostly, not much
+
+Tested and largely negative, which is itself the finding:
+
+- **Land size.** Over-valued outliers sit on a median 530 m², under-valued on 676 m², at the same
+  floor area — consistent with land being under-adjusted (multiplier 1.25). But across all 641,
+  r = −0.125 and **every land quintile runs MAE 9–11%**. It does not explain them.
+- **Missing data.** Homes missing 1 or 2 of {land, floor, beds, baths} are **no worse** than complete
+  ones (MAE 10.2% vs 10.0%). Only the 23 missing 3–4 are bad (MAE 19–26%).
+- **Small floor area.** Under 150 m²: MAE 9.5% against 10.4% for larger. No effect.
+- **Listing text.** Only two themes appear more in the worst 15% than the rest: **canal/waterfront
+  (11% vs 5%)** and **golf (7% vs 3%)** — precisely the two attributes above that never fire.
+
+## Two defensible exclusions
+
+- **Unit-numbered addresses** — 13 in the sample, MAE **18.0%** against 10.3%. Being valued by the
+  detached-house method at all is the bug.
+- **Homes missing 3+ of 4 core facts** — 23 homes, MAE 19–26%. We are guessing.
+
+## Everything that survived testing, stacked
+
+| | homes valued | MAE | within 10% | flat ±12% covers | honest 80% band on $1.6M |
+|---|---|---|---|---|---|
+| as shipped | 641 | 10.83% | 59% | 66% | $588,000 |
+| + per-suburb offsets | 641 | 10.12% | 61% | 68% | $528,000 |
+| + drop 3 subjective adjustments | 641 | 9.52% | 64% | 72% | $501,000 |
+| **+ refuse units & 3+-missing** | **618 (96.4%)** | **9.12%** | **65%** | **72%** | **$479,000** |
+
+⚠ **Exclusion is only honest if it applies to the product, not just the measurement.** Those 23
+homes must get `directional_only` — exactly as `precompute_valuations.py` already does outside the
+$1M–$2M envelope. Dropping them from the accuracy claim alone is marking our own homework.
+
+## The open lead
+
+Waterfront/canal and golf frontage are the one place where the outlier evidence, the firing-rate
+evidence and the listing-text evidence all point the same way. `[[waterfront_out_of_scope]]` already
+rules waterfront out of scope — so the question is whether these homes should be **detected and
+refused** rather than valued badly. That would be the third exclusion, and on this sample it is
+worth more than any remaining calibration work.
+
+**Property-by-property list for manual review: [[12_OUTLIER_LIST]] (50 worst, with links).**
