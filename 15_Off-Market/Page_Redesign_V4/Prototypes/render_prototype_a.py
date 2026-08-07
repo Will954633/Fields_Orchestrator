@@ -1555,9 +1555,19 @@ def render(slug, proto="full", version=LATEST):
             rounded = round(v["point"] / 50_000) * 50_000
             add(f'<p class="centre">The evidence centres around <b>approximately '
                 f'{E(money(rounded))}</b> — rounded deliberately, because the width is the honest part.</p>')
-        if v.get("n_comps") and adj:
+        # ⚠ "N relevant sales influenced the range" is only TRUE when the engine
+        # built it. On a fallback range that sentence, sitting two screens above
+        # "this range was not built by our comparable-sales method", is a flat
+        # contradiction — and the credibility of the whole page rests on
+        # sentences like this one being exact.
+        if v.get("n_comps") and adj and acc:
             add(f'<p class="basis fine">{v["n_comps"]} relevant sales influenced the range. '
                 f'The {len(adj)} strongest carried most of the weight.</p>')
+        elif not acc:
+            add('<p class="basis fine">This home sits outside the band our tested '
+                'comparable-sales model operates in, so this is a broader evidence range rather '
+                'than that model\'s output. The strongest nearby sales are still below \u2014 '
+                'what we cannot responsibly do is attach our measured error rate to it.</p>')
         add('<p class="fine">The width is not hidden. It reflects what can — and cannot — be '
             'concluded without seeing inside the home.</p>')
         if acc:
@@ -1617,7 +1627,8 @@ def render(slug, proto="full", version=LATEST):
     if adj:
         add('<section id="comps"><div class="wrap">')
         add('<div class="eyebrow">The evidence</div>')
-        add('<h2>The sales behind that range</h2>')
+        add('<h2>' + ('The sales behind that range' if acc else
+                      'The strongest sales near this home') + '</h2>')
         # ⚠ Only promise the tap when the rich cards actually render. Outside the
         # design envelope the resolver returns None (no reconciled range), the
         # page falls back to simple cards with nothing to expand, and this line
@@ -1642,7 +1653,10 @@ def render(slug, proto="full", version=LATEST):
         add('</div>')
         if cred.get("characteristics"):
             add(f'<p class="fine">{cred["characteristics"]} property characteristics were '
-                f'considered when comparing them.</p>')
+                f'considered when comparing them.'
+                + ('' if acc else ' These sales inform the picture; they did not generate the '
+                                  'range above.')
+                + '</p>')
         oc_addr = str((b.get("obvious_comp") or {}).get("address") or "").split(",")[0].lower()
         fresh = [c for c in adj if oc_addr not in str(c.get("address", "")).lower()] if oc_addr else adj
         cards = evidence_cards(EV)
