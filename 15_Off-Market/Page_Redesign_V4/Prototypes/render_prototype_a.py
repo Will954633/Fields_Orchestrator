@@ -1232,6 +1232,19 @@ details .body{padding-top:12px;font-size:.94rem;color:var(--ink-2)}
 
 .promiseline{font-weight:600;color:var(--ink)}
 
+
+/* ── PART: the level above a section ───────────────────────────────────
+   Reads as a chapter opening, not another section: full-bleed tone change,
+   generous air, and the section rule suppressed on the section that follows
+   so the part and its first section read as one unit. */
+.part{background:var(--stone);border-top:1px solid var(--line);padding:52px 0 40px;margin-top:0}
+.parth{font-family:var(--serif);font-size:2.4rem;line-height:1.1;letter-spacing:-.02em;
+  margin:0 0 .35rem;color:var(--ink)}
+.parts{margin:0;color:var(--ink-2);font-size:1.04rem;max-width:34ch}
+.part + section{border-top:none;padding-top:44px}
+.part + section::before{display:none}
+@media(min-width:760px){.parth{font-size:3.1rem}.part{padding:64px 0 48px}}
+
 footer{padding:44px 0 70px;border-top:1px solid var(--line-2);color:var(--muted);font-size:.85rem}
 
 @media(min-width:760px){
@@ -2012,6 +2025,33 @@ def render(slug, proto="full", version=LATEST):
 
     import re as _re
     body = "".join(P)
+
+    # ── PARTS: the level above sections ──────────────────────────────
+    # The page had FOURTEEN h2 sections and nothing above them. Every section
+    # was a peer of every other, so there was no hierarchy for the reader to
+    # perceive — "What has happened since the last recorded sale" carried the
+    # same weight as "Is now the right time to be selling", because structurally
+    # it did.
+    #
+    # The parts are not invented: they are the three questions the page opens by
+    # naming. Answering them in order, and SAYING which one you are inside, is
+    # the map. Deliberately no "part 2 of 3" or progress bar — the brief rules
+    # that out ("turns curiosity into homework"). A part is a place, not a
+    # percentage.
+    PARTS = [
+        ("which",   "The number",   "Is the number attached to this home real?"),
+        ("since",   "The timing",   "Is now the right time to be selling, or should I wait?"),
+        ("correct", "What you can do about any of it", None),
+    ]
+    for sid, title, sub in PARTS:
+        anchor = f'<section id="{sid}"'
+        if anchor not in body:
+            continue
+        part = (f'<div class="part"><div class="wrap">'
+                f'<h1 class="parth">{E(title)}</h1>'
+                + (f'<p class="parts">{E(sub)}</p>' if sub else "")
+                + '</div></div>')
+        body = body.replace(anchor, part + anchor, 1)
 
     # ── re-chain the forward cues ────────────────────────────────────
     # Every cue was written pointing at the section the author expected to come
