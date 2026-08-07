@@ -58,7 +58,9 @@ from precompute_valuations import (
     resolve_floor_area,
     resolve_beach_distance,
     detect_golf_course_backing,
+    apply_retired_adjustments,
 )
+from shared.waterfront import classify_water_relationship, WATERFRONT
 
 # These may be private — import with fallback
 try:
@@ -129,6 +131,8 @@ def backtest_single_property(db, subject_doc, all_sold_in_suburb, sold_by_suburb
     suburb = subject_doc.get('suburb', '')
     prop_type = subject_doc.get('property_type', 'House')
     subject_is_waterfront = is_waterfront(subject_doc)
+    # Mirror production: geometry decides the cohort, not photographs.
+    subject_water_class = classify_water_relationship(subject_doc)[0]
     suburb_key = subject_doc.get('_collection', suburb.lower().replace(' ', '_'))
 
     # Resolve subject coordinates and build year
@@ -181,9 +185,10 @@ def backtest_single_property(db, subject_doc, all_sold_in_suburb, sold_by_suburb
     bed_band = [max(1, subject_beds - 1), subject_beds + 1] if subject_beds is not None else None
 
     def in_cohort(doc):
-        if subject_is_waterfront and not is_waterfront(doc):
-            return False
-        if not subject_is_waterfront and is_waterfront(doc):
+        # Mirrors precompute_valuations.py::in_cohort — waterfront is kept
+        # separate; water_view and dry are pooled.
+        if (subject_water_class == WATERFRONT) != (
+                classify_water_relationship(doc)[0] == WATERFRONT):
             return False
         # Prestige tier: soft filter via weighting (not hard exclude)
         if bed_band:
@@ -450,6 +455,10 @@ def backtest_single_property(db, subject_doc, all_sold_in_suburb, sold_by_suburb
                 if s_lat and s_lon and compute_micro_location_premium else None),
         }
         adj_result = calculate_adjustments(subject_features, comp_features, comp_price, adj_rates)
+        # Mirror production: the retired adjustments are computed and shown but
+        # do not move the price. Without this the backtest measures a method we
+        # no longer ship.
+        adj_result = apply_retired_adjustments(adj_result)
         pt['adjustment_result'] = adj_result
         pt['_data_quality_pct'] = comp_cov['overall_coverage']
         all_enriched_points.append(pt)
