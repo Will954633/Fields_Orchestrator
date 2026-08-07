@@ -1796,7 +1796,7 @@ def render(slug, proto="full", version=LATEST):
     if mkt_for_timing := ((get_mongo_client()["system_monitor"]["market_pulse"]
                            .find_one({"suburb": b["suburb_key"]}) or {}).get("data_snapshot") or {}):
         add('<section id="timing"><div class="wrap">')
-        add('<div class="eyebrow">The second question</div>')
+        add('<div class="eyebrow">The honest answer</div>')
         # Deliberately the reader's own words from the top of the page, verbatim.
         add('<h2>Is now the right time to be selling, or should I wait?</h2>')
         paras = timing_answer(b.get("suburb_display", ""), mkt_for_timing)
@@ -2040,7 +2040,7 @@ def render(slug, proto="full", version=LATEST):
     # percentage.
     PARTS = [
         ("which",   "The number",   "Is the number attached to this home real?"),
-        ("since",   "The timing",   "Is now the right time to be selling, or should I wait?"),
+        ("timing",  "The timing",   "Is now the right time to be selling, or should I wait?"),
         ("correct", "What you can do about any of it", None),
     ]
     for sid, title, sub in PARTS:
@@ -2052,6 +2052,15 @@ def render(slug, proto="full", version=LATEST):
                 + (f'<p class="parts">{E(sub)}</p>' if sub else "")
                 + '</div></div>')
         body = body.replace(anchor, part + anchor, 1)
+        # Drop the following section's <h2> when it merely repeats the part's
+        # subtitle. The part asks the question; the section answers it.
+        if sub:
+            at = body.find(anchor)
+            end = body.find('</section>', at)
+            head = body[at:end if end > 0 else len(body)]
+            dup = f'<h2>{E(sub)}</h2>'
+            if dup in head:
+                body = body[:at] + head.replace(dup, '', 1) + body[end if end > 0 else len(body):]
 
     # ── re-chain the forward cues ────────────────────────────────────
     # Every cue was written pointing at the section the author expected to come
