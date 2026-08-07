@@ -99,7 +99,39 @@ VERSIONS = {
         },
     },
 }
-LATEST = "v2"
+VERSIONS["v3"] = {
+    # v3 2026-08-07 — the portal disagreement becomes the INCITING INCIDENT, not
+    # a thing the page mentions. Will: "the opening shouldn't merely mention the
+    # portal disagreement; it should make that disagreement the inciting incident
+    # of the whole experience."
+    #
+    # The other two questions (timing, where next) are deliberately NOT raised
+    # up front any more. Raising three questions at once dilutes the one the
+    # visitor actually arrived with, and the page cannot answer the other two
+    # until it has earned the right to. They are introduced later, where they
+    # are about to be answered.
+    "questions_intro": None,
+    "questions": [],
+    "promise": None,
+    "preamble": {
+        "opener": "You've probably already seen two different values for this home.",
+        "heading": "So which one should you believe?",
+        "paras": [
+            "The problem is that you can't tell from the number alone.",
+            "What matters is which sales were used, why they were chosen, and what was changed "
+            "to make them genuinely comparable with this home.",
+            "So rather than give you a third unexplained number, we'll show you what the "
+            "evidence actually supports.",
+        ],
+    },
+    # Raised later, once the value question has been answered.
+    "other_questions_intro": "Two other questions usually follow.",
+    "other_questions": [
+        "Is now the right time to be selling, or should I wait?",
+        "If I sold, where would I go and what could I buy there?",
+    ],
+}
+LATEST = "v3"
 
 # ── Seasonality — the canonical source of truth ────────────────────────────
 # scripts/seasonality_analysis.py -> 08_Seller-Book/Market_Data/seasonality/
@@ -1245,6 +1277,20 @@ details .body{padding-top:12px;font-size:.94rem;color:var(--ink-2)}
 .part + section::before{display:none}
 @media(min-width:760px){.parth{font-size:3.1rem}.part{padding:64px 0 48px}}
 
+
+/* the hook — the reason they clicked, said first */
+.opener{margin:30px 0 6px;font-size:1.1rem;color:var(--ink-2)}
+.hookq{font-family:var(--serif);font-size:2.15rem;line-height:1.14;letter-spacing:-.02em;
+  margin:0 0 4px;color:var(--ink)}
+@media(min-width:760px){.hookq{font-size:2.7rem}.opener{font-size:1.2rem}}
+
+/* why the range is wide — answered where the question is asked */
+.whywide{margin:22px 0 4px;padding:18px 20px;background:var(--paper-2);
+  border:1px solid var(--line-2);border-left:2px solid var(--accent);border-radius:5px}
+.whywide h3{margin-bottom:7px}
+.whywide p{margin:0 0 .7rem;font-size:.94rem;color:var(--ink-2)}
+.whywide p:last-child{margin-bottom:0}
+
 footer{padding:44px 0 70px;border-top:1px solid var(--line-2);color:var(--muted);font-size:.85rem}
 
 @media(min-width:760px){
@@ -1511,8 +1557,13 @@ def render(slug, proto="full", version=LATEST):
         add(f'<p style="margin-top:16px" class="fine">Last recorded sale: '
             f'<b>{E(exact(tl[0]["price"]))}</b> in {E(when)}. No later market sale is recorded.</p>')
 
-    add(f'<p class="lede" style="margin-top:26px">{E(V["questions_intro"])}</p>')
-    add('<ul class="qs">' + "".join(f'<li>{E(q)}</li>' for q in V["questions"]) + '</ul>')
+    pre = V.get("preamble") or {}
+    if pre.get("opener"):
+        add(f'<p class="opener">{E(pre["opener"])}</p>')
+        add(f'<h1 class="hookq">{E(pre["heading"])}</h1>')
+    elif V.get("questions_intro"):
+        add(f'<p class="lede" style="margin-top:26px">{E(V["questions_intro"])}</p>')
+        add('<ul class="qs">' + "".join(f'<li>{E(q)}</li>' for q in V["questions"]) + '</ul>')
     if V.get("promise"):
         add(f'<div class="promise">{E(V["promise"])}</div>')
     add('</div></section>')
@@ -1525,7 +1576,8 @@ def render(slug, proto="full", version=LATEST):
     if pre:
         add('<section id="which"><div class="wrap">')
         add('<div class="eyebrow">Why the numbers disagree</div>')
-        add(f'<h2>{E(pre["heading"])}</h2>')
+        if not pre.get("opener"):
+            add(f'<h2>{E(pre["heading"])}</h2>')
         for i, para in enumerate(pre["paras"]):
             # First para sets up the problem; the LAST one is the promise the
             # rest of the page has to keep, so it carries the emphasis. Styled
@@ -1568,8 +1620,44 @@ def render(slug, proto="full", version=LATEST):
                 'comparable-sales model operates in, so this is a broader evidence range rather '
                 'than that model\'s output. The strongest nearby sales are still below \u2014 '
                 'what we cannot responsibly do is attach our measured error rate to it.</p>')
-        add('<p class="fine">The width is not hidden. It reflects what can — and cannot — be '
-            'concluded without seeing inside the home.</p>')
+        # ⚠ The honest reason, and it is not property-specific: the range is a
+        # flat ±12% of the estimate, set from the method's MEASURED accuracy
+        # across 1,800+ sold homes. Inventing a bespoke reason per property
+        # would be a better story and a false one. What IS property-specific is
+        # the list of things we could not see, so both are said.
+        add('<div class="whywide">')
+        add('<h3>Why is the range this wide?</h3>')
+        if acc:
+            add(f'<p>Because that is how far this method has been out when we have tested it. '
+                f'The width is not a guess about this home \u2014 it is the measured spread of '
+                f'the method itself, so narrowing it would imply more certainty than the evidence '
+                f'supports.</p>')
+        else:
+            add('<p>Because this range was not built from close comparable sales. It is drawn '
+                'from what can be verified from the outside, which is a wider kind of evidence.</p>')
+        # ⚠ Two DIFFERENT kinds of not-knowing, and merging them reads as a
+        # category error: condition is something nobody can see from the street,
+        # a bathroom count is a fact simply missing from the record. Said
+        # separately, and the second only when it is actually missing.
+        add('<p>Public records tell us a great deal about this home. What they cannot tell us is '
+            'its current internal condition or the quality of any renovation \u2014 and those move '
+            'the result materially. Until someone has seen them, this is the honest width.</p>')
+        gaps = [str(g).replace(" unknown", "").strip() for g in (b.get("gaps") or [])
+                if "unknown" in str(g)]
+        if gaps:
+            listed = (", ".join(gaps[:-1]) + " and " + gaps[-1]) if len(gaps) > 1 else gaps[0]
+            add(f'<p>We are also missing {E(listed)} from the record for this address \u2014 which '
+                f'you can correct further down.</p>')
+        # ⚠ The closing line must match the method. On a fallback range the sales
+        # did NOT pull the answer anywhere, and saying they did rebuilds the very
+        # contradiction fixed an hour ago, in new words.
+        if acc:
+            add('<p class="fine">What we can do is show you exactly which sales pulled the answer '
+                'to where it sits.</p>')
+        else:
+            add('<p class="fine">What we can still do is show you the strongest sales near this '
+                'home, and what each one adjusts to.</p>')
+        add('</div>')
         if acc:
             add('<div class="controls"><a class="btn" href="#comps">See the strongest '
                 'comparisons</a><a class="btn" href="#reliable">How reliable has this been?</a>'
@@ -2086,7 +2174,11 @@ def render(slug, proto="full", version=LATEST):
     # that out ("turns curiosity into homework"). A part is a place, not a
     # percentage.
     PARTS = [
-        ("which",   "The number",   "Is the number attached to this home real?"),
+        # ⚠ No subtitle. In v3 the hero already asks "So which one should you
+        # believe?" — a part subtitle asking "Is the number attached to this home
+        # real?" restates it two lines later. That subtitle was carried over from
+        # the v2 question list and is now orphaned copy.
+        ("which",   "The number",   None),
         ("timing",  "The timing",   "Is now the right time to be selling, or should I wait?"),
         ("correct", "What you can do about any of it", None),
     ]
