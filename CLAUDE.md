@@ -107,13 +107,43 @@ with job_run("my_process", cadence_hours=24, title="Human-Readable Name") as bea
 ```
 Passing `cadence_hours` writes a `self_registered` heartbeat to `system_monitor.job_runs`, which the generic `collect_self_reported_jobs` collector in `scripts/main_site_health_check.py` renders **automatically** on the **"Fields Systems Health"** sheet (Process Registry page) — `https://docs.google.com/spreadsheets/d/1Oa7uZv0shzsxftDYJJ3WErxhr7OZMf_SOxRFawbSgTk/edit`. **OK** = ran within cadence; **STALE** = last run older than `cadence_hours × 1.5` (cron stopped firing); **ERROR** = last run raised. No bespoke renderer or sheet-auth code per script — the one call is the whole contract.
 
+**⚠ 7b. THE HEARTBEAT MUST ASSERT AN OUTCOME, NOT MERELY THAT NOTHING THREW.**
+
+`job_run` records success on any clean exit. That is not enough: a job which runs to completion having
+achieved **nothing** is indistinguishable from one that worked. So for every ongoing process, identify
+its **zero-output path** and `raise` on it.
+
+```python
+with job_run("my_process", cadence_hours=24, title="…") as beat:
+    result = do_the_work()
+    beat.metrics = {"processed": result.n, "failures": len(result.failed)}
+    if result.n == 0 and work_was_expected:      # <-- the assertion
+        raise RuntimeError("processed 0 items; upstream is broken, not empty")
+    beat.detail = f"{result.n} processed"
+```
+
+Three rules that follow from it:
+
+1. **Distinguish "no work to do" from "could not do the work."** An empty queue is success. An empty
+   *result* where input existed is failure. If your code cannot tell these apart, that is the bug —
+   fix it before the heartbeat.
+2. **Never advance a watermark / cursor / `last_run` on a failed run.** Doing so makes one night's
+   failure permanent, because the next run's "since last time" window excludes everything the failed
+   run dropped.
+3. **Record the error text.** A handler that returns `{"status": "error"}` and a caller that counts only
+   successes throws away the one thing needed to diagnose it.
+
 **Checklist when shipping any ongoing process:**
 1. Wrap the run body in `job_run(name, cadence_hours=…, title=…)` (or, if a plain function fits better, call `record_job_result(name, "success"/"error", cadence_hours=…, …)` on both paths).
-2. **Run it once at creation** so a real heartbeat exists (a job that never ran even once has no row — the first run seeds it; the wrapper records even a failed first run).
-3. Verify it appears on the Process Registry page of the Systems Health sheet before considering the task done.
-4. If it warrants a richer, dedicated view (like a data dashboard), still keep the heartbeat — the health sheet is the single "is everything running?" board.
+2. **Add the outcome assertion (7b)** — name the zero-output path and raise on it.
+3. **Load your own environment.** Call `load_env()` in the script rather than trusting the caller; a cron line missing `set -a` exports nothing, and `shared.db` will still connect via `config/settings.yaml` so the job looks healthy while every credential-dependent call fails.
+4. **Run it once at creation** so a real heartbeat exists (a job that never ran even once has no row — the first run seeds it; the wrapper records even a failed first run).
+5. Verify it appears on the Process Registry page of the Systems Health sheet before considering the task done.
+6. If it warrants a richer, dedicated view (like a data dashboard), still keep the heartbeat — the health sheet is the single "is everything running?" board.
 
-**Why this is mandatory, not optional:** we have repeatedly had processes die silently and go unnoticed for days-to-weeks (the daily sitemap push failing every day 2026-07-20→22; three GitHub Actions failing for up to 5 weeks; the lead worklist frozen 9 days). Every such incident was invisible because the process had no self-check. This rule closes that class for good — a new process is not "done" until its own status is visible on the health board.
+**Why this is mandatory, not optional:** we have repeatedly had processes die silently and go unnoticed for days-to-weeks (the daily sitemap push failing every day 2026-07-20→22; three GitHub Actions failing for up to 5 weeks; the lead worklist frozen 9 days). Every such incident was invisible because the process had no self-check.
+
+**And why 7b exists:** on 2026-08-07 an audit found three live jobs that had a heartbeat and were *still* invisible, because each reported success while doing nothing. `build_listed_property` recorded `"queue drained"` through **11 consecutive total failures** for a week (`[BUILDER-ENV-EXPORT-GAP]`). `google_indexing submit-new` submitted **0 URLs on 9 straight nights — 757 dropped** — discarded the API error, and advanced its watermark each time so every failed batch became permanently unrecoverable (`[INDEXING-SILENT-ZERO]`). `offmarket_intel_poller` swallowed sub-resolver exceptions, wrote `status: "done"`, cleared the error field and never retried, leaving 231 public deck pages permanently missing content the database claims completed. Rule 7 alone did not catch any of the three. 7b is the part that does.
 
 ---
 

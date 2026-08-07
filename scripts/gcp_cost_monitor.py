@@ -124,6 +124,26 @@ def analyse(beat):
     mtd = sum(float(r["net_cost"]) for r in by_service)
     currency = (by_service[0]["currency"] if by_service else "") or ""
 
+    # Rule 7b: ASSERT AN OUTCOME. The missing-table case below is already treated as
+    # fatal, but an export table that EXISTS and returns zero rows was not — so this
+    # monitor recorded `status: success, detail: "MTD 0.00, forecast 0.00, top=n/a,
+    # 0 alert(s)"` against a real ~$410/month bill, and none of the three alert paths
+    # could fire (the spike check needs >= 8 complete days, the ceiling check needs a
+    # non-zero forecast, the Recommender check needs savings > 0). That silence is
+    # exactly how a $76/month unmounted disk and $113/month of idle VMs survived for
+    # eight days. An empty result is the same failure as a missing table wearing a
+    # different hat, so it gets the same deliberate-fatal treatment.
+    day_of_month = today.day
+    if not by_service and day_of_month >= 2:
+        raise CostDataUnavailable(
+            f"Billing export returned ZERO rows for {month} on day {day_of_month} "
+            f"(table={table}). A real bill cannot be $0 — the query, the table or the "
+            f"billing account is wrong. Refusing to report $0.00 as success.")
+    if mtd == 0 and day_of_month >= 2:
+        raise CostDataUnavailable(
+            f"Billing export summed to $0.00 for {month} on day {day_of_month} across "
+            f"{len(by_service)} service row(s). Refusing to report $0.00 as success.")
+
     # Forecast month-end by run-rate. Exclude today: its rows are still
     # landing, so counting it would drag the daily average down all morning.
     complete = [d for d in dailies if d["day"] < today.isoformat()]
