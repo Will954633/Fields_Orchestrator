@@ -531,10 +531,22 @@ def main():
         cur = cur.limit(args.limit)
 
     write = args.backfill and not args.dry_run
-    stats = {"published": 0, "needs_review": 0, "skipped_no_price": 0}
+    stats = {"published": 0, "needs_review": 0, "skipped_no_price": 0, "retracted": 0}
     for p in cur:
         if not parse_price(p.get("sale_price"), p.get("last_sale_price")):
             stats["skipped_no_price"] += 1
+            # A plain `continue` would leave any EXISTING sold_analysis live. That matters
+            # now that `listing_price` is no longer accepted as a sale price: the pages
+            # that lose their price are exactly the ones whose published copy states an
+            # ASKING price as the sold figure. Skipping would quietly preserve the defect
+            # this change exists to remove, so retract instead.
+            if p.get("sold_analysis"):
+                stats["retracted"] += 1
+                print(f"  RETRACT {p.get('address') or p.get('_id')} — no recorded sale "
+                      f"price; removing sold_analysis that quoted the asking price")
+                if write:
+                    db[args.suburb].update_one({"_id": p["_id"]},
+                                               {"$unset": {"sold_analysis": ""}})
             continue
         status, ok = process(db, args.suburb, p, bench, args.dry_run, write)
         stats[status] = stats.get(status, 0) + 1
