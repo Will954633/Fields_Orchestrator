@@ -1656,8 +1656,10 @@ def render(slug, proto="full", version=LATEST):
                .find_one({"slug": slug}) or {})
         actives = ((rep.get("comparables") or {}).get("closest_active") or [])
         if comp.get("n_compete"):
-            add(f'<p>{comp["n_compete"]} homes a buyer could compare with this one if it came to '
-                f'market today, from {comp.get("n_total","—")} on the market across the wider area.</p>')
+            nc = comp["n_compete"]
+            add(f'<p>{nc} {"home" if nc == 1 else "homes"} a buyer could compare with this one if '
+                f'it came to market today, from {comp.get("n_total", "-")} on the market across '
+                f'the wider comparison catchment.</p>')
         if C and actives:
             ap_ = (rep.get("comparables") or {}).get("aperture_label")
             if ap_:
@@ -1686,19 +1688,17 @@ def render(slug, proto="full", version=LATEST):
                     add(f'<div class="fine" style="margin-top:8px">{E(str(a_["difference_vs_subject"]))}</div>')
                 add('</div></article>')
             add('</div>')
-        dom, dom_p = mkt.get("dom_median"), mkt.get("dom_yoy_prev")
-        act, act_d = mkt.get("active_listings"), mkt.get("active_listings_mom_pct")
-        if dom and dom_p and act:
-            add('<h3 style="margin-top:26px">Two true things point in different directions</h3>')
-            add('<div class="twotrue">')
-            add(f'<div><div class="n">{dom:.0f} days</div><div class="fine">to sell, against '
-                f'{dom_p:.0f} twelve months ago</div></div>')
-            add(f'<div><div class="n">{act:.0f} homes</div><div class="fine">on the market'
-                + (f', {abs(act_d):.0f}% {"fewer" if act_d < 0 else "more"} than a month ago' if act_d else '')
-                + '</div></div>')
-            add('</div>')
-            add('<p>Both readings are true and they support opposite conclusions, which is why a '
-                'single market headline cannot settle anything about this home.</p>')
+        # ⚠ REMOVED 2026-08-07: this block restated days-on-market and active
+        # listings under "Two true things point in different directions" —
+        # hardcoded to that framing. For Varsity Lakes and Robina both readings
+        # move the SAME way, so the page asserted "they support opposite
+        # conclusions" two screens after the timing section correctly said "both
+        # readings moved the same way", about the identical numbers. One page,
+        # two contradictory readings of one fact.
+        #
+        # `timing_answer()` owns that pair now and derives the direction per
+        # suburb. This section is about the COMPETITOR SET specifically, which
+        # is its distinct job.
         if C:
             acts = [a for a in (rep.get("activity") or []) if timeline_safe(a)]
             if acts:
