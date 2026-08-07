@@ -58,13 +58,47 @@ def load_env():
     load_dotenv(env_path, override=False)
 
 
+SA_KEY_PATH = os.environ.get("GOOGLE_INDEXING_SA_KEY", "/home/fields/.gcp-indexing-sa.json")
+
+
 def get_credentials():
-    """Get OAuth2 credentials from refresh token."""
+    """Service-account credentials if available, else the legacy OAuth refresh token.
+
+    A service account is the approach Google documents for the Indexing API and it is
+    strictly better for a nightly server job: no consent screen, no refresh token to
+    expire or be overwritten, no OAuth publishing-status restrictions.
+
+    Both of the failures we hit came from the OAuth path:
+      * `GOOGLE_INDEXING_REFRESH_TOKEN` was byte-identical to `GOOGLE_ADS_REFRESH_TOKEN`,
+        i.e. an `adwords`-scoped token used to request `indexing` + `webmasters`, so every
+        refresh returned `invalid_scope` — 757 URLs dropped over 9 nights
+        (fix-history [INDEXING-SILENT-ZERO]).
+      * Re-consenting then failed with `Error 403: access_denied`, because the OAuth client
+        lives in project `fields-estate-ads` whose consent screen is not published for
+        these sensitive scopes.
+
+    The service account must be added as a **delegated owner** of the Search Console
+    property, otherwise the API answers 403 `Permission denied`. That is the one step
+    that cannot be automated from here.
+    """
     from google.oauth2.credentials import Credentials
+
+    if os.path.exists(SA_KEY_PATH):
+        from google.oauth2 import service_account
+        return service_account.Credentials.from_service_account_file(
+            SA_KEY_PATH, scopes=SCOPES)
 
     client_id = os.environ.get("GOOGLE_ADS_CLIENT_ID")
     client_secret = os.environ.get("GOOGLE_ADS_CLIENT_SECRET")
     refresh_token = os.environ.get("GOOGLE_INDEXING_REFRESH_TOKEN")
+
+    if refresh_token and refresh_token == os.environ.get("GOOGLE_ADS_REFRESH_TOKEN"):
+        print("ERROR: GOOGLE_INDEXING_REFRESH_TOKEN is the same value as "
+              "GOOGLE_ADS_REFRESH_TOKEN — an adwords-scoped token cannot request the "
+              "indexing scope and will fail with invalid_scope on every call.\n"
+              f"Fix: add the service-account key at {SA_KEY_PATH} (preferred), or mint a "
+              "genuinely indexing-scoped refresh token.", file=sys.stderr)
+        sys.exit(1)
 
     if not all([client_id, client_secret, refresh_token]):
         print("ERROR: Missing credentials. Run 'python3 scripts/google_indexing.py auth' first.")

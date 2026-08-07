@@ -95,3 +95,7 @@ feedback/
 09_Appraisals/Substantiation/
 # Local property-photo cache (regenerable from blob storage)
 cache/
+
+# Google Indexing API service-account key (never commit)
+.gcp-indexing-sa.json
+*-sa.json
