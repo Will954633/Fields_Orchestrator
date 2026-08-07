@@ -114,3 +114,81 @@ different prices — and the honest move is to change how the range is *presente
 
 See [[valuation_design_envelope]], [[valuation_backtest_claim_constraints]],
 [[adjusted_comparables_evidence]], [[data_source_undercapture_reset]].
+
+---
+
+# Part 2 — Attribute-level ablation (2026-08-07, same n = 641)
+
+Instrumented `--dump-errors` to carry the **full per-comparable adjustment breakdown** (4,916
+comparables, 19 attributes), so every hypothesis below is an offline re-computation rather than a
+fresh backtest. All figures **de-biased first**, so they measure spread, not offset.
+
+## Does adjusting beat not adjusting? — YES
+
+| predictor | MAE | within 10% | 80% half-width |
+|---|---|---|---|
+| median of the same comps, **unadjusted** | 13.1% | 53% | ±20.4% |
+| median of those comps, **adjusted** | **10.8%** | **59%** | **±18.4%** |
+| **weighted mean** of adjusted (shipped) | 11.2% | 58% | ±18.3% |
+
+Adjustment earns 2.3pp of MAE. **But the six-factor weighting scheme is slightly worse than an
+unweighted median of the same comps.** It is not earning its keep.
+
+## Do more comparables add variance? — NO, the opposite
+
+Restricting to the best-weighted comps of the same pool makes it worse: best 3 → ±18.4%, best 5 →
+±18.0%, best 6 → ±17.4%, **all 8 → ±16.9%**. "Fewer but higher quality" is tested and loses.
+
+(Across properties, 8-comp cases run MAE 9.8% against 14.1% for 3–4 comps — but that is confounded:
+unusual homes are *why* a pool is thin.)
+
+## ⚠ Which attributes hurt — the subjective ones, all of them
+
+Leave-one-out, MAE change when the adjustment is removed:
+
+| removing this HELPS | gain | | removing this HURTS | cost |
+|---|---|---|---|---|
+| kitchen | −0.39pp | | land_size | +1.55pp |
+| renovation | −0.26pp | | pool | +0.74pp |
+| renovation_quality | −0.22pp | | street_premium | +0.73pp |
+| stories | −0.07pp | | floor_area | +0.72pp |
+| car_spaces | −0.06pp | | micro_location | +0.53pp |
+
+## ⚠ And the adjustment RATES are miscalibrated in exactly the same direction
+
+The multiplier on our dollar adjustment that would minimise error (1.0 = our rate is right):
+
+| calibrated / under-adjusted | | over-adjusted or pure noise | |
+|---|---|---|---|
+| floor_area | **1.00** | micro_location | 0.75 |
+| property_age | **1.00** | condition | 0.50 |
+| land_size | 1.25 | renovation | 0.25 |
+| pool | 1.25 | kitchen | **0.00** |
+| street_premium | 1.50 | renovation_quality | **0.00** |
+
+**The measurable facts are calibrated. Our own quality judgements are over-trusted — three of them
+carry no signal at all.** Kitchen and renovation-quality scores are AI-derived from photos;
+optimal weight zero means they are adding noise, not information.
+
+## What this buys, stacked
+
+| | MAE | within 10% | a flat ±12% covers | honest 80% band on $1.6M |
+|---|---|---|---|---|
+| as shipped | 10.83% | 59% | 66% | $588,000 |
+| + per-suburb offsets | 10.12% | 61% | 68% | $528,000 |
+| + drop kitchen/renovation/renovation_quality | 10.30% | 59% | 66% | $540,000 |
+| **+ both** | **9.52%** | **64%** | **72%** | **$501,000** |
+
+⚠ **Prefer the binary drop to the full rate recalibration.** Refitting all 19 multipliers gives
+±15.5% against ±15.6% for the simple drop — no real gain, and those multipliers were fitted on the
+same 641 sales, so they are in-sample. Dropping three attributes is a far smaller overfitting
+surface for the same result.
+
+## Still not tested
+
+- **Are we missing variables?** No residual analysis against unused attributes has been run. This
+  is the open question with the most headroom.
+- **Why the top of the pool is still truncated.** Dropping the subjective adjustments moves
+  "sells above dearest adjusted comp" from 45% to 39% — against 12% expected. Most of the
+  compression is elsewhere.
+- **The irreducible-noise ceiling** — leave-one-out within the comp set.
