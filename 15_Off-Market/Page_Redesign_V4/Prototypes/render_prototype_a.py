@@ -38,14 +38,28 @@ load_dotenv("/home/fields/Fields_Orchestrator/.env")
 import assemble as A                                # noqa: E402
 from src.mongo_client_factory import get_mongo_client  # noqa: E402
 
-# Measured 2026-08-06, detached houses $1M-$2M, --price-filter none.
-# Product/09_ACCURACY_AND_CALIBRATION.md. Per suburb, never blended — the spread
-# between suburbs is wider than the gain from scoping, so a blend misdescribes
-# two of three markets. No fallback: an unmeasured suburb renders no figure.
+# Measured 2026-08-08 under the CURRENT method. Canonical source:
+# 16_Valuation/accuracy/2026-08-08-figures.md — do not edit these by hand without
+# re-running the backtest there.
+#
+#   python3 scripts/valuation_backtest.py --price-filter none --property-type House \
+#     --min-price 1000000 --max-price 2000000 --suburb <suburb> --blind-subject
+#
+# --blind-subject is MANDATORY here: this page is the off-market product, and an
+# off-market home has no marketing photos, so a sighted backtest would quote an
+# accuracy we cannot deliver for this reader.
+#
+# Per suburb, never blended — the spread between suburbs is wider than the gain
+# from scoping, so a blend misdescribes two of three markets. No fallback: an
+# unmeasured suburb renders no figure.
+#
+# `band` is the PUBLISHED half-width and is per suburb too. 80% coverage is a
+# promise, so each suburb gets the width its own measurement earns — a pooled
+# 12.2% contained only 77% in Burleigh Waters.
 ACCURACY = {
-    "robina":          {"n": 278, "mae": 10.5, "median": 8.2, "within10": 59, "contain": 67},
-    "burleigh_waters": {"n": 155, "mae": 11.2, "median": 9.8, "within10": 52, "contain": 60},
-    "varsity_lakes":   {"n": 207, "mae": 13.8, "median": 13.4, "within10": 36, "contain": 41},
+    "robina":          {"n": 251, "mae": 8.2, "median": 6.6, "within10": 67, "contain": 79, "band": 12.2},
+    "burleigh_waters": {"n": 146, "mae": 8.6, "median": 7.7, "within10": 68, "contain": 77, "band": 14.0},
+    "varsity_lakes":   {"n": 184, "mae": 7.3, "median": 5.5, "within10": 72, "contain": 82, "band": 11.2},
 }
 
 # ── VERSIONS ───────────────────────────────────────────────────────────────
@@ -1706,25 +1720,34 @@ def render(slug, proto="full", version=LATEST):
         # "this range was not built by our comparable-sales method", is a flat
         # contradiction — and the credibility of the whole page rests on
         # sentences like this one being exact.
+        # ⚠ Must match the method exactly. Since 2026-08-08 the estimate is
+        # computed from the WHOLE candidate pool and the eight shown are a
+        # display choice — saying they "carried most of the weight" would be a
+        # description of the old method, and the credibility of this page rests
+        # on sentences like this one being literally true.
         if v.get("n_comps") and adj and acc:
-            add(f'<p class="basis fine">{v["n_comps"]} relevant sales influenced the range. '
-                f'The {len(adj)} strongest carried most of the weight.</p>')
+            add(f'<p class="basis fine">Built from all {v["n_comps"]} comparable sales we hold for '
+                f'this home \u2014 not a hand-picked few. The {len(adj)} closest are shown below.</p>')
         elif not acc:
             add('<p class="basis fine">This home sits outside the band our tested '
                 'comparable-sales model operates in, so this is a broader evidence range rather '
                 'than that model\'s output. The strongest nearby sales are still below \u2014 '
                 'what we cannot responsibly do is attach our measured error rate to it.</p>')
-        # ⚠ The honest reason, and it is not property-specific: the range is a
-        # flat ±12% of the estimate, set from the method's MEASURED accuracy
-        # across 1,800+ sold homes. Inventing a bespoke reason per property
+        # ⚠ The honest reason, and it is not property-specific: the width is an
+        # EMPIRICAL 80% BAND, measured per suburb — four in five tested sales
+        # landed inside a range built this way. It is not a confidence interval
+        # and must never be called one. Inventing a bespoke reason per property
         # would be a better story and a false one. What IS property-specific is
         # the list of things we could not see, so both are said.
         add('<div class="whywide">')
         add('<h3>Why is the range this wide?</h3>')
         if acc:
-            add('<p>We set the width using how far estimates like this one have historically '
-                'missed the eventual sale price. Narrowing it further would imply more certainty '
-                'than our testing supports.</p>')
+            add(f'<p>The width is not a style choice. We set it by testing this method against '
+                f'{acc["n"]} {E(b.get("suburb_display",""))} houses that later sold, and widening '
+                f'the range until four in five of them landed inside it. '
+                f'<b>It is as narrow as the evidence earns.</b></p>')
+            add('<p>Narrowing it further would not make the estimate better. It would only make '
+                'the claim less true.</p>')
         else:
             add('<p>Because this range was not built from close comparable sales. It is drawn '
                 'from what can be verified from the outside, which is a wider kind of evidence.</p>')
@@ -1897,7 +1920,8 @@ def render(slug, proto="full", version=LATEST):
         add(f'<div class="bigfig">{acc["mae"]}%</div>')
         add(f'<p>Tested against {acc["n"]} {E(b.get("suburb_display",""))} houses in this price range '
             f'that later sold, the centre of the estimate was out by <b>{acc["mae"]}% on average</b>. '
-            f'Half the time it was within {acc["median"]}%.</p>')
+            f'Half the time it was within {acc["median"]}%, and it landed within 10% of the eventual '
+            f'sale price on {acc["within10"]}% of homes.</p>')
         add('<p>That is why this page shows a range rather than pretending the evidence supports one '
             'exact number.</p>')
         if v.get("low") and v.get("high"):
@@ -1907,7 +1931,9 @@ def render(slug, proto="full", version=LATEST):
                 f'<div class="lbl"><span>{E(money(v["low"]))}</span>'
                 f'<span>{E(money(v["high"]))}</span></div>'
                 f'<div class="fine" style="margin-top:12px">The sale price fell inside a range built '
-                f'this way {acc["contain"]}% of the time.</div></div>')
+                f'this way <b>{acc["contain"]}% of the time</b> \u2014 which is what the width is '
+                f'chosen to deliver. It is not a statistical confidence interval, and we do not '
+                f'describe it as one.</div></div>')
         add('<details><summary>See the full test</summary><div class="body">')
         add(f'<p>Leave-one-out test on {acc["n"]} detached houses in {E(b.get("suburb_display",""))} '
             f'that sold between $1,000,000 and $2,000,000 — the band this method is built for. '
@@ -1919,12 +1945,14 @@ def render(slug, proto="full", version=LATEST):
             f'<span>Half the time within</span><span>{acc["median"]}%</span></div>')
         add(f'<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line-2)">'
             f'<span>Within 10% of the sale price</span><span>{acc["within10"]}% of homes</span></div>')
-        add(f'<div style="display:flex;justify-content:space-between;padding:6px 0">'
+        add(f'<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line-2)">'
             f'<span>Sale fell inside the published range</span><span>{acc["contain"]}%</span></div>')
+        add(f'<div style="display:flex;justify-content:space-between;padding:6px 0">'
+            f'<span>Published range width</span><span>\u00b1{acc["band"]}%</span></div>')
         add('<p class="fine" style="margin-top:14px">Those homes sold, which this one has not — so '
             'treat it as the method\'s track record, not a promise about this address.</p>')
         add('</div></details>')
-        add('<div class="src">Fields analysis · tested 6 August 2026</div>')
+        add('<div class="src">Fields analysis \u00b7 tested 8 August 2026</div>')
         add('</div></section>')
 
     # ── 6b · why the other estimates disagree (Prototype B) ─────────
@@ -2062,11 +2090,22 @@ def render(slug, proto="full", version=LATEST):
         rep = (get_mongo_client()["system_monitor"]["property_reports"]
                .find_one({"slug": slug}) or {})
         actives = ((rep.get("comparables") or {}).get("closest_active") or [])
+        # ⚠ Two counts of "competing homes" appear on this page and they are
+        # measured differently — the section above counts homes sharing the
+        # feature COMBINATION, this one counts homes a buyer would actually
+        # shortlist at this price today. Stated bare, one reads as contradicting
+        # the other. So this sentence names the relationship rather than
+        # dropping a second, smaller number on the reader.
         if comp.get("n_compete"):
             nc = comp["n_compete"]
-            add(f'<p>{nc} {"home" if nc == 1 else "homes"} a buyer could compare with this one if '
-                f'it came to market today, from {comp.get("n_total", "-")} on the market across '
-                f'the wider comparison catchment.</p>')
+            _m = sc.get("active_matching")
+            if _m and _m > nc:
+                add(f'<p>Of those {_m}, <b>{nc}</b> {"is" if nc == 1 else "are"} priced where a '
+                    f'buyer looking at this home would actually be choosing between them today.</p>')
+            else:
+                add(f'<p>{nc} {"home" if nc == 1 else "homes"} a buyer could compare with this one '
+                    f'if it came to market today, from {comp.get("n_total", "-")} on the market '
+                    f'across the wider comparison catchment.</p>')
         if C and actives:
             ap_ = (rep.get("comparables") or {}).get("aperture_label")
             if ap_:
@@ -2153,8 +2192,20 @@ def render(slug, proto="full", version=LATEST):
         # noticeably more promotional than everything around it. Framed as what
         # it is: one group likely to value this more than average.
         add('<h2>One buyer group likely to value this combination more than average</h2>')
+        # ⚠ Softening the HEADING was not enough — the engine's own line
+        # ("Local family upgraders carry the price") still printed underneath it
+        # as a flat assertion, which is the thing that was wrong. We hold no
+        # buyer-origin data: this is inferred from what the home has and what the
+        # comparable sales show buyers paying for. Say so, once, before it.
+        if bb.get("headline") or bb.get("body"):
+            add('<p class="fine">We have no data on who is actually buying in this street. '
+                'What follows is inferred from this home\u2019s features and what the sales '
+                'above show buyers paying more for.</p>')
         if bb.get("headline"):
-            add(f'<p class="lede">{E(str(bb["headline"]).rstrip("."))}.</p>')
+            _h = str(bb["headline"]).rstrip(".").strip()
+            _h = _h[0].lower() + _h[1:] if _h else _h
+            add(f'<p class="lede">On that basis, the group most likely to stretch for this '
+                f'home is the one for whom {E(_h)}.</p>')
         if bb.get("body"):
             add(f'<p class="lede">{E(str(bb["body"]).strip())}</p>')
         carries, attracts = vd_.get("carries_price") or [], vd_.get("attracts_buyer") or []
