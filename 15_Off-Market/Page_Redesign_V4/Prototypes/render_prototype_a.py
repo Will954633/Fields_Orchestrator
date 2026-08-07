@@ -22,6 +22,7 @@ no build step:
 import argparse
 import html
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -408,6 +409,51 @@ def market_insights(suburb_display):
         data = {}
     _INSIGHTS_CACHE[suburb_display] = data
     return data
+
+
+def excluded_sale(vd):
+    """The priciest nearby sale we did NOT use, and the stored reason why.
+
+    Answers the question a homeowner actually asks — "but that place up the road
+    sold for $X" — for the sales that did NOT make the set. `recent_sales`
+    carries all 51 candidates with `included_in_valuation` and a
+    `verification.issues` list, so the reason is recorded rather than inferred.
+
+    Only returns a sale that has a RECORDED issue. Plenty of excluded sales
+    simply were not among the eight strongest by weight — "it wasn't in the top
+    eight" is true but not interesting, and dressing it up as a rejection would
+    misrepresent what happened.
+    """
+    rs = [r for r in (vd.get("recent_sales") or [])
+          if not r.get("included_in_valuation") and r.get("price")]
+    cands = []
+    for r in rs:
+        v = r.get("verification") or {}
+        issues = [i for i in (v.get("issues") or []) if "All checks passed" not in i]
+        if issues:
+            cands.append((r, issues, v.get("status")))
+    if not cands:
+        return None
+    r, issues, status = max(cands, key=lambda c: c[0]["price"])
+
+    # "Adjusted price +58% from cohort median" -> plain English, keeping the number.
+    reasons = []
+    for i in issues:
+        m = re.search(r"([+-]?\d+)%\s+from cohort median", i)
+        if m:
+            pc = int(m.group(1))
+            reasons.append(f"once the differences were priced in it still sat {abs(pc)}% "
+                           f"{'above' if pc > 0 else 'below'} the middle of the comparable set")
+            continue
+        if "outlier" in i.lower():
+            reasons.append("it sat far enough from the rest of the set to read as an outlier")
+            continue
+        reasons.append(i.rstrip("."))
+    return {"address": str(r.get("address", "")).split(",")[0],
+            "price": r["price"],
+            "distance_km": r.get("distance_km"),
+            "reasons": reasons[:2],
+            "status": status}
 
 
 def median_chart(mi):
@@ -1325,6 +1371,33 @@ def render(slug, proto="full", version=LATEST):
         add('<a class="cue" href="#different">So what makes this one different? ↓</a>')
         add('</div></section>')
 
+    # ── 4b · the sale we did NOT use ────────────────────────────────
+    # Answers the mirror of the "sale up the road" card: not why a headline
+    # price does not transfer, but why a nearby sale is not in the set at all.
+    # Also removes a duplication — the range card already has a "See the
+    # strongest comparisons" button, so a forward cue pointing at the same
+    # section said the same thing twice.
+    exc = excluded_sale(doc.get("valuation_data") or {})
+    if exc and adj:
+        add('<section id="excluded"><div class="wrap">')
+        add('<div class="eyebrow">What we left out</div>')
+        add(f'<h2>A sale at {E(exact(exc["price"]))} that is not in that set</h2>')
+        meta = E(exc["address"])
+        if exc.get("distance_km"):
+            meta += f' \u2014 {exc["distance_km"]:.1f} km away'
+        add(f'<div class="anchor">{meta}</div>')
+        add('<p>It is a real sale, and it is close enough that you would notice it. It was '
+            'considered and left out.</p>')
+        if exc["reasons"]:
+            add('<div class="label">Why</div>')
+            add('<ul class="ticks">' + "".join(f'<li>{E(r)}</li>' for r in exc["reasons"])
+                + '</ul>')
+        add('<p class="fine">Leaving it in would have pulled the range toward a home this one is '
+            'not. That is the same judgement working in reverse when a low sale is left out, and '
+            'it is why the number of sales behind a range matters less than which ones.</p>')
+        add('<a class="cue" href="#different">So what makes this one different? \u2193</a>')
+        add('</div></section>')
+
     # ── 5 · what makes this home different ──────────────────────────
     if sc.get("active_matching") and sc.get("active_total"):
         add('<section id="different"><div class="wrap">')
@@ -1712,6 +1785,7 @@ def render(slug, proto="full", version=LATEST):
         "answer": "See what the sales support \u2193",
         "nearby": "First, one sale nearby is worth looking at \u2193",
         "comps": "See the strongest sales \u2193",
+        "excluded": "And the sale we left out \u2193",
         "different": "So what makes this one different? \u2193",
         "reliable": "So how wrong could you be? \u2193",
         "dispersion": "Then why do the other numbers disagree? \u2193",
@@ -1732,7 +1806,17 @@ def render(slug, proto="full", version=LATEST):
         cur = here.group(1) if here else None
         if target in order and order.index(target) > (order.index(cur) if cur in order else -1):
             return m.group(0)                     # already points forward, leave it
-        nxt = next((sid for sid in order[order.index(cur) + 1:]), None) if cur in order else None
+        if cur not in order:
+            return m.group(0)
+        # ⚠ Skip any target this section ALREADY links from a control. The range
+        # card carries a "See the strongest comparisons" button, so a cue landing
+        # on the same section said the same thing twice — which is what Will
+        # spotted. Advance to the next section that is not already reachable
+        # from here.
+        sec_end = body.find('</section>', m.start())
+        sec_html = body[at:sec_end if sec_end > 0 else len(body)]
+        already = set(_re.findall(r'class="btn" href="#([^"]+)"', sec_html))
+        nxt = next((sid for sid in order[order.index(cur) + 1:] if sid not in already), None)
         if not nxt:
             return ""                             # nothing follows — drop the cue entirely
         label = CUE.get(nxt) or ("Keep reading " + chr(0x2193))
