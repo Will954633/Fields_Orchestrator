@@ -63,23 +63,53 @@ Read these before running any measurement. Each cost real time or produced a wro
 
 ---
 
+## Current position, in one line
+
+**MAE 8.05%, 80% band ±12.2% ($391,904 on a $1.6M home), n = 581.** Down from $603,574 at the start
+of this work. `accuracy/2026-08-08-figures.md` is the only quotable source.
+
 ## Index
 
-### Methodology
-- `methodology/01-how-the-valuation-works.md` — the pipeline end to end
-- `methodology/02-design-envelope.md` — why $1M–$2M, and why it is structural
-- `methodology/03-the-range.md` — what ±12% is, what it is not, and its measured coverage
-- `methodology/04-water-and-cohorts.md` — waterfront vs water view vs dry, and cohort selection
-- `methodology/05-what-we-exclude.md` — attached dwellings, incomplete records, and why
+### Methodology — how it works today
+- `01-how-the-valuation-works.md` — **start here.** The pipeline end to end
+- `02-design-envelope.md` — why $1M–$2M, and why it is structural
+- `03-the-range.md` — what the band is, what it is not, and its measured coverage
+- `04-water-and-cohorts.md` — waterfront vs water view vs dry; geometry decides frontage
+- `05-what-we-exclude.md` — attached dwellings, incomplete records, and the blind-subject rule
 
-### Experiments
-- `experiments/2026-08-07-band-width-investigation.md` — the full investigation (parts 1–6)
+### Experiments — append-only, newest first
+- `2026-08-08-comparable-selection.md` — the post-adjustment filter keyed to the cohort median
+- `2026-08-08-where-the-headroom-is.md` — the ceiling is selection, not coverage (+ a correction)
+- `2026-08-07-enrichment-contribution-scoping.md` — four enrichment hypotheses, all rejected;
+  the noise floor
+- `2026-08-07-water-geometry-backfill.md` — 53% → 100% coverage; where the water premium stops
+- `2026-08-07-band-width-investigation.md` — the original investigation (parts 1–6)
+- `2026-08-07-outlier-list.md` — the 50 worst misses, with links
 
 ### Decisions
-- `decisions/2026-08-07-range-meaning.md` — coverage vs width
+- `2026-08-07-range-meaning.md` — coverage vs width; the band became an empirical 80% band
 
 ### Accuracy
-- `accuracy/README.md` — how to reproduce every published figure
+- `2026-08-08-figures.md` — **CURRENT.** Reproduction commands and the rejected-hypotheses list
+- `2026-08-07-figures.md` — superseded
+
+---
+
+## ⚠ What has been tested and rejected
+
+Do not re-run these. Each is recorded with its measurement:
+
+adaptive band width · fewer-but-better comparables · nearest-by-distance selection · refitting all 19
+adjustment multipliers · rescaling beach/street premiums · satellite analysis as an accuracy lever ·
+photo-derived quality attributes · the floor-area "ruler mismatch"
+
+## What is still open
+
+1. **Attributes we hold no data on for any property** — aspect, outlook, slope, frontage width,
+   noise exposure. The only surviving explanation for the residual displacement.
+2. **48.7% of off-market homes have no floor area at all** — the largest adjustment, missing on half
+   our subjects.
+3. **Waterfront** — out of scope by decision; Varsity Lakes has only 18 waterfront comparables.
 
 ---
 
