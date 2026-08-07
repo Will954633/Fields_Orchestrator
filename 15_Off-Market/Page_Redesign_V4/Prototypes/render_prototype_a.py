@@ -1057,6 +1057,65 @@ footer{padding:44px 0 70px;border-top:1px solid var(--line-2);color:var(--muted)
 """
 
 JS = """
+// ── in-page navigation: a glide, not a jump ────────────────────────────
+// A native anchor jump teleports. There is no sense of travel, so the reader
+// loses their place and has to rebuild the map of the page in their head.
+// This animates the scroll with an ease that accelerates gently, carries, and
+// decelerates long into the landing.
+//
+// Duration scales with DISTANCE — a short hop and a half-page move should not
+// take the same time, or the short one feels sluggish and the long one feels
+// thrown. Clamped so it never drags.
+//
+// prefers-reduced-motion is honoured: someone who has asked the OS for less
+// motion gets the instant jump, which for them is the correct behaviour.
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+function headerOffset(){
+  const el=document.querySelector('header.top');
+  return el ? el.getBoundingClientRect().height + 12 : 12;
+}
+function glideTo(target){
+  const y = target.getBoundingClientRect().top + scrollY - headerOffset();
+  const start = scrollY, dist = y - start;
+  if (reduceMotion || Math.abs(dist) < 8){ scrollTo(0, y); return; }
+  // ~0.55ms per pixel, floored at 480ms and capped at 1500ms.
+  const dur = Math.min(1500, Math.max(480, Math.abs(dist) * 0.55));
+  const t0 = performance.now();
+  // easeInOutCubic — symmetric, no abrupt start, long soft landing.
+  const ease = t => t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2;
+  let raf;
+  const step = now => {
+    const t = Math.min(1, (now - t0) / dur);
+    scrollTo(0, start + dist * ease(t));
+    if (t < 1) raf = requestAnimationFrame(step);
+  };
+  raf = requestAnimationFrame(step);
+  // A wheel or touch during the glide cancels it — never fight the reader.
+  const cancel = () => { cancelAnimationFrame(raf);
+    removeEventListener('wheel', cancel); removeEventListener('touchstart', cancel); };
+  addEventListener('wheel', cancel, {passive:true, once:true});
+  addEventListener('touchstart', cancel, {passive:true, once:true});
+}
+document.addEventListener('click', e => {
+  const a = e.target.closest('a[href^="#"]');
+  if (!a) return;
+  const id = a.getAttribute('href').slice(1);
+  const target = id && document.getElementById(id);
+  if (!target) return;
+  e.preventDefault();
+  glideTo(target);
+  // Update the address bar without a second jump, so back/forward and sharing
+  // still work.
+  history.pushState(null, '', '#' + id);
+});
+// Arriving with a hash already in the URL should land the same way.
+addEventListener('load', () => {
+  if (location.hash.length > 1){
+    const t = document.getElementById(location.hash.slice(1));
+    if (t) setTimeout(() => glideTo(t), 60);
+  }
+});
+
 const h=document.querySelector('header.top');
 // Burger. Plain hidden/aria toggle — no library, no scroll lock: the brief asks
 // for normal vertical scrolling and locking the page to open a menu is a small
