@@ -519,7 +519,7 @@ def _comp_spread(points, predicted):
     import statistics as _st
     out = {"adj_iqr_pct": None, "adj_cv": None, "top_weight": None,
            "comp_months": None, "dist_km": None,
-           "adj_max": None, "adj_min": None, "raw_max": None}
+           "adj_max": None, "adj_min": None, "raw_max": None, "comps": []}
     if not points or not predicted:
         return out
     vals = [(p.get("adjustment_result") or {}).get("adjusted_price") for p in points]
@@ -536,6 +536,16 @@ def _comp_spread(points, predicted):
     ms = [p.get("months_ago") for p in points if p.get("months_ago") is not None]
     if ms:
         out["comp_months"] = _st.median(ms)
+    # Full per-comparable breakdown, so attribute ablation can be run offline
+    # without re-running the (9-minute) backtest for every hypothesis.
+    out["comps"] = [{
+        "price": p.get("price"),
+        "adjusted": (p.get("adjustment_result") or {}).get("adjusted_price"),
+        "total_adj": (p.get("adjustment_result") or {}).get("total_adjustment"),
+        "weight": (p.get("weight") or {}).get("normalized_weight"),
+        "adj": {k: (v or {}).get("dollars")
+                for k, v in ((p.get("adjustment_result") or {}).get("adjustments") or {}).items()},
+    } for p in points]
     if vals:
         out["adj_max"] = max(vals)
         out["adj_min"] = min(vals)
@@ -950,7 +960,7 @@ def main():
                          "range_low": r.get("range_low"), "range_high": r.get("range_high"),
                          **{k: r.get(k) for k in ("adj_iqr_pct", "adj_cv", "top_weight",
                                                   "comp_months", "dist_km",
-                                                  "adj_max", "adj_min", "raw_max")}}
+                                                  "adj_max", "adj_min", "raw_max", "comps")}}
                         for r in fields_results], fh)
         print(f"\nwrote {len(fields_results)} signed errors to {args.dump_errors}")
 
