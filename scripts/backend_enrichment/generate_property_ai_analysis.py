@@ -371,13 +371,59 @@ def get_property_doc(db, suburb: str, slug: str = None, address: str = None) -> 
     return cosmos_retry(lambda: db[suburb].find_one(query), f"get_property_{suburb}")
 
 
-def get_suburb_medians(db, suburb: str) -> List[Dict]:
-    """Pipeline 2: Recent quarterly median prices."""
+UNION_SOURCE = "domain_union_onthehouse"
+
+
+def get_suburb_medians(db, suburb: str) -> Dict[str, Any]:
+    """Pipeline 2: the suburb median the editorial is allowed to quote, plus trend context.
+
+    This used to return `suburb_median_prices` (a Domain-only quarterly series rebuilt
+    nightly by step 13) and `format_medians` handed its LAST entry to the LLM labelled
+    "USE THIS FIGURE". That last entry is the IN-PROGRESS quarter, so on 2026-08-07 the
+    editorial was being instructed to publish:
+
+        Burleigh Waters $2,250,000 on n=11   (canonical: $1,925,000, n=167)  +16.9%
+        Robina          $1,365,000 on n=9    (canonical: $1,490,000, n=265)  -8.4%
+
+    on ~206 listings, nightly, with AUTO_PUBLISH=1 — the same artefact class as the
+    "Burleigh Waters is accelerating" claim we published and retracted once already.
+
+    Now the quotable figure is the promoted union scalar from `precomputed_indexed_prices`
+    (Domain u onthehouse, with a 90% CI and a real sample size), provenance-gated on
+    `median_source`. If the gate fails we return no canonical figure and the prompt tells
+    the LLM it may not state a suburb median at all — omission, not fallback.
+
+    The legacy quarterly series is kept ONLY as directional trend context, with the
+    in-progress quarter and thin quarters removed, and is explicitly marked non-quotable.
+    """
+    canonical = None
+    idx = cosmos_retry(
+        lambda: db["precomputed_indexed_prices"].find_one({"_id": suburb}), "get_canonical_median")
+    if idx and idx.get("median_source") == UNION_SOURCE and idx.get("rolling_12m_median_price"):
+        canonical = {
+            "median": idx["rolling_12m_median_price"],
+            "n": idx.get("rolling_12m_median_sample_n"),
+            "ci_low": idx.get("rolling_12m_ci_low"),
+            "ci_high": idx.get("rolling_12m_ci_high"),
+            "yoy_pct": idx.get("rolling_12m_yoy_pct"),
+            "source": idx["median_source"],
+        }
+
+    # Period the canonical pipeline explicitly refuses to publish — never show it as current.
+    in_progress = ((idx or {}).get("in_progress_quarter") or {}).get("period")
+
+    history: List[Dict] = []
     doc = cosmos_retry(lambda: db["suburb_median_prices"].find_one({"suburb": suburb}), "get_medians")
-    if not doc or "data" not in doc:
-        return []
-    # Last 8 quarters
-    return [d for d in doc["data"] if d.get("date", "") >= "2024-Q1"]
+    for d in (doc or {}).get("data", []):
+        if d.get("date", "") < "2024-Q1":
+            continue
+        if in_progress and d.get("date") == in_progress:
+            continue
+        if (d.get("count") or 0) < 20:      # too thin to carry even a direction
+            continue
+        history.append(d)
+
+    return {"canonical": canonical, "history": history, "in_progress_excluded": in_progress}
 
 
 def get_competing_listings(db, suburb: str, exclude_id=None) -> List[Dict]:
@@ -1093,19 +1139,43 @@ def build_property_summary(prop: Dict) -> str:
     return "\n".join(lines)
 
 
-def format_medians(suburb_medians: List[Dict]) -> str:
-    if not suburb_medians:
-        return "  No recent data available"
+def format_medians(suburb_medians: Dict[str, Any]) -> str:
+    """Render the median block for the prompt. Canonical figure only; history is context."""
+    # Tolerate the old list shape in case any caller still passes one.
+    if isinstance(suburb_medians, list):
+        suburb_medians = {"canonical": None, "history": suburb_medians}
+    canonical = (suburb_medians or {}).get("canonical")
+    history = (suburb_medians or {}).get("history") or []
+
     lines = []
-    # Flag the most recent quarter as THE current median
-    if suburb_medians:
-        latest = suburb_medians[-1]
-        lines.append(f"  ⚡ CURRENT SUBURB MEDIAN: ${latest['median']:,} ({latest['date']}, {latest['count']} sales) — USE THIS FIGURE when referencing the suburb median. Do NOT use older quarters.")
-        lines.append("")
-    lines.append("  Quarterly history (for trend context only):")
-    for d in suburb_medians:
-        marker = " ← CURRENT" if d == suburb_medians[-1] else ""
-        lines.append(f"    {d['date']}: ${d['median']:,} ({d['count']} sales){marker}")
+    if canonical:
+        n = canonical.get("n")
+        line = f"  ⚡ CURRENT SUBURB MEDIAN: ${canonical['median']:,}"
+        if n:
+            line += f" (rolling 12 months, {n} sales"
+            if canonical.get("ci_low") and canonical.get("ci_high"):
+                line += f", 90% CI ${canonical['ci_low']:,.0f}–${canonical['ci_high']:,.0f}"
+            line += ")"
+        lines.append(line + " — USE THIS FIGURE when referencing the suburb median.")
+        if canonical.get("yoy_pct") is not None:
+            lines.append(f"  Year-on-year: {canonical['yoy_pct']:+.1f}% (rolling 12 months)")
+        lines.append(f"  Source: {canonical['source']} — Domain and onthehouse sold records, deduplicated.")
+        lines.append("  Always state the sample size alongside this figure. It is an estimate, not a census.")
+    else:
+        # Provenance gate failed. Omission is required, not a weaker number.
+        lines.append("  ⚠ NO AUTHORITATIVE SUBURB MEDIAN IS AVAILABLE for this suburb.")
+        lines.append("  You MUST NOT state a suburb median price, and MUST NOT infer one from the")
+        lines.append("  quarterly figures below. Write the analysis without a suburb median.")
+    lines.append("")
+
+    if history:
+        lines.append("  Quarterly history — DIRECTION ONLY, these figures are NOT quotable:")
+        lines.append("  (Domain-only sample on a different basis to the median above; quoting one as")
+        lines.append("   'the median' would contradict our own published figure.)")
+        for d in history:
+            lines.append(f"    {d['date']}: ${d['median']:,} ({d['count']} sales)")
+        if suburb_medians.get("in_progress_excluded"):
+            lines.append(f"  ({suburb_medians['in_progress_excluded']} omitted — quarter still in progress.)")
     return "\n".join(lines)
 
 
@@ -3063,7 +3133,7 @@ OUTPUT BODY JSON — use v2 structured format (no markdown, no code fences):
 
 def run_multi_agent_pipeline(
     prop_summary: str,
-    suburb_medians: List[Dict],
+    suburb_medians: Dict[str, Any],
     competing_listings: List[Dict],
     recent_sales: List[Dict],
     suburb_name: str,
