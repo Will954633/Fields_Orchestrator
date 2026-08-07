@@ -380,6 +380,74 @@ def timing_answer(suburb_display, ms):
     return paras
 
 
+def median_block(suburb_display, ms):
+    """The suburb median, placed against the national picture.
+
+    ⚠ Leads with the ROLLING 12-MONTH median, never the latest quarter. The data
+    carries its own warning: `latest_quarter_median_price_basis` reads "name it
+    as a quarterly figure wherever it appears, never as 'the median house
+    price'". And the quarters bounce — Robina runs $1,560k then $1,410k on
+    samples of 55 and 43 — which is why the mindset brief bars quarter-on-quarter
+    claims for Robina and Burleigh Waters. The bars are shown with their sample
+    counts and no line is drawn through them.
+
+    Year-on-year is only defensible in its rolling form with the basis attached,
+    which is how `yoy_growth_basis` states it.
+    """
+    med = ms.get("median_12m")
+    if not med:
+        return ""
+    lo, hi = ms.get("median_12m_ci_low"), ms.get("median_12m_ci_high")
+    n = ms.get("median_12m_sample_n")
+    yoy = ms.get("yoy_growth_pct")
+    hist = ms.get("median_price_history") or []
+    # ⚠ The stored basis is internal notation — "12-month rolling median
+    # (Domain ∪ onthehouse)". The set-union symbol is fine in a data dictionary
+    # and meaningless to a homeowner. Say it in words.
+    basis = ("a twelve-month rolling median, built from Domain and onthehouse "
+             "sale records combined")
+
+    out = [f'<h3 style="margin-top:30px">What the median has done in {E(suburb_display)}</h3>']
+    lede = (f"Nationally, home values have fallen for three consecutive months. Over the same "
+            f"period the rolling twelve-month median for houses in {suburb_display} sits at "
+            f"<b>{exact(med)}</b>")
+    if yoy is not None:
+        lede += (f", {abs(yoy):.1f}% {'above' if yoy >= 0 else 'below'} the twelve months before "
+                 f"it")
+    lede += ". The two are not in conflict — a national index and one suburb measure different things."
+    out.append(f'<p class="lede">{lede}</p>')
+
+    if lo and hi and n:
+        out.append(f'<p class="fine">That figure carries a range of {exact(lo)} to {exact(hi)} on '
+                   f'{n} sales \u2014 {E(basis)}.</p>')
+
+    if hist:
+        vals = [h["median_price"] for h in hist]
+        top, bot = max(vals), min(vals)
+        span = (top - bot) or 1
+        bars = []
+        for h in hist:
+            v, cnt = h["median_price"], h.get("transaction_count") or 0
+            pct = 22 + (v - bot) / span * 74
+            thin = cnt < 50
+            bars.append(
+                f'<div class="qbar"><div class="qb" style="height:{pct:.0f}%'
+                + (';opacity:.45' if thin else '') + f'" title="{E(str(h["period"]))}"></div>'
+                f'<span class="qv">{v/1000:.0f}k</span>'
+                # ⚠ A real non-breaking space, not "&nbsp;". E() is html.escape,
+                # so an entity passed through it becomes "&amp;nbsp;" and the
+                # reader sees the literal markup.
+                f'<span class="qp">{E(str(h["period"]).replace(" ", chr(0xA0)))}</span>'
+                f'<span class="qn">{cnt}</span></div>')
+        out.append('<div class="qwrap"><div class="qchart">' + "".join(bars) + '</div>'
+                   '<div class="qkey"><span>Quarterly median, with the number of sales behind '
+                   'each. Faded bars are quarters with fewer than 50 sales.</span></div></div>')
+        out.append('<p class="fine">We have not drawn a line through those quarters. They move '
+                   'around more than the underlying market does, so the twelve-month figure above '
+                   'is the one worth reading.</p>')
+    return "".join(out)
+
+
 def seasonality_strip():
     """A port of `YourHomePage/components/SeasonalityStrip.tsx`, not a new chart.
 
@@ -788,6 +856,19 @@ details .body{padding-top:12px;font-size:.94rem;color:var(--ink-2)}
 .qs2{margin:14px 0 6px;padding-left:20px}
 .qs2 li{font-family:var(--serif);font-size:1.04rem;padding:6px 0;color:var(--ink)}
 
+
+/* quarterly median bars */
+.qwrap{margin:18px 0 8px;padding:16px 14px 12px;background:var(--paper-2);
+  border:1px solid var(--line-2);border-radius:8px}
+.qchart{display:grid;grid-template-columns:repeat(8,1fr);gap:5px;align-items:end;height:150px}
+.qbar{display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%;
+  position:relative}
+.qb{width:100%;background:var(--accent);border-radius:3px 3px 0 0;min-height:4px}
+.qv{font-size:.6rem;color:var(--ink-2);margin-top:4px;font-variant-numeric:tabular-nums}
+.qp{font-size:.54rem;letter-spacing:.02em;color:var(--muted);text-align:center;line-height:1.25}
+.qn{font-size:.52rem;color:var(--muted);opacity:.75}
+.qkey{margin-top:10px;font-size:.78rem;color:var(--muted)}
+@media(max-width:560px){.qv{font-size:.54rem}.qp{font-size:.48rem}}
 
 /* seasonality — ported from YourHomePage/components/SeasonalityStrip */
 .season{margin:20px 0 10px;padding:18px 16px 14px;background:var(--paper-2);
@@ -1255,6 +1336,7 @@ def render(slug, proto="full", version=LATEST):
         for i, para in enumerate(paras):
             cls = ' class="lede"' if i == 0 else ''
             add(f'<p{cls}>{E(para)}</p>')
+        add(median_block(b.get("suburb_display", ""), mkt_for_timing))
         add('<h3 style="margin-top:30px">When does the southern Gold Coast sell for the most?</h3>')
         add(seasonality_strip())
         add('<div class="src">Fields analysis of Gold Coast sale records \u00b7 rate and national '
