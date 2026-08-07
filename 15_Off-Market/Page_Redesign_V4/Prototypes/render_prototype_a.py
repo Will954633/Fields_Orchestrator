@@ -22,6 +22,7 @@ no build step:
 import argparse
 import html
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -543,6 +544,116 @@ def median_chart(mi):
         '<div class="mtip" hidden></div>'
         '<div class="mlegend"><span class="lq">Quarterly median</span>'
         '<span class="lr">Rolling 12-month median</span></div></div>')
+
+
+FEATURE_LABEL = {
+    "land_size": ("Land", "m²"), "floor_area": ("Floor area", "m²"),
+    "bedrooms": ("Bedrooms", ""), "bathrooms": ("Bathrooms", ""),
+    "car_spaces": ("Car spaces", ""), "pool": ("Pool", ""), "stories": ("Levels", ""),
+    "renovation": ("Condition", ""), "beach_proximity": ("Distance to beach", ""),
+    "street_premium": ("Street", ""), "micro_location": ("Position", ""),
+    "time_adjustment": ("Time since sale", ""), "golf_backing": ("Golf frontage", ""),
+    "water_views": ("Water outlook", ""),
+}
+WEIGHT_FACTOR_LABEL = {
+    "adjustment_quality": "How little had to be adjusted",
+    "adjusted_accuracy": "How closely it agrees with the rest",
+    "proximity": "How close it is",
+    "recency": "How recently it sold",
+    "verification": "How much we could verify",
+    "data_quality": "How complete its record is",
+}
+
+
+def evidence_cards(ev, limit=3):
+    """The comparable cards, rendered from `valuation_evidence_from_engine()`.
+
+    ⚠ This is the SAME payload `ValuationEvidence.tsx` consumes — resolver
+    output, no recomputation. It ships as that component; this reproduces its
+    content so the prototype reads end to end, and is not where its design gets
+    decided. Photos arrive as {thumb, full} already normalised to the CDN.
+    """
+    comps = ev.get("comparables") or []
+    if not comps:
+        return ""
+    out = []
+    for i, c in enumerate(comps):
+        hidden = "" if i < limit else ' hidden data-extra="1"'
+        f = c.get("features") or {}
+        bits = [f'{f["bedrooms"]} bd' if f.get("bedrooms") else None,
+                f'{f["bathrooms"]} ba' if f.get("bathrooms") else None,
+                f'{f["landSqm"]:.0f}m² land' if f.get("landSqm") else None,
+                f'{f["floorSqm"]:.0f}m² floor' if f.get("floorSqm") else None]
+        meta = [f'{c["distanceKm"]:.1f}km away' if c.get("distanceKm") else None,
+                _ago(c.get("saleDate")),
+                f'Weight: {c["weightPct"]}%' if c.get("weightPct") is not None else None]
+        rows = []
+        for a in (c.get("adjustments") or []):
+            lab, unit = FEATURE_LABEL.get(a.get("feature"),
+                                          (str(a.get("feature", "")).replace("_", " ").capitalize(), ""))
+            d = a.get("dollars") or 0
+            if not d:
+                continue
+            sv, cv = a.get("subject"), a.get("comp")
+            detail = (f'theirs {cv:,.0f}{unit} · yours {sv:,.0f}{unit}'
+                      if isinstance(sv, (int, float)) and isinstance(cv, (int, float)) else "")
+            rows.append(f'<div class="arow"><span>{E(lab)}'
+                        + (f'<em>{E(detail)}</em>' if detail else "")
+                        + f'</span><span class="ad">{"+" if d > 0 else "−"}'
+                        f'{exact(abs(d))}</span></div>')
+        wf = "".join(
+            f'<div class="wrow"><span>{E(WEIGHT_FACTOR_LABEL.get(k, k))}</span>'
+            f'<span class="wbar"><i style="width:{min(100, v*100):.0f}%"></i></span></div>'
+            for k, v in (c.get("weightFactors") or {}).items())
+        photos = "".join(
+            f'<img src="{E(ph["thumb"])}" alt="" loading="lazy">'
+            for ph in (c.get("photos") or [])[:4] if isinstance(ph, dict) and ph.get("thumb"))
+        more = len(c.get("photos") or []) - 4
+
+        out.append(
+            f'<article class="ecard"{hidden}>'
+            f'<div class="ehead"><span class="erank">{i+1}</span>'
+            f'<span class="eaddr">{E(str(c.get("address", "")))}</span>'
+            + ('<span class="ever" title="Verified against the record">✓</span>' if c.get("verified") else "")
+            + '</div>'
+            + (f'<div class="efeat">{E(" · ".join(x for x in bits if x))}</div>' if any(bits) else "")
+            + '<div class="eprice">'
+              f'<div><span class="k">Sold</span><span class="v">{E(exact(c.get("soldPrice")) or "—")}</span></div>'
+              f'<div><span class="k">Adjusted to yours</span>'
+              f'<span class="v adj">{E(exact(c.get("adjustedPrice")) or "—")}</span></div></div>'
+            + (f'<div class="emeta">{E(" · ".join(x for x in meta if x))}</div>' if any(meta) else "")
+            + (f'<p class="enarr">{E(str(c.get("narrative", "")))}</p>' if c.get("narrative") else "")
+            + (f'<div class="ephotos">{photos}'
+               + (f'<span class="emore">+{more}</span>' if more > 0 else "") + '</div>' if photos else "")
+            + (f'<details class="ework"><summary>See the line-by-line adjustment</summary>'
+               f'<div class="body">{"".join(rows)}'
+               f'<div class="anet"><span>Net adjustment</span><span>'
+               f'{"+" if (c.get("netAdjustment") or 0) > 0 else "−"}'
+               f'{exact(abs(c.get("netAdjustment") or 0))}</span></div>'
+               + (f'<div class="wlab">Why it carries {c.get("weightPct")}% of the weight</div>{wf}'
+                  if wf else "")
+               + '</div></details>' if rows else "")
+            + '</article>')
+
+    extra = len(comps) - limit
+    if extra > 0:
+        out.append(f'<button class="btn showall" data-n="{extra}">See all {len(comps)} '
+                   f'comparables</button>')
+    return '<div class="ecards">' + "".join(out) + '</div>'
+
+
+def _ago(ms):
+    if not ms:
+        return None
+    from datetime import datetime, timezone
+    try:
+        d = datetime.fromtimestamp(ms / 1000, tz=timezone.utc)
+    except Exception:
+        return None
+    months = (datetime.now(timezone.utc) - d).days // 30
+    if months < 1:
+        return "this month"
+    return f"{months} month{'s' if months != 1 else ''} ago"
 
 
 def median_block(suburb_display, ms):
@@ -1068,6 +1179,41 @@ details .body{padding-top:12px;font-size:.94rem;color:var(--ink-2)}
   border:1px solid var(--accent);border-radius:99px;padding:2px 8px;margin-top:1px}
 .ported code{font-size:.78rem;color:var(--ink-2)}
 
+
+/* comparable evidence cards — content mirrors ValuationEvidence */
+.ecards{margin:18px 0 6px}
+.ecard{background:var(--paper-2);border:1px solid var(--line-2);border-radius:8px;
+  padding:16px 18px;margin-bottom:12px}
+.ehead{display:flex;align-items:center;gap:9px;margin-bottom:3px}
+.erank{flex:none;width:21px;height:21px;border-radius:99px;background:var(--accent);color:#fff;
+  font-size:.68rem;display:flex;align-items:center;justify-content:center}
+.eaddr{font-family:var(--serif);font-size:1.06rem;line-height:1.3}
+.ever{margin-left:auto;color:#4E7A5E;font-size:.9rem}
+.efeat{font-size:.84rem;color:var(--muted);margin-bottom:12px}
+.eprice{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:11px 0;
+  border-top:1px solid var(--line-2);border-bottom:1px solid var(--line-2)}
+.eprice .k{display:block;font-size:.6rem;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--muted);margin-bottom:2px}
+.eprice .v{font-family:var(--serif);font-size:1.06rem}
+.eprice .v.adj{color:var(--accent)}
+.emeta{font-size:.8rem;color:var(--muted);margin-top:9px}
+.enarr{font-size:.88rem;color:var(--ink-2);margin:9px 0 0;line-height:1.5}
+.ephotos{display:flex;gap:6px;margin-top:12px;align-items:center}
+.ephotos img{width:23%;aspect-ratio:4/3;object-fit:cover;border-radius:5px;background:var(--stone)}
+.emore{font-size:.76rem;color:var(--muted)}
+.ework{margin-top:12px;border-top:1px solid var(--line-2);padding-top:10px}
+.arow{display:flex;justify-content:space-between;gap:12px;padding:7px 0;
+  border-bottom:1px solid var(--line-2);font-size:.88rem}
+.arow em{display:block;font-style:normal;font-size:.76rem;color:var(--muted)}
+.arow .ad{white-space:nowrap;color:var(--accent)}
+.anet{display:flex;justify-content:space-between;padding:11px 0 4px;font-weight:600;font-size:.92rem}
+.wlab{margin-top:10px;font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.wrow{display:flex;align-items:center;gap:10px;padding:5px 0;font-size:.82rem;color:var(--ink-2)}
+.wrow span:first-child{flex:1}
+.wbar{flex:none;width:82px;height:4px;background:var(--stone);border-radius:2px;overflow:hidden}
+.wbar i{display:block;height:100%;background:var(--accent)}
+.showall{margin-top:4px}
+
 footer{padding:44px 0 70px;border-top:1px solid var(--line-2);color:var(--muted);font-size:.85rem}
 
 @media(min-width:760px){
@@ -1187,6 +1333,12 @@ document.querySelectorAll('.mchart').forEach(box=>{
   svg.addEventListener('pointercancel',hide);
 });
 
+// "See all N comparables"
+document.querySelectorAll('.showall').forEach(b=>b.addEventListener('click',()=>{
+  b.closest('.ecards').querySelectorAll('[data-extra]').forEach(el=>el.hidden=false);
+  b.remove();
+}));
+
 // seasonality month tiles
 document.querySelectorAll('.mcell').forEach(c=>c.addEventListener('click',()=>{
   const i=c.dataset.i;
@@ -1225,6 +1377,19 @@ def render(slug, proto="full", version=LATEST):
         _cards = {c["type"]: c for c in emit_v4.emit_v4(slug)["cards"]}
     except Exception:
         _cards = {}
+
+    # The SAME payload the mini-site's ValuationEvidence consumes. Resolver
+    # output, no recomputation — proven to work unchanged on off-market docs.
+    try:
+        sys.path.insert(0, os.path.join(ORCH_ROOT, "scripts"))
+        from property_reports.slot_resolver import SlotResolver
+        _r = SlotResolver({"suburb_key": b["suburb_key"], "suburb": b.get("suburb_display", ""),
+                           "address": b["address"], "property_id": doc.get("_id")},
+                          get_mongo_client()["Gold_Coast"])
+        _r._subject = doc
+        EV = _r.valuation_evidence_from_engine() or {}
+    except Exception:
+        EV = {}
 
     s, v = b.get("subject") or {}, b.get("valuation") or {}
     cred, oc = b.get("credibility") or {}, b.get("obvious_comp") or {}
@@ -1381,10 +1546,16 @@ def render(slug, proto="full", version=LATEST):
         add('<section id="comps"><div class="wrap">')
         add('<div class="eyebrow">The evidence</div>')
         add('<h2>The sales behind that range</h2>')
-        add(ported("ValuationEvidence",
-                   "photo strips with a lightbox, weight percentages, verified flags, the "
-                   "per-feature adjustment grid, the full weighted calculation and an evidence "
-                   "map"))
+        # ⚠ Only promise the tap when the rich cards actually render. Outside the
+        # design envelope the resolver returns None (no reconciled range), the
+        # page falls back to simple cards with nothing to expand, and this line
+        # would be a promise the page does not keep.
+        if EV.get("comparables"):
+            add('<p class="fine">Each sale below is adjusted to this home for the ways it differs. '
+                'Tap any one for the line-by-line working and why it carries the weight it does.</p>')
+        else:
+            add('<p class="fine">Each sale below is adjusted to this home for the ways it '
+                'differs.</p>')
         add('<div class="funnel">')
         steps = []
         if cred.get("sales_reviewed"):
@@ -1402,55 +1573,16 @@ def render(slug, proto="full", version=LATEST):
                 f'considered when comparing them.</p>')
         oc_addr = str((b.get("obvious_comp") or {}).get("address") or "").split(",")[0].lower()
         fresh = [c for c in adj if oc_addr not in str(c.get("address", "")).lower()] if oc_addr else adj
-        for c in fresh[:3]:
-            add('<div class="comp">')
-            add(f'<div class="a">{E(str(c.get("address","")).split(",")[0])}</div>')
-            meta = []
-            if c.get("sale_price"):
-                meta.append(f'Sold {exact(c["sale_price"])}')
-            if c.get("sale_date"):
-                meta.append(month_year(c["sale_date"]))
-            if c.get("distance_m"):
-                meta.append(f'{int(c["distance_m"])}m away')
-            add(f'<div class="m">{E(" · ".join(meta))}</div>')
-            add(f'<div class="adj"><span class="lab">Adjusted position</span>'
-                f'<span class="val">about {E(money(c["adjusted_price"]))}</span></div>')
-            if c.get("adjustments"):
-                add('<details><summary>See the adjustment</summary><div class="body">'
-                    + adjustment_rows(c) + '</div></details>')
-            add('</div>')
-        if B and len(adj) > 3:
-            add(f'<details><summary>See all {len(adj)} strongest comparisons</summary><div class="body">')
-            add('<div class="ctable">')
-            for c in adj:
-                w = c.get("weight")
-                add('<div class="crow">'
-                    f'<div class="ca">{E(str(c.get("address","")).split(",")[0])}'
-                    f'<span class="fine"> · {E(month_year(c.get("sale_date")) or "—")}'
-                    + (f' · {c["distance_km"]:.1f} km' if c.get("distance_km") else '')
-                    + '</span></div>'
-                    f'<div class="cs">{E(exact(c.get("sale_price")) or "—")}</div>'
-                    f'<div class="cj">{E(money(c["adjusted_price"]))}</div>'
-                    + (f'<div class="cw"><span style="width:{min(100, w*100):.0f}%"></span></div>'
-                       if isinstance(w, (int, float)) else '<div class="cw"></div>')
-                    + (f'<div class="cv fine">{E(str(c.get("verification")))}</div>'
-                       if c.get("verification") else '<div class="cv"></div>')
-                    + '</div>')
-                add('<div class="cwork">' + adjustment_rows(c) + '</div>')
-            add('</div>')
-            add('<p class="fine">Weight reflects how good a comparison each sale is — adjustment '
-                'quality, proximity, recency and how much of it we could verify.</p>')
-            add('</div></details>')
-        elif len(adj) > 3:
-            add(f'<details><summary>See all {len(adj)} strongest comparisons</summary><div class="body">')
-            for c in adj:
-                if c in fresh[:3]:
-                    continue
-                add(f'<div style="padding:10px 0;border-bottom:1px solid var(--line-2)">'
-                    f'<b>{E(str(c.get("address","")).split(",")[0])}</b> — sold '
-                    f'{E(exact(c.get("sale_price")) or "—")}, adjusts to about '
-                    f'{E(money(c["adjusted_price"]))}</div>')
-            add('</div></details>')
+        cards = evidence_cards(EV)
+        if cards:
+            add(cards)
+        else:
+            for c in fresh[:3]:
+                add('<div class="comp">')
+                add(f'<div class="a">{E(str(c.get("address","")).split(",")[0])}</div>')
+                add(f'<div class="adj"><span class="lab">Adjusted position</span>'
+                    f'<span class="val">about {E(money(c["adjusted_price"]))}</span></div>')
+                add('</div>')
         add('<p style="margin-top:20px">No sale is a match. Each one differs from this home in ways '
             'that are worth money, so we price those differences rather than averaging past them.</p>')
         add('<div class="src">Fields analysis of Queensland sales records · Government record</div>')
