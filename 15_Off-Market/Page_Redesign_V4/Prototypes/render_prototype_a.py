@@ -1221,6 +1221,21 @@ details .body{padding-top:12px;font-size:.94rem;color:var(--ink-2)}
         color:var(--accent);border:1px solid var(--accent);border-radius:99px;
         padding:2px 9px;margin-bottom:10px}
 .sim h3{margin-bottom:6px}
+/* Wired blocks (2026-08-08): SOLID border, not the dashed `.sim` treatment.
+   The dashed frame means "concept, not real" everywhere else on this page, so
+   a working feature wearing it would be actively misleading. */
+.sincebox,.planbox{margin:24px 0;padding:20px;border:1px solid var(--line);border-radius:4px}
+.sincebox h3,.planbox h3{margin-bottom:6px}
+.qs2 .qtext{font-weight:600;margin-bottom:9px}
+.qs2 li{margin-bottom:20px}
+.choices.plan{display:flex;flex-wrap:wrap;gap:8px}
+.choices.plan .choice{font-size:.86rem;padding:7px 13px}
+.planout{margin-top:6px;padding:18px;border-left:2px solid var(--accent);background:rgba(0,0,0,.02)}
+.planout h3{margin:0 0 8px}
+.planprog{font-size:.86rem;color:var(--ink-2)}
+.correctbox{margin:22px 0;padding:20px;border:1px solid var(--line);border-radius:4px}
+.choices.plainc{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.choices.plainc .choice{font-size:.86rem;padding:7px 13px}
 .ticks{list-style:none;padding:0;margin:10px 0}
 .ticks li{padding:6px 0 6px 18px;position:relative;color:var(--ink-2)}
 .ticks li:before{content:"";position:absolute;left:0;top:15px;width:7px;height:1px;background:var(--accent)}
@@ -1514,13 +1529,186 @@ document.querySelectorAll('.mcell').forEach(c=>c.addEventListener('click',()=>{
   document.querySelectorAll('.mcell').forEach(x=>x.setAttribute('aria-pressed',x===c?'true':'false'));
   document.querySelectorAll('.mdet').forEach(d=>{d.hidden=d.dataset.i!==i;});
 }));
-document.querySelectorAll('.choice').forEach(b=>b.addEventListener('click',()=>{
+document.querySelectorAll('.choices:not(.plan):not(.plainc) .choice').forEach(b=>b.addEventListener('click',()=>{
   const g=b.closest('.choices');
   g.querySelectorAll('.choice').forEach(x=>x.setAttribute('aria-pressed','false'));
   b.setAttribute('aria-pressed','true');
   const r=g.parentElement.querySelector('.result');
   r.innerHTML=b.dataset.result; r.classList.add('on');
 }));
+
+// ── Corrections ──────────────────────────────────────────────────────────
+// Same contract as the plan: kept on the device, and saying so is the point.
+// The section claims corrections do not trigger contact, so it must not post.
+(function(){
+  const box = document.getElementById('correctbox');
+  const out = document.getElementById('correctout');
+  if(!box || !out) return;
+  const KEY = 'fields.corrections.' + box.dataset.slug;
+  let flags = {};
+  try { flags = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch(e) { flags = {}; }
+
+  const paint = () => {
+    const on = Object.keys(flags).filter(k=>flags[k]);
+    box.querySelectorAll('.choice').forEach(b=>
+      b.setAttribute('aria-pressed', flags[b.dataset.tag] ? 'true' : 'false'));
+    if(!on.length){ out.classList.remove('on'); out.innerHTML=''; return; }
+    const notes = on.map(k=>box.querySelector('.choice[data-tag="'+k+'"]').dataset.result);
+    out.innerHTML = notes.map(n=>'<p style="margin:0 0 8px">'+n+'</p>').join('') +
+      '<p class="fine" style="margin:0">' + on.length +
+      (on.length===1 ? ' item flagged' : ' items flagged') +
+      ' \u2014 these are what a valuer would check first on this address.</p>';
+    out.classList.add('on');
+  };
+
+  box.querySelectorAll('.choice').forEach(b=>b.addEventListener('click',()=>{
+    flags[b.dataset.tag] = !flags[b.dataset.tag];
+    try { localStorage.setItem(KEY, JSON.stringify(flags)); } catch(e){}
+    paint();
+  }));
+  paint();
+})();
+
+// ── The private working plan ─────────────────────────────────────────────
+// Five owner-only answers, composed into a short brief the owner can read back.
+// Kept on the device: this section's whole claim is that it is not a lead
+// capture, and a plan that quietly posted somewhere would make that a lie.
+(function(){
+  const box = document.getElementById('planbox');
+  const out = document.getElementById('planout');
+  if(!box || !out) return;
+  const KEY = 'fields.plan.' + (document.getElementById('sincebox')?.dataset.slug || 'this');
+  let answers = {};
+  try { answers = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch(e) { answers = {}; }
+
+  const restore = () => {
+    box.querySelectorAll('.choices.plan').forEach(g=>{
+      const chosen = answers[g.dataset.key];
+      if(!chosen) return;
+      g.querySelectorAll('.choice').forEach(b=>
+        b.setAttribute('aria-pressed', b.dataset.tag === chosen ? 'true' : 'false'));
+    });
+  };
+
+  const compose = () => {
+    const keys = ['timing','prep','matters','access','other'];
+    const done = keys.filter(k=>answers[k]).length;
+    if(done === 0){ out.hidden = true; return; }
+    out.hidden = false;
+    if(done < keys.length){
+      out.innerHTML = '<div class="planprog">' + done + ' of ' + keys.length +
+        ' answered \u2014 the brief writes itself as you go.</div>';
+      return;
+    }
+    const a = answers;
+    const bits = [];
+    bits.push('A move built around <b>' + a.timing + '</b>, with <b>' + a.prep + '</b>.');
+    bits.push('You have told us the deciding factor is <b>' + a.matters + '</b>, and that a ' +
+              'campaign would run with <b>' + a.access + '</b>.');
+    if(a.other && a.other !== 'nothing further'){
+      bits.push('You have also flagged <b>' + a.other + '</b>.');
+    }
+    let steer = '';
+    if(a.matters === 'certainty over price'){
+      steer = 'Given certainty matters more than the last few per cent, the method and the launch ' +
+              'price are the two decisions that carry the most weight \u2014 and they pull in ' +
+              'opposite directions.';
+    } else if(a.matters === 'price above all'){
+      steer = 'Chasing the top of the range usually costs time on market. That trade is the first ' +
+              'thing we would put numbers against, not a matter of opinion.';
+    } else if(a.matters === 'speed'){
+      steer = 'Speed is mostly bought with the launch price and the campaign shape, not with ' +
+              'preparation. Which of those to spend on is the first thing to settle.';
+    } else if(a.matters === 'privacy'){
+      steer = 'Privacy changes the campaign shape more than the price. There are ways to run this ' +
+              'without a public listing, and they have costs worth stating plainly.';
+    }
+    if(a.access === 'private appointments only' || a.access === 'limited access'){
+      steer += ' Restricted access narrows which campaign shapes are realistic, so it is worth ' +
+               'deciding early rather than discovering it mid-campaign.';
+    }
+    out.innerHTML = '<h3>What you have told us</h3><p>' + bits.join(' ') + '</p>' +
+      (steer ? '<p>' + steer + '</p>' : '') +
+      '<p class="fine">This is your brief, not a recommendation. The recommendations \u2014 the ' +
+      'launch price, the method, which preparation pays \u2014 need someone to see the home ' +
+      'first, and each one should state what would change it.</p>' +
+      '<p class="fine">Saved in this browser only. Nothing has been sent to us.</p>';
+  };
+
+  box.querySelectorAll('.choices.plan .choice').forEach(b=>b.addEventListener('click',()=>{
+    const g = b.closest('.choices.plan');
+    g.querySelectorAll('.choice').forEach(x=>x.setAttribute('aria-pressed','false'));
+    b.setAttribute('aria-pressed','true');
+    answers[g.dataset.key] = b.dataset.tag;
+    try { localStorage.setItem(KEY, JSON.stringify(answers)); } catch(e){}
+    compose();
+  }));
+  restore(); compose();
+})();
+
+// ── Since you last looked ────────────────────────────────────────────────
+// Was blocked on "a visitor token this page does not yet issue". It never
+// needed one. The comparison is between what this browser saw last time and
+// what the page says now, so localStorage is not a workaround — it is the
+// correct store, and it keeps the promise the page already makes: nothing
+// about this address leaves the device.
+(function(){
+  const box = document.getElementById('sincebox');
+  if(!box || !window.localStorage) return;
+  const KEY = 'fields.seen.' + box.dataset.slug;
+  const now = JSON.parse(box.dataset.state || '{}');
+  let prev = null;
+  try { prev = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch(e) { prev = null; }
+
+  const money = n => '$' + Number(n).toLocaleString('en-AU');
+  const when  = ts => {
+    const d = Math.floor((Date.now() - ts) / 86400000);
+    if (d <= 0) return 'earlier today';
+    if (d === 1) return 'yesterday';
+    if (d < 14)  return d + ' days ago';
+    if (d < 60)  return Math.round(d/7) + ' weeks ago';
+    return new Date(ts).toLocaleDateString('en-AU',{month:'long',year:'numeric'});
+  };
+
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(
+      Object.assign({}, now, {ts: Date.now()}))); } catch(e){} };
+
+  if(!prev || !prev.ts){
+    box.innerHTML = '<h3>Since you last looked</h3>' +
+      '<p>This is your first visit to this page from this browser. When you come back, this is ' +
+      'where it will open \u2014 showing what moved since today, rather than making you re-read ' +
+      'what you have already seen.</p>' +
+      '<p class="fine">Kept in this browser only. Nothing about this address is sent to us, and ' +
+      'clearing your browser data removes it.</p>';
+    save();
+    return;
+  }
+
+  const lines = [];
+  if(prev.low !== now.low || prev.high !== now.high){
+    lines.push('The range moved from ' + money(prev.low) + '\u2013' + money(prev.high) +
+               ' to <b>' + money(now.low) + '\u2013' + money(now.high) + '</b>');
+  } else {
+    lines.push('The range did not move');
+  }
+  if(typeof prev.actives === 'number' && prev.actives !== now.actives){
+    const d = now.actives - prev.actives;
+    lines.push(Math.abs(d) + ' ' + (Math.abs(d)===1?'home':'homes') +
+               (d > 0 ? ' came to market' : ' left the market') + ' in the comparison set');
+  }
+  if(typeof prev.comps === 'number' && prev.comps !== now.comps){
+    lines.push('The evidence set changed from ' + prev.comps + ' to <b>' + now.comps +
+               '</b> comparable sales');
+  }
+  const nothing = lines.length === 1 && lines[0] === 'The range did not move';
+  box.innerHTML = '<h3>Since you last looked</h3>' +
+    '<p>You were last here <b>' + when(prev.ts) + '</b>.' +
+    (nothing ? ' Nothing has changed for this home since then.' : '') + '</p>' +
+    '<ul class="ticks">' + lines.map(l=>'<li>'+l+'</li>').join('') + '</ul>' +
+    '<p class="fine">Compared against what this browser saw last time. Kept on this device only ' +
+    '\u2014 nothing about this address is sent to us.</p>';
+  save();
+})();
 """
 
 
@@ -2160,21 +2348,27 @@ def render(slug, proto="full", version=LATEST):
                 if when:
                     add(f'<div class="fine">Competitor set re-checked nightly · last checked '
                         f'{E(full_date(when))}</div>')
-            # ⚠ SIMULATED. There is no visitor identity on this page yet, and the
-            # device_token defect means a submission would be silently discarded.
-            # Shown so the CONCEPT can be judged; labelled so it is never mistaken
-            # for working plumbing.
-            add('<div class="sim">')
-            add('<div class="simtag">Concept — not wired</div>')
+            # ⚠ WIRED 2026-08-08. Previously simulated, blocked on "a visitor
+            # token this page does not yet issue". It never needed one: the
+            # comparison is between what THIS BROWSER saw last time and what the
+            # page says now, so localStorage is the correct store rather than a
+            # workaround — and it keeps the promise the page already makes, that
+            # nothing about this address leaves the device.
+            #
+            # The state fingerprint is deliberately small: the range, the number
+            # of active competitors, and the number of comparable sales. Those
+            # are the three things the page tells a reader; anything finer would
+            # report churn the reader never saw.
+            _state = json.dumps({
+                "low":     v.get("low"),
+                "high":    v.get("high"),
+                "actives": comp.get("n_compete"),
+                "comps":   v.get("n_comps"),
+            }, separators=(",", ":"))
+            add(f'<div id="sincebox" class="sincebox" data-slug="{E(slug)}" '
+                f'data-state=\'{E(_state)}\'>')
             add('<h3>Since you last looked</h3>')
-            add('<p>On a return visit this is where the page would open: what moved since the last '
-                'time this address was viewed, rather than making someone re-read what they have '
-                'already seen.</p>')
-            add('<ul class="ticks"><li>One new home came to market in the comparison set</li>'
-                '<li>One asking price changed</li>'
-                '<li>The range did not move</li></ul>')
-            add('<p class="fine">Requires a visitor token this page does not yet issue. Nothing '
-                'here is stored today.</p>')
+            add('<p class="fine">Checking what has changed since your last visit\u2026</p>')
             add('</div>')
         add('<div class="src">Fields analysis of active listings · re-checked nightly</div>')
         add('<a class="cue" href="#correct">What if something here is wrong? ↓</a>')
@@ -2250,15 +2444,41 @@ def render(slug, proto="full", version=LATEST):
                        ("Something else", "Thanks — we'll look at this one by hand.")]:
             add(f'<button class="choice" aria-pressed="false" data-result="{E(res)}">{E(n)}</button>')
         add('</div><div class="result"></div>')
-        if C:
-            add('<div class="sim" style="margin-top:18px">')
-            add('<div class="simtag">Concept — not wired</div>')
-            add('<p style="margin:0">Once saved, a correction would persist against this address '
-                'and the page would open with it already applied — including the note of what it '
-                'changed, so the revision stays visible rather than quietly folded in.</p>')
-            add('</div>')
-        else:
-            add('<p class="fine" style="margin-top:18px">Prototype — selections are not saved yet.</p>')
+    # ⚠ The bathroom block above only renders when the bathroom count is
+    # MISSING. On a home with complete records — 11 Placid Court is one — the
+    # section promised "corrections update this property record" and then
+    # offered no way to make one. A section that names an action and does not
+    # provide it is worse than not raising it.
+    #
+    # So the universal path is always offered. The four options are the four
+    # things that actually move this page's answer, in the order they move it.
+    add('<div class="correctbox" id="correctbox" data-slug="%s">' % E(slug))
+    add('<p><b>Is something here wrong?</b></p>')
+    add('<div class="choices plainc">')
+    for tag, label, res in [
+        ("condition",
+         "The condition is out of date",
+         "Noted. Condition is the single largest thing we cannot see from the outside, and it "
+         "moves the result more than any other correction on this list."),
+        ("renovation",
+         "There has been work we don\u2019t know about",
+         "Noted. Recent work usually shifts the estimate upward, and by more than its cost on "
+         "kitchens and bathrooms \u2014 but by how much depends on what was done."),
+        ("rooms",
+         "A room or feature count is wrong",
+         "Noted. Room counts change which sales are treated as comparable, so this can move the "
+         "range as well as the centre."),
+        ("comp",
+         "A sale used here shouldn\u2019t have been",
+         "Noted. Tell us which one and why. A sale that should not be in the set is a fault in "
+         "our working, not in your home."),
+    ]:
+        add(f'<button class="choice" aria-pressed="false" data-tag="{E(tag)}" '
+            f'data-result="{E(res)}">{E(label)}</button>')
+    add('</div><div class="result" id="correctout"></div>')
+    add('<p class="fine">Kept in this browser. Nothing is sent to us, and noting it here does not '
+        'start a conversation \u2014 it marks what a valuer would need to check first.</p>')
+    add('</div>')
     add('<p class="fine" style="margin-top:18px">Corrections update this property record. They are '
         'not treated as a request for contact. Nobody calls unless you ask.</p>')
     add('<p class="fine">No agent is paying to appear on this page, and your interest in your own '
@@ -2281,18 +2501,51 @@ def render(slug, proto="full", version=LATEST):
     add('<p class="lede">You don\'t need to be planning to sell. This brings the decisions '
         'together privately — what would have to happen, what we\'d recommend, and what '
         'genuinely can\'t be decided without seeing the home.</p>')
-    add('<div class="sim"><div class="simtag">Concept — not wired</div>')
+    # ⚠ WIRED 2026-08-08. Previously a static list under "Concept — not wired".
+    # The five questions are the ones only the OWNER can answer — the rule that
+    # makes this section defensible is that we ASK those and RECOMMEND the rest.
+    # Answers stay in this browser: a plan that quietly became a lead capture
+    # would break the promise made two sections earlier, and this section is
+    # worthless if the reader suspects that is what it is.
+    _PLAN_QS = [
+        ("timing", "What would a move need to work around?",
+         [("Nothing in particular", "no fixed constraint"),
+          ("A school year", "a school year"),
+          ("Buying something first", "buying first"),
+          ("A work or family change", "a work or family change")]),
+        ("prep", "How much preparation would feel reasonable?",
+         [("As little as possible", "minimal preparation"),
+          ("Cosmetic only", "cosmetic work only"),
+          ("Whatever pays for itself", "whatever returns more than it costs"),
+          ("Not sure yet", "preparation still open")]),
+        ("matters", "What matters most?",
+         [("The highest price", "price above all"),
+          ("Certainty of sale", "certainty over price"),
+          ("Speed", "speed"),
+          ("Privacy", "privacy")]),
+        ("access", "What access could a campaign reasonably have?",
+         [("Open homes are fine", "open homes acceptable"),
+          ("Private appointments only", "private appointments only"),
+          ("Limited \u2014 tenants or pets", "limited access"),
+          ("Not sure yet", "access still open")]),
+        ("other", "Anything else we\u2019d need to work around?",
+         [("No", "nothing further"),
+          ("Yes \u2014 I\u2019d rather explain it", "something to explain in person")]),
+    ]
+    add('<div class="planbox" id="planbox">')
     add('<ol class="qs2">')
-    for q in ["What would a move need to work around?",
-              "How much preparation would feel reasonable?",
-              "What matters most?",
-              "What access could a campaign reasonably have?",
-              "Anything else we\u2019d need to work around?"]:
-        add(f'<li>{E(q)}</li>')
+    for key, q, opts in _PLAN_QS:
+        add(f'<li><div class="qtext">{E(q)}</div><div class="choices plan" data-key="{E(key)}">')
+        for label, tag in opts:
+            add(f'<button class="choice" aria-pressed="false" data-tag="{E(tag)}">{E(label)}</button>')
+        add('</div></li>')
     add('</ol>')
-    add('<p class="fine">Five questions only you can answer. Everything else — the method, the '
-        'launch price, the campaign shape, which preparation actually pays — is ours to recommend, '
-        'and every recommendation states what would change it.</p>')
+    add('<div class="planout" id="planout" hidden></div>')
+    add('<p class="fine">Five questions only you can answer. Everything else \u2014 the method, the '
+        'launch price, the campaign shape, which preparation actually pays \u2014 is ours to '
+        'recommend, and every recommendation states what would change it.</p>')
+    add('<p class="fine">Your answers stay in this browser. They are not sent to us, and nothing '
+        'here starts a conversation you did not ask for.</p>')
     add('</div>')
     add('<h3 style="margin-top:26px">The part that needs someone to walk through it</h3>')
     add('<p>The final launch price · whether styling would change how the rooms photograph · '
