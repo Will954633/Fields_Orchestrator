@@ -390,3 +390,36 @@ Two OpenAI keys exist on this VM and **only one has credit**:
 
 OpenRouter (`openai/gpt-5.6-terra`) is wired as a fallback but its balance was **negative** on
 2026-08-07 ($13,748.48 credited / $13,748.62 used), so it 402s until topped up.
+
+---
+
+## 11. ⚠ RETRACTION — the peer-auditor comparison was invalid (2026-08-08)
+
+Will challenged the round-2 conclusion as biased toward Claude. **He was right.** Verified from the
+run artifacts:
+
+1. **GPT was penalised for a rule it never received.** I reported "2 of GPT's 8 findings were
+   re-reports… a 25% noise rate despite a direct instruction". `experiments/_already_fixed.md`
+   contains **zero** mentions of seasonality, price-tier liquidity or the PropRadar gap queue — those
+   exclusions were only in the Claude subagent prompt I wrote separately. The statement was false.
+2. **Tool surfaces were not comparable and the gap maps onto the score.** GPT had 24 read-only shell
+   commands, no `python3`/`curl`/`sudo`/`gcloud`/`bq`, no authenticated HTTP. The Claude arms had
+   unrestricted Bash plus PostHog. Every one of Claude's best findings required something GPT could
+   not do, so **E1 (cost) was structurally unwinnable** — GPT correctly named provider-console
+   access as its blind spot and I still tabulated its 0 findings as a verdict.
+3. **Budgets differed ~30x** (GPT 4.5-6.2k output tokens and 45 tool calls; Claude ~165-205k tokens
+   and 58-83 calls, uncapped).
+4. **The exclusion list was written in Claude's framing** from predominantly Claude's round-1
+   findings, and the Claude E4 arm got a curated list of promising collections GPT never received.
+
+**The 5:1 figure must not be cited.** The battery measured harness privilege, not model capability.
+A caveat that does not change the stated conclusion is a biased report, which is what I produced.
+
+**Consequence for this folder:** an agent A/B is valid only with identical tool surface, budget and
+briefing. Those cannot be equalised here, because GPT is remote and cannot be given privileged
+access to a box holding live credentials. **So capability comparisons are retired.** The productive
+question is which MODE each model contributes in — see `02_GPT_AS_PRINCIPAL.md`, which documents the
+mode Will has already validated in production and which needs no tool parity to work.
+
+The findings the battery produced remain valid and are logged in `logs/fix-history/2026-08-07.md`;
+it is only the *comparison* that is withdrawn.
