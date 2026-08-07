@@ -167,3 +167,73 @@ forced-enrichment run, the cheaper test is the one still not done: **leave-one-o
 set** — how well the weighted mean of seven adjusted comparables predicts the eighth. That measures
 the method's irreducible noise floor. If it lands near the current ±13.7%, no amount of enrichment
 will narrow the band, and the remaining work is presentational rather than computational.
+
+---
+
+# The noise floor — measured, and it says there IS headroom
+
+The question left open all day: **how narrow could this method ever be?** Answered by leave-one-out
+*inside* the comparable set. Every adjusted comparable is an independent estimate of the same
+subject's value, so their disagreement with each other is the method's own precision, with no
+reference to the eventual sale price at all.
+
+**4,549 leave-one-out predictions across 581 properties:**
+
+| | |
+|---|---|
+| median disagreement between our own comparables | **4.01%** |
+| mean disagreement | 5.13% |
+| 80% of comparables agree within | **±8.3%** |
+| averaging ~8 of them should therefore give (÷√n) | **±3.0%** |
+| **what the method actually delivers** | **±15.6%** |
+
+## ⚠ The method is PRECISE but not ACCURATE
+
+The band is roughly **five times wider than internal comparable disagreement explains**. Our
+comparables agree closely with one another and are then **collectively displaced** from the eventual
+sale price.
+
+That distinction matters more than any individual finding in this file:
+
+- If the comparables disagreed wildly and averaged out to the right answer, the fix would be **more
+  comparables** or **better weighting**. Tested — more comps helps slightly, weighting is worse than
+  a plain median.
+- They do the opposite. They **agree with each other and are wrong together.** Random noise cancels
+  under averaging; this does not, so it is not noise. It is a systematic, per-property displacement.
+
+## What can displace an entire comparable set at once
+
+Only something about the **subject** that the comparables do not share and we do not measure. Three
+candidates, none yet tested:
+
+1. **Property-specific attributes we capture for nobody** — aspect, outlook, slope, street frontage
+   width, noise exposure, renovation recency, view quality. `beach_proximity` and
+   `golf_course_backing` were of this class and one of them (proximity) earned its keep.
+2. **Comparable SELECTION rather than adjustment** — if the eight chosen comps are collectively
+   unrepresentative of the subject, every one of them is displaced the same way and they will still
+   agree beautifully with each other. This has never been tested directly.
+3. **Sale-specific circumstance** — auction vs private treaty, campaign length, motivated vendor.
+   Irreducible from our data, and part of the floor.
+
+## What this changes about the enrichment experiment
+
+It **supports** running it — with a correction to the conclusion drawn earlier in this file.
+
+"More AI judgement does not help" holds for the three attributes tested (kitchen, renovation
+quality, satellite adjacency). It does **not** follow that no further data can help, because there is
+a measured **~12 percentage points** between what averaging should deliver (±3.0%) and what we get
+(±15.6%), and it has to come from somewhere property-specific.
+
+**Revised design for the 30-home run:**
+
+- Choose the 30 homes from the **worst-error** tail, not at random — they are where the displacement
+  lives, and the worst 10% carry 31% of all absolute error.
+- For each, capture what a valuer would notice and we do not: aspect, outlook, slope, frontage,
+  noise, condition relative to street.
+- Test whether any of it predicts the **signed** residual. A displacement that a human can see and we
+  cannot is the whole hypothesis.
+- ⚠ Vision through **Gemini via Vertex** (`VISION_BACKEND=gemini_vertex`).
+
+⚠ **Test comparable selection at the same time.** It is free — the dumps already carry every
+comparable's price, adjustment breakdown and weight. If the chosen set is collectively displaced,
+that is a selection defect, and no amount of enrichment of the *subject* will fix it.
