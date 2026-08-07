@@ -420,8 +420,9 @@ def timing_answer(suburb_display, ms):
         "across fifteen years rather than forecast forward.")
 
     paras.append(
-        "None of that tells you what to do, and we are not going to. It is the same evidence we "
-        "would want if it were our own home.")
+        "None of that tells you what you should do by itself. The useful question is how these "
+        "conditions interact with your home, your timing, and what you would need to buy next \u2014 "
+        "which is where we can actually help.")
     return paras
 
 
@@ -597,6 +598,68 @@ WEIGHT_FACTOR_LABEL = {
 }
 
 
+def _phrase(feature, diff, subject, comp):
+    """One difference, in words, describing the COMPARABLE — with no dollars.
+
+    ⚠ POLARITY. `diff` is subject minus comp, so a POSITIVE diff means the
+    subject has more and the comparable has LESS. The card is about the
+    comparable, so the sense inverts. The first version did not, and described
+    a 685 m² comparable as "a smaller block" against a 603 m² subject — the
+    opposite of the truth, in a section whose whole job is showing our working.
+
+    Magnitude words come from the PROPORTIONAL difference, not the raw one:
+    80 m² is a lot of house and very little land.
+    """
+    if not diff:
+        return None
+    more = diff < 0            # the COMPARABLE has more of it
+    try:
+        share = abs(diff) / float(comp) if comp else 0
+    except (TypeError, ValueError, ZeroDivisionError):
+        share = 0
+    scale = "far " if share >= 0.4 else ("notably " if share >= 0.15 else "")
+
+    if feature == "land_size":
+        return f"a {scale}{'larger' if more else 'smaller'} block"
+    if feature == "floor_area":
+        return f"a {scale}{'larger' if more else 'smaller'} house"
+    if feature in ("bedrooms", "bathrooms", "car_spaces"):
+        noun = {"bedrooms": "bedroom", "bathrooms": "bathroom",
+                "car_spaces": "car space"}[feature]
+        n = int(abs(diff))
+        return f"{n} {'more' if more else 'fewer'} {noun}{'s' if n != 1 else ''}"
+    if feature == "pool":
+        return "a pool" if more else "no pool"
+    if feature == "renovation":
+        return f"a {'stronger' if more else 'weaker'} recorded condition"
+    if feature == "stories":
+        return "more than one level" if more else "single level"
+    # ⚠ Position, street and beach adjustments are dropped from the word list.
+    # They are frequently the largest dollar mover, so they led every card with
+    # "a different position" — which is repetitive and tells a homeowner
+    # nothing. The dollars are still in the expanded working, where the label
+    # names the specific factor.
+    return None
+
+
+def differences_in_words(comp):
+    """The two or three differences that actually moved the number, as prose.
+
+    Ranked by DOLLARS — the biggest movers are the ones worth naming — but the
+    dollars themselves are withheld until the reader asks.
+    """
+    adjs = [a for a in (comp.get("adjustments") or []) if a.get("dollars")]
+    adjs.sort(key=lambda a: -abs(a["dollars"]))
+    out = []
+    for a in adjs:
+        ph = _phrase(a.get("feature"), a.get("diff"), a.get("subject"), a.get("comp"))
+        if ph and ph not in out:
+            out.append(ph)
+        if len(out) == 4:
+            break
+    return out
+
+
 def evidence_cards(ev, limit=3):
     """The comparable cards, rendered from `valuation_evidence_from_engine()`.
 
@@ -654,11 +717,16 @@ def evidence_cards(ev, limit=3):
               f'<div><span class="k">Adjusted to yours</span>'
               f'<span class="v adj">{E(exact(c.get("adjustedPrice")) or "—")}</span></div></div>'
             + (f'<div class="emeta">{E(" · ".join(x for x in meta if x))}</div>' if any(meta) else "")
-            + (f'<p class="enarr">{E(str(c.get("narrative", "")))}</p>' if c.get("narrative") else "")
+            + (('<div class="ediff"><span class="k">Main differences</span><ul>'
+                + "".join(f'<li>{E(d)}</li>' for d in differences_in_words(c))
+                + '</ul></div>') if differences_in_words(c) else "")
             + (f'<div class="ephotos">{photos}'
                + (f'<span class="emore">+{more}</span>' if more > 0 else "") + '</div>' if photos else "")
-            + (f'<details class="ework"><summary>See the line-by-line adjustment</summary>'
-               f'<div class="body">{"".join(rows)}'
+            + (f'<details class="ework"><summary>See all {len(rows)} adjustments</summary>'
+               f'<div class="body">'
+               + (f'<p class="enarr">{E(str(c.get("narrative", "")))}</p>'
+                  if c.get("narrative") else "")
+               + f'{"".join(rows)}'
                f'<div class="anet"><span>Net adjustment</span><span>'
                f'{"+" if (c.get("netAdjustment") or 0) > 0 else "−"}'
                f'{exact(abs(c.get("netAdjustment") or 0))}</span></div>'
@@ -1244,7 +1312,13 @@ details .body{padding-top:12px;font-size:.94rem;color:var(--ink-2)}
 .eprice .v{font-family:var(--serif);font-size:1.06rem}
 .eprice .v.adj{color:var(--accent)}
 .emeta{font-size:.8rem;color:var(--muted);margin-top:9px}
-.enarr{font-size:.88rem;color:var(--ink-2);margin:9px 0 0;line-height:1.5}
+.enarr{font-size:.84rem;color:var(--muted);margin:0 0 10px;line-height:1.5}
+.ediff{margin-top:11px}
+.ediff .k{display:block;font-size:.6rem;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--muted);margin-bottom:5px}
+.ediff ul{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+.ediff li{font-size:.84rem;color:var(--ink-2);background:var(--paper);border:1px solid var(--line-2);
+  border-radius:99px;padding:4px 11px}
 .ephotos{display:flex;gap:6px;margin-top:12px;align-items:center}
 .ephotos img{width:23%;aspect-ratio:4/3;object-fit:cover;border-radius:5px;background:var(--stone)}
 .emore{font-size:.76rem;color:var(--muted)}
@@ -1884,9 +1958,8 @@ def render(slug, proto="full", version=LATEST):
         add('<section id="dispersion"><div class="wrap">')
         add('<div class="eyebrow">The other numbers</div>')
         add('<h2>Why the other estimates say something different</h2>')
-        add('<p>A valuation built from only three selected sales is highly sensitive to which three '
-            'are chosen — and three comparable sales is the statutory Statement of Information '
-            'standard in Victoria and the incoming NSW regime, so it is not a straw man.</p>')
+        add('<p>The trouble with using only three sales is that the answer becomes highly '
+            'sensitive to which three are chosen.</p>')
         add('<p>We took 512 homes that have since sold, found every set of three comparable sales '
             'that could reasonably have been chosen, and worked out what each set said.</p>')
         add('<div class="finding">The median gap between the highest and lowest defensible result '
@@ -1897,6 +1970,9 @@ def render(slug, proto="full", version=LATEST):
             '<p>A close answer was present in the available evidence on 73.6% of those homes — '
             'identifiable only with hindsight. The worst available choice was more than 20% out '
             'on 73.4%.</p>'
+            '<p>Three sales is not a figure we picked to make a point: it is the statutory '
+            'Statement of Information standard in Victoria and in the incoming New South Wales '
+            'regime.</p>'
             '<p class="fine">This is a property of the three-sale method, measured on our own data. '
             'It is not a claim about any particular provider, and we have not tested anyone '
             'else\'s figures.</p></div></details>')
