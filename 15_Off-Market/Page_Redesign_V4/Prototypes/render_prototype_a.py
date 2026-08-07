@@ -352,78 +352,71 @@ def report_qr(short_address, slug):
 
 
 def timing_answer(suburb_display, ms):
-    """The market paragraph, COMPUTED per suburb — never a fixed narrative.
+    """The three things we can actually know, and the belief reversal above them.
 
-    ⚠ Why computed. The obvious story ("listings rising, prices holding firm")
-    is true in Varsity Lakes (+43.8%) and Robina (+5.5%) and FALSE in Burleigh
-    Waters, where active listings are DOWN 27.3%. Days on market moves in
-    different directions too — faster in Burleigh Waters, slower in the other
-    two. One paragraph asserting a single trend would be contradicted by our own
-    data on one suburb in three.
+    ⚠ REWRITTEN 2026-08-07. The previous version ran 994 words — a third of the
+    page's entire primary path — walking through Westpac, the RBA, national
+    indices, Brisbane, local DOM, listing volume, rolling medians, quarterly
+    caveats and fifteen years of seasonality before saying anything useful. The
+    reader arrived asking a decision question and got an economics note.
+    Measured, not estimated: it was the single heaviest section by a factor of
+    two.
+    Nothing is deleted. The forecasts and the seasonality move behind
+    disclosures, where a sceptical reader can still audit every claim.
 
-    Editorial constraints this must survive (Home_Owner_Perspective brief, s8):
-      · no advice, no prediction, no urgency, no framing of timing
-      · report the numbers; the reader draws the inference
-      · attribute macro claims, never adopt a view
-      · "the market is strong / holding up / resilient" is a prediction in
-        disguise and is banned outright
-      · no quarter-on-quarter claims for Robina or Burleigh Waters — our own
-        quarterly figures move around more than the underlying market does
+    The reframe (Will): you do not need to predict the next six months
+    correctly to make a good decision. What you can know is how fast homes like
+    yours are selling, how much choice buyers currently have, and what selling
+    would let you buy next — and the third usually matters more than whether a
+    national index moves two per cent.
+
+    Editorial constraints unchanged: no advice, no prediction, no urgency, no
+    "strong/holding up/resilient", direction stated per suburb and never
+    characterised as good or bad.
     """
     dom, dom_prev = ms.get("dom_median"), ms.get("dom_yoy_prev")
     act, act_d = ms.get("active_listings"), ms.get("active_listings_mom_pct")
-    paras = []
 
-    # 1 · the macro the reader has already absorbed, reported and attributed.
-    paras.append(
-        "The honest answer is that nobody can tell you, and the people whose job it is to "
-        "forecast have spent this year disagreeing in public. In July, Westpac was tipping two "
-        "more rate rises; by the end of the month it had withdrawn that call, and all four major "
-        "banks now expect the Reserve Bank to hold. National figures show home values falling "
-        "for three consecutive months \u2014 though Brisbane is close to flat rather than falling, "
-        "and the Gold Coast is a different market again.")
+    lede = ("You don't need to predict the next six months correctly to make a good decision. "
+            "Nobody can, and the people paid to try have spent this year disagreeing in public.")
 
-    # 2 · what our own data says about THIS suburb. Two readings, both true.
-    if dom and dom_prev and act is not None:
-        faster = dom < dom_prev
-        bits = [f"Homes in {suburb_display} that sold last quarter took a median of "
-                f"{dom:.0f} days, against {dom_prev:.0f} a year earlier"]
-        if act_d is not None:
-            direction = "fewer" if act_d < 0 else "more"
-            bits.append(f"and there are {act:.0f} homes on the market now, "
-                        f"{abs(act_d):.0f}% {direction} than a month ago")
-        else:
-            bits.append(f"and there are {act:.0f} homes on the market now")
-        # ⚠ Test BOTH directions. The first version said "those two readings do
-        # not point the same way" whenever the case wasn't faster-and-fewer —
-        # which made it FALSE for Robina (slower AND more listings) and Varsity
-        # Lakes (slower AND more), i.e. wrong on two suburbs in three. State
-        # which way each moved and whether they agree; never characterise that
-        # as strength or weakness, which would be a prediction in disguise.
+    knowables = []
+    if dom and dom_prev:
+        slower = dom > dom_prev
+        knowables.append(
+            (f"How quickly homes like yours are selling",
+             f"A median of {dom:.0f} days in {suburb_display} last quarter, against "
+             f"{dom_prev:.0f} a year earlier \u2014 {'longer' if slower else 'less time'} than it "
+             f"took then."))
+    if act is not None:
         more = (act_d or 0) > 0
-        if faster and not more:
-            tail = ("Both readings moved the same way: selling took less time than it did a "
-                    "year ago, and there is less on the market than there was a month ago.")
-        elif (not faster) and more:
-            tail = ("Both readings moved the same way: selling took longer than it did a year "
-                    "ago, and there is more on the market than there was a month ago.")
-        else:
-            tail = ("Those two readings do not point the same way, which is common, and is why "
-                    "a single market headline settles nothing about one home.")
-        paras.append(bits[0] + " \u2014 " + bits[1] + ". " + tail)
+        detail = f"{act:.0f} homes on the market now"
+        if act_d:
+            detail += (f", {abs(act_d):.0f}% {'more' if more else 'fewer'} than a month ago")
+        knowables.append(("How much choice buyers currently have", detail + "."))
+    knowables.append(
+        ("What selling would let you buy next",
+         "The part almost nobody measures, and usually the one that decides whether a move works."))
+    return lede, knowables
 
-    # 3 · hand off to the strip rather than restating it. The strip carries the
-    #     figures, the window, the catchment caveat and the citations; saying it
-    #     twice in different words is how two numbers drift apart.
-    paras.append(
-        "There is one pattern underneath all of it that does hold up, because it is measured "
-        "across fifteen years rather than forecast forward.")
 
-    paras.append(
-        "None of that tells you what you should do by itself. The useful question is how these "
-        "conditions interact with your home, your timing, and what you would need to buy next \u2014 "
-        "which is where we can actually help.")
-    return paras
+BEL = {
+    "land_size": ("Land", "m²"), "floor_area": ("Floor area", "m²"),
+    "bedrooms": ("Bedrooms", ""), "bathrooms": ("Bathrooms", ""),
+    "car_spaces": ("Car spaces", ""), "pool": ("Pool", ""), "stories": ("Levels", ""),
+    "renovation": ("Condition", ""), "beach_proximity": ("Distance to beach", ""),
+    "street_premium": ("Street", ""), "micro_location": ("Position", ""),
+    "time_adjustment": ("Time since sale", ""), "golf_backing": ("Golf frontage", ""),
+    "water_views": ("Water outlook", ""),
+}
+TOR_LABEL = {
+    "adjustment_quality": "How little had to be adjusted",
+    "adjusted_accuracy": "How closely it agrees with the rest",
+    "proximity": "How close it is",
+    "recency": "How recently it sold",
+    "verification": "How much we could verify",
+    "data_quality": "How complete its record is",
+}
 
 
 _INSIGHTS_CACHE = {}
@@ -756,6 +749,7 @@ def _ago(ms):
     return f"{months} month{'s' if months != 1 else ''} ago"
 
 
+
 def median_block(suburb_display, ms):
     """The suburb median, placed against the national picture.
 
@@ -774,8 +768,7 @@ def median_block(suburb_display, ms):
     yoy = ms.get("yoy_growth_pct")
     mi = market_insights(suburb_display)
 
-    out = [f'<h3 style="margin-top:30px">What the median has done in {E(suburb_display)}</h3>',
-           ]
+    out = []
     lede = (f"Nationally, home values have fallen for three consecutive months. Over the same "
             f"period the rolling twelve-month median for houses in {suburb_display} sits at "
             f"<b>{exact(med)}</b>")
@@ -1365,6 +1358,17 @@ details .body{padding-top:12px;font-size:.94rem;color:var(--ink-2)}
 .whywide p{margin:0 0 .7rem;font-size:.94rem;color:var(--ink-2)}
 .whywide p:last-child{margin-bottom:0}
 
+
+/* the three knowables */
+.know{list-style:none;counter-reset:k;margin:16px 0 18px;padding:0}
+.know li{counter-increment:k;position:relative;padding:13px 0 13px 34px;
+  border-bottom:1px solid var(--line-2)}
+.know li:before{content:counter(k);position:absolute;left:0;top:13px;width:21px;height:21px;
+  border-radius:99px;background:var(--accent);color:#fff;font-size:.68rem;
+  display:flex;align-items:center;justify-content:center}
+.know .kt{display:block;font-weight:650;font-size:.95rem;margin-bottom:2px}
+.know .kd{display:block;font-size:.92rem;color:var(--ink-2)}
+
 footer{padding:44px 0 70px;border-top:1px solid var(--line-2);color:var(--muted);font-size:.85rem}
 
 @media(min-width:760px){
@@ -1702,10 +1706,9 @@ def render(slug, proto="full", version=LATEST):
         add('<div class="whywide">')
         add('<h3>Why is the range this wide?</h3>')
         if acc:
-            add(f'<p>Because that is how far this method has been out when we have tested it. '
-                f'The width is not a guess about this home \u2014 it is the measured spread of '
-                f'the method itself, so narrowing it would imply more certainty than the evidence '
-                f'supports.</p>')
+            add('<p>We set the width using how far estimates like this one have historically '
+                'missed the eventual sale price. Narrowing it further would imply more certainty '
+                'than our testing supports.</p>')
         else:
             add('<p>Because this range was not built from close comparable sales. It is drawn '
                 'from what can be verified from the outside, which is a wider kind of evidence.</p>')
@@ -1864,51 +1867,6 @@ def render(slug, proto="full", version=LATEST):
         add('<a class="cue" href="#different">So what makes this one different? ↓</a>')
         add('</div></section>')
 
-    # ── 5 · what makes this home different ──────────────────────────
-    if sc.get("active_matching") and sc.get("active_total"):
-        add('<section id="different"><div class="wrap">')
-        add('<div class="eyebrow">This home</div>')
-        anchors = [n["phrase"] for n in (sc.get("notable") or []) if n.get("tier") == "anchor"]
-        if anchors:
-            add(f'<h2>{E(" and ".join(anchors).capitalize())} do not appear together often.</h2>')
-        add('<div class="attrs">')
-        if s.get("bedrooms"):
-            add(f'<div><div class="n">{int(s["bedrooms"])}</div><div class="l">bedrooms</div></div>')
-        if s.get("pool"):
-            add('<div><div class="n">Pool</div><div class="l">on the block</div></div>')
-        cl = (poi.get("cluster") or {})
-        if cl.get("matching"):
-            add(f'<div><div class="n">{cl["matching"]}</div><div class="l">share the position</div></div>')
-        add('</div>')
-        phrase = " and ".join(anchors) if anchors else None
-        if phrase:
-            add(f'<p>{sc["active_matching"]} of the {sc["active_total"]} homes on the market right '
-                f'now match this one on {E(phrase)}.</p>')
-        feats = poi.get("features") or []
-        if cl.get("matching") and feats:
-            names = ", ".join(f["short"] for f in feats[:-1]) + " and " + feats[-1]["short"] if len(feats) > 1 else feats[0]["short"]
-            add(f'<p>Of the {poi.get("physical_matching")} that share the combination, only '
-                f'<b>{cl["matching"]}</b> sit this close to {E(names)} — all at once.</p>')
-        add('<p class="fine">That does not set a price by itself. It reduces the number of close '
-            'substitutes a buyer can choose from.</p>')
-        if B:
-            mp, n_pins = scarcity_map(doc, b, slug)
-            if mp:
-                add(f'<img class="shot" style="aspect-ratio:16/10;margin:20px 0 6px" src="{E(mp)}" '
-                    f'alt="Homes sharing this combination near {E(short)}" loading="lazy">')
-                add(f'<div class="fine">This home in yellow; the {n_pins} homes currently on the '
-                    f'market that share the combination in grey. How far a buyer would have to go '
-                    f'to find a substitute. Mapping · Google</div>')
-        if feats:
-            add('<details><summary>See the distances</summary><div class="body">')
-            for f in feats:
-                add(f'<div style="display:flex;justify-content:space-between;padding:6px 0;'
-                    f'border-bottom:1px solid var(--line-2)"><span>{E(f["label"])}</span>'
-                    f'<span>{int(f["distance_m"])}m</span></div>')
-            add('</div></details>')
-        add('<a class="cue" href="#reliable">So how wrong could you be? ↓</a>')
-        add('</div></section>')
-
     # ── 6 · how reliable ────────────────────────────────────────────
     # A SECTION only when there is a measured error rate to show — the figure,
     # the scale and the full test are main-path content and one of the brief's
@@ -2003,20 +1961,88 @@ def render(slug, proto="full", version=LATEST):
         add('<a class="cue" href="#now">And what\'s happening around it now? ↓</a>')
         add('</div></section>')
 
+    # ── 5 · what makes this home different ──────────────────────────
+    if sc.get("active_matching") and sc.get("active_total"):
+        add('<section id="different"><div class="wrap">')
+        add('<div class="eyebrow">This home</div>')
+        anchors = [n["phrase"] for n in (sc.get("notable") or []) if n.get("tier") == "anchor"]
+        if anchors:
+            add(f'<h2>{E(" and ".join(anchors).capitalize())} do not appear together often.</h2>')
+        add('<div class="attrs">')
+        if s.get("bedrooms"):
+            add(f'<div><div class="n">{int(s["bedrooms"])}</div><div class="l">bedrooms</div></div>')
+        if s.get("pool"):
+            add('<div><div class="n">Pool</div><div class="l">on the block</div></div>')
+        cl = (poi.get("cluster") or {})
+        if cl.get("matching"):
+            add(f'<div><div class="n">{cl["matching"]}</div><div class="l">share the position</div></div>')
+        add('</div>')
+        phrase = " and ".join(anchors) if anchors else None
+        if phrase:
+            add(f'<p>{sc["active_matching"]} of the {sc["active_total"]} homes on the market right '
+                f'now match this one on {E(phrase)}.</p>')
+        feats = poi.get("features") or []
+        if cl.get("matching") and feats:
+            names = ", ".join(f["short"] for f in feats[:-1]) + " and " + feats[-1]["short"] if len(feats) > 1 else feats[0]["short"]
+            add(f'<p>Of the {poi.get("physical_matching")} that share the combination, only '
+                f'<b>{cl["matching"]}</b> sit this close to {E(names)} — all at once.</p>')
+        add('<p class="fine">That does not set a price by itself. It reduces the number of close '
+            'substitutes a buyer can choose from.</p>')
+        if B:
+            mp, n_pins = scarcity_map(doc, b, slug)
+            if mp:
+                add(f'<img class="shot" style="aspect-ratio:16/10;margin:20px 0 6px" src="{E(mp)}" '
+                    f'alt="Homes sharing this combination near {E(short)}" loading="lazy">')
+                add(f'<div class="fine">This home in yellow; the {n_pins} homes currently on the '
+                    f'market that share the combination in grey. How far a buyer would have to go '
+                    f'to find a substitute. Mapping · Google</div>')
+        if feats:
+            add('<details><summary>See the distances</summary><div class="body">')
+            for f in feats:
+                add(f'<div style="display:flex;justify-content:space-between;padding:6px 0;'
+                    f'border-bottom:1px solid var(--line-2)"><span>{E(f["label"])}</span>'
+                    f'<span>{int(f["distance_m"])}m</span></div>')
+            add('</div></details>')
+        add('<a class="cue" href="#reliable">So how wrong could you be? ↓</a>')
+        add('</div></section>')
+
     # ── 7b · is now the right time? ─────────────────────────────────
     if mkt_for_timing := ((get_mongo_client()["system_monitor"]["market_pulse"]
                            .find_one({"suburb": b["suburb_key"]}) or {}).get("data_snapshot") or {}):
         add('<section id="timing"><div class="wrap">')
         add('<div class="eyebrow">The honest answer</div>')
-        # Deliberately the reader's own words from the top of the page, verbatim.
         add('<h2>Is now the right time to be selling, or should I wait?</h2>')
-        paras = timing_answer(b.get("suburb_display", ""), mkt_for_timing)
-        for i, para in enumerate(paras):
-            cls = ' class="lede"' if i == 0 else ''
-            add(f'<p{cls}>{E(para)}</p>')
+        lede, knowables = timing_answer(b.get("suburb_display", ""), mkt_for_timing)
+        add(f'<p class="lede">{E(lede)}</p>')
+        add('<p>Three things you can know right now, without a forecast:</p>')
+        add('<ol class="know">')
+        for title, detail in knowables:
+            add(f'<li><span class="kt">{E(title)}</span><span class="kd">{E(detail)}</span></li>')
+        add('</ol>')
+        add('<p>The third usually matters more than whether a national index moves two per cent, '
+            'and it is the one the portals never touch.</p>')
+
+        # Everything that PROVES the above, for a reader who wants to check it.
+        add('<details class="disc"><summary>What forecasters currently think</summary>'
+            '<div class="body">'
+            '<p>In July, Westpac was tipping two more rate rises; by the end of the month it had '
+            'withdrawn that call, and all four major banks now expect the Reserve Bank to hold. '
+            'National figures show home values falling for three consecutive months \u2014 though '
+            'Brisbane is close to flat rather than falling, and the Gold Coast is a different '
+            'market again.</p>'
+            '<p class="fine">Reported, not adopted. We hold no view on what the Reserve Bank will '
+            'do.</p></div></details>')
+
+        add('<details class="disc"><summary>What the median has done in '
+            + E(b.get("suburb_display", "")) + '</summary><div class="body">')
         add(median_block(b.get("suburb_display", ""), mkt_for_timing))
-        add('<h3 style="margin-top:30px">When does the southern Gold Coast sell for the most?</h3>')
+        add('</div></details>')
+
+        add('<details class="disc"><summary>Does the month you list in matter?</summary>'
+            '<div class="body">')
         add(seasonality_strip())
+        add('</div></details>')
+
         add('<div class="src">Fields analysis of Gold Coast sale records \u00b7 rate and national '
             'price figures as reported by the RBA, Westpac and Cotality</div>')
         add('<a class="cue" href="#now">What\'s moving around this home right now? \u2193</a>')
@@ -2254,9 +2280,18 @@ def render(slug, proto="full", version=LATEST):
         # believe?" — a part subtitle asking "Is the number attached to this home
         # real?" restates it two lines later. That subtitle was carried over from
         # the v2 question list and is now orphaned copy.
-        ("which",   "The number",   None),
-        ("timing",  "The timing",   "Is now the right time to be selling, or should I wait?"),
-        ("correct", "What you can do about any of it", None),
+        # ⚠ NO part heading over the opening. The hero already asks the question
+        # the visitor arrived with; a part titled "The number" above it makes the
+        # reader parse the page's taxonomy before its meaning. Acts II and III
+        # still open with one, because there the reader IS changing subject.
+
+        # ACT II — opens once the value question has closure. "What has happened
+        # since the last recorded sale" starts it: the first thing that is about
+        # this home TODAY rather than about the number.
+        ("since",   "What it means now",
+         "You know what the evidence supports. Here is where this home sits in today's market."),
+        # ACT III
+        ("plan",    "What it would mean for you", None),
     ]
     for sid, title, sub in PARTS:
         anchor = f'<section id="{sid}"'
