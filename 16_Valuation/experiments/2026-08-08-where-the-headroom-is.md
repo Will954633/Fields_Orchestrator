@@ -76,7 +76,7 @@ price)`):
 adjustment is close to correctly scaled. It is not over-applied, so simple shrinkage is not the fix.
 Note λ = 0 still leaves the ceiling at 24%: **shrinking cannot repair a pool that is already low.**
 
-### 2. The subject looks average because we cannot see it — NO
+### 2. The subject looks average because we cannot see it — NO (⚠ but see the correction below)
 
 The obvious explanation for pulling dear comps down was that a blind subject presents as unremarkable,
 so superior comparables get adjusted down to meet it. Tested by running the same properties with the
@@ -122,3 +122,24 @@ and the eligible pool is reconstructable from the same sold collections.
 
 ⚠ **Do not run the 30-home enrichment experiment until this is settled.** Four subject-enrichment
 hypotheses have now failed, and this evidence says the defect is upstream of the subject entirely.
+
+
+---
+
+# ⚠ CORRECTION (2026-08-08) — "missing subject attributes" was NOT properly rejected
+
+This file concluded the missing-subject-attribute hypothesis was rejected. **Over-stated.**
+
+The sighted-vs-blind test restored **three specific photo-derived attributes** —
+`renovation_quality_score`, `kitchen_score`, `number_of_stories` — every one of which had *already*
+measured as noise in the earlier ablation. Showing the subject three worthless attributes and finding
+no improvement does not test whether attributes we hold **no data on at all** would help.
+
+**Aspect, outlook, slope, frontage width and noise exposure remain untested**, and after
+`2026-08-08-comparable-selection.md` they are the only surviving candidate: selection, adjustment
+scaling and photo attributes all move the centre or the shape while leaving the **band width** at
+13.7%.
+
+The selection conclusion in this file stands and is strengthened — see the follow-up for the
+mechanism (`calculate_weight` factor 2 scores comparables on their closeness to the cohort median,
+i.e. selection on the dependent variable) and for what fixing it does and does not buy.
