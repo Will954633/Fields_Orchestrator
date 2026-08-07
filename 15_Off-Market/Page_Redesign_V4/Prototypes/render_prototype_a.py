@@ -1422,7 +1422,27 @@ def render(slug, proto="full", version=LATEST):
     except Exception:
         EV = {}
 
+    # ⚠ THE LIVE VALUATION WINS OVER THE BUNDLE'S.
+    #
+    # Bundles are cached, and most were built before the off-market book was
+    # valued — so their `valuation` fell through to `exterior_evidence` and has
+    # stayed there. Meanwhile the document now carries a high-confidence engine
+    # range. The page was therefore printing a stale fallback range at the top
+    # while rendering ENGINE comparables underneath it:
+    #     11 Placid   bundle $1,462,626-$2,061,774   live $1,470,491-$1,871,534
+    #     3 Fimiston  bundle $1,736,360-$2,447,640   live $1,607,377-$2,045,752
+    # $400k apart at the top end on Fimiston, and the number disagreed with its
+    # own evidence. The nightly rebuild would eventually correct the bundles;
+    # reading the authoritative source means it does not have to.
     s, v = b.get("subject") or {}, b.get("valuation") or {}
+    _live = ((doc.get("valuation_data") or {}).get("confidence") or {})
+    _lr = _live.get("range") or {}
+    if _lr.get("low") and _lr.get("high") and _live.get("reconciled_valuation"):
+        v = {**v, "low": _lr["low"], "high": _lr["high"],
+             "point": _live["reconciled_valuation"], "method": "engine",
+             "confidence": _live.get("confidence"),
+             "n_comps": _live.get("n_total") or v.get("n_comps")}
+        b["valuation"] = v
     cred, oc = b.get("credibility") or {}, b.get("obvious_comp") or {}
     sc, poi = b.get("scarcity") or {}, b.get("poi_rarity") or {}
     # ⚠ The error rate describes the COMPARABLE-SALES ENGINE only. When a home
@@ -1540,8 +1560,24 @@ def render(slug, proto="full", version=LATEST):
                 f'The {len(adj)} strongest carried most of the weight.</p>')
         add('<p class="fine">The width is not hidden. It reflects what can — and cannot — be '
             'concluded without seeing inside the home.</p>')
-        add('<div class="controls"><a class="btn" href="#comps">See the strongest comparisons</a>'
-            '<a class="btn" href="#reliable">How reliable has this been?</a></div>')
+        if acc:
+            add('<div class="controls"><a class="btn" href="#comps">See the strongest '
+                'comparisons</a><a class="btn" href="#reliable">How reliable has this been?</a>'
+                '</div>')
+        else:
+            # No measured rate for the method that produced this range — say so
+            # HERE, against the number, rather than as a section of its own.
+            add('<div class="controls"><a class="btn" href="#comps">See the strongest '
+                'comparisons</a></div>')
+            add('<details class="disc"><summary>How reliable is this?</summary><div class="body">'
+                '<p>This range was not built by our comparable-sales method. The home sits outside '
+                'the band that method was built for \u2014 detached houses between $1,000,000 and '
+                '$2,000,000 \u2014 so we have used a wider approach based on what can be verified '
+                'from the outside.</p>'
+                '<p>We publish a measured error rate for the comparable-sales method. We do not '
+                'have one for this approach, so we are not quoting a number we have not earned.</p>'
+                '<p class="fine">The comparable sales further down are unchanged. They are the '
+                'part we can stand behind either way.</p></div></details>')
         add('</div>')
         add('<a class="cue" href="#nearby">First, one sale nearby is worth looking at ↓</a>')
         add('</div></section>')
@@ -1698,10 +1734,16 @@ def render(slug, proto="full", version=LATEST):
         add('</div></section>')
 
     # ── 6 · how reliable ────────────────────────────────────────────
-    add('<section id="reliable"><div class="wrap">')
-    add('<div class="eyebrow">Reliability</div>')
-    add('<h2>How wrong has this method been?</h2>')
+    # A SECTION only when there is a measured error rate to show — the figure,
+    # the scale and the full test are main-path content and one of the brief's
+    # eight moments. Without one there is nothing but a caveat, and a caveat
+    # promoted to its own section reads as more important than the number it
+    # qualifies. Outside the design envelope it is rendered beside the range
+    # instead (see the valuation section).
     if acc:
+        add('<section id="reliable"><div class="wrap">')
+        add('<div class="eyebrow">Reliability</div>')
+        add('<h2>How wrong has this method been?</h2>')
         add(f'<div class="bigfig">{acc["mae"]}%</div>')
         add(f'<p>Tested against {acc["n"]} {E(b.get("suburb_display",""))} houses in this price range '
             f'that later sold, the centre of the estimate was out by <b>{acc["mae"]}% on average</b>. '
@@ -1733,16 +1775,7 @@ def render(slug, proto="full", version=LATEST):
             'treat it as the method\'s track record, not a promise about this address.</p>')
         add('</div></details>')
         add('<div class="src">Fields analysis · tested 6 August 2026</div>')
-    else:
-        add('<p>The range above was not built by the comparable-sales method. This home sits '
-            'outside the band that method was built for — detached houses between $1,000,000 and '
-            '$2,000,000 — so we have used a wider approach based on what can be verified from '
-            'the outside.</p>')
-        add('<p>We publish a measured error rate for the comparable-sales method. We do not have '
-            'one for this fallback, so we are not quoting a number we have not earned.</p>')
-        add('<p class="fine">The comparable sales below are unchanged. They are the part we can '
-            'stand behind either way.</p>')
-    add('</div></section>')
+        add('</div></section>')
 
     # ── 6b · why the other estimates disagree (Prototype B) ─────────
     if B:
