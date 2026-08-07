@@ -727,6 +727,11 @@ def render(slug, proto="full", version=LATEST):
         bits.append(f'<span><b>{int(s["land_sqm"])}</b> m² land</span>')
     if s.get("bedrooms"):
         bits.append(f'<span><b>{int(s["bedrooms"])}</b> bedrooms</span>')
+    # Rendered only when known. Bathrooms is our biggest attribute gap, and the
+    # correction section further down asks the owner for exactly this — so an
+    # invented or zero value here would contradict the page asking for it.
+    if s.get("bathrooms"):
+        bits.append(f'<span><b>{int(s["bathrooms"])}</b> bathrooms</span>')
     if s.get("floor_sqm"):
         bits.append(f'<span><b>{int(s["floor_sqm"])}</b> m² floor</span>')
     if s.get("pool"):
