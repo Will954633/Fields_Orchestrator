@@ -667,6 +667,58 @@ def differences_in_words(comp):
     return out
 
 
+
+# ⚠ WHY THE ENGINE DECLINED — said accurately, not generically.
+# One sentence covered every refusal: "this home sits outside the band our
+# tested comparable-sales model operates in". True for a $3M house; FALSE for an
+# attached dwelling, for a home with no recorded floor area, and for a thin
+# comparable set. Telling an owner their home is outside a price band when the
+# real reason is a missing measurement is a plain inaccuracy, and it is the kind
+# a reader can catch — they know what their house is worth roughly, and they
+# know it is a townhouse.
+_DECLINE_COPY = {
+    "attached_dwelling": (
+        "This home is attached to a neighbouring dwelling, and the comparable-sales method "
+        "behind our tested figure is built for detached houses. So this is a broader evidence "
+        "range rather than that model\u2019s output."),
+    "misclassified_dwelling": (
+        "This home is attached to a neighbouring dwelling, and the comparable-sales method "
+        "behind our tested figure is built for detached houses. So this is a broader evidence "
+        "range rather than that model\u2019s output."),
+    "above_design_ceiling": (
+        "This home sits above the price band our tested comparable-sales model operates in. "
+        "The method reaches its ceiling because a weighted average of comparable sales cannot "
+        "exceed the priciest sale available, so this is a broader evidence range instead."),
+    "below_design_floor": (
+        "This home sits below the price band our tested comparable-sales model operates in, so "
+        "this is a broader evidence range rather than that model\u2019s output."),
+    "insufficient_comparables": (
+        "We could not find enough closely comparable sales for this home to run our tested "
+        "method, so this is a broader evidence range drawn from what can be verified from the "
+        "outside."),
+    # The engine's own exclusion_reason for this case is `missing_floor_area`;
+    # keyed under both so the copy fires off the real value, not a guess.
+    "missing_floor_area": (
+        "We have no recorded internal floor area for this home, and floor area is the single "
+        "largest adjustment our tested method makes. Without it we will not put that method\u2019s "
+        "name to a figure, so this is a broader evidence range instead."),
+    "no_floor_area": (
+        "We have no recorded internal floor area for this home, and floor area is the single "
+        "largest adjustment our tested method makes. Without it we will not put that method\u2019s "
+        "name to a figure, so this is a broader evidence range instead."),
+}
+_DECLINE_DEFAULT = (
+    "Our tested comparable-sales method declined to produce a figure for this home, so this is a "
+    "broader evidence range drawn from what can be verified from the outside.")
+
+
+def decline_copy(reason, has_floor_area=True):
+    """The honest sentence for why the engine did not produce this range."""
+    if not has_floor_area and reason in (None, "no_engine_figure", "insufficient_comparables"):
+        return _DECLINE_COPY["no_floor_area"]
+    return _DECLINE_COPY.get(reason or "", _DECLINE_DEFAULT)
+
+
 def evidence_cards(ev, limit=3):
     """The comparable cards, rendered from `valuation_evidence_from_engine()`.
 
@@ -1773,11 +1825,34 @@ def render(slug, proto="full", version=LATEST):
     s, v = b.get("subject") or {}, b.get("valuation") or {}
     _live = ((doc.get("valuation_data") or {}).get("confidence") or {})
     _lr = _live.get("range") or {}
+    _lsum = ((doc.get("valuation_data") or {}).get("summary") or {})
     if _lr.get("low") and _lr.get("high") and _live.get("reconciled_valuation"):
         v = {**v, "low": _lr["low"], "high": _lr["high"],
              "point": _live["reconciled_valuation"], "method": "engine",
              "confidence": _live.get("confidence"),
              "n_comps": _live.get("n_total") or v.get("n_comps")}
+        b["valuation"] = v
+    elif doc.get("valuation_data"):
+        # ⚠ THE OVERRIDE MUST WORK DOWNWARD TOO.
+        #
+        # The branch above only ever UPGRADES a stale bundle to "engine". When
+        # the live engine DECLINES — attached dwelling, outside the envelope,
+        # too few comparables — the bundle's cached `method: "engine"` survived,
+        # and every downstream claim keyed off it. Measured on 19 Manhattan
+        # Avenue, Robina: an attached dwelling the engine now refuses, rendering
+        # a confident $1.03M-$1.32M range under "we set it by testing this
+        # method against 251 Robina houses". That is a false accuracy claim on
+        # the exact class of home we deliberately exclude — and bundles are
+        # cached, so it would have shipped on every stale one.
+        #
+        # Provenance is a property of the LIVE valuation, so a live refusal must
+        # override a cached success. The reason is carried through so the copy
+        # can say WHICH refusal it was rather than guessing.
+        _reason = (_live.get("directional_reason")
+                   or _lsum.get("exclusion_reason")
+                   or ("directional" if _live.get("directional_only") else None)
+                   or "no_engine_figure")
+        v = {**v, "method": "declined", "decline_reason": _reason}
         b["valuation"] = v
     cred, oc = b.get("credibility") or {}, b.get("obvious_comp") or {}
     sc, poi = b.get("scarcity") or {}, b.get("poi_rarity") or {}
@@ -1933,10 +2008,10 @@ def render(slug, proto="full", version=LATEST):
             add(f'<p class="basis fine">Built from all {v["n_comps"]} comparable sales we hold for '
                 f'this home \u2014 not a hand-picked few. The {len(adj)} closest are shown below.</p>')
         elif not acc:
-            add('<p class="basis fine">This home sits outside the band our tested '
-                'comparable-sales model operates in, so this is a broader evidence range rather '
-                'than that model\'s output. The strongest nearby sales are still below \u2014 '
-                'what we cannot responsibly do is attach our measured error rate to it.</p>')
+            add(f'<p class="basis fine">'
+                f'{E(decline_copy(v.get("decline_reason"), bool((b.get("subject") or {}).get("floor_sqm"))))} '
+                f'The strongest nearby sales are still below \u2014 what we cannot responsibly do '
+                f'is attach our measured error rate to it.</p>')
         # ⚠ The honest reason, and it is not property-specific: the width is an
         # EMPIRICAL 80% BAND, measured per suburb — four in five tested sales
         # landed inside a range built this way. It is not a confidence interval
@@ -1973,7 +2048,12 @@ def render(slug, proto="full", version=LATEST):
         # leaves should have been told how wrong it has been — the figure and its
         # track record are one claim, and separating them lets the number travel
         # without it.
-        if acc:
+        # ⚠ `v["point"]` is None on a directional page — there IS no centre to
+        # take a percentage of. Guarded separately from `acc`, because the two
+        # are independent: a suburb can have a measured error rate while THIS
+        # home has no point estimate. An earlier version crashed the whole
+        # render on 12 Beaconsfield Drive for exactly this.
+        if acc and v.get("point"):
             # The sample is named a paragraph earlier; naming it twice in one
             # section reads as padding.
             add(f'<p><b>Across those same sales, the centre of the estimate was out by '
@@ -1981,6 +2061,11 @@ def render(slug, proto="full", version=LATEST):
                 f'On a home at this value {acc["mae"]}% is about '
                 f'{E(money(round(v["point"] * acc["mae"] / 100 / 10_000) * 10_000))} \u2014 which '
                 f'is roughly the size of what a valuer standing inside would be resolving.</p>')
+        elif acc:
+            add(f'<p><b>Across those same sales, the centre of an estimate built this way was out '
+                f'by {acc["mae"]}% on average.</b> Half the time it was within {acc["median"]}%. '
+                f'That is the track record of the method \u2014 not of the wider evidence range '
+                f'shown above, which was not produced by it.</p>')
         # ⚠ The closing line must match the method. On a fallback range the sales
         # did NOT pull the answer anywhere, and saying they did rebuilds the very
         # contradiction fixed an hour ago, in new words.
@@ -1992,18 +2077,27 @@ def render(slug, proto="full", version=LATEST):
             add('<h3 class="hinge">What we can do is show you exactly which sales pulled the '
                 'answer to where it sits.</h3>')
         else:
-            add('<h3 class="hinge">What we can still do is show you the strongest sales near '
-                'this home, and what each one adjusts to.</h3>')
+            if adj:
+                add('<h3 class="hinge">What we can still do is show you the strongest sales near '
+                    'this home, and what each one adjusts to.</h3>')
+            else:
+                add('<h3 class="hinge">What we can still do is show you exactly what is known '
+                    'about this home, and what is missing.</h3>')
         add('</div>')
+        # ⚠ #comps only renders when `adj` is non-empty. Every link to it must
+        # carry that condition or the button is dead — caught by
+        # check_invariants.py on three declined pages, where the engine produced
+        # no comparables but the button still promised them.
         if acc:
-            add('<div class="controls"><a class="btn" href="#comps">See the strongest '
-                'comparisons</a><a class="btn" href="#reliable">How reliable has this been?</a>'
-                '</div>')
+            add('<div class="controls">'
+                + ('<a class="btn" href="#comps">See the strongest comparisons</a>' if adj else '')
+                + '<a class="btn" href="#reliable">How reliable has this been?</a></div>')
         else:
             # No measured rate for the method that produced this range — say so
             # HERE, against the number, rather than as a section of its own.
-            add('<div class="controls"><a class="btn" href="#comps">See the strongest '
-                'comparisons</a></div>')
+            if adj:
+                add('<div class="controls"><a class="btn" href="#comps">See the strongest '
+                    'comparisons</a></div>')
             add('<details class="disc"><summary>How reliable is this?</summary><div class="body">'
                 '<p>This range was not built by our comparable-sales method. The home sits outside '
                 'the band that method was built for \u2014 detached houses between $1,000,000 and '
