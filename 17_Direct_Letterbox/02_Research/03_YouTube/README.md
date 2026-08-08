@@ -82,10 +82,26 @@ YouTube citation invisible to the quote verifier. 900000 sits far above the orig
 
 ## 3. Channels
 
-| Library | Channel | Videos listed | Why it is in the corpus |
-|---|---|---|---|
-| **BLAC SALT** | `@BLAC_SALT` (`UCuygO2H0YAvCn1i8h3p3Htw`) | 81 | Australian training (Agents'Agency, Manos Findikakis). Long-form virtual sessions, ~17–22k words each. **This is the point of the exercise** — Brain 1 outside Tom Panos is US-weighted, and mail economics, consumer behaviour and regulation do not read across from the US. |
-| **eXp Realty** | `@eXpRealty` (`UC43frD2HapVKMMaQM5Cf5qw`) | 250 | Large US brokerage. Expect a low signal-to-noise ratio — much of the channel is agent-attraction and revenue-share, not prospecting method. |
+**Status: ✅ INGESTED.** 325 of 331 videos transcribed (**2,537,053 words**), chunked to 2,278 units,
+**2,264 annotated (99.4%)** and merged into the Brain 1 graph on 2026-08-08. The graph went
+**6,400 → 8,664 units**. Verified queryable in isolation:
+`brain1_deep.py "…" --library "BLAC SALT (AU)"` returns 88 relevant units from 199 candidates.
+
+⚠ The merged `package.json` is now **25.3 MB / ~6.3M tokens** and the graph builder warns it exceeds
+the ~900k budget for a single Opus context. `brain1_deep.py` is unaffected — it retrieves per facet
+and Haiku-judges before synthesis — but anything that tries to load the whole package at once will
+not fit.
+
+| Library | Channel | Videos | Units in graph | Why it is in the corpus |
+|---|---|---|---|---|
+| **BLAC SALT (AU)** | `@BLAC_SALT` (`UCuygO2H0YAvCn1i8h3p3Htw`) | 81 | **674** | Australian training (Agents'Agency, Manos Findikakis). Long-form virtual sessions, ~17–22k words each. **This is the point of the exercise** — Brain 1 outside Tom Panos is US-weighted, and mail economics, consumer behaviour and regulation do not read across from the US. |
+| **eXp Realty (US)** | `@eXpRealty` (`UC43frD2HapVKMMaQM5Cf5qw`) | 250 | **1,590** | Large US brokerage. Expect a low signal-to-noise ratio — much of the channel is agent-attraction and revenue-share, not prospecting method. |
+
+**⚠ The market suffix is load-bearing, not cosmetic.** The rest of Brain 1 is US-weighted, and
+postage, consumer behaviour, regulation and even the seasons do not read across — one eXp blueprint
+anchors its whole six-mailer calendar to "spring = March, fall = October", which inverts here. The
+market is also stamped into every unit header (`Market: Australia`), because the annotator sees only
+the header and the text.
 
 ⚠ **Both channels are self-published marketing by organisations selling training or recruitment.**
 Nothing in them is measured, controlled or independently verified. Treat every number as an
