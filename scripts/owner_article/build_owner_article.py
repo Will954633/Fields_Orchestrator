@@ -45,6 +45,7 @@ sys.path.insert(0, "/home/fields/Feilds_Website/07_Valuation_Comps")
 
 from factbook import FactBook                                  # noqa: E402
 import guardrails                                              # noqa: E402
+import charts as charts_mod                                    # noqa: E402
 
 # ---------------------------------------------------------------- constants
 
@@ -251,7 +252,61 @@ def suburb_median_series(client, suburb_key: str) -> dict | None:
         "ci_margin_pct": doc.get("rolling_12m_ci_margin_pct"),
         "median_source": doc["median_source"],
         "median_computed_at": doc.get("median_computed_at"),
+        # For the chart only. ⚠ SPARSE -- Robina skips Q2 2021 -> Q4 2021 -> Q2 2023,
+        # and is missing Q3 2024 even inside the recent window. The chart MUST place
+        # points by true quarter ordinal and break the line across gaps; walking this
+        # by index would space non-consecutive quarters evenly and invent continuity.
+        "series": doc.get("rolling_12m_median_series") or [],
     }
+
+
+def suburb_dom(client, suburb_key: str) -> dict | None:
+    """Median days on market -- READ from `precomputed_market_charts`, the same
+    collection the Market Intelligence page renders, so the two surfaces cannot
+    disagree.
+
+    Why DOM is publishable off a partial sample when sales VOLUME is not: our own
+    cross-check against PropRadar (memory `data_source_undercapture_reset`) found
+    days-on-market and price growth matched closely -- Varsity 23-26 vs 23,
+    Burleigh 33 vs 33 -- while scraped sold VOLUME under-counts by ~2x. A median
+    is robust to sampling; a count is precisely what sampling destroys. So the
+    median is the published figure and `transaction_count` appears only as the
+    sample size beneath each point, never as a market fact of its own.
+    """
+    gc = client["Gold_Coast"]
+    d = (gc["precomputed_market_charts"].find_one({"_id": f"{suburb_key}_days_on_market"})
+         or gc["precomputed_market_charts"].find_one(
+             {"suburb": suburb_key, "chart_type": "days_on_market"}))
+    if not d or d.get("latest_quarter_median") is None:
+        return None
+    return {"latest": d["latest_quarter_median"],
+            "yoy_days": d.get("yoy_change_days"),
+            "timeline": d.get("timeline") or []}
+
+
+def check_surface_consistency(client, suburb_key: str, dom: dict | None) -> list[str]:
+    """The article's figures must equal what the public pages already show.
+
+    CLAUDE.md Rule 6 exists because a Market Pulse rewrite once left a third
+    content layer stale and produced one page showing three different absorption
+    rates. The same failure ACROSS surfaces is worse: the owner is holding a
+    printed sheet and looking at the website, and cannot see which is stale. The
+    check is two queries, so there is no reason not to run it every build.
+    """
+    problems = []
+    if not dom:
+        return problems
+    seen = {(p.get("data_snapshot") or {}).get("dom_median")
+            for p in client["system_monitor"]["market_pulse"].find(
+                {"suburb": suburb_key}, {"data_snapshot.dom_median": 1})}
+    seen.discard(None)
+    for v in seen:
+        if abs(float(v) - float(dom["latest"])) > 0.51:
+            problems.append(
+                f"days-on-market disagreement for {suburb_key}: market_pulse (the "
+                f"Market Intelligence pages) shows {v}, precomputed_market_charts "
+                f"shows {dom['latest']}")
+    return problems
 
 
 def comp_movement(comps: list[dict]) -> dict | None:
@@ -319,8 +374,9 @@ def load_macro() -> tuple[dict | None, str | None]:
 
 # ---------------------------------------------------------------- composition
 
-def compose(bundle: dict) -> tuple[str, FactBook]:
+def compose(bundle: dict) -> tuple[str, FactBook, dict]:
     fb = FactBook()
+    charts: dict[str, str] = {}
     b = bundle
     comps, subj = b["comps"], b["subject"]
     short = fb.address("subject_addr", b["address_short"])
@@ -417,6 +473,26 @@ def compose(bundle: dict) -> tuple[str, FactBook]:
         f"and it should not be read as one; the width is the honest part, reflecting how "
         f"the {n_comps} homes genuinely differed from yours.\n")
 
+    # ---- how long homes are taking to sell
+    # Placed before the median section deliberately. The owner's first question is
+    # "will it sell at all", not "what is the number" -- and the homeowner brief
+    # §8.3 says to lead with time-on-market over medians, because it is more
+    # reliable in our data and cannot accidentally become advice.
+    dom = b["dom"]
+    if dom and dom.get("timeline"):
+        svg, cap = charts_mod.dom_chart(dom["timeline"], b["suburb_display"], fb)
+        if svg:
+            charts["dom"] = svg
+            latest = fb.num("dom_latest", dom["latest"])
+            P.append(f"## How long homes are taking to sell in {b['suburb_display']}\n")
+            P.append(
+                f"Half the houses that sold in {b['suburb_display']} last quarter were "
+                f"under offer within {latest} days of listing, and half took longer. "
+                f"The chart below shows that figure each quarter, with the number of "
+                f"sales it is measured from underneath.\n")
+            P.append("{{CHART:dom}}")
+            P.append(f"*{cap}*\n")
+
     # ---- agreement with the suburb
     mv, sm = b["movement"], b["suburb"]
     if mv and sm:
@@ -462,6 +538,14 @@ def compose(bundle: dict) -> tuple[str, FactBook]:
                        f"contradiction to resolve.")
         P.append(lead + verdict + "\n")
 
+        if sm.get("series"):
+            svg, cap = charts_mod.median_price_chart(
+                sm["series"], b["suburb_display"], fb)
+            if svg:
+                charts["median"] = svg
+                P.append("{{CHART:median}}")
+                P.append(f"*{cap}*\n")
+
         mae = fb.pct("mae", MAE_PCT, signed=False)
         halves = (n_e if mv["n_early"] == mv["n_late"] else f"{n_e} and {n_l}")
         closing = ("The direction is the reportable part; the precision either figure "
@@ -504,7 +588,8 @@ def compose(bundle: dict) -> tuple[str, FactBook]:
         # The union pipeline carries a 90% CI. Now that we read it instead of recomputing
         # a bare median, disclose it -- it is the honest width of that figure.
         if sm.get("ci_low") and sm.get("ci_high"):
-            limits += (f"Its 90% confidence range runs "
+            limits += (f"Its {fb.pct('sub_ci_level', 90, signed=False, dp=0)} "
+                       f"confidence range runs "
                        f"{fb.money('sub_ci_low', sm['ci_low'])} to "
                        f"{fb.money('sub_ci_high', sm['ci_high'])}. ")
     limits += (f"Sales within {radius} km of one home, over "
@@ -518,7 +603,7 @@ def compose(bundle: dict) -> tuple[str, FactBook]:
             f"inside the standard {fb.num('std_radius', RADIUS_KM, dp=1)} km, so the search "
             f"was widened to {radius} km for this home.*\n")
 
-    return "\n".join(P), fb
+    return "\n".join(P), fb, charts
 
 
 # ---------------------------------------------------------------- rendering
@@ -568,7 +653,8 @@ td:nth-child(5){font-weight:600;color:var(--accent)}
 """
 
 
-def md_to_html(md: str, title: str, hero: dict | None) -> str:
+def md_to_html(md: str, title: str, hero: dict | None,
+               charts: dict | None = None) -> str:
     """Minimal, deliberate markdown -> HTML. Only the constructs we emit."""
     def inline(s):
         s = (s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
@@ -597,6 +683,13 @@ def md_to_html(md: str, title: str, hero: dict | None) -> str:
                     out.append("<tr>" + "".join(f"<td>{inline(c)}</td>" for c in r) + "</tr>")
                 out.append("</tbody></table></div>")
             continue
+        m_chart = re.fullmatch(r"\{\{CHART:(\w+)\}\}", ln.strip())
+        if m_chart:
+            svg = (charts or {}).get(m_chart.group(1))
+            if svg:
+                out.append(svg)
+            i += 1
+            continue
         if ln.startswith("## "):
             out.append(f"<h2>{inline(ln[3:])}</h2>")
         elif ln.startswith("# "):
@@ -613,7 +706,8 @@ def md_to_html(md: str, title: str, hero: dict | None) -> str:
         '<!doctype html><html lang="en"><head><meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width,initial-scale=1">\n'
         '<meta name="robots" content="noindex">\n'
-        f"<title>{title}</title>\n<style>{CSS}</style></head><body><div class=\"wrap\">\n"
+        f"<title>{title}</title>\n<style>{CSS}{charts_mod.CSS}</style>"
+        '</head><body><div class="wrap">\n'
         '<div class="flag">Fields &middot; prepared for this address</div>\n'
         + "\n".join(out)
         + '\n<div class="foot">Prepared by Fields Real Estate from recorded sales and '
@@ -677,6 +771,16 @@ def build(address, suburb=None, out_dir=None, want_html=True,
     macro, macro_err = load_macro()
     subj_feat = ((vd.get("subject_property") or {}).get("features") or {}).get("basic") or {}
 
+    # Days-on-market, plus the assertion that it equals what the public pages show.
+    # A disagreement here is a BUILD FAILURE, not a warning: the owner may be
+    # holding this sheet while looking at our website, and cannot tell which is
+    # stale. Better to ship nothing than two Fields numbers for one suburb.
+    dom = suburb_dom(client, suburb_key)
+    inconsistent = check_surface_consistency(client, suburb_key, dom)
+    if inconsistent:
+        return {"ok": False, "stage": "consistency", "address": full_addr,
+                "errors": inconsistent}
+
     bundle = {
         "subject": doc, "address_full": full_addr,
         "address_short": full_addr.split(",")[0].strip(),
@@ -687,10 +791,11 @@ def build(address, suburb=None, out_dir=None, want_html=True,
         "worked": worked_example(comps, subj_feat),
         "movement": comp_movement(comps),
         "suburb": suburb_median_series(client, suburb_key),
+        "dom": dom,
         "macro": macro,
     }
 
-    md, fb = compose(bundle)
+    md, fb, charts = compose(bundle)
 
     unminted = fb.verify(md)
     findings = guardrails.lint(md)
@@ -708,7 +813,11 @@ def build(address, suburb=None, out_dir=None, want_html=True,
     os.makedirs(out_dir, exist_ok=True)
     md_path = os.path.join(out_dir, f"{slug}.md")
     with open(md_path, "w") as fh:
-        fh.write(md)
+        # The markdown is the archival/plain-text form; charts are an HTML/print
+        # concern, so the placeholder becomes a readable marker rather than a
+        # dangling token.
+        fh.write(re.sub(r"\{\{CHART:(\w+)\}\}",
+                        lambda m: f"*[chart: {m.group(1)}]*", md))
 
     html_path = None
     if want_html:
@@ -716,7 +825,7 @@ def build(address, suburb=None, out_dir=None, want_html=True,
         title = f"{bundle['address_short']} — sales near your street"
         html_path = os.path.join(out_dir, f"{slug}.html")
         with open(html_path, "w") as fh:
-            fh.write(md_to_html(md, title, hero))
+            fh.write(md_to_html(md, title, hero, charts))
 
     return {"ok": True, "address": full_addr, "slug": slug, "md": md_path,
             "html": html_path, "n_comps": len(comps), "radius_km": radius,

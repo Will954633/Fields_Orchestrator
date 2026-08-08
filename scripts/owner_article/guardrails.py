@@ -58,8 +58,19 @@ RULES: list[tuple[str, str, str, str]] = [
     ("BLOCK", "CONFIDENCE", r"\bconfidence(?: recorded)?(?: for this set)?:\s*(?:high|medium|low|very low)\b",
      "grade is non-discriminating -- do not print"),
     ("BLOCK", "CONFIDENCE", r"\b(?:high|medium|low|very low)[- ]confidence\b", "grade is non-discriminating"),
+    # ⚠ Narrow, deliberately. There are TWO different intervals in this article and
+    # only one of them is a lie:
+    #   * the PROPERTY band (+/-12% of reconciled_valuation) is NOT a statistical CI
+    #     -- it contains the actual sale price ~57% of the time. Calling it a 90%
+    #     confidence range is the thing this rule exists to stop.
+    #   * the SUBURB MEDIAN interval IS a real bootstrap 90% CI --
+    #     `precompute_union_prices.bootstrap_ci(values, confidence=0.90)`. Disclosing
+    #     it is honest and is exactly the "publish the confidence" move.
+    # So the block is scoped by EXEMPTION: a line that is talking about the median is
+    # allowed to say 90% CI. See `_EXEMPT`.
     ("BLOCK", "CONFIDENCE", r"\b90% confidence (?:range|interval)\b",
-     "the +/-12% band is not a statistical CI and contains the sale price ~57% of the time"),
+     "the property's +/-12% band is not a statistical CI -- it contains the sale "
+     "price ~57% of the time (the suburb MEDIAN's bootstrap CI is exempt)"),
 
     # ---- house style ----
     ("BLOCK", "WORDS", r"\bstunning\b", "banned word"),
@@ -78,6 +89,17 @@ RULES: list[tuple[str, str, str, str]] = [
 
 _HEADLINE_MONEY = re.compile(r"\$[\d,]+")
 
+# Per-RULE exemptions, keyed by the rule's own pattern -- deliberately NOT keyed by
+# label, which would also excuse the confidence-GRADE rules sharing that label.
+# If the matched line also matches the exemption, the finding is dropped.
+_EXEMPT = {
+    # The union pipeline's suburb-median interval is a genuine bootstrap 90% CI
+    # (`precompute_union_prices.bootstrap_ci(values, confidence=0.90)`), so a line
+    # about the median may say so. The property's +/-12% band still may not.
+    r"\b90% confidence (?:range|interval)\b":
+        re.compile(r"\bmedian\b", re.IGNORECASE),
+}
+
 
 def lint(markdown: str) -> list[dict]:
     """Return findings. Each: {severity, label, why, match, line}."""
@@ -85,7 +107,10 @@ def lint(markdown: str) -> list[dict]:
     lines = markdown.splitlines()
     for sev, label, pat, why in RULES:
         rx = re.compile(pat, re.IGNORECASE)
+        exempt = _EXEMPT.get(pat)
         for i, line in enumerate(lines, 1):
+            if exempt and exempt.search(line):
+                continue
             for m in rx.finditer(line):
                 findings.append({
                     "severity": sev, "label": label, "why": why,
