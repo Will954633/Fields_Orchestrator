@@ -158,20 +158,45 @@ def main():
     todo = [b for b in batches if os.path.basename(b) not in done]
     log(f"START — {len(done)}/{len(batches)} batches already done, {len(todo)} to do")
 
+    def _ask(units):
+        recs = extract_json_array(call_haiku(build_prompt(units)))
+        if not isinstance(recs, list) or not recs:
+            raise ValueError("empty/invalid array")
+        return recs
+
     def annotate_one(path):
         """Returns (name, recs|None). Never raises — a dead batch must not kill the run."""
         name = os.path.basename(path)
-        prompt = build_prompt(parse_batch(path))
+        units = parse_batch(path)
         for attempt in (1, 2):
             try:
-                recs = extract_json_array(call_haiku(prompt))
-                if not isinstance(recs, list) or not recs:
-                    raise ValueError("empty/invalid array")
-                return name, recs
+                return name, _ask(units)
             except Exception as e:
                 log(f"  {name} attempt {attempt} failed: {str(e)[:160]}")
                 time.sleep(5)
-        return name, None
+
+        # Fall back to one unit at a time. The failures are almost entirely
+        # truncated / malformed JSON on a 10-unit array — the model runs out of
+        # room or fumbles an escape somewhere in ~12k words of unpunctuated
+        # auto-caption text. A single unit is a short, well-formed array, so it
+        # nearly always succeeds. This costs 10 calls instead of 1, but only for
+        # the batches that already failed twice.
+        #
+        # Why it matters: without this, a batch that fails is 10 units silently
+        # missing from the graph. On the first YouTube backfill that was 77 of
+        # 228 batches — a THIRD of the corpus gone, while the run still exited 0.
+        log(f"  {name} batch failed twice — falling back to per-unit")
+        recs, lost = [], 0
+        for u in units:
+            try:
+                recs.extend(_ask([u]))
+            except Exception as e:
+                lost += 1
+                log(f"    {name}/{u['unit_id']} unrecoverable: {str(e)[:110]}")
+        if not recs:
+            return name, None
+        log(f"  {name} per-unit recovered {len(recs)}/{len(units)} units ({lost} lost)")
+        return name, recs
 
     # Each call is a `claude -p` subprocess — I/O-bound on the API, so workers cost
     # almost no local CPU. Serial, a 228-batch YouTube backfill takes ~10 hours.
