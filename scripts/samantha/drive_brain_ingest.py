@@ -76,6 +76,30 @@ HARD_PRIVATE = re.compile(
 # fails closed to brain3/private, never brain1, when unsure). Filename is the hard signal here.
 HARD_PRIVATE_PATH = re.compile(r"draft.{0,3}appraisal", re.I)
 
+# Stage-1 firewall #2 — OUR OWN AI OUTPUT. Not private; worse than private for this
+# purpose. Brain 1 briefs get saved to the Research folder, ingested from there, and
+# then retrieved by a later run as though a practitioner had said it — with the
+# original citation still attached to the quote string. On 2026-08-08 a brief closed
+# on "The data is the weapon. The conversations are still the war." attributed to a
+# named agent (u1903); the sentence exists in NO coaching unit, only in two
+# external:drive/Research units whose source doc is "New Agents & First Listings —
+# Brain 1 Corpus Analysis (2026-07-18)" — a brief we wrote.
+#
+# brain1_verify.py cannot catch this: the text genuinely IS in the corpus. So it has
+# to be stopped at ingest. A synthesis re-entering its own evidence base is circular
+# by construction, and every pass through the loop makes the claim look better
+# attested than it is.
+#
+# Name-based, deliberately: it must not depend on the LLM classifier's judgement.
+SELF_OUTPUT = re.compile(
+    r"brain\s*[13]\b|brain\s*1\s*corpus|corpus\s*analysis|deep\s*(query|research)\s*brief|"
+    r"\bintelligence\s*brief\b|samantha\s*(brief|report|analysis)|"
+    r"generated\s*by\s*(claude|opus|samantha)|ai[-\s]?generated\s*(brief|analysis|report)",
+    re.I)
+# A retrieved quote carrying a corpus unit id (u0123 / k01234 / i123456789) is the
+# tell-tale of re-ingested output even when the filename is innocent.
+SELF_OUTPUT_TEXT = re.compile(r"[\"“][^\"”]{15,}[\"”]\s*[—-]?[^\n]{0,40}\(\s*[uki]\d{4,10}\s*\)")
+
 # mimeType -> how to pull text
 GDOC = "application/vnd.google-apps.document"
 GSHEET = "application/vnd.google-apps.spreadsheet"
@@ -232,10 +256,29 @@ def main():
                                   "reason": "hard-private firewall", "name": name}
             continue
 
+        # Stage 1b — our own AI output, by filename
+        if SELF_OUTPUT.search(name) or SELF_OUTPUT.search(path):
+            decisions["self_output"] = decisions.get("self_output", 0) + 1
+            log(f"  [self-output] excluded by name: {path[:90]}")
+            doc_cache[f["id"]] = {"content_hash": None, "decision": "exclude",
+                                  "reason": "our own AI output — self-citation loop", "name": name}
+            continue
+
         text = extract_text(svc, f)
         if len(text.split()) < 25:
             decisions["no_text"] += 1
             continue
+
+        # Stage 1c — our own AI output, by content. Catches an innocently-named doc
+        # that is really a brief: a quoted span followed by a corpus unit id.
+        if len(SELF_OUTPUT_TEXT.findall(text)) >= 2:
+            decisions["self_output"] = decisions.get("self_output", 0) + 1
+            log(f"  [self-output] excluded by content (quotes carry unit ids): {path[:80]}")
+            doc_cache[f["id"]] = {"content_hash": None, "decision": "exclude",
+                                  "reason": "quotes carry corpus unit ids — re-ingested output",
+                                  "name": name}
+            continue
+
         h = ing.content_hash(text)
 
         # Stage 2 — classifier (cached by content hash so unchanged docs are free)

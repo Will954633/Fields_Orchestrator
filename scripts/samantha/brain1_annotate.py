@@ -131,6 +131,9 @@ def main():
                     help=f"build directory holding batches/ (default {BASE})")
     ap.add_argument("--workers", type=int, default=1,
                     help="batches annotated concurrently (each is one `claude -p` call)")
+    ap.add_argument("--sweep-missing", action="store_true",
+                    help="annotate units present in batches/ but absent from annotations.jsonl, "
+                         "one at a time (recovers stragglers a batch-level retry cannot reach)")
     args = ap.parse_args()
     workers = max(1, args.workers)
     if args.base != BASE:
@@ -152,6 +155,48 @@ def main():
     batches = sorted(glob.glob(f"{BATCH_DIR}/b_*.txt") + glob.glob(f"{BATCH_DIR}/yt_*.txt"))
     if not batches:
         raise SystemExit(f"no batch files in {BATCH_DIR} — nothing to annotate")
+    if args.sweep_missing:
+        # A batch that partially succeeded is marked done, so its lost units are
+        # invisible to a batch-level retry — they sit inside a "finished" batch
+        # forever. This compares the unit ids in batches/ against the ids actually
+        # in annotations.jsonl and annotates whatever is missing, one at a time.
+        have = set()
+        if os.path.exists(OUT):
+            for line in open(OUT, encoding="utf-8"):
+                try:
+                    have.add(json.loads(line).get("unit_id"))
+                except json.JSONDecodeError:
+                    pass
+        missing = []
+        for b in batches:
+            for u in parse_batch(b):
+                if u["unit_id"] not in have:
+                    missing.append(u)
+        log(f"SWEEP — {len(have)} units annotated, {len(missing)} missing from batches/")
+        if not missing:
+            log("SWEEP — nothing missing, corpus is complete")
+            return
+        recovered = lost = 0
+        for u in missing:
+            try:
+                recs = extract_json_array(call_haiku(build_prompt([u])))
+                if not isinstance(recs, list) or not recs:
+                    raise ValueError("empty/invalid array")
+            except Exception as e:
+                lost += 1
+                log(f"  {u['unit_id']} unrecoverable: {str(e)[:120]}")
+                continue
+            with open(OUT, "a") as f:
+                for rec in recs:
+                    rec["_batch"] = "sweep"
+                    f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+            recovered += 1
+            log(f"  {u['unit_id']} recovered ({recovered}/{len(missing)})")
+        log(f"SWEEP COMPLETE — recovered {recovered}, still lost {lost}")
+        if recovered == 0 and missing:
+            raise SystemExit(f"swept {len(missing)} missing units and recovered none")
+        return
+
     done = set()
     if os.path.exists(DONE):
         done = set(l.strip() for l in open(DONE) if l.strip())

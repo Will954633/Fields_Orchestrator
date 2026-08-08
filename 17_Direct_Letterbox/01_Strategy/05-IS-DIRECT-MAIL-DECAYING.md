@@ -166,9 +166,18 @@ are not arguing about the same variable:
 | **When** | Long before any listing conversation | At or near the listing appointment |
 | **Risk** | Slow — 12+ month lag, and the payoff is often a *referral*, not a listing from that person | Free spec work for someone who has already decided |
 
-**The reconciled rule, consistent with every source: give freely as a long-horizon nurture act;
-withhold the bespoke deep-dive as spec work at the point of a live listing decision until there is
-commitment.** That maps exactly onto the structure already proposed — the automated per-address
+**⚠ Read that contradiction knowing the corpus is lopsided.** The *withhold* side is a book we hold
+in full — **Voss & Shull, *The Full Fee Agent*, 102 annotated units.** The *give* side's most
+prominent voice is **absent: Sabri Suby's *Sell Like Crazy*** — the book whose entire thesis is
+giving away your best material first — **is not in Brain 1 at all.** We own the file; the Kindle
+scrape stalled at **page 3 of 307**, was written in a legacy format the chunker never consumed, and
+was marked `_ingested` regardless. So the corpus holds the anti-giving argument at full strength and
+the pro-giving argument only second-hand through coaches. **Weight the reconciliation below
+accordingly, and re-run this question if the book is ever properly ingested.**
+
+**The reconciled rule, consistent with every source we actually hold: give freely as a long-horizon
+nurture act; withhold the bespoke deep-dive as spec work at the point of a live listing decision
+until there is commitment.** That maps exactly onto the structure already proposed — the automated per-address
 analysis is the free nurture layer, the heavy posted appraisal is the commitment-gated escalation
 (Option 5). It is also the same answer the lead-funnel verdict reached: **ungate the analysis, keep
 the artefact.**
