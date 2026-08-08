@@ -1836,22 +1836,28 @@ def render(slug, proto="full", version=LATEST):
             when = str(tl[0]["date"])[:7]
         add(f'<p style="margin-top:16px" class="fine">Last recorded sale: '
             f'<b>{E(exact(tl[0]["price"]))}</b> in {E(when)}. No later market sale is recorded.</p>')
-        # The ten-year movement belongs BESIDE the fact that provokes the
-        # question, not two acts later as a section of its own. Act II then
-        # opens on the present, which is what its heading promises.
-        _g = _cards.get("gain") or {}
-        if _g.get("ten_year") or _g.get("cannot_reach"):
-            add('<details class="disc"><summary>See what has happened since</summary>'
-                '<div class="body">')
-            if _g.get("cannot_reach"):
-                add(f'<p class="fine">{E(str(_g["cannot_reach"]).strip())}</p>')
-            if _g.get("since"):
-                add(f'<p>{E(str(_g["since"]).strip())}</p>')
-            if _g.get("ten_year"):
-                add(f'<p>{E(str(_g["ten_year"]).strip())}</p>')
-            if _g.get("means"):
-                add(f'<p class="fine">{E(str(_g["means"]).strip())}</p>')
-            add('</div></details>')
+        # ⚠ MOVED OUT OF THE HERO 2026-08-08. This used to be a "See what has
+        # happened since" disclosure sitting directly under the last-sale line,
+        # on the reasoning that the ten-year movement belongs beside the fact
+        # that provokes the question. The structural half of that was right —
+        # it had been a whole section in Act II and did not deserve one. The
+        # placement was still wrong, for three reasons:
+        #
+        #   1. Two of its three sentences are REFUSALS ("outside what we can
+        #      measure", "not one we can draw as a single line"). It answered
+        #      the reader's question with a caveat, at the one point in the page
+        #      where we have not yet earned the credit to spend on caveats.
+        #   2. Its only substantive figure is a SUBURB median. The least
+        #      personal fact on the page was sitting in the most personal
+        #      position, above the address-specific evidence.
+        #   3. It stood between the last-sale line and the page's actual
+        #      opening — "you've probably already seen two different values for
+        #      this home; which should you believe?" — which IS the honest
+        #      answer to "what has happened since".
+        #
+        # The last-sale fact stays and now runs straight into that opener.
+        # The market movement lives in #timing, where market context belongs and
+        # where a stated limitation reads as method rather than as an apology.
 
     pre = V.get("preamble") or {}
     if pre.get("opener"):
@@ -2240,6 +2246,29 @@ def render(slug, proto="full", version=LATEST):
         add('</ol>')
         add('<p>The third can matter more to the decision than a small movement in a national '
             'index \u2014 and it is usually treated separately from your home\'s value online.</p>')
+
+        # ⚠ MOVED HERE FROM THE HERO 2026-08-08. See the note at the last-sale
+        # line. This is market context and a stated limit on our own data, and
+        # both belong in the section about the market rather than above the
+        # address-specific evidence. Framed forward from the last recorded sale,
+        # so it answers a question the reader has actually been carrying rather
+        # than opening with what we cannot do.
+        _g = _cards.get("gain") or {}
+        if _g.get("ten_year") or _g.get("cannot_reach"):
+            add('<details class="disc"><summary>How the suburb has moved over ten years'
+                '</summary><div class="body">')
+            if _g.get("ten_year"):
+                add(f'<p>{E(str(_g["ten_year"]).strip())}</p>')
+            if _g.get("since"):
+                add(f'<p>{E(str(_g["since"]).strip())}</p>')
+            add('<p class="fine">That is the suburb, not this home. A median moves with what '
+                'happens to sell in a quarter as much as with what any one house is worth, so it '
+                'is context for the decision \u2014 not a second estimate.</p>')
+            if _g.get("cannot_reach"):
+                add(f'<p class="fine">{E(str(_g["cannot_reach"]).strip())}</p>')
+            if _g.get("means"):
+                add(f'<p class="fine">{E(str(_g["means"]).strip())}</p>')
+            add('</div></details>')
 
         # Everything that PROVES the above, for a reader who wants to check it.
         add('<details class="disc"><summary>What forecasters currently think</summary>'
