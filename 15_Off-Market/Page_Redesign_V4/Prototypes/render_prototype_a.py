@@ -2116,8 +2116,8 @@ def render(slug, proto="full", version=LATEST):
             f'that later sold, the centre of the estimate was out by <b>{acc["mae"]}% on average</b>. '
             f'Half the time it was within {acc["median"]}%, and it landed within 10% of the eventual '
             f'sale price on {acc["within10"]}% of homes.</p>')
-        add('<p>That is why this page shows a range rather than pretending the evidence supports one '
-            'exact number.</p>')
+        add('<p><b>That is why this page shows a range rather than pretending the evidence '
+            'supports one exact number.</b></p>')
         if v.get("low") and v.get("high"):
             add('<div class="scale"><div class="fine">Where the eventual sale landed, in testing</div>'
                 '<div class="bar"><span class="band" style="left:22%;right:22%"></span>'
