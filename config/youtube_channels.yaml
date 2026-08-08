@@ -1,0 +1,30 @@
+# Channels whose videos are transcribed and folded into Brain 1.
+#
+# `library` becomes the corpus `provenance.library` and is what
+# `brain1_deep.py --library "<name>"` isolates. Keep it stable — renaming it
+# orphans every unit already annotated under the old name.
+#
+# `channel_id` is the UC... id (resolve with:
+#   yt-dlp --flat-playlist --playlist-items 1 --dump-single-json <url> | jq -r .channel_id )
+# It is what the RSS poller uses; the @handle is not stable enough to key on.
+
+channels:
+  - library: "eXp Realty"
+    handle: "@eXpRealty"
+    url: "https://www.youtube.com/@eXpRealty"
+    channel_id: "UC43frD2HapVKMMaQM5Cf5qw"
+    why: >
+      Large US brokerage channel. Agent-attraction and production content;
+      the interest here is prospecting, farming and follow-up method, not the
+      recruiting/revenue-share material — expect a low signal-to-noise ratio.
+    max_backfill: 250
+
+  - library: "BLAC SALT"
+    handle: "@BLAC_SALT"
+    url: "https://www.youtube.com/@BLAC_SALT"
+    channel_id: "UCuygO2H0YAvCn1i8h3p3Htw"
+    why: >
+      Australian real-estate training (Agents'Agency). Small channel, long-form
+      sessions. AU market context is the reason it matters — the rest of the
+      Brain 1 corpus outside Tom Panos is US-weighted.
+    max_backfill: 250

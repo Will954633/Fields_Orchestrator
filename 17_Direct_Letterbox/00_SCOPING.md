@@ -111,10 +111,33 @@ front" are mutually exclusive; the concept as described is an addressed campaign
 under the DL-fold figure (no envelope, no insertion) but is the same order of magnitude. Existing
 figures are for A4/C4 in envelopes — **get a postcard-specific quote.**
 
-**Expected response** [RESEARCHED]: ANA/DMA average ~4.4%; house lists 5–9%, cold 2–4.4%; VDP
-personalisation adds a **2–3× lift**; QR alongside a URL lifts response further. On 1,000
-personalised addressed cards that is plausibly **40–90 responses** — which would multiply the
-current 46-strong warm list several times over in a single wave. That is the business case.
+**⚠ Expected response — this section was WRONG and is corrected here (2026-08-08).**
+
+The original text read *"ANA/DMA average ~4.4%; house lists 5–9%, cold 2–4.4%; VDP personalisation
+adds a 2–3× lift … plausibly 40–90 responses"*. Every one of those numbers failed verification.
+The 4.4% does not appear in the ANA report it is attributed to; the report **disclaims itself** as
+benchmark data and its direct-mail cells rest on N=25–26 self-reports. The "2–3× VDP lift" has no
+retrievable primary source. See `02_Research/02_Web/W1-direct-mail-evidence-base.md`, and
+`07_Focus/lead-funnel-audit-2026-08/00-LEAD-FUNNEL-VERDICT.md` §4.6, which retracted it first.
+
+**What replaces it** — JICMAIL, the UK joint industry committee, ~5,000 campaigns measured by
+matchback / unique code / test-and-control, FY2025:
+
+| List | Response | ROI |
+|---|---|---|
+| **Cold addressed** — what wave 1 is | **0.9%** | £3.20 per £1 |
+| Warm / house list | 7.2% | £9.00–£11.50 |
+| Door drop (unaddressed) | 0.5–0.6% | — |
+
+**On 1,000 cold addressed pieces, expect ~9 responses, not 40–90.** At ~$1.10–1.90 postage that is
+roughly **$120–210 per response before print**. The business case has to survive that number, or the
+programme has to stop being cold — which is exactly what triggering off `/off-market` engagement does.
+
+Two findings materially improve those odds and both are [PRIMARY]: **repeat mailings to the same
+addresses run 2.5× the response of one-off campaigns (+37% ROI)**, and mail carrying *the
+recipient's own record* moves behaviour ~10× more than generic mail (Gerber & Green: +4.9pp vs
+<0.5pp). Fields' asset is precisely a per-address record, which is the one lever the evidence
+actually supports.
 
 ## 6. Measurement design — the part that matters most
 

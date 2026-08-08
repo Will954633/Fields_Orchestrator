@@ -15,7 +15,8 @@ built to survive interruption:
 Run: env -u CLAUDECODE python3 scripts/samantha/brain1_annotate.py
 Cron relaunch (auto-resume): */10 * * * * /home/fields/brain1_build/run.sh
 """
-import os, re, sys, json, glob, time, fcntl, subprocess
+import os, re, sys, json, glob, time, fcntl, argparse, threading, subprocess
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 BASE = "/home/fields/brain1_build"
@@ -86,8 +87,13 @@ def build_prompt(units):
 
 
 def call_haiku(prompt, timeout=300):
+    # ANTHROPIC_API_KEY must go too, not just the nested-session vars: when it is
+    # present the CLI prefers the metered API over the Max OAuth login and exits 1
+    # ("connectors are disabled because ANTHROPIC_API_KEY ... takes precedence").
+    # Same strip list as max_client.py — keep them in step.
     env = {k: v for k, v in os.environ.items()
-           if k not in ("CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SSE_PORT")}
+           if k not in ("CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SSE_PORT",
+                        "ANTHROPIC_API_KEY")}
     r = subprocess.run(
         ["claude", "-p", "--model", MODEL],
         input=prompt, capture_output=True, text=True, timeout=timeout, env=env,
@@ -104,7 +110,31 @@ def extract_json_array(s):
     return json.loads(s[a:b + 1])
 
 
+def _rebase(base):
+    """Point every path constant at a different build dir (used by the YouTube feed,
+    which annotates into its own annotations file and is merged at graph time)."""
+    global BASE, BATCH_DIR, OUT, DONE, FAIL, LOG, LOCK, COMPLETE
+    BASE = base
+    BATCH_DIR = f"{BASE}/batches"
+    OUT = f"{BASE}/annotations.jsonl"
+    DONE = f"{BASE}/done_batches.txt"
+    FAIL = f"{BASE}/failures.txt"
+    LOG = f"{BASE}/brain1_annotate.log"
+    LOCK = f"{BASE}/.lock"
+    COMPLETE = f"{BASE}/COMPLETE"
+    os.makedirs(BASE, exist_ok=True)
+
+
 def main():
+    ap = argparse.ArgumentParser(description="Annotate brain-1 transcript batches.")
+    ap.add_argument("--base", default=BASE,
+                    help=f"build directory holding batches/ (default {BASE})")
+    ap.add_argument("--workers", type=int, default=1,
+                    help="batches annotated concurrently (each is one `claude -p` call)")
+    args = ap.parse_args()
+    workers = max(1, args.workers)
+    if args.base != BASE:
+        _rebase(args.base)
     os.makedirs(BATCH_DIR, exist_ok=True)
     lockf = open(LOCK, "w")
     try:
@@ -115,41 +145,53 @@ def main():
     lockf.write(str(os.getpid()))
     lockf.flush()
 
-    batches = sorted(glob.glob(f"{BATCH_DIR}/b_*.txt"))
+    # Original corpus batches are b_*.txt; the YouTube feed writes yt_*.txt into
+    # its own base. Globbing only b_* made a run over the YouTube base report
+    # "COMPLETE — all 0 batches annotated" — a clean exit having done nothing,
+    # which is the exact failure CLAUDE.md rule 7b exists to stop.
+    batches = sorted(glob.glob(f"{BATCH_DIR}/b_*.txt") + glob.glob(f"{BATCH_DIR}/yt_*.txt"))
+    if not batches:
+        raise SystemExit(f"no batch files in {BATCH_DIR} — nothing to annotate")
     done = set()
     if os.path.exists(DONE):
         done = set(l.strip() for l in open(DONE) if l.strip())
     todo = [b for b in batches if os.path.basename(b) not in done]
     log(f"START — {len(done)}/{len(batches)} batches already done, {len(todo)} to do")
 
-    for path in todo:
+    def annotate_one(path):
+        """Returns (name, recs|None). Never raises — a dead batch must not kill the run."""
         name = os.path.basename(path)
-        units = parse_batch(path)
-        prompt = build_prompt(units)
-        recs = None
+        prompt = build_prompt(parse_batch(path))
         for attempt in (1, 2):
             try:
-                out = call_haiku(prompt)
-                recs = extract_json_array(out)
+                recs = extract_json_array(call_haiku(prompt))
                 if not isinstance(recs, list) or not recs:
                     raise ValueError("empty/invalid array")
-                break
+                return name, recs
             except Exception as e:
                 log(f"  {name} attempt {attempt} failed: {str(e)[:160]}")
                 time.sleep(5)
-        if recs is None:
-            with open(FAIL, "a") as f:
-                f.write(name + "\n")
-            log(f"  {name} SKIPPED after retries")
-            continue
-        with open(OUT, "a") as f:
-            for rec in recs:
-                rec["_batch"] = name
-                f.write(json.dumps(rec, ensure_ascii=False) + "\n")
-        with open(DONE, "a") as f:
-            f.write(name + "\n")
-        done.add(name)
-        log(f"  {name} OK — {len(recs)} units ({len(done)}/{len(batches)} done)")
+        return name, None
+
+    # Each call is a `claude -p` subprocess — I/O-bound on the API, so workers cost
+    # almost no local CPU. Serial, a 228-batch YouTube backfill takes ~10 hours.
+    write_lock = threading.Lock()
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        for name, recs in pool.map(annotate_one, todo):
+            with write_lock:
+                if recs is None:
+                    with open(FAIL, "a") as f:
+                        f.write(name + "\n")
+                    log(f"  {name} SKIPPED after retries")
+                    continue
+                with open(OUT, "a") as f:
+                    for rec in recs:
+                        rec["_batch"] = name
+                        f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+                with open(DONE, "a") as f:
+                    f.write(name + "\n")
+                done.add(name)
+                log(f"  {name} OK — {len(recs)} units ({len(done)}/{len(batches)} done)")
 
     remaining = [b for b in batches if os.path.basename(b) not in done]
     if not remaining:
