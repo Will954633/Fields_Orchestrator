@@ -23,9 +23,14 @@ The rule is never *deleted*. It is *stranded*. That is why monitoring built arou
 | 4 | Unit-address exclusion | route: `address \|\| complete_address \|\| ADDRESS_STANDARD`<br>generator: `address` only | both shipped, never compared | **4,559 URLs** in the sitemap serving `noindex, nofollow` |
 | 5 | Effective address | `off-market.$slug`: 3-field chain<br>`property.$id`: `address \|\| full_address` | both shipped, never compared | **115 sitemap URLs** serving 200 + "Property Not Found" + noindex for documents that resolved fine |
 | 6 | Multi-lot suppression | detector discovered candidates via a query containing **its own output flag** | — | Self-cancelling oscillator: ~390 pages flipped `index`↔`noindex` nightly for 7 days |
+| 7 | The canonical URL | route `meta()` (SSR, correct) | a hydrated `useEffect` calling `updateSeoMeta({url})` | `/market-intelligence/Varsity-Lakes` declared itself a duplicate of its own `/sell-now` tab and left the index. Google honoured our declaration exactly; the declaration was accidental |
 
-Five of six are **one policy expressed in two places that drifted**. The sixth is the
-same disease in one component: a rule whose input included its own output.
+Six of seven are **one policy expressed in two places that drifted**. The other (#6) is
+the same disease inside one component: a rule whose input included its own output.
+
+\#7 is the purest form of it. SSR owns the canonical; legacy client code, written when
+this page was a client-rendered SPA, still believed it owned the canonical too. Both
+were internally consistent. The later writer won, and it was wrong.
 
 Note #4 and #5 are the *same field-chain question* answered differently by three
 consumers. That is how a single ambiguity produced 4,674 broken URLs.
@@ -47,6 +52,10 @@ Rule 7b already says a heartbeat must assert an outcome. The lesson these six ad
 Stated as properties of the *site*, not of any component. Anything that can be phrased
 this way can be enforced by comparison rather than by remembering.
 
+0. **A URL has exactly ONE canonical authority.** Route/server metadata defines it.
+   Hydrated components may not independently rewrite `<link rel="canonical">` — Google's
+   own guidance is to put the canonical in the HTML source and not let JavaScript change
+   it. (#7)
 1. **One canonical address identity per property entity.** Every consumer resolves an
    address the same way. → `effectivePropertyAddress()` in `db.server.ts`, now the sole
    definition, used by `property.$id.tsx` and `off-market.$slug.tsx`. It deliberately
@@ -63,6 +72,7 @@ this way can be enforced by comparison rather than by remembering.
 
 | Invariant | Enforced? | By what |
 |---|---|---|
+| 0 — one canonical authority | **No** | `updateSeoMeta` still *accepts* a `url`; three other callers pass one. Removing `setCanonical` from it, or a lint rule, would enforce it |
 | 1 — one address identity | **Partly** | Shared function exists; nothing *prevents* a new consumer writing its own chain |
 | 2 — sitemap URL healthy | **Yes** | `scripts/sitemap_robots_invariant.py`, nightly 07:00 |
 | 3 — eligible ⇒ in sitemap | **Partly** | Same monitor, invariant B — sampled, and only for URLs GSC already knows |
@@ -109,7 +119,13 @@ So the test for any future SEO check:
 
 ## Open
 
-- Invariants 4 and 5 have no enforcement.
+- Invariants 0, 4 and 5 have no enforcement.
+- **A canonical tag alone does not resolve duplication.** Measured 2026-08-08: the bare
+  `/market-intelligence/Robina` hub is *byte-identical* to its `/sell-now` tab (15,910
+  chars each, 99% token overlap, identical opening). Google treats canonicals as a
+  signal and may still pick its own when pages are genuinely duplicate, so #7's fix is
+  necessary but not sufficient — the hub needs distinct content or a deliberate
+  redirect. The other tabs are genuinely distinct (35-46% overlap).
 - `effectivePropertyAddress()` is shared but not *mandatory* — a lint rule banning
   raw `.address ||` chains outside `db.server.ts` would close it.
 - `system_monitor.offmarket_entity_diagnostics` — 64 unresolved same-address groups.
