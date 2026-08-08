@@ -91,12 +91,21 @@ for the whole book instead of 103 addresses.** That is the single highest-levera
 - It refers to "the consultant-signed final range" — a contact promise, which this page's central
   claim rules out.
 
-### ⚠ Unresolved product decision, now load-bearing
+### ~~Unresolved product decision~~ — RETRACTED, there is no payment gate
 
-The live deck is a **gated $15 unlock**; V4 gives the answer away. The answer block, already built,
-renders the range for free. **The port cannot stay silent on this much longer** — it is a decision
-about the business model, not the rendering, and it should be made deliberately rather than settled
-by whichever component ships first.
+I recorded here, three times, that the live deck is a "gated $15 unlock" that V4 would conflict with.
+**That was wrong.** Will: *"we removed that $15 gated lock version."*
+
+Verified in the code: `OffMarketPage.tsx` forces `arm = "ladder_dark"` for every visitor and returns
+`<OffMarketDeck>` at line 212. **`OffMarketDeck.tsx` contains zero payment references.** The
+`square-payment` fetch at line 471 sits BELOW that early return, in the `minimal`/`rich` arms, which
+are reachable only via `?arm=` for side-by-side review.
+
+I read a stale header comment (`// LIVE (2026-07-23)…`, describing the A/B era) and an unreachable
+code path, and raised it as a blocking business decision without checking whether the code ran.
+
+⚠ **The lesson for the rest of this port: in this file, comments describe history, not behaviour.**
+Trace the actual render path before treating anything in `OffMarketPage.tsx` as live.
 
 
 
