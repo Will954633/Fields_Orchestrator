@@ -62,12 +62,36 @@ carries far more method than a 40-second clip.
 Then annotate and fold into the graph:
 
 ```bash
-python3 scripts/samantha/brain1_annotate.py --base /home/fields/brain1_yt
+python3 scripts/samantha/brain1_annotate.py --base /home/fields/brain1_yt --workers 8
+
+# ⚠ BACK UP FIRST. brain1_graph rebuilds the package from EXACTLY the files you
+# name and has no memory of the previous build, so omitting a source silently
+# shrinks the corpus while exiting 0.
+cp /home/fields/brain1_build/package.json /home/fields/brain1_build/package.bak.json
+
+# ⚠ ALL FOUR SOURCES. Naming only brain1_build + the YouTube file cut the graph
+# from 6,400 to 4,593 units and 18.6 MB to 12.9 MB on 2026-08-08, reporting
+# success — see fix-history [BRAIN1-MERGE-SOURCE-LOSS].
 python3 scripts/samantha/brain1_graph.py \
-    --in /home/fields/brain1_build/annotations.jsonl \
-    --merge /home/fields/brain1_yt/annotations.jsonl \
+    --in    /home/fields/brain1_build/annotations.jsonl \
+    --merge /home/fields/brain3_build/annotations_public.jsonl \
+            /home/fields/brain_drive/annotations_b1.jsonl \
+            /home/fields/brain1_yt/annotations.jsonl \
     --outdir /home/fields/brain1_build
+
+# then CHECK IT GREW — a shrinking graph is the failure mode, and it looks identical to success
+python3 -c "import json; d=json.load(open('/home/fields/brain1_build/graph_stats.json')); print(d['n_units'])"
 ```
+
+**The four sources, and what each contributes:** `u####` 3,071 coaching (`brain1_build`) ·
+`k####` 3,017 KB (`brain3_build/annotations_public.jsonl`) · `i#########` 312 Drive
+(`brain_drive/annotations_b1.jsonl`) · `u9#####` 2,264 YouTube (`brain1_yt`).
+
+⚠ **Annotation failure is silent by default.** A 10-unit batch whose JSON does not parse used to be
+written to a `failures.txt` nothing reads — 77 of 228 batches (756 units) vanished that way on the
+first run while it exited 0. `brain1_annotate.py` now falls back to **one unit at a time** after two
+whole-batch attempts, which recovered 1,522 → 2,264 units. Check the log for `per-unit recovered`
+and `unrecoverable`.
 
 `brain1_annotate.py` gained a `--base` flag for this (it was hard-wired to one build dir). The
 YouTube units annotate into their **own** `annotations.jsonl` and are merged only at graph time, so
@@ -134,6 +158,15 @@ an empty result where input existed is not.
 ⚠ The transcripts are **auto-captions**: no reliable punctuation, and names are frequently mangled.
 Fine for retrieval and method-mining; clean anything before quoting it publicly.
 
-⚠ The extraction is keyword-driven, so it is **recall-biased toward the words we thought of**. It is
-a shortcut to usable findings while the full annotate-and-merge runs; it is not a substitute for
-querying the merged graph.
+⚠ The extraction is keyword-driven, so it is **recall-biased toward the words we thought of**. It
+was the shortcut used to produce `YT-FINDINGS.md` before the graph existed. **The graph now exists —
+query it instead:**
+
+```bash
+python3 scripts/samantha/brain1_deep.py "your question" --library "BLAC SALT (AU)"
+python3 scripts/samantha/brain1_deep.py "your question" --library "eXp Realty (US)"
+```
+
+Isolating one library is the point: it is the only way to tell whether a finding is Australian or
+American, and to stop 2,614 units of Tom Panos crowding out 674 units of the market we actually
+operate in.
