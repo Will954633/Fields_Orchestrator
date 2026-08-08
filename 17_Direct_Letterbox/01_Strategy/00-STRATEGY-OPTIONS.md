@@ -206,9 +206,39 @@ dispute risk with the appointed agent is an open legal question** (W4, question 
 before piece 1. The safer variant mails only on **sold** and **withdrawn** events, which loses the
 live-loop mechanic but removes the conflict entirely.
 
+**⭐ The upgrade that makes this the strongest option, not just the most interesting.**
+
+Brain 1's sequencing query surfaced the cleanest micro-conversion in the whole corpus, and it is
+built for exactly this structure:
+
+> *"if they say 'I'm going to come to the open', you can then say, **'would you like me to let you
+> know what it sells for?'**"* (u1730)
+
+**Put that opt-in on piece 1.** *"We'll write to you when 27 Smith Street sells, and tell you what
+it means for yours."* One yes, no phone number, no email — just a tick and a return path.
+
+That single move changes the economics and the legal position at once:
+
+| Before | After the opt-in |
+|---|---|
+| Cold list — **0.9%** response | **Solicited** — the warm band is **7.2%**, an 8× swing |
+| APP 7.3 "impracticable to obtain consent" — the weakest link in the whole legal analysis | **Consent obtained**, in writing, per address |
+| WRRA / POA "unsolicited" addressing paradox | Largely dissolves — they asked |
+| Endowment framing asserted | *Their* subscription, actually |
+
+It also matches the corpus's other finding — **that the documented print sequence is
+event-triggered, not calendar-triggered** — and Fields' own measured reality that the public will
+not surrender a phone or an email but *will* engage with an address. Pieces 2–4 then arrive because
+the recipient **asked** for them, which is the only version of this programme that is unambiguously
+welcome.
+
+**This makes Option 3 the cheapest available route from cold to warm**, and warm is the single
+largest lever in the entire evidence base.
+
 **Kill criterion.** Six events (~720 pieces, ~$1,800) with a matched holdout of streets that get
-nothing. If piece 4 does not out-scan pieces 1–3 by a clear margin, the payoff structure is not
-working and the whole thesis is wrong.
+nothing. Two things to read: the **opt-in rate on piece 1** (that is the real number — it decides
+whether the rest of the programme is solicited or not), and whether **piece 4 out-scans pieces 1–3.**
+If piece 4 does not, the payoff structure is not working and the thesis is wrong.
 
 ---
 
@@ -370,9 +400,17 @@ The reasoning is short:
   the page that touches that variable.
 - **It is also the cheapest thing that can produce a readable result** — ~$3,800 and eight weeks
   against ~$18,000 and six months.
-- **Option 3 is the best idea in the folder and the least proven.** Prototype it on **sold and
+- **Option 3 has been upgraded and is now arguably the lead, not the prototype.** With the
+  *"would you like me to let you know what it sells for?"* opt-in on piece 1, it becomes the
+  **cheapest route from cold to warm that exists on this page** — and warm is an 8× swing. It also
+  converts the programme from unsolicited to solicited, which repairs the weakest link in the legal
+  analysis (APP 7.3 impracticability) rather than arguing around it. Prototype it on **sold and
   withdrawn events only**, which sidesteps the appointed-agent conflict entirely while keeping the
-  mechanic that makes it interesting.
+  mechanic intact.
+- **Note what Options 1 and 3 have in common, because it is the actual strategy:** both work by
+  making the list warmer rather than bigger. Option 1 harvests warmth that organic search is already
+  generating for free; Option 3 manufactures it with a single tick-box. Everything else on this page
+  spends money mailing strangers.
 - **Option 2 stays available.** Nothing about starting warm forecloses the farm; the farm forecloses
   nothing either. But spending $18,000 on the weakest-evidenced option while a free warm list
   accumulates untouched is the wrong order.

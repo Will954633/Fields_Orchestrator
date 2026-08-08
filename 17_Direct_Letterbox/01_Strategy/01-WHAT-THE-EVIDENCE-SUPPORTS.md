@@ -187,6 +187,38 @@ trash can… the other one is just like every door delivered one-page glossy rea
 combination, not in isolation."* And what mail does is warm, not close: *"Prospecting does not get
 you listings, it gets you contacts that one day will become a listing."*
 
+### ⭐ The weekly/monthly conflict resolves — they are different rungs, not different opinions
+
+Brain 1's cadence query settles what looked like a straight contradiction with the controlled
+evidence. **The doctrine's "weekly" is a *passive, cheap* touch. Its personal, expensive touch is
+quarterly.** The two run side by side:
+
+> *"Every single one of them does a weekly email. Every single one of them does a call every
+> quarter."* (u2562, repeated u1511, u2726, of ten agents writing 600+ a year)
+
+The weekly rung is an email or a **25-cent unaddressed letterbox flyer**. The quarterly rung is a
+phone call or a market review. **Nothing in the corpus advocates weekly *addressed, personalised*
+mail** — and, notably, *"fortnightly is effectively absent; the corpus skips the fortnight."*
+
+So there is no conflict to resolve. A ~$2.50 personalised addressed piece is not the weekly rung; it
+sits between the two, and **the corpus's own most concrete annual total agrees**: *"nine points of
+contact per year and then at the end of the year I give them all a gift"* (u0370) — **a touch every
+~6 weeks.** That lands inside the fortnightly-to-monthly band the controlled evidence supports, from
+a completely different direction.
+
+**The genuine two-source corroboration in the corpus is a touch *ladder*, not a frequency:**
+*"9 to 12 contacts, people start to become your friend. 18 to 24 contacts… you almost start to
+become extended family"* — stated independently by Panos (u0495, u1202) **and** Steinwede (u0073).
+Two coaches agreeing is not data, but it is the only place in this corpus where two separate
+doctrines land on the same number.
+
+⚠ **And one direct collision to record.** Brain 1 asserts *"80% of sales are made from the fifth to
+the twelfth contact"* (u1229, u3034) as a load-bearing claim. **The web research traced that to a
+1942 survey of fewer than forty Long Island salesmen, about in-person sales calls** — and the
+successor organisation it is credited to now publishes it as an example of a statistic you should
+not trust. Where the corpus and the controlled evidence collide, the corpus loses. This is the
+clearest instance in the whole project.
+
 **Frequency to the same list beats reach — stated directly, and it matches JICMAIL.** *"You are
 better off doing 5,000 letterbox drops a week to the same people each week than just doing one
 person once in a month and doing 20,000 in a whole area."* That is the same shape as JICMAIL's
