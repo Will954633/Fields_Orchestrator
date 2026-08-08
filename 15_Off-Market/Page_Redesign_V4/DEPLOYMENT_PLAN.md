@@ -64,6 +64,42 @@ report builder across the book, or make the React port read `valuation_data` dir
 
 ## Phase 2 — the port
 
+### Progress
+
+| # | piece | status |
+|---|---|---|
+| 0 | loader exposes `valuation` **with provenance** | ✅ `8828ac45` |
+| 1 | answer block | ✅ `ccb099b6` |
+| 2 | reliability section | ✅ shipped |
+| 3 | comparables — **reuse `ValuationEvidence.tsx`** | ⚠ needs an adapter, see below |
+| 4–8 | remainder | not started |
+
+### ⚠ The comparables adapter — the one real surprise
+
+`ValuationEvidence.tsx` takes a single `evidence` prop, so reuse is clean. But that payload is
+written by `slot_resolver.valuation_evidence_from_engine()` into the **property report document**,
+and only **103** of those exist against ~14,600 pages.
+
+The resolver's own docstring says it "reads straight off `valuation_data` — no recomputation".
+**So the transform is pure, and porting it to a TypeScript function in the loader unlocks a
+1,068-line component (photo strips, per-feature adjustments, weight %, verified flags, evidence map)
+for the whole book instead of 103 addresses.** That is the single highest-leverage remaining task.
+
+⚠ Two things inside that component need handling when it is adopted:
+- It rounds the working range to the nearest $100k "so the band reads as a considered estimate".
+  Our band is a **measured 80% band** and rounding it changes what it means. Decide deliberately.
+- It refers to "the consultant-signed final range" — a contact promise, which this page's central
+  claim rules out.
+
+### ⚠ Unresolved product decision, now load-bearing
+
+The live deck is a **gated $15 unlock**; V4 gives the answer away. The answer block, already built,
+renders the range for free. **The port cannot stay silent on this much longer** — it is a decision
+about the business model, not the rendering, and it should be made deliberately rather than settled
+by whichever component ships first.
+
+
+
 **2.1 ⚠ Decide the data contract first.** V4's Python renderer reads `property_reports.cards`. The
 live deck reads Mongo directly. Porting V4 as-is would make a 103-document collection a hard
 dependency for 14,600 pages.
