@@ -1082,10 +1082,15 @@ header.top.stuck .stickyaddr{opacity:1}
 .centre{margin-top:20px;opacity:0;animation:fade .6s 1.5s forwards}
 .centre b{font-family:var(--serif);font-size:1.16rem;font-weight:600}
 .basis{opacity:0;animation:fade .6s 1.8s forwards}
+/* ⚠ The hinge must arrive AFTER the number it refers to. Added to the staged
+   reveal 2026-08-08 — it was rendering at full opacity from the first frame,
+   so the reader met "which sales pulled the answer to where it sits" a full
+   second before seeing the answer. */
+.hinge{opacity:0;animation:fade .6s 2.1s forwards}
 @keyframes fade{to{opacity:1}}
 @media(prefers-reduced-motion:reduce){
   .rangeline i{animation:none;transform:scaleX(1)}
-  .rangefig,.centre,.basis{animation:none;opacity:1}
+  .rangefig,.centre,.basis,.hinge{animation:none;opacity:1}
 }
 
 /* controls */
@@ -1233,6 +1238,11 @@ details .body{padding-top:12px;font-size:.94rem;color:var(--ink-2)}
 .planout{margin-top:6px;padding:18px;border-left:2px solid var(--accent);background:rgba(0,0,0,.02)}
 .planout h3{margin:0 0 8px}
 .planprog{font-size:.86rem;color:var(--ink-2)}
+/* The hinge out of the answer and into the evidence. Deliberately larger than
+   body copy and given air on both sides — it is a turn in the argument, not a
+   caption. */
+.hinge{margin:26px 0 4px;font-size:1.16rem;line-height:1.4;font-weight:600;
+       padding-top:20px;border-top:1px solid var(--line-2)}
 .correctbox{margin:22px 0;padding:20px;border:1px solid var(--line);border-radius:4px}
 .choices.plainc{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
 .choices.plainc .choice{font-size:.86rem;padding:7px 13px}
@@ -1958,15 +1968,32 @@ def render(slug, proto="full", version=LATEST):
             listed = (", ".join(gaps[:-1]) + " and " + gaps[-1]) if len(gaps) > 1 else gaps[0]
             add(f'<p>We are also missing {E(listed)} from the record for this address \u2014 which '
                 f'you can correct further down.</p>')
+        # ⚠ The measured error belongs HERE, against the number, not only two
+        # sections later under its own heading. A reader who takes the range and
+        # leaves should have been told how wrong it has been — the figure and its
+        # track record are one claim, and separating them lets the number travel
+        # without it.
+        if acc:
+            # The sample is named a paragraph earlier; naming it twice in one
+            # section reads as padding.
+            add(f'<p><b>Across those same sales, the centre of the estimate was out by '
+                f'{acc["mae"]}% on average.</b> Half the time it was within {acc["median"]}%. '
+                f'On a home at this value {acc["mae"]}% is about '
+                f'{E(money(round(v["point"] * acc["mae"] / 100 / 10_000) * 10_000))} \u2014 which '
+                f'is roughly the size of what a valuer standing inside would be resolving.</p>')
         # ⚠ The closing line must match the method. On a fallback range the sales
         # did NOT pull the answer anywhere, and saying they did rebuilds the very
         # contradiction fixed an hour ago, in new words.
+        # ⚠ This is the page's main hinge — it turns "here is a number and its
+        # limits" into "come and check it", and it is what carries the reader
+        # into the evidence. It was set as `.fine`, the smallest type on the
+        # page, which is the opposite of the job it does.
         if acc:
-            add('<p class="fine">What we can do is show you exactly which sales pulled the answer '
-                'to where it sits.</p>')
+            add('<h3 class="hinge">What we can do is show you exactly which sales pulled the '
+                'answer to where it sits.</h3>')
         else:
-            add('<p class="fine">What we can still do is show you the strongest sales near this '
-                'home, and what each one adjusts to.</p>')
+            add('<h3 class="hinge">What we can still do is show you the strongest sales near '
+                'this home, and what each one adjusts to.</h3>')
         add('</div>')
         if acc:
             add('<div class="controls"><a class="btn" href="#comps">See the strongest '
