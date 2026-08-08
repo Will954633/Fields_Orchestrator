@@ -145,6 +145,62 @@ Three rules that follow from it:
 
 **And why 7b exists:** on 2026-08-07 an audit found three live jobs that had a heartbeat and were *still* invisible, because each reported success while doing nothing. `build_listed_property` recorded `"queue drained"` through **11 consecutive total failures** for a week (`[BUILDER-ENV-EXPORT-GAP]`). `google_indexing submit-new` submitted **0 URLs on 9 straight nights — 757 dropped** — discarded the API error, and advanced its watermark each time so every failed batch became permanently unrecoverable (`[INDEXING-SILENT-ZERO]`). `offmarket_intel_poller` swallowed sub-resolver exceptions, wrote `status: "done"`, cleared the error field and never retried, leaving 231 public deck pages permanently missing content the database claims completed. Rule 7 alone did not catch any of the three. 7b is the part that does.
 
+### 8. Never Infer Absence From a Guessed Field Name
+
+**A query returning zero is evidence about the name you typed, not about the data.**
+Before writing *or reporting* any claim that data is missing — "no aerials", "nothing has
+coordinates", "that field is empty" — look at what the documents actually contain.
+
+```bash
+# START HERE. Searches every database, and expands your word into the vocabulary
+# THIS schema uses (aerial -> satellite, photo -> image, coords -> georeference).
+python3 scripts/db_fields.py --find aerial
+
+# Is this exact path real? Prints fill count; on zero, prints what DOES exist.
+python3 scripts/db_fields.py Gold_Coast robina --check aerial_image_url
+
+# Every field in one collection, with fill counts, scoped to live listings.
+python3 scripts/db_fields.py Gold_Coast robina --grep image \
+    --query '{"listing_status": "for_sale"}'
+```
+
+Rules that follow:
+
+1. **Never put a field name into a query from memory or intuition.** Confirm it first.
+   Plausible-sounding names — `aerial_image_url`, `image_url`, `latitude` — are exactly
+   the ones that return zero while the data sits there under another name.
+2. **Do not grep the index for your own word and stop.** `grep -i aerial
+   SCHEMA_PATHS.tsv` returns **one irrelevant hit**; the 14,531 aerials live under
+   `satellite_analysis.satellite_image_url`. A literal search for your own guess just
+   confirms your own assumption. Use `--find`, which expands the vocabulary.
+3. **Absence from `SCHEMA_SNAPSHOT.md` proves nothing.** That file is **top-level fields
+   only**. Nested paths — `satellite_analysis.satellite_image_url`,
+   `transactions[].price` — are in `SCHEMA_PATHS.tsv`, one line each, all depths, with a
+   fill count. Both are regenerated daily by `generate_schema_snapshot.py`.
+4. **Report a zero as a wrong name, not as missing data.** Say "there is no field called
+   X — the related paths are A, B, C". Never "this data does not exist" — that is a
+   claim you have not tested.
+5. **Scope the sample.** `Gold_Coast.robina` is ~12,000 documents, mostly cadastral
+   stubs; a field on every live listing still shows single-digit fill against the whole
+   collection. Low fill is not absence either — pass `--query`.
+
+**Why this is mandatory:** on 2026-08-09 a query for `aerial_image_url` returned zero and
+was reported as "no aerials exist in the database". **14,531 documents had one** — the
+guessed name had simply never existed. The safeguard that should have caught it,
+`SCHEMA_SNAPSHOT.md`, could not: it sampled the **first 5 documents** of each collection
+(the oldest, all one shape) and walked only the top level, so it listed **75 fields for
+`Gold_Coast.robina`, where live listings carry 233 top-level keys and 2,523 total paths**
+— and the omission was biased toward precisely the enrichment fields being asked about.
+Both halves are fixed now (`shared/doc_shape.py`: random `$sample`, full recursion
+through nested objects and arrays, a fill count on every path), but tooling only helps if
+it runs *before* the conclusion is written. See `logs/fix-history/2026-08-09.md`
+`[FIELD-NAME-GUESS-FALSE-ABSENCE]`.
+
+This is Rule 7b applied to reads: **an empty result must assert an outcome, not merely
+fail to throw.** "No documents matched" and "I asked the wrong question" produce the
+identical output, and only one of them is an answer.
+
+
 ---
 
 ## The Business

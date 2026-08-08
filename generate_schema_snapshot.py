@@ -1,145 +1,221 @@
 #!/usr/bin/env python3
 """
 generate_schema_snapshot.py
-Samples all Azure Cosmos DB (MongoDB API) collections and writes a
-comprehensive SCHEMA_SNAPSHOT.md that Claude Code reads at session start.
-Run daily via cron.
+Inventories every MongoDB collection and writes two artifacts:
+
+  SCHEMA_SNAPSHOT.md  — readable orientation: top-level fields + fill counts.
+  SCHEMA_PATHS.tsv    — the complete, greppable path index (all depths).
+
+Run daily via cron (03:00 AEST).
+
+WHY THE REWRITE (2026-08-09): the previous version sampled each collection with
+`collection.find({}).limit(5)` — the five OLDEST documents, not a random draw —
+and walked only the top level, capping nested objects at 10 subkeys. In a mixed
+collection like `Gold_Coast.robina` (12,092 docs: ~40K cadastral stubs plus a
+few hundred enriched listings) the first five documents are all one shape, so
+the file listed 75 fields where live listings carry 233 top-level keys and 2,523
+total paths. The omission was biased toward exactly the enrichment fields people
+ask about. A field could be absent from this file and present on thousands of
+documents, which is how "no aerials exist" got reported for a database holding
+14,531 of them. See logs/fix-history/2026-08-09.md.
+
+The fix is `shared/doc_shape.py`: random `$sample`, full recursion through
+nested objects and arrays, and a FILL COUNT on every path so "listed" and
+"present on 1 of 300 documents" are distinguishable.
 """
 
 import os
 import sys
+import time
 from datetime import datetime, timezone
-from collections import defaultdict
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 from pymongo import MongoClient
 
-CONN = os.environ.get('COSMOS_CONNECTION_STRING')
-OUTPUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'SCHEMA_SNAPSHOT.md')
-SAMPLE_SIZE = 5
+from shared.doc_shape import sample_shape, type_name
+from shared.env import load_env
+from scripts.job_status import job_run
+
+load_env()
+
+CONN = os.environ.get("COSMOS_CONNECTION_STRING")
+ROOT = os.path.dirname(os.path.abspath(__file__))
+OUTPUT_MD = os.path.join(ROOT, "SCHEMA_SNAPSHOT.md")
+OUTPUT_TSV = os.path.join(ROOT, "SCHEMA_PATHS.tsv")
+
+SAMPLE_SIZE = 300
 
 TARGET_DBS = [
-    'Gold_Coast_Currently_For_Sale',
-    'Gold_Coast_Recently_Sold',
-    'Gold_Coast',
-    'Target_Market_Sold_Last_12_Months',
-    'property_data',
-    'system_monitor',
+    "Gold_Coast_Currently_For_Sale",
+    "Gold_Coast_Recently_Sold",
+    "Gold_Coast",
+    "Target_Market_Sold_Last_12_Months",
+    "property_data",
+    "system_monitor",
 ]
 
-def infer_type(value):
-    if value is None:
-        return 'null'
-    if isinstance(value, bool):
-        return 'bool'
-    if isinstance(value, int):
-        return 'int'
-    if isinstance(value, float):
-        return 'float'
-    if isinstance(value, list):
-        if value:
-            return f'array[{infer_type(value[0])}]'
-        return 'array[]'
-    if isinstance(value, dict):
-        return 'object'
-    return type(value).__name__
+SUBURB_KEYWORDS = [
+    "burleigh", "robina", "varsity", "coolangatta", "carrara", "merrimac",
+    "mudgeeraba", "reedy", "worongary", "palm_beach", "miami", "mermaid",
+]
 
-def get_schema(collection, sample_size=SAMPLE_SIZE):
-    docs = list(collection.find({}, {'_id': 0}).limit(sample_size))
-    if not docs:
-        return {}, {}, {}
-    field_types = defaultdict(set)
-    for doc in docs:
-        for key, val in doc.items():
-            field_types[key].add(infer_type(val))
-    nested = {}
-    for doc in docs:
-        for key, val in doc.items():
-            if isinstance(val, dict) and key not in nested:
-                nested[key] = list(val.keys())[:10]
-    return dict(field_types), nested, docs[0]
+HEADER = """# Database Schema Snapshot
 
-def format_example(doc, max_fields=8):
-    lines = []
-    for i, (k, v) in enumerate(doc.items()):
-        if i >= max_fields:
-            lines.append(f'  ... (+{len(doc) - max_fields} more fields)')
-            break
-        if isinstance(v, str) and len(v) > 80:
-            v = v[:80] + '...'
-        if isinstance(v, list) and len(v) > 3:
-            v = v[:3] + [f'...({len(v)} total)']
-        lines.append(f'  {k}: {repr(v)}')
-    return '\n'.join(lines)
+**Generated:** {now}
+**Source:** {host}
+**Script:** `generate_schema_snapshot.py` (daily via cron, 03:00 AEST)
+**Sample:** random `$sample` of up to {sample} documents per collection
 
-def main():
-    if not CONN:
-        print("ERROR: COSMOS_CONNECTION_STRING not set", file=sys.stderr)
-        sys.exit(1)
-    client = MongoClient(CONN, serverSelectionTimeoutMS=10000)
-    now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
-    lines = [
-        '# Database Schema Snapshot',
-        '',
-        f'**Generated:** {now}  ',
-        f'**Source:** Azure Cosmos DB (MongoDB API)  ',
-        '**Script:** `generate_schema_snapshot.py` (runs daily via cron)',
-        '',
-        '> Claude: Read this file before writing ANY MongoDB query. Use exact field names',
-        '> shown here. If a field is not listed, sample the collection first.',
-        '',
-        '---',
-        '',
-    ]
+> ## Claude: this file is ORIENTATION, not the authority.
+>
+> It lists **top-level fields only**, with a fill count (`n/N` = documents in the
+> sample carrying that field). Nested paths are NOT here — they are in
+> `SCHEMA_PATHS.tsv`, one path per line, all depths, every collection:
+>
+> ```bash
+> grep -i aerial SCHEMA_PATHS.tsv          # does anything about X exist, anywhere?
+> ```
+>
+> **A query returning zero is not evidence a field is absent.** Before writing or
+> reporting any negative result, probe the live documents:
+>
+> ```bash
+> python3 scripts/db_fields.py Gold_Coast robina --grep aerial
+> python3 scripts/db_fields.py Gold_Coast robina --check aerial_image_url
+> ```
+>
+> `--check` prints the fill count for the exact name AND every related path that
+> does exist, so a guessed field name cannot silently read as "no such data".
+
+---
+
+"""
+
+
+def build(client, tsv_rows, md_lines, beat_counts):
     for db_name in TARGET_DBS:
         db = client[db_name]
         try:
             all_cols = db.list_collection_names()
         except Exception as e:
-            lines.append(f'## {db_name}\n\n_Error listing collections: {e}_\n\n---\n')
+            md_lines.append(f"## {db_name}\n\n_Error listing collections: {e}_\n\n---\n")
             continue
         if not all_cols:
             continue
-        lines.append(f'## Database: `{db_name}`\n')
-        suburb_keywords = ['burleigh','robina','varsity','coolangatta','carrara','merrimac','mudgeeraba','reedy','worongary','palm_beach','miami','mermaid']
-        utility_cols = [c for c in all_cols if not any(s in c for s in suburb_keywords)]
-        suburb_cols = [c for c in all_cols if c not in utility_cols]
-        for col_name in sorted(utility_cols) + sorted(suburb_cols):
+
+        md_lines.append(f"## Database: `{db_name}`\n")
+        utility = [c for c in all_cols if not any(s in c for s in SUBURB_KEYWORDS)]
+        suburb = [c for c in all_cols if c not in utility]
+
+        for col_name in sorted(utility) + sorted(suburb):
             col = db[col_name]
             try:
                 count = col.estimated_document_count()
-            except:
-                count = '?'
-            lines.append(f'### `{col_name}` ({count} documents)\n')
-            if count == 0 or count == '?':
-                lines.append('_Empty collection._\n')
-                continue
-            try:
-                field_types, nested, example_doc = get_schema(col)
-            except Exception as e:
-                lines.append(f'_Error sampling: {e}_\n')
-                continue
-            if not field_types:
-                lines.append('_No documents sampled._\n')
-                continue
-            lines.append('**Fields:**\n')
-            lines.append('| Field | Type(s) |')
-            lines.append('|-------|---------|')
-            for field, types in sorted(field_types.items()):
-                type_str = ' / '.join(sorted(types))
-                sub = ''
-                if field in nested:
-                    sub = f' → `{", ".join(nested[field])}`'
-                lines.append(f'| `{field}` | {type_str}{sub} |')
-            lines.append('')
-            lines.append('<details><summary>Example document</summary>\n')
-            lines.append('```')
-            lines.append(format_example(example_doc))
-            lines.append('```')
-            lines.append('</details>\n')
-        lines.append('---\n')
-    with open(OUTPUT, 'w') as f:
-        f.write('\n'.join(lines))
-    print(f"Schema snapshot written to {OUTPUT}")
-    print(f"Total databases documented: {len(TARGET_DBS)}")
+            except Exception:
+                count = "?"
 
-if __name__ == '__main__':
+            md_lines.append(f"### `{col_name}` ({count} documents)\n")
+            if count == 0:
+                md_lines.append("_Empty collection._\n")
+                continue
+
+            try:
+                paths, n = sample_shape(col, sample=SAMPLE_SIZE)
+            except Exception as e:
+                md_lines.append(f"_Error sampling: {e}_\n")
+                continue
+            if not paths:
+                md_lines.append("_No documents sampled._\n")
+                continue
+
+            beat_counts["collections"] += 1
+            beat_counts["paths"] += len(paths)
+
+            # Full inventory -> TSV (the searchable artifact).
+            for path in sorted(paths):
+                e = paths[path]
+                tsv_rows.append(
+                    f"{db_name}\t{col_name}\t{path}\t{e['count']}/{n}\t"
+                    f"{'/'.join(sorted(e['types']))}"
+                )
+
+            # Top level only -> markdown (the readable artifact).
+            top = {p: e for p, e in paths.items() if "." not in p and "[]" not in p}
+            deeper = len(paths) - len(top)
+            md_lines.append(f"_Sampled {n} documents at random. "
+                            f"{len(top)} top-level fields, {deeper} nested paths "
+                            f"(nested in `SCHEMA_PATHS.tsv`)._\n")
+            md_lines.append("| Field | Fill | Type(s) |")
+            md_lines.append("|-------|------|---------|")
+            for path in sorted(top):
+                e = top[path]
+                pct = round(100 * e["count"] / n) if n else 0
+                types = "/".join(sorted(e["types"]))
+                md_lines.append(f"| `{path}` | {e['count']}/{n} ({pct}%) | {types} |")
+            md_lines.append("")
+
+        md_lines.append("---\n")
+
+
+def main():
+    if not CONN:
+        print("ERROR: COSMOS_CONNECTION_STRING not set", file=sys.stderr)
+        sys.exit(1)
+
+    # 7b: a run that documents nothing, or far less than last time, is a
+    # FAILURE — not a quiet success. The whole point of this file is that its
+    # blind spots are invisible from its own output, so the run must assert
+    # its coverage rather than merely finish.
+    prev_rows = 0
+    if os.path.exists(OUTPUT_TSV):
+        with open(OUTPUT_TSV) as f:
+            prev_rows = sum(1 for _ in f) - 1  # minus header
+
+    with job_run("schema_snapshot", cadence_hours=24,
+                 title="DB Schema Snapshot + Path Index") as beat:
+        client = MongoClient(CONN, serverSelectionTimeoutMS=10000)
+        host = CONN.split("@")[-1].split("/")[0]
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+        md_lines = [HEADER.format(now=now, host=host, sample=SAMPLE_SIZE)]
+        tsv_rows = []
+        counts = {"collections": 0, "paths": 0}
+        start = time.time()
+
+        build(client, tsv_rows, md_lines, counts)
+
+        beat.metrics = {
+            "collections": counts["collections"],
+            "paths": counts["paths"],
+            "prev_paths": prev_rows,
+            "sample_size": SAMPLE_SIZE,
+        }
+
+        if counts["collections"] == 0:
+            raise RuntimeError(
+                "documented 0 collections — the connection or DB list is broken, "
+                "not empty; refusing to overwrite the existing snapshot")
+
+        if prev_rows and counts["paths"] < prev_rows * 0.6:
+            raise RuntimeError(
+                f"path coverage collapsed: {counts['paths']} paths this run vs "
+                f"{prev_rows} last run (<60%). Sampling is degraded — refusing "
+                f"to overwrite a good snapshot with a blind one")
+
+        with open(OUTPUT_MD, "w") as f:
+            f.write("\n".join(md_lines))
+        with open(OUTPUT_TSV, "w") as f:
+            f.write("database\tcollection\tpath\tfill\ttypes\n")
+            f.write("\n".join(tsv_rows) + "\n")
+
+        client.close()
+        beat.detail = (f"{counts['collections']} collections, "
+                       f"{counts['paths']} paths in {time.time() - start:.0f}s")
+        print(f"Wrote {OUTPUT_MD}")
+        print(f"Wrote {OUTPUT_TSV}  ({counts['paths']} paths, "
+              f"{counts['collections']} collections)")
+
+
+if __name__ == "__main__":
     main()

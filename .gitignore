@@ -99,3 +99,7 @@ cache/
 # Google Indexing API service-account key (never commit)
 .gcp-indexing-sa.json
 *-sa.json
+
+# Generated DB path index (5MB, regenerated daily by generate_schema_snapshot.py)
+SCHEMA_PATHS.tsv
+SCHEMA_SNAPSHOT.md
