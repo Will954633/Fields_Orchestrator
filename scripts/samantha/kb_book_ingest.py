@@ -189,15 +189,69 @@ def chunk():
     return len(units)
 
 
+def stamp_provenance():
+    """Overwrite provenance.course on every unit from the manifest.
+
+    The annotator is asked to lift the book title out of the unit header, and it
+    does so unreliably: the same book came back as "SELL LIKE CRAZY", "SELL LIKE
+    CRAZY How to Get As Many Clients, Cu…" and "Sell Like Crazy: How to Get…" in
+    different batches, and **134 of 461 units carried no title at all**. That makes
+    a book impossible to filter or attribute — you cannot say "Suby argues X" if a
+    third of his units are anonymous.
+
+    The mapping is already known exactly: kb_book_ingest wrote it to the manifest
+    at chunk time. So take it from there rather than from the model. Deterministic,
+    free, and idempotent.
+    """
+    if not os.path.exists(MANIFEST):
+        raise SystemExit(f"no manifest at {MANIFEST} — run --chunk first")
+    man = json.load(open(MANIFEST, encoding="utf-8"))
+    ann = f"{BASE}/annotations.jsonl"
+    if not os.path.exists(ann):
+        raise SystemExit(f"no annotations at {ann} — annotate first")
+
+    import shutil
+    shutil.copyfile(ann, ann + ".pre-stamp")
+    out, fixed, unknown = [], 0, 0
+    for line in open(ann, encoding="utf-8"):
+        try:
+            d = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        m = man.get(d.get("unit_id"))
+        if not m:
+            unknown += 1
+            out.append(json.dumps(d, ensure_ascii=False))
+            continue
+        prov = d.get("provenance") or {}
+        if prov.get("course") != m["title"]:
+            fixed += 1
+        prov["library"] = "KB:book"
+        prov["course"] = m["title"]
+        prov["module"] = f"part {m['part']}"
+        d["provenance"] = prov
+        out.append(json.dumps(d, ensure_ascii=False))
+    with open(ann, "w", encoding="utf-8") as f:
+        f.write("\n".join(out) + "\n")
+    print(f"stamped {len(out)} units — {fixed} titles corrected, {unknown} not in manifest")
+    if unknown:
+        print(f"  ⚠ {unknown} units had no manifest entry and were left as-is")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--audit", action="store_true", help="report only, change nothing")
     ap.add_argument("--chunk", action="store_true", help="write Brain 1 batch files")
+    ap.add_argument("--stamp-provenance", action="store_true",
+                    help="rewrite provenance.course from the manifest (run after annotating)")
     args = ap.parse_args()
 
     if args.chunk:
         chunk()
+        return
+    if args.stamp_provenance:
+        stamp_provenance()
         return
     rows = audit()
     print(f"{'BOOK':<62}{'KB':>7}{'chunks':>8}{'units':>7}  STATUS")

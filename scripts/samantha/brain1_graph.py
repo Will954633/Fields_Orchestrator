@@ -249,9 +249,28 @@ def main():
     units, bad = load(inp, dedupe=args.dedupe, exclude_ids=exclude_ids)
     print(f"Loaded {len(units)} records from {inp.name} ({bad} bad lines)")
     for extra in args.merge:
-        eu, eb = load(Path(extra))
+        # --dedupe was applied to --in only, so a duplicated unit_id in a MERGED
+        # source was silently counted twice — the same unit, the same quotes, twice
+        # in every retrieval, looking like two independent witnesses. Found 2026-08-09
+        # when an interrupted sweep left 5 duplicate k9#### records.
+        eu, eb = load(Path(extra), dedupe=args.dedupe)
         units += eu
         print(f"Merged {len(eu)} records from {Path(extra).name} ({eb} bad lines)")
+
+    # And across sources: the same id appearing in two files is the same unit.
+    seen, deduped, cross = set(), [], 0
+    for r in reversed(units):
+        uid = r.get("unit_id")
+        if uid and uid in seen:
+            cross += 1
+            continue
+        if uid:
+            seen.add(uid)
+        deduped.append(r)
+    deduped.reverse()
+    if cross:
+        print(f"Dropped {cross} cross-source duplicate unit_id(s)")
+    units = deduped
     print(f"Total {len(units)} annotation records")
     canon = load_canonical(outdir)
     if canon:
