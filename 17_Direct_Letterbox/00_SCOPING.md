@@ -9,6 +9,22 @@ out to be wrong, and this project's whole value rests on measuring something the
 
 ---
 
+---
+
+## Assets in this folder
+
+| Asset | Status | What |
+|---|---|---|
+| **[Owner_Subject_Article/](Owner_Subject_Article/)** | ✅ **working generator**, nothing posted | A short printed piece about ONE off-market home, posted to that home: recent nearby sales each adjusted to the recipient's property, set against the national headlines. Intended as **piece 1** of the multi-piece campaign this document scopes. Preview: `vm.fieldsestate.com.au/concepts/owner-article/<slug>.html` |
+| `Houses_Surrounding_A_Just_Listed.md` | idea note | Letterbox-drop the street when a home lists; follow the sale; "how this sale changed your home's value" when it sells. |
+| This document | scoping, nothing built | The personalised card + fridge magnet, and the rail underneath both. |
+
+⚠ The article asset is deliberately **separate** from the
+`11_House_Mini_Site/Version_Two` 7-session booklet system, which describes a
+similar-looking fortnightly posted sequence (Will, 2026-08-07). Do not merge them.
+
+---
+
 ## 1. The concept
 
 A postcard-sized (or slightly larger) addressed mail piece carrying:
