@@ -166,18 +166,70 @@ are not arguing about the same variable:
 | **When** | Long before any listing conversation | At or near the listing appointment |
 | **Risk** | Slow — 12+ month lag, and the payoff is often a *referral*, not a listing from that person | Free spec work for someone who has already decided |
 
-**⚠ Read that contradiction knowing the corpus is lopsided.** The *withhold* side is a book we hold
-in full — **Voss & Shull, *The Full Fee Agent*, 102 annotated units.** The *give* side's most
-prominent voice is **absent: Sabri Suby's *Sell Like Crazy*** — the book whose entire thesis is
-giving away your best material first — **is not in Brain 1 at all.** We own the file; the Kindle
-scrape stalled at **page 3 of 307**, was written in a legacy format the chunker never consumed, and
-was marked `_ingested` regardless. So the corpus holds the anti-giving argument at full strength and
-the pro-giving argument only second-hand through coaches. **Weight the reconciliation below
-accordingly, and re-run this question if the book is ever properly ingested.**
+**✅ Re-run 2026-08-09 against a balanced corpus.** This section originally carried a warning that the
+*withhold* side was in the corpus as a full book (Voss & Shull, *The Full Fee Agent*, 102 units)
+while the *give* side's most prominent voice — **Sabri Suby's *Sell Like Crazy*** — was absent
+entirely. It has now been ingested (**64 units**), along with five other books that had never made it
+in. The question was re-asked against 1,049 relevant units with **no single source above 39%** —
+the first time this corpus has cleared its own concentration warning. Full brief:
+[`../02_Research/01_Brain1/D1-give-away-rerun-with-suby.md`](../02_Research/01_Brain1/D1-give-away-rerun-with-suby.md)
+(⚠ 67% quote fidelity — every quote below was re-verified against its cited unit by hand).
 
-**The reconciled rule, consistent with every source we actually hold: give freely as a long-horizon
-nurture act; withhold the bespoke deep-dive as spec work at the point of a live listing decision
-until there is commitment.** That maps exactly onto the structure already proposed — the automated per-address
+**The axis is not *when*. It is *whose thing you are analysing*.**
+
+| | Educate **the market** | Analyse **their asset** |
+|---|---|---|
+| Who says give it away | Suby, Carr, Pulizzi, Scott | — |
+| Who says withhold | — | Voss & Shull |
+| What it is | teaching everyone | spec work auditing *them* |
+| Risk | slow | you can be fired before you are hired |
+
+They are not arguing about the same object, which is why both read as obviously right. Suby's own
+framing (k90092, k90093, verified): *"Value-based marketing is about offering value to your customers
+**without asking for a sale in return**"* … *"why don't we run an ad and **give away some useful
+information**, something that educates our prospects, and then offer to give away some more useful
+information?"* And the mechanism he claims for it (k90099): *"If this is what they're giving away for
+free, **imagine what their paid products/services are like!**"*
+
+**Two things in Suby that bear directly on this programme, and one that stings:**
+
+1. **The free report *is* the instrument.** His whole model is a High-Value Content Offer — a free
+   report that gets someone into a funnel. That is precisely what the Owner-Subject Article is, which
+   makes him the closest thing to a named advocate for the artefact we have already built.
+2. **The title does the work** (k90096): *"the title of your free report is the number one factor in
+   the pulling power of your HVCO and will largely be responsible for the amount of people that enter
+   your funnel."* Actionable, and it argues for treating the piece's opening line as the single
+   highest-leverage element — consistent with promoting the `anchor` variant to piece 1.
+3. ⚠ **He does not support an organic-only position** (k90085): *"If you're solely relying on free
+   traffic, referrals, joint ventures, or other channels like these, then you **don't have a
+   predictable and dependable way to grow your business**."* Suby is emphatically pro-paid-advertising.
+   Fields is 92% organic with Facebook paused. Recording it because it cuts against us, and the
+   honest read is that our strongest advocate for giving the analysis away is also an advocate for
+   paying to distribute it.
+
+**⚠ And the uncomfortable one, which the earlier version of this section hid.** The Owner-Subject
+Article is **analysis of *their* property, delivered unsolicited, before any commitment** — which is
+the exact thing the withhold side prohibits, not the education it permits. Voss/Shull would call it
+spec work. Three honest responses, and we should pick deliberately rather than by default:
+
+- It is *not* an appraisal-for-a-listing-decision — no CTA, no price opinion, no ask — so it may sit
+  outside the prohibition on its own terms.
+- Suby's HVCO defence covers it only if it functions as a funnel entry, which requires the reader to
+  be able to take a next step. Our piece deliberately offers none.
+- Or it genuinely is spec work, and the mitigation is Option 3's opt-in — *"would you like me to let
+  you know what it sells for?"* — which converts it from unsolicited analysis into a requested one.
+  **That is a third, independent argument for the opt-in.**
+
+**Two disagreements that do NOT dissolve, and both are live for Fields:**
+
+- **Is free uptake a leading indicator or a mirage?** Pulizzi and Scott count audience as the asset.
+  Blank & Dorf (*The Startup Owner's Manual*) count consumption without a committed action as noise
+  that masks willingness to pay. Fields is pre-revenue with 26,297 decks and zero customers. **A
+  swipe through a valuation page is not yet evidence of a seller**, and this is precisely the
+  measurement Option 0 exists to settle.
+- **Trust-then-commit, or commit-then-educate?** *"I prospect for the relationship today"* against
+  *"never educate without control"* (u0163, verified). **Panos's own corpus holds both positions,
+  same era** — so it is a live doctrinal split, not something recency can resolve. That maps exactly onto the structure already proposed — the automated per-address
 analysis is the free nurture layer, the heavy posted appraisal is the commitment-gated escalation
 (Option 5). It is also the same answer the lead-funnel verdict reached: **ungate the analysis, keep
 the artefact.**
