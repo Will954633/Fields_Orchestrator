@@ -64,15 +64,28 @@ report builder across the book, or make the React port read `valuation_data` dir
 
 ## Phase 2 — the port
 
-### Progress
+### Progress — PORT COMPLETE 2026-08-08, flag OFF
 
 | # | piece | status |
 |---|---|---|
 | 0 | loader exposes `valuation` **with provenance** | ✅ `8828ac45` |
 | 1 | answer block | ✅ `ccb099b6` |
-| 2 | reliability section | ✅ shipped |
-| 3 | comparables — **reuse `ValuationEvidence.tsx`** | ⚠ needs an adapter, see below |
-| 4–8 | remainder | not started |
+| 2 | reliability section | ✅ `3080a648` |
+| 3 | comparables via `ValuationEvidence.tsx` + adapter | ✅ `36f229eb` / `0f6d269f` |
+| 4 | nearby-sale contrast | ✅ `1e222aa2` |
+| 5 | **declined page** for the 26% with no figure | ✅ `262bca10` |
+| 6 | timing | ✅ `05601e1d` |
+| 7 | since-you-last-looked + corrections (device-local) | ✅ `b6b0ccca` |
+| — | page shell, three-suburb gate, `offmarket_v4` flag | ✅ `0a36f025` / `5e1c77d9` |
+
+**Verified live on real addresses, all four data states** — see Phase 3.2. Reachable via `?v4=1`;
+the flag is off and every real visitor still gets the deck.
+
+⚠ **Two mistakes worth carrying forward.** V4 was first mounted inside `OffMarketPage` — the CLASSIC
+path, which never runs for an address that has a discovery doc, i.e. almost all of them. And the
+variant was first decided in a `useEffect`, so the server sent the deck and the browser swapped after
+hydration: a visible flash, and crawlers indexing the deck. Both are fixed by deciding in the LOADER.
+The lesson generalises: **trace the render path before assuming which component serves a URL.**
 
 ### ⚠ The comparables adapter — the one real surprise
 
