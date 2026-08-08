@@ -62,7 +62,11 @@ def log(msg):
 
 def parse_batch(path):
     content = open(path, encoding="utf-8", errors="ignore").read()
-    parts = re.split(r"===== UNIT (u\d+) \| LIB: (.*?) =====", content)
+    # Ids are u#### (coaching, YouTube), k##### (KB books) or i######### (Drive).
+    # This was hard-wired to `u\d+`, so a batch of k-ids parsed to ZERO units, the
+    # prompt went out empty, the model answered in prose and every batch failed
+    # with "no JSON array in output" — a parser bug wearing an API error's clothes.
+    parts = re.split(r"===== UNIT ([uki]\d+) \| LIB: (.*?) =====", content)
     units = []
     for i in range(1, len(parts), 3):
         uid = parts[i].strip()
