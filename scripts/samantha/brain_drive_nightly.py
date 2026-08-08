@@ -79,12 +79,30 @@ def main():
             if os.path.isdir(f"{DRIVE}/batches_{pool}"):
                 run([py, f"{HERE}/brain3_annotate.py", "--pool", pool, "--base", DRIVE], timeout=7200)
 
-        # 3. rebuild BRAIN 1 = coaching + KB public + Drive-external
-        merges = []
-        if os.path.exists(f"{B3PUB}/annotations_public.jsonl"):
-            merges.append(f"{B3PUB}/annotations_public.jsonl")
-        if os.path.exists(f"{DRIVE}/annotations_b1.jsonl"):
-            merges.append(f"{DRIVE}/annotations_b1.jsonl")
+        # 3. rebuild BRAIN 1 = coaching + KB public + Drive-external + YouTube
+        #
+        # ⚠ THIS IS THE SOLE NIGHTLY OWNER OF package.json. It rebuilds the graph
+        # from exactly the list below, so ANY corpus missing from it is deleted
+        # from Brain 1 at 03:10 every night — silently, with a success exit.
+        # That is what happened on 2026-08-09: a 2,264-unit YouTube corpus was
+        # merged by hand at 17:00 and was gone by 03:12, reverting 8,664 -> 6,400
+        # units. See fix-history [BRAIN1-NIGHTLY-REBUILD-DROPS-SOURCES].
+        #
+        # Adding a new Brain 1 corpus means adding it HERE, not just merging it once.
+        BRAIN1_SOURCES = [
+            f"{B3PUB}/annotations_public.jsonl",        # k#### KB public books
+            f"{DRIVE}/annotations_b1.jsonl",            # i######### Drive external
+            "/home/fields/brain1_yt/annotations.jsonl",  # u9##### YouTube channels
+        ]
+        merges = [p for p in BRAIN1_SOURCES if os.path.exists(p)]
+        missing = [p for p in BRAIN1_SOURCES if not os.path.exists(p)]
+        if missing:
+            # A source that vanishes is a corpus silently leaving the graph. Say so
+            # in the log rather than quietly building a smaller brain.
+            with open(LOG, "a") as fh:
+                fh.write(f"{datetime.now(timezone.utc).isoformat()} "
+                         f"⚠ Brain 1 source(s) MISSING — graph will be built "
+                         f"WITHOUT them: {missing}\n")
         cmd = [py, f"{HERE}/brain1_graph.py", "--in", f"{B1}/annotations.jsonl",
                "--outdir", B1, "--dedupe"]
         if merges:

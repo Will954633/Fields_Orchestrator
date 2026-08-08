@@ -20,6 +20,7 @@ Design notes:
     keyword search misses (doc->question generation).
 """
 import json
+import shutil
 import re
 import sys
 import argparse
@@ -228,6 +229,9 @@ def main():
     ap.add_argument("--dedupe", action="store_true",
                      help="keep only the LAST annotation per unit_id (nightly delta re-annotates "
                           "changed content under the same id; the later record supersedes)")
+    ap.add_argument("--allow-shrink", action="store_true",
+                    help="permit writing a package with FEWER units than the existing one "
+                         "(tombstones or a deliberately retired source); refused by default")
     ap.add_argument("--tombstones", default=None,
                      help="JSON file of unit_ids to exclude entirely (sources removed since last ingest)")
     args = ap.parse_args()
@@ -259,6 +263,35 @@ def main():
 
     pkg_path = outdir / "package.json"
     stats_path = outdir / "graph_stats.json"
+
+    # A rebuild is fed EXACTLY the files named on the command line and has no
+    # memory of the previous build, so forgetting a --merge source silently
+    # replaces the corpus with a smaller one and still exits 0. On 2026-08-08 a
+    # rebuild that named 1 of 4 sources cut the graph 6,400 -> 4,593 units and
+    # 18.6 MB -> 12.9 MB, printing nothing but success.
+    # A shrinking graph is therefore treated as an error unless it is asked for.
+    if pkg_path.exists():
+        try:
+            prev_n = json.loads(pkg_path.read_text(encoding="utf-8"))["meta"]["n_units"]
+        except Exception:
+            prev_n = None
+        if prev_n:
+            new_n = st["n_units"]
+            backup = outdir / "package.prev.json"
+            if new_n < prev_n and not args.allow_shrink:
+                print(f"\n*** REFUSING TO WRITE: {new_n} units vs {prev_n} in the existing "
+                      f"package — the graph would SHRINK by {prev_n - new_n}.")
+                print("    You have probably omitted a --merge source. The four are:")
+                print("      brain1_build/annotations.jsonl (u####, coaching)")
+                print("      brain3_build/annotations_public.jsonl (k####, KB)")
+                print("      brain_drive/annotations_b1.jsonl (i#########, Drive)")
+                print("      brain1_yt/annotations.jsonl (u9#####, YouTube)")
+                print("    If the shrink is intended (tombstones, a retired source), "
+                      "re-run with --allow-shrink.")
+                raise SystemExit(2)
+            shutil.copyfile(pkg_path, backup)
+            print(f"Previous package backed up to {backup.name} ({prev_n} units)")
+
     pkg_path.write_text(json.dumps(package, ensure_ascii=False), encoding="utf-8")
     stats_path.write_text(json.dumps(st, ensure_ascii=False, indent=2), encoding="utf-8")
 
