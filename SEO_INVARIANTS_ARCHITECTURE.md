@@ -72,14 +72,38 @@ this way can be enforced by comparison rather than by remembering.
 
 | Invariant | Enforced? | By what |
 |---|---|---|
-| 0 — one canonical authority | **No** | `updateSeoMeta` still *accepts* a `url`; three other callers pass one. Removing `setCanonical` from it, or a lint rule, would enforce it |
+| 0 — one canonical authority | **Yes, structurally** | `setCanonical()` deleted from `seoMeta.ts` — the capability no longer exists, so it cannot be reintroduced by a caller. Monitored by invariant C |
 | 1 — one address identity | **Partly** | Shared function exists; nothing *prevents* a new consumer writing its own chain |
 | 2 — sitemap URL healthy | **Yes** | `scripts/sitemap_robots_invariant.py`, nightly 07:00 |
+| — canonical stable across hydration | **Yes** | Same monitor, invariant C + `scripts/canonical_stability.js` (headless; small sample by design) |
 | 3 — eligible ⇒ in sitemap | **Partly** | Same monitor, invariant B — sampled, and only for URLs GSC already knows |
 | 4 — inbound link exists | **No** | Nothing checks it. #2 was found by hand |
 | 5 — address in SSR `h1` | **No** | Nothing checks it. #3 was found by hand |
 
-Two of five are unenforced. That is the honest state, and it is the backlog.
+Invariants 4 and 5 remain unenforced — both were found by hand, and nothing would catch
+them recurring. That is the honest state, and it is the backlog.
+
+## An operational invariant, learned the same day
+
+> **A production verification is valid only against a known deployed commit.**
+
+On 2026-08-08 another writer's commits landed between a push and its build; Netlify
+superseded the deploy and the change rode in on theirs. Nothing broke, but the
+verification had been performed against a commit that was never established.
+
+Minimum discipline, in force from now:
+
+1. Record HEAD before editing.
+2. Re-check immediately before pushing. If it moved: inspect the intervening commits
+   and the files they touched, confirm no overlap with your working tree, re-verify.
+3. Never push a stale working tree over another writer's work.
+4. Every deployment report states: starting SHA, final SHA, intervening commits by other
+   writers, and whether live verification corresponds to that exact SHA.
+
+First use caught a real risk: another writer had modified `off-market.$slug.tsx`, a file
+edited earlier the same day. Their version retained all six markers of that work and the
+local copy was byte-identical, so nothing was lost — **but that was luck, not safety**.
+A lightweight production-write lock (owner/session + expiry) is not built.
 
 ## What makes an invariant enforceable
 
