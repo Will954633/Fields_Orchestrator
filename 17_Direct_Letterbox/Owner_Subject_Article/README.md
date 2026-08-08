@@ -215,7 +215,48 @@ two needing a widened radius.
 
 ---
 
-## 10. Open
+## 10. Copy variants (added 2026-08-08)
+
+Six compositions of the same data, same gates. Compare them at
+`/concepts/owner-article/index.html`. Build with `--variant <name>` or
+`--all-variants`; `make_index.py` rebuilds the comparison board.
+
+| Variant | The gap it opens |
+|---|---|
+| `report` | none — states the finding, then evidences it (the original) |
+| `anomaly` | *two sales near you point to very different numbers for your home* — our strongest prediction error; adjustment is the resolution |
+| `anchor` | *you already have a number for this address — where did it come from?* — ranked fear #3, a gap the reader already carries |
+| `features` | *what are your land, condition and floor area actually worth?* — the most self-relevant |
+| `timing` | *half sold within N days; which half would yours be?* — leads with time-on-market per brief §8.3 |
+| `contradiction` | *the national numbers and your street disagree* — brief §8.1, name the ambiguity before resolving it |
+
+**The theory.** Loewenstein: awareness of a gap between what you know and what you want
+to know creates tension that motivates closing it. A gap is *strong* rather than
+irritating only when it is (1) self-relevant, (2) unresolvable alone, and (3) **credibly
+closeable by us** — which is why the named, dated sales appear *before* the biggest
+question in every variant. A gap opened before credibility is established reads as a tease.
+
+⚠ **The line between this and manipulation.** Every gap opened must be **closed in the
+same piece, with real evidence.** We are not withholding to drive an action — the piece
+has no CTA. In particular we never defer a gap to a later mailing: holding back
+information about someone's own home to make them wait is leverage over something that
+matters to them, and this reader has been burned by confident people twice in eighteen
+months. `guardrails.py` gained a **TEASE** rule class enforcing this ("read on", "find
+out", "in our next letter", "you may be surprised").
+
+Mostly these do not *manufacture* gaps — they make an existing one felt. The reader
+already carries "the number in my head might not be real"; `anchor` just names it.
+
+**Two things caught while writing them, worth keeping in mind:**
+- The `anomaly` variant compares the cheapest and dearest raw sales, which is the pair
+  where adjustment does the most visible work. Left alone that overstates the method
+  (standing rule: never quote the best pair as typical — median narrowing is ~40%). The
+  copy now states the whole-set figure in the same breath.
+- A draft of `timing` asserted that how fast a home sells "is not mostly about the
+  market". We have not measured that. Removed — an opinion in a fact's clothes is exactly
+  what this format cannot afford.
+
+## 11. Open
 
 1. **Length.** ~1,100 words plus two charts and a table. Possibly long for a cold
    letterbox drop; awaiting Will's read.

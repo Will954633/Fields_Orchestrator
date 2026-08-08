@@ -72,6 +72,23 @@ RULES: list[tuple[str, str, str, str]] = [
      "the property's +/-12% band is not a statistical CI -- it contains the sale "
      "price ~57% of the time (the suburb MEDIAN's bootstrap CI is exempt)"),
 
+    # ---- TEASE ----
+    # Added 2026-08-08 with the information-gap variants. An opened gap must be CLOSED
+    # IN THE SAME PIECE with real evidence. These constructions are the ones that open a
+    # gap and then either withhold, or point at an action, or defer to a later mailing --
+    # which turns curiosity into leverage over something that matters to the reader. This
+    # reader has been burned by confident people twice in eighteen months and is primed
+    # to detect exactly this.
+    ("BLOCK", "TEASE", r"\b(?:read on|find out|keep reading|see for yourself)\b",
+     "gap must be closed here, not pointed at"),
+    ("BLOCK", "TEASE", r"\bin (?:our|the) next (?:letter|piece|mailing|instalment)\b",
+     "never defer a gap about the reader's own home to a later mailing"),
+    ("BLOCK", "TEASE", r"\byou (?:might|may|will) be surprised\b", "tease"),
+    ("BLOCK", "TEASE", r"\bwhat we found\b(?![^.]*\bis\b)", "teases a finding without giving it"),
+    ("BLOCK", "TEASE", r"\b(?:the answer|the reason) may surprise\b", "tease"),
+    ("WARN",  "TEASE", r"\bsomething (?:unusual|surprising|interesting)\b",
+     "acceptable only if the very next sentence says what it is"),
+
     # ---- house style ----
     ("BLOCK", "WORDS", r"\bstunning\b", "banned word"),
     ("BLOCK", "WORDS", r"\bnestled\b", "banned word"),

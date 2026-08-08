@@ -46,6 +46,7 @@ sys.path.insert(0, "/home/fields/Feilds_Website/07_Valuation_Comps")
 from factbook import FactBook                                  # noqa: E402
 import guardrails                                              # noqa: E402
 import charts as charts_mod                                    # noqa: E402
+import variants as variants_mod                                # noqa: E402
 
 # ---------------------------------------------------------------- constants
 
@@ -374,9 +375,16 @@ def load_macro() -> tuple[dict | None, str | None]:
 
 # ---------------------------------------------------------------- composition
 
-def compose(bundle: dict) -> tuple[str, FactBook, dict]:
+def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]:
     fb = FactBook()
     charts: dict[str, str] = {}
+    if variant != "report":
+        S = variants_mod.Sections(bundle, fb, charts, {
+            "fmt_date": fmt_date, "parse_date": parse_date, "upper1": _upper1,
+            "charts_mod": charts_mod, "MAE_PCT": MAE_PCT,
+        })
+        builder, _desc = variants_mod.VARIANTS[variant]
+        return "\n".join(builder(S, MIN_COMPS, RADIUS_KM)), fb, charts
     b = bundle
     comps, subj = b["comps"], b["subject"]
     short = fb.address("subject_addr", b["address_short"])
@@ -749,7 +757,8 @@ def build_hero(client, doc, suburb_key, slug, out_dir) -> dict | None:
 # ---------------------------------------------------------------- driver
 
 def build(address, suburb=None, out_dir=None, want_html=True,
-          skip_market_check=False, no_hero=False, verbose=True):
+          skip_market_check=False, no_hero=False, verbose=True,
+          variant="report"):
     client = get_db()
     doc, suburb_key = resolve_subject(client, address, suburb)
     if not doc:
@@ -795,7 +804,7 @@ def build(address, suburb=None, out_dir=None, want_html=True,
         "macro": macro,
     }
 
-    md, fb, charts = compose(bundle)
+    md, fb, charts = compose(bundle, variant)
 
     unminted = fb.verify(md)
     findings = guardrails.lint(md)
@@ -809,6 +818,8 @@ def build(address, suburb=None, out_dir=None, want_html=True,
                 "markdown": md}
 
     slug = slugify(full_addr)
+    if variant != "report":
+        slug = f"{slug}--{variant}"
     out_dir = out_dir or os.path.join(HERE, "output")
     os.makedirs(out_dir, exist_ok=True)
     md_path = os.path.join(out_dir, f"{slug}.md")
@@ -873,6 +884,11 @@ def main():
     ap.add_argument("--no-hero", action="store_true")
     ap.add_argument("--skip-market-check", action="store_true",
                     help="skip the PropRadar listed/lease guard (dev only -- never for print)")
+    ap.add_argument("--variant", default="report",
+                    choices=["report"] + sorted(variants_mod.VARIANTS),
+                    help="composition angle; see variants.py")
+    ap.add_argument("--all-variants", action="store_true",
+                    help="build every variant for this address")
     ap.add_argument("--list-candidates", action="store_true")
     ap.add_argument("--limit", type=int, default=25)
     a = ap.parse_args()
@@ -886,8 +902,24 @@ def main():
     if not a.address:
         ap.error("--address is required (or --list-candidates)")
 
-    r = build(a.address, a.suburb, a.out_dir, not a.no_html,
-              a.skip_market_check, a.no_hero)
+    wanted = (["report"] + sorted(variants_mod.VARIANTS)) if a.all_variants else [a.variant]
+    rc = 0
+    for v in wanted:
+        r = build(a.address, a.suburb, a.out_dir, not a.no_html,
+                  a.skip_market_check, a.no_hero, variant=v)
+        if not r["ok"]:
+            print(f"REJECTED [{v}] at {r['stage']}: {r.get('address') or a.address}",
+                  file=sys.stderr)
+            for e in r["errors"]:
+                print(f"  - {e}", file=sys.stderr)
+            rc = 3 if r["stage"] in ("checks", "consistency") else 2
+            continue
+        print(f"OK  [{v}]  {r['address']}  -> {os.path.basename(r['html'] or r['md'])}")
+        for w in r["warnings"]:
+            print(f"    ? WARN {w['label']} line {w['line']}: {w['match']!r} -- {w['why']}")
+    return rc
+
+def _unused_legacy(a, r):
 
     if not r["ok"]:
         print(f"REJECTED at {r['stage']}: {r.get('address') or a.address}", file=sys.stderr)
