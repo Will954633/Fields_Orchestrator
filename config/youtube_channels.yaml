@@ -4,12 +4,21 @@
 # `brain1_deep.py --library "<name>"` isolates. Keep it stable — renaming it
 # orphans every unit already annotated under the old name.
 #
+# ⚠ The market suffix in `library` is NOT decoration. The rest of Brain 1 is
+# US-weighted, and mail economics, postage, consumer behaviour, regulation and
+# even the seasons do not read across. A US voice and an AU voice saying the
+# same thing are not two sources agreeing, and a synthesis that cannot tell them
+# apart will silently apply Northern-Hemisphere spring timing and USPS pricing
+# to the Gold Coast. `country` is carried onto every unit header for the same
+# reason — the annotator only ever sees the header and the text.
+#
 # `channel_id` is the UC... id (resolve with:
 #   yt-dlp --flat-playlist --playlist-items 1 --dump-single-json <url> | jq -r .channel_id )
 # It is what the RSS poller uses; the @handle is not stable enough to key on.
 
 channels:
-  - library: "eXp Realty"
+  - library: "eXp Realty (US)"
+    country: "United States"
     handle: "@eXpRealty"
     url: "https://www.youtube.com/@eXpRealty"
     channel_id: "UC43frD2HapVKMMaQM5Cf5qw"
@@ -19,7 +28,8 @@ channels:
       recruiting/revenue-share material — expect a low signal-to-noise ratio.
     max_backfill: 250
 
-  - library: "BLAC SALT"
+  - library: "BLAC SALT (AU)"
+    country: "Australia"
     handle: "@BLAC_SALT"
     url: "https://www.youtube.com/@BLAC_SALT"
     channel_id: "UCuygO2H0YAvCn1i8h3p3Htw"

@@ -142,6 +142,7 @@ def discover(only_library=None):
             doc = {
                 "video_id": vid,
                 "library": ch["library"],
+                "country": ch.get("country", ""),
                 "channel_id": ch["channel_id"],
                 "title": e.get("title"),
                 "duration": e.get("duration"),
@@ -363,7 +364,12 @@ def chunk(only_library=None):
             uid = f"u{unit_no}"
             unit_no += 1
             ids.append(uid)
-            header = (f"Channel: {doc['library']} | Video: {doc.get('title') or ''} "
+            # The market goes in the header because the annotator sees ONLY the
+            # header and the text. Without it, a US postage figure and an AU one
+            # annotate identically and the graph cannot tell them apart later.
+            header = (f"Channel: {doc['library']} | Market: "
+                      f"{doc.get('country') or 'unknown'} "
+                      f"| Video: {doc.get('title') or ''} "
                       f"| Part {n} of {len(chunks)} | {doc['url']}")
             pending_units.append(
                 f"===== UNIT {uid} | LIB: {doc['library']} =====\n"

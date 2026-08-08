@@ -18,6 +18,7 @@ format since retired.
 | [01_Strategy/02-AS-BUILT-REALITY.md](01_Strategy/02-AS-BUILT-REALITY.md) | What actually exists in code and in the database, as opposed to in markdown |
 | [01_Strategy/03-PSYCHOLOGICAL-ARCHITECTURE.md](01_Strategy/03-PSYCHOLOGICAL-ARCHITECTURE.md) | How the pieces are designed to be read, and where the line is |
 | ⚠ [01_Strategy/04-LEGAL-AND-ETHICAL-GATES.md](01_Strategy/04-LEGAL-AND-ETHICAL-GATES.md) | **Research, not advice.** What must clear a lawyer before anything is sent |
+| ⭐ [01_Strategy/05-IS-DIRECT-MAIL-DECAYING.md](01_Strategy/05-IS-DIRECT-MAIL-DECAYING.md) | Whether the channel is dying, or one proposition inside it died — and what is measurably still working |
 
 ---
 
