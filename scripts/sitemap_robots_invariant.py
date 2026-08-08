@@ -26,6 +26,12 @@ THE INVARIANTS
   B. Every URL earning impressions that is genuinely healthy+indexable is in the
      sitemap. Confirmed against the LIVE page, so historical URLs that now 301/404/
      noindex do not raise false alarms.
+  C. The canonical is STABLE ACROSS HYDRATION — the post-JS DOM canonical equals the
+     one in the SSR source, and there is exactly one canonical element. Route metadata
+     owns the canonical; a component that rewrites it after hydration silently changes
+     what Googlebot (which renders JS) sees. On 2026-08-08 that de-indexed
+     /market-intelligence/Varsity-Lakes, which declared itself a duplicate of its own
+     child tab. Requires a headless browser, so it runs on a small sample.
 
 A is checked by sampling the sitemap and reading the live robots tag. B is checked
 against Search Console — a URL Google already shows results for, which serves 200 and
@@ -71,6 +77,11 @@ DEFAULT_SAMPLE = 25
 # mostly legitimate, so this is sampled — never let a sampled check be reported as
 # exhaustive (b_population records the true size).
 DEFAULT_B_CAP = 40
+# Invariant C needs a real browser per URL, so it is the most expensive check. A small
+# per-family sample is enough: a canonical rewrite is a code-level fault that affects
+# every page rendered by the same component, never a single URL.
+DEFAULT_C_SAMPLE = 3
+CANON_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "canonical_stability.js")
 ROBOTS_RE = re.compile(r'<meta[^>]+name="robots"[^>]+content="([^"]*)"', re.I)
 CANON_RE = re.compile(r'<link[^>]+rel="canonical"[^>]+href="([^"]*)"', re.I)
 TITLE_RE = re.compile(r"<title>([^<]*)</title>", re.I)
@@ -198,7 +209,39 @@ def check_b(paths, cap: int, rng) -> tuple[list, int, int]:
     return violations, checked, population
 
 
-def run(per_family: int, b_cap: int) -> dict:
+def check_c(paths, per_family: int, rng) -> tuple[list, int]:
+    """Invariant C — canonical unchanged by hydration. Shells out to a headless
+    browser; returns ([], 0) if the harness is unavailable rather than failing the
+    whole run, and says so in the metrics."""
+    import json as _json
+    import subprocess
+    if not os.path.exists(CANON_SCRIPT):
+        return [], 0
+    by = defaultdict(list)
+    for p in paths:
+        by[family(p)].append(p)
+    urls = []
+    for fam, ps in sorted(by.items()):
+        urls += [SITE + p for p in rng.sample(ps, min(per_family, len(ps)))]
+    try:
+        out = subprocess.run(["node", CANON_SCRIPT, *urls], capture_output=True,
+                             text=True, timeout=600).stdout
+        rows = _json.loads(out or "[]")
+    except Exception as e:
+        print(f"  (invariant C skipped: {e})")
+        return [], 0
+    violations = []
+    for r in rows:
+        if r.get("error"):
+            continue
+        if r.get("count") != 1 or r.get("ssr") != r.get("post"):
+            violations.append({"invariant": "C", "family": family(r["path"]), "path": r["path"],
+                               "status": 200, "robots": "-",
+                               "reason": f"canonical {r.get('ssr')} -> {r.get('post')} ({r.get('count')} element(s))"})
+    return violations, len(rows)
+
+
+def run(per_family: int, b_cap: int, c_sample: int = DEFAULT_C_SAMPLE) -> dict:
     rng = random.Random(20260808)  # fixed seed: a violation is reproducible
     paths = sitemap_paths()
     if not paths:
@@ -206,11 +249,13 @@ def run(per_family: int, b_cap: int) -> dict:
         raise RuntimeError("sitemap returned 0 URLs — cannot assert anything; treating as failure")
     va, na = check_a(paths, per_family, rng)
     vb, nb, pop_b = check_b(paths, b_cap, rng)
+    vc, nc = check_c(paths, c_sample, rng)
     st = {
         "sitemap_urls": len(paths),
         "a_checked": na, "a_violations": len(va),
         "b_checked": nb, "b_population": pop_b, "b_violations": len(vb),
-        "violations": (va + vb)[:40],
+        "c_checked": nc, "c_violations": len(vc),
+        "violations": (va + vb + vc)[:40],
     }
     if na == 0:
         raise RuntimeError("checked 0 sitemap URLs; the sampler is broken, not the site")
@@ -221,6 +266,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--sample", type=int, default=DEFAULT_SAMPLE, help="URLs per family for invariant A")
     ap.add_argument("--b-cap", type=int, default=DEFAULT_B_CAP, help="max URLs sampled for invariant B")
+    ap.add_argument("--c-sample", type=int, default=DEFAULT_C_SAMPLE, help="URLs per family for invariant C (headless)")
     ap.add_argument("--dry-run", action="store_true", help="no heartbeat")
     args = ap.parse_args()
     load_env()  # never trust the caller's env (CLAUDE.md rule 7, step 3)
@@ -229,28 +275,31 @@ def main():
         print(f"sitemap URLs: {st['sitemap_urls']}")
         print(f"  A (sitemap URL is indexable):        checked {st['a_checked']:>4}  violations {st['a_violations']}")
         print(f"  B (indexable + ranking => in sitemap): checked {st['b_checked']:>4} of {st['b_population']} missing  violations {st['b_violations']}")
+        print(f"  C (canonical stable across hydration): checked {st['c_checked']:>4}  violations {st['c_violations']}")
         for v in st["violations"]:
             print(f"    [{v['invariant']}] {v['family']:<20} {v['path']}\n          status={v['status']} robots={v['robots']} reason={v.get('reason','')}")
 
     if args.dry_run:
-        report(run(args.sample, args.b_cap))
+        report(run(args.sample, args.b_cap, args.c_sample))
         return
 
     with job_run("sitemap_robots_invariant", cadence_hours=24,
                  title="Sitemap/Robots Invariant Check") as beat:
-        st = run(args.sample, args.b_cap)
+        st = run(args.sample, args.b_cap, args.c_sample)
         report(st)
         beat.metrics = st
-        total = st["a_violations"] + st["b_violations"]
+        total = st["a_violations"] + st["b_violations"] + st["c_violations"]
         beat.detail = (f"{st['sitemap_urls']} sitemap URLs; A {st['a_violations']}/{st['a_checked']} "
-                       f"violations, B {st['b_violations']}/{st['b_checked']} violations")
+                       f"violations, B {st['b_violations']}/{st['b_checked']} violations, "
+                       f"C {st['c_violations']}/{st['c_checked']} canonical-drift")
         # Outcome assertion (7b): a clean exit must mean the invariants HOLD, not merely
         # that the script ran. Both defects this monitor exists for would raise here.
         if total:
             raise RuntimeError(
-                f"sitemap/robots invariant violated: {st['a_violations']} sitemap URLs serve "
-                f"noindex, {st['b_violations']} indexable ranking URLs are missing from the "
-                f"sitemap. First: {st['violations'][0] if st['violations'] else 'n/a'}")
+                f"sitemap/robots/canonical invariant violated: A={st['a_violations']} unhealthy "
+                f"sitemap URLs, B={st['b_violations']} indexable ranking URLs missing from the "
+                f"sitemap, C={st['c_violations']} canonicals rewritten by hydration. "
+                f"First: {st['violations'][0] if st['violations'] else 'n/a'}")
 
 
 if __name__ == "__main__":
