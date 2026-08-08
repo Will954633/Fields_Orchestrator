@@ -295,6 +295,14 @@ this really well later"* — and resolves it the way the lead-funnel verdict pro
 analysis, keep the artefact.** The on-page data stays free and open. The heavy, posted, personally
 signed pack is the earned escalation, sent only to people who did something.
 
+**⭐ Brain 1 independently validates this split, and it settles a real fight.** The corpus carries a
+genuine cross-source contradiction — give-give-give (Panos *and* Serhant, separately) against
+*"the more value you give away for free, the less valuable you are"* (Voss/Shull). They are not
+disagreeing about the same variable: **give freely as a long-horizon nurture act, withhold the
+bespoke deep-dive as spec work at the point of a live listing decision until there is commitment.**
+That is the only position consistent with every source in the corpus, and it is exactly this option
+paired with an ungated on-page analysis. See [`05-IS-DIRECT-MAIL-DECAYING.md`](05-IS-DIRECT-MAIL-DECAYING.md) §2b.
+
 **Why it is on the list despite thin evidence.** It is the **smallest build** — the V4 appraisal
 PDFs already render, 184 of them exist on disk. It is the cheapest to trial. And it is the only
 option where the physical object is meant to be *rare*, which is the one property none of the others

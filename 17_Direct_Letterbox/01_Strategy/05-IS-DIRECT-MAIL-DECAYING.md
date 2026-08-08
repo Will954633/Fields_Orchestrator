@@ -154,6 +154,39 @@ adjusted down?*) that only more evidence resolves. Generosity is the retention m
 scarcity. Which is fortunate, because the alternative is leverage over something that matters to
 them, and it is already blocked in `guardrails.py`.
 
+**2b. The corpus's own give-vs-withhold fight resolves on *when*, not *whether*.** Brain 1 carries a
+genuine cross-source contradiction: give-give-give (Panos *and* Serhant, independently) against
+*"the more value you give away for free, the less valuable you are"* and *"do not conduct property
+analysis without client commitment first"* (Voss/Shull). Both are right in their own frame, and they
+are not arguing about the same variable:
+
+| | Give freely | Withhold |
+|---|---|---|
+| **What it is for** | Building the relationship over months, unsolicited | Servicing a live listing prospect |
+| **When** | Long before any listing conversation | At or near the listing appointment |
+| **Risk** | Slow — 12+ month lag, and the payoff is often a *referral*, not a listing from that person | Free spec work for someone who has already decided |
+
+**The reconciled rule, consistent with every source: give freely as a long-horizon nurture act;
+withhold the bespoke deep-dive as spec work at the point of a live listing decision until there is
+commitment.** That maps exactly onto the structure already proposed — the automated per-address
+analysis is the free nurture layer, the heavy posted appraisal is the commitment-gated escalation
+(Option 5). It is also the same answer the lead-funnel verdict reached: **ungate the analysis, keep
+the artefact.**
+
+**⚠ And the sharpest challenge in the whole corpus, which does not come from the dominant source.**
+Voss/Shull's *Favorite/Fool*: *"They already had a Favorite before they even called you, and no
+listing presentation will change that."* If true, an unsolicited report to someone who already has a
+Favorite is wasted, and one sent to someone for whom you *are* the Favorite was unnecessary.
+
+That is a real hit, and it should not be waved away. But note what it actually refutes: it kills the
+*late* giveaway, not the *early* one. Fields' own external research says **81% of sellers contact
+only one agent and 59% hire the first they contact** — so the game was never the bake-off. It is to
+**be the Favorite before the moment arrives**, at a moment nobody can predict, because 78% of
+sellers are triggered by an unpredictable life event. Favorite/Fool does not argue against a
+sustained programme. **It is the strongest available argument for why the programme must be
+sustained, and why a one-shot mailer cannot work** — which is the same conclusion Opower reaches
+from the data side.
+
 **3. Fund a cadence or do not start.** Opower is unambiguous: a single mailer peaks ~10 days after
 arrival and **decays to nothing within about three months**, while a two-year programme is
 **2.5–4.2× more cost-effective**. A one-shot test will under-read its own result and tell you the
