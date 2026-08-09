@@ -22,13 +22,21 @@ import os, re, sys, json, argparse
 from difflib import SequenceMatcher
 
 PACKAGE = "/home/fields/brain1_build/package.json"
-# All annotation sources feeding the unified external brain — coaching (u####) + KB (k####).
-# Without the KB files, KB-quote citations would falsely verify as fabricated.
+# All annotation sources feeding the unified external brain — coaching (u####) + KB (k####)
+# + video corpus (u9#####) + Drive (i#########).
+# Without every file, citations to the missing library falsely verify as FABRICATED (NOT_FOUND).
+# ⚠ THIS LIST MUST MATCH THE --merge LIST IN brain1_graph.py / brain_drive_nightly.py.
+# On 2026-08-10 the graph had grown to include /home/fields/brain1_yt (2,292 units: eXp Realty US,
+# BLAC SALT AU) but this list had not, so EVERY u9##### quote was reported NOT_FOUND — 41 false
+# fabrications in one brief, dropping its headline fidelity to 64%. A publish gate that cries wolf
+# gets ignored, so adding a corpus to Brain 1 means adding it HERE too.
 ANN_FILES = [
     "/home/fields/brain1_build/annotations.jsonl",
+    "/home/fields/brain1_yt/annotations.jsonl",        # video corpus (u9##### units)
     "/home/fields/brain3_build/annotations_public.jsonl",
     "/home/fields/brain3_build/annotations_private.jsonl",
-    "/home/fields/brain3_ops/annotations_ops.jsonl",  # Brain 3 internal ops (i##### units)
+    "/home/fields/brain3_ops/annotations_ops.jsonl",   # Brain 3 internal ops (i##### units)
+    "/home/fields/brain_drive/annotations_b1.jsonl",   # Drive-ingested (i######### units)
 ]
 _norm_re = re.compile(r"[^a-z0-9 ]+")
 _ws = re.compile(r"\s+")
