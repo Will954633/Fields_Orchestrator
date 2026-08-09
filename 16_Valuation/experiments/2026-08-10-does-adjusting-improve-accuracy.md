@@ -1,4 +1,4 @@
-# Does adjusting comparables make the answer more accurate? — no
+# Does adjusting comparables make the answer more accurate? — YES (see the correction at the foot)
 
 **Date:** 2026-08-10 · **n = 631** sold houses, $1M–$2M, Robina / Varsity Lakes / Burleigh Waters
 **Script:** `16_Valuation/experiments/adjustment_accuracy.py` → `adjustment_accuracy.jsonl`
@@ -7,7 +7,9 @@ differences, our valuations become x% more accurate."*
 
 ## The answer
 
-**There is no such number, and the measurement points the other way.** The line must not be
+⚠ **SUPERSEDED — this section measures the wrong set. See the CORRECTION at the foot of this file.**
+
+**Measured over the 8 displayed comparables the answer looked like "no". The line must not be
 published.
 
 | | unadjusted | adjusted | change |
