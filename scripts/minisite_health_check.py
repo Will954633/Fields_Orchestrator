@@ -45,7 +45,16 @@ SEVERITY = {ERROR: 4, MISSING: 3, STALE: 2, UNKNOWN: 1, GAP: 0, PENDING: 0, OK: 
 
 # Per-upstream staleness: None = nightly (judge vs expected last nightly run);
 # a number = monthly/slow source judged on clock age in days.
-UPSTREAM_STALE_DAYS = {"prices": None, "charts": None, "active": None,
+# "prices" (precomputed_indexed_prices) and "charts" (precomputed_market_charts)
+# are MONTHLY sources, not nightly: their only producer is
+# run_monthly_market_precompute.sh (0 5 1 * *), and both were deliberately removed
+# from the nightly pipeline on 2026-08-02 because the nightly re-run blind-replaced
+# the union medians — fix-history [UNION-MEDIANS-REVERTED-NIGHTLY]. Judging them
+# nightly marked 489 market.* field-rows STALE across the 70 real mini-sites for
+# ~29 days of every month. 40d = 31-day month + grace, matching the main board's
+# CADENCE_DAYS["monthly"]. "active" stays nightly — precomputed_active_listings
+# genuinely refreshes every night.
+UPSTREAM_STALE_DAYS = {"prices": 40, "charts": 40, "active": None,
                        "valuation": 3, "seasonality": 35, "library": None}
 
 

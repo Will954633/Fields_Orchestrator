@@ -405,6 +405,34 @@ def build(db, doc, max_points=4):
     return lead + points + trail
 
 
+MAX_GENERATED_POINTS = 3   # suburb + macro; the property layer adds up to 2 more
+
+# Fingerprints of the local readings, so the same measured sentence cannot be
+# attached to two different events. Keyed on the distinctive figure rather than
+# the whole string, because the surrounding wording differs by event.
+def _reading_key(text):
+    import re as _re
+    m = _re.search(r"(\$[\d,]+|\d+ days)", text or "")
+    return m.group(1) if m else None
+
+
+def _dedupe_readings(points):
+    """Drop a point whose local reading repeats a figure already on screen.
+
+    The event statement is always unique; the LOCAL half is what repeats, and it
+    is the half a reader recognises. Keeping the earlier point is deliberate —
+    it is the one whose date the reading was measured against."""
+    seen, out = set(), []
+    for p in sorted(points, key=lambda x: x["date"]):
+        k = _reading_key(p["text"].split("—", 1)[-1])
+        if k and k in seen:
+            continue
+        if k:
+            seen.add(k)
+        out.append(p)
+    return out
+
+
 def emit_ts(db, out_path):
     """Write the suburb / macro / watch layers as a TypeScript constant.
 
@@ -424,9 +452,18 @@ def emit_ts(db, out_path):
     blocks = []
     for key, name in (("robina", "Robina"), ("varsity_lakes", "Varsity Lakes"),
                       ("burleigh_waters", "Burleigh Waters")):
-        pts = (suburb_events(db, key, name, now)
-               + macro_events(db, key, name, now)
-               + watch_points(db, key, name, now))
+        # ⚠ DEDUPE THE LOCAL READINGS, THEN CAP.
+        # Three events each pair with a local metric, and the first render put
+        # "$1,490,000 on a 12-month rolling basis, -1.7%" on screen THREE times
+        # (12 May, Q2 2026, 31 July) and the 34-day figure twice. A reader counts
+        # that as one fact repeated, not four facts — and repetition on a page
+        # arguing for rigour reads as padding. Each metric now speaks once, and
+        # the whole layer is capped so the block lands at Will's 3-5 points once
+        # the property layer is added on top.
+        suburb_pts = suburb_events(db, key, name, now)
+        macro_pts = macro_events(db, key, name, now)
+        pts = _dedupe_readings(suburb_pts + macro_pts)[:MAX_GENERATED_POINTS]
+        pts += watch_points(db, key, name, now)
         rows = []
         for p in sorted(pts, key=lambda x: x["date"]):
             rows.append("      {\n"

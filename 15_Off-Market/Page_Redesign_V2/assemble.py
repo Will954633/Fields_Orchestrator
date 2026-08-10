@@ -648,7 +648,11 @@ def _adj_phrase(sig, mode):
     watery = kind in ("water", "river", "canal", "creek", "beach")
     verb = "backing onto" if rel == "backs onto" else "right beside"
     if mode == "family":
-        return f"{verb} {nm} — a backyard the kids share with no one" if not watery else f"{verb} {nm}"
+        # ⚠ NOT "a backyard the kids share with no one". That is listing-brochure
+        # voice, and on the V4 report it arrives after twenty sections of
+        # measured evidence — the tonal break costs more than the phrase adds.
+        # State the boundary fact; the reader supplies the feeling.
+        return f"{verb} {nm} — no neighbour behind" if not watery else f"{verb} {nm}"
     if mode == "stroll":
         return f"{nm} to wander at the door"
     if mode == "outlook":
@@ -685,17 +689,20 @@ def _persona_fit(frame, s):
         add(school); add(_adj_phrase(s, "family"))
         if s["single_level"]: add("a single level while the kids are small")
         add(childcare)
-        if s["pool"]: add("a pool for summer")
+        if s["pool"]: add("a pool")
         add(park)
     elif frame == "land_lifestyle_family":
         if s["big_land"]: add(f"the {s['land']}m² block to grow into")
         add(_adj_phrase(s, "family"))
-        if s["pool"]: add("a pool for the family")
+        # ⚠ Plain noun. "a pool for the family" is brochure voice — the persona
+        # is already stated, so the qualifier only adds warmth we have not earned
+        # on a page built on measured evidence.
+        if s["pool"]: add("a pool")
         add(school or park)
         if s["single_level"]: add("single-level family living")
     elif frame == "beachside_lifestyle":
         add(beach)
-        if s["pool"]: add("a pool for after the sand")
+        if s["pool"]: add("a pool")
         add(cafe)
         add(finish("a high-end, holiday-ready finish", "a fully renovated, holiday-ready home"))
         add(_adj_phrase(s, "stroll"))

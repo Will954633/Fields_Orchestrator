@@ -1201,10 +1201,18 @@ _STEP_OUTCOME_CHECKS = [
      lambda n: (ERROR, "Pass 3 wrote nothing — Domain profile scraping is failing "
                        "(direct VM fetch is Akamai-blocked; blocks are mislabelled 404)")
      if n == 0 else (OK, "")),
-    ("113", "Withdrawn detection: full sweep",
-     r"ABORTED EARLY: runtime budget exceeded", "count",
-     lambda n: (STALE, "aborted on its 40-min budget — part of the for-sale book went "
-                       "unchecked again this run") if n else (OK, "")),
+    # Step 113 is a ROLLING sweep, not a per-night full sweep: the 40-min budget covers
+    # ~35-50 of a ~200-listing book and the withdrawn_last_checked_at cursor picks up the
+    # rest over the following nights (full pass ≈ 2-3 days, by design). Asserting on
+    # "ABORTED EARLY" therefore marked the row STALE every single night for correct
+    # behaviour — red from 2026-08-04 onward with nothing wrong [WTA-OPS-020]. Judge the
+    # invariant that actually matters instead: has any live listing gone unchecked longer
+    # than the rotation should take? detect_withdrawn.py now prints that verdict directly.
+    ("113", "Withdrawn detection: rolling coverage",
+     r"COVERAGE BEHIND", "count",
+     lambda n: (ERROR, "a live listing has gone unchecked longer than the rotation should "
+                       "take (or BrightData is degraded) — withdrawals may be going "
+                       "undetected") if n else (OK, "")),
     # The log line is "⚠️ Excluded (missing_floor_area) — cleared existing valuation",
     # which fires on EVERY exclusion whether or not a valuation existed. Reading it as
     # "N valuations wiped" was wrong (2026-08-05 ops cycle): DB confirms zero data loss
@@ -1648,7 +1656,20 @@ def collect(client, now_utc, prev_map):
                 add(PG, f"Chart: {label}", suburb_label(s), None, MISSING, "last_updated", None, "doc absent")
             else:
                 ts = as_dt(d.get("last_updated"))
-                st, dt = judge(ts, "nightly", now_utc, last_run)
+                # MONTHLY, not nightly — same reasoning as the indexed-prices block
+                # above, and load-bearing here. precompute_market_charts.py's only
+                # producer is run_monthly_market_precompute.sh (0 5 1 * *). It was
+                # deliberately REMOVED from the nightly pipeline on 2026-08-02
+                # (RUN_PRECOMPUTE.sh, step 17) because running it nightly blind-
+                # replaced the union medians every night — see fix-history
+                # [UNION-MEDIANS-REVERTED-NIGHTLY]. The data is quarterly and cannot
+                # change between nights; the crontab, the RUN_PRECOMPUTE.sh comment
+                # block and the live page footer ("Updated monthly on the 1st") all
+                # say so. Judging it nightly made these 21 rows STALE for ~29 days of
+                # every month AND implicitly demanded the exact nightly re-run that
+                # caused the corruption incident. 40d threshold = 31-day month + grace,
+                # so a genuinely missed monthly run still goes STALE.
+                st, dt = judge(ts, "monthly", now_utc, last_run)
                 # market_cycle needs ~2yr of House sales; thin non-core suburbs
                 # legitimately can't recompute it (producer returns None, leaves the
                 # prior doc). Per coverage policy, treat that as a known gap, not STALE.

@@ -59,7 +59,14 @@ insights:
     trigger: pool
     card: card_07
     priority: 7
-    text: "Buyers love a pool — but across 2,153 local sales it added only about 1–4% to value per square metre. It's more a signal of the price tier than a driver of it. Good to know before anyone tries to over- or under-weight it."
+    # ⚠ WAS "about 1–4% to value per square metre" — a hand-written figure from
+    # the playbook, in a unit that does not describe what a pool does (a pool
+    # does not move price per square metre). Our OWN engine measures it: the
+    # regression-validated comparable adjustment is $75,000, which the page can
+    # stand behind because it is the number it actually applied. The "signal of
+    # the price tier, not a driver of it" inference is NOT restated here — it
+    # was never tested, and this page is read by owners who will check.
+    text: "In the comparable adjustments behind your figure, a pool is worth about $75,000 — real, and usually less than owners expect. It is one line in the working, not the thing that sets the number."
 
 card_02_hook:
   answer: "Here's what stood out."
@@ -249,10 +256,18 @@ card_05_competition:
   # same page: "Comparable to yours 1" above "Based on 59 adjusted comparable
   # sales" reads as the page contradicting itself, on the one card carrying a
   # dollar figure. Naming the tense fixes it without touching either number.
+  # ⚠ EACH TIER IS A DIFFERENT UNIVERSE, so each label must name its own scope.
+  # Tier 1 is the suburb; tier 2 is the NINE-SUBURB comparison catchment (Robina
+  # alone has far fewer); tier 3 is the subset of tier 2 that broadly matches
+  # this home. Labelled loosely ("For sale across the area") a reader meets 183
+  # here, 58 in the timing section and 40 in the closing link and concludes the
+  # page cannot count. Scope was made explicit once before, on 2026-07-30
+  # ([OFFMARKET-FUNNEL-SCOPE-AND-CARD07]); this goes further because "the area"
+  # is not a place a reader can picture.
   funnel_labels:
     - "Homes in {suburb}"
-    - "For sale across the area"
-    - "Comparable to yours, on the market now"
+    - "Houses for sale across the wider comparison catchment"
+    - "That broadly match this home"
   none_note: "Not one listing on the market gives your buyer the same combination. They either choose your home — or they compromise."
   opens: "But what about that sale down the road that looks just like mine?"
 
@@ -286,7 +301,11 @@ card_08_buyer:
   # the buyer archetype + this home's suburb/school/features — not a data tag.
   # Then a "why your home fits them" line from the buyer drivers.
   fit_template: "What a cheaper home can't give them: {drivers}."
-  reframe: "Right now it's your home. To them, it's the one they've been waiting for."
+  # ⚠ NO reframe LINE. It read "Right now it's your home. To them, it's the one
+  # they've been waiting for" — listing copy, arriving after twenty sections
+  # that trained the reader to expect evidence and restraint. The point that
+  # survives is the analytical one, and it is made without the brochure voice.
+  reframe: "The point is not that every buyer values these features. It is that the right buyer may value them disproportionately."
   opens: "So where does that put its value?"
 
 # CARD 09 — The Valuation Reveal.  Finally. The number is the conclusion, not the product.

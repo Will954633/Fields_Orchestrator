@@ -458,9 +458,42 @@ OUTRO_WIRE = """<script>
     }, { rootMargin: "0px 0px 60% 0px" });
     io.observe(card);
   }
+  // START THE BUILD ON THE PRESS, NOT ON THE TEXT.
+  //
+  // The shatter sequence runs ~27s, then they have to open Messages, send, and
+  // wait for the reply — call it 90 seconds before the old trigger fired. That
+  // is 90 seconds of mini-site build we were throwing away while the reader
+  // watched an animation. Pressing "Start building" is an unambiguous signal of
+  // intent, so it is the honest moment to start actually building.
+  //
+  // Fire-and-forget, once, and safe to repeat: submit keeps any existing doc and
+  // only refreshes timestamps, and without `claim` it cannot take ownership of
+  // a report someone else holds. The SMS webhook calls the same endpoint later
+  // and simply finds this one already under way.
+  //
+  // Skips internal devices, same flag the ladder deck's pre-warm uses — no
+  // point burning an LLM build every time we test our own page.
+  let warmed = false;
+  const prewarm = () => {
+    const C = window.__FIELDS_CLAIM;
+    if (warmed || !C || !C.fullAddress || !C.suburbKey) return;
+    warmed = true;
+    try {
+      if (localStorage.getItem("fields_internal") === "1") return;
+      fetch("https://fieldsestate.com.au/api/v1/analyse-your-home-submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ address: C.fullAddress, suburb: C.suburb,
+                               suburb_key: C.suburbKey, source: "offmarket_deck_cta" }),
+        keepalive: true,
+      }).catch(() => {});
+    } catch (_) { /* a failed pre-warm must never block the sequence */ }
+  };
+
   const go = (e) => {
     e.preventDefault();
     if (FieldsOutro.running) return;
+    prewarm();
     // Strike where the finger actually landed. A keyboard activation has no
     // coordinates, so fall back to the centre of the button itself.
     const r = cta.getBoundingClientRect();
@@ -562,6 +595,12 @@ def claim_config(doc: dict) -> str:
     svg = qr.svg_inline(scale=4, border=2, dark="#000000", light="#ffffff")
     return ("<script>window.__FIELDS_CLAIM = {"
             f" address: {json.dumps(address)},"
+            # The full address and suburb keys are for the pre-warm POST, which
+            # needs what the AYH form would have sent. `address` above is the
+            # short form, because that is what goes in the text message.
+            f" fullAddress: {json.dumps(doc.get('address') or address)},"
+            f" suburb: {json.dumps(doc.get('suburb_display'))},"
+            f" suburbKey: {json.dumps(doc.get('suburb_key'))},"
             f" number: {json.dumps(SMS_NUMBER)},"
             f" numberDisplay: {json.dumps(SMS_NUMBER_DISPLAY)},"
             f" placeholder: {json.dumps(SMS_NUMBER_IS_PLACEHOLDER)},"
@@ -629,8 +668,8 @@ def build_one(slug: str, out_path: Path, cfg: dict) -> dict:
     # emblems have nothing that could plausibly detach, so they get no script at
     # all rather than a disabled one — see fruit_roll.js and PLAN.md.
     if em and em.get("detach") == "fruit":
-        js += "<script>\n" + (HERE / "fruit_roll.js").read_text().replace(
-            '"../media/', f'"{rel or "./"}media/') + "</script>\n"
+        js += (f'<script>window.FIELDS_MEDIA_BASE = "{rel or "./"}media/";</script>\n'
+               + "<script>\n" + (HERE / "fruit_roll.js").read_text() + "</script>\n")
 
     html_ = html_.replace("</head>", css + "</head>", 1)
     html_ = html_.replace("<script>", cfg_js + "<script>", 1)

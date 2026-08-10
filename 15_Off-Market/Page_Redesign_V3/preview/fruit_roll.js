@@ -39,7 +39,9 @@
 (function () {
   "use strict";
 
-  const SPRITE = "../media/pandanus_fruit.png";
+  // Resolved against a base the host sets, so the same file works from the
+  // preview (a relative folder) and from the site (the blob host).
+  const SPRITE = (window.FIELDS_MEDIA_BASE || "../media/") + "pandanus_fruit.png";
   const BALL_FRAC = 0.390;       // ball radius as a fraction of sprite width
                                  // (from build_fruit_sprite.py — keep in step)
 

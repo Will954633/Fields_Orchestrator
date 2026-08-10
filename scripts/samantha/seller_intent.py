@@ -391,20 +391,38 @@ def listing_expiry_monitor(sm, gc_db, suburbs=None, dry_run=False):
                 continue
             slug = d.get("url_slug")
             key = f"listing:{slug or re.sub(r'[^a-z0-9]+', '', addr.lower())}"
-            alerts.append((addr, dom, dte, d.get("price"), d.get("agency")))
             captured += 1
+
+            # --- notification state: alert on window ENTRY and again at the boundary ---
+            # Keyed by cycle (dom // 90) so a listing that survives to 180d/270d gets a
+            # fresh pair of alerts at each renewal boundary rather than one alert ever.
+            cycle = dom // FORM6_DAYS
+            existing = sm["lead_worklist"].find_one(
+                {"lead_key": key}, {"listing_expiry.alerts_sent": 1})
+            sent = ((existing or {}).get("listing_expiry") or {}).get("alerts_sent") or {}
+            if sent.get("cycle") != cycle:
+                sent = {"cycle": cycle}          # new agency term -> new pair of alerts
+            milestone = "final" if dte <= FINAL_DTE else "entry"
+            if milestone not in sent:
+                alerts.append((addr, dom, dte, d.get("price"), d.get("agency")))
+                sent = {**sent, milestone: NOW}
+
             if dry_run:
                 continue
             cosmos_retry(lambda: sm["lead_worklist"].update_one(
                 {"lead_key": key},
                 {"$setOnInsert": {"lead_key": key, "email": "", "name": "", "phone": "",
                                   "sources": ["listing_expiry"], "is_test": False, "first_seen": NOW},
+                 # NB: this $set replaces the whole listing_expiry sub-doc, so alerts_sent
+                 # MUST be carried forward here — omitting it silently wipes the
+                 # notification state every night and restores the 22-alert behaviour.
                  "$set": {"address": addr,
                           "origins": [{"collection": "gc_listing", "id": str(d.get("_id"))}],
                           "extra": {"report_slug": slug, "agency": d.get("agency"),
                                     "agent_name": d.get("agent_name")},
                           "listing_expiry": {"days_on_market": dom, "days_to_expiry": dte,
-                                             "agency": d.get("agency"), "price": d.get("price")},
+                                             "agency": d.get("agency"), "price": d.get("price"),
+                                             "alerts_sent": sent},
                           "updated_at": NOW}},
                 upsert=True))
     if alerts and not dry_run:
@@ -420,9 +438,17 @@ def _notify_expiring(alerts):
         sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
         from telegram_notify import send_message
         alerts.sort(key=lambda a: a[2])  # soonest expiry first
-        lines = [f"⏰ {len(alerts)} listing(s) nearing ~90-day agency expiry — switch/re-list leads:"]
-        for addr, dom, dte, price, agency in alerts[:12]:
-            lines.append(f"• {addr} — {dom}d on market, ~{dte}d to expiry, {price or '?'} via {agency or '?'}")
+        CAP = 20
+        lines = [f"⏰ {len(alerts)} listing(s) newly nearing ~90-day agency expiry — switch/re-list leads:"]
+        for addr, dom, dte, price, agency in alerts[:CAP]:
+            flag = "⚠ AT BOUNDARY — " if dte <= FINAL_DTE else ""
+            lines.append(f"• {flag}{addr} — {dom}d on market, ~{dte}d to expiry, "
+                         f"{price or '?'} via {agency or '?'}")
+        # Header used to print len(alerts) while the loop printed only the first 12, so
+        # "21 listings" was followed by 12 bullets and 9 vanished silently. Never print a
+        # count without accounting for every item behind it.
+        if len(alerts) > CAP:
+            lines.append(f"…and {len(alerts) - CAP} more (see Live Leads Tracker)")
         send_message("\n".join(lines), parse_mode="")
     except Exception as e:  # noqa: BLE001
         print(f"(expiry Telegram alert skipped: {e})")
@@ -513,6 +539,13 @@ def _money(v):
 # decision point to renew, switch agent, or withdraw.
 FORM6_DAYS = 90
 EXPIRY_WINDOW = 21  # days before a 90-day boundary that we treat as "nearing expiry"
+# A listing sits inside EXPIRY_WINDOW for 22 consecutive nights per 90-day cycle, and
+# until 2026-08-10 it was Telegrammed on every one of them with only the day-counter
+# changing — 22 identical-looking messages per listing per cycle. We now alert twice
+# per cycle: once when it ENTERS the window (the "start preparing" signal) and once at
+# the boundary itself (the "act now" signal). The lead is still captured into
+# lead_worklist every night either way; this only governs the notification.
+FINAL_DTE = 1  # dte <= this fires the second, at-the-boundary alert
 
 
 def listing_stage(dom):

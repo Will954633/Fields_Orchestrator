@@ -71,6 +71,17 @@ COSMOS_RETRY_ATTEMPTS = 3    # DB write retries
 MAX_RUNTIME_MIN = int(os.environ.get("WITHDRAWN_MAX_RUNTIME_MIN", "40"))      # global wall-clock budget
 CIRCUIT_BREAKER_ERRORS = int(os.environ.get("WITHDRAWN_CIRCUIT_BREAKER", "15"))  # consecutive errors -> abort
 
+# This step is a ROLLING sweep, not a nightly full sweep. At ~24s/listing (Web
+# Unlocker round-trip) a 40-min budget covers ~35-50 of a ~200-listing book, and the
+# rotation cursor (withdrawn_last_checked_at) means the rest are picked up on
+# subsequent nights — full coverage lands in ~2-3 days by design. So "aborted early"
+# is the NORMAL end state and alerting on it fired a warning every single night
+# (2026-08-03 .. 2026-08-09 inclusive) for healthy operation.
+# The thing actually worth alerting on is COVERAGE: has any live listing gone
+# unchecked for longer than the rotation should take? That is the assertion this
+# step owes (CLAUDE.md Rule 7b) — an outcome, not merely "nothing threw".
+COVERAGE_STALE_DAYS = float(os.environ.get("WITHDRAWN_COVERAGE_STALE_DAYS", "3"))
+
 
 def get_aest_now():
     """Get current time in AEST (UTC+10)."""
@@ -162,6 +173,9 @@ def run_withdrawn_detection(suburbs, dry_run=False):
     deadline = time.monotonic() + MAX_RUNTIME_MIN * 60
     consecutive_errors = 0
     aborted = None  # reason string if we stop early (deadline or circuit breaker)
+    circuit_broken = False        # True only for the BrightData-degraded abort, not the budget one
+    coverage_age_days = {}        # suburb -> age in days of the OLDEST rotation cursor
+    never_checked = {}            # suburb -> count of live listings with no cursor at all
 
     # ---- Round-robin ordering across suburbs (2026-07-16) ----
     # Previously we processed suburbs strictly sequentially. Combined with the 40-min
@@ -288,13 +302,55 @@ def run_withdrawn_detection(suburbs, dry_run=False):
                 totals["errors"] += 1
                 consecutive_errors += 1
                 print(f"  ERROR: {address} — could not determine status")
+                if not dry_run:
+                    # Stamp on the error path too. Without this a listing that fails
+                    # every time (dead URL, permanent 403) keeps its old/missing
+                    # timestamp, wins the sort every single night, and consumes budget
+                    # ahead of listings that have never been checked at all — one bad
+                    # listing could starve the whole rotation indefinitely. It is
+                    # retried on the next pass round, ~2-3 days later.
+                    retry_db(lambda collection=collection, prop=prop: collection.update_one(
+                        {"_id": prop["_id"]},
+                        {"$set": {"withdrawn_last_checked_at": now_iso}}
+                    ))
                 # Circuit breaker — BrightData clearly degraded; stop instead of grinding for hours
                 if consecutive_errors >= CIRCUIT_BREAKER_ERRORS:
                     aborted = (f"circuit breaker tripped after {consecutive_errors} consecutive "
                                f"fetch errors (BrightData Web Unlocker degraded)")
+                    circuit_broken = True
                     break
 
             time.sleep(REQUEST_DELAY)
+
+        # --- coverage assertion (Rule 7b) — must run before the client is closed ---
+        # Oldest rotation cursor across the live book. If the sweep is keeping up this
+        # is < COVERAGE_STALE_DAYS regardless of how many any single night got through.
+        for suburb, collection, _props in per_suburb:
+            oldest = retry_db(lambda collection=collection: list(collection.find(
+                {"listing_status": "for_sale", "listing_url": {"$exists": True, "$ne": None}},
+                {"withdrawn_last_checked_at": 1}
+            ).sort("withdrawn_last_checked_at", 1).limit(1)))
+            if not oldest:
+                continue
+            stamp = oldest[0].get("withdrawn_last_checked_at")
+            if not stamp:
+                never_checked[suburb] = retry_db(lambda collection=collection: collection.count_documents(
+                    {"listing_status": "for_sale", "listing_url": {"$exists": True, "$ne": None},
+                     "withdrawn_last_checked_at": {"$exists": False}}))
+                continue
+            try:
+                # now_iso is written by datetime.utcnow() -> NAIVE, already UTC. Calling
+                # .astimezone() on it would have Python assume LOCAL (AEST) and silently
+                # shift it 10 hours, which is the exact off-by-ten class that produced a
+                # bogus "swallowed heartbeat" diagnosis in [WTA-OPS-011]. Attach UTC
+                # explicitly instead of converting.
+                dt = datetime.fromisoformat(stamp)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                coverage_age_days[suburb] = (
+                    datetime.now(timezone.utc) - dt).total_seconds() / 86400
+            except Exception:
+                pass
 
     finally:
         session.close()
@@ -316,18 +372,46 @@ def run_withdrawn_detection(suburbs, dry_run=False):
         print(f"  ⚠ ABORTED EARLY: {aborted}")
         print(f"     Suburbs left incomplete: {', '.join(unfinished) if unfinished else 'none'}")
         print(f"     Remaining for_sale listings left unchecked — will retry next run.")
-        if not dry_run:
-            try:
-                sys.path.insert(0, '/home/fields/Fields_Orchestrator/scripts')
-                from telegram_notify import send_message
-                send_message(
-                    f"⚠️ *Withdrawn detection (step 113) aborted early*\n"
-                    f"{aborted}\n"
-                    f"Suburbs left incomplete: {', '.join(unfinished) if unfinished else 'none'}\n"
-                    f"Checked {totals['checked']}, withdrawn {totals['withdrawn']}, errors {totals['errors']}."
-                )
-            except Exception as e:
-                print(f"     (telegram alert failed: {e})")
+
+    # --- coverage verdict: this, not the early abort, decides whether Will hears ---
+    stale_cov = {s: a for s, a in coverage_age_days.items() if a > COVERAGE_STALE_DAYS}
+    print(f"  Rotation coverage (oldest cursor per suburb): " + (", ".join(
+        f"{s}={a:.1f}d" for s, a in sorted(coverage_age_days.items())) or "n/a"))
+    if never_checked:
+        print(f"  Never checked: " + ", ".join(f"{s}={n}" for s, n in never_checked.items()))
+
+    # Machine-readable verdict for the Systems Health board's step-113 outcome check.
+    # The board must judge COVERAGE, not the early abort — an abort with healthy
+    # coverage is normal (see COVERAGE_STALE_DAYS above), so asserting on "aborted"
+    # made the row permanently STALE for correct behaviour [WTA-OPS-020].
+    if stale_cov or circuit_broken:
+        print(f"  ⚠ COVERAGE BEHIND: " + (", ".join(
+            f"{s}={a:.1f}d" for s, a in sorted(stale_cov.items())) or "brightdata degraded"))
+    else:
+        print(f"  ✅ COVERAGE OK: rolling sweep within {COVERAGE_STALE_DAYS:g}d on all suburbs")
+
+    if not dry_run and (circuit_broken or stale_cov):
+        # Alert ONLY on a genuine failure: BrightData degraded (circuit breaker), or the
+        # rolling sweep has fallen behind so a live listing may have been withdrawn days
+        # ago without us noticing. A plain budget abort with healthy coverage is the
+        # designed steady state and is deliberately silent.
+        try:
+            sys.path.insert(0, '/home/fields/Fields_Orchestrator/scripts')
+            from telegram_notify import send_message
+            if circuit_broken:
+                head = ("⚠️ Withdrawn detection (step 113): BrightData Web Unlocker degraded\n"
+                        f"{aborted}")
+            else:
+                head = ("⚠️ Withdrawn detection (step 113): rolling sweep has fallen behind\n"
+                        f"Listings unchecked for >{COVERAGE_STALE_DAYS:g}d: " + ", ".join(
+                            f"{s} {a:.1f}d" for s, a in sorted(stale_cov.items())))
+            send_message(
+                f"{head}\n"
+                f"Checked {totals['checked']}, withdrawn {totals['withdrawn']}, "
+                f"errors {totals['errors']}.",
+                parse_mode="")
+        except Exception as e:
+            print(f"     (telegram alert failed: {e})")
     if dry_run:
         print(f"  (DRY RUN — no DB changes made)")
     print(f"{'='*60}")
