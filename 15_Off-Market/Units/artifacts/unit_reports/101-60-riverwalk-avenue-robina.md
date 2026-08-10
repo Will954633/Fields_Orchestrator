@@ -14,11 +14,15 @@ This home is one of **53 homes** in **Greenwich On Riverwalk** — a strata comp
 
 The buildings in it stand **5–9 storeys** (about 29 m). Derived from Queensland LiDAR building outlines captured in 2022 — accurate to within one storey nine times in ten, which is why it is stated as a band rather than a number.
 
+At that height it will have a lift — **inferred from the building, not recorded**; no source we hold publishes lift presence.
+
 *Source: Queensland cadastre (CC-BY 4.0) — © State of Queensland.*
 
 > **Derived figure.** The 96 m² above is the median of 34 same-bedroom dwellings in this scheme, not a measured area for this home. Method error 5.2% median on leave-one-out testing.
 
 > **GAP [C3]** — no complex amenity data — lift, pool, gym, secure parking (structuredFeatures[] not stored).
+>
+> Lift is inferred above; pool, gym, secure parking and on-site management are still unknown.
 
 ---
 
