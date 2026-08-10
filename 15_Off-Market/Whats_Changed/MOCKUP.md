@@ -21,11 +21,11 @@ suburb and paired with the national event it sits beside.
 - **15 March 2026** — 31 Huntingdale Crescent sold for $1,910,000. Adjusted to this home and weighted with the other comparable sales, including it moved the centre of this home's range up by about $6,321.
   <br><sub>Fields comparable-sales engine · effect measured by re-reconciling without this sale</sub>
 
+- **1 May 2026** — The cash rate rose in February, March and May 2026 to 4.35% — a reversal for a market that had spent 2025 waiting for cuts — and has been held there since 17 June. Over the same period, homes in Robina have taken longer to sell — a median of 34 days in 2026-Q2 against 26 in 2026-Q1.
+  <br><sub>RBA · via Fields monthly market research, 2 August 2026</sub>
+
 - **12 May 2026** — Negative gearing and capital gains tax changes were announced on 12 May 2026 and received Royal Assent on 26 June, taking effect 1 July 2027. They apply to investment purchases; the main residence exemption is unchanged. Since then, the number of homes on the market in Robina has risen from an average of 45 before that date to 58 now (+29%). Locally the Robina median house price is broadly unchanged over the same period — $1,490,000 on a 12-month rolling basis in Q2 2026, -1.7% on the quarter before.
   <br><sub>Commonwealth legislation · via Fields monthly market research, 2 August 2026</sub>
-
-- **17 June 2026** — The cash rate rose in February, March and May 2026 to 4.35%, and has been held there since 17 June. Over the same period, homes in Robina have taken longer to sell — a median of 34 days in 2026-Q2 against 26 in 2026-Q1. Since then, the number of homes on the market in Robina has risen from an average of 46 before that date to 58 now (+26%).
-  <br><sub>RBA · via Fields monthly market research, 2 August 2026</sub>
 
 - **Q2 2026** — the Robina median house price stands at $1,490,000 on a 12-month rolling basis, +5.8% on a year earlier. Quarterly sales volumes in Robina are too thin to read a quarter-to-quarter movement in either direction.
   <br><sub>Fields analysis of Robina sales</sub>
@@ -36,14 +36,14 @@ suburb and paired with the national event it sits beside.
 
 ## 1/18 Menton Avenue, Varsity Lakes, QLD 4227
 
+- **1 May 2026** — The cash rate rose in February, March and May 2026 to 4.35% — a reversal for a market that had spent 2025 waiting for cuts — and has been held there since 17 June. Over the same period, homes in Varsity Lakes have taken longer to sell — a median of 26 days in 2026-Q2 against 25 in 2026-Q1.
+  <br><sub>RBA · via Fields monthly market research, 2 August 2026</sub>
+
 - **12 May 2026** — Negative gearing and capital gains tax changes were announced on 12 May 2026 and received Royal Assent on 26 June, taking effect 1 July 2027. They apply to investment purchases; the main residence exemption is unchanged. Since then, the number of homes on the market in Varsity Lakes has risen from an average of 11 before that date to 22 now (+100%). Locally the Varsity Lakes median house price is broadly unchanged over the same period — $1,400,000 on a 12-month rolling basis in Q2 2026, +1.2% on the quarter before.
   <br><sub>Commonwealth legislation · via Fields monthly market research, 2 August 2026</sub>
 
 - **18 May 2026** — 1/9 Magenta Drive sold for $1,092,000. Adjusted to this home and weighted with the other comparable sales, including it moved the centre of this home's range up by about $69,782.
   <br><sub>Fields comparable-sales engine · effect measured by re-reconciling without this sale</sub>
-
-- **17 June 2026** — The cash rate rose in February, March and May 2026 to 4.35%, and has been held there since 17 June. Over the same period, homes in Varsity Lakes have taken longer to sell — a median of 26 days in 2026-Q2 against 25 in 2026-Q1. Since then, the number of homes on the market in Varsity Lakes has risen from an average of 10 before that date to 22 now (+123%).
-  <br><sub>RBA · via Fields monthly market research, 2 August 2026</sub>
 
 - **Q2 2026** — the Varsity Lakes median house price is $1,400,000, +10.2% on a year earlier.
   <br><sub>Fields analysis of Varsity Lakes sales</sub>
@@ -54,11 +54,11 @@ suburb and paired with the national event it sits beside.
 
 ## 1 Anthony Drive, Burleigh Waters QLD 4220
 
+- **1 May 2026** — The cash rate rose in February, March and May 2026 to 4.35% — a reversal for a market that had spent 2025 waiting for cuts — and has been held there since 17 June. Over the same period, homes in Burleigh Waters have taken less time to sell — a median of 29 days in 2026-Q2 against 31 in 2026-Q1.
+  <br><sub>RBA · via Fields monthly market research, 2 August 2026</sub>
+
 - **12 May 2026** — Negative gearing and capital gains tax changes were announced on 12 May 2026 and received Royal Assent on 26 June, taking effect 1 July 2027. They apply to investment purchases; the main residence exemption is unchanged. Since then, the number of homes on the market in Burleigh Waters has fallen from an average of 36 before that date to 32 now (-10%). Locally the Burleigh Waters median house price is broadly unchanged over the same period — $1,925,000 on a 12-month rolling basis in Q2 2026, +0.8% on the quarter before.
   <br><sub>Commonwealth legislation · via Fields monthly market research, 2 August 2026</sub>
-
-- **17 June 2026** — The cash rate rose in February, March and May 2026 to 4.35%, and has been held there since 17 June. Over the same period, homes in Burleigh Waters have taken shorter to sell — a median of 29 days in 2026-Q2 against 31 in 2026-Q1. Since then, the number of homes on the market in Burleigh Waters has fallen from an average of 40 before that date to 32 now (-19%).
-  <br><sub>RBA · via Fields monthly market research, 2 August 2026</sub>
 
 - **Q2 2026** — the Burleigh Waters median house price is $1,925,000, +6.9% on a year earlier.
   <br><sub>Fields analysis of Burleigh Waters sales</sub>
@@ -69,8 +69,6 @@ suburb and paired with the national event it sits beside.
 - **Since February 2026** — 23 sales in this home's comparison set have settled, from $1,100,000 to $4,600,000. Together they left the centre of this home's range effectively unchanged.
   <br><sub>Fields comparable-sales engine · measured by reconciling with and without the window's sales</sub>
 
-
----
 
 ---
 
