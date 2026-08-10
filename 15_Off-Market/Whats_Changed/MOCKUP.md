@@ -18,47 +18,47 @@ suburb and paired with the national event it sits beside.
 ---
 ## 1 Anglesea Court, Robina QLD 4226
 
-- **2 March 2026** — 25 Huntingdale Crescent sold for $1,731,000. Adjusted to this home and weighted with the other comparable sales, including it moved the centre of this home's range up by about $5,031.
-  <br><sub>Fields comparable-sales engine · effect measured by re-reconciling without this sale</sub>
-
 - **15 March 2026** — 31 Huntingdale Crescent sold for $1,910,000. Adjusted to this home and weighted with the other comparable sales, including it moved the centre of this home's range up by about $6,321.
   <br><sub>Fields comparable-sales engine · effect measured by re-reconciling without this sale</sub>
 
-- **17 June 2026** — The cash rate has sat at 4.35% since 17 June 2026, after rises in February, March and May. Over the same period, homes in Robina have taken a median of 34 days to sell.
-  <br><sub>RBA · via Fields monthly market research, 2 August 2026</sub>
-
-- **26 June 2026** — Negative gearing and capital gains tax changes received Royal Assent on 26 June 2026, taking effect 1 July 2027. They apply to investment purchases; the main residence exemption is unchanged. Locally, Robina currently has 58 homes listed for sale.
+- **12 May 2026** — Negative gearing and capital gains tax changes were announced on 12 May 2026 and received Royal Assent on 26 June, taking effect 1 July 2027. They apply to investment purchases; the main residence exemption is unchanged. Since then, the number of homes on the market in Robina has risen from an average of 45 before that date to 58 now (+29%). Locally the Robina median house price is broadly unchanged over the same period — $1,490,000 on a 12-month rolling basis in Q2 2026, -1.7% on the quarter before.
   <br><sub>Commonwealth legislation · via Fields monthly market research, 2 August 2026</sub>
+
+- **17 June 2026** — The cash rate rose in February, March and May 2026 to 4.35%, and has been held there since 17 June. Over the same period, homes in Robina have taken longer to sell — a median of 34 days in 2026-Q2 against 26 in 2026-Q1. Since then, the number of homes on the market in Robina has risen from an average of 46 before that date to 58 now (+26%).
+  <br><sub>RBA · via Fields monthly market research, 2 August 2026</sub>
 
 - **Q2 2026** — the Robina median house price stands at $1,490,000 on a 12-month rolling basis, +5.8% on a year earlier. Quarterly sales volumes in Robina are too thin to read a quarter-to-quarter movement in either direction.
   <br><sub>Fields analysis of Robina sales</sub>
 
+- **Since February 2026** — 17 sales in this home's comparison set have settled, from $1,260,000 to $1,910,000. Together they moved the centre of this home's range up by about $23,037.
+  <br><sub>Fields comparable-sales engine · measured by reconciling with and without the window's sales</sub>
+
 
 ## 1/18 Menton Avenue, Varsity Lakes, QLD 4227
+
+- **12 May 2026** — Negative gearing and capital gains tax changes were announced on 12 May 2026 and received Royal Assent on 26 June, taking effect 1 July 2027. They apply to investment purchases; the main residence exemption is unchanged. Since then, the number of homes on the market in Varsity Lakes has risen from an average of 11 before that date to 22 now (+100%). Locally the Varsity Lakes median house price is broadly unchanged over the same period — $1,400,000 on a 12-month rolling basis in Q2 2026, +1.2% on the quarter before.
+  <br><sub>Commonwealth legislation · via Fields monthly market research, 2 August 2026</sub>
 
 - **18 May 2026** — 1/9 Magenta Drive sold for $1,092,000. Adjusted to this home and weighted with the other comparable sales, including it moved the centre of this home's range up by about $69,782.
   <br><sub>Fields comparable-sales engine · effect measured by re-reconciling without this sale</sub>
 
-- **17 June 2026** — The cash rate has sat at 4.35% since 17 June 2026, after rises in February, March and May. Over the same period, homes in Varsity Lakes have taken a median of 26 days to sell.
+- **17 June 2026** — The cash rate rose in February, March and May 2026 to 4.35%, and has been held there since 17 June. Over the same period, homes in Varsity Lakes have taken longer to sell — a median of 26 days in 2026-Q2 against 25 in 2026-Q1. Since then, the number of homes on the market in Varsity Lakes has risen from an average of 10 before that date to 22 now (+123%).
   <br><sub>RBA · via Fields monthly market research, 2 August 2026</sub>
-
-- **26 June 2026** — Negative gearing and capital gains tax changes received Royal Assent on 26 June 2026, taking effect 1 July 2027. They apply to investment purchases; the main residence exemption is unchanged. Locally, Varsity Lakes currently has 20 homes listed for sale.
-  <br><sub>Commonwealth legislation · via Fields monthly market research, 2 August 2026</sub>
 
 - **Q2 2026** — the Varsity Lakes median house price is $1,400,000, +10.2% on a year earlier.
   <br><sub>Fields analysis of Varsity Lakes sales</sub>
 
-- **30 June 2026** — Queensland rental vacancy was 1.0% in June 2026, with Gold Coast vacancy up 0.4 percentage points over the month. Locally, Varsity Lakes currently has 20 homes listed for sale.
-  <br><sub>QLD vacancy data · via Fields monthly market research, 2 August 2026</sub>
+- **Now** — homes in Varsity Lakes are taking a median of 26 days to sell, longer than the 24 days recorded six months earlier.
+  <br><sub>Fields analysis of Varsity Lakes listings</sub>
 
 
 ## 1 Anthony Drive, Burleigh Waters QLD 4220
 
-- **17 June 2026** — The cash rate has sat at 4.35% since 17 June 2026, after rises in February, March and May. Over the same period, homes in Burleigh Waters have taken a median of 29 days to sell.
-  <br><sub>RBA · via Fields monthly market research, 2 August 2026</sub>
-
-- **26 June 2026** — Negative gearing and capital gains tax changes received Royal Assent on 26 June 2026, taking effect 1 July 2027. They apply to investment purchases; the main residence exemption is unchanged. Locally, Burleigh Waters currently has 31 homes listed for sale.
+- **12 May 2026** — Negative gearing and capital gains tax changes were announced on 12 May 2026 and received Royal Assent on 26 June, taking effect 1 July 2027. They apply to investment purchases; the main residence exemption is unchanged. Since then, the number of homes on the market in Burleigh Waters has fallen from an average of 36 before that date to 32 now (-10%). Locally the Burleigh Waters median house price is broadly unchanged over the same period — $1,925,000 on a 12-month rolling basis in Q2 2026, +0.8% on the quarter before.
   <br><sub>Commonwealth legislation · via Fields monthly market research, 2 August 2026</sub>
+
+- **17 June 2026** — The cash rate rose in February, March and May 2026 to 4.35%, and has been held there since 17 June. Over the same period, homes in Burleigh Waters have taken shorter to sell — a median of 29 days in 2026-Q2 against 31 in 2026-Q1. Since then, the number of homes on the market in Burleigh Waters has fallen from an average of 40 before that date to 32 now (-19%).
+  <br><sub>RBA · via Fields monthly market research, 2 August 2026</sub>
 
 - **Q2 2026** — the Burleigh Waters median house price is $1,925,000, +6.9% on a year earlier.
   <br><sub>Fields analysis of Burleigh Waters sales</sub>
@@ -66,77 +66,73 @@ suburb and paired with the national event it sits beside.
 - **29 June 2026** — 6 Skua Street sold for $2,000,000. Adjusted to this home and weighted with the other comparable sales, including it moved the centre of this home's range up by about $9,758.
   <br><sub>Fields comparable-sales engine · effect measured by re-reconciling without this sale</sub>
 
-- **28 July 2026** — 33 Montezuma Drive sold for $1,100,000. Adjusted to this home and weighted with the other comparable sales, including it moved the centre of this home's range down by about $9,136.
-  <br><sub>Fields comparable-sales engine · effect measured by re-reconciling without this sale</sub>
+- **Since February 2026** — 23 sales in this home's comparison set have settled, from $1,100,000 to $4,600,000. Together they left the centre of this home's range effectively unchanged.
+  <br><sub>Fields comparable-sales engine · measured by reconciling with and without the window's sales</sub>
 
 
 ---
 
-# What this mock-up shows, and what it does not
+---
 
-## It caught a contradiction on its first run
+# What this mock-up shows
 
-The suburb bullet initially read **−4.7%** for Robina while the report's own
-market card and the monthly research both said **+5.8%**. Same suburb, same day,
-opposite sign — because it read year-on-year off single-quarter medians where
-every other surface quotes the 12-month rolling series. This is the identical
-basis trap found earlier the same day between the median figure and the median
-chart. It is now pinned in the code with a comment naming the incident.
+## The policy point now carries the local shift Will described — where it happened
 
-**Any new surface that quotes a suburb number inherits this trap.** The rolling
-series is the house basis; a quarterly figure needs its basis stated in the same
-sentence or it will contradict something.
+Measured against 12 May 2026, the announcement date (our active-listing snapshots
+begin 21 February, so 11 May is a genuine pre-announcement baseline, not an
+arbitrary one):
 
-## The honest weakness: the property layer is thin
+| suburb | homes on market, before → now | days on market | rolling median |
+|---|---|---|---|
+| **Robina** | 45 → 58 (**+29%**) | 26 → 34 days (slower) | $1,490,000, −1.7% |
+| **Varsity Lakes** | 10 → 20 (**+96%**) | 25 → 26 days | $1,400,000, +1.2% |
+| **Burleigh Waters** | 36 → 32 (**−10%**) | 31 → 29 days (**faster**) | $1,925,000, +0.8% |
 
-The two home-specific bullets move the figure by **$4,532** and **$5,600** — real,
-computed, and not what a homeowner means by "the most significant changes".
-With ~49 comparables in the pool no single sale carries much weight, which is by
-design and is exactly why the estimate is stable.
+**Robina and Varsity Lakes match the read exactly** — more stock, slower sales,
+prices holding. **Burleigh Waters inverts it**: fewer listings, selling faster,
+price still up. One hand-written sentence would have been false on a third of the
+book, which is why the local half of every event is computed per suburb rather
+than authored. `TimingSection` already carries a warning about this exact trap,
+from the last time a market narrative was written once and applied to three
+markets.
 
-Three options, none of them yet chosen:
+## What the data supports, and what it does not
 
-1. **Report the aggregate instead.** "Six sales in your comparison set have
-   settled since February; together they moved the centre up about $23,000."
-   Truthful, materially larger, and still computed — but loses the named address
-   that makes it feel like it is about them.
-2. **Name the sale, drop the effect.** "31 Huntingdale Crescent sold for
-   $1,910,000 — the highest in your comparison set this year." No causal claim at
-   all, just the fact a neighbour would already be discussing.
-3. **Raise the bar and accept fewer bullets.** Only show a sale that moved the
-   figure by more than, say, $15,000. Most months that renders nothing, which is
-   itself an honest answer.
+**Supported:** supply and time-on-market moved sharply in two of three suburbs
+over the same window, while price did not. That contrast — *more homes sitting,
+prices holding* — is real, measured, and is the most interesting local fact we
+have. It is also exactly the pattern the monthly research describes nationally.
 
-My preference is **1 + 2 combined**: the aggregate for the number, one named sale
-for the recognition, no per-sale effect claim.
+**Not supported:** that the policy caused it. Three rate rises, a national price
+downturn and the reform all land inside the same fourteen weeks, and nothing in
+our data separates them. Every sentence therefore reads "since then" or "over the
+same period". We are placing two measured series side by side in time, which is
+what we did, and the reader draws the inference.
 
-## What it deliberately refuses
+**Also worth stating plainly:** we cannot see unsold stock directly. "Homes on the
+market" is a snapshot count, so a rise is consistent with more homes listing OR
+with the same homes taking longer — and the days-on-market series says both are
+happening in Robina. Withdrawal counts would settle it and we do not currently
+publish them.
 
-- **No causal language.** "Coincided with", "over the same period" — never
-  "caused" or "drove". Two series moving together is what we measured.
-- **No forecasts, including attributed ones.** "Westpac expects two cuts in 2027"
-  is a prediction the moment it is on a homeowner's report, whoever said it.
-- **No unpaired national headline.** Every macro event must carry a local
-  reading measured from our own data, or it does not render. A Cotality
-  five-city fall on its own tells a Robina owner nothing and simply transmits
-  the anxiety the page exists to answer.
-- **No suburb narrative the data cannot carry.** The research states Robina's
-  quarter-on-quarter median is not statistically supportable; the generator
-  degrades to a level statement there rather than inventing a movement.
-- **Only `[VERIFIED]` rows from the research.** The `[INFERRED]` emotional reads
-  are our interpretation and must never appear as events.
+## The property layer, as Will asked
 
-## What is still manual
+Two bullets now, doing different jobs:
 
-`events.yaml` is transcribed by hand from the monthly research. That is the right
-place for a human gate — these are the only sentences on the page not derived from
-our own database, and they carry the most reputational risk. Monthly transcription
-is roughly fifteen minutes of work.
+- **one named sale** — recognition, the neighbour they have already heard about,
+  with the measured effect of that single sale ($5,600 here);
+- **the window in aggregate** — 17 sales, $1,260,000 to $1,910,000, together
+  worth about $8,323 on the centre.
 
-## Open questions for Will
+The aggregate is bigger and still small, which is honest: with ~49 comparables no
+single quarter of sales should swing a stable estimate much. If that reads as
+underwhelming, the fix is not a bigger number — it is dropping the effect claim
+from the named sale and letting the aggregate carry it alone.
 
-1. Which of the three property-layer options above?
-2. Should the block appear in Part 01 (it is evidence about the figure) or Part 03
-   (it is context for a decision)? It currently reads as Part 03 material.
-3. Should an event be suppressed once the reader has seen it in a previous month,
-   or does a report that is re-read monthly benefit from the repetition?
+## Still open
+
+1. Part 01 or Part 03? It reads as Part 03 material — context for a decision
+   rather than evidence for the figure.
+2. Should an event be suppressed once a returning reader has seen it?
+3. Withdrawal counts would turn "more homes listed" into "more homes unsold",
+   which is the sharper and more accurate claim. Worth scoping.
