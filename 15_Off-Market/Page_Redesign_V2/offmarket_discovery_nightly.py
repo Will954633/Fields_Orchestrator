@@ -126,6 +126,37 @@ def _gc():
     return get_mongo_client()["Gold_Coast"]
 
 
+
+def _effective_address(doc):
+    """The address chain the ROUTE uses — `address || complete_address`.
+
+    ⚠ NOT `ADDRESS_STANDARD`: it holds a cadastral datum code (observed value "UK") on
+    2,952 robina unit records and would render as nonsense. This mirrors
+    `effectivePropertyAddress()` in src/lib/db.server.ts and `effectiveAddress()` in
+    scripts/generate-sitemap.mjs — three consumers, one definition, kept in step.
+    """
+    return (doc.get("address") or doc.get("complete_address") or "")
+
+
+def _is_unit_address(doc):
+    """Unit test applied to the EFFECTIVE address, not the `address` field alone.
+
+    ⚠ WHY THIS EXISTS. `indexed_query()` filters `address: {$not: UNIT_ADDR_RE}`, which
+    tests ONE field. 3,991 of 4,000 sampled attached dwellings carry `address: None` and
+    hold their address in `complete_address` — so they passed the filter and got a deck.
+    Result: 8,095 discovery documents for unit-addressed homes, built by a house-shaped
+    engine, all live at HTTP 200.
+
+    This is the identical defect fixed in generate-sitemap.mjs on 2026-08-08
+    ([OFFMARKET-UNIT-SITEMAP-MISMATCH]) — the Python builder never got the same
+    treatment. Same policy, third language, third effective-address chain.
+
+    Kept as a POST-FILTER rather than an $expr chain for readability; the Mongo clause
+    above stays as a cheap pre-filter and is documented as insufficient alone.
+    """
+    return bool(UNIT_ADDR_RE.search(_effective_address(doc)))
+
+
 def indexed_query():
     cutoff = (datetime.datetime.utcnow() - datetime.timedelta(days=int(12 * 30.44))).strftime("%Y-%m-%d")
     return {
@@ -148,6 +179,7 @@ def indexed_query():
         "offmarket_entity_unresolved": {"$ne": True},
         "property_type": {"$nin": NON_HOUSE_TYPES},
         "building_type": {"$nin": NON_HOUSE_TYPES},
+        # ⚠ CHEAP PRE-FILTER ONLY — INSUFFICIENT ALONE. See _is_unit_address().
         "address": {"$not": UNIT_ADDR_RE},
         "$or": [
             {"listing_status": {"$ne": "sold"}, "enriched_data.transactions.0": {"$exists": True}},
@@ -200,7 +232,12 @@ def reachable_homes():
     q = reachable_query()
     for c in target_suburbs(gc):
         for r in gc[c].find(q, {"url_slug": 1, "enriched_data.last_enriched": 1,
-                               "valuation_data.computed_at": 1}):
+                               "valuation_data.computed_at": 1,
+                               "address": 1, "complete_address": 1}):
+            # POST-FILTER: the Mongo clause tests `address` only; 99.8% of the units
+            # that leaked past it carry their address in `complete_address`.
+            if _is_unit_address(r):
+                continue
             slug = r.get("url_slug")
             if not slug:
                 continue
@@ -221,7 +258,12 @@ def indexed_homes():
     q = indexed_query()
     for c in target_suburbs(gc):
         for r in gc[c].find(q, {"url_slug": 1, "enriched_data.last_enriched": 1,
-                               "valuation_data.computed_at": 1}):
+                               "valuation_data.computed_at": 1,
+                               "address": 1, "complete_address": 1}):
+            # POST-FILTER: the Mongo clause tests `address` only; 99.8% of the units
+            # that leaked past it carry their address in `complete_address`.
+            if _is_unit_address(r):
+                continue
             slug = r.get("url_slug")
             if not slug:
                 continue
@@ -244,7 +286,12 @@ def frozen_released_slugs(gc=None):
     for sub, limit in frozen_suburbs(gc).items():
         if not limit:
             continue
-        for r in gc[sub].find(q, {"url_slug": 1}).sort([("_id", 1)]).limit(int(limit)):
+        for r in gc[sub].find(q, {"url_slug": 1, "address": 1,
+                                  "complete_address": 1}).sort([("_id", 1)]).limit(int(limit)):
+            # Mirrors generate-sitemap.mjs, which applies the unit test to the
+            # EFFECTIVE address — so this must too, or the two disagree again.
+            if _is_unit_address(r):
+                continue
             if r.get("url_slug"):
                 out.add(r["url_slug"])
     return out
