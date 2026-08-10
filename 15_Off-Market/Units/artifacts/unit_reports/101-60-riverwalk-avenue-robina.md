@@ -42,11 +42,11 @@ Units and townhouses here are taking a median of **20 days** to sell (n=88), and
 
 ### What the sales support
 
-**$742,616 – $1.11 million**
+**$743,000 – $1.11 million**
 
-The evidence centres around **$925,955** — rounded deliberately, because the width is the honest part.
+The evidence centres around **$926,000** — rounded deliberately, because the width is the honest part.
 
-It is built from **12** other 2-bedroom homes that have sold in this same scheme (30 were available).
+It is built from **12** other 2-bedroom homes that have sold in this same scheme (20 were available).
 
 ### The sales it is built from
 
