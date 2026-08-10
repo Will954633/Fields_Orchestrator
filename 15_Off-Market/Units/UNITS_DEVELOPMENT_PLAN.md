@@ -204,7 +204,30 @@ All CC-BY 4.0, commercially republishable with attribution.
 
 | ID | Source | Delivers |
 |---|---|---|
-| **E1** | QLD cadastre, LandParcelPropertyFramework layer 4 | Complex name, **CTS scheme number**, lots per scheme — **9,641 CMS-linked parcels**, 414 schemes in Robina alone |
+| **E1** | QLD cadastre, LandParcelPropertyFramework **layer 4** | Complex name, **CTS scheme number**, lots per scheme. Robina: 4,872 parcels carry a complex name, 894 of them BUP/GTP |
+
+**⚠ Verified field names, 2026-08-10 — the research doc named these wrongly.** Tested live from the VM:
+
+```
+GET .../PlanningCadastre/LandParcelPropertyFramework/MapServer/4/query
+    ?where=locality='Robina' AND plan LIKE 'BUP%' AND feat_name IS NOT NULL
+    &outFields=lotplan,feat_name,alias_name,lot_area&f=json
+
+  1BUP9672 | Shanandoa Court | CMS5659
+```
+
+| Want | **Real field** | Not |
+|---|---|---|
+| Complex name | `feat_name` | ~~COMPLEX_NAME~~ |
+| CTS / CMS number | `alias_name` | ~~CMS_NUMBER~~ |
+| Parcel key | `lotplan` | — |
+| Lots per scheme | `COUNT(*) GROUP BY alias_name` | — |
+
+**Two traps that cost real time:**
+- `locality` is **title-case** (`'Robina'`). `'ROBINA'` returns **0**, not an error — a silent false absence,
+  exactly the Rule 8 failure mode. Use `UPPER(locality)='ROBINA'`.
+- **Layer 10 "Strata Parcels Only" is not community-title lots** — Robina returns **59**. It means
+  volumetric/strata *land* parcels. The unit stock is in layer 4, discriminated by the `plan` prefix.
 | **E2** | QLD Buildings layer 11 (LiDAR) | Height → **storeys band**. 4.3 m/storey: 59% exact, **90% within ±1** |
 | **E3** | AustLII `QBCCMCmr` | Adjudicator orders → disputes flag (Form 33 explicitly excludes defects) |
 | **E4** | New `Gold_Coast.complexes` collection keyed on **CTS number** | The unit of analysis, replacing the lot |
@@ -304,9 +327,16 @@ sufficient data + resolved identity", not "has a valuation". A page with complex
 honest refusal is indexable content. Holding it back keeps ~3,000 URLs out of the index for a further
 6 weeks for no reader benefit.
 
-**D3 — legal advice, two items, before M3 ships anything derived from Titles Registry or s205.**
-(a) Titles Registry republication terms (Crown copyright notice; ToU page 404s — publish derived facts, not
-documents). (b) s205(13)(f) agency wording at volume. ~30 minutes of a strata lawyer's time.
+**D3 — legal. ✅ PART (a) DECIDED 2026-08-10 (Will): proceed on "publish derived facts, never reproduce
+the CMS".** Entitlement shares, lot counts, scheme size and derived levy bands are publishable as facts;
+the CMS document itself is never reproduced, quoted at length, or made downloadable. Encode this as a
+constraint in the renderer and the page, not as a convention someone has to remember.
+
+**(b) still open — s205(13)(f) agency at volume.** Needed only for Phase 4 (levies). It does **not** gate
+M1–M3 or the markdown report. Worth ~30 minutes of a strata lawyer's time before Phase 4 is built, because
+the answer changes its economics: if the authority carries only to the instructing owner's lot, "54
+engagements covers 50% of stock" becomes "one engagement covers one lot" — a per-customer service rather
+than a data multiplier.
 
 ---
 
