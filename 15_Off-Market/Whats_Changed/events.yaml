@@ -22,46 +22,45 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 events:
+  - id: cgt_ng_reform
+    date: 2026-05-12
+    scope: national
+    # ⚠ DATED TO THE ANNOUNCEMENT, not to Royal Assent (26 June). Behaviour
+    # changes when a policy becomes known, not when it is signed — and our own
+    # active-listing snapshots start 21 February, so 11 May is a genuine
+    # pre-announcement baseline rather than an arbitrary one.
+    #
+    # ⚠ TWO local metrics, because the interesting local fact is that they moved
+    # in OPPOSITE directions: supply and time-on-market shifted while price did
+    # not. Either one alone tells half the story.
+    statement: >-
+      Negative gearing and capital gains tax changes were announced on 12 May 2026
+      and received Royal Assent on 26 June, taking effect 1 July 2027. They apply
+      to investment purchases; the main residence exemption is unchanged.
+    local_metric: active_listings
+    local_metric_2: median_price
+    source: "Commonwealth legislation · via Fields monthly market research, 2 August 2026"
+
   - id: cash_rate_holds
     date: 2026-06-17
     scope: national
-    # Direction matters more than level — the research is explicit that the
-    # reversal is what registers, not the number.
+    # The direction reversal is the fact, per the research: three rises then a
+    # hold, against a market that had spent 2025 waiting for cuts.
     statement: >-
-      The cash rate has sat at 4.35% since 17 June 2026, after rises in February,
-      March and May.
+      The cash rate rose in February, March and May 2026 to 4.35%, and has been
+      held there since 17 June.
     local_metric: days_on_market
+    local_metric_2: active_listings
     source: "RBA · via Fields monthly market research, 2 August 2026"
-
-  - id: cgt_ng_reform
-    date: 2026-06-26
-    scope: national
-    # The single clearest gap in the market per the research §8: most
-    # owner-occupiers are unaffected and do not know it.
-    statement: >-
-      Negative gearing and capital gains tax changes received Royal Assent on
-      26 June 2026, taking effect 1 July 2027. They apply to investment
-      purchases; the main residence exemption is unchanged.
-    local_metric: active_listings
-    source: "Commonwealth legislation · via Fields monthly market research, 2 August 2026"
 
   - id: national_prices_fall
     date: 2026-07-31
     scope: national
-    # ⚠ Brisbane is roughly flat, not falling. Stating the aggregate without
-    # that is the thing the research warns nobody reads the decimal on.
+    # ⚠ Brisbane is roughly flat, not falling. The aggregate without that line
+    # is the number the research says nobody reads the decimal on.
     statement: >-
       National home values fell 2.0% over the July 2026 quarter across the five
       largest capitals, led by Sydney (−3.7%) and Melbourne (−3.0%). Brisbane was
       close to flat at −0.1%.
     local_metric: median_price
     source: "Cotality 5-city aggregate, July 2026 · via Fields monthly market research"
-
-  - id: rental_vacancy
-    date: 2026-06-30
-    scope: state
-    statement: >-
-      Queensland rental vacancy was 1.0% in June 2026, with Gold Coast vacancy up
-      0.4 percentage points over the month.
-    local_metric: active_listings
-    source: "QLD vacancy data · via Fields monthly market research, 2 August 2026"
