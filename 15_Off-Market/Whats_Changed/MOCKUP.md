@@ -18,6 +18,9 @@ suburb and paired with the national event it sits beside.
 ---
 ## 1 Anglesea Court, Robina QLD 4226
 
+- **Coming up — 11 August 2026 (tomorrow)** — The Reserve Bank hands down its next cash rate decision on Tuesday 11 August 2026. We will re-read Robina's numbers against it and update this page. The number we will be watching in Robina is how long homes take to sell — currently a median of 34 days.
+  <br><sub>RBA meeting calendar · via Fields monthly market research, 2 August 2026</sub>
+
 - **15 March 2026** — 31 Huntingdale Crescent sold for $1,910,000. Adjusted to this home and weighted with the other comparable sales, including it moved the centre of this home's range up by about $6,321.
   <br><sub>Fields comparable-sales engine · effect measured by re-reconciling without this sale</sub>
 
@@ -27,14 +30,14 @@ suburb and paired with the national event it sits beside.
 - **12 May 2026** — Negative gearing and capital gains tax changes were announced on 12 May 2026 and received Royal Assent on 26 June, taking effect 1 July 2027. They apply to investment purchases; the main residence exemption is unchanged. Since then, the number of homes on the market in Robina has risen from an average of 45 before that date to 58 now (+29%). Locally the Robina median house price is broadly unchanged over the same period — $1,490,000 on a 12-month rolling basis in Q2 2026, -1.7% on the quarter before.
   <br><sub>Commonwealth legislation · via Fields monthly market research, 2 August 2026</sub>
 
-- **Q2 2026** — the Robina median house price stands at $1,490,000 on a 12-month rolling basis, +5.8% on a year earlier. Quarterly sales volumes in Robina are too thin to read a quarter-to-quarter movement in either direction.
-  <br><sub>Fields analysis of Robina sales</sub>
-
 - **Since February 2026** — 17 sales in this home's comparison set have settled, from $1,260,000 to $1,910,000. Together they moved the centre of this home's range up by about $23,037.
   <br><sub>Fields comparable-sales engine · measured by reconciling with and without the window's sales</sub>
 
 
 ## 1/18 Menton Avenue, Varsity Lakes, QLD 4227
+
+- **Coming up — 11 August 2026 (tomorrow)** — The Reserve Bank hands down its next cash rate decision on Tuesday 11 August 2026. We will re-read Varsity Lakes's numbers against it and update this page. The number we will be watching in Varsity Lakes is how long homes take to sell — currently a median of 26 days.
+  <br><sub>RBA meeting calendar · via Fields monthly market research, 2 August 2026</sub>
 
 - **1 May 2026** — The cash rate rose in February, March and May 2026 to 4.35% — a reversal for a market that had spent 2025 waiting for cuts — and has been held there since 17 June. Over the same period, homes in Varsity Lakes have taken longer to sell — a median of 26 days in 2026-Q2 against 25 in 2026-Q1.
   <br><sub>RBA · via Fields monthly market research, 2 August 2026</sub>
@@ -48,20 +51,17 @@ suburb and paired with the national event it sits beside.
 - **Q2 2026** — the Varsity Lakes median house price is $1,400,000, +10.2% on a year earlier.
   <br><sub>Fields analysis of Varsity Lakes sales</sub>
 
-- **Now** — homes in Varsity Lakes are taking a median of 26 days to sell, longer than the 24 days recorded six months earlier.
-  <br><sub>Fields analysis of Varsity Lakes listings</sub>
-
 
 ## 1 Anthony Drive, Burleigh Waters QLD 4220
+
+- **Coming up — 11 August 2026 (tomorrow)** — The Reserve Bank hands down its next cash rate decision on Tuesday 11 August 2026. We will re-read Burleigh Waters's numbers against it and update this page. The number we will be watching in Burleigh Waters is how long homes take to sell — currently a median of 29 days.
+  <br><sub>RBA meeting calendar · via Fields monthly market research, 2 August 2026</sub>
 
 - **1 May 2026** — The cash rate rose in February, March and May 2026 to 4.35% — a reversal for a market that had spent 2025 waiting for cuts — and has been held there since 17 June. Over the same period, homes in Burleigh Waters have taken less time to sell — a median of 29 days in 2026-Q2 against 31 in 2026-Q1.
   <br><sub>RBA · via Fields monthly market research, 2 August 2026</sub>
 
 - **12 May 2026** — Negative gearing and capital gains tax changes were announced on 12 May 2026 and received Royal Assent on 26 June, taking effect 1 July 2027. They apply to investment purchases; the main residence exemption is unchanged. Since then, the number of homes on the market in Burleigh Waters has fallen from an average of 36 before that date to 32 now (-10%). Locally the Burleigh Waters median house price is broadly unchanged over the same period — $1,925,000 on a 12-month rolling basis in Q2 2026, +0.8% on the quarter before.
   <br><sub>Commonwealth legislation · via Fields monthly market research, 2 August 2026</sub>
-
-- **Q2 2026** — the Burleigh Waters median house price is $1,925,000, +6.9% on a year earlier.
-  <br><sub>Fields analysis of Burleigh Waters sales</sub>
 
 - **29 June 2026** — 6 Skua Street sold for $2,000,000. Adjusted to this home and weighted with the other comparable sales, including it moved the centre of this home's range up by about $9,758.
   <br><sub>Fields comparable-sales engine · effect measured by re-reconciling without this sale</sub>
@@ -126,6 +126,47 @@ The aggregate is bigger and still small, which is honest: with ~49 comparables n
 single quarter of sales should swing a stable estimate much. If that reads as
 underwhelming, the fix is not a bigger number — it is dropping the effect claim
 from the named sale and letting the aggregate carry it alone.
+
+## The forward-looking point — the reason to come back
+
+A `watch:` block in `events.yaml` carries one dated thing ahead. It leads the
+list when it is within seven days and otherwise closes it, because sorting it by
+date would bury tomorrow's decision underneath things that already happened.
+
+> **Coming up — 11 August 2026 (tomorrow)** — The Reserve Bank hands down its next
+> cash rate decision on Tuesday 11 August 2026. We will re-read Robina's numbers
+> against it and update this page. The number we will be watching in Robina is how
+> long homes take to sell — currently a median of 34 days.
+
+**It names the metric, which is what makes it a promise rather than a tease.**
+The reader can come back and check we did what we said. `metric_to_watch` must be
+something we already publish for that suburb — promising to re-read a number we
+do not measure is a promise we cannot keep.
+
+**It contains no forecast, in either direction.** Not "if rates fall…", not
+"economists expect…". An attributed forecast is still a forecast once it is on a
+homeowner's report. What is allowed: the decision is scheduled, here is the local
+number, we will publish what actually happened.
+
+**It goes silent rather than stale.** Verified by test: with the date moved into
+the past and no `outcome` recorded, the point does not render and the generator
+warns on stderr —
+
+    ⚠ watch 'rba_2026_08_11' expired 6d ago with no outcome recorded — dropped from the report
+
+A page still saying "coming up 11 August" on the 15th proves nobody is home, which
+costs more than the point is worth. Writing `outcome` retires the watch and the
+event moves into the timeline in its correct chronological position — which is the
+trigger point for the research pass that writes the per-suburb commentary.
+
+**Two bugs this surfaced, both worth knowing:**
+
+- Dating an event outside the six-month window makes it **vanish with no error**.
+  The first rate event, anchored to 1 February, was 190 days back and simply did
+  not appear.
+- `(now - date).days` on a UTC clock called tomorrow's decision **"today"**,
+  because the evening of 10 August AEST is still 10 August UTC. Watch dates are
+  now compared on AEST calendar days.
 
 ## Still open
 
