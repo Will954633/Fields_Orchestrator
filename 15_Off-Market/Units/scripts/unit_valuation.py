@@ -42,7 +42,16 @@ from shared.dwelling_type import classify_dwelling
 
 MIN_COMPS = 3
 PREFERRED_COMPS = 12
-MAX_AGE_YEARS = 8          # older sales deflate badly; the index is quarterly
+MAX_AGE_YEARS = 8          # outer bound; MAX_UPLIFT is the real constraint
+# ⚠ A SALE THAT NEEDS A HUGE UPLIFT IS NOT EVIDENCE, IT IS AN INDEX PROJECTION.
+# Found by reading a rendered page: 1/23 Thorngate Drive priced off four comps, three
+# of them 4-6 years old, including a 2020 sale of $334,300 carried to $718,962 — a
+# +115% adjustment. The published number would have been mostly index, presented to the
+# reader as "the sales it is built from". Anything past this threshold is dropped and
+# the drop is DISCLOSED, because a quietly smaller comp set looks identical to a
+# genuinely thin one.
+MAX_UPLIFT = 0.60          # +60%: roughly three years of the fastest attached growth
+OLD_COMP_YEARS = 3         # beyond this a comp is disclosed as leaning on the index
 BAND_PCT = 19.8            # measured P80 error of this method - NOT a confidence interval
 _TIERS = ("same_complex_same_beds", "same_complex_any_beds",
           "same_subtype_same_beds_suburb")
@@ -236,16 +245,21 @@ class UnitValuer:
                     "tried": tried,
                     "explain": ("No sale in this scheme, and too few same-type sales of "
                                 "this size in the suburb, to support a range.")}
-        adj, dropped = [], 0
+        adj, dropped, over = [], 0, 0
         for c in comps:
             a, factor, basis = self.deflate(c["price"], c["date"], c.get("beds"))
             if a is None:
                 dropped += 1
                 continue
+            if factor is not None and factor - 1 > MAX_UPLIFT:
+                over += 1
+                continue
             adj.append({**c, "adjusted": a, "factor": factor, "basis": basis})
         if len(adj) < MIN_COMPS:
-            return {"method": "declined", "decline_reason": "comparables_not_deflatable",
-                    "tried": tried, "dropped": dropped,
+            return {"method": "declined",
+                    "decline_reason": ("comparables_too_old" if over else
+                                       "comparables_not_deflatable"),
+                    "tried": tried, "dropped": dropped, "dropped_too_old": over,
                     "explain": ("Sales exist in this scheme but the attached price index "
                                 "does not reach far enough back to bring them to today.")}
         adj.sort(key=lambda r: r["date"], reverse=True)
@@ -262,6 +276,11 @@ class UnitValuer:
             "n_comps": len(used),
             "n_available": len(adj),
             "dropped_undeflatable": dropped,
+            "dropped_too_old": over,
+            "old_comp_share": round(
+                sum(1 for r in used
+                    if _year(r["date"]) and 2026 - _year(r["date"]) > OLD_COMP_YEARS)
+                / max(1, len(used)), 2),
             "comparables": [{"address": r["address"], "date": r["date"],
                              "sold": int(r["price"]), "adjusted": int(r["adjusted"]),
                              "beds": r["beds"], "complex": r["complex"]}
