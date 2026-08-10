@@ -21,6 +21,8 @@ The typical lot in this scheme is 116 m², and the scheme holds 18,801 m² of co
 > **GAP [C2]** — no floor area recorded and none imputable from this scheme.
 
 > **GAP [C3]** — no complex amenity data — lift, pool, gym, secure parking (structuredFeatures[] not stored).
+>
+> Lift is inferred above; pool, gym, secure parking and on-site management are still unknown.
 
 ---
 
