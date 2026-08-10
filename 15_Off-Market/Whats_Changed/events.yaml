@@ -73,3 +73,35 @@ events:
       close to flat at −0.1%.
     local_metric: median_price
     source: "Cotality 5-city aggregate, July 2026 · via Fields monthly market research"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# WATCH — the one thing coming that will move this narrative.
+#
+# Purpose: a dated reason to come back. Not a forecast.
+#
+# ⚠ NEVER STATE OR IMPLY THE OUTCOME. Not "if rates fall…", not "economists
+# expect…", not "this could mean…". An attributed forecast is still a forecast
+# once it is on a homeowner's report (CLAUDE.md Rule 5). What is allowed: the
+# decision is scheduled, here is the local number it will be read against, and
+# we will publish what actually happened.
+#
+# ⚠ `metric_to_watch` MUST be a metric we already publish for that suburb.
+# Promising to re-read something we do not measure is a promise we cannot keep,
+# and this line's whole value is that the reader can check we kept it.
+#
+# ⚠ AN EXPIRED WATCH MUST NOT RENDER. Once `date` has passed and no `outcome`
+# has been written, the generator drops the point and warns on stderr. A page
+# still saying "coming up 11 August" on 15 August is worse than saying nothing —
+# it proves nobody is home. Writing `outcome` converts it into a normal dated
+# event and it moves into the timeline in the right chronological position.
+# ─────────────────────────────────────────────────────────────────────────────
+watch:
+  - id: rba_2026_08_11
+    date: 2026-08-11
+    statement: >-
+      The Reserve Bank hands down its next cash rate decision on Tuesday
+      11 August 2026.
+    metric_to_watch: days_on_market
+    # Written the day after, then this becomes an ordinary timeline entry.
+    outcome: null
+    source: "RBA meeting calendar · via Fields monthly market research, 2 August 2026"
