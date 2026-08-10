@@ -98,7 +98,13 @@ def money_m(v):
         f = float(v)
     except Exception:
         return None
-    return f"${f/1_000_000:.2f} million" if f >= 1_000_000 else f"${f:,.0f}"
+    if f >= 1_000_000:
+        return f"${f/1_000_000:.2f} million"
+    # Round sub-million to the nearest thousand — $925,955 is false precision on a
+    # figure whose honest width is ±19.8%. Must match render_unit_page.money_m or the
+    # two surfaces show a reader different numbers for the same home; that divergence
+    # was caught by check_renderer_consistency.py, which is why it exists.
+    return f"${round(f/1000)*1000:,.0f}"
 
 
 def _norm(s):
