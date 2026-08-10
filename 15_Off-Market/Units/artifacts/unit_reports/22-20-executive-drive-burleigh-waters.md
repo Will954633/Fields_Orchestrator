@@ -12,15 +12,19 @@
 
 This home is one of **58 homes** in **Vantage Burleigh** — a strata complex, community titles scheme CMS55689.
 
+The buildings in it stand **about 20 storeys** (about 77 m). Derived from Queensland LiDAR building outlines captured in 2022 — accurate to within one storey nine times in ten, which is why it is stated as a band rather than a number.
+
+At that height it will have a lift — **inferred from the building, not recorded**; no source we hold publishes lift presence.
+
 The typical lot in this scheme is 9 m², and the scheme holds 6,682 m² of common property.
 
 *Source: Queensland cadastre (CC-BY 4.0) — © State of Queensland.*
 
 > **Derived figure.** The 120 m² above is the median of 12 same-bedroom dwellings in this scheme, not a measured area for this home. Method error 5.2% median on leave-one-out testing.
 
-> **GAP [E2]** — no storeys band — QLD LiDAR buildings layer not yet ingested.
-
 > **GAP [C3]** — no complex amenity data — lift, pool, gym, secure parking (structuredFeatures[] not stored).
+>
+> Lift is inferred above; pool, gym, secure parking and on-site management are still unknown.
 
 ---
 
@@ -160,4 +164,4 @@ No agent is paying to appear on this page, and your interest in your own home is
 
 Engine-reported gaps: `no comparable sale`, `positioning/value-drivers unavailable`
 
-**GAP markers: 4** — C3, E2, E5, G1
+**GAP markers: 3** — C3, E5, G1
