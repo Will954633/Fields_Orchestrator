@@ -60,6 +60,44 @@ def send_message(text: str, chat_id: str = None, parse_mode: str = "Markdown"):
     return data
 
 
+DIGEST_COLLECTION = "telegram_digest"
+
+
+def queue_message(text: str, source: str, heading: str = None):
+    """Queue `text` for the next morning digest instead of sending it now.
+
+    Opt-in, never global. Routine status reporting — the nightly health board, the
+    Brain 3 refresh line, the ops triage cycle — arrives at 01:00/03:35/07:15 and is
+    read in one sitting hours later, so four separate buzzes buy nothing. Anything
+    genuinely time-sensitive (a new lead, a hot lead, the whale, a failed backup)
+    must keep calling send_message() directly and does.
+
+    Falls back to sending immediately if the queue write fails: a digest entry that
+    silently vanishes would be strictly worse than an extra notification.
+    """
+    try:
+        import sys as _sys
+        from datetime import timezone
+        _sys.path.insert(0, "/home/fields/Fields_Orchestrator")
+        from shared.db import get_client
+        get_client()["system_monitor"][DIGEST_COLLECTION].insert_one({
+            "queued_at": datetime.now(timezone.utc),
+            "source": source,
+            "heading": heading or source,
+            "text": text,
+            "sent": False,
+        })
+        print(f"[digest] queued {len(text)} chars from {source}")
+        return True
+    except Exception as e:
+        print(f"(digest queue failed: {e} — sending immediately instead)")
+        try:
+            send_message(text, parse_mode="")
+        except Exception as e2:
+            print(f"(immediate fallback also failed: {e2})")
+        return False
+
+
 def _record_send(chat_id, text, ok, error=None, message_id=None):
     """Audit every outbound message to system_monitor.telegram_sends.
 
@@ -161,6 +199,8 @@ if __name__ == "__main__":
     parser.add_argument("message", nargs="?", help="Message to send")
     parser.add_argument("--market-pulse-reminder", action="store_true", help="Send monthly pulse reminder")
     parser.add_argument("--check-chat-id", action="store_true", help="Check for chat ID from recent messages")
+    parser.add_argument("--queue", metavar="SOURCE",
+                        help="Queue for the next morning digest instead of sending now")
     args = parser.parse_args()
 
     try:
@@ -168,6 +208,8 @@ if __name__ == "__main__":
             check_chat_id()
         elif args.market_pulse_reminder:
             market_pulse_reminder()
+        elif args.message and args.queue:
+            queue_message(args.message, source=args.queue)
         elif args.message:
             send_message(args.message)
         else:

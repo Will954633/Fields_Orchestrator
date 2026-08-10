@@ -283,10 +283,20 @@ def maybe_alert(pages, totals, url, now_utc, minisite_results=None):
         if len(mini_breaches) > 5:
             lines.append(f"   – …and {len(mini_breaches) - 5} more (see Mini-Site Dashboard tab)")
     lines.append(url)
+    # Queued for the 09:30 morning digest rather than buzzing at 01:00. This board is
+    # routine status — ~46 red rows nightly of which only 2-4 are new — and is acted on
+    # in the morning regardless. Nothing is suppressed: the full body still goes out,
+    # just batched with the other routine reports. _alert_own_crash() below deliberately
+    # still sends IMMEDIATELY, because "the health checker itself died" must not wait in
+    # a queue that the dead checker was supposed to fill.
     try:
-        send_message("\n".join(lines), parse_mode="")
+        from telegram_notify import queue_message
+        queue_message("\n".join(lines), source="main_site_health_to_sheet.py",
+                      heading="⚠️ Fields Systems Health")
     except TelegramSendError as e:
         print(f"(telegram send failed: {e} — check TELEGRAM_BOT_TOKEN/CHAT_ID)")
+    except Exception as e:
+        print(f"(digest queue failed: {e})")
 
 
 # ---- main ---------------------------------------------------------------------

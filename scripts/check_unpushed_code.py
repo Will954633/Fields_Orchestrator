@@ -159,11 +159,15 @@ def push_repo(repo, remote, files, message):
     return commit
 
 
-def telegram(text):
+def telegram(text, queue_as=None):
     try:
         sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-        from telegram_notify import send_message
-        send_message(text)
+        if queue_as:
+            from telegram_notify import queue_message
+            queue_message(text, source=queue_as, heading="⚠️ Code backup")
+        else:
+            from telegram_notify import send_message
+            send_message(text)
     except Exception as e:
         print(f"(telegram alert failed: {e})", file=sys.stderr)
 
@@ -245,10 +249,11 @@ def main():
             # working. Rule 7b still holds: silence here means "pushed or nothing to
             # push", never "could not tell" — every unknown path appends to problems.
             if problems:
-                telegram("⚠️ Code backup needs you — auto-push could not complete:\n\n"
+                telegram("Auto-push could not complete:\n\n"
                          + "\n".join(f"• {p}" for p in problems[:20])
                          + (f"\n…and {len(problems) - 20} more" if len(problems) > 20 else "")
-                         + "\n\nEverything else was pushed automatically.")
+                         + "\n\nEverything else was pushed automatically.",
+                         queue_as="check_unpushed_code.py")
         elif real:
             msg = ("⚠️ *Unpushed code detected* — files on the VM not backed up to GitHub:\n\n"
                    + "\n".join(f"• `{g}`" for g in real_gaps[:30])

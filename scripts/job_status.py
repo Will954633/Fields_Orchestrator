@@ -111,6 +111,17 @@ def job_run(job: str, cadence_hours: float = 24, title: str | None = None,
             detail=(f"{type(e).__name__}: {e}")[:500],
             cadence_hours=cadence_hours, title=title, stale_hours=stale_hours,
             traceback=traceback.format_exc()[-1500:],
+            # Persist metrics on the ERROR path too (added 2026-08-10).
+            #
+            # This branch previously dropped them, so any job that set beat.metrics and
+            # then raised recorded metrics=None — and rule 7b tells every job to raise
+            # precisely when its outcome is bad. The diagnostics were therefore discarded
+            # in exactly the runs that needed them: sitemap_robots_invariant recorded
+            # `a_violations=None` on a run that had found 3 real violations, and the
+            # counts survived only because they happened to be inlined in the exception
+            # text. Whatever the job managed to measure before failing is the most
+            # useful thing it produces.
+            metrics=beat.metrics or {},
             duration_s=round(time.time() - start, 1), **extra)
         raise
     else:
