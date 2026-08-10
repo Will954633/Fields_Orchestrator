@@ -133,6 +133,44 @@ def comp_events(doc, now):
     return out[:2]                        # at most two — the rest is noise
 
 
+def aggregate_sales_point(doc, now):
+    """Every comparable that settled inside the window, as one figure.
+
+    A single sale moves this home's centre by a few thousand — real, and smaller
+    than a homeowner means by "what changed". The set of them together is the
+    honest larger number, and it is the same arithmetic: reconcile with the
+    window's sales, reconcile without them, take the difference."""
+    vd = doc.get("valuation_data") or {}
+    pool = [p for p in (vd.get("recent_sales") or []) + (vd.get("comparables") or [])
+            if (p.get("adjustment_result") or {}).get("adjusted_price")
+            and (p.get("weight") or {}).get("normalized")]
+    if len(pool) < 4:
+        return []
+    recent = [p for p in pool
+              if as_dt(p.get("sale_date")) and (now - as_dt(p["sale_date"])).days <= WINDOW_DAYS]
+    older = [p for p in pool if p not in recent]
+    if len(recent) < 2 or len(older) < 2:
+        return []
+    base, without = reconcile(pool), reconcile(older)
+    if not base or not without:
+        return []
+    effect = base - without
+    prices = sorted(p["price"] for p in recent if p.get("price"))
+    first = min(as_dt(p["sale_date"]) for p in recent)
+    direction = ("up" if effect > 0 else "down") if abs(effect) >= MIN_COMP_EFFECT else None
+    moved = (f"Together they moved the centre of this home's range {direction} by about "
+             f"{money(abs(effect))}." if direction else
+             "Together they left the centre of this home's range effectively unchanged.")
+    return [{
+        "date": now - datetime.timedelta(days=1),
+        "kind": "property",
+        "text": (f"**Since {first:%B %Y}** — {len(recent)} sales in this home's comparison set "
+                 f"have settled, from {money(prices[0])} to {money(prices[-1])}. {moved}"),
+        "source": "Fields comparable-sales engine · measured by reconciling with and without the window's sales",
+        "magnitude": abs(effect),
+    }]
+
+
 # ── Layer 2: this suburb ─────────────────────────────────────────────────────
 
 def suburb_events(db, suburb_key, suburb_name, now):
@@ -180,30 +218,55 @@ def suburb_events(db, suburb_key, suburb_name, now):
     return out
 
 
-def suburb_reading(db, suburb_key, suburb_name, metric):
-    """One measured local sentence to sit beside a national headline. Returns
-    None when we cannot measure it — in which case the event does not render."""
-    if metric == "days_on_market":
-        dom = db["precomputed_market_charts"].find_one({"_id": f"{suburb_key}_days_on_market"}) or {}
-        hist = [h for h in (dom.get("timeline") or []) if h.get("median_days_on_market")]
-        if hist:
-            return (f"Over the same period, homes in {suburb_name} have taken a median of "
-                    f"{round(hist[-1]['median_days_on_market'])} days to sell.")
+def suburb_reading(db, suburb_key, suburb_name, metric, since):
+    """What OUR data did locally since `since` — a measured shift, not a level.
+
+    ⚠ THE SHIFT IS COMPUTED PER SUBURB AND MAY POINT THE OTHER WAY. Measured
+    2026-08-10 against the 12 May policy announcement: active listings rose 38%
+    in Robina and 122% in Varsity Lakes, and FELL 21% in Burleigh Waters, whose
+    days on market also got faster while the other two slowed. One written
+    sentence would have been false for a third of the book. This is the same
+    failure `TimingSection` already carries a warning about.
+
+    ⚠ "Since", never "because". Two series moving in the same window is a
+    coincidence in time, which is all we measured (CLAUDE.md Rule 5).
+    """
     if metric == "active_listings":
         al = db["precomputed_active_listings"].find_one({"_id": suburb_key}) or {}
-        snaps = al.get("snapshots") or []
-        if snaps:
-            return (f"Locally, {suburb_name} currently has "
-                    f"{snaps[-1].get('active_listings'):,} homes listed for sale.")
+        snaps = sorted((al.get("snapshots") or []), key=lambda x: str(x.get("date")))
+        before = [x["active_listings"] for x in snaps
+                  if str(x.get("date"))[:10] < since.strftime("%Y-%m-%d") and x.get("active_listings")]
+        after = [x["active_listings"] for x in snaps[-14:] if x.get("active_listings")]
+        if len(before) >= 5 and after:
+            b, a = sum(before) / len(before), sum(after) / len(after)
+            if b:
+                pct = (a - b) / b * 100
+                word = "risen" if pct > 0 else "fallen"
+                return (f"Since then, the number of homes on the market in {suburb_name} has {word} "
+                        f"from an average of {b:.0f} before that date to {a:.0f} now "
+                        f"({pct:+.0f}%).")
+    if metric == "days_on_market":
+        dom = db["precomputed_market_charts"].find_one({"_id": f"{suburb_key}_days_on_market"}) or {}
+        tl = [t for t in (dom.get("timeline") or []) if t.get("median_days_on_market")]
+        if len(tl) >= 2:
+            prev, last = tl[-2], tl[-1]
+            d0, d1 = prev["median_days_on_market"], last["median_days_on_market"]
+            if d0 == d1:
+                return (f"Over the same period, homes in {suburb_name} have taken a median of "
+                        f"{d1:.0f} days to sell, unchanged on the previous quarter.")
+            word = "longer" if d1 > d0 else "shorter"
+            return (f"Over the same period, homes in {suburb_name} have taken {word} to sell — a "
+                    f"median of {d1:.0f} days in {last['period']} against {d0:.0f} in {prev['period']}.")
     if metric == "median_price":
-        price = db["precomputed_indexed_prices"].find_one({"_id": suburb_key}) or {}
-        series = [dict(s, median_price=s["rolling_median"])
-                  for s in (price.get("rolling_12m_median_series") or [])
-                  if s.get("rolling_median") and not s.get("is_in_progress")]   # rolling — see above
-        if len(series) >= 5:
-            pct = (series[-1]["median_price"] - series[-5]["median_price"]) / series[-5]["median_price"] * 100
-            return (f"The {suburb_name} median house price over the same period is "
-                    f"{money(series[-1]['median_price'])}, {pct:+.1f}% on a year earlier.")
+        px = db["precomputed_indexed_prices"].find_one({"_id": suburb_key}) or {}
+        roll = [r for r in (px.get("rolling_12m_median_series") or []) if not r.get("is_in_progress")]
+        if len(roll) >= 2:
+            prev, last = roll[-2], roll[-1]
+            pct = (last["rolling_median"] - prev["rolling_median"]) / prev["rolling_median"] * 100
+            steady = "broadly unchanged" if abs(pct) < 3 else ("higher" if pct > 0 else "lower")
+            return (f"Locally the {suburb_name} median house price is {steady} over the same period — "
+                    f"{money(last['rolling_median'])} on a 12-month rolling basis in {last['period']}, "
+                    f"{pct:+.1f}% on the quarter before.")
     return None
 
 
@@ -217,9 +280,15 @@ def macro_events(db, suburb_key, suburb_name, now):
         d = datetime.datetime.combine(d, datetime.time()) if isinstance(d, datetime.date) else d
         if (now - d).days > WINDOW_DAYS:
             continue
-        local = suburb_reading(db, suburb_key, suburb_name, e.get("local_metric"))
+        local = suburb_reading(db, suburb_key, suburb_name, e.get("local_metric"), d)
         if not local:
             continue                      # never publish the headline unpaired
+        # A second local metric where the event has one — supply and price can
+        # move in opposite directions in the same window, and that contrast IS
+        # the local story. Optional: absent, the event still renders.
+        local2 = suburb_reading(db, suburb_key, suburb_name, e.get("local_metric_2"), d)
+        if local2:
+            local = f"{local} {local2}"
         out.append({
             "date": d, "kind": "macro",
             "text": f"**{d:%-d %B %Y}** — {' '.join(e['statement'].split())} {local}",
@@ -236,7 +305,8 @@ def build(db, doc, max_points=5):
     suburb_name = (doc.get("suburb") or suburb_key.replace("_", " ").title())
     suburb_name = suburb_name.title() if suburb_name.islower() else suburb_name
 
-    points = (comp_events(doc, now)
+    points = (comp_events(doc, now)[:1]
+              + aggregate_sales_point(doc, now)
               + suburb_events(db, suburb_key, suburb_name, now)
               + macro_events(db, suburb_key, suburb_name, now))
     points.sort(key=lambda p: p["date"])
