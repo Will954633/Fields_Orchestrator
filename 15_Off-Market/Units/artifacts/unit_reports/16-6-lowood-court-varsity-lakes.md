@@ -12,13 +12,13 @@
 
 This home is one of **23 homes** in **Lowood Waters** — an apartment building with shared common property, community titles scheme CMS4033.
 
+The buildings in it stand **low-rise (1–2 storeys)** (about 11 m). Derived from Queensland LiDAR building outlines captured in 2022 — accurate to within one storey nine times in ten, which is why it is stated as a band rather than a number.
+
 The typical lot in this scheme is 131 m², and the scheme holds 11,304 m² of common property.
 
 *Source: Queensland cadastre (CC-BY 4.0) — © State of Queensland.*
 
 > **Derived figure.** The 131 m² above is the median of 8 same-bedroom dwellings in this scheme, not a measured area for this home. Method error 5.2% median on leave-one-out testing.
-
-> **GAP [E2]** — no storeys band — QLD LiDAR buildings layer not yet ingested.
 
 > **GAP [C3]** — no complex amenity data — lift, pool, gym, secure parking (structuredFeatures[] not stored).
 
@@ -160,4 +160,4 @@ No agent is paying to appear on this page, and your interest in your own home is
 
 Engine-reported gaps: `no comparable sale`, `positioning/value-drivers unavailable`
 
-**GAP markers: 4** — C3, E2, E5, G1
+**GAP markers: 3** — C3, E5, G1
