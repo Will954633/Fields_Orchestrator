@@ -2,18 +2,7 @@
 
 *Private property report · rendered Monday 10 August 2026*
 
-> **Harness note.** This is the markdown proof of the unit page, rendered from the live engine (`fact_bundle` → `emit_v4`). It is not published anywhere. GAP markers name the workstream in `UNITS_DEVELOPMENT_PLAN.md` that closes them.
-
-| | |
-|---|---|
-| Slug | `1-38-killarney-avenue-robina` |
-| Suburb | Robina |
-| Dwelling class | **attached** (computed live — dwelling_class is not persisted; classification is computed live here) |
-| Cadastral subtype | GTP (group title — villa/townhouse) |
-| Complex name | — |
-| Cards emitted | 7 of 11 |
-
----
+> **Harness output — not published anywhere.** Rendered from the live engines so the prose can be reviewed as a document. GAP markers name the workstream that closes them.
 
 ## 0 · The header
 
@@ -21,63 +10,66 @@
 
 3 bedrooms · 2 bathrooms
 
-> **GAP [C2]** — no floor area on this dwelling (Domain internalArea not yet read).
+This home is one of **9 homes** in **Maureen's Manor** — a villa and townhouse complex, community titles scheme CMS20880.
 
-You may be trying to answer three questions privately.
+The typical lot in this scheme is 347 m², and the scheme holds 598 m² of common property.
 
-- Is the number attached to this home real?
-- Is this the wrong time to move?
-- And if you sold, where would you go next?
+*Source: Queensland cadastre (CC-BY 4.0) — © State of Queensland.*
 
-This page starts with the first: what the sales around this home actually support. There is nothing to fill in and no account to create — the whole page is here.
+> **GAP [C2]** — no floor area recorded and none imputable from this scheme.
 
-> **GAP [G4]** — hero is a cadastral lot; for a unit the parcel is the whole scheme.
->
-> The house page shows a title boundary and land size here. For a unit the cadastral parcel is the whole scheme — it would show ~40 neighbours' roofs. Replacement is complex name + scheme size + storeys band.
+> **GAP [E2]** — no storeys band — QLD LiDAR buildings layer not yet ingested.
 
-> **GAP [E1]** — no complex entity - CTS number, scheme name and scheme size not yet ingested.
-
-> **GAP [E2]** — no storeys band - QLD LiDAR buildings layer not yet ingested.
+> **GAP [C3]** — no complex amenity data — lift, pool, gym, secure parking (structuredFeatures[] not stored).
 
 ---
 
 ## 1 · The last six months — what's changed recently
 
-> **GAP [D1]** — no unit price series exists for this suburb; the house median would be wrong here.
->
-> The house page shows suburb median, days-on-market and comparable sales here. Every one of those series is houses-only by construction (`precompute_union_prices.py` filters `classify_dwelling == house`).
+**2026-Q2** — the median price for an attached dwelling in Robina stands at **$990,000** on a 12-month rolling basis, +14.1% on a year earlier.
 
-> **GAP [D3]** — no unit days-on-market or unit active-listing count.
+Units and townhouses here are taking a median of **20 days** to sell (n=88), and **53** are on the market now.
+
+> **What this median is and is not.** It covers units, apartments, townhouses, villas and duplexes together, so it moves with the mix of what sold as well as with price. Measured on Robina it rose 35% over two years while 2-bedroom homes rose 18% and 3-bedroom 29% — faster than either, because the mix shifted toward larger dwellings. It is context for a decision, not a second estimate of this home, and the valuation above uses the bedroom-matched series instead.
+
+*Domain property timelines ∪ enriched transactions ∪ sold listings, deduped on address+month+price; dwelling class via shared.dwelling_type.classify_dwelling == attached. Medians only — sale volume is not published, because Domain's sold capture misses an estimated 40–50% of transactions.*
 
 ---
 
 ## 2 · Part 01 — The valuation
 
-### The range
+### What the sales support
 
-What the sales around it say.
+**$862,759 – $1.29 million**
 
-$1.15 million – $1.41 million
+The evidence centres around **$1.08 million** — rounded deliberately, because the width is the honest part.
 
-The evidence centres around
+It is built from **12** 3-bedroom homes of the same kind that have sold across Robina (80 were available).
 
-$1.3 million
+> **Worth saying plainly:** no sale in this home's own scheme could be used, so this range comes from similar homes elsewhere in the suburb. That is a weaker comparison than a sale in the same building, and the figure should be read as such.
 
-rounded deliberately, because the width is the honest part
+### The sales it is built from
 
-We have limited verified data on this specific home, so this is an indicative suburb-level band rather than a property-specific range.
+| Sold | Address | Beds | Sold for | Brought to today |
+|---|---|---|---:|---:|
+| 2026-03 | 53/14 Oakmont Street | 3 | $1,260,000 | $1,350,000 |
+| 2026-03 | 3/27 Dandenong Terrace | 3 | $1,149,000 | $1,231,071 |
+| 2026-01 | 34/51 Cottesloe Drive | 3 | $960,000 | $1,028,571 |
+| 2026-01 | 2/48 Glen Eagles Drive Robina | 3 | $1,065,000 | $1,141,071 |
+| 2025-12 | 2/128 Cottesloe Drive | 3 | $946,000 | $1,059,520 |
+| 2025-11 | 4/189 Ron Penhaligon Way | 3 | $1,200,000 | $1,344,000 |
+| 2025-10 | 7/1 University Drive | 3 | $896,500 | $1,004,080 |
+| 2025-10 | 1/30 Glen Eagles Drive | 3 | $975,000 | $1,092,000 |
 
-### Reliability
+*Each sale is brought to today using the Robina attached-dwelling price index — not the house index. Sales the index cannot reach are dropped, never carried at face value.*
 
-What this is, and what it isn't.
+### How wide the range is, and why
 
-This is an estimate built from comparable sales. It is not a formal valuation and it isn't an appraisal — a valuer inspects the property and carries professional liability for the figure. Nobody has been inside this home.
+The published width is ±19.8%.
 
-We take sales of homes near this one, adjust each for the ways it differs, weight them by how good a comparison they are, and publish the spread.
+> ⚠ **Not publishable yet.** ±19.8% is the measured P80 error of this method on leave-one-out testing (n=4,093). It is NOT a statistical confidence interval and is NOT yet a published figure — it needs a production-shaped backtest first.
 
-The range above wasn't built by the method described here — this home sits outside the band our comparable-sales model was built for, so we've used a wider approach based on what can be verified from the outside. We publish a measured error rate for the comparable-sales method; we don't have one for this fallback, so we're not quoting a number we haven't earned.
-
-### Why three sites disagree
+### Why three sites can give three different values
 
 Why the other estimates say something different.
 
@@ -92,47 +84,54 @@ That does not make any one estimate dishonest. It means three sales are often to
 **See what the test found** — A close answer was present in the available evidence on 73.6% of those homes — identifiable only with hindsight. The worst available choice was more than 20% out on 73.4%.
 
 
-> **GAP [F5]** — the engine emitted a RANGE for this unit, derived from HOUSE sales — `_thin_valuation_range` filters on bedrooms with no property_type clause.
->
-> Engine emitted **$1.15 million – $1.41 million** for this dwelling via `method=thin`, n_comps=20. ⚠ **This is not a refusal — it is a number.** The V4 React page suppresses it (it requires `valuation_data.confidence.range.low`), but the DISCOVERY DECK renders this card, and the deck is the default in every non-V4 suburb. Verify before shipping the unit arm.
-
 ---
 
 ## 3 · Part 02 — The home itself
 
-### What stood out
+### Where it sits in Maureen's Manor
 
-What makes this home less common among today's listings.
+There are **9** lots in this scheme. That is the number a buyer is really choosing between — the closest substitute for this home is another home in this building, not a house down the road.
 
-Where a buyer may focus:
+### At the doorstep
 
-- no pool
+- Robina State School — 427m
+- Varsity College Secondary Campus — 1751m
+- Robina First Early Learning Centre — 576m
+- Woolworths Robina North — 1590m
+- Prestwick Park — 209m
+- The Lott Cafe Robina — 546m
 
-### The comparison set
-
-What's moving around this home.
-
-Two true things that point in different directions.
-
-Homes here are selling more slowly than a year ago — a median of 34 days, against 24 twelve months earlier. But there is less to choose from: 58 homes are on the market, 5.5% more than a month ago.
-
-Both readings are true and they support opposite conclusions, which is why a single market headline can't settle anything about this home.
-
-We're not showing a quarter-on-quarter price change. Only 51 and 71 sales sit behind the two quarters — too few to separate a real movement from ordinary variation.
-
-> **GAP [D4]** — the market card quotes house days-on-market and house listing counts.
->
-> The market copy rendered above draws on `precomputed_market_charts` (days-on-market) and `precomputed_active_listings` — both keyed by suburb only, both houses-only by construction. Presented here as this dwelling's market.
-
-> **GAP [G3]** — green_space makes a boundary claim from a single geocode; invalid for a scheme.
->
-> Engine returned: `{"premium": {"name": "Belmore Close Reserve", "kind": "park", "edge_m": 141.3, "relation": "steps from"}}`. Suppress for attached dwellings.
+> **GAP [E5]** — no body-corporate levy — lawful only as an owner's agent (Phase 4).
 
 ---
 
 ## 4 · Part 03 — Where that leaves you
 
-### What you know that we don't
+### The market a move would happen in
+
+| | |
+|---|---|
+| Median attached price, Robina | **$990,000** (2026-Q2, 12-month rolling) |
+| Change on a year earlier | +14.1% |
+| Median days on market | 20 (n=88) |
+| Attached homes for sale now | 53 |
+
+Recent quarterly medians:
+
+| Quarter | Median | Sales |
+|---|---:|---:|
+| 2024-Q3 | $840,000 | 67 |
+| 2024-Q4 | $853,000 | 54 |
+| 2025-Q1 | $869,000 | 61 |
+| 2025-Q2 | $900,000 | 77 |
+| 2025-Q3 | $915,000 | 81 |
+| 2025-Q4 | $982,500 | 60 |
+| 2026-Q1 | $1,090,000 | 55 |
+| 2026-Q2 | $1,050,000 | 39 |
+
+*149 quarters back to 1987-Q2 clear the 8-sale threshold; 2026-Q3 is still in progress and is excluded from the headline and the year-on-year figure.*
+
+### You know this home better than the records do
 
 This is your home's page. You can change it.
 
@@ -144,31 +143,23 @@ Tell us what's wrong, and we'll fix it and rebuild the figure in front of you.
 
 No agent is paying to appear on this page, and your interest in your own home is not sold to anyone. Fields is the agency that built it — there is no third party being handed your address.
 
-> **GAP [D1]** — no unit price series exists for this suburb; the house median would be wrong here.
->
-> The house page closes with suburb median, median trend chart, days-on-market and "N houses for sale". All house series.
-
+> **GAP [G1]** — copy below is the house voice; copy_units_v4.yaml does not exist yet.
 
 ---
 
-## Appendix — engine diagnostics
+## Appendix — diagnostics
 
-Which of the 11 emitters produced a card for this dwelling:
-
-| # | card type | emitted |
-|---|---|---|
-| 00 | `recognition` | yes |
-| 01 | `valuation` | yes |
-| 02 | `evidence` | — |
-| 03 | `comparable` | — |
-| 04 | `reveal` | yes |
-| 05 | `method` | yes |
-| 06 | `dispersion` | yes |
-| 07 | `gain` | — |
-| 08 | `competition` | yes |
-| 09 | `buyer` | — |
-| 10 | `control` | yes |
+| | |
+|---|---|
+| Slug | `1-38-killarney-avenue-robina` |
+| Dwelling class | attached |
+| Scheme | Maureen's Manor · GTP1908 · CMS20880 |
+| Scheme size | 9 dwellings (cadastre parcels: 4) |
+| Subtype | group_title |
+| Valuation | same_complex_comparables / same_subtype_same_beds_suburb |
+| Floor area | — |
+| Deck cards emitted | 7 of 11 |
 
 Engine-reported gaps: `no comparable sale`, `positioning/value-drivers unavailable`
 
-**GAP markers in this report: 9** — C2, D1, D3, D4, E1, E2, F5, G3, G4
+**GAP markers: 5** — C2, C3, E2, E5, G1
