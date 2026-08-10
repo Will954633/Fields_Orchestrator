@@ -42,11 +42,11 @@ Units and townhouses here are taking a median of **17 days** to sell (n=81), and
 
 ### What the sales support
 
-**$818,901 – $1.22 million**
+**$836,000 – $1.25 million**
 
-The evidence centres around **$1.02 million** — rounded deliberately, because the width is the honest part.
+The evidence centres around **$1.04 million** — rounded deliberately, because the width is the honest part.
 
-It is built from **8** other 3-bedroom homes that have sold in this same scheme.
+It is built from **4** other 3-bedroom homes that have sold in this same scheme.
 
 ### The sales it is built from
 
@@ -56,10 +56,6 @@ It is built from **8** other 3-bedroom homes that have sold in this same scheme.
 | 2024-07 | 1/6 Lowood Court Varsity Lakes | 3 | $845,000 | $1,043,524 |
 | 2024-06 | 22/6 Lowood Court Varsity Lakes | 3 | $825,000 | $1,050,465 |
 | 2024-02 | 2/6 Lowood Court Varsity Lakes | 3 | $790,000 | $1,042,149 |
-| 2021-03 | 5/6 Lowood Court | 3 | $520,000 | $1,066,000 |
-| 2020-08 | 14/6 Lowood Court Varsity Lakes | 3 | $415,000 | $950,558 |
-| 2019-04 | 10/6 Lowood Court | 3 | $400,000 | $911,111 |
-| 2018-01 | 15/6 Lowood Court Varsity Lakes | 3 | $410,000 | $927,704 |
 
 *Each sale is brought to today using the Varsity Lakes attached-dwelling price index — not the house index. Sales the index cannot reach are dropped, never carried at face value.*
 
