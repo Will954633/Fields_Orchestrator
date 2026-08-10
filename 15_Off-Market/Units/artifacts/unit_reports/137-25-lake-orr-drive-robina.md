@@ -14,6 +14,8 @@ This home is one of **309 homes** in **Varsity Towers** — a strata complex, co
 
 The buildings in it stand **6–10 storeys** (about 33 m). Derived from Queensland LiDAR building outlines captured in 2022 — accurate to within one storey nine times in ten, which is why it is stated as a band rather than a number.
 
+At that height it will have a lift — **inferred from the building, not recorded**; no source we hold publishes lift presence.
+
 The typical lot in this scheme is 75 m², and the scheme holds 52,800 m² of common property.
 
 *Source: Queensland cadastre (CC-BY 4.0) — © State of Queensland.*
@@ -21,6 +23,8 @@ The typical lot in this scheme is 75 m², and the scheme holds 52,800 m² of com
 > **GAP [C2]** — no floor area recorded and none imputable from this scheme.
 
 > **GAP [C3]** — no complex amenity data — lift, pool, gym, secure parking (structuredFeatures[] not stored).
+>
+> Lift is inferred above; pool, gym, secure parking and on-site management are still unknown.
 
 ---
 
