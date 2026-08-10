@@ -104,7 +104,14 @@ YYYY-MM-DD — [ops] — status: OPEN`, then `**Blocks:** / **Needs a human beca
    injected — use them verbatim, never invent the path or timestamp). Include: the board
    snapshot, every row you touched and how, every Tier 3 you raised, and — explicitly — a
    list of anything you deliberately left alone and why.
-6. **Telegram Will ONE message** via `python3 scripts/telegram_notify.py "..."`.
+6. **Telegram Will ONE message** via
+   `python3 scripts/telegram_notify.py "..." --queue ops_cycle`.
+   `--queue` places it in the 09:30 AEST morning digest alongside the other routine
+   reports instead of buzzing separately at 07:15 (2026-08-10). This is a delivery
+   change only — it does **not** license you to soften, shorten or omit anything, and
+   the queued text is sent verbatim. If a finding is genuinely time-critical (active
+   data loss, a security exposure, an integrity violation), drop `--queue` so it goes
+   immediately, and say in the message why it could not wait.
    It **must** open with the honest count in this exact shape, so the raw number can never
    hide behind acknowledgements:
    `🔧 Ops: N actionable (X fixed, Y need you) · board raw ERROR=E STALE=S`
