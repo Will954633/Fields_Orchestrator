@@ -41,16 +41,25 @@ events:
     local_metric_2: median_price
     source: "Commonwealth legislation · via Fields monthly market research, 2 August 2026"
 
-  - id: cash_rate_holds
-    date: 2026-06-17
+  - id: cash_rate_rises
+    # ⚠ 2026-02-01 put this 190 days back and the six-month window silently
+    # dropped it — the bullet vanished with no error. Anchored to the MAY rise,
+    # the most recent one, which is inside the window and is still the event.
+    date: 2026-05-01
     scope: national
-    # The direction reversal is the fact, per the research: three rises then a
-    # hold, against a market that had spent 2025 waiting for cuts.
+    # ⚠ DATED TO THE RISES, NOT THE HOLD. Dating this 17 June put it after the
+    # policy event and gave it the same fourteen-week window, so both bullets
+    # reported the same listings movement with slightly different averages (46 vs
+    # 45) — which reads as two facts that disagree rather than one stated once.
+    #
+    # ⚠ DAYS ON MARKET ONLY. The policy event owns active listings; this one owns
+    # how long a home takes to sell. Each bullet must carry a local reading the
+    # other does not, or the second is padding.
     statement: >-
-      The cash rate rose in February, March and May 2026 to 4.35%, and has been
-      held there since 17 June.
+      The cash rate rose in February, March and May 2026 to 4.35% — a reversal for
+      a market that had spent 2025 waiting for cuts — and has been held there
+      since 17 June.
     local_metric: days_on_market
-    local_metric_2: active_listings
     source: "RBA · via Fields monthly market research, 2 August 2026"
 
   - id: national_prices_fall
