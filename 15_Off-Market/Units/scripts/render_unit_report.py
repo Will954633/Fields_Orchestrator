@@ -243,6 +243,10 @@ def build_report(doc, suburb, bundle, cards, notes, gc):
                 "accurate to within one storey nine times in ten, which is why it is "
                 "stated as a band rather than a number.")
             W("")
+        if cx.get("lift_inferred") == "yes":
+            W("At that height it will have a lift — **inferred from the building, not "
+              "recorded**; no source we hold publishes lift presence.")
+            W("")
         if cx.get("lot_area_median_sqm"):
             W(f"The typical lot in this scheme is {int(cx['lot_area_median_sqm'])} m²"
               + (f", and the scheme holds {int(cx['common_property_sqm']):,} m² of common property"
@@ -262,7 +266,11 @@ def build_report(doc, suburb, bundle, cards, notes, gc):
         W(gap("C2"))
     if not (cx and cx.get("storeys_band")):
         W(gap("E2"))
-    W(gap("C3"))
+    if not cx or not cx.get("lift_inferred"):
+        W(gap("C3"))
+    else:
+        W(gap("C3", "Lift is inferred above; pool, gym, secure parking and on-site "
+                    "management are still unknown."))
     W("---")
     W("")
 
