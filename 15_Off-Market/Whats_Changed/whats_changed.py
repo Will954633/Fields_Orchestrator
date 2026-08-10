@@ -297,9 +297,82 @@ def macro_events(db, suburb_key, suburb_name, now):
     return out
 
 
+def watch_metric_now(db, suburb_key, suburb_name, metric):
+    """The CURRENT level of the number a watch point promises to re-read.
+
+    Present tense and forward-facing: "the number we will be watching is X,
+    currently Y". No movement claim, because the movement has not happened."""
+    if metric == "days_on_market":
+        dom = db["precomputed_market_charts"].find_one({"_id": f"{suburb_key}_days_on_market"}) or {}
+        tl = [t for t in (dom.get("timeline") or []) if t.get("median_days_on_market")]
+        if tl:
+            return (f"The number we will be watching in {suburb_name} is how long homes take to "
+                    f"sell — currently a median of {tl[-1]['median_days_on_market']:.0f} days.")
+    if metric == "active_listings":
+        al = db["precomputed_active_listings"].find_one({"_id": suburb_key}) or {}
+        snaps = al.get("snapshots") or []
+        if snaps:
+            return (f"The number we will be watching in {suburb_name} is how many homes are on the "
+                    f"market — currently {snaps[-1].get('active_listings'):,}.")
+    if metric == "median_price":
+        px = db["precomputed_indexed_prices"].find_one({"_id": suburb_key}) or {}
+        roll = [r for r in (px.get("rolling_12m_median_series") or []) if not r.get("is_in_progress")]
+        if roll:
+            return (f"The number we will be watching in {suburb_name} is the median house price — "
+                    f"currently {money(roll[-1]['rolling_median'])} on a 12-month rolling basis.")
+    return None
+
+
+def watch_points(db, suburb_key, suburb_name, now):
+    """The one dated thing ahead that will move this narrative.
+
+    ⚠ NO FORECAST, IN EITHER DIRECTION. This says a decision is scheduled and
+    names the local number it will be read against. It does not say what the
+    decision will be, what it would mean, or what anyone expects — an attributed
+    forecast is still a forecast on a homeowner's report.
+
+    ⚠ SILENCE ON EXPIRY, LOUDLY. A watch whose date has passed with no `outcome`
+    written renders NOTHING and warns on stderr. "Coming up 11 August" still
+    sitting there on 15 August tells the reader nobody is maintaining this, which
+    costs more than the point was ever worth.
+    """
+    cfg = yaml.safe_load((HERE / "events.yaml").read_text())
+    out = []
+    for w in cfg.get("watch") or []:
+        d = w["date"]
+        d = datetime.datetime.combine(d, datetime.time()) if isinstance(d, datetime.date) else d
+        # ⚠ AEST CALENDAR DAYS, not a UTC timedelta. `now` is UTC, so on the
+        # evening of 10 August AEST the floor of the difference is 0 and a
+        # decision that is genuinely tomorrow renders as "today". The business
+        # and the reader are both in Brisbane.
+        aest_today = (now + datetime.timedelta(hours=10)).date()
+        days = (d.date() - aest_today).days
+        if days < 0 and not w.get("outcome"):
+            print(f"  ⚠ watch '{w['id']}' expired {abs(days)}d ago with no outcome recorded "
+                  f"— dropped from the report", file=sys.stderr)
+            continue
+        if w.get("outcome"):
+            continue          # resolved: belongs in the timeline, not here
+        # ⚠ FORWARD PHRASING, not `suburb_reading`. That function writes "over the
+        # same period, homes have taken longer to sell" — past tense about a
+        # thing that has not happened. What belongs here is the CURRENT level of
+        # the number we are promising to re-read, so the reader can check us.
+        reading = watch_metric_now(db, suburb_key, suburb_name, w.get("metric_to_watch"))
+        when = ("tomorrow" if days == 1 else "today" if days == 0
+                else f"in {days} days")
+        text = (f"**Coming up — {d:%-d %B %Y} ({when})** — {' '.join(w['statement'].split())} "
+                f"We will re-read {suburb_name}'s numbers against it and update this page.")
+        if reading:
+            text += f" {reading}"
+        out.append({"date": d, "kind": "watch", "text": text,
+                    "source": w["source"], "magnitude": 0,
+                    "lead": days <= 7})
+    return out
+
+
 # ── Assembly ─────────────────────────────────────────────────────────────────
 
-def build(db, doc, max_points=5):
+def build(db, doc, max_points=4):
     now = datetime.datetime.utcnow()
     suburb_key = doc.get("_suburb_collection") or (doc.get("suburb") or "").lower().replace(" ", "_")
     suburb_name = (doc.get("suburb") or suburb_key.replace("_", " ").title())
@@ -311,13 +384,21 @@ def build(db, doc, max_points=5):
               + macro_events(db, suburb_key, suburb_name, now))
     points.sort(key=lambda p: p["date"])
 
+    # ⚠ A WATCH POINT IS NOT PART OF THE TIMELINE — it is the reason to return,
+    # so it leads when it is imminent (within a week) and otherwise closes the
+    # list. Sorting it by date would bury tomorrow's RBA decision at the bottom
+    # under things that already happened.
+    watch = watch_points(db, suburb_key, suburb_name, now)
+    lead = [w for w in watch if w.get("lead")]
+    trail = [w for w in watch if not w.get("lead")]
+
     # Property-specific points always survive the cap: they are the only layer
     # that is about this home rather than about the postcode.
     if len(points) > max_points:
         prop = [p for p in points if p["kind"] == "property"]
         rest = [p for p in points if p["kind"] != "property"]
         points = sorted(prop + rest[: max_points - len(prop)], key=lambda p: p["date"])
-    return points
+    return lead + points + trail
 
 
 def main():
