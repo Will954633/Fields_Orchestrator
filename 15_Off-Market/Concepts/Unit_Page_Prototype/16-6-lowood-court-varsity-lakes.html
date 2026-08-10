@@ -1,0 +1,60 @@
+<!doctype html><html lang="en-AU"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>16/6 Lowood Court — unit page prototype</title><style>
+:root{
+  --ink:#1a1a18; --muted:#6b6b63; --line:#e0ddd4; --bg:#faf9f6;
+  --panel:#fff; --accent:#7c4a2d; --soft:#f2efe7; --good:#2f5d3f;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  -webkit-font-smoothing:antialiased}
+.wrap{max-width:720px;margin:0 auto;padding:0 22px}
+.serif{font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif}
+.banner{background:#2b2a26;color:#f3f0e8;font-size:13px;padding:9px 0;text-align:center;
+  letter-spacing:.02em}
+.banner b{color:#f7d9a0}
+header.rep{border-bottom:1px solid var(--line);padding:26px 0 20px;margin-bottom:8px}
+.eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+h1{font-size:30px;line-height:1.22;margin:10px 0 6px;font-weight:600}
+.sub{color:var(--muted);font-size:15px}
+.facts{display:flex;flex-wrap:wrap;gap:8px 18px;margin:16px 0 0;font-size:14px;color:var(--muted)}
+.facts b{color:var(--ink);font-weight:600}
+section{padding:34px 0;border-top:1px solid var(--line)}
+.part{display:flex;align-items:baseline;gap:14px;margin:0 0 6px}
+.part .num{font-size:40px;color:var(--accent);opacity:.55;font-weight:600;line-height:1}
+.part .lbl{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+h2{font-size:23px;line-height:1.3;margin:14px 0 10px;font-weight:600}
+h3{font-size:17px;margin:26px 0 8px;font-weight:600}
+p{margin:0 0 14px}
+.lead{font-size:18px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+  padding:22px;margin:18px 0}
+.range{font-size:33px;letter-spacing:-.01em;margin:2px 0 4px;font-weight:600}
+.point{font-size:15px;color:var(--muted)}
+.point b{color:var(--ink)}
+table{width:100%;border-collapse:collapse;font-size:14px;margin:10px 0 6px}
+th{text-align:left;font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--muted);font-weight:600;padding:0 8px 8px 0;border-bottom:1px solid var(--line)}
+td{padding:9px 8px 9px 0;border-bottom:1px solid var(--soft)}
+td.n,th.n{text-align:right}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.note{font-size:13px;color:var(--muted);margin-top:8px}
+.kv{display:grid;grid-template-columns:1fr auto;gap:9px 16px;font-size:15px;margin:6px 0 0}
+.kv div:nth-child(even){text-align:right;font-weight:600}
+.kv div:nth-child(odd){color:var(--muted)}
+.gap{background:#fdf6e8;border-left:3px solid #d8a44a;padding:11px 14px;margin:14px 0;
+  font-size:13.5px;color:#5c4a26;border-radius:0 8px 8px 0}
+.gap b{color:#3d3116}
+.derived{background:#eef3ee;border-left:3px solid var(--good);padding:11px 14px;margin:14px 0;
+  font-size:13.5px;color:#2c4433;border-radius:0 8px 8px 0}
+.refuse{border:1px solid var(--line);border-radius:12px;padding:22px;background:var(--panel)}
+.refuse h3{margin-top:0}
+ul.poi{list-style:none;padding:0;margin:8px 0 0}
+ul.poi li{display:flex;justify-content:space-between;padding:7px 0;
+  border-bottom:1px solid var(--soft);font-size:15px}
+ul.poi li span:last-child{color:var(--muted);font-variant-numeric:tabular-nums}
+footer{padding:34px 0 60px;color:var(--muted);font-size:12.5px;border-top:1px solid var(--line)}
+@media (max-width:520px){h1{font-size:25px}.range{font-size:27px}.part .num{font-size:32px}}
+</style></head><body><div class="banner">PROTOTYPE — not the live page, not published. Rendered from live data to review layout and copy. <b>Figures are real; the valuation band is not yet backtested.</b></div><div class="wrap"><header class="rep"><div class="eyebrow">Private property report</div><h1 class="serif">16/6 Lowood Court Varsity Lakes QLD 4227</h1><div class="facts"><span><b>3</b> bedrooms</span><span><b>1</b> bathrooms</span><span><b>~131 m²</b> internal</span></div><p class="sub" style="margin-top:14px">Updated Monday 10 August 2026</p></header><section><div class="eyebrow">The building</div><h2>One of 23 homes in Lowood Waters</h2><p class="lead">This home sits in an apartment building with shared common property, community titles scheme CMS4033.</p><p>The buildings stand <b>low-rise (1–2 storeys)</b> (about 11 m). Derived from Queensland LiDAR captured in 2022 — accurate to within one storey nine times in ten, which is why it is a band and not a number.</p><p>The scheme holds <b>11,304 m²</b> of common property, and the typical lot in it is 131 m².</p><p class="note">Scheme detail from the Queensland cadastre (CC-BY 4.0) — © State of Queensland. Dwelling count is ours: the cadastre records base parcels, not one polygon per apartment.</p><div class="derived"><b>Derived figure.</b> The ~131 m² above is the median of 8 same-bedroom homes in this scheme — not a measured area for this home. 5.2% median error on leave-one-out testing (n=424).</div><div class="gap"><b>GAP [C3]</b> — no complex amenity beyond lift — pool, gym, secure parking not stored. Lift is inferred where the building is tall enough.</div></section><section><div class="part"><div class="num serif">01</div><div class="lbl">The valuation</div></div><p class="sub">What the sales in this building support, and how far the method has been tested.</p><div class="panel"><div class="eyebrow">What the sales support</div><div class="range serif">$836,000 – $1.25 million</div><div class="point">The evidence centres around <b>$1.04 million</b> — rounded deliberately, because the width is the honest part.</div></div><p>It is built from <b>4</b> other 3-bedroom homes that have sold in this same scheme.</p><h3>The sales it is built from</h3><div class="scroll"><table><thead><tr><th>Sold</th><th>Address</th><th class="n">Beds</th><th class="n">Sold for</th><th class="n">Brought to today</th></tr></thead><tbody><tr><td>2026-04</td><td>7/6 Lowood Court</td><td class="n">3</td><td class="n">$1,000,000</td><td class="n">$1,000,000</td></tr><tr><td>2024-07</td><td>1/6 Lowood Court</td><td class="n">3</td><td class="n">$845,000</td><td class="n">$1,043,524</td></tr><tr><td>2024-06</td><td>22/6 Lowood Court</td><td class="n">3</td><td class="n">$825,000</td><td class="n">$1,050,465</td></tr><tr><td>2024-02</td><td>2/6 Lowood Court</td><td class="n">3</td><td class="n">$790,000</td><td class="n">$1,042,149</td></tr></tbody></table></div><p class="note">Each sale is brought to today using the Varsity Lakes attached-dwelling index, bedroom-matched — not the house index, with 4 older sales left out because bringing them to today would have taken more than a 60% uplift — at that distance the figure is the index, not the sale.</p><h3>How wide the range is, and why</h3><p>The published width is ±19.8%.</p><div class="gap"><b>Not publishable yet.</b> ±19.8% is the measured P80 error of this method on leave-one-out testing (n=4,093). It is NOT a statistical confidence interval and is NOT yet a published figure — it needs a production-shaped backtest first.</div></section><section><div class="part"><div class="num serif">02</div><div class="lbl">The market it sits in</div></div><p class="sub">Units and townhouses in this suburb — not the house market.</p><div class="panel"><div class="kv"><div>Median attached price, Varsity Lakes</div><div>$930,000</div><div>Change on a year earlier</div><div>+13.8%</div><div>Median days on market</div><div>17</div><div>Attached homes for sale now</div><div>35</div></div></div><div class="gap"><b>What this median is and is not.</b> It covers units, apartments, townhouses, villas and duplexes together, so it moves with the mix of what sold as well as with price. On Robina it rose 35% over two years while 2-bedroom homes rose 18% and 3-bedroom 29% — faster than either. It is context for a decision, not a second estimate of this home, and the valuation above uses the bedroom-matched series instead.</div><p class="note">Domain property timelines ∪ enriched transactions ∪ sold listings, deduped on address+month+price; dwelling class via shared.dwelling_type.classify_dwelling == attached. Medians only — sale volume is not published, because Domain's sold capture misses an estimated 40–50% of transactions.</p></section><section><div class="part"><div class="num serif">03</div><div class="lbl">At the doorstep</div></div><p class="sub">What is within walking distance.</p><ul class="poi"><li><span>Varsity College Primary Campus</span><span>810 m</span></li><li><span>Goodstart Early Learning Burleigh</span><span>222 m</span></li><li><span>ALDI</span><span>929 m</span></li><li><span>Stanford Avenue Reserve</span><span>197 m</span></li><li><span>Wild Cherry Coffee House</span><span>557 m</span></li></ul></section><section><div class="eyebrow">The other numbers</div><h2>Why three sites can give you three different values</h2><p>A valuation built from only three selected sales is highly sensitive to which three are chosen — and three comparable sales is the statutory Statement of Information standard in Victoria and the incoming NSW regime, so it is not a straw man.
+</p><p>We took 512 homes that have since sold, found every set of three comparable sales that could reasonably have been chosen, and worked out what each set said.
+</p><p class="lead">The median gap between the highest and lowest defensible result was $469,000.</p><p>That does not make any one estimate dishonest. It means three sales are often too small a sample to show which comparison deserves the most weight.
+</p></section><section><div class="gap"><b>GAP [E5]</b> — no body-corporate levy — lawful only as an owner&#x27;s agent (Phase 4).</div><div class="gap"><b>GAP [G1]</b> — copy is the house voice; copy_units_v4.yaml does not exist yet.</div></section><footer>Prototype rendered 10 August 2026 from live data · slug <code>16-6-lowood-court-varsity-lakes</code> · dwelling class attached · valuation method same_complex_comparables / same_complex_same_beds<br>Fields Estate — internal review artifact. Not published, not indexed.</footer></div></body></html>
