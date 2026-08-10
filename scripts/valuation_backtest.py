@@ -59,6 +59,9 @@ from precompute_valuations import (
     resolve_beach_distance,
     detect_golf_course_backing,
     apply_retired_adjustments,
+    apply_adjustment_reliability,
+    valuation_points,
+    suburb_calibration_factor,
     _resolve_internal_and_building,
 )
 from shared.waterfront import classify_water_relationship, WATERFRONT
@@ -467,6 +470,10 @@ def backtest_single_property(db, subject_doc, all_sold_in_suburb, sold_by_suburb
         # do not move the price. Without this the backtest measures a method we
         # no longer ship.
         adj_result = apply_retired_adjustments(adj_result)
+        # ⚠ MUST MIRROR PRODUCTION. `precompute_property_valuation` applies the
+        # reliability shrinkage here too; omitting it measured lambda=1.0 while we
+        # ship 0.80 — see the 2026-08-10 correction below.
+        adj_result = apply_adjustment_reliability(adj_result)
         pt['adjustment_result'] = adj_result
         pt['_data_quality_pct'] = comp_cov['overall_coverage']
         all_enriched_points.append(pt)
@@ -524,8 +531,44 @@ def backtest_single_property(db, subject_doc, all_sold_in_suburb, sold_by_suburb
         if not pt.get('included_in_valuation', False):
             pt.setdefault('weight', {})['normalized'] = 0.0
 
-    # Gap 6: Confidence interval
-    confidence_result = calculate_confidence(included_points, n_total_override=len(all_enriched_points))
+    # ─── Gap 6: Confidence interval — MIRRORS PRODUCTION EXACTLY ──────────
+    #
+    # ⚠ FIXED 2026-08-10. This block used to read:
+    #
+    #     confidence_result = calculate_confidence(
+    #         included_points, n_total_override=len(all_enriched_points))
+    #
+    # which differed from `precompute_property_valuation` in three ways at once,
+    # so the backtest measured a method we do not ship:
+    #
+    #   1. it reconciled over the EIGHT DISPLAYED comparables, where production
+    #      reconciles over the whole candidate pool (`valuation_points`) — the
+    #      change credited with taking "homes selling above every comparable"
+    #      from 42% to 4%;
+    #   2. it never applied the adjustment reliability shrinkage (above);
+    #   3. it passed no `suburb_key`, so every range used the DEFAULT +/-14.0%
+    #      band instead of the suburb's own, and no suburb calibration factor
+    #      was applied to the figure at all.
+    #
+    # Measured consequence: run on Robina it returned MAE 9.4% / median 7.0% /
+    # within-10% 62% against the documented 8.2% / 6.6% / 67% on the same n.
+    # Our published per-suburb bands could not be re-derived from our own tool.
+    _estimate_points = valuation_points(all_enriched_points)
+    normalize_weights(_estimate_points)
+    confidence_result = calculate_confidence(
+        _estimate_points, n_total_override=len(all_enriched_points),
+        suburb_key=suburb_key)
+
+    # Suburb calibration — production corrects the figure and carries the range
+    # with it, so a backtest that skips this measures an uncalibrated method.
+    _cal = suburb_calibration_factor(suburb_key)
+    if _cal != 1.0 and confidence_result.get('reconciled_valuation'):
+        confidence_result['reconciled_valuation'] = round(
+            confidence_result['reconciled_valuation'] * _cal)
+        _rng = confidence_result.get('range') or {}
+        if _rng.get('low') and _rng.get('high'):
+            _rng['low'] = round(_rng['low'] * _cal)
+            _rng['high'] = round(_rng['high'] * _cal)
 
     return {
         'reconciled_valuation': confidence_result.get('reconciled_valuation'),
