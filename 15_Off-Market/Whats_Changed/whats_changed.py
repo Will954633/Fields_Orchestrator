@@ -254,7 +254,7 @@ def suburb_reading(db, suburb_key, suburb_name, metric, since):
             if d0 == d1:
                 return (f"Over the same period, homes in {suburb_name} have taken a median of "
                         f"{d1:.0f} days to sell, unchanged on the previous quarter.")
-            word = "longer" if d1 > d0 else "shorter"
+            word = "longer" if d1 > d0 else "less time"
             return (f"Over the same period, homes in {suburb_name} have taken {word} to sell — a "
                     f"median of {d1:.0f} days in {last['period']} against {d0:.0f} in {prev['period']}.")
     if metric == "median_price":
