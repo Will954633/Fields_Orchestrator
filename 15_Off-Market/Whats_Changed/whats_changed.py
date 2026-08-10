@@ -360,8 +360,12 @@ def watch_points(db, suburb_key, suburb_name, now):
         reading = watch_metric_now(db, suburb_key, suburb_name, w.get("metric_to_watch"))
         when = ("tomorrow" if days == 1 else "today" if days == 0
                 else f"in {days} days")
+        # ⚠ "Varsity Lakes's" — a name already ending in s takes a bare
+        # apostrophe. The only suburb of the three it affects, and it reads as
+        # carelessness on the one line asking the reader to trust us to come back.
+        poss = f"{suburb_name}'" if suburb_name.endswith("s") else f"{suburb_name}'s"
         text = (f"**Coming up — {d:%-d %B %Y} ({when})** — {' '.join(w['statement'].split())} "
-                f"We will re-read {suburb_name}'s numbers against it and update this page.")
+                f"We will re-read {poss} numbers against it and update this page.")
         if reading:
             text += f" {reading}"
         out.append({"date": d, "kind": "watch", "text": text,
@@ -401,14 +405,87 @@ def build(db, doc, max_points=4):
     return lead + points + trail
 
 
+def emit_ts(db, out_path):
+    """Write the suburb / macro / watch layers as a TypeScript constant.
+
+    ⚠ THE HARNESS IS THE GENERATOR, NOT THE RUNTIME. These three layers are the
+    same for every home in a suburb, so recomputing them per request would be
+    three extra queries to say the same sentence 12,000 times. They are generated
+    here and checked in, exactly as ACCURACY and ADJUSTMENT_BENEFIT are.
+
+    ⚠ THE PROPERTY LAYER IS NOT IN HERE. It is per-home and is computed in the
+    route loader from `valuation_data`, which the page already holds.
+
+    `generatedAt` is load-bearing: the component renders nothing from this
+    constant once it is older than 45 days, so forgetting to re-run this degrades
+    the block to silence rather than to a stale claim.
+    """
+    now = datetime.datetime.utcnow()
+    blocks = []
+    for key, name in (("robina", "Robina"), ("varsity_lakes", "Varsity Lakes"),
+                      ("burleigh_waters", "Burleigh Waters")):
+        pts = (suburb_events(db, key, name, now)
+               + macro_events(db, key, name, now)
+               + watch_points(db, key, name, now))
+        rows = []
+        for p in sorted(pts, key=lambda x: x["date"]):
+            rows.append("      {\n"
+                        f'        date: "{p["date"]:%Y-%m-%d}",\n'
+                        f'        kind: "{p["kind"]}",\n'
+                        f'        text: {json.dumps(p["text"])},\n'
+                        f'        source: {json.dumps(p["source"])},\n'
+                        + (f'        lead: true,\n' if p.get("lead") else "")
+                        + "      },")
+        blocks.append(f'  {key}: [\n' + "\n".join(rows) + "\n  ],")
+
+    ts = f"""// GENERATED — do not edit by hand.
+//   python3 15_Off-Market/Whats_Changed/whats_changed.py --emit-ts <path>
+//
+// The suburb, macro and watch layers of "What's changed recently". Identical for
+// every home in a suburb, so they are generated once rather than recomputed per
+// request. The PROPERTY layer is per-home and is built in the route loader from
+// `valuation_data` — see `whatsChanged.server.ts`.
+//
+// ⚠ REGENERATE MONTHLY, alongside the homeowner research that feeds
+// `events.yaml`. `generatedAt` is enforced: `TIMELINE_MAX_AGE_DAYS` below makes
+// the component drop this entire layer once it is stale, so a forgotten refresh
+// costs a quieter page rather than a wrong one.
+
+export type TimelinePoint = {{
+  date: string;
+  kind: "suburb" | "macro" | "watch";
+  text: string;
+  source: string;
+  /** Forward-looking and imminent — renders first, not in date order. */
+  lead?: boolean;
+}};
+
+export const TIMELINE_GENERATED_AT = "{now:%Y-%m-%d}";
+
+/** Past this, the generated layer stops rendering. Roughly one missed monthly
+ *  refresh plus a fortnight of slack. */
+export const TIMELINE_MAX_AGE_DAYS = 45;
+
+export const SUBURB_TIMELINE: Record<string, TimelinePoint[]> = {{
+{chr(10).join(blocks)}
+}};
+"""
+    Path(out_path).write_text(ts)
+    print(f"  wrote {out_path}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--slug")
     ap.add_argument("--sample", type=int, default=0)
     ap.add_argument("--out", default="MOCKUP.md")
+    ap.add_argument("--emit-ts", default=None)
     args = ap.parse_args()
 
     db = get_gold_coast_db()
+    if args.emit_ts:
+        emit_ts(db, args.emit_ts)
+        return
     docs = []
     if args.slug:
         for s in ("robina", "varsity_lakes", "burleigh_waters"):
