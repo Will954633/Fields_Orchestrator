@@ -2,18 +2,7 @@
 
 *Private property report · rendered Monday 10 August 2026*
 
-> **Harness note.** This is the markdown proof of the unit page, rendered from the live engine (`fact_bundle` → `emit_v4`). It is not published anywhere. GAP markers name the workstream in `UNITS_DEVELOPMENT_PLAN.md` that closes them.
-
-| | |
-|---|---|
-| Slug | `1-40-cheltenham-drive-robina` |
-| Suburb | Robina |
-| Dwelling class | **attached** (computed live — dwelling_class is not persisted; classification is computed live here) |
-| Cadastral subtype | BUP (building, common property — apartment) |
-| Complex name | — |
-| Cards emitted | 8 of 11 |
-
----
+> **Harness output — not published anywhere.** Rendered from the live engines so the prose can be reviewed as a document. GAP markers name the workstream that closes them.
 
 ## 0 · The header
 
@@ -21,67 +10,66 @@
 
 3 bedrooms · 2 bathrooms
 
-> **GAP [C2]** — no floor area on this dwelling (Domain internalArea not yet read).
+This home is one of **3 homes** in **Robina Palms** — an apartment building with shared common property, community titles scheme CMS6543.
 
-You may be trying to answer three questions privately.
+The typical lot in this scheme is 153 m², and the scheme holds 2,178 m² of common property.
 
-- Is the number attached to this home real?
-- Is this the wrong time to move?
-- And if you sold, where would you go next?
+*Source: Queensland cadastre (CC-BY 4.0) — © State of Queensland.*
 
-This page starts with the first: what the sales around this home actually support. There is nothing to fill in and no account to create — the whole page is here.
+> **GAP [C2]** — no floor area recorded and none imputable from this scheme.
 
-Last recorded sale: $580,000 in August 2020.
+> **GAP [E2]** — no storeys band — QLD LiDAR buildings layer not yet ingested.
 
-No later market sale is recorded.
-
-> **GAP [G4]** — hero is a cadastral lot; for a unit the parcel is the whole scheme.
->
-> The house page shows a title boundary and land size here. For a unit the cadastral parcel is the whole scheme — it would show ~40 neighbours' roofs. Replacement is complex name + scheme size + storeys band.
-
-> **GAP [E1]** — no complex entity - CTS number, scheme name and scheme size not yet ingested.
-
-> **GAP [E2]** — no storeys band - QLD LiDAR buildings layer not yet ingested.
+> **GAP [C3]** — no complex amenity data — lift, pool, gym, secure parking (structuredFeatures[] not stored).
 
 ---
 
 ## 1 · The last six months — what's changed recently
 
-> **GAP [D1]** — no unit price series exists for this suburb; the house median would be wrong here.
->
-> The house page shows suburb median, days-on-market and comparable sales here. Every one of those series is houses-only by construction (`precompute_union_prices.py` filters `classify_dwelling == house`).
+**2026-Q2** — the median price for an attached dwelling in Robina stands at **$990,000** on a 12-month rolling basis, +14.1% on a year earlier.
 
-> **GAP [D3]** — no unit days-on-market or unit active-listing count.
+Units and townhouses here are taking a median of **20 days** to sell (n=88), and **53** are on the market now.
+
+> **What this median is and is not.** It covers units, apartments, townhouses, villas and duplexes together, so it moves with the mix of what sold as well as with price. Measured on Robina it rose 35% over two years while 2-bedroom homes rose 18% and 3-bedroom 29% — faster than either, because the mix shifted toward larger dwellings. It is context for a decision, not a second estimate of this home, and the valuation above uses the bedroom-matched series instead.
+
+*Domain property timelines ∪ enriched transactions ∪ sold listings, deduped on address+month+price; dwelling class via shared.dwelling_type.classify_dwelling == attached. Medians only — sale volume is not published, because Domain's sold capture misses an estimated 40–50% of transactions.*
 
 ---
 
 ## 2 · Part 01 — The valuation
 
-### The range
+### What the sales support
 
-What the sales around it say.
+**$919,486 – $1.37 million**
 
-$1.27 million – $1.79 million
+The evidence centres around **$1.15 million** — rounded deliberately, because the width is the honest part.
 
-The evidence centres around
+It is built from **12** 3-bedroom homes of the same kind that have sold across Robina (42 were available).
 
-$1.55 million
+> **Worth saying plainly:** no sale in this home's own scheme could be used, so this range comes from similar homes elsewhere in the suburb. That is a weaker comparison than a sale in the same building, and the figure should be read as such.
 
-rounded deliberately, because the width is the honest part
+### The sales it is built from
 
-This home isn't currently listed, so we have no interior photography to assess. We've built the range from what we can verify — land size, floor area, bedroom and bathroom count, position, and recent comparable sales nearby, supported by aerial and street-level imagery of the exterior. What a desk can't see is the inside: renovation quality, interior condition, and layout — among the largest factors in a final figure. That's why this range is deliberately wide and the confidence is marked lower.
+| Sold | Address | Beds | Sold for | Brought to today |
+|---|---|---|---:|---:|
+| 2026-08 | 28/244 Ron Penhaligon Way | 3 | $855,000 | $855,000 |
+| 2025-12 | 10/24 Ron Penhaligon Way | 3 | $1,280,000 | $1,433,600 |
+| 2025-11 | 2/24 Ron Penhaligon Way | 3 | $1,200,000 | $1,344,000 |
+| 2025-05 | 31/244 Ron Penhaligon Way | 3 | $830,000 | $984,745 |
+| 2025-05 | 1/34 Cheltenham Drive Robina | 3 | $917,000 | $1,087,966 |
+| 2025-04 | 43/250 Ron Penhaligon Way | 3 | $795,000 | $943,220 |
+| 2025-03 | 24/1 Kentwood Drive Robina | 3 | $815,000 | $987,024 |
+| 2025-03 | 1/24 Ron Penhaligon Way Robina | 3 | $995,000 | $1,205,017 |
 
-### Reliability
+*Each sale is brought to today using the Robina attached-dwelling price index — not the house index. Sales the index cannot reach are dropped, never carried at face value.*
 
-What this is, and what it isn't.
+### How wide the range is, and why
 
-This is an estimate built from comparable sales. It is not a formal valuation and it isn't an appraisal — a valuer inspects the property and carries professional liability for the figure. Nobody has been inside this home.
+The published width is ±19.8%.
 
-We take sales of homes near this one, adjust each for the ways it differs, weight them by how good a comparison they are, and publish the spread.
+> ⚠ **Not publishable yet.** ±19.8% is the measured P80 error of this method on leave-one-out testing (n=4,093). It is NOT a statistical confidence interval and is NOT yet a published figure — it needs a production-shaped backtest first.
 
-The range above wasn't built by the method described here — this home sits outside the band our comparable-sales model was built for, so we've used a wider approach based on what can be verified from the outside. We publish a measured error rate for the comparable-sales method; we don't have one for this fallback, so we're not quoting a number we haven't earned.
-
-### Why three sites disagree
+### Why three sites can give three different values
 
 Why the other estimates say something different.
 
@@ -96,59 +84,54 @@ That does not make any one estimate dishonest. It means three sales are often to
 **See what the test found** — A close answer was present in the available evidence on 73.6% of those homes — identifiable only with hindsight. The worst available choice was more than 20% out on 73.4%.
 
 
-> **GAP [F5]** — the engine emitted a RANGE for this unit, derived from HOUSE sales — `_thin_valuation_range` filters on bedrooms with no property_type clause.
->
-> Engine emitted **$1.27 million – $1.79 million** for this dwelling via `method=exterior_evidence`, n_comps=60. ⚠ **This is not a refusal — it is a number.** The V4 React page suppresses it (it requires `valuation_data.confidence.range.low`), but the DISCOVERY DECK renders this card, and the deck is the default in every non-V4 suburb. Verify before shipping the unit arm.
-
 ---
 
 ## 3 · Part 02 — The home itself
 
-### What stood out
+### Where it sits in Robina Palms
 
-What makes this home less common among today's listings.
+There are **3** lots in this scheme. That is the number a buyer is really choosing between — the closest substitute for this home is another home in this building, not a house down the road.
 
-Where a buyer may focus:
+### At the doorstep
 
-- no pool
+- Robina State School — 402m
+- Varsity College Secondary Campus — 1804m
+- Robina Town Child Care Centre — 690m
+- Woolworths Robina North — 1455m
+- Sawgrass Park — 112m
+- The Lott Cafe Robina — 687m
 
-### The comparison set
-
-What's moving around this home.
-
-Two true things that point in different directions.
-
-Homes here are selling more slowly than a year ago — a median of 34 days, against 24 twelve months earlier. But there is less to choose from: 58 homes are on the market, 5.5% more than a month ago.
-
-Both readings are true and they support opposite conclusions, which is why a single market headline can't settle anything about this home.
-
-We're not showing a quarter-on-quarter price change. Only 51 and 71 sales sit behind the two quarters — too few to separate a real movement from ordinary variation.
-
-> **GAP [D4]** — the market card quotes house days-on-market and house listing counts.
->
-> The market copy rendered above draws on `precomputed_market_charts` (days-on-market) and `precomputed_active_listings` — both keyed by suburb only, both houses-only by construction. Presented here as this dwelling's market.
-
-> **GAP [G3]** — green_space makes a boundary claim from a single geocode; invalid for a scheme.
->
-> Engine returned: `{"premium": {"name": "Sawgrass Park", "kind": "park", "edge_m": 90.5, "relation": "steps from"}}`. Suppress for attached dwellings.
+> **GAP [E5]** — no body-corporate levy — lawful only as an owner's agent (Phase 4).
 
 ---
 
 ## 4 · Part 03 — Where that leaves you
 
-### What it has done since you bought
+### The market a move would happen in
 
-Since the last recorded sale.
+| | |
+|---|---|
+| Median attached price, Robina | **$990,000** (2026-Q2, 12-month rolling) |
+| Change on a year earlier | +14.1% |
+| Median days on market | 20 (n=88) |
+| Attached homes for sale now | 53 |
 
-Last recorded sale $580,000, August 2020.
+Recent quarterly medians:
 
-The gap between what was last paid and what the sales say today is real, but it is not one we can draw as a single line — and a line we can't evidence is worth less than saying so.
+| Quarter | Median | Sales |
+|---|---:|---:|
+| 2024-Q3 | $840,000 | 67 |
+| 2024-Q4 | $853,000 | 54 |
+| 2025-Q1 | $869,000 | 61 |
+| 2025-Q2 | $900,000 | 77 |
+| 2025-Q3 | $915,000 | 81 |
+| 2025-Q4 | $982,500 | 60 |
+| 2026-Q1 | $1,090,000 | 55 |
+| 2026-Q2 | $1,050,000 | 39 |
 
-Our quarterly median series for Robina starts at Q3 2024. Everything before that is outside what we can measure, so we are not drawing a line across it.
+*149 quarters back to 1987-Q2 clear the 8-sale threshold; 2026-Q3 is still in progress and is excluded from the headline and the year-on-year figure.*
 
-Over ten years the suburb moved from $600,000 to $1.41 million — about 135%.
-
-### What you know that we don't
+### You know this home better than the records do
 
 This is your home's page. You can change it.
 
@@ -160,31 +143,23 @@ Tell us what's wrong, and we'll fix it and rebuild the figure in front of you.
 
 No agent is paying to appear on this page, and your interest in your own home is not sold to anyone. Fields is the agency that built it — there is no third party being handed your address.
 
-> **GAP [D1]** — no unit price series exists for this suburb; the house median would be wrong here.
->
-> The house page closes with suburb median, median trend chart, days-on-market and "N houses for sale". All house series.
-
+> **GAP [G1]** — copy below is the house voice; copy_units_v4.yaml does not exist yet.
 
 ---
 
-## Appendix — engine diagnostics
+## Appendix — diagnostics
 
-Which of the 11 emitters produced a card for this dwelling:
-
-| # | card type | emitted |
-|---|---|---|
-| 00 | `recognition` | yes |
-| 01 | `valuation` | yes |
-| 02 | `evidence` | — |
-| 03 | `comparable` | — |
-| 04 | `reveal` | yes |
-| 05 | `method` | yes |
-| 06 | `dispersion` | yes |
-| 07 | `gain` | yes |
-| 08 | `competition` | yes |
-| 09 | `buyer` | — |
-| 10 | `control` | yes |
+| | |
+|---|---|
+| Slug | `1-40-cheltenham-drive-robina` |
+| Dwelling class | attached |
+| Scheme | Robina Palms · BUP8753 · CMS6543 |
+| Scheme size | 3 dwellings (cadastre parcels: 2) |
+| Subtype | building_units |
+| Valuation | same_complex_comparables / same_subtype_same_beds_suburb |
+| Floor area | — |
+| Deck cards emitted | 8 of 11 |
 
 Engine-reported gaps: `no comparable sale`, `positioning/value-drivers unavailable`
 
-**GAP markers in this report: 9** — C2, D1, D3, D4, E1, E2, F5, G3, G4
+**GAP markers: 5** — C2, C3, E2, E5, G1
