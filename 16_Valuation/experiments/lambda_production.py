@@ -18,6 +18,16 @@ ship.
 backtest as it stands cannot reproduce the configuration our own accuracy
 document describes — which is what this script exists to settle.
 
+⚠ RE-RUNNING THIS AFTER 2026-08-10 NEEDS ONE CORRECTION
+───────────────────────────────────────────────────────────────────────────────
+`valuation_backtest.py` was aligned with production on 2026-08-10 and now applies
+`apply_adjustment_reliability` itself. So `adjustment_result.adjusted_price` is
+already shrunk to lambda=0.80, and sweeping over it sweeps 0 -> 0.8, not 0 -> 1.
+The jsonl this script's published result came from predates that fix, so its
+`adj_est` IS full strength and the recorded sweep stands. To re-run, either
+divide the adjustment back out by `_ADJUSTMENT_RELIABILITY` or temporarily set
+that constant to 1.0 — otherwise every lambda on the axis is really 0.8x itself.
+
 THE SWEEP IS ANALYTIC, AND EXACTLY EQUIVALENT
 ───────────────────────────────────────────────────────────────────────────────
 Shrinkage is linear in the adjustment, so shrinking each comparable and then
