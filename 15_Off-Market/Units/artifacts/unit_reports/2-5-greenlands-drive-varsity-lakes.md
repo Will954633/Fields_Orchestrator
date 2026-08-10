@@ -12,13 +12,13 @@ _no attributes recorded_
 
 This home is one of **81 homes** in **Currawong Heights** — a villa and townhouse complex, community titles scheme CMS20697.
 
+The buildings in it stand **low-rise (1–2 storeys)** (about 9 m). Derived from Queensland LiDAR building outlines captured in 2022 — accurate to within one storey nine times in ten, which is why it is stated as a band rather than a number.
+
 The typical lot in this scheme is 215 m², and the scheme holds 52,230 m² of common property.
 
 *Source: Queensland cadastre (CC-BY 4.0) — © State of Queensland.*
 
 > **GAP [C2]** — no floor area recorded and none imputable from this scheme.
-
-> **GAP [E2]** — no storeys band — QLD LiDAR buildings layer not yet ingested.
 
 > **GAP [C3]** — no complex amenity data — lift, pool, gym, secure parking (structuredFeatures[] not stored).
 
@@ -162,4 +162,4 @@ One thing we could not verify: bedrooms.
 
 Engine-reported gaps: `bedrooms unknown`, `bathrooms unknown`, `no valuation range`, `no comparable sale`, `competition count unavailable`, `positioning/value-drivers unavailable`
 
-**GAP markers: 5** — C2, C3, E2, E5, G1
+**GAP markers: 4** — C2, C3, E5, G1
