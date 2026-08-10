@@ -1,0 +1,67 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Dated market/policy events for the "What's changed recently" block.
+#
+# WHERE THESE COME FROM
+# Extracted by hand from the monthly homeowner research —
+# 15_Off-Market/Home_Owner_Perspective/Gold-Coast-Homeowner-Selling-Mindset-<date>.md
+# Only rows the research tags [VERIFIED] may appear here. An [INFERRED] emotional
+# read is our interpretation and must never be published as an event.
+#
+# ⚠ EVERY EVENT MUST PAIR WITH A LOCAL READING FROM OUR OWN DATA.
+# A national headline on its own tells a Robina owner nothing about their home,
+# and repeating it unpaired is how a report becomes the anxiety it is supposed to
+# answer. `local_metric` names which of our measured series the generator must
+# put beside it. If we cannot measure the local side, the event does not render.
+#
+# ⚠ NO CAUSAL VERBS. "coincided with", "over the same period", "since" — never
+# "caused", "drove", "led to". We are pairing two measured series in time, and
+# that is all we can support (CLAUDE.md Rule 5).
+#
+# ⚠ NO FORECASTS, even attributed ones. "Westpac expects two cuts in 2027" is a
+# prediction the moment it appears on a homeowner's report, whoever said it.
+# ─────────────────────────────────────────────────────────────────────────────
+
+events:
+  - id: cash_rate_holds
+    date: 2026-06-17
+    scope: national
+    # Direction matters more than level — the research is explicit that the
+    # reversal is what registers, not the number.
+    statement: >-
+      The cash rate has sat at 4.35% since 17 June 2026, after rises in February,
+      March and May.
+    local_metric: days_on_market
+    source: "RBA · via Fields monthly market research, 2 August 2026"
+
+  - id: cgt_ng_reform
+    date: 2026-06-26
+    scope: national
+    # The single clearest gap in the market per the research §8: most
+    # owner-occupiers are unaffected and do not know it.
+    statement: >-
+      Negative gearing and capital gains tax changes received Royal Assent on
+      26 June 2026, taking effect 1 July 2027. They apply to investment
+      purchases; the main residence exemption is unchanged.
+    local_metric: active_listings
+    source: "Commonwealth legislation · via Fields monthly market research, 2 August 2026"
+
+  - id: national_prices_fall
+    date: 2026-07-31
+    scope: national
+    # ⚠ Brisbane is roughly flat, not falling. Stating the aggregate without
+    # that is the thing the research warns nobody reads the decimal on.
+    statement: >-
+      National home values fell 2.0% over the July 2026 quarter across the five
+      largest capitals, led by Sydney (−3.7%) and Melbourne (−3.0%). Brisbane was
+      close to flat at −0.1%.
+    local_metric: median_price
+    source: "Cotality 5-city aggregate, July 2026 · via Fields monthly market research"
+
+  - id: rental_vacancy
+    date: 2026-06-30
+    scope: state
+    statement: >-
+      Queensland rental vacancy was 1.0% in June 2026, with Gold Coast vacancy up
+      0.4 percentage points over the month.
+    local_metric: active_listings
+    source: "QLD vacancy data · via Fields monthly market research, 2 August 2026"
