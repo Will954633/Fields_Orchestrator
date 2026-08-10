@@ -2,18 +2,7 @@
 
 *Private property report · rendered Monday 10 August 2026*
 
-> **Harness note.** This is the markdown proof of the unit page, rendered from the live engine (`fact_bundle` → `emit_v4`). It is not published anywhere. GAP markers name the workstream in `UNITS_DEVELOPMENT_PLAN.md` that closes them.
-
-| | |
-|---|---|
-| Slug | `137-25-lake-orr-drive-robina` |
-| Suburb | Robina |
-| Dwelling class | **attached** (computed live — dwelling_class is not persisted; classification is computed live here) |
-| Cadastral subtype | SP (survey plan — ambiguous) |
-| Complex name | — |
-| Cards emitted | 7 of 11 |
-
----
+> **Harness output — not published anywhere.** Rendered from the live engines so the prose can be reviewed as a document. GAP markers name the workstream that closes them.
 
 ## 0 · The header
 
@@ -21,57 +10,43 @@
 
 _no attributes recorded_
 
-> **GAP [C2]** — no floor area on this dwelling (Domain internalArea not yet read).
+This home is one of **309 homes** in **Varsity Towers** — a strata complex, community titles scheme CMS33293.
 
-You may be trying to answer three questions privately.
+The typical lot in this scheme is 75 m², and the scheme holds 52,800 m² of common property.
 
-- Is the number attached to this home real?
-- Is this the wrong time to move?
-- And if you sold, where would you go next?
+*Source: Queensland cadastre (CC-BY 4.0) — © State of Queensland.*
 
-This page starts with the first: what the sales around this home actually support. There is nothing to fill in and no account to create — the whole page is here.
+> **GAP [C2]** — no floor area recorded and none imputable from this scheme.
 
-> **GAP [G4]** — hero is a cadastral lot; for a unit the parcel is the whole scheme.
->
-> The house page shows a title boundary and land size here. For a unit the cadastral parcel is the whole scheme — it would show ~40 neighbours' roofs. Replacement is complex name + scheme size + storeys band.
+> **GAP [E2]** — no storeys band — QLD LiDAR buildings layer not yet ingested.
 
-> **GAP [E1]** — no complex entity - CTS number, scheme name and scheme size not yet ingested.
-
-> **GAP [E2]** — no storeys band - QLD LiDAR buildings layer not yet ingested.
+> **GAP [C3]** — no complex amenity data — lift, pool, gym, secure parking (structuredFeatures[] not stored).
 
 ---
 
 ## 1 · The last six months — what's changed recently
 
-> **GAP [D1]** — no unit price series exists for this suburb; the house median would be wrong here.
->
-> The house page shows suburb median, days-on-market and comparable sales here. Every one of those series is houses-only by construction (`precompute_union_prices.py` filters `classify_dwelling == house`).
+**2026-Q2** — the median price for an attached dwelling in Robina stands at **$990,000** on a 12-month rolling basis, +14.1% on a year earlier.
 
-> **GAP [D3]** — no unit days-on-market or unit active-listing count.
+Units and townhouses here are taking a median of **20 days** to sell (n=88), and **53** are on the market now.
+
+> **What this median is and is not.** It covers units, apartments, townhouses, villas and duplexes together, so it moves with the mix of what sold as well as with price. Measured on Robina it rose 35% over two years while 2-bedroom homes rose 18% and 3-bedroom 29% — faster than either, because the mix shifted toward larger dwellings. It is context for a decision, not a second estimate of this home, and the valuation above uses the bedroom-matched series instead.
+
+*Domain property timelines ∪ enriched transactions ∪ sold listings, deduped on address+month+price; dwelling class via shared.dwelling_type.classify_dwelling == attached. Medians only — sale volume is not published, because Domain's sold capture misses an estimated 40–50% of transactions.*
 
 ---
 
 ## 2 · Part 01 — The valuation
 
-### The range
+### We are not going to put a figure on this home
 
-What the sales around it say.
+No sale in this scheme, and too few same-type sales of this size in the suburb, to support a range.
 
-We can't put a range on this home yet.
+*Decline reason: `no_class_matched_comparables`. Tiers attempted: same_complex_any_beds=0.*
 
-We hold its land size and its last recorded sale, but not enough of the rest to stand behind a range. A range built without it would look exactly like one built with it, which is the problem.
+> This is the correct output, not a hole — a range built from homes that are not genuinely comparable would be worse than no range. The page should say so and explain what would change it.
 
-### Reliability
-
-What this is, and what it isn't.
-
-This is an estimate built from comparable sales. It is not a formal valuation and it isn't an appraisal — a valuer inspects the property and carries professional liability for the figure. Nobody has been inside this home.
-
-We take sales of homes near this one, adjust each for the ways it differs, weight them by how good a comparison they are, and publish the spread.
-
-no measured error rate for robina
-
-### Why three sites disagree
+### Why three sites can give three different values
 
 Why the other estimates say something different.
 
@@ -86,47 +61,54 @@ That does not make any one estimate dishonest. It means three sales are often to
 **See what the test found** — A close answer was present in the available evidence on 73.6% of those homes — identifiable only with hindsight. The worst available choice was more than 20% out on 73.4%.
 
 
-> **GAP [F3]** — no unit valuation - the comparables engine is house-only and refuses attached stock.
->
-> This is the honest refusal the page would show. It is correct today — but the target is a same-complex method that earns a range, not a permanent refusal. See Workstream F.
-
 ---
 
 ## 3 · Part 02 — The home itself
 
-### What stood out
+### Where it sits in Varsity Towers
 
-What makes this home less common among today's listings.
+There are **309** lots in this scheme. That is the number a buyer is really choosing between — the closest substitute for this home is another home in this building, not a house down the road.
 
-Where a buyer may focus:
+### At the doorstep
 
-- no pool
+- Mastery Schools Australia Varsity Lakes — 865m
+- Goodstart Early Learning Varsity Lakes — 741m
+- Coles Varsity Lakes — 1400m
+- Cassowary Drive Reserve — 887m
+- Papyrus Café — 419m
+- Miami Beach — 1815m
 
-### The comparison set
-
-What's moving around this home.
-
-Two true things that point in different directions.
-
-Homes here are selling more slowly than a year ago — a median of 34 days, against 24 twelve months earlier. But there is less to choose from: 58 homes are on the market, 5.5% more than a month ago.
-
-Both readings are true and they support opposite conclusions, which is why a single market headline can't settle anything about this home.
-
-We're not showing a quarter-on-quarter price change. Only 51 and 71 sales sit behind the two quarters — too few to separate a real movement from ordinary variation.
-
-> **GAP [D4]** — the market card quotes house days-on-market and house listing counts.
->
-> The market copy rendered above draws on `precomputed_market_charts` (days-on-market) and `precomputed_active_listings` — both keyed by suburb only, both houses-only by construction. Presented here as this dwelling's market.
-
-> **GAP [G3]** — green_space makes a boundary claim from a single geocode; invalid for a scheme.
->
-> Engine returned: `{"premium": {"name": "Lake Orr", "kind": "water", "edge_m": 14.8, "relation": "backs onto"}, "detractor": {"name": "Bermuda Street", "kind": "a main road", "edg`. Suppress for attached dwellings.
+> **GAP [E5]** — no body-corporate levy — lawful only as an owner's agent (Phase 4).
 
 ---
 
 ## 4 · Part 03 — Where that leaves you
 
-### What you know that we don't
+### The market a move would happen in
+
+| | |
+|---|---|
+| Median attached price, Robina | **$990,000** (2026-Q2, 12-month rolling) |
+| Change on a year earlier | +14.1% |
+| Median days on market | 20 (n=88) |
+| Attached homes for sale now | 53 |
+
+Recent quarterly medians:
+
+| Quarter | Median | Sales |
+|---|---:|---:|
+| 2024-Q3 | $840,000 | 67 |
+| 2024-Q4 | $853,000 | 54 |
+| 2025-Q1 | $869,000 | 61 |
+| 2025-Q2 | $900,000 | 77 |
+| 2025-Q3 | $915,000 | 81 |
+| 2025-Q4 | $982,500 | 60 |
+| 2026-Q1 | $1,090,000 | 55 |
+| 2026-Q2 | $1,050,000 | 39 |
+
+*149 quarters back to 1987-Q2 clear the 8-sale threshold; 2026-Q3 is still in progress and is excluded from the headline and the year-on-year figure.*
+
+### You know this home better than the records do
 
 This is your home's page. You can change it.
 
@@ -140,31 +122,23 @@ No agent is paying to appear on this page, and your interest in your own home is
 
 One thing we could not verify: bedrooms.
 
-> **GAP [D1]** — no unit price series exists for this suburb; the house median would be wrong here.
->
-> The house page closes with suburb median, median trend chart, days-on-market and "N houses for sale". All house series.
-
+> **GAP [G1]** — copy below is the house voice; copy_units_v4.yaml does not exist yet.
 
 ---
 
-## Appendix — engine diagnostics
+## Appendix — diagnostics
 
-Which of the 11 emitters produced a card for this dwelling:
-
-| # | card type | emitted |
-|---|---|---|
-| 00 | `recognition` | yes |
-| 01 | `valuation` | yes |
-| 02 | `evidence` | — |
-| 03 | `comparable` | — |
-| 04 | `reveal` | yes |
-| 05 | `method` | yes |
-| 06 | `dispersion` | yes |
-| 07 | `gain` | — |
-| 08 | `competition` | yes |
-| 09 | `buyer` | — |
-| 10 | `control` | yes |
+| | |
+|---|---|
+| Slug | `137-25-lake-orr-drive-robina` |
+| Dwelling class | attached |
+| Scheme | Varsity Towers · SP157828 · CMS33293 |
+| Scheme size | 309 dwellings (cadastre parcels: 6) |
+| Subtype | survey_plan |
+| Valuation | declined |
+| Floor area | — |
+| Deck cards emitted | 7 of 11 |
 
 Engine-reported gaps: `bedrooms unknown`, `bathrooms unknown`, `no valuation range`, `no comparable sale`, `competition count unavailable`, `positioning/value-drivers unavailable`
 
-**GAP markers in this report: 9** — C2, D1, D3, D4, E1, E2, F3, G3, G4
+**GAP markers: 5** — C2, C3, E2, E5, G1
