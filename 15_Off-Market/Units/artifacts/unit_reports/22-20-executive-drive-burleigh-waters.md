@@ -48,7 +48,7 @@ Units and townhouses here are taking a median of **16 days** to sell (n=34), and
 
 The evidence centres around **$1.48 million** — rounded deliberately, because the width is the honest part.
 
-It is built from **12** other 3-bedroom homes that have sold in this same scheme (21 were available).
+It is built from **12** other 3-bedroom homes that have sold in this same scheme (17 were available).
 
 ### The sales it is built from
 
