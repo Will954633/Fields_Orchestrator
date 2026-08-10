@@ -2,82 +2,72 @@
 
 *Private property report · rendered Monday 10 August 2026*
 
-> **Harness note.** This is the markdown proof of the unit page, rendered from the live engine (`fact_bundle` → `emit_v4`). It is not published anywhere. GAP markers name the workstream in `UNITS_DEVELOPMENT_PLAN.md` that closes them.
-
-| | |
-|---|---|
-| Slug | `16-6-lowood-court-varsity-lakes` |
-| Suburb | Varsity Lakes |
-| Dwelling class | **attached** (computed live — dwelling_class is not persisted; classification is computed live here) |
-| Cadastral subtype | BUP (building, common property — apartment) |
-| Complex name | — |
-| Cards emitted | 7 of 11 |
-
----
+> **Harness output — not published anywhere.** Rendered from the live engines so the prose can be reviewed as a document. GAP markers name the workstream that closes them.
 
 ## 0 · The header
 
 **16/6 LOWOOD COURT VARSITY LAKES QLD 4227**
 
-3 bedrooms · 1 bathrooms
+3 bedrooms · 1 bathrooms · ~131 m² internal *(derived)*
 
-> **GAP [C2]** — no floor area on this dwelling (Domain internalArea not yet read).
+This home is one of **23 homes** in **Lowood Waters** — an apartment building with shared common property, community titles scheme CMS4033.
 
-You may be trying to answer three questions privately.
+The typical lot in this scheme is 131 m², and the scheme holds 11,304 m² of common property.
 
-- Is the number attached to this home real?
-- Is this the wrong time to move?
-- And if you sold, where would you go next?
+*Source: Queensland cadastre (CC-BY 4.0) — © State of Queensland.*
 
-This page starts with the first: what the sales around this home actually support. There is nothing to fill in and no account to create — the whole page is here.
+> **Derived figure.** The 131 m² above is the median of 8 same-bedroom dwellings in this scheme, not a measured area for this home. Method error 5.2% median on leave-one-out testing.
 
-> **GAP [G4]** — hero is a cadastral lot; for a unit the parcel is the whole scheme.
->
-> The house page shows a title boundary and land size here. For a unit the cadastral parcel is the whole scheme — it would show ~40 neighbours' roofs. Replacement is complex name + scheme size + storeys band.
+> **GAP [E2]** — no storeys band — QLD LiDAR buildings layer not yet ingested.
 
-> **GAP [E1]** — no complex entity - CTS number, scheme name and scheme size not yet ingested.
-
-> **GAP [E2]** — no storeys band - QLD LiDAR buildings layer not yet ingested.
+> **GAP [C3]** — no complex amenity data — lift, pool, gym, secure parking (structuredFeatures[] not stored).
 
 ---
 
 ## 1 · The last six months — what's changed recently
 
-> **GAP [D1]** — no unit price series exists for this suburb; the house median would be wrong here.
->
-> The house page shows suburb median, days-on-market and comparable sales here. Every one of those series is houses-only by construction (`precompute_union_prices.py` filters `classify_dwelling == house`).
+**2026-Q2** — the median price for an attached dwelling in Varsity Lakes stands at **$930,000** on a 12-month rolling basis, +13.8% on a year earlier.
 
-> **GAP [D3]** — no unit days-on-market or unit active-listing count.
+Units and townhouses here are taking a median of **17 days** to sell (n=81), and **35** are on the market now.
+
+> **What this median is and is not.** It covers units, apartments, townhouses, villas and duplexes together, so it moves with the mix of what sold as well as with price. Measured on Robina it rose 35% over two years while 2-bedroom homes rose 18% and 3-bedroom 29% — faster than either, because the mix shifted toward larger dwellings. It is context for a decision, not a second estimate of this home, and the valuation above uses the bedroom-matched series instead.
+
+*Domain property timelines ∪ enriched transactions ∪ sold listings, deduped on address+month+price; dwelling class via shared.dwelling_type.classify_dwelling == attached. Medians only — sale volume is not published, because Domain's sold capture misses an estimated 40–50% of transactions.*
 
 ---
 
 ## 2 · Part 01 — The valuation
 
-### The range
+### What the sales support
 
-What the sales around it say.
+**$818,901 – $1.22 million**
 
-$1.19 million – $1.45 million
+The evidence centres around **$1.02 million** — rounded deliberately, because the width is the honest part.
 
-The evidence centres around
+It is built from **8** other 3-bedroom homes that have sold in this same scheme.
 
-$1.3 million
+### The sales it is built from
 
-rounded deliberately, because the width is the honest part
+| Sold | Address | Beds | Sold for | Brought to today |
+|---|---|---|---:|---:|
+| 2026-04 | 7/6 Lowood Court | 3 | $1,000,000 | $1,000,000 |
+| 2024-07 | 1/6 Lowood Court Varsity Lakes | 3 | $845,000 | $1,043,524 |
+| 2024-06 | 22/6 Lowood Court Varsity Lakes | 3 | $825,000 | $1,050,465 |
+| 2024-02 | 2/6 Lowood Court Varsity Lakes | 3 | $790,000 | $1,042,149 |
+| 2021-03 | 5/6 Lowood Court | 3 | $520,000 | $1,066,000 |
+| 2020-08 | 14/6 Lowood Court Varsity Lakes | 3 | $415,000 | $950,558 |
+| 2019-04 | 10/6 Lowood Court | 3 | $400,000 | $911,111 |
+| 2018-01 | 15/6 Lowood Court Varsity Lakes | 3 | $410,000 | $927,704 |
 
-We have limited verified data on this specific home, so this is an indicative suburb-level band rather than a property-specific range.
+*Each sale is brought to today using the Varsity Lakes attached-dwelling price index — not the house index. Sales the index cannot reach are dropped, never carried at face value.*
 
-### Reliability
+### How wide the range is, and why
 
-What this is, and what it isn't.
+The published width is ±19.8%.
 
-This is an estimate built from comparable sales. It is not a formal valuation and it isn't an appraisal — a valuer inspects the property and carries professional liability for the figure. Nobody has been inside this home.
+> ⚠ **Not publishable yet.** ±19.8% is the measured P80 error of this method on leave-one-out testing (n=4,093). It is NOT a statistical confidence interval and is NOT yet a published figure — it needs a production-shaped backtest first.
 
-We take sales of homes near this one, adjust each for the ways it differs, weight them by how good a comparison they are, and publish the spread.
-
-The range above wasn't built by the method described here — this home sits outside the band our comparable-sales model was built for, so we've used a wider approach based on what can be verified from the outside. We publish a measured error rate for the comparable-sales method; we don't have one for this fallback, so we're not quoting a number we haven't earned.
-
-### Why three sites disagree
+### Why three sites can give three different values
 
 Why the other estimates say something different.
 
@@ -92,46 +82,54 @@ That does not make any one estimate dishonest. It means three sales are often to
 **See what the test found** — A close answer was present in the available evidence on 73.6% of those homes — identifiable only with hindsight. The worst available choice was more than 20% out on 73.4%.
 
 
-> **GAP [F5]** — the engine emitted a RANGE for this unit, derived from HOUSE sales — `_thin_valuation_range` filters on bedrooms with no property_type clause.
->
-> Engine emitted **$1.19 million – $1.45 million** for this dwelling via `method=thin`, n_comps=20. ⚠ **This is not a refusal — it is a number.** The V4 React page suppresses it (it requires `valuation_data.confidence.range.low`), but the DISCOVERY DECK renders this card, and the deck is the default in every non-V4 suburb. Verify before shipping the unit arm.
-
 ---
 
 ## 3 · Part 02 — The home itself
 
-### What stood out
+### Where it sits in Lowood Waters
 
-What makes this home less common among today's listings.
+There are **23** lots in this scheme. That is the number a buyer is really choosing between — the closest substitute for this home is another home in this building, not a house down the road.
 
-Where a buyer may focus:
+### At the doorstep
 
-- a single bathroom
-- no pool
+- Varsity College Primary Campus — 810m
+- Goodstart Early Learning Burleigh — 222m
+- ALDI — 929m
+- Stanford Avenue Reserve — 197m
+- Wild Cherry Coffee House — 557m
+- Nobby Beach — 2419m
 
-### The comparison set
-
-What's moving around this home.
-
-Two true things that point in different directions.
-
-Homes here are selling more slowly than a year ago — a median of 26 days, against 21 twelve months earlier. But there is less to choose from: 23 homes are on the market, 43.8% more than a month ago.
-
-Both readings are true and they support opposite conclusions, which is why a single market headline can't settle anything about this home.
-
-> **GAP [D4]** — the market card quotes house days-on-market and house listing counts.
->
-> The market copy rendered above draws on `precomputed_market_charts` (days-on-market) and `precomputed_active_listings` — both keyed by suburb only, both houses-only by construction. Presented here as this dwelling's market.
-
-> **GAP [G3]** — green_space makes a boundary claim from a single geocode; invalid for a scheme.
->
-> Engine returned: `{"premium": {"name": "Silvabank Lake", "kind": "water", "edge_m": 15.0, "relation": "backs onto"}}`. Suppress for attached dwellings.
+> **GAP [E5]** — no body-corporate levy — lawful only as an owner's agent (Phase 4).
 
 ---
 
 ## 4 · Part 03 — Where that leaves you
 
-### What you know that we don't
+### The market a move would happen in
+
+| | |
+|---|---|
+| Median attached price, Varsity Lakes | **$930,000** (2026-Q2, 12-month rolling) |
+| Change on a year earlier | +13.8% |
+| Median days on market | 17 (n=81) |
+| Attached homes for sale now | 35 |
+
+Recent quarterly medians:
+
+| Quarter | Median | Sales |
+|---|---:|---:|
+| 2024-Q3 | $778,500 | 70 |
+| 2024-Q4 | $807,000 | 41 |
+| 2025-Q1 | $820,000 | 45 |
+| 2025-Q2 | $837,075 | 60 |
+| 2025-Q3 | $852,000 | 60 |
+| 2025-Q4 | $903,000 | 61 |
+| 2026-Q1 | $1,010,000 | 49 |
+| 2026-Q2 | $1,000,000 | 44 |
+
+*146 quarters back to 1989-Q1 clear the 8-sale threshold; 2026-Q3 is still in progress and is excluded from the headline and the year-on-year figure.*
+
+### You know this home better than the records do
 
 This is your home's page. You can change it.
 
@@ -143,31 +141,23 @@ Tell us what's wrong, and we'll fix it and rebuild the figure in front of you.
 
 No agent is paying to appear on this page, and your interest in your own home is not sold to anyone. Fields is the agency that built it — there is no third party being handed your address.
 
-> **GAP [D1]** — no unit price series exists for this suburb; the house median would be wrong here.
->
-> The house page closes with suburb median, median trend chart, days-on-market and "N houses for sale". All house series.
-
+> **GAP [G1]** — copy below is the house voice; copy_units_v4.yaml does not exist yet.
 
 ---
 
-## Appendix — engine diagnostics
+## Appendix — diagnostics
 
-Which of the 11 emitters produced a card for this dwelling:
-
-| # | card type | emitted |
-|---|---|---|
-| 00 | `recognition` | yes |
-| 01 | `valuation` | yes |
-| 02 | `evidence` | — |
-| 03 | `comparable` | — |
-| 04 | `reveal` | yes |
-| 05 | `method` | yes |
-| 06 | `dispersion` | yes |
-| 07 | `gain` | — |
-| 08 | `competition` | yes |
-| 09 | `buyer` | — |
-| 10 | `control` | yes |
+| | |
+|---|---|
+| Slug | `16-6-lowood-court-varsity-lakes` |
+| Dwelling class | attached |
+| Scheme | Lowood Waters · BUP11556 · CMS4033 |
+| Scheme size | 23 dwellings (cadastre parcels: 22) |
+| Subtype | building_units |
+| Valuation | same_complex_comparables / same_complex_same_beds |
+| Floor area | ~131 (derived) |
+| Deck cards emitted | 7 of 11 |
 
 Engine-reported gaps: `no comparable sale`, `positioning/value-drivers unavailable`
 
-**GAP markers in this report: 9** — C2, D1, D3, D4, E1, E2, F5, G3, G4
+**GAP markers: 4** — C3, E2, E5, G1
