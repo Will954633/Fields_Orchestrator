@@ -21,6 +21,8 @@ The typical lot in this scheme is 131 m², and the scheme holds 11,304 m² of co
 > **Derived figure.** The 131 m² above is the median of 8 same-bedroom dwellings in this scheme, not a measured area for this home. Method error 5.2% median on leave-one-out testing.
 
 > **GAP [C3]** — no complex amenity data — lift, pool, gym, secure parking (structuredFeatures[] not stored).
+>
+> Lift is inferred above; pool, gym, secure parking and on-site management are still unknown.
 
 ---
 
