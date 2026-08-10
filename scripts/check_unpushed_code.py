@@ -88,20 +88,48 @@ def remote_blob(repo, rel):
     return sha or None
 
 
+def is_external_link(repo, rel):
+    """True if `rel` is a symlink resolving OUTSIDE this repo.
+
+    `git hash-object` FOLLOWS symlinks, so a link into another repo hashes as that
+    repo's file content and reads here as an un-backed-up gap. It is not one: the
+    file is version-controlled where it actually lives. Pushing it would (a) commit a
+    duplicate copy of live website source into the orchestrator repo, and (b) flip
+    straight back to MOD the next time the real file is edited — a nag that can never
+    be cleared by acting on it. 10 of the 27 files in the 2026-08-10 alert were
+    Break_glass_emergency/workbench/*.js links into
+    Feilds_Website/01_Website/src/components/BreakGlass/, already backed up in
+    Website_Version_Feb_2026.
+    """
+    p = os.path.join(repo, rel)
+    if not os.path.islink(p):
+        return False
+    return not os.path.realpath(p).startswith(os.path.realpath(repo) + os.sep)
+
+
 def classify(repo):
-    """Return (new_only_on_vm, modified) — real gaps only, by content hash."""
-    new, mod = [], []
+    """Return (new_only_on_vm, modified, linked) — real gaps only, by content hash."""
+    new, mod, linked = [], [], []
     for rel in code_files(repo):
+        if is_external_link(repo, rel):
+            linked.append(rel)
+            continue
         local = git(repo, "hash-object", rel).strip()
         remote = remote_blob(repo, rel)
         if remote is None:
             new.append(rel)
         elif local != remote:
             mod.append(rel)
-    return sorted(new), sorted(mod)
+    return sorted(new), sorted(mod), sorted(linked)
 
 
 def secret_hits(repo, rel):
+    # This file DEFINES the patterns, so scanning it matches itself — SECRET_RE contains
+    # the literal "AccountKey=", which made check_unpushed_code.py block its own backup
+    # and raise a "possible secret" alert about a regex. A detector must not be its own
+    # first false positive.
+    if os.path.abspath(os.path.join(repo, rel)) == os.path.abspath(__file__):
+        return []
     hits = []
     with open(os.path.join(repo, rel), errors="replace") as fh:
         for i, line in enumerate(fh, 1):
@@ -142,7 +170,9 @@ def telegram(text):
 
 def main():
     any_gap = False
-    real_gaps = []          # non-scratch gaps worth a human alert
+    real_gaps = []          # non-scratch gaps found this run
+    problems = []           # things a HUMAN must resolve — the only Telegram trigger in --push mode
+    pushed_total = 0
     lines = []
     for r in REPOS:
         repo, remote = r["path"], r["remote"]
@@ -150,8 +180,12 @@ def main():
             git(repo, "fetch", "origin", "main", timeout=120)
         except Exception as e:
             lines.append(f"⚠ {remote}: fetch failed ({e}) — skipped")
+            problems.append(f"⚠ {remote}: git fetch failed — backup state UNKNOWN ({str(e)[:150]})")
             continue
-        new, mod = classify(repo)
+        new, mod, linked = classify(repo)
+        if linked:
+            lines.append(f"↔ {remote}: {len(linked)} symlink(s) into another repo — "
+                         f"backed up there, not here")
         if not new and not mod:
             lines.append(f"✓ {remote}: in sync with GitHub")
             continue
@@ -178,24 +212,54 @@ def main():
             pushable = [f for f in pushable if f not in {b[0] for b in blocked}]
             for f, h in blocked:
                 lines.append(f"    ⛔ SKIPPED (possible secret) {f}: line {h[0][0]}")
+                # A blocked file is the one case a human MUST see: it stays unbacked-up
+                # until someone looks. Silently skipping it (the behaviour before
+                # 2026-08-10) meant the only file that genuinely needed attention was
+                # the only one nobody was told about.
+                problems.append(f"⛔ {remote}: {f} not pushed — possible secret at line {h[0][0]}")
             if pushable:
                 msg = f"backup: sync {len(pushable)} unpushed code files flagged by check_unpushed_code"
-                commit = push_repo(repo, remote, pushable, msg)
-                lines.append(f"    ⬆ pushed {len(pushable)} files as {commit[:8]}")
+                try:
+                    commit = push_repo(repo, remote, pushable, msg)
+                    lines.append(f"    ⬆ pushed {len(pushable)} files as {commit[:8]}")
+                    pushed_total += len(pushable)
+                except Exception as e:
+                    # Previously this raised straight out of main(), so a bad token or a
+                    # GitHub outage killed the cron with nothing sent anywhere.
+                    lines.append(f"    ✗ PUSH FAILED: {e}")
+                    problems.append(f"✗ {remote}: push of {len(pushable)} file(s) FAILED — {str(e)[:200]}")
 
     # "Healthy" = no REAL gaps. Files matching SCRATCH_RE are intentionally
     # unpushed, so they don't count toward alerts, the exit code, or --quiet output.
     real = bool(real_gaps)
     report = "\n".join(lines)
-    if real or not QUIET:
+    if real or problems or not QUIET:
         print(report)
-    if NOTIFY and real and not PUSH:
-        msg = ("⚠️ *Unpushed code detected* — files on the VM not backed up to GitHub:\n\n"
-               + "\n".join(f"• `{g}`" for g in real_gaps[:30])
-               + (f"\n…and {len(real_gaps) - 30} more" if len(real_gaps) > 30 else "")
-               + "\n\nRun `python3 scripts/check_unpushed_code.py --push` on the VM to sync.")
-        telegram(msg)
-    sys.exit(1 if real and not PUSH else 0)
+
+    if NOTIFY:
+        if PUSH:
+            # Self-healing mode (cron default from 2026-08-10). The backup happens
+            # automatically; Will only hears when something is left un-backed-up and
+            # only a human can clear it — a blocked secret, a failed push, a failed
+            # fetch. A clean run that pushed 27 files is not news, it is the job
+            # working. Rule 7b still holds: silence here means "pushed or nothing to
+            # push", never "could not tell" — every unknown path appends to problems.
+            if problems:
+                telegram("⚠️ Code backup needs you — auto-push could not complete:\n\n"
+                         + "\n".join(f"• {p}" for p in problems[:20])
+                         + (f"\n…and {len(problems) - 20} more" if len(problems) > 20 else "")
+                         + "\n\nEverything else was pushed automatically.")
+        elif real:
+            msg = ("⚠️ *Unpushed code detected* — files on the VM not backed up to GitHub:\n\n"
+                   + "\n".join(f"• `{g}`" for g in real_gaps[:30])
+                   + (f"\n…and {len(real_gaps) - 30} more" if len(real_gaps) > 30 else "")
+                   + "\n\nRun `python3 scripts/check_unpushed_code.py --push` on the VM to sync.")
+            telegram(msg)
+
+    if PUSH:
+        print(f"\n[summary] pushed {pushed_total} file(s); {len(problems)} needing a human.")
+        sys.exit(1 if problems else 0)
+    sys.exit(1 if real else 0)
 
 
 if __name__ == "__main__":
