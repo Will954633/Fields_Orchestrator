@@ -236,6 +236,13 @@ def build_report(doc, suburb, bundle, cards, notes, gc):
         W(f"This home is one of **{n} homes** in **{who}** — {kind}"
           + (f", community titles scheme {cx['cms_number']}" if cx.get("cms_number") else "") + ".")
         W("")
+        if cx.get("storeys_band"):
+            W(f"The buildings in it stand **{cx['storeys_band']}**"
+              + (f" (about {cx['building_height_m']:.0f} m)" if cx.get("building_height_m") else "")
+              + ". Derived from Queensland LiDAR building outlines captured in 2022 — "
+                "accurate to within one storey nine times in ten, which is why it is "
+                "stated as a band rather than a number.")
+            W("")
         if cx.get("lot_area_median_sqm"):
             W(f"The typical lot in this scheme is {int(cx['lot_area_median_sqm'])} m²"
               + (f", and the scheme holds {int(cx['common_property_sqm']):,} m² of common property"
@@ -253,7 +260,8 @@ def build_report(doc, suburb, bundle, cards, notes, gc):
         W("")
     elif not floor and not imputed:
         W(gap("C2"))
-    W(gap("E2") if cx else "")
+    if not (cx and cx.get("storeys_band")):
+        W(gap("E2"))
     W(gap("C3"))
     W("---")
     W("")
