@@ -92,6 +92,28 @@ Plain-text extraction of the published book PDF (`Latest_Copy_26th-May-2026/Fiel
 
 ---
 
+## Brain 1 ingestion — staged, awaiting upload
+
+`stage_for_brain1.py` builds **`sources/brain1_staged/`** — 25 deduplicated papers (2.6 MB of text, no PDFs), each carrying a **claim-status block**: citation, sample, key finding, verification status, and a *"does not prove / handle with care"* line.
+
+**Why the caveat is attached at ingest rather than at retrieval.** Chunk-and-embed retrieval returns claims, not the refutations that live in other documents. Ask Brain 1 *"how much do bidding wars add?"* and `BiddingWar.txt` returns Han & Strange's **17.89% premium over list price** — a real, peer-reviewed, citable number that means almost the opposite of what it looks like (it was higher in the bust *because sellers listed lower*, and the same authors call the underprice→war→premium chain "folklore"). Attaching the caveat to the document makes it travel in the same retrieval chunk as the finding.
+
+**The chunker forced a second design step.** `drive_brain_ingest.py` splits at `WORDS_PER_CHUNK = 600` on a naive word split, so a header placed only at the top of a file reaches chunk 1 and nothing else — and these papers run to 15–64 chunks each. The script therefore also interleaves a **compact one-line banner every 500 words**. Verified: **727 of 727 retrieval chunks carry either the full header or the banner.**
+
+Two routing safeguards, because the Haiku classifier defaults uncertain documents to Brain 3:
+- Each file opens with an explicit `DOCUMENT TYPE: EXTERNAL PUBLISHED ACADEMIC LITERATURE — PUBLIC / NON-CONFIDENTIAL … ROUTE: BRAIN 1` block, so "Fields Estate" appearing in the header doesn't read as internal.
+- Staged filenames were checked against the ingester's `HARD_PRIVATE` regex — no collisions.
+
+### Status: ⏸ blocked on Google Drive re-authentication
+
+`drive_brain_ingest.py` reads from Drive only; it has no local-path option. The plan is to upload `brain1_staged/` into the Drive **Research** root (`1AYkf2FPojjKTTPFjx8CkkqX9nXCsM1h9`), which is already in the ingester's `ROOTS`, after which `brain_drive_nightly.py` picks it up at 03:10 with no code change.
+
+**The upload could not be completed** — the gdrive MCP OAuth token returned `invalid_grant` (the known 7-day expiry). Re-authorise in an interactive session, then upload the folder. Note the *ingester* itself uses a separate non-expiring service account, so only the upload step is affected.
+
+**What must NOT go to Brain 1:** the analysis documents, the agent reports, and the Fields measurements. Those are Brain 3 by the classifier's own definition ("our analysis, case studies, seller-book drafts"). And the do-not-publish register belongs in `CLAUDE.md` or memory, not in a retrieval pool — a register only works if it is read every time, not when it happens to match a query.
+
+---
+
 ## Reading notes
 
 **The three things most likely to be quoted wrongly:**
