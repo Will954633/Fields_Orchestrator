@@ -25,6 +25,9 @@ from pymongo import MongoClient
 from pymongo.errors import OperationFailure
 from bson import ObjectId
 
+sys.path.insert(0, "/home/fields/Fields_Orchestrator")
+from shared.dwelling_type import classify_dwelling  # noqa: E402
+
 TARGET_SUBURBS = ['robina', 'burleigh_waters', 'varsity_lakes']
 
 
@@ -347,8 +350,22 @@ def process_suburb(db, suburb, stats_coll, medians_coll, limit=None, dry_run=Fal
             lot_size = extract_lot_size(doc)
             transactions = extract_transactions(doc)
 
-            # Build property_insights
-            if suburb_stats and (bedrooms or lot_size):
+            # ⚠ HOUSE STATS, SO HOUSES ONLY.
+            # `suburb_stats` above is looked up with `property_type: 'House'`, but this
+            # loop runs over ALL off-market stock (`listing_status: {$nin: [for_sale,
+            # sold]}`) — 1,798 of which are attached dwellings. Left ungated, a run
+            # writes house bedroom distributions and house lot percentiles onto units as
+            # `property_insights`, which the page then renders as this home's rarity.
+            #
+            # Currently inert (0 affected docs) only because those units have no
+            # bedrooms/lot_size to trigger it. That is luck, not a guard — and the
+            # bedroom backfill on 2026-08-13 has started filling exactly that field.
+            # A unit's rarity comes from its scheme (see 15_Off-Market/Units), not from
+            # the house market.
+            _eff = (doc.get('address') or doc.get('complete_address')
+                    or doc.get('street_address') or '')
+            _is_house = classify_dwelling({**doc, 'street_address': _eff}) == 'house'
+            if _is_house and suburb_stats and (bedrooms or lot_size):
                 insights = build_rarity_insights(bedrooms, lot_size, suburb_stats, for_sale_count)
                 if insights:
                     update['property_insights'] = insights
