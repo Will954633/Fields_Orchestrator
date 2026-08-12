@@ -31,17 +31,43 @@ from shared.db import get_client
 from scripts.enrich_cadastral import extract_transactions, compute_capital_gain, cosmos_retry
 
 
-def is_bugged(doc):
+def is_bugged(doc, deep=False):
+    """Does this document hold a rental where a sale should be?
+
+    ⚠ `deep` EXISTS BECAUSE THE ORIGINAL RUN ONLY CHECKED THE NEWEST TRANSACTION.
+    That was right for the symptom it chased — the deck showed `transactions[0]`, so a
+    bugged newest entry was the visible harm, and 3,719/3,719 were fixed on 2026-07-22.
+    But the re-derivation was never applied to entries deeper in the array, and those
+    were still there three weeks later: measured 2026-08-12, **5,811 rental entries
+    across 2,879 documents (16.9% of those with a transaction array)**, against only 7
+    bugged newest entries.
+
+    That is invisible to any consumer reading `transactions[0]` and poisons any consumer
+    reading the WHOLE array — which is exactly what the unit valuation method does. It
+    put weekly rents ($640, $750, $850) into comparable pools and into the attached price
+    index; the backtest surfaced it as an MAE of 4,171%.
+
+    Dating separates the two populations cleanly and the amount alone does not:
+    sub-$1k entries have a median year of 2013 (weekly rents), while $5k-$20k entries
+    have a median year of 1978 (genuine cheap sales, which must be preserved).
+    """
     txs = (doc.get("enriched_data") or {}).get("transactions") or []
     if not txs:
         return False
-    newest = max(txs, key=lambda t: t.get("date") or "")
     tl = (doc.get("scraped_data") or {}).get("property_timeline") or []
-    match = next(
-        (ev for ev in tl if ev.get("date") == newest.get("date") and float(ev.get("price") or 0) == float(newest.get("price") or 0)),
-        None,
-    )
-    return bool(match and match.get("category") == "Rental")
+
+    def rental(t):
+        match = next(
+            (ev for ev in tl
+             if ev.get("date") == t.get("date")
+             and float(ev.get("price") or 0) == float(t.get("price") or 0)),
+            None,
+        )
+        return bool(match and match.get("category") == "Rental")
+
+    if deep:
+        return any(rental(t) for t in txs)
+    return rental(max(txs, key=lambda t: t.get("date") or ""))
 
 
 def main():
@@ -49,6 +75,8 @@ def main():
     ap.add_argument("--suburb", help="single suburb collection (default: all)")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--limit", type=int)
+    ap.add_argument("--deep", action="store_true",
+                    help="check EVERY transaction, not just the newest — see is_bugged()")
     args = ap.parse_args()
 
     client = get_client()
@@ -70,7 +98,7 @@ def main():
         n_this_suburb = 0
         for doc in cursor:
             total_scanned += 1
-            if not is_bugged(doc):
+            if not is_bugged(doc, deep=args.deep):
                 continue
             total_bugged += 1
             fixed_txs = extract_transactions(doc)
