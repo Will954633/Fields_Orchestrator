@@ -26,6 +26,7 @@ one the report uses.
 """
 import argparse
 import json
+import re
 import math
 import os
 import sys
@@ -99,6 +100,24 @@ def fetch_polygon(lotplan):
     return {"rings": rings, "lot_area_sqm": area, "lotplan": lotplan} if rings else None
 
 
+def scheme_lotplan_for(doc):
+    """The SCHEME's own parcel — lot 0 of the plan, which is the common property and
+    therefore the footprint of the whole building.
+
+    ⚠ ONLY FOR ATTACHED DWELLINGS, AND ONLY AS A FALLBACK. In a building-format scheme
+    an individual apartment has no cadastral polygon at all: `101SP197709` returns zero
+    features, because the cadastre records the land, and an apartment on level 1 does not
+    touch it. `0SP197709` returns the scheme footprint (3,582 m², 44 points).
+
+    Group-titled townhouses and villas are different — `1GTP3941` DOES return its own
+    195 m² lot, and those must keep using it. So this is tried second, never first, and
+    the caller records WHICH was used so the caption can say "your home" or "your
+    building" accurately rather than implying a boundary the reader does not own.
+    """
+    plan = str(doc.get("PLAN") or "").strip().upper()
+    return f"0{plan}" if plan else None
+
+
 def polygon_for(gc, suburb, doc, refetch=False):
     """Cached on the document. The QLD service is public and free but slow (~1-3s),
     and parcel boundaries do not move."""
@@ -106,9 +125,19 @@ def polygon_for(gc, suburb, doc, refetch=False):
     if cached and cached.get("rings") and not refetch:
         return cached
     lp = lotplan_for(doc)
-    if not lp:
-        return None
-    poly = fetch_polygon(lp)
+    poly = fetch_polygon(lp) if lp else None
+    if poly:
+        poly["boundary_scope"] = "lot"          # this dwelling's own parcel
+    else:
+        # An apartment in a building-format scheme owns no land, so it has no polygon.
+        # Fall back to the SCHEME footprint and record that we did — the caption must
+        # not imply the reader owns a boundary they do not. Townhouses never reach here:
+        # their own lot resolves above.
+        sp = scheme_lotplan_for(doc)
+        if sp and sp != lp:
+            poly = fetch_polygon(sp)
+            if poly:
+                poly["boundary_scope"] = "scheme"
     if poly:
         gc[suburb].update_one({"_id": doc["_id"]}, {"$set": {"cadastral_polygon": poly}})
     return poly
@@ -228,7 +257,13 @@ def render(gc, suburb, doc, colour, out_dir, width=640, height=440, scale=2, ref
     img = static_map(clat, clon, zoom, width, height, scale, key)
     img = draw_boundary(img, poly["rings"], clat, clon, zoom, scale, BRAND[colour])
     img = stamp_logo(img, scale)
-    slug = "-".join(str(doc.get("address", "")).lower().replace(",", "").split()[:-2]) or str(doc["_id"])
+    # ⚠ PREFER `url_slug`. Deriving the filename from the address put a SLASH in it for
+    # every unit — "101/60 Riverwalk Avenue" wrote to `aerials/101/60-...png`, silently
+    # creating a directory per unit number instead of a file per home.
+    slug = doc.get("url_slug") or "-".join(
+        str(doc.get("address", "")).lower().replace(",", "").replace("/", "-").split()[:-2]
+    ) or str(doc["_id"])
+    slug = re.sub(r"[^a-z0-9-]+", "-", str(slug).lower()).strip("-")
     out = Path(out_dir) / f"{slug}-aerial-{colour}.png"
     out.parent.mkdir(parents=True, exist_ok=True)
     img.convert("RGB").save(out, "PNG", optimize=True)
@@ -245,6 +280,8 @@ def main():
     # with the terracotta roofs that dominate these suburbs and dissolve into the
     # roofline; sun holds against roof, lawn, concrete and pool alike. `all` is
     # kept only for re-running the comparison, never for production output.
+    ap.add_argument("--attached", action="store_true",
+                    help="include attached dwellings (units/townhouses), not just houses")
     ap.add_argument("--colour", choices=["sun", "gold", "copper", "all"], default="sun")
     ap.add_argument("--refetch", action="store_true", help="ignore the cached polygon")
     ap.add_argument("--out", default="/home/fields/Fields_Orchestrator/15_Off-Market/"
@@ -257,18 +294,28 @@ def main():
     if args.address:
         docs = [(args.suburb, gc[args.suburb].find_one({"address": args.address}))]
     elif args.slug:
+        # ⚠ LOOK THE SLUG UP DIRECTLY. This used to rebuild a street address from the
+        # slug and regex it against `address` — which works for "28-wedgebill-parade"
+        # but never for a unit: "101-60-riverwalk-avenue-robina" becomes "101 60
+        # riverwalk avenue" and cannot match "101/60 Riverwalk Avenue". The slash is
+        # unrecoverable from the slug, so the derivation was always going to fail on
+        # attached stock. `url_slug` is stored on the document; use it.
         found = None
         for s in ["robina", "varsity_lakes", "burleigh_waters"]:
-            if args.slug.endswith(s.replace("_", "-")):
-                street = args.slug[: -(len(s) + 1)].replace("-", " ")
-                d = gc[s].find_one({"address": {"$regex": f"^{street}", "$options": "i"}})
-                if d:
-                    found = (s, d)
-                    break
+            d = gc[s].find_one({"url_slug": args.slug})
+            if d:
+                found = (s, d)
+                break
         docs = [found] if found else []
     else:
-        docs = [(args.suburb, d) for d in gc[args.suburb].find(
-            {"property_type": "House", "LOT": {"$exists": True}}).limit(args.limit)]
+        # ⚠ WAS `{"property_type": "House"}` — which is why 86.7% of houses have an
+        # aerial and 0.4% of attached dwellings do, despite 94.9% of them carrying the
+        # LATITUDE and PLAN needed to render one. Attached stock is included via
+        # --attached; the scheme fallback in polygon_for() handles apartments.
+        q = {"LOT": {"$exists": True}}
+        if not args.attached:
+            q["property_type"] = "House"
+        docs = [(args.suburb, d) for d in gc[args.suburb].find(q).limit(args.limit)]
 
     colours = ["sun", "gold", "copper"] if args.colour == "all" else [args.colour]
     n = 0
