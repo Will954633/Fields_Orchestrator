@@ -51,6 +51,12 @@ PROJ = {"url_slug": 1, "address": 1, "complete_address": 1, "street_address": 1,
         "property_type": 1, "classified_property_type": 1, "PLAN": 1, "LOT": 1,
         "scraped_data.features.property_type": 1, "scraped_data_v2.property_type": 1,
         "PROPERTY_NAME": 1, "UNIT_NUMBER": 1, "bedrooms": 1, "bathrooms": 1,
+        # ⚠ bedrooms live in five places — see unit_valuation.bedrooms_of().
+        # Omitting these from the projection silently disables the coalesce and
+        # costs ~4 points of valuation reachability.
+        "scraped_data.features.bedrooms": 1, "scraped_data_v2.bedrooms": 1,
+        "scraped_data_apr01_recovered.features.bedrooms": 1,
+        "property_valuation_data.layout.number_of_bedrooms": 1,
         "car_spaces": 1, "floor_area_sqm": 1, "internal_living_area_sqm": 1,
         "enriched_data.floor_area_sqm": 1, "enriched_data.transactions": 1,
         "complex_plan": 1, "complex_cms": 1, "complex_name_cadastre": 1,
