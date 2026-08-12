@@ -52,22 +52,66 @@ MAX_AGE_YEARS = 8          # outer bound; MAX_UPLIFT is the real constraint
 # genuinely thin one.
 MAX_UPLIFT = 0.60          # +60%: roughly three years of the fastest attached growth
 OLD_COMP_YEARS = 3         # beyond this a comp is disclosed as leaning on the index
-BAND_PCT = 19.8            # measured P80 error of this method - NOT a confidence interval
+# ⚠ MEASURED, PER SUBURB — NOT ONE BLENDED NUMBER.
+# Source: backtest_unit_valuation.py, leakage-free (comparables strictly before the
+# subject's sale, deflated to that quarter, subject's own history excluded, production
+# tiers and caps applied). Run 2023.
+#
+# `band` is the P80 absolute error: 80% of predictions landed inside it. It is an
+# EMPIRICAL band, not a statistical confidence interval, and the page must say so.
+#
+# Keyed by suburb because a blended figure would lend one suburb's track record to
+# another — the exact failure that put a confident range on an attached dwelling under
+# "tested against 251 Robina houses". Burleigh Waters is materially worse than the other
+# two (n=167, within-10% 49.1%) and is flagged so a caller can decline to publish.
+ACCURACY = {
+    "robina": {"band": 13.63, "median": 6.27, "mae": 9.27, "within10": 68.0, "n": 625},
+    "varsity_lakes": {"band": 14.82, "median": 4.95, "mae": 9.28, "within10": 67.8, "n": 992},
+    "burleigh_waters": {"band": 20.32, "median": 10.84, "mae": 15.12, "within10": 49.1, "n": 167},}
+BAND_FALLBACK = 19.8       # only for a suburb with no measurement — should never ship
+WEAK_WITHIN10 = 55.0       # below this the cohort is not fit to publish a figure
+
+
+def accuracy_for(suburb_key):
+    return ACCURACY.get(suburb_key)
+
+
+def band_for(suburb_key):
+    a = ACCURACY.get(suburb_key)
+    return a["band"] if a else BAND_FALLBACK
 _TIERS = ("same_complex_same_beds", "same_complex_any_beds",
           "same_subtype_same_beds_suburb")
 
 
-def _num(v):
+# ⚠ RENTALS ARE STORED AS TRANSACTIONS. A "$750" on a property timeline is a WEEKLY
+# RENT, not a sale — 100 of 2,652 attached "sales" since 2023 were rents ($640, $670,
+# $850…). See memory `rental_as_sale_bug_2026-07-22` and `sold_pipeline_lease_as_sale_gap`.
+#
+# The first version of this function applied the sanity band ONLY to the string branch
+# and returned numeric values unchecked, so every rent stored as a number sailed through
+# — into the comparables, into the price index, and into the backtest's answer key,
+# where it produced an MAE of 4,171%. The band must be applied on EVERY path.
+#
+# $20,000 floor: the earliest genuine sale in our series is $33,200 (1983), and no
+# residential rent reaches $20,000 a week. Safe in both directions.
+MIN_SALE, MAX_SALE = 20_000, 20_000_000
+
+
+def sale_price(v):
+    """A transaction amount that is plausibly a SALE, or None."""
     if v is None:
         return None
     if isinstance(v, (int, float)):
-        return float(v) or None
-    s = re.sub(r"[^0-9.]", "", str(v))
-    try:
-        f = float(s)
-    except ValueError:
-        return None
-    return f or None
+        f = float(v)
+    else:
+        try:
+            f = float(re.sub(r"[^0-9.]", "", str(v)))
+        except ValueError:
+            return None
+    return f if MIN_SALE < f < MAX_SALE else None
+
+
+_num = sale_price      # internal alias; every call site gets the sanity band
 
 
 def _year(s):
@@ -80,6 +124,59 @@ def _quarter(s):
     if not m:
         return None
     return f"{m.group(1)}-Q{(int(m.group(2)) - 1) // 3 + 1}"
+
+
+# ⚠ BEDROOMS LIVE IN FIVE PLACES, NOT ONE.
+# Reading only the top-level `bedrooms` field cost real coverage: it fills 53.5% of the
+# never-listed attached surface, while `scraped_data.features.bedrooms` fills 54.8% and
+# the union of all five reaches 57.1%. Measured on 10,822 dwellings; the sources
+# disagree on 0.9%, so coalescing is safe. Bedrooms are the binding constraint on
+# whether this method can value a home at all — WITH them 90% of subjects get a range,
+# WITHOUT them 22% — so the extra 3.6 points are worth having.
+# Ordered by trust: our own field first, then the richest scrape layers.
+_BED_PATHS = (
+    ("bedrooms",),
+    ("scraped_data", "features", "bedrooms"),
+    ("scraped_data_v2", "bedrooms"),
+    ("scraped_data_apr01_recovered", "features", "bedrooms"),
+    ("property_valuation_data", "layout", "number_of_bedrooms"),
+)
+
+
+# ⚠ A PRICE CAN PASS THE SANITY BAND AND STILL NOT BE A DWELLING SALE.
+# After removing rents, the backtest's worst misses were all bad ANSWERS, not bad
+# predictions: "$37,200" and "$57,500" at 1 Arbour Avenue where the building's median is
+# ~$900,000 (share transfers, car-space or storage-lot titles), and an "$8,000,000" at a
+# Varsity Lakes address. They are 1.4% of transactions but they poison a mean, and in
+# production they would enter the comparable pool as real evidence.
+#
+# A transaction far outside its own scheme's price level is not a comparable dwelling.
+# The band is deliberately wide — a genuine penthouse can be 2-3x the building median,
+# and a studio can be well under half — so this removes titles, not cheap or dear homes.
+SCHEME_MIN_RATIO, SCHEME_MAX_RATIO = 0.35, 3.0
+
+
+def plausible_for_scheme(price, scheme_median):
+    """False when a priced transaction cannot be an arms-length sale of a dwelling in
+    this scheme. Returns True when there is no scheme median to judge against — absence
+    of evidence is not grounds to drop a real sale."""
+    if not scheme_median or not price:
+        return True
+    return SCHEME_MIN_RATIO * scheme_median <= price <= SCHEME_MAX_RATIO * scheme_median
+
+
+def bedrooms_of(doc):
+    """First plausible bedroom count across every source we hold."""
+    for path in _BED_PATHS:
+        cur = doc
+        for k in path:
+            if not isinstance(cur, dict):
+                cur = None
+                break
+            cur = cur.get(k)
+        if isinstance(cur, int) and 0 < cur < 10:
+            return cur
+    return None
 
 
 class UnitValuer:
@@ -151,6 +248,9 @@ class UnitValuer:
     def _sales_in(self, query, subject_id=None):
         proj = {"street_address": 1, "address": 1, "complete_address": 1,
                 "property_type": 1, "classified_property_type": 1, "bedrooms": 1,
+                "scraped_data.features.bedrooms": 1, "scraped_data_v2.bedrooms": 1,
+                "scraped_data_apr01_recovered.features.bedrooms": 1,
+                "property_valuation_data.layout.number_of_bedrooms": 1,
                 "bathrooms": 1, "sale_price": 1, "sold_date": 1, "listing_status": 1,
                 "complex_plan": 1, "complex_cms": 1, "complex_name_cadastre": 1,
                 "scraped_data.features.property_type": 1,
@@ -186,7 +286,7 @@ class UnitValuer:
             if not best:
                 continue
             out.append({"address": eff, "date": best[0], "price": best[1],
-                        "beds": d.get("bedrooms"), "baths": d.get("bathrooms"),
+                        "beds": bedrooms_of(d), "baths": d.get("bathrooms"),
                         "floor": (_num(d.get("floor_area_sqm"))
                                   or _num(d.get("internal_living_area_sqm"))
                                   or _num((d.get("enriched_data") or {}).get("floor_area_sqm"))),
@@ -203,7 +303,7 @@ class UnitValuer:
         reader is entitled to know whether their figure came from their own building.
         """
         sid = subject.get("_id")
-        beds = subject.get("bedrooms")
+        beds = bedrooms_of(subject)
         plan = subject.get("complex_plan")
         cms = subject.get("complex_cms")
         cutoff = None
@@ -211,7 +311,14 @@ class UnitValuer:
 
         def fresh(rows):
             now = 2026
-            return [r for r in rows if _year(r["date"]) and now - _year(r["date"]) <= MAX_AGE_YEARS]
+            rows = [r for r in rows
+                    if _year(r["date"]) and now - _year(r["date"]) <= MAX_AGE_YEARS]
+            # Scheme-relative plausibility: computed from the pool itself, so a complex
+            # of genuinely cheap units is judged against its own level, not the suburb's.
+            if len(rows) >= 4:
+                med = st.median([r["price"] for r in rows])
+                rows = [r for r in rows if plausible_for_scheme(r["price"], med)]
+            return rows
 
         scope = {}
         if cms:
@@ -219,22 +326,29 @@ class UnitValuer:
         elif plan:
             scope = {"complex_plan": plan}
 
-        if scope and beds:
-            rows = fresh(self._sales_in({**scope, "bedrooms": beds}, sid))
-            tried.append(("same_complex_same_beds", len(rows)))
-            if len(rows) >= MIN_COMPS:
-                return rows, "same_complex_same_beds", tried
+        # ⚠ NEVER PUT `bedrooms` IN THE MONGO QUERY.
+        # It matches the TOP-LEVEL field only, which fills 53.5% of attached stock while
+        # the union of all five bedroom sources reaches 57.1% (see bedrooms_of). Filtering
+        # in the query silently discarded every comparable whose bedroom count lives in a
+        # scrape layer — the same class of mistake as reading one field on the subject.
+        # Fetch the scope once, then match on the COALESCED value in Python.
         if scope:
-            rows = fresh(self._sales_in(dict(scope), sid))
-            tried.append(("same_complex_any_beds", len(rows)))
-            if len(rows) >= MIN_COMPS:
-                return rows, "same_complex_any_beds", tried
+            pool = fresh(self._sales_in(dict(scope), sid))
+            if beds:
+                matched = [r for r in pool if r.get("beds") == beds]
+                tried.append(("same_complex_same_beds", len(matched)))
+                if len(matched) >= MIN_COMPS:
+                    return matched, "same_complex_same_beds", tried
+            tried.append(("same_complex_any_beds", len(pool)))
+            if len(pool) >= MIN_COMPS:
+                return pool, "same_complex_any_beds", tried
         if beds and subject.get("complex_subtype"):
-            rows = fresh(self._sales_in(
-                {"complex_subtype": subject["complex_subtype"], "bedrooms": beds}, sid))
-            tried.append(("same_subtype_same_beds_suburb", len(rows)))
-            if len(rows) >= MIN_COMPS:
-                return rows[:80], "same_subtype_same_beds_suburb", tried
+            pool = fresh(self._sales_in(
+                {"complex_subtype": subject["complex_subtype"]}, sid))
+            matched = [r for r in pool if r.get("beds") == beds]
+            tried.append(("same_subtype_same_beds_suburb", len(matched)))
+            if len(matched) >= MIN_COMPS:
+                return matched[:80], "same_subtype_same_beds_suburb", tried
         return [], None, tried
 
     # -- the range ---------------------------------------------------------
@@ -270,9 +384,12 @@ class UnitValuer:
             "method": "same_complex_comparables",
             "tier": tier,
             "point": int(point),
-            "low": int(point * (1 - BAND_PCT / 100)),
-            "high": int(point * (1 + BAND_PCT / 100)),
-            "band_pct": BAND_PCT,
+            "low": int(point * (1 - band_for(self.suburb) / 100)),
+            "high": int(point * (1 + band_for(self.suburb) / 100)),
+            "band_pct": band_for(self.suburb),
+            "accuracy": accuracy_for(self.suburb),
+            "publishable": bool(accuracy_for(self.suburb)
+                                and accuracy_for(self.suburb)["within10"] >= WEAK_WITHIN10),
             "n_comps": len(used),
             "n_available": len(adj),
             "dropped_undeflatable": dropped,
@@ -286,18 +403,28 @@ class UnitValuer:
                              "beds": r["beds"], "complex": r["complex"]}
                             for r in used],
             "tried": tried,
-            "band_basis": (f"±{BAND_PCT}% is the measured P80 error of this method on "
-                           f"leave-one-out testing (n=4,093). It is NOT a statistical "
-                           f"confidence interval and is NOT yet a published figure — "
-                           f"it needs a production-shaped backtest first."),
+            "band_basis": self._band_basis(),
         }
+
+    def _band_basis(self):
+        a = accuracy_for(self.suburb)
+        if not a:
+            return ("No measured error rate exists for this suburb, so no band has been "
+                    "earned. This figure should not be published.")
+        sub = self.suburb.replace("_", " ").title()
+        return (f"±{a['band']}% is the measured P80 error of this method on "
+                f"{a['n']:,} {sub} attached sales, tested without letting the method see "
+                f"the sale it was predicting. 80% of predictions landed inside it. "
+                f"It is an empirical band from observed error, NOT a statistical "
+                f"confidence interval. Median error {a['median']}%, "
+                f"within 10% on {a['within10']}% of homes.")
 
     # -- floor area (F4) ---------------------------------------------------
     def impute_floor_area(self, subject):
         """Same-complex, same-bed median. Measured 5.2% median error / 67% within 10%,
         against 15.9% / 28% for a suburb-wide same-bed median. Always returned as
         DERIVED — an imputed figure must never be presented as a measured one."""
-        beds = subject.get("bedrooms")
+        beds = bedrooms_of(subject)
         scope = ({"complex_cms": subject.get("complex_cms")} if subject.get("complex_cms")
                  else {"complex_plan": subject.get("complex_plan")}
                  if subject.get("complex_plan") else None)
