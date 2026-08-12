@@ -26,12 +26,25 @@ read each site to decide what the filter is actually doing.
 
 | Site | What happens |
 |---|---|
-| `scripts/enrich_cadastral.py:298` | Scoped `listing_status: {$nin: [for_sale, sold]}` — i.e. **all off-market stock including units** — but looks up `suburb_stats` with `property_type: 'House'` for its rarity comparison, and counts an untyped `for_sale` total for "rarity context". Every enriched unit is measured against the house market. |
-| `scripts/backend_enrichment/calculate_property_insights.py:414-416, 443-445` | Peer cohort query has **no** type filter; the stats lookup is house-only. A unit is ranked against a mixed cohort, then percentile-scored against house breakpoints. Can emit "Largest lot currently for sale" for a unit. |
-| `scripts/step117_satellite_analysis.py:154-172` | Prompt asks for `lot_shape`, `usable_yard`, `neighbour_setback` at zoom 19. For an apartment the pin lands on the whole strata parcel and the tower's common pool becomes the subject's pool — and `:126` states downstream treats these as ground truth. |
+| `scripts/enrich_cadastral.py:298` | ✅ **FIXED 2026-08-13** — gated on `classify_dwelling == "house"`. It looped over ALL off-market stock (1,798 attached) while looking up `suburb_stats` house-only, writing house bedroom distributions and lot percentiles onto units. Inert at the time only because those units had no bedrooms — and the bedroom backfill the same day had begun filling exactly that field. |
+| `calculate_property_insights.py` | ✅ **FIXED 2026-08-13** — see below; the defect was bigger than the type filter. |
+| `scripts/step117_satellite_analysis.py` | ✅ **FIXED 2026-08-13** — `_is_house()` gate. **477 attached dwellings already carried a house-shaped analysis** (a level-23 apartment recorded with `usable_yard: "minimal"`). Existing records left in place deliberately: for a duplex on its own lot the analysis is legitimate, and separating those needs a per-field pass the gate makes safe to postpone. |
 
-**None of these are fixed.** They are recorded here rather than patched because each needs
-its own verification, and two of them (117, insights) touch the house product.
+### The insights defect was not really about types
+
+Chasing the type filter in `calculate_property_insights.py` surfaced something larger. Its
+comparison pool was `{"price": {"$exists": true}}` with **no `listing_status` filter at
+all** — **66.4% of the "currently for sale" pool was not for sale** (50.6% sold, 8.9%
+withdrawn, 5.7% under contract). Fixed to a for-sale, type-matched cohort with a
+`MIN_RANK_COHORT` guard. **49 of 260 homes gained a true claim; 0 lost one.**
+
+And chasing the last stray lot claim surfaced a bug in the shared classifier itself:
+`classify_dwelling` returned `"attached"` for **Land, Industrial, Development Site,
+Leisure and Farm** — directly beside a comment saying those are "neither a house nor an
+attached dwelling we track". 88 non-dwellings were in the attached bucket. Now
+`non_dwelling`.
+
+**All three 🔴 items are now closed.**
 
 ---
 
