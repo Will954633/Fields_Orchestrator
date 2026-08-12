@@ -109,6 +109,32 @@ def build_candidate_query(status_filter: Optional[str] = "for_sale") -> Dict[str
 
     return {"$and": conditions}
 
+
+def _is_house(doc):
+    """⚠ THIS ANALYSIS IS HOUSE-SHAPED THROUGHOUT, NOT JUST IN THE LOT FIELDS.
+
+    The prompt asks for `lot_shape`, `usable_yard` and `neighbour_setback` at zoom 19 —
+    a frame that assumes one dwelling on one visible parcel. Pointed at an apartment the
+    pin lands on the whole strata plan, so every answer describes the SCHEME: 2301/22-34
+    Glenside Drive (level 23 of a tower) was recorded with `lot_shape: "irregular"`,
+    `usable_yard: "minimal"` and `backs_onto: ["bushland"]`.
+
+    That is not cosmetic. `precompute_valuations.py:448` calls
+    `satellite_analysis.categories.adjacency.backs_onto` its PRIMARY signal, and
+    `shared/waterfront.py` reads the same field to set `is_waterfront` — which gates the
+    sitemap and the discovery builder. A scheme-level adjacency can therefore move a
+    whole building's units in or out of the index.
+
+    477 attached dwellings already carry this. They are left in place rather than
+    bulk-deleted: for duplexes and semis on their own titled lot the analysis is
+    legitimate, and telling those apart needs the per-field pass this gate makes safe to
+    postpone. What the gate stops is the number growing.
+    """
+    from shared.dwelling_type import classify_dwelling
+    eff = (doc.get("address") or doc.get("complete_address")
+           or doc.get("street_address") or "")
+    return classify_dwelling({**doc, "street_address": eff}) == "house"
+
 # ---------------------------------------------------------------------------
 # GPT Prompt
 # ---------------------------------------------------------------------------
@@ -394,6 +420,10 @@ class SatelliteAnalysisRepository:
 
             def _load(coll=collection, query=q, lim=batch):
                 cursor = coll.find(query)
+                # Houses only — see _is_house(). Filtered here rather than in the query
+                # because dwelling class is derived from several fields plus the address,
+                # which Mongo cannot express.
+                cursor = (d for d in cursor if _is_house(d))
                 if lim > 0:
                     cursor = cursor.limit(lim)
                 return list(cursor)
