@@ -21,6 +21,14 @@ Provenance is recorded on each document so the write is auditable and reversible
     bedrooms_source = {"path": "scraped_data_v2.bedrooms",
                        "backfilled_at": "...", "script": "backfill_beds_baths"}
 
+⚠ ALSO RUN THIS FOR ATTACHED DWELLINGS (`--attached`, added 2026-08-13). The original
+scope was `property_type: "House"`, which left the same gap on units — and there it is
+not cosmetic either: a missing bedroom count is the single biggest constraint on whether
+a unit can be valued at all. Measured on the attached off-market surface, subjects WITH a
+bedroom count get a range 90% of the time and subjects WITHOUT get one 22% of the time.
+The unit valuer coalesces the fallback paths at read time (`bedrooms_of`), but Mongo
+queries and every other consumer read the top-level field, so it has to be written.
+
 DRY RUN BY DEFAULT.
 
     python3 scripts/backfill_beds_baths.py                 # report only
@@ -52,6 +60,9 @@ PATHS = {
 }
 
 
+ATTACHED = False
+
+
 def dig(doc, path):
     cur = doc
     for part in path.split("."):
@@ -74,6 +85,8 @@ def plausible(field, v):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--apply", action="store_true", help="write (default: dry run)")
+    ap.add_argument("--attached", action="store_true",
+                    help="include attached dwellings (units/townhouses), not houses only")
     ap.add_argument("--revert", action="store_true", help="undo values this script wrote")
     ap.add_argument("--suburb", default=None)
     args = ap.parse_args()
@@ -92,6 +105,8 @@ def main():
                 print(f"  {s}.{field}: reverted {r.modified_count}")
         return 0
 
+    global ATTACHED
+    ATTACHED = bool(args.attached)
     grand = {"bedrooms": 0, "bathrooms": 0}
     rejected = 0
     for s in subs:
@@ -99,7 +114,8 @@ def main():
         found = {"bedrooms": 0, "bathrooms": 0}
         by_path = {}
         cur = db[s].find(
-            {"listing_status": {"$exists": False}, "property_type": "House",
+            {**({} if ATTACHED else {"property_type": "House"}),
+             "listing_status": {"$exists": False},
              "$or": [{"bedrooms": None}, {"bedrooms": {"$exists": False}},
                      {"bathrooms": None}, {"bathrooms": {"$exists": False}}]})
         for doc in cur:
