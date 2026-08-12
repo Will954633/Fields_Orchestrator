@@ -177,8 +177,8 @@ def build_html(d):
     W = S.append
 
     W('<div class="banner">PROTOTYPE — not the live page, not published. '
-      'Rendered from live data to review layout and copy. <b>Figures are real; the '
-      'valuation band is not yet backtested.</b></div>')
+      'Rendered from live data to review layout and copy. '
+      '<b>Bands are measured per suburb on a leakage-free backtest.</b></div>')
     W('<div class="wrap">')
 
     # ---- header
@@ -295,8 +295,28 @@ def build_html(d):
           + (', with ' + e(' and '.join(drops)) if drops else '')
           + '.</p>')
         W('<h3>How wide the range is, and why</h3>')
-        W(f'<p>The published width is ±{val["band_pct"]}%.</p>')
-        W(f'<div class="gap"><b>Not publishable yet.</b> {e(val["band_basis"])}</div>')
+        acc = val.get("accuracy") or {}
+        if val.get("publishable") and acc:
+            W(f'<p>The width is <b>±{val["band_pct"]}%</b>. We set it by testing this method '
+              f'against <b>{acc["n"]:,}</b> {e(d["suburb"])} attached sales, without letting '
+              f'it see the sale it was predicting — and widening the band until four in five '
+              f'landed inside.</p>')
+            W('<div class="panel"><div class="kv">')
+            W(f'<div>Median error</div><div>{acc["median"]}%</div>')
+            W(f'<div>Within 10% of the eventual sale</div><div>{acc["within10"]}%</div>')
+            W(f'<div>Sales tested</div><div>{acc["n"]:,}</div>')
+            W('</div></div>')
+            W('<p class="note">An empirical band from observed error — <b>not</b> a statistical '
+              'confidence interval. It is as narrow as the evidence earns; narrowing it '
+              'further would not make the estimate better, only the claim less true.</p>')
+        else:
+            W(f'<div class="gap"><b>Not fit to publish for this suburb.</b> '
+              f'{e(val.get("band_basis", ""))} '
+              + (f'On this cohort the method landed within 10% on only {acc["within10"]}% of '
+                 f'homes (n={acc["n"]:,}), against 68% in Robina. The range above is shown '
+                 f'here for review; it should not go on a live page until the sample and the '
+                 f'accuracy improve.' if acc else '')
+              + '</div>')
     else:
         W('<div class="refuse">')
         W('<h3>We are not going to put a figure on this home</h3>')
