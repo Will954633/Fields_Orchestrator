@@ -166,15 +166,50 @@ def get_room_area(property_doc, room_keywords, fallback_largest_bedroom=False):
 
 
 def _rank_among(property_doc, for_sale_properties, value, extract_fn):
-    """Count how many other properties have a value greater than this one."""
+    """Count how many other properties have a value greater than or equal to this one.
+
+    Ties count against the subject, so two properties sharing the top value both
+    rank 2 and neither claims the 'only one' label. This matches how the kitchen
+    and master-bedroom branches below already compare (>=).
+    """
     count = 0
     for p in for_sale_properties:
         if p.get('_id') == property_doc.get('_id'):
             continue
         p_val = extract_fn(p)
-        if p_val and p_val > value:
+        if p_val and p_val >= value:
             count += 1
     return count + 1
+
+
+# Strata dwellings carry the whole complex's parcel in lot_size_sqm — an apartment
+# at 186/325 Reedy Creek Road inherits 82,620m² and claims the largest lot in the
+# suburb. They must neither claim a lot insight nor compete in the lot ranking.
+_STRATA_PROPERTY_TYPES = {
+    'apartment / unit / flat', 'apartment', 'unit', 'flat', 'studio',
+    'townhouse', 'villa', 'retirement living', 'semi-detached', 'terrace',
+    'new apartments / off the plan', 'new apartments',
+}
+_STRATA_CLASSIFIED = {'unit/apartment', 'townhouse', 'villa', 'retirement living'}
+_UNIT_ADDRESS_RE = re.compile(r'^\s*[\w-]+\s*/')
+
+
+def has_own_lot(doc):
+    """True only when a dwelling sits on its own land parcel.
+
+    The two type fields disagree often (measured 2026-08-13: 17 active listings
+    typed 'House' are classified as attached), so either one saying strata is
+    enough to disqualify, backed by the unit-number address pattern. Docs with
+    no type at all are treated as strata: a missing insight is recoverable,
+    a false "Largest lot currently for sale" published on a property card is not.
+    """
+    if _UNIT_ADDRESS_RE.match(doc.get('address') or ''):
+        return False
+    pt = (doc.get('property_type') or '').strip().lower()
+    cpt = (doc.get('classified_property_type') or '').strip().lower()
+    if pt in _STRATA_PROPERTY_TYPES or cpt in _STRATA_CLASSIFIED:
+        return False
+    return bool(pt or cpt)
 
 
 def calculate_rarity_insights(property_doc, suburb_stats, for_sale_properties):
@@ -239,8 +274,10 @@ def calculate_rarity_insights(property_doc, suburb_stats, for_sale_properties):
         lot_size = float(lot_size) if lot_size else None
     except (TypeError, ValueError):
         lot_size = None
-    if lot_size and lot_size > 0:
+    if lot_size and lot_size > 0 and has_own_lot(property_doc):
         def extract_lot(p):
+            if not has_own_lot(p):
+                return None
             ed = p.get('enriched_data') or {}
             ls = ed.get('lot_size_sqm')
             try:
