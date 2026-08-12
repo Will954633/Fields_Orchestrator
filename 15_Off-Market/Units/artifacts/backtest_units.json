@@ -1,0 +1,140 @@
+{
+  "scored": 1784,
+  "refused": 412,
+  "coverage_pct": 81.2,
+  "from_year": 2023,
+  "overall": {
+    "n": 1784,
+    "median": 5.95,
+    "mae": 9.82,
+    "within10": 66.1,
+    "within20": 86.7,
+    "p80": 15.33
+  },
+  "by_suburb": {
+    "robina": {
+      "n": 625,
+      "median": 6.27,
+      "mae": 9.27,
+      "within10": 68.0,
+      "within20": 89.3,
+      "p80": 13.63
+    },
+    "varsity_lakes": {
+      "n": 992,
+      "median": 4.95,
+      "mae": 9.28,
+      "within10": 67.8,
+      "within20": 86.3,
+      "p80": 14.82
+    },
+    "burleigh_waters": {
+      "n": 167,
+      "median": 10.84,
+      "mae": 15.12,
+      "within10": 49.1,
+      "within20": 79.0,
+      "p80": 20.32
+    }
+  },
+  "by_suburb_bedrooms": {
+    "burleigh_waters:2bed": {
+      "n": 95,
+      "median": 11.31,
+      "mae": 12.56,
+      "within10": 44.2,
+      "within20": 80.0,
+      "p80": 20.1
+    },
+    "burleigh_waters:3bed": {
+      "n": 71,
+      "median": 9.41,
+      "mae": 17.02,
+      "within10": 56.3,
+      "within20": 78.9,
+      "p80": 20.36
+    },
+    "burleigh_waters:4bed": {
+      "n": 1,
+      "insufficient": true
+    },
+    "robina:1bed": {
+      "n": 56,
+      "median": 6.0,
+      "mae": 10.54,
+      "within10": 73.2,
+      "within20": 87.5,
+      "p80": 12.09
+    },
+    "robina:2bed": {
+      "n": 182,
+      "median": 5.65,
+      "mae": 7.45,
+      "within10": 75.8,
+      "within20": 93.4,
+      "p80": 10.77
+    },
+    "robina:3bed": {
+      "n": 310,
+      "median": 6.19,
+      "mae": 8.97,
+      "within10": 67.7,
+      "within20": 91.0,
+      "p80": 14.25
+    },
+    "robina:4bed": {
+      "n": 39,
+      "median": 11.09,
+      "mae": 12.28,
+      "within10": 43.6,
+      "within20": 74.4,
+      "p80": 24.33
+    },
+    "robina:5bed": {
+      "n": 6,
+      "insufficient": true
+    },
+    "varsity_lakes:1bed": {
+      "n": 128,
+      "median": 5.88,
+      "mae": 10.63,
+      "within10": 71.1,
+      "within20": 87.5,
+      "p80": 15.12
+    },
+    "varsity_lakes:2bed": {
+      "n": 233,
+      "median": 4.94,
+      "mae": 8.88,
+      "within10": 73.8,
+      "within20": 88.0,
+      "p80": 13.26
+    },
+    "varsity_lakes:3bed": {
+      "n": 264,
+      "median": 9.19,
+      "mae": 10.46,
+      "within10": 51.5,
+      "within20": 87.5,
+      "p80": 15.33
+    },
+    "varsity_lakes:4bed": {
+      "n": 255,
+      "median": 3.67,
+      "mae": 7.23,
+      "within10": 81.6,
+      "within20": 85.1,
+      "p80": 6.75
+    },
+    "varsity_lakes:5bed": {
+      "n": 2,
+      "insufficient": true
+    }
+  },
+  "tiers": {
+    "same_subtype_same_beds_suburb": 329,
+    "same_complex_same_beds": 1385,
+    "same_complex_any_beds": 70
+  },
+  "method": "leakage-free: comps strictly before the subject's sale quarter, deflated to that quarter, subject's own history excluded, production tiers/MIN_COMPS/MAX_UPLIFT applied"
+}
