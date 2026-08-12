@@ -161,6 +161,44 @@ def _suburb_key_for(subject_id: str) -> str | None:
     return None
 
 
+def boundary_aerial(subject_id: str, suburb_key: str | None, subject_doc: dict | None) -> Path | None:
+    """Return a parcel-centred satellite image with the property's cadastral
+    boundary outlined, or None if this property has no parcel on file.
+
+    This is the same asset the V4 /off-market hero uses — `aerial_boundary_url`,
+    produced by scripts/render_property_aerial.py: the zoom is fitted to the
+    parcel bbox (not the geocoded address) and the lot is stroked in Fields sun.
+    It is ALWAYS the subject property, which is why it outranks
+    `local_cadastral` — a cadastral photo is often an uncentred aerial where the
+    subject is one of five roofs in frame and the reader cannot tell which.
+
+    Prefers the already-rendered blob (batch_render_aerials writes ~473 of
+    these) and only pays for a Static Maps fetch when one is missing.
+
+    ⚠ Scope travels with the image: for a house/townhouse the outline is the
+    dwelling's own lot; for an apartment it is the SCHEME parcel. Check
+    `cadastral_polygon.boundary_scope` before captioning it as "your block".
+    """
+    if not suburb_key:
+        return None
+    cached = Path(f"/data/blobs/property-images/aerial/{suburb_key}/{subject_id}/boundary.png")
+    if cached.exists() and cached.stat().st_size > 2000:
+        return cached
+    if not subject_doc:
+        return None
+    try:
+        sys.path.insert(0, str(REPO_ROOT / "scripts"))
+        import render_property_aerial as ra  # type: ignore
+        path, _note = ra.render(
+            get_client()["Gold_Coast"], suburb_key, subject_doc, "sun",
+            str(OUTPUT_DIR / "assets" / "aerial_tmp"), width=640, height=440, scale=2,
+        )
+        return Path(path) if path else None
+    except Exception as exc:
+        print(f"  [WARN] boundary aerial render failed: {type(exc).__name__}: {exc}")
+        return None
+
+
 def splice(text: str, key: str, new_block: str) -> str:
     """Replace the section block bounded by SPLICE_POINTS[key] markers."""
     start_marker, end_marker = SPLICE_POINTS[key]
@@ -617,15 +655,20 @@ def render_appraisal(
     # so the audit + console can warn loudly when a fallback is in play —
     # critical for production homeowner reports where the wrong photo on a
     # mailed PDF is unacceptable.
-    fallback_hero = V4_DIR / "assets" / "img" / "cover_hero_13_terrace_court.jpg"
-    fallback_sat = V4_DIR / "assets" / "satellite_13_terrace_court.png"
+    # ⚠ THERE IS NO GENERIC FALLBACK IMAGE, DELIBERATELY. Until 2026-08-13 both
+    # chains ended by copying a photo of 13 Terrace Court — a real, unrelated
+    # house — onto a cover printed with the subject's address. A report that
+    # shows someone else's home is worse than no report, so when every source
+    # fails the render now raises and no PDF is produced. Do not reintroduce a
+    # placeholder: the correct last resort is the boundary aerial, which is
+    # always the subject property.
     expected_hero = OUTPUT_DIR / "assets" / "img" / f"cover_hero_{subject_id}.jpg"
     expected_sat = OUTPUT_DIR / "assets" / f"satellite_{subject_id}.png"
     expected_hero.parent.mkdir(parents=True, exist_ok=True)
     expected_sat.parent.mkdir(parents=True, exist_ok=True)
 
-    hero_source = None     # "pipeline" | "auto_apr01" | "auto_scraped" | "fallback" | "missing"
-    satellite_source = None  # "pipeline" | "annotated" | "satellite_analysis" | "auto_static_maps" | "fallback" | "missing"
+    hero_source = None     # "pipeline" | "auto_apr01" | "auto_scraped" | "local_street_view" | "boundary_aerial" | "local_cadastral"
+    satellite_source = None  # "pipeline" | "annotated" | "satellite_analysis" | "boundary_aerial" | "auto_static_maps"
 
     # Look up the subject doc up-front — used by both hero and satellite blocks.
     from shared.db import get_client as _gc
@@ -692,11 +735,19 @@ def render_appraisal(
         # correct hero: it is the actual subject house. Cadastral photos are a
         # weaker fallback (sometimes an aerial), but a real image of the subject
         # still beats the generic 13TC placeholder.
+        # Ordered last resorts, all of them genuinely THIS property:
+        #   1. street-view front — an actual photo of the facade, best of the three
+        #   2. boundary aerial   — parcel-centred, lot outlined (see boundary_aerial)
+        #   3. cadastral photo   — real but often an uncentred aerial, so it ranks
+        #                          below the outlined one which resolves the ambiguity
         if not hero_source and suburb_key:
             local_candidates = [
                 (Path(f"/data/blobs/property-images/for_sale/{suburb_key}/{subject_id}/street_view/front.jpg"),
                  "local_street_view"),
             ]
+            aerial = boundary_aerial(subject_id, suburb_key, _subj)
+            if aerial:
+                local_candidates.append((aerial, "boundary_aerial"))
             cad_dir = (_subj or {}).get("cadastral_photos_dir")
             if cad_dir:
                 for jpg in sorted(Path(cad_dir).glob("*.jpg")):
@@ -710,13 +761,18 @@ def render_appraisal(
                 except Exception:
                     continue
         if not hero_source:
-            # Auto-fetch failed — use the generic fallback so the PDF isn't broken,
-            # but mark loudly that this is the wrong photo for the subject.
-            if fallback_hero.exists():
-                shutil.copy(fallback_hero, expected_hero)
-                hero_source = "fallback"
-            else:
-                hero_source = "missing"
+            # The HTML was written at line ~645, before images resolve. Remove it
+            # so a failed render leaves no partial artifact for a wrapping script
+            # or the tracking server to pick up and serve.
+            html_path.unlink(missing_ok=True)
+            raise RuntimeError(
+                f"No cover hero image could be resolved for subject {subject_id} "
+                f"({(_subj or {}).get('complete_address', 'unknown address')}). "
+                f"Every source failed: listing photos, street view, boundary aerial, "
+                f"cadastral. Refusing to render — a report must never show a photo of "
+                f"a different house. Fix the property's imagery or pick a hero in the "
+                f"ops dashboard, then re-run."
+            )
 
     # Satellite source priority:
     #   1. pipeline_record.satellite_image_src  — analyst override
@@ -726,8 +782,9 @@ def render_appraisal(
     #      mini-site renders. Use it whenever it's available.
     #   3. satellite_analysis.satellite_image_url — raw Google Maps tile from
     #      the inline_satellite resolver (or the nightly step 117 batch).
-    #   4. Fresh Google Static Maps call — fallback when nothing is cached.
-    #   5. Local fallback asset.
+    #   4. Boundary aerial — parcel-centred, lot outlined (render_property_aerial).
+    #   5. Fresh Google Static Maps call — last resort when nothing is cached.
+    #      There is no generic placeholder; exhausting the chain raises.
     if (pipeline_record or {}).get("satellite_image_src"):
         satellite_source = "pipeline"
     else:
@@ -748,6 +805,24 @@ def render_appraisal(
                     satellite_source = "annotated" if _sa.get("annotated_image_url") else "satellite_analysis"
             except Exception as exc:
                 print(f"  [WARN] cached satellite fetch failed ({cached_url[:80]}…): {exc}")
+
+        # Boundary aerial — parcel-centred with the lot outlined, the same asset
+        # the V4 /off-market hero uses. Ranked above the raw Static Maps fetch
+        # below, which centres on the geocoded address at a fixed zoom 19 with no
+        # outline, so on a large or irregular parcel the subject is ambiguous.
+        # ⚠ Only when the cover did NOT already use it. Both chains can resolve to
+        # the boundary aerial, and without this guard the identical image appears
+        # twice in one report — once as the cover hero and again in the satellite
+        # section a few pages later. When the cover has taken it, fall through to
+        # the Static Maps fetch below so the two pages show different framings.
+        if not satellite_source and hero_source != "boundary_aerial":
+            aerial = boundary_aerial(subject_id, suburb_key, _subj)
+            if aerial:
+                try:
+                    shutil.copy(aerial, expected_sat)
+                    satellite_source = "boundary_aerial"
+                except Exception as exc:
+                    print(f"  [WARN] boundary aerial copy failed: {exc}")
 
         # Fall back to a fresh Google Static Maps fetch only when nothing
         # cached worked. This is the path Will's old reports went through.
@@ -771,11 +846,15 @@ def render_appraisal(
                 except Exception:
                     pass
         if not satellite_source:
-            if fallback_sat.exists():
-                shutil.copy(fallback_sat, expected_sat)
-                satellite_source = "fallback"
-            else:
-                satellite_source = "missing"
+            html_path.unlink(missing_ok=True)  # see note on the hero raise above
+            raise RuntimeError(
+                f"No satellite image could be resolved for subject {subject_id} "
+                f"({(_subj or {}).get('complete_address', 'unknown address')}). "
+                f"Every source failed: cached annotation, boundary aerial, Static Maps. "
+                f"Refusing to render — a report must never show a different property's "
+                f"location. Check LATITUDE/LONGITUDE on the doc and "
+                f"GOOGLE_MAPS_STATIC_API_KEY in the environment, then re-run."
+            )
 
     # Drain layout-rules audit records collected during section renders and
     # write a structured audit alongside the HTML/PDF. Phase 1: warnings only
@@ -1008,8 +1087,14 @@ def main() -> None:
     ps = result.get("photo_sources") or {}
     hero_src = ps.get("cover_hero")
     sat_src = ps.get("satellite")
-    hero_warn = "  ⚠  COVER HERO is GENERIC FALLBACK (not the subject's photo)" if hero_src == "fallback" else None
-    sat_warn = "  ⚠  SATELLITE is GENERIC FALLBACK (not the subject's location)" if sat_src == "fallback" else None
+    # A generic placeholder is no longer possible — every source is the subject
+    # property or the render raises. What remains worth flagging is a WEAK but
+    # valid hero: a cadastral photo is frequently an uncentred aerial in which
+    # the subject is one of several roofs, which reads badly on a cover printed
+    # with a single address.
+    hero_warn = ("  ⚠  COVER HERO is a cadastral photo — often an uncentred aerial. "
+                 "Check it before printing.") if hero_src == "local_cadastral" else None
+    sat_warn = None
     print(f"  Photos: cover_hero={hero_src} · satellite={sat_src}")
     if hero_warn: print(hero_warn)
     if sat_warn: print(sat_warn)
@@ -1128,19 +1213,23 @@ def main() -> None:
         if tracking_id:
             print(f"  Preview: https://vm.fieldsestate.com.au/track/view/{tracking_id}")
 
-    # Strict-photos enforcement — block production/postal rendering when
-    # either the cover hero or satellite is the generic 13TC fallback. The
-    # rendered files exist on disk so the operator can inspect, but the
-    # exit code is non-zero so any wrapping script knows not to send.
+    # Strict-photos enforcement — block production/postal rendering on a WEAK
+    # hero. The generic-placeholder case this originally guarded is gone: the
+    # render now raises rather than substituting an unrelated house, so reaching
+    # this point already means every image is the subject property. What is left
+    # to catch is `local_cadastral`, which is usually an uncentred aerial —
+    # acceptable for a self-serve download, not for something posted.
     if args.strict_photos:
         bad = [k for k, v in (result.get("photo_sources") or {}).items()
-               if v in ("fallback", "missing")]
+               if v in ("local_cadastral",)]
         if bad:
-            print(f"\n✗ STRICT-PHOTOS CHECK FAILED — {', '.join(bad)} used the generic fallback.", flush=True)
-            print(f"  The rendered PDF is on disk for inspection but MUST NOT be sent to a homeowner.")
-            print(f"  Resolve by: (a) adding the per-subject asset to assets/, OR")
-            print(f"             (b) setting cover_hero_image_src / satellite_image_src on the pipeline_record, OR")
-            print(f"             (c) ensuring the subject doc has live Domain CDN images / valid LATITUDE/LONGITUDE.")
+            print(f"\n✗ STRICT-PHOTOS CHECK FAILED — {', '.join(bad)} used a cadastral photo.", flush=True)
+            print(f"  These are frequently uncentred aerials showing several homes, so the")
+            print(f"  reader cannot tell which one is theirs. The PDF is on disk for")
+            print(f"  inspection but SHOULD NOT be posted.")
+            print(f"  Resolve by: (a) picking a hero in the ops dashboard (cover_hero_image_src), OR")
+            print(f"             (b) rendering a boundary aerial: python3 scripts/render_property_aerial.py --slug <slug>, OR")
+            print(f"             (c) ensuring the subject doc has live Domain CDN images.")
             raise SystemExit(2)
 
 
