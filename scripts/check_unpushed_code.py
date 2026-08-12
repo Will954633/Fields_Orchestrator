@@ -45,6 +45,35 @@ EXTRA_FILES = [
      "remote": "Will954633/Fields_Orchestrator",
      "rel": "07_Valuation_Comps/precompute_valuations.py"},
 ]
+
+# ── Out-of-tree DIRECTORIES ──────────────────────────────────────────────────
+# Same blind spot as EXTRA_FILES, at directory scale. `/home/fields/Feilds_Website`
+# has no local `.git` at all — the website is pushed purely by `gh api`, so nothing
+# was ever comparing 983 live source files against the remote.
+#
+# ⚠ REPORT-ONLY, DELIBERATELY. These are never auto-pushed, for two reasons:
+#   1. **A website push triggers a Netlify deploy.** Deploys cost credits and a
+#      sitemap build hang is UNCANCELLABLE (see memory `sitemap_build_hang`,
+#      `netlify_deploy_credit_cost`). A backup check must not be able to deploy.
+#   2. **Direction is unknown.** A content-hash mismatch says local != remote, NOT
+#      that local is newer. For the orchestrator repo that inference is safe
+#      (edit-local-then-push is the only workflow). Here it is not: measured
+#      2026-08-13, all 3 real diffs looked like the LOCAL copy was behind. Pushing
+#      local over remote would have regressed the live site.
+# So this answers "is anything unbacked-up?" and stops there. A human decides.
+EXTRA_TREES = [
+    {"local": "/home/fields/Feilds_Website/01_Website",
+     "remote": "Will954633/Website_Version_Feb_2026",
+     # Website files sit at the REPO ROOT — local `01_Website/` is not part of the
+     # repo path (see CLAUDE.md "GitHub Path Mapping").
+     "prefix": "",
+     # Generated output and dependency trees. `.react-router` is typegen (50 files),
+     # `public/data/articles.json` is written at build time by scripts/fetch-articles.js
+     # — both drift locally on every build and mean nothing as a backup signal.
+     "exclude": re.compile(r"(^|/)(node_modules|dist|build|coverage|\.netlify|\.react-router|\.git)/"
+                           r"|^public/data/articles(-index)?\.json$")},
+]
+TREE_EXT = (".ts", ".tsx", ".js", ".mjs", ".jsx", ".css", ".json", ".yaml", ".yml", ".sh")
 CODE_EXT = (".py", ".mjs", ".js", ".sh", ".yaml", ".yml")
 # One-off, per-cycle FB ad builders (Home Owner Lead Funnel): each ran once to push a
 # specific batch of ads to Meta and is never re-run — the durable record lives in that
@@ -129,6 +158,37 @@ def is_external_link(repo, rel):
     return not os.path.realpath(p).startswith(os.path.realpath(repo) + os.sep)
 
 
+_TREE_CACHE = {}
+
+
+def _remote_paths(remote):
+    if remote not in _TREE_CACHE:
+        t = json.loads(gh([f"repos/{remote}/git/trees/main?recursive=1"]))
+        _TREE_CACHE[remote] = {b["path"] for b in t["tree"] if b["type"] == "blob"}
+    return _TREE_CACHE[remote]
+
+
+def link_is_really_backed_up(repo, rel):
+    """VERIFY the claim `is_external_link()` makes, instead of asserting it.
+
+    That function skips external symlinks on the reasoning that the file "is
+    version-controlled where it actually lives". For 8 of the 10 BreakGlass
+    workbench links that was true. For **`sirens.js` and `powerAudio.js` it was
+    false** — neither is in Website_Version_Feb_2026, so 22.7KB of source was
+    backed up NOWHERE while two separate checks each assumed the other had it
+    (measured 2026-08-13). The comment was the only evidence, and it was wrong.
+
+    Returns (covered: bool, detail: str).
+    """
+    target = os.path.realpath(os.path.join(repo, rel))
+    for spec in EXTRA_TREES:
+        root = os.path.realpath(spec["local"])
+        if target.startswith(root + os.sep):
+            tgt_rel = spec["prefix"] + os.path.relpath(target, root)
+            return tgt_rel in _remote_paths(spec["remote"]), f"{spec['remote']}:{tgt_rel}"
+    return False, f"no configured EXTRA_TREES entry covers {target}"
+
+
 def ghost_files(repo):
     """Paths git tracks that no longer exist on disk — GitHub-only 'ghosts'.
 
@@ -156,6 +216,51 @@ def ghost_files(repo):
                   if r.strip().endswith(CODE_EXT)
                   and r.strip() not in covered
                   and not os.path.isfile(os.path.join(repo, r.strip())))
+
+
+def classify_tree(spec):
+    """(in_sync, differing, local_only) for one EXTRA_TREES entry, by content hash.
+
+    One recursive `git/trees` call for the whole remote side (1,502 blobs, not
+    truncated) and one batched `git hash-object` for the local side — so this is
+    two subprocesses for ~1,000 files, not one API call each.
+    """
+    tree = json.loads(gh([f"repos/{spec['remote']}/git/trees/main?recursive=1"]))
+    if tree.get("truncated"):
+        # >100k entries: the comparison would silently look like mass local-only
+        # files. Say so rather than report a fiction.
+        raise RuntimeError("remote tree truncated — comparison would be wrong")
+    remote = {t["path"]: t["sha"] for t in tree["tree"] if t["type"] == "blob"}
+
+    local = {}
+    for dirpath, dirnames, filenames in os.walk(spec["local"]):
+        for fn in filenames:
+            if not fn.endswith(TREE_EXT):
+                continue
+            full = os.path.join(dirpath, fn)
+            rel = spec["prefix"] + os.path.relpath(full, spec["local"])
+            if spec["exclude"].search(rel):
+                continue
+            local[rel] = full
+    rels = sorted(local)
+    if not rels:
+        raise RuntimeError(f"no files found under {spec['local']} — path wrong or tree moved")
+
+    p = subprocess.run(["git", "hash-object", *[local[r] for r in rels]],
+                       capture_output=True, env=ENV)
+    shas = p.stdout.decode().split()
+    if len(shas) != len(rels):
+        raise RuntimeError(f"hash-object returned {len(shas)} shas for {len(rels)} files")
+
+    in_sync, differ, local_only = 0, [], []
+    for rel, sha in zip(rels, shas):
+        if rel not in remote:
+            local_only.append(rel)
+        elif remote[rel] != sha:
+            differ.append(rel)
+        else:
+            in_sync += 1
+    return in_sync, differ, local_only
 
 
 def classify_extra():
@@ -290,8 +395,20 @@ def main():
                 lines.append(f"    GONE {g}")
 
         if linked:
-            lines.append(f"↔ {remote}: {len(linked)} symlink(s) into another repo — "
-                         f"backed up there, not here")
+            covered, orphaned = [], []
+            for rel in linked:
+                try:
+                    ok, detail = link_is_really_backed_up(repo, rel)
+                except Exception as e:
+                    ok, detail = False, f"could not verify ({str(e)[:80]})"
+                (covered if ok else orphaned).append((rel, detail))
+            lines.append(f"↔ {remote}: {len(covered)}/{len(linked)} symlink(s) into another repo "
+                         f"VERIFIED backed up there")
+            for rel, detail in orphaned:
+                # The whole point: an unverified assumption is not a backup.
+                lines.append(f"    ⛔ ORPHAN {rel} — symlink target is in NO repo ({detail})")
+                real_gaps.append(f"{remote}: ORPHAN {rel} (target backed up nowhere)")
+                problems.append(f"⛔ {remote}: {rel} symlinks to a file backed up NOWHERE — {detail}")
         if not new and not mod and not localmap:
             lines.append(f"✓ {remote}: in sync with GitHub")
             continue
@@ -335,6 +452,31 @@ def main():
                     # GitHub outage killed the cron with nothing sent anywhere.
                     lines.append(f"    ✗ PUSH FAILED: {e}")
                     problems.append(f"✗ {remote}: push of {len(pushable)} file(s) FAILED — {str(e)[:200]}")
+
+    # ── Out-of-tree directories (report-only — see EXTRA_TREES) ──────────────
+    for spec in EXTRA_TREES:
+        try:
+            in_sync, differ, local_only = classify_tree(spec)
+        except Exception as e:
+            # Rule 7b: a tree we could not compare is UNKNOWN, not clean. Never
+            # let an exception here read as "nothing to report".
+            lines.append(f"⚠ {spec['remote']}: tree check FAILED ({str(e)[:120]}) — backup state UNKNOWN")
+            problems.append(f"⚠ {spec['remote']}: tree check failed — backup state UNKNOWN ({str(e)[:150]})")
+            continue
+        head = (f"🌐 {spec['remote']}  ({in_sync} in sync · {len(differ)} differ · "
+                f"{len(local_only)} local-only)   [report-only, never auto-pushed]")
+        lines.append(head)
+        for f in differ:
+            # NOT called MOD: that word means "local is newer, push it", which is
+            # exactly the inference this check cannot make. See EXTRA_TREES note 2.
+            lines.append(f"    DIFF {f}   (direction unknown — check before acting)")
+        if local_only:
+            by_dir = {}
+            for f in local_only:
+                by_dir[f.split("/")[0]] = by_dir.get(f.split("/")[0], 0) + 1
+            summary = "  ".join(f"{d}({n})" for d, n in
+                                sorted(by_dir.items(), key=lambda kv: -kv[1])[:6])
+            lines.append(f"    local-only, not in the repo: {summary}")
 
     # "Healthy" = no REAL gaps. Files matching SCRATCH_RE are intentionally
     # unpushed, so they don't count toward alerts, the exit code, or --quiet output.
