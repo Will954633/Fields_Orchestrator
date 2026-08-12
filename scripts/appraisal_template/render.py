@@ -1514,7 +1514,7 @@ SECTION_RECOMMENDATION_TEMPLATE = '''\
 <!-- ============================================================ -->
 <!-- PAGE {{ rec.page_number }} — RECOMMENDATION                   -->
 <!-- ============================================================ -->
-<div class="page" data-section="recommendation_p{{ rec.page_number }}" data-variant="standard">
+<div class="page" data-section="recommendation_p{{ rec.page_number }}" data-variant="{% if self_serve %}self_serve{% elif positioning %}positioning{% else %}standard{% endif %}">
   <div class="page-pad">
     <div class="page-header">
       <div class="page-header-title">For {{ subject.short_address }}</div>
@@ -1523,10 +1523,33 @@ SECTION_RECOMMENDATION_TEMPLATE = '''\
         <path fill="#B76749" d="M7.83,22.86v82.51h8.87c8.18,0,14.84-6.66,14.84-14.84V31.73h58.77c8.18,0,14.84-6.65,14.84-14.84v-8.87H22.66c-8.18,0-14.84,6.66-14.84,14.84"/>
       </svg>
     </div>
-    <div style="font-family:IBM Plex Mono, monospace; font-size:9pt; letter-spacing:0.15em; text-transform:uppercase; color:#B76749; margin-bottom:3mm;">Recommendation</div>
-    <h2 class="right-headline" style="font-size:30pt; margin-bottom:3mm;">{% if positioning and rec.page_number == 18 %}If selling became relevant, this is where the strategy would begin.{% else %}{{ rec.headline_html | safe }}{% endif %}</h2>
-    {% if not (positioning and rec.page_number == 18) %}<div class="right-subhead" style="margin-bottom:6mm;">{{ rec.subhead }}</div>{% endif %}
-    {% if rec.pending_review %}
+    <div style="font-family:IBM Plex Mono, monospace; font-size:9pt; letter-spacing:0.15em; text-transform:uppercase; color:#B76749; margin-bottom:3mm;">{% if self_serve %}{% if rec.page_number == 11 %}Pricing{% else %}Next step{% endif %}{% else %}Recommendation{% endif %}</div>
+    <h2 class="right-headline" style="font-size:30pt; margin-bottom:3mm;">{% if self_serve %}{% if rec.page_number == 11 %}We have not put a listing price on this home.{% else %}The evidence is here. The judgement needs a walk-through.{% endif %}{% elif positioning and rec.page_number == 18 %}If selling became relevant, this is where the strategy would begin.{% else %}{{ rec.headline_html | safe }}{% endif %}</h2>
+    {% if self_serve %}<div class="right-subhead" style="margin-bottom:6mm;">{% if rec.page_number == 11 %}A price needs a person in the property.{% else %}What the data cannot settle on its own.{% endif %}</div>{% elif not (positioning and rec.page_number == 18) %}<div class="right-subhead" style="margin-bottom:6mm;">{{ rec.subhead }}</div>{% endif %}
+    {% if self_serve %}
+    {#  Self-serve variant: the reader downloaded this themselves from the
+        off-market page, so no analyst has set a listing/target price and no
+        inspection has happened. We do not synthesise one from the engine —
+        a listing price is a judgement, not an engine output. This branch
+        replaces both priced pages with the reason and a consultant CTA. #}
+    {% if rec.page_number == 11 %}
+    <p style="font-size:10.5pt; line-height:1.6; color:#2c2924; margin-bottom:4mm;">The range on pages 9–10 is produced by the Fields valuation engine from comparable sales evidence. It is the same range published for this address on our website, and it is built from recorded data alone.</p>
+    <p style="font-size:10.5pt; line-height:1.6; color:#2c2924; margin-bottom:4mm;">A recommended listing price is a different kind of statement. It is a judgement about where a campaign should enter the market — built on that evidence, but shaped by condition, presentation, recent improvements, and the features that property records and aerial imagery cannot establish.</p>
+    <p style="font-size:10.5pt; line-height:1.6; color:#2c2924; margin-bottom:5mm;">That judgement needs someone standing in the property. We are not willing to publish one without that step, so this page carries no figure.</p>
+    {% else %}
+    <p style="font-size:10.5pt; line-height:1.6; color:#2c2924; margin-bottom:4mm;">Across the six forces examined in this report, the evidence for <strong>{{ subject.short_address }}</strong> is assembled: the comparable range, the buyer profile, the competitive position, and the features that separate this home from the cohort around it.</p>
+    <p style="font-size:10.5pt; line-height:1.6; color:#2c2924; margin-bottom:5mm;">What the report cannot settle on its own is the pricing and campaign recommendation. That rests on condition, presentation, and improvements — observable in a walk-through, not in property records.</p>
+    {% endif %}
+    <div style="background:#22382C; color:#E6DDD2; border-left:3px solid #B76749; padding:6mm 7mm; margin-bottom:5mm;">
+      <div style="font-family:'IBM Plex Mono', monospace; font-size:8pt; letter-spacing:0.15em; text-transform:uppercase; color:#E6B79A; margin-bottom:3mm;">Speak to a property consultant</div>
+      <p style="font-family:'Playfair Display', serif; font-style:italic; font-size:10.5pt; line-height:1.55; color:#E6DDD2; margin:0 0 5mm;">A 30-minute inspection is what turns the evidence in this report into a specific pricing and campaign recommendation for {{ subject.short_address }}.</p>
+      <div style="font-family:Cormorant Garamond, serif; font-size:22pt; color:#E6DDD2; line-height:1.1;">Will Simpson</div>
+      <div style="font-family:'IBM Plex Mono', monospace; font-size:8pt; letter-spacing:0.08em; text-transform:uppercase; color:#B7A895; margin:2mm 0 4mm;">Property Consultant · Fields Real Estate</div>
+      <div style="font-family:Cormorant Garamond, serif; font-size:19pt; color:#E6B79A; line-height:1.35;">0416 529 481</div>
+      <div style="font-family:'IBM Plex Mono', monospace; font-size:9pt; color:#E6DDD2;">will@fieldsestate.com.au</div>
+    </div>
+    <div style="font-family:'Playfair Display', serif; font-style:italic; font-size:11pt; color:#B76749; margin-top:auto; margin-bottom:4mm;">The evidence is yours to keep. The conversation is optional.</div>
+    {% elif rec.pending_review %}
     <div style="background:#fdf3ec; border-left:3px solid #B76749; padding:7mm 9mm; margin-bottom:6mm;">
       <div style="font-family:'IBM Plex Mono', monospace; font-size:9pt; letter-spacing:0.18em; text-transform:uppercase; color:#B76749; margin-bottom:4mm;">Analyst review required</div>
       <p style="font-size:11pt; line-height:1.55; color:#2c2924; margin:0 0 4mm;">The recommended listing price and target sale price are set by the analyst on top of the derived valuation range. Both are populated in the ops dashboard after the valuation is confirmed.</p>
@@ -1607,11 +1630,16 @@ def render_section_recommendation_html(
     pipeline_record: dict | None = None,
     write_substantiation: bool = True,
     positioning: bool = False,
+    self_serve: bool = False,
 ) -> str:
     subject = data_pull.get_subject(subject_id)
     rec = data_pull.section_recommendation(subject_id, pipeline_record=pipeline_record, page_number=page_number)
-    ctx = {'subject': {'short_address': _short_address(subject)}, 'rec': rec, 'positioning': positioning}
-    if not rec.get("pending_review", False):
+    ctx = {'subject': {'short_address': _short_address(subject)}, 'rec': rec,
+           'positioning': positioning, 'self_serve': self_serve}
+    # layout_rules validates the campaign-duration copy budget, which only the
+    # priced branch renders. The self-serve branch renders neither price nor
+    # campaign figures, so there is nothing to validate.
+    if not rec.get("pending_review", False) and not self_serve:
         section_key = "recommendation_p11" if page_number == 11 else "recommendation_p18"
         layout_rules.validate_and_record(section_key, {
             "campaign_duration_days": rec.get("campaign_duration_days", ""),
