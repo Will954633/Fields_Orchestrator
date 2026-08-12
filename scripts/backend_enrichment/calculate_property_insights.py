@@ -30,6 +30,7 @@ sys.path.insert(0, str(REPO_ROOT))
 from shared.env import load_env  # type: ignore
 from shared.db import get_client, get_db, cosmos_retry, EmptyWorkSetError, sleep_with_jitter, FEATURED_SUBURBS  # type: ignore
 from shared.monitor_client import MonitorClient  # type: ignore
+from shared.dwelling_type import classify_dwelling  # type: ignore
 
 load_env()
 
@@ -165,13 +166,20 @@ def get_room_area(property_doc, room_keywords, fallback_largest_bedroom=False):
     return None
 
 
+MIN_RANK_COHORT = 12
+
+
 def _rank_among(property_doc, for_sale_properties, value, extract_fn):
+    """⚠ Returns None when the cohort is too small for a rank to mean anything —
+    see MIN_RANK_COHORT. Callers already treat None as "no claim"."""
     """Count how many other properties have a value greater than or equal to this one.
 
     Ties count against the subject, so two properties sharing the top value both
     rank 2 and neither claims the 'only one' label. This matches how the kitchen
     and master-bedroom branches below already compare (>=).
     """
+    if len(for_sale_properties or []) < MIN_RANK_COHORT:
+        return None
     count = 0
     for p in for_sale_properties:
         if p.get('_id') == property_doc.get('_id'):
@@ -212,6 +220,13 @@ def has_own_lot(doc):
     return bool(pt or cpt)
 
 
+# ⚠ A RANK CLAIM NEEDS A COHORT BIG ENOUGH TO MEAN ANYTHING.
+# "3rd largest floor area currently for sale" is true whether the pool is 100 or 3, but
+# it only implies rarity in the first case. Once the pool is correctly filtered to
+# genuinely-for-sale, type-matched listings, some suburb/class cohorts fall to 14 and one
+# to 1 — at which point the label reads as a finding and is really an artefact of an
+# empty market. Below this, rank claims are withheld; percentile claims are unaffected
+# because they come from `suburb_stats`, a different and much larger basis.
 def calculate_rarity_insights(property_doc, suburb_stats, for_sale_properties):
     """
     Calculate what's unique about this property compared to what's currently for sale.
@@ -547,11 +562,35 @@ def calculate_property_insights() -> None:
                 f"  Active for_sale: {len(active_properties)} / {len(suburb_properties)} total"
             )
 
+            # ⚠ THE COMPARISON POOL, NOT JUST THE WRITE SET.
+            # `active_properties` above decides WHICH homes get insights. This decides
+            # WHAT THEY ARE RANKED AGAINST, and it used to be `suburb_properties` — every
+            # document with a price, of which **66.4% is not for sale** (50.6% sold, 8.9%
+            # withdrawn, 5.7% under contract). So "3rd largest kitchen currently for sale"
+            # counted sold homes as competitors. Measured: 31 of 260 for-sale homes (12%)
+            # get a DIFFERENT claim once the pool is real, and nearly all are gains —
+            # homes were being denied a true claim by competitors that had already sold.
+            #
+            # Type-matching is the second half. A unit ranked against detached houses is
+            # the same error in another dimension; with both filters 57 of 260 (22%)
+            # change. Dwelling class comes from the one shared classifier.
+            by_class = {}
+            for p in active_properties:
+                eff = (p.get("address") or p.get("complete_address")
+                       or p.get("street_address") or "")
+                k = classify_dwelling({**p, "street_address": eff})
+                by_class.setdefault(k, []).append(p)
+
             for prop in active_properties:
                 processed += 1
                 try:
+                    _eff = (prop.get("address") or prop.get("complete_address")
+                            or prop.get("street_address") or "")
+                    cohort = by_class.get(
+                        classify_dwelling({**prop, "street_address": _eff}), []
+                    )
                     rarity_insights = calculate_rarity_insights(
-                        prop, suburb_stats, suburb_properties
+                        prop, suburb_stats, cohort
                     )
                     enriched_data = prop.get("enriched_data") or {}
                     suburb_stats_data = suburb_stats.get("statistics", {})
