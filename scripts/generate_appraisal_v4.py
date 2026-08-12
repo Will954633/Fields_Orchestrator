@@ -194,6 +194,7 @@ def render_appraisal(
     render_pdf: bool = True,
     open_pdf: bool = False,
     positioning: bool = False,
+    self_serve: bool = False,
 ) -> dict:
     """Render the full V4-format appraisal HTML and (optionally) PDF.
 
@@ -292,14 +293,14 @@ def render_appraisal(
 
     rec_p11 = render.render_section_recommendation_html(
         subject_id, page_number=11, pipeline_record=pipeline_record, write_substantiation=True,
-        positioning=positioning,
+        positioning=positioning, self_serve=self_serve,
     )
-    sections_rendered.append("recommendation_p11")
+    sections_rendered.append("recommendation_p11" + ("_self_serve" if self_serve else ""))
     rec_p18 = render.render_section_recommendation_html(
         subject_id, page_number=18, pipeline_record=pipeline_record, write_substantiation=True,
-        positioning=positioning,
+        positioning=positioning, self_serve=self_serve,
     )
-    sections_rendered.append("recommendation_p18")
+    sections_rendered.append("recommendation_p18" + ("_self_serve" if self_serve else ""))
 
     s04 = render.render_section_04_right_html(
         subject_id,
@@ -909,6 +910,12 @@ def main() -> None:
                              "you've received this' opener. WITHOUT this flag the report renders byte-for-byte "
                              "identical to the original. (A pipeline record with report_variant='positioning' "
                              "also enables it.)")
+    parser.add_argument("--self-serve", action="store_true",
+                        help="Self-serve variant for readers who request the report themselves from the "
+                             "off-market page. Replaces the two analyst-priced recommendation pages (11 + 18) "
+                             "with the reason no listing price is published and a consultant CTA. The "
+                             "engine-derived range on pages 9-10 is unaffected. WITHOUT this flag the report "
+                             "renders byte-for-byte identical to the original.")
     args = parser.parse_args()
 
     if args.pipeline_id:
@@ -976,6 +983,7 @@ def main() -> None:
             output_basename=args.output_basename,
             render_pdf=not args.no_pdf,
             positioning=args.positioning or (bool(pipe) and pipe.get("report_variant") == "positioning"),
+            self_serve=args.self_serve or (bool(pipe) and pipe.get("report_variant") == "self_serve"),
         )
     except Exception as exc:
         if args.update_pipeline and pipe:
