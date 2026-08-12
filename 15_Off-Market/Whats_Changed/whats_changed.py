@@ -421,9 +421,22 @@ def _dedupe_readings(points):
 
     The event statement is always unique; the LOCAL half is what repeats, and it
     is the half a reader recognises. Keeping the earlier point is deliberate —
-    it is the one whose date the reading was measured against."""
+    it is the one whose date the reading was measured against.
+
+    ⚠ EXCEPT AGAINST A `suburb` POINT, WHICH HAS NO REAL DATE TO BE MEASURED
+    AGAINST. The "**Now** — homes are taking 34 days to sell" bullet is dated
+    `now - 30d`, a synthetic value that exists only to sort it; nothing was
+    measured "since" it. So "earlier wins" — which is sound between two macro
+    events — silently ranked that bare restatement above a dated fact carrying
+    the same figure. On 2026-08-13 that dropped the 11 August RBA decision from
+    every page: the watch had promised we would re-read the local numbers
+    against it and publish the result, and the result was the point discarded.
+    A macro event is the same reading WITH its reason attached, so it outranks
+    the restatement whatever the dates say; macro-vs-macro is still earliest.
+    """
+    rank = {"macro": 0, "property": 0, "suburb": 1}
     seen, out = set(), []
-    for p in sorted(points, key=lambda x: x["date"]):
+    for p in sorted(points, key=lambda x: (rank.get(x["kind"], 0), x["date"])):
         k = _reading_key(p["text"].split("—", 1)[-1])
         if k and k in seen:
             continue

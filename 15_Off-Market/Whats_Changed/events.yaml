@@ -41,26 +41,38 @@ events:
     local_metric_2: median_price
     source: "Commonwealth legislation · via Fields monthly market research, 2 August 2026"
 
-  - id: cash_rate_rises
+  - id: cash_rate_path
+    # ⚠ ONE CASH-RATE BULLET, RE-ANCHORED TO THE LATEST DECISION. Adding the
+    # 11 August hold as a SECOND event silently published nothing: both bullets
+    # pair with days_on_market, `_dedupe_readings` saw the same "34 days" twice
+    # and kept the earlier one, so the newer, truer bullet was the one dropped.
+    # Every local metric is already spoken for, so a second cash-rate event can
+    # never carry a local reading of its own — which makes one bullet, moved
+    # forward as decisions land, the only shape that works here.
+    #
     # ⚠ 2026-02-01 put this 190 days back and the six-month window silently
-    # dropped it — the bullet vanished with no error. Anchored to the MAY rise,
-    # the most recent one, which is inside the window and is still the event.
-    date: 2026-05-01
-    scope: national
-    # ⚠ DATED TO THE RISES, NOT THE HOLD. Dating this 17 June put it after the
-    # policy event and gave it the same fourteen-week window, so both bullets
-    # reported the same listings movement with slightly different averages (46 vs
-    # 45) — which reads as two facts that disagree rather than one stated once.
+    # dropped it — the bullet vanished with no error. Any future re-anchoring
+    # must stay inside WINDOW_DAYS of the generation date.
     #
     # ⚠ DAYS ON MARKET ONLY. The policy event owns active listings; this one owns
     # how long a home takes to sell. Each bullet must carry a local reading the
     # other does not, or the second is padding.
+    date: 2026-08-11
+    scope: national
+    # ⚠ OUTCOME ONLY, NO READ-THROUGH. "Held at 4.35%" is the fact. What a hold
+    # means for the reader's home, or for what 29 September might bring, is a
+    # forecast (Rule 5) — the local reading beside it is the whole commentary.
+    #
+    # ⚠ RESOLVES THE `rba_2026_08_11` WATCH, which promised we would re-read the
+    # local numbers against this decision and update the page. Setting `outcome:`
+    # on that watch only STOPS the "coming up" line; it publishes nothing. The
+    # two must always be written together or the page quietly breaks its promise.
     statement: >-
-      The cash rate rose in February, March and May 2026 to 4.35% — a reversal for
-      a market that had spent 2025 waiting for cuts — and has been held there
-      since 17 June.
+      The Reserve Bank held the cash rate at 4.35%, a second consecutive hold
+      after the rises in February, March and May 2026 — a reversal for a market
+      that had spent 2025 waiting for cuts.
     local_metric: days_on_market
-    source: "RBA · via Fields monthly market research, 2 August 2026"
+    source: "RBA media release 2026-19, 11 August 2026"
 
   - id: national_prices_fall
     date: 2026-07-31
@@ -102,6 +114,19 @@ watch:
       The Reserve Bank hands down its next cash rate decision on Tuesday
       11 August 2026.
     metric_to_watch: days_on_market
-    # Written the day after, then this becomes an ordinary timeline entry.
-    outcome: null
+    # ⚠ RESOLVED 2026-08-13. Setting this does NOT publish the result — it only
+    # stops the "coming up" line rendering. The result is published by the
+    # `cash_rate_path` event above, re-anchored to 11 August; the two must be
+    # written together or the page goes quiet on a promise it made.
+    outcome: held at 4.35% — published via event `cash_rate_path`
     source: "RBA meeting calendar · via Fields monthly market research, 2 August 2026"
+
+  - id: rba_2026_09_29
+    date: 2026-09-29
+    statement: >-
+      The Reserve Bank hands down its next cash rate decision on Tuesday
+      29 September 2026.
+    metric_to_watch: days_on_market
+    # Written the day after, alongside a new event entry — see the note above.
+    outcome: null
+    source: "RBA meeting calendar · rba.gov.au, verified 13 August 2026"
