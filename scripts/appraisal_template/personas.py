@@ -20,6 +20,8 @@ specific subject (e.g. premium waterfront, atypical buyer mix).
 
 from __future__ import annotations
 
+from . import location_facts
+
 from typing import Any
 
 # ---------------------------------------------------------------------------
@@ -102,15 +104,15 @@ def _subject_attributes(subject: dict) -> dict[str, bool | int]:
     outdoor = pvd.get("outdoor") or {}
     meta = pvd.get("property_metadata") or {}
     overview = pvd.get("property_overview") or {}
-    sat = ((subject.get("satellite_analysis") or {}).get("categories") or {})
-    backs = (sat.get("adjacency") or {}).get("backs_onto") or []
-    frontage = (sat.get("adjacency") or {}).get("frontage") or ""
-
+    # ⚠ This used to duplicate pick_highlight.py's GPT-vision substring match,
+    # so the same false claims were derived twice from two files and fixing one
+    # would have left the other wrong. Both now go through the single verified
+    # resolver: OSM road classification for cul-de-sac, measured OSM green-space
+    # edge distance for the boundary. See location_facts for the incident.
     beds = subject.get("bedrooms") or 0
-    bushland = (
-        isinstance(backs, list) and any("bushland" in str(b).lower() or "reserve" in str(b).lower() for b in backs)
-    )
-    cul_de_sac = "cul_de_sac" in str(frontage).lower()
+    facts = location_facts.resolve(subject)
+    bushland = facts["bushland_boundary"]
+    cul_de_sac = facts["cul_de_sac"]
     return {
         "bedrooms_high": beds >= 5,
         "dual_living": bool(meta.get("has_study") and meta.get("has_home_office")),
@@ -128,8 +130,14 @@ def _match_bars_for(persona: dict, subject_attrs: dict[str, bool | int]) -> list
     in the template — the fill count is `round(weight * 5)` when the subject
     has the feature, 0 otherwise."""
     rows = []
+    # ⚠ These label the PERSONA'S PREFERENCE, not the subject's features. The
+    # dots say whether this home matches; the label must therefore stay generic
+    # and true of the buyer, never of the property. "Six bedrooms" was 13
+    # Terrace Court's own bedroom count baked into a label whose key is the
+    # generic `bedrooms_high` (beds >= 5), so every 4-bed home rendered a row
+    # reading "Six bedrooms". Keep these phrased as thresholds.
     feature_labels = [
-        ("bedrooms_high", "Six bedrooms"),
+        ("bedrooms_high", "Five or more bedrooms"),
         ("dual_living", "Dual-living"),
         ("pool", "Pool"),
         ("cul_de_sac", "Cul-de-sac"),
