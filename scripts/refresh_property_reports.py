@@ -29,6 +29,7 @@ from dotenv import load_dotenv  # noqa: E402
 load_dotenv("/home/fields/Fields_Orchestrator/.env")
 
 from shared.db import get_client  # noqa: E402
+from shared.price import looks_like_rent, sale_price_or_none  # noqa: E402
 from scripts.property_reports.slot_resolver import SlotResolver  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -188,13 +189,20 @@ def fmt_aud(n: float | str) -> str:
 
 
 def coerce_price(v: Any) -> float | None:
-    """Accept int/float/string and return a clean float, or None."""
+    """Accept int/float/string and return a clean SALE price float, or None.
+
+    Rentals rejected via shared.price — `$1,200 per week` matched the plain
+    `\\$([\\d,]+)` pattern and returned 1200. See fix-history 2026-08-13
+    [RENTAL-AS-SALE-PARSERS].
+    """
     if v is None:
         return None
+    if looks_like_rent(v):
+        return None
     if isinstance(v, (int, float)):
-        return float(v)
+        return sale_price_or_none(v, float(v))
     if isinstance(v, str):
-        return parse_price(v)
+        return sale_price_or_none(v, parse_price(v))
     return None
 
 

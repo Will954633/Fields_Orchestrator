@@ -21,7 +21,14 @@ from __future__ import annotations
 import datetime as dt
 import logging
 import re
+import sys
+from pathlib import Path
 from typing import Any
+
+_ROOT = str(Path(__file__).resolve().parents[2])
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
+from shared.price import looks_like_rent, sale_price_or_none  # noqa: E402
 
 log = logging.getLogger(__name__)
 
@@ -64,12 +71,21 @@ def parse_price(s: Any) -> float | None:
 
 
 def coerce_price(v: Any) -> float | None:
+    """Sale price from an int/float/AUD string, or None.
+
+    This is the real entry point — `parse_price` above is string-only by design.
+    Rentals rejected via shared.price: `$1,200 per week` matched the plain
+    `\\$([\\d,]+)` pattern and returned 1200. See fix-history 2026-08-13
+    [RENTAL-AS-SALE-PARSERS].
+    """
     if v is None:
         return None
+    if looks_like_rent(v):
+        return None
     if isinstance(v, (int, float)):
-        return float(v)
+        return sale_price_or_none(v, float(v))
     if isinstance(v, str):
-        return parse_price(v)
+        return sale_price_or_none(v, parse_price(v))
     return None
 
 

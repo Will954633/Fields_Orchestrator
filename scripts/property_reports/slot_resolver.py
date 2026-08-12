@@ -27,6 +27,7 @@ from bson import ObjectId
 from pymongo.database import Database
 
 from shared import blob_storage
+from shared.price import looks_like_rent, sale_price_or_none
 from scripts.property_reports.hero_photo import score_and_pick_hero
 from scripts.property_reports.walking_distances import resolve_pois
 from scripts.property_reports.market_narrative import resolve_market_narrative
@@ -2285,16 +2286,23 @@ def _photo_analysis_from(s: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
 
 def _parse_price(v: Any) -> Optional[int]:
-    """Parse '$1,420,000' or 1420000 into int dollars."""
+    """Parse '$1,420,000' or 1420000 into int dollars.
+
+    Rentals rejected via shared.price: this stripped all non-digits, so
+    "$750 per week" parsed to 750 — a sale price of seven hundred and fifty
+    dollars. See fix-history 2026-08-13 [RENTAL-AS-SALE-PARSERS].
+    """
     if v is None:
         return None
+    if looks_like_rent(v):
+        return None
     if isinstance(v, (int, float)):
-        return int(v)
+        return sale_price_or_none(v, int(v))
     if isinstance(v, str):
         digits = re.sub(r"[^\d]", "", v)
         if digits:
             try:
-                return int(digits)
+                return sale_price_or_none(v, int(digits))
             except ValueError:
                 return None
     return None

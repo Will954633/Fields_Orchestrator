@@ -31,6 +31,11 @@ from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
 from jinja2 import Environment, FileSystemLoader
+
+_ROOT = str(Path(__file__).resolve().parents[1])
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
+from shared.price import looks_like_rent, sale_price_or_none  # noqa: E402
 from pymongo import MongoClient
 from bson import ObjectId
 
@@ -209,17 +214,21 @@ def select_comps(client, suburb: str, subject: dict, max_comps: int = 5) -> list
 
 
 def _parse_price(val) -> Optional[float]:
+    """Parse a sale price. Rentals rejected via shared.price — see fix-history
+    2026-08-13 [RENTAL-AS-SALE-PARSERS]."""
+    if looks_like_rent(val):
+        return None
     if isinstance(val, (int, float)):
-        return float(val) if val > 0 else None
+        return sale_price_or_none(val, float(val) if val > 0 else None)
     if not isinstance(val, str):
         return None
     cleaned = re.sub(r"[$,\s]", "", val)
     m = re.match(r"^(\d+\.?\d*)m$", cleaned, re.IGNORECASE)
     if m:
-        return float(m.group(1)) * 1_000_000
+        return sale_price_or_none(val, float(m.group(1)) * 1_000_000)
     try:
         n = float(cleaned)
-        return n if n > 0 else None
+        return sale_price_or_none(val, n if n > 0 else None)
     except ValueError:
         return None
 

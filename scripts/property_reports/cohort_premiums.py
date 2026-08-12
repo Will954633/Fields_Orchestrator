@@ -64,9 +64,16 @@ from __future__ import annotations
 
 import logging
 import statistics
+import sys
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from pymongo.database import Database
+
+_ROOT = str(Path(__file__).resolve().parents[2])
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
+from shared.price import looks_like_rent, sale_price_or_none  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -200,15 +207,20 @@ def _has_feature(key: str, sold_doc: Dict[str, Any]) -> Optional[bool]:
 
 
 def _parse_price(v: Any) -> Optional[float]:
+    """Parse a sale price. Rentals rejected via shared.price — this stripped all
+    non-digits, so "$750 per week" parsed to 750. See fix-history 2026-08-13
+    [RENTAL-AS-SALE-PARSERS]."""
     if v is None:
         return None
+    if looks_like_rent(v):
+        return None
     if isinstance(v, (int, float)):
-        return float(v)
+        return sale_price_or_none(v, float(v))
     if isinstance(v, str):
         import re
         digits = re.sub(r"[^\d.]", "", v)
         try:
-            return float(digits) if digits else None
+            return sale_price_or_none(v, float(digits) if digits else None)
         except ValueError:
             return None
     return None

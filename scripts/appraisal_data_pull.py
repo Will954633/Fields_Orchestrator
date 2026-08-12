@@ -30,6 +30,7 @@ from bson import ObjectId
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from shared.db import get_client, normalize_suburb, TARGET_SUBURBS
+from shared.price import looks_like_rent, sale_price_or_none
 
 # -- Constants ---------------------------------------------------------------
 
@@ -276,15 +277,17 @@ def _parse_price_string(s) -> Optional[float]:
     """Parse '$1,520,000' or 'SOLD - $1,520,000' → 1520000.0. Return None if unparseable."""
     if s is None:
         return None
+    if looks_like_rent(s):
+        return None
     if isinstance(s, (int, float)):
-        return float(s) if s > 0 else None
+        return sale_price_or_none(s, float(s) if s > 0 else None)
     if not isinstance(s, str):
         return None
     m = re.search(r"\$\s*([\d,]+(?:\.\d+)?)", s)
     if not m:
         return None
     try:
-        return float(m.group(1).replace(",", ""))
+        return sale_price_or_none(s, float(m.group(1).replace(",", "")))
     except ValueError:
         return None
 
