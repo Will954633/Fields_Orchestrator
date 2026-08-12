@@ -20,6 +20,8 @@ sys.path.insert(0, str(REPO_ROOT))
 from bson import ObjectId  # type: ignore
 from shared.db import get_client  # type: ignore
 
+from . import location_facts
+
 DEFAULT_CATCHMENT = ["merrimac", "robina", "varsity_lakes", "burleigh_waters"]
 DEFAULT_LOOKBACK_DAYS = 365
 
@@ -945,11 +947,55 @@ def section_04_right(subject_id: str, catchment: list[str] | None = None) -> dic
     }
 
 
+
+def _join_clauses(items: list[str]) -> str:
+    """Join verified clauses into readable prose: "a", "a and b", "a, b and c"."""
+    if not items:
+        return ""
+    if len(items) == 1:
+        return items[0]
+    return ", ".join(items[:-1]) + " and " + items[-1]
+
+
 def section_05_right(subject_id: str) -> dict:
     """§05 right — "Presentation turns features into desire." Photography
     contrast (standard vs Fields twilight) + +118% stat + three-row
     presentation strategy."""
     subject = get_subject(subject_id)
+
+    # ⚠ These two rows were 13 Terrace Court's campaign copy, hardcoded as
+    # static strings that never referenced `subject`. Every appraisal for every
+    # property therefore asserted a pool, a bushland boundary, a rear deck and a
+    # quiet cul-de-sac — regardless of what the home actually had. Build them
+    # from verified facts only, and name nothing we have not substantiated.
+    facts = location_facts.resolve(subject)
+    boundary = location_facts.boundary_phrase(facts)
+    pool = bool(((subject.get("property_valuation_data") or {}).get("outdoor") or {}).get("pool_present"))
+
+    # Only genuinely verified features are named. Each clause is omitted rather
+    # than guessed, so a home with none of them gets the generic sentence.
+    story_details = []
+    if pool:
+        story_details.append("the pool")
+    if boundary:
+        story_details.append(f"the outlook where the property {boundary}")
+    if facts["cul_de_sac"]:
+        story_details.append("the quiet of a cul-de-sac position")
+    story_tail = (
+        f" For this home that means {_join_clauses(story_details)}."
+        if story_details else ""
+    )
+
+    imagery_details = []
+    if pool:
+        imagery_details.append("the pool and entertaining zone")
+    if boundary:
+        imagery_details.append("the green outlook")
+    imagery_tail = (
+        f" Here the emphasis falls on {_join_clauses(imagery_details)}."
+        if imagery_details else ""
+    )
+
     return {
         "headline_html": 'Presentation turns features into <span class="copper">desire.</span>',
         "subhead": "Photography, listing copy and editorial storytelling are all calibrated to how the right buyer will experience the home.",
@@ -960,9 +1006,13 @@ def section_05_right(subject_id: str) -> dict:
         },
         "presentation_rows": [
             {"num": "01", "label": "The story",
-             "desc": "Listing copy that places the buyer inside the home, not in front of it. Sensory, specific, calm: mornings on the rear deck, children in the pool, permanent greenery beyond, and no through-traffic in front."},
+             "desc": "Listing copy that places the buyer inside the home, not in front of it — "
+                     "sensory, specific and calm, built from the features this home actually has "
+                     "rather than a template." + story_tail},
             {"num": "02", "label": "The imagery",
-             "desc": "Twilight and golden-hour photography focused on the rear entertaining zone, pool, bushland boundary, kitchen-to-deck transition and quiet cul-de-sac setting. No flat midday light. No generic real-estate photography."},
+             "desc": "Twilight and golden-hour photography, composed around the spaces that carry "
+                     "this home's value and the transitions between them. No flat midday light. "
+                     "No generic real-estate photography." + imagery_tail},
             {"num": "03", "label": "The buyer emphasis",
              "desc": "The same home, three stories — one per persona from Section 02."},
         ],
