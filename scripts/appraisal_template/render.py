@@ -546,20 +546,20 @@ SECTION_05_RIGHT_TEMPLATE = """\
     </div>
 
     <div class="levers">
+      {# ⚠ These rows come from data_pull.section_05_right()'s `presentation_rows`,
+         which builds them from VERIFIED facts only. They were previously three
+         hardcoded strings carrying 13 Terrace Court's own campaign copy, so every
+         appraisal asserted a pool, a bushland boundary, a rear deck and a quiet
+         cul-de-sac regardless of the property. Do not inline copy here again. #}
+      {% for row in s05.presentation_rows[:2] %}
       <div class="lever-card">
-        <div class="lever-num">01</div>
+        <div class="lever-num">{{ row.num }}</div>
         <div class="lever-body">
-          <div class="lever-name">The story</div>
-          <div class="lever-desc">Listing copy that places the buyer inside the home, not in front of it. Sensory, specific, calm: <span class="sample">mornings on the rear deck, children in the pool, permanent greenery beyond, and no through-traffic in front.</span></div>
+          <div class="lever-name">{{ row.label }}</div>
+          <div class="lever-desc">{{ row.desc }}</div>
         </div>
       </div>
-      <div class="lever-card">
-        <div class="lever-num">02</div>
-        <div class="lever-body">
-          <div class="lever-name">The imagery</div>
-          <div class="lever-desc">Twilight and golden-hour photography focused on the rear entertaining zone, pool, bushland boundary, kitchen-to-deck transition and quiet cul-de-sac setting. <span class="sample">No flat midday light. No generic real-estate photography.</span></div>
-        </div>
-      </div>
+      {% endfor %}
       <div class="lever-card">
         <div class="lever-num">03</div>
         <div class="lever-body">
