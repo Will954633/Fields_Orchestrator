@@ -84,6 +84,7 @@ if _ORCH_ROOT not in sys.path:
     sys.path.insert(0, _ORCH_ROOT)
 from shared.waterfront import (classify_water_relationship, WATERFRONT, LAKEFRONT,
                                WATER_VIEW, DRY)
+from shared.price import looks_like_rent, sale_price_or_none
 
 
 # ─── Haversine Distance ──────────────────────────────────────────────────────
@@ -1454,21 +1455,31 @@ def calculate_adjustments(subject_features, comp_features, comp_price, rates):
         }
 
     # Storey adjustment (structural premium beyond floor area)
-    s_stories = subject_features.get('number_of_stories') or 1
-    c_stories = comp_features.get('number_of_stories') or 1
-    # Cap at 3 for houses — higher values are likely apartment buildings misclassified
-    s_stories = min(s_stories, 3)
-    c_stories = min(c_stories, 3)
-    storey_diff = s_stories - c_stories
+    # ⚠ UNKNOWN != SINGLE STOREY. Skip when either side is unknown — see the pool
+    # note above; `or 1` previously read an un-analysed subject as single-storey
+    # and marked it down the full storey rate against any two-storey comparable.
+    s_stories_raw = subject_features.get('number_of_stories')
+    c_stories_raw = comp_features.get('number_of_stories')
+    if _LEGACY_UNKNOWN:
+        s_stories_raw, c_stories_raw = (s_stories_raw or 1), (c_stories_raw or 1)
     storey_rate = rates.get('per_storey', 45000)
-    storey_dollars = round(storey_diff * storey_rate)
-    adjustments['stories'] = {
-        'subject_value': s_stories,
-        'comp_value': c_stories,
-        'diff': storey_diff,
-        'rate': storey_rate,
-        'dollars': storey_dollars,
-    }
+    if s_stories_raw is None or c_stories_raw is None:
+        adjustments['stories'] = {
+            'subject_value': s_stories_raw, 'comp_value': c_stories_raw, 'diff': 0,
+            'rate': storey_rate, 'dollars': 0, 'skipped': True,
+        }
+    else:
+        # Cap at 3 for houses — higher values are likely apartment buildings misclassified
+        s_stories = min(s_stories_raw, 3)
+        c_stories = min(c_stories_raw, 3)
+        storey_diff = s_stories - c_stories
+        adjustments['stories'] = {
+            'subject_value': s_stories,
+            'comp_value': c_stories,
+            'diff': storey_diff,
+            'rate': storey_rate,
+            'dollars': round(storey_diff * storey_rate),
+        }
 
     # Renovation level adjustment (ordinal: 1=original → 5=new_build)
     s_reno = subject_features.get('renovation_level', 3)
@@ -1485,32 +1496,54 @@ def calculate_adjustments(subject_features, comp_features, comp_price, rates):
     }
 
     # Water views adjustment (binary: has water view vs no water view)
-    s_water = 1 if subject_features.get('water_views') else 0
-    c_water = 1 if comp_features.get('water_views') else 0
-    water_diff = s_water - c_water
+    # ⚠ UNKNOWN != NO WATER VIEW. At $120k this was the largest silent markdown of
+    # an un-analysed subject — see the pool note above.
+    s_water_raw = subject_features.get('water_views')
+    c_water_raw = comp_features.get('water_views')
+    if _LEGACY_UNKNOWN:
+        s_water_raw, c_water_raw = bool(s_water_raw), bool(c_water_raw)
     water_rate = rates.get('per_water_view', 120000)
-    water_dollars = round(water_diff * water_rate)
-    adjustments['water_views'] = {
-        'subject_value': s_water,
-        'comp_value': c_water,
-        'diff': water_diff,
-        'rate': water_rate,
-        'dollars': water_dollars,
-    }
+    if s_water_raw is None or c_water_raw is None:
+        adjustments['water_views'] = {
+            'subject_value': s_water_raw, 'comp_value': c_water_raw, 'diff': 0,
+            'rate': water_rate, 'dollars': 0, 'skipped': True,
+        }
+    else:
+        s_water = 1 if s_water_raw else 0
+        c_water = 1 if c_water_raw else 0
+        water_diff = s_water - c_water
+        adjustments['water_views'] = {
+            'subject_value': s_water,
+            'comp_value': c_water,
+            'diff': water_diff,
+            'rate': water_rate,
+            'dollars': round(water_diff * water_rate),
+        }
 
     # Cladding material adjustment (ordinal: 1=weatherboard → 4=stone)
-    s_clad = subject_features.get('cladding_level', 2)
-    c_clad = comp_features.get('cladding_level', 2)
-    clad_diff = s_clad - c_clad
+    # ⚠ UNKNOWN != BRICK. Defaulting both sides to 2 was safe only when both were
+    # unknown; an un-analysed subject vs a comparable read as stone lost 2 levels
+    # (~$40k) it may never have deserved. See the pool note above.
+    s_clad = subject_features.get('cladding_level')
+    c_clad = comp_features.get('cladding_level')
+    if _LEGACY_UNKNOWN:
+        s_clad = 2 if s_clad is None else s_clad
+        c_clad = 2 if c_clad is None else c_clad
     clad_rate = rates.get('per_cladding_level', 20000)
-    clad_dollars = round(clad_diff * clad_rate)
-    adjustments['cladding'] = {
-        'subject_value': s_clad,
-        'comp_value': c_clad,
-        'diff': clad_diff,
-        'rate': clad_rate,
-        'dollars': clad_dollars,
-    }
+    if s_clad is None or c_clad is None:
+        adjustments['cladding'] = {
+            'subject_value': s_clad, 'comp_value': c_clad, 'diff': 0,
+            'rate': clad_rate, 'dollars': 0, 'skipped': True,
+        }
+    else:
+        clad_diff = s_clad - c_clad
+        adjustments['cladding'] = {
+            'subject_value': s_clad,
+            'comp_value': c_clad,
+            'diff': clad_diff,
+            'rate': clad_rate,
+            'dollars': round(clad_diff * clad_rate),
+        }
 
     # Kitchen quality score adjustment (1-10 scale)
     s_kitchen = subject_features.get('kitchen_score') or 5
@@ -1527,18 +1560,28 @@ def calculate_adjustments(subject_features, comp_features, comp_price, rates):
     }
 
     # Air conditioning type adjustment (binary: ducted premium)
-    s_ac = 1 if subject_features.get('ac_ducted') else 0
-    c_ac = 1 if comp_features.get('ac_ducted') else 0
-    ac_diff = s_ac - c_ac
+    # ⚠ UNKNOWN != NOT DUCTED. See the pool note above.
+    s_ac_raw = subject_features.get('ac_ducted')
+    c_ac_raw = comp_features.get('ac_ducted')
+    if _LEGACY_UNKNOWN:
+        s_ac_raw, c_ac_raw = bool(s_ac_raw), bool(c_ac_raw)
     ac_rate = rates.get('per_ac_ducted', 20000)
-    ac_dollars = round(ac_diff * ac_rate)
-    adjustments['ac_type'] = {
-        'subject_value': s_ac,
-        'comp_value': c_ac,
-        'diff': ac_diff,
-        'rate': ac_rate,
-        'dollars': ac_dollars,
-    }
+    if s_ac_raw is None or c_ac_raw is None:
+        adjustments['ac_type'] = {
+            'subject_value': s_ac_raw, 'comp_value': c_ac_raw, 'diff': 0,
+            'rate': ac_rate, 'dollars': 0, 'skipped': True,
+        }
+    else:
+        s_ac = 1 if s_ac_raw else 0
+        c_ac = 1 if c_ac_raw else 0
+        ac_diff = s_ac - c_ac
+        adjustments['ac_type'] = {
+            'subject_value': s_ac,
+            'comp_value': c_ac,
+            'diff': ac_diff,
+            'rate': ac_rate,
+            'dollars': round(ac_diff * ac_rate),
+        }
 
     # Condition adjustment (using interior condition score as proxy for age/condition)
     # Only adjust when both sides have real condition data (not defaults)
@@ -2177,10 +2220,39 @@ def calculate_confidence(points, n_total_override=None, suburb_key=None):
 # Re-derived 2026-08-07 AFTER the geometry-led cohort change, which moved 30
 # mis-flagged homes out of the waterfront pool and shrank Robina's and Burleigh
 # Waters' offsets. Measured on off-market (blind) subjects, n=581.
+# ⚠ RE-DERIVED 2026-08-10 on the ALIGNED backtest, fitted on half the homes and
+# validated on the other half (`16_Valuation/experiments/calibration_refit.py`).
+# The previous values were fitted 2026-08-07, BEFORE the full-candidate-pool and
+# λ=0.80 shrinkage changes of 08-08 improved the method — so they went on
+# correcting a low bias that no longer existed and the method began running
+# HIGH. Measured on held-out homes, every suburb improved on bias, MAE and band
+# width at once:
+#     robina          1.0189 -> 1.0058   bias +1.52% -> +0.22%,  MAE 8.79 -> 8.57
+#     varsity_lakes   1.1243 -> 1.1038   bias +2.66% -> +0.78%,  MAE 8.03 -> 7.67
+#     burleigh_waters 0.9925 -> 1.0177   bias -3.81% -> -1.37%,  MAE 8.17 -> 7.81
+#
+# ⚠ TWO CAUTIONS RECORDED WITH THEM. Burleigh Waters FLIPS DIRECTION — from
+# correcting down to correcting up — on the smallest sample (fit n=70). And
+# Robina's refit is barely better than no correction at all (8.57% against
+# 8.50% MAE unadjusted), which suggests that suburb may no longer need one.
+# Re-derive again after any further method change; that is the omission that
+# caused this.
+# ⚠ HELD AT THE OLD VALUES SO THE PAGE CAN GO LIVE TONIGHT (Will, 2026-08-10).
+# The refitted factors below are BETTER and holdout-validated — robina 1.0058,
+# varsity_lakes 1.1038, burleigh_waters 1.0177 — but applying them at tonight's
+# 20:30 recompute would change every stored valuation while `v4/valuationCopy.ts`
+# still publishes an MAE, an 80% band and an adjustment-benefit figure measured
+# under THESE values. The page would then state a track record for a method the
+# site had stopped running, on the same night it went live.
+#
+# Re-apply the refit and the re-derived page tables TOGETHER, as one change:
+#     16_Valuation/experiments/calibration_refit.py     (the factors)
+#     16_Valuation/refresh_page_accuracy.py             (checks the drift)
+# Full working: 16_Valuation/experiments/ and logs/fix-history/2026-08-10.md.
 _SUBURB_CALIBRATION = {
-    'robina': 1.0189,           # measured -1.9% low
-    'burleigh_waters': 0.9925,  # measured +0.8% HIGH — the only one above
-    'varsity_lakes': 1.1243,    # measured -11.1% low
+    'varsity_lakes':   1.1243,
+    'robina':          1.0189,
+    'burleigh_waters': 0.9925,
 }
 
 # ── Adjustment reliability shrinkage (added 2026-08-08) ──────────────────────
@@ -2242,6 +2314,34 @@ def _band_for_suburb(suburb_key):
 # The adjustments are still COMPUTED and still shown on the receipts, so a
 # reader can see the comparison. They simply no longer move the price.
 _RETIRED_ADJUSTMENTS = ('kitchen', 'renovation', 'renovation_quality')
+
+# ── Unknown-vs-known hardening (written 2026-08-12, NOT YET ENABLED) ──────────
+#
+# water_views, cladding, stories and ac_type collapse an UNKNOWN subject attribute
+# to a concrete inferior value ("no water view" / brick / single storey / not
+# ducted), so an un-analysed subject is marked down against any comparable that
+# HAS been analysed. Same defect class as the pool default fixed 2026-08-07, which
+# had penalised ~894 homes the full pool rate. It matters far more at corpus scale:
+# comparables are listed homes with 73-97% photo coverage, while off-market
+# subjects mostly have none.
+#
+# ⚠ WHY IT IS OFF BY DEFAULT. Measured A/B on identical data (robina, n=253,
+# --price-filter none --blind-subject, full photo-blinding via BACKTEST_BLIND_FULL):
+#     legacy   MAE 9.0%  median 7.2%  bias +0.7%
+#     hardened MAE 9.2%  median 6.7%  bias +2.1%
+# Median error IMPROVES, but the markdown was silently cancelling ~1.4% of a
+# systematic OVERvaluation — most of which is the stale suburb calibration below
+# (robina 1.0189 where the holdout-validated refit says 1.0058). Two wrongs were
+# cancelling. Enabling this alone would push every stored valuation up ~1.4% at the
+# next 20:30 recompute, while the live page still publishes accuracy measured under
+# the old behaviour — exactly the situation Will declined on 2026-08-10.
+#
+# SHIP AS ONE CHANGE, like the 08-10 note below requires:
+#     1. VALUATION_UNKNOWN_HARDENING=1 (this)
+#     2. the calibration refit (_SUBURB_CALIBRATION)
+#     3. re-derived page tables (16_Valuation/refresh_page_accuracy.py)
+# Working: 16_Valuation/experiments/2026-08-12-unknown-attribute-hardening.md
+_LEGACY_UNKNOWN = os.environ.get("VALUATION_UNKNOWN_HARDENING") != "1"
 
 
 def apply_adjustment_reliability(adjustment_result, reliability=None):
@@ -2469,24 +2569,33 @@ def parse_price(price_str):
     """
     Parse price string to number.
     Handles formats like: "$1,500,000", "1.5m", "1500000", etc.
+
+    Rentals are rejected via shared.price. This parser used to return 750 for a
+    weekly rent of 750. It has never actually done so, because its comp pool is
+    built from listing_status:"sold" documents and rentals do not live there
+    (0 rent-like values in 71,126 adjusted comparables, measured 2026-08-12).
+    The guard makes that a property of the parser rather than of its caller.
     """
+    if looks_like_rent(price_str):
+        return None
+
     if isinstance(price_str, (int, float)):
-        return float(price_str) if price_str > 0 else None
-    
+        return sale_price_or_none(price_str, float(price_str) if price_str > 0 else None)
+
     if not isinstance(price_str, str):
         return None
-    
+
     # Remove common non-numeric characters
     cleaned = re.sub(r'[$,\s]', '', price_str)
-    
+
     # Handle "1.4m" or "1.4M" style
     m_match = re.match(r'^(\d+\.?\d*)m$', cleaned, re.IGNORECASE)
     if m_match:
-        return float(m_match.group(1)) * 1_000_000
-    
+        return sale_price_or_none(price_str, float(m_match.group(1)) * 1_000_000)
+
     try:
         num = float(cleaned)
-        return num if num > 0 else None
+        return sale_price_or_none(price_str, num if num > 0 else None)
     except ValueError:
         return None
 
@@ -3060,22 +3169,37 @@ def basic_features(doc):
     renovation_level_raw = reno.get('overall_renovation_level')
     renovation_level = RENOVATION_LEVEL_MAP.get(renovation_level_raw, 3)  # default: cosmetically_updated
 
-    # Water views
-    water_views = bool(outdoor.get('water_views', False)) if outdoor else False
+    # Water views.
+    # None when the photo analysis never ran — see calculate_adjustments(). When
+    # `outdoor` IS present the analyser did look, so a missing key legitimately
+    # means "no water view" and stays False. Collapsing the un-analysed case to
+    # False marked every such subject down the full water-view rate (~$120k)
+    # against any comparable that had one — the same defect class as the pool
+    # default fixed 2026-08-07.
+    water_views = (bool(outdoor.get('water_views', False)) if outdoor
+                   else (False if _LEGACY_UNKNOWN else None))
 
-    # Cladding material
+    # Cladding material.
+    # None when unknown rather than 2/brick: defaulting an un-analysed subject to
+    # brick marked it down against any comparable read as rendered/stone.
     exterior = pvd.get('exterior', {})
     cladding_raw = exterior.get('cladding_material') if exterior else None
-    cladding_level = CLADDING_MATERIAL_MAP.get(cladding_raw, 2)  # default: brick
+    cladding_level = (CLADDING_MATERIAL_MAP.get(cladding_raw, 2)
+                      if cladding_raw is not None
+                      else (2 if _LEGACY_UNKNOWN else None))
 
     # Kitchen quality score
     kitchen = pvd.get('kitchen', {})
     kitchen_score = kitchen.get('quality_score') if kitchen else None
 
-    # Air conditioning type
+    # Air conditioning type.
+    # None when unknown — see calculate_adjustments(). An un-analysed subject was
+    # previously read as "not ducted" and marked down against any ducted comparable.
     metadata = pvd.get('property_metadata', {})
-    ac_type = metadata.get('air_conditioning', '') if metadata else ''
-    ac_ducted = ac_type == 'ducted'
+    if metadata and metadata.get('air_conditioning') is not None:
+        ac_ducted = metadata.get('air_conditioning') == 'ducted'
+    else:
+        ac_ducted = False if _LEGACY_UNKNOWN else None
 
     return {
         'bedrooms': doc.get('bedrooms'),
