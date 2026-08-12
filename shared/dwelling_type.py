@@ -33,13 +33,30 @@ from __future__ import annotations
 
 import re
 
-__all__ = ["classify_dwelling", "is_house", "UNIT_TYPE_TOKENS"]
+__all__ = ["classify_dwelling", "is_house", "UNIT_TYPE_TOKENS",
+           "NON_DWELLING_TOKENS"]
 
 # Attached / strata tokens. Kept in sync with `_UNIT_TYPE_TOKENS` in
 # precompute_valuations.py — if you add one there, add it here.
 UNIT_TYPE_TOKENS = (
     "unit", "apartment", "flat", "studio", "townhouse",
     "villa", "duplex", "terrace", "semi",
+)
+
+# ⚠ NOT DWELLINGS AT ALL. These used to fall through to `attached`, because the final
+# branch returned "attached" for any recognised-but-unlisted type — while the comment
+# beside it said they were "neither a house nor an attached dwelling we track". The code
+# and the comment disagreed, and the code won: 88 documents across the three suburbs
+# (34 Land, 29 Industrial, 12 Leisure, 8 Development Site, 3+1 Vacant Land, 1 Farm) were
+# being counted as attached dwellings — entering unit comparable pools, the attached
+# price index, and eligible for a unit page. 0.8% of the attached bucket.
+#
+# They get their own bucket rather than `unknown`, which means "no signal at all" and is
+# something callers are told to count and report. "This is an industrial shed" is a
+# signal, and a strong one.
+NON_DWELLING_TOKENS = (
+    "land", "industrial", "development site", "leisure", "sport", "farm",
+    "retirement living", "commercial", "vacant",
 )
 
 # "12/8 Marine Parade", "4 / 19-21 Beachcomber Ct", "Unit 3 Smith St", "Apt 2 ..."
@@ -88,6 +105,8 @@ def classify_dwelling(doc) -> str:
     'house'    — detached dwelling on its own lot; what a suburb house median means.
     'attached' — unit / apartment / townhouse / villa / duplex / terrace / semi,
                  OR any unit-numbered address regardless of the type field.
+    'non_dwelling' — land, industrial, development site, farm, retirement living.
+                 Not a home; must never enter a dwelling comparable pool or median.
     'unknown'  — no address signal and no usable type field. Callers MUST count
                  these and report the number rather than dropping them quietly.
     """
@@ -104,13 +123,16 @@ def classify_dwelling(doc) -> str:
         token = str(raw).strip().lower()
         if not token:
             continue
+        # Order matters: "Retirement Living" contains no unit token but is not a
+        # dwelling we track, and "New House & Land" contains BOTH "house" and "land",
+        # so the house test must come before the non-dwelling test.
         if any(t in token for t in UNIT_TYPE_TOKENS):
             return "attached"
         if "house" in token:
             return "house"
-        # A recognised-but-other type ("Land", "Vacant land", "Retirement Living",
-        # "Other") is neither a house nor an attached dwelling we track.
-        return "attached" if token not in ("other",) else "unknown"
+        if any(t in token for t in NON_DWELLING_TOKENS):
+            return "non_dwelling"
+        return "unknown"
 
     return "unknown"
 
