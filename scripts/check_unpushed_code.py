@@ -139,10 +139,23 @@ def ghost_files(repo):
     ghost made GitHub's copy look authoritative while the file that actually ran
     lived somewhere else entirely. Reported, not alerted, since most ghosts are
     ordinary uncommitted deletions.
+
+    ⚠ Read from **origin/main**, not the local index. `git ls-files -d` was the
+    obvious call and is wrong here for the same reason this whole file exists:
+    the local index has drifted (nothing commits locally; `git push` hangs), so
+    it under- and over-reports. `origin/main` is what actually holds the backup.
+
+    A path covered by EXTRA_FILES is NOT a ghost — its live copy is elsewhere and
+    is being checked. Listing it anyway would print "in sync" and "GONE" for the
+    same file every run: a nag no action can ever clear, which is how a report
+    stops being read.
     """
-    out = git(repo, "ls-files", "-d", "--exclude-standard", check=False)
+    covered = {e["rel"] for e in EXTRA_FILES}
+    out = git(repo, "ls-tree", "-r", "--name-only", "origin/main", check=False)
     return sorted(r.strip() for r in out.splitlines()
-                  if r.strip().endswith(CODE_EXT))
+                  if r.strip().endswith(CODE_EXT)
+                  and r.strip() not in covered
+                  and not os.path.isfile(os.path.join(repo, r.strip())))
 
 
 def classify_extra():
