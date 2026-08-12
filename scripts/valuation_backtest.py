@@ -610,6 +610,21 @@ _PHOTO_DERIVED_SUBJECT_ATTRS = (
     'number_of_stories',
 )
 
+# The list above is INCOMPLETE: water_views, cladding_level and ac_ducted also come
+# only from the GPT photo pass (precompute_valuations.basic_features), so an
+# off-market home lacks them too. They are not in the shipped tuple because until
+# 2026-08-12 nulling them did not blind them — calculate_adjustments collapsed the
+# None to "no view / brick / not ducted" and marked the subject DOWN. Set
+# BACKTEST_BLIND_FULL=1 to blind the complete photo-derived set, which is what an
+# off-market subject actually looks like. Experimental: changing the default would
+# change the published figures, so it is opt-in until that re-measure is recorded.
+if os.environ.get("BACKTEST_BLIND_FULL") == "1":
+    _PHOTO_DERIVED_SUBJECT_ATTRS = _PHOTO_DERIVED_SUBJECT_ATTRS + (
+        'water_views',
+        'cladding_level',
+        'ac_ducted',
+    )
+
 
 def is_attached_dwelling(doc):
     """True if the dwelling is attached (unit, townhouse, duplex, villa...).

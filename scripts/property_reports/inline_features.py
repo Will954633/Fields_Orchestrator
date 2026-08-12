@@ -85,11 +85,22 @@ CLADDING_MATERIAL_MAP = {
 
 
 def _resolve_numeric(val: Any) -> Optional[float]:
-    """Best-effort numeric coercion. Returns None for non-numeric values."""
+    """Best-effort numeric coercion. Returns None for non-numeric values.
+
+    Handles the {"value": N, "unit": ..., "confidence": ...} envelope the vision
+    passes emit. Without that branch `floor_plan_vision` lost the floor-area
+    ladder on all 434 documents carrying `floor_plan_analysis.internal_floor_area`
+    — it is stored as a dict, so this returned None every time while
+    precompute_valuations.resolve_numeric() (which does unwrap) read 168 of them.
+    """
     if val is None:
+        return None
+    if isinstance(val, bool):          # bool is an int subclass — never an area
         return None
     if isinstance(val, (int, float)):
         return float(val)
+    if isinstance(val, dict):
+        return _resolve_numeric(val.get("value"))
     if isinstance(val, str):
         try:
             return float(val.replace(",", "").strip())

@@ -161,7 +161,8 @@ def _suburb_key_for(subject_id: str) -> str | None:
     return None
 
 
-def boundary_aerial(subject_id: str, suburb_key: str | None, subject_doc: dict | None) -> Path | None:
+def boundary_aerial(subject_id: str, suburb_key: str | None, subject_doc: dict | None,
+                    *, cover: bool = False) -> Path | None:
     """Return a parcel-centred satellite image with the property's cadastral
     boundary outlined, or None if this property has no parcel on file.
 
@@ -178,22 +179,70 @@ def boundary_aerial(subject_id: str, suburb_key: str | None, subject_doc: dict |
     ⚠ Scope travels with the image: for a house/townhouse the outline is the
     dwelling's own lot; for an apartment it is the SCHEME parcel. Check
     `cadastral_polygon.boundary_scope` before captioning it as "your block".
+
+    ⚠ `cover=True` renders a DIFFERENT aspect ratio, and the reason is legal, not
+    aesthetic. The shared 640x440 aerial is 1.455:1; the cover's image band is
+    210mm x 68% of 297mm = 1.040:1. `background-size: cover` therefore scales by
+    height and crops **14.3% off each side** — and Google's mandatory imagery
+    attribution sits in the bottom-right of the source PNG, so it was being cut
+    mid-word ("Imagery ©2026 Airbus, Vexce"). Static Maps terms require it to stay
+    legible. Shifting `background-position` cannot fix this: preserving the right
+    edge pushes the parcel off-centre. Requesting a near-square image that matches
+    the band means nothing is cropped and the attribution survives intact.
+    Cached separately as boundary_cover.png so re-renders stay free.
     """
     if not suburb_key:
         return None
-    cached = Path(f"/data/blobs/property-images/aerial/{suburb_key}/{subject_id}/boundary.png")
+    base = Path(f"/data/blobs/property-images/aerial/{suburb_key}/{subject_id}")
+    cached = base / ("boundary_cover.png" if cover else "boundary.png")
     if cached.exists() and cached.stat().st_size > 2000:
         return cached
     if not subject_doc:
         return None
+    # The cover band is 210mm x (297mm * 68%) == aspect 1.040. Request something
+    # deliberately TALLER (640x680 == 0.94) rather than an exact match: with
+    # `background-size: cover` a taller image scales by WIDTH, so the only
+    # overflow is vertical, and the bottom-right anchor set on the cover div
+    # then guarantees Google's attribution stays flush and legible. An exact
+    # aspect match leaves the crop direction at the mercy of sub-pixel rounding,
+    # which sliced the attribution in half. Overflow comes off the top, which is
+    # empty margin around the parcel.
+    width, height = (640, 680) if cover else (640, 440)
     try:
         sys.path.insert(0, str(REPO_ROOT / "scripts"))
         import render_property_aerial as ra  # type: ignore
         path, _note = ra.render(
             get_client()["Gold_Coast"], suburb_key, subject_doc, "sun",
-            str(OUTPUT_DIR / "assets" / "aerial_tmp"), width=640, height=440, scale=2,
+            str(OUTPUT_DIR / "assets" / "aerial_tmp"), width=width, height=height, scale=2,
         )
-        return Path(path) if path else None
+        if not path:
+            return None
+        if cover:
+            # Google bakes its imagery attribution into the bottom ~17px (x2 at
+            # scale=2) of the returned tile. The cover crops the image to fill a
+            # fixed band, and no combination of background-size/position reliably
+            # keeps that strip intact — it was rendering sliced through the middle
+            # of the glyphs. So remove it from the raster here and re-draw it as
+            # real HTML text on the cover instead (see the injection in the hero
+            # block). Attribution is still displayed, and now always legibly.
+            # ⚠ Do not simply crop without re-displaying it: Static Maps terms
+            # require the attribution to remain visible.
+            try:
+                from PIL import Image as _Image
+                _im = _Image.open(path)
+                _w, _h = _im.size
+                _im.crop((0, 0, _w, _h - 40)).save(path)
+            except Exception as exc:
+                print(f"  [WARN] attribution strip crop failed: {exc}")
+            # Persist beside the shared aerial so the next render of this
+            # property does not pay for another Static Maps call.
+            try:
+                base.mkdir(parents=True, exist_ok=True)
+                shutil.copy(path, cached)
+                return cached
+            except Exception:
+                pass
+        return Path(path)
     except Exception as exc:
         print(f"  [WARN] boundary aerial render failed: {type(exc).__name__}: {exc}")
         return None
@@ -745,7 +794,7 @@ def render_appraisal(
                 (Path(f"/data/blobs/property-images/for_sale/{suburb_key}/{subject_id}/street_view/front.jpg"),
                  "local_street_view"),
             ]
-            aerial = boundary_aerial(subject_id, suburb_key, _subj)
+            aerial = boundary_aerial(subject_id, suburb_key, _subj, cover=True)
             if aerial:
                 local_candidates.append((aerial, "boundary_aerial"))
             cad_dir = (_subj or {}).get("cadastral_photos_dir")
@@ -760,6 +809,33 @@ def render_appraisal(
                         break
                 except Exception:
                     continue
+        if hero_source == "boundary_aerial":
+            # Anchor the cover image's bottom-right corner. The stylesheet uses
+            # `background-position: center 30%`, which pushes any residual
+            # overflow off the BOTTOM — precisely where Google stamps the
+            # mandatory imagery attribution, so it was being sliced in half even
+            # after the aspect match above removed the horizontal crop. Anchoring
+            # bottom-right keeps that corner flush whichever way the rounding
+            # falls; the overflow instead comes off the top-left, which is empty
+            # margin around the parcel. Inline style beats the stylesheet rule.
+            # Applied ONLY for aerials — photo covers keep `center 30%`, which
+            # frames a house correctly.
+            text = text.replace(
+                'class="cover-image" style="background-image:',
+                'class="cover-image" style="background-position:right bottom;background-image:', 1)
+            # Re-display Google's imagery attribution as real text, since it was
+            # cropped out of the raster in boundary_aerial(cover=True). Sits just
+            # inside the bottom-right of the image band, white on the existing
+            # darkening gradient. z-index 6 keeps it under the terracotta address
+            # card (z-index 7) so it can never overlap the address.
+            _attrib = (
+                '<div style="position:absolute; right:6mm; top:calc(68% - 6mm); z-index:6;'
+                ' font-family:\'IBM Plex Mono\', monospace; font-size:6pt; color:rgba(255,255,255,0.82);'
+                ' letter-spacing:0.02em; text-shadow:0 1px 2px rgba(0,0,0,0.6);">'
+                'Imagery &copy;2026 Airbus, Vexcel Imaging US, Inc.</div>'
+            )
+            text = text.replace('<div class="cover-card">', _attrib + '<div class="cover-card">', 1)
+            html_path.write_text(text)
         if not hero_source:
             # The HTML was written at line ~645, before images resolve. Remove it
             # so a failed render leaves no partial artifact for a wrapping script

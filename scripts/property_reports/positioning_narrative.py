@@ -244,8 +244,12 @@ def _validate_output(parsed: Dict[str, Any]) -> Optional[str]:
         return f"genericParagraph word count {gp_words} out of 35-120 range"
 
     # Editorial guardrails on the prose fields (not vocabulary.avoid, not genericParagraph)
+    # NB: vocabulary.avoidNote is EXCLUDED. It is the field where the model names
+    # the hype words it avoided ("avoid phrases like 'rare opportunity'"), so
+    # scanning it for forbidden words rejected the slot for doing its job — three
+    # attempts, ~352s, and positioning/personas/buyers all lost (2026-08-10).
     prose = " ".join([
-        frame["angle"], frame["reasoning"], vocab.get("avoidNote", ""),
+        frame["angle"], frame["reasoning"],
         " ".join(t["apparent"] + " " + t["reframe"] + " " + t["evidence"] for t in trade),
         " ".join(p["brief"] + " " + p["proves"] for p in photo),
         sp,
