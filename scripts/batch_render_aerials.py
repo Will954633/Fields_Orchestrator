@@ -63,6 +63,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--suburb", default=None)
     ap.add_argument("--limit", type=int)
+    ap.add_argument("--attached", action="store_true",
+                    help="render attached dwellings (units/townhouses) instead of houses only")
     ap.add_argument("--force", action="store_true", help="re-render even if one exists")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
@@ -73,8 +75,16 @@ def main():
     if args.dry_run:
         total = 0
         for s in suburbs:
-            q = {"listing_status": {"$nin": ["sold", "for_sale"]}, "property_type": "House",
+            # ⚠ `property_type: "House"` here is why 86.7% of houses carry an aerial and
+            # 0.4% of attached dwellings do — despite 94.9% of them holding the LAT/PLAN
+            # needed to render one. Units get the same treatment under --attached:
+            # a townhouse resolves its OWN lot (1GTP3941 -> 195 m²), and an apartment,
+            # which owns no land and has no polygon of its own, falls back to the scheme
+            # parcel (0SP197709 -> 3,582 m²). See polygon_for()/scheme_lotplan_for().
+            q = {"listing_status": {"$nin": ["sold", "for_sale"]},
                  "LOT": {"$nin": [None, ""]}, "PLAN": {"$nin": [None, ""]}}
+            if not args.attached:
+                q["property_type"] = "House"
             if not args.force:
                 q["aerial_boundary_url"] = {"$exists": False}
             n = db[s].count_documents(q)
@@ -89,8 +99,16 @@ def main():
         eligible = 0
 
         for suburb in suburbs:
-            q = {"listing_status": {"$nin": ["sold", "for_sale"]}, "property_type": "House",
+            # ⚠ `property_type: "House"` here is why 86.7% of houses carry an aerial and
+            # 0.4% of attached dwellings do — despite 94.9% of them holding the LAT/PLAN
+            # needed to render one. Units get the same treatment under --attached:
+            # a townhouse resolves its OWN lot (1GTP3941 -> 195 m²), and an apartment,
+            # which owns no land and has no polygon of its own, falls back to the scheme
+            # parcel (0SP197709 -> 3,582 m²). See polygon_for()/scheme_lotplan_for().
+            q = {"listing_status": {"$nin": ["sold", "for_sale"]},
                  "LOT": {"$nin": [None, ""]}, "PLAN": {"$nin": [None, ""]}}
+            if not args.attached:
+                q["property_type"] = "House"
             if not args.force:
                 q["aerial_boundary_url"] = {"$exists": False}
             cursor = db[suburb].find(q, {"address": 1, "LOT": 1, "PLAN": 1,
@@ -120,8 +138,17 @@ def main():
                     continue
                 Path(path).rename(final)
                 url = f"{PUBLIC_ROOT}/{suburb}/{doc['_id']}/boundary.png"
+                # ⚠ SCOPE TRAVELS WITH THE IMAGE. For a house and for a townhouse the
+                # outline is the dwelling's own lot; for an apartment it is the SCHEME's
+                # parcel, because an apartment owns no land and has no polygon. The page
+                # caption must say "your home" or "your building" accordingly — an
+                # outline around forty neighbours captioned "this is your block" is the
+                # exact defect this whole feature exists to avoid.
+                fresh = db[suburb].find_one({"_id": doc["_id"]}, {"cadastral_polygon": 1})
+                scope = ((fresh or {}).get("cadastral_polygon") or {}).get("boundary_scope") or "lot"
                 db[suburb].update_one({"_id": doc["_id"]},
                                       {"$set": {"aerial_boundary_url": url,
+                                                "aerial_boundary_scope": scope,
                                                 "aerial_boundary_at": time.strftime("%Y-%m-%dT%H:%M:%S")},
                                        "$unset": {"aerial_boundary_failed": ""}})
                 rendered += 1
