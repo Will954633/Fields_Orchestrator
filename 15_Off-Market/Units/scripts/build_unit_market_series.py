@@ -51,6 +51,7 @@ try:
 except Exception:
     pass
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from shared.db import get_client                        # noqa: E402
 from shared.dwelling_type import classify_dwelling       # noqa: E402
 from scripts.job_status import job_run                   # noqa: E402
@@ -60,17 +61,10 @@ MIN_Q = 8          # below this a quarter is flagged thin, never silently droppe
 ROLL_MIN = 12      # rolling window needs this many sales to publish a median
 
 
-def parse_price(v):
-    if v is None:
-        return None
-    if isinstance(v, (int, float)):
-        return float(v) or None
-    s = re.sub(r"[^0-9.]", "", str(v))
-    try:
-        f = float(s)
-    except ValueError:
-        return None
-    return f if 50_000 < f < 20_000_000 else None
+# ⚠ ONE definition of "is this a sale", imported — not a third copy. The duplicate that
+# lived here applied its sanity band only to the string branch, so weekly rents stored as
+# numbers were counted as sales and moved the median.
+from unit_valuation import sale_price as parse_price   # noqa: E402
 
 
 def quarter(date_str):
