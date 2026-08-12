@@ -63,6 +63,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--suburb", default=None)
     ap.add_argument("--limit", type=int)
+    ap.add_argument("--indexable-only", action="store_true",
+                    help="only dwellings flagged unit_indexable — the pages that are live")
     ap.add_argument("--attached", action="store_true",
                     help="render attached dwellings (units/townhouses) instead of houses only")
     ap.add_argument("--force", action="store_true", help="re-render even if one exists")
@@ -85,6 +87,14 @@ def main():
                  "LOT": {"$nin": [None, ""]}, "PLAN": {"$nin": [None, ""]}}
             if not args.attached:
                 q["property_type"] = "House"
+            # INDEXED PAGES FIRST. The aerial is the hero — the first thing on the page
+            # and the reason a reader recognises their own home. 4,980 unit URLs entered
+            # the index on 2026-08-13, and a broad pass over all 13,329 attached
+            # dwellings reached only 7% of them in the first hours because it walks the
+            # collection in natural order. Restrict a pass to the pages that are actually
+            # live to Google; run that first, then the broad pass for the remainder.
+            if args.indexable_only:
+                q["unit_indexable"] = True
             if not args.force:
                 q["aerial_boundary_url"] = {"$exists": False}
             n = db[s].count_documents(q)
@@ -109,6 +119,14 @@ def main():
                  "LOT": {"$nin": [None, ""]}, "PLAN": {"$nin": [None, ""]}}
             if not args.attached:
                 q["property_type"] = "House"
+            # INDEXED PAGES FIRST. The aerial is the hero — the first thing on the page
+            # and the reason a reader recognises their own home. 4,980 unit URLs entered
+            # the index on 2026-08-13, and a broad pass over all 13,329 attached
+            # dwellings reached only 7% of them in the first hours because it walks the
+            # collection in natural order. Restrict a pass to the pages that are actually
+            # live to Google; run that first, then the broad pass for the remainder.
+            if args.indexable_only:
+                q["unit_indexable"] = True
             if not args.force:
                 q["aerial_boundary_url"] = {"$exists": False}
             cursor = db[suburb].find(q, {"address": 1, "LOT": 1, "PLAN": 1,
