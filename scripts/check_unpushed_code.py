@@ -23,6 +23,28 @@ REPOS = [
     {"path": "/home/fields/Fields_Orchestrator",   "remote": "Will954633/Fields_Orchestrator"},
     {"path": "/home/fields/Property_Data_Scraping", "remote": "Will954633/Property_Data_Scraping"},
 ]
+
+# ── Out-of-tree live files ───────────────────────────────────────────────────
+# Files that RUN from a directory no repo scans, but whose backup belongs at a
+# path inside one. `REPOS` above can only see files under a repo root, so an
+# out-of-tree live file is invisible to this checker no matter how stale it gets.
+#
+# The failure this exists to stop (2026-08-13): the house valuation engine runs
+# from /home/fields/Feilds_Website/07_Valuation_Comps/ — outside BOTH repo roots.
+# Someone had worked around that by hand-copying it into the orchestrator repo at
+# a mirror path and pushing it; the mirror was later deleted from the working
+# tree, leaving GitHub as the only copy. The 2026-08-12 [VALUATION-UNKNOWN-
+# ASYMMETRY] fix then edited the LIVE file and never reached GitHub, and the two
+# sat 254 lines apart with nothing to notice — the checker was scanning a
+# directory the file no longer lived in.
+#
+# Pointing at the LIVE path (not a copy of it) is the whole point: there is no
+# second file to drift. Add an entry here rather than copying a file into a repo.
+EXTRA_FILES = [
+    {"local": "/home/fields/Feilds_Website/07_Valuation_Comps/precompute_valuations.py",
+     "remote": "Will954633/Fields_Orchestrator",
+     "rel": "07_Valuation_Comps/precompute_valuations.py"},
+]
 CODE_EXT = (".py", ".mjs", ".js", ".sh", ".yaml", ".yml")
 # One-off, per-cycle FB ad builders (Home Owner Lead Funnel): each ran once to push a
 # specific batch of ads to Meta and is never re-run — the durable record lives in that
@@ -107,6 +129,43 @@ def is_external_link(repo, rel):
     return not os.path.realpath(p).startswith(os.path.realpath(repo) + os.sep)
 
 
+def ghost_files(repo):
+    """Paths git tracks that no longer exist on disk — GitHub-only 'ghosts'.
+
+    `code_files()` filters these out with `os.path.isfile`, which is right for
+    hashing (there is nothing to hash) but made them SILENT. A ghost is not a
+    backup gap in itself — GitHub holds more than the VM, not less — but it is
+    how a stale mirror hides: the 07_Valuation_Comps/precompute_valuations.py
+    ghost made GitHub's copy look authoritative while the file that actually ran
+    lived somewhere else entirely. Reported, not alerted, since most ghosts are
+    ordinary uncommitted deletions.
+    """
+    out = git(repo, "ls-files", "-d", "--exclude-standard", check=False)
+    return sorted(r.strip() for r in out.splitlines()
+                  if r.strip().endswith(CODE_EXT))
+
+
+def classify_extra():
+    """(in_sync, gaps) for EXTRA_FILES — out-of-tree live files, by content hash."""
+    in_sync, gaps = [], []
+    for e in EXTRA_FILES:
+        if not os.path.isfile(e["local"]):
+            # A vanished live file is a real problem: nothing to back up, and the
+            # entry silently covering nothing is exactly the Rule 7b failure.
+            gaps.append({**e, "state": "MISSING"})
+            continue
+        local = subprocess.run(["git", "hash-object", e["local"]],
+                               capture_output=True, env=ENV).stdout.decode().strip()
+        p = subprocess.run(["gh", "api", f"repos/{e['remote']}/contents/{e['rel']}",
+                            "--jq", ".sha"], capture_output=True, env=ENV)
+        remote = p.stdout.decode().strip() if p.returncode == 0 else None
+        if remote and local == remote:
+            in_sync.append(e)
+        else:
+            gaps.append({**e, "state": "MOD" if remote else "NEW"})
+    return in_sync, gaps
+
+
 def classify(repo):
     """Return (new_only_on_vm, modified, linked) — real gaps only, by content hash."""
     new, mod, linked = [], [], []
@@ -123,27 +182,33 @@ def classify(repo):
     return sorted(new), sorted(mod), sorted(linked)
 
 
-def secret_hits(repo, rel):
+def secret_hits(path):
+    """Scan an ABSOLUTE path. Takes a path rather than (repo, rel) so an
+    out-of-tree EXTRA_FILES live copy is scanned exactly like an in-repo file —
+    the secret gate must not have a hole for the files that bypass the repo."""
     # This file DEFINES the patterns, so scanning it matches itself — SECRET_RE contains
     # the literal "AccountKey=", which made check_unpushed_code.py block its own backup
     # and raise a "possible secret" alert about a regex. A detector must not be its own
     # first false positive.
-    if os.path.abspath(os.path.join(repo, rel)) == os.path.abspath(__file__):
+    if os.path.abspath(path) == os.path.abspath(__file__):
         return []
     hits = []
-    with open(os.path.join(repo, rel), errors="replace") as fh:
+    with open(path, errors="replace") as fh:
         for i, line in enumerate(fh, 1):
             if SECRET_RE.search(line) and not SECRET_ALLOW.search(line):
                 hits.append((i, line.strip()[:120]))
     return hits
 
 
-def push_repo(repo, remote, files, message):
+def push_repo(repo, remote, files, message, localmap=None):
+    """`files` are repo-relative paths. `localmap` overrides where a path's BYTES
+    come from, for EXTRA_FILES whose live copy sits outside the repo tree."""
+    localmap = localmap or {}
     base = json.loads(gh([f"repos/{remote}/git/ref/heads/main"]))["object"]["sha"]
     base_tree = json.loads(gh([f"repos/{remote}/git/commits/{base}"]))["tree"]["sha"]
     tree = []
     for rel in files:
-        with open(os.path.join(repo, rel), "rb") as fh:
+        with open(localmap.get(rel) or os.path.join(repo, rel), "rb") as fh:
             b64 = base64.b64encode(fh.read()).decode()
         blob = json.loads(gh([f"repos/{remote}/git/blobs", "--input", "-"],
                              {"content": b64, "encoding": "base64"}))["sha"]
@@ -187,10 +252,34 @@ def main():
             problems.append(f"⚠ {remote}: git fetch failed — backup state UNKNOWN ({str(e)[:150]})")
             continue
         new, mod, linked = classify(repo)
+
+        # Out-of-tree live files claiming a path in THIS repo (see EXTRA_FILES).
+        extra_sync, extra_gaps = classify_extra()
+        extra_sync = [e for e in extra_sync if e["remote"] == remote]
+        extra_gaps = [e for e in extra_gaps if e["remote"] == remote]
+        localmap = {e["rel"]: e["local"] for e in extra_gaps if e["state"] != "MISSING"}
+        for e in extra_sync:
+            lines.append(f"✓ {remote}: {e['rel']} (out-of-tree live file) in sync")
+        for e in extra_gaps:
+            if e["state"] == "MISSING":
+                lines.append(f"    ⚠ MISSING {e['rel']} — live file gone: {e['local']}")
+                problems.append(f"⚠ {remote}: EXTRA_FILES entry {e['rel']} points at a live "
+                                f"file that no longer exists ({e['local']})")
+            else:
+                lines.append(f"    {e['state']:<4} {e['rel']}   [out-of-tree: {e['local']}]")
+                real_gaps.append(f"{remote}: {e['state']} {e['rel']} (out-of-tree)")
+
+        ghosts = ghost_files(repo)
+        if ghosts:
+            lines.append(f"👻 {remote}: {len(ghosts)} tracked file(s) on GitHub but not on the VM "
+                         f"(not a backup gap — but a stale mirror hides here)")
+            for g in ghosts[:10]:
+                lines.append(f"    GONE {g}")
+
         if linked:
             lines.append(f"↔ {remote}: {len(linked)} symlink(s) into another repo — "
                          f"backed up there, not here")
-        if not new and not mod:
+        if not new and not mod and not localmap:
             lines.append(f"✓ {remote}: in sync with GitHub")
             continue
         any_gap = True
@@ -208,9 +297,10 @@ def main():
 
         if PUSH:
             pushable = [f for f in (new + mod) if not SCRATCH_RE.search(f)]
+            pushable += list(localmap)          # out-of-tree live files
             blocked = []
             for f in pushable:
-                h = secret_hits(repo, f)
+                h = secret_hits(localmap.get(f) or os.path.join(repo, f))
                 if h:
                     blocked.append((f, h))
             pushable = [f for f in pushable if f not in {b[0] for b in blocked}]
@@ -224,7 +314,7 @@ def main():
             if pushable:
                 msg = f"backup: sync {len(pushable)} unpushed code files flagged by check_unpushed_code"
                 try:
-                    commit = push_repo(repo, remote, pushable, msg)
+                    commit = push_repo(repo, remote, pushable, msg, localmap=localmap)
                     lines.append(f"    ⬆ pushed {len(pushable)} files as {commit[:8]}")
                     pushed_total += len(pushable)
                 except Exception as e:
