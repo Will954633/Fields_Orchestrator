@@ -77,7 +77,7 @@ def main():
         todo = todo[:args.limit]
     print(f"{len(todo):,} homes to value across {', '.join(subs)}")
     if args.dry_run:
-        return 0
+        return {"queued": len(todo), "written": 0, "errors": 0, "dry_run": True}
 
     t0 = time.time()
     print("Building shared caches (once) …")
@@ -122,7 +122,10 @@ def main():
     print(f"\ndone in {el/60:.1f} min ({len(todo)/el:.0f}/s)")
     for k, v in out.most_common():
         print(f"  {k:<20} {v:,}")
-    return 0
+    return {"queued": len(todo), "written": out["written"],
+            "with_comparables": out["with_comparables"],
+            "no_result": out["no_result"], "errors": out["error"],
+            "minutes": round(el / 60, 1)}
 
 
 if __name__ == "__main__":
@@ -132,9 +135,25 @@ if __name__ == "__main__":
         job_run = None
     if job_run and "--dry-run" not in sys.argv:
         # Rule 7 — this is intended to run on an interval, so it self-reports.
-        with job_run("batch_value_offmarket", cadence_hours=168,
+        # Scheduled nightly 02:10 AEST (crontab). Was unscheduled until
+        # 2026-08-14: it carried a heartbeat and a declared cadence but nothing
+        # ever fired it, so the off-market book was only revalued when a human
+        # remembered. See logs/fix-history/2026-08-14.md.
+        with job_run("batch_value_offmarket", cadence_hours=24,
                      title="Batch valuation — off-market book") as beat:
-            rc = main()
-            beat.detail = "adjusted-comparables valuations recomputed"
-        sys.exit(rc)
-    sys.exit(main())
+            res = main()
+            beat.metrics = res
+            # Rule 7b — a clean exit is not an outcome. Nightly the queue is
+            # usually small (only homes stale past --max-age-days) and an empty
+            # queue is a legitimate success. A queue with work in it that wrote
+            # NOTHING is the upstream breaking, and must not report success.
+            if res["queued"] and not res["written"]:
+                raise RuntimeError(
+                    f"{res['queued']} homes queued, 0 valuations written "
+                    f"({res['errors']} errors, {res['no_result']} no_result) — "
+                    "the engine or its caches are broken, not the queue empty")
+            beat.detail = (f"{res['written']:,} of {res['queued']:,} valued, "
+                           f"{res['errors']} errors")
+        sys.exit(0)
+    main()
+    sys.exit(0)
