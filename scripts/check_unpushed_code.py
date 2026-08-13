@@ -168,7 +168,7 @@ def _remote_paths(remote):
     return _TREE_CACHE[remote]
 
 
-def link_is_really_backed_up(repo, rel):
+def link_is_really_backed_up(repo, remote, rel):
     """VERIFY the claim `is_external_link()` makes, instead of asserting it.
 
     That function skips external symlinks on the reasoning that the file "is
@@ -185,8 +185,23 @@ def link_is_really_backed_up(repo, rel):
         root = os.path.realpath(spec["local"])
         if target.startswith(root + os.sep):
             tgt_rel = spec["prefix"] + os.path.relpath(target, root)
-            return tgt_rel in _remote_paths(spec["remote"]), f"{spec['remote']}:{tgt_rel}"
-    return False, f"no configured EXTRA_TREES entry covers {target}"
+            if tgt_rel in _remote_paths(spec["remote"]):
+                return True, f"{spec['remote']}:{tgt_rel}"
+            break   # a tree covers the path but the remote lacks it — try this repo
+
+    # Fallback: the content backed up into THIS repo at the symlink's own path.
+    # Used for files that live in the website tree but are NOT in the website repo
+    # (sirens.js, powerAudio.js — unimported, so pushing them there would spend a
+    # Netlify deploy on dead code). `git hash-object` FOLLOWS the symlink, so this
+    # compares CONTENT: if the live file is later edited, the copy here goes STALE
+    # and says so, rather than silently vouching for an out-of-date backup.
+    remote_sha = remote_blob(repo, rel)
+    if remote_sha:
+        local_sha = git(repo, "hash-object", rel).strip()
+        if local_sha == remote_sha:
+            return True, f"{remote}:{rel} (content backed up in this repo)"
+        return False, f"STALE — {remote}:{rel} holds an OLDER copy; re-push to refresh"
+    return False, f"no repo holds {target}"
 
 
 def ghost_files(repo):
@@ -398,7 +413,7 @@ def main():
             covered, orphaned = [], []
             for rel in linked:
                 try:
-                    ok, detail = link_is_really_backed_up(repo, rel)
+                    ok, detail = link_is_really_backed_up(repo, remote, rel)
                 except Exception as e:
                     ok, detail = False, f"could not verify ({str(e)[:80]})"
                 (covered if ok else orphaned).append((rel, detail))
