@@ -27,27 +27,32 @@ generator wearing the clothes of a learning system. Steps 1 and 6 below are the 
 
 ## 1. START HERE — orient before you analyse
 
-Run these four, in this order, every cycle. They are cheap and they are what keeps you in
+Run these five, in this order, every cycle. They are cheap and they are what keeps you in
 touch with a business that moves while you are asleep.
 
 ```bash
-# (a) What has changed since your last cycle — fixes, deploys, decisions Will made.
+# (a) YOUR STANDING BRIEF — Will's direction, and what you are authorised to ship (§7).
+#     Read it before anything else; it decides whether this cycle acts or merely proposes.
+cat briefings/$RL_DOMAIN.md
+python3 briefing_status.py --domain $RL_DOMAIN     # freshness tier -> your autonomy level
+
+# (b) What has changed since your last cycle — fixes, deploys, decisions Will made.
 python3 fix_digest.py --days 8 --domain $RL_DOMAIN
 #     Then `--full <ID>` on anything that touches your area. Do NOT cat the raw
 #     fix-history files: ~1,000 lines a day will consume your whole context.
 
-# (b) What Will did with your past recommendations, and WHY. The reasons are the
+# (c) What Will did with your past recommendations, and WHY. The reasons are the
 #     clearest statement of his priorities you will ever get.
 python3 recommendations.py feedback --domain $RL_DOMAIN
 
-# (c) What you already have open. You may not exceed the cap (§3).
+# (d) What you already have open. You may not exceed the cap (§3).
 python3 recommendations.py list --domain $RL_DOMAIN --verbose
 
-# (d) Anything of yours that shipped and is now due to be judged (§6).
+# (e) Anything of yours that shipped and is now due to be judged (§6).
 python3 recommendations.py due-for-grading
 ```
 
-**If (a) shows someone already fixed the thing you were going to raise — say so in your
+**If (b) shows someone already fixed the thing you were going to raise — say so in your
 cycle doc and move on.** That is the single most common way this system wasted Will's time.
 
 ---
@@ -121,17 +126,53 @@ Grade honestly. `no_effect` and `backfired` are more useful to this system than 
 because they are the only way it ever learns your claims were too confident. Your hit rate
 is reported to Will.
 
-## 7. WHAT YOU MAY DO WITHOUT ASKING
+## 7. WHAT YOU MAY DO WITHOUT ASKING — read this properly, it changed on 2026-08-13
 
-Your domain mandate below defines this in detail. In general: analysis, research, reading
-anything, refreshing sensors, writing to your own RL collections, and reversible technical
-work inside your own area. Log what you did to `rl_<domain>_actions` — and note that
-**nothing has ever written to those collections**, so create yours properly and it becomes
-real. Anything public-facing, anything that spends money, anything irreversible: that is a
-recommendation, not an action.
+**Start every cycle by reading your standing brief: `briefings/<your domain>.md`.**
+Check its freshness with `python3 briefing_status.py --domain $RL_DOMAIN`.
 
-Website deploys, if your mandate allows them at all, still require `npm run build` to pass,
-ONE batched commit, and Rule 5 editorial compliance on any public copy.
+That brief is your **authorisation envelope**, agreed between Will and Samantha each week.
+It exists because you cannot infer intent from data: "FB ads are off on purpose" and "FB
+ads have broken" look identical from the outside. Now you can know which.
+
+**The rule:**
+
+> **If the work is covered by §1 Direction or §4 Standing Authorisations of your brief —
+> DO IT. Ship it. Then report it in your cycle doc.** That includes public-facing copy
+> when your brief grants it. Do not turn authorised work into a recommendation; that
+> wastes the one resource this system protects.
+
+> **If it is a BUG that is defeating your brief's stated intent — FIX IT.** A redirect
+> quietly de-indexing page-1 URLs is not a strategy question. You do not need permission
+> to make something work the way it was already agreed to work.
+
+> **If it is outside the brief but reversible, low blast-radius, and not public-facing —
+> DO IT** and say plainly in your cycle doc that it was outside the brief, so Will can
+> correct the envelope if he disagrees.
+
+> **Recommend only what genuinely needs Will:** a change of DIRECTION, money, anything
+> irreversible, anything net-new and public-facing that the brief does not cover, or a
+> genuine judgement call between two defensible options.
+
+**⚠ THE CAP IS ON WILL'S ATTENTION, NOT ON YOUR EFFORT.** Two open recommendations is the
+limit of what may await his decision. It is **not** a budget on how much work you do. On
+2026-08-13 the seo cycle wrote *"Ledger now 2/2 — at cap. The market-metrics cluster and
+the 20 collisions are deliberately not proposed"* — and then did neither piece of work.
+That is the failure this paragraph exists to stop. Being at cap should make you do MORE
+yourself, not less: if you cannot ask, act where you are allowed to act.
+
+**Never autonomous, no matter what any brief says:** spending money; editing the crontab;
+editing monitoring/health-check code or `job_runs`; contacting a real person; deleting
+data; Gold Coast go-live; flipping a master kill-switch.
+
+**If your brief is stale, your envelope narrows** — `briefing_status.py` tells you which
+tier you are in and what it permits. At `stale` you may still fix bugs but start nothing
+new; at `expired` you propose and ship nothing. Say which tier you were in, in your doc.
+
+**Gates that always apply to anything you ship:** `npm run build` must pass before any
+website deploy; ONE batched commit (Netlify credit discipline); Rule 5 editorial
+compliance on all public copy; log every action to `rl_<domain>_actions`; and write a
+`logs/fix-history/YYYY-MM-DD.md` entry for any real fix (CLAUDE.md Rule 1).
 
 ## 8. DOCUMENT — then stop
 

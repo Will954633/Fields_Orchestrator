@@ -71,14 +71,20 @@ def set_state(sm, constraint, priority, why, cycle) -> None:
     print(f"state updated (constraint {'CHANGED' if changed else 'unchanged'}): {doc['constraint']}")
 
 
-def add_directive(sm, domain, text, cycle) -> None:
+def add_directive(sm, domain, text, cycle, origin="conductor") -> None:
+    """origin defaults to the conductor. A DOMAIN may also write to another domain —
+    Will asked on 2026-08-13 for seo and articles to work together — and when it does,
+    the note must say who sent it. A domain-to-domain note is a REQUEST between peers;
+    a conductor directive carries Will's authority. Rendering them identically would let
+    any domain issue instructions in Samantha's name."""
     if domain not in DOMAINS:
         print(f"unknown domain '{domain}' (valid: {sorted(DOMAINS)})"); return
     r = sm[DIRECTIVE_COLL].insert_one({
-        "domain": domain, "text": text, "status": "open",
+        "domain": domain, "text": text, "status": "open", "origin": origin,
         "created_at": _now(), "created_cycle": cycle,
     })
-    print(f"directive added [{r.inserted_id}] → {domain}: {text}")
+    label = "directive" if origin == "conductor" else f"note from {origin}"
+    print(f"{label} added [{r.inserted_id}] → {domain}: {text}")
 
 
 def list_directives(sm, domain, show_all) -> None:
@@ -86,7 +92,9 @@ def list_directives(sm, domain, show_all) -> None:
     if domain:
         q["domain"] = {"$in": [domain, "all"]}
     for d in sm[DIRECTIVE_COLL].find(q).sort("created_at", 1):
-        print(f"[{d['_id']}] {d.get('status'):5} {d.get('domain'):9} {d.get('text','')}")
+        origin = d.get("origin", "conductor")
+        src = "CONDUCTOR" if origin == "conductor" else f"from:{origin}"
+        print(f"[{d['_id']}] {d.get('status'):5} {d.get('domain'):9} {src:14} {d.get('text','')}")
 
 
 def done(sm, did) -> None:
@@ -104,14 +112,14 @@ def main() -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("show")
     p = sub.add_parser("set"); p.add_argument("--constraint"); p.add_argument("--priority"); p.add_argument("--why"); p.add_argument("--cycle", type=int)
-    p = sub.add_parser("directive"); p.add_argument("--domain", required=True); p.add_argument("--text", required=True); p.add_argument("--cycle", type=int)
+    p = sub.add_parser("directive"); p.add_argument("--domain", required=True); p.add_argument("--text", required=True); p.add_argument("--cycle", type=int); p.add_argument("--from", dest="origin", default="conductor", help="sending domain; omit for a conductor directive")
     p = sub.add_parser("directives"); p.add_argument("--domain"); p.add_argument("--all", action="store_true")
     p = sub.add_parser("done"); p.add_argument("--id", required=True)
     a = ap.parse_args()
     sm = _sm()
     if a.cmd == "show": show(sm)
     elif a.cmd == "set": set_state(sm, a.constraint, a.priority, a.why, a.cycle)
-    elif a.cmd == "directive": add_directive(sm, a.domain, a.text, a.cycle)
+    elif a.cmd == "directive": add_directive(sm, a.domain, a.text, a.cycle, a.origin)
     elif a.cmd == "directives": list_directives(sm, a.domain, a.all)
     elif a.cmd == "done": done(sm, a.id)
     return 0

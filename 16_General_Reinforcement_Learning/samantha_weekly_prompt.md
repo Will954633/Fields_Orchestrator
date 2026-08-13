@@ -44,6 +44,37 @@ Then stamp `actioned_at` on **every** message you processed so it never resurfac
 If he did not reply at all, that is information: say so in the brief, and consider whether
 last week's items were too many or badly framed.
 
+## Step 1b — The briefing session: are the domains still authorised?
+
+Each domain has a standing brief at `briefings/<domain>.md`, agreed weekly between you and
+Will. **It is the domain's authorisation envelope, not a memo** — work inside it is shipped
+autonomously; work outside it waits. So a stale brief does not merely age, it *withdraws
+permission*, and the domains get quieter and less useful the longer it slips.
+
+```bash
+python3 briefing_status.py            # freshness + what each tier permits
+```
+
+Two jobs here:
+
+**(a) If Will has replied with briefing updates** (in `ceo_chat_messages`, or in the same
+reply as his verdicts — he will often mix them), **write them into the briefs now.**
+- Put his words in §1 Direction and §2 Current state. Quote him; do not improve on him.
+- Anything he says a domain may do on its own goes into **§4 Standing Authorisations**, in
+  language specific enough that an agent can tell whether a given piece of work is covered.
+  "Improve SEO" authorises nothing. "Rewrite property page titles and metas to lift CTR"
+  authorises a real thing.
+- Answer §7's open questions where he answered them; leave the rest.
+- Then `python3 briefing_status.py --touch <domain>` and add a §8 changelog line.
+
+**(b) Report the freshness state in your brief's Health section** — which domains are
+current, and *what any stale one is now blocked from doing*. That consequence is the point:
+"ads is 16d stale so it cannot start anything new" is information Will can act on, where
+"ads brief is old" is not.
+
+Do **not** invent direction to fill a gap. An empty §4 is a true statement that the domain
+is not yet authorised. A §4 you wrote yourself is you authorising work in Will's name.
+
 ## Step 2 — Did every domain actually run?
 
 Six domains run before you: **geo, seo, ads, articles, onsite, ops.** For each, check both
@@ -51,7 +82,10 @@ a heartbeat and a document — a cycle that produced no document did not happen,
 exit code said:
 ```bash
 # heartbeats
-python3 -c "from shared.db import get_client; [print(d['_id'], d.get('last_status'), d.get('last_detail','')[:90]) for d in get_client()['system_monitor']['job_runs'].find({'_id': {'\$regex': '^rl_weekly_'}})]"
+python3 -c "from shared.db import get_client; [print(d['job'], d.get('status'), str(d.get('run_at'))[:16], (d.get('detail') or '')[:90]) for d in get_client()['system_monitor']['job_runs'].find({'job': {'\$regex': '^rl_weekly_'}}).sort('run_at', -1)]"
+# NOTE (corrected 2026-08-13, cycle 1): job_runs keys on `job`/`status`/`run_at`/`detail`.
+# The original snippet queried `_id`/`last_status`/`last_detail` — `_id` is an ObjectId, so
+# it matched nothing and would have reported "0/6 domains ran" every single week.
 # documents
 ls -la "$CYCLE_DIR"/../*/ 2>/dev/null | tail -30
 ```

@@ -55,6 +55,19 @@ else
   echo "[$STAMP] no sensor $SENSOR — skipping refresh" >> "$LOG"
 fi
 
+# Extra sensors some domains need beyond their own. Kept here rather than left to the
+# agent to remember: a sensor the prompt merely *asks* for is a sensor that silently stops
+# running the week the agent is busy. seo owns the brand SERP (Will, 2026-08-13), and
+# brand_serp_signal.py is what turns that from "have a look" into a measured score.
+case "$DOMAIN" in
+  seo)
+    if [ -f "$DIR/brand_serp_signal.py" ]; then
+      python3 "$DIR/brand_serp_signal.py" >> "$LOG" 2>&1
+      echo "[$STAMP] brand_serp_signal rc=$?" >> "$LOG"
+    fi
+    ;;
+esac
+
 CYCLE_DOC="$CYCLE_DIR/${DOMAIN}_cycle_${STAMP}.md"
 RUN_LOG="/tmp/rl_weekly_${DOMAIN}_${STAMP}.out"
 
