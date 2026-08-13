@@ -309,10 +309,16 @@ def macro_events(db, suburb_key, suburb_name, now):
         # by hand in the GENERATED file on 2026-08-10 and silently undone on 2026-08-12
         # when this script next ran. Fixing generated output instead of its generator
         # buys about two days.
+        # The same question answered with the reader's own market. See unit_reading.
+        u_local = unit_reading(db, suburb_key, suburb_name, e.get("local_metric"), d)
+        u2 = unit_reading(db, suburb_key, suburb_name, e.get("local_metric_2"), d)
+        if u_local and u2:
+            u_local = f"{u_local} {u2}"
         out.append({
             "date": d, "kind": "macro",
             "text": f"**{d:%-d %B %Y}** — {' '.join(e['statement'].split())}",
             "house_local": local,
+            "unit_local": u_local,
             "source": e["source"], "magnitude": 0,
         })
     return out
@@ -341,6 +347,73 @@ def watch_metric_now(db, suburb_key, suburb_name, metric):
         if roll:
             return (f"The number we will be watching in {suburb_name} is the median house price — "
                     f"currently {money(roll[-1]['rolling_median'])} on a 12-month rolling basis.")
+    return None
+
+
+def unit_series(db, suburb_key):
+    """The attached-dwelling series — the unit equivalent of the house precomputes."""
+    return db["unit_market_series"].find_one({"_id": suburb_key}) or {}
+
+
+def unit_reading(db, suburb_key, suburb_name, metric, since):
+    """The local clause for an ATTACHED dwelling.
+
+    ⚠ WHY THIS EXISTS RATHER THAN JUST SUPPRESSING THE HOUSE LINE.
+    `suburb_reading` is house data throughout — median HOUSE price, house
+    days-on-market, house listing counts. Dropping it for units left the macro
+    events with no local clause at all, and left the watch point quoting the
+    HOUSE figure outright: unit pages read "how long homes take to sell —
+    currently a median of 34 days" when the Robina attached median is 20.
+    A unit owner reading 34 is reading somebody else's market.
+
+    We hold the attached equivalents in `unit_market_series`, so the honest fix
+    is to answer the same question with the right number, not to go quiet.
+    """
+    u = unit_series(db, suburb_key)
+    if not u:
+        return None
+    if metric == "days_on_market":
+        d = u.get("median_days_on_market")
+        if d:
+            return (f"Over the same period, attached homes in {suburb_name} have taken a "
+                    f"median of {d:.0f} days to sell.")
+    if metric == "active_listings":
+        n = u.get("active_listings")
+        if n:
+            return (f"Since then, {n:,} attached homes are on the market in {suburb_name}.")
+    if metric == "median_price":
+        roll = [r for r in (u.get("rolling_12m") or [])
+                if r.get("period") != u.get("in_progress_period") and r.get("rolling_median")]
+        if len(roll) >= 2:
+            prev, last = roll[-2], roll[-1]
+            pct = (last["rolling_median"] - prev["rolling_median"]) / prev["rolling_median"] * 100
+            steady = "broadly unchanged" if abs(pct) < 3 else ("higher" if pct > 0 else "lower")
+            return (f"Locally the {suburb_name} median unit price is {steady} over the same "
+                    f"period — {money(last['rolling_median'])} on a 12-month rolling basis in "
+                    f"{last['period']}, {pct:+.1f}% on the quarter before.")
+    return None
+
+
+def unit_watch_metric_now(db, suburb_key, suburb_name, metric):
+    """Present-tense level of the watched number, for an attached dwelling."""
+    u = unit_series(db, suburb_key)
+    if not u:
+        return None
+    if metric == "days_on_market":
+        d = u.get("median_days_on_market")
+        if d:
+            return (f"The number we will be watching in {suburb_name} is how long attached "
+                    f"homes take to sell — currently a median of {d:.0f} days.")
+    if metric == "active_listings":
+        n = u.get("active_listings")
+        if n:
+            return (f"The number we will be watching in {suburb_name} is how many attached "
+                    f"homes are on the market — currently {n:,}.")
+    if metric == "median_price":
+        m = u.get("latest_rolling_median")
+        if m:
+            return (f"The number we will be watching in {suburb_name} is the median unit "
+                    f"price — currently {money(m)} on a 12-month rolling basis.")
     return None
 
 
@@ -379,6 +452,7 @@ def watch_points(db, suburb_key, suburb_name, now):
         # thing that has not happened. What belongs here is the CURRENT level of
         # the number we are promising to re-read, so the reader can check us.
         reading = watch_metric_now(db, suburb_key, suburb_name, w.get("metric_to_watch"))
+        u_reading = unit_watch_metric_now(db, suburb_key, suburb_name, w.get("metric_to_watch"))
         when = ("tomorrow" if days == 1 else "today" if days == 0
                 else f"in {days} days")
         # ⚠ "Varsity Lakes's" — a name already ending in s takes a bare
@@ -387,9 +461,13 @@ def watch_points(db, suburb_key, suburb_name, now):
         poss = f"{suburb_name}'" if suburb_name.endswith("s") else f"{suburb_name}'s"
         text = (f"**Coming up — {d:%-d %B %Y} ({when})** — {' '.join(w['statement'].split())} "
                 f"We will re-read {poss} numbers against it and update this page.")
-        if reading:
-            text += f" {reading}"
+        # ⚠ DO NOT CONCATENATE THE READING INTO `text`.
+        # It used to be appended here, which made it unfilterable — so every unit page
+        # published the HOUSE days-on-market (34) as though it were the reader's own
+        # market (20). Emitted as house_local/unit_local, the consumer picks the one
+        # that matches the dwelling, exactly as the macro events already do.
         out.append({"date": d, "kind": "watch", "text": text,
+                    "house_local": reading, "unit_local": u_reading,
                     "source": w["source"], "magnitude": 0,
                     "lead": days <= 7})
     return out
@@ -509,6 +587,8 @@ def emit_ts(db, out_path):
                         # them for attached dwellings — see TimelinePoint.houseLocal.
                         + (f'        houseLocal: {json.dumps(p["house_local"])},\n'
                            if p.get("house_local") else "")
+                        + (f'        unitLocal: {json.dumps(p["unit_local"])},\n'
+                           if p.get("unit_local") else "")
                         + (f'        houseOnly: true,\n' if p.get("house_only") else "")
                         + (f'        lead: true,\n' if p.get("lead") else "")
                         + "      },")
@@ -540,6 +620,7 @@ export type TimelinePoint = {{
    *  component appends this only for houses. The macro fact in `text` is
    *  dwelling-neutral and always runs. Do NOT fold these back into `text`. */
   houseLocal?: string;
+  unitLocal?: string;
   /** The whole entry is a house figure — dropped entirely for attached dwellings. */
   houseOnly?: boolean;
 }};
