@@ -1,0 +1,50 @@
+{
+  "_comment": "Selectors for the browser fallback path (id4me_bot.py). The day-to-day tool is lookup.py, which calls the JSON API directly and needs none of this. Each key is an ordered list of candidates; the first that resolves to a visible element wins. All values below were confirmed against the live site, not guessed.",
+
+  "_site_notes": {
+    "framework": "React + Material UI. Element ids like '_r_7_' are auto-generated per render - never select on them.",
+    "auth": "Auth0 tenant id4me.au.auth0.com, OAuth2 PKCE, audience ' Id4me-search-v2' (leading space is real).",
+    "search_modes": "A MUI split button toggles 'Search' (classic) and 'Smart Search' (Beta, natural language). The choice persists in localStorage under 'searchMode'. Classic is the one that takes addresses.",
+    "tooltip_trap": "A MuiTooltip popper overlays the mode menu and swallows Playwright clicks. Click those menu items via page.evaluate, not locator.click."
+  },
+
+  "logged_out_markers": [
+    "input[type=password]",
+    "#loginemail",
+    "#btn-login"
+  ],
+
+  "login_email": ["#loginemail", "input[type=email][name=email]"],
+  "login_password": ["#loginpassword", "input[type=password][name=password]"],
+  "login_submit": ["#btn-login", "button:has-text('Sign in')"],
+
+  "mode_dropdown": ["button[aria-label='select merge strategy']"],
+  "mode_menuitem_classic": ["[role=menuitem]:text-is('Search')"],
+
+  "search_input": [
+    "input[type=search][role=combobox]",
+    "input[placeholder*='Search address' i]",
+    "input[type=search]"
+  ],
+
+  "search_button": [
+    "button:text-is('SEARCH')",
+    "button[type=submit]"
+  ],
+
+  "suggestion_option": [
+    "[role=option]",
+    ".MuiAutocomplete-option"
+  ],
+
+  "results_container": [
+    ".MuiTable-root",
+    "[class*='result' i]",
+    "main"
+  ],
+
+  "no_results_markers": [
+    "text=/no (results|matches|records) found/i",
+    "text=/0 results/i"
+  ]
+}
