@@ -136,10 +136,19 @@ def build(db) -> dict:
     read_depth = []
     for r in db.article_performance.find({"read_depth.paid_sessions": {"$gte": 10}}):
         rd = r["read_depth"]
+        # ⚠ NOT an average page-read percentage — see article_performance.py's read_depth
+        # note. `scroll_depth` is a 25/50/75/100 milestone ladder and a session with no
+        # milestone is stored as 0, so the old `avg_scroll_pct` here was teaching the
+        # article generator a fabricated statistic. What we can honestly say is the SHARE
+        # of sessions that reached a quarter of the page.
         read_depth.append({
             "title": r.get("title"),
             "paid_sessions": rd.get("paid_sessions"),
-            "avg_scroll_pct": rd.get("paid_avg_scroll_pct"),
+            "reached_quarter_of_page_pct": round((rd.get("paid_reach_25_pct") or 0) * 100, 1)
+            if rd.get("paid_reach_25_pct") is not None else None,
+            "sessions_with_any_scroll_milestone": rd.get("paid_sessions_with_scroll_event"),
+            "measurement_caveat": "scroll is a 25/50/75/100 milestone ladder; below 25% is "
+                                  "indistinguishable from no scroll at all",
             "headline_ctr_pct": round((r.get("paid_headline", {}).get("ctr") or 0) * 100, 2),
         })
 
