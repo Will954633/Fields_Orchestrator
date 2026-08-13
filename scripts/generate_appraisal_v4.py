@@ -282,6 +282,7 @@ def render_appraisal(
     open_pdf: bool = False,
     positioning: bool = False,
     self_serve: bool = False,
+    flatten_cover: bool = True,
 ) -> dict:
     """Render the full V4-format appraisal HTML and (optionally) PDF.
 
@@ -1061,10 +1062,18 @@ def render_appraisal(
 
         # Print-safe pass: flatten the cover so Officeworks / any CMYK RIP
         # can't shift the hero to pink via transparency flattening.
-        try:
-            flatten_cover_for_print(pdf_path)
-        except Exception as exc:  # never fail generation over the print-safe pass
-            print(f"WARN: cover flatten skipped ({exc})", file=sys.stderr)
+        #
+        # ⚠ Skipped for screen delivery. The flatten rasterises page 1 at 300 DPI
+        # and re-embeds it, which is the single largest contributor to file size —
+        # these PDFs average 11.87 MB, and a self-serve download over mobile pays
+        # that whole cost for a fix that only matters at a print shop. Screen
+        # copies keep the cover vector; anything destined for paper must NOT set
+        # this flag.
+        if flatten_cover:
+            try:
+                flatten_cover_for_print(pdf_path)
+            except Exception as exc:  # never fail generation over the print-safe pass
+                print(f"WARN: cover flatten skipped ({exc})", file=sys.stderr)
 
     return {
         "html_path": str(html_path),
@@ -1099,6 +1108,11 @@ def main() -> None:
                              "you've received this' opener. WITHOUT this flag the report renders byte-for-byte "
                              "identical to the original. (A pipeline record with report_variant='positioning' "
                              "also enables it.)")
+    parser.add_argument("--no-flatten-cover", action="store_true",
+                        help="Skip the 300 DPI print-safe cover raster. Cuts file size dramatically "
+                             "(the flatten is the main reason these PDFs average 11.87 MB) at the cost "
+                             "of the Officeworks CMYK pink-hero fix. Use for screen/download copies; "
+                             "never for anything being printed or posted.")
     parser.add_argument("--self-serve", action="store_true",
                         help="Self-serve variant for readers who request the report themselves from the "
                              "off-market page. Replaces the two analyst-priced recommendation pages (11 + 18) "
@@ -1173,6 +1187,7 @@ def main() -> None:
             render_pdf=not args.no_pdf,
             positioning=args.positioning or (bool(pipe) and pipe.get("report_variant") == "positioning"),
             self_serve=args.self_serve or (bool(pipe) and pipe.get("report_variant") == "self_serve"),
+            flatten_cover=not args.no_flatten_cover,
         )
     except Exception as exc:
         if args.update_pipeline and pipe:
