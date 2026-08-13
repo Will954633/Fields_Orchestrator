@@ -42,6 +42,7 @@ and never reaches new work).
 
 import argparse
 import logging
+import os
 import shutil
 import subprocess
 import sys
@@ -376,6 +377,13 @@ def main():
                          "must report, or its failure is invisible (Rule 7).")
     args = ap.parse_args()
 
+    # ⚠ Before any work, and before the heartbeat: a second instance must exit
+    # quietly, not record a run. Overlapping instances is a VM-down risk.
+    lock = _acquire_lock()
+    if lock is None:
+        logger.info("another pre-warm holds the lock — exiting without running")
+        return
+
     # Rule 7b, stated once and enforced on both paths: "nothing to do" is
     # success; "had work and achieved none" is not. An empty target list means
     # every eligible report is inside its shelf life — the good outcome, and the
@@ -405,6 +413,32 @@ def main():
         beat.detail = (f"{ok} warmed, {refused} declined, "
                        f"{unexplained} unexplained of {considered} due")
         _assert_outcome(ok, refused, unexplained, considered)
+
+
+_LOCK_PATH = Path("/tmp/prewarm_offmarket_covers.lock")
+
+
+def _acquire_lock():
+    """Refuse to run twice at once.
+
+    ⚠ NOT a tidiness measure. Each instance spawns `--workers` Chromium + node +
+    Ghostscript sets, and 3 is already the documented ceiling on this 4-vCPU box
+    — two overlapping runs is 6, which per Will is what takes the VM down. Once
+    this is on cron, a scheduled run landing on top of a manual fill is not a
+    hypothetical: the fill takes ~31 hours of run time and the cron fires daily.
+
+    flock is released automatically if the process dies, so a crash cannot
+    permanently wedge the job the way a stale lockfile would.
+    """
+    import fcntl
+    fh = open(_LOCK_PATH, "w")
+    try:
+        fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return None
+    fh.write(str(os.getpid()))
+    fh.flush()
+    return fh  # keep referenced for the process lifetime, or the lock drops
 
 
 def _run(args):
