@@ -113,8 +113,14 @@ def content_hash(prof):
 
 
 def call_opus(block, timeout=300):
+    # ANTHROPIC_API_KEY / AUTH_TOKEN MUST be stripped: this module load_dotenv()s
+    # .env at import, which re-injects the metered API key even when the caller
+    # unset it, and `claude -p` then refuses to start ("connectors are disabled
+    # because ANTHROPIC_API_KEY ... takes precedence"). This annotator is
+    # subscription-only by design — enforce it here rather than trusting the caller.
     env = {k: v for k, v in os.environ.items()
-           if k not in ("CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SSE_PORT")}
+           if k not in ("CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SSE_PORT",
+                        "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BACKEND")}
     prompt = SCHEMA_PROMPT + "\n\n===== AD =====\n" + block
     # --effort high = Opus adaptive high reasoning; the --settings override clears
     # the global alwaysThinkingEnabled, which injects the legacy thinking.type.enabled

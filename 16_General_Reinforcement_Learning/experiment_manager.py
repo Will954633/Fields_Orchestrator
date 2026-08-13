@@ -34,7 +34,13 @@ from shared.db import get_client  # noqa: E402
 NOW = datetime.now(timezone.utc)
 COLL = "rl_onsite_experiments"
 MASTER_KILL_SWITCH = "genrl_personalization_v1"
-SURFACES = ("/analyse-your-home", "/for-sale-v3")
+# 2026-08-13: /off-market and /property added by the onsite cycle. The original two surfaces were
+# both ~100% Facebook-fed and fell to ~2 users/week when ads paused 2026-07-30, so every experiment
+# registered against them is unreadable. Organic traffic lands on the deck (324 of 545 google-referred
+# users / 28d) and the property page (162). NOTE: registering a surface here does NOT mount it —
+# PersonalizationSlot is only rendered by AnalyseYourHomePage.tsx and DecisionFeedV3Page.tsx, so an
+# experiment on a new surface stays STAGED until the slot is mounted there (REC-onsite-001).
+SURFACES = ("/analyse-your-home", "/for-sale-v3", "/off-market", "/property")
 
 
 def _ph(method, path, body=None):

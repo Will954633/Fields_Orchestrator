@@ -57,6 +57,10 @@ NOW = datetime.now(timezone.utc)
 ARTICLES = "content_articles"
 PENDING = "article_pending_approval"
 EXPIRE_H = 72          # longer than fb_approval's 24h — an article is not time-critical
+# Proposing a draft is AUTHORISED — it does not need a recommendation, because Will's tap
+# IS the decision. But 15 drafts in one burst is a flood he cannot triage, and unreviewed
+# messages are how the previous system died. Drip instead.
+MAX_PROPOSALS_PER_DAY = 3
 
 YES = re.compile(r"\b(yes|approve|approved|publish|ok|👍|✅)\b", re.I)
 NO = re.compile(r"\b(no|reject|rejected|hold|don'?t|nope|👎|❌)\b", re.I)
@@ -118,6 +122,15 @@ def cmd_propose(a):
         sys.exit(f"ERROR: no article matching {a.id!r} in {ARTICLES}")
     if sm[PENDING].find_one({"article_id": art["_id"], "status": "awaiting_approval"}):
         sys.exit(f"already awaiting approval: {art.get('title')}")
+
+    since = (NOW - timedelta(hours=24)).isoformat()
+    sent = sm[PENDING].count_documents({"created_at": {"$gt": since}})
+    if sent >= MAX_PROPOSALS_PER_DAY and not a.force:
+        sys.exit(f"RATE LIMIT: {sent} draft(s) already sent for approval in the last 24h "
+                 f"(cap {MAX_PROPOSALS_PER_DAY}).\n"
+                 f"  Proposing is authorised and needs no recommendation — but a burst of "
+                 f"drafts is a queue Will cannot triage, and an unread queue is how the last "
+                 f"system died.\n  Send the rest tomorrow, or --force if there is a reason.")
 
     # Rule 5 gate over the BODY, not just the headline. Until 2026-08-13 the only Rule 5
     # check in the article path lived in fb_post_article.py and was handed a title plus a

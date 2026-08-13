@@ -42,6 +42,15 @@ NOW = datetime.now(timezone.utc)
 COLL = "rl_onsite_friction"
 MIN_SEARCHES = 5          # >= this many searches with 0 submit = struggling
 KEY_FUNNEL = "/analyse-your-home"
+# 2026-08-13: the sensor was scoped entirely to the address-search funnel — every incident path is
+# behind `if not searches: continue`. That page was ~100% Facebook-fed and fell to ~2 users/week when
+# ads paused 2026-07-30, so the sensor now watches an empty room: 3 sessions scanned over 7d while
+# 545 organic users passed through the site in 28d, 324 of them onto the off-market deck. A deck
+# reader who bounces at the hero or rage-clicks produced no incident of any kind. DECK_DEAD_END adds
+# that surface. `is_internal` is also now excluded — Will's own testing was scoring as user friction.
+MIN_DECK_SESSIONS = 8      # don't call a dead end until the surface has been seen this many times
+DECK_ENGAGED_FRAC = 0.6    # >= this share actually reading (sections_read >= 1) = a real audience
+DECK_FORWARD_OK_FRAC = 0.05  # forward-CTA clicks above this share of engaged readers = not a dead end
 # categories where a returned-nothing search is a REAL bug (the address exists / is ours to know)
 IN_COVERAGE = {"current_listing", "recent_listing", "withdrawn_listing", "likely_home_owner", "home_owner"}
 
@@ -56,14 +65,16 @@ def _posthog(days):
     pid = os.environ.get("POSTHOG_PROJECT_ID", "348370")
     if not key:
         return []
+    # $exception_message is ALWAYS null on this project — the text lives in $exception_values.
     q = f"""
     SELECT properties.$session_id AS sid, distinct_id, timestamp, event,
            properties.search_query AS q, properties.result_count AS rc,
-           properties.$pathname AS path, properties.$exception_message AS exc
+           properties.$pathname AS path, properties.$exception_values AS exc
     FROM events
     WHERE timestamp >= now() - INTERVAL {int(days)} DAY
+      AND ifNull(toString(properties.is_internal), 'false') != 'true'
       AND event IN ('address_search','analyse_home_address_submit','analyse_home_submit_success',
-                    'analyse_abandoned','$exception')
+                    'analyse_abandoned','$exception','$rageclick')
     ORDER BY sid, timestamp
     LIMIT 100000
     """
@@ -73,6 +84,78 @@ def _posthog(days):
         headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"}, method="POST")
     with urllib.request.urlopen(req, timeout=120) as r:
         return json.load(r).get("results", [])
+
+
+def _hogql(sql):
+    key = os.environ.get("POSTHOG_PERSONAL_API_KEY") or os.environ.get("POSTHOG_ALL_ACCESS_KEY")
+    pid = os.environ.get("POSTHOG_PROJECT_ID", "348370")
+    if not key:
+        return []
+    req = urllib.request.Request(
+        f"https://us.posthog.com/api/projects/{pid}/query/",
+        data=json.dumps({"query": {"kind": "HogQLQuery", "query": sql}}).encode(),
+        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"}, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=120) as r:
+            return json.load(r).get("results", [])
+    except Exception:
+        return []
+
+
+def _deck_dead_ends(days):
+    """DECK_DEAD_END — the off-market deck is the biggest organic surface but had no sensor at all.
+
+    A deck reader is invisible to the search-funnel incident loop above, because that loop is gated
+    on an `address_search` event firing at all. Reported per suburb so one dud page does not read as
+    a site-wide failure.
+
+    ⚠ The pathology here is NOT bouncing. Measured 2026-08-13 over 25 non-internal v4_report_exit
+    users in 28d: only 3 read zero sections, and sections_read runs 1-11. Readers read — 2 to 3
+    sections typically — and then leave, with 1 forward_cta_clicked across 183 arm-assigned deck
+    users in the same window. So the incident is ENGAGED-BUT-NO-EXIT, and the denominator is readers
+    who actually read (sections_read >= 1). Scoring on hero-bounce instead would fire never, which
+    is how this surface stayed unmonitored while being the largest organic destination on the site.
+
+    ⚠ Do not use `deepest_section` for this: it reported 'hero' for 13-14 users whose sections_read
+    was > 0, i.e. it contradicts sections_read on the same event. Logged as a V4 telemetry defect.
+    """
+    rows = _hogql(f"""
+      SELECT ifNull(toString(properties.suburb),'?') sub,
+             uniq(distinct_id) readers,
+             uniqIf(distinct_id, toInt64OrNull(toString(properties.sections_read)) >= 1) engaged
+      FROM events WHERE event = 'v4_report_exit'
+        AND timestamp >= now() - INTERVAL {int(days)} DAY
+        AND ifNull(toString(properties.is_internal), 'false') != 'true'
+      GROUP BY sub ORDER BY readers DESC LIMIT 20""")
+    fwd = _hogql(f"""
+      SELECT uniq(distinct_id) FROM events WHERE event = 'forward_cta_clicked'
+        AND timestamp >= now() - INTERVAL {int(days)} DAY
+        AND ifNull(toString(properties.is_internal), 'false') != 'true'""")
+    n_forward = (fwd[0][0] if fwd and fwd[0] else 0)
+
+    out = []
+    for sub, readers, engaged in rows:
+        if not readers or readers < MIN_DECK_SESSIONS:
+            continue
+        frac = engaged / readers
+        # Engaged readers who never take a forward action. If a decent share DID click through,
+        # the surface is working and this is not an incident regardless of read depth.
+        if frac < DECK_ENGAGED_FRAC or n_forward > max(1, engaged * DECK_FORWARD_OK_FRAC):
+            continue
+        score = 30 + frac * 20 + (20 if n_forward == 0 else 10)
+        out.append({
+            "type": "DECK_DEAD_END", "severity": "HIGH" if score >= 55 else "MEDIUM",
+            "score": round(score, 1), "session_id": f"deck:{sub}:{days}d", "distinct_id": None,
+            "surface": "/off-market", "suburb": sub,
+            "n_searches": 0, "submitted": 0, "abandoned": False, "zero_result_hits": 0,
+            "address_category": None, "in_coverage": None, "retry_loop": False,
+            "longest_query": "", "sample_queries": [],
+            "readers": readers, "engaged_readers": engaged, "forward_cta_users": n_forward,
+            "last_seen": NOW.isoformat(),
+            "why": (f"{engaged}/{readers} deck readers in {sub} read >=1 section ({frac:.0%}) but "
+                    f"only {n_forward} forward-CTA click(s) site-wide over {days}d — engaged, no exit"),
+        })
+    return out
 
 
 def build(days=7, dry_run=False):
@@ -140,6 +223,7 @@ def build(days=7, dry_run=False):
                     + (f", in-coverage {cat} → should have matched" if in_cov else
                        (f", {cat}" if cat else ""))),
         })
+    incidents.extend(_deck_dead_ends(days))
     incidents.sort(key=lambda r: -r["score"])
 
     client_errors = [{"page": p, "count": c} for p, c in
