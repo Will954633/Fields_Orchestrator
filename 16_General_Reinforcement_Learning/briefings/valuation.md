@@ -22,20 +22,31 @@ property page and the mini-site are all wrappers around an estimate and a range.
 estimate is wrong, or the range around it is dishonest, none of the marketing matters — and
 the failure lands in a document with our name on it that we posted to somebody's house.
 
-Right now the headline problem is **coverage, not accuracy**. Accuracy is measured and
-respectable within the design envelope (MAE 8.05%, 80% band ±12.2%, n = 581 —
-`16_Valuation/accuracy/2026-08-08-figures.md`). But **59.4% of the live for-sale book
-carries no valuation at all** (126 of 212, 2026-08-13), and Burleigh Waters is at 16.7%
-coverage. A method that is accurate on the 40% it will speak about, and silent on the rest,
-limits every downstream product to a minority of addresses.
+Accuracy is measured and respectable within the design envelope (MAE 8.05%, 80% band
+±12.2%, n = 581 — `16_Valuation/accuracy/2026-08-08-figures.md`). **59.4% of the live
+for-sale book carries no valuation** (126 of 212, 2026-08-13) — but read the correction
+below before drawing the obvious conclusion from that number, because the domain's first
+cycle showed the obvious conclusion is wrong.
 
-The first job is therefore diagnostic: **understand the shape of the 59.4% before proposing
-anything to fix it.** Some of it is the method correctly refusing to speak (outside the
-design envelope, attached dwelling, acreage) and that is a *success* being counted as a
-failure. Some of it is missing input data we could actually go and get. And on 2026-08-13
-the sensor found that **76 of the 126 — 60% of all failures — record no reason whatsoever**.
-That last group is the one that matters most, because we currently cannot tell a deliberate
-refusal from a crash.
+⚠ **Corrected 2026-08-13 by the domain's own first cycle.** This section originally said
+76 of the 126 failures "record no reason whatsoever" and that we could not tell a deliberate
+refusal from a crash. **That was false, and it was a defect in our instrument, not in the
+data.** All 76 carry a machine-readable reason under keys the first sensor did not read
+(`directional_reason`, and the `confidence` tier itself); all 76 have `computed_at`; none is
+a crash. The sensor has been fixed. Keep the correction visible — it is the cleanest example
+in this domain of Rule 8 applied to our own measurement rather than to the database.
+
+**What is actually true:** the 59.4% is overwhelmingly the method *correctly refusing to
+speak*. Against the population the house method claims to serve — classified House, inside
+the design envelope, n = 69 — coverage is **78.3%**, and it is even across suburbs (Robina
+77.6%, Varsity Lakes 81.8%, Burleigh Waters 77.8%). **Burleigh Waters' alarming 16.7% is a
+composition effect**: 45 of its 54 listings are attached dwellings or above the ceiling.
+
+So the honest coverage gap on the house method is **15 properties**, of which about 9 are a
+sourceable missing input. There is no large coverage win hiding here — which is itself the
+finding, and it redirects this domain away from coverage and toward the two surfaces that
+are genuinely thin: **attached dwellings (28.3% valued, n = 113, dominated by empty
+comparable pools)** and comp-pool depth.
 
 ## 2. Current state — what is ON, OFF, or PAUSED, and deliberately so
 
@@ -45,18 +56,21 @@ refusal from a crash.
 | CatBoost `iteration_08_valuation` | **Not in use** | Separate, inferior model. Do not confuse the two; do not revive it. |
 | Design envelope $1M–$2M, detached houses | **ON, deliberately** | Structural, not a policy choice — the estimate cannot exceed its priciest comparable. Outside it we suppress **both** figure and range. This is correct behaviour and is not to be "fixed". |
 | Waterfront | **Out of scope by decision** | Varsity Lakes has only 18 waterfront comparables. Decided, not open. |
-| Attached dwellings (units, townhouses, duplexes) | **Excluded by decision** | They inflate every published accuracy figure. `05-what-we-exclude.md`. |
+| Attached dwellings — **house** method | **Excluded by decision** | They inflate every published accuracy figure. `05-what-we-exclude.md`. |
+| Attached dwellings — **own** method | **LIVE since 2026-08-10** | `[UNITS-VALUATION-LIVE]` — units/townhouses now get a measured range of their own. ⚠ This is why `05-what-we-exclude.md` is no longer the whole story, why the $1M–$2M envelope must never be applied to a unit, and why this surface (28.3% valued, n = 113) is now the domain's largest honest opportunity. |
 | The ±12.2% band | **An EMPIRICAL 80% band** | NOT a confidence interval. It was called a "90% CI" on two live pages until 2026-08-07, when it actually contained the sale 58% of the time. |
 | `16_Valuation/` folder governance | **Binding** | Experiment record before any method change ships; append-only. Predates this domain and outranks it. |
 | This domain's write access | **OFF in week one** | See §4. Deliberate, and Will's call to widen. |
 
 ## 3. Goals — what good looks like
 
-1. **Every unvalued property has a recorded, correct reason.** The 76 silent failures go to
-   zero — not by valuing them, but by knowing why we didn't. This is the week-one goal and
-   it is achievable without changing the method at all.
+1. **Coverage is always reported against the addressable population, never the raw book.**
+   The raw 40.6% is not a defect rate — it counts every correct refusal as a failure. The
+   number that means something is 78.3% of the 69 homes the house method serves. Report
+   both, and never let the raw one travel alone.
 2. **Coverage rises where it honestly can** — i.e. where the blocker is a missing input we
-   can source (floor area, land size), not where the method is correctly refusing.
+   can source (floor area 7, land size 2 on the house method), not where the method is
+   correctly refusing. The attached-dwelling surface (28.3%, n = 113) is the larger prize.
 3. **No live claim about valuation accuracy or the range is false.** Zero instances of "90%
    confidence interval" language, zero unreproducible accuracy figures in public copy.
 4. **Accuracy does not drift** without somebody noticing in the same week it moves.
@@ -121,15 +135,18 @@ On top of those, permanently — these do **not** become autonomous when §4 is 
 
 ## 7. Open questions — Will to answer
 
-- [ ] **Week two: widen §4 to allow diagnosis-driven writes?** Specifically: writing a
-      correct `exclusion_reason` onto properties that currently record none. It is the
-      lowest-risk write available (a reason string, never a figure) and closes goal 1.
+- [ ] **Week two: widen §4 to allow writes?** ⚠ The original version of this question asked
+      for permission to stamp reasons onto the "76 silent failures" — a job that turned out
+      not to exist. Cycle 1 needs no new write access to have been useful, which is evidence
+      the read-only constraint is cheap. Ask again only when there is a specific write worth
+      naming.
 - [ ] **Is coverage or accuracy the priority?** They pull in different directions: the
       cheapest way to lift coverage is to value homes we currently refuse, which lowers
       average accuracy. Stated preference beats the domain guessing.
-- [ ] **Burleigh Waters is at 16.7% coverage against Robina's 55.6%.** Is that suburb worth
-      a targeted data-sourcing effort, or is it structurally outside the envelope (premium
-      family suburb, prices above $2M) and correctly silent?
+- [x] ~~**Burleigh Waters is at 16.7% coverage against Robina's 55.6%.**~~ **Answered by
+      cycle 1:** composition effect, not a suburb problem. On the homes the method is built
+      for it performs identically to Robina (77.8% vs 77.6%). A targeted data-sourcing
+      effort there is **not** warranted.
 - [ ] **`16_Valuation/README.md` indexes `methodology/02-design-envelope.md`, which does not
       exist on disk.** Should the domain write it from CLAUDE.md's envelope section, or is
       the index line the thing to remove?
@@ -138,4 +155,8 @@ On top of those, permanently — these do **not** become autonomous when §4 is 
 
 - 2026-08-13 — created. Domain added to the weekly RL fleet as the first non-marketing
   vertical. Week one deliberately read-only (§4). Baseline at creation: 86/212 valued
-  (40.6%), 126 unvalued, of which 76 record no reason; Burleigh Waters 16.7%.
+  (40.6% of the raw book; **78.3% of the 69 addressable homes**), 126 unvalued.
+- 2026-08-13 — **corrected after cycle 1.** The "76 unvalued with no recorded reason"
+  premise this brief was written on was an artefact of the sensor reading one of three
+  reason fields. Retired; §1, §3 and §7 rewritten; Burleigh Waters question answered and
+  closed. The domain's first act was to falsify its own brief, which is the system working.

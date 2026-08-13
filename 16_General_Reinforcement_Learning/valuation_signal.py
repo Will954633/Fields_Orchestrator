@@ -160,6 +160,7 @@ def collect_suburb(coll, now):
     directional = {p: 0 for p in DIRECTIONAL_PATHS}
     directional_reason = Counter()
     in_envelope = above_env = below_env = 0
+    suppressed_above = suppressed_below = valued_outside_band = 0
     n_used, comp_ages, thin_pools, zero_pools = [], [], 0, 0
     stale_comp_subjects = 0
     computed_ages = []
@@ -179,11 +180,36 @@ def collect_suburb(coll, now):
         tier = _dig(d, "valuation_data.confidence.confidence")
         conf_tier[tier if tier else "(absent)"] += 1
 
-        # Why it failed. Written in two places; either is authoritative, prefer summary.
+        # Why it did not produce a figure.
+        #
+        # ⚠ THREE separate writers stamp a refusal, and reading only the first one is a
+        # Rule 8 violation against our own instrument. The first version of this sensor
+        # read `exclusion_reason` alone and labelled the residual "(no reason recorded)"
+        # — 76 of 126, which the domain's first cycle (2026-08-13) proved wrong: all 76
+        # carry a machine-readable reason, all 76 have `computed_at`, and NOT ONE is a
+        # crash. "(no reason recorded)" asserted an outcome the query could not support.
+        #
+        # Resolution order, most specific first:
+        #   1. exclusion_reason      — a data failure (missing_floor_area, acreage, ...)
+        #   2. directional_reason    — an envelope refusal, when the tier is "directional"
+        #   3. the confidence tier   — insufficient_data / not_available carry their own
+        #                              meaning; n_total ∈ {0,1} on these
         reason = (_dig(d, "valuation_data.summary.exclusion_reason")
                   or _dig(d, "valuation_data.confidence.exclusion_reason"))
         if not has_rv:
-            exclusion[reason or "(no reason recorded)"] += 1
+            if not reason:
+                if tier == "directional":
+                    reason = _dig(d, "valuation_data.confidence.directional_reason") \
+                             or "directional (no directional_reason)"
+                elif tier:
+                    reason = f"tier:{tier}"
+            # Anything reaching this line genuinely has nothing anywhere — which, unlike
+            # the old label, is now a real finding rather than an artefact of where we read.
+            if not reason:
+                reason = "(NO REASON IN ANY FIELD — verify before believing)"
+                if not _dig(d, "valuation_data.computed_at"):
+                    reason = "(never computed — no reason, no computed_at)"
+            exclusion[reason] += 1
 
         flags = {p: _dig(d, p) for p in DIRECTIONAL_PATHS}
         for p, v in flags.items():
@@ -198,17 +224,49 @@ def collect_suburb(coll, now):
             if has_rv:
                 contra_directional_with_figure += 1
 
+        # ⚠ The envelope counter must NOT be gated on `has_rv`. The first version of this
+        # sensor was, which meant the one population it exists to measure — properties the
+        # envelope SUPPRESSED, which by definition have no reconciled_valuation — was the
+        # exact population it could not see. It printed `above 0` for Robina against 25
+        # real `above_design_ceiling` flags: close to the opposite of the truth.
+        #
+        # So suppressed properties are counted from their directional_reason, and a valued
+        # property landing outside the band is counted separately as an integrity fault
+        # (it should be unreachable — production suppresses before writing the figure).
+        d_reason = _dig(d, "valuation_data.confidence.directional_reason")
+        # ⚠ The envelope is a property of the HOUSE method only. Attached dwellings got
+        # their own measured method on 2026-08-10 ([UNITS-VALUATION-LIVE]), so a unit
+        # valued at $825,297 is correct, not a fault. Flagging them cost 4 false
+        # positives on the first run — all four were units, and all four were right.
+        # ⚠ EXACT match, never a substring: "house" is a substring of "townhouse", which
+        # is an ATTACHED dwelling and the opposite of what this test means. That bug
+        # flagged 2 townhouses as envelope violations on the first run.
+        _ptype = str(d.get("classified_property_type")
+                     or d.get("property_type") or "").strip().lower()
+        is_house = _ptype in ("house", "detached house")
         if has_rv:
-            if rv < ENVELOPE_MIN:
-                below_env += 1
-            elif rv >= ENVELOPE_MAX:      # strict ceiling, mirrors the production check
-                above_env += 1
-            else:
+            if ENVELOPE_MIN <= rv < ENVELOPE_MAX:   # strict ceiling, mirrors production
                 in_envelope += 1
+            elif rv < ENVELOPE_MIN:
+                below_env += 1
+                valued_outside_band += is_house
+            else:
+                above_env += 1
+                valued_outside_band += is_house
+            # Only meaningful for a VALUED property. A suppressed one has its range
+            # stripped deliberately (backfill_design_envelope.py writes the flag and
+            # removes the band together), so counting those here reported 42 fake
+            # contradictions — the whole directional population.
             lo = _dig(d, "valuation_data.confidence.range.low")
             hi = _dig(d, "valuation_data.confidence.range.high")
             if lo is None or hi is None:
                 contra_valued_no_range += 1
+        elif d_reason:
+            # above_design_ceiling / price_above_threshold -> above; below_design_floor -> below
+            if "below" in d_reason:
+                suppressed_below += 1
+            else:
+                suppressed_above += 1
 
         if _dig(d, "valuation_data.summary.insufficient_data") is True and has_rv:
             contra_insufficient_but_valued += 1
@@ -259,8 +317,16 @@ def collect_suburb(coll, now):
         "directional_by_path": directional,
         "directional_disagreement": directional_disagreement,
         "directional_reasons": dict(directional_reason.most_common()),
-        "envelope": {"inside": in_envelope, "above": above_env, "below": below_env,
-                     "inside_pct_of_valued": _pct(in_envelope, valued)},
+        "envelope": {
+            # of the VALUED
+            "inside": in_envelope, "above": above_env, "below": below_env,
+            "inside_pct_of_valued": _pct(in_envelope, valued),
+            # of the UNVALUED — the population the envelope actually acts on
+            "suppressed_above": suppressed_above,
+            "suppressed_below": suppressed_below,
+            "suppressed_total": suppressed_above + suppressed_below,
+            "suppressed_pct_of_book": _pct(suppressed_above + suppressed_below, total),
+        },
         "comp_pool": {
             "median_comps_used": _med(n_used),
             "min_comps_used": min(n_used) if n_used else None,
@@ -286,6 +352,8 @@ def collect_suburb(coll, now):
             "valued_without_range": contra_valued_no_range,
             "directional_but_figure_present": contra_directional_with_figure,
             "directional_flags_disagree": directional_disagreement,
+            # Should be unreachable: production suppresses before writing a figure.
+            "valued_outside_envelope": valued_outside_band,
         },
     }
 
@@ -344,8 +412,9 @@ def render(doc):
             continue
         cp = v["comp_pool"]
         print(f"  [{s:16}] {v['valued']:3}/{v['total_for_sale']:3} valued "
-              f"({v['coverage_pct']:5}%) · envelope in/above/below "
-              f"{v['envelope']['inside']}/{v['envelope']['above']}/{v['envelope']['below']}"
+              f"({v['coverage_pct']:5}%) · envelope inside {v['envelope']['inside']}, "
+              f"suppressed {v['envelope']['suppressed_total']} "
+              f"(above {v['envelope']['suppressed_above']}, below {v['envelope']['suppressed_below']})"
               f" · comps med {cp['median_comps_used']} (thin {cp['thin_pool_subjects']}, "
               f"zero {cp['zero_comp_subjects']}) · comp age med "
               f"{cp['median_comp_age_days']}d · computed med "
