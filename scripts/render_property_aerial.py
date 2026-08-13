@@ -74,6 +74,60 @@ def lotplan_for(doc):
     return None
 
 
+def fetch_scheme_polygon(plan):
+    """The scheme's common-property parcel, found by PLAN rather than by lotplan.
+
+    ⚠ THE LOT NUMBER IS ZERO-PADDED, AND NOT CONSISTENTLY.
+    `scheme_lotplan_for` builds `0{plan}` and `fetch_polygon` does an EXACT match on
+    `lotplan`. But the cadastre stores the common-property parcel of BUP100135 as
+    `00000BUP100135` — five digits — so the exact match found nothing and the dwelling
+    was recorded as "no parcel geometry". Some plans do use the unpadded form, which is
+    why the fallback worked for thousands of homes and silently failed for 757 of them:
+    a padding convention that varies by plan looks exactly like missing data.
+
+    Querying by `plan` sidesteps the padding entirely. The common property is the
+    largest parcel on the plan — the land the building sits on — so we take max area
+    rather than guessing at a lot number.
+    """
+    q = urllib.parse.urlencode({
+        "where": f"plan='{plan}'",
+        "outFields": "lotplan,lot_area",
+        "returnGeometry": "true",
+        "outSR": "4326",
+        "f": "json",
+    })
+    try:
+        with urllib.request.urlopen(f"{QLD_CADASTRE}?{q}", timeout=30) as r:
+            data = json.loads(r.read())
+    except Exception:                                   # noqa: BLE001
+        return None
+    def ring_area(ring):
+        """Shoelace area in degrees^2 — only ever compared against another ring."""
+        if len(ring) < 3:
+            return 0.0
+        a = 0.0
+        for i in range(len(ring) - 1):
+            a += ring[i][0] * ring[i + 1][1] - ring[i + 1][0] * ring[i][1]
+        return abs(a) * 0.5
+
+    # ⚠ RANK ON THE GEOMETRY, NOT ON `lot_area`.
+    # The attribute is 0.0 on many strata plans (every parcel of SP280574 reports zero)
+    # while the rings are perfectly good — which is how the centroid ingest located all
+    # 1,964 schemes. Trusting the attribute silently discards those plans a second time,
+    # for a second wrong reason, after the padding bug already discarded them once.
+    best, best_score = None, 0.0
+    for f in (data.get("features") or []):
+        rings = (f.get("geometry") or {}).get("rings") or []
+        if not rings:
+            continue
+        score = max(ring_area(r) for r in rings)
+        if score > best_score:
+            best, best_score = {"rings": rings,
+                                "lotplan": (f.get("attributes") or {}).get("lotplan"),
+                                "lot_area": float((f.get("attributes") or {}).get("lot_area") or 0)}, score
+    return best
+
+
 def fetch_polygon(lotplan):
     """Rings as [[(lon, lat), ...], ...]. Returns None rather than raising — a
     property with no parcel on file simply renders without an outline."""
@@ -136,8 +190,16 @@ def polygon_for(gc, suburb, doc, refetch=False):
         sp = scheme_lotplan_for(doc)
         if sp and sp != lp:
             poly = fetch_polygon(sp)
-            if poly:
-                poly["boundary_scope"] = "scheme"
+        # The exact-lotplan attempt above misses every plan whose common-property lot is
+        # zero-padded (`00000BUP100135`, not `0BUP100135`) — 757 indexed unit pages were
+        # recorded as "no parcel geometry" for that reason alone. Retry by PLAN, which
+        # does not depend on the padding convention. See fetch_scheme_polygon.
+        if not poly:
+            plan = str(doc.get("PLAN") or "").strip().upper()
+            if plan:
+                poly = fetch_scheme_polygon(plan)
+        if poly:
+            poly["boundary_scope"] = "scheme"
     if poly:
         gc[suburb].update_one({"_id": doc["_id"]}, {"$set": {"cadastral_polygon": poly}})
     return poly
