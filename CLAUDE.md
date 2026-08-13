@@ -224,12 +224,18 @@ more traffic than the feature work it was mentioned in passing beside.
    the work should survive the session, deserves fresh context, or is not yours to finish.
    Pick up prior handoffs with `python3 scripts/spawn_status.py --pending`.
 
-**⚠ The brief is the whole game, and the validator cannot save you.** A spawned session has
-zero context and cannot ask a follow-up. `spawn_task.py` enforces that the five fields are
-*present and substantial* — it cannot check they are *true*. On 2026-08-13 the very first
-example brief written for it cited a repro command (`scripts/check_sitemap_urls.py`) that
-does not exist; the shape gate passed it. **Verify the repro command runs before you queue
-it**, or you have handed a session an hour of chasing your own fiction.
+**⚠ The brief is the whole game.** A spawned session has zero context and cannot ask a
+follow-up. `spawn_task.py` enforces that the five fields are present and substantial, AND
+that every file path and binary they cite actually exists — added 2026-08-13 after the
+first example brief cited `scripts/check_sitemap_urls.py`, which does not exist, and the
+shape gate passed it. The same check immediately caught a second invention in that brief:
+`01_Website/src/pages/PropertyPage.tsx`, where the real file is
+`.../pages/PropertyPage/PropertyPage.tsx`.
+
+**What it still cannot check is whether the brief is TRUE.** It confirms the repro command
+exists; it cannot confirm the command reproduces anything, that your measurement was sound,
+or that the problem is real. **Run the repro before you queue it.** `--skip-path-check`
+exists for targets created at run time and is meant to stay an exception.
 
 **⚠ Scope discipline.** `investigate` (diagnosis, no Write/Edit) is the default and should
 stay it. `patch` edits only inside a git worktree. There is deliberately no `deploy` scope —
