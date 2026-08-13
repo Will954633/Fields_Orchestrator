@@ -131,7 +131,13 @@ def main():
                 ok, why = decide(d, content.get(d.get("url_slug")) or {}, cutoff)
                 reasons[why] += 1
                 indexable += ok
-                if bool(d.get("unit_indexable")) != ok or True:
+                # Write only on an actual change. The `or True` that used to be here
+                # defeated this test and rewrote all ~11,500 attached docs every night —
+                # needless RU on a serverless Cosmos tier. Compare the reason too, not
+                # just the boolean: `ok` can stay the same while `why` changes, and the
+                # reason is what explains a decision after the fact.
+                if (bool(d.get("unit_indexable")) != ok
+                        or d.get("unit_indexable_reason") != why):
                     ops.append(UpdateOne({"_id": d["_id"]}, {"$set": {
                         "unit_indexable": ok,
                         "unit_indexable_reason": why,

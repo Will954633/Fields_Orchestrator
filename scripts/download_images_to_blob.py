@@ -93,6 +93,29 @@ def is_already_uploaded(doc):
     return False
 
 
+# Hosts that appear in Domain's image list but never serve an image — 3D tours and
+# video embeds. Fetching one returns HTTP 200 and an HTML page, which used to be
+# written straight to a .jpg (six of them found 2026-08-13). blob_storage.upload now
+# refuses those bytes; this skips the pointless fetch as well. Matterport URLs also
+# carry an `auth=Bearer …` token, so not requesting them keeps a credential off the
+# wire. See 15_On_Market/HANDOFF_two_live_defects.md.
+NON_IMAGE_URL_HOSTS = (
+    'my.matterport.com',
+    'matterport.com',
+    'youtube.com',
+    'youtu.be',
+    'vimeo.com',
+    'kuula.co',
+)
+
+
+def is_non_image_url(url):
+    if not isinstance(url, str):
+        return True
+    lowered = url.lower()
+    return any(host in lowered for host in NON_IMAGE_URL_HOSTS)
+
+
 def download_single_image(url):
     try:
         url = url.rstrip('\\')
@@ -136,10 +159,16 @@ def upload_images_for_property(blob_service_client, doc, db_label, suburb, dry_r
     tasks = []
     for i, url in enumerate(photo_urls):
         if isinstance(url, str) and url:
+            if is_non_image_url(url):
+                print(f"    SKIP non-image source (3D tour/video) at photo index {i}", flush=True)
+                continue
             blob_name = f"{db_label}/{suburb}/{property_id}/photos/{date_prefix}/{i:02d}.jpg"
             tasks.append((url, blob_name, 'photo', i))
     for i, url in enumerate(fp_urls):
         if isinstance(url, str) and url:
+            if is_non_image_url(url):
+                print(f"    SKIP non-image source (3D tour/video) at floor plan index {i}", flush=True)
+                continue
             blob_name = f"{db_label}/{suburb}/{property_id}/floor_plans/{date_prefix}/{i:02d}.jpg"
             tasks.append((url, blob_name, 'floor_plan', i))
 

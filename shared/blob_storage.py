@@ -56,6 +56,51 @@ def to_live_url(url: Optional[str]) -> Optional[str]:
     return url
 
 
+# Magic-byte signatures for every raster format we could plausibly be handed.
+# (offset, signature) — offset 0 unless the container puts a length prefix first.
+_IMAGE_MAGIC = (
+    (0, b"\xff\xd8\xff",     "jpeg"),
+    (0, b"\x89PNG\r\n\x1a\n", "png"),
+    (0, b"GIF87a",           "gif"),
+    (0, b"GIF89a",           "gif"),
+    (0, b"BM",               "bmp"),
+    (0, b"II*\x00",          "tiff"),
+    (0, b"MM\x00*",          "tiff"),
+    (0, b"\x00\x00\x01\x00", "ico"),
+)
+
+
+def sniff_image_format(data: bytes) -> Optional[str]:
+    """Return a short format name if `data` really is an image, else None.
+
+    Extension and Content-Type both lie: on 2026-08-13 six Matterport 3D tour
+    pages (~200 KB of HTML each) were found stored as `.jpg` photos because the
+    downloader trusted HTTP 200 and the uploader hard-coded `image/jpeg`. Only
+    the bytes are authoritative. See 15_On_Market/HANDOFF_two_live_defects.md.
+    """
+    if not data or len(data) < 12:
+        return None
+    for offset, sig, name in _IMAGE_MAGIC:
+        if data[offset:offset + len(sig)] == sig:
+            return name
+    # RIFF containers: "RIFF" <4-byte size> "WEBP"
+    if data[0:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "webp"
+    # ISO-BMFF: "....ftyp" + brand — AVIF / HEIC / HEIF
+    if data[4:8] == b"ftyp":
+        brand = data[8:12]
+        if brand in (b"avif", b"avis", b"heic", b"heix", b"heim", b"heis",
+                     b"hevc", b"hevx", b"mif1", b"msf1"):
+            return brand.decode("ascii", "replace")
+    return None
+
+
+def _looks_like_markup(data: bytes) -> bool:
+    """True if the payload opens like HTML/XML — the common non-image impostor."""
+    head = data[:512].lstrip()[:64].lower()
+    return head.startswith((b"<!doctype", b"<html", b"<?xml", b"<head", b"<body"))
+
+
 def upload(
     container: str,
     blob_name: str,
@@ -66,7 +111,23 @@ def upload(
     """Upload bytes; return the public URL or None on failure.
 
     blob_name uses forward slashes as path separators.
+
+    If `content_type` claims an image, the bytes are sniffed first and the
+    upload is REFUSED when they aren't one. Callers already treat None as a
+    failed upload and drop the URL from the list, so a rejected impostor never
+    reaches a gallery.
     """
+    if content_type.startswith("image/"):
+        fmt = sniff_image_format(data)
+        if fmt is None:
+            kind = "HTML/XML document" if _looks_like_markup(data) else "unrecognised data"
+            print(
+                f"    ✗ REFUSED non-image upload ({kind}, {len(data)} bytes) "
+                f"declared as {content_type}: {container}/{blob_name}",
+                flush=True,
+            )
+            return None
+
     backend = _backend()
     if backend == "local":
         try:
