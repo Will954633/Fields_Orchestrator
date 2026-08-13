@@ -53,9 +53,9 @@ except Exception:
 
 from shared.db import get_client                       # noqa: E402
 from shared.dwelling_type import classify_dwelling      # noqa: E402
-from unit_valuation import (                            # noqa: E402
+from unit_valuation import (                                          # noqa: E402
     MIN_COMPS, PREFERRED_COMPS, MAX_UPLIFT, MAX_AGE_YEARS, bedrooms_of, sale_price,
-    plausible_for_scheme,
+    plausible_for_scheme, dedupe_sales,
 )
 
 SUBURBS = ["robina", "varsity_lakes", "burleigh_waters"]
@@ -112,7 +112,12 @@ def load(gc, suburb):
             continue
         rows.append({"id": d["_id"], "addr": eff, "beds": bedrooms_of(d),
                      "cms": d.get("complex_cms"), "plan": d.get("complex_plan"),
-                     "subtype": d.get("complex_subtype"), "sales": sorted(set(s))})
+                     "subtype": d.get("complex_subtype"),
+                     # dedupe_sales, not set(): one sale reaches us under two dates from
+                     # different sources (sold fields vs timeline, observed 7 days apart),
+                     # so exact-tuple dedupe leaves it in TWICE — scored twice as a target
+                     # and double-weighted as a comparable. 125 of 19,947 events (0.63%).
+                     "sales": dedupe_sales(s)})
     # ⚠ The ANSWER KEY needs the same filter as the comparables. A "$37,200 sale" in a
     # $900k building is not a wrong prediction, it is a wrong answer — and scoring
     # against it reported an MAE of 21.8% where the median error was 6.5%.
