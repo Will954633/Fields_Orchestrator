@@ -40,7 +40,7 @@ python3 conductor_state.py directive --domain seo --from articles --text "<...>"
 | Publishing | **NOT paused** — publishing is expected | Will: *"publishing is not paused, we should have published articles this week?"* |
 | Recent output | Articles published in the last two weeks, but **there have been workflow errors** | The gap is a pipeline failure, not a decision. Investigate it. |
 | Approval | Every article still needs Will's explicit yes before going live | 2026-07-29 rule, still standing. |
-| Approval mechanism | **Under review by Will** | He is considering Telegram delivery of drafts with approve / disapprove + feedback buttons. |
+| Approval mechanism | **BUILT + APPROVED 2026-08-13** — `scripts/article_approval.py` | Drafts go to Telegram with YES/NO buttons; Will's rejection FEEDBACK is stored on the article and replayed to you. |
 | 15 how-it-sold drafts | Exist; format ranks page-1 for exact-address queries | Awaiting Will. |
 
 ## 3. Goals — what good looks like
@@ -63,6 +63,10 @@ KPIs Will attached to this domain:
 - **Investigating and reporting the publishing workflow errors** that stopped this week's
   articles going out.
 - Sending evidenced notes to seo via `--from articles`.
+- **Proposing drafts for approval**: `python3 scripts/article_approval.py propose --id <article_id>`.
+  Will taps YES/NO in Telegram; a poller publishes or records his reason. **Read
+  `will_feedback` on any rejected article before redrafting it** — that field is the
+  clearest statement of what he wants, exactly like a recommendation verdict.
 
 ## 5. Off-limits — never, regardless of anything else
 
@@ -87,7 +91,7 @@ deleting data, Gold Coast go-live.
 ## 7. Open questions — Will to answer
 
 - [ ] Publish the 15 how-it-sold drafts?
-- [ ] Approve building the Telegram approve/reject-with-feedback flow for drafts? (Will raised it; it would remove the main bottleneck.)
+- [x] Telegram approve/reject-with-feedback flow — **approved and built 2026-08-13.**
 
 ## 8. Changelog
 

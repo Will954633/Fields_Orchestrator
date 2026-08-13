@@ -30,8 +30,15 @@ class TelegramSendError(Exception):
     """
 
 
-def send_message(text: str, chat_id: str = None, parse_mode: str = "Markdown"):
-    """Send a message via the Telegram bot. Raises TelegramSendError on failure."""
+def send_message(text: str, chat_id: str = None, parse_mode: str = "Markdown",
+                 reply_markup: dict = None):
+    """Send a message via the Telegram bot. Raises TelegramSendError on failure.
+
+    reply_markup takes a Telegram keyboard dict. Prefer a REPLY keyboard over an inline
+    one: ceo-telegram-bridge.py requests allowed_updates ["message", "edited_message"]
+    and so never receives callback_query, meaning inline buttons fire into a void. A reply
+    keyboard sends ordinary text the bridge already captures into ceo_chat_messages.
+    """
     cid = chat_id or CHAT_ID
     if not cid:
         print("ERROR: No TELEGRAM_CHAT_ID set. Send a message to @WillFieldsBot first.")
@@ -44,11 +51,16 @@ def send_message(text: str, chat_id: str = None, parse_mode: str = "Markdown"):
     payload = {"chat_id": cid, "text": text}
     if parse_mode:
         payload["parse_mode"] = parse_mode
+    if reply_markup:
+        payload["reply_markup"] = reply_markup
     resp = requests.post(url, json=payload, timeout=10)
     data = resp.json()
     if not data.get("ok") and parse_mode and data.get("error_code") == 400:
         # Markdown entity-parse failures (e.g. URLs containing "_") — retry as plain text
-        resp = requests.post(url, json={"chat_id": cid, "text": text}, timeout=10)
+        retry = {"chat_id": cid, "text": text}
+        if reply_markup:
+            retry["reply_markup"] = reply_markup
+        resp = requests.post(url, json=retry, timeout=10)
         data = resp.json()
     if not data.get("ok"):
         print(f"ERROR: {data}")

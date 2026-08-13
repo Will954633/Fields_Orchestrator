@@ -92,7 +92,9 @@ deleting data, Gold Coast go-live.
 
 ## 7. Open questions — Will to answer
 
-- [ ] Is a QLD real estate licence held? (Gates the GBP category, REIQ membership, and how we describe the business.) **Still unanswered.**
+- [x] **Will holds a FULL QLD real estate licence** (confirmed 2026-08-13). So: the Google
+  Business Profile category is *Real estate agent*, REIQ Accredited Agency membership is
+  available, and Fields may be described as a licensed agency without qualification.
 - [ ] Google Business Profile: confirm the service-area-business route from the home address.
 
 ## 8. Changelog

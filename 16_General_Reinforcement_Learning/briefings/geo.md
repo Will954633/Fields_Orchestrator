@@ -17,8 +17,9 @@
 1. **We come up for the main AI searches**, including *"best real estate agent [suburb]"*.
 2. **AI describes Fields accurately.** This is the critical one. Not long ago **ChatGPT did
    not know Fields sells houses** and described us as a data agency. In Will's words: *"thats
-   a critical error."* Fields is a real estate agency that sells houses and happens to be
-   exceptional at data — not a data company. Any AI surface saying otherwise is a defect to
+   a critical error."* Fields is a **licensed** real estate agency (Will holds a full QLD
+   licence, confirmed 2026-08-13) that sells houses and happens to be exceptional at
+   data — not a data company. Any AI surface saying otherwise is a defect to
    be measured and corrected.
 3. **We get referrals from AI.**
 4. **AI ranks us highly as a trusted source of data, and prefers us as a trusted and highly
