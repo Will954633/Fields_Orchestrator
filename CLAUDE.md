@@ -200,6 +200,43 @@ This is Rule 7b applied to reads: **an empty result must assert an outcome, not 
 fail to throw.** "No documents matched" and "I asked the wrong question" produce the
 identical output, and only one of them is an answer.
 
+### 9. Never Name Parallelisable Work Without Dispatching It
+
+**Work you identify but do not act on dies with the session.** When you notice something
+that is (a) independent of the current thread, (b) well-bounded, and (c) not blocked on a
+decision from Will — dispatch it. Do not append it to a list of things you found and
+didn't touch.
+
+Never end a turn having *named* such work without either dispatching it or saying, in one
+line, why you didn't. "Two live defects I found but haven't touched" is the failure this
+rule exists to stop: both were independent, both were bounded, and one of them was worth
+more traffic than the feature work it was mentioned in passing beside.
+
+**Two tiers — pick by whether it must outlive the session:**
+
+1. **In-session (default).** Fire background agents in a single message so they run
+   concurrently and report back into this transcript. Right for anything that finishes
+   inside the session and informs what you're currently doing.
+
+2. **Out-of-session — `scripts/spawn_task.py`.** Queues a brief onto
+   `system_monitor.spawned_tasks`; `spawn_worker.py` runs it as a separate headless
+   `claude -p` session on Max (concurrency 2) and reports to Will via Telegram. Right when
+   the work should survive the session, deserves fresh context, or is not yours to finish.
+   Pick up prior handoffs with `python3 scripts/spawn_status.py --pending`.
+
+**⚠ The brief is the whole game, and the validator cannot save you.** A spawned session has
+zero context and cannot ask a follow-up. `spawn_task.py` enforces that the five fields are
+*present and substantial* — it cannot check they are *true*. On 2026-08-13 the very first
+example brief written for it cited a repro command (`scripts/check_sitemap_urls.py`) that
+does not exist; the shape gate passed it. **Verify the repro command runs before you queue
+it**, or you have handed a session an hour of chasing your own fiction.
+
+**⚠ Scope discipline.** `investigate` (diagnosis, no Write/Edit) is the default and should
+stay it. `patch` edits only inside a git worktree. There is deliberately no `deploy` scope —
+website deploys, ad changes and publishing never run unattended. A spawned session's
+deliverable is a verified diagnosis and a reviewable diff; Will ships it. Do not add a
+`--dangerously-skip-permissions` path to this system: one already exists at
+`worker-agent/run-worker-agent.sh:73` and it is not a precedent to extend.
 
 ---
 
