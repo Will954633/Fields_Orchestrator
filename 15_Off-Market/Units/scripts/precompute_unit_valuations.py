@@ -94,6 +94,8 @@ def main():
                         "low": r["low"], "high": r["high"], "point": r["point"],
                         "band_pct": r["band_pct"], "n_comps": r["n_comps"],
                         "n_available": r.get("n_available"),
+                        "adjusted_low": r.get("adjusted_low"),
+                        "adjusted_high": r.get("adjusted_high"),
                         "comparables": r.get("comparables", [])[:8],
                         "band_basis": r.get("band_basis"),
                         "accuracy": r.get("accuracy"),
