@@ -169,15 +169,40 @@ def _wills_verdict(sm, pend):
     return None, None
 
 
+NETLIFY_BUILD_HOOK = "https://api.netlify.com/build_hooks/699faf0aa7c588800d79f95d"
+
+
 def _publish(art_id):
-    """Flip the article live. content_articles is the store the site reads."""
+    """Flip the article live, then trigger a deploy.
+
+    The deploy is NOT optional and this is the subtle part. Setting status='published' makes
+    the article render at its own URL immediately (db.server.ts findArticle() reads Mongo
+    live and does not filter on status). But the /articles INDEX is served from
+    /data/articles.json, which scripts/fetch-articles.js generates AT BUILD TIME from the
+    published-articles endpoint. So without a build the article is published-but-unlisted:
+    reachable only by someone who already has the URL, and absent from the feed, which is
+    indistinguishable from "publishing silently failed".
+
+    One build per approval is the correct cost (~15 Netlify credits). Approvals arrive one
+    at a time via Telegram, so this cannot stampede the way a bulk publish would.
+    """
     sm = _sm()
     r = sm[ARTICLES].update_one(
         {"_id": art_id},
         {"$set": {"status": "published",
                   "published_at": datetime.now(timezone.utc).isoformat(),
                   "approved_by": "will_telegram"}})
-    return r.modified_count == 1
+    if r.modified_count != 1:
+        return False, "database write did not apply"
+
+    try:
+        import requests
+        resp = requests.post(NETLIFY_BUILD_HOOK, timeout=30)
+        if resp.status_code >= 300:
+            return True, f"published, but the deploy hook returned HTTP {resp.status_code} — it will not appear in the articles list until a build runs"
+    except Exception as e:
+        return True, f"published, but the deploy hook failed ({e}) — it will not appear in the articles list until a build runs"
+    return True, None
 
 
 def cmd_poll(a):
@@ -200,14 +225,23 @@ def cmd_poll(a):
             continue
 
         if verdict == "yes":
-            ok = _publish(pend["article_id"])
+            ok, warn = _publish(pend["article_id"])
             sm[PENDING].update_one({"_id": pend["_id"]}, {"$set": {
                 "status": "published" if ok else "publish_failed",
+                "publish_warning": warn,
                 "decided_at": NOW.isoformat()}})
-            _tg(f"✅ Published: *{pend['title']}*" if ok else
-                f"⚠️ Approved but the publish write FAILED for *{pend['title']}* — "
-                f"article `{pend['article_id']}` is unchanged. Needs a look.")
-            print(f"published #{pend['token']}: {pend['title']}" if ok
+            url = f"https://fieldsestate.com.au/articles/{pend.get('slug')}"
+            if ok and not warn:
+                _tg(f"✅ Published: *{pend['title']}*\n{url}\n"
+                    f"_Deploy triggered — it will appear in the articles list in a few minutes._")
+            elif ok:
+                _tg(f"⚠️ Published *{pend['title']}* but the DEPLOY did not trigger.\n{warn}\n"
+                    f"It is live at {url} but will not show in the articles list until a "
+                    f"build runs.")
+            else:
+                _tg(f"⚠️ Approved but the publish FAILED for *{pend['title']}* — "
+                    f"article `{pend['article_id']}` is unchanged. Needs a look.")
+            print(f"published #{pend['token']}: {pend['title']} (warn={warn})" if ok
                   else f"PUBLISH FAILED #{pend['token']}")
         else:
             # The feedback is the product of a rejection. Store it on the article so the
