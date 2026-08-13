@@ -31,6 +31,8 @@ from shared.price import looks_like_rent, sale_price_or_none
 from scripts.property_reports.hero_photo import score_and_pick_hero
 from scripts.property_reports.walking_distances import resolve_pois
 from scripts.property_reports.market_narrative import resolve_market_narrative
+from scripts.property_reports.market_paragraph import resolve_market_paragraph
+from scripts.property_reports.scarcity_headline import resolve_scarcity_headline
 from scripts.property_reports.scarcity_features import resolve_scarcity_features
 from scripts.property_reports.valuation_format import display_range
 from scripts.property_reports.competitor_matcher import resolve_competitor_map
@@ -436,10 +438,16 @@ class SlotResolver:
             # 3x with validation guardrails; failures set slot_status.error.
             bed_band = _to_int((self._subject or {}).get("bedrooms"))
             try:
-                narrative = None if self.no_llm else resolve_market_narrative(
-                    market, self.suburb_display, bed_band,
-                    address=self.address,
-                )
+                # no_llm builds get the deterministic template instead of the
+                # Opus call — same ten scalars in, same one-paragraph shape out,
+                # ~0ms and no failure mode. See market_paragraph.py.
+                if self.no_llm:
+                    narrative = resolve_market_paragraph(market, self.suburb_display)
+                else:
+                    narrative = resolve_market_narrative(
+                        market, self.suburb_display, bed_band,
+                        address=self.address,
+                    )
                 if narrative and narrative.get("text"):
                     updates["market_narrative"] = narrative
                     updates["slot_status.market_narrative"] = "approved"
@@ -666,10 +674,20 @@ class SlotResolver:
                     scarcity_struct, resolved_pois, self.suburb_display, self.address,
                 )
                 if self.no_llm:
-                    # Data-first build: surface the deterministic scarcity EVIDENCE
-                    # (feature-evidence ladder + reliable sold-cohort premiums)
-                    # without the Opus prose hero (headline/combinatorial/walking
-                    # monopoly are intentionally absent in this mode).
+                    # Data-first build: the deterministic scarcity EVIDENCE plus a
+                    # TEMPLATED hero (scarcity_headline.py) in place of the Opus
+                    # prose. The template writes the same three strings from the
+                    # phrases scarcity_features already produced.
+                    #
+                    # ⚠ The headline is what gates the hero on the frontend
+                    # (HeroSection keys off slot_status.scarcity, then falls back to
+                    # `hero.subhead || hero.headline`). Approving this slot WITHOUT a
+                    # headline left the un-overwritten Merrimac fixture text showing —
+                    # a six-bedroom Merrimac claim on a four-bedroom Robina home. So
+                    # the slot is only approved when a headline actually exists.
+                    hero = resolve_scarcity_headline(
+                        scarcity_struct, resolved_pois, self.suburb_display, self.address,
+                    )
                     updates["scarcity"] = {
                         "soldCohortPremiums": cohort_premiums_to_sold_cohort_premiums(
                             scarcity_struct.get("cohort_premiums") or []
@@ -678,8 +696,25 @@ class SlotResolver:
                             scarcity_struct.get("cohort_premiums") or []
                         ),
                     }
-                    updates["slot_status.scarcity"] = "approved"
-                    self.emit.done("scarcity_story", "Scarcity evidence ready")
+                    if hero and hero.get("headline"):
+                        updates["scarcity"].update({
+                            "headline": hero["headline"],
+                            "closingLine": hero["closingLine"],
+                            "combinatorialMatch": hero["combinatorialMatch"],
+                            "walkingDistanceMonopoly": hero["walkingDistanceMonopoly"],
+                            "generated_at": hero["generated_at"],
+                            "method": hero["method"],
+                        })
+                        updates["slot_status.scarcity"] = "approved"
+                        logger.info(
+                            "  scarcity headline (deterministic): %d chars",
+                            len(hero["headline"]),
+                        )
+                        self.emit.done("scarcity_story", "Scarcity story ready")
+                    else:
+                        updates["slot_status.scarcity"] = "pending"
+                        logger.info("  scarcity: evidence only — stack too thin for a hero claim")
+                        self.emit.done("scarcity_story", "Scarcity evidence ready")
                 elif narrative and narrative.get("headline"):
                     sold_cohort_premiums = cohort_premiums_to_sold_cohort_premiums(
                         scarcity_struct.get("cohort_premiums") or []
