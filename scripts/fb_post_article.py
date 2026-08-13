@@ -33,6 +33,9 @@ COSMOS_URI = os.environ["COSMOS_CONNECTION_STRING"]
 SITE_BASE = "https://fieldsestate.com.au"
 ARTICLE_URL = SITE_BASE + "/articles/{slug}"
 MAX_HOOK_CHARS = 500
+# Posting the whole back catalogue in one day would spam the page AND ruin the trial —
+# same-day posts compete for reach and cannot be compared against each other.
+MAX_ARTICLE_POSTS_PER_DAY = 2
 
 TAGLINE = "Fields Real Estate: Smarter with data."
 
@@ -328,6 +331,24 @@ def main():
         if not args.post:
             print("\n(Dry run — add --post to publish)")
             return
+
+        # ── RATE LIMIT ────────────────────────────────────────────────────────────
+        # The articles brief says "post all article trials to the page". There are 73
+        # published articles, and nothing else here stops an agent reading that as
+        # "post 73 today" — which would spam the page, destroy the trial (73 posts on
+        # one day cannot be compared against each other), and cost reach on every one.
+        # A brief instruction cannot enforce this; only code can.
+        from datetime import datetime, timedelta, timezone
+        since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+        posted_24h = sm["fb_page_posts"].count_documents(
+            {"posted_at": {"$gt": since}, "article_id": {"$ne": None}})
+        if posted_24h >= MAX_ARTICLE_POSTS_PER_DAY and not args.force:
+            print(f"\nREFUSED — {posted_24h} article(s) already posted to the page in the "
+                  f"last 24h (cap {MAX_ARTICLE_POSTS_PER_DAY}).")
+            print("  The cap exists so the trial stays readable: posts made on the same day "
+                  "compete with each other for reach and cannot be compared.")
+            print("  Space them out. --force overrides, but you should have a reason.")
+            sys.exit(3)
 
         fb = _load_fb_page_post()
         print("\nPublishing to Facebook page...")

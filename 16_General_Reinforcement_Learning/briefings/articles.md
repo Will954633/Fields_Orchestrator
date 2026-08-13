@@ -89,6 +89,21 @@ KPIs Will attached to this domain:
   20-minute floor, and a forced stop after 2 consecutive sessions producing no artefact.
   Chaining to look busy is the worst thing you can do here: it burns Max usage and recreates
   the churn that got the previous system switched off after 27 cycles in two days.
+- **POSTING PUBLISHED ARTICLES TO THE FACEBOOK PAGE — authorised (Will, 2026-08-13).**
+  *"I still want it posting top performing articles to page and early attempts should post
+  all article trials to page."* So: post every published article to the page as a trial, and
+  keep posting the winners. `fb_post_article.py --id <slug> --post`. Only `status: published`
+  articles — the article approval gate is upstream of this and unchanged. Rank on
+  `post_clicks`; Meta has deprecated post reach. Baseline to beat: all 15 prior organic posts
+  scored **exactly zero** engagement.
+- **THE BRAINS — you may query them at will.** Nobody told you these existed:
+  - **Brain 2 = our own behaviour data** (FB Ads + PostHog). HogQL via
+    `scripts/brain2/brain2_util.py` → `hog_retry(pid, key, sql)`. Capabilities documented in
+    `scripts/brain2/POSTHOG_CAPABILITIES.md`. This is how you answer questions the rolled-up
+    collections cannot — per-event, per-session, arbitrary breakdowns.
+  - **Brain 1** (coaching/sales corpus) and **Brain 3** (internal operational knowledge —
+    fix-logs, CEO memory, past articles): `python3 scripts/samantha/brain_search.py "<q>"
+    --brain all`. Zero-cost recall; use it before assuming something has never been tried.
 - **Your plan lives in `ARTICLES_PLAN.md`** — priorities P1-P6 and the full reference list of
   every data source with its honest limitation. Read it at the start of every session; keep it
   updated as you go. You own it now.

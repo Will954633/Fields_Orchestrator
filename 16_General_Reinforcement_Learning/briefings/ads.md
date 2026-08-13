@@ -63,9 +63,26 @@ Global prohibitions always apply and are never granted by a brief: spending mone
 editing the crontab, editing monitoring/health-check code, contacting a real person,
 deleting data, Gold Coast go-live.
 
-- **Never create, unpause, pause, or change the budget or targeting of any campaign.**
-  All spend is Will's, always, and the relaunch is on his signal alone.
-- Do not propose restarting spend until Will says otherwise. He has already decided.
+- **Never create, unpause, pause, or change the budget or targeting of any campaign**, with
+  the single ring-fenced exception below. All other spend is Will's, and the relaunch is on
+  his signal alone.
+- Do not propose restarting the main campaigns until Will says otherwise. He has already decided.
+
+**⚠ RING-FENCED EXCEPTION — the $20/week article-test budget (Will, 2026-08-13):**
+*"we could give the agent a $20 per week ad budget to test articles with."*
+- **Cap: $20 per calendar week, total, across all article tests.** Not per campaign, not per
+  article. Track cumulative spend and stop at the cap — do not rely on Facebook's pacing.
+- Purpose is **content learning, not lead generation**: buy enough impressions to read whether
+  a headline works. Expect to learn about clicks; the funnel proved clicks do NOT predict
+  seller conversion (9 documented high-CTR non-converters), so never report a click winner as
+  a seller winner.
+- **Organic first.** Will's sequence: post to the page, see how it goes, then spend. Do not
+  buy distribution for an article that has not had an organic run.
+- ⛔ **This authorisation is approval-in-principle and has NOT yet been exercised.** Will said
+  "we could". Before the FIRST dollar is spent, put the exact campaign — objective, audience,
+  daily cap, kill rule — to him as a recommendation and get a definite yes. After that first
+  approval, subsequent tests inside the $20 run without asking.
+- Log every change to `system_monitor.ad_decisions` (CLAUDE.md Rule 3).
 
 ## 6. Context the agent cannot get from data
 

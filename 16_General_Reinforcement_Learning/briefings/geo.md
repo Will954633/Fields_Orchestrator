@@ -46,7 +46,12 @@ because it actively tells sellers we are not in the business of selling their ho
 
 ## 4. Standing authorisations — SHIP THESE WITHOUT ASKING
 
-- `llms.txt`, robots directives for AI crawlers, and crawler allowlist entries.
+- Robots directives for AI crawlers, and crawler allowlist entries.
+  ⚠ **`llms.txt` is cargo cult — deprioritise it.** Verified 2026-08-13: Google has stated it
+  will "neither harm nor help". Same for FAQPage schema as an AI-citation play (Google
+  deprecated FAQ rich results in June 2026), and for treating "GEO/AEO" as a discipline
+  distinct from SEO — that is vendor marketing. **Being INDEXED is the eligibility gate for
+  AI Overviews**, so indexation work outranks all of it.
 - IndexNow and Bing submissions; recrawl requests.
 - Structured data and entity markup that affects how AI systems describe us.
 - **Diagnosing serving and indexing regressions**, including the Bing cliff — investigate

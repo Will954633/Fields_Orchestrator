@@ -80,6 +80,30 @@ patterns above, propose the best for organic posting, and measure.
 - Baseline: all 15 prior organic posts scored **exactly zero** engagement. Anything above
   zero is new information.
 
+**Where we may publish — researched 2026-08-13, ranked.**
+| Channel | Verdict | Why |
+|---|---|---|
+| **r/AusPropertyChat + r/AusProperty** (~286k) | **Do first** | The only channel where this exact asset demonstrably outperforms: a sales-analysis post scored 456 upvotes/159 comments; a price-guide-accuracy tool 747 upvotes. Free, referrer-measurable. ⚠ Disclosure of the licence is legally required and costs upvotes — a self-identified agent's post scored 0, while the top agent-related posts are *attacks* on agents. Our sold-vs-asking data is genuinely adversarial to agent interests, which is the only reason this can work. Numbers in the body, link in a comment. |
+| **Firstlinks (Morningstar)** | **Do** | Uniquely permits content already on your own site, and grants a bio link. SMSF/retiree audience ≈ asset-rich 45-65. Free. |
+| **The GC Minute** (6,000+ local subs) · **myGC** (`news@mygc.com.au`) | **Do** | Geographically matched, low effort, plausible links. |
+| SourceBottle free tier | Conditional | Reactive, ~10 min/day, no PR history needed. |
+| Facebook community groups | Conditional | Right audience, but **Group Insights are admin-only** — a non-admin poster gets zero analytics. Only worth it as an admin-sanctioned recurring data snapshot, with a distinct UTM per group. |
+| PropertyChat | **Low priority** | $1,375/yr, and its two rule pages **contradict each other** on the one thing you would pay for (Forum Rules permit article links; the Business Members Guide forbids them). Assume the restrictive reading. Audience is national investors, not GC sellers. ⚠ It also has a "No Market Research" rule a prior session may already have breached. |
+| LinkedIn · Medium · Nextdoor · Whirlpool · r/GoldCoast · Gold Coast Bulletin · trade titles | **Ignore** | Medium's Distribution Guidelines disqualify content marketing outright. r/GoldCoast is the highest ban risk and lowest reach. **Gold Coast Bulletin is News Corp, which majority-owns REA Group — PropTrack is their in-house suburb data, so ours is a substitute for something they already own.** |
+
+**⭐ The opening nobody has taken:** Domain and Brisbane Times are Nine/CoStar-owned and
+structurally locked out of REA's PropTrack. They are the one national outlet family for whom
+"original non-REA Gold Coast suburb data" is a competitive offer rather than a redundancy.
+Worth a dedicated approach.
+
+**⚠ The QLD risk is not advertising — it is inbound DMs.** Publishing suburb aggregates does
+not trigger POA s215; that fires when a seller *asks* what their property will sell for.
+Every forum channel creates a path to exactly that question in a private message, and
+answering it invokes the CMA obligation plus the s216(6) bar on passing it to anyone else.
+**Route valuation questions off-forum into the appraisal flow; never answer inline.** And
+posting without disclosing the licence is astroturfing under ACL s18 — PropertyChat states
+it reports such businesses to the ACCC.
+
 ### P3 — Feed the hook evidence into generation
 The generator's angle selection is a hardcoded 14-rule table scoring property attributes,
 and its prompt is static. It has never seen `content_hook_corpus`. Closing that is the
@@ -124,6 +148,16 @@ Will's stated goal. Requires quality and consistency first; sequence after P1–
   36 dead angles. **Read the dead angles before proposing any topic or hook.**
 - `16_General_Reinforcement_Learning/CONTENT_LEARNINGS.md` — what the corpus is and its ten
   stated limitations.
+
+**The Brains — query at will; they are free and nobody had told you they exist**
+- **Brain 2 — our own behaviour** (FB Ads + PostHog). `scripts/brain2/brain2_util.py` →
+  `hog_retry(pid, key, sql)` for arbitrary HogQL. See `scripts/brain2/POSTHOG_CAPABILITIES.md`.
+  Use it when the rolled-up collections cannot answer the question — per-event, per-session,
+  any breakdown you like. This is how you'd find *where* in an article readers drop, rather
+  than only that they do.
+- **Brain 1** (coaching/sales corpus) and **Brain 3** (internal operational knowledge: fix
+  logs, CEO memory, prior articles): `scripts/samantha/brain_search.py "<q>" --brain all`.
+  Check here before assuming something has never been tried.
 
 **⚠ Contested claims — do NOT treat as settled**
 CLAUDE.md lists these as "established, do not re-test", but our own sources contradict them:
