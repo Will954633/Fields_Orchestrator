@@ -248,6 +248,42 @@ def boundary_aerial(subject_id: str, suburb_key: str | None, subject_doc: dict |
         return None
 
 
+def _cover_gate_verdict(subject_id: str, image_bytes: bytes) -> dict:
+    """Cached cover-photo assessment. See appraisal_template/cover_photo_gate.
+
+    Cached on (subject_id, image hash) in system_monitor.cover_photo_verdicts so
+    a re-render of the same property costs no Vision call — pre-warming ~7,700
+    covers would otherwise pay for every one of them twice.
+
+    Fails OPEN on any error: an unreachable Vision API must not silently demote
+    every cover in the catchment to an aerial.
+    """
+    import hashlib
+
+    digest = hashlib.sha256(image_bytes).hexdigest()[:24]
+    try:
+        col = get_client()["system_monitor"]["cover_photo_verdicts"]
+        hit = col.find_one({"_id": f"{subject_id}:{digest}"})
+        if hit:
+            return hit
+    except Exception:
+        col = None
+
+    try:
+        from scripts.appraisal_template import cover_photo_gate
+        verdict = cover_photo_gate.assess(image_bytes)
+    except Exception as exc:
+        return {"publishable": True, "reason": f"gate_error:{type(exc).__name__}"}
+
+    if col is not None:
+        try:
+            col.update_one({"_id": f"{subject_id}:{digest}"},
+                           {"$set": {**verdict, "subject_id": subject_id}}, upsert=True)
+        except Exception:
+            pass
+    return verdict
+
+
 def splice(text: str, key: str, new_block: str) -> str:
     """Replace the section block bounded by SPLICE_POINTS[key] markers."""
     start_marker, end_marker = SPLICE_POINTS[key]
@@ -799,6 +835,7 @@ def render_appraisal(
         # `.../image/http:`), so the original must be tried as a fallback.
         if candidates:
             import urllib.request
+            branded_listing = False   # set when the listing's own watermark is found
             for url, kind in candidates:
                 for try_url in dict.fromkeys([to_bucket_api_url(url), url]):
                     try:
@@ -806,12 +843,35 @@ def render_appraisal(
                         with urllib.request.urlopen(req, timeout=15) as resp:
                             data = resp.read()
                         if len(data) > 2000:  # sanity: not an error placeholder
+                            # ⚠ Listing photos belong to the listing agency and
+                            # frequently carry its watermark. "1 Highgate Lane"
+                            # shipped a cover reading "PRD nationwide Robina"
+                            # under our own logo. They are also often an interior
+                            # — photo #1 is a kitchen or a lounge about a third of
+                            # the time. Both are rejected here and the chain falls
+                            # through to the boundary aerial, which is ours, is
+                            # never watermarked, and always shows the subject lot.
+                            verdict = _cover_gate_verdict(subject_id, data)
+                            if not verdict.get("publishable"):
+                                reason = str(verdict.get("reason") or "")
+                                print(f"  [gate] rejected {kind} hero: {reason}")
+                                # Branding is a property of the LISTING, not of the
+                                # frame: every photo in a PRD listing carries PRD's
+                                # watermark. Testing all 8 cost 8 Vision calls to
+                                # reach the same answer — ~$550 across the catchment.
+                                # Composition is per-frame, so for interior/pool
+                                # rejections it is worth trying the next photo.
+                                if reason.startswith(("logo:", "agency_text:",
+                                                      "marketing_text", "phone_number")):
+                                    branded_listing = True
+                                    break
+                                continue
                             expected_hero.write_bytes(data)
                             hero_source = kind
                             break
                     except Exception:
                         continue
-                if hero_source:
+                if hero_source or branded_listing:
                     break
         # Local on-disk subject images — survive after Domain CDN URLs expire
         # (a listing scraped months ago has 404 photos). For a homeowner
