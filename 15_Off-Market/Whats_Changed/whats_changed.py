@@ -174,6 +174,15 @@ def aggregate_sales_point(doc, now):
 # ── Layer 2: this suburb ─────────────────────────────────────────────────────
 
 def suburb_events(db, suburb_key, suburb_name, now):
+    """⚠ EVERY POINT HERE IS HOUSE-ONLY, so each is tagged `house_only`.
+
+    The sources — `precomputed_indexed_prices` and `precomputed_market_charts` — are
+    houses-only by construction (`precompute_union_prices.py` filters
+    `classify_dwelling == "house"`), and there is no dwelling dimension in their keys.
+    An attached dwelling's page drops these entirely rather than showing the reader a
+    median that is not their market. The attached equivalent lives in
+    `Gold_Coast.unit_market_series` and is rendered by the unit market section.
+    """
     out = []
 
     price = db["precomputed_indexed_prices"].find_one({"_id": suburb_key}) or {}
@@ -199,7 +208,7 @@ def suburb_events(db, suburb_key, suburb_name, now):
         else:
             text = (f"**{latest['period']}** — the {suburb_name} median house price is "
                     f"{money(latest['median_price'])}, {pct:+.1f}% on a year earlier.")
-        out.append({"date": now - datetime.timedelta(days=45), "kind": "suburb", "text": text,
+        out.append({"date": now - datetime.timedelta(days=45), "kind": "suburb", "house_only": True, "text": text,
                     "source": f"Fields analysis of {suburb_name} sales", "magnitude": 0})
 
     dom = db["precomputed_market_charts"].find_one({"_id": f"{suburb_key}_days_on_market"}) or {}
@@ -209,7 +218,7 @@ def suburb_events(db, suburb_key, suburb_name, now):
         if first["median_days_on_market"] != last["median_days_on_market"]:
             direction = "longer" if last["median_days_on_market"] > first["median_days_on_market"] else "shorter"
             out.append({
-                "date": now - datetime.timedelta(days=30), "kind": "suburb",
+                "date": now - datetime.timedelta(days=30), "kind": "suburb", "house_only": True,
                 "text": (f"**Now** — homes in {suburb_name} are taking a median of "
                          f"{round(last['median_days_on_market'])} days to sell, {direction} than the "
                          f"{round(first['median_days_on_market'])} days recorded six months earlier."),
@@ -289,9 +298,21 @@ def macro_events(db, suburb_key, suburb_name, now):
         local2 = suburb_reading(db, suburb_key, suburb_name, e.get("local_metric_2"), d)
         if local2:
             local = f"{local} {local2}"
+        # ⚠ THE MACRO FACT AND THE LOCAL READING ARE SEPARATE FIELDS, ON PURPOSE.
+        # `local` comes from suburb_reading(), which is HOUSE data — median house
+        # price, house days-on-market, house listing counts. The macro statement (a
+        # cash-rate move, a tax change) is national and true for every dwelling; the
+        # local clause is about somebody else's market when the reader owns a unit.
+        #
+        # Emitting them concatenated is why an attached dwelling's page read "the
+        # Robina median house price is broadly unchanged — $1,490,000". That was fixed
+        # by hand in the GENERATED file on 2026-08-10 and silently undone on 2026-08-12
+        # when this script next ran. Fixing generated output instead of its generator
+        # buys about two days.
         out.append({
             "date": d, "kind": "macro",
-            "text": f"**{d:%-d %B %Y}** — {' '.join(e['statement'].split())} {local}",
+            "text": f"**{d:%-d %B %Y}** — {' '.join(e['statement'].split())}",
+            "house_local": local,
             "source": e["source"], "magnitude": 0,
         })
     return out
@@ -484,6 +505,11 @@ def emit_ts(db, out_path):
                         f'        kind: "{p["kind"]}",\n'
                         f'        text: {json.dumps(p["text"])},\n'
                         f'        source: {json.dumps(p["source"])},\n'
+                        # House-only clauses ride separately so the component can drop
+                        # them for attached dwellings — see TimelinePoint.houseLocal.
+                        + (f'        houseLocal: {json.dumps(p["house_local"])},\n'
+                           if p.get("house_local") else "")
+                        + (f'        houseOnly: true,\n' if p.get("house_only") else "")
                         + (f'        lead: true,\n' if p.get("lead") else "")
                         + "      },")
         blocks.append(f'  {key}: [\n' + "\n".join(rows) + "\n  ],")
@@ -508,6 +534,14 @@ export type TimelinePoint = {{
   source: string;
   /** Forward-looking and imminent — renders first, not in date order. */
   lead?: boolean;
+  /** ⚠ HOUSE-ONLY CLAUSE. Every suburb figure in this file — median price, days on
+   *  market, listing counts — comes from a houses-only series. On an attached
+   *  dwelling's page those sentences are about somebody else's market, so the
+   *  component appends this only for houses. The macro fact in `text` is
+   *  dwelling-neutral and always runs. Do NOT fold these back into `text`. */
+  houseLocal?: string;
+  /** The whole entry is a house figure — dropped entirely for attached dwellings. */
+  houseOnly?: boolean;
 }};
 
 export const TIMELINE_GENERATED_AT = "{now:%Y-%m-%d}";
