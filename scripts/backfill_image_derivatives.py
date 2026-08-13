@@ -9,8 +9,12 @@ store holds one rendition per photo, so listing pages ship ~3,000px originals in
 original (see `shared/image_derivatives.py` for the naming and the never-upscale rule).
 
 Idempotent: a photo whose renditions already exist is skipped without re-encoding.
-Originals are never modified and no document is written — the derivative URL is
-derivable from the original by string substitution, so there is nothing to store.
+Originals are never modified.
+
+The one document write is `image_derivative_widths` on each listing — the widths present
+on EVERY photo of that listing. The serializer cannot stat the blob disk, and a 404
+inside `srcset` does not fall back to `src`, so it needs to be told which renditions are
+safe to advertise. See `_listing_widths`.
 
 USAGE:
   python3 scripts/backfill_image_derivatives.py --dry-run
@@ -47,64 +51,93 @@ def blob_name_from_url(url):
 
 
 def collect(db, suburbs, limit):
-    """Blob names of every mirrored photo on live listings, capped at `limit`."""
-    names, listings = [], 0
+    """Live listings as (suburb, _id, [blob_name, ...]), capped at `limit` photos.
+
+    Grouped by listing rather than flattened because the widths we advertise are a
+    per-listing fact (see `_listing_widths`).
+    """
+    groups, n = [], 0
     for suburb in suburbs:
         for doc in db[suburb].find({'listing_status': 'for_sale'},
                                    {'property_images': 1}):
-            got = [n for n in (blob_name_from_url(u)
-                               for u in (doc.get('property_images') or [])) if n]
+            got = [nm for nm in (blob_name_from_url(u)
+                                 for u in (doc.get('property_images') or [])) if nm]
             if not got:
                 continue
-            listings += 1
-            names.extend(got)
-            if limit and len(names) >= limit:
-                return names[:limit], listings
-    return names, listings
+            if limit and n + len(got) > limit:
+                got = got[:limit - n]
+                if got:
+                    groups.append((suburb, doc['_id'], got))
+                return groups, n + len(got)
+            groups.append((suburb, doc['_id'], got))
+            n += len(got)
+    return groups, n
 
 
 def _one(name):
-    """(status, count) for a single photo. Runs on a worker thread.
+    """(status, count, widths) for a single photo. Runs on a worker thread.
 
     `corrupt` is kept apart from `skipped` on purpose. Folding an undecodable original
     into "nothing to do" is how a job reports success while achieving nothing — it hid
-    four HTML-error-pages-saved-as-.jpg on the first Robina run.
+    three HTML-error-pages-saved-as-.jpg on the first Robina run.
     """
     before = deriv.existing_derivatives(CONTAINER, name)
     try:
         got = deriv.make_derivatives_from_disk(CONTAINER, name)
     except deriv.DecodeError as exc:
         print(f"    ! corrupt original: {exc}", flush=True)
-        return ('corrupt', 0)
+        return ('corrupt', 0, set())
     if got is None:
-        return ('missing', 0)
+        return ('missing', 0, set())
     new = set(got) - set(before)
     if new:
-        return ('written', len(new))
+        return ('written', len(new), set(got))
     # Either the renditions already existed, or the source is narrower than every
     # target and correctly produced none. Both are genuinely "no work needed".
-    return ('skipped', 0)
+    return ('skipped', 0, set(got))
+
+
+def _listing_widths(photo_widths):
+    """The widths safe to advertise for a whole listing: the INTERSECTION.
+
+    The serializer emits one `srcset` shape per listing but applies it to every photo,
+    and a 404 inside `srcset` does not fall back to `src` — the image fails outright.
+    So a width may only be advertised if EVERY photo has it. A listing containing one
+    narrow (or corrupt) photo therefore advertises fewer widths, or none, and falls
+    back to originals. Conservative on purpose: slow beats broken.
+    """
+    if not photo_widths:
+        return []
+    common = set(deriv.WIDTHS)
+    for w in photo_widths:
+        common &= w
+    return sorted(common)
 
 
 def run(suburbs, limit, dry_run, workers=4, beat=None):
     db = get_gold_coast_db()
-    names, listings = collect(db, suburbs, limit)
-    seen = len(names)
-    written = skipped = missing = corrupt = 0
+    groups, seen = collect(db, suburbs, limit)
+    listings = len(groups)
+    written = skipped = missing = corrupt = tagged = 0
 
     if dry_run:
-        for name in names:
-            have = deriv.existing_derivatives(CONTAINER, name)
-            todo = [w for w in deriv.WIDTHS if w not in have]
-            print(f"  [DRY] {name} have={sorted(have)} todo={todo}", flush=True)
-    else:
-        # Pillow releases the GIL across resize and encode, so threads genuinely
-        # parallelise here. Kept modest: this shares a 4-vCPU box with the pipeline.
-        done = 0
-        with ThreadPoolExecutor(max_workers=workers) as pool:
+        for _suburb, _id, names in groups:
+            for name in names:
+                have = deriv.existing_derivatives(CONTAINER, name)
+                todo = [w for w in deriv.WIDTHS if w not in have]
+                print(f"  [DRY] {name} have={sorted(have)} todo={todo}", flush=True)
+        return {'listings': listings, 'seen': seen, 'written': 0, 'skipped': 0,
+                'missing': 0, 'corrupt': 0, 'tagged': 0}
+
+    # Pillow releases the GIL across resize and encode, so threads genuinely
+    # parallelise here. Kept modest: this shares a 4-vCPU box with the pipeline.
+    done = 0
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        for suburb, _id, names in groups:
+            per_photo = []
             for fut in as_completed(pool.submit(_one, n) for n in names):
                 try:
-                    status, n = fut.result()
+                    status, n, widths = fut.result()
                 except Exception as exc:
                     print(f"    ✗ worker failed: {exc}", flush=True)
                     missing += 1
@@ -117,18 +150,32 @@ def run(suburbs, limit, dry_run, workers=4, beat=None):
                     corrupt += 1
                 else:
                     missing += 1
+                per_photo.append(widths)
                 done += 1
                 if done % 250 == 0:
                     print(f"  … {done}/{seen} photos, {written} written", flush=True)
+
+            # Only widths present on EVERY photo of this listing may be advertised.
+            # Written even when empty: an empty list is the instruction "serve the
+            # originals", and is meaningfully different from the field being absent
+            # (never processed). The serializer must treat both as originals-only.
+            wid = _listing_widths(per_photo) if len(per_photo) == len(names) else []
+            try:
+                db[suburb].update_one({'_id': _id},
+                                      {'$set': {'image_derivative_widths': wid}})
+                tagged += 1
+            except Exception as exc:
+                print(f"    ✗ could not tag {suburb}/{_id}: {exc}", flush=True)
 
     if beat is not None:
         beat.metrics = {
             'listings': listings, 'photos_seen': seen, 'derivatives_written': written,
             'skipped_existing': skipped, 'originals_missing': missing,
-            'originals_corrupt': corrupt,
+            'originals_corrupt': corrupt, 'listings_tagged': tagged,
         }
-        beat.detail = (f"{listings} listings, {seen} photos, {written} written, "
-                       f"{skipped} skipped, {missing} missing, {corrupt} corrupt")
+        beat.detail = (f"{listings} listings ({tagged} tagged), {seen} photos, "
+                       f"{written} written, {skipped} skipped, {missing} missing, "
+                       f"{corrupt} corrupt")
         # Rule 7b: an empty queue is success; encoding every photo and writing nothing
         # is not. Only assert when there WAS work — seen==0 means no live listings had
         # mirrored photos, which is a different (and also suspicious) condition.
@@ -147,9 +194,17 @@ def run(suburbs, limit, dry_run, workers=4, beat=None):
             raise RuntimeError(
                 f"{corrupt}/{seen} originals are undecodable (>2%) — the mirror is "
                 f"storing error pages as .jpg, not just the odd bad file")
+        # Derivatives nothing can find are derivatives that do not exist. If the disk
+        # work succeeded but no listing carries the widths field, the website still
+        # serves originals and this job has achieved nothing visible.
+        if listings and tagged == 0:
+            raise RuntimeError(
+                f"processed {listings} listings but tagged 0 with "
+                f"image_derivative_widths — the serializer cannot use any of this")
 
     return {'listings': listings, 'seen': seen, 'written': written,
-            'skipped': skipped, 'missing': missing, 'corrupt': corrupt}
+            'skipped': skipped, 'missing': missing, 'corrupt': corrupt,
+            'tagged': tagged}
 
 
 def main():
@@ -179,7 +234,8 @@ def main():
                       workers=args.workers, beat=beat)
 
     print(f"\nlistings={res['listings']} photos={res['seen']} written={res['written']} "
-          f"skipped={res['skipped']} missing={res['missing']} corrupt={res['corrupt']}",
+          f"skipped={res['skipped']} missing={res['missing']} corrupt={res['corrupt']} "
+          f"tagged={res['tagged']}",
           flush=True)
 
 
