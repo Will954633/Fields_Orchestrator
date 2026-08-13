@@ -98,3 +98,42 @@ on this endpoint too, which the original analysis did not catch. **Do not scope 
 Fill rates are **Robina only**, 108 sampled live listings; `varsity_lakes` and `burleigh_waters` were
 not sampled. Nobody has confirmed the prototype's own subject document carries every path — the rates
 are collection-level, not per-document.
+
+## ⚠ Layer 1 coverage — measured 2026-08-13, 212 live listings across the three suburbs
+
+The prototype's subject (38 Glen Eagles Drive) has **12 price events and a withdrawal**. That is not
+typical, and the port must not assume it.
+
+| price_history events | listings | share |
+|---|---|---|
+| 1 (a single dot — no story) | 81 | **38%** |
+| 2 | 52 | 25% |
+| 3 | 31 | 15% |
+| 4 | 22 | 10% |
+| 5 | 11 | 5% |
+| 6+ | 15 | 7% |
+
+**The flagship "portal says 33 days, the true figure is 137" story applies to 4 of 212 listings — 2%.**
+Those are exactly the 4 carrying a `withdrawn` event. Where it does apply it is dramatic: the portal
+understates by a **median of 92.5 days**.
+
+| gap | portal | true | address |
+|---|---|---|---|
+| +121 | 14 | 135 | 4 Yerrecoin Place, Burleigh Waters |
+| +104 | 36 | 140 | 38 Glen Eagles Drive, Robina *(the prototype subject)* |
+| +81 | 65 | 146 | 50/20 Executive Drive, Burleigh Waters |
+| +80 | 28 | 108 | 89 Camberwell Circuit, Robina |
+
+**What this means for the build.** Layer 1 has something to say on **62%** of listings and is a single
+dot on 38%. The differentiator is real and nobody else publishes it — but it is a *rare-case* strength,
+not the page's spine. Design the empty and single-event states first, not last, and do not let the
+page's credibility rest on a section that is blank for four listings in ten.
+
+⚠ **`price_history[0].recorded_at` is when WE first saw the listing, not when it was first listed.**
+For anything listed before our tracking began, "true cumulative DOM" is bounded by our own history and
+understates. Do not publish it as an absolute unless the first event is `initial`.
+
+⚠ **Methodology trap, hit while measuring this.** `recorded_at` is stored as an ISO **string**, not a
+BSON datetime. A first pass using `isinstance(r, datetime)` silently matched nothing and reported
+**0%** — i.e. "the flagship story never occurs", which would have killed Layer 1 on a type error.
+Parse it, and sanity-check any zero against a known-positive case before believing it.
