@@ -64,10 +64,18 @@ OLD_COMP_YEARS = 3         # beyond this a comp is disclosed as leaning on the i
 # another — the exact failure that put a confident range on an attached dwelling under
 # "tested against 251 Robina houses". Burleigh Waters is materially worse than the other
 # two (n=167, within-10% 49.1%) and is flagged so a caller can decline to publish.
+#
+# ⚠ RE-MEASURED 2026-08-13 after `dedupe_sales` landed. One sale reaching us under two
+# dates from different sources was previously scored TWICE and double-weighted as a
+# comparable (125 of 19,947 events, 0.63%). Sample sizes fell accordingly — Robina
+# 625->596, Varsity Lakes 992->967, Burleigh Waters 167->155 — and the figures moved a
+# little in both directions. These are rendered verbatim on ~5,000 live pages
+# ("tested against 596 Robina attached sales"), so they must be re-measured and updated
+# together with any change to what counts as a sale. Never hand-edit one of them.
 ACCURACY = {
-    "robina": {"band": 13.63, "median": 6.27, "mae": 9.27, "within10": 68.0, "n": 625},
-    "varsity_lakes": {"band": 14.82, "median": 4.95, "mae": 9.28, "within10": 67.8, "n": 992},
-    "burleigh_waters": {"band": 20.32, "median": 10.84, "mae": 15.12, "within10": 49.1, "n": 167},}
+    "robina": {"band": 13.6, "median": 6.4, "mae": 9.3, "within10": 67.4, "n": 596},
+    "varsity_lakes": {"band": 14.6, "median": 4.8, "mae": 9.1, "within10": 69.1, "n": 967},
+    "burleigh_waters": {"band": 21.9, "median": 11.3, "mae": 15.9, "within10": 46.5, "n": 155},}
 BAND_FALLBACK = 19.8       # only for a suburb with no measurement — should never ship
 WEAK_WITHIN10 = 55.0       # below this the cohort is not fit to publish a figure
 
@@ -111,7 +119,82 @@ def sale_price(v):
     return f if MIN_SALE < f < MAX_SALE else None
 
 
-_num = sale_price      # internal alias; every call site gets the sanity band
+def _num(v):
+    """A plain number, or None. NO price band — see the warning below.
+
+    ⚠ THIS WAS ONCE `_num = sale_price`, AND THAT SILENTLY DELETED EVERY FLOOR AREA.
+    The alias carried the comment "every call site gets the sanity band", which sounds
+    prudent and was the opposite: `sale_price` rejects anything below MIN_SALE ($20,000),
+    so a floor area of 263 m2 came back None. Every call site that measured a NON-PRICE
+    quantity got zero, forever, with no error.
+
+    What that cost: `impute_floor_area` — live on the page data path — builds its sample
+    through this helper, so the sample was always empty, `len(rows) < 2` always tripped,
+    and it returned None for every unit ever asked. It advertises "5.2% median error
+    (n=424)" in its own docstring, a figure it could not possibly have been producing.
+    The comparables' `floor` field was likewise always None.
+
+    A sanity band is a claim about a QUANTITY, not a safety feature you can apply
+    everywhere. Prices go through `sale_price`; sizes, counts and distances go through
+    `_num` and are bounded by their own callers.
+    """
+    if v is None:
+        return None
+    if isinstance(v, bool):          # bool is an int subclass; a True bathroom is not 1
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
+    try:
+        return float(re.sub(r"[^0-9.]", "", str(v)))
+    except ValueError:
+        return None
+
+
+SAME_SALE_DAYS = 180
+
+
+def dedupe_sales(events):
+    """Collapse one real-world sale recorded under two dates. events: [(iso_date, price)].
+
+    ⚠ AN EXACT-TUPLE `set()` DOES NOT DO THIS, AND THAT IS WHY THIS EXISTS.
+    A sale reaches us from several places — `sold_date`/`sale_price` on the listing record,
+    `scraped_data.property_timeline`, and `enriched_data.transactions` — and they do not
+    agree on the DATE. Observed at 1/29 Mountain Ash Circuit: the same $1,300,000 sale
+    carries 2026-05-18 from the sold fields and 2026-05-11 from the timeline, seven days
+    apart. Both survive `set()` because the tuples differ, so the sale was counted twice.
+
+    That put the same address in one comparable table twice, which is worse than dropping
+    it: the sale is DOUBLE-WEIGHTED in the median while the comparable count claims the
+    evidence is broader than it is.
+
+    Keyed on price, not date: two genuine sales of one dwelling at the identical price
+    within six months do not happen, whereas two records of one sale disagreeing by days
+    demonstrably do. The EARLIEST date is kept — the later figure is typically settlement,
+    while the price was agreed at contract.
+    """
+    out = []
+    for date, price in sorted(events):
+        if not date or price is None:
+            continue
+        dup = False
+        for i, (d0, p0) in enumerate(out):
+            if p0 == price and abs(_days(date) - _days(d0)) <= SAME_SALE_DAYS:
+                dup = True
+                if date < d0:
+                    out[i] = (date, price)
+                break
+        if not dup:
+            out.append((date, price))
+    return sorted(out)
+
+
+def _days(iso):
+    """Rough day number from an ISO date — only differences are ever used."""
+    try:
+        y, m, d = int(iso[:4]), int(iso[5:7]), int(iso[8:10])
+    except (ValueError, TypeError, IndexError):
+        return 0
+    return y * 365 + m * 30 + d
 
 
 def _year(s):
@@ -278,7 +361,9 @@ class UnitValuer:
                 events.append((d.get("sold_date"), d.get("sale_price")))
             best = None
             for date, price in events:
-                p, y = _num(price), _year(date)
+                # sale_price, NOT _num: this is a transaction amount and needs the
+                # rental sanity band. _num deliberately has none — see its docstring.
+                p, y = sale_price(price), _year(date)
                 if not p or not y:
                     continue
                 if best is None or str(date) > str(best[0]):
@@ -392,6 +477,15 @@ class UnitValuer:
                                 and accuracy_for(self.suburb)["within10"] >= WEAK_WITHIN10),
             "n_comps": len(used),
             "n_available": len(adj),
+            # The spread of the EVIDENCE, distinct from the published band above.
+            # These are the adjusted sales themselves; low/high are point +/- the measured
+            # error band. They are different quantities and the page states them separately
+            # — the band exceeds the evidence spread on 81% of pages, so presenting the two
+            # as one range invites the fair question "where did the top number come from?".
+            # Taken over `used`, the comparables the point is actually computed from, not
+            # the 8 displayed.
+            "adjusted_low": int(prices[0]),
+            "adjusted_high": int(prices[-1]),
             "dropped_undeflatable": dropped,
             "dropped_too_old": over,
             "old_comp_share": round(
@@ -421,22 +515,36 @@ class UnitValuer:
 
     # -- floor area (F4) ---------------------------------------------------
     def impute_floor_area(self, subject):
-        """Same-complex, same-bed median. Measured 5.2% median error / 67% within 10%,
-        against 15.9% / 28% for a suburb-wide same-bed median. Always returned as
-        DERIVED — an imputed figure must never be presented as a measured one."""
+        """Same-complex, same-bed median. Always returned as DERIVED — an imputed figure
+        must never be presented as a measured one.
+
+        ⚠ THIS RETURNED None FOR EVERY UNIT UNTIL 2026-08-13, for two independent reasons,
+        either of which alone was fatal:
+          1. `_num` was aliased to `sale_price`, so every floor area (a number around 100)
+             fell under the $20,000 price floor and became None. Sample always empty.
+          2. `bedrooms` was passed INSIDE the Mongo query — the top-level field, which
+             fills 53.5% of attached stock, against 57.1% for the coalesced value. This is
+             the exact anti-pattern documented on `comparables()` twenty lines above.
+        The docstring cited "5.2% median error (n=424)" throughout, which was never a
+        figure this code could produce. Both are fixed; bedrooms are now matched in Python
+        on the coalesced value.
+        """
         beds = bedrooms_of(subject)
         scope = ({"complex_cms": subject.get("complex_cms")} if subject.get("complex_cms")
                  else {"complex_plan": subject.get("complex_plan")}
                  if subject.get("complex_plan") else None)
         if not scope or not beds:
             return None
-        rows = [r["floor"] for r in self._sales_in({**scope, "bedrooms": beds},
-                                                   subject.get("_id")) if r.get("floor")]
+        rows = [r["floor"] for r in self._sales_in(dict(scope), subject.get("_id"))
+                if r.get("floor") and r.get("beds") == beds]
         # also take non-sold neighbours - a floor area does not require a sale
         proj = {"floor_area_sqm": 1, "internal_living_area_sqm": 1,
-                "enriched_data.floor_area_sqm": 1}
-        for d in self.gc[self.suburb].find({**scope, "bedrooms": beds}, proj):
-            if d["_id"] == subject.get("_id"):
+                "enriched_data.floor_area_sqm": 1, "bedrooms": 1,
+                "scraped_data.features.bedrooms": 1, "scraped_data_v2.bedrooms": 1,
+                "scraped_data_apr01_recovered.features.bedrooms": 1,
+                "property_valuation_data.layout.number_of_bedrooms": 1}
+        for d in self.gc[self.suburb].find(dict(scope), proj):
+            if d["_id"] == subject.get("_id") or bedrooms_of(d) != beds:
                 continue
             f = (_num(d.get("floor_area_sqm")) or _num(d.get("internal_living_area_sqm"))
                  or _num((d.get("enriched_data") or {}).get("floor_area_sqm")))
@@ -446,4 +554,15 @@ class UnitValuer:
             return None
         return {"value": round(st.median(rows)), "n": len(rows), "derived": True,
                 "basis": f"median of {len(rows)} same-bedroom dwellings in this scheme",
-                "accuracy": "5.2% median error on leave-one-out testing (n=424)"}
+                # Re-measured 2026-08-13, the first time this function could return
+                # anything at all. Leave-one-out over homes whose own floor area we hold
+                # (n=218): median error 5.3%, within-10% 63.8%.
+                # ⚠ THE MEAN IS 15.0%, nearly three times the median. That gap is the
+                # honest part: the typical imputation is good and a minority are badly
+                # wrong, which is what a scheme with mixed layouts under one bedroom count
+                # produces. The previous string quoted only "5.2% median (n=424)" and so
+                # described the good half of a distribution as if it were all of it.
+                "accuracy": ("5.3% median error, 63.8% within 10% on leave-one-out "
+                             "testing (n=218); mean error 15.0% — a minority are well out"),
+                "accuracy_median_pct": 5.3, "accuracy_mean_pct": 15.0,
+                "accuracy_within10_pct": 63.8, "accuracy_n": 218}
