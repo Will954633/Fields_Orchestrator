@@ -51,6 +51,7 @@ from datetime import datetime, timedelta, timezone
 sys.path.insert(0, "/home/fields/Fields_Orchestrator")
 sys.path.insert(0, "/home/fields/Fields_Orchestrator/scripts")
 from shared.db import get_client  # noqa: E402
+from editorial_gate import check_article, _is_acknowledged  # noqa: E402
 
 NOW = datetime.now(timezone.utc)
 ARTICLES = "content_articles"
@@ -117,6 +118,21 @@ def cmd_propose(a):
         sys.exit(f"ERROR: no article matching {a.id!r} in {ARTICLES}")
     if sm[PENDING].find_one({"article_id": art["_id"], "status": "awaiting_approval"}):
         sys.exit(f"already awaiting approval: {art.get('title')}")
+
+    # Rule 5 gate over the BODY, not just the headline. Until 2026-08-13 the only Rule 5
+    # check in the article path lived in fb_post_article.py and was handed a title plus a
+    # one-line excerpt, so three of the fifteen drafts put to Will as "Rule 5 clean" were
+    # not. Refuse rather than warn: the whole point of this command is that what follows it
+    # is Will tapping YES, and he is entitled to assume the copy has been checked.
+    breaches = [b for b in check_article(art)
+                if not _is_acknowledged(art.get("slug") or str(art["_id"]), b)]
+    if breaches and not a.allow_breach:
+        print(f"REFUSING to propose {art.get('title')!r} — {len(breaches)} Rule 5 breach(es):",
+              file=sys.stderr)
+        for b in breaches:
+            print(f"  - {b}", file=sys.stderr)
+        sys.exit("Fix the copy, or re-run with --allow-breach if every one is a false "
+                 "positive (then add it to ACKNOWLEDGED in editorial_gate.py).")
 
     tok = _token()
     title = art.get("title") or "(untitled)"
@@ -302,7 +318,10 @@ def cmd_list(a):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[1])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    p = sub.add_parser("propose"); p.add_argument("--id", required=True); p.set_defaults(f=cmd_propose)
+    p = sub.add_parser("propose"); p.add_argument("--id", required=True)
+    p.add_argument("--allow-breach", action="store_true",
+                   help="propose despite Rule 5 breaches (only when all are false positives)")
+    p.set_defaults(f=cmd_propose)
     p = sub.add_parser("poll"); p.add_argument("--dry-run", action="store_true"); p.set_defaults(f=cmd_poll)
     p = sub.add_parser("list"); p.set_defaults(f=cmd_list)
     a = ap.parse_args()
