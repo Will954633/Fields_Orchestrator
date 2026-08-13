@@ -121,6 +121,59 @@ def _error_summary(output: str, returncode: int) -> str:
     return f"Generator exited {returncode} with no usable error output"
 
 
+def _wf_address(client, subject_id, suburb):
+    """Human address for the tracking record / Telegram line."""
+    try:
+        from bson import ObjectId
+        d = client["Gold_Coast"][suburb].find_one({"_id": ObjectId(subject_id)},
+                                                  {"complete_address": 1})
+        return (d or {}).get("complete_address")
+    except Exception:
+        return None
+
+
+def _mint_tracking(client, pdf_path: Path, slug: str, address: str) -> str | None:
+    """Create an email_tracking record so the report can be read in the tracked
+    viewer rather than handed over as an untraceable file.
+
+    A raw PDF is invisible the moment it lands on someone's device — no re-open,
+    no page, no dwell. The viewer at /track/view/<id> already records
+    `viewer_opened`, per-page `page_view` (IntersectionObserver), heartbeats
+    that accumulate time-per-page, `pdf_downloaded` and `session_end`.
+
+    ⚠ NO CONTACT DETAILS, and there are none to store. The self-serve flow asks
+    for nothing, so `recipient_email` is None and `recipient_name` is "the
+    Owner". `sync_crm_engagement` returns early without an email, so this
+    deliberately does NOT write to the CRM — a reader who was promised nobody
+    would contact them must not silently become a CRM contact.
+    """
+    try:
+        sys.path.insert(0, str(REPO_ROOT / "tracking-server"))
+        from send_report import create_tracking_record  # type: ignore
+        import fitz
+
+        pages = fitz.open(pdf_path).page_count
+        tid = create_tracking_record(
+            client["system_monitor"], None, "the Owner", address,
+            str(pdf_path), "Property Positioning Report", pages,
+        )
+        client["system_monitor"]["email_tracking"].update_one(
+            {"tracking_id": tid},
+            {"$set": {
+                "source_channel": "offmarket_self_serve",
+                "minisite_slug": slug,
+                "minisite_url": f"https://fieldsestate.com.au/off-market/{slug}",
+                # Read by record_event to decide how loudly to notify — see
+                # the throttle in tracking-server/server.py.
+                "notify_policy": "quiet",
+            }},
+        )
+        return tid
+    except Exception as exc:
+        logger.warning("tracking record failed for %s: %s", slug, exc)
+        return None
+
+
 def _publish_cover(pdf_path: Path, slug: str) -> str | None:
     """Publish page 1 as a JPEG thumbnail for the page's report section.
 
@@ -223,6 +276,15 @@ def process_one(client, req) -> bool:
     screen_pdf = _shrink(pdf_path)
     published = _publish(screen_pdf, slug)
     cover_url = _publish_cover(screen_pdf, slug)
+
+    # Keep a durable copy for the viewer. The blob is the download; this path is
+    # what tracking-server renders pages from, and the artifacts/ intermediates
+    # are deleted by the pre-warm.
+    kept = Path("/data/blobs/off-market-reports") / slug / "report.pdf"
+    kept.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy(screen_pdf, kept)
+    address = (_wf_address(client, subject_id, suburb) or slug.replace("-", " ").title())
+    tracking_id = _mint_tracking(client, kept, slug, address)
     # The SHIPPED size, not the source. Recording the pre-shrink figure would
     # report 11 MB for a file the visitor downloads at 1.2 MB, and this metric
     # exists precisely to watch download weight.
@@ -232,6 +294,11 @@ def process_one(client, req) -> bool:
         "status": "completed",
         "pdf_url": published,
         "cover_url": cover_url,
+        "tracking_id": tracking_id,
+        # The tracked reading surface. The API prefers this over pdf_url so we
+        # can see opens, pages and re-opens; the raw download stays inside it.
+        "viewer_url": (f"https://fieldsestate.com.au/track/view/{tracking_id}"
+                       if tracking_id else None),
         "size_mb": size_mb,
         "subject_id": subject_id,
         "suburb": suburb,
