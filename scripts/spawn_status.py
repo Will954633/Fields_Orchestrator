@@ -51,7 +51,12 @@ def _age(dt) -> str:
 
 
 def show_one(coll, task_id: str) -> int:
-    task = coll.find_one({"_id": ObjectId(task_id)})
+    try:
+        oid = ObjectId(task_id)
+    except Exception:
+        print(f"not a valid task id: {task_id}", file=sys.stderr)
+        return 1
+    task = coll.find_one({"_id": oid})
     if not task:
         print(f"no such task: {task_id}", file=sys.stderr)
         return 1
