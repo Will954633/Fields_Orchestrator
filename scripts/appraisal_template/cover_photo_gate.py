@@ -50,6 +50,14 @@ EXTERIOR = {
     "estate", "suburb", "garage", "front yard", "lawn", "neighbourhood",
     "neighborhood", "villa", "mansion", "farmhouse", "door", "window",
     "aerial photography", "bird's-eye view", "residential",
+    # Added 2026-08-13 after review: Vision labels a pool-and-house frame
+    # "resort" / "leisure" / "condominium", none of which were counted, so the
+    # exterior score came out below the pool score and four perfectly good
+    # covers — pool in front of a clearly visible two-storey block — were
+    # rejected. The vocabulary was the bug, not the photos.
+    "resort", "condominium", "apartment", "backyard", "garden", "grass",
+    "sky", "tree", "outdoor structure", "patio", "deck", "terrace", "balcony",
+    "architecture", "shade", "landscape", "swimming pool",
 }
 INTERIOR = {
     "kitchen", "countertop", "cabinetry", "room", "interior design", "furniture",
@@ -70,6 +78,13 @@ MARKETING_RE = re.compile(
     re.I,
 )
 PHONE_RE = re.compile(r"\b0[45]\d{2}[\s-]?\d{3}[\s-]?\d{3}\b")
+
+# Logos that are NOT a competing agency's branding. Google/Android appear on
+# Street View frames as Google's required attribution; treating them as agency
+# watermarks mislabels the reason (and would have been the stated cause for
+# rejecting every street-view hero). Street-view frames are still weak covers,
+# but that is a ranking decision in the hero chain, not a branding verdict.
+ALLOWED_LOGOS = {"google", "android", "google maps", "google street view"}
 
 
 def _agency_tokens() -> list[str]:
@@ -132,8 +147,9 @@ def assess(image_bytes: bytes) -> dict:
 
     # 1. Any recognised logo at all. On a house photo a detected brand mark is
     #    an agency watermark essentially by definition.
-    if logos:
-        return {"publishable": False, "reason": f"logo:{logos[0][:40]}", "detail": detail}
+    agency_logos = [l for l in logos if l.strip().lower() not in ALLOWED_LOGOS]
+    if agency_logos:
+        return {"publishable": False, "reason": f"logo:{agency_logos[0][:40]}", "detail": detail}
 
     # 2. A known agency name in the OCR.
     for token in _agency_tokens():
@@ -156,8 +172,10 @@ def assess(image_bytes: bytes) -> dict:
 
     if inte > ext:
         return {"publishable": False, "reason": "interior", "detail": detail}
-    if pool > ext:
-        return {"publishable": False, "reason": "pool_dominant", "detail": detail}
+    # ⚠ NO `pool > ext` RULE. It rejected four good covers on 2026-08-13 — pool
+    # in front of a clearly visible home — because Vision scores those frames
+    # "resort"/"leisure". A frame containing no building at all is caught by
+    # no_exterior_signal below, which is the case that actually matters.
     if ext == 0:
         return {"publishable": False, "reason": "no_exterior_signal", "detail": detail}
 
