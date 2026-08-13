@@ -823,7 +823,16 @@ def render_appraisal(
                 ("scraped_data", "auto_scraped"),
             ]:
                 imgs = (_subj.get(source_key) or {}).get("images") or []
-                for img in imgs[:8]:  # try first 8 images max
+                # ⚠ 20, not 8. Listings do not reliably lead with the facade:
+                # 1 Ashwood Court has 31 photos whose first 10 are all interiors
+                # and whose first exterior is #11, so an 8-photo window sent it
+                # to the aerial while a perfectly good photo sat just outside.
+                # The gate makes a wider window safe — every extra candidate is
+                # assessed, not blindly accepted — and _cover_gate_verdict caps
+                # the cost by short-circuiting the whole listing on the first
+                # BRANDING rejection, which is the case that would otherwise walk
+                # all 20.
+                for img in imgs[:20]:
                     url = img.get("url") if isinstance(img, dict) else img
                     if not url or "blob.core.windows.net" in url:
                         continue
