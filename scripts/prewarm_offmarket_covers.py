@@ -94,8 +94,30 @@ def warm_one(subject_id, slug):
     pdf_url = _publish(screen, slug)
     _publish_cover(screen, slug)
 
-    # The 11 MB source and its HTML/audit siblings are pure intermediates once
-    # the 1.2 MB screen copy is published. Keeping ~8,000 of them would be ~95 GB
+    # Keep the audit's photo_sources BEFORE deleting the intermediates. Which
+    # hero tier each cover used is the only scalable way to verify 7,730 covers
+    # — `local_cadastral` in particular is usually an uncentred aerial showing
+    # several homes, which reads badly on a cover printed with one address.
+    # Deleting the audit made that unanswerable except by eye.
+    audit = (REPO_ROOT / "artifacts" / "appraisals_v4" / f"{basename}.audit.json")
+    sources = {}
+    try:
+        import json
+        sources = json.loads(audit.read_text()).get("photo_sources") or {}
+    except Exception:
+        pass
+
+    from shared.db import get_client
+    get_client()["system_monitor"]["offmarket_report_covers"].update_one(
+        {"slug": slug},
+        {"$set": {"slug": slug, "cover_hero": sources.get("cover_hero"),
+                  "satellite": sources.get("satellite"),
+                  "pdf_url": pdf_url, "built_at": datetime.now(timezone.utc)}},
+        upsert=True,
+    )
+
+    # The 11 MB source and its HTML siblings are pure intermediates once the
+    # 1.2 MB screen copy is published. Keeping ~8,000 of them would be ~95 GB
     # against 27 GB free — the constraint that ruled out pre-generating in the
     # first place.
     for junk in (REPO_ROOT / "artifacts" / "appraisals_v4").glob(f"{basename}*"):
