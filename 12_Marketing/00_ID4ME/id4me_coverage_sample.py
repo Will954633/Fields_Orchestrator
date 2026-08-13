@@ -27,7 +27,7 @@ from collections import Counter
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-ID4ME_DIR = Path(__file__).resolve().parent / "unzipped_20260813" / "01_ID4ME"
+ID4ME_DIR = Path(__file__).resolve().parent / "tool"
 sys.path.insert(0, str(ID4ME_DIR))
 
 import lookup as id4me_lookup          # noqa: E402
