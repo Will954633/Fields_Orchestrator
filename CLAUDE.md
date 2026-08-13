@@ -240,9 +240,16 @@ exists for targets created at run time and is meant to stay an exception.
 **⚠ Scope discipline.** `investigate` (diagnosis, no Write/Edit) is the default and should
 stay it. `patch` edits only inside a git worktree. There is deliberately no `deploy` scope —
 website deploys, ad changes and publishing never run unattended. A spawned session's
-deliverable is a verified diagnosis and a reviewable diff; Will ships it. Do not add a
-`--dangerously-skip-permissions` path to this system: one already exists at
-`worker-agent/run-worker-agent.sh:73` and it is not a precedent to extend.
+deliverable is a verified diagnosis and a reviewable diff; Will ships it.
+
+**⚠ Never add a `--dangerously-skip-permissions` path to this system.** One used to exist
+(`worker-agent/run-worker-agent.sh`) and was deleted 2026-08-13: it ran that flag for 6000s
+after `set -a && source .env`, handing a permissionless session all 83 credentials —
+including a GitHub token with `admin` on both production repos. It had been dead since
+2026-04-26 but stayed armed and maintained, so it read as live. `spawn_worker.py` is the
+successor and takes the opposite approach: it sandboxes credentials away rather than
+exporting them. If a spawned session reports it cannot reach some service, that is the
+design working — do not hand the credential back.
 
 ---
 
