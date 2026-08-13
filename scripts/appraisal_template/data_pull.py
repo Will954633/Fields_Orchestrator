@@ -31,17 +31,45 @@ DEFAULT_LOOKBACK_DAYS = 365
 # ---------------------------------------------------------------------------
 
 
+_SUBJECT_CACHE: dict = {}
+
+
 def get_subject(subject_id: str, suburb_hint: Optional[str] = None) -> dict:
     """Fetch the subject property doc. Searches across target catchment suburbs
-    unless `suburb_hint` narrows the lookup."""
+    unless `suburb_hint` narrows the lookup.
+
+    ⚠ MEMOIZED PER PROCESS, and it matters more than it looks. A single report
+    build calls this ~20 times — twice per section, once in the render wrapper
+    and again inside the data_pull assembler — and NO caller passes a
+    suburb_hint, so each call loops DEFAULT_CATCHMENT issuing a find_one per
+    suburb until it hits. burleigh_waters, being last, costs 4 round-trips every
+    time. That was 20-80 serial Cosmos queries per build, all returning the
+    identical document, on a generator that spends only 42% of its wall-clock on
+    CPU (measured 2026-08-14).
+
+    Safe because a build is a short-lived, single-subject process: the generator
+    is spawned per property by offmarket_report_poller / prewarm_offmarket_covers
+    and exits. Nothing mutates the returned doc expecting a fresh read — but note
+    it IS the same object each time, so a caller that mutated it would now be
+    seen by the others. None do; the mutation `_suburb_collection` is set here
+    before caching.
+    """
     db = get_client()["Gold_Coast"]
     oid = ObjectId(subject_id) if not isinstance(subject_id, ObjectId) else subject_id
+
+    ck = (str(oid), suburb_hint)
+    if ck in _SUBJECT_CACHE:
+        return _SUBJECT_CACHE[ck]
 
     suburbs = [suburb_hint] if suburb_hint else DEFAULT_CATCHMENT
     for s in suburbs:
         doc = db[s].find_one({"_id": oid})
         if doc:
             doc["_suburb_collection"] = s
+            _SUBJECT_CACHE[ck] = doc
+            # Also satisfy the un-hinted form from a hinted hit and vice versa —
+            # callers mix the two for the same subject.
+            _SUBJECT_CACHE.setdefault((str(oid), None), doc)
             return doc
     # Fallback: scan all collections
     for coll_name in db.list_collection_names():
@@ -50,6 +78,8 @@ def get_subject(subject_id: str, suburb_hint: Optional[str] = None) -> dict:
         doc = db[coll_name].find_one({"_id": oid})
         if doc:
             doc["_suburb_collection"] = coll_name
+            _SUBJECT_CACHE[ck] = doc
+            _SUBJECT_CACHE.setdefault((str(oid), None), doc)
             return doc
     raise LookupError(f"Subject {subject_id} not found in Gold_Coast")
 
