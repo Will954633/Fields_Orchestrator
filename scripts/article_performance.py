@@ -20,9 +20,14 @@ WHAT IT PULLS, and the honest state of each source:
                              series, so trend is unavailable and must not be implied.
   ad_session_behaviour       ⭐ the most valuable and least used: articles_read[] carries
                              max_scroll_pct and dwell per session. PAID traffic only.
-                             The $3.465M flagship reads 37 sessions at 10.1% avg scroll —
-                             the hook won the click and the body lost the reader. Nothing
-                             has ever read this.
+                             ⚠ CORRECTED 2026-08-13. This docstring used to read "the
+                             flagship reads 37 sessions at 10.1% avg scroll — the hook won
+                             the click and the body lost the reader". That number was a mean
+                             over a 25/50/75/100 MILESTONE ladder in which a session emitting
+                             no milestone is stored as 0. The true reading is 7 of 37 paid
+                             sessions reached a quarter of the page; the other 30 emitted
+                             nothing, and the instrument cannot tell a bounce from a 24% read.
+                             See the read_depth block below.
   organic_journeys           article_view + scroll_depth fire and land in timeline[] for
                              ORGANIC sessions but are never rolled up — paid gets read-depth
                              and organic does not, for no reason other than nobody built it.
@@ -100,8 +105,11 @@ def build(dry_run=False, only_slug=None, verbose=False):
     perf = defaultdict(lambda: {
         "organic": {"sessions": 0, "engaged": 0, "converters": 0},
         "search": {"clicks": 0, "impressions": 0, "position_weighted": 0.0, "top_query": None},
-        "read_depth_paid": {"sessions": 0, "scroll_sum": 0.0, "dwell_sum": 0.0},
-        "read_depth_organic": {"sessions": 0, "scroll_sum": 0.0},
+        # `scrolled` counts sessions that ACTUALLY emitted a scroll milestone. See the
+        # ⚠ note on read_depth in the output block: a session with no milestone is stored
+        # as 0 and must never be averaged in as a measured 0% read.
+        "read_depth_paid": {"sessions": 0, "scrolled": 0, "scroll_sum": 0.0, "dwell_sum": 0.0},
+        "read_depth_organic": {"sessions": 0, "scrolled": 0, "scroll_sum": 0.0},
         "paid_headline": {"ads": 0, "impressions": 0, "clicks": 0, "spend_aud": 0.0},
         "fb_organic": {"posts": 0, "clicks": 0, "fan_reach": 0, "reactions": 0},
     })
@@ -141,7 +149,10 @@ def build(dry_run=False, only_slug=None, verbose=False):
                 continue
             p = perf[aid]["read_depth_paid"]
             p["sessions"] += 1
-            p["scroll_sum"] += r.get("max_scroll_pct") or 0
+            depth = r.get("max_scroll_pct") or 0
+            if depth:
+                p["scrolled"] += 1
+                p["scroll_sum"] += depth
             p["dwell_sum"] += dwell
 
     # ── ORGANIC read depth — same measure, never previously rolled up ───────────
@@ -161,7 +172,9 @@ def build(dry_run=False, only_slug=None, verbose=False):
         for aid, depth in best.items():
             p = perf[aid]["read_depth_organic"]
             p["sessions"] += 1
-            p["scroll_sum"] += depth
+            if depth:
+                p["scrolled"] += 1
+                p["scroll_sum"] += depth
 
     # ── the ~200 article-titled ads ─────────────────────────────────────────────
     # Two joins are needed and they catch different things:
@@ -252,12 +265,35 @@ def build(dry_run=False, only_slug=None, verbose=False):
                        "avg_position": round(s["position_weighted"] / s["impressions"], 1)
                        if s["impressions"] else None,
                        "ctr": round(s["clicks"] / s["impressions"], 4) if s["impressions"] else None},
+            # ⚠ WHAT THIS IS, AND WHAT IT IS NOT (corrected 2026-08-13).
+            # The source is `scroll_depth`, a MILESTONE LADDER firing only at 25/50/75/100
+            # (`src/utils/posthog.ts::phTrackScrollDepth`). Two consequences that were being
+            # published as fact:
+            #   1. A session that emitted no milestone is stored as max_scroll_pct = 0. That
+            #      means "never reached a quarter of the page" — NOT "read 0%". The ladder is
+            #      blind between 0 and 25 and cannot tell a 3-second bounce from a 24% read.
+            #   2. Averaging those zeros in produced "the flagship reads 10.1% avg scroll
+            #      (n=37)", which was 30 sessions with no event and 7 that cleared 25%.
+            # So the honest headline number is `*_reach_25_pct` — the SHARE of sessions that
+            # got at least a quarter down. `*_avg_scroll_pct_of_scrollers` is a conditional
+            # mean over only those that emitted a milestone and is survivor-biased by
+            # construction: quote it with its own n, never as "the average reader".
+            # `phTrackPageEngagement('article_page')` was added to ArticlePage on 2026-08-13
+            # and emits continuous `max_depth_pct`; roll THAT up when data accumulates and
+            # this whole block becomes a legacy fallback.
             "read_depth": {
                 "paid_sessions": rdp["sessions"],
-                "paid_avg_scroll_pct": round(rdp["scroll_sum"] / rdp["sessions"], 1) if rdp["sessions"] else None,
+                "paid_sessions_with_scroll_event": rdp["scrolled"],
+                "paid_reach_25_pct": round(rdp["scrolled"] / rdp["sessions"], 3) if rdp["sessions"] else None,
+                "paid_avg_scroll_pct_of_scrollers": round(rdp["scroll_sum"] / rdp["scrolled"], 1) if rdp["scrolled"] else None,
                 "paid_avg_dwell_s": round(rdp["dwell_sum"] / rdp["sessions"], 1) if rdp["sessions"] else None,
                 "organic_sessions": rdo["sessions"],
-                "organic_avg_scroll_pct": round(rdo["scroll_sum"] / rdo["sessions"], 1) if rdo["sessions"] else None,
+                "organic_sessions_with_scroll_event": rdo["scrolled"],
+                "organic_reach_25_pct": round(rdo["scrolled"] / rdo["sessions"], 3) if rdo["sessions"] else None,
+                "organic_avg_scroll_pct_of_scrollers": round(rdo["scroll_sum"] / rdo["scrolled"], 1) if rdo["scrolled"] else None,
+                "metric_note": ("scroll_depth is a 25/50/75/100 milestone ladder; a session with "
+                                "no milestone is 0 = 'never reached 25%', not a measured 0% read. "
+                                "Do not average those zeros into a page-read percentage."),
             },
             "paid_headline": {**ph,
                               "ctr": round(ph["clicks"] / ph["impressions"], 4) if ph["impressions"] else None},
@@ -282,11 +318,11 @@ def build(dry_run=False, only_slug=None, verbose=False):
         else:
             block["evidence_grade"] = "measurable"
             hints = []
-            if block["read_depth"]["paid_avg_scroll_pct"] is not None and rdp["sessions"] >= MIN_SESSIONS_FOR_READ_DEPTH:
-                if block["read_depth"]["paid_avg_scroll_pct"] < 25:
-                    hints.append(f"readers stop at {block['read_depth']['paid_avg_scroll_pct']}% "
-                                 f"of the page (n={rdp['sessions']}) — the body is losing them, "
-                                 f"not the headline")
+            reach = block["read_depth"]["paid_reach_25_pct"]
+            if reach is not None and rdp["sessions"] >= MIN_SESSIONS_FOR_READ_DEPTH and reach < 0.5:
+                hints.append(f"{rdp['scrolled']}/{rdp['sessions']} paid sessions reached a quarter "
+                             f"of the page ({reach*100:.0f}%) — the rest emitted no scroll "
+                             f"milestone at all, which the ladder cannot separate from a bounce")
             if ph["impressions"] >= MIN_IMPRESSIONS_FOR_CTR and block["paid_headline"]["ctr"]:
                 hints.append(f"headline earned {block['paid_headline']['ctr']*100:.2f}% CTR paid "
                              f"(n={ph['impressions']} impr)")
@@ -320,12 +356,12 @@ def main():
     print()
 
     rank = sorted(rows, key=lambda r: (r[3], r[2]), reverse=True)[:a.top]
-    print(f"{'article':52s} {'impr':>7s} {'sess':>5s} {'scroll':>7s} {'grade':>16s}")
+    print(f"{'article':52s} {'impr':>7s} {'sess':>5s} {'≥25%':>7s} {'grade':>16s}")
     for art, b, sess, impr in rank:
         rd = b["read_depth"]
-        scroll = rd["paid_avg_scroll_pct"] if rd["paid_avg_scroll_pct"] is not None else rd["organic_avg_scroll_pct"]
+        reach = rd["paid_reach_25_pct"] if rd["paid_reach_25_pct"] is not None else rd["organic_reach_25_pct"]
         print(f"{str(art.get('title'))[:52]:52s} {impr:>7d} {sess:>5d} "
-              f"{(str(scroll)+'%') if scroll is not None else '—':>7s} {b['evidence_grade']:>16s}")
+              f"{(f'{reach*100:.0f}%') if reach is not None else '—':>7s} {b['evidence_grade']:>16s}")
     print()
     for art, b, _, _ in rank[:5]:
         if b["verdict_note"] and b["evidence_grade"] == "measurable":
