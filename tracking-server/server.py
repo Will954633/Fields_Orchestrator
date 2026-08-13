@@ -8,6 +8,7 @@ Sends Telegram notifications on every interaction.
 import os
 import sys
 import json
+import secrets
 import uuid
 import logging
 from datetime import datetime, timezone, timedelta
@@ -246,7 +247,23 @@ def record_event(tracking_id, event_type, req, extra_data=None):
     # Sync engagement data to CRM contact
     sync_crm_engagement(tracking_id, doc, event_type, extra_data)
 
-    # Telegram notification (skip heartbeats to avoid spam)
+    # Telegram notification (skip heartbeats to avoid spam).
+    #
+    # ⚠ QUIET POLICY for self-serve readers. Every non-heartbeat event notifies,
+    # which is right for a posted appraisal — Will mailed a handful of people and
+    # wants to know the moment one opens it. Self-serve is a different scale: a
+    # 20-page read fires ~20 `page_view` events, so at any real traffic level the
+    # channel becomes unreadable and the genuinely interesting signals (someone
+    # opened it; someone spent nine minutes on it) drown. Records minted by
+    # offmarket_report_poller carry notify_policy="quiet" and notify only on the
+    # first open and the session end. Everything is still RECORDED either way —
+    # pages, dwell, re-opens — this only governs what gets pushed to a phone.
+    quiet = doc.get("notify_policy") == "quiet"
+    QUIET_EVENTS = {"viewer_opened", "session_end", "conversation_requested",
+                    "feedback_submitted"}
+    if quiet and event_type not in QUIET_EVENTS:
+        return
+
     if event_type != "heartbeat":
         name = doc.get("recipient_name", "Unknown")
         addr = doc.get("property_address", "Unknown property")
@@ -613,7 +630,12 @@ def track_event():
 # Status endpoint — view all tracking data for a report
 @app.route("/status/<tracking_id>")
 def status(tracking_id):
-    doc = tracking_col().find_one({"tracking_id": tracking_id}, {"_id": 0})
+    # Knowing an id proves you hold the link, not that you may read the
+    # recipient's contact details or their raw event log (IPs, user agents).
+    projection = {"_id": 0} if _admin_ok(request) else {
+        "_id": 0, "recipient_email": 0, "events": 0,
+    }
+    doc = tracking_col().find_one({"tracking_id": tracking_id}, projection)
     if not doc:
         abort(404)
     # Convert datetimes to strings for JSON
@@ -629,8 +651,33 @@ def status(tracking_id):
 
 
 # List all tracked reports
+
+# ---------------------------------------------------------------------------
+# Admin auth
+# ---------------------------------------------------------------------------
+# ⚠ ADDED 2026-08-13 AFTER A LIVE PRIVACY LEAK. `/track/list` was
+# unauthenticated and returned 153 tracking records — real client names, 151
+# real EMAIL ADDRESSES, property addresses and engagement history — to anyone
+# who requested the URL. `/track/status/<id>` returned the entire document,
+# events included. Both were public on vm.fieldsestate.com.au.
+#
+# The reader-facing routes (/view, /page, /event, /download, /scan, /pixel)
+# stay open: they are reached with a 12-char unguessable id and are the product.
+# The ADMIN routes now require a bearer token.
+TRACKING_ADMIN_TOKEN = os.environ.get("TRACKING_ADMIN_TOKEN", "")
+
+
+def _admin_ok(req) -> bool:
+    if not TRACKING_ADMIN_TOKEN:
+        return False          # no token configured -> closed, never open
+    sent = (req.headers.get("Authorization") or "").removeprefix("Bearer ").strip()
+    return bool(sent) and secrets.compare_digest(sent, TRACKING_ADMIN_TOKEN)
+
+
 @app.route("/list")
 def list_tracked():
+    if not _admin_ok(request):
+        abort(401)
     docs = list(
         tracking_col().find(
             {},
