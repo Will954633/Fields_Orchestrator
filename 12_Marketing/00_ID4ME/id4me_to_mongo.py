@@ -9,8 +9,8 @@ data.
     python3 id4me_to_mongo.py --address "20 Chantilly Place, Robina, QLD 4226"
     python3 id4me_to_mongo.py --address "..." --dry-run
 
-The lookup itself is the unmodified tool in unzipped_20260813/01_ID4ME - this
-script only orchestrates it and shapes the result for Mongo.
+The lookup itself is the delivered ID4ME tool in tool/ - this script only
+orchestrates it and shapes the result for Mongo.
 
 PRIVACY: the payload holds names, dates of birth, phone numbers and email
 addresses of real people. Australian Privacy Act obligations apply. Check
@@ -23,7 +23,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-ID4ME_DIR = Path(__file__).resolve().parent / "unzipped_20260813" / "01_ID4ME"
+ID4ME_DIR = Path(__file__).resolve().parent / "tool"
 sys.path.insert(0, str(ID4ME_DIR))
 
 import lookup as id4me_lookup          # noqa: E402
