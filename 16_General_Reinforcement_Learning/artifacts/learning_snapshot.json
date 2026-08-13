@@ -1,0 +1,226 @@
+{
+  "built_at": "2026-08-13T09:07:35.002392+00:00",
+  "built_by": "scripts/build_learning_snapshot.py (Fields_Orchestrator)",
+  "impression_floor": 500,
+  "headline_outcomes": [
+    {
+      "title": "Someone Bought This Robina Home Six Months Ago. Now It's Back on the Market.",
+      "impressions": 12195,
+      "ctr_pct": 16.47
+    },
+    {
+      "title": "The Owner Paid $475,000 in 2010. They're Now Asking $1,285,000.",
+      "impressions": 2290,
+      "ctr_pct": 11.79
+    },
+    {
+      "title": "Someone Bought This Home 18 Months Ago. Now It's Back on the Market.",
+      "impressions": 705,
+      "ctr_pct": 11.49
+    },
+    {
+      "title": "Someone Paid $1,550,000 for This Burleigh Waters Home. Eighteen Months Later, It Sold for $3,465,000.",
+      "impressions": 6952,
+      "ctr_pct": 9.97
+    },
+    {
+      "title": "Burleigh Waters Has a New Upper Limit Test: $4,150,000.",
+      "impressions": 2200,
+      "ctr_pct": 7.82
+    },
+    {
+      "title": "$1,710,000 on Outrigger Drive: What This Robina Result Tells the Market",
+      "impressions": 5638,
+      "ctr_pct": 6.49
+    },
+    {
+      "title": "Is Now a Good Time to Buy in Burleigh Waters?",
+      "impressions": 5397,
+      "ctr_pct": 6.06
+    },
+    {
+      "title": "Why Queensland Won't Tell You What an Auction Property Is Worth — And What to Do About It",
+      "impressions": 1869,
+      "ctr_pct": 0.75
+    },
+    {
+      "title": "The Southern Gold Coast Apartment Boom: A Suburb-by-Suburb Guide",
+      "impressions": 2856,
+      "ctr_pct": 0.74
+    },
+    {
+      "title": "Is Now a Good Time to Buy in Varsity Lakes?",
+      "impressions": 845,
+      "ctr_pct": 0.71
+    },
+    {
+      "title": "Is Now a Good Time to Buy in Robina?",
+      "impressions": 2847,
+      "ctr_pct": 0.7
+    },
+    {
+      "title": "Is Now a Good Time to Sell in Robina?",
+      "impressions": 3098,
+      "ctr_pct": 0.65
+    },
+    {
+      "title": "$2,545,000 at 27 Warrina Crescent: What a Near-Double in Five Years Tells Us About Burleigh Waters",
+      "impressions": 559,
+      "ctr_pct": 0.54
+    },
+    {
+      "title": "Robina's Fastest-Moving Year in Half a Decade",
+      "impressions": 2211,
+      "ctr_pct": 0.05
+    }
+  ],
+  "read_depth": [
+    {
+      "title": "Burleigh Waters Posts a +38.7% Quarterly Surge — the Strongest Single-Quarter Move Across the Corridor",
+      "paid_sessions": 10,
+      "avg_scroll_pct": 20.0,
+      "headline_ctr_pct": 0
+    },
+    {
+      "title": "Someone Paid $1,550,000 for This Burleigh Waters Home. Eighteen Months Later, It Sold for $3,465,000.",
+      "paid_sessions": 37,
+      "avg_scroll_pct": 10.1,
+      "headline_ctr_pct": 9.97
+    }
+  ],
+  "distribution": {
+    "measurable": 20,
+    "insufficient": 20,
+    "never_distributed": 60
+  },
+  "laws": [
+    {
+      "id": "law_headline_formula_for_cheap_clicks",
+      "title": "The cheap-click headline formula: specific price + specific timeframe + implied story",
+      "actionable": "Use for reach and traffic goals only, never as a lead-quality signal.",
+      "confidence": "high",
+      "evidence": "'Someone Bought This Robina Home Six Months Ago' $0.16/click, 946 clicks, $152.96 · 'The Owner Paid $475,000 in 2010. They're Now Asking $1,285,000' $0.31/click, 111 clicks · '$1,710,000 on Outrigger Drive' $0.14/click, 92 clicks · 'Who buys for $1,550,000 and sells eighteen months later for $3,465,000?' $0.12/click, 48 clicks."
+    },
+    {
+      "id": "law_broad_market_commentary_is_the_anti_pattern",
+      "title": "Broad market commentary without a personal stake gets the most expensive clicks",
+      "actionable": "Never ship a suburb-statistic headline with no personal stake.",
+      "confidence": "high",
+      "evidence": "'Robina's Fastest-Moving Year in Half a Decade' $7.29/click (copy) and $5.10/click (original), 8 clicks total, ~$56 spent · 'Southern Gold Coast Apartment Boom' $5.83/click, 6 clicks · 'Gold Coast Interstate Migration' $2.02/click, 6 clicks · 'Robina Sales Volume Surges 111%' $3.31/click, 2 clicks. Against $0.12-$0.31 for story formats. Independently corroborated by the hook corpus: the same 'Fastest-Moving Year' ad is the WORST performer above the evidence floor at 0.05% CTR on 1,879 impressions."
+    },
+    {
+      "id": "law_abstract_without_dollars_dead",
+      "title": "Abstract concepts die at scroll speed — 7 of 7, zero exceptions",
+      "actionable": "Show the number. Never name the category the number is in.",
+      "confidence": "high",
+      "evidence": "AN6 'five-figure gap' 0.6% CTR / 151 impressions · AN8 'a different number' 2.4% / 247 · AN12 visual info-gap 0.00% / 76 · AN20 'wrong year' 0.9% / 106 · AN22 net proceeds 2.81% / 178 · AN23 three numbers 2.99% / 167 · AN25 equity 3.68% / 190. Contrast AN2's concrete '$1,440,000 → $2,500,000' at 9.44% CTR."
+    },
+    {
+      "id": "law_dollar_anchor_not_sufficient",
+      "title": "A dollar anchor is NECESSARY BUT NOT SUFFICIENT — one number, not a puzzle",
+      "actionable": "One number per hook. Never a spread, never a three-way framework.",
+      "confidence": "medium",
+      "evidence": "AN39 'The Valuation Spread' (three appraisals $1.2M/$1.35M/$1.48M → a $280,000 spread): 0 link clicks on 114 combined impressions, 0.00% CTR both backgrounds, AFTER a starvation-relief cull guaranteed a fair auction for a full hour. AN40 'Kitchen Math' ($80,000 kitchen returns ~$34,000): dark 0.0% on 69 impressions, light 1.4% on 71 — the second kill of the renovation axis after AN13's narrative-only death."
+    },
+    {
+      "id": "law_aggregate_stats_dont_personalise",
+      "title": "Aggregate statistics create awareness; single specific examples create identification",
+      "actionable": null,
+      "confidence": "high",
+      "evidence": "AN1 raw stat 2.4% CTR / 295 impressions / $21.71 / 0 leads · AN4 same stat plus an address ask 1.4% / 155 · AN24 same stat as a research narrative, dark 3.92% / 102, light 3.03% / 99. Six variants, ~900 impressions, zero leads."
+    },
+    {
+      "id": "law_facebook_scroll_depth_caps_at_50pct",
+      "title": "Scroll depth from Facebook traffic caps at ~50% regardless of content quality",
+      "actionable": "Put anything that must be seen above the halfway point of the page.",
+      "confidence": "high",
+      "evidence": "Three separate tests, ~1,200 total sessions, identical result: V2 broad 50.1%, V2 core 50.3%, V3 49.8% — average and median both ~50%, unchanged by content improvements that lifted time on page +24%."
+    },
+    {
+      "id": "law_conversion_content_never_reached",
+      "title": "Only 10% of feed visitors reach the CTA — it sits below the scroll ceiling",
+      "actionable": null,
+      "confidence": "high",
+      "evidence": "V3 section funnel: feed view 86% → Seller Anchor 38% (a 48pp drop) → Big Mistake 32% → Insight 30% → Compare 24% → Fields Pick 15% → Save Worthy 14% → Seller Bridge 13% → CTA 10%."
+    },
+    {
+      "id": "law_articles_are_dead_ends",
+      "title": "Article pages are dead ends — 95% read and leave; zero property views from any ad",
+      "actionable": "A new hook cannot fix this. Do not attribute a conversion failure to the headline until a next step exists.",
+      "confidence": "high",
+      "evidence": "Of 310 tracked Facebook sessions: 296 stayed on the article page only, 2 reached /for-sale, 1 reached a property page, 11 reached market-intelligence. And: zero tracked property views across ALL ads in the attribution data."
+    }
+  ],
+  "cautions": [
+    {
+      "id": "caution_hook_corpus_has_no_lead_outcomes",
+      "title": "The semantic hook corpus contains ZERO lead-optimised ads — CTR is all it can measure",
+      "actionable": "Annotating the 108 OUTCOME_LEADS ads is the single highest-value unblock — it would let the hook taxonomy be tested against leads rather than clicks.",
+      "confidence": "high",
+      "evidence": "Join of ad_profiles (203) to ad_semantic_annotations (92) matches 92 of 92 on ad_id. Objective mix of the matched set: OUTCOME_ENGAGEMENT 57 ads / 74,649 impressions · OUTCOME_TRAFFIC 33 / 217,956 · OUTCOME_AWARENESS 2 / 12,603. The account's 108 OUTCOME_LEADS ads — including all 43 homeowner-funnel angles — are entirely UNANNOTATED. Attributed leads in the corpus: 0. Only 55 of 92 rows clear a 500-impression evidence floor."
+    },
+    {
+      "id": "caution_reward_sparsity_verdicts_are_coinflips",
+      "title": "READ FIRST — the entire copy-discovery run rests on 7 lead events",
+      "actionable": "The prescribed fix was to move the optimisation target up-funnel to engagement, where there are 50-100x the data points per dollar.",
+      "confidence": "high",
+      "evidence": "Verbatim from the mandate scoping doc: '$868 spend → 7 leads → 4 quality \"Yes\" (one of those a fake +93 phone). Blended CPL $124. The killer problem is reward sparsity. 1-2 leads per winning ad is statistically noise. You cannot optimise copy — let alone sequences of copy — on 7 events. Every cycle \"verdict\" to date is a coin-flip dressed as a finding. All conversions landed Day 1, then flatlined despite continued spend — but off 1-2 leads that decay is indistinguishable from noise.'"
+    },
+    {
+      "id": "caution_out_of_market_economics_do_not_transfer",
+      "title": "All copy testing ran OUT OF MARKET — funnel shape transfers, economics do not",
+      "actionable": "Never quote a funnel-run CPL as a Gold Coast forecast.",
+      "confidence": "high",
+      "evidence": "Verbatim: 'Transfers to GC: funnel SHAPE, PII-resistance RANKING, warm-up DEPTH, hook MECHANICS — these are structural/psychological. Does NOT transfer: absolute CPL, absolute conversion rate, whether the person is a real prospect (Brisbane people aren't your buyers). Economics are re-validated only in a GC run — never trust a Brisbane CPL as a GC forecast.' Out-of-market leads received nothing post-submit by design."
+    }
+  ],
+  "dead_hook_mechanics": [
+    {
+      "mechanic": "Naming the category instead of showing the number",
+      "detail": "'a five-figure gap', 'the valuation spread', 'the equity you can't see'. The abstraction is the failure, not the topic.",
+      "from_angles": [
+        "AN6",
+        "AN8",
+        "AN23",
+        "AN25",
+        "AN39"
+      ]
+    },
+    {
+      "mechanic": "A population statistic offered as if it were personal",
+      "detail": "'89% of homes are overvalued', '3.6% national growth'. Aggregates create awareness, never identification. One specific address outperforms every time.",
+      "from_angles": [
+        "AN1",
+        "AN5",
+        "AN24"
+      ]
+    },
+    {
+      "mechanic": "Pure utility with no open question",
+      "detail": "'Sold-price alerts', 'The Cost of Selling — itemised'. Useful, complete, and therefore nothing to click. A headline that answers itself has no reader.",
+      "from_angles": [
+        "AN7",
+        "AN16",
+        "AN22"
+      ]
+    },
+    {
+      "mechanic": "More than one number in the hook",
+      "detail": "Three-figure frameworks and spreads compete with themselves. One dominant number per headline. A second number belongs in the body.",
+      "from_angles": [
+        "AN23",
+        "AN39",
+        "AN31"
+      ]
+    },
+    {
+      "mechanic": "Generic 'how to' / 'is now a good time' framing",
+      "detail": "Confirmed on our OWN articles, not just ads — see the headline table.",
+      "from_angles": [
+        "AN8",
+        "AN9",
+        "AN13"
+      ]
+    }
+  ]
+}
