@@ -59,6 +59,16 @@ EXTERIOR = {
     "sky", "tree", "outdoor structure", "patio", "deck", "terrace", "balcony",
     "architecture", "shade", "landscape", "swimming pool",
 }
+# The subset of EXTERIOR that specifically evidences a BUILDING, as opposed to
+# merely being outdoors. A cover is a portrait of a home; a garden, a fence or a
+# paved patio is outdoors and still not the subject.
+DWELLING = {
+    "house", "home", "building", "residential area", "roof", "facade",
+    "property", "cottage", "villa", "mansion", "farmhouse", "estate",
+    "condominium", "apartment", "architecture", "siding", "garage",
+    "real estate", "residential",
+}
+
 INTERIOR = {
     "kitchen", "countertop", "cabinetry", "room", "interior design", "furniture",
     "floor", "ceiling", "living room", "couch", "tile", "bathroom", "bedroom",
@@ -178,6 +188,18 @@ def assess(image_bytes: bytes) -> dict:
     # no_exterior_signal below, which is the case that actually matters.
     if ext == 0:
         return {"publishable": False, "reason": "no_exterior_signal", "detail": detail}
+
+    # ⚠ OUTDOORS IS NOT ENOUGH — THE COVER MUST SHOW THE DWELLING.
+    # Widening the candidate window to 20 surfaced a new failure: 1 Ashwood
+    # Court's photo #11 is a covered patio facing a fence. It scored exterior
+    # 3.01 on brick/shade/garden/backyard with NO dwelling label at all, passed
+    # as "exterior", and produced a markedly worse cover than the outlined
+    # aerial it replaced. A real facade scores 13.41 and carries home/house/
+    # roof/residential area, so the two separate cleanly on dwelling evidence.
+    dwelling = sum(s for k, s in labels.items() if k in DWELLING)
+    detail["dwelling"] = round(dwelling, 2)
+    if dwelling < 0.5:
+        return {"publishable": False, "reason": "no_dwelling_visible", "detail": detail}
 
     return {"publishable": True, "reason": None, "detail": detail}
 
