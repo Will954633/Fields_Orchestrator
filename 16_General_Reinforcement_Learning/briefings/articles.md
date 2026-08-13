@@ -40,7 +40,9 @@ python3 conductor_state.py directive --domain seo --from articles --text "<...>"
 | Publishing | **NOT paused** — publishing is expected | Will: *"publishing is not paused, we should have published articles this week?"* |
 | Recent output | Articles published in the last two weeks, but **there have been workflow errors** | The gap is a pipeline failure, not a decision. Investigate it. |
 | Approval | Every article still needs Will's explicit yes before going live | 2026-07-29 rule, still standing. |
-| Approval mechanism | **BUILT + APPROVED 2026-08-13** — `scripts/article_approval.py` | Drafts go to Telegram with YES/NO buttons; Will's rejection FEEDBACK is stored on the article and replayed to you. |
+| Approval mechanism | **BUILT 2026-08-13** — `article_approval.py` + `article_revise.py` | Drafts go to Telegram with YES/NO buttons AND a live preview link. A NO now triggers an automatic revision against Will's feedback and RE-PROPOSES — capped at 3 rounds, then parked `needs_human`. |
+| Authorship | **ALL articles authored by Will Simpson** (Will, 2026-08-13) | Was 73 'Fields Research' / 26 'Will Simpson'; corrected corpus-wide to `author='Will Simpson'`, `author_slug='will'`. |
+| QLD licence number in disclaimers | **4832972** — corrected corpus-wide 2026-08-13 | 68 articles (40 published) carried **4832971**, wrong by one digit. Recurrence of a 2026-06-21 fix that only corrected 3 website pages. ⚠ The GENERATOR still produces it — 28 of the 68 were created in Aug 2026. Source not yet found. |
 | 15 how-it-sold drafts | Exist; format ranks page-1 for exact-address queries | Awaiting Will. |
 
 ## 3. Goals — what good looks like
@@ -67,6 +69,8 @@ KPIs Will attached to this domain:
   Will taps YES/NO in Telegram; a poller publishes or records his reason. **Read
   `will_feedback` on any rejected article before redrafting it** — that field is the
   clearest statement of what he wants, exactly like a recommendation verdict.
+- **Revising a rejected draft**: `article_revise.py --id <id>` runs automatically on rejection.
+  You may also run it by hand. It never publishes — Will's tap is still the only way live.
 
 ## 5. Off-limits — never, regardless of anything else
 

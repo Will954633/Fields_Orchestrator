@@ -44,6 +44,7 @@ import argparse
 import os
 import re
 import secrets
+import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
 
@@ -125,16 +126,26 @@ def cmd_propose(a):
         "status": "awaiting_approval", "created_at": NOW.isoformat(),
     })
 
+    # Drafts are already reachable at their live URL: db.server.ts findArticle() looks up by
+    # slug or _id and does NOT filter on status, so the real page renders — hero image,
+    # charts, styling and all — without publishing anything or building a preview route.
+    # Nothing links to it and it is not in the sitemap, so it stays effectively unlisted.
+    url = f"https://fieldsestate.com.au/articles/{slug}" if slug else None
+
     _tg(f"📝 *Article draft for approval*  [#{tok}]\n\n"
         f"*{title}*\n"
-        f"_{words} words · /{slug}_\n\n"
+        f"_{words} words_\n\n"
         f"{excerpt}…\n\n"
-        f"Tap *YES {tok}* to publish, or *NO {tok}* — and add why, e.g.\n"
+        + (f"📄 [Read the full draft]({url})\n_(live preview — hero image and all; "
+           f"still unpublished)_\n\n" if url else
+           "_⚠ No slug on this article, so there is no preview link._\n\n")
+        + f"Tap *YES {tok}* to publish, or *NO {tok}* — and add why, e.g.\n"
         f"`NO {tok} too generic, needs the Robina median in the opener`\n"
         f"_Your reason goes back to the articles agent; it is how it learns._\n"
         f"(expires in {EXPIRE_H}h)",
         keyboard=_keyboard(tok))
     print(f"proposed article #{tok}: {title}")
+    print(f"  preview: {url}")
 
 
 def _wills_verdict(sm, pend):
@@ -209,12 +220,29 @@ def cmd_poll(a):
                 "status": "rejected", "feedback": feedback,
                 "decided_at": NOW.isoformat()}})
             if feedback:
+                # Close the loop rather than parking it (Will, 2026-08-13): hand the
+                # feedback straight to a revision agent, which edits the draft and
+                # re-proposes it. Detached, because that agent takes minutes and this
+                # poller must return promptly for the next cron tick.
                 _tg(f"❌ Held: *{pend['title']}*\nNoted: _{feedback}_\n"
-                    f"The articles agent reads this next cycle.")
+                    f"Revising now — I'll resend the draft for approval shortly.")
+                try:
+                    subprocess.Popen(
+                        [sys.executable,
+                         "/home/fields/Fields_Orchestrator/scripts/article_revise.py",
+                         "--id", str(pend["article_id"])],
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                        start_new_session=True)
+                    print(f"  -> revision agent launched for {pend['article_id']}")
+                except Exception as e:
+                    print(f"  -> FAILED to launch revision agent: {e}")
+                    _tg(f"⚠️ Could not start the revision agent for *{pend['title']}* "
+                        f"({e}). The feedback is saved; it needs a manual run of "
+                        f"`article_revise.py --id {pend['article_id']}`.")
             else:
                 _tg(f"❌ Held: *{pend['title']}*\n"
-                    f"No reason given — the agent can't learn from that. "
-                    f"Reply `NO {pend['token']} <why>` if you want it to.")
+                    f"No reason given — so there is nothing to revise against. "
+                    f"Reply `NO {pend['token']} <why>` and I'll fix it and resend.")
             print(f"rejected #{pend['token']}: {feedback!r}")
     print(f"poll complete — {acted} decision(s) actioned")
 
