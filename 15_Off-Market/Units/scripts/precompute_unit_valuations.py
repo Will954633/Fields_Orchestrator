@@ -144,7 +144,37 @@ def main():
             print(f"  {suburb:17s} {n:6,} attached · {ranged:6,} with a range "
                   f"({ranged/max(1,n)*100:4.1f}%) · publishable: {pub}")
 
+        # ⚠ SWEEP ORPHANS. This job only writes records for dwellings it EVALUATES, so a
+        # dwelling that stops being attached — reclassified as a house, or caught by the
+        # `non_dwelling` bucket added 2026-08-13 — keeps its last valuation forever. It is
+        # never updated and never cleared, because the loop above never reaches it.
+        # Found 25 such records still carrying the pre-dedupe accuracy figures (n=625/992/167)
+        # days after those figures were superseded. Nothing renders them today: the route
+        # only loads a unit valuation when the dwelling is attached. That is a consumer
+        # being careful, not the data being right — the same reasoning as the $unset above.
+        # Safe to delete: every field here is derived and regenerated from source each run.
+        if not args.dry_run and not args.suburb and not args.limit:
+            live = set()
+            for suburb in targets:
+                for d in gc[suburb].find({}, {"url_slug": 1, "address": 1,
+                                              "complete_address": 1, "street_address": 1,
+                                              "property_type": 1,
+                                              "classified_property_type": 1,
+                                              "scraped_data.features.property_type": 1,
+                                              "scraped_data_v2.property_type": 1}):
+                    eff = (d.get("address") or d.get("complete_address")
+                           or d.get("street_address") or "")
+                    if (d.get("url_slug")
+                            and classify_dwelling({**d, "street_address": eff}) == "attached"):
+                        live.add(d["url_slug"])
+            orphans = [d["_id"] for d in col.find({}, {"_id": 1}) if d["_id"] not in live]
+            if orphans:
+                col.delete_many({"_id": {"$in": orphans}})
+            print(f"  orphaned records removed (no longer attached): {len(orphans):,}")
+            totals["orphans"] = len(orphans)
+
         beat.metrics = {"attached": totals["total"], "ranged": totals["ranged"],
+                        "orphans_removed": totals.get("orphans", 0),
                         "coverage_pct": round(totals["ranged"] / max(1, totals["total"]) * 100, 1)}
         beat.detail = f"{totals['ranged']:,} of {totals['total']:,} attached dwellings valued"
 
