@@ -719,6 +719,40 @@ def render_appraisal(
     hero_source = None     # "pipeline" | "auto_apr01" | "auto_scraped" | "local_street_view" | "boundary_aerial" | "local_cadastral"
     satellite_source = None  # "pipeline" | "annotated" | "satellite_analysis" | "boundary_aerial" | "auto_static_maps"
 
+    # ⚠ WATERFRONT GUARD — self-serve only.
+    #
+    # Waterfront has been out of scope since 2026-07-26: the comparable-sales
+    # model values a waterfront home against dry blocks and produces a
+    # materially wrong range, so the figure and range are withheld platform-wide.
+    # Every other surface has a human or an editor between that policy and a
+    # reader. The self-serve download does not — it hands a PDF straight to
+    # whoever clicked. So it refuses outright rather than publishing a number
+    # the policy says we must withhold.
+    #
+    # Analyst-driven renders are deliberately NOT blocked: Will can see the
+    # property is waterfront and decide, which is the judgement the policy
+    # assumes. This guard exists because self-serve removes that judgement.
+    if self_serve:
+        try:
+            from shared.waterfront import detect_waterfront  # type: ignore
+            _wf_doc = None
+            if suburb_key:
+                _wf_doc = get_client()["Gold_Coast"][suburb_key].find_one({"_id": ObjectId(subject_id)})
+            _wf = detect_waterfront(_wf_doc or {})
+            if _wf.get("is_waterfront"):
+                html_path.unlink(missing_ok=True)
+                raise RuntimeError(
+                    f"Refusing to self-serve render {subject_id} "
+                    f"({(_wf_doc or {}).get('complete_address', 'unknown address')}): "
+                    f"property is waterfront (reason={_wf.get('reason')}, "
+                    f"detail={_wf.get('signals', {}).get('osm_water_frontage')}). "
+                    f"Waterfront is out of scope — the comparable-sales model values it "
+                    f"against dry comps and the range is withheld platform-wide. "
+                    f"An analyst-driven render (without --self-serve) is still permitted."
+                )
+        except ImportError:
+            print("  [WARN] shared.waterfront unavailable — waterfront guard NOT applied")
+
     # Look up the subject doc up-front — used by both hero and satellite blocks.
     from shared.db import get_client as _gc
     _subj = None
