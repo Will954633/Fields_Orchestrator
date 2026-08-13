@@ -110,7 +110,28 @@ def main():
                         "explain": r.get("explain"),
                         "publishable": False,
                     })
-                ops.append(UpdateOne({"_id": slug}, {"$set": doc}, upsert=True))
+                # ⚠ A DECLINE MUST ERASE THE PREVIOUS FIGURE, NOT JUST STOP UPDATING IT.
+                # `$set` only writes the fields it names. When a dwelling that HAD a range
+                # stops earning one, every range field from the previous run survives on
+                # the document, so the record says `method: declined, publishable: false`
+                # while still carrying `point`, `low`, `high`, `accuracy` and a full
+                # comparables list from a superseded method.
+                # Found 2026-08-13: 6 live indexed pages in that state after dedupe_sales
+                # pushed their comparables past MAX_UPLIFT — e.g. 71/98 University Drive
+                # declined for `comparables_too_old` while holding point=$579,550 and
+                # accuracy.n=992 (the pre-dedupe sample size).
+                # Nothing rendered them, because UnitValuationSection gates on
+                # `publishable`. That is one consumer being careful, not the data being
+                # right — and it is precisely the market_pulse failure CLAUDE.md Rule 6
+                # was written for: a partial $set leaving one content layer stale until it
+                # contradicted the rest of the page.
+                op = {"$set": doc}
+                if r.get("method") != "same_complex_comparables":
+                    op["$unset"] = {k: "" for k in (
+                        "low", "high", "point", "band_pct", "n_comps", "n_available",
+                        "adjusted_low", "adjusted_high", "comparables", "band_basis",
+                        "accuracy", "dropped_too_old", "dropped_undeflatable")}
+                ops.append(UpdateOne({"_id": slug}, op, upsert=True))
                 if len(ops) >= 250 and not args.dry_run:
                     col.bulk_write(ops, ordered=False)
                     ops = []
