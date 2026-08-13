@@ -59,6 +59,40 @@ BLOB_ROOT = Path("/data/blobs/property-images/aerial")
 PUBLIC_ROOT = "https://blobs.fieldsestate.com.au/property-images/aerial"
 
 
+
+def build_query(args):
+    """The set of dwellings this pass will render.
+
+    ⚠ ONE DEFINITION, USED BY BOTH THE COST ESTIMATE AND THE RUN. It was written out
+    twice, identically, which is how an estimate quietly stops describing the job it is
+    estimating — the same duplicated-policy shape as the sitemap/robots divergence.
+    """
+    q = {"listing_status": {"$nin": ["sold", "for_sale"]},
+         "LOT": {"$nin": [None, ""]}, "PLAN": {"$nin": [None, ""]}}
+    if not args.attached:
+        q["property_type"] = "House"
+    # INDEXED PAGES FIRST. The aerial is the hero — the first thing on the page and the
+    # reason a reader recognises their own home. 4,980 unit URLs entered the index on
+    # 2026-08-13, and a broad pass over all 13,329 attached dwellings reached only 7% of
+    # them in the first hours because it walks the collection in natural order.
+    if args.indexable_only:
+        q["unit_indexable"] = True
+        # ⚠ AND DROP THE listing_status EXCLUSION, WHICH CONTRADICTS THE FLAG.
+        # The default query skips `sold` because a sold HOUSE belongs to the
+        # recently-sold surface, not the off-market one. `flag_unit_indexable`
+        # deliberately ALLOWS sold dwellings — a sale history is what earns an
+        # off-market page at all; only `for_sale`/`under_contract` are declined.
+        # Leaving the exclusion in meant 110 live indexed unit pages could never
+        # receive an aerial: the flag said "publish this" and the renderer said "not
+        # eligible". `unit_indexable` is the single definition of what is published
+        # (flag_unit_indexable.py); it must not be intersected with an older rule
+        # that disagrees with it.
+        q.pop("listing_status", None)
+    if not args.force:
+        q["aerial_boundary_url"] = {"$exists": False}
+    return q
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--suburb", default=None)
@@ -83,20 +117,7 @@ def main():
             # a townhouse resolves its OWN lot (1GTP3941 -> 195 m²), and an apartment,
             # which owns no land and has no polygon of its own, falls back to the scheme
             # parcel (0SP197709 -> 3,582 m²). See polygon_for()/scheme_lotplan_for().
-            q = {"listing_status": {"$nin": ["sold", "for_sale"]},
-                 "LOT": {"$nin": [None, ""]}, "PLAN": {"$nin": [None, ""]}}
-            if not args.attached:
-                q["property_type"] = "House"
-            # INDEXED PAGES FIRST. The aerial is the hero — the first thing on the page
-            # and the reason a reader recognises their own home. 4,980 unit URLs entered
-            # the index on 2026-08-13, and a broad pass over all 13,329 attached
-            # dwellings reached only 7% of them in the first hours because it walks the
-            # collection in natural order. Restrict a pass to the pages that are actually
-            # live to Google; run that first, then the broad pass for the remainder.
-            if args.indexable_only:
-                q["unit_indexable"] = True
-            if not args.force:
-                q["aerial_boundary_url"] = {"$exists": False}
+            q = build_query(args)
             n = db[s].count_documents(q)
             total += n
             print(f"  {s:<18}{n:>7,} to render")
@@ -115,20 +136,7 @@ def main():
             # a townhouse resolves its OWN lot (1GTP3941 -> 195 m²), and an apartment,
             # which owns no land and has no polygon of its own, falls back to the scheme
             # parcel (0SP197709 -> 3,582 m²). See polygon_for()/scheme_lotplan_for().
-            q = {"listing_status": {"$nin": ["sold", "for_sale"]},
-                 "LOT": {"$nin": [None, ""]}, "PLAN": {"$nin": [None, ""]}}
-            if not args.attached:
-                q["property_type"] = "House"
-            # INDEXED PAGES FIRST. The aerial is the hero — the first thing on the page
-            # and the reason a reader recognises their own home. 4,980 unit URLs entered
-            # the index on 2026-08-13, and a broad pass over all 13,329 attached
-            # dwellings reached only 7% of them in the first hours because it walks the
-            # collection in natural order. Restrict a pass to the pages that are actually
-            # live to Google; run that first, then the broad pass for the remainder.
-            if args.indexable_only:
-                q["unit_indexable"] = True
-            if not args.force:
-                q["aerial_boundary_url"] = {"$exists": False}
+            q = build_query(args)
             cursor = db[suburb].find(q, {"address": 1, "LOT": 1, "PLAN": 1,
                                          "LATITUDE": 1, "LONGITUDE": 1})
             if args.limit:
