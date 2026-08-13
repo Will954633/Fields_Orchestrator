@@ -161,6 +161,33 @@ def detect_waterfront(doc):
     if sat_reason:
         signals[sat_reason] = sat_detail
 
+    # Signal 4: OSM measured water geometry.
+    #
+    # ⚠ THIS IS THE STRONGEST SIGNAL WE HAVE AND IT WAS BEING MISSED. The line
+    # below used to read `doc.get('waterfront_premium_eligible')` at the TOP
+    # level — the field has always lived nested under
+    # `osm_location_features.water_features`. So the detector was written to
+    # consume exactly this evidence and looked for it at the wrong depth,
+    # silently finding nothing. The OSM block was backfilled on 2026-08-08,
+    # after this module was written on 2026-07-26, and lake homes were the
+    # documented blind spot the backfill existed to close.
+    #
+    # Measured on 2026-08-13 across the three core suburbs: 2,011 properties
+    # carry OSM waterfront geometry, only 63 were flagged — 1,948 missed, of
+    # which 252 had a published valuation range built from dry comparables,
+    # precisely the failure the out-of-scope policy exists to prevent.
+    #
+    # `waterfront_premium_eligible` already encodes conservative thresholds set
+    # in backfill_osm_water_features.py (lake/river/canal front 30 m, coastline
+    # 50 m), so it is used as-is rather than re-deriving a distance rule here.
+    osm_water = ((doc.get('osm_location_features') or {}).get('water_features') or {})
+    if osm_water.get('waterfront_premium_eligible') is True:
+        signals['osm_water_frontage'] = {
+            'waterfront_type': osm_water.get('waterfront_type'),
+            'distance_to_water_m': osm_water.get('distance_to_water_m'),
+            'nearest_water_type': osm_water.get('nearest_water_type'),
+        }
+
     # Signal 0: explicit flag already present (manual override or a prior backfill).
     explicit = bool(doc.get('is_waterfront') or doc.get('waterfront_premium_eligible'))
     if explicit:
@@ -168,11 +195,14 @@ def detect_waterfront(doc):
 
     is_waterfront = explicit or bool(
         signals.get('photo_vision') or signals.get('listing_text') or sat_reason
+        or signals.get('osm_water_frontage')
     )
 
-    # Strongest evidence-based reason first (more informative than the persisted flag).
+    # Strongest evidence-based reason first (more informative than the persisted
+    # flag). Measured geometry outranks vision and text — it is the only signal
+    # with a metre distance behind it.
     reason = None
-    for candidate in ('photo_vision', 'listing_text',
+    for candidate in ('osm_water_frontage', 'photo_vision', 'listing_text',
                       'satellite_water_proximity', 'satellite_backs_onto'):
         if candidate in signals:
             reason = candidate
