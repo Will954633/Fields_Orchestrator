@@ -2249,11 +2249,67 @@ def calculate_confidence(points, n_total_override=None, suburb_key=None):
 #     16_Valuation/experiments/calibration_refit.py     (the factors)
 #     16_Valuation/refresh_page_accuracy.py             (checks the drift)
 # Full working: 16_Valuation/experiments/ and logs/fix-history/2026-08-10.md.
+# ⚠ RE-DERIVED 2026-08-12, TOGETHER with the unknown-attribute hardening below.
+# The 2026-08-10 refit was fitted under the OLD unknown handling, where an
+# un-analysed subject was marked down ~1.4%; enabling the hardening removes that
+# markdown, so those factors would have been stale on arrival. Re-fitted on half
+# and validated on the other half with the hardening ON
+# (`experiments/calibration_refit.py`, n=631). Every suburb improved out-of-sample:
+#     robina          1.0189 -> 1.0     MAE 8.84 -> 8.52,  bias +1.88% -> +0.03%
+#     varsity_lakes   1.1243 -> 1.1001  MAE 8.07 -> 7.64,  bias +2.83% -> +0.62%
+#     burleigh_waters 0.9925 -> 1.0177  MAE 8.16 -> 7.80,  bias -3.74% -> -1.29%
+#
+# ROBINA NO LONGER NEEDS A CORRECTION. Its refitted factor is 1.0005, and the
+# holdout shows applying it and applying nothing are indistinguishable (MAE 8.52%
+# either way). Set to exactly 1.0 rather than shipping a 0.05% constant that looks
+# like a measurement but is noise. The entry is KEPT, not deleted, so the record
+# shows the suburb was measured and found to need nothing — an absent entry would
+# read as "never measured".
+#
+# ⚠ BURLEIGH WATERS KEEPS ITS INCUMBENT FACTOR — the refit's 1.0177 is WRONG, and
+# so is the 2026-08-10 refit that first proposed it. `calibration_refit.py` calls
+# `backtest_single_property(..., median_cache={}, street_premium_cache={})` — empty
+# caches — so it fits against a method with NO street-premium or micro-location
+# adjustment. That is not the method we ship. On the stripped method Burleigh reads
+# as UNDERvaluing by −3.74%, so correcting up looks right; on the real method it
+# already OVERvalues by +3.8%, and 1.0177 corrects the wrong way. Measured on the
+# full backtest, identical data, n=145:
+#       0.9925 (incumbent)   MAE  9.3%   bias +3.8%
+#       1.0177 (refit)       MAE 10.4%   bias +6.6%
+# Robina and Varsity Lakes are adopted because they also improve on the FULL
+# backtest (robina 9.2 → 9.0, varsity_lakes 7.7 → 7.7 with bias improving); the
+# refit's own numbers were not sufficient evidence for any of the three.
+# Fix calibration_refit.py to populate the caches before trusting it again.
+# ⏸ HELD AT THE INCUMBENT VALUES 2026-08-12. The re-derivation below is DONE and
+# validated on the full backtest — robina 1.0189 -> 1.0 (MAE 9.2 -> 9.0) and
+# varsity_lakes 1.1243 -> 1.1001 (7.7 = 7.7, bias improves) both win; burleigh_waters
+# KEEPS 0.9925 because the refit's 1.0177 measured worse (9.3 -> 10.4, bias +3.8% ->
+# +6.6%). It is not applied yet only because applying it requires the page tables to
+# move in the same change, and that was not finishable before the 20:30 recompute.
+# Nothing here is blocked on measurement — see
+# 16_Valuation/experiments/2026-08-12-unknown-attribute-hardening.md §6.
+#
+# TO SHIP (one change): set the three factors below, flip _LEGACY_UNKNOWN to
+# hardening-on, re-derive the 80% bands, update v4/valuationCopy.ts and add a dated
+# file to 16_Valuation/accuracy/.
+#     varsity_lakes 1.1001 · robina 1.0 · burleigh_waters 0.9925 (unchanged)
 _SUBURB_CALIBRATION = {
     'varsity_lakes':   1.1243,
     'robina':          1.0189,
     'burleigh_waters': 0.9925,
 }
+
+# Testing affordance: VALUATION_CALIBRATION_OVERRIDE='{"robina": 1.0189, ...}'
+# replaces the table for one process. Exists so a calibration change can be A/B'd
+# against the shipped values on identical data without editing this file — the
+# 2026-08-12 release needed exactly that to tell a real regression apart from a
+# population difference between the refit's filtered sample and the full backtest.
+if os.environ.get("VALUATION_CALIBRATION_OVERRIDE"):
+    try:
+        import json as _json
+        _SUBURB_CALIBRATION = dict(_json.loads(os.environ["VALUATION_CALIBRATION_OVERRIDE"]))
+    except Exception:
+        pass
 
 # ── Adjustment reliability shrinkage (added 2026-08-08) ──────────────────────
 #
@@ -2325,21 +2381,24 @@ _RETIRED_ADJUSTMENTS = ('kitchen', 'renovation', 'renovation_quality')
 # comparables are listed homes with 73-97% photo coverage, while off-market
 # subjects mostly have none.
 #
-# ⚠ WHY IT IS OFF BY DEFAULT. Measured A/B on identical data (robina, n=253,
-# --price-filter none --blind-subject, full photo-blinding via BACKTEST_BLIND_FULL):
+# ⏸ WRITTEN AND MEASURED, NOT YET ENABLED (2026-08-12). Ships with the calibration
+# above and the re-derived page tables as ONE change — the three-part release the
+# 08-10 note requires. Held only because the page tables could not be finished
+# before that night's 20:30 recompute; a half-applied release is worse than a delay.
+# Enable with VALUATION_UNKNOWN_HARDENING=1 -> then flip this default.
+#
+# Measured A/B on identical data before enabling (robina, n=253, --price-filter
+# none --blind-subject, full photo-blinding via BACKTEST_BLIND_FULL):
 #     legacy   MAE 9.0%  median 7.2%  bias +0.7%
 #     hardened MAE 9.2%  median 6.7%  bias +2.1%
-# Median error IMPROVES, but the markdown was silently cancelling ~1.4% of a
-# systematic OVERvaluation — most of which is the stale suburb calibration below
-# (robina 1.0189 where the holdout-validated refit says 1.0058). Two wrongs were
-# cancelling. Enabling this alone would push every stored valuation up ~1.4% at the
-# next 20:30 recompute, while the live page still publishes accuracy measured under
-# the old behaviour — exactly the situation Will declined on 2026-08-10.
+# Median error improved; MAE and bias appeared to worsen ONLY because the markdown
+# had been silently cancelling a systematic OVERvaluation coming from the stale
+# calibration. Two wrongs were cancelling. With the calibration re-fitted ON TOP of
+# the hardening, both go the right way: robina bias +1.88% -> +0.03%, MAE 8.84 ->
+# 8.52; varsity_lakes +2.83% -> +0.62%, 8.07 -> 7.64; burleigh_waters -3.74% ->
+# -1.29%, 8.16 -> 7.80. That is why they could not ship separately.
 #
-# SHIP AS ONE CHANGE, like the 08-10 note below requires:
-#     1. VALUATION_UNKNOWN_HARDENING=1 (this)
-#     2. the calibration refit (_SUBURB_CALIBRATION)
-#     3. re-derived page tables (16_Valuation/refresh_page_accuracy.py)
+# Set VALUATION_LEGACY_UNKNOWN_DEFAULTS=1 to restore the old behaviour for an A/B.
 # Working: 16_Valuation/experiments/2026-08-12-unknown-attribute-hardening.md
 _LEGACY_UNKNOWN = os.environ.get("VALUATION_UNKNOWN_HARDENING") != "1"
 
