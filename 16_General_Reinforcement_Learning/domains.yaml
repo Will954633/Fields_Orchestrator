@@ -1,11 +1,44 @@
 # General RL domain registry — a domain = a <name>_signal.py sensor + a <name>_prompt.md mandate,
 # run by the shared rl_cycle.sh / rl_dispatch.sh via cycle_pacer.py --job <name>.
 # To add a domain: write the two files, add a row here, add the two cron lines (signal + dispatch).
+#
+# fix_keywords: used by fix_digest.py to filter logs/fix-history/ down to the entries a
+# domain actually owns. Matched case-insensitively on token boundaries against each entry's
+# problem ID, title and **Files:** list. Keep them specific — a keyword that matches
+# everything is worse than no keyword. A domain with no fix_keywords gets every entry.
 domains:
-  geo:   { sensor: geo_signal.py,   sphere: upstream, status: live,     note: "AI-channel / GEO flagship" }
-  seo:   { sensor: seo_signal.py,   sphere: upstream, status: live,     note: "Google organic" }
-  ads:   { sensor: ads_signal.py,   sphere: upstream, status: live,      note: "FB + Google paid (M2a)" }
-  articles: { sensor: articles_signal.py, sphere: upstream, status: live   , note: "topic selection by conversion (M2b)" }
-  onsite:   { sensor: onsite_signal.py,   sphere: onsite,   status: live   , note: "per-user hot-lead surfacing (M3)" }
+  geo:   { sensor: geo_signal.py,   sphere: upstream, status: live,     note: "AI-channel / GEO flagship",
+           fix_keywords: [geo, aeo, ai, chatgpt, openai, perplexity, gemini, copilot,
+                          llms.txt, llms, crawler, crawl, bot, user-agent, robots, robots.txt, indexnow,
+                          bing, duckduckgo, citation, cited, referrer, referral, structured data, schema,
+                          json-ld, entity, geoblock, allowlist] }
+  seo:   { sensor: seo_signal.py,   sphere: upstream, status: live,     note: "Google organic",
+           fix_keywords: [seo, sitemap, sitemaps, index, indexing, indexation, indexed, deindex, canonical,
+                          meta, meta title, meta description, serp, h1, slug, url, urls, redirect,
+                          "301", robots, crawl, crawler, gsc, search console, organic, ssr, ranking,
+                          impressions, ctr, structured data, noindex, soft-404, soft404] }
+  ads:   { sensor: ads_signal.py,   sphere: upstream, status: live,      note: "FB + Google paid (M2a)",
+           fix_keywords: [ads, ad, adset, campaign, creative, facebook, fb, meta ads, google ads, pixel,
+                          capi, conversions api, conversion, cpl, cpa, spend, budget, bid, targeting,
+                          audience, retargeting, lead ad, lead_ad, carousel, attribution, utm, keyword,
+                          keywords, ad_decisions, fb-metrics-collector.py, google_ads_manager.py] }
+  articles: { sensor: articles_signal.py, sphere: upstream, status: live   , note: "topic selection by conversion (M2b)",
+           fix_keywords: [article, articles, content, editorial, copy, draft, publish, published, ghost,
+                          topic, headline, narrative, market pulse, market_pulse, news, newsletter, blog,
+                          author, byline, fact-check, factcheck, content_articles, push-ghost-draft.py,
+                          generate_property_ai_analysis.py, prompt, writing, wording] }
+  onsite:   { sensor: onsite_signal.py,   sphere: onsite,   status: live   , note: "per-user hot-lead surfacing (M3)",
+           fix_keywords: [onsite, posthog, experiment, arm_grader, flag, feature flag, personalization,
+                          personalisation, funnel, friction, cta, lead_worklist, hot lead, visitor,
+                          analytics, tracking, telemetry, scroll, form, submit, address search,
+                          address_search, ayh, analyse-your-home, minisite, mini-site, break-glass,
+                          breakglass, samantha_chat, discover, recording, session replay, reading
+                          analytics] }
   conductor: { sensor: conductor.py,     sphere: meta,     status: live,      note: "NEW Samantha — meta-conductor agent over all domains + Will inbox" }
-  ops:      { sensor: ops_signal.py,     sphere: meta,     status: live,      note: "health-board triage — Process Registry + Pipeline Processes; STANDALONE runner ops_cycle.sh on Opus 5, not rl_cycle.sh" }
+  ops:      { sensor: ops_signal.py,     sphere: meta,     status: live,      note: "health-board triage — Process Registry + Pipeline Processes; STANDALONE runner ops_cycle.sh on Opus 5, not rl_cycle.sh",
+           fix_keywords: [ops, pipeline, orchestrator, step, cron, crontab, job, job_run, job_runs, jobs,
+                          heartbeat, health, health board, monitor, monitoring, watchdog, daemon, systemd,
+                          service, scrape, scraper, scraping, ingest, ingestion, backfill, enrichment,
+                          cosmos, mongo, mongodb, database, backup, disk, memory, cpu, timeout, stale,
+                          silent, zero, token, credential, expired, auth, "401", "403", "500", deploy,
+                          workflow, github actions, runner, dr, spawn, spawned, restart, failure, failed] }

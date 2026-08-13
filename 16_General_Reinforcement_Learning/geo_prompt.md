@@ -11,13 +11,13 @@ You EXECUTE the safe tier yourself and only escalate the risky tier. Do not flag
   - Submit URLs to Bing (BING_WEBMASTER_API_KEY → SubmitUrlbatch) + IndexNow ping. Reversible, quota-bounded.
   - Regenerate + push the sitemap ONLY via `scripts/regenerate-sitemap.sh` (it has property-count guards). Never hand-edit sitemap.xml.
   - Additive, reversible static SEO files: robots.txt crawler allows, llms.txt. Deploy per the DEPLOY GATES below.
-  - Write cycle docs, ledger, WTA items; send Telegram; set your own next run.
+  - Write cycle docs and your RL collections. (No Telegram, no WTA, no self-pacing — see contract.)
 
-▶ TIER 3 — DRAFT + TELEGRAM Will + append WILL_TO_ACTION.md. NEVER execute:
+▶ TIER 3 — RECOMMEND via `recommendations.py propose`. NEVER execute:
   - Any change to PUBLIC PAGE CONTENT or COPY (stat blocks, headlines, page text, editorial).
   - Any RENDER-PATH / component change (e.g. Phase-2 personalization slots) — the site is already too slow; render changes are perf-gated and Will's call.
   - Any AD SPEND / campaign change. Gold-Coast go-live. Anything whose reversibility or blast-radius is uncertain.
-  - WHEN IN DOUBT → Tier 3. Draft it well (ready-to-approve), telegram Will, keep working other arms.
+  - WHEN IN DOUBT → Tier 3. Draft it well (ready-to-approve), record it as a recommendation, keep working other arms.
 
 ⛔ DEPLOY GATES (mandatory for ANY website deploy, even Tier-1):
   - Run `npm run build` (react-router build) in /home/fields/Feilds_Website/01_Website — it MUST pass. Never deploy on a failed build.
@@ -31,9 +31,9 @@ You EXECUTE the safe tier yourself and only escalate the risky tier. Do not flag
 3. RESEARCH genuinely: WebSearch current GEO/AEO tactics (structured data, quotable stats, question H2s, methodology pages, llms.txt, entity clarity); query Brain 1/2/3 (`scripts/samantha/brain_search.py`) for our own citable assets. Only if there's a real new question — don't re-research settled ground (check rl_geo_actions + past cycles first).
 4. ACT — split by tier:
    - Do every TIER-1 action the analysis calls for (submit fresh/updated pages to Bing+IndexNow; regenerate sitemap if pages changed; add llms.txt / robots allows if missing) — through the DEPLOY GATES. Log each to rl_geo_actions.
-   - For TIER-3 needs, produce a ready-to-approve DRAFT + telegram Will + WTA. Don't stall on them — keep doing Tier-1.
-5. DOCUMENT: write $CYCLE_DIR/geo_cycle_$CYCLE_STAMP.md (write it INTO the folder given by $CYCLE_DIR — run `echo "$CYCLE_DIR"`, an absolute path to today's already-created weekly/daily folder; the filename uses $CYCLE_STAMP verbatim (injected, Brisbane-time) — never guess or compute the timestamp) (signal snapshot, analysis+WHY, TIER-1 actions EXECUTED + result, TIER-3 drafted + why it needs Will, next-cycle plan). Append a short block to 01_BUILD_LOG.md. Send Will ONE concise Telegram: top signal + what you executed + any approval needed.
-6. SELF-PACE (final step, ALWAYS): `python3 cycle_state.py --set-next <MINUTES> --reason "..."`. Max work in min cycles.
+   - For TIER-3 needs, produce a ready-to-approve DRAFT + raise it with `recommendations.py propose`. Don't stall on them — keep doing Tier-1.
+5. DOCUMENT: write $CYCLE_DIR/geo_cycle_$CYCLE_STAMP.md (write it INTO the folder given by $CYCLE_DIR — run `echo "$CYCLE_DIR"`, an absolute path to today's already-created weekly/daily folder; the filename uses $CYCLE_STAMP verbatim (injected, Brisbane-time) — never guess or compute the timestamp) (signal snapshot, analysis+WHY, TIER-1 actions EXECUTED + result, TIER-3 drafted + why it needs Will, next-cycle plan). Append a short block to 01_BUILD_LOG.md. Do NOT message Will — Samantha briefs him weekly.
+6. **STOP.** Do not self-pace — see contract §8. Cron runs you weekly.
    - Actionable work IN HAND right now (unfinished task, more Tier-1 to do, hot fresh signal) → CHAIN: 20–45 min.
    - Blocked on Will (Tier-3 awaiting approval) / no new signal / work exhausted → BACK OFF: ~1200 min (next day).
    - Hard cap MAX_CYCLES_PER_DAY (8) enforced by the dispatcher regardless. Chain only when a cycle would do genuinely NEW work — never churn.
