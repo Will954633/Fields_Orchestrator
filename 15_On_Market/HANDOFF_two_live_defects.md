@@ -3,6 +3,47 @@
 **Written:** 2026-08-13 · **For:** a separate Claude session · **Author context:** found while
 building image derivatives + auditing analytics for the `/property` A/B test. Neither is fixed.
 
+---
+
+## ✅ RESOLVED 2026-08-13 12:50 AEST — read this before the rest of the document
+
+This handoff was picked up and worked. **Both defects are closed in code.** The sections below are
+kept for their traced root causes, but two of their numbers are now known to be wrong. See
+`logs/fix-history/2026-08-13.md` → `[BLOB-NON-IMAGE-WRITE]`, `[PROPERTY-SOFT404-CLOSURE]`,
+`[SITEMAP-LOG-INVISIBLE-MANUAL]`, `[UNIT-FLAG-OR-TRUE]`.
+
+**Defect 1 — guarded at the choke point, not the two scripts named below.** 11 callers upload images
+through `blob_storage.upload()`; patching only `download_images_to_blob.py` and
+`mirror_full_res_photos.py` would have left 9 unguarded. `blob_storage.upload` now magic-byte sniffs
+any payload declared `image/*` and refuses non-images, which every caller already treats as a failed
+upload. Pushed as `ea3f2a45`.
+
+- ⚠ **It is 10 files, not 6.** A sweep of all **1,127,148** image-extension files in every container
+  found 10, on 10 distinct properties. The 4 extra were missed because §Defect 1 checked only
+  `for_sale` in the three target suburbs — **2 are in Reedy Creek**, 2 are `sold` docs stored under
+  the `for_sale/` prefix. All other containers are clean at 0. **The table below is incomplete.**
+- ⚠ **Do not write a "must be JPEG" check.** Sniffing 4,000 random live blobs: **3,050 are WEBP**,
+  806 JPEG, 135 PNG. **76% of files named `.jpg` and served as `image/jpeg` are not JPEGs.** The
+  shipped guard measured 0 false rejections over those 4,000.
+- Blast radius is **fully materialised, not growing**: of all 364,148 URLs in
+  `property_images_original`, exactly **10 are Matterport** (1:1 with the 10 bad blobs — no backlog)
+  and **8 are Domain `/virtual-viewer/`** (which never produced a blob). Only two non-CDN hosts exist.
+- **Still open, needs Will:** repairing the 10. `scripts/repair_non_image_blobs.py` is written and
+  tested (`--scan`/`--dry-run`/`--apply`; matches by URL never index, moves aside rather than deletes,
+  redacts tokens, can preserve the tour as `virtual_tour_url`). **Held** for the `property_page_v2`
+  A/A window flagged at the foot of this document.
+
+**Defect 2 — fully closed, not "largely".** Checked **all 1,508** `/property` sitemap URLs
+exhaustively rather than sampling: **0 render "Property Not Found"** (was 115). The ≤1.5% upper bound
+below was correct but loose; the true residual is **zero**. The inverse problem (§item 3) was also
+already fixed — of 226 impression-earning pages absent from the sitemap, **all 226 correctly serve
+`noindex`**. Nothing wrongly excluded. The closing fix-history entry — whose absence caused this to be
+re-reported as open twice — now exists.
+
+⚠ **Gap this exposed:** `sitemap_robots_invariant.py` samples `DEFAULT_SAMPLE = 25` **per family**, so
+it only ever tests 25 of 1,508 `/property` URLs a night. Re-running it would **not** have answered the
+question; the original 7.7% breakage was caught by luck. Not fixed.
+
 ⚠ **Read this first:** I originally described these to Will as "6 corrupt originals" and "115 of
 1,493 sitemap URLs broken — probably worth more traffic than the redesign". **Both descriptions were
 wrong**, and I corrected them by measuring. Defect 1 is real but is not what I said it was; defect 2

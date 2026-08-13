@@ -108,12 +108,27 @@ NON_IMAGE_URL_HOSTS = (
     'kuula.co',
 )
 
+# Path fragments that mark a tour/viewer page on a host we otherwise trust. A full
+# sweep of all 364,148 URLs in `property_images_original` (2026-08-13) found exactly
+# two non-CDN hosts: 10 `my.matterport.com` URLs and 8
+# `www.domain.com.au/virtual-viewer/exterior?listingId=…`. Only Matterport actually
+# trips the defect — the virtual-viewer fetch fails and is dropped — but it is one
+# upstream change away from returning 200, so it is filtered too. Matching on path
+# means we never blanket-block `www.domain.com.au`.
+NON_IMAGE_URL_PATHS = (
+    '/virtual-viewer',
+    '/virtualtour',
+    '/virtual-tour',
+)
+
 
 def is_non_image_url(url):
     if not isinstance(url, str):
         return True
     lowered = url.lower()
-    return any(host in lowered for host in NON_IMAGE_URL_HOSTS)
+    if any(host in lowered for host in NON_IMAGE_URL_HOSTS):
+        return True
+    return any(frag in lowered for frag in NON_IMAGE_URL_PATHS)
 
 
 def download_single_image(url):
