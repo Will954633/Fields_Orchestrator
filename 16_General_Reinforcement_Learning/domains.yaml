@@ -42,3 +42,15 @@ domains:
                           cosmos, mongo, mongodb, database, backup, disk, memory, cpu, timeout, stale,
                           silent, zero, token, credential, expired, auth, "401", "403", "500", deploy,
                           workflow, github actions, runner, dr, spawn, spawned, restart, failure, failed] }
+  # First non-marketing domain (added 2026-08-13). The six above are all top-of-funnel:
+  # they ask how to bring more people to the number. This one asks whether the number is
+  # any good — it watches the product itself, which until now had no watcher at all.
+  valuation: { sensor: valuation_signal.py, sphere: product, status: live,
+           note: "valuation quality — coverage of the for-sale book, envelope suppression, comp-pool health, backtest drift. WEEKLY. Read-only brief in week one.",
+           fix_keywords: [valuation, valuations, valued, unvalued, comp, comps, comparable, comparables,
+                          reconciled, reconciled_valuation, precompute_valuations.py, valuation_backtest.py,
+                          envelope, directional, directional_only, confidence, confidence_reason,
+                          adjustment, adjustments, adjusted, mae, backtest, estimate, price estimate,
+                          appraisal, cma, npui, catboost, floor area, floorsize, land size, landsize,
+                          attribute, attributes, bedrooms, beds, baths, property type, property_type,
+                          valuation_data, precompute, noise floor, selector] }

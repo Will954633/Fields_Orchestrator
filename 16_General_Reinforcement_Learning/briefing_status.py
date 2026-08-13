@@ -46,7 +46,7 @@ except Exception:  # pragma: no cover
 
 DIR = Path("/home/fields/Fields_Orchestrator/16_General_Reinforcement_Learning")
 BRIEF_DIR = DIR / "briefings"
-DOMAINS = ["geo", "seo", "ads", "articles", "onsite", "ops"]
+DOMAINS = ["geo", "seo", "ads", "articles", "onsite", "ops", "valuation"]
 
 CURRENT_DAYS = 7
 AGING_DAYS = 14

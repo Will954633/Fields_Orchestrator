@@ -63,7 +63,7 @@ COLL = "rl_recommendations"
 MAX_OPEN_PER_DOMAIN = 2      # a domain may hold this many undecided items. Hard.
 MAX_BRIEF_ITEMS = 5          # Samantha may put this many decisions in a weekly brief.
 
-DOMAINS = ["geo", "seo", "ads", "articles", "onsite", "ops"]
+DOMAINS = ["geo", "seo", "ads", "articles", "onsite", "ops", "valuation"]
 TYPES = ["fix", "experiment", "question", "decision", "fyi"]
 EFFORTS = ["S", "M", "L"]
 REVERSIBILITY = ["reversible", "hard", "irreversible"]
@@ -502,7 +502,7 @@ def main():
     sp.add_argument("--ask", default="", help="exactly what Will must decide")
     sp.add_argument("--n", default="", help="sample size / basis for the claim")
     sp.add_argument("--metric", default="", help="the metric this should move")
-    sp.add_argument("--direction", default="", help="e.g. 'up from 2.1% to ~3%'")
+    sp.add_argument("--direction", default="", help="e.g. 'up from 2.1%% to ~3%%'")
     sp.add_argument("--by", default=None, help="YYYY-MM-DD the effect should be visible")
     sp.add_argument("--effort", default="M", choices=EFFORTS)
     sp.add_argument("--reversibility", default="reversible", choices=REVERSIBILITY)

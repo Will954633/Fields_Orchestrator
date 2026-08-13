@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# samantha_weekly.sh — the weekly synthesis cycle. Runs AFTER all six domain cycles.
+# samantha_weekly.sh — the weekly synthesis cycle. Runs AFTER all seven domain cycles
+# (valuation, the first non-marketing domain, was added 2026-08-13 at 12:00 Sun).
 #
 # Samantha is now the ONLY channel between the domain agents and Will. That is the whole
 # point of the redesign — but it also makes this script the single point of failure for the

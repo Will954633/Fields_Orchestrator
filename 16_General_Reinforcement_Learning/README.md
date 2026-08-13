@@ -14,9 +14,9 @@ where it is safe, record what happened, and compound across cycles.
 ## The loop, in one picture
 
 ```
-  Sunday 06:00–11:00        Sunday 16:00              Will, whenever he likes
+  Sunday 06:00–12:00        Sunday 16:00              Will, whenever he likes
   ┌──────────────────┐      ┌───────────────┐         ┌──────────────────┐
-  │ 6 domain agents  │─────▶│   Samantha    │────────▶│  ONE brief       │
+  │ 7 domain agents  │─────▶│   Samantha    │────────▶│  ONE brief       │
   │ (staggered 1h)   │ recs │ dedupe · rank │ ≤5 asks │  numbered Qs     │
   └──────────────────┘      │ challenge N   │         └────────┬─────────┘
         ▲    ▲              └───────────────┘                  │
@@ -98,6 +98,25 @@ Write `<name>_prompt.md` and `<name>_signal.py`, add a row plus `fix_keywords` t
 `domains.yaml`, add one cron line calling `weekly_cycle.sh <name>`, and add it to the list
 Samantha checks in `samantha_weekly_prompt.md` step 2. Nothing else.
 
-The six current domains are all top-of-funnel marketing. The data-rich parts of the business
-with no watcher — valuation quality, data coverage, editorial freshness, off-market deck
-integrity — are the obvious candidates, one at a time, once the loop has proven itself.
+**`valuation` was the first one added this way (2026-08-13)** — see it as the worked example.
+Six of the seven domains are top-of-funnel marketing; that one watches the *product* (the
+reconciled valuation and its range) rather than the traffic, on the reasoning that the
+data-rich half of the business had nobody looking at it while five agents competed to bring
+more people to a number none of them checked.
+
+The remaining candidates, still one at a time: **data coverage** (Domain under-capture
+40–50%), **editorial freshness** (51% of editorial arguing against a dead price), and
+**off-market deck integrity** (231 decks the database claims completed and which are
+permanently missing content).
+
+⚠ Two things the valuation build learned that the next one should copy:
+
+1. **Verify every field path before the sensor queries it** (Rule 8). The headline claim
+   going in was "57% of the for-sale book can't be valued". The real number is **59.4%**,
+   `directional_only` exists in **three copies that disagree**, and `confidence_reason` —
+   which CLAUDE.md refers to — **does not exist** at that path at all. A sensor built on
+   remembered field names measures nothing and reports it confidently.
+2. **Start a product domain read-only.** A marketing domain that ships a bad change costs a
+   week of traffic; a valuation domain that ships one puts a wrong number in a document
+   posted to somebody's house. `valuation`'s §4 authorises sensors, backtests, reading and
+   records — nothing else — until Will has read one cycle.
