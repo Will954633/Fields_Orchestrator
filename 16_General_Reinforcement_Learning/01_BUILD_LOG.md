@@ -498,3 +498,104 @@ Board: 16 actionable · raw ERROR=14 STALE=1 UNKNOWN-FRESHNESS=1 KNOWN-GAP=44.
 WTA-OPS-001..004, and Brain2 + step 111 are red on evidence that predates their fixes and clear tonight.
 No monitoring code, crontab, heartbeat or log was touched.
 Cycle doc: `cycles/2026-W32/2026-08-05/ops_cycle_20260805_1112.md`
+
+## 2026-08-08 07:15 AEST — ops cycle (20260808_0715)
+Board: 13 actionable (ERROR 9, STALE 3, UNKNOWN-FRESHNESS 1) · OK 129 · KNOWN-GAP 44.
+**0 fixed · 1 new WTA · 1 existing WTA strengthened.** 11 of 13 rows were already open as WTA-OPS-001…014,
+so the cycle went depth-first on the two that were not fully understood.
+- **WTA-OPS-015 (new)** — Google Indexing: 10 consecutive nights of `Submitted 0/NN`, 843 attempted / 0
+  accepted / 757 permanently dropped. Root cause **proven by direct token probe**: the refresh token is alive
+  and grants `indexing` only, while `google_indexing.py:41-44` requests `indexing`+`webmasters` — a superset,
+  so Google returns `invalid_scope` and the token refresh fails before any URL is submitted. Distinct from
+  WTA-OPS-009 (`invalid_grant`). Confirmed the 2026-08-07 watermark-refusal fix is holding — the latest 86
+  URLs were preserved, not dropped.
+- **WTA-OPS-013 (addendum)** — Tier 1 read-only re-run of step 107 (verified `--fix` not passed) proved a
+  genuine hang rather than buffering (72 s / 67,836 B on 08-05 → 1 byte across 6 attempts since), and found it
+  holding **~5.0 GB RSS on an 8 GB VM** — a new, credible link to the August VM lockups. Diagnostic process
+  killed and confirmed stopped.
+- No repairs performed → no fix-history entry (Rule 1 covers fixes; nothing was fixed).
+- No monitoring code, `job_runs` document, or crontab line touched. Nothing acknowledged or paused.
+Cycle doc: `cycles/2026-W32/2026-08-08/ops_cycle_20260808_0715.md`
+
+---
+
+## Ops cycle — 2026-08-09 07:15 AEST
+
+11 actionable. **1 fixed by me, 1 fixed by Will and verified by me, 3 proven false alarms, 3 escalated,
+3 deliberately left alone.** Board raw ERROR=8 STALE=2 (+1 UNKNOWN-FRESHNESS).
+
+**Ran the experiment two prior cycles left open.** `WTA-OPS-013` named the decisive test — *"run the audit under
+`/usr/bin/time -v` on a quiet box and read Maximum RSS"* — and the 2026-08-08 addendum declined it as a plausible
+way to wedge the VM. It ran cleanly:
+
+```
+current code (no projection):  150 s   peak RSS 7,348,876 KB = 7.01 GB   exit 0
+projection, 5 fields:            7.8 s peak RSS   104,548 KB =  102 MB   exit 0
+                                       400,193 docs, same box, ~5 min apart  →  19× faster, 70× less memory
+```
+
+That converts OPS-013 from hypothesis to measured fact, and **corrects the 08-08 addendum on two points**:
+step 107 is *not* a hang (it exits 0 — `audit_collection()` simply prints nothing without `--verbose`, so silence
+is expected output and the prior diagnostic was killed early), and the VM is 16 GB, not the 8 GB the addendum's
+arithmetic assumed.
+
+**Corrected a second prior diagnosis.** `WTA-OPS-011` concluded the FB approval poller's heartbeat was being
+swallowed because the log ran to `22:57` while `job_runs` froze at `12:57`. Those are **the same instant** —
+`job_status.py:70` stores UTC, mtimes print AEST, and today's pair are **32 ms apart**. The real cause is
+structural and recurs nightly: cron `*/3 8-22` leaves a 9-hour designed silence against a declared
+`cadence_hours=1`, so the row is STALE with certainty every morning at the 07:15 cycle slot.
+
+**Verified Will's Google Indexing fix end-to-end** and marked `WTA-OPS-015` RESOLVED. The SA key landed
+2026-08-08 07:49; the next run went from ten straight nights of `Submitted 0/N` + `invalid_scope` to
+**85/85**. The 7b watermark guard worked — it refused to advance on the failed night, so those 86 URLs were
+recovered. Residual left open: the 757 dropped before the guard existed.
+
+**Raised:** `WTA-OPS-016` (3 sitemap pages — `/privacy`, `/disclaimer`, `/accuracy` — carry no canonical; the
+check's `RuntimeError` mislabels them as "serve noindex", which they do not), `WTA-OPS-017` (retired step 6 is
+indistinguishable from an accidental orphan, so the schedule-membership row is red forever — the paused-vs-dead
+problem reappearing on the pipeline page).
+
+**Nothing silenced.** No monitoring code, `job_runs` doc, cron, unit or step touched. Three rows are false alarms
+and I left all three red — deciding they may stop alarming is Will's call.
+
+**Process note, against last cycle's lesson:** analysis finished at ~14 min, everything written by ~30, one
+Telegram. The three-message sprawl of 2026-08-08 did not repeat.
+
+**Late addition (after the Telegram, noted in the cycle doc so message and ledger don't disagree):**
+`WTA-OPS-018` — step 111's outcome check has **never matched its own log**: it greps
+`r"TOTAL:.*?(\d+)\s+updated"` against a Python dict repr (`'updated': 0`), so no possible input matches. And
+repairing only the regex would make it *worse* — its assertion (`updated == 0` → STALE) fires on the step's
+healthy steady state, 2 of the last 4 nights. The step itself is fine. The wider worry is that this is a
+`"capture"`-mode probe that silently never fires, and any other `_STEP_OUTCOME_CHECKS` entry could be in the
+same state and look identical from the board. Auditing the rest is the obvious first task next cycle.
+
+## [ops] 2026-08-10 07:15 — health-board triage cycle
+Board: 11 actionable (raw ERROR=8, STALE=2, UNKNOWN=1). **Tier 1 repairs: 0.** Raised 1 new + 1 addendum.
+
+Key observation: **9 of 11 actionable rows were already escalated and OPEN in WILL_TO_ACTION.md** — the board
+is a queue of human-blocked items, not new decay. Spent the cycle deepening the two with real open questions.
+
+- **[WTA-OPS-019] NEW** — `Gold_Coast` is 5.60 GB / 400,193 docs but MongoDB's WiredTiger cache is **1.61 GB**
+  (`/etc/mongod.conf cacheSizeGB: 1.5`, dated 17 May, sized for the 8 GB VM we left on 1 Aug; Mongo's own
+  default here would be 7.0 GB). `serverStatus` shows 783.54M pages read vs 783.43M evicted — 99.99%, textbook
+  thrash. This is the amplifier under step 107 ([WTA-OPS-013], now **4 consecutive nights**, byte-identical
+  1921s). Explicitly NOT claimed as the trigger — the cap predates the 06 Aug cliff by 11 weeks. Re-benchmarked
+  the proposed projection fix at **206–471×**. Declined the same risky RSS experiment OPS-013 declined.
+- **[WTA-OPS-015 ADDENDUM]** — the "757 dropped indexing URLs" residual measured, not assumed: only **10**
+  documents still carry a `last_updated` inside the outage gap, and **0 are `for_sale`**. Recommended doing
+  nothing rather than burning Indexing API quota on 10 non-live pages. Side-finding: the
+  `REFUSING to advance the watermark` guard worked on 06 Aug then was bypassed by the fix-verification run
+  (missing `--no-advance`); damage 1 doc.
+- Confirmed false alarms, not re-raised: FB approval poller (cron `*/3 8-22` vs `cadence_hours=1`, healthy),
+  ops_cycle itself (yesterday `Reached max turns (80)` → rc=1 after completing its writes).
+- Left alone on purpose and recorded as such: step 113 (uninvestigated, possible 4th cache victim), step 12
+  (Akamai block), steps 6/111/under_contract/sitemap canonicals (all already OPEN).
+
+Integrity: no monitoring code, `job_runs` doc, crontab, unit, step or KNOWN-GAP touched. Raw ERROR still 8.
+- **[WTA-OPS-020] NEW (added after the Telegram went out)** — went back to step 113 with leftover budget rather
+  than leaving it as "uninvestigated". It is a **false alarm**: `detect_withdrawn.py` sorts by
+  `withdrawn_last_checked_at` ascending, so the 40-min budget abort is a *rolling* sweep. Measured all 205
+  `for_sale` listings — never-checked 0, MAX age **2.42d**, none older than 3d. The whole book is covered every
+  ~2.4 days. Raised as probe-fitness (assert coverage staleness, not per-run completeness), not applied.
+  ⚠ Method note: `withdrawn_last_checked_at` is an ISO **string**, not a BSON date — the datetime query
+  returned 0/205 and would have read as total absence (CLAUDE.md Rule 8 caught it).

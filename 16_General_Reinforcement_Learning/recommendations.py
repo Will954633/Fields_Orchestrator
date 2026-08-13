@@ -211,6 +211,9 @@ def cmd_propose(a):
     if not rec["expected_effect"]["metric"]:
         print("  ⚠ no --metric given. An item with no measurable claim can never be "
               "graded, so it can never teach this system anything.")
+    if not rec["expected_effect"]["by"]:
+        print("  ⚠ no --by date given, so nothing will ever surface this for grading. "
+              "Re-run with --by YYYY-MM-DD (when the effect should be visible).")
     return rec["_id"]
 
 

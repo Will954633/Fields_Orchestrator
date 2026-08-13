@@ -102,6 +102,9 @@ The old system graded a variant "1.13× leading" off 14 conversions vs 11, and b
   dishonesty is dressing it as statistical evidence.
 - `--evidence` must include the command or query that produced the numbers, so Samantha and
   Will can re-run it. An assertion without a reproduction is not evidence.
+- **Always pass `--metric` AND `--by`.** Without a date nothing ever surfaces the item for
+  grading, so its claim is never checked and you never learn whether you were right. An
+  ungraded recommendation is the old system's failure mode in miniature.
 - Rule 8 binds you: a query returning zero is a fact about the field name you typed, not
   about the data. Verify with `python3 scripts/db_fields.py --find <thing>` before you ever
   write that something is missing.
