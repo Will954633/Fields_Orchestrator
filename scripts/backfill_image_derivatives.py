@@ -64,16 +64,25 @@ def collect(db, suburbs, limit):
 
 
 def _one(name):
-    """(status, count) for a single photo. Runs on a worker thread."""
+    """(status, count) for a single photo. Runs on a worker thread.
+
+    `corrupt` is kept apart from `skipped` on purpose. Folding an undecodable original
+    into "nothing to do" is how a job reports success while achieving nothing — it hid
+    four HTML-error-pages-saved-as-.jpg on the first Robina run.
+    """
     before = deriv.existing_derivatives(CONTAINER, name)
-    got = deriv.make_derivatives_from_disk(CONTAINER, name)
+    try:
+        got = deriv.make_derivatives_from_disk(CONTAINER, name)
+    except deriv.DecodeError as exc:
+        print(f"    ! corrupt original: {exc}", flush=True)
+        return ('corrupt', 0)
     if got is None:
         return ('missing', 0)
     new = set(got) - set(before)
     if new:
         return ('written', len(new))
     # Either the renditions already existed, or the source is narrower than every
-    # target and correctly produced none. Both are "no work needed".
+    # target and correctly produced none. Both are genuinely "no work needed".
     return ('skipped', 0)
 
 
@@ -81,7 +90,7 @@ def run(suburbs, limit, dry_run, workers=4, beat=None):
     db = get_gold_coast_db()
     names, listings = collect(db, suburbs, limit)
     seen = len(names)
-    written = skipped = missing = 0
+    written = skipped = missing = corrupt = 0
 
     if dry_run:
         for name in names:
@@ -104,6 +113,8 @@ def run(suburbs, limit, dry_run, workers=4, beat=None):
                     written += n
                 elif status == 'skipped':
                     skipped += 1
+                elif status == 'corrupt':
+                    corrupt += 1
                 else:
                     missing += 1
                 done += 1
@@ -114,9 +125,10 @@ def run(suburbs, limit, dry_run, workers=4, beat=None):
         beat.metrics = {
             'listings': listings, 'photos_seen': seen, 'derivatives_written': written,
             'skipped_existing': skipped, 'originals_missing': missing,
+            'originals_corrupt': corrupt,
         }
         beat.detail = (f"{listings} listings, {seen} photos, {written} written, "
-                       f"{skipped} skipped, {missing} missing")
+                       f"{skipped} skipped, {missing} missing, {corrupt} corrupt")
         # Rule 7b: an empty queue is success; encoding every photo and writing nothing
         # is not. Only assert when there WAS work — seen==0 means no live listings had
         # mirrored photos, which is a different (and also suspicious) condition.
@@ -127,10 +139,17 @@ def run(suburbs, limit, dry_run, workers=4, beat=None):
         if written == 0 and skipped == 0:
             raise RuntimeError(
                 f"saw {seen} photos and wrote 0 derivatives with 0 already present "
-                f"({missing} originals missing) — encoding is failing, not idle")
+                f"({missing} missing, {corrupt} corrupt) — encoding is failing, not idle")
+        # A slow bleed of unreadable originals never trips the checks above, because
+        # the healthy majority keeps `written`/`skipped` non-zero. Surface it instead
+        # of letting it accumulate silently: these are photos broken on the live site.
+        if corrupt and corrupt > 0.02 * seen:
+            raise RuntimeError(
+                f"{corrupt}/{seen} originals are undecodable (>2%) — the mirror is "
+                f"storing error pages as .jpg, not just the odd bad file")
 
     return {'listings': listings, 'seen': seen, 'written': written,
-            'skipped': skipped, 'missing': missing}
+            'skipped': skipped, 'missing': missing, 'corrupt': corrupt}
 
 
 def main():
@@ -160,7 +179,8 @@ def main():
                       workers=args.workers, beat=beat)
 
     print(f"\nlistings={res['listings']} photos={res['seen']} written={res['written']} "
-          f"skipped={res['skipped']} missing={res['missing']}", flush=True)
+          f"skipped={res['skipped']} missing={res['missing']} corrupt={res['corrupt']}",
+          flush=True)
 
 
 if __name__ == '__main__':

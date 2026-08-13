@@ -36,6 +36,16 @@ from PIL import Image, ImageOps
 
 from shared import blob_storage
 
+
+class DecodeError(Exception):
+    """The stored original could not be decoded as an image.
+
+    Distinct from "no rendition needed" ({}) and from "original missing" (None). The
+    blob store contains files with a .jpg extension whose bytes are an HTML error page
+    saved by a failed download; those must be counted as failures, not as no-ops.
+    """
+
+
 # Spec §3. 480 for cards/thumbnails, 960 for gallery tiles, 1600 for the opened view.
 WIDTHS = (480, 960, 1600)
 
@@ -87,11 +97,20 @@ def make_derivatives(
     """Write WebP renditions of `data` beside `blob_name`; return {width: public_url}.
 
     Only widths strictly narrower than the source are generated — a width omitted from
-    the result means "no rendition exists", whether because the source was already that
-    small or because encoding failed. Either way the caller falls back to the original,
-    so this function does not raise on a single bad photo.
+    the result means "no rendition exists", so the caller falls back to the original.
+    An empty dict therefore means "decoded fine, nothing to write" and nothing worse.
+
+    Raises `DecodeError` if the stored original is not a decodable image. A per-width
+    encode failure is still swallowed (logged, width omitted) — one bad rendition is
+    recoverable by fallback; an unreadable source is not, and must be counted.
     """
     targets = sorted(widths, reverse=True)
+
+    have = existing_derivatives(container, blob_name) if skip_existing else {}
+    if len(have) == len(targets):
+        # Every rendition already on disk. Decoding here would cost a full JPEG decode
+        # per photo on every re-run — the dominant cost of a nightly no-op pass.
+        return dict(have)
 
     try:
         im = Image.open(io.BytesIO(data))
@@ -109,8 +128,11 @@ def make_derivatives(
             pass
         im.load()
     except Exception as exc:
-        print(f"    ✗ derivative decode failed for {blob_name}: {exc}", flush=True)
-        return {}
+        # NOT `return {}`. An undecodable original and a photo that legitimately needs
+        # no rendition would then be indistinguishable to the caller — the exact shape
+        # Rule 7b exists to prevent, and it hid three corrupt originals on the first
+        # real run. A corrupt source is a failure and must be counted as one.
+        raise DecodeError(f"{blob_name}: {exc}") from exc
 
     # Phone photos carry rotation in EXIF; resizing without applying it bakes in a
     # sideways image that the original renders correctly.
@@ -122,7 +144,6 @@ def make_derivatives(
     if im.mode not in ("RGB", "L"):
         im = im.convert("RGB")
 
-    have = existing_derivatives(container, blob_name) if skip_existing else {}
     out: Dict[int, str] = dict(have)
 
     # Widest first, each rendition resized from the previous one rather than from the
@@ -162,9 +183,12 @@ def make_derivatives_from_disk(
 ) -> Optional[Dict[int, str]]:
     """Read an already-mirrored original off the local disk and derive from it.
 
-    Returns None when the original is missing — distinct from {} ("original present,
-    no renditions needed or written"). The backfill relies on that distinction so a
-    missing source is never counted as a photo that needed no work.
+    Three outcomes, deliberately distinct, because the backfill counts them separately
+    and a heartbeat that conflates them reports success while doing nothing:
+
+        None            original is not on disk
+        DecodeError     original is on disk but is not a decodable image
+        {} or {w: url}  original decoded; renditions written, or none were needed
     """
     path = _local_path(container, blob_name)
     try:
