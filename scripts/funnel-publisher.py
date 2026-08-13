@@ -45,6 +45,15 @@ def publish_landing_page(db, funnel, dry_run=False):
     lp = funnel["landing_page"]
     now = datetime.now(timezone.utc).isoformat()
 
+    # A funnel landing page lands in content_articles and renders at /articles/<slug> —
+    # a reader cannot tell it from an article and neither can Google, so it goes through
+    # the same review gate.
+    if not dry_run:
+        import sys as _s; _s.path.insert(0, "/home/fields/Fields_Orchestrator/scripts")
+        from article_publish_guard import require_approval
+        require_approval("funnel-publisher.py", lp.get("slug", "(no slug)"),
+                         override=globals().get("_FORCE_PUBLISH", False))
+
     article = {
         "title": lp["title"],
         "slug": lp["slug"],

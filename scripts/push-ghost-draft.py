@@ -122,6 +122,11 @@ def generate_slug(title):
 def create_article(title, html, tags=None, excerpt=None, feature_image=None,
                    slug=None, publish=False, author=None, author_slug=None):
     """Create a new article in MongoDB."""
+    if publish:
+        from article_publish_guard import require_approval
+        require_approval("push-ghost-draft.py (create)", slug or title,
+                         override=globals().get("_FORCE_PUBLISH", False))
+
     db = get_db()
     now = datetime.now(timezone.utc).isoformat()
 
@@ -198,6 +203,9 @@ def update_article(article_id, html=None, title=None, tags=None, excerpt=None,
     if feature_image:
         updates["feature_image"] = feature_image
     if publish:
+        from article_publish_guard import require_approval
+        require_approval("push-ghost-draft.py (update)", str(oid),
+                         override=globals().get("_FORCE_PUBLISH", False))
         updates["status"] = "published"
         if not existing.get("published_at"):
             updates["published_at"] = now
@@ -286,6 +294,8 @@ def main():
     parser.add_argument("--excerpt", help="Custom excerpt / meta description")
     parser.add_argument("--feature-image", help="URL for the feature/hero image")
     parser.add_argument("--slug", help="URL slug (auto-generated from title if omitted)")
+    parser.add_argument("--force-publish", action="store_true",
+                        help="bypass Will's Telegram review gate (logged; have a reason)")
     parser.add_argument("--publish", action="store_true", help="Publish immediately instead of draft")
     parser.add_argument("--author", help="Author name (default: Fields Research)")
     parser.add_argument("--author-slug", help="Author slug (default: fields)")
