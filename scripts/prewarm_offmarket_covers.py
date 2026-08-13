@@ -128,29 +128,105 @@ def warm_one(subject_id, slug):
     return pdf_url, None
 
 
+# ⚠ THE ORCHESTRATOR WINDOW IS A HARD EXCLUSION, NOT A PREFERENCE.
+# The nightly pipeline starts 20:30 AEST and each worker here spawns Chromium +
+# node + Ghostscript. Running both would contend for all 4 vCPU and, per Will,
+# would likely take the VM down. The guard is checked before EVERY property, not
+# once at startup, so a long run walks into the window and parks rather than
+# ploughing through it.
+BLACKOUT_START = 20      # 20:00 AEST — half an hour of headroom before 20:30
+BLACKOUT_END = 6         # 06:00 AEST
+
+
+def _aest_hour() -> int:
+    from datetime import timedelta, timezone as _tz
+    return (datetime.now(_tz(timedelta(hours=10)))).hour
+
+
+def _in_blackout() -> bool:
+    h = _aest_hour()
+    return h >= BLACKOUT_START or h < BLACKOUT_END
+
+
+def _wait_out_blackout():
+    while _in_blackout():
+        logger.info("orchestrator window (%02d:00 AEST) — parked, re-checking in 10 min",
+                    _aest_hour())
+        time.sleep(600)
+
+
+def _warm_task(args_tuple):
+    """Worker entry point. Must be module-level and picklable.
+
+    ⚠ Drops the inherited MongoClient first. `shared.db` caches one at module
+    level, ProcessPoolExecutor forks, and a forked client carries the parent's
+    sockets and background monitor threads — pymongo warns about exactly this
+    and the documented failure is a deadlock, not an error. On a 30-hour run a
+    hung worker would be invisible until the batch simply stopped progressing.
+    Each process therefore builds its own connection on first use.
+    """
+    import shared.db as _db
+    _db._cached_client = None
+
+    subject_id, slug = args_tuple
+    try:
+        url, err = warm_one(subject_id, slug)
+        return slug, url, err
+    except Exception as exc:                                    # noqa: BLE001
+        return slug, None, f"{type(exc).__name__}: {exc}"
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--limit", type=int, default=50)
     ap.add_argument("--suburb", choices=V4_SUBURBS)
+    ap.add_argument("--workers", type=int, default=1,
+                    help="Parallel renders. Each spawns Chromium + node + Ghostscript, so this "
+                         "is CPU-bound: 3 is the practical ceiling on a 4-vCPU VM. Ignore the "
+                         "temptation to raise it — the bottleneck is the browser, not I/O.")
+    ap.add_argument("--ignore-blackout", action="store_true",
+                    help="Run through the 20:00-06:00 AEST orchestrator window. Do not use on "
+                         "this VM: concurrent Chromium plus the nightly pipeline is what takes "
+                         "it down.")
     args = ap.parse_args()
 
     targets = eligible(args.suburb, args.limit)
-    logger.info("%d properties to warm", len(targets))
+    logger.info("%d properties to warm, %d worker(s)", len(targets), args.workers)
     ok = fail = 0
     t0 = time.time()
-    for i, (subject_id, slug, suburb) in enumerate(targets, 1):
-        try:
-            url, err = warm_one(subject_id, slug)
-        except Exception as exc:
-            url, err = None, f"{type(exc).__name__}: {exc}"
-        if url:
-            ok += 1
-            logger.info("[%d/%d] %s ok", i, len(targets), slug)
-        else:
-            fail += 1
-            logger.warning("[%d/%d] %s FAILED: %s", i, len(targets), slug, err)
-    logger.info("done: %d warmed, %d failed, %.1f min", ok, fail, (time.time() - t0) / 60)
+
+    if args.workers <= 1:
+        for i, (subject_id, slug, _suburb) in enumerate(targets, 1):
+            if not args.ignore_blackout:
+                _wait_out_blackout()
+            slug, url, err = _warm_task((subject_id, slug))
+            ok, fail = (ok + 1, fail) if url else (ok, fail + 1)
+            logger.info("[%d/%d] %s %s", i, len(targets), slug,
+                        "ok" if url else f"FAILED: {err}")
+    else:
+        from concurrent.futures import ProcessPoolExecutor, as_completed
+        # Submitted in chunks rather than all at once so the blackout guard can
+        # take effect mid-run: a single submit of 7,700 futures would run
+        # straight through 20:30 no matter what the guard said.
+        CHUNK = args.workers * 4
+        done = 0
+        for start in range(0, len(targets), CHUNK):
+            if not args.ignore_blackout:
+                _wait_out_blackout()
+            chunk = [(s, sl) for s, sl, _ in targets[start:start + CHUNK]]
+            with ProcessPoolExecutor(max_workers=args.workers) as pool:
+                futures = {pool.submit(_warm_task, t): t[1] for t in chunk}
+                for fut in as_completed(futures):
+                    slug, url, err = fut.result()
+                    done += 1
+                    ok, fail = (ok + 1, fail) if url else (ok, fail + 1)
+                    logger.info("[%d/%d] %s %s", done, len(targets), slug,
+                                "ok" if url else f"FAILED: {err}")
+
+    mins = (time.time() - t0) / 60
+    logger.info("done: %d warmed, %d failed, %.1f min (%.1fs/property)",
+                ok, fail, mins, (mins * 60 / max(ok + fail, 1)))
     # Non-zero when the batch achieved nothing despite having work — a silent
     # "0 warmed" run is indistinguishable from success otherwise (Rule 7b).
     if targets and ok == 0:
