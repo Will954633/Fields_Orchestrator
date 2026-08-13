@@ -10,8 +10,8 @@ subscription, then writes the result back onto the same document.
       --title "115 of 1,493 /property sitemap URLs render Property Not Found" \
       --scope investigate \
       --detection-file /tmp/brief.md \
-      --repro "python3 scripts/check_sitemap_urls.py --sitemap property" \
-      --known-files "01_Website/src/pages/PropertyPage.tsx,netlify/functions/property.mjs" \
+      --repro "python3 scripts/sitemap_robots_invariant.py" \
+      --known-files "01_Website/src/pages/PropertyPage/PropertyPage.tsx,01_Website/netlify/functions/property.mjs" \
       --success "Names the DB condition that distinguishes the 115 failing ids from the 1,378 working ones, with a query that reproduces the split."
 
 WHY THIS EXISTS
@@ -38,6 +38,8 @@ from __future__ import annotations
 import argparse
 import os
 import re
+import shlex
+import shutil
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -77,8 +79,87 @@ _MINIMUMS = {
 }
 
 
+# Roots a path in a brief may be relative to. The website tree is a separate
+# checkout, so "01_Website/src/..." resolves under Feilds_Website, not this repo.
+_PATH_ROOTS = (
+    REPO_ROOT,
+    Path("/home/fields/Feilds_Website"),
+    Path("/home/fields/Feilds_Website/01_Website"),
+    Path("/home/fields"),
+)
+
+_CODE_EXT = (".py", ".sh", ".mjs", ".js", ".ts", ".tsx", ".jsx", ".json",
+             ".yaml", ".yml", ".md", ".sql", ".css", ".html")
+
+
 class ThinBrief(ValueError):
     """Raised when a brief is too thin to hand to a session with no context."""
+
+
+class FictionalBrief(ValueError):
+    """Raised when a brief cites a file or command that does not exist."""
+
+
+def _resolves(token: str) -> bool:
+    """Does this token name something that actually exists on disk?"""
+    p = Path(token)
+    if p.is_absolute():
+        return p.exists()
+    return any((root / token).exists() for root in _PATH_ROOTS)
+
+
+def _looks_like_path(token: str) -> bool:
+    return ("/" in token or token.endswith(_CODE_EXT)) and not token.startswith("-")
+
+
+def _check_repro(repro: str) -> list[str]:
+    """Verify the repro command's binary and file arguments exist.
+
+    ⚠ THIS IS THE FIX FOR THE ONE FAILURE THE SHAPE GATE COULD NOT SEE. The first
+    example brief ever written for this tool cited
+    `python3 scripts/check_sitemap_urls.py` — a script that does not exist. Every
+    length and placeholder check passed it, and a spawned session would have burnt
+    45 minutes chasing a command that was never real. Shape validation cannot
+    catch fiction; existence checks can.
+
+    Deliberately static — we do NOT execute the repro. Running an arbitrary
+    command at enqueue time would be a worse problem than the one it solves.
+    """
+    problems = []
+    try:
+        tokens = shlex.split(repro)
+    except ValueError:
+        # Unbalanced quotes etc. — not fatal on its own; the session gets the raw
+        # string and can cope. Skip the check rather than reject a valid brief.
+        return problems
+
+    # shlex keeps shell separators glued to the word (`foo.py;`, `x.py&&`), which
+    # made a perfectly valid multi-command repro fail the existence check on a
+    # path that does exist. Strip the operators before testing.
+    tokens = [t.strip(";&|()<>") for t in tokens]
+    tokens = [t for t in tokens if t]
+
+    if tokens:
+        binary = tokens[0]
+        if not _looks_like_path(binary) and not shutil.which(binary):
+            problems.append(f"repro command `{binary}` is not on PATH")
+
+    for tok in tokens[1:]:
+        if _looks_like_path(tok) and not _resolves(tok):
+            problems.append(f"repro references `{tok}`, which does not exist")
+    return problems
+
+
+def _check_known_files(files: list[str]) -> list[str]:
+    """Verify each cited path exists. Entries containing spaces are treated as
+    search commands/hints rather than paths and are left alone."""
+    problems = []
+    for f in files:
+        if " " in f or "*" in f:      # a search hint or glob, not a literal path
+            continue
+        if not _resolves(f):
+            problems.append(f"known-files references `{f}`, which does not exist")
+    return problems
 
 
 def _validate(field: str, value: str) -> str:
@@ -100,7 +181,13 @@ def _validate(field: str, value: str) -> str:
 
 
 def build_task(*, title, scope, detection, repro, known_files, success_criteria,
-               repo, constraints, spawned_by, max_turns, timeout_s) -> dict:
+               repo, constraints, spawned_by, max_turns, timeout_s,
+               skip_path_check=False) -> dict:
+    # ⚠ Clamp. The worker reclaims a task once its timeout + margin elapses; an
+    # unbounded value let the sweep reclaim a task a live thread still held,
+    # rmtree the worktree it was editing, and delete its result file mid-run.
+    timeout_s = max(300, min(int(timeout_s), 5400))
+
     if scope not in SCOPES:
         raise ThinBrief(f"--scope must be one of {SCOPES} (deploy is never autonomous)")
 
@@ -117,6 +204,16 @@ def build_task(*, title, scope, detection, repro, known_files, success_criteria,
             "'I don't know where it lives' is itself the finding — say that in "
             "--detection and point at where you looked."
         )
+
+    if not skip_path_check:
+        problems = _check_repro(repro) + _check_known_files(files)
+        if problems:
+            raise FictionalBrief(
+                "\n  ".join(problems)
+                + "\n\n  A brief that cites something non-existent sends a session with no "
+                  "context chasing your own fiction. Fix the paths, or pass "
+                  "--skip-path-check if the target is genuinely created at run time."
+            )
 
     # ⚠ /home/fields/Feilds_Website is NOT a git repo on this VM, so a website
     # task cannot be worktree-isolated. It runs read-only and returns a diff for
@@ -190,9 +287,13 @@ def main():
     p.add_argument("--spawned-by", default=os.environ.get("SPAWN_PARENT", "claude-session"))
     p.add_argument("--max-turns", type=int, default=60)
     p.add_argument("--timeout-s", type=int, default=2700,
-                   help="Wall clock for the spawned session (default 45 min).")
+                   help="Wall clock for the spawned session (default 45 min, max 90).")
     p.add_argument("--dry-run", action="store_true",
                    help="Validate the brief and print it without enqueuing.")
+    p.add_argument("--skip-path-check", action="store_true",
+                   help="Bypass the existence check on --repro and --known-files. "
+                        "Only for targets created at run time — it exists to be "
+                        "the exception, not the habit.")
     args = p.parse_args()
 
     detection = args.detection
@@ -208,9 +309,13 @@ def main():
             known_files=args.known_files, success_criteria=args.success_criteria,
             repo=args.repo, constraints=args.constraints, spawned_by=args.spawned_by,
             max_turns=args.max_turns, timeout_s=args.timeout_s,
+            skip_path_check=args.skip_path_check,
         )
     except ThinBrief as e:
         print(f"REJECTED — brief too thin to hand off:\n  {e}", file=sys.stderr)
+        return 2
+    except FictionalBrief as e:
+        print(f"REJECTED — brief cites something that does not exist:\n  {e}", file=sys.stderr)
         return 2
 
     if args.dry_run:
