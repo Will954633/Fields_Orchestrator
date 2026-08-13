@@ -1,9 +1,45 @@
 #!/bin/bash
-# Fields Worker Agent — Launcher
-# Runs Claude Opus via CLI with full read access and write guardrails.
-# Usage: bash worker-agent/run-worker-agent.sh [--max-turns N]
+# Fields Worker Agent — Launcher  ⚠ RETIRED 2026-04-27, SAFETY-GATED 2026-08-13
+#
+# ⚠ DO NOT RE-ENABLE WITHOUT READING THIS.
+#
+# This launches `claude -p --dangerously-skip-permissions` for up to 6000s, and
+# line 32 does `set -a && source .env`, which exports all 83 credentials into the
+# child. An audit on 2026-08-13 confirmed by live probe that the inherited
+# GITHUB_TOKEN carries admin:true AND push:true on BOTH production repos
+# (Website_Version_Feb_2026 and Fields_Orchestrator). Combined with the skipped
+# permission engine, a single run can deploy the live website, change Facebook and
+# Google ad campaigns, publish content, drop database collections, and send from
+# Will's Telegram/Gmail — with no prompt.
+#
+# The guardrails named at line ~72 ("system prompt enforces hard limits") are
+# INSTRUCTIONS IN WORKER_AGENT.md, enforced by nothing. Worse, the prompt is built
+# by concatenating 07_Focus/*.md raw, so anything written into those files becomes
+# an instruction to a permissionless agent.
+#
+# Cron was disabled 2026-04-27 (fix-history [WORKER-AGENT-DISABLE]) and it has not
+# run since 2026-04-26. It is kept only because deliverables/ has historical value.
+# The successor is scripts/spawn_worker.py, which sandboxes credentials rather
+# than exporting them. See CLAUDE.md Rule 9.
 
 set -euo pipefail
+
+if [[ "${WORKER_AGENT_I_MEAN_IT:-}" != "1" ]]; then
+    cat >&2 <<'GATE'
+run-worker-agent.sh is RETIRED and gated.
+
+It runs claude with --dangerously-skip-permissions and exports every production
+credential (GitHub admin+push on both repos, Netlify, Facebook Ads, Google Ads,
+Cosmos, Telegram, Gmail) into that session. Nothing enforces its stated limits.
+
+If you want a background Claude session, use the sandboxed path instead:
+    python3 scripts/spawn_task.py --help
+
+To run this anyway, you must be a human who has read the header:
+    WORKER_AGENT_I_MEAN_IT=1 bash worker-agent/run-worker-agent.sh
+GATE
+    exit 1
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ORCHESTRATOR_DIR="$(dirname "$SCRIPT_DIR")"
