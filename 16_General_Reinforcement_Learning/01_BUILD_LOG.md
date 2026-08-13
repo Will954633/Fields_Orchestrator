@@ -599,3 +599,18 @@ Integrity: no monitoring code, `job_runs` doc, crontab, unit, step or KNOWN-GAP 
   ~2.4 days. Raised as probe-fitness (assert coverage staleness, not per-run completeness), not applied.
   ⚠ Method note: `withdrawn_last_checked_at` is an ISO **string**, not a BSON date — the datetime query
   returned 0/205 and would have read as total absence (CLAUDE.md Rule 8 caught it).
+
+## 2026-08-13 13:09 — SEO cycle (first under the weekly contract)
+- Signal: 477 pages / 3,494 impr / 52 clicks (1.5% CTR). `/property/` 1,720 impr, 27 clicks, 1.57% CTR at avg pos 8.5.
+- **Finding:** property pages already rank page 1; the `<title>` is generic while the editorial hook sits unused in `og:title`. 92 published pages affected, Rule 5 scan clean → **REC-seo-001** (drafted ready to approve, `cycles/2026-W33/2026-08-13/DRAFT_property_title_hybrid.md`).
+- **Finding (new):** 11 of the top 20 off-market pages by impressions serve noindex; 6 302-redirect to the `/building/` "coverage in progress" stub on an unverified PropRadar on_market signal. The replacement build has succeeded 2 of 14 times and has no failure recovery. Confirmed false positive on 4 Barbie Avenue (`listing_status: sold` vs PropRadar `on_market: True`) → **REC-seo-002**.
+- Tier 1: sensors refreshed; 9 verified-indexable off-market pages submitted to IndexNow + Bing (both 200); `recommendations.py propose --help` crash fixed (unescaped `%`); 5 actions logged to `rl_seo_actions`.
+- Ledger 2/2, at cap. Nothing graded (empty ledger). Cycle doc: `cycles/2026-W33/2026-08-13/seo_cycle_20260813_1309.md`.
+
+## GEO cycle — 2026-08-13 13:20 AEST (first weekly-contract cycle)
+- **Finding:** Bing impressions 488 (07-16→22) → **0 on every day 07-23→08-11**; bing.com + copilot.microsoft.com referrals 0 for W31/32/33. Bingbot still crawls 100-130 pages/day at 200 (robots blocks 0), but InIndex fell 2,247→1,998 and the AllOtherCodes bucket climbed +350-400/day from 07-28. Serving problem, not discovery. Google went the other way over the same weeks (68→151 sessions/wk).
+- **Tier-1 shipped:** `/llms.txt` was a 404 (only existed at `/.well-known/`); created at root, fixed every Key-Pages URL (all pointed at 301-redirecting `/market-metrics/...`), and removed a false "confidence intervals" claim about our valuations. Build passed, ONE commit `55cc0d26`, live-verified 200.
+- **Tier-1 deliberately skipped:** mass Bing/IndexNow resubmission — discovery is not the constraint; would have been churn.
+- **Tier-3:** REC-geo-001 (Bing collapse diagnosis; geo-block 403+noindex vs the two Netlify pauses). 1/2 open.
+- **Discarded evidence:** Bing SERP scraping — the control query returned unrelated results, so the method is invalid.
+- Cycle doc: `cycles/2026-W33/2026-08-13/geo_cycle_20260813_1320.md`
