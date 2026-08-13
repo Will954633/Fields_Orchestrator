@@ -18,8 +18,10 @@ THE BAR — "complex + scheme content" (Will, 2026-08-13), 4,967 URLs:
   2. clears the existing off-market tier the sitemap already requires — has a sale
      history, not currently listed, not waterfront, not multilot/unresolved
   3. linked to a scheme (`complex_plan`)
-  4. carries at least one scheme-scoped claim in `unit_content` — a bedroom mix or a
-     turnover figure
+  4. carries at least one scheme-scoped claim in `unit_content` (a bedroom mix or a
+     turnover figure) **OR** a publishable valuation. Widened 2026-08-13: requiring the
+     claim alone excluded 943 dwellings that hold a tested figure but sit in a scheme too
+     small for a mix claim or too quiet for a turnover rate.
 
 Deliberately NOT required: a valuation range. A page whose method honestly refuses still
 carries complex identity, scheme context, unit-scoped market data and sale history — and
@@ -70,7 +72,7 @@ PROJ = {"url_slug": 1, "address": 1, "complete_address": 1, "street_address": 1,
         "complex_plan": 1, "unit_indexable": 1}
 
 
-def decide(doc, content, cutoff):
+def decide(doc, content, cutoff, publishable=False):
     """Returns (indexable: bool, reason: str). The reason is stored so a page that is
     NOT indexed can say why without anyone re-deriving the rule."""
     eff = (doc.get("address") or doc.get("complete_address")
@@ -95,7 +97,16 @@ def decide(doc, content, cutoff):
 
     if not doc.get("complex_plan"):
         return False, "no_scheme"
-    if not (content.get("same_size_in_scheme") or content.get("sales_recent")):
+    # ⚠ SCHEME CLAIM **OR** A PUBLISHABLE FIGURE (Will, 2026-08-13). Originally the bar
+    # required a scheme claim, full stop. Measured against what those pages would
+    # actually carry, that excluded 943 dwellings holding a TESTED VALUATION — an
+    # address, an aerial, market context and a figure we stand behind — purely because
+    # their scheme was too small for a bedroom-mix claim (MIN_SCHEME_FOR_MIX=6) or too
+    # quiet for a turnover rate (MIN_SALES_FOR_TURNOVER=4). Thresholds that protect a
+    # CLAIM from being noise should not also suppress a figure that was never noisy.
+    # Still excluded: dwellings with neither, which are genuinely thin.
+    if not (content.get("same_size_in_scheme") or content.get("sales_recent")
+            or publishable):
         return False, "no_scheme_content"
     return True, "ok"
 
@@ -112,6 +123,11 @@ def main():
         gc = get_client()["Gold_Coast"]
         content = {d["_id"]: d for d in gc["unit_content"].find(
             {}, {"same_size_in_scheme": 1, "sales_recent": 1})}
+        # The second half of the bar — a figure we stand behind is content in its own
+        # right. `publishable` already encodes the suburb accuracy gate, so a Burleigh
+        # Waters dwelling (within-10% 46.5%, below the 55% bar) never qualifies here.
+        publishable = {d["_id"] for d in gc["unit_valuations"].find(
+            {"publishable": True}, {"_id": 1})}
         reasons, indexable, seen = Counter(), 0, 0
 
         for suburb in SUBURBS:
@@ -128,7 +144,8 @@ def main():
                             "unit_indexable_reason": "not_attached"}}))
                     continue
                 seen += 1
-                ok, why = decide(d, content.get(d.get("url_slug")) or {}, cutoff)
+                ok, why = decide(d, content.get(d.get("url_slug")) or {}, cutoff,
+                                 d.get("url_slug") in publishable)
                 reasons[why] += 1
                 indexable += ok
                 # Write only on an actual change. The `or True` that used to be here
