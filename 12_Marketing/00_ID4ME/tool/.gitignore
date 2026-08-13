@@ -1,0 +1,7 @@
+# Runtime secrets and personal data - never commit.
+.env
+.token.json
+credentials.txt
+.chrome_profile/
+output/
+discovery/
