@@ -70,15 +70,22 @@ def _token():
 
 
 def _keyboard(tok):
-    """A reply keyboard — tapping a key sends its text as a normal message, which the CEO
-    bridge captures. Inline buttons would not reach us (see module docstring)."""
+    """INLINE buttons, attached to the message itself.
+
+    A *reply* keyboard was tried first (2026-08-13). It transmits correctly, but it replaces
+    the phone keyboard, hides behind the client's keyboard toggle, and `one_time_keyboard`
+    collapses it after a single use — Will never saw any buttons. Inline buttons render
+    directly under the message and stay there.
+
+    This works only because ceo-telegram-bridge.py was extended the same day to request
+    `callback_query` in allowed_updates and translate a tap into the same "YES <token>" text
+    the poller already reads. Reverting that bridge change silently breaks these buttons.
+    """
     return {
-        "keyboard": [
-            [{"text": f"YES {tok}"}, {"text": f"NO {tok}"}],
-        ],
-        "resize_keyboard": True,
-        "one_time_keyboard": True,
-        "input_field_placeholder": f"Tap, or type: NO {tok} <your feedback>",
+        "inline_keyboard": [[
+            {"text": "✅ Publish", "callback_data": f"YES {tok}"},
+            {"text": "✏️ Request changes", "callback_data": f"NO {tok}"},
+        ]],
     }
 
 

@@ -166,6 +166,10 @@ def aest_label() -> str:
 # The NEW Samantha = the General RL meta-conductor agent. Founder Telegram messages wake her.
 CONDUCTOR_CYCLE = "/home/fields/Fields_Orchestrator/16_General_Reinforcement_Learning/conductor_cycle.sh"
 
+# "YES 8AF6" / "NO 8AF6 <reason>" — an article-approval verdict. Matched here so the bridge
+# stores it and stays quiet, leaving article_approval.py to act and confirm.
+APPROVAL_TOKEN_RE = re.compile(r"^(yes|no|approve|reject)\s+[0-9a-f]{4}\b", re.I)
+
 
 def conductor_running() -> bool:
     """Is the Samantha conductor agent currently running? (flock in the runner is the real guard;
@@ -1137,11 +1141,26 @@ def handle_text_message(sm, update: dict[str, Any], message: dict[str, Any], tex
         send_message(chat_id, reply)
         return
 
+    # An approval tap or typed token ("YES 8AF6" / "NO 8AF6 too generic") needs nothing from
+    # this bridge except STORAGE — article_approval.py polls ceo_chat_messages every 5 minutes
+    # and sends its own confirmation. Replying here as well would double-message Will for one
+    # action, and waking anything would be pure waste.
+    if APPROVAL_TOKEN_RE.match(text.strip()):
+        log.info("Approval token captured (%s) — stored, no reply, no wake", text.strip()[:20])
+        return
+
     # LEGACY GPT "CEO team" is RETIRED (Will, 2026-07-29). The message is already stored in
-    # ceo_chat_messages (above). Auto-wake the NEW Samantha (the RL meta-conductor agent): she reads
-    # her inbox first thing, answers Will, and acts. (Will chose auto-wake-every-message.)
-    already = conductor_running()
-    launched = wake_conductor() if not already else False
+    # ceo_chat_messages (above).
+    #
+    # Auto-wake is now conditional on the runner EXISTING. Samantha moved to a weekly cadence
+    # on 2026-08-13 and conductor_cycle.sh was retired to _retired/; this constant still pointed
+    # at the old path, so every founder message since then answered "⚠️ couldn't start Samantha"
+    # — an error message for something that is now working as designed. Checking the path lets
+    # the reply tell the truth either way, and restores instant wake automatically if an
+    # interactive runner is ever put back at that location.
+    conductor_available = os.path.exists(CONDUCTOR_CYCLE)
+    already = conductor_running() if conductor_available else False
+    launched = wake_conductor() if (conductor_available and not already) else False
     sm[SESSION_COLL].update_one(
         {"_id": session["_id"]},
         {"$set": {"last_remote_status": "handed_to_samantha", "updated_at": iso_now()}},
@@ -1152,6 +1171,11 @@ def handle_text_message(sm, update: dict[str, Any], message: dict[str, Any], tex
     elif launched:
         sam = ("🟢 Waking Samantha (your RL conductor) now — she'll read this, act on it, and reply "
                "here in a few minutes.")
+    elif not conductor_available:
+        sam = ("📥 Saved for Samantha. She now runs **weekly** (Sunday 16:00 AEST) and reads her "
+               "inbox first thing, so this will be in her next brief.\n"
+               "_Article approvals are the exception — tap a button or reply `YES <token>` and "
+               "that is actioned within 5 minutes._")
     else:
         sam = ("⚠️ Saved — but I couldn't start Samantha automatically just now. She'll pick it up on "
                "her next scheduled pass. (conductor_cycle.log has the detail.)")
@@ -1330,6 +1354,26 @@ def process_job(job_id: str) -> None:
 
 
 def extract_message_text(update: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
+    # A tapped inline button arrives as a callback_query, not a message. We translate it into
+    # the ordinary (message, text) shape so everything downstream — the allowed-chat check,
+    # session handling, ceo_chat_messages storage — treats it exactly like typed text. That
+    # keeps the change additive: no consumer needs to know buttons exist.
+    #
+    # Added 2026-08-13 for the article approval flow. A *reply* keyboard was tried first and
+    # is transmitted correctly, but it hides behind the client's keyboard toggle and collapses
+    # after one use, so Will never saw it. Inline buttons attach to the message itself.
+    callback = update.get("callback_query")
+    if callback:
+        base = callback.get("message") or {}
+        data = callback.get("data") or ""
+        # `message.from` on a callback is the BOT (it sent the message the button sits on).
+        # The human who tapped is callback.from — use that, or the message is attributed to
+        # the bot and the session/author record is wrong.
+        message = dict(base)
+        if callback.get("from"):
+            message["from"] = callback["from"]
+        return message, data
+
     message = update.get("message") or update.get("edited_message")
     if not message:
         return None, None
@@ -1342,7 +1386,7 @@ def poll_once(sm) -> int:
     state = get_bridge_state(sm)
     payload = {
         "timeout": 30,
-        "allowed_updates": ["message", "edited_message"],
+        "allowed_updates": ["message", "edited_message", "callback_query"],
     }
     if state.get("last_update_id") is not None:
         payload["offset"] = int(state["last_update_id"]) + 1
@@ -1356,6 +1400,16 @@ def poll_once(sm) -> int:
         update_id = update.get("update_id")
         if update_id is None:
             continue
+
+        # Telegram shows a spinner on a tapped inline button until it is acknowledged.
+        # Answer immediately and never let a failure here stop the update being processed —
+        # a stuck spinner is cosmetic, a dropped approval is not.
+        callback = update.get("callback_query")
+        if callback and callback.get("id"):
+            try:
+                telegram_call("answerCallbackQuery", {"callback_query_id": callback["id"]})
+            except Exception:
+                log.warning("answerCallbackQuery failed for update_id=%s", update_id)
 
         message, text = extract_message_text(update)
         chat_id = message.get("chat", {}).get("id") if message else None
