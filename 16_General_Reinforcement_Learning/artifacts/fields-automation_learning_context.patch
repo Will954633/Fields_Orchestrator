@@ -1,0 +1,649 @@
+diff --git a/pipeline/article_generator.py b/pipeline/article_generator.py
+index 6194baa..a8a6feb 100644
+--- a/pipeline/article_generator.py
++++ b/pipeline/article_generator.py
+@@ -20,6 +20,7 @@ from claude_max_client import make_client
+ from config import ANTHROPIC_API_KEY, CLAUDE_MODEL, CLAUDE_MAX_TOKENS, CLAUDE_MAX_RETRIES, LOG_DIR
+ from data_assembler import PropertySaleData
+ from market_context_loader import build_market_context_block
++from learning_context import build_learning_context_block
+ 
+ # ── Load prompt templates ─────────────────────────────────────────────────────
+ 
+@@ -306,6 +307,10 @@ def _build_user_prompt(data: PropertySaleData) -> str:
+     # Market context from weekly monitor snapshot (optional — omitted if snapshot unavailable)
+     market_context_block = build_market_context_block(suburb=data.suburb)
+ 
++    # Measured outcomes of our OWN previously published articles — the feedback path.
++    # Empty string when the snapshot is absent; the prompt then reads as it always did.
++    learning_context_block = build_learning_context_block()
++
+     # Features
+     features_str = ", ".join(data.features) if data.features else "Not specified"
+ 
+@@ -349,6 +354,7 @@ def _build_user_prompt(data: PropertySaleData) -> str:
+         campaign_block        = campaign_block,
+         suburb_context_block  = suburb_context_block,
+         market_context_block  = market_context_block,
++        learning_context_block = learning_context_block,
+         agents_description    = data.agents_description or "(No marketing copy available)",
+         listing_url           = data.listing_url or "–",
+         image_block           = image_block,
+diff --git a/pipeline/data/learning_snapshot.json b/pipeline/data/learning_snapshot.json
+new file mode 100644
+index 0000000..5d4695f
+--- /dev/null
++++ b/pipeline/data/learning_snapshot.json
+@@ -0,0 +1,226 @@
++{
++  "built_at": "2026-08-13T09:07:35.002392+00:00",
++  "built_by": "scripts/build_learning_snapshot.py (Fields_Orchestrator)",
++  "impression_floor": 500,
++  "headline_outcomes": [
++    {
++      "title": "Someone Bought This Robina Home Six Months Ago. Now It's Back on the Market.",
++      "impressions": 12195,
++      "ctr_pct": 16.47
++    },
++    {
++      "title": "The Owner Paid $475,000 in 2010. They're Now Asking $1,285,000.",
++      "impressions": 2290,
++      "ctr_pct": 11.79
++    },
++    {
++      "title": "Someone Bought This Home 18 Months Ago. Now It's Back on the Market.",
++      "impressions": 705,
++      "ctr_pct": 11.49
++    },
++    {
++      "title": "Someone Paid $1,550,000 for This Burleigh Waters Home. Eighteen Months Later, It Sold for $3,465,000.",
++      "impressions": 6952,
++      "ctr_pct": 9.97
++    },
++    {
++      "title": "Burleigh Waters Has a New Upper Limit Test: $4,150,000.",
++      "impressions": 2200,
++      "ctr_pct": 7.82
++    },
++    {
++      "title": "$1,710,000 on Outrigger Drive: What This Robina Result Tells the Market",
++      "impressions": 5638,
++      "ctr_pct": 6.49
++    },
++    {
++      "title": "Is Now a Good Time to Buy in Burleigh Waters?",
++      "impressions": 5397,
++      "ctr_pct": 6.06
++    },
++    {
++      "title": "Why Queensland Won't Tell You What an Auction Property Is Worth — And What to Do About It",
++      "impressions": 1869,
++      "ctr_pct": 0.75
++    },
++    {
++      "title": "The Southern Gold Coast Apartment Boom: A Suburb-by-Suburb Guide",
++      "impressions": 2856,
++      "ctr_pct": 0.74
++    },
++    {
++      "title": "Is Now a Good Time to Buy in Varsity Lakes?",
++      "impressions": 845,
++      "ctr_pct": 0.71
++    },
++    {
++      "title": "Is Now a Good Time to Buy in Robina?",
++      "impressions": 2847,
++      "ctr_pct": 0.7
++    },
++    {
++      "title": "Is Now a Good Time to Sell in Robina?",
++      "impressions": 3098,
++      "ctr_pct": 0.65
++    },
++    {
++      "title": "$2,545,000 at 27 Warrina Crescent: What a Near-Double in Five Years Tells Us About Burleigh Waters",
++      "impressions": 559,
++      "ctr_pct": 0.54
++    },
++    {
++      "title": "Robina's Fastest-Moving Year in Half a Decade",
++      "impressions": 2211,
++      "ctr_pct": 0.05
++    }
++  ],
++  "read_depth": [
++    {
++      "title": "Burleigh Waters Posts a +38.7% Quarterly Surge — the Strongest Single-Quarter Move Across the Corridor",
++      "paid_sessions": 10,
++      "avg_scroll_pct": 20.0,
++      "headline_ctr_pct": 0
++    },
++    {
++      "title": "Someone Paid $1,550,000 for This Burleigh Waters Home. Eighteen Months Later, It Sold for $3,465,000.",
++      "paid_sessions": 37,
++      "avg_scroll_pct": 10.1,
++      "headline_ctr_pct": 9.97
++    }
++  ],
++  "distribution": {
++    "measurable": 20,
++    "insufficient": 20,
++    "never_distributed": 60
++  },
++  "laws": [
++    {
++      "id": "law_headline_formula_for_cheap_clicks",
++      "title": "The cheap-click headline formula: specific price + specific timeframe + implied story",
++      "actionable": "Use for reach and traffic goals only, never as a lead-quality signal.",
++      "confidence": "high",
++      "evidence": "'Someone Bought This Robina Home Six Months Ago' $0.16/click, 946 clicks, $152.96 · 'The Owner Paid $475,000 in 2010. They're Now Asking $1,285,000' $0.31/click, 111 clicks · '$1,710,000 on Outrigger Drive' $0.14/click, 92 clicks · 'Who buys for $1,550,000 and sells eighteen months later for $3,465,000?' $0.12/click, 48 clicks."
++    },
++    {
++      "id": "law_broad_market_commentary_is_the_anti_pattern",
++      "title": "Broad market commentary without a personal stake gets the most expensive clicks",
++      "actionable": "Never ship a suburb-statistic headline with no personal stake.",
++      "confidence": "high",
++      "evidence": "'Robina's Fastest-Moving Year in Half a Decade' $7.29/click (copy) and $5.10/click (original), 8 clicks total, ~$56 spent · 'Southern Gold Coast Apartment Boom' $5.83/click, 6 clicks · 'Gold Coast Interstate Migration' $2.02/click, 6 clicks · 'Robina Sales Volume Surges 111%' $3.31/click, 2 clicks. Against $0.12-$0.31 for story formats. Independently corroborated by the hook corpus: the same 'Fastest-Moving Year' ad is the WORST performer above the evidence floor at 0.05% CTR on 1,879 impressions."
++    },
++    {
++      "id": "law_abstract_without_dollars_dead",
++      "title": "Abstract concepts die at scroll speed — 7 of 7, zero exceptions",
++      "actionable": "Show the number. Never name the category the number is in.",
++      "confidence": "high",
++      "evidence": "AN6 'five-figure gap' 0.6% CTR / 151 impressions · AN8 'a different number' 2.4% / 247 · AN12 visual info-gap 0.00% / 76 · AN20 'wrong year' 0.9% / 106 · AN22 net proceeds 2.81% / 178 · AN23 three numbers 2.99% / 167 · AN25 equity 3.68% / 190. Contrast AN2's concrete '$1,440,000 → $2,500,000' at 9.44% CTR."
++    },
++    {
++      "id": "law_dollar_anchor_not_sufficient",
++      "title": "A dollar anchor is NECESSARY BUT NOT SUFFICIENT — one number, not a puzzle",
++      "actionable": "One number per hook. Never a spread, never a three-way framework.",
++      "confidence": "medium",
++      "evidence": "AN39 'The Valuation Spread' (three appraisals $1.2M/$1.35M/$1.48M → a $280,000 spread): 0 link clicks on 114 combined impressions, 0.00% CTR both backgrounds, AFTER a starvation-relief cull guaranteed a fair auction for a full hour. AN40 'Kitchen Math' ($80,000 kitchen returns ~$34,000): dark 0.0% on 69 impressions, light 1.4% on 71 — the second kill of the renovation axis after AN13's narrative-only death."
++    },
++    {
++      "id": "law_aggregate_stats_dont_personalise",
++      "title": "Aggregate statistics create awareness; single specific examples create identification",
++      "actionable": null,
++      "confidence": "high",
++      "evidence": "AN1 raw stat 2.4% CTR / 295 impressions / $21.71 / 0 leads · AN4 same stat plus an address ask 1.4% / 155 · AN24 same stat as a research narrative, dark 3.92% / 102, light 3.03% / 99. Six variants, ~900 impressions, zero leads."
++    },
++    {
++      "id": "law_facebook_scroll_depth_caps_at_50pct",
++      "title": "Scroll depth from Facebook traffic caps at ~50% regardless of content quality",
++      "actionable": "Put anything that must be seen above the halfway point of the page.",
++      "confidence": "high",
++      "evidence": "Three separate tests, ~1,200 total sessions, identical result: V2 broad 50.1%, V2 core 50.3%, V3 49.8% — average and median both ~50%, unchanged by content improvements that lifted time on page +24%."
++    },
++    {
++      "id": "law_conversion_content_never_reached",
++      "title": "Only 10% of feed visitors reach the CTA — it sits below the scroll ceiling",
++      "actionable": null,
++      "confidence": "high",
++      "evidence": "V3 section funnel: feed view 86% → Seller Anchor 38% (a 48pp drop) → Big Mistake 32% → Insight 30% → Compare 24% → Fields Pick 15% → Save Worthy 14% → Seller Bridge 13% → CTA 10%."
++    },
++    {
++      "id": "law_articles_are_dead_ends",
++      "title": "Article pages are dead ends — 95% read and leave; zero property views from any ad",
++      "actionable": "A new hook cannot fix this. Do not attribute a conversion failure to the headline until a next step exists.",
++      "confidence": "high",
++      "evidence": "Of 310 tracked Facebook sessions: 296 stayed on the article page only, 2 reached /for-sale, 1 reached a property page, 11 reached market-intelligence. And: zero tracked property views across ALL ads in the attribution data."
++    }
++  ],
++  "cautions": [
++    {
++      "id": "caution_hook_corpus_has_no_lead_outcomes",
++      "title": "The semantic hook corpus contains ZERO lead-optimised ads — CTR is all it can measure",
++      "actionable": "Annotating the 108 OUTCOME_LEADS ads is the single highest-value unblock — it would let the hook taxonomy be tested against leads rather than clicks.",
++      "confidence": "high",
++      "evidence": "Join of ad_profiles (203) to ad_semantic_annotations (92) matches 92 of 92 on ad_id. Objective mix of the matched set: OUTCOME_ENGAGEMENT 57 ads / 74,649 impressions · OUTCOME_TRAFFIC 33 / 217,956 · OUTCOME_AWARENESS 2 / 12,603. The account's 108 OUTCOME_LEADS ads — including all 43 homeowner-funnel angles — are entirely UNANNOTATED. Attributed leads in the corpus: 0. Only 55 of 92 rows clear a 500-impression evidence floor."
++    },
++    {
++      "id": "caution_reward_sparsity_verdicts_are_coinflips",
++      "title": "READ FIRST — the entire copy-discovery run rests on 7 lead events",
++      "actionable": "The prescribed fix was to move the optimisation target up-funnel to engagement, where there are 50-100x the data points per dollar.",
++      "confidence": "high",
++      "evidence": "Verbatim from the mandate scoping doc: '$868 spend → 7 leads → 4 quality \"Yes\" (one of those a fake +93 phone). Blended CPL $124. The killer problem is reward sparsity. 1-2 leads per winning ad is statistically noise. You cannot optimise copy — let alone sequences of copy — on 7 events. Every cycle \"verdict\" to date is a coin-flip dressed as a finding. All conversions landed Day 1, then flatlined despite continued spend — but off 1-2 leads that decay is indistinguishable from noise.'"
++    },
++    {
++      "id": "caution_out_of_market_economics_do_not_transfer",
++      "title": "All copy testing ran OUT OF MARKET — funnel shape transfers, economics do not",
++      "actionable": "Never quote a funnel-run CPL as a Gold Coast forecast.",
++      "confidence": "high",
++      "evidence": "Verbatim: 'Transfers to GC: funnel SHAPE, PII-resistance RANKING, warm-up DEPTH, hook MECHANICS — these are structural/psychological. Does NOT transfer: absolute CPL, absolute conversion rate, whether the person is a real prospect (Brisbane people aren't your buyers). Economics are re-validated only in a GC run — never trust a Brisbane CPL as a GC forecast.' Out-of-market leads received nothing post-submit by design."
++    }
++  ],
++  "dead_hook_mechanics": [
++    {
++      "mechanic": "Naming the category instead of showing the number",
++      "detail": "'a five-figure gap', 'the valuation spread', 'the equity you can't see'. The abstraction is the failure, not the topic.",
++      "from_angles": [
++        "AN6",
++        "AN8",
++        "AN23",
++        "AN25",
++        "AN39"
++      ]
++    },
++    {
++      "mechanic": "A population statistic offered as if it were personal",
++      "detail": "'89% of homes are overvalued', '3.6% national growth'. Aggregates create awareness, never identification. One specific address outperforms every time.",
++      "from_angles": [
++        "AN1",
++        "AN5",
++        "AN24"
++      ]
++    },
++    {
++      "mechanic": "Pure utility with no open question",
++      "detail": "'Sold-price alerts', 'The Cost of Selling — itemised'. Useful, complete, and therefore nothing to click. A headline that answers itself has no reader.",
++      "from_angles": [
++        "AN7",
++        "AN16",
++        "AN22"
++      ]
++    },
++    {
++      "mechanic": "More than one number in the hook",
++      "detail": "Three-figure frameworks and spreads compete with themselves. One dominant number per headline. A second number belongs in the body.",
++      "from_angles": [
++        "AN23",
++        "AN39",
++        "AN31"
++      ]
++    },
++    {
++      "mechanic": "Generic 'how to' / 'is now a good time' framing",
++      "detail": "Confirmed on our OWN articles, not just ads — see the headline table.",
++      "from_angles": [
++        "AN8",
++        "AN9",
++        "AN13"
++      ]
++    }
++  ]
++}
+diff --git a/pipeline/learning_context.py b/pipeline/learning_context.py
+new file mode 100644
+index 0000000..a1c19ba
+--- /dev/null
++++ b/pipeline/learning_context.py
+@@ -0,0 +1,250 @@
++"""
++learning_context.py
++===================
++The generator's feedback path. Until now this pipeline wrote articles and never
++found out whether any of them worked: the prompts are static files and the only
++runtime context is property data. This module reads what our own published
++articles actually measured and turns it into a bounded prompt block.
++
++Design notes
++------------
++* Source is a COMMITTED JSON snapshot (`pipeline/data/learning_snapshot.json`),
++  not a live query. This copy ends up on a public website; the evidence steering
++  it has to be reviewable in a diff before it ships, not fetched at run time.
++  Regenerate with `scripts/build_learning_snapshot.py` in Fields_Orchestrator.
++* Degrades to "" if the snapshot is missing or malformed — exactly like
++  `market_context_loader.build_market_context_block`. A missing snapshot must
++  never break generation.
++* Bounded: ~500 words / ~750 tokens. A feedback loop is a small number of
++  load-bearing facts, not 80 documents.
++* The caveats are NOT optional garnish. Everything measured here is CLICKS.
++  Not one lead-optimised ad is in the corpus and the funnel has nine documented
++  high-CTR non-converters, so a block that shipped the patterns without the
++  caveats would be teaching this generator to be interesting rather than useful.
++  `_caveat_block()` is therefore emitted unconditionally and cannot be disabled
++  by a caller.
++
++Usage:
++    from learning_context import build_learning_context_block
++    block = build_learning_context_block()                 # full block
++    block = build_learning_context_block(section="body")   # structure only
++"""
++
++import json
++from pathlib import Path
++
++SNAPSHOT_PATH = Path(__file__).parent / "data" / "learning_snapshot.json"
++
++# How many winners / losers to show. Six rows carry the pattern; fourteen is a
++# data dump the model will average out.
++TOP_N = 4
++BOTTOM_N = 4
++
++
++def _load() -> dict | None:
++    try:
++        if SNAPSHOT_PATH.exists():
++            return json.loads(SNAPSHOT_PATH.read_text(encoding="utf-8"))
++    except Exception:
++        pass
++    return None
++
++
++def _headline_block(snap: dict) -> list[str]:
++    rows = snap.get("headline_outcomes") or []
++    if len(rows) < 3:
++        return []
++    floor = snap.get("impression_floor", 500)
++    top, bottom = rows[:TOP_N], rows[-BOTTOM_N:]
++
++    lines = [
++        "### What our own headlines measured",
++        "",
++        f"Every Fields article headline that has run as a paid ad above {floor} "
++        "impressions. This is our copy, our market, measured — not a style opinion.",
++        "",
++        "| Click-through | Impressions | Headline |",
++        "|---|---|---|",
++    ]
++    for r in top:
++        lines.append(f"| **{r['ctr_pct']}%** | {r['impressions']:,} | {r['title']} |")
++    lines.append("| … | | |")
++    for r in bottom:
++        lines.append(f"| {r['ctr_pct']}% | {r['impressions']:,} | {r['title']} |")
++    # The best-powered failure in the data — quoted so the null is not read as noise.
++    # Derived, never hardcoded: a figure in this block that is not in the snapshot
++    # is a fabrication the model would then repeat.
++    losers = [r for r in rows if r["ctr_pct"] < 1.0]
++    powered = max(losers, key=lambda r: r["impressions"]) if losers else None
++
++    spread = round(top[0]["ctr_pct"] / rows[-1]["ctr_pct"]) if rows[-1]["ctr_pct"] else None
++
++    lines += [
++        "",
++        f"The spread is about {spread}x and the mechanism is legible:" if spread
++        else "The mechanism is legible:",
++        "",
++        "- **One named property, one dominant dollar figure, and a change over time** wins. "
++        "\"Someone paid $X. Eighteen months later…\" is the shape.",
++        "- **A suburb statistic with no person in it loses.** So does a generic question "
++        "(\"Is Now a Good Time to…\") and a how-to guide.",
++    ]
++    if powered:
++        lines.append(
++            f"  The clearest failure ran {powered['impressions']:,} impressions at "
++            f"{powered['ctr_pct']}% — a well-powered null, not noise.")
++    lines += [
++        "- **One number in the headline, not two.** A spread or a three-way framework "
++        "competes with itself.",
++        "- Name the number; never name the category the number is in. "
++        "\"A five-figure gap\" is the abstraction that kills a hook.",
++        "- **A dollar figure is not on its own enough.** There is a specific-address, "
++        "specific-price headline in the losing half of that table. What the winners add is a "
++        "*person and a change over time* — someone bought, someone paid, and then something "
++        "happened. A price with no human event attached reads as a statistic.",
++    ]
++    return lines
++
++
++def _body_block(snap: dict) -> list[str]:
++    rows = snap.get("read_depth") or []
++    if not rows:
++        return []
++    rows = sorted(rows, key=lambda r: -(r.get("paid_sessions") or 0))
++    best = rows[0]
++
++    lines = [
++        "### The body is where we lose them, not the headline",
++        "",
++        f"\"{best['title']}\" earned {best['headline_ctr_pct']}% click-through — near the "
++        f"best in the business — and then {best['paid_sessions']} readers averaged "
++        f"**{best['avg_scroll_pct']}% scroll depth**. Nine in ten were gone before a tenth "
++        "of the page.",
++    ]
++    if len(rows) > 1:
++        o = rows[1]
++        lines.append(
++            f"A second article measured {o['avg_scroll_pct']}% over {o['paid_sessions']} "
++            "sessions. Both readings are small; the direction is not in doubt.")
++    lines += [
++        "",
++        "Scroll depth from social traffic caps around 50% regardless of how good the writing "
++        "is, and only about 10% of arrivals ever reach the foot of the page. So:",
++        "",
++        "- **Everything that must be read goes in the top half.** The single most valuable "
++        "paragraph — the result, the number, the finding — belongs immediately after the "
++        "opening, not in a section six headings down.",
++        "- **Earn the next paragraph, every paragraph.** Description that could apply to any "
++        "home in the suburb is where readers leave. Delete it rather than improve it.",
++        "- **Front-load, don't build.** There is no payoff at the end, because nobody is "
++        "there for it.",
++        "- Do not lengthen an article to hit a word target. Nothing past the halfway mark is "
++        "being read; padding it costs a reader and buys nothing.",
++    ]
++    return lines
++
++
++def _dead_mechanics_block(snap: dict) -> list[str]:
++    mechs = snap.get("dead_hook_mechanics") or []
++    if not mechs:
++        return []
++    lines = [
++        "### Hook mechanics that measured dead",
++        "",
++        "Abstracted from 36 killed advertising angles. **These are verdicts on HOOK "
++        "CONSTRUCTION, not on subject matter** — they were tested as ad copy against a lead "
++        "form, in a different market. A topic on this list is not banned; building a headline "
++        "this way is what failed.",
++        "",
++    ]
++    for m in mechs:
++        lines.append(f"- **{m['mechanic']}** — {m['detail']}")
++    return lines
++
++
++def _caveat_block(snap: dict) -> list[str]:
++    """Emitted unconditionally. See module docstring."""
++    dist = snap.get("distribution") or {}
++    never = dist.get("never_distributed")
++    lines = [
++        "### What this evidence is NOT",
++        "",
++        "**Every number above measures a CLICK.** Not one of the advertisements behind this "
++        "corpus was optimised for enquiries, no lead outcome joins to any of them, and our "
++        "own funnel documented nine high-click-through angles that converted nobody. "
++        "A headline pattern that wins attention is **not** evidence of an article that helps "
++        "anyone.",
++        "",
++        "So the patterns above are permission to be **specific**, never permission to be "
++        "**interesting at the expense of being right**:",
++        "",
++        "- If following one of these patterns would require rounding a price, dropping a "
++        "sample size, omitting that a figure is a rolling 12-month median, implying a "
++        "recommendation, or making a claim the supplied data does not support — **do not "
++        "follow it.** The editorial rules in your system prompt outrank every line of this "
++        "block, without exception. The evidence for these patterns is clicks. The evidence "
++        "for those rules is legal.",
++        "- Never manufacture drama a property does not have. An unremarkable result stated "
++        "plainly is a Fields article; an unremarkable result dressed as a shock is not, and "
++        "the reader who clicks it is the reader who leaves at 10%.",
++        "- The underlying advertising tests ran outside the Gold Coast on a small number of "
++        "outcomes. The *shape* of what works transfers; the magnitudes do not.",
++    ]
++    if never:
++        lines += [
++            f"- Context, not an instruction: **{never} of our articles have never been seen "
++            "by anyone** — zero impressions on any channel. The largest constraint on this "
++            "work is distribution, not writing. Do not over-fit to the handful of articles "
++            "that happen to have been measured.",
++        ]
++    return lines
++
++
++def build_learning_context_block(section: str = "all") -> str:
++    """
++    Build the measured-performance context block for injection into an article prompt.
++
++    Args:
++        section: "all" (default), "headline", or "body". Narrower sections still
++                 carry the caveat block — it is not optional.
++
++    Returns:
++        Markdown string, or "" when the snapshot is unavailable.
++    """
++    snap = _load()
++    if not snap:
++        return ""
++
++    parts: list[str] = [
++        "## WHAT WE HAVE MEASURED ABOUT OUR OWN ARTICLES",
++        "",
++        "Read this before you write. It is the measured outcome of previously published "
++        "Fields articles, and it is here so this pipeline stops repeating what did not work.",
++        "",
++    ]
++
++    blocks: list[list[str]] = []
++    if section in ("all", "headline"):
++        blocks.append(_headline_block(snap))
++    if section in ("all", "body"):
++        blocks.append(_body_block(snap))
++    if section in ("all", "headline"):
++        blocks.append(_dead_mechanics_block(snap))
++    blocks.append(_caveat_block(snap))
++
++    for b in blocks:
++        if b:
++            parts.extend(b)
++            parts.append("")
++
++    built = snap.get("built_at", "")[:10]
++    parts.append(f"_Evidence snapshot: {built}._")
++    parts.append("")
++    return "\n".join(parts)
++
++
++if __name__ == "__main__":
++    block = build_learning_context_block()
++    print(block)
++    print("---")
++    print(f"[{len(block):,} chars, ~{len(block)//4:,} tokens]")
+diff --git a/pipeline/prompts/article_prompt_template.md b/pipeline/prompts/article_prompt_template.md
+index 6c9613b..cdda077 100644
+--- a/pipeline/prompts/article_prompt_template.md
++++ b/pipeline/prompts/article_prompt_template.md
+@@ -70,18 +70,41 @@ The guide above is the FINAL advertised price. This is how the price actually mo
+ 
+ ---
+ 
++{learning_context_block}
++
++---
++
+ ## ARTICLE STRUCTURE TO FOLLOW
+ 
+ Write the article in this exact order using these markdown headings:
+ 
+ ### 1. Headline (H1)
+-Data-driven and specific. Include the address or a compelling stat.
+-Example format: "Sold in {days_on_market} Days: How [Address] Achieved [Result]"
++One named property, one dominant number, and the human event behind it — someone
++bought, someone paid, someone is now asking — and what changed. See the measured
++headline table above; the winning shape is "Someone Paid $X for This {suburb_display}
++Home. [Time] Later, It Sold for $Y." Do not use a generic question, a how-to framing,
++or a bare suburb statistic. Do not put two competing numbers in the headline.
++If this sale genuinely has no such story, write a plain factual headline rather than
++manufacturing one.
+ 
+ ### 2. Hook (no heading — 2-3 sentences)
+ Lead with the result. Create curiosity about how it happened.
+ 
+-### 3. ## The Property
++### 3. ## The Result
++Moved to the top deliberately: measured scroll depth says most readers never reach
++the middle of the page, so the payoff cannot live at the bottom.
++
++Write a tight data paragraph using this format (adapt as needed):
++> **{street_address}, {suburb_display}** sold on {sold_date_text} for **{sale_price_fmt}**.
++> [Days on market vs suburb average if available]
++> [% vs guide if available]
++> [% vs suburb median if available]
++> [Bedroom median comparison if available]
++
++Keep this section punchy and scannable. This is the most-read section, and it is now
++positioned where it will actually be read.
++
++### 4. ## The Property
+ 2–3 paragraphs describing the home. Draw on the marketing copy, PROPERTY CONDITION & FEATURES data, and any VISUAL PROPERTY ANALYSIS for character and detail, but write it fresh — don't copy the listing description. If renovation data is available, use it prominently — a fully renovated home with new kitchen/bathrooms explains a price premium that readers want to understand. If a visual analysis mentions specific features (pool, outdoor entertaining, architectural details), weave those naturally into the narrative. Reference what makes this home stand out in {suburb_display}'s market.
+ 
+ If PROPERTY PHOTOS are provided above, output each one as a raw HTML figure tag on its own line immediately after the last paragraph in this section. Use exactly this format (no code fences, no markdown wrapping):
+@@ -89,23 +112,12 @@ If PROPERTY PHOTOS are provided above, output each one as a raw HTML figure tag
+ 
+ Use the captions provided. Do not add extra line breaks inside the tag.
+ 
+-### 4. ## The Market It Sold Into
++### 5. ## The Market It Sold Into
+ 1–2 paragraphs placing this sale in the context of the {suburb_display} market at the time. Use the suburb context data provided. Make it feel like insider knowledge, not a stats dump.
+ 
+-### 5. ## The Campaign
++### 6. ## The Campaign
+ 1–2 paragraphs covering the sale process: how long it was on the market, whether it sold above/below guide (if guide available), and what that tells us. If days on market is available, compare it to the suburb average — but only make DOM a narrative point if the difference is meaningful (more than 5 days faster = strong result worth noting; more than 7 days slower = challenging campaign worth noting; within 5 days either side = state the number as fact only, do not frame an average result as fast or slow).
+ 
+-### 6. ## The Result
+-
+-Write a tight data paragraph using this format (adapt as needed):
+-> **{street_address}, {suburb_display}** sold on {sold_date_text} for **{sale_price_fmt}**.
+-> [Days on market vs suburb average if available]
+-> [% vs guide if available]
+-> [% vs suburb median if available]
+-> [Bedroom median comparison if available]
+-
+-Keep this section punchy and scannable. This is the most-read section.
+-
+ ### 7. ## What This Means for Buyers and Sellers
+ 2 paragraphs. First paragraph: what this sale tells buyers who are active in {suburb_display} in this price range. Second paragraph: what it tells homeowners who are thinking about selling nearby.
+ 
+@@ -114,4 +126,6 @@ Keep this section punchy and scannable. This is the most-read section.
+ "Talk to the Fields team about what your home could achieve in today's market."
+ 
+ Do not include the listing URL in the article body.
+-Target length: 850–1100 words.
+\ No newline at end of file
++Target length: 800–1000 words. Do not pad to reach it — measured scroll depth says
++the back half is largely unread, so a shorter article that says everything by the
++halfway mark beats a longer one that does not.
+\ No newline at end of file
+diff --git a/pipeline/watch_article_generator.py b/pipeline/watch_article_generator.py
+index 8144de5..e1dd681 100644
+--- a/pipeline/watch_article_generator.py
++++ b/pipeline/watch_article_generator.py
+@@ -22,6 +22,7 @@ from claude_max_client import make_client
+ from config import ANTHROPIC_API_KEY, CLAUDE_MODEL, CLAUDE_MAX_TOKENS, CLAUDE_MAX_RETRIES, LOG_DIR
+ from watch_data_assembler import WatchSaleData
+ from market_context_loader import build_market_context_block
++from learning_context import build_learning_context_block
+ 
+ # ── Load prompts ───────────────────────────────────────────────────────────────
+ 
+@@ -332,18 +333,26 @@ def _build_prompt(data: WatchSaleData) -> str:
+         **angle_kwargs,
+     )
+ 
+-    # Append market context block if available (injected before INSTRUCTIONS).
+-    # Applies to all angle templates without modifying each one individually.
+-    market_ctx = build_market_context_block(suburb=data.suburb)
+-    if market_ctx:
++    # Append market context and measured-performance context (injected before
++    # INSTRUCTIONS). Applies to all 14 angle templates without modifying each one.
++    #
++    # Order matters: the learning block goes LAST, immediately above the angle's
++    # own instructions, because it constrains how those instructions are executed
++    # (headline shape, what goes in the top half, what not to manufacture).
++    market_ctx   = build_market_context_block(suburb=data.suburb)
++    learning_ctx = build_learning_context_block()
++
++    for block in (market_ctx, learning_ctx):
++        if not block:
++            continue
+         if "## INSTRUCTIONS" in prompt:
+             prompt = prompt.replace(
+                 "## INSTRUCTIONS",
+-                f"{market_ctx}\n\n---\n\n## INSTRUCTIONS",
++                f"{block}\n\n---\n\n## INSTRUCTIONS",
+                 1,
+             )
+         else:
+-            prompt = prompt + f"\n\n---\n\n{market_ctx}"
++            prompt = prompt + f"\n\n---\n\n{block}"
+ 
+     return prompt
+ 
