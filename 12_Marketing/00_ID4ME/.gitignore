@@ -1,0 +1,13 @@
+# The delivered bundle contains .env, credentials.txt and .token.json inside it,
+# so the archive itself must never be committed even though the extracted copies
+# are covered by the inner .gitignore.
+*.zip
+unzipped_*/
+
+# Belt and braces - ID4ME output is personal data (names, DOBs, phones, emails).
+output/
+discovery/
+.chrome_profile/
+.env
+.token.json
+credentials.txt
