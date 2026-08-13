@@ -69,6 +69,13 @@ def build_query(args):
     """
     q = {"listing_status": {"$nin": ["sold", "for_sale"]},
          "LOT": {"$nin": [None, ""]}, "PLAN": {"$nin": [None, ""]}}
+    # ⚠ `--for-sale` INVERTS the default exclusion rather than relaxing it: the V2
+    # listing page (15_On_Market) uses the same boundary hero as the off-market
+    # report, and those listings are precisely the ones the default query drops.
+    # Kept as an explicit opt-in so a normal off-market pass can never silently
+    # start spending Static Maps calls on live listings.
+    if getattr(args, "for_sale", False):
+        q["listing_status"] = "for_sale"
     if not args.attached:
         q["property_type"] = "House"
     # INDEXED PAGES FIRST. The aerial is the hero — the first thing on the page and the
@@ -96,6 +103,9 @@ def build_query(args):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--suburb", default=None)
+    ap.add_argument("--for-sale", dest="for_sale", action="store_true",
+                    help="render live for-sale listings instead of off-market stock "
+                         "(the V2 listing-page hero)")
     ap.add_argument("--limit", type=int)
     ap.add_argument("--indexable-only", action="store_true",
                     help="only dwellings flagged unit_indexable — the pages that are live")
