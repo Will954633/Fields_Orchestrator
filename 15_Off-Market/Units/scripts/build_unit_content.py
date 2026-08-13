@@ -54,7 +54,8 @@ from pymongo import UpdateOne                           # noqa: E402
 from shared.db import get_client                        # noqa: E402
 from shared.dwelling_type import classify_dwelling       # noqa: E402
 from scripts.job_status import job_run                   # noqa: E402
-from unit_valuation import bedrooms_of, sale_price, plausible_for_scheme   # noqa: E402
+from unit_valuation import (bedrooms_of, sale_price, plausible_for_scheme,   # noqa: E402
+                            dedupe_sales)
 
 SUBURBS = ["robina", "varsity_lakes", "burleigh_waters"]
 MIN_SCHEME_FOR_MIX = 6      # below this a bedroom-mix claim is noise, not a profile
@@ -93,7 +94,9 @@ def sales_of(doc):
         p = sale_price(doc.get("sale_price"))
         if p:
             out.append((str(doc.get("sold_date") or "")[:10], p))
-    return sorted(set(out))
+    # One row per real sale — the same sale reaches us under two dates from
+    # different sources, which would inflate every scheme turnover figure.
+    return dedupe_sales(out)
 
 
 def build_for_suburb(gc, suburb, this_year):
