@@ -29,6 +29,25 @@ METHOD
 4. Report current vs new on the HOLDOUT half. A factor that does not beat the
    incumbent out-of-sample does not ship.
 
+⚠⚠ THIS SCRIPT DOES NOT MEASURE THE SHIPPED METHOD. Found 2026-08-12.
+The `backtest_single_property` call below passes `median_cache={}` and
+`street_premium_cache={}` — EMPTY. So every estimate here is produced WITHOUT the
+street-premium and micro-location adjustments, which together are ~21% of gross
+adjustment dollars in production. The factors it derives therefore correct a
+method we do not run.
+
+That is not academic. On 2026-08-12 it proposed `burleigh_waters: 1.0177`,
+"validated on holdout", because on the stripped method Burleigh reads as
+UNDERvaluing by −3.74%. On the real method Burleigh already OVERvalues by +3.8%,
+and shipping that factor moved it from MAE 9.3% to 10.4% and bias +3.8% to +6.6%
+(full backtest, n=145, identical data). The 2026-08-10 refit proposed the same
+number from the same flaw and was queued to ship.
+
+**Until the caches are populated, treat this script's output as a hypothesis and
+confirm every proposed factor against `scripts/valuation_backtest.py` on the full
+sample before shipping it.** A holdout does not save you here — it validates
+against the same wrong method.
+
 ⚠ THIS FITS ONE NUMBER PER SUBURB ON A FEW HUNDRED HOMES. Treat a small
 improvement as noise. The bar for replacing a shipped constant is that the
 holdout agrees with the fit on direction and rough size.

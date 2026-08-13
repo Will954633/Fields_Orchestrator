@@ -1,7 +1,14 @@
 # 2026-08-12 — Unknown-vs-known attribute hardening (water_views, cladding, stories, ac_type)
 
-**Status: WRITTEN, NOT ENABLED.** Ships behind `VALUATION_UNKNOWN_HARDENING=1`.
-Default behaviour is unchanged and verified so (below).
+**Status: SHIPPED 2026-08-12**, as one release with a recalibration fitted on top of
+it and re-derived page tables. `VALUATION_LEGACY_UNKNOWN_DEFAULTS=1` restores the old
+behaviour for an A/B.
+
+> **Why it could not ship alone.** On its own the hardening looked like a regression —
+> MAE 9.0% → 9.2%, bias +0.7% → +2.1%. That was two wrongs cancelling: the markdown had
+> been silently offsetting a systematic OVERvaluation coming from a stale calibration.
+> Re-fitting the calibration *on top of* the hardening moves both the right way in every
+> suburb (§6). Shipping either half by itself would have made the method worse.
 
 ---
 
@@ -128,6 +135,42 @@ and any future refit should average several runs or pin the comparable ordering 
 unsorted Mongo cursor).
 
 ---
+
+## 6. The recalibration that shipped with it
+
+The 2026-08-10 refit was fitted under the OLD unknown handling, so it would have been
+stale on arrival. Re-fitted with the hardening ON — `experiments/calibration_refit.py`,
+n=631, fitted on half and judged on the other half:
+
+| suburb | fit n / holdout n | factor | MAE | median | bias | within 10% |
+|---|---|---|---|---|---|---|
+| robina | 150 / 122 | 1.0189 → **1.0** | 8.84 → **8.52** | 7.62 → **6.91** | +1.88% → **+0.03%** | 66.4 → 65.6 |
+| varsity_lakes | 103 / 102 | 1.1243 → **1.1001** | 8.07 → **7.64** | 6.65 → **6.12** | +2.83% → **+0.62%** | 72.6 → **73.5** |
+| burleigh_waters | 70 / 84 | 0.9925 → **1.0177** | 8.16 → **7.80** | 6.63 → 6.88 | −3.74% → **−1.29%** | 64.3 → **72.6** |
+
+All three beat the incumbent out-of-sample — the script's own bar for replacing a
+shipped constant.
+
+**Robina no longer needs a correction.** Its refitted factor is 1.0005, and on the
+holdout, applying it and applying nothing are indistinguishable (MAE 8.52% either way).
+Shipped as exactly `1.0` rather than a 0.05% constant that looks like a measurement but
+is noise. The entry is kept rather than deleted so the record shows the suburb was
+measured and found to need nothing — an absent entry reads as "never measured".
+
+This is the outcome the hardening predicted: with the markdown removed, the calibration
+no longer has to compensate for it, and Robina's residual bias goes to ~zero.
+
+## 7. Still outstanding — the published figures are measured on a subject that knows too much
+
+`--blind-subject` blinds three photo-derived attributes. An off-market home lacks **six**
+— `water_views`, `cladding_level` and `ac_ducted` are equally photo-derived and equally
+absent. `BACKTEST_BLIND_FULL=1` blinds the full set and is the honest simulation of the
+off-market product these figures describe.
+
+This release deliberately did NOT adopt it, so that one variable changed at a time and
+the new figures stay comparable to the published ones. **The consequence is that our
+published accuracy is still measured on a subject that knows slightly more than a real
+off-market home does.** Worth a separate, deliberate re-measure.
 
 ## Files
 
