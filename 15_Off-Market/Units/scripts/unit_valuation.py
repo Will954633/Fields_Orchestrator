@@ -359,17 +359,23 @@ class UnitValuer:
                     events.append((e.get("date"), e.get("price")))
             if d.get("listing_status") == "sold":
                 events.append((d.get("sold_date"), d.get("sale_price")))
-            best = None
-            for date, price in events:
-                # sale_price, NOT _num: this is a transaction amount and needs the
-                # rental sanity band. _num deliberately has none — see its docstring.
-                p, y = sale_price(price), _year(date)
-                if not p or not y:
-                    continue
-                if best is None or str(date) > str(best[0]):
-                    best = (str(date)[:10], p)
-            if not best:
+            # ⚠ DEDUPE BEFORE PICKING THE LATEST, OR THE TWO COMPARABLE TABLES DISAGREE
+            # WITH EACH OTHER ON THE SAME PAGE.
+            # This picks the most recent sale for a dwelling. `dedupe_sales` collapses one
+            # sale recorded under two dates and keeps the EARLIER. Picking the latest raw
+            # event instead picks the LATER of that pair — so the same sale carried a
+            # different date in this table than in the statutory one, and therefore a
+            # different index quarter and a different adjusted figure.
+            # Seen live at 187 Easthill Drive: 159 Easthill's $1,425,000 sale appeared as
+            # 2026-04 -> $1,425,000 here and 2026-03 -> $1,523,676 there, on one page.
+            # sale_price, NOT _num: this is a transaction amount and needs the rental
+            # sanity band. _num deliberately has none — see its docstring.
+            clean = dedupe_sales([(str(date)[:10], sale_price(price))
+                                  for date, price in events
+                                  if sale_price(price) and _year(date)])
+            if not clean:
                 continue
+            best = clean[-1]                      # most recent, on the canonical date
             out.append({"address": eff, "date": best[0], "price": best[1],
                         "beds": bedrooms_of(d), "baths": d.get("bathrooms"),
                         "floor": (_num(d.get("floor_area_sqm"))
