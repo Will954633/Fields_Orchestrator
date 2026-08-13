@@ -121,6 +121,39 @@ def _error_summary(output: str, returncode: int) -> str:
     return f"Generator exited {returncode} with no usable error output"
 
 
+def _publish_cover(pdf_path: Path, slug: str) -> str | None:
+    """Publish page 1 as a JPEG thumbnail for the page's report section.
+
+    Taken from the RENDERED PDF rather than re-rendering the cover separately,
+    so the thumbnail is by construction the cover of the document it advertises.
+    A separately-built preview could drift from the real thing — the hero chain
+    has six fallback tiers, and showing one photo while delivering another would
+    be its own small dishonesty.
+
+    Fixed path per slug (no timestamp) so the page can reference it without a
+    lookup and simply hide the image when it 404s. ⚠ nginx serves /data/blobs
+    with `immutable, max-age=31536000`, so a refreshed cover will not be picked
+    up by a browser that has already cached one. Acceptable: the cover changes
+    only if the hero photo changes, which is rare, and the alternative is a
+    lookup on every page render.
+    """
+    try:
+        import fitz  # PyMuPDF
+        from shared.blob_storage import upload
+
+        doc = fitz.open(pdf_path)
+        # ~600px wide at A4 — retina-sharp in the ~300px slot the section gives it.
+        pix = doc[0].get_pixmap(dpi=72)
+        data = pix.tobytes("jpeg", jpg_quality=82) if hasattr(pix, "tobytes") else pix.tobytes()
+        doc.close()
+        return upload("off-market-reports", f"covers/{slug}.jpg", data,
+                      content_type="image/jpeg")
+    except Exception as exc:
+        # A missing thumbnail degrades to no image; it must never fail the report.
+        logger.warning("Cover thumbnail failed for %s: %s", slug, exc)
+        return None
+
+
 def _publish(pdf_path: Path, slug: str) -> str:
     """Copy the PDF into the public blob root and return its URL.
 
@@ -189,6 +222,7 @@ def process_one(client, req) -> bool:
 
     screen_pdf = _shrink(pdf_path)
     published = _publish(screen_pdf, slug)
+    cover_url = _publish_cover(screen_pdf, slug)
     # The SHIPPED size, not the source. Recording the pre-shrink figure would
     # report 11 MB for a file the visitor downloads at 1.2 MB, and this metric
     # exists precisely to watch download weight.
@@ -197,6 +231,7 @@ def process_one(client, req) -> bool:
     queue.update_one({"_id": req_id}, {"$set": {
         "status": "completed",
         "pdf_url": published,
+        "cover_url": cover_url,
         "size_mb": size_mb,
         "subject_id": subject_id,
         "suburb": suburb,
