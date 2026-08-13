@@ -29,10 +29,11 @@ Run as a service: fields-offmarket-report-poller
 
 import logging
 import os
+import shutil
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -315,10 +316,16 @@ def poll_once(client) -> dict:
 
     # Reclaim anything a crash left mid-flight, otherwise a restart strands the
     # visitor on a spinner forever.
-    cutoff = datetime.now(timezone.utc).timestamp() - STALE_CLAIM_SECONDS
+    # ⚠ Cosmos returns naive datetimes. `naive.timestamp()` interprets them as
+    # LOCAL time (AEST, UTC+10), so a job started seconds ago looked ten hours
+    # old and was reclaimed instantly — a job still rendering would be handed to
+    # a second worker. Compare in explicit UTC.
+    cutoff = datetime.now(timezone.utc) - timedelta(seconds=STALE_CLAIM_SECONDS)
     for stuck in queue.find({"status": "processing"}):
         started = stuck.get("started_at")
-        if started and started.timestamp() < cutoff:
+        if started and started.tzinfo is None:
+            started = started.replace(tzinfo=timezone.utc)
+        if started and started < cutoff:
             queue.update_one({"_id": stuck["_id"]}, {"$set": {"status": "pending"}})
             logger.warning("Reclaimed stale job %s", stuck["_id"])
 
