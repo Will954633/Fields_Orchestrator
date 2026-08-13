@@ -130,9 +130,22 @@ Frontend renders `srcset` + `sizes` with the **original as `src`**, so a photo w
 still displays. That fallback is what makes this shippable before the backfill finishes — nothing
 breaks while it runs, images merely stay heavy until it reaches them.
 
-Only derivatives that were actually written may appear in `srcset`; a 404 inside `srcset` costs a
-request and silently degrades selection. The rendition set must be built from what exists on disk,
-not assumed from the width list.
+Only derivatives that were actually written may appear in `srcset`; a 404 inside `srcset` does **not**
+fall back to `src` in browsers — the image simply fails. The rendition set must be built from what
+exists, not assumed from the width list.
+
+**⚠ Open design problem, found 2026-08-13 while starting this step.** The serializer is a Netlify
+function; it cannot stat the blob disk, so at serve time it has no way to know which renditions were
+written. Never-upscale guarantees some are legitimately absent — 15 of 120 sampled photos are ≤960px,
+and the Robina backfill skipped 4 of 150 tiers on its first 50 photos. So the naive "emit all three
+widths" is a live breakage risk on exactly the narrow photos, and §3's "no schema change" claim does
+not survive contact with this step.
+
+The cheapest honest fix is one conservative field per listing: the **intersection** of widths present
+across *every* photo of that listing (e.g. `image_derivative_widths: [480, 960]`), written by the
+backfill and the two ingest writers, and read by the serializer. One small array per document, no
+per-photo map, and a listing with one narrow photo simply advertises fewer widths rather than
+breaking. **Not yet built or agreed** — it is a schema addition and wants a decision first.
 
 ## 6. Sequence
 
