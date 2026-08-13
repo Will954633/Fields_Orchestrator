@@ -122,6 +122,10 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--root', default=DEFAULT_ROOT, help='Blob subtree to scan')
+    ap.add_argument('--paths-file',
+                    help='Newline-separated blob paths to repair, skipping the full scan. '
+                         'Each is still re-sniffed and a real image is refused, so a stale '
+                         'or wrong list cannot delete a good photo.')
     ap.add_argument('--scan', action='store_true', help='Report affected blobs and exit')
     ap.add_argument('--dry-run', action='store_true', help='Show planned repairs, change nothing')
     ap.add_argument('--apply', action='store_true', help='Perform the repairs')
@@ -134,7 +138,34 @@ def main():
         ap.error('pick one of --scan / --dry-run / --apply')
 
     load_env()
-    found = scan(args.root, args.workers)
+
+    if args.paths_file:
+        # Verify each supplied path independently rather than trusting the list. A path
+        # that turns out to hold a real image is REFUSED, not repaired — the whole point
+        # of this tool is that only the bytes are authoritative.
+        found, refused = [], []
+        for line in open(args.paths_file):
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            p = Path(line if line.startswith('/') else os.path.join(args.root, line))
+            if not p.is_file():
+                refused.append((p, 'missing'))
+                continue
+            with open(p, 'rb') as f:
+                head = f.read(8192)
+            fmt = sniff_image_format(head)
+            if fmt is not None:
+                refused.append((p, f'is a real {fmt} — refusing'))
+                continue
+            found.append((p, p.stat().st_size,
+                          'html' if _looks_like_markup(head) else 'unknown', title_of(head)))
+        if refused:
+            print(f"\n⚠ {len(refused)} supplied path(s) NOT repaired:")
+            for p, why in refused:
+                print(f"    {why:<28} {p}")
+    else:
+        found = scan(args.root, args.workers)
 
     print(f"\n{'=' * 74}\nNON-IMAGE BLOBS: {len(found)}\n{'=' * 74}")
     for p, size, kind, title in found:
@@ -182,8 +213,18 @@ def main():
 
         update = {'$set': {field: new_list}}
         if args.keep_tour and source and 'matterport' in source.lower():
-            update['$set']['virtual_tour_url'] = source
-            print("    + recording virtual_tour_url")
+            # ⚠ STORE THE REDACTED URL, NEVER THE RAW ONE.
+            #
+            # These tour URLs carry `auth=Bearer <token>`. On 2026-08-13
+            # [PHOTO-API-BEARER-LEAK] found that exact token being served on the PUBLIC
+            # property API, because anything in a photo array gets emitted by the API
+            # whether or not the page paints it. Writing the raw URL to a new field
+            # would re-create that leak in a new location — the token would simply be
+            # published under a different key. A redacted URL keeps the tour ID (the
+            # useful part) and drops the credential; a working link needs a token
+            # re-issued by whoever owns the Matterport account, not ours to persist.
+            update['$set']['virtual_tour_url'] = redact(source)
+            print("    + recording virtual_tour_url (credential redacted)")
 
         coll.update_one({'_id': doc['_id']}, update)
         Path(p).rename(str(p) + '.notanimage')   # reversible; not a delete

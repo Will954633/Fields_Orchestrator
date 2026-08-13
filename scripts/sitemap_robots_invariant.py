@@ -56,6 +56,7 @@ import sys
 import urllib.request
 from collections import defaultdict
 from datetime import date, timedelta
+from typing import Optional
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -72,6 +73,13 @@ GSC_SCOPES = ["https://www.googleapis.com/auth/webmasters"]
 # Per-family sample for invariant A. Small enough to stay polite, large enough that a
 # systemic breakage (4,559 URLs = 26% of a family) is caught with near-certainty:
 # at 26% prevalence, P(miss) over 25 draws is ~0.0006.
+#
+# That figure is for ONE night, and until 2026-08-13 one night was all you ever got —
+# `run()` used a hardcoded seed, so the same 25 URLs were drawn every night forever and
+# coverage never accrued. The seed is now the date (see run()), so the small sample is
+# backed by cumulative coverage: 25 URLs after one night, ~169 after a week, ~603 of
+# 1,508 after a month. A 1%-prevalence defect goes from 22% detection *permanently* to
+# 83% within a week and 99.9% within a month — without fetching any more per night.
 DEFAULT_SAMPLE = 25
 # Cap for invariant B. The missing-from-sitemap population is routinely ~1,200 and
 # mostly legitimate, so this is sampled — never let a sampled check be reported as
@@ -241,8 +249,25 @@ def check_c(paths, per_family: int, rng) -> tuple[list, int]:
     return violations, len(rows)
 
 
-def run(per_family: int, b_cap: int, c_sample: int = DEFAULT_C_SAMPLE) -> dict:
-    rng = random.Random(20260808)  # fixed seed: a violation is reproducible
+def run(per_family: int, b_cap: int, c_sample: int = DEFAULT_C_SAMPLE,
+        seed: Optional[int] = None) -> dict:
+    # Seed from TODAY's date, not a constant.
+    #
+    # This was `random.Random(20260808)` — a hardcoded seed — so the sampler drew the
+    # SAME 25 URLs per family every night, forever. The reassuring maths in the
+    # DEFAULT_SAMPLE comment ("P(miss) over 25 draws is ~0.0006") holds for ONE night
+    # and then stops accruing: repeated runs added no coverage at all, and any defect
+    # outside those 25 URLs was never checked no matter how long the monitor ran. That
+    # is a silent blind spot over ~98% of each family.
+    #
+    # A date seed keeps the property the constant was there for — a violation found
+    # today is reproducible today, which is when you debug it — while giving a fresh
+    # draw each night. Cumulative coverage over a month goes from 25 URLs to ~700, and
+    # a 1%-prevalence defect is caught with ~83% probability inside a week rather than
+    # ~0%. Pass --seed to replay a specific past run.
+    if seed is None:
+        seed = int(date.today().strftime("%Y%m%d"))
+    rng = random.Random(seed)
     paths = sitemap_paths()
     if not paths:
         # Zero-output path (CLAUDE.md 7b): an empty sitemap is never "no work to do".
@@ -252,6 +277,7 @@ def run(per_family: int, b_cap: int, c_sample: int = DEFAULT_C_SAMPLE) -> dict:
     vc, nc = check_c(paths, c_sample, rng)
     st = {
         "sitemap_urls": len(paths),
+        "seed": seed,   # replay this exact draw with --seed
         "a_checked": na, "a_violations": len(va),
         "b_checked": nb, "b_population": pop_b, "b_violations": len(vb),
         "c_checked": nc, "c_violations": len(vc),
@@ -267,12 +293,14 @@ def main():
     ap.add_argument("--sample", type=int, default=DEFAULT_SAMPLE, help="URLs per family for invariant A")
     ap.add_argument("--b-cap", type=int, default=DEFAULT_B_CAP, help="max URLs sampled for invariant B")
     ap.add_argument("--c-sample", type=int, default=DEFAULT_C_SAMPLE, help="URLs per family for invariant C (headless)")
+    ap.add_argument("--seed", type=int, default=None,
+                    help="replay a specific draw (default: today's date, YYYYMMDD)")
     ap.add_argument("--dry-run", action="store_true", help="no heartbeat")
     args = ap.parse_args()
     load_env()  # never trust the caller's env (CLAUDE.md rule 7, step 3)
 
     def report(st):
-        print(f"sitemap URLs: {st['sitemap_urls']}")
+        print(f"sitemap URLs: {st['sitemap_urls']}   (seed {st['seed']} — replay with --seed {st['seed']})")
         print(f"  A (sitemap URL is indexable):        checked {st['a_checked']:>4}  violations {st['a_violations']}")
         print(f"  B (indexable + ranking => in sitemap): checked {st['b_checked']:>4} of {st['b_population']} missing  violations {st['b_violations']}")
         print(f"  C (canonical stable across hydration): checked {st['c_checked']:>4}  violations {st['c_violations']}")
@@ -280,12 +308,12 @@ def main():
             print(f"    [{v['invariant']}] {v['family']:<20} {v['path']}\n          status={v['status']} robots={v['robots']} reason={v.get('reason','')}")
 
     if args.dry_run:
-        report(run(args.sample, args.b_cap, args.c_sample))
+        report(run(args.sample, args.b_cap, args.c_sample, args.seed))
         return
 
     with job_run("sitemap_robots_invariant", cadence_hours=24,
                  title="Sitemap/Robots Invariant Check") as beat:
-        st = run(args.sample, args.b_cap, args.c_sample)
+        st = run(args.sample, args.b_cap, args.c_sample, args.seed)
         report(st)
         beat.metrics = st
         total = st["a_violations"] + st["b_violations"] + st["c_violations"]
