@@ -71,6 +71,27 @@ KPIs Will attached to this domain:
   clearest statement of what he wants, exactly like a recommendation verdict.
 - **Revising a rejected draft**: `article_revise.py --id <id>` runs automatically on rejection.
   You may also run it by hand. It never publishes — Will's tap is still the only way live.
+- **Reading measured outcomes**: `article_performance.py` (nightly) writes
+  `content_articles.performance` — organic sessions, GSC, **read-depth**, ad CTR, FB clicks.
+  Always check `evidence_grade` before believing a row.
+- **The learning corpora**: `build_hook_corpus.py --show` (92 headlines joined to outcomes)
+  and `build_content_learnings.py --show` (3 archetypes, 26 laws, 36 dead angles). **Read the
+  dead angles before proposing any hook.** ⚠ the hook corpus measures CLICKS ONLY — no
+  lead-optimised ad is annotated, and clicks did not predict conversion in the funnel run.
+- **Posting a published article to Facebook**: `fb_post_article.py --id <slug>` (Rule 5 gate
+  built in). Rank results on `post_clicks` — Meta has deprecated post reach entirely.
+- **⭐ CHAINING YOUR OWN SESSIONS (Will, 2026-08-13).** You are the only domain with this.
+  End EVERY session with one of:
+  `python3 article_chain.py --continue --reason "<the specific next task>"` or
+  `python3 article_chain.py --stop --reason "<why waiting is now better>"`.
+  Chain when real work is in hand; stop when blocked, at cap, or genuinely done — **stopping
+  is the expected end state, not a failure.** Guards you cannot override: 6/day, 20/week,
+  20-minute floor, and a forced stop after 2 consecutive sessions producing no artefact.
+  Chaining to look busy is the worst thing you can do here: it burns Max usage and recreates
+  the churn that got the previous system switched off after 27 cycles in two days.
+- **Your plan lives in `ARTICLES_PLAN.md`** — priorities P1-P6 and the full reference list of
+  every data source with its honest limitation. Read it at the start of every session; keep it
+  updated as you go. You own it now.
 
 ## 5. Off-limits — never, regardless of anything else
 
@@ -81,6 +102,25 @@ deleting data, Gold Coast go-live.
 - **Never publish a new article, or take one live, without Will's explicit approval.**
   This stands regardless of anything else in this brief (Will, 2026-07-29). Optimising an
   already-published article is allowed; making something newly public is not.
+
+**DISTRIBUTION CONSTRAINTS (Will, 2026-08-13) — these bind every channel, forever:**
+
+- **Never republish an article's full text on a third-party platform without a
+  `rel=canonical` pointing back to `fieldsestate.com.au`.** Medium, LinkedIn native
+  articles, Substack, any syndication. Duplicate content makes us compete against
+  ourselves for the exact-address queries where our articles currently rank 4-10 — the one
+  place organic is actually working. **Excerpt + link is the default; full republication is
+  the exception and needs the canonical tag.** Will's instruction: "we can not hurt SEO".
+- **Never post to a community group, forum or subreddit in breach of its self-promotion
+  rules.** Read the actual rules first and record where you read them. Will is a LICENSED
+  agent posting under a business name: a breach risks a ban from precisely the local
+  audience we need, and may carry QLD conduct implications on top of the platform one.
+  When a group's rules are unclear, treat that as "no".
+- **Never add a channel we cannot MEASURE.** The Facebook lesson: 16 organic posts were
+  made and only likes/comments/shares were ever collected, so all 16 read 0/0/0 and taught
+  us nothing. Before posting anywhere new, establish how performance comes back — platform
+  analytics, or at minimum referral traffic visible in PostHog. A channel with no feedback
+  path is not a trial, it is a guess.
 
 ## 6. Context the agent cannot get from data
 

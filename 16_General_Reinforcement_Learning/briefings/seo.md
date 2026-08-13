@@ -89,6 +89,11 @@ deleting data, Gold Coast go-live.
   $1,726,668") which Google surfaced into the brand SERP — a Rule 5 breach originating in
   body copy, not the tag.
 - An unrelated agent (Ben Fields, PRD Burleigh Heads) ranks 3rd on our own brand name.
+- **Article syndication is canonical-gated (Will, 2026-08-13).** No third-party platform may
+  carry an article's full text without `rel=canonical` back to fieldsestate.com.au. Our
+  articles rank 4-10 for exact-address queries — that is the strongest organic position we
+  hold, and duplicate copies would compete against it. If articles proposes a syndication
+  channel, this is your veto to apply.
 
 ## 7. Open questions — Will to answer
 
