@@ -274,6 +274,91 @@ def process_one(client, pv, claim):
     return True
 
 
+def publish_one(client, pv, claim):
+    """
+    Apply a HUMAN-APPROVED correction to the property document and republish.
+
+    ⚠ THIS IS THE ONLY CODE THAT MAKES A READER'S FIGURE PUBLIC, and it runs
+    only on `status: "approved"`, which only a human can set (ops dashboard,
+    OPS_AUTH_TOKEN). Nothing here is reachable from the public endpoint.
+
+    ⚠ IT RE-DERIVES THE VALUATION; IT DOES NOT COPY `provisional`.
+    Persisting the attributes and then valuing the corrected document is what
+    makes the published figure DURABLE: the nightly `batch_value_offmarket` run
+    reads the same document and reproduces the same answer. Copying the
+    provisional would publish a number the nightly job would then recompute from
+    an uncorrected document and silently revert — the figure would flicker back
+    to "no figure" the next morning and nobody would know why.
+
+    ⚠ AN `assumed` CLAIM CAN NEVER BE PUBLISHED. Those were filled from suburb
+    medians, so they describe a shape of home, not this home. Publishing one
+    would put a median on a page about somebody's actual property and attach our
+    measured error rate to it. The guard is here, in code, rather than left to
+    whoever is clicking in the dashboard.
+    """
+    gc = client["Gold_Coast"]
+    claims = client["system_monitor"]["attribute_claims"]
+
+    def fail(reason):
+        logger.error("Publish %s failed: %s", claim["_id"], reason)
+        claims.update_one({"_id": claim["_id"]},
+                          {"$set": {"status": "computed", "publish_error": reason}})
+        return False
+
+    if claim.get("assumed"):
+        return fail("refused: built from typical figures, not this home's own")
+
+    attributes, err = _validate(claim.get("attributes"))
+    if err:
+        return fail(f"rejected: {err}")
+
+    suburb, doc = _find_property(gc, claim["slug"])
+    if not doc:
+        return fail(f"no property for slug {claim['slug']}")
+
+    previous = {INJECT_AT[f]: doc.get(INJECT_AT[f]) for f in attributes}
+    update = {INJECT_AT[f]: v for f, v in attributes.items()}
+    # Provenance, shaped like the existing `property_type_correction` so the
+    # document carries one recognisable idiom for "a field was corrected".
+    update["attribute_correction"] = {
+        "at": datetime.now(timezone.utc),
+        "claim_id": str(claim["_id"]),
+        "source": "offmarket_v4_reader",
+        "applied": {INJECT_AT[f]: v for f, v in attributes.items()},
+        "previous": previous,
+        "verified_by": claim.get("verified_by") or "ops",
+    }
+    gc[suburb].update_one({"_id": doc["_id"]}, {"$set": update})
+
+    # Revalue from the now-corrected document, exactly as the nightly job would.
+    fresh = gc[suburb].find_one({"_id": doc["_id"]})
+    fresh["_collection"] = suburb
+    sold, coords, timelines, mc, sc = _CACHE["payload"] or _caches(pv, client)
+    try:
+        vd = pv.precompute_property_valuation(
+            gc, fresh, gc[suburb], sold, coords, timelines, mc, sc)
+    except Exception as exc:
+        return fail(f"revaluation failed: {type(exc).__name__}: {exc}")
+    if not vd:
+        return fail("revaluation returned nothing")
+
+    gc[suburb].update_one({"_id": doc["_id"]}, {"$set": {"valuation_data": vd}})
+    conf = (vd.get("confidence") or {})
+    point = conf.get("reconciled_valuation")
+    claims.update_one(
+        {"_id": claim["_id"]},
+        {"$set": {"status": "published", "published_at": datetime.now(timezone.utc),
+                  "publish_error": None,
+                  "published_valuation": {
+                      "low": (conf.get("range") or {}).get("low"),
+                      "high": (conf.get("range") or {}).get("high"),
+                      "point": point}}},
+    )
+    logger.info("Claim %s PUBLISHED on %s: %s", claim["_id"], doc.get("address"),
+                point or (vd.get("summary") or {}).get("exclusion_reason"))
+    return True
+
+
 def poll_once(client, pv):
     claims = client["system_monitor"]["attribute_claims"]
 
@@ -281,24 +366,40 @@ def poll_once(client, pv):
     # AEST, so a naive comparison makes a job started seconds ago look ten hours
     # old and hands a live job to a second worker.
     cutoff = datetime.now(timezone.utc) - timedelta(seconds=STALE_CLAIM_SECONDS)
-    for stuck in claims.find({"status": "processing"}):
-        started = stuck.get("started_at")
-        if started and started.tzinfo is None:
-            started = started.replace(tzinfo=timezone.utc)
-        if started and started < cutoff:
-            claims.update_one({"_id": stuck["_id"]}, {"$set": {"status": "pending"}})
-            logger.warning("Reclaimed stale claim %s", stuck["_id"])
+    # Both in-flight states, each returned to the state it came from — a crashed
+    # publish must go back to `approved`, not to `pending`, or the human approval
+    # is silently discarded and the claim quietly re-enters the reader queue.
+    for state, back_to in (("processing", "pending"), ("publishing", "approved")):
+        for stuck in claims.find({"status": state}):
+            started = stuck.get("started_at")
+            if started and started.tzinfo is None:
+                started = started.replace(tzinfo=timezone.utc)
+            if started and started < cutoff:
+                claims.update_one({"_id": stuck["_id"]}, {"$set": {"status": back_to}})
+                logger.warning("Reclaimed stale claim %s (%s -> %s)",
+                               stuck["_id"], state, back_to)
 
+    # Readers first — someone is watching a spinner for a `pending` claim, while
+    # an `approved` one is a background publish nobody is waiting on.
     claim = claims.find_one_and_update(
         {"status": "pending"},
         {"$set": {"status": "processing", "started_at": datetime.now(timezone.utc)}},
         sort=[("created_at", 1)],
     )
-    if not claim:
-        return {"claimed": 0, "succeeded": 0, "failed": 0}
+    if claim:
+        ok = process_one(client, pv, claim)
+        return {"claimed": 1, "succeeded": int(ok), "failed": int(not ok), "published": 0}
 
-    ok = process_one(client, pv, claim)
-    return {"claimed": 1, "succeeded": int(ok), "failed": int(not ok)}
+    approved = claims.find_one_and_update(
+        {"status": "approved"},
+        {"$set": {"status": "publishing", "started_at": datetime.now(timezone.utc)}},
+        sort=[("created_at", 1)],
+    )
+    if approved:
+        ok = publish_one(client, pv, approved)
+        return {"claimed": 1, "succeeded": int(ok), "failed": int(not ok), "published": int(ok)}
+
+    return {"claimed": 0, "succeeded": 0, "failed": 0, "published": 0}
 
 
 def main():
