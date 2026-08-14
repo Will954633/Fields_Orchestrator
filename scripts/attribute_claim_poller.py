@@ -62,7 +62,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-POLL_INTERVAL = 15
+# ⚠ A READER IS WATCHING A SPINNER. This is not a background queue — someone is
+# sitting on the page waiting for the answer, so the interval is the floor on
+# how fast they can possibly get it. 15s here plus a 145s cold cache build was
+# measured at ~160s end to end on 2026-08-14 and people leave long before that.
+POLL_INTERVAL = 2
 STALE_CLAIM_SECONDS = 600
 # Comfortably inside the 24h cadence x1.5 stale threshold, so an idle poller
 # reads OK on the health board rather than STALE. See the note in main().
@@ -97,6 +101,17 @@ CACHE_TTL_SECONDS = 6 * 3600
 
 
 def _caches(pv, client):
+    """
+    ⚠ NEVER CALL THIS ON THE CLAIM PATH. Building the comparable caches was
+    measured at **145 seconds**, and lazily building them meant the first reader
+    to click paid for all of it while staring at a spinner. It is now called
+    once at startup and again from idle ticks (`_warm_caches`), so a claim only
+    ever reads an already-built payload.
+
+    Stale-but-present beats fresh-but-slow here: the sold set changes nightly, so
+    a payload a few hours past its TTL is materially identical, while a rebuild
+    on the claim path is a reader lost.
+    """
     now = time.time()
     if _CACHE["payload"] and now - _CACHE["built_at"] < CACHE_TTL_SECONDS:
         return _CACHE["payload"]
@@ -115,6 +130,46 @@ def _caches(pv, client):
     _CACHE["built_at"] = now
     logger.info("  caches ready in %.0fs", time.time() - t0)
     return payload
+
+
+def _notify(claim, doc, provisional, suburb):
+    """
+    Tell Will a real person just corrected a record.
+
+    Best-effort and deliberately non-fatal: a Telegram outage must never fail a
+    claim the reader completed successfully. Errors are logged, not raised.
+    """
+    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    chat = os.getenv("TELEGRAM_CHAT_ID")
+    if not (token and chat):
+        return
+    try:
+        import requests
+        attrs = ", ".join(f"{k.replace('_sqm','').replace('_',' ')} {v}"
+                          for k, v in (claim.get("attributes") or {}).items())
+        if provisional.get("method") == "engine":
+            outcome = (f"${provisional['low']:,.0f} – ${provisional['high']:,.0f} "
+                       f"({provisional.get('n_comps')} comps)")
+        else:
+            outcome = f"still declined ({provisional.get('decline_reason')})"
+        kind = "typical figures" if claim.get("assumed") else "their own figures"
+        lines = [
+            "🏠 *Someone corrected a record*",
+            f"*{doc.get('address', claim['slug'])}*",
+            f"Gave us: {attrs}  _({kind})_",
+            f"Result: {outcome}",
+            "",
+            f"Private to them — not published. Review: `{claim['_id']}`",
+            f"https://fieldsestate.com.au/off-market/{claim['slug']}",
+        ]
+        requests.post(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            json={"chat_id": chat, "text": "\n".join(lines), "parse_mode": "Markdown",
+                  "disable_web_page_preview": True},
+            timeout=10,
+        )
+    except Exception as exc:
+        logger.error("Telegram notify failed (claim still succeeded): %s", exc)
 
 
 def _find_property(gc, slug):
@@ -173,7 +228,10 @@ def process_one(client, pv, claim):
     for field, value in attributes.items():
         doc[INJECT_AT[field]] = value
 
-    sold, coords, timelines, mc, sc = _caches(pv, client)
+    # Warmed at startup and on idle ticks. Falls back to a build only if the
+    # warm-up itself failed, which would otherwise mean returning an error to a
+    # reader who did nothing wrong.
+    sold, coords, timelines, mc, sc = _CACHE["payload"] or _caches(pv, client)
     try:
         vd = pv.precompute_property_valuation(
             gc, doc, gc[suburb], sold, coords, timelines, mc, sc)
@@ -209,6 +267,7 @@ def process_one(client, pv, claim):
     )
     logger.info("Claim %s computed: %s %s", claim["_id"], provisional["method"],
                 point or provisional["decline_reason"])
+    _notify(claim, doc, provisional, suburb)
     # A declined what-if is a legitimate outcome, not a failure: the reader's
     # correction can be perfectly valid and the home still fall outside the
     # design envelope. It is recorded, and the caller counts it as succeeded.
@@ -247,10 +306,27 @@ def main():
     import precompute_valuations as pv
     client = get_client()
     last_idle_beat = 0.0
+
+    # Warm before serving anything. The first reader must never pay the 145s
+    # build; systemd restarts this process rarely, and a restart during traffic
+    # costs one slow claim rather than every claim.
+    try:
+        _caches(pv, client)
+    except Exception as exc:
+        logger.error("Cache warm-up failed, will retry on the first claim: %s", exc)
+
     while True:
         try:
             counters = poll_once(client, pv)
             now = time.time()
+
+            # Refresh off the critical path, while nobody is waiting.
+            if not counters["claimed"] and _CACHE["built_at"] and \
+                    now - _CACHE["built_at"] > CACHE_TTL_SECONDS:
+                try:
+                    _caches(pv, client)
+                except Exception as exc:
+                    logger.error("Cache refresh failed, keeping the old payload: %s", exc)
 
             # ⚠ TWO heartbeat paths, deliberately.
             #
