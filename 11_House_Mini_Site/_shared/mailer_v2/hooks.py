@@ -242,10 +242,15 @@ def f_advantages_tradeoffs(doc) -> Optional[Finding]:
     tr_n = _plural(n_tr, "thing", "things")
     return Finding(
         kind="advantages_tradeoffs",
-        number=f"{n_adv}&thinsp;/&thinsp;{n_tr}",
-        label="Strengths / trade-offs identified",
-        sub=(f"{n_adv} {adv_n} in your home's favour &mdash; and "
-             f"{n_tr} {tr_n} buyers may weigh against it"),
+        # Nouns, not a ratio. "3 / 3" reads for a moment as a score or rating
+        # before the label corrects it; naming both halves is understood at a
+        # glance and is the whole point of the finding.
+        # non-breaking hyphen (&#8209;) — a normal one lets the renderer split
+        # "trade-offs" across lines as "trade-" / "offs"
+        number=(f"{n_adv} {_plural(n_adv, 'strength', 'strengths')} &middot; "
+                f"{n_tr} {_plural(n_tr, 'trade&#8209;off', 'trade&#8209;offs')}"),
+        label="Identified in your home's position",
+        sub="we name both &mdash; not just the flattering half",
         hero_headline=(f"We found <b>{n_adv}</b> {adv_n} working in your home's favour "
                        f"&mdash; and <b>{n_tr}</b> {tr_n} buyers may weigh against it."),
         hero_consequence=(
@@ -310,7 +315,7 @@ def f_buyer(doc) -> Optional[Finding]:
     return Finding(
         kind="buyer",
         number="1",
-        label="Buyer group is the strongest fit",
+        label="Buyer group stands out",
         sub="identified from who is actually buying homes like yours nearby",
         hero_headline="<b>One</b> buyer group stands out as the strongest fit for your home.",
         hero_consequence=(
@@ -398,7 +403,11 @@ def f_feature_rarity(doc) -> Optional[Finding]:
         kind="feature_rarity",
         number=freq,
         label=f"Comparable homes offer {label.lower()}",
-        sub="one of the features separating local sale results &mdash; and yours has it",
+        # "local sale results" was ambiguous — sale results, search results,
+        # pricing? This names what the cohort figures actually measure, and
+        # hedges to "appears to", because the stored premium is a median gap
+        # between homes with and without the feature, not an isolated effect.
+        sub="a feature that appears to separate the stronger local sales &mdash; and yours has it",
         surprise=9 if prev <= 20 else 7,
         specificity=8, relevance=8, curiosity=6, credibility=8,
         conflicts=CONFLICTS["feature_rarity"],

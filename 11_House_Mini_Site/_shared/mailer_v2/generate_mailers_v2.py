@@ -173,9 +173,11 @@ def check_ready(doc):
 # ---------------------------------------------------------------------------
 def support_card_html(f):
     unit = f'<span class="unit">{f.unit}</span>' if f.unit else ""
+    # a worded value ("3 strengths · 3 trade-offs") cannot render at numeral size
+    long = " long" if len(strip(f.number)) > 6 else ""
     return (
         '        <div class="stat">\n'
-        f'          <div class="big serif">{f.number}{unit}</div>\n'
+        f'          <div class="big serif{long}">{f.number}{unit}</div>\n'
         '          <div class="txt">\n'
         f'            <div class="lab">{f.label}</div>\n'
         f'            <div class="sub">{f.sub}</div>\n'
@@ -277,7 +279,7 @@ def also_line(hero, cands, support):
             "scarcity": "how rare your home&rsquo;s combination really is",
             "buyer": "the buyer most likely to value it highly",
             "land_rank": "how your block compares with its cohort",
-            "feature_rarity": "which feature separates local results",
+            "feature_rarity": "which feature appears to separate the stronger local sales",
             "recent_activity": "what changed in your competing set this month",
             "school_walk": "the everyday distances a buyer weighs",
         }.get(f.kind)
@@ -476,7 +478,7 @@ def strip(s):
     for ent, ch in (("&mdash;", "—"), ("&rsquo;", "'"), ("&ldquo;", "“"),
                     ("&rdquo;", "”"), ("&sup2;", "²"), ("&thinsp;", " "),
                     ("&nbsp;", " "), ("&middot;", "·"), ("&amp;", "&"),
-                    ("&rarr;", "→")):
+                    ("&rarr;", "→"), ("&#8209;", "‑")):
         s = s.replace(ent, ch)
     return s
 
