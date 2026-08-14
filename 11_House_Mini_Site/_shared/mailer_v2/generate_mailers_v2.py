@@ -71,6 +71,48 @@ PAPER = (253, 243, 236)
 DEEP_LINK = "#market"
 
 
+# Postcodes for every locality we mail into. A wrong postcode on a printed
+# envelope is not a cosmetic defect — it can stop delivery outright, and it is
+# the one claim on the page the reader can check instantly.
+#
+# ⚠ Robina street addresses are ALWAYS 4226. 4230 is Robina Town Centre PO
+# boxes and locked bags only and must never appear on a posted address.
+# ⚠ 4213 is the trap: Mudgeeraba and Worongary are legitimately 4213, so a 4213
+# on a Robina record looks plausible. That is exactly how
+# "819 Legend Trail, Robina, QLD 4213" reached the artwork.
+POSTCODES = {
+    "robina": "4226",
+    "merrimac": "4226",
+    "clear island waters": "4226",
+    "varsity lakes": "4227",
+    "reedy creek": "4227",
+    "burleigh waters": "4220",
+    "mudgeeraba": "4213",
+    "worongary": "4213",
+    "carrara": "4211",
+    "nerang": "4211",
+    "mermaid waters": "4218",
+}
+PO_BOX_ONLY = {"4230": "Robina Town Centre PO boxes and locked bags"}
+
+
+def check_postal_address(address):
+    """Reasons this address must not be printed on an envelope."""
+    import re
+    m = re.search(r",\s*([A-Za-z ]+?),?\s*QLD\s*(\d{4})\s*$", (address or "").strip())
+    if not m:
+        return [f"cannot parse a QLD postal address from {address!r}"]
+    locality, pc = m.group(1).strip().lower(), m.group(2)
+    if pc in PO_BOX_ONLY:
+        return [f"postcode {pc} is {PO_BOX_ONLY[pc]} — never a street delivery"]
+    expected = POSTCODES.get(locality)
+    if expected is None:
+        return [f"{locality.title()} is not a locality we have a postcode for — add it to POSTCODES"]
+    if pc != expected:
+        return [f"{locality.title()} addresses are {expected}, not {pc} — mail may not be delivered"]
+    return []
+
+
 def parse_address(address):
     parts = [p.strip() for p in address.split(",") if p.strip()]
     return parts[0], " ".join(parts[1:]).upper()
@@ -125,6 +167,10 @@ def check_ready(doc):
     reasons = []
     ss = doc.get("slot_status") or {}
     sf = doc.get("scarcity_features") or {}
+
+    # the postal address is the first claim on the page and the only one that
+    # decides whether the envelope arrives at all
+    reasons += check_postal_address(doc.get("address"))
 
     if doc.get("build_state") != "complete":
         reasons.append(f"build_state={doc.get('build_state')}")
