@@ -107,18 +107,25 @@ unverified reaches a print run.** Comparison is done with whitespace and case
 stripped, because `text-transform:uppercase` and `letter-spacing` make
 `pdftotext` emit `T E M P L AT E` for `TEMPLATE`.
 
-**⚠ Text extraction proves copy EXISTS; it cannot prove copy is VISIBLE.**
-Overlapping text is present in the PDF and extracts perfectly. That is why the
-character budgets exist alongside the presence checks — they are the only guard
-against a label wrapping onto an extra line and rendering on top of the line
-below. Both classes of check are load-bearing; do not drop one for the other.
+**⚠ Three checks, three different failures. All are load-bearing.**
 
-Defects this caught during the build, none of which threw an error anywhere:
-the closing paragraph rendering under the CTA band; the scarcity contradiction
-leaking into that paragraph; two over-long support labels clipping; sub-lines
-overflowing every support card while their labels rendered fine; and — its own
-bug — probes failing because `&rsquo;` prints as `’` (U+2019) while `strip()`
-folded it to an ASCII `'`.
+| Check | Catches | Blind to |
+|---|---|---|
+| **Geometry** (`verify_layout`) — walks WeasyPrint's laid-out box tree before the PDF is written and compares each flowing element's bottom against `.cta`'s top | copy printing under the CTA band, or off the page | wording |
+| **Presence** (`pdftotext`) — every load-bearing line, whitespace/case/typography folded | copy that vanished entirely | anything still on the page but unreadable |
+| **Budgets + agreement** — per-field character limits; regex for `1 <plural noun>` etc. | a wrapped label overlapping the line below; number/verb disagreement | cumulative height |
+
+**Character budgets alone were the wrong instrument and shipped a defect.** They bound each string
+separately; the real constraint on page 1 is *cumulative* height. On 213 Acanthus Avenue the hero
+headline wrapped to three lines, pushing a comfortably-within-budget paragraph under the band —
+4 mailers were affected. When a check needs a proxy, ask what the constraint actually is.
+
+Defects these caught, none of which threw an error anywhere: the closing paragraph rendering under
+the CTA band (twice, by two different mechanisms); the scarcity contradiction leaking into that
+paragraph; over-long support labels clipping; sub-lines overflowing every support card while their
+labels rendered fine; three number-agreement bugs (`3 buyers may weigh against it`,
+`1 Home ... that closely compete with yours`); and — its own bug — probes failing because `&rsquo;`
+prints as `’` (U+2019) while `strip()` folded it to an ASCII `'`.
 
 Current state: **21 of 21 mailable addresses generate and verify clean.**
 Leads: 17 `competition`, 4 `no_competition`. Support cards:
