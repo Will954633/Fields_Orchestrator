@@ -64,6 +64,16 @@ DISK_CRIT_PCT = 92.0  # aggressive cleanup + Telegram
 SUSTAIN_N = 3         # consecutive high checks (~90s each => ~4.5 min) before alerting
 ALERT_COOLDOWN_H = 3  # min hours between alerts of the same category
 
+# When cleanup runs at CRITICAL and frees essentially nothing, the ordinary disk
+# alert is actively misleading — it says "auto-cleanup ran", which reads as
+# handled. That case gets its own category and a much shorter cooldown so it
+# cannot be mistaken for the routine message. See 2026-08-15: cleanup reclaimed
+# ~0 bytes on 976 consecutive critical passes while / sat at 100%, and the only
+# messages sent were the routine 3-hourly ones.
+CLEANUP_INEFFECTIVE_BYTES = 200 * 1024 * 1024   # < this freed == "did nothing"
+INEFFECTIVE_COOLDOWN_H = 1.0
+GROWTH_SCAN_ROOTS = ["/home/fields", "/var", "/tmp"]
+
 # Process patterns considered reapable ONLY when orphaned (PPID==1).
 ORPHAN_REAP_PATTERNS = [
     "native-binary/claude",
@@ -152,7 +162,7 @@ def save_state(state: dict):
         log(f"WARN could not save state: {e}")
 
 
-def alert_allowed(state: dict, category: str) -> bool:
+def alert_allowed(state: dict, category: str, cooldown_h: float = None) -> bool:
     last = state.get("last_alert", {}).get(category)
     if not last:
         return True
@@ -160,10 +170,21 @@ def alert_allowed(state: dict, category: str) -> bool:
         last_dt = datetime.fromisoformat(last)
     except Exception:
         return True
-    return datetime.now(timezone.utc) - last_dt >= timedelta(hours=ALERT_COOLDOWN_H)
+    hours = ALERT_COOLDOWN_H if cooldown_h is None else cooldown_h
+    return datetime.now(timezone.utc) - last_dt >= timedelta(hours=hours)
 
 
-def mark_alerted(state: dict, category: str):
+def mark_alerted(state: dict, category: str, dry: bool = False):
+    """Record that `category` alerted, starting its cooldown.
+
+    ⚠ Must be a no-op on a dry run. `send_telegram` returns early when dry, so
+    marking anyway starts a cooldown for a message nobody received — a
+    diagnostic run then silently suppresses the next REAL alert. Observed
+    2026-08-15: a --dry-run consumed the disk_ineffective budget and the live
+    run 67s later stayed silent at 94% disk.
+    """
+    if dry:
+        return
     state.setdefault("last_alert", {})[category] = datetime.now(timezone.utc).isoformat()
 
 
@@ -412,8 +433,17 @@ def _run(cmd: list, dry: bool):
         vlog(f"cmd failed {cmd}: {e}")
 
 
-def disk_cleanup(aggressive: bool, dry: bool) -> list:
-    """Reclaim disk. `aggressive` when past DISK_CRIT_PCT."""
+def disk_cleanup(aggressive: bool, dry: bool) -> tuple:
+    """Reclaim disk. `aggressive` when past DISK_CRIT_PCT.
+
+    Returns (actions, bytes_freed). ⚠ Report the bytes, not the fact that it
+    ran: every target below is a *cache or log*, so when the growth is anywhere
+    else (an artifacts/ or scratch dir) this function is structurally incapable
+    of helping and will still happily report a list of actions it performed.
+    The caller must assert on the outcome. See Rule 7b.
+    """
+    import shutil as _shutil
+    before = _shutil.disk_usage("/").free
     actions = []
     # 1. journald — cap ring buffer
     size = "150M" if aggressive else "300M"
@@ -454,12 +484,65 @@ def disk_cleanup(aggressive: bool, dry: bool) -> list:
                 continue
         if pruned:
             actions.append(f"pruned {pruned} old run-logs (>14d)")
-    return actions
+    freed = max(0, _shutil.disk_usage("/").free - before)
+    actions.append(f"reclaimed {freed / 1e6:.0f}MB")
+    return actions, freed
 
 
 # --------------------------------------------------------------------------- #
 # Alerting + audit
 # --------------------------------------------------------------------------- #
+def top_growth_dirs(limit: int = 5) -> list:
+    """Largest directories on /, to name the culprit in an alert.
+
+    ⚠ Deliberately NOT called on a routine pass. `du` over /home/fields is
+    itself heavy I/O, and the guard runs every 90s on a box that is by
+    definition already under pressure — scanning every pass would make the
+    problem worse. Only the ineffective-cleanup alert path calls this.
+
+    `-x` keeps it on the root filesystem (so /data/blobs, a separate 738G
+    device, is not walked). Depth 2 is enough to point at a directory a human
+    can act on without walking millions of inodes.
+    """
+    found = []
+    for root in GROWTH_SCAN_ROOTS:
+        if not os.path.isdir(root):
+            continue
+        try:
+            out = subprocess.run(
+                ["du", "-x", "--block-size=1M", "--max-depth=2", root],
+                capture_output=True, text=True, timeout=60,
+            )
+            for line in out.stdout.splitlines():
+                parts = line.split("\t", 1)
+                if len(parts) != 2:
+                    continue
+                try:
+                    mb = int(parts[0])
+                except ValueError:
+                    continue
+                if parts[1].rstrip("/") != root.rstrip("/"):
+                    found.append((mb, parts[1]))
+        except Exception as e:
+            vlog(f"growth scan failed for {root}: {e}")
+    found.sort(reverse=True)
+    # Drop a parent when a listed child already accounts for most of it —
+    # "24.8G Fields_Orchestrator / 19.7G Fields_Orchestrator/artifacts" spends
+    # two of five lines saying one thing. Keep the deeper path: it is the one
+    # someone can actually act on.
+    kept = []
+    for mb, path in found:
+        redundant = any(
+            child.startswith(path.rstrip("/") + "/") and child_mb >= 0.7 * mb
+            for child_mb, child in found
+        )
+        if not redundant:
+            kept.append((mb, path))
+        if len(kept) >= limit:
+            break
+    return kept
+
+
 def send_telegram(text: str, dry: bool):
     if dry:
         log(f"DRY telegram: {text.splitlines()[0]}")
@@ -537,7 +620,7 @@ def main():
                   "(`\\{0,120\\}`) with -o -i over a long-line file — "
                   "ugrep allocates without bound. Use -F, or -P for PCRE.",
                 dry)
-            mark_alerted(state, "runaway")
+            mark_alerted(state, "runaway", dry)
 
     # --- always: per-cgroup pressure on the shared Claude slice ---
     cg = cgroup_pressure()
@@ -560,7 +643,7 @@ def main():
                     f"all page cache — every read now hits disk. The workbench "
                     f"will stop loading shortly. Check for a runaway process.",
                     dry)
-                mark_alerted(state, "cgroup")
+                mark_alerted(state, "cgroup", dry)
 
     # --- always: is the workbench actually usable? ---
     wb = workbench_healthy()
@@ -581,7 +664,7 @@ def main():
                 f"systemd still reports active — that means nothing here. "
                 f"vm.fieldsestate.com.au is likely not loading.",
                 dry)
-            mark_alerted(state, "workbench")
+            mark_alerted(state, "workbench", dry)
 
     # --- memory ---
     if m["mem_pct"] >= MEM_WARN_PCT:
@@ -602,7 +685,7 @@ def main():
                 f"code-server slice is capped at 5G so a session (not mongod) will be "
                 f"OOM-killed if it climbs further. Reachable now — check if action needed.",
                 dry)
-            mark_alerted(state, "mem")
+            mark_alerted(state, "mem", dry)
     elif state.get("mem_high_streak", 0) >= SUSTAIN_N:
         level = "warn" if level == "ok" else level
         if alert_allowed(state, "mem"):
@@ -614,25 +697,50 @@ def main():
                 f"swap {m['swap_pct']:.0f}%\nTop consumers:\n{body}\n"
                 f"Box still healthy — flagging early. Likely accumulated Claude Code sessions.",
                 dry)
-            mark_alerted(state, "mem")
+            mark_alerted(state, "mem", dry)
 
     # --- disk ---
     if m["disk_pct"] >= DISK_WARN_PCT:
         state["disk_high_streak"] = state.get("disk_high_streak", 0) + 1
+        streak = state["disk_high_streak"]
         aggressive = m["disk_pct"] >= DISK_CRIT_PCT
-        actions += disk_cleanup(aggressive, dry)
+        cleanup_actions, freed = disk_cleanup(aggressive, dry)
+        actions += cleanup_actions
         # re-measure after cleanup
         m_after = get_metrics()
+        free_gb = m_after["disk_total_gb"] - m_after["disk_used_gb"]
         actions.append(f"disk {m['disk_pct']:.0f}%->{m_after['disk_pct']:.0f}% after cleanup")
         if aggressive:
             level = "critical"
-            if alert_allowed(state, "disk"):
+            still_critical = m_after["disk_pct"] >= DISK_CRIT_PCT
+            ineffective = freed < CLEANUP_INEFFECTIVE_BYTES and still_critical
+            if ineffective:
+                # The routine message below says "auto-cleanup ran", which reads
+                # as handled. It is not handled: cleanup only clears caches and
+                # logs, so growth anywhere else is invisible to it. Say that
+                # plainly, name the directories, and use a shorter cooldown so
+                # this cannot be mistaken for the routine 3-hourly message.
+                if alert_allowed(state, "disk_ineffective", INEFFECTIVE_COOLDOWN_H):
+                    growth = top_growth_dirs()
+                    lines = "\n".join(f"  {mb / 1024:.1f}G  {p}" for mb, p in growth) or "  (scan failed)"
+                    send_telegram(
+                        f"\U0001F534 *VM disk CRITICAL — cleanup is NOT working*\n"
+                        f"{m_after['disk_pct']:.0f}% on / — *{free_gb:.1f}GB free* "
+                        f"({m_after['disk_used_gb']}/{m_after['disk_total_gb']}GB).\n"
+                        f"Auto-cleanup reclaimed only {freed / 1e6:.0f}MB this pass, and disk has been "
+                        f"critical for {streak} consecutive checks. It only clears caches and logs, so "
+                        f"whatever is growing is somewhere it cannot see.\n\n"
+                        f"*Largest on /:*\n{lines}\n\n"
+                        f"This needs a human — it will not resolve itself.",
+                        dry)
+                    mark_alerted(state, "disk_ineffective", dry)
+            elif alert_allowed(state, "disk"):
                 send_telegram(
                     f"\U0001F534 *VM disk CRITICAL* {m['disk_pct']:.0f}% on / "
-                    f"({m['disk_used_gb']}/{m['disk_total_gb']}GB). Auto-cleanup ran "
-                    f"(now {m_after['disk_pct']:.0f}%). Reachable now — investigate growth.",
+                    f"({m['disk_used_gb']}/{m['disk_total_gb']}GB). Auto-cleanup freed "
+                    f"{freed / 1e6:.0f}MB (now {m_after['disk_pct']:.0f}%, {free_gb:.1f}GB free).",
                     dry)
-                mark_alerted(state, "disk")
+                mark_alerted(state, "disk", dry)
     else:
         state["disk_high_streak"] = 0
 
