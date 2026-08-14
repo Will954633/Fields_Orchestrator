@@ -325,8 +325,21 @@ def cta2_lines(hero, doc):
         return ("Nothing for sale closely competes with your home.",
                 "See what we compared it against &mdash; and where yours stands.")
     noun = "home" if close == 1 else "homes"
+
+    # NOT "where yours has the edge over them". That asserts superiority over
+    # the whole competing set, and on a property whose own analysis found 1
+    # strength against 3 trade-offs it is simply not supported — 120 Glen
+    # Eagles is exactly that shape. The honest version is also the stronger
+    # one: it opens two loops (where do I win, where do I lose) instead of one,
+    # and a sender willing to say "gives one away" is read as an assessment
+    # rather than an approach.
+    n_adv = len(_g(doc, "scarcity_features", "notable_features", default=[]))
+    n_tr = len(_g(doc, "positioning", "tradeOffs", default=[]))
+    if n_adv and n_tr:
+        return (f"See the {close} {noun} we found.",
+                "And where yours has an advantage &mdash; or gives one away.")
     return (f"See the {close} {noun} we found.",
-            "And where yours has the edge over them.")
+            "And where yours stands against them.")
 
 
 def peek_1(doc):

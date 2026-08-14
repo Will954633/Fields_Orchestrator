@@ -168,8 +168,13 @@ def f_competition(doc) -> Optional[Finding]:
         # no in-band count.
         sub=f"found by reviewing all {total} homes for sale across the buyer search area",
         funnel=(total, in_band, close),
-        hero_headline=(f"Of the {total} homes for sale near you, only <b>{close}</b> "
-                       f"closely {_plural(close, 'competes', 'compete')} with yours."),
+        # "homes buyers can currently choose from across your area" — the hero
+        # stays human. "Near you" was too vague to mean anything and "buyer
+        # search area" is our term, not a homeowner's. The precise label stays
+        # in the funnel line underneath, where it reads as methodology.
+        hero_headline=(f"Of the {total} homes buyers can choose from across your area, "
+                       f"only <b>{close}</b> closely "
+                       f"{_plural(close, 'competes', 'compete')} with yours."),
         hero_consequence=(
             "Those are the homes a buyer weighs yours against when deciding "
             "whether it is fairly priced &mdash; or worth stretching for."
@@ -195,8 +200,8 @@ def f_no_competition(doc) -> Optional[Finding]:
         label="Homes for sale that closely compete with yours",
         sub=f"found by reviewing all {total} homes for sale across the buyer search area",
         funnel=(total, in_band, 0),
-        hero_headline=(f"We checked {total} homes for sale near you. "
-                       f"<b>None</b> of them closely competes with yours."),
+        hero_headline=(f"We checked the {total} homes buyers can choose from across your "
+                       f"area. <b>None</b> closely competes with yours."),
         hero_consequence=(
             "That is unusual, and it cuts both ways: less to be measured "
             "against, and fewer recent results to anchor a buyer&rsquo;s "
@@ -224,14 +229,21 @@ def f_advantages_tradeoffs(doc) -> Optional[Finding]:
     n_adv, n_tr = len(adv), len(trades)
     if not n_adv or not n_tr:
         return None
+    # "{n} things buyers may weigh against it" — NOT "{n} buyers may weigh
+    # against it", which is what the original `_plural(n_tr, 'a buyer',
+    # 'buyers')` produced. It read as three *buyers* objecting to the house.
+    # The same broken construction was in the hero headline, where it can reach
+    # the largest type on the page.
+    adv_n = _plural(n_adv, "thing", "things")
+    tr_n = _plural(n_tr, "thing", "things")
     return Finding(
         kind="advantages_tradeoffs",
         number=f"{n_adv}&thinsp;/&thinsp;{n_tr}",
-        label="Strengths, and trade-offs, identified",
-        sub=(f"{n_adv} {_plural(n_adv, 'thing', 'things')} working in your home's favour "
-             f"&mdash; and {n_tr} {_plural(n_tr, 'a buyer', 'buyers')} may weigh against it"),
-        hero_headline=(f"We found <b>{n_adv}</b> {_plural(n_adv, 'thing', 'things')} working in "
-                       f"your home's favour &mdash; and <b>{n_tr}</b> buyers may weigh against it."),
+        label="Strengths / trade-offs identified",
+        sub=(f"{n_adv} {adv_n} in your home's favour &mdash; and "
+             f"{n_tr} {tr_n} buyers may weigh against it"),
+        hero_headline=(f"We found <b>{n_adv}</b> {adv_n} working in your home's favour "
+                       f"&mdash; and <b>{n_tr}</b> {tr_n} buyers may weigh against it."),
         hero_consequence=(
             "Both matter to what a buyer will pay. We have named them plainly "
             "rather than listing only the flattering half."
