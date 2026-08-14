@@ -1,0 +1,5 @@
+recordings/
+*.mp3
+exports/
+*_submit.csv
+*_rejects.csv
