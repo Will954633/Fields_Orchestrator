@@ -122,7 +122,13 @@ def _walkable_differentiators(pois: List[Dict[str, Any]]) -> List[str]:
         metres = poi.get("walkMetres")
         if cat in WALKABLE_CATEGORIES and isinstance(metres, (int, float)) and 0 < metres <= WALKABLE_CEILING_M:
             name = poi.get("name") or cat.title()
-            cand.append((metres, f"a {int(metres)}-metre walk to {name}"))
+            # "an 824-metre walk", not "a 824-metre walk" — the article follows
+            # the SPOKEN number, so only 8-, 11- and 18-leading values take "an".
+            # These phrases flow through positioning_object into the live
+            # deterministic thesis, so the error was reader-visible.
+            _n = str(int(metres))
+            _art = "an" if (_n.startswith("8") or _n[:2] in ("11", "18")) else "a"
+            cand.append((metres, f"{_art} {int(metres)}-metre walk to {name}"))
     cand.sort(key=lambda x: x[0])
     return [phrase for _, phrase in cand[:2]]
 

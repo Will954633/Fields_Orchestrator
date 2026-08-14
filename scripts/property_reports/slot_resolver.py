@@ -20,7 +20,7 @@ from __future__ import annotations
 import logging
 import math
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from bson import ObjectId
@@ -335,6 +335,18 @@ class SlotResolver:
                 confidence=model_range.get("confidence"),
             )
         else:
+            # ⚠ EXPLICITLY CLEAR ANY PREVIOUS RANGE. The writer only ever $sets,
+            # so simply not writing here would leave a stale figure on the doc —
+            # and for an attached dwelling that stale figure is the house-comp
+            # number this build exists to remove. Writing None overwrites it.
+            # Mirrors precompute_unit_valuations.py, which $unsets its range
+            # fields on a decline for the same reason.
+            updates["valuation.model_range"] = None
+            updates["valuation.no_figure"] = {
+                "reason": getattr(self, "_no_figure_reason", None) or "insufficient_evidence",
+                "dwelling_class": "attached" if self._is_attached_dwelling() else "house",
+                "decided_at": datetime.now(timezone.utc).isoformat(),
+            }
             self.emit.done("valuation", "Working range pending — consultant will finalise")
 
         # Valuation comps from the engine output (Path A — produced by
@@ -1311,6 +1323,19 @@ class SlotResolver:
         if not bed:
             return None
 
+        # ⚠ DEFENCE IN DEPTH. Attached dwellings are gated out in
+        # working_valuation_range() before this tier can run, but this query used
+        # to match on bedrooms ALONE — so a 3-bedroom unit was valued against
+        # 3-bedroom houses (Robina +27%, Burleigh Waters +26%, Varsity Lakes
+        # +21%, measured on sold stock 2026-08-14). The class filter is applied
+        # here as well so the defect cannot return if the gate is ever bypassed
+        # or a new caller appears.
+        try:
+            from shared.dwelling_type import classify_dwelling
+        except Exception:
+            classify_dwelling = None
+        subject_is_attached = self._is_attached_dwelling()
+
         try:
             cursor = self.db[self.suburb_key].find(
                 {
@@ -1318,9 +1343,24 @@ class SlotResolver:
                     "bedrooms": bed,
                     "sale_price": {"$exists": True, "$ne": None},
                 },
-                {"sale_price": 1, "sale_date": 1, "bedrooms": 1},
-            ).sort("sale_date", -1).limit(20)
-            comps = list(cursor)
+                {"sale_price": 1, "sale_date": 1, "bedrooms": 1, "property_type": 1,
+                 "building_type": 1, "street_address": 1, "address": 1,
+                 "complete_address": 1},
+            ).sort("sale_date", -1).limit(120)
+            comps = []
+            for c in cursor:
+                if classify_dwelling is not None:
+                    c.setdefault("street_address",
+                                 c.get("street_address") or c.get("address")
+                                 or c.get("complete_address") or "")
+                    try:
+                        if (classify_dwelling(c) == "attached") != subject_is_attached:
+                            continue
+                    except Exception:
+                        pass
+                comps.append(c)
+                if len(comps) >= 20:
+                    break
         except Exception as e:
             logger.warning(f"valuation_model_range query failed: {e}")
             return None
@@ -1378,7 +1418,19 @@ class SlotResolver:
 
         Always writes to `valuation.model_range` (the key the frontend already
         reads); the added `method` / `confidence` / `confidence_reason` keys are
-        ignored by older consumers and drive the new disclaimer card."""
+        ignored by older consumers and drive the new disclaimer card.
+
+        ⚠ ATTACHED DWELLINGS NEVER ENTER THE HOUSE TIERS. Units, townhouses and
+        duplexes are valued by a separate engine (15_Off-Market/Units) and are
+        returned or refused before Tier 1. Until 2026-08-14 a unit fell through
+        to Tier 3, whose query filtered on bedrooms and NOT property type, so a
+        3-bedroom unit was valued against 3-bedroom HOUSES. Measured overstatement
+        on sold stock: Robina +27%, Burleigh Waters +26%, Varsity Lakes +21%.
+        See [YOURHOME-UNIT-HOUSE-COMPS] in logs/fix-history/2026-08-14.md."""
+        # Tier 0 — attached dwellings get the unit engine, or no figure at all.
+        if self._is_attached_dwelling():
+            return self._unit_valuation_range()
+
         # Tier 1 — precomputed engine output already on the doc.
         eng = self._engine_valuation_range()
         if eng:
@@ -1395,6 +1447,91 @@ class SlotResolver:
                 return eng
         # Tier 2 — exterior-evidence fallback (no interior data), then Tier 3.
         return self.valuation_exterior_range() or self._thin_valuation_range()
+
+    def _is_attached_dwelling(self) -> bool:
+        """Unit / townhouse / duplex / villa. Uses the ONE shared classifier
+        (`shared.dwelling_type.classify_dwelling`), never a local regex — the
+        off-market TS route has its own `unitLike` regex and the two disagree at
+        the edges. `unknown` is deliberately NOT treated as attached: it is a
+        distinct bucket, and defaulting it either way is how the original
+        misclassification stayed invisible."""
+        s = self._subject or {}
+        try:
+            from shared.dwelling_type import classify_dwelling
+        except Exception:
+            return False
+        probe = dict(s)
+        # classify_dwelling reads `street_address`; the report subject may only
+        # carry `address` / `complete_address`.
+        probe.setdefault(
+            "street_address",
+            s.get("street_address") or s.get("address")
+            or s.get("complete_address") or self.address or "",
+        )
+        try:
+            return classify_dwelling(probe) == "attached"
+        except Exception:
+            return False
+
+    def _unit_valuation_range(self) -> Optional[Dict[str, Any]]:
+        """Range for an attached dwelling, from the unit engine only.
+
+        Reads the precomputed `Gold_Coast.unit_valuations` record (written daily
+        04:30 by `precompute_unit_valuations.py`), keyed by `url_slug`. Returns
+        None — meaning NO FIGURE — when the unit engine declined, or when it
+        produced a range the engine itself marks unpublishable.
+
+        ⚠ Returning None here is correct and must NOT fall through to the house
+        tiers. `publishable` is false for every Burleigh Waters unit (the
+        measured within-10% is below the engine's own threshold), and 1,302 of
+        them carry a point estimate that must never be rendered."""
+        s = self._subject or {}
+        slug = s.get("url_slug") or s.get("slug")
+        rec = None
+        try:
+            coll = self.db["unit_valuations"]
+            if slug:
+                rec = coll.find_one({"_id": slug})
+            if rec is None:
+                pid = s.get("_id")
+                if pid is not None:
+                    rec = coll.find_one({"property_id": pid}) or coll.find_one({"_id": str(pid)})
+        except Exception as e:
+            logger.warning(f"  unit valuation lookup failed: {e}")
+            return None
+
+        if not rec:
+            self._no_figure_reason = "unit_not_yet_valued"
+            logger.info("  unit valuation: no precomputed record — no figure")
+            return None
+        if rec.get("method") == "declined" or not rec.get("point"):
+            self._no_figure_reason = rec.get("decline_reason") or "unit_declined"
+            logger.info("  unit valuation declined (%s) — no figure",
+                        rec.get("decline_reason"))
+            return None
+        if not rec.get("publishable"):
+            self._no_figure_reason = "unit_accuracy_below_threshold"
+            logger.info("  unit valuation present but NOT publishable "
+                        "(suburb accuracy below threshold) — no figure")
+            return None
+
+        return {
+            "low": int(rec["low"]),
+            "high": int(rec["high"]),
+            "point": int(rec["point"]),
+            "method": "unit_engine",
+            "tier": rec.get("tier"),
+            "band_pct": rec.get("band_pct"),
+            "n_comps": rec.get("n_comps"),
+            "accuracy": rec.get("accuracy"),
+            "adjusted_low": rec.get("adjusted_low"),
+            "adjusted_high": rec.get("adjusted_high"),
+            "confidence_reason": (
+                f"Valued against {rec.get('n_comps')} adjusted sales in this "
+                f"scheme or of this unit type, time-adjusted with the attached "
+                f"price index. Band is the measured error for this suburb."
+            ),
+        }
 
     def _has_interior_evidence(self) -> bool:
         """True when we have anything that lets us assess the interior — the
