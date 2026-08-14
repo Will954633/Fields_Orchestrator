@@ -65,7 +65,7 @@
      border, and because it OVERLAPPED rather than clipped, reading the PDF text
      back could not detect it (both strings are present). Laying them out
      horizontally trades height they cannot use for width they can. */
-  .findings{ margin-top:5.5mm; }
+  .findings{ margin-top:4.5mm; }
   .hero-card{ background:var(--green); color:var(--paper); border-radius:2.5mm;
               padding:5mm 6mm; display:flex; align-items:center; gap:7mm; height:30mm; }
   .hero-card .big{ font-family:"Liberation Serif",serif; font-size:40pt; line-height:.9;
@@ -96,11 +96,15 @@
   .proof b{ color:var(--green); font-weight:700; }
 
   /* real property imagery band */
-  .imgband{ display:flex; gap:4mm; margin-top:5mm; }
+  .imgband{ display:flex; gap:4mm; margin-top:4mm; }
   .imgband .ph{ border:1px solid var(--line); border-radius:2.5mm; overflow:hidden;
                 box-shadow:0 2.5mm 6mm rgba(34,56,44,.13); }
-  .imgband .home{ flex:1.7; height:38mm; }
-  .imgband .aer{ flex:1; height:38mm; }
+  /* 34mm, not 38mm. The worst-case page 1 is a three-line hero headline plus a
+     two-line closing paragraph (213 Acanthus Avenue), which overran the CTA
+     band by 11pt. The imagery is the one element that can give back height
+     without losing information. */
+  .imgband .home{ flex:1.7; height:34mm; }
+  .imgband .aer{ flex:1; height:34mm; }
   .imgband .ph img{ width:100%; height:100%; object-fit:cover; display:block; }
   .imgcap{ font-size:8.3pt; color:var(--sage); margin-top:2.2mm; letter-spacing:.2pt; }
   .imgcap b{ color:var(--green); }
@@ -113,13 +117,18 @@
      underneath the green band — still present in the PDF (so a text-extraction
      check passes it) but invisible on the printed page. Keep this in step with
      the CTA's real height. */
-  .frontbody{ padding-bottom:50mm; }
+  .frontbody{ padding-bottom:46mm; }
 
   /* CTA band */
+  /* Height here is content's headroom: the band is absolutely positioned across
+     the bottom, so every mm it uses is a mm page-1 copy cannot. Trimmed from
+     6mm/31mm after the geometry check found the worst-case page (three-line
+     hero + two-line closing paragraph) overrunning by 18pt on 4 mailers. A
+     28mm QR is still far above the ~20mm practical scanning floor. */
   .cta{ position:absolute; left:0; right:0; bottom:0; background:var(--green);
-        color:var(--paper); padding:6mm 14mm; display:flex; align-items:center; gap:9mm; }
+        color:var(--paper); padding:5mm 14mm; display:flex; align-items:center; gap:8mm; }
   .cta .qrwrap{ background:var(--paper); padding:3mm; border-radius:2.5mm; flex:0 0 auto; text-align:center; }
-  .cta .qrwrap img{ display:block; width:31mm; height:31mm; }
+  .cta .qrwrap img{ display:block; width:28mm; height:28mm; }
   /* friction removal sits ON the QR, not in a paragraph below it — it is the
      single biggest reason a homeowner lets themselves look */
   .cta .qrwrap .nofric{ font-size:6.6pt; color:var(--green); font-weight:700;

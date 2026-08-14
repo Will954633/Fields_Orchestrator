@@ -162,7 +162,11 @@ def f_competition(doc) -> Optional[Finding]:
     return Finding(
         kind="competition",
         number=str(close),
-        label=f"{_plural(close, 'Home', 'Homes')} for sale that closely compete with yours",
+        # the VERB has to agree too — "1 Home for sale that closely compete
+        # with yours" shipped past the last review because only the headline
+        # pluralised it
+        label=(f"{_plural(close, 'Home', 'Homes')} for sale that closely "
+               f"{_plural(close, 'competes', 'compete')} with yours"),
         # The narrowing itself is the proof of work — see `funnel` below, which
         # renders it as 230 → 91 → 2. This sub is the fallback for reports with
         # no in-band count.

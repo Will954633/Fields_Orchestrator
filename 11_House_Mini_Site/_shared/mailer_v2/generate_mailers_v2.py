@@ -452,9 +452,13 @@ def render(ctx, dry=False):
         return None
     os.makedirs(OUT, exist_ok=True)
     out_pdf = os.path.join(OUT, f"{slug}.pdf")
-    HTML(string=html, base_url=HERE).write_pdf(out_pdf)
 
-    problems = verify_pdf(out_pdf, ctx)
+    # Render once, measure the laid-out boxes, then write the same document.
+    document = HTML(string=html, base_url=HERE).render()
+    layout_problems = verify_layout(document)
+    document.write_pdf(out_pdf)
+
+    problems = layout_problems + verify_pdf(out_pdf, ctx)
     if problems:
         # keep the file so the fault can be looked at, but never let it into a
         # print run silently
@@ -475,6 +479,78 @@ def strip(s):
                     ("&rarr;", "→")):
         s = s.replace(ent, ch)
     return s
+
+
+def _boxes_by_class(page_box):
+    """{css class -> (top, bottom)} for every laid-out box on a page.
+
+    WeasyPrint keeps the source element on each box, so the real geometry of the
+    artwork is readable before anything is written to disk.
+    """
+    found = {}
+
+    def walk(box):
+        el = getattr(box, "element", None)
+        cls = (el.get("class") if el is not None and hasattr(el, "get") else None)
+        if cls:
+            try:
+                top = box.position_y
+                bottom = top + box.height
+            except (AttributeError, TypeError):
+                top = bottom = None
+            if top is not None:
+                for c in cls.split():
+                    prev = found.get(c)
+                    found[c] = (min(prev[0], top), max(prev[1], bottom)) if prev else (top, bottom)
+        for child in getattr(box, "children", []):
+            walk(child)
+
+    walk(page_box)
+    return found
+
+
+def verify_layout(document):
+    """Measure the page instead of guessing at it.
+
+    Page 1's flowing copy ends with `.also`, and `.cta` is absolutely positioned
+    across the bottom. Nothing in the normal flow knows the CTA is there, so an
+    overlong paragraph renders underneath it — present in the PDF, invisible on
+    paper.
+
+    Character budgets were the first attempt at guarding this and they are the
+    wrong instrument: they bound each string separately, while the real
+    constraint is CUMULATIVE. On 213 Acanthus Avenue the hero headline wrapped
+    to three lines instead of two, which pushed everything down; the also-line
+    was comfortably inside its own limit and still got cut in half by the green
+    band. A proxy for a geometric constraint fails whenever some other element
+    moves. This measures the collision directly.
+    """
+    problems = []
+    for i, page in enumerate(document.pages, start=1):
+        boxes = _boxes_by_class(page._page_box)
+        page_h = page.height
+        cta = boxes.get("cta")
+        if not cta:
+            problems.append(f"page {i}: no CTA band found — template changed?")
+            continue
+        cta_top = cta[0]
+        # every element that flows normally on this page
+        for cls in ("also", "imgcap", "proof", "findings", "conseq", "trust", "items"):
+            box = boxes.get(cls)
+            if not box:
+                continue
+            top, bottom = box
+            if top >= cta_top:          # legitimately inside/after the band
+                continue
+            if bottom > cta_top:
+                problems.append(
+                    f"page {i}: .{cls} runs {bottom - cta_top:.1f}pt past the top of the "
+                    f"CTA band — it will print underneath the green panel")
+            if bottom > page_h:
+                problems.append(
+                    f"page {i}: .{cls} runs {bottom - page_h:.1f}pt off the bottom of the "
+                    f"page — it will be cropped")
+    return problems
 
 
 def verify_pdf(path, ctx):
@@ -526,6 +602,28 @@ def verify_pdf(path, ctx):
     # label simply wraps onto an extra line and renders ON TOP of the sub. That
     # is invisible to text extraction (both strings are present in the PDF), so
     # a length budget is the only check that catches it.
+    # Number/verb agreement. Every count on this page is data-driven, so a
+    # string that reads correctly for n=3 can be wrong for n=1 and no one sees
+    # it until a property with n=1 comes along. This has now shipped twice —
+    # "3 buyers may weigh against it" and "1 Home ... that closely compete with
+    # yours" — so it is worth a check rather than another pair of eyes.
+    agreement = [
+        (r"\b1 [A-Za-z]+s\b(?! ago)", "'1' followed by a plural noun"),
+        (r"\b1 [A-Za-z]+ (?:for sale )?that closely compete\b", "singular subject with 'compete'"),
+        (r"\b1 (?:thing|home|listing|property) [^.]{0,40}\b(?:are|have|were)\b",
+         "singular subject with a plural verb"),
+    ]
+    for txt in [strip(ctx["hero"].hero_headline), strip(ctx["hero"].label),
+                strip(ctx["hero"].sub), strip(ctx["also"]), strip(ctx["cta2_head"]),
+                strip(ctx["cta2_then"]), strip(ctx["competition_sentence"]),
+                strip(ctx["peek_1"])] + \
+               [strip(f.label) for f in ctx["support"]] + \
+               [strip(f.sub) for f in ctx["support"]]:
+        for pat, why in agreement:
+            m = re.search(pat, txt or "", re.I)
+            if m:
+                problems.append(f"number agreement — {why}: {m.group(0)!r} in {txt[:70]!r}")
+
     for f in ctx["support"]:
         for part, text, limit in (("label", strip(f.label), 52),
                                   ("sub", strip(f.sub), 78)):
