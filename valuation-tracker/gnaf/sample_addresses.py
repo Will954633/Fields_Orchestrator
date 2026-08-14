@@ -125,7 +125,15 @@ def build_address(addr_row, street_lookup, locality_lookup, street_types):
         return None
 
     # Resolve street type (ST -> Street, RD -> Road, etc.)
-    street_type = street_types.get(street_type_code, street_type_code).title()
+    # ⚠ G-NAF uses the code XXX for streets that HAVE no type — `The Esplanade`,
+    # `The Crestway`, `The Gardenway`. Falling back to the raw code on a lookup miss
+    # appended it to the address and produced 4,269 records reading
+    # "29 THE CRESTWAY XXX ROBINA QLD 4226", which rendered on live public pages and
+    # left street_type="XXX" in the address search index. An unresolved code is never
+    # safe to print: emit nothing rather than the code itself.
+    street_type = ""
+    if street_type_code and street_type_code.upper() != "XXX":
+        street_type = street_types.get(street_type_code, "").title()
 
     # Locality (suburb)
     locality_pid = addr_row.get("LOCALITY_PID", "")
@@ -139,7 +147,10 @@ def build_address(addr_row, street_lookup, locality_lookup, street_types):
     # Build the Domain-format address
     # Domain expects: "28 Federal Place, Robina, QLD 4226"
     state = loc_info.get("state_abbrev", "")
-    address = f"{street_num} {street_name} {street_type}, {suburb}, {state} {postcode}"
+    # street_type is legitimately empty for `The Esplanade`-style names, so join on the
+    # parts that exist rather than interpolating a blank and leaving " ," behind.
+    street = " ".join(p for p in (street_num, street_name, street_type) if p)
+    address = f"{street}, {suburb}, {state} {postcode}"
 
     return {
         "address": address,
