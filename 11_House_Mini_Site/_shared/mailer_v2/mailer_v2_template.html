@@ -74,6 +74,11 @@
   .hero-card .txt{ flex:1; }
   .hero-card .lab{ font-size:11pt; color:var(--paper); font-weight:700; line-height:1.28; }
   .hero-card .sub{ font-size:8.4pt; color:var(--sand); line-height:1.42; margin-top:1.8mm; }
+  /* 230 → 91 → 2. The narrowing IS the proof: it shows a market was filtered,
+     not that two similar-looking listings were picked. */
+  .funnel{ margin-top:2.2mm; font-size:8.2pt; color:var(--sand); line-height:1.35; }
+  .funnel b{ color:var(--paper); font-size:9.6pt; font-weight:700; }
+  .funnel .arw{ color:#8fa396; padding:0 1.6mm; }
   .support{ display:flex; gap:4.5mm; margin-top:4.5mm; height:23mm; }
   /* NOT justify-content:center — a label that wraps then overlaps the sub-line
      instead of pushing it down. Flow from the top. */
@@ -142,6 +147,10 @@
                  margin-bottom:1.6mm; line-height:1.22; }
   .item .txt p{ font-size:9.5pt; line-height:1.45; color:#4a453d; }
   .item .txt p b{ color:var(--terra-dark); }
+  /* Skim layer. Someone giving page 2 three seconds should see four answers
+     waiting behind the code without reading a word of body copy. */
+  .item .txt .peek{ font-size:8.6pt; color:var(--terra-dark); font-weight:700;
+                    margin-top:1.8mm; letter-spacing:.2pt; }
 
   /* objection killers — these are not "features", they are the four reasons a
      homeowner would otherwise bin this */
@@ -190,6 +199,7 @@
         <div class="txt">
           <div class="lab">{{HERO_LABEL}}</div>
           <div class="sub">{{HERO_SUB}}</div>
+{{HERO_FUNNEL}}
         </div>
       </div>
       <div class="support">
@@ -215,7 +225,10 @@
       <div class="nofric">No login. No details.<br>No phone call.</div>
     </div>
     <div class="ctatext">
-      <div class="ctak">We have finished the first analysis of your home</div>
+      <!-- NOT "the first analysis" — that reads as preliminary and fights
+           "Analysis complete" at the top of the page. It reintroduced the
+           feeling the deleted three-business-day line used to create. -->
+      <div class="ctak">See what we found about {{STREET}}</div>
       <h2>{{CTA_HEADLINE}}<br><span class="then">{{CTA_THEN}}</span></h2>
       <div class="steps"><b>Point your phone's camera at the code.</b> It opens the analysis
         for this address directly &mdash; read it whether you would sell now, later, or not at all.</div>
@@ -243,27 +256,40 @@
     <div class="items">
       <div class="item"><div class="idx serif">01</div><div class="txt">
         <h3>If you sold today, what would buyers compare your home with?</h3>
-        <p>{{COMPETITION_SENTENCE}}</p></div></div>
+        <p>{{COMPETITION_SENTENCE}}</p>
+        <div class="peek">{{PEEK_1}}</div></div></div>
       <div class="item"><div class="idx serif">02</div><div class="txt">
         <h3>Which recent sales actually matter to its value?</h3>
         <p><b>{{COMPS_REVIEWED}} recent sales</b> reviewed, then the closest adjusted for the
           differences buyers pay attention to &mdash; land, internal area, condition,
-          accommodation and timing. The working range is shown with its evidence.</p></div></div>
+          accommodation and timing. The working range is shown with its evidence.</p>
+        <div class="peek">See the sales that mattered &rarr;</div></div></div>
       <div class="item"><div class="idx serif">03</div><div class="txt">
         <h3>Who is most likely to value your home highly?</h3>
+        <!-- "the feature most likely to matter to them", NOT "the one thing they
+             pay more for". The persona's `paysMoreFor` is a reasoned judgement
+             about a buyer segment, not a measured premium on this house; the
+             stronger phrasing would be false precision. -->
         <p>The buyer group your particular combination of location, accommodation and
-          lifestyle fits best &mdash; who they are, and the one thing about your home
-          they pay more for.</p></div></div>
+          lifestyle fits best &mdash; who they are, and the feature most likely to
+          matter to them.</p>
+        <div class="peek">See the buyer &rarr;</div></div></div>
       <div class="item"><div class="idx serif">04</div><div class="txt">
         <h3>What could strengthen &mdash; or weaken &mdash; its position?</h3>
         <p>Your block, street position, presentation and surroundings, with strengths
           <b>and</b> trade-offs named rather than glossed over. Your home seen the way a
-          buyer sees it, before they ever walk through the door.</p></div></div>
+          buyer sees it, before they ever walk through the door.</p>
+        <div class="peek">See the strengths and trade-offs &rarr;</div></div></div>
     </div>
 
     <div class="trust">
-      <div class="t"><h4>Not a suburb template</h4><p>Built for {{STREET}} from its own data &mdash; nothing about it is generic.</p></div>
-      <div class="t"><h4>Not just an algorithm</h4><p>A person who knows this market reviews the pricing before it is shown.</p></div>
+      <!-- "nothing about it is generic" was too absolute — the method, layout
+           and presentation obviously are reusable, and claiming otherwise
+           invites the reader to catch us out. What IS unique is the inputs,
+           competitive set, findings and conclusions. Say that instead: it is a
+           narrower claim and a more believable one. -->
+      <div class="t"><h4>Not a suburb template</h4><p>Built around the market position of {{STREET}} &mdash; not a suburb report with the address swapped in.</p></div>
+      <div class="t"><h4>Not just an algorithm</h4><p>The analysis uses technology. The pricing conclusion is reviewed by someone who works in this market.</p></div>
       <div class="t"><h4>Not a one-off snapshot</h4><p>It keeps up as nearby homes list, sell and change price. Come back to it.</p></div>
       <div class="t"><h4>Not a sales funnel</h4><p>No sign-up, no email, no obligation, and nobody calls you.</p></div>
     </div>
@@ -272,13 +298,16 @@
   <div class="cta">
     <div class="qrwrap">
       <img src="{{QR_IMG}}" alt="Scan to open your analysis">
-      <div class="nofric">No login. No details.<br>No phone call.</div>
     </div>
     <div class="ctatext">
       <div class="ctak">Prepared for {{STREET}}</div>
-      <h2>See what we found. <span class="then">Come back as the market moves.</span></h2>
-      <div class="steps">Prepared by <b>Will Simpson</b>, Fields Real Estate<br>
-        will@fieldsestate.com.au &nbsp;·&nbsp; fieldsestate.com.au</div>
+      <!-- Specific, not "See what we found." Curiosity closes the scan; the
+           come-back-later benefit is real but secondary until they have
+           visited once, so it sits underneath rather than beside. -->
+      <h2>{{CTA2_HEADLINE}}<br><span class="then">{{CTA2_THEN}}</span></h2>
+      <div class="steps">Prepared by <b>Will Simpson</b>, Fields Real Estate
+        &nbsp;·&nbsp; will@fieldsestate.com.au<br>
+        Come back as the market changes &mdash; it stays up to date.</div>
     </div>
   </div>
 </div>

@@ -72,6 +72,10 @@ class Finding:
     credibility: int = 0
     # findings that must not appear alongside this one (see CONFLICTS)
     conflicts: tuple = ()
+    # (total, in_band, close) — renders as "230 → 91 → 2" on the hero card.
+    # The narrowing is the proof of work: it shows we filtered a market rather
+    # than picked two listings that looked similar.
+    funnel: Optional[tuple] = None
     # only these may lead the page; a finding without a hero_headline cannot
     hero_ok: bool = False
 
@@ -155,13 +159,15 @@ def f_competition(doc) -> Optional[Finding]:
     pct = 100 * close / total
     # the scarcer the competition, the more startling the finding
     surprise = 10 if pct < 1 else 9 if pct < 2 else 8 if pct < 4 else 6
-    band_note = (f"narrowed from {in_band} in your home&rsquo;s size and type band"
-                 if in_band else "narrowed from the local search area")
     return Finding(
         kind="competition",
         number=str(close),
         label=f"{_plural(close, 'Home', 'Homes')} for sale that closely compete with yours",
-        sub=f"{band_note}, out of {total} homes for sale across your area",
+        # The narrowing itself is the proof of work — see `funnel` below, which
+        # renders it as 230 → 91 → 2. This sub is the fallback for reports with
+        # no in-band count.
+        sub=f"found by reviewing all {total} homes for sale across the buyer search area",
+        funnel=(total, in_band, close),
         hero_headline=(f"Of the {total} homes for sale near you, only <b>{close}</b> "
                        f"closely {_plural(close, 'competes', 'compete')} with yours."),
         hero_consequence=(
@@ -183,13 +189,12 @@ def f_no_competition(doc) -> Optional[Finding]:
     close, in_band, total = _funnel(doc)
     if close != 0 or not total:
         return None
-    band_note = (f"we compared it against {in_band} homes in its size and type band"
-                 if in_band else "we compared it against the local search area")
     return Finding(
         kind="no_competition",
         number="0",
         label="Homes for sale that closely compete with yours",
-        sub=f"{band_note}, drawn from {total} for sale across your area",
+        sub=f"found by reviewing all {total} homes for sale across the buyer search area",
+        funnel=(total, in_band, 0),
         hero_headline=(f"We checked {total} homes for sale near you. "
                        f"<b>None</b> of them closely competes with yours."),
         hero_consequence=(
@@ -400,16 +405,31 @@ def f_recent_activity(doc) -> Optional[Finding]:
         return None
     if days < 0 or days > 30:               # stale news is not news
         return None
-    kind_word = {"new_listing": "came to market",
-                 "sold": "sold",
-                 "price_change": "changed price"}[latest["kind"]]
-    when = "today" if days == 0 else ("yesterday" if days == 1 else f"{days} days ago")
+    # Lead with the EVENT, not the count. "4 changes logged" is a database
+    # statistic — four changes since when, and were any of them important? The
+    # homeowner-meaningful fact is that their competitive set moved, and when.
+    kind_word = {"new_listing": "a comparable home came to market",
+                 "sold": "a comparable home sold",
+                 "price_change": "a comparable home changed price"}[latest["kind"]]
+    if days == 0:
+        num, unit, when = "Today", "", "today"
+    elif days == 1:
+        num, unit, when = "1", " day ago", "yesterday"
+    else:
+        num, unit, when = str(days), " days ago", f"{days} days ago"
+    others = len(rel) - 1
+    tail = f"; {others} more logged" if others > 0 else ""
     return Finding(
         kind="recent_activity",
-        number=str(len(rel)),
-        label="Changes logged in your competing set",
-        sub=f"most recently, a comparable home {kind_word} {when} &mdash; checked nightly",
-        specificity=8, surprise=6, relevance=7, curiosity=6, credibility=9,
+        number=num,
+        unit=unit,
+        label="Your competing set changed",
+        sub=f"{kind_word}{tail} &mdash; checked nightly",
+        # recency is the whole point: a change last week is live news, a change
+        # last month is filing
+        curiosity=8 if days <= 7 else 6,
+        surprise=7 if days <= 7 else 5,
+        specificity=8, relevance=7, credibility=9,
     )
 
 

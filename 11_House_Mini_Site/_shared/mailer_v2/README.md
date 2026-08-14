@@ -71,14 +71,21 @@ same contradiction through a second path until the artwork verifier caught it.
 ## Readiness gate (stricter than V1)
 
 Mailable requires all of: `build_state=complete`; `scarcity` +
-`competitor_matches` slots approved; **`comps` slot approved**; **`model_range.method`
-not `thin`/absent**; `funnel.close_tier` present; at least one competing listing
-to name; hero photo; aerial.
+`competitor_matches` slots approved; **`comps` slot approved**;
+**`model_range.method` not `thin`/absent**; **`positioning.personas` non-empty**;
+**`positioning.tradeOffs` non-empty**; `funnel.close_tier` present; at least one
+competing listing to name; hero photo; aerial.
 
-The two bolded conditions are what let us delete the three-business-day caveat.
-Cost: **25 of 71** complete reports qualify, against 45 under V1's gate. That is
-the honest trade — V1 mailed homes whose valuation was still pending and
-admitted it on the page.
+Every bolded condition exists to keep a promise the artwork makes:
+
+- the valuation two are what let the three-business-day caveat be deleted;
+- personas and tradeOffs are what make page 2's **Q3** ("who is most likely to
+  value your home highly") and **Q4** ("what could strengthen — or weaken — its
+  position") answerable. 4 of 25 otherwise-mailable reports carried neither, so
+  the mailer would have promised two sections the scan could not deliver.
+
+Cost: **21 of 71** complete reports qualify, against 45 under V1's gate. That is
+the honest trade — the alternative is mailing a promise the landing page breaks.
 
 Run `--audit` to see the pool, what each address would lead with, and why the
 rest are blocked.
@@ -113,10 +120,23 @@ overflowing every support card while their labels rendered fine; and — its own
 bug — probes failing because `&rsquo;` prints as `’` (U+2019) while `strip()`
 folded it to an ASCII `'`.
 
-Current state: **25 of 25 mailable addresses generate and verify clean.**
-Leads: 20 `competition`, 5 `no_competition`. Support cards:
-21 `advantages_tradeoffs`, 17 `buyer`, 6 `land_rank`, 4 `recent_activity`,
-1 `feature_rarity`.
+Current state: **21 of 21 mailable addresses generate and verify clean.**
+Leads: 17 `competition`, 4 `no_competition`. Support cards:
+21 `advantages_tradeoffs`, 17 `buyer`, 4 `land_rank`.
+
+## Second review round — changes made
+
+| Change | Why |
+|---|---|
+| `230 → 91 → 2` funnel on the hero card | The narrowing *is* the proof of work: it shows a market was filtered, not that two similar-looking listings were picked. |
+| Dropped "the **first** analysis" | It fought "Analysis complete" at the top and reintroduced the preliminary feeling the three-day line used to create. Now "See what we found about {address}". |
+| Activity card leads with the **event**, not the count | "4 changes logged" is a database statistic. "9 days ago · Your competing set changed" is news. Recency now drives its score. |
+| "the feature most likely to matter to them" | Was "the one thing they pay more for" — a causal economic claim. `personas[].paysMoreFor` is a reasoned judgement about a segment, not a measured premium on this house. |
+| "not a suburb report with the address swapped in" | Was "nothing about it is generic" — too absolute. The method and layout *are* reusable; the inputs, competitive set and conclusions are not. The narrower claim is the more believable one. |
+| Page 2 CTA now specific | "See the 7 homes we found. And where yours has the edge over them." Was "See what we found" — the weakest line on either page, at the point where the scan should close. |
+| Four skim prompts (`See the 7 properties →`) | Three seconds on page 2 should reveal four answers waiting behind the code, without reading body copy. |
+| "broadly similar homes", not "size and type band" | Internal jargon leaking onto the page. Geography now consistently "the buyer search area", never the vaguer "near you". |
+| Friction line removed from page 2's QR | It appeared twice plus the *Not a sales funnel* box. Three times reads as protesting. |
 
 ## Files
 
@@ -162,8 +182,10 @@ company the feature keeps.
 - **No true percentiles.** `cohort_stats` carries a median and a sample size but
   no distribution, so "larger than 84% of its competitive set" would be
   fabricated precision. Land is stated against the median instead.
-- **Hook variety is still competition-dominated** (20 of 25 lead with
+- **Hook variety is still competition-dominated** (all 21 lead with
   competition/no-competition). That is a fair reflection of which finding is
   genuinely strongest, but `land_rank` only reaches hero grade at ≥1.5× median
-  and `scarcity` rarely wins. Worth revisiting once more reports carry trade-offs
-  (only 48% do today).
+  and `scarcity` never wins under the current weights. Worth revisiting.
+- **The 230 → 91 → 2 funnel is text, not a graphic.** It reads well, but the
+  narrowing is arguably the single most persuasive proof on the page and could
+  carry a visual treatment.

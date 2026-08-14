@@ -149,6 +149,18 @@ def check_ready(doc):
         reasons.append("no competing listings to name")
     if not sf.get("active_listings_total"):
         reasons.append("no active_listings_total")
+    # Page 2 asks four questions and promises an answer to each. Two of them —
+    # "who is most likely to value your home highly" and "what could strengthen
+    # or weaken its position" — are answered from positioning.personas and
+    # positioning.tradeOffs. 4 of 25 otherwise-mailable reports carry neither,
+    # so the mailer would promise two sections the scan cannot deliver. Same
+    # principle as the valuation gate above: make the claim true, not unsaid.
+    pos = doc.get("positioning") or {}
+    if not (pos.get("personas") or []):
+        reasons.append("no buyer persona (page 2 Q3 would be unanswerable)")
+    if not (pos.get("tradeOffs") or []):
+        reasons.append("no trade-offs (page 2 Q4 would be unanswerable)")
+
     if not (doc.get("property") or {}).get("photos"):
         reasons.append("no hero photo")
     if not _g(doc, "property", "satellite", "satellite_image_url"):
@@ -169,6 +181,29 @@ def support_card_html(f):
         f'            <div class="sub">{f.sub}</div>\n'
         '          </div>\n'
         '        </div>'
+    )
+
+
+def funnel_html(hero):
+    """Render the narrowing as 230 → 91 → 2.
+
+    "Broadly similar" replaces the in-house phrase "size and type band" — no
+    homeowner thinks about their house that way. The widest figure is named as
+    the buyer search area rather than "near you", because the geography is part
+    of the methodology and vagueness there reads as hand-waving.
+    """
+    if not hero.funnel:
+        return ""
+    total, in_band, close = hero.funnel
+    if not total or not in_band or in_band >= total or close > in_band:
+        return ""
+    a = '<span class="arw">&rarr;</span>'
+    return (
+        '          <div class="funnel">'
+        f'<b>{total}</b> for sale in the buyer search area{a}'
+        f'<b>{in_band}</b> broadly similar to yours{a}'
+        f'<b>{close}</b> genuinely competing'
+        '</div>'
     )
 
 
@@ -202,9 +237,11 @@ def competition_sentence(doc):
                 f"the {plotted} nearest substitutes anyway &mdash; named, mapped, and watched "
                 "as their prices and status change.")
     word = "listing" if close == 1 else "listings"
+    # "broadly similar", not "in your home's band" — no homeowner thinks in
+    # bands, and the phrase reads as internal jargon leaking onto the page
     return (f"The <b>{close} {word}</b> a buyer would realistically choose between &mdash; "
             f"named, mapped, and watched as their prices and status change"
-            + (f", narrowed from {in_band} in your home&rsquo;s band." if in_band else "."))
+            + (f", narrowed from {in_band} broadly similar homes." if in_band else "."))
 
 
 def _funnel_local(doc):
@@ -249,6 +286,23 @@ def also_line(hero, cands, support):
             said.add(f.kind)
         if len(parts) == 2:
             break
+    # Fallback: on a property where every scored finding already appears on the
+    # page, there is nothing left to tease and the paragraph collapses, leaving
+    # a hole above the CTA. The four page-2 questions always have answers (the
+    # gate guarantees it), so tease whichever of those the cards have not
+    # already covered. This keeps the second open loop on every mailer.
+    if len(parts) < 2:
+        for kind, phrase in (
+            ("buyer", "the buyer group most likely to value it highly"),
+            ("advantages_tradeoffs", "where your home has an edge &mdash; and where a buyer may hesitate"),
+            ("competition", "which recent sales actually set the benchmark for yours"),
+        ):
+            if kind not in said and phrase not in parts:
+                parts.append(phrase)
+                said.add(kind)
+            if len(parts) == 2:
+                break
+
     if not parts:
         return ""
     if len(parts) == 1:
@@ -256,6 +310,31 @@ def also_line(hero, cands, support):
     else:
         body = ", ".join(parts[:-1]) + ", and " + parts[-1]
     return f"We also found <b>{body}</b>. None of it is on this page."
+
+
+def cta2_lines(hero, doc):
+    """Page 2's closing CTA — as specific as page 1's.
+
+    "See what we found" is the weakest line on either page and it sat at the
+    exact point where the scan should close. Curiosity carries the first visit;
+    the come-back-later benefit is real but secondary until they have been once,
+    so it moves to the line beneath.
+    """
+    close, _in_band, _total = _funnel_local(doc)
+    if hero.kind == "no_competition" or close == 0:
+        return ("Nothing for sale closely competes with your home.",
+                "See what we compared it against &mdash; and where yours stands.")
+    noun = "home" if close == 1 else "homes"
+    return (f"See the {close} {noun} we found.",
+            "And where yours has the edge over them.")
+
+
+def peek_1(doc):
+    """Skim-layer prompt for page 2, item 01. Counts, never names."""
+    close, _in_band, _total = _funnel_local(doc)
+    if not close:
+        return "See what we compared it against &rarr;"
+    return f"See the {close} {'property' if close == 1 else 'properties'} &rarr;"
 
 
 def cta_lines(hero):
@@ -278,6 +357,7 @@ def build_context(doc):
     street, locality = parse_address(doc["address"])
     hero, support, cands = select(doc, n_support=2)
     cta_head, cta_then = cta_lines(hero)
+    cta2_head, cta2_then = cta2_lines(hero, doc)
 
     return {
         "doc": doc,
@@ -296,6 +376,9 @@ def build_context(doc):
         "also": also_line(hero, cands, support),
         "cta_head": cta_head,
         "cta_then": cta_then,
+        "cta2_head": cta2_head,
+        "cta2_then": cta2_then,
+        "peek_1": peek_1(doc),
     }
 
 
@@ -317,11 +400,15 @@ def render(ctx, dry=False):
         "{{HERO_UNIT}}": hero.unit,
         "{{HERO_LABEL}}": hero.label,
         "{{HERO_SUB}}": hero.sub,
+        "{{HERO_FUNNEL}}": funnel_html(hero),
         "{{SUPPORT_CARDS}}": "\n".join(support_card_html(f) for f in ctx["support"]),
         "{{PROOF_LINE}}": ctx["proof"],
         "{{ALSO_LINE}}": ctx["also"],
         "{{CTA_HEADLINE}}": ctx["cta_head"],
         "{{CTA_THEN}}": ctx["cta_then"],
+        "{{CTA2_HEADLINE}}": ctx["cta2_head"],
+        "{{CTA2_THEN}}": ctx["cta2_then"],
+        "{{PEEK_1}}": ctx["peek_1"],
         "{{COMPETITION_SENTENCE}}": ctx["competition_sentence"],
         "{{COMPS_REVIEWED}}": str(ctx["comps_reviewed"]),
         "{{HERO_IMG}}": hero_rel,
@@ -371,7 +458,8 @@ def strip(s):
     s = re.sub(r"<[^>]+>", "", s or "")
     for ent, ch in (("&mdash;", "—"), ("&rsquo;", "'"), ("&ldquo;", "“"),
                     ("&rdquo;", "”"), ("&sup2;", "²"), ("&thinsp;", " "),
-                    ("&nbsp;", " "), ("&middot;", "·"), ("&amp;", "&")):
+                    ("&nbsp;", " "), ("&middot;", "·"), ("&amp;", "&"),
+                    ("&rarr;", "→")):
         s = s.replace(ent, ch)
     return s
 
@@ -436,7 +524,7 @@ def verify_pdf(path, ctx):
     for name, text, limit in (
         ("hero headline", strip(ctx["hero"].hero_headline), 105),
         ("consequence", strip(ctx["hero"].hero_consequence), 190),
-        ("also line", strip(ctx["also"]), 200),
+        ("also line", strip(ctx["also"]), 215),
         ("proof line", strip(ctx["proof"]), 210),
     ):
         if len(text or "") > limit:
@@ -455,6 +543,9 @@ def verify_pdf(path, ctx):
         "friction remover": "No login.",
         "back-page Q1": "what would buyers",
         "back-page Q4": "What could strengthen",
+        "page-2 CTA": strip(ctx["cta2_head"]),
+        "skim prompt 01": strip(ctx["peek_1"]).replace("→", "").strip(),
+        "skim prompt 04": "See the strengths and trade-offs",
         "objection: not a template": "Not a suburb",
         "objection: not an algorithm": "Not just an",
         "objection: not a snapshot": "Not a one-off",
