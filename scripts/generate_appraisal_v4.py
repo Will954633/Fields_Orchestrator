@@ -38,6 +38,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -239,6 +240,15 @@ def boundary_aerial(subject_id: str, suburb_key: str | None, subject_doc: dict |
             try:
                 base.mkdir(parents=True, exist_ok=True)
                 shutil.copy(path, cached)
+                # The render target under assets/aerial_tmp is scratch: once the
+                # bytes are in the shared cache nothing references it again, and
+                # nothing else ever removed it. Pre-warming the catchment left
+                # 3,528 orphans / 6.9GB and took the VM to 77MB free on
+                # 2026-08-15. Drop it here, where we know the copy succeeded.
+                try:
+                    Path(path).unlink()
+                except OSError:
+                    pass
                 return cached
             except Exception:
                 pass
@@ -1160,7 +1170,29 @@ def render_appraisal(
     }
 
 
+def _sweep_aerial_scratch(max_age_hours: int = 24) -> None:
+    """Remove stale scratch aerials left under assets/aerial_tmp.
+
+    The cover path unlinks its own scratch file as soon as the shared cache copy
+    succeeds, but the non-cover branch RETURNS the scratch path — the caller is
+    still using it, so it cannot be dropped inline. Those accumulate instead.
+    Age-gated at 24h so a concurrent render (the pre-warm runs 3 workers) can
+    never have its in-flight file pulled out from under it.
+    """
+    scratch = OUTPUT_DIR / "assets" / "aerial_tmp"
+    if not scratch.is_dir():
+        return
+    cutoff = time.time() - max_age_hours * 3600
+    for f in scratch.iterdir():
+        try:
+            if f.is_file() and f.stat().st_mtime < cutoff:
+                f.unlink()
+        except OSError:
+            pass
+
+
 def main() -> None:
+    _sweep_aerial_scratch()
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     g = parser.add_mutually_exclusive_group(required=True)
     g.add_argument("--subject-id", help="Subject property ObjectId (Gold_Coast.<suburb>._id)")
