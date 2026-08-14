@@ -35,6 +35,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable, Optional
 
+from grammar import Count
+
 # ---------------------------------------------------------------------------
 # scoring weights. curiosity is weighted hardest because the mailer has exactly
 # one job — earn the scan — and credibility is weighted second because a claim
@@ -159,14 +161,12 @@ def f_competition(doc) -> Optional[Finding]:
     pct = 100 * close / total
     # the scarcer the competition, the more startling the finding
     surprise = 10 if pct < 1 else 9 if pct < 2 else 8 if pct < 4 else 6
+    c = Count(close)
     return Finding(
         kind="competition",
         number=str(close),
-        # the VERB has to agree too — "1 Home for sale that closely compete
-        # with yours" shipped past the last review because only the headline
-        # pluralised it
-        label=(f"{_plural(close, 'Home', 'Homes')} for sale that closely "
-               f"{_plural(close, 'competes', 'compete')} with yours"),
+        label=(f"{c.noun('Home', 'Homes')} for sale that closely "
+               f"{c.verb('competes', 'compete')} with yours"),
         # The narrowing itself is the proof of work — see `funnel` below, which
         # renders it as 230 → 91 → 2. This sub is the fallback for reports with
         # no in-band count.
@@ -178,10 +178,17 @@ def f_competition(doc) -> Optional[Finding]:
         # in the funnel line underneath, where it reads as methodology.
         hero_headline=(f"Of the {total} homes buyers can choose from across your area, "
                        f"only <b>{close}</b> closely "
-                       f"{_plural(close, 'competes', 'compete')} with yours."),
-        hero_consequence=(
-            "Those are the homes a buyer weighs yours against when deciding "
-            "whether it is fairly priced &mdash; or worth stretching for."
+                       f"{c.verb('competes', 'compete')} with yours."),
+        # The singular is not just grammatically correct, it is stronger: "the
+        # one home a buyer is most likely to weigh yours against" is a sharper
+        # claim than the plural.
+        hero_consequence=c.pick(
+            zero="",
+            one=("That is the home a buyer is most likely to weigh yours against "
+                 "when deciding whether yours is fairly priced &mdash; or worth "
+                 "stretching for."),
+            many=("Those are the homes a buyer weighs yours against when deciding "
+                  "whether yours is fairly priced &mdash; or worth stretching for."),
         ),
         specificity=10, surprise=surprise, relevance=10, curiosity=10, credibility=9,
         conflicts=CONFLICTS["competition"], hero_ok=True,
@@ -238,8 +245,8 @@ def f_advantages_tradeoffs(doc) -> Optional[Finding]:
     # 'buyers')` produced. It read as three *buyers* objecting to the house.
     # The same broken construction was in the hero headline, where it can reach
     # the largest type on the page.
-    adv_n = _plural(n_adv, "thing", "things")
-    tr_n = _plural(n_tr, "thing", "things")
+    c_adv, c_tr = Count(n_adv), Count(n_tr)
+    adv_n, tr_n = c_adv.noun("thing", "things"), c_tr.noun("thing", "things")
     return Finding(
         kind="advantages_tradeoffs",
         # Nouns, not a ratio. "3 / 3" reads for a moment as a score or rating
@@ -247,8 +254,8 @@ def f_advantages_tradeoffs(doc) -> Optional[Finding]:
         # glance and is the whole point of the finding.
         # non-breaking hyphen (&#8209;) — a normal one lets the renderer split
         # "trade-offs" across lines as "trade-" / "offs"
-        number=(f"{n_adv} {_plural(n_adv, 'strength', 'strengths')} &middot; "
-                f"{n_tr} {_plural(n_tr, 'trade&#8209;off', 'trade&#8209;offs')}"),
+        number=(f"{n_adv} {c_adv.noun('strength', 'strengths')} &middot; "
+                f"{n_tr} {c_tr.noun('trade&#8209;off', 'trade&#8209;offs')}"),
         label="Identified in your home's position",
         sub="we name both &mdash; not just the flattering half",
         hero_headline=(f"We found <b>{n_adv}</b> {adv_n} working in your home's favour "

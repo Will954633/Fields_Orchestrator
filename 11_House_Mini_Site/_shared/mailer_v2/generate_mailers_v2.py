@@ -52,6 +52,7 @@ from weasyprint import HTML
 
 from shared.db import get_client  # noqa: E402
 
+from grammar import Count  # noqa: E402
 from hooks import select, build_findings  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -280,16 +281,22 @@ def competition_sentence(doc):
     """
     close, in_band, _total = _funnel_local(doc)
     plotted = len(_g(doc, "comparables", "closest_active", default=[]))
-    if close == 0:
-        return ("<b>Nothing currently for sale</b> closely competes with your home. We show "
-                f"the {plotted} nearest substitutes anyway &mdash; named, mapped, and watched "
-                "as their prices and status change.")
-    word = "listing" if close == 1 else "listings"
+    c = Count(close)
+    narrowed = f", narrowed from {in_band} broadly similar homes." if in_band else "."
     # "broadly similar", not "in your home's band" — no homeowner thinks in
-    # bands, and the phrase reads as internal jargon leaking onto the page
-    return (f"The <b>{close} {word}</b> a buyer would realistically choose between &mdash; "
-            f"named, mapped, and watched as their prices and status change"
-            + (f", narrowed from {in_band} broadly similar homes." if in_band else "."))
+    # bands, and the phrase reads as internal jargon leaking onto the page.
+    #
+    # The singular is a different SENTENCE, not a different word: you cannot
+    # "choose between" one listing, and "their prices" has no referent.
+    return c.pick(
+        zero=("<b>Nothing currently for sale</b> closely competes with your home. We show "
+              f"the {plotted} nearest substitutes anyway &mdash; named, mapped, and watched "
+              "as their prices and status change."),
+        one=("The <b>one listing</b> a buyer would most realistically compare with yours "
+             "&mdash; named, mapped and watched as its price and status change" + narrowed),
+        many=(f"The <b>{close} listings</b> a buyer would realistically choose between "
+              "&mdash; named, mapped, and watched as their prices and status change" + narrowed),
+    )
 
 
 def _funnel_local(doc):
@@ -369,10 +376,10 @@ def cta2_lines(hero, doc):
     so it moves to the line beneath.
     """
     close, _in_band, _total = _funnel_local(doc)
-    if hero.kind == "no_competition" or close == 0:
+    c = Count(close)
+    if hero.kind == "no_competition" or c.is_zero:
         return ("Nothing for sale closely competes with your home.",
                 "See what we compared it against &mdash; and where yours stands.")
-    noun = "home" if close == 1 else "homes"
 
     # NOT "where yours has the edge over them". That asserts superiority over
     # the whole competing set, and on a property whose own analysis found 1
@@ -383,27 +390,43 @@ def cta2_lines(hero, doc):
     # rather than an approach.
     n_adv = len(_g(doc, "scarcity_features", "notable_features", default=[]))
     n_tr = len(_g(doc, "positioning", "tradeOffs", default=[]))
-    if n_adv and n_tr:
-        return (f"See the {close} {noun} we found.",
-                "And where yours has an advantage &mdash; or gives one away.")
-    return (f"See the {close} {noun} we found.",
-            "And where yours stands against them.")
+    then = ("And where yours has an advantage &mdash; or gives one away."
+            if (n_adv and n_tr) else
+            c.pick(zero="", one="And where yours stands against it.",
+                   many="And where yours stands against them."))
+    # The singular headline says WHY that one home matters rather than just
+    # counting it — a single competitor is a sharper fact than six.
+    head = c.pick(
+        zero="",
+        one="See the home buyers are most likely to compare with yours.",
+        many=f"See the {close} homes we found.",
+    )
+    return (head, then)
 
 
 def peek_1(doc):
-    """Skim-layer prompt for page 2, item 01. Counts, never names."""
+    """Skim-layer prompt for page 2, item 01. Counts, never names.
+
+    "See the 1 property" is both clumsy and weaker than "See which property" —
+    the latter keeps the loop open, which is the whole job of these prompts.
+    """
     close, _in_band, _total = _funnel_local(doc)
-    if not close:
-        return "See what we compared it against &rarr;"
-    return f"See the {close} {'property' if close == 1 else 'properties'} &rarr;"
+    return Count(close).pick(
+        zero="See what we compared it against &rarr;",
+        one="See which property &rarr;",
+        many=f"See the {close} properties &rarr;",
+    )
 
 
 def cta_lines(hero):
     """Headline + the intensifier beneath it. Matched to whatever led page 1, so
     the promise the QR makes is the promise the landing tab keeps."""
     return {
-        "competition": ("See the homes buyers would compare with yours.",
-                        "And where yours stands against them."),
+        "competition": (hero.number == "1" and
+                        ("See the home buyers are most likely to compare with yours.",
+                         "And where yours stands against it.") or
+                        ("See the homes buyers would compare with yours.",
+                         "And where yours stands against them.")),
         "advantages_tradeoffs": ("See what is working in your home&rsquo;s favour.",
                                  "And what a buyer may weigh against it."),
         "scarcity": ("See how rare your home&rsquo;s combination really is.",
