@@ -152,11 +152,14 @@ def main():
     lockf.write(str(os.getpid()))
     lockf.flush()
 
-    # Original corpus batches are b_*.txt; the YouTube feed writes yt_*.txt into
-    # its own base. Globbing only b_* made a run over the YouTube base report
-    # "COMPLETE — all 0 batches annotated" — a clean exit having done nothing,
-    # which is the exact failure CLAUDE.md rule 7b exists to stop.
-    batches = sorted(glob.glob(f"{BATCH_DIR}/b_*.txt") + glob.glob(f"{BATCH_DIR}/yt_*.txt"))
+    # Original corpus batches are b_*.txt; the YouTube feed writes yt_*.txt and
+    # the podcast feed sp_*.txt, each into its own base. Globbing only b_* made a
+    # run over the YouTube base report "COMPLETE — all 0 batches annotated" — a
+    # clean exit having done nothing, which is the exact failure CLAUDE.md rule
+    # 7b exists to stop. Any NEW corpus prefix must be added here too.
+    batches = sorted(glob.glob(f"{BATCH_DIR}/b_*.txt")
+                     + glob.glob(f"{BATCH_DIR}/yt_*.txt")
+                     + glob.glob(f"{BATCH_DIR}/sp_*.txt"))
     if not batches:
         raise SystemExit(f"no batch files in {BATCH_DIR} — nothing to annotate")
     if args.sweep_missing:
