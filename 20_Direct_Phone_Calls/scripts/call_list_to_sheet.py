@@ -127,7 +127,12 @@ def build_row(d: dict, day: datetime, rank: int) -> list:
     row[COL["Phone"]] = d.get("phone", "")
     row[COL["Address"]] = d.get("address", "")
     row[COL["Suburb"]] = (d.get("suburb") or "").title()
-    row[COL["Why now"]] = hook
+    # The time-sensitive intent reason leads, because it is the thing that decays:
+    # "valued their own home 2 days ago" is why we are calling TODAY, whereas the
+    # property hook is true any week. Both are shown — the hook is what the caller
+    # actually opens with, the note is why this row is near the top.
+    note = (d.get("intent_note") or "").strip()
+    row[COL["Why now"]] = f"⚡ {note}\n{hook}" if note else hook
     row[COL["Track"]] = TRACK_LABELS.get(d.get("track", ""), d.get("track", ""))
 
     # Occupancy verdict (occupancy_evidence.py). The caller needs to know whether
