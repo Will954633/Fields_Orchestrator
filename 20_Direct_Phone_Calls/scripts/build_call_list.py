@@ -38,7 +38,24 @@ Usage
   python3 build_call_list.py --stats
   python3 build_call_list.py --build --dry-run
   python3 build_call_list.py --build [--track A|B|C] [--suburb robina] [--limit 50]
+                             [--max-per-address 2] [--include-prior]
   python3 build_call_list.py --needs-id4me [--out addresses.tsv] [--limit 200]
+
+Who is still at the address
+---------------------------
+ID4ME returns every person it has ever associated with an address — 12 people at the
+one sample property, spanning 1997 to 2023. Most are previous occupants. Every
+ID4ME-sourced person is therefore dated against the property's last recorded SALE by
+`occupancy_evidence.assess_occupancy` BEFORE a queue row exists:
+
+  prior_occupant  -> NO ROW. Counted under `prior_occupant_dated_before_sale`, which
+                     appears in --stats, because each suppressed number is a DNC wash
+                     credit we would have paid for and a stranger we would have rung.
+  current_likely  -> row, scored up. ⚠ "not excluded", NOT "confirmed owner".
+  unknown         -> row, scored flat.
+
+Rows per address are capped (--max-per-address, default 2) and ordered by
+`rank_people`, so the strongest current-occupant candidate is the one that survives.
 
 Never prints real names or phone numbers — everything human-readable is masked.
 """
@@ -54,9 +71,17 @@ from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 # repo root on the path (this file lives two levels down)
-_REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_REPO = os.path.dirname(os.path.dirname(_HERE))
 sys.path.insert(0, _REPO)
 sys.path.insert(0, os.path.join(_REPO, "scripts"))
+sys.path.insert(0, _HERE)
+
+# Dating people against the property's last SALE — see occupancy_evidence.py.
+# ⚠ The inference is ASYMMETRIC: `prior_occupant` is strong evidence, `current_likely`
+# is weak ("not excluded", never "confirmed owner"). Everything downstream of this
+# import — the exclusion, the score term, the sheet label — is written to respect that.
+from occupancy_evidence import assess_occupancy, rank_people, last_sale  # noqa: E402
 
 AEST = ZoneInfo("Australia/Brisbane")
 
@@ -243,53 +268,110 @@ def editorial_violations(line: str) -> list[str]:
 # ─────────────────────────────────────────────────────────────────────────────
 # ID4ME consumption (read-only — never a lookup)
 # ─────────────────────────────────────────────────────────────────────────────
-def id4me_people(gc_doc: dict) -> list[dict]:
-    """Every (person, phone) pair carried on a property doc's ID4ME_Contact_Data.
+def _person_phone_rows(person: dict, blob: dict) -> list[dict]:
+    """Every dialable (person, phone) pair for ONE ID4ME person record."""
+    retrieved_at = blob.get("ID4ME_Retrieved_At")
+    gnaf = blob.get("ID4ME_GNAF_PID")
+    blocked = {re.sub(r"\D", "", str(b)) for b in (person.get("ID4ME_DNCR_Blocked") or [])}
+    has_dncr_detail = bool(person.get("ID4ME_DNCR_Detail"))
+    source_date = person.get("ID4ME_Source_Date_Latest") or blob.get("ID4ME_Most_Recent_Source_Date")
+    out = []
+    for raw in list(person.get("ID4ME_Mobiles") or []) + list(person.get("ID4ME_Landlines") or []):
+        norm = normalise_phone(raw)
+        if not norm:
+            continue
+        phone, ptype = norm
+        if phone in blocked or re.sub(r"\D", "", str(raw)) in blocked:
+            advisory = "blocked"
+        elif has_dncr_detail:
+            advisory = "clean"
+        else:
+            advisory = "unknown"
+        out.append({
+            "phone": phone, "phone_type": ptype,
+            "person_name": person.get("ID4ME_Full_Name") or "",
+            "first_name": person.get("ID4ME_First_Name") or "",
+            "suburb_hint": person.get("ID4ME_Suburb"),
+            "postcode": person.get("ID4ME_Postcode"),
+            "state": person.get("ID4ME_State") or "QLD",
+            "gnaf_pid": person.get("ID4ME_GNAF_PID") or gnaf,
+            "id4me_retrieved_at": retrieved_at,
+            "id4me_source_date_latest": source_date,
+            "record_age_years": years_since(source_date),
+            "id4me_advisory": advisory,
+        })
+    return out
+
+
+def id4me_people(gc_doc: dict, our_contacts: list | None = None,
+                 include_prior: bool = False, max_per_address: int = 2,
+                 occ: Counter | None = None) -> list[dict]:
+    """Every (person, phone) pair worth dialling at this address, best first.
 
     Verified against the ONE document in Gold_Coast that currently has this object
-    (20 Chantilly Place, Robina — 12 people, 47 raw records). Written defensively
-    because n=1: any missing key degrades to None rather than raising."""
+    (20 Chantilly Place, Robina — 12 people spanning 1997-2023, 47 raw records).
+    Written defensively because n=1: any missing key degrades to None rather than
+    raising.
+
+    Three things happen here that did not before, and all three exist because that
+    one sample has TWELVE people on it:
+
+    1. Every person is DATED against the property's last recorded sale
+       (occupancy_evidence.assess_occupancy). `prior_occupant` — the vendor's most
+       recent sighting of them predates a change of ownership — produces NO ROW. This
+       is the money filter: we pay per DNC wash credit, and the call itself would put
+       a stranger on the phone. `--include-prior` overrides it for analysis.
+    2. People are ordered by rank_people(), so the best current-occupant candidate is
+       reached first and the cap below bites on the weakest, not the strongest.
+    3. `max_per_address` caps how many ROWS one address may contribute. Dialling five
+       people at one house is the behaviour that gets us complained about — and the
+       cap is on rows, not people, because two numbers for one person is two calls to
+       that house just the same.
+
+    ⚠ The `current_likely` verdict is the WEAK direction of an asymmetric inference.
+    It means "not excluded", not "confirmed owner", and nothing here treats it as more.
+    """
     blob = gc_doc.get("ID4ME_Contact_Data") or {}
     if blob.get("ID4ME_Status") != "ok":
         return []
-    retrieved_at = blob.get("ID4ME_Retrieved_At")
-    gnaf = blob.get("ID4ME_GNAF_PID")
-    out = []
-    for person in blob.get("ID4ME_People") or []:
-        blocked = {re.sub(r"\D", "", str(b)) for b in (person.get("ID4ME_DNCR_Blocked") or [])}
-        has_dncr_detail = bool(person.get("ID4ME_DNCR_Detail"))
-        source_date = person.get("ID4ME_Source_Date_Latest") or blob.get("ID4ME_Most_Recent_Source_Date")
-        for raw in list(person.get("ID4ME_Mobiles") or []) + list(person.get("ID4ME_Landlines") or []):
-            norm = normalise_phone(raw)
-            if not norm:
-                continue
-            phone, ptype = norm
-            if phone in blocked or re.sub(r"\D", "", str(raw)) in blocked:
-                advisory = "blocked"
-            elif has_dncr_detail:
-                advisory = "clean"
-            else:
-                advisory = "unknown"
-            out.append({
-                "phone": phone, "phone_type": ptype,
-                "person_name": person.get("ID4ME_Full_Name") or "",
-                "first_name": person.get("ID4ME_First_Name") or "",
-                "suburb_hint": person.get("ID4ME_Suburb"),
-                "postcode": person.get("ID4ME_Postcode"),
-                "state": person.get("ID4ME_State") or "QLD",
-                "gnaf_pid": person.get("ID4ME_GNAF_PID") or gnaf,
-                "id4me_retrieved_at": retrieved_at,
-                "id4me_source_date_latest": source_date,
-                "record_age_years": years_since(source_date),
-                "id4me_advisory": advisory,
-            })
-    # de-duplicate identical numbers across people on the same address
+    occ = occ if occ is not None else Counter()
+
     seen, uniq = set(), []
-    for p in out:
-        if p["phone"] in seen:
+    suppressed_seen: set = set()
+    capped = 0
+    for ranked in rank_people(gc_doc, blob, our_contacts):
+        person, a = ranked["person"], ranked["assessment"]
+        rows = [p for p in _person_phone_rows(person, blob) if p["phone"] not in seen]
+        if not rows:
+            # No dialable number we do not already hold: nothing was suppressed by
+            # occupancy and no slot is consumed.
+            occ[f"no_new_phone_{a['verdict']}"] += 1
             continue
-        seen.add(p["phone"])
-        uniq.append(p)
+        if a["verdict"] == "prior_occupant" and not include_prior:
+            occ["prior_occupant_people"] += 1
+            # Count DISTINCT numbers, not raw rows: the count is read as "DNC wash
+            # credits not spent", and we would only ever have washed a number once.
+            new = {p["phone"] for p in rows} - suppressed_seen
+            suppressed_seen |= new
+            occ["prior_occupant_rows_suppressed"] += len(new)
+            continue
+        if max_per_address and len(uniq) >= max_per_address:
+            capped += len(rows)
+            continue
+        occ[a["verdict"]] += 1
+        for p in rows:
+            if p["phone"] in seen:
+                # One person can carry the same number twice (two raw landline
+                # records normalising to one). The pre-filter above cannot catch
+                # that — it runs before any of THIS person's numbers are seen.
+                continue
+            if max_per_address and len(uniq) >= max_per_address:
+                capped += 1
+                continue
+            seen.add(p["phone"])
+            p["occupancy"] = a
+            uniq.append(p)
+    occ["rows_capped_by_max_per_address"] += capped
     return uniq
 
 
@@ -483,9 +565,44 @@ SUBURB_FRESHNESS_WEIGHT = {"robina": 0.10, "burleigh_waters": 0.05, "varsity_lak
 TRACK_BASE = {"A_warm": 0.45, "B_intent": 0.30, "C_openmarket": 0.10}
 
 
+# ── the occupancy-evidence term ──────────────────────────────────────────────
+# Whether the person still LIVES there is a better predictor of a useful
+# conversation than tenure, phone type or suburb, so it is weighted above all of
+# them. It is deliberately NOT weighted above record_freshness (max 0.30):
+#
+#   1. The two are partly the same measurement. Both are driven by
+#      ID4ME_Source_Date_Latest; letting occupancy dominate would double-count one
+#      date and let a 2011 record ride a `current_likely` verdict to the top of the
+#      list purely because the house last sold in 2009.
+#   2. `current_likely` is the WEAK direction of an asymmetric inference (see the
+#      occupancy_evidence docstring). A signal that cannot confirm should not be the
+#      largest term in the score. The STRONG direction — `prior_occupant` — is not
+#      expressed as a penalty at all; it removes the row entirely, upstream.
+#
+# So: current_likely 0.10-0.25 (scaled by its own confidence, so a 0.5 does not buy
+# what a 0.9 buys), unknown 0.03, and the -0.25 for prior_occupant is only ever
+# reachable under --include-prior, where it must not out-rank a real candidate.
+OCCUPANCY_WEIGHT_BASE = 0.10
+OCCUPANCY_WEIGHT_CONF = 0.15
+OCCUPANCY_WEIGHT_UNKNOWN = 0.03
+OCCUPANCY_WEIGHT_PRIOR = -0.25
+
+
+def occupancy_score(assessment: dict | None) -> float:
+    if not assessment:
+        return 0.0                                  # Track A: never assessed
+    verdict = assessment.get("verdict")
+    conf = assessment.get("confidence") or 0.0
+    if verdict == "current_likely":
+        return round(OCCUPANCY_WEIGHT_BASE + OCCUPANCY_WEIGHT_CONF * conf, 4)
+    if verdict == "prior_occupant":
+        return OCCUPANCY_WEIGHT_PRIOR
+    return OCCUPANCY_WEIGHT_UNKNOWN
+
+
 def score_candidate(track: str, suburb: str, phone_type: str, record_age_years: float | None,
                     years_held: float | None, occupancy_type: str | None,
-                    advisory: str) -> tuple[float, dict]:
+                    advisory: str, occupancy_assessment: dict | None = None) -> tuple[float, dict]:
     parts = {"track_base": TRACK_BASE.get(track, 0.0)}
     parts["phone_type"] = 0.12 if phone_type == "mobile" else 0.0
     if record_age_years is None:
@@ -498,6 +615,9 @@ def score_candidate(track: str, suburb: str, phone_type: str, record_age_years: 
     else:
         parts["tenure"] = round(0.15 * min(1.0, years_held / 15.0), 4)
     parts["occupancy"] = 0.08 if occupancy_type == "owner_occupier" else 0.0
+    # Is this PERSON still at the address (occupancy_evidence), as distinct from
+    # `occupancy` above, which is whether the PROPERTY is owner-occupied or tenanted.
+    parts["occupancy_evidence"] = occupancy_score(occupancy_assessment)
     # ID4ME's DNC flag buys us no legal defence (ACMA IS 157) but it is still the
     # best available signal that a wash will reject the number — deprioritise, do
     # not drop, because dnc_wash.py is the only thing entitled to decide.
@@ -523,6 +643,11 @@ class Excluded:
             "unresolved_address": "address did not resolve to a Gold_Coast property document",
             "no_dialable_phone": "no AU-format mobile or landline could be normalised",
             "no_id4me_data": "no ID4ME_Contact_Data on the property document (human-paced append pending)",
+            "prior_occupant_dated_before_sale":
+                "occupancy_evidence: ID4ME last saw this person at the address BEFORE it "
+                "last sold — a previous occupant. Counted in dialable numbers suppressed, "
+                "because each one is a DNC wash credit we would have paid for and a "
+                "stranger we would have phoned (--include-prior to keep them)",
         }
 
     def hit(self, key, n=1):
@@ -564,6 +689,116 @@ def occupancy_for_doc(gc_doc: dict) -> dict:
     if not gc_doc:
         return occ.classify_from_timeline([])
     return occ.classify_from_timeline(occ.normalise_stored_timeline(gc_doc))
+
+
+class ContactHistory:
+    """When did anyone at THIS address engage with US? Keyed by address_slug.
+
+    This is the `our_contacts` argument to assess_occupancy. It matters because
+    ID4ME's own contact-recency fields are all empty (verified 2026-08-15 — see the
+    occupancy_evidence docstring), so "date of last contact" can only come from our
+    own records. Ours is better evidence anyway: we know exactly what it means.
+
+    ⚠ It is an ADDRESS-level signal, not a person-level one. Somebody at this address
+    used our site; it does not identify WHICH of the twelve names ID4ME lists. It can
+    raise the floor on a verdict; it can never confirm an individual, and
+    assess_occupancy is written that way.
+
+    ⚠ CLAUDE.md Rule 8 — every path below was confirmed with
+    `python3 scripts/db_fields.py system_monitor <collection>` before it was queried,
+    with its fill count:
+      lead_worklist.address            400/400 (100%)   .last_seen 370/400 (92%)
+      lead_worklist.first_seen         400/400 (100%)   .seller_intent.behavioral.last_seen 100%
+      analyse_leads.address             11/11  (100%)   .submitted_at_date 11/11 (100%)
+      property_reports.address         105/106 (99%)    .slug 106/106  .created_at 75/106 (71%)
+      property_reports.messages[].sender / .created_at  74/106 (70%)  (values: agent|seller)
+      offmarket_report_requests.slug   400/400 (100%)   .requested_at 100%  .source 100%
+
+    ⚠ NOT WIRED — `system_monitor.call_outcomes` and `system_monitor.call_activity`
+    are BOTH EMPTY (0 documents; call_outcomes is not even a created collection yet —
+    no call has been made). A prior call outcome would be the strongest possible
+    signal here, and it is deliberately left out rather than coded against guessed
+    field names. Wire it after the first round of calls, when the documents exist and
+    their shape can be read instead of assumed.
+    """
+
+    # `prewarm` (7,303 docs) and `test` are OUR OWN precompute, not a human opening a
+    # page — counting them as contact would mark every off-market address "engaged".
+    _OFFMARKET_MACHINE_SOURCES = {"prewarm", "test", None, ""}
+
+    def __init__(self, sm_db):
+        self.by_slug: dict[str, list[dict]] = {}
+        self.sources_loaded = Counter()
+        self.call_outcomes_available = False   # see the class docstring
+        self._load(sm_db)
+
+    def _add(self, address_or_slug: str, date, kind: str, detail: str = ""):
+        if not date:
+            return
+        slug = address_slug(address_or_slug) if " " in (address_or_slug or "") \
+            else (address_or_slug or "").strip().lower()
+        if not slug:
+            return
+        self.by_slug.setdefault(slug, []).append(
+            {"date": date, "kind": kind, "detail": detail})
+        self.sources_loaded[kind] += 1
+
+    def _load(self, sm_db):
+        # 1. lead_worklist — the address was searched / the off-market page opened.
+        for d in sm_db.lead_worklist.find(
+                {}, {"address": 1, "last_seen": 1, "first_seen": 1, "is_test": 1,
+                     "sources": 1, "seller_intent.behavioral.last_seen": 1}):
+            if d.get("is_test") or not d.get("address"):
+                continue
+            det = ",".join(sorted(d.get("sources") or []))[:120]
+            self._add(d["address"], d.get("last_seen"), "lead_worklist_last_seen", det)
+            self._add(d["address"], d.get("first_seen"), "lead_worklist_first_seen", det)
+            beh = ((d.get("seller_intent") or {}).get("behavioral") or {}).get("last_seen")
+            self._add(d["address"], beh, "behavioral_last_seen", det)
+
+        # 2. analyse_leads — they typed the address into /analyse-your-home themselves.
+        for d in sm_db.analyse_leads.find({}, {"address": 1, "submitted_at_date": 1,
+                                               "submitted_at": 1, "source": 1}):
+            if not d.get("address") or d["address"].strip().lower() in ("test", ""):
+                continue
+            self._add(d["address"], d.get("submitted_at_date") or d.get("submitted_at"),
+                      "analyse_your_home_form", str(d.get("source") or ""))
+
+        # 3. property_reports — a report was requested for this address, and any
+        #    message the SELLER (not us) sent back through it.
+        for d in sm_db.property_reports.find({}, {"address": 1, "slug": 1, "created_at": 1,
+                                                  "is_test": 1, "source": 1,
+                                                  "messages.sender": 1,
+                                                  "messages.created_at": 1}):
+            if d.get("is_test") or d.get("source") == "diagnostic_test":
+                continue
+            key = d.get("address") or d.get("slug") or ""
+            if not key or d.get("slug") in TEST_SLUGS:
+                continue
+            self._add(key, d.get("created_at"), "property_report_requested",
+                      str(d.get("source") or ""))
+            for m in d.get("messages") or []:
+                if m.get("sender") == "seller":
+                    self._add(key, m.get("created_at"), "seller_message")
+
+        # 4. offmarket_report_requests — only visitor-triggered builds.
+        for d in sm_db.offmarket_report_requests.find(
+                {"source": {"$nin": list(self._OFFMARKET_MACHINE_SOURCES)}},
+                {"slug": 1, "requested_at": 1, "source": 1}):
+            self._add(d.get("slug") or "", d.get("requested_at"),
+                      "offmarket_report_request", str(d.get("source") or ""))
+
+    def for_address(self, address: str) -> list[dict]:
+        """[] means "we have no record of this household engaging with us" — which is
+        the normal case for Track C, not a failure."""
+        return self.by_slug.get(address_slug(address), [])
+
+    def report(self) -> list[str]:
+        out = [f"  {n:>6}  {k}" for k, n in self.sources_loaded.most_common()]
+        out.append("       0  prior_call_outcome — system_monitor.call_outcomes is EMPTY "
+                   "(no call has been made yet); deliberately not queried rather than "
+                   "coded against guessed field names")
+        return out
 
 
 def collect_track_a(sm_db, ex: Excluded) -> list[dict]:
@@ -695,11 +930,17 @@ def collect_track_c_addresses(gc_db, suburbs, known_slugs: set, limit: int) -> l
     return out
 
 
-def property_rows(gc_db, ctx, track, addresses, ex: Excluded, stats: Counter) -> list[dict]:
+def property_rows(gc_db, ctx, track, addresses, ex: Excluded, stats: Counter,
+                  contacts: "ContactHistory | None" = None,
+                  include_prior: bool = False, max_per_address: int = 2,
+                  occ_counts: Counter | None = None) -> list[dict]:
     """Turn address-level candidates (B or C) into (address, phone) rows.
 
     Every exclusion is counted so --stats can say honestly how many candidates are
-    blocked on the ID4ME append versus genuinely unusable."""
+    blocked on the ID4ME append versus genuinely unusable — and, since the occupancy
+    module landed, how many people were dated to BEFORE the property last sold and
+    therefore never became a row at all."""
+    occ_counts = occ_counts if occ_counts is not None else Counter()
     rows = []
     for cand in addresses:
         gc_doc = cand.get("_doc")
@@ -717,8 +958,31 @@ def property_rows(gc_db, ctx, track, addresses, ex: Excluded, stats: Counter) ->
             ex.hit("tenanted_investor")
             continue
         stats["candidates_considered"] += 1
-        people = id4me_people(gc_doc)
+        # Our own engagement history for this address — an ADDRESS-level signal that
+        # can raise the floor on a verdict, never confirm an individual.
+        our_contacts = contacts.for_address(gc_doc.get("address") or cand["address"]) \
+            if contacts else []
+        if our_contacts:
+            stats["addresses_with_our_contact"] += 1
+        has_id4me = bool((gc_doc.get("ID4ME_Contact_Data") or {}).get("ID4ME_People"))
+        if has_id4me:
+            # Counted so "everything was excluded as a prior occupant" can never be
+            # confused with "we found nothing" (Rule 7b, applied to a read).
+            stats["people_assessed"] += len(gc_doc["ID4ME_Contact_Data"]["ID4ME_People"])
+            stats["sale_known" if last_sale(gc_doc)[0] else "no_sale_recorded"] += 1
+        before = occ_counts["prior_occupant_rows_suppressed"]
+        people = id4me_people(gc_doc, our_contacts=our_contacts,
+                              include_prior=include_prior,
+                              max_per_address=max_per_address, occ=occ_counts)
+        suppressed = occ_counts["prior_occupant_rows_suppressed"] - before
+        if suppressed:
+            ex.hit("prior_occupant_dated_before_sale", suppressed)
         if not people:
+            if has_id4me and suppressed:
+                # NOT "no ID4ME data" — we had data, dated it, and every dialable
+                # person predates the last sale. A real, reportable outcome.
+                stats["all_people_prior_occupants"] += 1
+                continue
             ex.hit("no_id4me_data")
             stats["blocked_on_id4me"] += 1
             cand["_needs_id4me"] = True
@@ -740,6 +1004,10 @@ def property_rows(gc_db, ctx, track, addresses, ex: Excluded, stats: Counter) ->
                 "lead_signals": cand.get("lead_signals") or [],
                 "facts": facts, "hook": hook,
                 "occupancy_type": occ_res.get("type"),
+                # Full assessment, stored so the sheet can label the row and so a
+                # verdict can be argued with later. call_list_to_sheet.build_row reads
+                # occupancy.verdict / occupancy.confidence — that contract exactly.
+                "occupancy": p.get("occupancy"),
                 "source_ref": cand["source_ref"],
                 **{k: p[k] for k in ("phone", "phone_type", "person_name", "first_name",
                                      "gnaf_pid", "id4me_retrieved_at",
@@ -784,9 +1052,15 @@ def upsert_rows(coll, rows: list[dict], dry_run: bool) -> dict:
             "hook": r["hook"], "property": r["facts"],
             "occupancy_type": r.get("occupancy_type"),
             "lead_signals": r.get("lead_signals") or [],
+            # `occupancy` (the person-level occupancy_evidence assessment) is written
+            # only when we HAVE one. A Track A row was never assessed, and writing
+            # None would render as "not assessed" — true — but would also overwrite a
+            # real assessment on a re-run that happened to lose its ID4ME data.
             "source_ref": r.get("source_ref"),
             "updated_at": now_utc(),
         }
+        if r.get("occupancy"):
+            mutable["occupancy"] = r["occupancy"]
         if r.get("consent"):
             mutable["consent"] = r["consent"]
         if dry_run:
@@ -812,6 +1086,9 @@ def do_build(gc_db, sm_db, args, beat) -> dict:
     ctx = HookContext(gc_db)
     ex = Excluded()
     stats = Counter()
+    occ_counts = Counter()
+    contacts = ContactHistory(sm_db)
+    max_per_address = args.max_per_address if args.max_per_address is not None else 2
     tracks = {"A": "A_warm", "B": "B_intent", "C": "C_openmarket"}
     wanted = [tracks[args.track]] if args.track else list(tracks.values())
     suburbs = [args.suburb] if args.suburb else CORE_SUBURBS
@@ -853,7 +1130,8 @@ def do_build(gc_db, sm_db, args, beat) -> dict:
         if args.suburb:
             b_addresses = [a for a in b_addresses if a["suburb"] == args.suburb]
     if "B_intent" in wanted:
-        b_rows = property_rows(gc_db, ctx, "B_intent", b_addresses, ex, stats)
+        b_rows = property_rows(gc_db, ctx, "B_intent", b_addresses, ex, stats,
+                               contacts, args.include_prior, max_per_address, occ_counts)
         stats["track_b_rows"] = len(b_rows)
         rows += b_rows
         needs_id4me += [a for a in b_addresses if a.get("_needs_id4me")]
@@ -861,7 +1139,8 @@ def do_build(gc_db, sm_db, args, beat) -> dict:
     if "C_openmarket" in wanted:
         known = {address_slug(a["address"]) for a in b_addresses}
         c_addresses = collect_track_c_addresses(gc_db, suburbs, known, args.limit or 0)
-        c_rows = property_rows(gc_db, ctx, "C_openmarket", c_addresses, ex, stats)
+        c_rows = property_rows(gc_db, ctx, "C_openmarket", c_addresses, ex, stats,
+                               contacts, args.include_prior, max_per_address, occ_counts)
         stats["track_c_rows"] = len(c_rows)
         rows += c_rows
 
@@ -869,7 +1148,7 @@ def do_build(gc_db, sm_db, args, beat) -> dict:
         r["score"], r["score_parts"] = score_candidate(
             r["track"], r["suburb"], r["phone_type"], r.get("record_age_years"),
             (r.get("facts") or {}).get("years_held"), r.get("occupancy_type"),
-            r.get("id4me_advisory") or "unknown")
+            r.get("id4me_advisory") or "unknown", r.get("occupancy"))
     rows.sort(key=lambda r: r["score"], reverse=True)
     if args.limit:
         rows = rows[: args.limit]
@@ -884,12 +1163,25 @@ def do_build(gc_db, sm_db, args, beat) -> dict:
     #     append" -> SUCCESS. The append is a documented manual gate, not a bug.
     #   * "we held ID4ME data for N properties and extracted zero phone rows" ->
     #     FAILURE. That is our parsing, not an empty upstream.
+    #   * "we held ID4ME data and every person on it dated to before the last sale"
+    #     -> SUCCESS, and a DIFFERENT fact from either of the above. It must be
+    #     distinguishable, or the filter that saves the money looks like the bug.
     considered = stats["candidates_considered"]
     with_id4me = stats["with_id4me"]
-    if with_id4me > 0 and stats["track_b_rows"] + stats["track_c_rows"] == 0:
+    prior_suppressed = ex.counts["prior_occupant_dated_before_sale"]
+    if stats["people_assessed"] > 0 and sum(
+            v for k, v in occ_counts.items()
+            if k in ("current_likely", "unknown", "prior_occupant", "prior_occupant_people")
+            or k.startswith("no_new_phone_")) == 0:
+        raise RuntimeError(
+            f"{stats['people_assessed']} ID4ME people were read but occupancy_evidence "
+            f"returned a verdict for none of them — the assessment is broken, not empty.")
+    if with_id4me > 0 and stats["track_b_rows"] + stats["track_c_rows"] == 0 \
+            and prior_suppressed == 0:
         raise RuntimeError(
             f"{with_id4me} propert{'ies' if with_id4me != 1 else 'y'} carried ID4ME_Contact_Data "
-            f"but produced 0 queue rows — phone extraction is broken, not empty upstream.")
+            f"but produced 0 queue rows, and none were suppressed as prior occupants — "
+            f"phone extraction is broken, not empty upstream.")
     if considered > 0 and not rows and stats["blocked_on_id4me"] == 0:
         raise RuntimeError(
             f"{considered} candidates were considered and 0 queue rows produced, with none blocked "
@@ -906,10 +1198,22 @@ def do_build(gc_db, sm_db, args, beat) -> dict:
         "excluded_s21": ex.counts["s21_listing_expiry"],
         "excluded_currently_listed": ex.counts["currently_listed"],
         "excluded_investor": ex.counts["tenanted_investor"],
+        # occupancy_evidence — people, not rows, except where named otherwise
+        "people_assessed": stats["people_assessed"],
+        "occ_current_likely": occ_counts["current_likely"],
+        "occ_unknown": occ_counts["unknown"],
+        "occ_prior_occupant_people": occ_counts["prior_occupant_people"],
+        "occ_prior_rows_suppressed": prior_suppressed,
+        "occ_addresses_all_prior": stats["all_people_prior_occupants"],
+        "rows_capped_by_max_per_address": occ_counts["rows_capped_by_max_per_address"],
+        "addresses_with_our_contact": stats["addresses_with_our_contact"],
+        "include_prior": bool(args.include_prior),
+        "max_per_address": max_per_address,
         "dry_run": bool(args.dry_run),
     }
     beat.detail = (f"{len(rows)} row(s) queued ({write['inserted']} new); "
-                   f"{stats['blocked_on_id4me']} candidates blocked on ID4ME append")
+                   f"{stats['blocked_on_id4me']} candidates blocked on ID4ME append; "
+                   f"{prior_suppressed} number(s) suppressed as prior occupants")
 
     print(f"\nBuild — {now_aest_str()}{'  [DRY RUN]' if args.dry_run else ''}")
     print(f"  candidates considered : {considered}")
@@ -919,6 +1223,29 @@ def do_build(gc_db, sm_db, args, beat) -> dict:
           f"{write['skipped_terminal']} left alone (terminal status)")
     print(f"  blocked on ID4ME      : {stats['blocked_on_id4me']}  "
           f"(run --needs-id4me for the human-paced append list)")
+    print(f"\nOccupancy evidence (occupancy_evidence.py — dated against the last SALE)"
+          f"{'  [--include-prior: prior occupants KEPT]' if args.include_prior else ''}")
+    print(f"  people assessed       : {stats['people_assessed']}   "
+          f"(on {stats['sale_known']} propert{'y' if stats['sale_known'] == 1 else 'ies'} "
+          f"with a recorded sale, {stats['no_sale_recorded']} without — no sale means no "
+          f"verdict is possible, only 'unknown')")
+    print(f"  current_likely        : {occ_counts['current_likely']}  "
+          f"⚠ 'not excluded', NEVER 'confirmed owner' — the weak direction of the inference")
+    print(f"  unknown               : {occ_counts['unknown']}")
+    print(f"  prior_occupant        : "
+          f"{occ_counts['prior_occupant_people'] + occ_counts['prior_occupant']} people → "
+          f"{prior_suppressed} dialable number(s) "
+          f"{'KEPT (--include-prior)' if args.include_prior else 'SUPPRESSED'} — "
+          f"{prior_suppressed} DNC wash credit(s) not spent")
+    print(f"  addresses fully prior : {stats['all_people_prior_occupants']}  "
+          f"(had ID4ME data; every dialable person predates the last sale — NOT the same "
+          f"as 'no data')")
+    print(f"  rows capped           : {occ_counts['rows_capped_by_max_per_address']} "
+          f"(--max-per-address {max_per_address})")
+    print(f"  our own contact known : {stats['addresses_with_our_contact']} address(es)")
+    print("  our_contacts sources loaded:")
+    for line in contacts.report():
+        print(line)
     print("\nExclusions (named, never silent):")
     for line in ex.report():
         print(line)
@@ -927,7 +1254,8 @@ def do_build(gc_db, sm_db, args, beat) -> dict:
         for r in rows[:10]:
             print(f"  {r['score']:.3f}  {r['track']:<12} {r['suburb'] or '-':<16} "
                   f"{mask_name(r.get('person_name'))!s:<10} {mask_phone(r['phone'])} "
-                  f"({r['phone_type']}, age {r.get('record_age_years')})")
+                  f"({r['phone_type']}, age {r.get('record_age_years')}, "
+                  f"occ {(r.get('occupancy') or {}).get('verdict', 'not assessed')})")
             print(f"          hook: {r['hook']['line'][:150]}")
     return {"rows": rows, "needs_id4me": needs_id4me, "excluded": ex, "stats": stats}
 
@@ -974,6 +1302,30 @@ def do_stats(sm_db):
     else:
         print("\n  BLOCKED ON ID4ME APPEND: unknown — build_call_list has no heartbeat yet "
               "(run --build). Not reported as zero.")
+
+    # ── Occupancy split (occupancy_evidence.py) ─────────────────────────────────
+    # Two halves that must never be conflated: what IS in the queue, read from the
+    # queue; and what was KEPT OUT as a prior occupant, which by definition has no
+    # row and can only come from the last build's heartbeat.
+    print("\n  Occupancy (is this person still at the address?):")
+    agg = list(coll.aggregate([{"$group": {"_id": "$occupancy.verdict", "n": {"$sum": 1}}},
+                               {"$sort": {"n": -1}}]))
+    label = {"current_likely": "current_likely  (⚠ 'not excluded', not 'confirmed owner')",
+             "unknown": "unknown", "prior_occupant": "prior_occupant  (⚠ kept via --include-prior)",
+             None: "not assessed  (Track A / pre-occupancy rows — no ID4ME person to date)"}
+    for a in agg:
+        print(f"    {a['n']:>6}  {label.get(a['_id'], a['_id'])}")
+    if hb and "occ_prior_rows_suppressed" in m:
+        print(f"    {m['occ_prior_rows_suppressed']:>6}  prior_occupant EXCLUDED at the last "
+              f"build ({hb.get('run_at')}) — {m['occ_prior_rows_suppressed']} dialable number(s) "
+              f"across {m.get('occ_prior_occupant_people')} people never became rows, from "
+              f"{m.get('people_assessed')} people assessed. {m.get('occ_addresses_all_prior')} "
+              f"address(es) lost EVERY person that way — which is a result, not an empty run.")
+        print(f"    {m.get('rows_capped_by_max_per_address', 0):>6}  rows dropped by "
+              f"--max-per-address {m.get('max_per_address')} (one household, one call)")
+    else:
+        print("         ?  prior_occupant exclusions: unknown — no build heartbeat carries "
+              "them yet (run --build). Not reported as zero.")
 
     no_hook = coll.count_documents({"hook.line": ""})
     if no_hook:
@@ -1046,6 +1398,14 @@ def main():
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--out", help="--needs-id4me: TSV output path")
     ap.add_argument("--dry-run", action="store_true", help="--build: compute but never write")
+    ap.add_argument("--include-prior", action="store_true",
+                    help="--build: KEEP people occupancy_evidence dates to before the last "
+                         "sale. Off by default: each one is a paid DNC wash credit and a "
+                         "stranger on the phone. For testing/analysis only.")
+    ap.add_argument("--max-per-address", type=int, default=None,
+                    help="--build: cap queue rows per address (default 2). ID4ME lists up to "
+                         "12 people at one house; dialling five of them is what gets us "
+                         "complained about. 0 disables the cap.")
     args = ap.parse_args()
 
     if not (args.build or args.stats or args.needs_id4me):
