@@ -1,0 +1,32 @@
+# Podcast feeds ingested into Brain 1.
+#
+# Discovery is RSS-only and needs no credentials: Spotify show pages have no
+# public transcript or episode API, but every Spotify-hosted show also exposes
+# an open RSS feed carrying the full episode list and a direct audio enclosure.
+# Resolve a Spotify show URL to its feed with the iTunes lookup API:
+#
+#   curl -s "https://itunes.apple.com/search?term=<show name>&entity=podcast" \
+#     | python3 -c "import sys,json;[print(r['collectionName'],r['feedUrl']) for r in json.load(sys.stdin)['results']]"
+#
+# `library` is the Brain 1 provenance label and MUST be stable — it is written
+# into every unit header and is how the graph attributes a claim to a source.
+
+feeds:
+  - library: "Bothsides Podcast (AU)"
+    slug: bothsides
+    country: Australia
+    spotify_show: "3wNWmFad9vzMqAwHfNaNzT"
+    rss: "https://anchor.fm/s/69c3076c/podcast/rss"
+    # Business / wealth / mindset interviews, Australian, property-heavy.
+    # Directly relevant to the seller/agent side.
+    max_backfill: 500
+    # `hosts` is the standing speaker roster. It is passed to the transcriber so
+    # speaker turns are labelled with real names instead of blind "Speaker A"
+    # diarization, which cannot stay consistent across audio segments. Guests are
+    # extracted per episode from the title and description and appended.
+    # Only names on the roster may be used — the transcriber is instructed to
+    # emit "Unknown:" rather than invent one.
+    hosts:
+      - "Daniel Beardall"    # Bothsides Buyers Agency
+      - "Kevin Buchanan"     # Manor Real Estate
+      - "Josh Morrissey"
