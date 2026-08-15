@@ -112,6 +112,10 @@ MAX_SPLIT_DEPTH = 3          # 10min -> 5 -> 2.5 -> 1.25min before giving up
 SEGMENT_UNIQ_MIN = 0.75      # per ASR call -> triggers a split
 EPISODE_UNIQ_MIN = 0.85      # whole transcript -> refuses to store
 ASR_MODEL = os.environ.get("PODCAST_ASR_MODEL", "gemini-2.5-flash")
+# Used only when splitting has failed at every depth. A repetition loop is a
+# property of one model's decoding on one piece of audio, so a different model is
+# the move once re-cutting the input has stopped working. Set empty to disable.
+ASR_FALLBACK_MODEL = os.environ.get("PODCAST_ASR_FALLBACK_MODEL", "gemini-2.5-pro")
 VERTEX_PROJECT = os.environ.get("VERTEX_PROJECT_ID", "fields-estate")
 VERTEX_REGION = os.environ.get("VERTEX_REGION", "global")
 MIN_FREE_DISK_MB = 1500      # refuse to start an episode below this
@@ -312,15 +316,17 @@ class TruncatedResponse(RuntimeError):
     """
 
 
-def _vertex_generate(parts, max_tokens=32768, attempt_budget=4):
+def _vertex_generate(parts, max_tokens=32768, attempt_budget=4, model=None):
     """POST one generateContent call to Vertex, with retry on transient status."""
+    model = model or ASR_MODEL
     host = ("aiplatform.googleapis.com" if VERTEX_REGION == "global"
             else f"{VERTEX_REGION}-aiplatform.googleapis.com")
     url = (f"https://{host}/v1/projects/{VERTEX_PROJECT}/locations/{VERTEX_REGION}"
-           f"/publishers/google/models/{ASR_MODEL}:generateContent")
-    body = {"contents": [{"role": "user", "parts": parts}],
-            "generationConfig": {"maxOutputTokens": max_tokens, "temperature": 0,
-                                 "thinkingConfig": {"thinkingBudget": 0}}}
+           f"/publishers/google/models/{model}:generateContent")
+    gen = {"maxOutputTokens": max_tokens, "temperature": 0}
+    if "flash" in model:   # pro rejects thinkingBudget=0
+        gen["thinkingConfig"] = {"thinkingBudget": 0}
+    body = {"contents": [{"role": "user", "parts": parts}], "generationConfig": gen}
     last = None
     for attempt in range(attempt_budget):
         try:
@@ -421,7 +427,7 @@ def _audio_duration(path):
         return 0.0
 
 
-def _asr_segment(path, roster, context, depth=0):
+def _asr_segment(path, roster, context, depth=0, model=None):
     """Transcribe one audio segment with speaker labels.
 
     On truncation, halve the audio and recurse rather than retrying. The model
@@ -438,7 +444,7 @@ def _asr_segment(path, roster, context, depth=0):
             {"inline_data": {"mime_type": "audio/mpeg", "data": data}},
             {"text": f"{_asr_prompt(roster)}\n\nContext (for names and jargon only, "
                      f"do not transcribe this line): {context}"},
-        ])
+        ], model=model)
         if txt.strip() == "[no speech]":
             return ""
         uniq = _shingle_uniqueness(txt)
@@ -448,26 +454,40 @@ def _asr_segment(path, roster, context, depth=0):
         return txt
     except (TruncatedResponse, DegenerateResponse) as e:
         dur = _audio_duration(path)
-        if depth >= MAX_SPLIT_DEPTH or dur < 60:
-            # Give up rather than return a partial or looped transcript: a silent
-            # gap (or 20 repetitions) in the middle of an episode is worse than a
-            # visibly failed episode.
-            raise
-        half = dur / 2
-        _log(f"    {type(e).__name__} at {dur/60:.1f}m (depth {depth}) — splitting in half")
-        out = []
-        for i, (ss, t) in enumerate([(0, half), (half, dur - half)]):
-            piece = f"{path}.d{depth}p{i}.mp3"
-            subprocess.run(
-                ["ffmpeg", "-nostdin", "-loglevel", "error", "-ss", f"{ss:.3f}",
-                 "-t", f"{t:.3f}", "-i", path, "-c", "copy", piece],
-                check=True, timeout=600)
+        can_split = depth < MAX_SPLIT_DEPTH and dur >= 60
+        if can_split:
+            half = dur / 2
+            _log(f"    {type(e).__name__} at {dur/60:.1f}m (depth {depth}) — splitting in half")
             try:
-                out.append(_asr_segment(piece, roster, context, depth + 1))
-            finally:
-                if os.path.exists(piece):
-                    os.remove(piece)
-        return "\n\n".join(x for x in out if x)
+                out = []
+                for i, (ss, t) in enumerate([(0, half), (half, dur - half)]):
+                    piece = f"{path}.d{depth}p{i}.mp3"
+                    subprocess.run(
+                        ["ffmpeg", "-nostdin", "-loglevel", "error", "-ss", f"{ss:.3f}",
+                         "-t", f"{t:.3f}", "-i", path, "-c", "copy", piece],
+                        check=True, timeout=600)
+                    try:
+                        out.append(_asr_segment(piece, roster, context, depth + 1, model))
+                    finally:
+                        if os.path.exists(piece):
+                            os.remove(piece)
+                return "\n\n".join(x for x in out if x)
+            except (TruncatedResponse, DegenerateResponse):
+                # Splitting did not rescue it. Fall through to the model swap
+                # below — but only at the top, so one stubborn episode costs a
+                # single pro-tier pass rather than one per failed leaf.
+                if not (depth == 0 and model is None and ASR_FALLBACK_MODEL):
+                    raise
+        # Last resort: a DIFFERENT model. Re-cutting the audio has stopped
+        # helping, but a repetition loop is a property of THIS model's decoding on
+        # THIS audio; another model does not inherit it.
+        if depth == 0 and model is None and ASR_FALLBACK_MODEL:
+            _log(f"    unrecoverable by splitting — retrying on {ASR_FALLBACK_MODEL}")
+            return _asr_segment(path, roster, context, depth=0,
+                                model=ASR_FALLBACK_MODEL)
+        # Give up rather than return a partial or looped transcript: a silent gap
+        # (or 20 repetitions) mid-episode is worse than a visibly failed episode.
+        raise
 
 
 def _canonical_speakers(text, roster):
