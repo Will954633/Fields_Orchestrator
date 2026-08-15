@@ -466,6 +466,7 @@ def resolve_dynamic_case_study(
     price_anchor: Optional[int] = None,
     catchment: Optional[List[str]] = None,
     today: Optional[dt.date] = None,
+    skip_narrative: bool = False,
 ) -> Optional[Dict[str, Any]]:
     """CS0 resolver. Returns the `case_studies.dynamic` dict, or None to hide."""
     subject = cm._subject_profile(subject_doc, features_basic, price_anchor)
@@ -576,7 +577,12 @@ def resolve_dynamic_case_study(
     except Exception as e:
         logger.warning(f"  cs0 exhibits failed (card ships data-only): {e}")
     try:
-        narrative = _draft_owner_narrative(subject, subject_doc, out)
+        # `skip_narrative` is the no_llm path: the card is designed to ship
+        # data-only (selection, fact-gating and exhibits are all
+        # deterministic), and the prose is the ONLY model call in it. Without
+        # this the whole card was skipped in no_llm mode, losing a verified
+        # comparable sale for the sake of a paragraph.
+        narrative = None if skip_narrative else _draft_owner_narrative(subject, subject_doc, out)
         if narrative:
             out["narrative"] = narrative
     except Exception as e:

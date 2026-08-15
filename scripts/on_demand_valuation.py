@@ -584,6 +584,28 @@ def run_precompute_valuation(db, doc, suburb_key, sold_by_suburb,
     return valuation_data
 
 
+# Fields excluded when loading a sold record to use as a COMPARABLE. Measured
+# 2026-08-15: a sold doc averages 128 KB, and a single on-demand valuation was
+# pulling 2,264 of them — 164 MB over the wire, ~22 s — for a computation that
+# needs the sale price and a handful of attributes.
+#
+# ⚠ EXCLUSION, not a whitelist. A whitelist risks silently dropping an input the
+# engine reads and changing valuations without anyone noticing; excluding only
+# fields that are provably inert as a comparable cannot. Everything the engine
+# reads for a comp — `property_valuation_data` (the photo attributes),
+# `valuation_data`, `satellite_analysis`, sale price, dates, geometry — is KEPT.
+_COMP_EXCLUDE_FIELDS = {
+    "floor_plans_v2_classifier": 0,   # 22% of the payload; classifier output
+    "scraped_data": 0,                # raw scrape blobs, superseded by parsed fields
+    "scraped_data_v2": 0,
+    "scraped_data_apr01_recovered": 0,
+    "property_images": 0,             # image arrays; never read for a comparable
+    "property_images_original": 0,
+    "domain_image_urls": 0,
+    "ai_analysis": 0,                 # editorial prose
+}
+
+
 def _load_sold_comparables_scoped(client, target_suburbs):
     """Load sold comparables from only the specified suburbs (fast for on-demand)."""
     result = {}
@@ -601,7 +623,7 @@ def _load_sold_comparables_scoped(client, target_suburbs):
             docs = list(gc_db[suburb_key].find({
                 'listing_status': 'sold',
                 'sale_price': {'$exists': True, '$ne': None}
-            }))
+            }, _COMP_EXCLUDE_FIELDS))
             for doc in docs:
                 if not doc.get('suburb_scraped'):
                     doc['suburb_scraped'] = SUBURB_DISPLAY.get(suburb_key, '')

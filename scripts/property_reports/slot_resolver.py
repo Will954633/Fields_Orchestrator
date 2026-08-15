@@ -631,8 +631,14 @@ class SlotResolver:
                 if model_range and model_range.get("low") and model_range.get("high"):
                     cs_anchor = int((model_range["low"] + model_range["high"]) / 2)
                 cs_features = derive_features_basic(self._subject)
-                dynamic = None if self.no_llm else resolve_dynamic_case_study(
+                # no_llm still builds the card — selection, fact-gating against the
+                # Domain timeline, and the exhibits are all deterministic. Only the
+                # prose is a model call, and the card was always designed to ship
+                # without it. Skipping the whole resolver in no_llm threw away a
+                # verified comparable sale for the sake of a paragraph.
+                dynamic = resolve_dynamic_case_study(
                     self._subject, self.db, cs_features, price_anchor=cs_anchor,
+                    skip_narrative=self.no_llm,
                 )
                 if dynamic:
                     updates["case_studies.dynamic"] = dynamic
