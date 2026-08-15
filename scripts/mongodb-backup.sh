@@ -31,7 +31,7 @@ fi
 DATE=$(date +%Y-%m-%d_%H%M)
 DUMP_DIR="$BACKUP_DIR/dump_$DATE"
 ARCHIVE="$BACKUP_DIR/fields_mongodb_$DATE.tar.gz"
-LOCAL_KEEP_DAYS=7
+LOCAL_KEEP_DAYS=3
 DRY_RUN="${1:-}"
 
 log() { echo "[$(date '+%H:%M:%S')] $1"; }
