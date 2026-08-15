@@ -1448,6 +1448,46 @@ class SlotResolver:
         # Tier 2 — exterior-evidence fallback (no interior data), then Tier 3.
         return self.valuation_exterior_range() or self._thin_valuation_range()
 
+    def refresh_valuation_slot(self) -> Dict[str, Any]:
+        """Pick up a valuation that has been computed SINCE this report was built.
+
+        A report is resolved once and then only its competitor slots are ever
+        refreshed, so it stays frozen against build-day data. The valuation
+        engines keep running behind it — `batch_value_offmarket.py` (02:10) writes
+        `valuation_data`, the unit engine (04:30) writes `unit_valuations`. A
+        property valued after its report was built never got the result.
+
+        Measured 2026-08-14: 25 of 44 reports showing no working range already had
+        a usable engine range on the property document — one built 14 June against
+        a valuation computed 8 August. Not broken; stale by two months.
+
+        ⚠ ONLY the already-computed tiers (0 and 1). Never runs the ~22 s
+        on-demand engine, and never falls back to exterior-evidence or
+        suburb-median tiers — those SYNTHESISE a range, and a nightly job must not
+        quietly invent a figure for a report that legitimately has none. A report
+        with nothing computed keeps showing "Working range being prepared".
+
+        Returns {} when there is nothing to update, so the caller can tell
+        "no change" from "changed".
+        """
+        if self._subject is None:
+            self._load_subject_property()
+        if not self._subject:
+            return {}
+
+        rng = (self._unit_valuation_range() if self._is_attached_dwelling()
+               else self._engine_valuation_range())
+        if not rng or not rng.get("low"):
+            return {}
+
+        current = (self.report.get("valuation") or {}).get("model_range") or {}
+        if (current.get("low") == rng.get("low")
+                and current.get("high") == rng.get("high")
+                and current.get("method") == rng.get("method")):
+            return {}
+
+        return {"valuation.model_range": rng, "valuation.no_figure": None}
+
     def _is_attached_dwelling(self) -> bool:
         """Unit / townhouse / duplex / villa. Uses the ONE shared classifier
         (`shared.dwelling_type.classify_dwelling`), never a local regex — the

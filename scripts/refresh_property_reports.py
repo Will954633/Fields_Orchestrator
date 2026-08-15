@@ -1039,8 +1039,30 @@ def refresh_comparables_for_doc(col, gc_db, doc: dict[str, Any], dry_run: bool) 
     time: it picks up price drops, method switches, withdrawals, and sales since
     the prior snapshot. Returns True if a competitor map was produced."""
     slug = doc.get("slug")
+    resolver = SlotResolver(doc, gc_db)
+
+    # Pick up a valuation computed since this report was built. Until 2026-08-14
+    # this loop refreshed competitor slots and NOTHING else, so a report stayed
+    # frozen against build-day data while the valuation engines kept running
+    # behind it — 25 of 44 reports showing no working range already had one
+    # sitting on the property document, one of them stale by two months.
+    # Tier 0/1 only: never synthesises a figure. See refresh_valuation_slot().
     try:
-        updates = SlotResolver(doc, gc_db).refresh_competitor_slots()
+        val_updates = resolver.refresh_valuation_slot()
+        if val_updates:
+            r = val_updates["valuation.model_range"]
+            log.info("· %s — valuation picked up (%s): $%s-%s", slug,
+                     r.get("method"), f"{r['low']:,}", f"{r['high']:,}")
+            if not dry_run:
+                col.update_one({"slug": slug}, {"$set": val_updates})
+    except Exception as e:
+        # Never let a valuation refresh failure stop the competitor refresh —
+        # they are independent and the competitor stream is what the "what
+        # changed" feed depends on.
+        log.warning("· %s — valuation refresh failed: %s", slug, e)
+
+    try:
+        updates = resolver.refresh_competitor_slots()
     except Exception as e:
         log.warning("· %s — competitor refresh failed: %s", slug, e)
         return False
