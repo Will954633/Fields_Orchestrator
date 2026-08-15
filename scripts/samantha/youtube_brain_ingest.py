@@ -79,6 +79,15 @@ WORDS_PER_UNIT = 1200      # brain1_annotate truncates a unit at 1500 words
 UNITS_PER_BATCH = 10       # matches the original corpus build
 MAX_ATTEMPTS = 3           # transcription attempts before a video is given up on
 MIN_TRANSCRIPT_WORDS = 150  # below this it is a trailer/short, not a teaching unit
+MAX_DEFERRALS = 8          # premiere re-checks before it counts as a real failure
+
+# A handful of genuinely unplayable videos (private, removed, region-locked) is
+# normal and must not hold the job red forever. A caption *outage* looks nothing
+# like that: it retires whole swathes of the corpus. Alert on the shape of the
+# second, not the first — a floor so a small corpus cannot trip on noise, and a
+# share so the threshold scales as the corpus grows.
+GIVE_UP_ALERT_FLOOR = 10   # never alert below this many given-up videos
+GIVE_UP_ALERT_SHARE = 0.05  # ...nor below this share of everything registered
 
 
 def _log(msg):
@@ -109,6 +118,7 @@ def discover(only_library=None):
     coll = _coll()
     registered = 0
     seen_total = 0
+    per_channel = {}
 
     for ch in _channels():
         if only_library and ch["library"] != only_library:
@@ -132,7 +142,16 @@ def discover(only_library=None):
                     entries.append(json.loads(line))
                 except json.JSONDecodeError:
                     pass
+        # Rule 7b: yt-dlp exits 0 on a channel tab it could read but that yielded
+        # nothing (bot check, channel restructure, id changed). That is a failure
+        # to list, not an empty channel — and because seen_total is a SUM, one
+        # dead channel is otherwise fully masked by the other still working.
+        if not entries:
+            raise RuntimeError(
+                f"listed 0 videos for {ch['library']} ({url}) — yt-dlp exited 0 "
+                f"but returned nothing; the channel tab is not readable")
         seen_total += len(entries)
+        per_channel[ch["library"]] = len(entries)
         _log(f"  {len(entries)} videos listed")
 
         for e in entries:
@@ -158,7 +177,17 @@ def discover(only_library=None):
             if res.upserted_id is not None:
                 registered += 1
 
-    return {"channels_listed": seen_total, "newly_registered": registered}
+    if not per_channel:
+        raise RuntimeError(
+            f"no channel matched --library {only_library!r} in {CONFIG}")
+
+    # Per-channel counts alongside the sum: the sum alone cannot show which
+    # channel contributed, so a channel that quietly drops to a fraction of its
+    # listing is invisible in `channels_listed` while the total still looks fine.
+    out = {"channels_listed": seen_total, "newly_registered": registered}
+    for lib, n in per_channel.items():
+        out[f"listed_{re.sub(r'[^a-z0-9]+', '_', lib.lower()).strip('_')}"] = n
+    return out
 
 
 # --------------------------------------------------------------------------- #
@@ -166,6 +195,12 @@ def discover(only_library=None):
 # --------------------------------------------------------------------------- #
 
 PREFERRED_LANGS = ["en", "en-AU", "en-US", "en-GB"]
+
+# youtube_transcript_api reports an unreleased premiere as VideoUnplayable with
+# the scheduled reason in the message ("Premieres in 2 days", "Live in 3 hours").
+_PREMIERE_RE = re.compile(r"premieres? in |live in |premiere will begin",
+                          re.IGNORECASE)
+
 _proxy_pw_cache = {}
 
 
@@ -231,7 +266,15 @@ def _transcribe_one(doc, session_tag):
     try:
         text, lang, is_asr = _fetch_transcript(doc["video_id"], session_tag)
     except Exception as e:
-        return doc, "error", f"{type(e).__name__}: {e}"[:300]
+        msg = f"{type(e).__name__}: {e}"[:300]
+        # A scheduled premiere is not a failure to fetch — the video does not
+        # exist yet. Charging it an attempt retires it after MAX_ATTEMPTS runs,
+        # so a video that premieres later is dropped from the corpus for good,
+        # and the retired stubs pile into the given-up count that gates the
+        # bulk-outage alert. Defer instead: no attempt spent, retried next run.
+        if _PREMIERE_RE.search(msg):
+            return doc, "not_yet_released", msg
+        return doc, "error", msg
     words = len(text.split())
     if words < MIN_TRANSCRIPT_WORDS:
         return doc, "short", words
@@ -251,7 +294,7 @@ def transcribe(limit=25, only_library=None, workers=6):
     todo = list(coll.find(q).sort("duration", -1).limit(limit))
     _log(f"transcribe: {len(todo)} videos queued (limit {limit}, {workers} workers)")
 
-    ok = failed = skipped_short = 0
+    ok = failed = skipped_short = deferred = 0
     errors = []
     done = 0
     with ThreadPoolExecutor(max_workers=workers) as pool:
@@ -268,7 +311,23 @@ def transcribe(limit=25, only_library=None, workers=6):
             done += 1
             tag = f"  [{done}/{len(todo)}] {vid} {(doc.get('title') or '')[:60]}"
 
-            if outcome == "error":
+            if outcome == "not_yet_released":
+                deferred += 1
+                # Bounded: a premiere that is cancelled rather than aired would
+                # otherwise defer forever and never be counted as anything.
+                if doc.get("deferrals", 0) + 1 >= MAX_DEFERRALS:
+                    coll.update_one({"video_id": vid},
+                                    {"$inc": {"attempts": 1, "deferrals": 1},
+                                     "$set": {"last_error": payload,
+                                              "last_attempt_at": datetime.now(timezone.utc)}})
+                    _log(f"{tag}\n      deferred {MAX_DEFERRALS}x — now counting attempts")
+                else:
+                    coll.update_one({"video_id": vid},
+                                    {"$inc": {"deferrals": 1},
+                                     "$set": {"last_error": payload,
+                                              "last_attempt_at": datetime.now(timezone.utc)}})
+                    _log(f"{tag}\n      not released yet — deferred, no attempt spent")
+            elif outcome == "error":
                 failed += 1
                 errors.append(f"{vid}: {payload}")
                 _log(f"{tag}\n      FAIL {payload}")
@@ -297,8 +356,22 @@ def transcribe(limit=25, only_library=None, workers=6):
                 _log(f"{tag}\n      OK — {words:,} words "
                      f"({lang}{', auto' if is_asr else ''})")
 
+    # Rule 7b: videos that burn through MAX_ATTEMPTS keep status "pending" but
+    # fall out of the query above forever — never retried, never counted, never
+    # reported. A sustained caption outage therefore raises for MAX_ATTEMPTS runs
+    # per video and then goes permanently silent with a growing pile of stuck
+    # documents. Count them every run so the pile is visible while it grows.
+    gq = {"status": "pending", "attempts": {"$gte": MAX_ATTEMPTS}}
+    if only_library:
+        gq["library"] = only_library
+    given_up = coll.count_documents(gq)
+    registered_total = coll.count_documents(
+        {"library": only_library} if only_library else {})
+
     return {"attempted": len(todo), "transcribed": ok,
             "failed": failed, "skipped_short": skipped_short,
+            "deferred": deferred,
+            "given_up": given_up, "registered_total": registered_total,
             "errors": errors[:10]}
 
 
@@ -451,10 +524,27 @@ def main():
             # Rule 7b: a run that attempted work and transcribed nothing is a
             # failure, not an empty queue. Silence here would look identical to
             # "all caught up" while Bright Data or the caption format was broken.
-            if r["attempted"] > 0 and r["transcribed"] == 0:
+            # Deferred premieres are excluded: they are not attempts that could
+            # have succeeded, so a queue holding only unreleased videos is "no
+            # work to do", not "could not do the work".
+            real_attempts = r["attempted"] - r["deferred"]
+            if real_attempts > 0 and r["transcribed"] == 0:
                 raise RuntimeError(
-                    f"attempted {r['attempted']} videos, transcribed 0 — "
-                    f"first errors: {r['errors'][:3]}")
+                    f"attempted {real_attempts} available videos, transcribed 0 "
+                    f"— first errors: {r['errors'][:3]}")
+            # Rule 7b, second path: the check above only fires while videos are
+            # still inside their MAX_ATTEMPTS budget. Once an outage exhausts
+            # them they leave the queue and `attempted` falls to 0, so the run
+            # goes green while the corpus quietly stops growing. This fires on
+            # the pile they leave behind, which does not drain on its own.
+            gate = max(GIVE_UP_ALERT_FLOOR,
+                       int(r["registered_total"] * GIVE_UP_ALERT_SHARE))
+            if r["given_up"] >= gate:
+                raise RuntimeError(
+                    f"{r['given_up']} of {r['registered_total']} registered "
+                    f"videos have exhausted {MAX_ATTEMPTS} attempts and will "
+                    f"never be retried (alert threshold {gate}) — captions are "
+                    f"failing in bulk, not video-by-video")
         if args.stage in ("chunk", "all"):
             r = chunk(args.library)
             _log(f"chunk: {r}")
