@@ -120,6 +120,19 @@ def build_row(d: dict, day: datetime, rank: int) -> list:
     row[COL["Suburb"]] = (d.get("suburb") or "").title()
     row[COL["Why now"]] = hook
     row[COL["Track"]] = TRACK_LABELS.get(d.get("track", ""), d.get("track", ""))
+
+    # Occupancy verdict (occupancy_evidence.py). The caller needs to know whether
+    # they may be about to ask a stranger about a house they sold years ago — and
+    # "current" is the WEAK direction of that inference, so the label says "likely",
+    # never "confirmed". Confidence is shown so a 0.5 doesn't read like a 0.85.
+    occ = d.get("occupancy") or {}
+    verdict, conf = occ.get("verdict"), occ.get("confidence")
+    row[COL["Occupant?"]] = {
+        "current_likely": f"likely current ({conf})" if conf else "likely current",
+        "prior_occupant": f"⚠ PRIOR OCCUPANT ({conf})" if conf else "⚠ PRIOR OCCUPANT",
+        "unknown": f"unconfirmed ({conf})" if conf else "unconfirmed",
+    }.get(verdict, "not assessed")
+
     row[COL["DNC washed"]] = washed_s
     row[COL["Property"]] = " · ".join(bits)
     # K, L, M deliberately left empty — the caller owns them.

@@ -71,10 +71,48 @@ carrying its values, comments, notes and colours. Newest day sits at the top.
 
 | Cols | Owner | Behaviour |
 |---|---|---|
-| **A–J** | machine | written once at insert, never touched again |
-| **K ☎ OUTCOME · L ☎ COMMENTS · M ☎ CALL BACK** | **human** | **never written by any script** |
-| **N Recording · O Transcript** | machine | refreshed one cell at a time, located by the hidden Call ID |
-| **P Call ID** | machine | hidden; the stable key — rows move daily, positions are never used |
+| **A–K** | machine | written once at insert, never touched again |
+| **L ☎ OUTCOME · M ☎ COMMENTS · N ☎ CALL BACK** | **human** | **never written by any script** |
+| **O Recording · P Transcript** | machine | refreshed one cell at a time, located by the hidden Call ID |
+| **Q Call ID** | machine | hidden; the stable key — rows move daily, positions are never used |
+
+---
+
+## Occupancy dating — who actually lives there
+
+[`occupancy_evidence.py`](scripts/occupancy_evidence.py) dates every ID4ME person
+against the property's **last recorded sale**, because ID4ME returns everyone it has
+*ever* associated with an address — 12 people at 20 Chantilly Place spanning 1997→2023,
+against a 2009 sale. Column **I (Occupant?)** carries the verdict.
+
+```bash
+python3 occupancy_evidence.py --address "20 Chantilly Place" --suburb robina
+python3 occupancy_evidence.py --audit-queue
+```
+
+⚠ **The inference is asymmetric — do not read the two verdicts as equally strong.**
+`ID4ME_Source_Date_Latest` is when the *data vendor* last saw that person at that
+address. It is **not** a move-in date.
+
+- Record dated **before** the sale → **strong** evidence they left. Row is dropped and
+  counted as `prior_occupant_dated_before_sale`, so we also don't pay to wash the number.
+- Record dated **after** the sale → **weak-moderate** evidence they're current. They may
+  have moved on since with no sale recorded. Labelled *"likely current"*, never
+  *"confirmed"*, and confidence is shown so a 0.5 doesn't read like a 0.85.
+
+⚠ **ID4ME's own contact-recency fields are empty** — `last_called_date_mobile`,
+`..._landline`, `..._name`, `..._address`, `live_called` and `home_owner_renter` are
+`None` on every raw record we hold (verified 2026-08-15). So "date of last contact"
+comes from **our** records, which is better evidence anyway because we know what it
+means: 179 of 218 candidate addresses have at least one dated engagement with us
+(worklist first/last seen, property report, AYH submission, seller message).
+
+⚠ **Prior call outcomes are not yet a signal** — `call_outcomes` and `call_activity` are
+empty because no call has been made. That will be the strongest signal of the lot.
+**Wire it in after round 1.**
+
+Rows are capped at **2 per address** (`--max-per-address`) in rank order. Dialling five
+people at one house is exactly what gets us complained about.
 
 `sheet_common.assert_machine_range()` **raises** if any write range overlaps K/L/M.
 It is a runtime guard, not a comment, so a future refactor that widens a range fails

@@ -58,14 +58,15 @@ HEADERS = [
     "Suburb",           # F  5  machine, write-once
     "Why now",          # G  6  machine, write-once (the hook)
     "Track",            # H  7  machine, write-once
-    "DNC washed",       # I  8  machine, write-once
-    "Property",         # J  9  machine, write-once
-    "☎ OUTCOME",        # K 10  HUMAN
-    "☎ COMMENTS",       # L 11  HUMAN
-    "☎ CALL BACK",      # M 12  HUMAN
-    "Recording",        # N 13  machine, refreshed in place
-    "Transcript",       # O 14  machine, refreshed in place
-    "Call ID",          # P 15  machine, hidden — the stable key
+    "Occupant?",        # I  8  machine, write-once — occupancy_evidence verdict
+    "DNC washed",       # J  9  machine, write-once
+    "Property",         # K 10  machine, write-once
+    "☎ OUTCOME",        # L 11  HUMAN
+    "☎ COMMENTS",       # M 12  HUMAN
+    "☎ CALL BACK",      # N 13  HUMAN
+    "Recording",        # O 14  machine, refreshed in place
+    "Transcript",       # P 15  machine, refreshed in place
+    "Call ID",          # Q 16  machine, hidden — the stable key
 ]
 
 COL = {h: i for i, h in enumerate(HEADERS)}
@@ -195,6 +196,21 @@ def ensure_tab(svc, ssid: str) -> int:
             }}
         }]}).execute()
         sid = resp["replies"][0]["addSheet"]["properties"]["sheetId"]
+
+    # Widen the grid if HEADERS has grown since the tab was created. Without this,
+    # adding a column makes every write to the new last column fail with "exceeds
+    # grid limits" — and the tab is only ever created once, so the creation-time
+    # columnCount goes stale the first time the schema changes.
+    meta = svc.spreadsheets().get(spreadsheetId=ssid).execute()
+    for s in meta["sheets"]:
+        p = s["properties"]
+        if p["title"] == TAB and p["gridProperties"].get("columnCount", 0) < len(HEADERS):
+            svc.spreadsheets().batchUpdate(spreadsheetId=ssid, body={"requests": [{
+                "updateSheetProperties": {
+                    "properties": {"sheetId": sid,
+                                   "gridProperties": {"columnCount": len(HEADERS)}},
+                    "fields": "gridProperties.columnCount"}
+            }]}).execute()
 
     # Header: write only if row 1 is empty, so a human-renamed header survives.
     rng = f"'{TAB}'!A1:{col_letter(len(HEADERS) - 1)}1"
