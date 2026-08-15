@@ -26,6 +26,37 @@ What this script deliberately does NOT do
   present on a property document, and `--needs-id4me` emits the ranked address list
   for a HUMAN-PACED append run.
 
+Seller intent (added 2026-08-15)
+-------------------------------
+Ranking used to answer only "can we reach this person?". It now also answers "is
+there a reason to ring them?", by JOINING the seller-intent layer this repo already
+computes nightly — `system_monitor.lead_worklist.seller_intent`
+(scripts/samantha/seller_intent.py). Read-only: nothing here writes lead_worklist.
+
+  * `moment` (a <=3-day-old strong signal, e.g. "Just generated a home valuation") is
+    the largest single intent term AND DECAYS TO NOTHING BY 14 DAYS, measured from the
+    signal itself, not from the last enrichment run.
+  * `hotness` / `behavioral_score` are continuous and saturated, not bucketed.
+  * ⚠ `on_market_fresh` is a STRONG NEGATIVE. It means the owner has just committed to
+    a competing agent — seller_intent scores it hotness -6 — and must never read as hot.
+  * Positive intent is scaled by ID4ME record freshness (`reach_factor`), so a hot lead
+    on a six-year-old phone record keeps only 40% of the bonus. An unreachable hot lead
+    is worth nothing.
+  * The join is asserted (Rule 7b): a collapse below a 50% address join rate raises,
+    because the measured baseline is 100% and a silent zero would restore the old
+    reachability-only order while looking like a normal run.
+  * `--needs-id4me` uses the SAME score. The append is human-paced at ~50/day, so that
+    ordering decides who we are able to call in week 1.
+  * `intent_note` is a NEW, separate one-line field for the sheet. The property-specific
+    `hook` is never overwritten, and the seller_intent `story` paragraph is never put in
+    a cell — it is written for a CRM reader, carries PropRadar valuation figures and
+    explicit "Approach:" coaching, and both are forbidden here (POA s215/s216; CLAUDE.md
+    editorial rules). Every note is passed through `editorial_violations` before storage.
+
+⛔ The POA Reg 2014 s21(3) listing-expiry exclusion is UNCHANGED and no scheduling is
+built. --stats and --needs-id4me now only COUNT how many excluded leads carry the
+`on_market_expiring` label, so the size of that open legal question is visible.
+
 Tracks (scoping §1 — they are not legally the same thing)
 ---------------------------------------------------------
   A_warm       lead supplied their OWN number (FB Lead Ads + Analyse Your Home).
@@ -600,9 +631,170 @@ def occupancy_score(assessment: dict | None) -> float:
     return OCCUPANCY_WEIGHT_UNKNOWN
 
 
+# ── the SELLER-INTENT term ───────────────────────────────────────────────────
+# Everything above answers "can we reach this person?". Nothing above answered
+# "is there any reason to ring them?" — even though we already compute that, every
+# night, in scripts/samantha/seller_intent.py and store it on
+# system_monitor.lead_worklist.seller_intent. This block consumes it. It does not
+# recompute it, and it never writes back to lead_worklist.
+#
+# ⚠ THE SCORE IS AN UNBOUNDED RANKING SCORE, NOT A PROBABILITY. It always was
+# (reachability alone already reaches 1.45). It is stated here rather than left
+# implicit, and every term below has a NAMED, ENUMERABLE maximum so the ceiling can
+# be recomputed by reading this file:
+#
+#     reachability   -0.20 .. +1.45   (track 0.45, phone 0.12, record freshness 0.30,
+#                                      suburb 0.10, tenure 0.15, owner-occupier 0.08,
+#                                      occupancy evidence 0.25, DNC advisory -0.20)
+#     intent         -0.35 .. +0.85   (capped at INTENT_CAP; see below)
+#     TOTAL          -0.55 .. +2.30
+#
+# WHY THESE WEIGHTS
+# -----------------
+# * `moment` is the single largest intent term (0.35 — bigger than any other intent
+#   component on its own) because a fresh strong signal is the best call we will ever
+#   make: somebody who valued their own home this week has already asked the question
+#   we are ringing to answer. It is also PERISHABLE. Full weight for <=3 days
+#   (seller_intent only ever sets `moment` on a <=3-day-old signal in the first
+#   place), then LINEAR DECAY TO ZERO at 14 days. Decay is measured from
+#   `seller_intent.behavioral.last_seen` — the event itself — not from `computed_at`,
+#   which is just the last time the nightly job ran and would keep a July moment
+#   looking fresh forever.
+# * `behavioral_score` and `hotness` are continuous and unbounded (measured max 170
+#   and 186, p95 13 and 22), so they are SATURATED, not bucketed: a smooth ramp to
+#   full weight at 20 / 25 respectively. They overlap by construction — hotness IS
+#   behavioral_score + listing_bonus — so hotness carries the smaller weight (0.08)
+#   and exists mainly to let listing_bonus register; behavioral_score (0.22) is the
+#   honest "what this person actually did" term.
+# * Labels carry what the numbers cannot. `engaged_owner_researching` and
+#   `pre_market_withdrawn` are the two strongest positives (+0.15) — an owner testing
+#   the water on their own home, and one who pulled a listing to wait.
+# * ⚠ `on_market_fresh` is a STRONG NEGATIVE (-0.35, the largest single weight in
+#   either direction). It does not mean "hot", it means COMMITTED TO A COMPETITOR:
+#   seller_intent scores it hotness -6 for exactly this reason, and READS says
+#   "not a lead yet". Without this, a fresh competitor listing with a busy PostHog
+#   journey would rank as high intent. It is a penalty rather than an exclusion
+#   because the exclusion that matters legally (s21(3), listings whose appointment
+#   is in force and nearing expiry) is upstream and untouched.
+# * `on_market_expiring` is deliberately weighted ZERO, not positive. Those leads are
+#   excluded upstream under s21(3) and whether they should be is Will's decision, not
+#   this file's; a positive weight here would pre-empt it.
+#
+# WHY INTENT CANNOT SWAMP REACHABILITY
+# ------------------------------------
+# The positive intent total is multiplied by REACH_FACTOR, derived from the ID4ME
+# record age: 1.0 at a same-day record, falling linearly to 0.40 at 5 years and
+# staying there. A six-year-old phone number for the hottest lead in the database
+# keeps only 40% of its intent bonus, because it is still probably a wrong number —
+# and the wrong-number rate is the one thing here we have actually measured (38.9%
+# of a 36-address sample was "mobile AND record <=2y"; median age 3.12 years).
+# The NEGATIVE half is NOT scaled: a competitor commitment is a fact about the
+# vendor, not about our phone record, and must not be softened by a stale record.
+INTENT_MOMENT_MAX = 0.35
+INTENT_BEHAVIOURAL_MAX = 0.22
+INTENT_HOTNESS_MAX = 0.08
+INTENT_PRIORITY_MAX = 0.05
+INTENT_CAP = 0.85           # 0.35 + 0.22 + 0.08 + 0.15 + 0.05 — the enumerated ceiling
+INTENT_FLOOR = -0.35
+
+MOMENT_FULL_DAYS = 3.0      # seller_intent only sets `moment` inside this window
+MOMENT_DEAD_DAYS = 14.0     # ...and we let it decay to nothing here
+BSCORE_SATURATION = 20.0
+HOTNESS_SATURATION = 25.0
+
+# `moment` is a fixed vocabulary written by seller_intent.analyze(). Matched on the
+# exact strings it emits — a miss scores 0.0 rather than guessing, so a new moment
+# type shows up as "no boost" rather than as a silent wrong weight.
+MOMENT_STRENGTH = {
+    "Just generated a home valuation": 1.00,
+    "Just visited a 'sell now' page": 0.90,
+    "Actively exploring their report (incl. Messages)": 0.70,
+    "Just engaged seller-focused content": 0.50,
+    "Just opted into the weekly buyer email": 0.35,
+}
+# ⚠ Not a moment we act on. seller_intent sets it when a tracked lead's home flips to
+# on-market — i.e. they just signed with somebody else. Scored 0, never a note.
+MOMENT_JUST_LISTED_PREFIX = "Just listed with another agent"
+
+INTENT_LABEL_WEIGHT = {
+    "engaged_owner_researching": 0.15,   # owner quietly valuing their own home
+    "pre_market_withdrawn": 0.15,        # pulled the listing to wait
+    "browsing_while_unlisted": 0.10,
+    "on_market_stale": 0.06,             # past the first agency term, still unsold
+    "viewing_listings_home_unknown": 0.03,
+    "on_market_active": 0.0,
+    "on_market_expiring": 0.0,           # ⚠ excluded upstream under s21(3) — not ours to rank
+    "no_cross_signal": 0.0,
+    "on_market_fresh": -0.35,            # ⚠ COMMITTED TO A COMPETITOR, never a positive
+}
+
+
+def moment_decay(age_days: float | None) -> float:
+    """1.0 while the signal is <=3 days old, linear to 0.0 at 14 days, 0 after.
+
+    None means we could not date the signal at all — score it as dead rather than as
+    fresh. An undated moment is exactly the stale one this decay exists to kill."""
+    if age_days is None:
+        return 0.0
+    if age_days <= MOMENT_FULL_DAYS:
+        return 1.0
+    if age_days >= MOMENT_DEAD_DAYS:
+        return 0.0
+    return round((MOMENT_DEAD_DAYS - age_days) / (MOMENT_DEAD_DAYS - MOMENT_FULL_DAYS), 4)
+
+
+def reach_factor(record_age_years: float | None) -> float:
+    """How much of a positive intent bonus a record this old is allowed to keep.
+
+    1.0 (same-day) -> 0.40 (>=5 years). Unknown age sits at 0.70: it covers BOTH a
+    Track A lead who typed their own number minutes ago (should be ~1.0) and an ID4ME
+    record with no source date (should be low), and we cannot tell them apart from
+    this argument alone — so it takes the middle rather than either optimistic or
+    pessimistic extreme."""
+    if record_age_years is None:
+        return 0.70
+    return round(0.40 + 0.60 * max(0.0, min(1.0, 1.0 - record_age_years / 5.0)), 4)
+
+
+def intent_score(intent: dict | None) -> tuple[float, dict]:
+    """-> (raw intent total BEFORE reach scaling, per-term breakdown).
+
+    `intent` is the joined `seller_intent` payload built by IntentIndex — never a
+    guessed shape. Every key read here was confirmed against the live collection with
+    `scripts/db_fields.py system_monitor lead_worklist --grep seller_intent`
+    (CLAUDE.md Rule 8), all at 400/400 fill:
+      seller_intent.hotness / .behavioral_score / .label / .moment / .computed_at
+      seller_intent.behavioral.last_seen   (str, 342/490 non-null on non-test docs)
+    `priority` is the TOP-LEVEL lead_worklist field written by lead_intelligence.py
+    (low 385 / medium 50 / high 2 / absent 52 on non-test docs) — not part of
+    seller_intent, and read as such."""
+    if not intent:
+        return 0.0, {}
+    parts = {}
+    moment = intent.get("moment") or ""
+    strength = 0.0 if moment.startswith(MOMENT_JUST_LISTED_PREFIX) \
+        else MOMENT_STRENGTH.get(moment, 0.0)
+    parts["intent_moment"] = round(
+        INTENT_MOMENT_MAX * strength * moment_decay(intent.get("signal_age_days")), 4)
+    b = intent.get("behavioral_score") or 0
+    parts["intent_behavioural"] = round(
+        INTENT_BEHAVIOURAL_MAX * min(1.0, max(0.0, b) / BSCORE_SATURATION), 4)
+    h = intent.get("hotness") or 0
+    parts["intent_hotness"] = round(
+        INTENT_HOTNESS_MAX * min(1.0, max(0.0, h) / HOTNESS_SATURATION), 4)
+    parts["intent_label"] = INTENT_LABEL_WEIGHT.get(intent.get("label"), 0.0)
+    pri = intent.get("priority")
+    parts["intent_priority"] = (INTENT_PRIORITY_MAX if pri == "high"
+                                else round(INTENT_PRIORITY_MAX / 2, 4) if pri == "medium"
+                                else 0.0)
+    total = max(INTENT_FLOOR, min(INTENT_CAP, round(sum(parts.values()), 4)))
+    return total, parts
+
+
 def score_candidate(track: str, suburb: str, phone_type: str, record_age_years: float | None,
                     years_held: float | None, occupancy_type: str | None,
-                    advisory: str, occupancy_assessment: dict | None = None) -> tuple[float, dict]:
+                    advisory: str, occupancy_assessment: dict | None = None,
+                    intent: dict | None = None) -> tuple[float, dict]:
     parts = {"track_base": TRACK_BASE.get(track, 0.0)}
     parts["phone_type"] = 0.12 if phone_type == "mobile" else 0.0
     if record_age_years is None:
@@ -622,7 +814,16 @@ def score_candidate(track: str, suburb: str, phone_type: str, record_age_years: 
     # best available signal that a wash will reject the number — deprioritise, do
     # not drop, because dnc_wash.py is the only thing entitled to decide.
     parts["dnc_advisory"] = -0.20 if advisory == "blocked" else 0.0
-    return round(sum(parts.values()), 4), parts
+    # Seller intent, scaled by how reachable this record actually is. Positive only:
+    # a competitor commitment (on_market_fresh) is a fact about the vendor and must
+    # not be softened by a stale phone record.
+    raw_intent, intent_parts = intent_score(intent)
+    reach = reach_factor(record_age_years)
+    parts["intent"] = round(raw_intent * reach, 4) if raw_intent > 0 else raw_intent
+    parts["intent_detail"] = {**intent_parts, "raw_total": raw_intent,
+                              "reach_factor": reach,
+                              "reach_applied": raw_intent > 0}
+    return round(sum(v for k, v in parts.items() if k != "intent_detail"), 4), parts
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -633,6 +834,13 @@ class Excluded:
 
     def __init__(self):
         self.counts = Counter()
+        # ⛔ NOT a scheduling hook. The s21(3) exclusion below is UNCHANGED. This
+        # counter only makes the SIZE of the open legal question visible: how many of
+        # the leads we drop under s21(3) are the `on_market_expiring` cohort — the
+        # group seller_intent scores highest and whose appointment is precisely the
+        # thing s21(3) turns on. Whether they should be scheduled rather than excluded
+        # is Will's decision; this file does not take it.
+        self.s21_labels = Counter()
         self.reasons = {
             "s21_listing_expiry": "POA Regulation 2014 s21(3) — another agent's appointment IS IN FORCE",
             "currently_listed": "listing_status for_sale/under_contract (memory ayh_currently_listed_guard)",
@@ -801,6 +1009,227 @@ class ContactHistory:
         return out
 
 
+class IntentIndex:
+    """The EXISTING seller-intent layer, joined onto call candidates.
+
+    scripts/samantha/seller_intent.py already answers "is there a reason to ring this
+    person?" every night and stores it on `system_monitor.lead_worklist.seller_intent`.
+    Until now this script ignored all of it and ranked purely on reachability. This
+    class is the join, and nothing more — it READS lead_worklist and never writes it.
+
+    Join keys, in the order they are tried (the strongest identifier first):
+      1. lead_key   — exact. Track B candidates carry `source_ref`
+                      "lead_worklist:<lead_key>", so this is an identity join.
+      2. address    — address_slug of `lead_worklist.address`. The measured path:
+                      100% of the 202 ID4ME-append candidates join this way.
+      3. email      — lower-cased. Only Track A (Facebook Lead Ads / AYH) has one.
+
+    ⚠ CLAUDE.md Rule 8 — every path below was confirmed against the live collection
+    with `python3 scripts/db_fields.py system_monitor lead_worklist --grep seller_intent`
+    before it was read, with its fill count (490 non-test docs):
+      lead_worklist.address                        386/490   lead_worklist.lead_key 100%
+      lead_worklist.priority                       438/490 (low 385/med 50/high 2)
+      seller_intent.hotness                        400/400 (100%)  int
+      seller_intent.behavioral_score               400/400 (100%)  int
+      seller_intent.label                          400/400 (100%)  str
+      seller_intent.moment                         400/400 (100%)  null/str  (2 non-null)
+      seller_intent.story                          451/490 non-empty
+      seller_intent.behavioral.last_seen           342/490 non-null, str
+      seller_intent.own_property.days_on_market    120/400
+      seller_intent.propradar.dom                   11/400
+    Nothing is queried by a name that was not on that list.
+    """
+
+    def __init__(self, sm_db):
+        self.by_lead_key: dict[str, dict] = {}
+        self.by_slug: dict[str, dict] = {}
+        self.by_email: dict[str, dict] = {}
+        self.n_docs = 0
+        self.label_counts = Counter()
+        self.lookups = Counter()          # joined_from -> n, plus "miss"
+        self._addr_joined = 0
+        self._addr_tried = 0
+        for d in sm_db.lead_worklist.find(
+                {}, {"lead_key": 1, "address": 1, "email": 1, "is_test": 1, "priority": 1,
+                     "sources": 1, "seller_intent": 1}):
+            if d.get("is_test"):
+                continue
+            self.n_docs += 1
+            payload = self._payload(d)
+            self.label_counts[payload.get("label")] += 1
+            if d.get("lead_key"):
+                self.by_lead_key.setdefault(str(d["lead_key"]), payload)
+            slug = address_slug(d.get("address") or "")
+            if slug:
+                # Several worklist rows can share an address (a report request and a
+                # behavioural surface). Keep the hottest — never silently the last one.
+                cur = self.by_slug.get(slug)
+                if cur is None or (payload.get("hotness") or 0) > (cur.get("hotness") or 0):
+                    self.by_slug[slug] = payload
+            em = (d.get("email") or "").strip().lower()
+            if em:
+                self.by_email.setdefault(em, payload)
+
+    @staticmethod
+    def _signal_age_days(si: dict) -> float | None:
+        """Age of the BEHAVIOURAL SIGNAL, not of the last enrichment run.
+
+        `computed_at` is when seller_intent.py last executed — it advances nightly
+        whether or not anything happened, so decaying against it would keep a
+        five-week-old "just generated a valuation" permanently fresh. The event time
+        is `behavioral.last_seen`. Fall back to computed_at only when there is no
+        behavioural record at all, in which case the moment cannot have come from
+        behaviour either."""
+        last_seen = ((si.get("behavioral") or {}).get("last_seen"))
+        dt = parse_iso(last_seen) or parse_iso(si.get("computed_at"))
+        if not dt:
+            return None
+        return round((now_utc() - dt).total_seconds() / 86400.0, 2)
+
+    def _payload(self, d: dict) -> dict:
+        si = d.get("seller_intent") or {}
+        return {
+            "hotness": si.get("hotness"),
+            "behavioral_score": si.get("behavioral_score"),
+            "label": si.get("label"),
+            "moment": si.get("moment"),
+            "priority": d.get("priority"),
+            # The full story paragraph is stored (it is the audit trail for the
+            # one-line note) but NEVER rendered into a sheet cell — it is written for
+            # a different reader and runs to several hundred characters.
+            "story": si.get("story") or "",
+            "signal_age_days": self._signal_age_days(si),
+            "listing_bonus": si.get("listing_bonus"),
+            "days_on_market": ((si.get("own_property") or {}).get("days_on_market")
+                               or (si.get("propradar") or {}).get("dom")),
+            "n_current_listings_viewed": si.get("n_current_listings_viewed"),
+            "lead_key": d.get("lead_key"),
+            "sources": sorted(d.get("sources") or []),
+            "computed_at": si.get("computed_at"),
+        }
+
+    def lookup(self, source_ref: str | None = None, address: str | None = None,
+               email: str | None = None) -> dict | None:
+        if source_ref and str(source_ref).startswith("lead_worklist:"):
+            hit = self.by_lead_key.get(str(source_ref).split(":", 1)[1])
+            if hit:
+                self.lookups["lead_key"] += 1
+                return {**hit, "joined_from": "lead_key"}
+        slug = address_slug(address or "")
+        if slug and slug in self.by_slug:
+            self.lookups["address"] += 1
+            return {**self.by_slug[slug], "joined_from": "address"}
+        em = (email or "").strip().lower()
+        if em and em in self.by_email:
+            self.lookups["email"] += 1
+            return {**self.by_email[em], "joined_from": "email"}
+        self.lookups["miss"] += 1
+        return None
+
+    def address_join_rate(self) -> tuple[int, int]:
+        """(joined, tried) for the ADDRESS path only — the one the 100%-join
+        measurement was taken on, and the one that silently breaks if address_slug or
+        the worklist's address format ever drifts. lead_key joins are tautological
+        (the candidate came FROM lead_worklist) and prove nothing about the index."""
+        return self._addr_joined, self._addr_tried
+
+    def probe_address(self, address: str) -> bool:
+        """Does this address resolve through the ADDRESS index? Counted for the Rule 7b
+        join-rate assertion. Separate from lookup() so the assertion measures the
+        address path even when lead_key already answered."""
+        if not (address or "").strip():
+            return False
+        self._addr_tried += 1
+        ok = address_slug(address) in self.by_slug
+        if ok:
+            self._addr_joined += 1
+        return ok
+
+
+def _plural(n, word):
+    return f"{n} {word}{'' if n == 1 else 's'}"
+
+
+def intent_note(intent: dict | None) -> str:
+    """ONE short factual line for the sheet's caller-facing intent column.
+
+    Deliberately NOT the `story` paragraph: story is written for a CRM reader, runs
+    to several hundred characters, and contains PropRadar valuation figures and
+    explicit "Approach:" coaching. Both are wrong in a call sheet — the figures
+    because POA s215/s216 make a spoken price a CMA trigger, the coaching because
+    CLAUDE.md's editorial rules forbid telling the reader what to do.
+
+    So this composes a new line from the same facts: what happened, and when. No
+    advice, no prediction, no valuation figure, no forbidden words. The result is
+    passed through `editorial_violations` and dropped if it fails — the caller reads
+    this aloud-adjacent, and an unchecked line must never reach them.
+
+    Returned as "" when there is nothing factual to say. "" is a real answer here
+    (most leads carry no cross-signal); it is never a stand-in for a failed lookup.
+    """
+    if not intent:
+        return ""
+    label = intent.get("label")
+    moment = intent.get("moment") or ""
+    age = intent.get("signal_age_days")
+    line = ""
+
+    # 1. A live moment — the strongest and most perishable thing we know. Only while
+    #    it is still inside the decay window; a dead moment is not "why now".
+    if moment and not moment.startswith(MOMENT_JUST_LISTED_PREFIX) \
+            and MOMENT_STRENGTH.get(moment) and moment_decay(age):
+        when = ("today" if age is not None and age < 1
+                else f"{int(age)} day{'' if int(age) == 1 else 's'} ago" if age is not None
+                else "recently")
+        phrase = {
+            "Just generated a home valuation": "Generated a valuation for their own home",
+            "Just visited a 'sell now' page": "Visited a selling page on our site",
+            "Actively exploring their report (incl. Messages)":
+                "Opened their own property report, including its Messages tab",
+            "Just engaged seller-focused content": "Read seller-focused content on our site",
+            "Just opted into the weekly buyer email": "Signed up to our weekly buyer email",
+        }.get(moment)
+        if phrase:
+            line = f"{phrase} {when}."
+
+    # 2. Otherwise, the situation label — facts about the property, not a read on it.
+    if not line:
+        dom = intent.get("days_on_market")
+        nviewed = intent.get("n_current_listings_viewed") or 0
+        if label == "engaged_owner_researching":
+            line = "Generated a valuation for their own home; it is not currently listed."
+        elif label == "pre_market_withdrawn":
+            line = "Their listing was withdrawn from the market."
+        elif label == "browsing_while_unlisted" and nviewed:
+            line = (f"Own home not listed; viewed {_plural(nviewed, 'live listing')} "
+                    f"on our site.")
+        elif label == "on_market_stale" and dom:
+            line = (f"Listed with another agency for {_plural(int(dom), 'day')} — past the "
+                    f"first 90-day appointment term.")
+        elif label == "on_market_expiring" and dom:
+            # Excluded upstream under s21(3); the note exists only so a row that
+            # reaches a sheet by some other route still states the fact plainly.
+            line = f"Listed with another agency for {_plural(int(dom), 'day')}."
+        elif label == "on_market_fresh" and dom:
+            line = (f"Recently listed with another agency ({_plural(int(dom), 'day')}) — "
+                    f"an appointment is in force.")
+        elif label == "viewing_listings_home_unknown" and nviewed:
+            line = (f"Viewed {_plural(nviewed, 'live listing')} on our site; we have not "
+                    f"tied a home to them.")
+
+    # 3. Last resort — plain site activity, stated as activity.
+    if not line:
+        b = intent.get("behavioral_score") or 0
+        if b > 0 and age is not None and age <= 45:
+            line = f"Last active on our site {int(age)} day{'' if int(age) == 1 else 's'} ago."
+
+    if not line:
+        return ""
+    if editorial_violations(line):
+        return ""
+    return line[:160]
+
+
 def collect_track_a(sm_db, ex: Excluded) -> list[dict]:
     """Leads who typed their OWN number. No ID4ME involved, no append needed.
 
@@ -835,6 +1264,9 @@ def collect_track_a(sm_db, ex: Excluded) -> list[dict]:
             "person_name": f.get("full_name") or "", "first_name": (f.get("full_name") or "").split(" ")[0],
             "id4me_retrieved_at": None, "id4me_source_date_latest": None, "record_age_years": None,
             "id4me_advisory": "unknown", "gnaf_pid": None, "postcode": None, "state": "QLD",
+            # Carried ONLY as a join key for IntentIndex (lead_worklist.email). Never
+            # written to the queue row and never printed.
+            "email": (f.get("email") or "").strip().lower(),
             "lead_signals": [f"fb_lead:{d.get('form_name') or d.get('campaign_name') or ''}"]
                             + ([f"area_of_interest:{f['area']}"] if f.get("area") else []),
             "consent": {"basis": "self-supplied on a Facebook Lead Ad form",
@@ -864,6 +1296,7 @@ def collect_track_a(sm_db, ex: Excluded) -> list[dict]:
             "person_name": owner.get("name") or "", "first_name": (owner.get("name") or "").split(" ")[0],
             "id4me_retrieved_at": None, "id4me_source_date_latest": None, "record_age_years": None,
             "id4me_advisory": "unknown", "gnaf_pid": None, "postcode": None, "state": "QLD",
+            "email": (owner.get("email") or "").strip().lower(),
             "lead_signals": ["analyse_your_home"],
             "consent": {"basis": "self-supplied on the Analyse Your Home form",
                         "given_at": given.isoformat() if given else None,
@@ -885,6 +1318,8 @@ def collect_track_b_leads(sm_db, ex: Excluded) -> list[dict]:
         sources = set(d.get("sources") or [])
         if sources & S21_EXCLUDED_SOURCES:
             ex.hit("s21_listing_expiry")
+            # Count, do not change. See Excluded.s21_labels.
+            ex.s21_labels[(d.get("seller_intent") or {}).get("label") or "(no seller_intent)"] += 1
             continue
         addr = d.get("address") or ""
         if not addr:
@@ -933,7 +1368,8 @@ def collect_track_c_addresses(gc_db, suburbs, known_slugs: set, limit: int) -> l
 def property_rows(gc_db, ctx, track, addresses, ex: Excluded, stats: Counter,
                   contacts: "ContactHistory | None" = None,
                   include_prior: bool = False, max_per_address: int = 2,
-                  occ_counts: Counter | None = None) -> list[dict]:
+                  occ_counts: Counter | None = None,
+                  intents: "IntentIndex | None" = None) -> list[dict]:
     """Turn address-level candidates (B or C) into (address, phone) rows.
 
     Every exclusion is counted so --stats can say honestly how many candidates are
@@ -958,6 +1394,21 @@ def property_rows(gc_db, ctx, track, addresses, ex: Excluded, stats: Counter,
             ex.hit("tenanted_investor")
             continue
         stats["candidates_considered"] += 1
+        # The EXISTING seller-intent layer, joined on. Attached to the candidate here
+        # (not only to the finished rows) so that --needs-id4me — which never gets as
+        # far as a row — ranks on exactly the same signal.
+        addr_for_join = gc_doc.get("address") or cand["address"]
+        if intents is not None:
+            if str(cand.get("source_ref") or "").startswith("lead_worklist:"):
+                # Only lead_worklist-sourced candidates are expected to have an
+                # address in the index; probing Track C would measure the wrong thing.
+                intents.probe_address(addr_for_join)
+            cand["_intent"] = intents.lookup(source_ref=cand.get("source_ref"),
+                                             address=addr_for_join)
+            if cand["_intent"]:
+                stats["intent_joined"] += 1
+            else:
+                stats["intent_missed"] += 1
         # Our own engagement history for this address — an ADDRESS-level signal that
         # can raise the floor on a verdict, never confirm an individual.
         our_contacts = contacts.for_address(gc_doc.get("address") or cand["address"]) \
@@ -1003,6 +1454,11 @@ def property_rows(gc_db, ctx, track, addresses, ex: Excluded, stats: Counter,
                 "state": p.get("state") or "QLD",
                 "lead_signals": cand.get("lead_signals") or [],
                 "facts": facts, "hook": hook,
+                # ⚠ `hook` is the property-specific opener and is NOT touched. The
+                # intent reason is a SEPARATE, shorter field so the sheet can show
+                # both — see intent_note().
+                "intent": cand.get("_intent"),
+                "intent_note": intent_note(cand.get("_intent")),
                 "occupancy_type": occ_res.get("type"),
                 # Full assessment, stored so the sheet can label the row and so a
                 # verdict can be argued with later. call_list_to_sheet.build_row reads
@@ -1050,6 +1506,11 @@ def upsert_rows(coll, rows: list[dict], dry_run: bool) -> dict:
             "dnc.id4me_advisory": r.get("id4me_advisory") or "unknown",
             "score": r["score"], "score_parts": r.get("score_parts"),
             "hook": r["hook"], "property": r["facts"],
+            # The joined seller-intent payload and its one-line caller note. Written
+            # unconditionally (including None / "") because a moment that has decayed
+            # or a lead whose label changed MUST clear, not linger from a prior run.
+            "intent": r.get("intent"),
+            "intent_note": r.get("intent_note") or "",
             "occupancy_type": r.get("occupancy_type"),
             "lead_signals": r.get("lead_signals") or [],
             # `occupancy` (the person-level occupancy_evidence assessment) is written
@@ -1088,6 +1549,7 @@ def do_build(gc_db, sm_db, args, beat) -> dict:
     stats = Counter()
     occ_counts = Counter()
     contacts = ContactHistory(sm_db)
+    intents = IntentIndex(sm_db)
     max_per_address = args.max_per_address if args.max_per_address is not None else 2
     tracks = {"A": "A_warm", "B": "B_intent", "C": "C_openmarket"}
     wanted = [tracks[args.track]] if args.track else list(tracks.values())
@@ -1121,6 +1583,13 @@ def do_build(gc_db, sm_db, args, beat) -> dict:
             r["occupancy_type"] = occ_type
             r["hook"] = build_hook(ctx, "A_warm", r["address"], r["suburb"],
                                    gc_doc, facts, r["lead_signals"])
+            # Track A joins on address where they gave one, else on the email they
+            # typed into the form. Most warm leads gave neither an address nor a
+            # worklist row, so a miss here is normal, not a broken join.
+            r["intent"] = intents.lookup(source_ref=r.get("source_ref"),
+                                         address=r.get("address"),
+                                         email=r.get("email"))
+            r["intent_note"] = intent_note(r["intent"])
             rows.append(r)
         stats["track_a_rows"] = len(rows)
 
@@ -1131,7 +1600,8 @@ def do_build(gc_db, sm_db, args, beat) -> dict:
             b_addresses = [a for a in b_addresses if a["suburb"] == args.suburb]
     if "B_intent" in wanted:
         b_rows = property_rows(gc_db, ctx, "B_intent", b_addresses, ex, stats,
-                               contacts, args.include_prior, max_per_address, occ_counts)
+                               contacts, args.include_prior, max_per_address, occ_counts,
+                               intents)
         stats["track_b_rows"] = len(b_rows)
         rows += b_rows
         needs_id4me += [a for a in b_addresses if a.get("_needs_id4me")]
@@ -1140,7 +1610,8 @@ def do_build(gc_db, sm_db, args, beat) -> dict:
         known = {address_slug(a["address"]) for a in b_addresses}
         c_addresses = collect_track_c_addresses(gc_db, suburbs, known, args.limit or 0)
         c_rows = property_rows(gc_db, ctx, "C_openmarket", c_addresses, ex, stats,
-                               contacts, args.include_prior, max_per_address, occ_counts)
+                               contacts, args.include_prior, max_per_address, occ_counts,
+                               intents)
         stats["track_c_rows"] = len(c_rows)
         rows += c_rows
 
@@ -1148,7 +1619,7 @@ def do_build(gc_db, sm_db, args, beat) -> dict:
         r["score"], r["score_parts"] = score_candidate(
             r["track"], r["suburb"], r["phone_type"], r.get("record_age_years"),
             (r.get("facts") or {}).get("years_held"), r.get("occupancy_type"),
-            r.get("id4me_advisory") or "unknown", r.get("occupancy"))
+            r.get("id4me_advisory") or "unknown", r.get("occupancy"), r.get("intent"))
     rows.sort(key=lambda r: r["score"], reverse=True)
     if args.limit:
         rows = rows[: args.limit]
@@ -1187,6 +1658,25 @@ def do_build(gc_db, sm_db, args, beat) -> dict:
             f"{considered} candidates were considered and 0 queue rows produced, with none blocked "
             f"on the ID4ME append — the selection pipeline gave us nothing.")
 
+    # ── Rule 7b, applied to the intent JOIN ──────────────────────────────────
+    # The join was MEASURED at 100% (all 202 ID4ME-append candidates resolve to a
+    # lead_worklist row by address). A collapse below 50% is therefore a BROKEN JOIN
+    # — address_slug drifting, the worklist changing its address format, or the
+    # collection being read empty — never "these leads have no intent". Scoring
+    # silently at zero would demote every hot lead back to reachability-only order
+    # and look exactly like a normal run.
+    addr_joined, addr_tried = intents.address_join_rate()
+    if intents.n_docs == 0:
+        raise RuntimeError(
+            "IntentIndex read 0 non-test lead_worklist documents — the seller-intent "
+            "layer is unreadable, not empty. Refusing to rank on reachability alone.")
+    if addr_tried >= 20 and (addr_joined / addr_tried) < 0.50:
+        raise RuntimeError(
+            f"seller-intent address join collapsed: {addr_joined}/{addr_tried} "
+            f"({addr_joined / addr_tried:.0%}) of lead_worklist-sourced candidates resolved "
+            f"through the address index, against a measured baseline of 100%. That is a "
+            f"broken join, not absent intent data (CLAUDE.md Rule 8 / 7b).")
+
     beat.metrics = {
         "candidates_considered": considered,
         "queue_rows": len(rows),
@@ -1196,6 +1686,17 @@ def do_build(gc_db, sm_db, args, beat) -> dict:
         "track_c": stats["track_c_rows"],
         "with_id4me": with_id4me, "blocked_on_id4me": stats["blocked_on_id4me"],
         "excluded_s21": ex.counts["s21_listing_expiry"],
+        # ⛔ Counter only — the s21(3) exclusion itself is unchanged.
+        "excluded_s21_on_market_expiring": ex.s21_labels["on_market_expiring"],
+        "excluded_s21_by_label": dict(ex.s21_labels),
+        # seller-intent join
+        "intent_worklist_docs": intents.n_docs,
+        "intent_joined": stats["intent_joined"],
+        "intent_missed": stats["intent_missed"],
+        "intent_address_join_rate": round(addr_joined / addr_tried, 4) if addr_tried else None,
+        "intent_rows_with_moment": sum(
+            1 for r in rows if (r.get("intent") or {}).get("moment")),
+        "intent_rows_with_note": sum(1 for r in rows if r.get("intent_note")),
         "excluded_currently_listed": ex.counts["currently_listed"],
         "excluded_investor": ex.counts["tenanted_investor"],
         # occupancy_evidence — people, not rows, except where named otherwise
@@ -1246,16 +1747,58 @@ def do_build(gc_db, sm_db, args, beat) -> dict:
     print("  our_contacts sources loaded:")
     for line in contacts.report():
         print(line)
+    # ── Seller intent (system_monitor.lead_worklist.seller_intent) ──────────
+    print(f"\nSeller intent (joined from lead_worklist — READ ONLY, never written)")
+    print(f"  worklist docs indexed : {intents.n_docs} non-test")
+    print(f"  candidates joined     : {stats['intent_joined']} joined / "
+          f"{stats['intent_missed']} missed "
+          f"[by key: {dict(intents.lookups)}]")
+    print(f"  address-path join rate: "
+          + (f"{addr_joined}/{addr_tried} ({addr_joined / addr_tried:.0%}) "
+             f"— baseline 100%; <50% raises" if addr_tried else "n/a (no probes)"))
+    lbl = Counter((r.get("intent") or {}).get("label") for r in rows)
+    for k, n in lbl.most_common():
+        flag = "  ⚠ committed to a competitor — scored NEGATIVE" if k == "on_market_fresh" else ""
+        print(f"    {n:>6}  {k or '(no intent joined)'}{flag}")
+    live_moments = [r for r in rows if (r.get("score_parts") or {}).get("intent_detail", {})
+                    .get("intent_moment")]
+    print(f"  rows with a LIVE moment: {len(live_moments)} "
+          f"(decays to nothing at {int(MOMENT_DEAD_DAYS)} days from the signal, not from "
+          f"the last enrichment run)")
+    print(f"  rows with an intent_note: {sum(1 for r in rows if r.get('intent_note'))} "
+          f"(separate field — the property hook is never overwritten)")
+
     print("\nExclusions (named, never silent):")
     for line in ex.report():
         print(line)
+    if ex.s21_labels:
+        # ⛔ Visibility only. The exclusion is unchanged and no scheduling is built.
+        print(f"    of the {ex.counts['s21_listing_expiry']} excluded under s21(3), by "
+              f"seller-intent label — OPEN QUESTION for Will, not a change:")
+        for k, n in ex.s21_labels.most_common():
+            mark = "  ← appointment IS IN FORCE and nearing expiry" if k == "on_market_expiring" else ""
+            print(f"      {n:>6}  {k}{mark}")
+
     if rows:
         print("\nTop rows (masked):")
         for r in rows[:10]:
+            sp = r.get("score_parts") or {}
+            det = sp.get("intent_detail") or {}
+            it = r.get("intent") or {}
             print(f"  {r['score']:.3f}  {r['track']:<12} {r['suburb'] or '-':<16} "
                   f"{mask_name(r.get('person_name'))!s:<10} {mask_phone(r['phone'])} "
                   f"({r['phone_type']}, age {r.get('record_age_years')}, "
                   f"occ {(r.get('occupancy') or {}).get('verdict', 'not assessed')})")
+            print(f"          intent {sp.get('intent', 0.0):+.3f}  "
+                  f"[raw {det.get('raw_total', 0.0):+.3f} "
+                  f"{'×' if det.get('reach_applied') else '(reach not applied — negative/zero:'} "
+                  f"reach {det.get('reach_factor', 1.0):.2f}"
+                  f"{']' if det.get('reach_applied') else ')]'} "
+                  f"label={it.get('label') or '-'} hot={it.get('hotness')} "
+                  f"beh={it.get('behavioral_score')} moment={it.get('moment') or '-'} "
+                  f"age={it.get('signal_age_days')}d via={it.get('joined_from') or '-'}")
+            if r.get("intent_note"):
+                print(f"          why now: {r['intent_note']}")
             print(f"          hook: {r['hook']['line'][:150]}")
     return {"rows": rows, "needs_id4me": needs_id4me, "excluded": ex, "stats": stats}
 
@@ -1327,6 +1870,59 @@ def do_stats(sm_db):
         print("         ?  prior_occupant exclusions: unknown — no build heartbeat carries "
               "them yet (run --build). Not reported as zero.")
 
+    # ── Seller intent in the queue ───────────────────────────────────────────
+    # Read from the queue itself, not recomputed — these are the values the ranking
+    # actually used. A row with `intent: null` means the join found nothing for that
+    # candidate; it is reported as "no intent joined", never folded into a bucket.
+    print("\n  Seller intent (joined from lead_worklist.seller_intent at build time):")
+    agg = list(coll.aggregate([{"$group": {"_id": "$intent.label", "n": {"$sum": 1}}},
+                               {"$sort": {"n": -1}}]))
+    for a in agg:
+        k = a["_id"]
+        flag = ("   ⚠ COMMITTED TO A COMPETITOR — scored negative, never a positive"
+                if k == "on_market_fresh" else "")
+        print(f"    {a['n']:>6}  {k or '(no intent joined)'}{flag}")
+    buckets = [("hotness >= 7", {"intent.hotness": {"$gte": 7}}),
+               ("hotness 4-6", {"intent.hotness": {"$gte": 4, "$lte": 6}}),
+               ("hotness 1-3", {"intent.hotness": {"$gte": 1, "$lte": 3}}),
+               ("hotness <= 0", {"intent.hotness": {"$lte": 0}}),
+               ("behavioral_score > 0", {"intent.behavioral_score": {"$gt": 0}}),
+               ("has a `moment`", {"intent.moment": {"$nin": [None, ""]}}),
+               ("has an intent_note", {"intent_note": {"$nin": [None, ""]}})]
+    print("\n    Intent strength:")
+    for label, q in buckets:
+        print(f"      {coll.count_documents(q):>6}  {label}")
+    agg = list(coll.aggregate([{"$group": {"_id": "$intent.joined_from", "n": {"$sum": 1}}},
+                               {"$sort": {"n": -1}}]))
+    print("    Joined via:")
+    for a in agg:
+        print(f"      {a['n']:>6}  {a['_id'] or '(not joined)'}")
+    if hb and "intent_address_join_rate" in m:
+        print(f"    address-path join rate at the last build: "
+              f"{m['intent_address_join_rate']} (measured baseline 1.0; below 0.5 raises)")
+    else:
+        print("    address-path join rate: unknown — no build heartbeat carries it yet. "
+              "Not reported as a fake 1.0.")
+
+    # ── ⛔ s21(3): the SIZE of the open question, not a change to the exclusion ──
+    # The exclusion in collect_track_b_leads is untouched. This counts how many of the
+    # leads it drops carry the `on_market_expiring` label — the cohort seller_intent
+    # scores highest (listing_bonus +22) and whose Form 6 appointment is exactly what
+    # s21(3) turns on. Whether they should be SCHEDULED for after expiry rather than
+    # excluded is Will's legal call. No scheduling is built here.
+    s21 = list(sm_db.lead_worklist.aggregate([
+        {"$match": {"sources": "listing_expiry", "is_test": {"$ne": True}}},
+        {"$group": {"_id": "$seller_intent.label", "n": {"$sum": 1}}},
+        {"$sort": {"n": -1}}]))
+    tot = sum(a["n"] for a in s21)
+    print(f"\n  ⛔ EXCLUDED under POA Reg 2014 s21(3) — {tot} lead(s) carry source "
+          f"'listing_expiry' and are dropped before scoring. UNCHANGED. By seller-intent label:")
+    for a in s21:
+        mark = ("  ← another agent's appointment IS IN FORCE and nearing expiry; whether "
+                "to SCHEDULE these for after expiry is Will's decision, not this script's"
+                if a["_id"] == "on_market_expiring" else "")
+        print(f"    {a['n']:>6}  {a['_id'] or '(no seller_intent)'}{mark}")
+
     no_hook = coll.count_documents({"hook.line": ""})
     if no_hook:
         print(f"  ⚠ {no_hook} rows have NO hook — every candidate line failed the editorial guard")
@@ -1339,29 +1935,78 @@ def do_needs_id4me(gc_db, sm_db, args):
     ctx = HookContext(gc_db)
     ex = Excluded()
     stats = Counter()
+    intents = IntentIndex(sm_db)
     addresses = collect_track_b_leads(sm_db, ex)
     if args.suburb:
         addresses = [a for a in addresses if a["suburb"] == args.suburb]
-    property_rows(gc_db, ctx, "B_intent", addresses, ex, stats)  # populates _needs_id4me
+    # populates _needs_id4me AND _intent
+    property_rows(gc_db, ctx, "B_intent", addresses, ex, stats, intents=intents)
     pending = [a for a in addresses if a.get("_needs_id4me")]
 
+    # ⚠ THIS ORDERING IS THE HIGHEST-VALUE PART OF THE INTENT WIRING. The append is
+    # human-paced at ~50/day over ~5 days, so this rank decides who we are even ABLE
+    # to call in week 1. Ranking it on reachability alone spent the first day on the
+    # freshest ID4ME records rather than on the people who told us they are thinking
+    # about selling. It uses the identical score_candidate() as --build so the two
+    # can never drift apart.
+    #
+    # `phone_type="mobile"` and `record_age_years=None` are placeholders — neither is
+    # knowable before the append, and both are constant across every pending row, so
+    # they cannot change the ORDER. record_age_years=None means reach_factor is 0.70
+    # for everyone here: intent is scaled uniformly, not discounted unevenly on a
+    # number we do not have yet.
     def rank(a):
         facts = a.get("_facts") or {}
         s, _ = score_candidate("B_intent", a["suburb"], "mobile", None,
-                               facts.get("years_held"), a.get("_occupancy"), "unknown")
+                               facts.get("years_held"), a.get("_occupancy"), "unknown",
+                               None, a.get("_intent"))
         return s
 
     pending.sort(key=rank, reverse=True)
     if args.limit:
         pending = pending[: args.limit]
 
+    # Rule 7b on the read: a collapsed join here would silently restore the old
+    # reachability-only ordering and look like a normal run.
+    addr_joined, addr_tried = intents.address_join_rate()
+    if intents.n_docs == 0:
+        raise RuntimeError("IntentIndex read 0 non-test lead_worklist documents — the "
+                           "seller-intent layer is unreadable, not empty.")
+    if addr_tried >= 20 and (addr_joined / addr_tried) < 0.50:
+        raise RuntimeError(
+            f"seller-intent address join collapsed: {addr_joined}/{addr_tried} "
+            f"({addr_joined / addr_tried:.0%}) against a measured 100% baseline — a broken "
+            f"join, not absent intent data. Refusing to emit a reachability-only append order.")
+
     print(f"\nAddresses needing an ID4ME append — {now_aest_str()}")
     print(f"  {len(pending)} ranked candidates (Track B intent leads, exclusions already applied)")
+    print(f"  Ranked by score_candidate() — reachability AND seller intent, the same "
+          f"function --build uses.")
     print(f"  ⚠ Append these BY HAND. ID4ME ToS forbids automated extraction; cap 800/day; "
           f"can_use_api is false on our subscription.")
+    print(f"\n  Seller intent across the pending list "
+          f"(join: {addr_joined}/{addr_tried} by address, {dict(intents.lookups)}):")
+    lbl = Counter((a.get("_intent") or {}).get("label") for a in pending)
+    for k, n in lbl.most_common():
+        flag = "  ⚠ scored NEGATIVE — committed to a competitor" if k == "on_market_fresh" else ""
+        print(f"    {n:>6}  {k or '(no intent joined)'}{flag}")
+    hot = [a for a in pending if ((a.get("_intent") or {}).get("hotness") or 0) >= 7]
+    hot_first50 = [a for a in pending[:50] if ((a.get("_intent") or {}).get("hotness") or 0) >= 7]
+    print(f"    hotness >= 7: {len(hot)} in the list, {len(hot_first50)} inside the first 50 "
+          f"(= day 1 of the append run)")
+    moments = [a for a in pending if (a.get("_intent") or {}).get("moment")]
+    print(f"    live/recent `moment`: {len(moments)}  "
+          f"(decays to nothing {int(MOMENT_DEAD_DAYS)} days after the signal)")
     print("\nExclusions applied:")
     for line in ex.report():
         print(line)
+    if ex.s21_labels:
+        # ⛔ Counter only — the s21(3) exclusion is unchanged and no scheduling is built.
+        print(f"    of the {ex.counts['s21_listing_expiry']} excluded under s21(3), by "
+              f"seller-intent label (OPEN QUESTION for Will — not a change):")
+        for k, n in ex.s21_labels.most_common():
+            mark = "  ← appointment IS IN FORCE and nearing expiry" if k == "on_market_expiring" else ""
+            print(f"      {n:>6}  {k}{mark}")
     by_suburb = Counter(a["suburb"] for a in pending)
     print("\n  By suburb (ID4ME freshness measured: Robina 66.7%, Burleigh Waters 41.7%, "
           "Varsity Lakes 8.3%):")
@@ -1372,13 +2017,19 @@ def do_needs_id4me(gc_db, sm_db, args):
         with open(args.out, "w", newline="") as fh:
             w = csv.writer(fh, delimiter="\t")
             w.writerow(["rank", "address", "suburb", "postcode", "years_held",
-                        "occupancy", "lead_signals", "score_proxy"])
+                        "occupancy", "lead_signals", "score_proxy",
+                        "intent_label", "hotness", "behavioral_score", "moment",
+                        "intent_note"])
             for i, a in enumerate(pending, 1):
                 facts = a.get("_facts") or {}
+                it = a.get("_intent") or {}
                 w.writerow([i, a["address"], SUBURB_LABEL.get(a["suburb"], a["suburb"]),
                             SUBURB_POSTCODE.get(a["suburb"], ""), facts.get("years_held") or "",
                             a.get("_occupancy") or "unknown",
-                            "|".join(a.get("lead_signals") or []), f"{rank(a):.4f}"])
+                            "|".join(a.get("lead_signals") or []), f"{rank(a):.4f}",
+                            it.get("label") or "", it.get("hotness") if it else "",
+                            it.get("behavioral_score") if it else "",
+                            it.get("moment") or "", intent_note(a.get("_intent"))])
         print(f"\n  Written: {args.out}")
     else:
         print("\n  (addresses withheld from stdout — pass --out FILE to write the list)")
