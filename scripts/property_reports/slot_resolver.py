@@ -17,6 +17,7 @@ without it, queries hit ~40K cadastral records).
 
 from __future__ import annotations
 
+import os
 import logging
 import math
 import re
@@ -32,6 +33,10 @@ from scripts.property_reports.hero_photo import score_and_pick_hero
 from scripts.property_reports.walking_distances import resolve_pois
 from scripts.property_reports.market_narrative import resolve_market_narrative
 from scripts.property_reports.market_paragraph import resolve_market_paragraph
+from scripts.property_reports.positioning_template import resolve_positioning_template
+from scripts.property_reports.personas_template import (
+    resolve_personas_template, resolve_buyers_template,
+)
 from scripts.property_reports.scarcity_headline import resolve_scarcity_headline
 from scripts.property_reports.scarcity_features import resolve_scarcity_features
 from scripts.property_reports.valuation_format import display_range
@@ -654,7 +659,31 @@ class SlotResolver:
         if latlng:
             self.emit.start("walking_distances", "Measuring walks to schools, parks, the beach")
             try:
-                resolved_pois = resolve_pois(latlng[0], latlng[1])
+                # ⚠ PRE-HARVESTED FIRST. `walking_distances.resolve_pois()` asks
+                # Overpass live for POI identity, which is the single slowest
+                # step in the build — 67 s of a 143 s build, with all three
+                # mirrors exhausting before one answered (measured 2026-08-15).
+                # `nearby_pois` answers the same question from the pre-harvested
+                # `Gold_Coast_POIs.pois` collection (788 places, 9 suburbs) with
+                # no Overpass dependency, and only routes the survivors.
+                # The off-market build has been on this path all along.
+                # Same output shape: {name, category, walkMetres}.
+                resolved_pois = []
+                try:
+                    from scripts.property_reports.nearby_pois import (
+                        resolve_nearby_pois, to_walking_poi_list,
+                    )
+                    proximity = resolve_nearby_pois(latlng[0], latlng[1], self.db)
+                    resolved_pois = to_walking_poi_list(
+                        proximity, latlng[0], latlng[1],
+                        mapbox_token=os.environ.get("MAPBOX_TOKEN"),
+                    )
+                except Exception as e:
+                    logger.info(f"  pre-harvested POIs unavailable ({e}); falling back to Overpass")
+                # Fall back to the live Overpass path only when the pre-harvested
+                # set produced nothing — a suburb outside the harvest, say.
+                if not resolved_pois:
+                    resolved_pois = resolve_pois(latlng[0], latlng[1])
                 if resolved_pois:
                     updates["pois"] = resolved_pois
                     updates["slot_status.walking_distance"] = "approved"
@@ -803,6 +832,56 @@ class SlotResolver:
         # sampleParagraph) grounded in the same structured scarcity + cohort
         # data the scarcity narrative used. Reads `valuation_data.subject_property
         # .features.basic` for the property's full engine-feature dict.
+        # ── no_llm build: deterministic positioning / personas / buyers ──────
+        # Built from `positioning_object` (already resolved above), which computes
+        # every decision the prompts were asking a model to make — the winning
+        # archetype, the price-driver vs buyer-driver split, the anti-frames and
+        # the forbidden-claim list. The templates dress that object; they do not
+        # re-decide anything. Cost is ~0 ms against ~90-400 s for the LLM chain,
+        # and there is no failure mode: the LLM positioning slot was erroring on
+        # 22 of 105 docs and silently taking personas AND buyers down with it,
+        # because both nested under `if pos.get("frame")`.
+        if self.no_llm and updates.get("positioning_object") and self._subject:
+            self.emit.start("positioning", "Building your positioning frame")
+            try:
+                pos_t = resolve_positioning_template(
+                    updates["positioning_object"],
+                    scarcity_features=scarcity_struct,
+                    suburb=self.suburb_display,
+                    address=self.address,
+                    valuation_range=updates.get("valuation.model_range"),
+                )
+                personas_t = resolve_personas_template(
+                    updates["positioning_object"],
+                    scarcity_features=scarcity_struct,
+                    suburb=self.suburb_display,
+                )
+                if pos_t and personas_t:
+                    pos_t["personas"] = personas_t
+                    updates["positioning"] = pos_t
+                    updates["slot_status.positioning"] = "approved"
+                    self.emit.done("positioning", "Positioning frame ready")
+
+                    buyers_t = resolve_buyers_template(
+                        updates["positioning_object"],
+                        personas_t,
+                        scarcity_features=scarcity_struct,
+                        valuation_range=updates.get("valuation.model_range"),
+                        suburb=self.suburb_display,
+                    )
+                    if buyers_t:
+                        updates["buyers"] = buyers_t
+                        updates["slot_status.buyers"] = "approved"
+                        logger.info("  positioning + personas + buyers (deterministic)")
+                    else:
+                        updates["slot_status.buyers"] = "pending"
+                else:
+                    updates["slot_status.positioning"] = "pending"
+                    self.emit.done("positioning", "Positioning pending")
+            except Exception as e:
+                logger.warning(f"  deterministic positioning failed: {e}")
+                updates["slot_status.positioning"] = "error"
+
         # no_llm build: skip the whole positioning/personas/buyers LLM chain.
         if scarcity_struct and scarcity_struct.get("notable_features") and self._subject and not self.no_llm:
             self.emit.start("positioning", "Building your positioning frame")
@@ -1212,7 +1291,12 @@ class SlotResolver:
             else (clean_candidates[0] if clean_candidates else scraper_hero)
         )
         hero_pick_meta = None
-        if clean_candidates:
+        # ⚠ `no_llm` means NO model calls. This one was never gated — it kept
+        # firing a vision request in the mode that exists to make none, costing
+        # ~6.7 s and a Gemini call per build (measured 2026-08-15). The gallery
+        # still renders: `hero_url` above already falls back to the scraper's own
+        # hero, or the first clean candidate.
+        if clean_candidates and not self.no_llm:
             self.emit.start("gallery", f"Selecting your hero shot from {len(clean_candidates)} photos")
             try:
                 pick = score_and_pick_hero(clean_candidates[:8])
