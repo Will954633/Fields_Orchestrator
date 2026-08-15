@@ -94,6 +94,7 @@ def main():
             f"{DRIVE}/annotations_b1.jsonl",               # i######### Drive external
             "/home/fields/brain1_yt/annotations.jsonl",    # u9##### YouTube channels
             "/home/fields/brain1_books/annotations.jsonl",  # k9#### raw-.txt books
+            "/home/fields/brain1_build/Spotify/annotations.jsonl",  # u8##### podcasts
         ]
         merges = [p for p in BRAIN1_SOURCES if os.path.exists(p)]
         missing = [p for p in BRAIN1_SOURCES if not os.path.exists(p)]
