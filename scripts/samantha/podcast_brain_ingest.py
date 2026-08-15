@@ -753,7 +753,7 @@ def chunk(only_slug=None):
 # ---------------------------------------------------------------------------
 # provenance
 # ---------------------------------------------------------------------------
-def provenance(only_slug=None):
+def provenance(only_slug=None, prune=False):
     """Rewrite `provenance` in annotations.jsonl from Mongo ground truth.
 
     The annotator infers provenance from the unit header, and that inference is
@@ -802,13 +802,20 @@ def provenance(only_slug=None):
                 "speakers": speakers,
             }
 
-    rows, rewritten, unmapped = [], 0, 0
+    rows, rewritten, unmapped, pruned = [], 0, 0, 0
     with open(path) as fh:
         for line in fh:
             line = line.strip()
             if not line:
                 continue
             row = json.loads(line)
+            if prune and row.get("unit_id") not in unit_map:
+                # An orphan: its episode was reset (e.g. by `audit --reset`) and
+                # re-chunked under fresh unit ids. Left in place it would ship the
+                # OLD degenerate text into the graph alongside the replacement,
+                # because the nightly merges this file wholesale.
+                pruned += 1
+                continue
             meta = unit_map.get(row.get("unit_id"))
             if meta:
                 before = (row.get("provenance"), row.get("date"), row.get("speakers"))
@@ -832,13 +839,17 @@ def provenance(only_slug=None):
         for row in rows:
             fh.write(json.dumps(row, ensure_ascii=False) + "\n")
     os.replace(tmp, path)
-    _log(f"provenance: rewrote {rewritten}/{len(rows)} units ({unmapped} unmapped)")
-    # Rule 7b: units we cannot attribute are units the graph will mis-cite.
+    _log(f"provenance: rewrote {rewritten}/{len(rows)} units "
+         f"({unmapped} unmapped, {pruned} pruned)")
+    # Rule 7b: units we cannot attribute are units the graph will mis-cite. Note
+    # this fires only WITHOUT --prune; an orphan is a real signal (usually a reset
+    # episode not yet re-chunked) and must be looked at, not silently dropped.
     if unmapped:
         raise RuntimeError(
             f"{unmapped} annotated units have no episode in Mongo — attribution "
-            f"would be wrong; investigate before rebuilding the graph")
-    return {"rewritten": rewritten, "unmapped": unmapped}
+            f"would be wrong. Re-run chunk if an episode was reset, or pass "
+            f"--prune to drop them deliberately")
+    return {"rewritten": rewritten, "unmapped": unmapped, "pruned": pruned}
 
 
 # ---------------------------------------------------------------------------
@@ -916,6 +927,9 @@ def main():
                                       "provenance", "audit", "status", "all"])
     ap.add_argument("--reset", action="store_true",
                     help="audit only: send degenerate transcripts back to pending")
+    ap.add_argument("--prune", action="store_true",
+                    help="provenance only: drop annotation rows whose episode no "
+                         "longer claims them (orphans left by audit --reset)")
     ap.add_argument("--slug", help="restrict to one feed from config/podcast_feeds.yaml")
     ap.add_argument("--limit", type=int, default=5, help="episodes per transcribe run")
     ap.add_argument("--no-heartbeat", action="store_true",
@@ -930,7 +944,7 @@ def main():
         if a.stage in ("chunk", "all"):
             chunk(a.slug)
         if a.stage == "provenance":
-            provenance(a.slug)
+            provenance(a.slug, prune=a.prune)
         if a.stage == "audit":
             audit(a.slug, reset=a.reset)
         if a.stage == "status":
