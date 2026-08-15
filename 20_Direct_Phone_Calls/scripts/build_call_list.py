@@ -795,9 +795,11 @@ def upsert_rows(coll, rows: list[dict], dry_run: bool) -> dict:
         coll.update_one({"_id": _id}, {
             "$set": mutable,
             # dnc.status is seeded once and never touched again by this script.
+            # Dotted path (not a whole `dnc` sub-document) because $set already
+            # addresses dnc.id4me_advisory — a nested-object $setOnInsert collides
+            # with it ("Updating the path 'dnc' would create a conflict at 'dnc'").
             "$setOnInsert": {"created_at": now_utc(), "status": "queued",
-                             "dnc": {"status": "unwashed",
-                                     "id4me_advisory": r.get("id4me_advisory") or "unknown"}},
+                             "dnc.status": "unwashed"},
         }, upsert=True)
         res["updated" if existing else "inserted"] += 1
     return res
@@ -911,8 +913,8 @@ def do_build(gc_db, sm_db, args, beat) -> dict:
 
     print(f"\nBuild — {now_aest_str()}{'  [DRY RUN]' if args.dry_run else ''}")
     print(f"  candidates considered : {considered}")
-    print(f"  queue rows produced   : {len(rows)}  "
-          f"(A {stats['track_a_rows']} / B {stats['track_b_rows']} / C {stats['track_c_rows']})")
+    print(f"  queue rows produced   : {len(rows)}   [pre-limit by track: "
+          f"A {stats['track_a_rows']} / B {stats['track_b_rows']} / C {stats['track_c_rows']}]")
     print(f"  written               : {write['inserted']} inserted, {write['updated']} updated, "
           f"{write['skipped_terminal']} left alone (terminal status)")
     print(f"  blocked on ID4ME      : {stats['blocked_on_id4me']}  "
@@ -959,6 +961,20 @@ def do_stats(sm_db):
         ages.sort()
         print(f"  ID4ME record age: median {ages[len(ages)//2]:.2f}y over {len(ages)} rows "
               f"(sample baseline was 3.12y median, 38.9% fresh)")
+    # Blocked on the ID4ME append. Read from the last build's heartbeat rather than
+    # recomputed — the count requires resolving every lead address to a property doc
+    # and --stats must stay cheap. If it is missing, say so; never print a fake zero.
+    hb = sm_db["job_runs"].find_one({"job": "build_call_list"})
+    m = (hb or {}).get("metrics") or {}
+    if hb and "blocked_on_id4me" in m:
+        print(f"\n  BLOCKED ON ID4ME APPEND: {m['blocked_on_id4me']} candidate addresses had no "
+              f"ID4ME_Contact_Data at the last build ({hb.get('run_at')}), out of "
+              f"{m.get('candidates_considered')} considered — run --needs-id4me for the "
+              f"ranked, human-paced append list. This script never calls ID4ME.")
+    else:
+        print("\n  BLOCKED ON ID4ME APPEND: unknown — build_call_list has no heartbeat yet "
+              "(run --build). Not reported as zero.")
+
     no_hook = coll.count_documents({"hook.line": ""})
     if no_hook:
         print(f"  ⚠ {no_hook} rows have NO hook — every candidate line failed the editorial guard")
