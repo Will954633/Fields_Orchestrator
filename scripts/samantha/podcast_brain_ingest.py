@@ -105,6 +105,12 @@ MIN_TRANSCRIPT_WORDS = 150   # below this it is a trailer/promo, not a teaching 
 MAX_ATTEMPTS = 3
 
 SEGMENT_SECONDS = 600        # 10 min -> ~3,200 words -> well inside maxOutputTokens
+MAX_SPLIT_DEPTH = 3          # 10min -> 5 -> 2.5 -> 1.25min before giving up
+# Repetition-loop guards. Real speech measured ~1.000 unique 10-grams across 146
+# episodes; the three degenerate ones came in at 0.43-0.79. Thresholds sit well
+# below the healthy floor so genuine repetition (a chant, a recited list) passes.
+SEGMENT_UNIQ_MIN = 0.75      # per ASR call -> triggers a split
+EPISODE_UNIQ_MIN = 0.85      # whole transcript -> refuses to store
 ASR_MODEL = os.environ.get("PODCAST_ASR_MODEL", "gemini-2.5-flash")
 VERTEX_PROJECT = os.environ.get("VERTEX_PROJECT_ID", "fields-estate")
 VERTEX_REGION = os.environ.get("VERTEX_REGION", "global")
@@ -295,6 +301,17 @@ def _vertex_token():
     return _VERTEX_CREDS.token
 
 
+class TruncatedResponse(RuntimeError):
+    """The model hit maxOutputTokens.
+
+    Kept distinct from transient errors because it must NOT be retried as-is. The
+    call is deterministic (temperature=0), so an identical retry fails identically
+    — the first backfill spent four attempts per segment discovering that. The
+    caller's correct response is to change the input (transcribe a shorter slice),
+    not to ask again.
+    """
+
+
 def _vertex_generate(parts, max_tokens=32768, attempt_budget=4):
     """POST one generateContent call to Vertex, with retry on transient status."""
     host = ("aiplatform.googleapis.com" if VERTEX_REGION == "global"
@@ -320,13 +337,16 @@ def _vertex_generate(parts, max_tokens=32768, attempt_budget=4):
             if fr == "MAX_TOKENS":
                 # A truncated response is a FAILURE, not a partial win: keeping it
                 # would splice a half-transcribed segment into the corpus with no
-                # signal that anything was lost.
-                raise RuntimeError("response truncated at maxOutputTokens")
+                # signal that anything was lost. Raised out of the retry loop
+                # rather than through it — see TruncatedResponse.
+                raise TruncatedResponse("response truncated at maxOutputTokens")
             txt = "".join(p.get("text", "")
                           for p in (cand.get("content", {}).get("parts") or [])).strip()
             if not txt:
                 raise RuntimeError(f"empty candidate (finishReason={fr})")
             return txt
+        except TruncatedResponse:
+            raise
         except Exception as e:
             last = f"{type(e).__name__}: {str(e)[:200]}"
             time.sleep(min(60, 5 * (2 ** attempt)))
@@ -367,16 +387,87 @@ def _extract_guests(doc):
     return guests[:6]
 
 
-def _asr_segment(path, roster, context):
-    """Transcribe one audio segment with speaker labels. Raises on failure."""
+class DegenerateResponse(RuntimeError):
+    """The model fell into a repetition loop but finished before the token cap.
+
+    This is the SILENT form of the truncation failure and the more dangerous one.
+    A truncated response at least raises; a degenerate-but-complete response looks
+    like a clean success and lands in the corpus. Measured across the first 146
+    episodes: the median transcript has a 1.000 unique-10-gram ratio and three
+    came back at 0.43-0.79, one of them claiming 470 words/minute of speech.
+
+    Word rate alone does NOT catch it — a 0.584 transcript sat at a plausible-
+    looking 235 wpm. n-gram uniqueness does.
+    """
+
+
+def _shingle_uniqueness(text, n=10):
+    """Fraction of distinct n-word sequences. ~1.0 for real speech, low for a loop."""
+    w = re.findall(r"\w+", text.lower())
+    if len(w) < n + 200:      # too short to judge; do not fail it on noise
+        return 1.0
+    sh = [" ".join(w[i:i + n]) for i in range(len(w) - n)]
+    return len(set(sh)) / len(sh)
+
+
+def _audio_duration(path):
+    out = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+         "-of", "default=nw=1:nk=1", path],
+        capture_output=True, text=True, timeout=120)
+    try:
+        return float(out.stdout.strip())
+    except ValueError:
+        return 0.0
+
+
+def _asr_segment(path, roster, context, depth=0):
+    """Transcribe one audio segment with speaker labels.
+
+    On truncation, halve the audio and recurse rather than retrying. The model
+    occasionally falls into a repetition loop on a particular passage and emits
+    tokens until the cap; because the call is deterministic, asking again is
+    guaranteed to reproduce it. Re-cutting the audio changes the input and breaks
+    the loop. Observed on 8 of 152 episodes, and NOT correlated with length — a
+    162-minute episode succeeded while a 39-minute one failed.
+    """
     with open(path, "rb") as fh:
         data = base64.b64encode(fh.read()).decode()
-    txt = _vertex_generate([
-        {"inline_data": {"mime_type": "audio/mpeg", "data": data}},
-        {"text": f"{_asr_prompt(roster)}\n\nContext (for names and jargon only, "
-                 f"do not transcribe this line): {context}"},
-    ])
-    return "" if txt.strip() == "[no speech]" else txt
+    try:
+        txt = _vertex_generate([
+            {"inline_data": {"mime_type": "audio/mpeg", "data": data}},
+            {"text": f"{_asr_prompt(roster)}\n\nContext (for names and jargon only, "
+                     f"do not transcribe this line): {context}"},
+        ])
+        if txt.strip() == "[no speech]":
+            return ""
+        uniq = _shingle_uniqueness(txt)
+        if uniq < SEGMENT_UNIQ_MIN:
+            # Same disease as truncation, caught before it can pass as success.
+            raise DegenerateResponse(f"repetition loop: {uniq:.2f} unique 10-grams")
+        return txt
+    except (TruncatedResponse, DegenerateResponse) as e:
+        dur = _audio_duration(path)
+        if depth >= MAX_SPLIT_DEPTH or dur < 60:
+            # Give up rather than return a partial or looped transcript: a silent
+            # gap (or 20 repetitions) in the middle of an episode is worse than a
+            # visibly failed episode.
+            raise
+        half = dur / 2
+        _log(f"    {type(e).__name__} at {dur/60:.1f}m (depth {depth}) — splitting in half")
+        out = []
+        for i, (ss, t) in enumerate([(0, half), (half, dur - half)]):
+            piece = f"{path}.d{depth}p{i}.mp3"
+            subprocess.run(
+                ["ffmpeg", "-nostdin", "-loglevel", "error", "-ss", f"{ss:.3f}",
+                 "-t", f"{t:.3f}", "-i", path, "-c", "copy", piece],
+                check=True, timeout=600)
+            try:
+                out.append(_asr_segment(piece, roster, context, depth + 1))
+            finally:
+                if os.path.exists(piece):
+                    os.remove(piece)
+        return "\n\n".join(x for x in out if x)
 
 
 def _canonical_speakers(text, roster):
@@ -464,6 +555,13 @@ def _transcribe_one(doc, roster):
 
         text = re.sub(r"\n{3,}", "\n\n", "\n\n".join(t for t in texts if t).strip())
         text, spoke = _canonical_speakers(text, roster)
+        # Rule 7b at the episode level: a transcript that assembled cleanly can
+        # still be junk. Assert the outcome, do not merely fail to throw.
+        uniq = _shingle_uniqueness(text)
+        if uniq < EPISODE_UNIQ_MIN:
+            raise DegenerateResponse(
+                f"transcript is {uniq:.2f} unique 10-grams — repetition loop "
+                f"survived segment-level checks; refusing to store it")
         return text, len(segs), spoke
     finally:
         shutil.rmtree(work, ignore_errors=True)
@@ -724,6 +822,55 @@ def provenance(only_slug=None):
 
 
 # ---------------------------------------------------------------------------
+def audit(only_slug=None, reset=False):
+    """Re-check stored transcripts for repetition loops.
+
+    Exists because the guards were added AFTER a backfill had already run: three
+    degenerate transcripts were sitting in the corpus looking like clean
+    successes. Run this after any bulk transcription, and after changing the ASR
+    model or prompt.
+
+    `reset=True` sends the offenders back to `pending` and deletes the bad
+    transcript so the next transcribe run redoes them.
+    """
+    coll = _coll()
+    q = {"transcript_path": {"$exists": True}}
+    if only_slug:
+        q["slug"] = only_slug
+    bad = []
+    n = 0
+    for d in coll.find(q, {"episode_id": 1, "title": 1, "transcript_path": 1,
+                           "duration": 1, "word_count": 1, "unit_ids": 1}):
+        try:
+            text = open(d["transcript_path"]).read()
+        except OSError:
+            continue
+        n += 1
+        uniq = _shingle_uniqueness(text)
+        if uniq < EPISODE_UNIQ_MIN:
+            dur = (d.get("duration") or 0) / 60
+            bad.append((uniq, d))
+            _log(f"  DEGENERATE {uniq:.3f} uniq | "
+                 f"{(d.get('word_count') or 0)/dur if dur else 0:.0f} wpm | "
+                 f"{d['title'][:44]}")
+    _log(f"audit: {len(bad)}/{n} transcripts below {EPISODE_UNIQ_MIN} unique 10-grams")
+    if bad and reset:
+        for uniq, d in bad:
+            try:
+                os.remove(d["transcript_path"])
+            except OSError:
+                pass
+            coll.update_one({"episode_id": d["episode_id"]}, {
+                "$set": {"status": "pending", "attempts": 0,
+                         "last_error": f"degenerate transcript ({uniq:.2f} uniq) — reset"},
+                "$unset": {"transcript_path": "", "word_count": "", "unit_ids": "",
+                           "last_unit_number": "", "chunked_at": "", "speakers": ""}})
+        _log(f"audit: reset {len(bad)} episodes to pending")
+        _log("      NOTE: units for these episodes are still in annotations.jsonl — "
+             "re-run chunk + annotate + provenance, then prune stale unit ids")
+    return {"checked": n, "degenerate": len(bad)}
+
+
 def status():
     coll = _coll()
     _log(f"base: {BASE}  ({_free_disk_mb(BASE):.0f} MB free)")
@@ -746,7 +893,9 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("stage", choices=["discover", "transcribe", "chunk",
-                                      "provenance", "status", "all"])
+                                      "provenance", "audit", "status", "all"])
+    ap.add_argument("--reset", action="store_true",
+                    help="audit only: send degenerate transcripts back to pending")
     ap.add_argument("--slug", help="restrict to one feed from config/podcast_feeds.yaml")
     ap.add_argument("--limit", type=int, default=5, help="episodes per transcribe run")
     ap.add_argument("--no-heartbeat", action="store_true",
@@ -762,6 +911,8 @@ def main():
             chunk(a.slug)
         if a.stage == "provenance":
             provenance(a.slug)
+        if a.stage == "audit":
+            audit(a.slug, reset=a.reset)
         if a.stage == "status":
             status()
 
