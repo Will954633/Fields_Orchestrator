@@ -74,6 +74,32 @@ CLEANUP_INEFFECTIVE_BYTES = 200 * 1024 * 1024   # < this freed == "did nothing"
 INEFFECTIVE_COOLDOWN_H = 1.0
 GROWTH_SCAN_ROOTS = ["/home/fields", "/var", "/tmp"]
 
+# --------------------------------------------------------------------------- #
+# Scratch directories this guard may sweep  (added 2026-08-15)
+# --------------------------------------------------------------------------- #
+# ⚠ THIS IS AN ALLOWLIST, AND IT MUST STAY ONE. Do not generalise it to
+# "artifacts/" or to an age sweep over the whole tree. Two things there are NOT
+# scratch and would be destroyed:
+#   * artifacts/appraisals_v4/*.pdf — 95 system_monitor.appraisal_pipeline docs
+#     reference these paths and all 95 files are live, the oldest from
+#     2026-05-18. An age sweep is exactly what kills them.
+#   * assets/img/cover_hero_*.jpg — the durable pre-warm cache; deleting it
+#     forces a full, expensive rebuild of the catchment.
+# The pre-warm already unlinks its own intermediates once published to blob
+# storage (prewarm_offmarket_covers.py), so the top level is not ours to manage.
+#
+# Every entry below must be justified: pure scratch, regenerable, unreferenced.
+#   aerial_tmp       render scratch; the generator copies to the shared cache and
+#                    unlinks. This is belt-and-braces for the non-cover path.
+#   browser_artifacts one timestamped dir per site-inspector run; only the newest
+#                    is ever read (ceo-telegram-bridge treats it as "evidence
+#                    gathered immediately before this reply"). 444 dirs back to
+#                    April were sitting there at ~1GB.
+SCRATCH_SWEEP = [
+    (BASE_DIR / "artifacts" / "appraisals_v4" / "assets" / "aerial_tmp", 1),
+    (BASE_DIR / "artifacts" / "browser_artifacts", 7),
+]
+
 # Process patterns considered reapable ONLY when orphaned (PPID==1).
 ORPHAN_REAP_PATTERNS = [
     "native-binary/claude",
@@ -484,6 +510,26 @@ def disk_cleanup(aggressive: bool, dry: bool) -> tuple:
                 continue
         if pruned:
             actions.append(f"pruned {pruned} old run-logs (>14d)")
+    # 5. allowlisted scratch dirs (see SCRATCH_SWEEP — do NOT widen this)
+    for target, age_days in SCRATCH_SWEEP:
+        if not target.is_dir():
+            continue
+        cutoff = time.time() - age_days * 86400
+        n = 0
+        for entry in target.iterdir():
+            try:
+                if entry.stat().st_mtime >= cutoff:
+                    continue  # too new — may be a render in flight
+                if not dry:
+                    if entry.is_dir():
+                        subprocess.run(["rm", "-rf", str(entry)], timeout=60)
+                    else:
+                        entry.unlink()
+                n += 1
+            except Exception:
+                continue
+        if n:
+            actions.append(f"swept {n} from {target.name} (>{age_days}d)")
     freed = max(0, _shutil.disk_usage("/").free - before)
     actions.append(f"reclaimed {freed / 1e6:.0f}MB")
     return actions, freed
