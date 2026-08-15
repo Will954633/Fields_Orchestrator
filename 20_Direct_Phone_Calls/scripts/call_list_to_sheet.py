@@ -60,7 +60,8 @@ def mask_phone(p: str) -> str:
 # ---------------------------------------------------------------------------
 # Candidate selection
 # ---------------------------------------------------------------------------
-def pick_candidates(db, limit: int, track: str | None, now: datetime):
+def pick_candidates(db, limit: int, track: str | None, now: datetime,
+                    preview: bool = False):
     """Dialable == queued, DNC-clean, wash not expired, not suppressed.
 
     The DNC test is deliberately positive ("status == clean AND expires_at in the
@@ -69,11 +70,14 @@ def pick_candidates(db, limit: int, track: str | None, now: datetime):
     us the defence only for 30 days after OUR OWN submission, and s11(6) puts the
     evidential burden on us — so the default must be "not dialable".
     """
-    q = {
-        "status": "queued",
-        "dnc.status": "clean",
-        "dnc.expires_at": {"$gt": now},
-    }
+    q = {"status": "queued"}
+    if not preview:
+        # PREVIEW MODE SKIPS THIS AND ONLY THIS. Preview rows are written with a
+        # "⛔ NOT WASHED — DO NOT DIAL" marker in the DNC column and a preview
+        # banner on the day separator, are never marked `listed`, and never enter
+        # the ledger — so they remain available to a real run after the wash.
+        q["dnc.status"] = "clean"
+        q["dnc.expires_at"] = {"$gt": now}
     if track:
         q["track"] = track
     cur = db[QUEUE_COLL].find(q).sort("score", -1)
@@ -109,7 +113,12 @@ def build_row(d: dict, day: datetime, rank: int) -> list:
         bits.append(f"last sold {p['last_sale_date']}{held}")
 
     washed = d.get("dnc", {}).get("washed_at")
-    washed_s = washed.astimezone(AEST).strftime("%-d %b") if isinstance(washed, datetime) else ""
+    if isinstance(washed, datetime):
+        washed_s = washed.astimezone(AEST).strftime("%-d %b")
+    else:
+        # Unwashed rows only reach the sheet via --preview. Say so loudly in the
+        # cell itself, not just in a banner the caller may have scrolled past.
+        washed_s = "⛔ NOT WASHED — DO NOT DIAL"
 
     row = [""] * len(HEADERS)
     row[COL["Call Date"]] = day.strftime("%Y-%m-%d")
@@ -143,7 +152,8 @@ def build_row(d: dict, day: datetime, rank: int) -> list:
 # ---------------------------------------------------------------------------
 # The insert
 # ---------------------------------------------------------------------------
-def insert_day_block(svc, ssid, sheet_id, rows: list, day: datetime):
+def insert_day_block(svc, ssid, sheet_id, rows: list, day: datetime,
+                     preview: bool = False):
     n = len(rows)
     svc.spreadsheets().batchUpdate(spreadsheetId=ssid, body={"requests": [{
         "insertDimension": {
@@ -154,7 +164,11 @@ def insert_day_block(svc, ssid, sheet_id, rows: list, day: datetime):
         }
     }]}).execute()
 
-    values = [day_separator_row(day, n)] + rows
+    sep = day_separator_row(day, n)
+    if preview:
+        sep[0] = (f"⛔  PREVIEW — {n} candidate{'s' if n != 1 else ''} for review only. "
+                  f"NOT DNC-WASHED. DO NOT DIAL ANY ROW IN THIS BLOCK.  ⛔")
+    values = [sep] + rows
     last = col_letter(len(HEADERS) - 1)
     rng = f"'{TAB}'!A2:{last}{2 + n}"
     # Hard guard: this range spans K/L/M, so we must NOT send those cells.
@@ -181,7 +195,8 @@ def insert_day_block(svc, ssid, sheet_id, rows: list, day: datetime):
         {"repeatCell": {
             "range": {"sheetId": sheet_id, "startRowIndex": 1, "endRowIndex": 2},
             "cell": {"userEnteredFormat": {
-                "backgroundColor": {"red": 0.20, "green": 0.24, "blue": 0.29},
+                "backgroundColor": ({"red": 0.65, "green": 0.11, "blue": 0.11} if preview
+                                    else {"red": 0.20, "green": 0.24, "blue": 0.29}),
                 "textFormat": {"bold": True, "foregroundColor":
                                {"red": 1, "green": 1, "blue": 1}}}},
             "fields": "userEnteredFormat.backgroundColor,userEnteredFormat.textFormat"}},
@@ -246,6 +261,10 @@ def main():
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--refresh-only", action="store_true",
                     help="only update Recording/Transcript, insert nothing")
+    ap.add_argument("--preview", action="store_true",
+                    help="show UNWASHED candidates for review. Rows are marked "
+                         "DO NOT DIAL, are not marked listed, and do not enter the "
+                         "ledger — so a real run can still list them after the wash.")
     args = ap.parse_args()
 
     set_env_from_file()
@@ -274,8 +293,13 @@ def main():
         while day.weekday() == 6:
             day += timedelta(days=1)
 
-        cands = pick_candidates(db, args.limit, args.track, now)
+        cands = pick_candidates(db, args.limit, args.track, now, preview=args.preview)
         queued_total = db[QUEUE_COLL].count_documents({"status": "queued"})
+
+        if not cands and args.preview:
+            print("no queued candidates at all — run build_call_list.py --build first")
+            beat.detail = "preview: queue empty"
+            return
 
         if not cands:
             # Rule 7b: distinguish "nothing to do" from "we could not do it".
@@ -304,7 +328,20 @@ def main():
             return
 
         sheet_id = ensure_tab(svc, args.spreadsheet_id)
-        insert_day_block(svc, args.spreadsheet_id, sheet_id, rows, day)
+        insert_day_block(svc, args.spreadsheet_id, sheet_id, rows, day,
+                         preview=args.preview)
+
+        if args.preview:
+            # Deliberately NO ledger write and NO status change. A preview must not
+            # consume the candidates — after the wash lands, the real run must still
+            # be able to list these same people.
+            print(f"PREVIEW: wrote {len(rows)} candidates for review. "
+                  f"NOT dialable, NOT ledgered, still 'queued'.\n"
+                  f"  Nothing may be dialled until dnc_wash.py round-trips "
+                  f"(DNCR Act 2006 s11(3)).")
+            beat.detail = f"preview {len(rows)}"
+            beat.metrics = {"preview_rows": len(rows), "queued_total": queued_total}
+            return
 
         # Ledger + queue state AFTER the successful write, so a failed write is
         # simply retried next run rather than silently dropping the candidates.
