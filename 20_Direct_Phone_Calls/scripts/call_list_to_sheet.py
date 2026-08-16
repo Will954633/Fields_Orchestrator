@@ -17,10 +17,10 @@ HOW THE NO-CLOBBER GUARANTEE WORKS
 3. `inheritFromBefore: False` makes the new rows inherit format from the row BELOW
    (a data row), not from the bold header. Getting this backwards makes every new
    row bold.
-4. Columns K/L/M are never in any write range. `assert_machine_range()` raises if a
+4. Columns L/M/N are never in any write range. `assert_machine_range()` raises if a
    future edit widens a range over them.
 5. Recording/Transcript are refreshed one cell at a time, located by the hidden
-   Call ID in column P — never by row number, because row numbers change daily.
+   Call ID in column Q — never by row number, because row numbers change daily.
 
 Rule 7b: a run that had dialable candidates but wrote zero rows RAISES.
 """
@@ -149,7 +149,7 @@ def build_row(d: dict, day: datetime, rank: int) -> list:
 
     row[COL["DNC washed"]] = washed_s
     row[COL["Property"]] = " · ".join(bits)
-    # K, L, M deliberately left empty — the caller owns them.
+    # L, M, N deliberately left empty — the caller owns them (HUMAN_COLS).
     row[CALL_ID_COL] = d["_id"]
     return row
 
@@ -176,7 +176,7 @@ def insert_day_block(svc, ssid, sheet_id, rows: list, day: datetime,
     values = [sep] + rows
     last = col_letter(len(HEADERS) - 1)
     rng = f"'{TAB}'!A2:{last}{2 + n}"
-    # Hard guard: this range spans K/L/M, so we must NOT send those cells.
+    # Hard guard: this range spans L/M/N, so we must NOT send those cells.
     # We write column-group by column-group instead, skipping the human block.
     left_rng = f"'{TAB}'!A2:{col_letter(COL['Property'])}{2 + n}"
     right_rng = f"'{TAB}'!{col_letter(RECORDING_COL)}2:{last}{2 + n}"
