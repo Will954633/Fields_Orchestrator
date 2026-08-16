@@ -1487,8 +1487,36 @@ def upsert_rows(coll, rows: list[dict], dry_run: bool) -> dict:
     from "called"/"do_not_contact" back to "queued" — the guard is structural, not
     a conditional someone can forget. dnc.status is likewise only ever seeded
     "unwashed" here; dnc_wash.py owns every later transition."""
-    res = {"inserted": 0, "updated": 0, "skipped_terminal": 0}
+    res = {"inserted": 0, "updated": 0, "skipped_terminal": 0, "skipped_suppressed_phone": 0}
+
+    # ⛔ Suppression is a property of the PERSON, not of this (track, address, phone) key.
+    # `_id` embeds the track and the address, so the terminal-status guard below — which only
+    # ever looks up that exact `_id` — misses two real cases:
+    #   1. TRACK CHANGE. Someone suppressed as "B_intent:12-smith-st:0412..." reappears as
+    #      "C_openmarket:12-smith-st:0412..." — same human, same number, different key, so
+    #      `existing` is None and they are re-queued. Track B -> C is the planned expansion
+    #      path (00_SCOPING.md §1), not a hypothetical.
+    #   2. NEW ADDRESS. read_call_outcomes.py sweeps a suppressed number across other
+    #      addresses, but only over docs that are "queued"/"listed" AT THAT MOMENT. A later
+    #      ID4ME append that finds the same number at a second property (investor, previous
+    #      occupant) creates a doc that sweep never saw.
+    # Either one re-queues a person who asked not to be called, which makes the caller's
+    # "I'll get it taken off" false. That is the fact pattern most likely to satisfy the
+    # "reckless" element of the statutory tort (Privacy Act Sch 2), where cl 6(3) means the
+    # small-business exemption is no shield.
+    # So: suppression is looked up BY PHONE, across every track and address, before insert.
+    suppressed_phones = set()
+    if not dry_run:
+        suppressed_phones = {
+            d["phone"] for d in coll.find(
+                {"status": "do_not_contact", "phone": {"$ne": None}}, {"phone": 1})
+            if d.get("phone")
+        }
+
     for r in rows:
+        if r.get("phone") and r["phone"] in suppressed_phones:
+            res["skipped_suppressed_phone"] += 1
+            continue
         _id = queue_id(r["track"], r["address"], r["phone"])
         existing = coll.find_one({"_id": _id}, {"status": 1}) if not dry_run else None
         if existing and existing.get("status") in TERMINAL_STATUSES:
@@ -1682,6 +1710,7 @@ def do_build(gc_db, sm_db, args, beat) -> dict:
         "queue_rows": len(rows),
         "inserted": write["inserted"], "updated": write["updated"],
         "skipped_terminal": write["skipped_terminal"],
+        "skipped_suppressed_phone": write["skipped_suppressed_phone"],
         "track_a": stats["track_a_rows"], "track_b": stats["track_b_rows"],
         "track_c": stats["track_c_rows"],
         "with_id4me": with_id4me, "blocked_on_id4me": stats["blocked_on_id4me"],
@@ -1722,6 +1751,9 @@ def do_build(gc_db, sm_db, args, beat) -> dict:
           f"A {stats['track_a_rows']} / B {stats['track_b_rows']} / C {stats['track_c_rows']}]")
     print(f"  written               : {write['inserted']} inserted, {write['updated']} updated, "
           f"{write['skipped_terminal']} left alone (terminal status)")
+    if write["skipped_suppressed_phone"]:
+        print(f"  ⛔ suppressed persons  : {write['skipped_suppressed_phone']} row(s) NOT queued — "
+              f"the number is do_not_contact at another address or on another track")
     print(f"  blocked on ID4ME      : {stats['blocked_on_id4me']}  "
           f"(run --needs-id4me for the human-paced append list)")
     print(f"\nOccupancy evidence (occupancy_evidence.py — dated against the last SALE)"
