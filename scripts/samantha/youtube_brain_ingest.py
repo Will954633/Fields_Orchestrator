@@ -261,6 +261,18 @@ def _fetch_transcript(video_id, session_tag):
     return text, track.language_code, track.is_generated
 
 
+# Errors that mean "this video has no caption track and never will", as opposed
+# to "we could not reach YouTube right now". The distinction matters to the Rule
+# 7b assertion below: a batch of purely un-transcribable videos yielding zero
+# transcripts is the CORRECT outcome, not evidence the route is broken.
+_UNAVAILABLE_MARKERS = ("TranscriptsDisabled", "NoTranscriptFound",
+                        "VideoUnavailable", "AgeRestricted", "VideoUnplayable")
+
+
+def _is_permanently_unavailable(err):
+    return any(m in (err or "") for m in _UNAVAILABLE_MARKERS)
+
+
 def _transcribe_one(doc, session_tag):
     """Worker body. Returns (doc, outcome, payload) — never raises."""
     try:
@@ -294,7 +306,7 @@ def transcribe(limit=25, only_library=None, workers=6):
     todo = list(coll.find(q).sort("duration", -1).limit(limit))
     _log(f"transcribe: {len(todo)} videos queued (limit {limit}, {workers} workers)")
 
-    ok = failed = skipped_short = deferred = 0
+    ok = failed = skipped_short = deferred = unavailable = 0
     errors = []
     done = 0
     with ThreadPoolExecutor(max_workers=workers) as pool:
@@ -329,6 +341,8 @@ def transcribe(limit=25, only_library=None, workers=6):
                     _log(f"{tag}\n      not released yet — deferred, no attempt spent")
             elif outcome == "error":
                 failed += 1
+                if _is_permanently_unavailable(payload):
+                    unavailable += 1
                 errors.append(f"{vid}: {payload}")
                 _log(f"{tag}\n      FAIL {payload}")
                 coll.update_one({"video_id": vid},
@@ -370,7 +384,7 @@ def transcribe(limit=25, only_library=None, workers=6):
 
     return {"attempted": len(todo), "transcribed": ok,
             "failed": failed, "skipped_short": skipped_short,
-            "deferred": deferred,
+            "deferred": deferred, "unavailable": unavailable,
             "given_up": given_up, "registered_total": registered_total,
             "errors": errors[:10]}
 
@@ -527,7 +541,17 @@ def main():
             # Deferred premieres are excluded: they are not attempts that could
             # have succeeded, so a queue holding only unreleased videos is "no
             # work to do", not "could not do the work".
-            real_attempts = r["attempted"] - r["deferred"]
+            #
+            # Videos whose captions are DISABLED are excluded for the same
+            # reason, and this is a third case the rule does not name: work that
+            # can never be done. Counting them as failures made the tail of every
+            # backfill throw — the Glover U run ended on 36 caption-less videos
+            # and raised three times while behaving perfectly. An assertion that
+            # cries wolf gets ignored, which is precisely how the silent failures
+            # it exists to catch come back. Note this only SHRINKS the numerator:
+            # if even one indeterminate error (proxy, network, format) is in the
+            # batch and nothing transcribed, it still raises.
+            real_attempts = r["attempted"] - r["deferred"] - r["unavailable"]
             if real_attempts > 0 and r["transcribed"] == 0:
                 raise RuntimeError(
                     f"attempted {real_attempts} available videos, transcribed 0 "
