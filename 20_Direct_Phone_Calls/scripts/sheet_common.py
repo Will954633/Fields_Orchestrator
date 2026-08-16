@@ -11,9 +11,13 @@ read_call_outcomes.py copies them out. So:
     * The sheet is NEVER rebuilt and NEVER cleared.
     * New day-blocks are INSERTED at the top (insertDimension), pushing every
       existing row — and its notes, comments and colours — down intact.
-    * Columns K/L/M are HUMAN-OWNED. Nothing in this codebase may write them.
+    * Columns L/M/N are HUMAN-OWNED. Nothing in this codebase may write them.
       There is a guard (assert_machine_range) that raises if a caller tries.
-    * Machine columns are addressed by the hidden Call ID in column P, never by
+      (They were K/L/M until "Occupant?" was inserted at index 8 and shifted
+      everything right. HUMAN_COLS below is derived from COL, so the guard moved
+      with them automatically — only the prose said K/L/M. Cite HUMAN_COLS, not
+      letters, if you touch this again.)
+    * Machine columns are addressed by the hidden Call ID in column Q, never by
       row position, because rows move every single day.
 
 Layout (day-blocks newest-first, each preceded by a separator row):
@@ -212,10 +216,35 @@ def ensure_tab(svc, ssid: str) -> int:
                     "fields": "gridProperties.columnCount"}
             }]}).execute()
 
-    # Header: write only if row 1 is empty, so a human-renamed header survives.
+    # Header. Write it if row 1 is empty, OR if its width no longer matches HEADERS.
+    #
+    # THE SECOND CONDITION IS NOT COSMETIC — it fixes a live data-integrity bug.
+    # This used to write the header ONLY when row 1 was empty, so that a human who
+    # renamed a column kept their name. But the tab is created exactly once, so the
+    # first time a column was INSERTED into HEADERS ("Occupant?" at index 8) the
+    # header row silently stayed on the old 16-column layout while build_row
+    # immediately began writing the new 17-column one. Every label from I onward
+    # then described the wrong column: "☎ OUTCOME" sat above the machine-written
+    # Property column, so the caller's typed outcomes would have been overwritten
+    # by the next nightly run, and the "⛔ NOT WASHED — DO NOT DIAL" marker sat
+    # under a header reading "Property".
+    #
+    # A width change means the schema moved and the labels are now lies, which is
+    # strictly worse than losing a rename. A same-width header is still left alone,
+    # so the original rename-survives intent holds everywhere it can.
     rng = f"'{TAB}'!A1:{col_letter(len(HEADERS) - 1)}1"
     cur = svc.spreadsheets().values().get(spreadsheetId=ssid, range=rng).execute()
-    if not cur.get("values"):
+    existing = (cur.get("values") or [[]])[0]
+    if not existing:
+        svc.spreadsheets().values().update(
+            spreadsheetId=ssid, range=rng, valueInputOption="RAW",
+            body={"values": [HEADERS]}).execute()
+    elif len(existing) != len(HEADERS):
+        print(f"!! header row has {len(existing)} column(s) but HEADERS defines "
+              f"{len(HEADERS)} — the schema changed and every label after the "
+              f"insertion point described the wrong column. Rewriting row 1. "
+              f"(Data rows are already written in the current layout; only the "
+              f"labels were stale.)")
         svc.spreadsheets().values().update(
             spreadsheetId=ssid, range=rng, valueInputOption="RAW",
             body={"values": [HEADERS]}).execute()
@@ -234,6 +263,15 @@ def ensure_tab(svc, ssid: str) -> int:
             "range": {"sheetId": sid, "dimension": "COLUMNS",
                       "startIndex": CALL_ID_COL, "endIndex": CALL_ID_COL + 1},
             "properties": {"hiddenByUser": True}, "fields": "hiddenByUser"}},
+        # ...and positively UNHIDE everything before it. This used to only ever add
+        # a hide, which is not idempotent against a schema change: when "Occupant?"
+        # shifted Call ID from P to Q, the old hide stayed on P and silently hid the
+        # Transcript column from the caller. Stating both halves means the visible
+        # set is whatever the current layout says, not an accumulation of history.
+        {"updateDimensionProperties": {
+            "range": {"sheetId": sid, "dimension": "COLUMNS",
+                      "startIndex": 0, "endIndex": CALL_ID_COL},
+            "properties": {"hiddenByUser": False}, "fields": "hiddenByUser"}},
         # Wrap the two long text columns so the caller can read the hook and
         # write a proper comment without the row becoming unreadable.
         {"repeatCell": {
@@ -255,6 +293,18 @@ def ensure_tab(svc, ssid: str) -> int:
             "range": {"sheetId": sid, "dimension": "COLUMNS",
                       "startIndex": idx, "endIndex": idx + 1},
             "properties": {"pixelSize": px}, "fields": "pixelSize"}})
+
+    # Clear any validation OUTSIDE the outcome column before re-applying it inside.
+    # Like the hide above, the old code only ever ADDED validation, so when
+    # "Occupant?" shifted OUTCOME from K to L the dropdown stayed behind on K as
+    # well — putting an outcome picker on top of the machine-written Property
+    # column, inviting the caller to type an outcome into a cell the nightly run
+    # overwrites. Stating the negative makes the layout self-healing.
+    for lo, hi in ((0, OUTCOME_COL), (OUTCOME_COL + 1, len(HEADERS))):
+        if lo < hi:
+            reqs.append({"setDataValidation": {
+                "range": {"sheetId": sid, "startRowIndex": 1,
+                          "startColumnIndex": lo, "endColumnIndex": hi}}})  # no rule = clear
 
     # Outcome dropdown, re-applied on every run over an OPEN-ENDED range (no
     # endRowIndex). No script in this repo has used dataValidation before, and it
