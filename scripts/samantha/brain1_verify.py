@@ -33,6 +33,8 @@ PACKAGE = "/home/fields/brain1_build/package.json"
 ANN_FILES = [
     "/home/fields/brain1_build/annotations.jsonl",
     "/home/fields/brain1_yt/annotations.jsonl",        # video corpus (u9##### units)
+    "/home/fields/brain1_build/Spotify/annotations.jsonl",  # podcasts (u8##### — Bothsides AU)
+    "/home/fields/brain1_books/annotations.jsonl",     # raw-.txt books (k9#### units)
     "/home/fields/brain3_build/annotations_public.jsonl",
     "/home/fields/brain3_build/annotations_private.jsonl",
     "/home/fields/brain3_ops/annotations_ops.jsonl",   # Brain 3 internal ops (i##### units)
@@ -67,7 +69,57 @@ def unit_texts(ann_files=None):
             fields = ["key_quotes", "concepts", "claims", "decisions", "initiatives", "metrics"]
             blob = " ".join(x for f in fields for x in (d.get(f) or []) if isinstance(x, str))
             out[d["unit_id"]] = norm(blob)
+    warn_index_gap(out)
     return out
+
+
+# ⚠ Rule 7b applied to the publish gate: an index that silently covers only part of the graph
+# still exits 0, and every quote from the uncovered part is reported NOT_FOUND — the verifier's
+# own word for FABRICATED. That has now happened twice (2026-08-10 brain1_yt, 41 false
+# fabrications in one brief; 2026-08-17 Spotify/Bothsides + brain1_books, 2,126 units). The
+# hardcoded ANN_FILES list above is the recurring cause, so this check exists to make the NEXT
+# drift announce itself by name instead of being discovered in a bad brief.
+GRAPH_PACKAGE = "/home/fields/brain1_build/package.json"
+
+
+def graph_units(package=GRAPH_PACKAGE):
+    """(id -> library) for every unit in the graph, streamed so we never hold the 41 MB package."""
+    pat = re.compile(rb'\{"id":\s*"([A-Za-z0-9_]+)",\s*"src":\s*\{"lib":\s*"([^"]*)"')
+    units, tail = {}, b""
+    if not os.path.exists(package):
+        return units
+    with open(package, "rb") as fh:
+        while True:
+            chunk = fh.read(4 << 20)
+            if not chunk:
+                break
+            buf = tail + chunk
+            for m in pat.finditer(buf):
+                units[m.group(1).decode()] = m.group(2).decode()
+            tail = buf[-4096:]          # carry a boundary window so a split record still matches
+    return units
+
+
+def warn_index_gap(index, package=GRAPH_PACKAGE):
+    """Loudly name any library the graph exposes but this index cannot see."""
+    units = graph_units(package)
+    if not units:
+        return
+    missing = {}
+    for uid, lib in units.items():
+        if uid not in index:
+            missing[lib] = missing.get(lib, 0) + 1
+    if missing:
+        total = sum(missing.values())
+        print(f"\n{'='*78}\n⚠ VERIFIER INDEX GAP — {total} of {len(units)} graph units are NOT in the "
+              f"quote index.\n  Quotes from these libraries WILL be reported NOT_FOUND "
+              f"(= 'fabricated') even when genuine:", file=sys.stderr)
+        for lib, n in sorted(missing.items(), key=lambda kv: -kv[1]):
+            print(f"    {n:>6}  {lib}", file=sys.stderr)
+        print("  FIX: add the annotation file(s) for these libraries to ANN_FILES at the top of "
+              f"this script.\n{'='*78}\n", file=sys.stderr)
+    else:
+        print(f"[quote-verify] index covers all {len(units)} graph units", file=sys.stderr)
 
 
 # A quoted span shorter than this (normalized) that is NOT found verbatim anywhere cannot be
