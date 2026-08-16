@@ -190,14 +190,54 @@ def attributable_len(frs):
     return sum(len(norm(f)) for f in frs)
 
 
+# ⚠ brain1_deep's synthesis renders verbatim corpus material in **bold**, not in quotation
+# marks. Extracting only "..." spans therefore checked almost nothing and still reported a clean
+# run: on the 2026-08-17 q2 brief that was 88 bold spans of real quoted material vs ~26 quoted
+# pairs, i.e. the publish gate passed a brief it had barely read. Bold is ALSO used for ordinary
+# emphasis and for labels ("**Stated purpose.**"), so bold spans are only treated as quotes when
+# they are long enough to attribute and do not look like a heading/label.
+BOLD_MIN = 40
+
+
+def _bold_quotes(line):
+    out = []
+    for span in re.findall(r"\*\*(.+?)\*\*", line):
+        s = span.strip()
+        if len(s) < BOLD_MIN:
+            continue
+        if s.endswith(":"):                     # "**Stated purpose:**" style label
+            continue
+        if re.fullmatch(r"[A-Z0-9 §/&'\-—,.]+", s):   # ALL-CAPS heading, not speech
+            continue
+        out.append(s)
+    return out
+
+
 def parse_pairs(text):
-    """Every quote paired with the uXXXX ids that appear on the same line/bullet."""
+    """Every quote paired with the uXXXX ids that appear on the same line/bullet.
+
+    Three carriers of verbatim material, all paired against ids on the SAME line:
+      "straight/curly quotes"   — the classic form
+      **bold spans**            — what brain1_deep actually emits (see BOLD_MIN note above)
+      > blockquote lines        — used for pulled-out quotes
+    """
     pairs = []
     for line in text.splitlines():
         quotes = re.findall(r'[\"“]([^\"”]{8,})[\"”]', line)
+        quotes += _bold_quotes(line)
+        bq = line.lstrip()
+        if bq.startswith(">"):
+            body = bq.lstrip("> ").strip()
+            # strip bold/emphasis wrappers so the blockquote isn't double-counted
+            body = re.sub(r"\*+", "", body).strip()
+            if len(body) >= BOLD_MIN:
+                quotes.append(body)
         ids = re.findall(r"[uki]\d{4,10}", line)  # u#### coaching + k##### KB
+        seen = set()
         for q in quotes:
-            if ids:
+            k = norm(q)
+            if ids and k and k not in seen:
+                seen.add(k)
                 pairs.append((q, ids))
     return pairs
 
