@@ -9,7 +9,7 @@ out of the sheet and into Mongo. STRICTLY ONE-WAY: sheet → Mongo.
 
 WHY ONE-WAY
 -----------
-The sheet is the source of truth for K/L/M. This script only ever calls
+The sheet is the source of truth for L/M/N (HUMAN_COLS). This script only ever calls
 values().get on those columns; it holds no code path that writes them, and
 sheet_common.assert_machine_range() raises if one is ever added. The caller must
 be able to trust that what they typed stays exactly as they typed it.
