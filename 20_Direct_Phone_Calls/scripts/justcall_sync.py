@@ -23,8 +23,16 @@ WHAT IT DOES
        entitled", which is why --test-transcription exists.
     3. Upsert both into `system_monitor.call_activity`, keyed on `call_sid` (stable
        across the webhook and this job; the numeric `id` is not guaranteed to be).
-    4. Join each call to the campaign row in `system_monitor.call_queue` by phone number
-       (digits-only, AU prefix variance handled) and stamp that row status="called".
+    4. Join each call to the campaign row in `system_monitor.call_queue` and stamp that
+       row status="called". Two paths, tried in this order:
+         a. BY `metadata` — exact. The sheet's call panel
+            (20_Direct_Phone_Calls/apps_script/) stamps the queue row's _id into the
+            JustCall dialer deep link, and JustCall echoes it back. A match here is
+            proof, not inference.
+         b. BY PHONE NUMBER — heuristic fallback (digits-only, AU prefix variance
+            handled). Covers calls placed outside the sheet, e.g. from Will's handset.
+       Which path matched is stored per call (`queue_match`) and counted, because a row
+       joined on an exact id is stronger evidence than one joined on folded digits.
        AN UNMATCHED CALL IS A FACT, NOT A FAILURE — it is recorded as such (Will dialling
        someone by hand is a legitimate unmatched call), and counted so a join that breaks
        wholesale is visible as a number rather than as silence.
@@ -338,6 +346,31 @@ def recording_url_of(row: dict) -> str | None:
     return str(val) if val else None
 
 
+# Keys JustCall might carry the deep-link `metadata` under. The dialer deep link
+# built by the sheet's call panel (20_Direct_Phone_Calls/apps_script/) puts the
+# call_queue _id here, so a call can be joined to its campaign row by an EXACT key
+# instead of by normalised phone digits.
+#
+# WHICH KEY IS REAL IS NOT DOCUMENTED for the /calls list response — the deep-link
+# guide only promises metadata "in webhook payload for all event triggers". So this
+# guesses a list rather than one name, AND the caller counts how many calls matched
+# this way. A wrong guess therefore shows up as `matched_by_metadata: 0` in the
+# heartbeat metrics — a number we can see — not as a silent fallback to the old
+# behaviour. (CLAUDE.md rule 8: a zero is a fact about the name you typed.)
+_METADATA_KEYS = ("metadata", "custom_metadata", "call_metadata", "meta_data")
+
+
+def metadata_call_id_of(row: dict) -> str | None:
+    """The call_queue _id we stamped into the dialer deep link, if it came back."""
+    for key in _METADATA_KEYS:
+        val = row.get(key)
+        if isinstance(val, dict):
+            val = pick(val, "call_id", "callId", "id", "value")
+        if isinstance(val, str) and val.strip():
+            return val.strip()
+    return None
+
+
 def transcript_from_ai(ai: dict | None) -> tuple[str, list, str | None]:
     """(state, segments, plain_text). See module docstring for the state vocabulary."""
     if not ai:
@@ -377,6 +410,7 @@ def build_doc(call: dict, ai: dict | None, entitlement_error: str | None) -> dic
     doc = {
         "call_sid": sid,
         "justcall_id": pick(call, "id", "call_id"),
+        "dialer_metadata": metadata_call_id_of(call),
         "contact_number": pick(call, "contact_number", "client_number", "contact"),
         "contact_name": pick(call, "contact_name", "friendly_name"),
         "justcall_number": pick(call, "justcall_number", "justcall_line"),
@@ -411,8 +445,17 @@ def build_doc(call: dict, ai: dict | None, entitlement_error: str | None) -> dic
 # ─────────────────────────────────────────────────────────────────────────────
 # campaign join
 # ─────────────────────────────────────────────────────────────────────────────
-def build_queue_index(db) -> dict[str, dict]:
-    """Phone-key -> call_queue doc.
+def build_queue_index(db) -> tuple[dict[str, dict], dict[str, dict]]:
+    """Returns (phone_key -> call_queue doc, _id -> call_queue doc).
+
+    Two indexes because there are two join paths, and they are not equally good:
+
+      * BY _id — exact. The sheet's call panel stamps the queue row's _id into the
+        JustCall dialer deep link as `metadata`, and JustCall relays it back. When
+        this matches, the call provably belongs to that row.
+      * BY PHONE — a heuristic. It cannot tell two people who share a landline
+        apart, and it silently fails whenever a number is stored in a shape
+        phone_key() does not fold. It is the fallback, not the primary.
 
     `call_queue` is written by build_call_list.py, which is a sibling of this script and
     may not have run yet. A MISSING QUEUE IS NOT A FAILURE OF THE SYNC — the calls are
@@ -420,11 +463,13 @@ def build_queue_index(db) -> dict[str, dict]:
     is never mistaken for a broken join.
     """
     if COLL_QUEUE not in db.list_collection_names():
-        return {}
+        return {}, {}
     index: dict[str, dict] = {}
+    by_id: dict[str, dict] = {}
     for row in db[COLL_QUEUE].find(
             {}, {"phone": 1, "phones": 1, "contact_phone": 1, "mobile": 1,
                  "address": 1, "suburb": 1, "track": 1, "status": 1, "name": 1}):
+        by_id[str(row["_id"])] = row
         candidates: list[Any] = [row.get("phone"), row.get("contact_phone"), row.get("mobile")]
         extra = row.get("phones")
         if isinstance(extra, list):
@@ -435,7 +480,7 @@ def build_queue_index(db) -> dict[str, dict]:
             key = phone_key(cand)
             if key:
                 index.setdefault(key, row)
-    return index
+    return index, by_id
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -626,13 +671,15 @@ def run_sync(args) -> dict:
             print(f"!! calls_ai refused: {entitlement_error}")
         print(f"AI records matched by call_sid: {len(ai_by_sid)}")
 
-    queue_index = build_queue_index(db)
-    print(f"call_queue index: {len(queue_index)} phone key(s)"
+    queue_index, queue_by_id = build_queue_index(db)
+    print(f"call_queue index: {len(queue_index)} phone key(s), "
+          f"{len(queue_by_id)} id(s)"
           + ("  (collection absent — every call will be recorded as unmatched)"
              if not queue_index else ""))
 
     # ── upsert ────────────────────────────────────────────────────────────────
     ingested = transcripts = recordings = unmatched = matched = skipped = 0
+    by_metadata = by_phone = metadata_seen = metadata_unknown = 0
 
     for call in calls:
         sid = call_sid_of(call)
@@ -646,22 +693,51 @@ def run_sync(args) -> dict:
             transcripts += 1
 
         key = phone_key(doc.get("contact_number"))
-        qrow = queue_index.get(key) if key else None
         doc["phone_key"] = key
+
+        # EXACT JOIN FIRST. The dialer deep link carried the queue row's _id, so if
+        # it came back we know which row this call belongs to rather than inferring
+        # it. Phone matching stays as the fallback for calls placed outside the
+        # sheet (Will dialling from his handset), which is a legitimate case.
+        meta_id = doc.get("dialer_metadata")
+        qrow = None
+        match_path = None
+        if meta_id:
+            metadata_seen += 1
+            qrow = queue_by_id.get(meta_id)
+            if qrow:
+                match_path = "matched_metadata"
+                by_metadata += 1
+            else:
+                # Metadata came back but names a row we do not have. That is a real
+                # anomaly (a deleted queue row, or a stale link), not a reason to
+                # pretend the metadata was absent — so it is counted and recorded.
+                metadata_unknown += 1
+        if qrow is None and key:
+            qrow = queue_index.get(key)
+            if qrow:
+                match_path = "matched_phone"
+                by_phone += 1
+
         if qrow:
             matched += 1
             doc["call_queue_id"] = qrow.get("_id")
             doc["matched_address"] = qrow.get("address")
             doc["matched_suburb"] = qrow.get("suburb")
             doc["matched_track"] = qrow.get("track")
-            doc["queue_match"] = "matched"
+            # Kept as the literal path, not a bare "matched": a row joined by an
+            # exact id is stronger evidence than one joined by folded phone digits,
+            # and anything downstream deserves to be able to tell them apart.
+            doc["queue_match"] = match_path
         else:
             unmatched += 1
             # An unmatched call is a FACT, not an error: Will dialling someone by hand
             # is legitimate. Stored explicitly so "no match" is a value, not a silence.
             doc["call_queue_id"] = None
-            doc["queue_match"] = ("no_queue_collection" if not queue_index
-                                  else "no_matching_number")
+            doc["queue_match"] = (
+                "no_queue_collection" if not queue_index
+                else "metadata_unknown_id" if meta_id
+                else "no_matching_number")
 
         if args.download_recordings and doc.get("recording_url"):
             rec = download_recording(jc, doc)
@@ -698,8 +774,20 @@ def run_sync(args) -> dict:
             )
 
     print(f"\ningested={ingested} transcripts={transcripts} recordings={recordings} "
-          f"matched={matched} unmatched={unmatched} skipped={skipped} "
+          f"matched={matched} (metadata={by_metadata} phone={by_phone}) "
+          f"unmatched={unmatched} skipped={skipped} "
           f"api_requests={jc.requests_made}")
+
+    # The metadata field name on /calls is NOT documented — we guess a list of keys
+    # (_METADATA_KEYS). Say plainly which way it went, so a wrong guess is a visible
+    # line rather than a silent, permanent fallback to the weaker phone join.
+    if ingested and not metadata_seen:
+        print("   note: no call carried dialer metadata. Either none were placed from "
+              "the sheet's call panel, or /calls does not echo it under any key in "
+              "_METADATA_KEYS — check a call you know you placed from the panel.")
+    if metadata_unknown:
+        print(f"   !! {metadata_unknown} call(s) carried metadata naming a call_queue "
+              f"row that no longer exists")
 
     # ── RULE 7b: assert an OUTCOME, not merely that nothing threw ─────────────
     # "No calls to sync" is success. "Calls existed and we ingested none" is failure,
@@ -739,6 +827,10 @@ def run_sync(args) -> dict:
         "recordings": recordings,
         "unmatched": unmatched,
         "matched": matched,
+        "matched_by_metadata": by_metadata,
+        "matched_by_phone": by_phone,
+        "metadata_present": metadata_seen,
+        "metadata_unknown_id": metadata_unknown,
         "skipped_no_sid": skipped,
         "transcript_entitlement": ("refused" if entitlement_error
                                    else ("proven" if transcripts else "unproven")),
