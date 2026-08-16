@@ -28,6 +28,23 @@ channels:
       recruiting/revenue-share material — expect a low signal-to-noise ratio.
     max_backfill: 250
 
+  - library: "Keller Williams (US)"
+    country: "United States"
+    handle: "@kellerwilliams"
+    url: "https://www.youtube.com/@kellerwilliams"
+    channel_id: "UCxViDXGTXVVfgLQJZUquM7A"   # resolved, not guessed — a wrong
+                                             # id registers 0 videos silently
+    curate: true          # <- gated by yt_curate.py
+    why: >
+      1,338 videos / 410 hours — 2.6x Glover U and the first channel large
+      enough that indiscriminate ingestion is the wrong default. Measured on the
+      eXp corpus: only 1% of units came from recruiting-TITLED videos, so the
+      noise is not bad videos, it is non-teaching passages inside long replays
+      ("Big Agent Meeting REPLAY", "Level Up", "The Lab"). Hence curation runs at
+      BOTH video and chunk level. KW's "Empire Building" series is leadership and
+      scaling content — deliberately out of scope, see curation.exclude.
+    max_backfill: 1400
+
   - library: "Glover U (US)"
     country: "United States"
     handle: "@GloverU"
