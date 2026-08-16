@@ -28,6 +28,20 @@ channels:
       recruiting/revenue-share material — expect a low signal-to-noise ratio.
     max_backfill: 250
 
+  - library: "Glover U (US)"
+    country: "United States"
+    handle: "@GloverU"
+    url: "https://www.youtube.com/@GloverU"
+    channel_id: "UCIT4ylSsHJApyfsvcgraxVQ"
+    why: >
+      Jeff Glover's coaching channel — listing presentations, scripts, objection
+      handling, prospecting and conversion method. The densest source of actual
+      seller-side technique in the corpus: long-form (389 of 525 videos exceed
+      10 minutes, ~264 hours total) and instructional rather than promotional.
+      US market, so the same read-across caveat as eXp applies — scripts and
+      psychology transfer, pricing/regulation/seasonality do not.
+    max_backfill: 600
+
   - library: "BLAC SALT (AU)"
     country: "Australia"
     handle: "@BLAC_SALT"
