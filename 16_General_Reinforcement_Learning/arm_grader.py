@@ -36,7 +36,38 @@ MIN_TOTAL_CONV = 2         # act on directional signal fast, do not wait for sig
 
 
 def _grade(variants):
-    """variants: [{variant, users, conv}]. Returns verdict per arm vs the control/lowest variant."""
+    """variants: [{variant, users, conv}]. Returns verdict per arm vs the control/lowest variant.
+
+    ⚠ A VERDICT MUST SURVIVE ONE CONVERSION MOVING (onsite RL cycle, 2026-08-16).
+
+    The min-N gate above is a gate on the EXPERIMENT (≥2 conversions, ≥20 users
+    total). It says nothing about the individual arm, and until today the arm
+    test was `rate > control and conv >= 2` — which grades an arm "leading" when
+    it and control have the SAME number of conversions and it merely has fewer
+    users. That is not a small imprecision, it is the exact failure the weekly
+    contract was written to stop; on this run it printed:
+
+        onsite_exp_analyseyourhome_1
+          street_range  users=114  conv=2  rate=1.8%  lift=1.15×  → leading
+          control       users=131  conv=2  rate=1.5%  lift=1.0×   → control
+
+    Two conversions against two, called a 1.15× winner. Nothing separates those
+    arms; the ordering is entirely which arm happened to be assigned fewer
+    people. The same test called `bridge_compare` (3 conv) "lagging" against a
+    control on 3.
+
+    So each arm now also has to clear a one-conversion robustness test:
+      leading  — still ahead of control after REMOVING one of its conversions
+      lagging  — still behind control after ADDING one
+    Anything ahead or behind by less than a single event is
+    `inconclusive_within_one_conversion`, which is a different statement from
+    "not enough users" and is named separately so the distinction survives into
+    the cycle docs.
+
+    This deliberately does NOT introduce a significance test. Directional reads
+    on small batches are how this business runs and that stays (Will,
+    2026-07-29). What it refuses is a verdict that no observation supports.
+    """
     tot_conv = sum(v["conv"] for v in variants)
     total_users = sum(v["users"] for v in variants)
     if tot_conv < MIN_TOTAL_CONV or total_users < 2 * MIN_USERS_PER_ARM:
@@ -53,14 +84,23 @@ def _grade(variants):
     for v in variants:
         v["lift_vs_control"] = round(v["rate"] / base, 2) if base else None
         v["rate"] = round(v["rate"], 4)
+        # ⚠ ONE-CONVERSION ROBUSTNESS — the guard that stops a verdict being an
+        # accident. Read the note above _grade before loosening either test.
+        lead_floor = (v["conv"] - 1) / v["users"] if v["users"] else 0
+        lag_ceiling = (v["conv"] + 1) / v["users"] if v["users"] else 1
         if v is ctrl:
             v["verdict"] = "control"
         elif v["users"] < MIN_USERS_PER_ARM:
             v["verdict"] = "inconclusive_need_more_N"
-        elif v["rate"] > ctrl["rate"] and v["conv"] >= 2:
+        elif v["rate"] > ctrl["rate"] and v["conv"] >= MIN_TOTAL_CONV and lead_floor > ctrl["rate"]:
             v["verdict"] = "leading"        # promote candidate
-        elif v["rate"] < ctrl["rate"] and v["users"] >= MIN_USERS_PER_ARM:
+        elif v["rate"] < ctrl["rate"] and lag_ceiling < ctrl["rate"]:
             v["verdict"] = "lagging"        # kill candidate
+        elif v["rate"] != ctrl["rate"]:
+            # Ahead or behind, but by less than one conversion — a real ordering
+            # with no evidence behind it. Named so a reader can see it is not
+            # simply short of users.
+            v["verdict"] = "inconclusive_within_one_conversion"
         else:
             v["verdict"] = "inconclusive_need_more_N"
     return variants, "graded"
