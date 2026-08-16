@@ -61,6 +61,29 @@ ADVICE_PATTERNS = [
     (r"\bnegotiate harder\b", "advises a course of action"),
     (r"\byour (?:best|next) move\b", "advises a course of action"),
     (r"^\s*(?:step\s*\d+\s*:\s*)?(?:act|buy|sell|list|wait|watch out)\b", "imperative instruction"),
+    # ── the HEDGED advisory register (added 2026-08-16) ──────────────────
+    # Every pattern above catches an imperative. None of them caught the register the
+    # "Is Now a Good Time to …?" series is actually written in: a weighed, two-sided
+    # recommendation delivered as a verdict. The gate reported 90/90 clean while a live
+    # page carried "The case for selling now / The case for waiting" under a heading
+    # called "The Honest Answer", and closed by telling readers who "can afford to hold"
+    # that they "may benefit". Hedging the verb does not stop it being advice — Rule 5
+    # says the reader draws the conclusion, and a section that draws it for them breaches
+    # it however softly it is phrased. See fix-history 2026-08-16 [ARTICLE-HEDGED-ADVICE].
+    (r"\bthe case for (?:selling|buying|waiting|listing|holding)\b",
+     "presents a recommendation for a course of action"),
+    (r"\breasons to (?:buy|sell|list|wait|hold)\b", "presents a recommendation"),
+    (r"\bthe honest answer\b", "delivers a verdict on what the reader should do"),
+    # "buyers should not assume X is a firm date" cautions against over-reading a fact.
+    # That is the opposite of advice and Rule 5 wants it, so exclude the negated forms.
+    (r"\b(?:sellers?|buyers?|owners?)\s+should(?!\s+not\s+(?:assume|expect|read|infer|treat))\b",
+     "tells the reader what to do"),
+    (r"\bif you can afford to (?:hold|wait)\b", "advises timing"),
+    (r"\b(?:sellers?|buyers?|owners?|you)\s+who\s+can\s+(?:hold|wait)\b", "advises timing"),
+    (r"\bcompounds the case\b", "argues a course of action"),
+    (r"\brewards?\s+(?:patience|action|waiting)\b", "advises a course of action"),
+    (r"\bworth considering seriously\b", "advises a course of action"),
+    (r"\btiming logic\b", "endorses the timing of a transaction"),
 ]
 
 # ── No predictions — report indicators, never forecast ───────────────────
@@ -74,6 +97,11 @@ PREDICTION_PATTERNS = [
     (r"\bby (?:the end of|next) (?:year|quarter)[^.]{0,40}\bwill\b", "predicts"),
     (r"\blikely to (?:rise|fall|strengthen|soften|climb|drop)\b", "predicts a move"),
     (r"\bpredicts? (?:house |property )?prices\b", "predicts prices"),
+    # ── hedged forecasts (added 2026-08-16, same scan as the advisory register) ──
+    (r"\bmay (?:benefit|support (?:further|price)|see further)\b", "forecasts, hedged"),
+    (r"\bgrounds for optimism\b", "forecasts sentiment about future prices"),
+    (r"\bwhere prices land in \d{4}\b", "forecasts a price level for a named year"),
+    (r"\bwill keep (?:increasing|rising|growing|climbing|falling)\b", "predicts a move"),
 ]
 
 SHORTHAND_PRICE_RE = re.compile(r"\$\s*(\d+(?:\.\d+)?)\s*([mMkK])\b")
@@ -196,6 +224,16 @@ ACKNOWLEDGED = {
     ("in-robina-three-bedroom-houses-sell-in-about-28-days-this-waterfront-one-just-listed",
      "is set to"):
         "'priced to meet the market', not 'poised to'",
+    # ── added 2026-08-16 with the hedged-advisory patterns ───────────────
+    # "The honest answer" is a breach when it delivers a buy/sell verdict, which is how
+    # the "Is Now a Good Time to …?" series uses it. These two use the same words to
+    # answer an ANALYTICAL question — is migration still a driver, what does the Olympics
+    # actually fund — and recommend no course of action to anyone. Read in full and
+    # judged compliant; if a later reader disagrees, the sentence is quoted above.
+    ("699d7222a47edd0001e077e1", "The honest answer"):
+        "answers 'is the migration effect still working' analytically; recommends no action",
+    ("699d7218a47edd0001e07798", "The honest answer"):
+        "answers what the Olympics funds; about infrastructure causation, not a transaction",
 }
 
 

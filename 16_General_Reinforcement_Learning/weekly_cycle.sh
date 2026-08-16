@@ -97,6 +97,15 @@ YOUR DOMAIN MANDATE ($DOMAIN) — subordinate to the contract above
 
 $(cat "$PROMPT_FILE")"
 
+# --max-turns was 80 until 2026-08-16, when it silently killed THREE of seven domains in one
+# cycle (seo, articles, onsite — all "Error: Reached max turns (80)"; articles had already lost
+# one run to it on 08-13). onsite got far enough to raise two recommendations and then died
+# before writing its cycle doc, which is the worst shape: findings exist, the reasoning behind
+# them does not. There are TWO ceilings on this call and only one of them is meaningful —
+# BUDGET_SEC (2400s) bounds real cost; a turn count bounds nothing anyone chose. All three
+# failures ran 13-17 minutes, i.e. nowhere near the time budget. 200 lets the wall-clock
+# budget be the actual bound, which is the ceiling we actually reasoned about.
+#
 # Retry once on a transient AUTH failure only — not on any other error.
 # On 2026-08-13 the ops cycle died on "OAuth session expired and could not be refreshed"
 # at 07:15:25; the identical refresh token then succeeded from another process 110 seconds
@@ -105,18 +114,23 @@ $(cat "$PROMPT_FILE")"
 # A daily job losing that coin-flip costs a day. A WEEKLY job loses seven, which is why
 # this retry lives here even though the original incident was on a daily cycle.
 AUTH_FAIL=0
+TURN_FAIL=0
 RC=0
 for attempt in 1 2; do
   set +e
   timeout -k 60 "$BUDGET_SEC" claude --model "$MODEL" -p "$FULL_PROMPT" \
     --allowedTools "Bash,Read,Write,Edit,Glob,Grep,WebSearch,WebFetch,TodoWrite" \
-    --max-turns 80 > "$RUN_LOG" 2>&1
+    --max-turns 200 > "$RUN_LOG" 2>&1
   RC=$?
   set -e 2>/dev/null || true
 
   AUTH_FAIL=0
   grep -qF "OAuth session expired" "$RUN_LOG" && AUTH_FAIL=1
   grep -qF "Failed to authenticate" "$RUN_LOG" && AUTH_FAIL=1
+  # Name this one specifically. "claude -p rc=1" is the same string for "never authenticated",
+  # "crashed" and "ran out of turns", and on 2026-08-16 that ambiguity hid a three-domain
+  # outage behind a generic red row for a full cycle.
+  grep -qF "Reached max turns" "$RUN_LOG" && TURN_FAIL=1
 
   cat "$RUN_LOG" >> "$LOG"
   if [ "$AUTH_FAIL" -eq 0 ]; then break; fi
@@ -156,17 +170,21 @@ if [ -n "$INTEG_SNAP" ] && [ -f "$INTEG_SNAP" ]; then
   rm -f "$INTEG_SNAP"
 fi
 
-python3 - "$DOMAIN" "$RC" "$DOC_OK" "$AUTH_FAIL" "$SIG_RC" "$CYCLE_DOC" <<'PY' 2>/dev/null || true
+python3 - "$DOMAIN" "$RC" "$DOC_OK" "$AUTH_FAIL" "$SIG_RC" "$CYCLE_DOC" "$TURN_FAIL" <<'PY' 2>/dev/null || true
 import sys
 sys.path.insert(0, "/home/fields/Fields_Orchestrator/scripts")
 dom, rc, doc_ok, auth_fail, sig_rc, doc = (
     sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4]),
     int(sys.argv[5]), sys.argv[6])
+turn_fail = int(sys.argv[7])
 try:
     from job_status import record_job_result
     problems = []
     if auth_fail:
         problems.append("Claude Max OAuth failed — the agent never ran")
+    if turn_fail:
+        problems.append("hit --max-turns — the agent ran out of road mid-cycle, "
+                        "it did not fail to start")
     if rc != 0:
         problems.append(f"claude -p rc={rc}")
     if not doc_ok:

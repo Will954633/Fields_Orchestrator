@@ -145,9 +145,26 @@ def build(dry_run=False):
             milestones.append("offmarket_intent_sell"); score += L("offmarket_intent_sell", 0.71)
             reasons.append("off-market intent-to-sell")
 
+        # ⚠ V4 EQUIVALENTS. The two milestones above are V1/V3-only — `offmarket_qualify`
+        # last fired 2026-07-27 and `offmarket_menu_sell` 2026-07-29, because V4 has no
+        # intent menu and no qualify step. V4 became the sole deck renderer ~2026-08-11,
+        # so from that date every deck reader scored zero on off-market intent no matter
+        # what they did. These are V4's actual high-intent acts, and both are stronger
+        # signals than the menu click they replace:
+        #   - requesting the written report names ONE address and asks for 19 pages on it;
+        #   - submitting an attribute claim means correcting the record about a specific
+        #     home, which is something essentially only an owner or occupier does.
+        if "offmarket_claim_submitted" in offmarket_events:
+            milestones.append("offmarket_qualified"); score += L("offmarket_qualified", 0.83)
+            reasons.append("corrected an attribute on the home (owner/occupier act)")
+        if "offmarket_report_requested" in offmarket_events:
+            milestones.append("offmarket_intent_sell"); score += L("offmarket_intent_sell", 0.71)
+            reasons.append("requested the written report for this address")
+
         # HOT = hit at least one high-value pre-reward milestone (not just a stray pageview)
         hot = bool({"submitted_address", "searched_home_owner_address",
-                    "viewed_multiple_properties", "return_visit", "offmarket_qualified"} & set(milestones))
+                    "viewed_multiple_properties", "return_visit", "offmarket_qualified",
+                    "offmarket_intent_sell"} & set(milestones))
         if not hot:
             continue
 
