@@ -345,7 +345,13 @@ SELECT distinct_id,
        argMax(properties.$browser, timestamp) as browser,
        argMax(properties.$referring_domain, timestamp) as referrer
 FROM events
-WHERE event = 'offmarket_report_view' AND timestamp > now() - INTERVAL 180 DAY
+-- ⚠ BOTH deck generations. `offmarket_report_view` is fired only by the V1/V3 decks;
+-- V4 fires `offmarket_v4_view` instead. V4 became the sole renderer around 2026-08-11,
+-- so this query silently stopped producing ANY new off-market lead rows while
+-- /off-market pageviews held flat at 10-19 users/day (78 V4 viewers in the 6 days to
+-- 2026-08-15, none of whom reached this sheet). Keep the old name for history.
+WHERE event IN ('offmarket_report_view', 'offmarket_v4_view')
+  AND timestamp > now() - INTERVAL 180 DAY
 GROUP BY distinct_id
 """)
     for did, first_seen, views, paths, city, country, device, browser, referrer in rows:
