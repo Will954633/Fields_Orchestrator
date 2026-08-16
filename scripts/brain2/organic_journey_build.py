@@ -50,10 +50,25 @@ CONTENT_EVENTS = ["article_view", "v3_section_marker_view", "property_view",
 # surface. These micro→macro signals let the SHARED reward ledger capture the off-market
 # trajectory (deck engagement → sell intent → qualify), composed with the true reward
 # (submitted_address). Presence-based rollup (no extra event properties needed).
+# ⚠ TWO GENERATIONS OF DECK VOCABULARY LIVE HERE, AND BOTH MUST STAY.
+# The V1/V3 decks (DiscoveryDeck, DeckV3, OffMarketPage) fire `offmarket_report_view` +
+# card/menu events. V4 fires NONE of them — it has its own names. V4 became the sole
+# renderer around 2026-08-11 and `offmarket_report_view` went to zero while /off-market
+# pageviews held flat at 10-19 users/day, so every off-market milestone below silently
+# stopped being reached. Kept the old names because older journeys still carry them.
 OFFMARKET_EVENTS = ["offmarket_report_view", "card_viewed", "deck_exit",
                     "offmarket_menu_sell", "offmarket_menu_market", "offmarket_menu_surprise",
                     "offmarket_menu_else", "forward_cta_clicked", "offmarket_qualify",
-                    "offmarket_selling_plan_open"]
+                    "offmarket_selling_plan_open",
+                    # --- V4 ---
+                    "offmarket_v4_view", "v4_section_read", "v4_report_exit",
+                    "offmarket_report_requested", "offmarket_report_ready",
+                    "offmarket_report_downloaded",
+                    "offmarket_claim_shown", "offmarket_claim_submitted"]
+
+# Deck-engagement counter. V1/V3 counted swiped cards; V4 has no cards, so a section
+# read past the 1.5s dwell threshold is its equivalent unit of "moved through the deck".
+DECK_UNIT_EVENTS = ("card_viewed", "v4_section_read")
 STATE_TOKENS = {"qld", "nsw", "vic", "act", "sa", "wa", "nt", "tas", "australia"}
 
 # --- Funnel-regime labelling (Will, 2026-07-16) ---------------------------------
@@ -272,7 +287,7 @@ def main():
                 j["submits"].append(address)
         elif event in OFFMARKET_EVENTS:
             j.setdefault("offmarket", set()).add(event)
-            if event == "card_viewed":
+            if event in DECK_UNIT_EVENTS:
                 j["offmarket_cards"] = j.get("offmarket_cards", 0) + 1
 
     # neighbour-sale trigger: entry /property/<addr> then valued a house on same street
