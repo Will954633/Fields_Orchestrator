@@ -30,6 +30,7 @@ import json
 import os
 import re
 import sys
+import urllib.error
 import urllib.request
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -87,9 +88,25 @@ def _posthog(days):
 
 
 def _hogql(sql):
+    """Run a HogQL query. Raises on failure — see below.
+
+    ⚠ THIS USED TO `except Exception: return []` (fixed 2026-08-16, onsite RL
+    cycle). In a SENSOR that is the worst possible handler: `_deck_dead_ends()`
+    reads this and a swallowed 400 renders identically to a healthy funnel —
+    "0 incidents". A malformed query, a rotated key and a site with no friction
+    all printed the same line, and the one that matters is invisible.
+
+    HogQL rejects more than you would expect (`last` is a reserved keyword,
+    `toInt32OrNull` does not exist), so a failing query here is a live
+    possibility, not a theoretical one. Rule 7b: the run must assert an outcome,
+    not merely fail to throw. It now raises; `job_run` records the error and the
+    Process Registry shows ERROR rather than a clean nightly zero.
+    """
     key = os.environ.get("POSTHOG_PERSONAL_API_KEY") or os.environ.get("POSTHOG_ALL_ACCESS_KEY")
     pid = os.environ.get("POSTHOG_PROJECT_ID", "348370")
     if not key:
+        # Distinct from a failure: unconfigured is a known, reportable state and
+        # the caller's `if not rows` path already treats it as "no data".
         return []
     req = urllib.request.Request(
         f"https://us.posthog.com/api/projects/{pid}/query/",
@@ -98,8 +115,9 @@ def _hogql(sql):
     try:
         with urllib.request.urlopen(req, timeout=120) as r:
             return json.load(r).get("results", [])
-    except Exception:
-        return []
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode("utf-8", "replace")[:600]
+        raise RuntimeError(f"HogQL query failed ({e.code}): {detail}\n--- query ---\n{sql}") from e
 
 
 def _deck_dead_ends(days):
@@ -118,17 +136,35 @@ def _deck_dead_ends(days):
 
     ⚠ Do not use `deepest_section` for this: it reported 'hero' for 13-14 users whose sections_read
     was > 0, i.e. it contradicts sections_read on the same event. Logged as a V4 telemetry defect.
+
+    ⚠ THIS DETECTOR HAD NEVER RUN. From the day it was written until 2026-08-16 the query below
+    called `toInt64OrNull`, which HogQL does not have, so every call 400'd — and `_hogql` swallowed
+    the error and returned []. The deck therefore had no sensor at all while eight consecutive
+    snapshots printed "0 incidents", which is the same sentence a healthy deck produces. Both halves
+    are fixed: `_hogql` now raises, and `sections_read` is read as the Float that PostHog stores
+    (confirmed against the project's own property types, not guessed — Rule 8).
     """
     rows = _hogql(f"""
       SELECT ifNull(toString(properties.suburb),'?') sub,
              uniq(distinct_id) readers,
-             uniqIf(distinct_id, toInt64OrNull(toString(properties.sections_read)) >= 1) engaged
+             uniqIf(distinct_id, toFloat(properties.sections_read) >= 1) engaged
       FROM events WHERE event = 'v4_report_exit'
         AND timestamp >= now() - INTERVAL {int(days)} DAY
         AND ifNull(toString(properties.is_internal), 'false') != 'true'
       GROUP BY sub ORDER BY readers DESC LIMIT 20""")
+    # ⚠ THE FORWARD ACTION IS VERSION-SPECIFIC. This counted only
+    # `forward_cta_clicked`, which is emitted by DiscoveryDeck.tsx and
+    # OffMarketDeck.tsx — the V3 decks. V4 has been the live default since
+    # 2026-08-14 and never emits it (its own events are enumerated in
+    # OffMarketPage/v4: report request, claim submit). So the test compared V4
+    # readers against a V4-impossible event, which is a guaranteed incident
+    # rather than a measurement — it would have reported every suburb as a dead
+    # end forever, and its first live run (2026-08-16) duly did.
+    # A V4 reader's forward actions are: ask for the written report, or claim an
+    # attribute. `forward_cta_clicked` stays in the union for residual V3 traffic.
     fwd = _hogql(f"""
-      SELECT uniq(distinct_id) FROM events WHERE event = 'forward_cta_clicked'
+      SELECT uniq(distinct_id) FROM events
+        WHERE event IN ('forward_cta_clicked','offmarket_report_requested','offmarket_claim_submitted')
         AND timestamp >= now() - INTERVAL {int(days)} DAY
         AND ifNull(toString(properties.is_internal), 'false') != 'true'""")
     n_forward = (fwd[0][0] if fwd and fwd[0] else 0)
@@ -153,7 +189,8 @@ def _deck_dead_ends(days):
             "readers": readers, "engaged_readers": engaged, "forward_cta_users": n_forward,
             "last_seen": NOW.isoformat(),
             "why": (f"{engaged}/{readers} deck readers in {sub} read >=1 section ({frac:.0%}) but "
-                    f"only {n_forward} forward-CTA click(s) site-wide over {days}d — engaged, no exit"),
+                    f"only {n_forward} user(s) took ANY forward action site-wide over {days}d "
+                    f"(report request / attribute claim / V3 forward CTA) — engaged, no exit"),
         })
     return out
 
