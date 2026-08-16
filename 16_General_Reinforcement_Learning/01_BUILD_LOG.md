@@ -1,3 +1,36 @@
+
+## 2026-08-16 06:00 AEST — Ops cycle (health-board triage)
+
+Board: 19 actionable (ERROR 14 / STALE 4 / UNKNOWN-FRESHNESS 1) against OK 167, KNOWN-GAP 43.
+Briefing tier **current**. **1 root cause found, proven and repaired** — it accounts for 9 of the
+19 rows. 1 recommendation raised (ledger 1/2). 1 grading.
+
+- **[ENV-ROTATION-NEVER-DELIVERED]** — Domain.com.au ingestion dead **5 consecutive nights**
+  (2026-08-11 → 08-15), `FATAL: 0 URLs` across all 6 suburbs, **including 3 nights after**
+  `[BRIGHTDATA-TOKEN-ROTATED]` declared it restored. Root cause: `systemd` reads
+  `EnvironmentFile=` once at unit start; `fields-orchestrator` (up since 2026-08-06 07:28) still
+  held the revoked key, and `task_executor.py` passes `os.environ.copy()` to every step. Proven:
+  daemon-held key → HTTP 401 "Invalid token"; `.env` key → HTTP 200.
+- **Tier 1 performed:** restarted 7 verified-idle services (orchestrator + 5 pollers +
+  spawn-worker), all confirmed holding the live credential; re-ran step 101 — Robina discovery
+  **0 → 119 of 121 expected URLs**, 23 listings needing a first-ever detail scrape.
+- **Wider sweep:** 5 of 83 env vars stale across 9 long-running services
+  (`BRIGHTDATA_API_KEY`, `GITHUB_TOKEN`, `GMAIL_REFRESH_TOKEN`, `GOOGLE_ADS_REFRESH_TOKEN`,
+  `GOOGLE_INDEXING_REFRESH_TOKEN`), `TRACKING_ADMIN_TOKEN` absent entirely.
+- **REC-ops-004** (new) — approve restarting the 6 services left alone on blast radius
+  (voice-agent, samantha-chat, watchdog, trigger-poller, valuation-api, offmarket-processor), and
+  choose a durable delivery mechanism. Includes the trap: a credential-liveness monitor built the
+  obvious way reads a **fresh shell** and would have shown GREEN on all five dark nights — it must
+  probe `/proc/PID/environ`.
+- **REC-ops-001 graded `no_effect`** — claimed 15 → ~6 actionable rows; measured 19. The token was
+  rotated; the delivery mechanism ate it.
+- Left alone with reasons recorded: the 6 `Coverage vs Domain` rows + `Nightly run` + `Step 101`
+  + `Listing Discovery Coverage` (all downstream, should clear tonight); `Terminal states`
+  (53 stuck `under_contract`, oldest 146d — flagged as next week's strongest candidate);
+  `Schedule membership` (retired CatBoost, cosmetic); `Step 111 outcome` (UNVERIFIABLE, needs more
+  time); GSC `invalid_scope` (already REC-ops-002, approved, unshipped); the two RL-fleet rows
+  (single miss on a 168h cadence — watching, not acting).
+
 # General RL — Build Log
 
 Running log of what's actually built. Scoping: [`00_SCOPING.md`](00_SCOPING.md). Human deps: [`WILL_TO_ACTION.md`](WILL_TO_ACTION.md).
@@ -765,3 +798,192 @@ register" against a number that fails, and `launch-form.mjs`. All fixed, one bat
 commit, verified live.
 **Ledger:** REC-articles-002 supersedes -001 to correct the "Rule 5 clean" claim made about
 the 15 drafts. 1/2 open. Nothing published.
+
+## 2026-08-13 21:00 — articles cycle #4 (`articles_cycle_20260813_2100.md`)
+Will approved both open recommendations at 20:28 AEST; this cycle executed them.
+- **REC-articles-003 shipped** — `fields-automation@d8895c0c`, 5 files: `learning_context.py` +
+  `learning_snapshot.json` (new) inject 6,085 chars of measured headline CTR / read-depth / dead
+  hook mechanics into every How It Sold + Watch This Sale prompt; `article_prompt_template.md`
+  moves `## The Result` section 6 → 3. Rebased onto the REMOTE first — the local clone of
+  `fields-automation` is stale and diffing against it showed phantom changes (`[REC-003-STALE-BASE]`).
+- **REC-articles-002 shipped** — 15 how-it-sold articles published (73 → 88), gate 15/15 clean
+  before any write, one Netlify build, `articles.json` and three live URLs verified.
+- **Fixed a live soft 404**: `/articles/<any-string>` answered HTTP 200 with a generic shell.
+  The 2026-08-08 pass fixed the legacy `/article/:id` route and 301'd dead ids INTO this one —
+  the canonical URL Google crawls. Now 404s; real articles and draft previews still 200.
+  `Website_Version_Feb_2026@f5af4d76`.
+- Investigated the brief's "publishing workflow errors": all four 2026-08-09 failures were
+  `credit balance too low`, already fixed on remote. Residual: 10 workflows set `USE_CLAUDE_MAX`
+  without `CLAUDE_CODE_OAUTH_TOKEN` and rely on the runner user's `~/.claude` login.
+- 9 of the 12 remaining drafts flagged `review_hold` — four duplicate pairs from a double
+  generation run, one headline contradicting its own body (24% vs 24.5%), one body carrying a
+  visible "…correction: +4.4%" editing artefact, and an asking-vs-valuation claim resting on our
+  own model's known design envelope. 2 clean drafts proposed to Will (#B1FB, #3481).
+- **Proposed nothing. Ledger 0/2.** Graded nothing — both items' metrics are weeks away.
+
+## 2026-08-16 08:00 AEST — GEO cycle (weekly)
+
+Found and fixed the reason AI surfaces describe Fields as a data company: **every AI crawler has been
+served 403 + noindex since 2026-07-21.** `public/robots.txt` explicitly allowed GPTBot, OAI-SearchBot,
+ChatGPT-User, PerplexityBot, ClaudeBot, Claude-Web and CCBot (GEO cycle WTA-010), but the geo-block
+edge function's `BOT_USER_AGENT_PATTERN` listed none of them, and they crawl only from US IPs.
+robots.txt granted access the edge silently revoked — and robots.txt is the only half observable from
+Australia, so every check we run said "AI crawlers welcome".
+
+Measured from a US residential IP (Bright Data `gold_coast_agency_level` as a plain proxy — the Web
+Unlocker 502s on blocked pages and hides the status code, which is why last cycle could not test this):
+bingbot 200, Google-Extended 200, all ten OpenAI/Anthropic/Perplexity/Meta/Amazon/CommonCrawl UAs 403.
+`/llms.txt` 403 too. Consequence: the correct `RealEstateAgent` entity markup the seo domain shipped on
+08-13 has been invisible to every AI crawler since it shipped.
+
+Shipped the strictly-additive fix (commit `eb443be8`, one build, `npm run build` passed). Verified live
+from the same US IP: all ten AI UAs now 200, ordinary US Chrome still 403 (block intact), AU 200.
+fix-history `[GEO-BLOCK-AI-CRAWLERS-403]` — 2nd in kind after `[GEO-BLOCK-INSPECTIONTOOL]`.
+
+Also measured brief §1 requirement (2) for the first time: AI still answers "functions as a
+data-driven market analytics company", and Fields is absent from "best real estate agent Robina".
+Baseline recorded for re-measurement next cycle.
+
+Bing: 24 consecutive zero-impression days; InIndex 2,247 → 1,982 (−11.8%). REC-geo-001 superseded by
+**REC-geo-002** — now carrying the measured cloaking divergence (US browser 403 + noindex vs bingbot
+200 on the identical URL) and asking Will the single yes/no his own brief §7 poses. Holding 1 of 2.
+
+Cycle doc: `cycles/2026-W33/2026-08-16/geo_cycle_20260816_0800.md`
+
+## 2026-08-16 09:00 AEST — ADS weekly cycle
+Brief tier `current`; $0 spend (paused since 07-30, deliberate). Rebuilt cost-per-identified-seller
+from `fb_leads` × `ad_daily_metrics` (`spend_aud`) with `ad_id→campaign` via `ad_profiles`.
+- **Answered brief §1.2:** Will's ~$15 forms are Independent Listing Analysis carousel **$12.75** (n=4)
+  and Buyer Brief v2 email+phone **$14.66** (n=3); both BUYER. The $15.77 seller-intent form is the
+  ex-GC copy test, not GC-served.
+- **Headline:** GC seller lead campaigns $355.21 → **0** real leads; buyer lead campaigns $237.54 →
+  13 leads → **7 identified GC homeowners = $33.93 each** via the `owns_gc_home` qualifier. Directional (n=7).
+- Form length: v2 email+phone $14.66 → v3 +name $30.89. The *name* field, not the phone, doubled CPL.
+- All 19 real leads reach `lead_worklist`; **0** reach any downstream collection. 0/145 appraisals past `draft_ready`.
+- **Withdrew REC-ads-002** — self-verified wrong (counted key presence not fill; 94/97 reports have an
+  empty name and never form-submitted). Samantha's brief §6 challenge was correct.
+- **Self-corrected within cycle:** my $371.21 seller figure grouped by ad-name prefix and folded in a
+  traffic campaign; the ledger's $203.29 was right. REC-ads-003 → superseded by **REC-ads-004**.
+Ledger 2/2. No spend, no campaign touched.
+
+## 2026-08-16 12:00 AEST — VALUATION weekly cycle (cycle 2)
+Brief tier `current`; week-one **read-only** envelope observed — no property writes, no method
+constant, no recompute, no fix-history entry (nothing fixed, because nothing may be).
+- **Headline:** `valuation_signal.py` has **never read the live unit product**. Attached-dwelling
+  valuations live in a separate collection, `Gold_Coast.unit_valuations` (keyed `url_slug`, gated
+  on `publishable`); the sensor reads the **house** engine's `valuation_data` for every property.
+  So the brief's "28.3% valued, n=113 — the domain's largest honest opportunity" is measured off
+  the wrong engine. **True live-book unit coverage 34.2% (38/111)**, median comps **12** (not 3),
+  median band ±13.6%, and the dominant blocker is **`no_class_matched_comparables` (54/72 declines,
+  3,148/3,725 collection-wide)** — not empty pools. Third Rule 8 failure by this sensor against itself.
+- **Two hypotheses killed en route, both recorded:** (1) `insufficient_data_but_valued 7` is a false
+  positive — `summary.insufficient_data` is `len(chart_points)<5`, a **scatter-plot** flag
+  (`precompute_valuations.py:3824`), disclosed honestly by the frontend. (2) "band narrower than its
+  evidence" was an artefact of the same blindness; `[RANGE-VS-EVIDENCE-COPY]` (08-13) shipped on the
+  unit engine and **stands — I found nothing wrong with it**.
+- Book 212→256, raw coverage 40.6%→46.5%, suppression 70/256 (27.3%, correct refusal, not a defect).
+- **Named, not claimed:** 1,303/5,028 non-publishable `unit_valuations` records carry a full
+  point/low/high, computed 2026-08-15 — the writer as designed, not `[DECLINE-LEAVES-THE-OLD-FIGURE]`
+  recurring. Safe only because one consumer gates on `publishable`; `[OFFMARKET-UNIT-THIN-RANGE-HOUSE-COMPS]`
+  is an open 2nd-recurrence case of a second consumer getting units from the wrong source.
+- **Carried:** 9 properties with no `computed_at` at all (3 classified House) — the mandate's real
+  defect class, outranked this week. `[VALUATION-ENGINE-VOLATILITY]` is next cycle's candidate.
+- **REC-valuation-002** proposed, **superseding REC-valuation-001** — one item on one file: four
+  sensor edits (read `unit_valuations`; drop the chart-flag contradiction; plus cycle 1's two
+  unfixed edits) and a correction to `briefings/valuation.md` §1/§3. Not self-applied: the sensor
+  carries a Rule 7 heartbeat, so it is monitoring code and permanently outside autonomous scope.
+Ledger **1/2** — free slot held deliberately. No backtest run; `accuracy/` figures quoted unchanged.
+
+Cycle doc: `cycles/2026-W33/2026-08-16/valuation_cycle_20260816_1200.md`
+Experiment: `16_Valuation/experiments/2026-08-16-unit-engine-sensor-blindness.md`
+
+## 2026-08-16 16:00 AEST — Samantha weekly brief, cycle 2 (2026-W33)
+
+**Ran:** 4 of 7 domains produced a cycle doc (ops, geo, ads, valuation). 7 recommendations
+open; 5 briefed across 5 slots (ads' two merged into one), 1 filtered, 1 pushed back.
+
+**The systemic finding was the harness, not a domain.** seo, articles and onsite all died on
+`Error: Reached max turns (80)` — inside a 40-minute wall-clock budget they used 13–17 minutes
+of. Two ceilings on one call, and the meaningless one was binding. onsite raised both its
+recommendations and then died before writing its cycle doc: findings without the reasoning
+behind them. articles had already lost a run to this on 08-13, making it a 2nd occurrence that
+nobody caught, because the heartbeat detail read `claude -p rc=1` — byte-identical to an auth
+failure.
+- `weekly_cycle.sh`: `--max-turns` 80 → 200; added `TURN_FAIL` detection so the heartbeat says
+  "hit --max-turns — the agent ran out of road mid-cycle, it did not fail to start".
+- Re-launched seo, articles, onsite sequentially. Their docs and any new recommendations land
+  after the brief, so this week's "7 open" is a floor, and I said so in the brief.
+
+**Two corrections I made to domains' own evidence before it reached Will:**
+- **ops** asked to restart 6 services carrying stale credentials. Diffed all six against
+  `.env` via `/proc/PID/environ` plus `systemctl show -p EnvironmentFiles`: only
+  `fields-voice-agent` and `fields-watchdog` read that file and hold stale secrets.
+  `fields-trigger-poller` / `fields-samantha-chat` have no `EnvironmentFile`;
+  `fields-valuation-api` / `fields-offmarket-processor` read *different* `.env` files.
+  Restarting those four delivers nothing. The blast radius ops flagged as Will's to accept
+  was largely not real.
+- **onsite** claimed `genrl_personalization_v1` is live at 100% against a brief that records it
+  OFF. Verified independently against the PostHog API rather than relaying it. True.
+  `briefings/onsite.md` §2 corrected to carry both Will's stated intent and the measured state,
+  marked UNRESOLVED — I did not resolve it myself, because which one is right is his call.
+
+**Pushed back, not briefed:** REC-onsite-004 (report-section placement) — n=3 readers, and
+onsite said so itself. Its own preferred fix is a reversible copy change inside its standing
+authorisations. Feedback written into `briefings/onsite.md` §8: ship it and measure it; bring
+Will the result, not the placement question.
+
+**Graded:** REC-ops-001 → `no_effect` (by ops, honestly — the token was rotated and the
+delivery mechanism ate it). Nothing else due.
+
+**The channel is itself a finding.** Will answered 0 of 5 written questions last week and 9 of
+9 tappable ones. `recommendation_approval.py` sends inline buttons and was never put on cron —
+only its `poll` half runs. Not wired this week: it would have re-asked the five items being
+briefed. If this brief also goes unanswered, switch to buttons next week.
+
+**Carried:** tonight's 20:30 run is the real end-to-end proof that ingestion is fixed — the
+check skipped on 08-13 that cost three dark nights. First item next cycle. Also still open and
+still unbriefed: the 53 `under_contract` listings polluting the public absorption rate.
+
+---
+
+## 2026-08-16 16:44 — articles cycle #5 (weekly cron)
+
+**The finding:** 0 of 90 published articles linked `/analyse-your-home`, and 88 of 90 had no
+non-disclaimer internal link at all. Neither template CTA pointed there either. That is the
+only page where the reward event (`analyse_home_address_submit`) can fire — `submitted_address`
+carries lift 50.5 on the reward ledger (n=9 conversions). So "90 articles, 12 sessions, 0
+converters" was never evidence about the format: **the funnel had no entrance.** The open
+question this domain has carried for three cycles was unanswerable, not unanswered.
+
+**Shipped** (2 commits, 2 builds, `npm run build` gated, verified live by fetch + headless
+render + reading the screenshot): CTAs now lead with `/analyse-your-home/<suburb>` and emit
+`article_cta_click`; internal article links canonicalised off the legacy `/article/:id` 301;
+and three defects the screenshot exposed — the card-index merge (every SSR article page was
+rendering the wrong category and **no suburb**, because the route loader's placeholders are
+defined values and the merge copied them over the index), the mid-article CTA landing between
+"The Result" and the result, and the median-house-price question being emitted on ~8 URLs per
+suburb rather than the 2 the `seo` directive reported.
+
+Also removed a leaked prompt instruction (`<p><em>Editorial opinion.</em></p>`) from a LIVE
+article Will approved three days ago — found by scanning all 100 for residue. Cost 0 builds:
+article bodies are served from Mongo by the route loader, not from `articles.json`.
+
+**Proposed:** nothing (ledger 0/2). **Sent to Will:** nothing — the one draft without a
+`review_hold` turned out to be a near-duplicate of a published article, disagreeing with it on
+four shared figures ten days apart, with a predicted outcome in its "Our Take". Held with
+reasons. **0 of 10 drafts are currently sendable.**
+
+**Graded:** nothing due. **Directive from `seo`:** actioned, answered with two findings back,
+closed.
+
+## 2026-08-16 17:16 — onsite weekly cycle
+Shipped `ReportAnchor` on the V4 deck: one line under the valuation answer pointing to `#report`
+(report section reached by 3 of 53 entries; the answer above it by 19). Ships the withdrawn
+REC-onsite-004's option (b) myself, per the conductor's brief-§8 feedback. Verified live desktop +
+mobile; one deploy-hook rebuild needed after a three-commit push published without the CSS.
+Fixed three measurement defects: `arm_grader.py` graded a 2-vs-2 conversion tie as a 1.15× winner
+(arm verdicts must now survive one conversion moving); `onsite_friction_signal.py` swallowed every
+HogQL failure, so its deck detector had never run in 8 snapshots of "0 incidents"; and once running,
+that detector tested V4 readers against `forward_cta_clicked`, a V3-only event.
+Ledger 1/2 — nothing proposed. REC-onsite-003 (kill-switch state + slot mount) remains the binding
+constraint on the domain. Cycle doc: `cycles/2026-W33/2026-08-16/onsite_cycle_20260816_1716.md`.
