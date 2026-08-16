@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<style>
+  :root {
+    --ink:#1f2430; --muted:#6b7280; --line:#e3e6ea; --bg:#ffffff;
+    --go:#0b8043; --go-dark:#096c38; --stop:#c5221f; --warn:#b06000;
+    --warn-bg:#fff8e6; --stop-bg:#fdecea;
+  }
+  * { box-sizing:border-box; }
+  body {
+    font-family:'Google Sans',Roboto,Arial,sans-serif; font-size:13px;
+    color:var(--ink); background:var(--bg); margin:0; padding:12px 12px 28px;
+    line-height:1.45;
+  }
+  .muted { color:var(--muted); }
+  .tiny  { font-size:11px; }
+
+  .name { font-size:19px; font-weight:600; letter-spacing:-.01em; }
+  .num  { font-size:15px; font-variant-numeric:tabular-nums; color:var(--muted); margin-top:1px; }
+  .addr { margin-top:6px; }
+
+  .why {
+    margin:10px 0; padding:9px 10px; background:#f4f6f8;
+    border-left:3px solid #9aa4b2; border-radius:0 4px 4px 0;
+    white-space:pre-wrap;
+  }
+
+  .meta { margin:10px 0; border-top:1px solid var(--line); padding-top:8px; }
+  .meta div { display:flex; gap:8px; padding:2px 0; }
+  .meta span:first-child { color:var(--muted); min-width:74px; flex:none; }
+
+  button.call {
+    width:100%; padding:15px; font-size:16px; font-weight:600; color:#fff;
+    background:var(--go); border:0; border-radius:6px; cursor:pointer;
+    margin:12px 0 4px; font-family:inherit;
+  }
+  button.call:hover:not(:disabled) { background:var(--go-dark); }
+  button.call:disabled { background:#c6cad1; cursor:not-allowed; }
+
+  .banner { padding:9px 10px; border-radius:5px; margin:8px 0; }
+  .banner.stop { background:var(--stop-bg); border-left:3px solid var(--stop); }
+  .banner.warn { background:var(--warn-bg); border-left:3px solid var(--warn); }
+  .banner b { display:block; margin-bottom:3px; }
+  .banner ul { margin:4px 0 0; padding-left:17px; }
+  .banner li { margin:3px 0; }
+
+  .outcome { margin-top:14px; border-top:1px solid var(--line); padding-top:10px; }
+  select, textarea {
+    width:100%; font-family:inherit; font-size:13px; padding:6px;
+    border:1px solid #c4c9d0; border-radius:4px; margin-top:4px; color:var(--ink);
+  }
+  textarea { resize:vertical; min-height:52px; }
+  button.save {
+    width:100%; padding:9px; margin-top:7px; font-size:13px; font-weight:600;
+    border:1px solid #c4c9d0; background:#f6f8fa; border-radius:4px;
+    cursor:pointer; font-family:inherit; color:var(--ink);
+  }
+  button.save:hover { background:#eceff2; }
+
+  .hint { text-align:center; padding:34px 8px; color:var(--muted); }
+  .flash { padding:7px 9px; border-radius:4px; margin-top:7px; font-size:12px; display:none; }
+  .flash.ok  { background:#e6f4ea; color:var(--go-dark); }
+  .flash.err { background:var(--stop-bg); color:var(--stop); }
+  label.chk { display:flex; gap:7px; align-items:flex-start; margin:8px 0; cursor:pointer; }
+  label.chk input { margin-top:2px; flex:none; }
+  a.alt { display:block; text-align:center; font-size:11px; color:var(--muted); margin-top:2px; }
+</style>
+</head>
+<body>
+
+<div id="root"><div class="hint">Loading…</div></div>
+
+<script>
+var OUTCOMES = [
+  '', 'Connected — wants the analysis', 'Connected — interested, call back',
+  'Connected — not interested', 'Connected — DO NOT CONTACT AGAIN',
+  'Connected — already has an agent', 'Connected — refused recording',
+  'Wrong number / not the owner', 'No answer', 'Voicemail (no message left)',
+  'Engaged / busy', 'Skipped — out of hours'
+];
+
+var lastKey = null;
+var current = null;
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+    return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c];
+  });
+}
+
+function poll() {
+  google.script.run
+    .withSuccessHandler(render)
+    .withFailureHandler(function (e) {
+      // A layout-guard throw must be loud and must stay on screen — it means the
+      // panel could otherwise dial the wrong person.
+      lastKey = 'ERR';
+      document.getElementById('root').innerHTML =
+        '<div class="banner stop"><b>Panel disabled</b>' + esc(e.message) + '</div>';
+    })
+    .getSelectedRow();
+}
+
+function render(d) {
+  // Re-render only when the selection or its state actually changes, so typing
+  // in the comment box is never interrupted by the poll.
+  var key = [d.state, d.callId, d.blocks && d.blocks.join('|'), d.outcome].join('~');
+  if (key === lastKey) return;
+  lastKey = key;
+  current = d;
+
+  var root = document.getElementById('root');
+
+  if (d.state === 'wrong_tab') {
+    root.innerHTML = '<div class="hint">Open the <b>' + esc(d.want) +
+      '</b> tab.<br><span class="tiny">Currently on "' + esc(d.tab) + '".</span></div>';
+    return;
+  }
+  if (d.state === 'no_row' || d.state === 'separator') {
+    root.innerHTML = '<div class="hint">Select a call row.</div>';
+    return;
+  }
+
+  var h = '';
+  h += '<div class="name">' + (esc(d.name) || '<span class="muted">(no name)</span>') + '</div>';
+  h += '<div class="num">' + esc(d.phone) + '</div>';
+  h += '<div class="addr">' + esc(d.address) + (d.suburb ? ', ' + esc(d.suburb) : '') + '</div>';
+  if (d.whyNow) h += '<div class="why">' + esc(d.whyNow) + '</div>';
+
+  h += '<div class="meta">';
+  if (d.property) h += '<div><span>Property</span><span>' + esc(d.property) + '</span></div>';
+  if (d.track)    h += '<div><span>Track</span><span>' + esc(d.track) + '</span></div>';
+  h += '<div><span>Occupancy</span><span>' + esc(d.occupant || '—') + '</span></div>';
+  h += '<div><span>DNC</span><span>' + esc(d.dnc || '—') + '</span></div>';
+  h += '</div>';
+
+  if (d.blocks && d.blocks.length) {
+    h += '<div class="banner stop"><b>Do not dial</b><ul>';
+    for (var i = 0; i < d.blocks.length; i++) h += '<li>' + esc(d.blocks[i]) + '</li>';
+    h += '</ul></div>';
+  } else {
+    if (d.warnings && d.warnings.length) {
+      h += '<div class="banner warn"><b>Before you dial</b><ul>';
+      for (var j = 0; j < d.warnings.length; j++) h += '<li>' + esc(d.warnings[j]) + '</li>';
+      h += '</ul></div>';
+    }
+    if (d.needsHolidayConfirm) {
+      h += '<div class="banner warn"><b>Unverified date</b>' + esc(d.holidayNote) + '</div>';
+      h += '<label class="chk"><input type="checkbox" id="holchk" onchange="toggleCall()">' +
+           '<span>I have confirmed today is not a national public holiday.</span></label>';
+    }
+    h += '<button class="call" id="callbtn" onclick="dial()"' +
+         (d.needsHolidayConfirm ? ' disabled' : '') + '>☎ Call ' +
+         esc(d.name || d.phone) + '</button>';
+    h += '<a class="alt" href="' + esc(d.desktopUrl) + '">or open the JustCall desktop app</a>';
+    h += '<div class="tiny muted" style="text-align:center;margin-top:6px">' +
+         esc(d.clock) + ' · window closes ' + esc(d.closesAt) + '</div>';
+  }
+
+  h += '<div class="outcome">';
+  h += '<div class="tiny muted">Outcome</div><select id="oc">';
+  for (var k = 0; k < OUTCOMES.length; k++) {
+    h += '<option' + (OUTCOMES[k] === d.outcome ? ' selected' : '') + '>' +
+         esc(OUTCOMES[k]) + '</option>';
+  }
+  h += '</select>';
+  h += '<div class="tiny muted" style="margin-top:8px">Add a comment (appended, never overwritten)</div>';
+  h += '<textarea id="cm" placeholder="What they said…"></textarea>';
+  h += '<button class="save" onclick="save(false)">Save to row</button>';
+  h += '<div class="flash" id="flash"></div>';
+  h += '</div>';
+
+  root.innerHTML = h;
+}
+
+function toggleCall() {
+  document.getElementById('callbtn').disabled = !document.getElementById('holchk').checked;
+}
+
+function dial() {
+  if (!current || !current.url) return;
+  // A named popup window, not a tab: the spreadsheet stays on screen behind it
+  // so notes go straight into the row while you are talking.
+  var w = window.open(current.url, 'justcall_dialer',
+                      'width=420,height=720,menubar=no,toolbar=no,location=no');
+  if (!w) {
+    flash('Popup blocked. Allow popups for docs.google.com, or use the desktop-app link.', true);
+  } else {
+    w.focus();
+  }
+}
+
+function save(force) {
+  var oc = document.getElementById('oc').value;
+  var cm = document.getElementById('cm').value.trim();
+  if (!oc && !cm) { flash('Nothing to save.', true); return; }
+
+  google.script.run
+    .withSuccessHandler(function (r) {
+      if (r.status === 'conflict') {
+        if (confirm('Row already has the outcome:\n\n  "' + r.existing +
+                    '"\n\nReplace it?')) { save(true); }
+        return;
+      }
+      document.getElementById('cm').value = '';
+      lastKey = null;                       // force a re-read so the row reflects it
+      flash('Saved to row ' + r.row + '.', false);
+    })
+    .withFailureHandler(function (e) { flash(e.message, true); })
+    .logOutcome(current.callId, oc, cm, !!force);
+}
+
+function flash(msg, isErr) {
+  var f = document.getElementById('flash');
+  if (!f) return;
+  f.textContent = msg;
+  f.className = 'flash ' + (isErr ? 'err' : 'ok');
+  f.style.display = 'block';
+  if (!isErr) setTimeout(function () { f.style.display = 'none'; }, 4000);
+}
+
+poll();
+setInterval(poll, 1500);
+</script>
+</body>
+</html>
