@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import sys
 from datetime import datetime, timezone
 
@@ -150,15 +151,44 @@ def sync(db, dry_run: bool = False) -> dict:
     return stats
 
 
+def _street_number(address: str) -> str | None:
+    """The street number WITH any letter suffix — '27a' for '27A Andromeda Pde',
+    '44' for '4/44 Frascott Avenue'. None if unparseable."""
+    a = re.sub(r"^\s*(unit|apt|apartment)\s+", "", (address or "").strip(), flags=re.I)
+    m = re.match(r"^\s*(?:[\w]+\s*/\s*)?(\d+[a-z]?)\b", a, flags=re.I)
+    return m.group(1).lower() if m else None
+
+
 def is_listed(db, address: str, suburb: str | None = None) -> dict | None:
     """Active onthehouse sale listing for this address, if any.
 
     A hit is positive proof the home is on the market. A miss means NOTHING — see the
     module docstring. Callers must not infer "safe to market" from None.
+
+    ⚠ The join key deliberately drops a letter suffix ('83a' -> '83', matching.py:81)
+    so a unit written '1302a/3' still joins. That is right for a UNIT letter and wrong
+    for a STREET-NUMBER letter: 27 and 27A Andromeda Parade are different houses on a
+    subdivided block, and both key to `|27|andromeda|robina`. On 2026-08-17 that
+    falsely reported 27 Andromeda Parade as listed (the real listing is 27A) and moved
+    a live lead off the tracker — the one thing a function documented as "positive
+    proof" must never do. 5 of 158 active listings currently carry such a suffix.
+
+    So the key still finds the CANDIDATE, and the street number then has to agree
+    exactly. Re-keying the collection would be the deeper fix but needs a full re-sync;
+    this closes the false-positive path without one. Only ever narrows a match, so it
+    cannot introduce a false negative beyond the miss the docstring already allows.
     """
     from onthehouse.matching import address_key
     k = address_key(address, suburb=suburb)
-    return db[COLL].find_one({"_id": k, "active": True}) if k else None
+    if not k:
+        return None
+    hit = db[COLL].find_one({"_id": k, "active": True})
+    if not hit:
+        return None
+    want, got = _street_number(address), _street_number(hit.get("address", ""))
+    if want and got and want != got:
+        return None
+    return hit
 
 
 def main():
