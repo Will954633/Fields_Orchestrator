@@ -914,6 +914,19 @@ def main():
     all_leads = (list(fb_lead_rows(db)) + list(ayh_rows(db)) + list(offmarket_rows(db, gc_db))
                  + list(worklist_only_rows(db)))
 
+    # Leads already moved to the "Came to Market" tab must never come back. The normal
+    # path is protected by the insert ledger, but --rebuild WIPES that ledger and
+    # rewrites every lead from source — which would silently undo every sweep. This is
+    # the only guard that survives a rebuild. See scripts/leads_came_to_market.py.
+    gone = {d["lead_id"] for d in db["leads_came_to_market"].find({}, {"lead_id": 1})
+            if d.get("lead_id")}
+    if gone:
+        before = len(all_leads)
+        all_leads = [l for l in all_leads if l["lead_id"] not in gone]
+        if before != len(all_leads):
+            print(f"({before - len(all_leads)} lead(s) held back — already on "
+                  f"'Came to Market')")
+
     # Attach the seller-intent "Situation" line to every lead (own-listing status +
     # days-on-market + the live listings they viewed + tailored follow-up conclusion).
     wl_idx = build_worklist_index(db)
