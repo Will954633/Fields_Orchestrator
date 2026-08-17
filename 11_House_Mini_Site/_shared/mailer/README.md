@@ -1,4 +1,8 @@
-# Homeowner Mailer — bespoke, data-driven, one PDF per address
+# Homeowner Mailer (V1) — bespoke, data-driven, one PDF per address
+
+> **⚠ V2 is Will's preferred version (2026-08-17).** Print runs use
+> `../mailer_v2/` unless he says otherwise. V1 stays here and stays runnable, but
+> it is no longer the default — see `../mailer_v2/README.md`.
 
 Direct-mail leaflet that drives homeowners to scan a QR and open their own Fields
 home report. **Every mailer is generated from that property's own report data** —
