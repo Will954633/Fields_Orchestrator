@@ -37,6 +37,35 @@ supplier:
     - fridge_magnets
   delivery: Drive folder per work order — "Fulfilment — Pronto Direct/<flow>_<date>"
 
+# STOCK HELD BY THE SUPPLIER
+# --------------------------
+# Only physical items WE supply are stock. The mailer itself is not — Pronto print
+# it per job from our PDFs — so paper never appears here.
+#
+# Balance is computed, never stored:
+#     on_hand   = sum(receipts) - consumed by work orders with status "posted"
+#     available = on_hand - reserved by work orders not yet posted
+# Read it with `python3 scripts/fulfilment_stock.py`.
+#
+# ⚠ Envelopes bind before magnets at 1 + 2 per piece. 100 envelopes is two 50-piece
+# runs, against 113 addresses already mailable and a 6-touch flow planned. Check
+# before sizing a batch, not after.
+stock:
+  c4_envelopes_branded:
+    unit: envelope
+    per_piece: 1
+    receipts:
+      - date: 2026-08-17
+        qty: 100
+        note: Hand-delivered by Will. Quantity confirmed by Will 2026-08-17.
+  fridge_magnets:
+    unit: magnet
+    per_piece: 2
+    receipts:
+      - date: 2026-08-17
+        qty: 250
+        note: Hand-delivered by Will. Quantity confirmed by Will 2026-08-17.
+
 # Physical components referenced by the recipes below.
 components:
   mailer_v2:
