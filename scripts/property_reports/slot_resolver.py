@@ -239,11 +239,32 @@ class SlotResolver:
             self.emit.start("satellite", "Reading the aerial view")
             try:
                 coll = self.db[self.suburb_key] if self.suburb_key else None
-                sat = None if self.no_llm else resolve_satellite(
-                    self._subject or {},
-                    suburb_key=self.suburb_key,
-                    db_subject_coll=coll,
-                )
+                if self.no_llm:
+                    # Deterministic build: NO model call, but still surface an aerial
+                    # IMAGE. Skipping the slot entirely was costing us the picture as
+                    # well as the analysis, and the picture is already on disk —
+                    # `aerial_boundary_url` (18,808 stored, 97% of live candidates,
+                    # 1280x880 with the lot boundary drawn and our watermark) beats
+                    # the pin-marker tile the vision pass produces. An existing
+                    # `satellite_analysis` is preferred when present since it also
+                    # carries the category buckets downstream resolvers read.
+                    #
+                    # ⚠ Do NOT reach for `satellite_analysis.satellite_image_url`
+                    # alone: it sits on ~8% of docs, and reading absence there as
+                    # "no aerial exists" is exactly the mistake CLAUDE.md Rule 8
+                    # documents. The aerials are under a different field name.
+                    sat = (self._subject or {}).get("satellite_analysis") or None
+                    if not (sat or {}).get("satellite_image_url"):
+                        boundary = (self._subject or {}).get("aerial_boundary_url")
+                        sat = ({**(sat or {}), "satellite_image_url": boundary,
+                                "image_source": "aerial_boundary_url"}
+                               if boundary else sat)
+                else:
+                    sat = resolve_satellite(
+                        self._subject or {},
+                        suburb_key=self.suburb_key,
+                        db_subject_coll=coll,
+                    )
                 if sat:
                     prop["satellite"] = sat
                     updates["property"] = prop
@@ -274,10 +295,17 @@ class SlotResolver:
             self.emit.start("street_view", "Capturing the street-level view")
             try:
                 coll = self.db[self.suburb_key] if self.suburb_key else None
-                sv = None if self.no_llm else resolve_street_view(
+                # no_llm keeps the PHOTOGRAPH and drops the vision read. For an
+                # off-market home with no listing photos, the Street View still is
+                # often the only picture of the house that exists anywhere — and
+                # skipping the whole resolver was leaving those reports with no
+                # image at all. The image is a Google Static fetch, not a model
+                # call, so it belongs in the deterministic build.
+                sv = resolve_street_view(
                     self._subject or {},
                     suburb_key=self.suburb_key,
                     db_subject_coll=coll,
+                    image_only=self.no_llm,
                 )
                 if sv and sv.get("street_view_image_url"):
                     prop["street_view"] = sv
@@ -1319,6 +1347,22 @@ class SlotResolver:
             if isinstance(url, str) and url not in seen:
                 clean_candidates.append(url)
                 seen.add(url)
+
+        # ⚠ NO LISTING PHOTOS — use the aerial we already hold.
+        # `aerial_boundary_url` is a rendered aerial of the lot with the cadastral
+        # boundary drawn on it, written by the aerial backfill and stored on the
+        # property doc. It was referenced NOWHERE in this pipeline, while 5,142
+        # no-photo properties across the three target suburbs carry one (54% of
+        # Robina's and Varsity Lakes' photo-less stock, 22% of Burleigh Waters').
+        #
+        # A never-listed home is exactly the seller this product is FOR, and it
+        # was the one getting a report with no picture of the house at all. The
+        # aerial costs nothing — it is already rendered and hosted.
+        aerial_url = (s.get("aerial_boundary_url") or "").strip() or None
+        if aerial_url and not clean_candidates:
+            clean_candidates.append(aerial_url)
+            seen.add(aerial_url)
+            logger.info("  no listing photos — using stored aerial boundary image")
 
         # AI hero pick (Day 4) — falls back to the first clean candidate on
         # failure. Don't default back to the scraper_hero when it's the known
