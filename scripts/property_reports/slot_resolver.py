@@ -1197,10 +1197,26 @@ class SlotResolver:
 
         # 2) Fallback: address string match (case-insensitive)
         try:
-            # Normalise the address — strip "QLD 4226" trailing bits + collapse spaces
-            normalised = re.sub(r"\s+QLD\s+\d{4}.*$", "", self.address, flags=re.I).strip()
-            normalised = re.sub(r"\s+", r"\\s+", re.escape(normalised))
-            doc = coll.find_one({"address": {"$regex": f"^{normalised}", "$options": "i"}})
+            # Normalise the address — strip "QLD 4226" trailing bits + collapse spaces.
+            #
+            # ⚠ Build the pattern by escaping each WORD and joining with \s+. The
+            # obvious one-liner — re.sub(r"\s+", r"\\s+", re.escape(addr)) — is
+            # broken and was, silently, from the start: re.escape() turns each space
+            # into "\ ", the sub then rewrites that space to "\s+" and leaves the
+            # backslash in front of it, yielding a literal "\\s+" that matches a
+            # backslash character and therefore nothing. This fallback never once
+            # resolved a subject; every report that worked did so via property_id
+            # above, and any report without one silently got NO subject — which
+            # fails comps, scarcity, competitors, personas, photos and aerial all at
+            # once, looking like missing data rather than a lookup bug.
+            #
+            # Trailing comma is stripped because Gold_Coast holds BOTH
+            # "27 Protea Court, Robina, QLD 4226" and "27 Protea Court, Robina QLD
+            # 4226" for the same home; anchoring on the comma matches only one.
+            normalised = re.sub(r"\s+QLD\s+\d{4}.*$", "", self.address,
+                                flags=re.I).strip().rstrip(",")
+            pattern = r"\s+".join(re.escape(w) for w in normalised.split())
+            doc = coll.find_one({"address": {"$regex": f"^{pattern}", "$options": "i"}})
             if doc:
                 self._subject = doc
                 return doc
