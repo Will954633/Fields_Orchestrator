@@ -34,10 +34,16 @@ def send_message(text: str, chat_id: str = None, parse_mode: str = "Markdown",
                  reply_markup: dict = None):
     """Send a message via the Telegram bot. Raises TelegramSendError on failure.
 
-    reply_markup takes a Telegram keyboard dict. Prefer a REPLY keyboard over an inline
-    one: ceo-telegram-bridge.py requests allowed_updates ["message", "edited_message"]
-    and so never receives callback_query, meaning inline buttons fire into a void. A reply
-    keyboard sends ordinary text the bridge already captures into ceo_chat_messages.
+    reply_markup takes a Telegram keyboard dict. Prefer an INLINE keyboard.
+
+    ⚠ This docstring said the opposite until 2026-08-18, and was wrong. It claimed
+    ceo-telegram-bridge.py requests allowed_updates ["message", "edited_message"] only,
+    so inline buttons "fire into a void". That stopped being true on 2026-08-13: the
+    bridge requests callback_query (ceo-telegram-bridge.py:1389) and translates a tap
+    into the ordinary (message, text) shape (extract_message_text, :1355-1375), so a
+    tapped inline button lands in ceo_chat_messages exactly like typed text. A REPLY
+    keyboard was tried first and is the one that failed in practice — it hides behind
+    the client's keyboard toggle and collapses after one use, so Will never saw it.
     """
     cid = chat_id or CHAT_ID
     if not cid:
@@ -213,7 +219,29 @@ if __name__ == "__main__":
     parser.add_argument("--check-chat-id", action="store_true", help="Check for chat ID from recent messages")
     parser.add_argument("--queue", metavar="SOURCE",
                         help="Queue for the next morning digest instead of sending now")
+    # Without this the reply_markup kwarg above was reachable only from Python, so every
+    # CLI caller — including Samantha's weekly brief (samantha_weekly_prompt.md Step 6) —
+    # sent plain text with no buttons. That is why the 2026-08-16 brief's 5 questions were
+    # structurally unanswerable by tapping while a *different* channel
+    # (recommendation_approval.py) was the only thing sending real buttons.
+    parser.add_argument("--reply-markup-json", metavar="JSON",
+                        help="Telegram reply_markup as a JSON string, e.g. "
+                             "'{\"inline_keyboard\":[[{\"text\":\"OK\",\"callback_data\":\"RV YES 1A2B\"}]]}'. "
+                             "Taps arrive as callback_query and are captured by ceo-telegram-bridge.py.")
     args = parser.parse_args()
+
+    markup = None
+    if args.reply_markup_json:
+        import json as _json
+        try:
+            markup = _json.loads(args.reply_markup_json)
+        except ValueError as e:
+            print(f"FATAL: --reply-markup-json is not valid JSON — {e}")
+            sys.exit(1)
+        if not isinstance(markup, dict):
+            print("FATAL: --reply-markup-json must be a JSON object, not "
+                  f"{type(markup).__name__}")
+            sys.exit(1)
 
     try:
         if args.check_chat_id:
@@ -221,9 +249,16 @@ if __name__ == "__main__":
         elif args.market_pulse_reminder:
             market_pulse_reminder()
         elif args.message and args.queue:
+            if markup:
+                # A queued message is rendered into the next morning digest, which is a
+                # different message entirely — the keyboard could not survive that trip,
+                # and silently dropping it would recreate exactly the bug this flag fixes.
+                print("FATAL: --reply-markup-json cannot be combined with --queue "
+                      "(the digest re-renders the text; buttons would be silently lost)")
+                sys.exit(1)
             queue_message(args.message, source=args.queue)
         elif args.message:
-            send_message(args.message)
+            send_message(args.message, reply_markup=markup)
         else:
             parser.print_help()
     except TelegramSendError as e:
