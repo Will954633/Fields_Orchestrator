@@ -81,7 +81,75 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('☎ Calling')
     .addItem('Open call panel', 'showSidebar')
+    .addItem('Verify install', 'verifyInstall')
     .addToUi();
+}
+
+
+/**
+ * Install self-test. Run this from the editor straight after pasting, BEFORE
+ * trusting the panel.
+ *
+ * The failure it exists to catch: a script created at script.google.com rather
+ * than from Extensions → Apps Script is STANDALONE — it has no spreadsheet
+ * attached, so getActiveSpreadsheet() returns null and nothing works. A bound
+ * project and a standalone one look identical in the editor; both are titled
+ * "Untitled project" until renamed. This is the only cheap way to tell them
+ * apart, so it reports the answer rather than leaving it to be inferred.
+ */
+function verifyInstall() {
+  var out = [];
+  var fatal = false;
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (!ss) {
+    // Cannot use ss.toast / getUi() reliably here, so throw: the editor shows it.
+    throw new Error(
+      'NOT BOUND TO A SPREADSHEET.\n\n' +
+      'This script is standalone, so it can never see the sheet. It was almost ' +
+      'certainly created with "New project" at script.google.com.\n\n' +
+      'Fix: delete this project, open the Marketing Phone Calls sheet, and use ' +
+      'Extensions -> Apps Script from inside the spreadsheet.');
+  }
+  out.push('✅ Bound to: "' + ss.getName() + '"');
+
+  var sheet = ss.getSheetByName(TAB);
+  if (!sheet) {
+    out.push('❌ No tab named "' + TAB + '" — found: ' +
+             ss.getSheets().map(function (s) { return '"' + s.getName() + '"'; }).join(', '));
+    fatal = true;
+  } else {
+    out.push('✅ Tab "' + TAB + '" found (' + sheet.getLastRow() + ' rows)');
+    try {
+      assertLayout(sheet);
+      out.push('✅ Column layout matches — safe to dial');
+    } catch (e) {
+      out.push('❌ ' + e.message);
+      fatal = true;
+    }
+  }
+
+  try {
+    HtmlService.createHtmlOutputFromFile('Sidebar');
+    out.push('✅ Sidebar.html present');
+  } catch (e) {
+    out.push('❌ No HTML file named exactly "Sidebar" — add it with ＋ → HTML. ' +
+             'The name must be "Sidebar", not "Sidebar.html".');
+    fatal = true;
+  }
+
+  var gate = timeGate();
+  out.push((gate.ok ? '🟢 ' : '🔴 ') + 'Calling window right now: ' +
+           (gate.ok ? 'OPEN until ' + gate.closesAt : 'CLOSED — ' + gate.reason));
+  if (gate.needsHolidayConfirm) out.push('⚠ ' + gate.holidayNote);
+
+  out.push('');
+  out.push(fatal ? 'INSTALL INCOMPLETE — fix the ❌ lines above.'
+                 : 'Install OK. Reload the spreadsheet, then ☎ Calling → Open call panel.');
+
+  SpreadsheetApp.getUi().alert('Call panel — install check', out.join('\n'),
+                               SpreadsheetApp.getUi().ButtonSet.OK);
+  return out.join('\n');
 }
 
 function showSidebar() {
