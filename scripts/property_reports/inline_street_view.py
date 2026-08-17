@@ -288,6 +288,7 @@ def resolve_street_view(
     suburb_key: str,
     db_subject_coll=None,
     db_label: str = "for_sale",
+    image_only: bool = False,
 ) -> Optional[Dict[str, Any]]:
     """End-to-end Street View resolver.
 
@@ -334,6 +335,32 @@ def resolve_street_view(
     )
 
     address = subject_doc.get("address") or ""
+
+    # `image_only` is the deterministic path: keep the PHOTOGRAPH, skip the vision
+    # read. The image is not the AI part — it is a Google Street View still, and
+    # for an off-market home with no listing photos it is often the only picture
+    # of the house that exists anywhere. Previously the image was uploaded and
+    # then DISCARDED whenever the analysis failed or was skipped, which threw away
+    # the asset we had already paid to fetch.
+    if image_only:
+        record = {
+            "street_view_image_url": image_url,
+            "processed_at": datetime.utcnow(),
+            "model": None,
+            "method": "image-only",
+            "source": "inline_resolver",
+            "fov": _FOV,
+            "pitch": _PITCH,
+        }
+        if db_subject_coll is not None and subject_doc.get("_id"):
+            try:
+                db_subject_coll.update_one({"_id": subject_doc["_id"]},
+                                           {"$set": {"street_view_analysis": record}})
+            except Exception as e:
+                logger.warning(f"  street_view: write-back failed: {e}")
+        logger.info(f"  street_view image captured (no analysis) for {address}")
+        return record
+
     analysis = analyse_street_view(image_bytes, address, suburb_key or "")
     if not analysis:
         logger.warning(f"  street_view: GPT analysis returned nothing for {address}")
