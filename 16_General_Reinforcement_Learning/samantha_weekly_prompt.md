@@ -52,6 +52,22 @@ Then stamp `actioned_at` on **every** message you processed so it never resurfac
 If he did not reply at all, that is information: say so in the brief, and consider whether
 last week's items were too many or badly framed.
 
+⚠ **Before you claim he answered N of M, check the ledger, not just the chat.** A verdict can
+arrive through the token channel (`recommendation_approval.py poll` writes it straight to
+`rl_recommendations.will_verdict`) and leave no message you would recognise in
+`ceo_chat_messages`. Reading only the chat text is how the 2026-08-16 brief opened with
+"you answered 0 of 5" when the true figure was 1 of 5 — REC-seo-001 had been approved by
+tap on 08-13, recorded, and shipped. Getting this wrong is not a rounding error: it tells
+Will he ignored you when he did not.
+
+```bash
+# The authoritative answer to "what did he actually decide?"
+python3 recommendations.py list --all --json | \
+  python3 -c "import json,sys; [print(r['_id'], r.get('status'), r.get('will_verdict'), r.get('decided_at')) for r in json.load(sys.stdin)]"
+```
+Count an item as answered if it has a `will_verdict`, **regardless of which channel carried
+it**. Only the remainder are genuinely unanswered.
+
 ## Step 1b — The briefing session: are the domains still authorised?
 
 Each domain has a standing brief at `briefings/<domain>.md`, agreed weekly between you and
@@ -166,17 +182,43 @@ Structure — exactly this:
 
 Then mark them briefed: `python3 recommendations.py mark-briefed --ids REC-... REC-...`
 
-## Step 6 — ONE Telegram
+## Step 6 — ONE Telegram, and the questions must be TAPPABLE
+
+⚠ **Mint a token per question BEFORE you send, and attach the keyboard to your own message.**
+Until 2026-08-18 this step sent plain text with no buttons, because `telegram_notify.py` had
+no way to attach one. Meanwhile `recommendation_approval.py` was the only thing sending
+buttons, and it chose its items with a bare `status: open` query that knew nothing about your
+triage. On 2026-08-13 the two channels overlapped on **exactly one** of your five questions.
+Will tapped all six buttons he was given, believed he had answered, and got the same five
+questions back a week later. **Your brief must be the single channel — the questions you ask
+are the questions that carry buttons.**
 
 ```bash
-python3 scripts/telegram_notify.py "<message>"
+# 1. One token per briefed item, in the order they appear in your message.
+TOK1=$(python3 16_General_Reinforcement_Learning/recommendation_approval.py mint --id REC-ops-004)
+TOK2=$(python3 16_General_Reinforcement_Learning/recommendation_approval.py mint --id REC-geo-002)
+
+# 2. Build the keyboard (one row per question, same order).
+KB=$(python3 16_General_Reinforcement_Learning/recommendation_approval.py keyboard "$TOK1" "$TOK2")
+
+# 3. ONE message, questions numbered, each carrying its token so a tap and a typed
+#    reply are interchangeable.
+python3 scripts/telegram_notify.py "<message>" --reply-markup-json "$KB"
 ```
+
+Print the token beside its question — `1️⃣ ROTATED SECRETS … [#$TOK1]` — so that a typed
+`RV YES <token>` and a tap on row 1 mean the same thing, and so he can answer out of order.
+Still tell him a plain numbered reply works ("1 yes, 2 no because X"); the buttons are an
+additional path, not a replacement. **A ✅ tap records immediately; No and Later deliberately
+require a reason**, because that reason is what the domain reads next cycle.
+
 One message. It carries the numbered questions **in full** — Will should be able to decide
-without opening anything — plus a one-line count of what you filtered. Tell him he can
-reply with just numbers ("1 yes, 2 no because X, 3 later").
+without opening anything — plus a one-line count of what you filtered.
 
 Do not send a second message this cycle. If something needs a second message, it needed to
-be in the first one.
+be in the first one. `recommendation_approval.py send` will now refuse to button anything
+you already briefed this week, so it cannot out-shout you mid-week — but that gate keys off
+`mark-briefed`, so **run `mark-briefed` (end of Step 5) before you send, not after.**
 
 ## Step 7 — Append a short block to `01_BUILD_LOG.md` and stop.
 
