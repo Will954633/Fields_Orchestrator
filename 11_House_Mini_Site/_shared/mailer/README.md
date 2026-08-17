@@ -50,6 +50,13 @@ python3 generate_mailers.py --all-complete --combine                 # every rea
 python3 generate_mailers.py --slug <s> --dry-run                     # print extracted copy, no PDF
 ```
 
+## Print stock — decided 2026-08-17
+**Silk, 210 GSM.** Chosen by Will after printing and comparing several test versions
+of the mini-site mailer. Use this stock for every mailer print run (V1 and V2) unless
+he says otherwise. Silk holds the aerial/hero photography without the glare of gloss,
+and 210 GSM is heavy enough that an A4 duplex leaflet doesn't show through or feel
+like a flyer.
+
 ## Notes
 - QR carries `utm_source=mailer&utm_medium=print&utm_campaign=home_report`.
 - Editorial (CLAUDE.md §5): no single valuation in the headline (competition-led), ranges
