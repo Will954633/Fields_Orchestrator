@@ -72,6 +72,44 @@ CORE_SUBURBS = ["robina", "varsity_lakes", "burleigh_waters"]
 TEST_EMAILS = {"will@fieldsestate.com.au", "test@tester.com.au"}
 TEST_SLUGS = {"7-huntingdale-crescent-robina", "5-fulham-place-robina"}
 
+# property_reports docs that exist for reasons OTHER than a person asking us for a
+# report. A doc here is not a lead and must never reach the sheet — several did, and
+# were sitting in the mailer-ready pool on 2026-08-17 ready to be posted to.
+#
+#   *_test_* / nollm_demo_* / *_comparison_*  our own test + demo builds
+#   offmarket_ladder_prewarm                  speculative pre-build, nobody asked
+#   offmarket_v4_mint                         a minted stub, nobody asked
+#
+# Kept as leads deliberately: sms_claim, offmarket_deck_cta, facebook, fb_leads —
+# each of those IS a real person doing something.
+NOT_A_LEAD_SOURCES = {
+    "diagnostic_test", "fb_lead_ayh", "offmarket_report",
+    "offmarket_direct_test_v1", "offmarket_ladder_prewarm", "offmarket_v4_mint",
+    "nollm_demo_for_will", "home_reco_correction",
+}
+# Substring guard so the NEXT one-off test source doesn't silently leak onto the
+# sheet the way offmarket_direct_test_v1 and nollm_comparison_2026-08-12 did.
+NOT_A_LEAD_PATTERNS = ("test", "demo", "prewarm", "mint", "comparison", "diagnostic")
+
+
+def is_not_a_lead(d: dict) -> str | None:
+    """Reason this property_reports doc is not a lead, or None if it is one."""
+    owner = d.get("owner") or {}
+    if d.get("is_test"):
+        return "is_test"
+    if owner.get("is_internal"):
+        return "owner.is_internal"
+    if (owner.get("email") or "").lower() in TEST_EMAILS:
+        return "test email"
+    if d.get("slug") in TEST_SLUGS:
+        return "test slug"
+    src = (d.get("source") or "").lower()
+    if src in NOT_A_LEAD_SOURCES:
+        return f"source={d.get('source')}"
+    if any(p in src for p in NOT_A_LEAD_PATTERNS):
+        return f"source~{d.get('source')}"
+    return None
+
 # Facebook Lead Ads have no on-site PostHog session, so there is no per-lead geoip.
 # The ad account only runs Australia-geo-targeted campaigns (see memory ads_reference:
 # HOUSING neighbourhood targeting on Robina/Varsity Lakes/Burleigh Waters) -- flagged as
@@ -183,13 +221,7 @@ def selling_plan_details(d: dict) -> str:
 def ayh_rows(db):
     for d in db.property_reports.find({}):
         owner = d.get("owner") or {}
-        if owner.get("is_internal"):
-            continue
-        if (owner.get("email") or "").lower() in TEST_EMAILS:
-            continue
-        if d.get("source") in ("diagnostic_test", "fb_lead_ayh", "offmarket_report"):
-            continue
-        if d.get("slug") in TEST_SLUGS:
+        if is_not_a_lead(d):
             continue
         visit_count = owner.get("visit_count", 0) or 0
         if visit_count < 1:
@@ -918,8 +950,9 @@ def main():
     # path is protected by the insert ledger, but --rebuild WIPES that ledger and
     # rewrites every lead from source — which would silently undo every sweep. This is
     # the only guard that survives a rebuild. See scripts/leads_came_to_market.py.
-    gone = {d["lead_id"] for d in db["leads_came_to_market"].find({}, {"lead_id": 1})
-            if d.get("lead_id")}
+    gone = {d["lead_id"]
+            for coll in ("leads_came_to_market", "leads_pruned_nonleads")
+            for d in db[coll].find({}, {"lead_id": 1}) if d.get("lead_id")}
     if gone:
         before = len(all_leads)
         all_leads = [l for l in all_leads if l["lead_id"] not in gone]
