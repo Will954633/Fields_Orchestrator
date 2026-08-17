@@ -207,6 +207,23 @@ def main():
                           "lead_source": "(explicit)"})
     else:
         picks = candidates(svc, sm, gc, pv.resolve_floor_area, args.limit)
+
+    # Stock check. Building a report costs nothing, but a batch sized past the
+    # envelopes on Pronto's floor produces artwork that cannot be posted — and the
+    # shortfall would surface at the mail house rather than here. Warn only: the
+    # build itself is harmless and a bigger ready pool is often deliberate.
+    try:
+        from fulfilment_stock import position
+        pos, _, _, _ = position(sm)
+        binding = min(pos.items(), key=lambda kv: kv[1]["pieces_possible"])
+        if binding[1]["pieces_possible"] < len(picks):
+            print(f"\n⚠ STOCK: {len(picks)} candidate(s) selected but only "
+                  f"{binding[1]['pieces_possible']} piece(s) can be POSTED — "
+                  f"{binding[0]} is the binding item "
+                  f"({binding[1]['available']} available). Build is fine; the "
+                  f"mail-out will need more stock.\n")
+    except Exception as e:  # noqa: BLE001 — never let the stock read block a build
+        print(f"(stock check skipped: {e})")
     print(f"{len(picks)} candidate(s) selected:\n")
     for c in picks:
         print(f"   {c['slug']:<48} {c['lead_source'][:24]}")
