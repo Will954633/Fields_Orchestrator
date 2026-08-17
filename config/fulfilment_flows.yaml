@@ -1,0 +1,130 @@
+# fulfilment_flows.yaml — the flow-code registry for physical mail.
+#
+# WHAT A CODE IS FOR
+# ------------------
+# Pronto Direct hold standing instructions per code: the code tells them what goes
+# in the envelope. Our side of the registry is deliberately richer — it also records
+# WHAT TRIGGERED the piece, because that is the only thing that makes a response
+# rate readable afterwards.
+#
+#   <flow>.<touch>     e.g. Fields_01.1
+#   Fields_01          the flow: one audience, one trigger, one pack-out recipe
+#   .1 .2 .3 ...       the touch number within that flow (a flow runs 6 touches)
+#
+# ⚠ ONE TRIGGER PER FLOW. If two audiences receive an identical envelope, they still
+# get different flow codes. On 2026-08-17 the first batch of 50 nearly went out as a
+# single code covering both off-market lookups and Analyse Your Home submissions —
+# the pack-out is the same, but AYH owners TYPED their own address while off-market
+# ownership is inferred from a page view. Mixed under one code, the first response
+# figure we ever collect would have been uninterpretable.
+#
+# ⚠ A code is never reused or redefined. If the artwork or the pack-out changes,
+# that is a new touch or a new flow, not an edit — pieces already in the post carry
+# the old meaning.
+#
+# Work orders dispatched against these codes are recorded in
+# system_monitor.fulfilment_work_orders (one doc per dispatch).
+
+supplier:
+  name: Pronto Direct
+  location: Molendinar, Gold Coast
+  contact: John Thwaites
+  email: sales@prontodirect.com.au
+  phone: "0400 526 533"
+  # They hold our stock and pack from it. Confirmed in person 2026-08-17.
+  holds_stock:
+    - c4_envelopes_branded
+    - fridge_magnets
+  delivery: Drive folder per work order — "Fulfilment — Pronto Direct/<flow>_<date>"
+
+# Physical components referenced by the recipes below.
+components:
+  mailer_v2:
+    source: 11_House_Mini_Site/_shared/mailer_v2
+    description: Per-property A4 report, variable data — one unique PDF per address
+    format: A4 double-sided
+    stock: 210 GSM Silk
+    pages: 2
+    # ⚠ VDP: artwork is per-recipient, never a single file for the run.
+    artwork: one PDF per piece, named in the work-order manifest
+  fridge_magnet:
+    source: 00_Run_Commands/Logo_Files/fridge_magnet
+    description: Green business-card magnet, QR to /fridge
+    size: 90 x 55 mm
+    artwork: Fields_BusinessCard_90x55_QR_GREEN_PRINT_CMYK.pdf
+  envelope_c4_branded:
+    description: C4 branded envelope
+    note: >
+      C4 is the expensive format (postage dominates, ~$3.50-$4.80/unit). It is
+      required here because the magnets cannot fold. A DL-fold flow would roughly
+      halve postage but cannot carry a magnet.
+
+flows:
+
+  Fields_01:
+    name: Off-market engagement nurture
+    status: live
+    audience: >
+      Homeowner at an address that someone looked up on /off-market. Ownership is
+      INFERRED from the lookup, not confirmed — the piece is addressed to "The
+      Homeowner", never to a named person.
+    trigger:
+      source: Live Leads Tracker "All Leads", lead source "Off-Market Report"
+      condition: >
+        Address resolves to a Gold_Coast subject, detached house, has a floor area,
+        report passes the mailer_v2 gate, and is NOT currently listed with another
+        agent (checked across PropRadar + our own listings + onthehouse).
+      excludes:
+        - Listing Nearing Expiry leads — they ARE on the market, own process
+        - anything on the "Came to Market" or "Not a Lead" tabs
+    planned_touches: 6
+    pack_out: &pack_mailer_2magnets
+      envelope: envelope_c4_branded
+      contents:
+        - component: mailer_v2
+          qty: 1
+        - component: fridge_magnet
+          qty: 2
+    touches:
+      "1":
+        code: Fields_01.1
+        name: First mailer — where your home sits
+        artwork: mailer_v2 (per-address)
+        pack_out: *pack_mailer_2magnets
+        qr_destination: https://fieldsestate.com.au/your-home/<slug>#market
+        utm: utm_source=mailer&utm_medium=print&utm_campaign=home_report_v2
+        first_dispatched: 2026-08-17
+        pieces: 38
+      # Touches 2-6 not yet defined. Define each one BEFORE it is dispatched —
+      # a touch invented at dispatch time has no recorded hypothesis to test.
+
+  Fields_02:
+    name: Analyse Your Home submission follow-up
+    status: live
+    audience: >
+      Homeowner who SUBMITTED their own address through /analyse-your-home. Ownership
+      evidence is materially stronger than Fields_01 — they typed the address
+      themselves — which is why this is a separate flow despite an identical envelope.
+    trigger:
+      source: Live Leads Tracker "All Leads", lead source "Analyse Your Home"
+      condition: same mailer_v2 gate and not-currently-listed checks as Fields_01
+    planned_touches: 6
+    pack_out: *pack_mailer_2magnets
+    touches:
+      "1":
+        code: Fields_02.1
+        name: First mailer — where your home sits
+        artwork: mailer_v2 (per-address)
+        pack_out: *pack_mailer_2magnets
+        qr_destination: https://fieldsestate.com.au/your-home/<slug>#market
+        utm: utm_source=mailer&utm_medium=print&utm_campaign=home_report_v2
+        first_dispatched: 2026-08-17
+        pieces: 12
+
+# ⚠ MEASUREMENT GAP, open as of 2026-08-17.
+# Fields_01.1 and Fields_02.1 currently carry the SAME utm_campaign and the same QR
+# destination, so a scan cannot be attributed to a flow — only to "a mailer". The
+# per-address `utm_content=<slug>` does identify the piece, so attribution is
+# recoverable by joining the slug back to the work order, but that is a join we have
+# to remember to do rather than something the URL states. Adding the flow code to the
+# QR (e.g. &utm_term=Fields_01.1) would make it self-describing. Do this before touch 2.
