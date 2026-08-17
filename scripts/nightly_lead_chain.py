@@ -88,6 +88,13 @@ STEPS = [
          "Insert new leads into the Live Leads Tracker. Runs LAST so a lead added "
          "tonight gets its Situation on the first insert, not a night later.",
          needs=["lead_intelligence", "seller_intent"]),
+    Step("leads_came_to_market", [PY, f"{ROOT}/scripts/leads_came_to_market.py"],
+         "Move leads whose home is now listed with another agent off 'All Leads' and "
+         "onto the 'Came to Market' tab. Runs AFTER the sheet write so leads captured "
+         "tonight are swept in the same pass rather than sitting a day in the working "
+         "list. Needs the sheet step because it reads and edits the rows that step "
+         "wrote.",
+         needs=["live_leads_to_sheet"]),
     Step("engagement_activity_to_sheet", [PY, f"{ROOT}/scripts/engagement_activity_to_sheet.py"],
          "Returning-known-contact activity ledger. Reads crm_contacts; independent of "
          "the worklist, so it still runs if enrichment failed.",
