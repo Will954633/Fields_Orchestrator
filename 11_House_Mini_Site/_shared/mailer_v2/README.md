@@ -1,5 +1,8 @@
 # Homeowner Mailer V2 — sell the finding, not the analysis
 
+> **✅ This is Will's preferred version (2026-08-17).** V2 is what goes to print;
+> V1 (`../mailer/`) is kept runnable but is no longer the default.
+
 A4 double-sided direct mail, one bespoke PDF per address, QR to that home's
 `/your-home/<slug>`. **Completely separate from V1** — its own folder, template,
 assets, output and code. Neither reads the other; `../mailer/` is untouched and
