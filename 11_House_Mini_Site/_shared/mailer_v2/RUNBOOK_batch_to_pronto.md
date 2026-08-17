@@ -171,11 +171,31 @@ use "anyone with the link" — it is a list of home addresses.
 **Pronto hold our C4 envelopes and fridge magnets** (they print the mailer per job
 from our PDFs, so paper is not our stock).
 
-⚠ **There is no stock ledger yet.** As of 2026-08-17 the only record is verbal:
-100 C4 envelopes, 250 magnets dropped off, receipt unconfirmed. At 1 envelope +
-2 magnets per piece, **envelopes bind first** — 100 envelopes is two 50-piece runs,
-against 113 addresses already mailable and a 6-touch flow planned. Confirm real
-figures with John and record them before planning a batch.
+```bash
+python3 scripts/fulfilment_stock.py            # current position
+python3 scripts/fulfilment_stock.py --plan 50  # feasible? exits 1 if short
+```
+
+Receipts are recorded in the `stock:` block of `config/fulfilment_flows.yaml`.
+Balance is **computed, never stored**, so it cannot drift:
+
+    on_hand   = receipts - pieces on work orders with status "posted"
+    available = on_hand  - pieces on work orders prepared/sent but not yet posted
+
+The reserved half matters: a work order at "prepared" has not burned an envelope
+yet, but it is spoken for. Counting only "posted" would let two batches be planned
+against the same 100 envelopes, and the second would fail at Pronto rather than here.
+
+⚠ **Envelopes bind before magnets** at 1 + 2 per piece. Opening position
+(confirmed by Will, delivered 2026-08-17): **100 envelopes, 250 magnets**. With the
+first 50 reserved that leaves **50 postable pieces** — one more run — against 113
+addresses already mailable and a 6-touch flow planned.
+
+`build_mailer_batch.py` warns (does not block) when a batch exceeds postable stock —
+building is harmless, posting is not.
+
+⚠ **Mark a work order `posted` once Pronto confirm lodgement**, or stock will read
+as permanently reserved and never consumed.
 
 ---
 
