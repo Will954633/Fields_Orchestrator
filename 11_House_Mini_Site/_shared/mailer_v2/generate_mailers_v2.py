@@ -130,12 +130,37 @@ def download(url, dest):
     return dest
 
 
-def make_qr(slug):
+def flow_for(slug, override=None):
+    """Flow code for this piece. An explicit --flow-code wins; otherwise look the
+    slug up in the work orders already recorded for it, so a mixed batch gets the
+    right code per piece rather than one blanket value."""
+    if override:
+        return override
+    try:
+        from shared.db import get_client
+        wo = get_client()["system_monitor"]["fulfilment_work_orders"].find_one(
+            {"items.slug": slug}, sort=[("dispatched_at", -1)])
+        return wo.get("flow_code") if wo else None
+    except Exception:
+        return None
+
+
+def make_qr(slug, flow_code=None):
     # utm_content carries the mailed slug so a scan is attributable to exactly
     # one posted envelope — the basis of per-address uplift measurement
     # (scripts/samantha/mailout_uplift_tracking.md). campaign is _v2 so the two
     # versions never pool in reporting.
-    url = f"{BASE_URL}/your-home/{slug}?{UTM}&utm_content={slug}{DEEP_LINK}"
+    #
+    # utm_term carries the FLOW CODE (config/fulfilment_flows.yaml), e.g.
+    # "Fields_01.1". Two flows can share identical artwork and an identical
+    # pack-out while having entirely different triggers — Fields_01 is an
+    # inferred-owner off-market lookup, Fields_02 a self-submitted address — and
+    # without this a scan says only "a mailer". The slug does make the flow
+    # RECOVERABLE by joining back to system_monitor.fulfilment_work_orders, but
+    # that is a join someone has to remember; this makes the scan self-describing.
+    # Invisible to the reader, present on every scan.
+    term = f"&utm_term={flow_code}" if flow_code else ""
+    url = f"{BASE_URL}/your-home/{slug}?{UTM}&utm_content={slug}{term}{DEEP_LINK}"
     qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=20, border=4)
     qr.add_data(url)
     qr.make(fit=True)
@@ -158,6 +183,35 @@ def _g(d, *path, default=None):
 # ---------------------------------------------------------------------------
 # readiness
 # ---------------------------------------------------------------------------
+def currently_listed(doc):
+    """Is this home on the market right now?
+
+    Never post a homeowner analysis to an address that is already listed. The
+    envelope arrives at someone who has an agent, a campaign and a price — the
+    mailer's whole premise ("we've already analysed your home, come and see
+    where it sits") reads as either ignorant or as a poach. There is an
+    equivalent guard on the submit path (see the currently-listed guard in
+    slot_resolver.py, which refuses to build a mini-site for a live listing);
+    this is the same rule applied at the point of print, because a report built
+    weeks ago can be listed by the time the envelope goes out.
+    """
+    import re
+    m = re.match(r"^(.*?),\s*([A-Za-z ]+),\s*QLD", (doc.get("address") or "").strip())
+    if not m:
+        return None
+    street, locality = m.group(1).strip(), m.group(2).strip().lower().replace(" ", "_")
+    try:
+        coll = get_client()["Gold_Coast"][locality]
+    except Exception:
+        return None
+    hit = coll.find_one(
+        {"address": {"$regex": f"^{re.escape(street)},", "$options": "i"},
+         "listing_status": "for_sale"},
+        {"address": 1, "price": 1, "listing_url": 1},
+    )
+    return hit or None
+
+
 def check_ready(doc):
     """Reasons this address cannot be mailed. Empty list = ready.
 
@@ -172,6 +226,12 @@ def check_ready(doc):
     # the postal address is the first claim on the page and the only one that
     # decides whether the envelope arrives at all
     reasons += check_postal_address(doc.get("address"))
+
+    listed = currently_listed(doc)
+    if listed:
+        reasons.append(
+            f"currently listed for sale ({listed.get('price') or 'price withheld'}) "
+            f"— never post a homeowner analysis to a live listing")
 
     if doc.get("build_state") != "complete":
         reasons.append(f"build_state={doc.get('build_state')}")
@@ -466,9 +526,9 @@ def build_context(doc):
     }
 
 
-def render(ctx, dry=False):
+def render(ctx, dry=False, flow_code=None):
     slug, hero = ctx["slug"], ctx["hero"]
-    url, qr_rel = make_qr(slug)
+    url, qr_rel = make_qr(slug, flow_code)
     gdir = os.path.join(GEN, slug)
     hero_rel, aer_rel = f"assets/gen/{slug}/hero.jpg", f"assets/gen/{slug}/aerial.png"
     if not dry:
@@ -790,6 +850,11 @@ def main():
     ap.add_argument("--combine", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--audit", action="store_true")
+    ap.add_argument("--flow-code", default=None,
+                    help="override the flow code baked into the QR as utm_term "
+                         "(e.g. Fields_01.1). Default: looked up per slug from "
+                         "system_monitor.fulfilment_work_orders, so a mixed batch "
+                         "gets the correct code per piece.")
     ap.add_argument("--force", action="store_true",
                     help="generate despite readiness failures (proofing only — never post these)")
     args = ap.parse_args()
@@ -819,7 +884,8 @@ def main():
         if reasons:
             print(f"  ! {d.get('slug')}: FORCED despite — {'; '.join(reasons)}")
         try:
-            p = render(build_context(d), dry=args.dry_run)
+            p = render(build_context(d), dry=args.dry_run,
+                       flow_code=flow_for(d.get("slug"), args.flow_code))
             if p:
                 pdfs.append(p)
         except Exception as e:
