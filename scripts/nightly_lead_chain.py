@@ -95,6 +95,11 @@ STEPS = [
          "list. Needs the sheet step because it reads and edits the rows that step "
          "wrote.",
          needs=["live_leads_to_sheet"]),
+    Step("leads_prune_nonleads", [PY, f"{ROOT}/scripts/leads_prune_nonleads.py"],
+         "Take our own test builds, demos and speculative pre-builds back off the "
+         "sheet. The sheet is insert-only, so a record flagged as a test AFTER it was "
+         "inserted stays a 'lead' forever unless something reconciles it.",
+         needs=["live_leads_to_sheet"]),
     Step("engagement_activity_to_sheet", [PY, f"{ROOT}/scripts/engagement_activity_to_sheet.py"],
          "Returning-known-contact activity ledger. Reads crm_contacts; independent of "
          "the worklist, so it still runs if enrichment failed.",
