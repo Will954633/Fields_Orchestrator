@@ -69,6 +69,57 @@ def _keyboard(tok):
     ]]}
 
 
+def cmd_mint(a):
+    """Mint a token for a rec WITHOUT sending anything — the brief embeds it itself.
+
+    WHY (2026-08-18). There were two ask-Will channels that did not know about each other:
+    the weekly brief (plain text, no buttons, questions chosen by Samantha's triage) and
+    this file (buttons, questions chosen by a bare `status: open` query). On 2026-08-13 the
+    overlap between the two was exactly ONE item out of five. Will tapped all 6 buttons he
+    was given and reasonably believed he had answered the brief; the brief then re-asked all
+    5 a week later and told him he had answered none.
+
+    `mint` makes the brief the SINGLE channel: Samantha mints one token per question she is
+    actually asking, prints it beside that question, and attaches the keyboard to her own
+    message. A tap and a typed `RV YES <token>` become interchangeable, and `poll` records
+    either one without caring which arrived.
+    """
+    sm = _sm()
+    rec = sm[RECS].find_one({"_id": a.id})
+    if not rec:
+        sys.exit(f"{a.id} does not exist")
+    if rec.get("status") != "open":
+        sys.exit(f"{a.id} is {rec.get('status')}, not open — nothing to ask")
+
+    existing = sm[PENDING].find_one({"rec_id": a.id, "status": "awaiting"})
+    if existing and not a.force:
+        # Reuse rather than mint a second live token for the same question: two valid
+        # tokens means a tap on the older message silently records against a stale ask.
+        print(existing["token"])
+        return
+
+    tok = secrets.token_hex(2).upper()
+    sm[PENDING].insert_one({"rec_id": a.id, "token": tok, "status": "awaiting",
+                            "sent_at": NOW.isoformat(), "minted_for": "brief"})
+    print(tok)
+
+
+def cmd_keyboard(a):
+    """Print the inline-keyboard JSON for a set of tokens, ready for
+    `telegram_notify.py --reply-markup-json`. One row per token."""
+    import json
+    rows = []
+    for tok in a.tokens:
+        tok = tok.strip().upper().lstrip("#")
+        label = f"#{tok}"
+        rows.append([
+            {"text": f"✅ {label}", "callback_data": f"RV YES {tok}"},
+            {"text": "✏️ No", "callback_data": f"RV NO {tok}"},
+            {"text": "⏳ Later", "callback_data": f"RV LATER {tok}"},
+        ])
+    print(json.dumps({"inline_keyboard": rows}))
+
+
 def cmd_send(a):
     sm = _sm()
     q = {"status": "open"}
@@ -81,9 +132,18 @@ def cmd_send(a):
     since = (NOW - timedelta(hours=24)).isoformat()
     sent_today = sm[PENDING].count_documents({"sent_at": {"$gt": since}})
     sent = 0
+    this_week = f"{NOW.isocalendar().year}-W{NOW.isocalendar().week:02d}"
     for r in recs:
         if sm[PENDING].find_one({"rec_id": r["_id"], "status": "awaiting"}):
             print(f"  {r['_id']}: already awaiting a verdict — skipped")
+            continue
+        # This channel used to select purely on `status: open`, with no knowledge of what
+        # the brief was asking. That is how Will ended up tapping 6 buttons that answered
+        # 1 of the brief's 5 questions (2026-08-13). If Samantha already put this item to
+        # him this week, the brief owns it and its token is live inside her message.
+        if this_week in (r.get("briefed_in") or []) and not a.force:
+            print(f"  {r['_id']}: already asked in the {this_week} brief — skipped "
+                  f"(the brief owns this question; --force to override)")
             continue
         if sent_today + sent >= MAX_SENDS_PER_DAY and not a.force:
             print(f"  drip cap reached ({MAX_SENDS_PER_DAY}/day) — {r['_id']} waits")
@@ -174,6 +234,11 @@ def main():
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("send"); s.add_argument("--id"); s.add_argument("--all", action="store_true")
     s.add_argument("--force", action="store_true"); s.set_defaults(f=cmd_send)
+    s = sub.add_parser("mint", help="mint a token for the brief to embed; prints the token")
+    s.add_argument("--id", required=True); s.add_argument("--force", action="store_true")
+    s.set_defaults(f=cmd_mint)
+    s = sub.add_parser("keyboard", help="inline-keyboard JSON for tokens, for --reply-markup-json")
+    s.add_argument("tokens", nargs="+"); s.set_defaults(f=cmd_keyboard)
     s = sub.add_parser("poll"); s.add_argument("--dry-run", action="store_true"); s.set_defaults(f=cmd_poll)
     s = sub.add_parser("list"); s.set_defaults(f=cmd_list)
     a = ap.parse_args()
