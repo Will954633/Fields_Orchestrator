@@ -3,6 +3,8 @@
 > **✅ This is Will's preferred version (2026-08-17).** V2 is what goes to print;
 > V1 (`../mailer/`) is kept runnable but is no longer the default.
 
+>PRINT SPEC: SILK 210 GSM
+
 A4 double-sided direct mail, one bespoke PDF per address, QR to that home's
 `/your-home/<slug>`. **Completely separate from V1** — its own folder, template,
 assets, output and code. Neither reads the other; `../mailer/` is untouched and
@@ -148,10 +150,21 @@ Leads: 17 `competition`, 4 `no_competition`. Support cards:
 | "broadly similar homes", not "size and type band" | Internal jargon leaking onto the page. Geography now consistently "the buyer search area", never the vaguer "near you". |
 | Friction line removed from page 2's QR | It appeared twice plus the *Not a sales funnel* box. Three times reads as protesting. |
 
+## Running a batch → Pronto Direct
+
+This README covers the **artwork** — what the mailer says and why. To actually
+produce, code, check and send a batch of printed mail, read
+**[`RUNBOOK_batch_to_pronto.md`](RUNBOOK_batch_to_pronto.md)**. It has the selection
+rules, the build command and its measured yield, the flow-code registry, the QR
+verification method, the Drive/manifest layout and the traps found on the first real
+run (2026-08-17, 50 pieces).
+
 ## Files
 
 - `hooks.py` — finding builders + scoring + conflict rules. **Start here.**
 - `generate_mailers_v2.py` — data → copy → PDF → verification.
+- `RUNBOOK_batch_to_pronto.md` — end-to-end batch process (build → code → send).
+- `../../../config/fulfilment_flows.yaml` — flow-code registry (`Fields_01.1` etc).
 - `mailer_v2_template.html` — A4 duplex template.
 - `assets/gen/<slug>/` — per-address hero.jpg, aerial.png, qr.png.
 - `output/<slug>.pdf` · `output/all_mailers_v2.pdf` (combined print file).
