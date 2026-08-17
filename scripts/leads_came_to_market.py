@@ -42,10 +42,11 @@ Usage
 """
 from __future__ import annotations
 import argparse
+import re
 import os
 import sys
 import warnings
-from datetime import datetime
+from datetime import datetime, timedelta
 
 warnings.filterwarnings("ignore")
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -67,8 +68,65 @@ LEDGER_COLL = "leads_came_to_market"
 
 # Appended to the right of the lead's own columns, so the carried row keeps its
 # original shape and column meanings.
-EXTRA_HEADERS = ["Detected (AEST)", "Signal", "Days on market", "Asking", "Why"]
+EXTRA_HEADERS = ["Detected (AEST)", "Signal", "Days on market", "Asking", "Why",
+                 "Visited site", "Home listed", "Days visit → list"]
 HEADERS = LEAD_HEADERS + EXTRA_HEADERS
+
+_MONTHS = {m: i + 1 for i, m in enumerate(
+    ["january", "february", "march", "april", "may", "june", "july", "august",
+     "september", "october", "november", "december"])}
+
+
+def _parse_date(s):
+    if isinstance(s, datetime):
+        return s.date()
+    for f in ("%Y-%m-%d", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S"):
+        try:
+            return datetime.strptime(str(s)[:19], f).date()
+        except (ValueError, TypeError):
+            pass
+    return None
+
+
+def _parse_day_month(s, before):
+    """Gold_Coast stores `first_listed_date` as "12 August" — day and month, NO YEAR.
+    Resolve to the most recent such date on or before `before` (the detection date),
+    since we only ever ask this about a listing that is live right now."""
+    m = re.match(r"^\s*(\d{1,2})\s+([A-Za-z]+)\s*$", str(s or ""))
+    if not m:
+        return None
+    day, mon = int(m.group(1)), _MONTHS.get(m.group(2).lower())
+    if not mon:
+        return None
+    for year in (before.year, before.year - 1):
+        try:
+            cand = datetime(year, mon, day).date()
+        except ValueError:
+            continue
+        if cand <= before:
+            return cand
+    return None
+
+
+def listed_on(st, detected, gc_first_listed=None, oth_listed=None):
+    """(date the home went on the market, how we know). None if undeterminable.
+
+    ⚠ The PropRadar path is DERIVED (detection date minus days-on-market), not
+    observed, so it inherits whatever staleness the cached status had. It is accurate
+    to about a day, which is fine for a gap measured in weeks — but never present it
+    as the listing's authoritative go-live date."""
+    dom = st.get("days_on_market") if st else None
+    if dom is not None:
+        return detected - timedelta(days=int(dom)), "derived from PropRadar days-on-market"
+    if gc_first_listed:
+        d = _parse_day_month(gc_first_listed, detected)
+        if d:
+            return d, "Gold_Coast first_listed_date (year inferred)"
+    if oth_listed:
+        d = _parse_date(oth_listed)
+        if d:
+            return d, "onthehouse listed_date"
+    return None, ""
 
 SOURCE_COL, ADDR_COL, LEAD_ID_COL = 1, 7, 12          # B, H, M (0-indexed)
 
@@ -167,7 +225,23 @@ def sweep(svc, ssid, db, gc_db, *, max_calls=500, dry_run=False):
     pr_ok = sum(1 for v in status.values() if not v.get("error"))
     sources_live = sum(1 for x in (pr_ok, gc_live, oth_live) if x)
 
-    moved, ts = [], datetime.now(AEST).strftime("%Y-%m-%d %H:%M")
+    # Listing dates for the two sources that don't carry days-on-market, so the
+    # visit -> listing gap can be computed for every row rather than most of them.
+    gc_first = {}
+    for sub in gc_db.list_collection_names():
+        try:
+            for d in gc_db[sub].find({"listing_status": "for_sale"},
+                                     {"address": 1, "first_listed_date": 1}):
+                if d.get("address"):
+                    gc_first[ms._key(d["address"])] = d.get("first_listed_date")
+        except Exception:  # noqa: BLE001 — a suburb we can't read is not fatal here
+            continue
+    oth_first = {ms._key(d.get("address", "")): d.get("listed_date")
+                 for d in db[ohl.COLL].find({"active": True},
+                                            {"address": 1, "listed_date": 1})}
+
+    now = datetime.now(AEST)
+    moved, ts = [], now.strftime("%Y-%m-%d %H:%M")
     for canon, idxs in targets.items():
         st = status.get(canon) or {}
         is_listed, signal = listing_signal(st)
@@ -179,10 +253,23 @@ def sweep(svc, ssid, db, gc_db, *, max_calls=500, dry_run=False):
         asking = (f"${lo:,.0f}" if lo and lo == hi else
                   f"${lo:,.0f}–${hi:,.0f}" if lo and hi else
                   f"${lo:,.0f}" if lo else "")
+        key = ms._key(canon)
+        listed, listed_how = listed_on(st, now.date(), gc_first.get(key),
+                                       oth_first.get(key))
         for i in idxs:
+            # Col A is when the lead was captured — for an off-market lead that IS
+            # the day they looked the address up, which is what makes the gap
+            # meaningful. A NEGATIVE gap means the home was already on the market
+            # when they visited: that visitor is a buyer (or the owner checking
+            # their own listing), never a seller signal. Do not average the two
+            # together.
+            visited = _parse_date(_cell(rows[i], 0))
+            gap = (listed - visited).days if (listed and visited) else None
             moved.append({"row": i + 2, "values": rows[i], "canonical": canon,
                           "signal": signal, "dom": dom, "asking": asking, "why": why,
-                          "lead_id": _cell(rows[i], LEAD_ID_COL), "detected": ts})
+                          "lead_id": _cell(rows[i], LEAD_ID_COL), "detected": ts,
+                          "visited": visited, "listed": listed,
+                          "listed_how": listed_how, "gap": gap})
 
     metrics = {"leads": total, "checked": len(targets), "exempt": exempt,
                "moved": len(moved), "sources_live": sources_live,
@@ -209,7 +296,9 @@ def sweep(svc, ssid, db, gc_db, *, max_calls=500, dry_run=False):
         body={"values": [
             m["values"] + [""] * (len(LEAD_HEADERS) - len(m["values"]))
             + [m["detected"], m["signal"],
-               str(m["dom"]) if m["dom"] is not None else "", m["asking"], m["why"]]
+               str(m["dom"]) if m["dom"] is not None else "", m["asking"], m["why"],
+               str(m["visited"] or ""), str(m["listed"] or ""),
+               str(m["gap"]) if m["gap"] is not None else ""]
             for m in moved]}).execute()
 
     # Delete bottom-up: each deleteDimension shifts everything below it, so
@@ -227,7 +316,11 @@ def sweep(svc, ssid, db, gc_db, *, max_calls=500, dry_run=False):
                          "detected_at": datetime.now(AEST), "signal": m["signal"],
                          "days_on_market": m["dom"], "asking": m["asking"],
                          "why": m["why"], "source": _cell(m["values"], SOURCE_COL),
-                         "lead_date": _cell(m["values"], 0)}, upsert=True)
+                         "lead_date": _cell(m["values"], 0),
+                         "visited_on": str(m["visited"] or ""),
+                         "listed_on": str(m["listed"] or ""),
+                         "listed_on_source": m["listed_how"],
+                         "days_visit_to_list": m["gap"]}, upsert=True)
 
     print(f"\nMoved {len(moved)} row(s) to '{LOST_TAB}'.")
     return metrics
