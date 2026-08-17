@@ -82,11 +82,26 @@ class SlotResolver:
         self.suburb_display = report_doc.get("suburb", "")
         self.address = report_doc.get("address", "")
         self.property_id = report_doc.get("property_id")
-        # build_mode == "no_llm": fast, data-first report — skip every vision +
-        # narrative (LLM) stage; keep all deterministic ones (valuation, comps,
-        # scarcity evidence, competition, market, walking distances). Default
-        # "full" => byte-identical to the previous behaviour.
-        self.no_llm = report_doc.get("build_mode") == "no_llm"
+        # ── BUILD MODE ──────────────────────────────────────────────────────
+        # DETERMINISTIC IS NOW THE DEFAULT (Will, 2026-08-16). Every slot the
+        # LLM chain used to write is templated off data we already compute:
+        # scarcity hero, market paragraph, positioning, personas, buyers, and the
+        # case-study card (its selection and fact-gating were always
+        # deterministic; only the prose was a model call).
+        #
+        # Measured on the same property, same data:
+        #     full AI      266-611 s, 11 model calls, 12 slots
+        #     deterministic     6-42 s,  0 model calls, 12 slots
+        # and the LLM positioning slot was erroring on 22 of 105 documents,
+        # silently taking personas AND buyers down with it because both nested
+        # under `if pos.get("frame")`.
+        #
+        # Opt back in per-report with `build_mode: "full"`. Anything else —
+        # including a missing field, which is what a fresh submit writes — is
+        # deterministic. The default is inverted deliberately: a new mode that
+        # only applies when someone remembers to set a flag is a mode that never
+        # applies.
+        self.no_llm = report_doc.get("build_mode") != "full"
         # Live progress emitter — defaults to no-op for tests / dry-runs
         self.emit = emitter or NullEmitter()
 
