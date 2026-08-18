@@ -183,7 +183,7 @@ def main():
     except Exception:
         job_run = None
     if job_run and not args.dry_run:
-        with job_run("rl_arm_grades", cadence_hours=24, title="General RL — arm grading loop (M4)") as beat:
+        with job_run("rl_arm_grades", cadence_hours=168, title="General RL — arm grading loop (M4)") as beat:
             s = build(days=args.days, dry_run=False)
             _summary(s)
             graded = sum(1 for e in s["experiments"] if e.get("status") == "graded")
