@@ -340,7 +340,7 @@ def main():
         return s
 
     if job_run and not args.dry_run:
-        with job_run("rl_onsite_friction", cadence_hours=24, title="General RL — Onsite friction sensor") as beat:
+        with job_run("rl_onsite_friction", cadence_hours=168, title="General RL — Onsite friction sensor") as beat:
             s = run()
             t = s["totals"]
             beat.detail = f"{t['incidents']} incidents (HIGH {t['HIGH']}, MED {t['MEDIUM']}) / {t['sessions_scanned']} sessions"
