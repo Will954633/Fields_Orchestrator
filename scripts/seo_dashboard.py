@@ -180,7 +180,15 @@ BUCKET_ORDER = ["Indexed", "Discovered – not indexed", "Crawled – not indexe
 
 # ---------------------------------------------------------------- sheet helpers
 def ensure_tabs(svc, sid):
-    meta = svc.spreadsheets().get(spreadsheetId=sid).execute()
+    # num_retries: googleapiclient retries 5xx with exponential backoff. Added
+    # 2026-08-18 after a single Sheets 503 ("service is currently unavailable")
+    # on the 06:45 run cost the whole night's dashboard and lit up the health
+    # board — 13 consecutive successes either side, and the identical read
+    # succeeded on demand the same day, so it was Google-side and momentary.
+    # ensure_tabs() runs first, so when it throws nothing downstream executes —
+    # both of its spreadsheets().get() reads are guarded (this one and the
+    # re-read after batchUpdate below).
+    meta = svc.spreadsheets().get(spreadsheetId=sid).execute(num_retries=3)
     existing = {s["properties"]["title"]: s["properties"]["sheetId"] for s in meta["sheets"]}
     reqs = []
     for t in TABS:
@@ -188,8 +196,8 @@ def ensure_tabs(svc, sid):
             reqs.append({"addSheet": {"properties": {"title": t}}})
     # drop the default "Sheet1" if present and unused
     if reqs:
-        svc.spreadsheets().batchUpdate(spreadsheetId=sid, body={"requests": reqs}).execute()
-    meta = svc.spreadsheets().get(spreadsheetId=sid).execute()
+        svc.spreadsheets().batchUpdate(spreadsheetId=sid, body={"requests": reqs}).execute(num_retries=3)
+    meta = svc.spreadsheets().get(spreadsheetId=sid).execute(num_retries=3)
     gids = {s["properties"]["title"]: s["properties"]["sheetId"] for s in meta["sheets"]}
     if "Sheet1" in gids and "Overview" in gids:
         try:
