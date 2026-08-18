@@ -755,23 +755,61 @@ def collect_search_console():
     except ImportError:
         return [], ["google-api-python-client: not installed"]
 
-    client_id = os.environ.get("GOOGLE_ADS_CLIENT_ID")
-    client_secret = os.environ.get("GOOGLE_ADS_CLIENT_SECRET")
-    refresh_token = os.environ.get("GOOGLE_INDEXING_REFRESH_TOKEN")
+    GSC_SCOPES = ["https://www.googleapis.com/auth/webmasters.readonly"]
+    # Prefer the SERVICE ACCOUNT. Added 2026-08-18 — this collector was the last
+    # consumer still on the user-OAuth path, which is why it broke while
+    # google_indexing.py and seo_dashboard.py (both service accounts) stayed green.
+    #
+    # The OAuth path cannot be made durable here: the `fields-estate-ads` consent
+    # screen is still in "Testing", so Google expires its refresh tokens every
+    # ~7 days. A service account has no consent screen and no expiry, so this
+    # removes the job from that cycle permanently rather than for a week.
+    # Verified 2026-08-18: this SA sees ['https://fieldsestate.com.au/'] and the
+    # searchanalytics query returns rows for both the trailing-slash and
+    # no-slash siteUrl forms.
+    sa_key = os.environ.get("GOOGLE_INDEXING_SA_KEY", "/home/fields/.gcp-indexing-sa.json")
+    creds = None
+    if os.path.exists(sa_key):
+        try:
+            from google.oauth2 import service_account
+            creds = service_account.Credentials.from_service_account_file(
+                sa_key, scopes=GSC_SCOPES)
+        except Exception as e:
+            return [], [f"gsc: service-account key at {sa_key} unusable: {type(e).__name__}: {e}"]
 
-    if not all([client_id, client_secret, refresh_token]):
-        return [], ["gsc: missing credentials (GOOGLE_INDEXING_REFRESH_TOKEN)"]
+    if creds is None:
+        client_id = os.environ.get("GOOGLE_ADS_CLIENT_ID")
+        client_secret = os.environ.get("GOOGLE_ADS_CLIENT_SECRET")
+        refresh_token = os.environ.get("GOOGLE_INDEXING_REFRESH_TOKEN")
 
-    try:
+        if not all([client_id, client_secret, refresh_token]):
+            return [], ["gsc: missing credentials (GOOGLE_INDEXING_REFRESH_TOKEN)"]
+
+        # ⚠ The guard google_indexing.py has carried since [INDEXING-SILENT-ZERO]
+        # (2026-07-22) and this script did not — which is the whole reason this job
+        # failed on 08-13, 08-16 and would have failed again tonight. An
+        # adwords-scoped token CANNOT request `webmasters`; it returns
+        # invalid_scope on every refresh. Re-auths keep copying the ads token into
+        # both env vars (seen again in the .env written 2026-08-18 21:12), so the
+        # condition must be NAMED rather than left to surface as a vague OAuth error.
+        if refresh_token == os.environ.get("GOOGLE_ADS_REFRESH_TOKEN"):
+            return [], [
+                "gsc: GOOGLE_INDEXING_REFRESH_TOKEN is byte-identical to "
+                "GOOGLE_ADS_REFRESH_TOKEN — an adwords-scoped token cannot request "
+                "the webmasters scope and fails invalid_scope on every call. "
+                f"Fix: add the service-account key at {sa_key} (preferred, no expiry), "
+                "or mint a genuinely webmasters-scoped refresh token."]
+
         creds = Credentials(
             token=None,
             refresh_token=refresh_token,
             client_id=client_id,
             client_secret=client_secret,
             token_uri="https://oauth2.googleapis.com/token",
-            scopes=["https://www.googleapis.com/auth/webmasters.readonly"],
+            scopes=GSC_SCOPES,
         )
 
+    try:
         service = build("searchconsole", "v1", credentials=creds)
 
         # Query last 5 days (GSC has 2-3 day data lag)
