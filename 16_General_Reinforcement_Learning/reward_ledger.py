@@ -480,7 +480,7 @@ def main():
         job_run = None
 
     if job_run and not args.dry_run:
-        with job_run("rl_reward_ledger", cadence_hours=24,
+        with job_run("rl_reward_ledger", cadence_hours=168,
                      title="General RL — reward ledger + milestone map") as beat:
             s = build(window_days=args.window_days, dry_run=False)
             _print_summary(s)
