@@ -362,8 +362,16 @@ def collect_leads_crm(add, sm, now_utc, last_run):
     typically in the log tail even though the alert itself isn't breach-gated."""
     PG = "Leads & CRM"
     orch_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    # ⚠ "Live Leads Tracker" (live-leads-sheet.log) was REMOVED from this loop
+    # 2026-08-18. On 2026-08-01 its cron line was folded into
+    # scripts/nightly_lead_chain.py, which runs every sub-step with
+    # stdout=sys.stdout — so all output lands in logs/nightly-lead-chain.log and
+    # live-leads-sheet.log has not been written since. This probe therefore
+    # measured the age of that refactor, not the health of the job, and sat STALE
+    # for 18 days while the sync ran fine every night. Replaced by the
+    # lead-worklist data-outcome check below. The two entries left here still have
+    # their own crons and their own logs, both fresh. See [LEADS-ORPHANED-LOG-PROBE].
     for name, log_name, cadence_days in [
-        ("Live Leads Tracker", "live-leads-sheet.log", 2),
         ("Sold Homes → Sheet", "sold-homes-sheet.log", 2),
         ("Listed Homes → Sheet", "listed-homes-sheet.log", 2),
     ]:
@@ -381,11 +389,36 @@ def collect_leads_crm(add, sm, now_utc, last_run):
     # being noticed when a lead is missed. mtime staleness = cron stopped; error-pattern
     # tail = the build crashed. Cadence 2d gives grace (health runs 01:00, build 02:00,
     # so the freshest successful log is ~23h old at audit time).
-    st, dt, mtime = log_freshness_check(
-        os.path.join(orch_dir, "logs", "samantha", "lead_intelligence.log"), 2,
-        error_patterns=("Traceback (most recent call last)", "pymongo.errors", "Error:"))
-    add(PG, "Lead-Intelligence Pipeline (worklist build)", "nightly 02:00",
-        mtime.date().isoformat() if mtime else None, st, "log mtime", mtime, dt)
+    # ⚠ REWRITTEN 2026-08-18. This was a log_freshness_check on
+    # logs/samantha/lead_intelligence.log, which the 2026-08-01 nightly_lead_chain
+    # refactor orphaned exactly as it orphaned live-leads-sheet.log above — mtime
+    # frozen at the refactor, row STALE for 18 days, while the worklist was in fact
+    # being rebuilt every night (587 leads enriched the night this was found).
+    #
+    # Now checks the OUTPUT instead of a log file's mtime. `collect_self_reported_jobs`
+    # already renders the nightly_lead_chain heartbeat ("did it run"); this asserts
+    # "did it produce anything", which is the half Rule 7b cares about and the half a
+    # redirect change cannot silently detach. Field name confirmed against the data
+    # per Rule 8 (lead_worklist.enriched_at, ~90% fill) rather than assumed.
+    newest = next(sm["lead_worklist"].find({"enriched_at": {"$exists": True}},
+                                           {"enriched_at": 1})
+                  .sort("enriched_at", -1).limit(1), None)
+    ts = as_dt(newest.get("enriched_at")) if newest else None
+    fresh_n = sm["lead_worklist"].count_documents(
+        {"enriched_at": {"$gte": now_utc - timedelta(days=2)}})
+    if ts is None:
+        add(PG, "Lead worklist freshness", "lead_worklist.enriched_at", None, MISSING,
+            "enriched_at", None, "no lead has ever been enriched")
+    else:
+        age_days = (now_utc - ts).total_seconds() / 86400
+        if age_days > 2:
+            add(PG, "Lead worklist freshness", "lead_worklist.enriched_at",
+                f"{fresh_n} in 2d", STALE, "enriched_at", ts,
+                f"newest enrichment {age_days:.1f}d old — nightly_lead_chain is not "
+                f"reaching lead_intelligence")
+        else:
+            add(PG, "Lead worklist freshness", "lead_worklist.enriched_at",
+                f"{fresh_n} in 2d", OK, "enriched_at", ts, "")
 
     # High-priority leads with no appraisal package started yet (added 2026-07-23).
     # Found by accident this session — a HIGH lead's "existing" appraisal turned out
@@ -2032,6 +2065,22 @@ def collect(client, now_utc, prev_map):
         if err:
             add(PG, "Daily push (VM cron)", path, None, ERROR, "commit date", None,
                 f"could not check GitHub: {err}")
+            continue
+        # ⚠ news-sitemap.xml is NOT a daily artefact. regenerate-sitemap.sh rewrites
+        # it every run but only COMMITS it when the content changes ("unchanged —
+        # skip"), and its content is the recent-articles list — so it legitimately
+        # does not move on any day no new article is published. Judging it on the
+        # daily `scrape` cadence made it read STALE purely because publishing is
+        # not daily (2026-08-18: sitemap.xml pushed fine that morning, rc=0, while
+        # this row was red). Reported as info instead, with the age stated so a
+        # genuinely long gap is still legible. sitemap.xml keeps the daily check —
+        # that one DOES change nightly as listings move.
+        if path.endswith("news-sitemap.xml"):
+            age_d = (now_utc - ts).total_seconds() / 86400 if ts else None
+            add(PG, "Push (only when a new article publishes)", path, f"commit {sha}",
+                OK, "commit date", ts,
+                f"last changed {age_d:.1f}d ago — tracks article publishing, not a daily push"
+                if age_d is not None else "", info=True)
             continue
         st, dt = judge(ts, "scrape", now_utc, last_run)
         add(PG, "Daily push (VM cron)", path, f"commit {sha}", st, "commit date", ts, dt)
