@@ -212,7 +212,7 @@ def main():
     except Exception:
         job_run = None
     if job_run and not args.dry_run:
-        with job_run("rl_ads_signal", cadence_hours=24, title="General RL — Ads (paid) sensor") as beat:
+        with job_run("rl_ads_signal", cadence_hours=168, title="General RL — Ads (paid) sensor") as beat:
             s = build(days=args.days, dry_run=False)
             _summary(s)
             beat.detail = (f"${s['totals']['spend_aud']} / {s['totals']['conversions']} conv "
