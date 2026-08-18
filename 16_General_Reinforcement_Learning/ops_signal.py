@@ -247,7 +247,7 @@ def main():
             "rl_ops_signal", "success",
             detail=(f"{doc['actionable_total']} actionable "
                     f"({', '.join(f'{k} {v}' for k, v in sorted(doc['actionable_by_class'].items()))})"),
-            cadence_hours=24, title="Ops — health-board sensor (what is broken)",
+            cadence_hours=168, title="Ops — health-board sensor (what is broken)",
             actionable=doc["actionable_total"],
         )
     except Exception as e:
