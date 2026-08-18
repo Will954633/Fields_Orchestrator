@@ -549,6 +549,22 @@ def main() -> int:
             print(f"  [{r['priority']:>6}] {r['email'] or r['address'] or r['lead_key']:<42} "
                   f"{'addr✓' if r['address'] else 'no-addr':<7} occ={occ_t:<13} "
                   f"held={r.get('years_held')} — {r['signals'][0] if r['signals'] else ''}")
+
+    # ⚠ Rule 7b — assert an OUTCOME, not merely that nothing threw. Added 2026-08-18.
+    # Without this, a run that assembled leads but wrote none still returns 0, and
+    # nightly_lead_chain.py — which judges each step purely on proc.returncode —
+    # records "all 7 steps ok". That is precisely the build_listed_property failure
+    # mode from CLAUDE.md Rule 7b: the chain would report success while the worklist
+    # Samantha reads silently stopped being rebuilt.
+    #
+    # The distinction that matters: `recs` empty is a legitimate empty queue and
+    # stays a success. `recs` non-empty but `written == 0` means input existed and
+    # we could not persist it — that is a failure and must be loud. --dry-run is
+    # excluded because writing nothing is its whole purpose.
+    if not args.dry_run and recs and written == 0:
+        raise RuntimeError(
+            f"assembled {len(recs)} lead record(s) but wrote 0 to lead_worklist — "
+            "the write path is broken, the input is not empty")
     return 0
 
 
