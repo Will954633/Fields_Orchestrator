@@ -184,7 +184,7 @@ def main():
     except Exception:
         job_run = None
     if job_run and not args.dry_run:
-        with job_run("rl_geo_signal", cadence_hours=24,
+        with job_run("rl_geo_signal", cadence_hours=168,
                      title="General RL — GEO/AI-channel sensor") as beat:
             s = build(dry_run=False)
             _summary(s)
