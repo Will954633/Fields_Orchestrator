@@ -72,6 +72,14 @@ ALERT_COOLDOWN_H = 3  # min hours between alerts of the same category
 # messages sent were the routine 3-hourly ones.
 CLEANUP_INEFFECTIVE_BYTES = 200 * 1024 * 1024   # < this freed == "did nothing"
 INEFFECTIVE_COOLDOWN_H = 1.0
+# Same escalation one band lower. Added 2026-08-18: the check above only ever ran
+# inside `if aggressive`, i.e. at >= DISK_CRIT_PCT. Root sat at 90-91% — above
+# WARN, below CRIT — for days while cleanup freed 0MB every 90s, and because the
+# non-aggressive branch also left `level` at "ok", the guard's own heartbeat
+# published `level=ok disk=90%`. Nothing alerted; the 12G that was actually
+# filling the disk was found only by a manual audit. A longer cooldown than the
+# critical one because 85-91% is not an emergency — but it must be visible.
+INEFFECTIVE_WARN_COOLDOWN_H = 6.0
 GROWTH_SCAN_ROOTS = ["/home/fields", "/var", "/tmp"]
 
 # --------------------------------------------------------------------------- #
@@ -810,6 +818,33 @@ def main():
                     f"{freed / 1e6:.0f}MB (now {m_after['disk_pct']:.0f}%, {free_gb:.1f}GB free).",
                     dry)
                 mark_alerted(state, "disk", dry)
+        else:
+            # WARN band (DISK_WARN_PCT .. DISK_CRIT_PCT). This branch used to do
+            # nothing but run cleanup and leave level="ok" — see the note on
+            # INEFFECTIVE_WARN_COOLDOWN_H. A disk that is high AND not responding
+            # to cleanup is the same problem at 90% as at 92%; the only
+            # difference is urgency, so it gets the same diagnosis (name the
+            # directories) at a calmer cadence.
+            level = "warn" if level == "ok" else level
+            still_high = m_after["disk_pct"] >= DISK_WARN_PCT
+            if (freed < CLEANUP_INEFFECTIVE_BYTES and still_high
+                    and streak >= SUSTAIN_N
+                    and alert_allowed(state, "disk_ineffective_warn",
+                                      INEFFECTIVE_WARN_COOLDOWN_H)):
+                growth = top_growth_dirs()
+                lines = "\n".join(f"  {mb / 1024:.1f}G  {p}" for mb, p in growth) or "  (scan failed)"
+                send_telegram(
+                    f"\U0001F7E0 *VM disk high — cleanup is not reclaiming*\n"
+                    f"{m_after['disk_pct']:.0f}% on / — *{free_gb:.1f}GB free* "
+                    f"({m_after['disk_used_gb']}/{m_after['disk_total_gb']}GB).\n"
+                    f"Auto-cleanup freed only {freed / 1e6:.0f}MB, and / has been above "
+                    f"{DISK_WARN_PCT:.0f}% for {streak} consecutive checks. Not critical yet "
+                    f"(alerts at {DISK_CRIT_PCT:.0f}%), but it is not trending back down "
+                    f"on its own and cleanup only touches caches and logs.\n\n"
+                    f"*Largest on /:*\n{lines}\n\n"
+                    f"Worth a look before it becomes urgent.",
+                    dry)
+                mark_alerted(state, "disk_ineffective_warn", dry)
     else:
         state["disk_high_streak"] = 0
 
