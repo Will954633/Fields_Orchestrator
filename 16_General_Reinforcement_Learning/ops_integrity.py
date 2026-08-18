@@ -172,7 +172,7 @@ def main():
         try:
             from job_status import record_job_result
             record_job_result("ops_integrity", "error", detail="; ".join(violations)[:300],
-                              cadence_hours=24, stale_hours=40,
+                              cadence_hours=168, stale_hours=180,
                               title="Ops — cycle integrity check")
         except Exception:
             pass
@@ -182,7 +182,7 @@ def main():
         from job_status import record_job_result
         record_job_result("ops_integrity", "success",
                           detail=f"clean; {len(notes)} expected change(s)",
-                          cadence_hours=24, stale_hours=40,
+                          cadence_hours=168, stale_hours=180,
                           title="Ops — cycle integrity check")
     except Exception:
         pass
