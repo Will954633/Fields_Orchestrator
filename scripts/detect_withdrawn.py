@@ -106,6 +106,11 @@ def retry_db(fn, max_retries=COSMOS_RETRY_ATTEMPTS):
 
 _TITLE_RE = re.compile(r'<title[^>]*>([^<]+)</title>', re.IGNORECASE)
 
+# Domain listing URLs end in a numeric listing id (e.g. .../93-burleigh-street-...-2020668300).
+# Used to confirm the page we landed on is still the listing we asked for — see the
+# identity check in check_listing_status().
+_LISTING_ID_RE = re.compile(r'-(\d{7,})/?$')
+
 
 def check_listing_status(session, listing_url):
     """Check if a listing URL is still active on Domain.
@@ -136,6 +141,30 @@ def check_listing_status(session, listing_url):
 
     if status != 200:
         return "error"
+
+    # Identity check (2026-08-19). Only HOUSES get redirected to /property-profile/ when
+    # withdrawn — units have no property-profile page, so Domain 301s them to the suburb
+    # search page instead, or occasionally to a DIFFERENT live listing. Both land here as
+    # status 200 with no withdrawn marker and were scored "active", so every withdrawn unit
+    # stayed for_sale indefinitely (units are 41-58% of the live book). Anchor on the listing
+    # id in the URL we requested: if the page we landed on doesn't carry it, this is no
+    # longer that listing. See logs/fix-history/2026-08-19.md [WITHDRAWN-UNIT-REDIRECT-MISS].
+    requested_id = _LISTING_ID_RE.search(listing_url.rstrip('/'))
+    if requested_id and requested_id.group(1) not in final_url:
+        return "withdrawn"
+
+    # Re-addressed listing (2026-08-19). The id check above is necessary but not sufficient:
+    # when Domain CORRECTS the address on an existing listing it keeps the id and changes
+    # only the slug, so the id still matches and we scored "active". Our document then holds
+    # an address that is not on the market, while a second document gets created under the
+    # corrected address — one live listing counted twice, once under a phantom address.
+    # Seen on 2/2 Warbler Parade -> 2/249 Christine Avenue, and 5 Peppertree Circut ->
+    # 5 Peppertree Circuit (a typo fix). Compare the slug, not just the id.
+    if requested_id:
+        requested_slug = listing_url.rstrip('/').rsplit('/', 1)[-1].rsplit('-', 1)[0]
+        final_slug = final_url.rstrip('/').rsplit('/', 1)[-1].rsplit('-', 1)[0]
+        if final_slug and requested_slug and final_slug != requested_slug:
+            return "withdrawn"
 
     # Status 200 but title may reflect terminal state. Domain serves the listing page
     # for sold properties with title "Sold <address> on <date> ...".

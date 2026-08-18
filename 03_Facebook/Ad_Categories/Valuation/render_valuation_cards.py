@@ -59,6 +59,31 @@ def card(inner, footer=None):
 
 
 INNER = {
+    # ---- P1: PLAN-ALIGNED. Campaign 1 / Territory A / Static Ad A1,
+    # "A number isn't a valuation" — the message the marketing plan actually
+    # specifies ("worth a range, and there should be evidence behind it"),
+    # carried by our own 3-comp sensitivity research rather than by a
+    # competitor's miss. Figure is the STRICT pool median ($227,500), the only
+    # one that survives a hostile screen — see 00_EVIDENCE_BASE.md §4.
+    "P1_range_not_number": (
+        '<div class="klabel">313 recent house sales · every possible trio tested</div>'
+        '<div class="statement xs">Pick three different sales to compare it with, '
+        'and the answer moves <em>$227,500</em>.</div>'
+        '<div class="sub">Your home isn’t worth a number. It’s worth a range '
+        '— and there should be evidence behind it.</div>'
+    ),
+    # ---- C1: Release 1 is Competition, not Value Evidence (doc 03: "Begin with
+    # Competition"; doc 04 build order puts Value Evidence at 18 of 19). This is the
+    # held-constant Competition ad. It makes NO quantified claim on purpose — the
+    # reasoning is the message, and a published competitor count is currently
+    # unsafe (closest_active caps at 6; doc 00 names that as a guardrail). ----
+    "C1_competitive_set": (
+        '<div class="klabel">The competitive set · Gold Coast</div>'
+        '<div class="statement xs">The home buyers compare yours with may not be '
+        '<em>the one you think</em>.</div>'
+        '<div class="sub">Not every nearby sale is a rival. Buyers weigh a home '
+        'against what they could realistically choose instead.</div>'
+    ),
     # ---- A1: the stronger claim. Above the TOP of their own published range. ----
     "A1_geraldton_range": (
         '<div class="klabel">One home · one online estimate · Robina</div>'
@@ -116,6 +141,12 @@ INNER = {
 }
 
 FOOT = {
+    "P1_range_not_number":
+        "Median spread across 313 detached house sales $1,000,000–$2,000,000 in "
+        "Robina, Varsity Lakes and Burleigh Waters. Comparables: sold within "
+        "6 months and 2km, land and floor area within 20%.",
+    "C1_competitive_set":
+        "Fields Real Estate · local property analysis",
     "A1_geraldton_range":
         "33 Geraldton Drive, Robina · sold 28 May 2026 · public record<br>"
         "Online estimate as published November 2025",
