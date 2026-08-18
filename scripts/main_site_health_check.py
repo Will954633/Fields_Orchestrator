@@ -1472,12 +1472,29 @@ _PAUSED_JOBS = {
     # …their analyst cycles
     "geo_cycle": _RL_PAUSE, "seo_cycle": _RL_PAUSE, "ads_cycle": _RL_PAUSE,
     "articles_cycle": _RL_PAUSE, "onsite_cycle": _RL_PAUSE, "conductor_cycle": _RL_PAUSE,
-    # …their sensors + meta layer
-    "rl_geo_signal": _RL_PAUSE, "rl_seo_signal": _RL_PAUSE, "rl_ads_signal": _RL_PAUSE,
-    "rl_articles_signal": _RL_PAUSE, "rl_onsite_signal": _RL_PAUSE,
-    "rl_onsite_friction": _RL_PAUSE, "rl_reward_ledger": _RL_PAUSE,
+    # …the meta layer that is still genuinely off. Last heartbeat for all three is
+    # 2026-07-30, the pause date itself — i.e. they have not run since.
     "rl_personalization_policy": _RL_PAUSE, "rl_conductor": _RL_PAUSE,
-    "rl_arm_grades": _RL_PAUSE, "rl_selftest": _RL_PAUSE, "cycle_organizer": _RL_PAUSE,
+    "rl_selftest": _RL_PAUSE, "cycle_organizer": _RL_PAUSE,
+    #
+    # ⚠ UN-PAUSED 2026-08-18. The ten domain SENSORS that used to be listed here
+    # (rl_geo/seo/ads/articles/onsite_signal, rl_onsite_friction, rl_reward_ledger,
+    # rl_arm_grades, rl_ops_signal, ops_integrity) came back to life when the
+    # SUNDAY weekly_cycle.sh crons resumed — the 2026-07-30 blanket pause stopped
+    # the DAILY self-pacing dispatchers/cycles above, not the weekly cycles, and
+    # the weekly agent session runs each sensor per its *_prompt.md.
+    #
+    # Verified: every one of them last ran Sun 2026-08-16 at its weekly_cycle slot
+    # time (ops 06:00, geo 08:00, ads 09:00, seo 16:04, articles 16:44, onsite
+    # 17:17 …). They were being suppressed as "Paused" purely because suppression
+    # keys on `age_h > cadence_h` and each declared cadence_hours=24 while actually
+    # running every 168 — so a 63h-old heartbeat looked paused instead of healthy.
+    # Both halves were wrong and they cancelled out: a live sensor rendered as a
+    # deliberate gap, and if one had genuinely broken, nothing would have shown.
+    # Their cadence is now 168 (see 16_General_Reinforcement_Learning/*_signal.py).
+    #
+    # Do NOT re-add them without first checking run_at: a Sunday heartbeat means
+    # live. Re-pausing a running job is what this registry explicitly forbids.
     # Off-Market RL (15_Off-Market/Reinforcement_Learning)
     "offmarket_rl_cycle": _RL_PAUSE,
     "offmarket_coverage_scraper": _RL_PAUSE,
