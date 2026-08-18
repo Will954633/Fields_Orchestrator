@@ -80,13 +80,36 @@ GROWTH_SCAN_ROOTS = ["/home/fields", "/var", "/tmp"]
 # ⚠ THIS IS AN ALLOWLIST, AND IT MUST STAY ONE. Do not generalise it to
 # "artifacts/" or to an age sweep over the whole tree. Two things there are NOT
 # scratch and would be destroyed:
-#   * artifacts/appraisals_v4/*.pdf — 95 system_monitor.appraisal_pipeline docs
-#     reference these paths and all 95 files are live, the oldest from
-#     2026-05-18. An age sweep is exactly what kills them.
+#   * artifacts/appraisals_v4/*.pdf — system_monitor.appraisal_pipeline docs
+#     reference these paths by name. Re-measured 2026-08-18: 682 live refs
+#     across 278 pipeline docs (the "95" this comment claimed since 2026-08-15
+#     was already 7x stale), oldest file 2026-05-15. An age sweep is exactly
+#     what kills them. Recount before trusting any number here:
+#       python3 - <<'PY'
+#       from shared.db import get_client; import re
+#       refs={m for d in get_client()['system_monitor']['appraisal_pipeline']
+#             .find({},{'_id':0})
+#             for m in re.findall(r'appraisals_v4/([^\'"\s,\)\]]+)', str(d))}
+#       print(len(refs))
+#       PY
 #   * assets/img/cover_hero_*.jpg — the durable pre-warm cache; deleting it
 #     forces a full, expensive rebuild of the catchment.
+#     ⚠ MOVED 2026-08-18: this is now a SYMLINK to
+#     /data/blobs/appraisal_assets/img. It was 12G of the 23G under artifacts/
+#     and sat on the 97G root disk (then 90% full) while /data/blobs is a
+#     separate 738G disk at 53%. Nothing was deleted — rsync'd, checksum
+#     -verified, symlinked, then the original removed; root fell 90% -> 79%.
+#     A sweep here now deletes from the BLOB disk, which is worse, not better.
 # The pre-warm already unlinks its own intermediates once published to blob
 # storage (prewarm_offmarket_covers.py), so the top level is not ours to manage.
+#
+# ⚠ This guard reported `level=ok ... reclaimed 0MB, disk 90%->90%` every 90s
+# while root filled up, because everything it is allowed to sweep is small and
+# the thing that was actually growing is on the deny side of this allowlist.
+# CLEANUP_INEFFECTIVE_BYTES (above) is the alert that is supposed to catch that
+# — it fires on <200MB freed at CRITICAL (92%), and root sat at 90-91%, just
+# under the threshold, for days. Consider whether DISK_WARN_PCT deserves the
+# same ineffective-cleanup escalation, not just DISK_CRIT_PCT.
 #
 # Every entry below must be justified: pure scratch, regenerable, unreferenced.
 #   aerial_tmp       render scratch; the generator copies to the shared cache and
