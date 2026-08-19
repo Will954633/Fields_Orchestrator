@@ -51,6 +51,7 @@ import requests
 from weasyprint import HTML
 
 from shared.db import get_client  # noqa: E402
+from shared.report_link import report_link_key  # noqa: E402
 
 from grammar import Count  # noqa: E402
 from hooks import select, build_findings  # noqa: E402
@@ -160,7 +161,12 @@ def make_qr(slug, flow_code=None):
     # that is a join someone has to remember; this makes the scan self-describing.
     # Invisible to the reader, present on every scan.
     term = f"&utm_term={flow_code}" if flow_code else ""
-    url = f"{BASE_URL}/your-home/{slug}?{UTM}&utm_content={slug}{term}{DEEP_LINK}"
+    # ⚠ The link key is MANDATORY on printed artwork. /your-home is gated
+    # server-side (netlify/functions/db.mjs -> mayReadReport) and a QR arrival
+    # has no device token, so a code printed without `k` lands the recipient on
+    # a 404 — discovered only after the mail has gone out. See report_link_key().
+    url = (f"{BASE_URL}/your-home/{slug}"
+           f"?{UTM}&utm_content={slug}{term}&k={report_link_key(slug)}{DEEP_LINK}")
     qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=20, border=4)
     qr.add_data(url)
     qr.make(fit=True)

@@ -26,6 +26,9 @@ import fitz  # PyMuPDF — server-side PDF rendering (correct ICC color handling
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
+sys.path.insert(0, "/home/fields/Fields_Orchestrator")
+from shared.report_link import report_link_key  # noqa: E402
+
 REPORTS_DIR = Path("/home/fields/Fields_Orchestrator/output/seller_reports")
 STATIC_DIR = Path(__file__).parent / "static"
 AEST = timezone(timedelta(hours=10))
@@ -391,6 +394,23 @@ def scan(tracking_id):
         "utm_campaign": "physical_material",
         "utm_content": tracking_id,
     })
+
+    # ⚠ Stamp the link key onto /your-home targets. The report route is gated
+    # server-side and a QR arrival carries no device token, so without `k` the
+    # scan lands on a 404.
+    #
+    # This redirect is what rescues codes ALREADY PRINTED: the key is added here,
+    # at scan time, so physical pieces in the wild keep working with no reprint.
+    # That is why the QR points at /scan rather than straight at the report.
+    if "/your-home/" in parts.path and "k" not in q:
+        slug_from_path = parts.path.rsplit("/", 1)[-1]
+        try:
+            q["k"] = report_link_key(slug_from_path)
+        except RuntimeError as e:
+            # Redirect anyway — a printed code must never 404 at OUR end — but
+            # make the cause loud, because the landing page now will.
+            log.error(f"/scan {tracking_id}: cannot stamp link key ({e})")
+
     target_final = urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(q), parts.fragment))
 
     if doc:
