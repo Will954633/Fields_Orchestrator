@@ -67,7 +67,17 @@ PY
 python3 -m scripts.property_reports.build_property_report --slug <slug> --force
 ```
 
-Omit `build_mode` (or set anything else) and you get the V1 full-AI build.
+⚠ **This is out of date as of 2026-08-16 — the default is now INVERTED.**
+`slot_resolver.py:104` reads `self.no_llm = report_doc.get("build_mode") != "full"`,
+so a missing `build_mode` (what a fresh submit writes) is **deterministic**, and
+you must opt IN to the LLM chain with `build_mode: "full"`. The comment there
+explains why: "a new mode that only applies when someone remembers to set a flag
+is a mode that never applies."
+
+Measured across the live collection 2026-08-19 — `no_llm` median **4.5 s** (p90
+22.6 s, n=132) vs `full` median **354 s** (p90 576 s, n=42). If you are reading a
+report built before 2026-08-16 with no `build_mode`, it is a **full-AI** build and
+its build time is not comparable. See [[offmarket_direct_test_round2]].
 
 ⚠ **Restart the poller after editing any resolver module** — it caches imports, so a fix
 lands but new submissions resolve with the old code:
