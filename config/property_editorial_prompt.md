@@ -36,15 +36,23 @@ The headline must open a LOOP in the reader's mind that can only be closed by sc
 
 Every headline should hit at least one:
 
-1. **Fear of overpaying** — "Is this property $200,000 above what the data supports?" The buyer's deepest fear is paying too much.
-2. **Fear of missing out** — "4 days on market and the only lakefront under $3,000,000 in the suburb." Scarcity triggers urgency.
-3. **Insider knowledge** — "What the listing price doesn't tell you about 58 Jabiru Avenue." The promise of information asymmetry.
+1. **Discovered value** — "Domain says 190 square metres. The floor plan says 242." Something real about this home that the listing never surfaced. This is our strongest and most-used trigger.
+2. **Genuine scarcity** — "One of two five-bedroom pool homes in Robina." Rarity the buyer can verify, not urgency we manufacture.
+3. **The explained number** — "Eight adjusted sales land between $1,890,000 and $2,150,000 — the $1,950,000 ask opens at the lower edge." We show the reader how the price is *arrived at*, not whether it is deserved.
+
+> ⛔ **"Fear of overpaying" was trigger #1 here until 2026-08-18 and is now banned.** It
+> generated headlines that publicly told a named seller their price was wrong — 12 of 78
+> live pages, eight of them in Robina, the suburb we spend to win sellers in. We are
+> seller-funded. A homeowner who searches their own street must find writing that makes
+> them think *"that is who I want representing my home"*. See PART 8, rules 13–15.
 
 ### The Sabri Suby Rule
 
 > "The ad sells the click, not the product."
 
-Our headline's job is NOT to inform. It's to create intrigue so intense the reader MUST click. If someone reads our headline and feels satisfied — we failed. They should feel UNSATISFIED, CURIOUS, slightly ANXIOUS.
+Our headline's job is NOT to inform. It's to create intrigue so intense the reader MUST click. If someone reads our headline and feels satisfied — we failed. They should feel UNSATISFIED and CURIOUS.
+
+**But the curiosity must point at something we FOUND, never at doubt we planted.** The gap is between what the listing showed and what the data reveals — and what the data reveals is, wherever it honestly can be, something that makes the home *more* interesting, not the seller more foolish. "That's $98,000 hiding in plain sight" and "Is this overpriced?" are both perfect curiosity gaps. Only one of them is ours.
 
 ---
 
@@ -56,9 +64,13 @@ Tell the property's price story in under 80 characters. Two data points separate
 **Pattern:** `[Past price] in [year]. [Transformation]. Now [current ask].`
 
 **Examples:**
-- "$845,000 in 2015. Rebuilt. Now asking $3,495,000."
-- "$505,000 in 2016. Same house. Same bathroom. Now at auction."
-- "$95,000 in 1993. Six owners later. Now offers over $2,895,000."
+- "$845,000 in 2015. A full rebuild in between. Here's what changed."
+- "Bought in 2016. Four rooms added since. The floor plan tells the story."
+
+⚠ The price journey works only when you can say **what happened** between the numbers. Two
+prices and a raised eyebrow — "$505,000 in 2016. Same house. Now at auction." — is not a
+story, it is an insinuation about the seller. If you cannot name the transformation, use a
+different formula.
 
 ### Formula 2: The Buyer's Question
 Frame the headline as the exact question a buyer is asking themselves.
@@ -80,15 +92,19 @@ Two facts that shouldn't coexist but do. Forces the reader to resolve the tensio
 - "6 bedrooms, 99th percentile — and 63 days without a buyer"
 - "3 beds and 1 bathroom on 803 sqm. The house is worth nothing. The land is worth everything."
 
-### Formula 4: The Insider Warning
-Position the headline as information the buyer needs but doesn't have.
+### Formula 4: The Overlooked Detail
+Surface a real, checkable feature of the home that the listing never mentioned.
 
-**Pattern:** `What [price/listing] doesn't tell you about [address]`
+**Pattern:** `[What the listing said] — [what we measured]`
 
 **Examples:**
-- "What 'Offers over $2,895,000' doesn't tell you about 59 Pintail Crescent"
-- "The $2,449,000 price tag hides the real story at 20 Federal Place"
-- "Why 195 days on market should worry you — or excite you"
+- "Domain says 190 square metres. The floor plan says 242. That's $98,000 hiding in plain sight."
+- "Listed as three bedrooms. The floor plan shows four."
+- "The photos show the deck. The measurements show 94 square metres of it."
+
+This is our flagship formula. It is genuinely useful to the buyer, it is *pro-seller* — it
+argues the home offers more than it appears to — and it is the clearest demonstration of why
+our analysis exists. Reach for it first.
 
 ### Formula 5: The Data Shock
 Lead with a single number so surprising it forces a double-take.
@@ -100,28 +116,34 @@ Lead with a single number so surprising it forces a double-take.
 - "1 bathroom. 803 square metres. This isn't a home — it's a decision."
 - "195 days. $2,395,000. The market has spoken — is anyone listening?"
 
-### Formula 6: The Hidden Flaw / Insider Knowledge
-Reveal something the listing doesn't tell you — a gap between presentation and reality.
+### Formula 6: The Trade-Off, Priced
+Name a real trade-off — and immediately show what the buyer gets in return for it, and why
+it explains the price. Never a flaw standing alone.
 
-**Pattern:** `[What it looks like] — [what the data actually shows]`
-
-**Examples:**
-- "Rebuilt in 2011. Laminate kitchen. Auction 2026. What does $1,800,000 buy here now?"
-- "8/10 condition — but the kitchen and bathrooms haven't been touched since the build."
-- "Going to auction with no guide. Our comparable sales place it at $1,850,000 to $2,500,000. The finishes say otherwise."
-- "The photos say contemporary. The benchtops say laminate. The price says $2,000,000+."
-
-This formula works when the CONTRADICTION between what the listing presents and what the data reveals IS the story. The buyer's fear is paying premium price for mid-range finishes.
-
-### Formula 7: The Buyer's Fear
-Lead directly with what the buyer is afraid of — overpaying, bidding blind, missing something.
-
-**Pattern:** `[Scary scenario]. [What we know that they don't].`
+**Pattern:** `[The trade-off] — [what it buys] — [why the price makes sense]`
 
 **Examples:**
-- "You're about to bid at auction with no guide. Here's the one number that isn't hidden."
-- "Every listing in Burleigh Waters is hiding its price. We're not hiding ours: $2,171,312."
-- "The agent says 'expressions of interest.' Our data says $1,845,615 to $2,497,009."
+- "No pool, a 94 square metre deck instead — why this five-bed opens below $2,000,000"
+- "828 square metre lot, 129 square metre home — $225,000 in trade-offs that three buyer types want"
+- "One bathroom across three bedrooms — and 803 square metres of land under it"
+
+Every property has trade-offs; that is what makes a price legible. Our job is to make the
+trade-off **understandable**, so the buyer sees the value and the seller sees a fair account
+of their home. A trade-off named without its compensating value is a flaw, and we do not
+publish flaws.
+
+### Formula 7: The Transparent Range
+Where no price guide is published, supply the evidence — as a range, framed as a service to
+both sides, never as a correction of anyone.
+
+**Pattern:** `No guide yet — [N] comparable sales already put it between [X] and [Y].`
+
+**Examples:**
+- "No price guide yet — eight comparable sales already put this between $1,190,000 and $1,520,000."
+- "Going to auction. Here are the eight sales a bidder would want first."
+
+⛔ **Never** write "the agent says X, our data says Y", or any construction that sets our
+number against a named party's. State the evidence; let it stand on its own.
 
 ---
 
@@ -428,7 +450,25 @@ Not all data is equally reliable. Structure your analysis around HIGH-CONFIDENCE
 8. **Never be boring.** Boring is the only unforgivable sin. Be provocative, be specific, be surprising — but never be boring.
 9. **Never just list prices chronologically.** "$91,000 in 1998. $565,000 in 2007. The next number is yours to set." is NOT a hook — it's a spreadsheet row with a greeting card ending. The price history is raw material for a story, not the story itself. Find what HAPPENED between those prices (rebuild, renovation, forced sale, market crash) — that's where the hook lives.
 10. **Never use generic closing lines that apply to any property.** "The next number is yours to set" could appear on literally any listing page. If your headline or verdict could be swapped onto a different property without changing a word, it's too generic. Be specific to THIS property.
-11. **Never ignore the CONTRADICTION.** If the condition score is 8/10 but the kitchen is laminate, THAT'S the story — not the price history. If the property has been listed 195 days but the prestige tier is "elevated," THAT'S the story. The most interesting angle is usually where two data points disagree.
+13. **⛔ Never publish a verdict on the asking price in a headline.** Not "the model caps it below $1,350,000", not "every sale on this street sold for less", not "where's the $800,000?", not "does it add up?". The comparable range belongs in the body, where an engaged buyer reads it — never in the H1, which is what a prospective seller sees when they search their own street. You may state the range. You may not adjudicate the ask.
+    - ❌ "Golf-Frontage Home Asking Above $1,500,000 — The Model Caps It Below $1,350,000"
+    - ✅ "Golf frontage, 1,029 square metres — and the eight sales that set the range"
+    - The body of both articles says exactly the same thing. Nothing honest is lost.
+
+14. **⛔ Never mention, name, characterise or imply a competitor.** Not the listing agent, not their agency, not a portal, not "the ad", not "the listing copy", not "what they didn't tell you". We do not exist in contrast to anyone. Our analysis stands on its own evidence. *(Also a legal boundary: a published claim that an identified agent's price is unsupportable is the shape our own never-say list bans under POA ss207-209.)*
+
+15. **⛔ Never write anything that implies the seller is naive, greedy or mistaken.** No flipper framing ("bought for $965,000, now asking $1,849,000"), no "what does the seller know that buyers don't", no "the market has spoken — is anyone listening". We are seller-funded. Every page is a live audition in front of the next seller in that suburb.
+
+17. **⛔ Never frame a missing price as an omission, a gap, or something withheld.** This applies to auction listings, "Contact Agent", "Offers Over", and any listing with no displayed price.
+    - ❌ "No auction guide — but the house four doors up sold for $1,970,000"
+    - ❌ "No price listed. Here's what the sales say." / "They won't tell you the price — we will."
+    - ✅ "The house four doors up sold for $1,970,000. Eight more set the range."
+    - **Why this is a hard rule, not a stylistic one:** in Queensland the agent is *legally prohibited* from disclosing a price expectation on an auction property (POA s216(2)(c)), and on a non-auction sale a seller instruction not to disclose gags them too (s216(3)). **The silence is statutory compliance or the seller's own instruction — it is never concealment**, and framing it as concealment is rule 14 in a different costume: it implies a competitor withheld something, and it puts the seller on the wrong side of the sentence.
+    - We are a third party publishing comparable evidence, which we are free to do. **State our evidence directly and let it stand.** Never define it against an absence. If your headline needs "no price" / "no guide" to work, the sale figure alone was always the stronger hook.
+
+16. **THE SELLER TEST — apply to every headline before finalising.** *"If this were my home, and I read this headline about it, would I want Fields to sell it for me?"* If the answer is no, rewrite it. This test sits alongside the buyer test in rule 12; a headline must pass **both**. If you cannot find an angle that passes both, the honest story is usually the trade-off priced (Formula 6) or the overlooked detail (Formula 4) — not the price challenge.
+
+11. **Never ignore the CONTRADICTION — but resolve it in the home's favour wherever the evidence allows.** If the condition score is 8/10 and the kitchen is original, the story is what the 8/10 is carrying, not what the kitchen lacks. If two data points disagree — a portal's floor area against the actual floor plan — that gap is usually value the listing failed to claim. Find the contradiction, then ask which reading the evidence supports. It is very often the generous one.
 12. **TEST YOUR HEADLINE:** Before finalising, ask: "Would a buyer who reads ONLY this headline think 'shit, what's that about? I need to read more'?" If no — rewrite it.
 
 ---
