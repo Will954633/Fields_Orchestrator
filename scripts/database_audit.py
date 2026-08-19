@@ -30,6 +30,7 @@ INTEGRATION:
 import os
 import sys
 import argparse
+import contextlib
 import re
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
@@ -41,6 +42,9 @@ sys.path.insert(0, REPO_ROOT)
 
 from shared.env import load_env  # type: ignore
 from shared.db import get_client, get_db  # type: ignore
+
+sys.path.insert(0, os.path.join(REPO_ROOT, 'scripts'))
+from job_status import job_run  # type: ignore
 
 load_env()
 
@@ -119,14 +123,28 @@ class DatabaseAuditor:
         collection = self.db[collection_name]
         errors = []
 
-        # Get all properties in this collection
-        properties = list(collection.find({}))
-        self.stats['total_properties'] += len(properties)
+        # Get all properties in this collection.
+        # PROJECTION IS LOAD-BEARING: these six fields are the only ones this audit
+        # reads. An unprojected find({}) pulls valuation_data too (~115 KB of a 149 KB
+        # average robina doc since [COMPS-DETAIL-EXPOSED] 2026-08-05), which needs ~13 GB
+        # of Python heap for robina alone and swap-thrashes the VM until SIGTERM.
+        # See logs/fix-history/2026-08-19.md [AUDIT-UNPROJECTED-OOM].
+        cursor = collection.find({}, {
+            '_id': 1,
+            'address': 1,
+            'suburb': 1,
+            'listing_url': 1,
+            'first_seen': 1,
+            'last_updated': 1,
+        })
 
-        if verbose:
-            print(f"\n📂 Auditing collection: {collection_name} ({len(properties)} properties)")
-
-        for prop in properties:
+        # Stream the cursor rather than materialising a list — memory stays flat
+        # regardless of collection size.
+        print(f"  scanning {collection_name} ...", flush=True)
+        seen = 0
+        for prop in cursor:
+            seen += 1
+            self.stats['total_properties'] += 1
             address = prop.get('address', '')
             suburb_field = prop.get('suburb', '')
             listing_url = prop.get('listing_url', 'N/A')
@@ -184,6 +202,9 @@ class DatabaseAuditor:
                     print(f"     Should Be In: {actual_suburb_normalized}")
                     print(f"     Root Cause: {error['root_cause']}")
 
+        self.stats['collections_scanned'] = self.stats.get('collections_scanned', 0) + 1
+        print(f"  scanned {collection_name}: {seen:,} docs, {len(errors)} misplaced", flush=True)
+
         return errors
 
     def _determine_root_cause(self, collection: str, suburb_field: str, actual_suburb: str) -> str:
@@ -233,8 +254,19 @@ class DatabaseAuditor:
         """
         all_errors = []
 
-        # Collections to exclude (catch-all/aggregate collections with intentional cross-suburb data)
-        EXCLUDED_COLLECTIONS = []
+        # Collections to exclude (catch-all/aggregate collections with intentional cross-suburb data).
+        # This audit's whole premise is "collection name == suburb name", so a collection
+        # that is keyed on anything else reports every document as misplaced. Left empty,
+        # these five produced 2,731 false positives and ZERO true ones (verified 2026-08-19:
+        # each spans robina + varsity_lakes + burleigh_waters by design).
+        EXCLUDED_COLLECTIONS = [
+            'propradar_sold',            # cross-suburb sold feed
+            'propradar_coverage_gaps',   # cross-suburb coverage worklist
+            'propradar_gap_enriched',    # cross-suburb enrichment output
+            'unit_valuations',           # keyed on unit, not suburb
+            'unit_statutory_comps',      # keyed on unit, not suburb
+            'property_attributes',       # canonical attribute layer, keyed on property
+        ]
 
         # Get collections to audit
         if specific_collection:
@@ -487,12 +519,41 @@ Examples:
     if not auditor.connect():
         sys.exit(1)
 
+    # Heartbeat only the full-database sweep (what step 107 runs). A targeted
+    # --collection run is a developer action, not the ongoing process.
+    heartbeat = (
+        job_run("database_audit", cadence_hours=24,
+                title="Database Audit & Validation (step 107)")
+        if not args.collection
+        else contextlib.nullcontext(None)
+    )
+
     try:
-        # Run audit
-        errors = auditor.audit_all_collections(
-            specific_collection=args.collection,
-            verbose=args.verbose
-        )
+        with heartbeat as beat:
+            # Run audit
+            errors = auditor.audit_all_collections(
+                specific_collection=args.collection,
+                verbose=args.verbose
+            )
+
+            # Rule 7b — assert an outcome, don't just fail to throw. --no-fail
+            # forces exit 0 regardless of findings, so without this a run that
+            # scanned nothing would be indistinguishable from a clean audit.
+            scanned = auditor.stats.get('collections_scanned', 0)
+            audited = auditor.stats['total_properties']
+            if beat is not None:
+                beat.metrics = {
+                    'collections_scanned': scanned,
+                    'properties_audited': audited,
+                    'misplaced': len(errors),
+                }
+                beat.detail = (f"{audited:,} properties across {scanned} collections, "
+                               f"{len(errors)} misplaced")
+            if scanned == 0 or audited == 0:
+                raise RuntimeError(
+                    f"audited {audited} properties across {scanned} collections — "
+                    "the database is not empty, so this is a broken read, not a clean audit"
+                )
 
         # Print summary
         auditor.print_summary()
