@@ -1261,6 +1261,23 @@ _STEP_OUTCOME_CHECKS = [
     # Reads the closing TOTAL line. Before the 2026-08-05 stdout-truncation fix that
     # line never reached stdout.log, so this resolves to UNKNOWN ("cannot verify")
     # on older runs rather than pretending the step succeeded.
+    # Step 107 ran to a 600s timeout on all 3 attempts every night from 2026-08-06 to
+    # 08-19 and NOTHING noticed: no job_run heartbeat, --no-fail forces exit 0, and it
+    # had no row in this table. Two checks, because they fail differently.
+    # (a) Did it complete at all? The summary line is the last thing it prints.
+    ("107", "Database audit: completed a full sweep",
+     r"Total Properties Audited:\s*([\d,]+)", "capture",
+     lambda n: (ERROR, "the audit did not reach its summary — it timed out mid-sweep, so "
+                       "data-integrity problems are going undetected entirely")
+     if n == 0 else (OK, f"{n:,} properties audited")),
+    # (b) Did it find real misplacement? Judged on LEVEL, not on non-zero — the five
+    # cross-suburb aggregate collections are excluded at source, so a true positive
+    # now means a property genuinely sitting in the wrong suburb collection.
+    ("107", "Database audit: misplaced properties",
+     r"Misplaced Properties Found:\s*(\d+)", "capture",
+     lambda n: (ERROR, f"{n} properties are in the wrong suburb collection — they will be "
+                       f"missing from that suburb's listings and stats") if n > 25
+     else ((STALE, f"{n} misplaced properties") if n else (OK, "no misplaced properties"))),
     ("111", "Sold backfill: records written",
      r"TOTAL:.*?(\d+)\s+updated", "capture",
      lambda n: (STALE, "sold backfill matched records but wrote none — the 7-day "
@@ -1352,7 +1369,10 @@ def collect_pipeline_integrity(add, gc, sm, now_utc):
                         "log did not contain the expected result line — cannot verify "
                         "this step actually did its work (log format changed?)")
                     continue
-                val = int(mm.group(1))
+                # Strip thousands separators: several steps print "435,882", and a
+                # bare int() on that raises ValueError and takes the whole health
+                # check down. No-op for patterns that capture bare digits.
+                val = int(mm.group(1).replace(",", ""))
             st, detail = judge_fn(val)
             add(PG, f"Step {step_id} outcome", label, str(val), st, "", None, detail)
 
