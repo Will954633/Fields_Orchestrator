@@ -30,6 +30,8 @@ import re
 import sys
 import time
 import argparse
+from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone, timedelta
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -68,8 +70,31 @@ COSMOS_RETRY_ATTEMPTS = 3    # DB write retries
 # Step-level safety limits (2026-06-15): BrightData Web Unlocker is reliable but
 # flaky/slow per-request on Domain. Without a ceiling, a degraded BD night made this
 # step grind ~6h (retries x 60s x ~150 listings) before the orchestrator killed it.
-MAX_RUNTIME_MIN = int(os.environ.get("WITHDRAWN_MAX_RUNTIME_MIN", "40"))      # global wall-clock budget
-CIRCUIT_BREAKER_ERRORS = int(os.environ.get("WITHDRAWN_CIRCUIT_BREAKER", "15"))  # consecutive errors -> abort
+# 2026-08-19: 40 -> 60. The 40 was never survivable: at ~26s/listing serial, 221 listings
+# needed ~95 min, so the step aborted early EVERY night for at least a week (12-18 Aug),
+# covering 25-50% of the book and leaving withdrawn listings undetected indefinitely.
+# config/process_commands.yaml has declared `estimated_duration_minutes: 60` for step 113
+# all along — the code and the config were contradicting each other, and the code won.
+# Concurrency (FETCH_WORKERS) brings a full pass to ~35 min measured at 4 workers; 60
+# restores real headroom for a slow night instead of sitting on the threshold.
+MAX_RUNTIME_MIN = int(os.environ.get("WITHDRAWN_MAX_RUNTIME_MIN", "60"))      # global wall-clock budget
+
+# Circuit breaker (2026-08-19): ROLLING WINDOW, not consecutive. Fetches now resolve
+# concurrently (see FETCH_WORKERS below), so "consecutive errors" no longer describes
+# anything real — the ordering of completions is arbitrary and a single healthy result
+# landing between two failures used to reset the counter to zero. Trip instead when
+# >= CIRCUIT_BREAKER_ERRORS of the last CIRCUIT_BREAKER_WINDOW results were errors.
+CIRCUIT_BREAKER_ERRORS = int(os.environ.get("WITHDRAWN_CIRCUIT_BREAKER", "15"))  # errors in window -> abort
+CIRCUIT_BREAKER_WINDOW = int(os.environ.get("WITHDRAWN_CIRCUIT_WINDOW", "20"))   # size of the rolling window
+
+# Concurrency (2026-08-19). Each check_listing_status() call is ~26s of pure network
+# wait inside BrightData's Web Unlocker — no local CPU, no shared state. Serially, a
+# ~221-listing book needs ~95 min against a 40-min budget, so the step aborted early
+# every night for a week and withdrawn listings went undetected. ONLY the fetch is
+# parallelised: results are handed back to the main thread IN ORDER and every DB write
+# still happens there, serially, exactly as before. Starting deliberately conservative
+# at 4; 6-8 is the eventual target once a few nights of BrightData error rates are seen.
+FETCH_WORKERS = max(1, int(os.environ.get("WITHDRAWN_FETCH_WORKERS", "4")))
 
 # This step is a ROLLING sweep, not a nightly full sweep. At ~24s/listing (Web
 # Unlocker round-trip) a 40-min budget covers ~35-50 of a ~200-listing book, and the
@@ -184,7 +209,29 @@ def check_listing_status(session, listing_url):
     return "active"
 
 
-def run_withdrawn_detection(suburbs, dry_run=False):
+def _resolve_status(session, item):
+    """Worker body: resolve ONE listing's status. Runs on a ThreadPoolExecutor thread.
+
+    READ-ONLY BY CONSTRUCTION — it touches the network and nothing else. It never
+    receives the MongoDB collection handle and performs no DB access, so no write can
+    originate from a worker thread. Any exception is caught and mapped to "error" so a
+    single bad listing can't poison the chunk (an escaping exception would surface at
+    .result() on the main thread and abort the whole run).
+
+    Returns "skip" for a missing/invalid listing_url, else check_listing_status()'s value.
+    """
+    _suburb, _collection, prop = item
+    listing_url = prop.get("listing_url", "")
+    if not listing_url or not listing_url.startswith("http"):
+        return "skip"
+    try:
+        return check_listing_status(session, listing_url)
+    except Exception as e:
+        print(f"  ERROR: fetch raised for {prop.get('address', 'unknown')} — {type(e).__name__}: {e}")
+        return "error"
+
+
+def run_withdrawn_detection(suburbs, dry_run=False, limit=None):
     """Main detection loop."""
     client = get_client()
     db = get_db(DATABASE_NAME)
@@ -200,7 +247,7 @@ def run_withdrawn_detection(suburbs, dry_run=False):
     totals = {"checked": 0, "withdrawn": 0, "active": 0, "errors": 0, "skipped": 0}
 
     deadline = time.monotonic() + MAX_RUNTIME_MIN * 60
-    consecutive_errors = 0
+    recent_results = deque(maxlen=CIRCUIT_BREAKER_WINDOW)  # True = error, rolling window
     aborted = None  # reason string if we stop early (deadline or circuit breaker)
     circuit_broken = False        # True only for the BrightData-degraded abort, not the budget one
     coverage_age_days = {}        # suburb -> age in days of the OLDEST rotation cursor
@@ -241,114 +288,139 @@ def run_withdrawn_detection(suburbs, dry_run=False):
             if i < len(props):
                 worklist.append((suburb, collection, props[i]))
 
-    per_suburb_checked = {s: 0 for s, _, _ in per_suburb}
-    print(f"\n--- checking {len(worklist)} listings round-robin across {len(per_suburb)} suburb(s) ---")
+    # --limit truncates AFTER interleaving, so a limited run keeps the round-robin
+    # proportionality across suburbs rather than taking the first N of one suburb.
+    if limit is not None and limit > 0:
+        worklist = worklist[:limit]
 
+    per_suburb_checked = {s: 0 for s, _, _ in per_suburb}
+    # Chunk = 2x workers: big enough to keep every worker fed, small enough that a
+    # deadline abort between chunks wastes at most one chunk of paid BrightData calls.
+    chunk_size = max(1, FETCH_WORKERS * 2)
+    print(f"\n--- checking {len(worklist)} listings round-robin across {len(per_suburb)} suburb(s) "
+          f"({FETCH_WORKERS} fetch workers, chunks of {chunk_size}) ---")
+
+    executor = ThreadPoolExecutor(max_workers=FETCH_WORKERS)
     try:
-        for suburb, collection, prop in worklist:
-            # Global wall-clock budget — never let BrightData slowness eat the pipeline window
+        stop = False
+        for start in range(0, len(worklist), chunk_size):
+            # Global wall-clock budget — never let BrightData slowness eat the pipeline
+            # window. Checked BETWEEN chunks only: aborting mid-chunk would strand
+            # in-flight (already paid for) Web Unlocker requests.
             if time.monotonic() > deadline:
                 aborted = f"runtime budget exceeded ({MAX_RUNTIME_MIN} min)"
                 break
 
-            listing_url = prop.get("listing_url", "")
-            address = prop.get("address", "unknown")
+            chunk = worklist[start:start + chunk_size]
+            # Fetch concurrently; .map preserves input order so results line up with chunk.
+            statuses = list(executor.map(lambda item: _resolve_status(session, item), chunk))
 
-            if not listing_url or not listing_url.startswith("http"):
-                totals["skipped"] += 1
-                continue
+            # ---- main thread, serial, in worklist order: all DB writes live here ----
+            for (suburb, collection, prop), status in zip(chunk, statuses):
+                address = prop.get("address", "unknown")
 
-            totals["checked"] += 1
-            per_suburb_checked[suburb] += 1
-            status = check_listing_status(session, listing_url)
+                if status == "skip":
+                    totals["skipped"] += 1
+                    continue
 
-            if status == "withdrawn":
-                totals["withdrawn"] += 1
-                print(f"  WITHDRAWN: {address}")
-                if not dry_run:
-                    # Fetch full doc to capture asking price before status change
-                    full_doc = retry_db(lambda collection=collection, prop=prop: collection.find_one({"_id": prop["_id"]}))
-                    listing_price = full_doc.get("price") if full_doc else None
-                    price_history = full_doc.get("price_history", []) if full_doc else []
+                totals["checked"] += 1
+                per_suburb_checked[suburb] += 1
+                recent_results.append(status == "error")
 
-                    update_fields = {
-                        "listing_status": "withdrawn",
-                        "withdrawn_date": today_aest,
-                        "withdrawn_detected_at": now_iso,
-                        "detection_method": "listing_url_redirect_check",
-                        "last_updated": now_iso,
-                        "listing_price": listing_price,
-                        "withdrawn_last_checked_at": now_iso,
-                    }
+                if status == "withdrawn":
+                    totals["withdrawn"] += 1
+                    print(f"  WITHDRAWN: {address}")
+                    if not dry_run:
+                        # Fetch full doc to capture asking price before status change
+                        full_doc = retry_db(lambda collection=collection, prop=prop: collection.find_one({"_id": prop["_id"]}))
+                        listing_price = full_doc.get("price") if full_doc else None
+                        price_history = full_doc.get("price_history", []) if full_doc else []
 
-                    # EDITORIAL HANDOVER (2026-08-05) — same reasoning as sold
-                    # detection. A withdrawn listing is no longer on the market,
-                    # so its on-market editorial ("the asking price picks the
-                    # lower half") stops being true the moment it comes down.
-                    # Unlike a sale there is no sold_analysis to replace it, so
-                    # the page falls back to its data-driven content — and because
-                    # the website's noindex gate keys off `has_ai_analysis`, these
-                    # pages also stop inviting indexation, which is right: they are
-                    # in no sitemap and describe a listing that no longer exists.
-                    # Guarded on "published" so the dotted $set can't fabricate an
-                    # ai_analysis sub-document on homes that never had one.
-                    if ((full_doc or {}).get("ai_analysis") or {}).get("status") == "published":
-                        update_fields["ai_analysis.status"] = "archived_on_withdrawal"
-                        update_fields["ai_analysis.archived_at"] = now_iso
-                        update_fields["ai_analysis.archived_reason"] = "listing withdrawn"
+                        update_fields = {
+                            "listing_status": "withdrawn",
+                            "withdrawn_date": today_aest,
+                            "withdrawn_detected_at": now_iso,
+                            "detection_method": "listing_url_redirect_check",
+                            "last_updated": now_iso,
+                            "listing_price": listing_price,
+                            "withdrawn_last_checked_at": now_iso,
+                        }
 
-                    # Append final "withdrawn" entry to price_history
-                    if listing_price:
-                        sys.path.insert(0, '/home/fields/Fields_Orchestrator/scripts')
-                        from track_price_changes import parse_price_numeric
-                        price_history.append({
-                            "price_text": listing_price,
-                            "price_numeric": parse_price_numeric(listing_price),
-                            "recorded_at": now_iso,
-                            "run_id": today_aest,
-                            "event": "withdrawn"
-                        })
-                        update_fields["price_history"] = price_history
+                        # EDITORIAL HANDOVER (2026-08-05) — same reasoning as sold
+                        # detection. A withdrawn listing is no longer on the market,
+                        # so its on-market editorial ("the asking price picks the
+                        # lower half") stops being true the moment it comes down.
+                        # Unlike a sale there is no sold_analysis to replace it, so
+                        # the page falls back to its data-driven content — and because
+                        # the website's noindex gate keys off `has_ai_analysis`, these
+                        # pages also stop inviting indexation, which is right: they are
+                        # in no sitemap and describe a listing that no longer exists.
+                        # Guarded on "published" so the dotted $set can't fabricate an
+                        # ai_analysis sub-document on homes that never had one.
+                        if ((full_doc or {}).get("ai_analysis") or {}).get("status") == "published":
+                            update_fields["ai_analysis.status"] = "archived_on_withdrawal"
+                            update_fields["ai_analysis.archived_at"] = now_iso
+                            update_fields["ai_analysis.archived_reason"] = "listing withdrawn"
 
-                    retry_db(lambda collection=collection, prop=prop, update_fields=update_fields: collection.update_one(
-                        {"_id": prop["_id"]},
-                        {"$set": update_fields}
-                    ))
-                consecutive_errors = 0
-            elif status == "active":
-                totals["active"] += 1
-                consecutive_errors = 0
-                if not dry_run:
-                    # Stamp so this property moves to the back of next run's
-                    # rotation — without this, a confirmed-active property with
-                    # an old/missing timestamp would keep winning the sort every
-                    # night, starving properties that have never been checked.
-                    retry_db(lambda collection=collection, prop=prop: collection.update_one(
-                        {"_id": prop["_id"]},
-                        {"$set": {"withdrawn_last_checked_at": now_iso}}
-                    ))
-            else:
-                totals["errors"] += 1
-                consecutive_errors += 1
-                print(f"  ERROR: {address} — could not determine status")
-                if not dry_run:
-                    # Stamp on the error path too. Without this a listing that fails
-                    # every time (dead URL, permanent 403) keeps its old/missing
-                    # timestamp, wins the sort every single night, and consumes budget
-                    # ahead of listings that have never been checked at all — one bad
-                    # listing could starve the whole rotation indefinitely. It is
-                    # retried on the next pass round, ~2-3 days later.
-                    retry_db(lambda collection=collection, prop=prop: collection.update_one(
-                        {"_id": prop["_id"]},
-                        {"$set": {"withdrawn_last_checked_at": now_iso}}
-                    ))
-                # Circuit breaker — BrightData clearly degraded; stop instead of grinding for hours
-                if consecutive_errors >= CIRCUIT_BREAKER_ERRORS:
-                    aborted = (f"circuit breaker tripped after {consecutive_errors} consecutive "
-                               f"fetch errors (BrightData Web Unlocker degraded)")
-                    circuit_broken = True
-                    break
+                        # Append final "withdrawn" entry to price_history
+                        if listing_price:
+                            sys.path.insert(0, '/home/fields/Fields_Orchestrator/scripts')
+                            from track_price_changes import parse_price_numeric
+                            price_history.append({
+                                "price_text": listing_price,
+                                "price_numeric": parse_price_numeric(listing_price),
+                                "recorded_at": now_iso,
+                                "run_id": today_aest,
+                                "event": "withdrawn"
+                            })
+                            update_fields["price_history"] = price_history
 
+                        retry_db(lambda collection=collection, prop=prop, update_fields=update_fields: collection.update_one(
+                            {"_id": prop["_id"]},
+                            {"$set": update_fields}
+                        ))
+                elif status == "active":
+                    totals["active"] += 1
+                    if not dry_run:
+                        # Stamp so this property moves to the back of next run's
+                        # rotation — without this, a confirmed-active property with
+                        # an old/missing timestamp would keep winning the sort every
+                        # night, starving properties that have never been checked.
+                        retry_db(lambda collection=collection, prop=prop: collection.update_one(
+                            {"_id": prop["_id"]},
+                            {"$set": {"withdrawn_last_checked_at": now_iso}}
+                        ))
+                else:
+                    totals["errors"] += 1
+                    print(f"  ERROR: {address} — could not determine status")
+                    if not dry_run:
+                        # Stamp on the error path too. Without this a listing that fails
+                        # every time (dead URL, permanent 403) keeps its old/missing
+                        # timestamp, wins the sort every single night, and consumes budget
+                        # ahead of listings that have never been checked at all — one bad
+                        # listing could starve the whole rotation indefinitely. It is
+                        # retried on the next pass round, ~2-3 days later.
+                        retry_db(lambda collection=collection, prop=prop: collection.update_one(
+                            {"_id": prop["_id"]},
+                            {"$set": {"withdrawn_last_checked_at": now_iso}}
+                        ))
+                    # Circuit breaker — BrightData clearly degraded; stop instead of
+                    # grinding for hours. Rolling window, not consecutive: with
+                    # concurrent fetches, completion order is arbitrary, so one healthy
+                    # result landing between failures must not reset the count.
+                    window_errors = sum(recent_results)
+                    if window_errors >= CIRCUIT_BREAKER_ERRORS:
+                        aborted = (f"circuit breaker tripped after {window_errors} "
+                                   f"fetch errors in the last {len(recent_results)} results "
+                                   f"(BrightData Web Unlocker degraded)")
+                        circuit_broken = True
+                        stop = True
+                        break
+
+            if stop:
+                break
+            # Brief pause BETWEEN chunks (was per-item; pointless now the fetch itself
+            # is the pacing constraint and workers already stagger their own requests).
             time.sleep(REQUEST_DELAY)
 
         # --- coverage assertion (Rule 7b) — must run before the client is closed ---
@@ -382,6 +454,7 @@ def run_withdrawn_detection(suburbs, dry_run=False):
                 pass
 
     finally:
+        executor.shutdown(wait=True)
         session.close()
         client.close()
 
@@ -480,6 +553,8 @@ def main():
     parser.add_argument('--dry-run', action='store_true', help='Preview only, no DB changes')
     parser.add_argument('--report', action='store_true', help='Show current withdrawn counts')
     parser.add_argument('--suburbs', nargs='+', help='Specific suburb collection names')
+    parser.add_argument('--limit', type=int, default=None,
+                        help='Only process the first N listings of the round-robin worklist (testing)')
     parser.add_argument('--no-fail', action='store_true', help='Exit 0 even on errors')
     args = parser.parse_args()
 
@@ -512,7 +587,7 @@ def main():
     print(f"  Time: {get_aest_now().strftime('%Y-%m-%d %H:%M')} AEST")
 
     try:
-        totals = run_withdrawn_detection(suburbs, dry_run=args.dry_run)
+        totals = run_withdrawn_detection(suburbs, dry_run=args.dry_run, limit=args.limit)
 
         if monitor:
             monitor.finish(status="success")
