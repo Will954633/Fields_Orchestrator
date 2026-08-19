@@ -1596,6 +1596,24 @@ class SlotResolver:
         if self._is_attached_dwelling():
             return self._unit_valuation_range()
 
+        # Tier 0.5 — the comparable-sales engine REFUSED this home, because it
+        # sits outside the $1M–$2M design envelope the method was measured in.
+        # Same rule as Tier 0: a refusal must not be re-answered by a weaker tier.
+        #
+        # ⚠ precompute_valuations.py expresses refusal by NULLING
+        # confidence.range (:4243). _engine_valuation_range() reads that null and
+        # cannot distinguish "deliberately declined" from "never valued" — both
+        # return None, and None means fall through. Without this check a declined
+        # home lands on exterior_evidence, a tier never backtested at ANY price
+        # band, and publishes a LARGER figure than the one just suppressed.
+        # Measured 2026-08-19: 21 live reports, 18 of them larger, up to
+        # $3,455,000 off 9 comps. See [ENVELOPE-FALLTHROUGH-MINISITE].
+        declined = self._engine_declined()
+        if declined:
+            self._no_figure_reason = declined
+            logger.info("  engine declined this home (%s) — no figure", declined)
+            return None
+
         # Tier 1 — precomputed engine output already on the doc.
         eng = self._engine_valuation_range()
         if eng:
@@ -1611,7 +1629,29 @@ class SlotResolver:
             if eng:
                 return eng
         # Tier 2 — exterior-evidence fallback (no interior data), then Tier 3.
-        return self.valuation_exterior_range() or self._thin_valuation_range()
+        fallback = self.valuation_exterior_range() or self._thin_valuation_range()
+
+        # The envelope binds the FALLBACK OUTPUT too, not just the engine's
+        # verdict. A home the engine never valued has no refusal to read, so
+        # Tier 0.5 cannot fire — and exterior_evidence happily produced
+        # $2,809,000 for 136-harrier-drive-burleigh-waters off 4 comps.
+        #
+        # exterior_evidence has never been backtested at ANY price band, so it is
+        # a WEAKER method than the one whose measured limit is $1M–$2M. It has no
+        # business publishing outside the band where the strong method was
+        # validated. Suppress rather than widen: a number we cannot stand behind
+        # is worse than no number, and the page already renders "working range
+        # being prepared" cleanly.
+        if fallback:
+            pt = _to_int(fallback.get("point")) or 0
+            if pt and not (self._ENVELOPE_MIN <= pt < self._ENVELOPE_MAX):
+                self._no_figure_reason = (
+                    "above_design_ceiling" if pt >= self._ENVELOPE_MAX
+                    else "below_design_floor")
+                logger.info("  %s point $%s outside envelope — no figure",
+                            fallback.get("method"), f"{pt:,}")
+                return None
+        return fallback
 
     def refresh_valuation_slot(self) -> Dict[str, Any]:
         """Pick up a valuation that has been computed SINCE this report was built.
@@ -1639,6 +1679,25 @@ class SlotResolver:
             self._load_subject_property()
         if not self._subject:
             return {}
+
+        # A refusal must be able to RETRACT a figure, not merely fail to add one.
+        # This method only ever $sets, so a report built BEFORE the engine
+        # declined the home keeps its frozen range for ever otherwise — which is
+        # how 11-orr-place ($2,306,598) and 157-christine-avenue ($2,028,976)
+        # still showed July ranges against subjects suppressed in August.
+        if not self._is_attached_dwelling():
+            declined = self._engine_declined()
+            if declined:
+                if not (self.report.get("valuation") or {}).get("model_range"):
+                    return {}
+                return {
+                    "valuation.model_range": None,
+                    "valuation.no_figure": {
+                        "reason": declined,
+                        "dwelling_class": "house",
+                        "decided_at": datetime.now(timezone.utc).isoformat(),
+                    },
+                }
 
         rng = (self._unit_valuation_range() if self._is_attached_dwelling()
                else self._engine_valuation_range())
@@ -1790,6 +1849,31 @@ class SlotResolver:
         except Exception as e:
             logger.warning(f"  re-read after engine valuation failed: {e}")
         return bool((self._subject or {}).get("valuation_data"))
+
+    # Design envelope of the comparable-sales method — detached houses only.
+    # Mirrors _ENVELOPE_MIN / _ENVELOPE_MAX in precompute_valuations.py.
+    _ENVELOPE_MIN = 1_000_000
+    _ENVELOPE_MAX = 2_000_000
+
+    def _engine_declined(self) -> Optional[str]:
+        """Reason string when the comparable-sales engine refused this subject,
+        else None.
+
+        Reads the engine's own verdict first. Falls back to applying the envelope
+        directly for subjects last computed before the gate landed (2026-08-06),
+        or in suburbs outside the nightly recompute scope — as of 2026-08-19
+        Gold_Coast.reedy_creek still carries 4 such documents, which is how
+        3-woodland-drive-reedy-creek published $2,286,709.
+        """
+        s = self._subject or {}
+        conf = (s.get("valuation_data") or {}).get("confidence") or {}
+        if conf.get("directional_only"):
+            return conf.get("directional_reason") or "outside_design_envelope"
+        rv = _to_int(conf.get("reconciled_valuation"))
+        if rv and not (self._ENVELOPE_MIN <= rv < self._ENVELOPE_MAX):
+            return ("above_design_ceiling" if rv >= self._ENVELOPE_MAX
+                    else "below_design_floor")
+        return None
 
     def _engine_valuation_range(self) -> Optional[Dict[str, Any]]:
         """Tier 1 — reuse the precompute engine's reconciled range when present."""
