@@ -1,0 +1,879 @@
+<title>Valuation Report — 27 Huntingdale Crescent</title>
+<style>
+:root {
+  --paper:#F7F8F6; --ink:#16211F; --muted:#5C6B65; --rule:#D2D8D3;
+  --rule-strong:#A9B4AE; --accent:#1F5D4C; --accent-soft:#E4EDE8;
+  --flag:#8A4B2A; --flag-soft:#F6EBE3; --pos:#1F5D4C; --neg:#8A4B2A;
+  --inert:#9AA6A0; --band:#EFF3F0;
+  --serif:Georgia,"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua","Times New Roman",serif;
+  --grot:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,"Liberation Mono",monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --paper:#12100E; --ink:#E6E3DC; --muted:#9AA39C; --rule:#2E3532;
+    --rule-strong:#4A534E; --accent:#7FB79F; --accent-soft:#1B2622;
+    --flag:#C98A5E; --flag-soft:#2A1F17; --pos:#7FB79F; --neg:#C98A5E;
+    --inert:#5C645F; --band:#191F1C;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#12100E; --ink:#E6E3DC; --muted:#9AA39C; --rule:#2E3532;
+  --rule-strong:#4A534E; --accent:#7FB79F; --accent-soft:#1B2622;
+  --flag:#C98A5E; --flag-soft:#2A1F17; --pos:#7FB79F; --neg:#C98A5E;
+  --inert:#5C645F; --band:#191F1C;
+}
+:root[data-theme="light"]{
+  --paper:#F7F8F6; --ink:#16211F; --muted:#5C6B65; --rule:#D2D8D3;
+  --rule-strong:#A9B4AE; --accent:#1F5D4C; --accent-soft:#E4EDE8;
+  --flag:#8A4B2A; --flag-soft:#F6EBE3; --pos:#1F5D4C; --neg:#8A4B2A;
+  --inert:#9AA6A0; --band:#EFF3F0;
+}
+
+body{background:var(--paper);color:var(--ink);font-family:var(--serif);
+  font-size:16px;line-height:1.62;-webkit-font-smoothing:antialiased;}
+.doc{max-width:60rem;margin:0 auto;padding:0 1.5rem 6rem;}
+
+/* ---- masthead ---- */
+.masthead{padding:3.5rem 0 1.25rem;border-bottom:2px solid var(--ink);
+  display:flex;flex-wrap:wrap;gap:1.5rem;align-items:flex-end;justify-content:space-between;}
+.brand{display:flex;flex-direction:column;gap:.35rem;}
+.brand-name{font-family:var(--grot);font-size:.72rem;font-weight:650;
+  letter-spacing:.19em;text-transform:uppercase;color:var(--accent);}
+.brand-sub{font-family:var(--grot);font-size:.68rem;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--muted);}
+.doc-type{text-align:right;}
+.doc-type h1{font-size:1.02rem;font-weight:600;letter-spacing:.03em;margin:0;}
+.doc-ref{font-family:var(--mono);font-size:.72rem;color:var(--muted);}
+
+/* ---- title block ---- */
+.title-block{padding:2.5rem 0 2rem;border-bottom:1px solid var(--rule);}
+.eyebrow{font-family:var(--grot);font-size:.68rem;font-weight:650;letter-spacing:.17em;
+  text-transform:uppercase;color:var(--muted);margin:0 0 .75rem;}
+.subject-address{font-size:clamp(1.7rem,4.2vw,2.5rem);line-height:1.14;margin:0;
+  font-weight:400;text-wrap:balance;letter-spacing:-.012em;}
+.subject-address em{font-style:normal;display:block;font-size:.52em;color:var(--muted);
+  margin-top:.5rem;letter-spacing:.01em;}
+
+/* ---- summary ---- */
+.summary{margin:2.25rem 0 0;border:1.5px solid var(--ink);}
+.summary-head{background:var(--ink);color:var(--paper);padding:.5rem 1.1rem;
+  font-family:var(--grot);font-size:.66rem;font-weight:650;letter-spacing:.17em;text-transform:uppercase;}
+.summary-body{padding:1.6rem 1.1rem;display:grid;gap:1.6rem;
+  grid-template-columns:repeat(auto-fit,minmax(15rem,1fr));}
+.figure-lead .fl-label{font-family:var(--grot);font-size:.66rem;font-weight:650;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:.45rem;}
+.fl-range{font-family:var(--mono);font-size:clamp(1.35rem,3.4vw,1.85rem);font-weight:600;
+  letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.15;}
+.fl-point{font-family:var(--mono);font-size:1.35rem;font-variant-numeric:tabular-nums;
+  letter-spacing:-.015em;}
+.fl-note{font-size:.83rem;color:var(--muted);margin-top:.5rem;line-height:1.5;}
+.summary-meta{border-top:1px solid var(--rule);padding:1rem 1.1rem;
+  display:grid;gap:.6rem 2rem;grid-template-columns:repeat(auto-fit,minmax(13rem,1fr));}
+.meta-row{display:flex;justify-content:space-between;gap:1rem;font-size:.85rem;
+  border-bottom:1px dotted var(--rule);padding-bottom:.35rem;}
+.meta-row dt{color:var(--muted);}
+.meta-row dd{margin:0;font-family:var(--mono);font-size:.8rem;text-align:right;
+  font-variant-numeric:tabular-nums;}
+
+/* ---- sections ---- */
+section{padding-top:3.25rem;}
+.sec-head{display:flex;gap:1rem;align-items:baseline;
+  border-bottom:1px solid var(--rule-strong);padding-bottom:.5rem;margin-bottom:1.35rem;}
+.sec-num{font-family:var(--mono);font-size:.82rem;color:var(--accent);font-weight:600;
+  flex:none;padding-top:.15rem;}
+.sec-head h2{font-size:1.22rem;font-weight:600;margin:0;letter-spacing:-.005em;text-wrap:balance;}
+.prose{max-width:38rem;}
+.prose p{margin:0 0 1rem;}
+.prose p:last-child{margin-bottom:0;}
+.prose ul,.prose ol{margin:0 0 1rem;padding-left:1.3rem;}
+.prose li{margin-bottom:.4rem;}
+.lede{font-size:1.05rem;color:var(--muted);}
+
+/* ---- disclosure callout: sienna is ONLY ever a limitation ---- */
+.disclosure{background:var(--flag-soft);border-left:3px solid var(--flag);
+  padding:1rem 1.15rem;margin:1.4rem 0;max-width:44rem;}
+.disclosure-label{font-family:var(--grot);font-size:.64rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--flag);display:block;margin-bottom:.5rem;}
+.disclosure p{margin:0 0 .7rem;font-size:.92rem;}
+.disclosure p:last-child,.disclosure ul:last-child{margin-bottom:0;}
+.disclosure ul{margin:0;padding-left:1.2rem;font-size:.92rem;}
+.flag-inline{font-family:var(--grot);font-size:.6rem;font-weight:650;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--flag);background:var(--flag-soft);
+  padding:.13rem .4rem;margin-left:.5rem;white-space:nowrap;}
+
+/* ---- tables ---- */
+.grid-scroll{overflow-x:auto;margin:1.4rem 0;border:1px solid var(--rule);}
+.grid-scroll:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+table{border-collapse:collapse;width:100%;font-size:.82rem;}
+th,td{padding:.5rem .7rem;text-align:left;border-bottom:1px solid var(--rule);vertical-align:baseline;}
+thead th{font-family:var(--grot);font-size:.63rem;font-weight:650;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--muted);border-bottom:1.5px solid var(--rule-strong);
+  vertical-align:bottom;white-space:nowrap;}
+tbody th[scope=row]{font-weight:400;white-space:nowrap;}
+.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;
+  white-space:nowrap;font-size:.78rem;}
+thead .num{text-align:right;}
+.addr{white-space:nowrap;}
+
+.grid tbody th[scope=row]{position:sticky;left:0;background:var(--paper);
+  border-right:1px solid var(--rule);z-index:1;}
+.grid thead .grid-corner{position:sticky;left:0;background:var(--paper);
+  border-right:1px solid var(--rule);z-index:2;}
+.grid-addr{display:block;color:var(--ink);font-size:.68rem;}
+.grid-sub{display:block;font-weight:400;letter-spacing:.04em;color:var(--muted);
+  font-family:var(--mono);font-size:.64rem;text-transform:none;}
+.grid-anchor{background:var(--band);}
+.grid-anchor th[scope=row]{background:var(--band);font-weight:600;}
+.grid-anchor td{font-weight:600;}
+.grid-result th[scope=row],.grid-result td{border-top:1.5px solid var(--rule-strong);}
+.grid-total th[scope=row]{font-weight:600;}
+.grid-total td{font-weight:600;}
+.grid-total-sub td,.grid-total-sub th[scope=row]{color:var(--muted);font-size:.76rem;}
+.pos{color:var(--pos);}
+.neg{color:var(--neg);}
+.nil,.inert{color:var(--inert);}
+.grid-inert th[scope=row]{color:var(--inert);}
+.grid-note{display:block;font-family:var(--grot);font-size:.58rem;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--flag);margin-top:.1rem;}
+.idx{color:var(--muted);}
+
+.recon{margin:1.4rem 0;}
+.recon tfoot th{font-weight:600;text-align:left;border-top:1.5px solid var(--rule-strong);}
+.recon tfoot td{border-top:1.5px solid var(--rule-strong);font-weight:600;}
+.bar-head{width:24%;}
+.bar-cell{padding-right:0;}
+.bar{display:block;height:.5rem;width:var(--w);background:var(--accent);opacity:.5;}
+
+/* ---- rate schedule ---- */
+.rates{display:grid;gap:0 1.8rem;grid-template-columns:repeat(auto-fit,minmax(17rem,1fr));
+  margin:1.3rem 0;}
+.rate-row{display:flex;justify-content:space-between;gap:1rem;align-items:baseline;
+  border-bottom:1px dotted var(--rule);padding:.42rem 0;font-size:.88rem;}
+.rate-row .num{font-size:.82rem;}
+.rate-row.retired{color:var(--inert);}
+.rate-row.retired .num{text-decoration:line-through;}
+
+/* ---- street evidence ---- */
+.street-list{list-style:none;padding:0;margin:1.2rem 0;max-width:44rem;}
+.street-list li{display:grid;gap:.2rem 1rem;padding:.6rem 0;
+  border-bottom:1px solid var(--rule);
+  grid-template-columns:1fr auto auto;align-items:baseline;}
+.si-addr{font-size:.92rem;}
+.si-date,.si-price{font-family:var(--mono);font-size:.78rem;font-variant-numeric:tabular-nums;}
+.si-date{color:var(--muted);}
+.si-pct{grid-column:1/-1;font-family:var(--grot);font-size:.68rem;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--accent);}
+
+/* ---- accuracy stats ---- */
+.stats{display:grid;gap:1px;background:var(--rule);border:1px solid var(--rule);
+  grid-template-columns:repeat(auto-fit,minmax(9.5rem,1fr));margin:1.4rem 0;}
+.stat{background:var(--paper);padding:1rem;}
+.stat-v{font-family:var(--mono);font-size:1.4rem;font-variant-numeric:tabular-nums;
+  letter-spacing:-.02em;display:block;}
+.stat-l{font-family:var(--grot);font-size:.63rem;font-weight:650;letter-spacing:.11em;
+  text-transform:uppercase;color:var(--muted);display:block;margin-top:.35rem;line-height:1.4;}
+
+/* ---- what this is / isn't ---- */
+.compare{display:grid;gap:1px;background:var(--rule);border:1px solid var(--rule);
+  grid-template-columns:repeat(auto-fit,minmax(17rem,1fr));margin:1.4rem 0;}
+.compare-col{background:var(--paper);padding:1.2rem;}
+.compare-col h3{font-family:var(--grot);font-size:.66rem;font-weight:700;letter-spacing:.14em;
+  text-transform:uppercase;margin:0 0 .8rem;}
+.compare-col.is h3{color:var(--accent);}
+.compare-col.isnt h3{color:var(--flag);}
+.compare-col ul{margin:0;padding-left:1.1rem;font-size:.9rem;}
+.compare-col li{margin-bottom:.5rem;}
+
+/* ---- download ---- */
+.actions{display:flex;flex-wrap:wrap;gap:.8rem;align-items:center;margin:1.6rem 0 0;}
+.btn{font-family:var(--grot);font-size:.75rem;font-weight:650;letter-spacing:.1em;
+  text-transform:uppercase;padding:.75rem 1.4rem;border:1.5px solid var(--ink);
+  background:var(--ink);color:var(--paper);cursor:pointer;}
+.btn:hover{background:transparent;color:var(--ink);}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:3px;}
+.btn.ghost{background:transparent;color:var(--ink);}
+.btn.ghost:hover{background:var(--ink);color:var(--paper);}
+.actions-note{font-size:.8rem;color:var(--muted);}
+
+/* ---- signature ---- */
+.signature{margin-top:2rem;border-top:1px solid var(--rule-strong);padding-top:1.3rem;
+  display:grid;gap:1.4rem;grid-template-columns:repeat(auto-fit,minmax(15rem,1fr));max-width:44rem;}
+.sig-block .sig-l{font-family:var(--grot);font-size:.63rem;font-weight:650;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--muted);display:block;margin-bottom:.3rem;}
+.sig-block .sig-v{font-size:.95rem;}
+
+.colophon{margin-top:3.5rem;border-top:2px solid var(--ink);padding-top:1.1rem;
+  font-size:.78rem;color:var(--muted);max-width:44rem;}
+.colophon p{margin:0 0 .6rem;}
+
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;}}
+
+@media print{
+  body{background:#fff;color:#000;font-size:10.5pt;}
+  .doc{max-width:none;padding:0;}
+  .actions{display:none;}
+  section{padding-top:1.6rem;break-inside:avoid;}
+  .grid-scroll{overflow:visible;}
+  .summary{break-inside:avoid;}
+  .disclosure{break-inside:avoid;}
+  table{font-size:8pt;}
+}
+</style>
+
+<div class="doc">
+
+<header class="masthead">
+  <div class="brand">
+    <span class="brand-name">Fields Real Estate</span>
+    <span class="brand-sub">Property intelligence &middot; Gold Coast</span>
+  </div>
+  <div class="doc-type">
+    <h1>Comparable Sales Assessment</h1>
+    <span class="doc-ref">Ref FRE&thinsp;/&thinsp;RBN&thinsp;/&thinsp;27-20260808</span>
+  </div>
+</header>
+
+<div class="title-block">
+  <p class="eyebrow">Subject property</p>
+  <p class="subject-address">27 Huntingdale Crescent<em>Robina QLD 4226</em></p>
+
+  <div class="summary">
+    <div class="summary-head">Assessment summary</div>
+    <div class="summary-body">
+      <div class="figure-lead">
+        <span class="fl-label">Assessed value range</span>
+        <span class="fl-range">$1,336,872 &ndash; $1,708,396</span>
+        <p class="fl-note">A &plusmn;12.2% band around the point figure. Four in five Robina
+        sales land inside a band of this width. It is <strong>not</strong> a confidence
+        interval and one sale in five falls outside it.</p>
+      </div>
+      <div class="figure-lead">
+        <span class="fl-label">Point figure</span>
+        <span class="fl-point">$1,522,634</span>
+        <p class="fl-note">The weight-reconciled mean of 8 adjusted comparable sales,
+        calibrated for Robina&rsquo;s measured bias. The range above carries the assessment;
+        this single figure is the arithmetic centre of it, not a price.</p>
+      </div>
+      <div class="figure-lead">
+        <span class="fl-label">Direct evidence spread</span>
+        <span class="fl-point">$1,369,550 &ndash; $1,674,291</span>
+        <p class="fl-note">Highest and lowest of the 8 comparables after adjustment
+        to the subject. Unweighted &mdash; the raw evidence before reconciliation.</p>
+      </div>
+    </div>
+    <div class="summary-meta">
+      <div class="meta-row"><dt>Date of assessment</dt><dd>08 August 2026</dd></div>
+      <div class="meta-row"><dt>Date of this report</dt><dd>20 August 2026</dd></div>
+      <div class="meta-row"><dt>Basis of value</dt><dd>Market value, vacant possession</dd></div>
+      <div class="meta-row"><dt>Interest assessed</dt><dd>Fee simple</dd></div>
+      <div class="meta-row"><dt>Inspection</dt><dd>None &mdash; desktop only</dd></div>
+      <div class="meta-row"><dt>Method</dt><dd>Direct comparison</dd></div>
+      <div class="meta-row"><dt>Sales in the calculation</dt><dd>49</dd></div>
+      <div class="meta-row"><dt>Sales set out in full</dt><dd>8</dd></div>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="btn" type="button" id="dl">Download report (PDF)</button>
+    <button class="btn ghost" type="button" id="dlData">Download the underlying figures</button>
+    <span class="actions-note">The PDF is this document, unabridged &mdash; every table included.</span>
+  </div>
+</div>
+
+<section id="s1">
+  <div class="sec-head"><span class="sec-num">1</span><h2>Purpose, and the limits of this document</h2></div>
+  <div class="prose">
+    <p class="lede">This is a desktop assessment of market value prepared by Fields Real
+    Estate using the direct comparison method. It was produced without an inspection, without
+    contact with the owner, and without a licensed valuer.</p>
+    <p>It exists because the two things normally on offer &mdash; an instant online estimate
+    with no working shown, and an agent appraisal that begins a sales conversation &mdash; both
+    ask you to accept a number on trust. This document takes the opposite approach: every
+    comparable sale, every dollar of adjustment, every weight, and every thing we could not
+    observe is set out below so you can disagree with it in specific terms.</p>
+  </div>
+
+  <div class="disclosure">
+    <span class="disclosure-label">This is not a certified valuation</span>
+    <p>This report has <strong>not</strong> been prepared by a Certified Practising Valuer and
+    is not a valuation under the Australian Property Institute&rsquo;s professional practice
+    standards. No member of the API has inspected the property or signed this document.</p>
+    <p>It <strong>cannot</strong> be relied upon for mortgage security or lending, litigation
+    or family law proceedings, stamp duty or land tax objections, probate or deceased estate
+    administration, insurance reinstatement, financial reporting, or any other purpose
+    requiring a valuation by a registered valuer. For any of those, engage a Certified
+    Practising Valuer.</p>
+    <p>It is prepared for the owner or occupier of the subject property, for their own
+    information. Fields Real Estate accepts no liability to any third party who obtains a copy
+    of it, and no duty of care arises to any party relying on it for a transaction.</p>
+  </div>
+
+  <div class="disclosure">
+    <span class="disclosure-label">No advice is given or implied</span>
+    <p>Nothing here is a recommendation to sell, to hold, to buy, or to list at any particular
+    price. This document reports what comparable properties have sold for and what our method
+    infers from that. What to do with that information is entirely yours, and depends on
+    circumstances we know nothing about.</p>
+    <p>A sale price is set by a buyer on a day, and can fall outside every figure below.</p>
+  </div>
+</section>
+
+<section id="s2">
+  <div class="sec-head"><span class="sec-num">2</span><h2>The subject property, as we hold it</h2></div>
+  <div class="prose">
+    <p>The attributes below drive every adjustment in section 5. They come from cadastral
+    records, historic listing data and satellite imagery &mdash; not from an inspection.
+    If any of them is wrong, the assessment is wrong, and the specific effect is traceable
+    through the grid.</p>
+  </div>
+
+  <div class="rates">
+    <div class="rate-row"><span>Bedrooms</span><span class="num">4</span></div>
+    <div class="rate-row"><span>Bathrooms</span><span class="num">2</span></div>
+    <div class="rate-row"><span>Car spaces</span><span class="num">2</span></div>
+    <div class="rate-row"><span>Living area</span><span class="num">192 m&sup2;</span></div>
+    <div class="rate-row"><span>Land area</span><span class="num">803 m&sup2;</span></div>
+    <div class="rate-row"><span>Approximate year built</span><span class="num">1987</span></div>
+    <div class="rate-row"><span>Swimming pool</span><span class="num">None recorded</span></div>
+    <div class="rate-row"><span>Water outlook</span><span class="num">None</span></div>
+    <div class="rate-row"><span>Distance to beach</span><span class="num">4.79 km</span></div>
+    <div class="rate-row"><span>Golf course frontage</span><span class="num">No</span></div>
+  </div>
+
+  <div class="disclosure">
+    <span class="disclosure-label">Not observed &mdash; the largest limitation in this report</span>
+    <p>No one has been inside this house. The following attributes are unknown to us, and each
+    of them is capable of moving a real sale price materially:</p>
+    <ul><li>Overall internal condition</li><li>Kitchen quality</li><li>Bathroom quality</li><li>Modern fit-out</li><li>Natural light</li><li>Number of living areas</li><li>Fencing condition</li></ul>
+    <p>Where an attribute is unknown, the method does not guess it &mdash; it holds the subject
+    at a neutral position and declines to adjust for that line. The practical consequence is
+    that <strong>a well-presented interior is not credited, and a poor one is not
+    discounted.</strong> If the interior is materially better or worse than a typical Robina
+    house of this age, the true figure sits above or below this assessment accordingly.</p>
+  </div>
+</section>
+
+<section id="s3">
+  <div class="sec-head"><span class="sec-num">3</span><h2>Method</h2></div>
+  <div class="prose">
+    <p>Direct comparison. Sales of similar properties are adjusted, line by line, for each
+    respect in which they differ from the subject, producing for each one an indication of what
+    the subject would have sold for on that sale&rsquo;s date. Those indications are then
+    weighted and reconciled to a single figure, and a measured band is placed around it.</p>
+    <p>49 sales within Robina were examined, adjusted and weighted, and all of
+    them inform the reconciled figure. A sale needing a large adjustment, or sitting further
+    away, or older, is not discarded &mdash; it is down-weighted, so that it counts for
+    something in proportion to how much it can fairly say about this house.</p>
+    <p>Of those, the 8 strongest are set out in full in sections 5 to 7 as the
+    evidence you can actually check. Section 7 is explicit about the gap between what is
+    displayed and what is calculated.</p>
+    <ol>
+      <li><strong>Selection</strong> &mdash; candidate sales screened on dwelling type, proximity,
+      recency and completeness of attribute data.</li>
+      <li><strong>Adjustment</strong> &mdash; each adopted sale adjusted against a published rate
+      schedule (section 4).</li>
+      <li><strong>Reliability shrinkage</strong> &mdash; every adjustment multiplied by
+      0.80. Adjustment rates are estimated, not known; shrinking them
+      toward zero pulls the result back toward the observed sale price, which is the one
+      genuinely hard fact in the calculation.</li>
+      <li><strong>Weighting</strong> &mdash; the six factors in section 6.</li>
+      <li><strong>Reconciliation</strong> &mdash; weighted mean of the adjusted indications
+      across the whole candidate pool, not only the sales displayed in section 5. Section 7
+      sets out what that distinction means for reading this report.</li>
+      <li><strong>Suburb calibration</strong> &mdash; multiplied by 1.0189, which
+      corrects Robina&rsquo;s measured systematic bias as at 08 August 2026.</li>
+      <li><strong>Band</strong> &mdash; &plusmn;12.2%, being the width that contained four in
+      five actual Robina sales when the method was tested against them (section 7).</li>
+    </ol>
+  </div>
+
+  <div class="disclosure">
+    <span class="disclosure-label">Scope of the method</span>
+    <p>This method is built and measured for <strong>detached houses selling between
+    $1,000,000 and $2,000,000</strong>. Outside that band it degrades, because a weighted mean
+    of adjusted comparables cannot exceed its most expensive comparable and the pool of
+    available sales pulls toward the middle of the market.</p>
+    <p>This property is assessed at $1,522,634 and sits inside that band, so the figures
+    above are reported in full. Had it fallen outside, we would have withheld both the figure
+    and the range and shown you the comparable evidence only.</p>
+  </div>
+</section>
+
+<section id="s4">
+  <div class="sec-head"><span class="sec-num">4</span><h2>Rate schedule</h2></div>
+  <div class="prose">
+    <p>These are the dollar rates applied per unit of difference. They are derived by
+    regression across 56 local sales rather than assumed, and they are the
+    same rates applied to every property we assess in this market &mdash; they are not tuned to
+    produce a particular answer here. Each rate is shown before reliability shrinkage.</p>
+  </div>
+
+  <div class="rates">
+    <div class="rate-row"><span>Land, per m&sup2;</span><span class="num">$403</span></div>
+    <div class="rate-row"><span>Living area, per m&sup2;</span><span class="num">$1,187</span></div>
+    <div class="rate-row"><span>Per bedroom</span><span class="num">$30,664</span></div>
+    <div class="rate-row"><span>Per bathroom</span><span class="num">$60,000</span></div>
+    <div class="rate-row"><span>Per car space</span><span class="num">$35,000</span></div>
+    <div class="rate-row"><span>Swimming pool</span><span class="num">$75,000</span></div>
+    <div class="rate-row"><span>Additional storey</span><span class="num">$45,000</span></div>
+    <div class="rate-row"><span>External cladding, per grade</span><span class="num">$20,000</span></div>
+    <div class="rate-row"><span>Ducted air-conditioning</span><span class="num">$20,000</span></div>
+    <div class="rate-row"><span>Water outlook</span><span class="num">$120,000</span></div>
+    <div class="rate-row"><span>Per year of age</span><span class="num">$2,352</span></div>
+    <div class="rate-row retired"><span>Renovation level, per grade</span><span class="num">$93,137</span></div>
+    <div class="rate-row retired"><span>Kitchen quality, per point</span><span class="num">$12,000</span></div>
+    <div class="rate-row retired"><span>Renovation quality</span><span class="num">$18,000</span></div>
+  </div>
+
+  <div class="disclosure">
+    <span class="disclosure-label">Three rates withdrawn from use</span>
+    <p>Renovation level, kitchen quality and renovation quality are struck through above and
+    appear as <span style="font-family:var(--mono);font-size:.85em">n/a</span> in the grid.
+    On 7 August 2026 we tested the method with and without each adjustment and found these
+    three <strong>increased</strong> the average error rather than reducing it. They were
+    withdrawn that day and contribute nothing to this assessment.</p>
+    <p>They remain listed because a rate schedule that quietly drops the lines that did not
+    work is not a rate schedule you can audit.</p>
+  </div>
+</section>
+
+<section id="s5">
+  <div class="sec-head"><span class="sec-num">5</span><h2>Schedule of comparable sales</h2></div>
+  <div class="prose">
+    <p>The 8 sales set out in full, as they were &mdash; before any adjustment. All
+    are detached houses in Robina. Ordered by adjusted indication, lowest to highest.</p>
+  </div>
+  <div class="grid-scroll" tabindex="0" role="region" aria-label="Schedule of comparable sales, scrollable">
+<table class="sched">
+<thead><tr>
+<th scope="col" class="num">#</th><th scope="col">Address (Robina)</th>
+<th scope="col" class="num">Sold</th><th scope="col" class="num">Price</th>
+<th scope="col" class="num">km</th><th scope="col" class="num">Bd</th>
+<th scope="col" class="num">Ba</th><th scope="col" class="num">Car</th>
+<th scope="col" class="num">Living m&sup2;</th><th scope="col" class="num">Land m&sup2;</th>
+<th scope="col" class="num">Pool</th>
+</tr></thead>
+<tbody><tr>
+<td class="num idx">1</td>
+<td class="addr">7 Beaumaris Court</td>
+<td class="num">02 Jul 2026</td>
+<td class="num">$1,275,000</td>
+<td class="num">1.49</td>
+<td class="num">3</td>
+<td class="num">2</td>
+<td class="num">2</td>
+<td class="num">164</td>
+<td class="num">470</td>
+<td class="num">Yes</td>
+</tr><tr>
+<td class="num idx">2</td>
+<td class="addr">26 Moorabbin Place</td>
+<td class="num">05 Jul 2026</td>
+<td class="num">$1,620,000</td>
+<td class="num">0.53</td>
+<td class="num">5</td>
+<td class="num">2</td>
+<td class="num">2</td>
+<td class="num">214</td>
+<td class="num">798</td>
+<td class="num">Yes</td>
+</tr><tr>
+<td class="num idx">3</td>
+<td class="addr">4 Springvale Street<span class="flag-inline">outside 6-month window</span></td>
+<td class="num">23 Oct 2025</td>
+<td class="num">$1,520,000</td>
+<td class="num">0.93</td>
+<td class="num">4</td>
+<td class="num">3</td>
+<td class="num">2</td>
+<td class="num">183</td>
+<td class="num">774</td>
+<td class="num">No</td>
+</tr><tr>
+<td class="num idx">4</td>
+<td class="addr">28 Merion Court</td>
+<td class="num">05 May 2026</td>
+<td class="num">$1,810,000</td>
+<td class="num">0.45</td>
+<td class="num">4</td>
+<td class="num">2</td>
+<td class="num">2</td>
+<td class="num">233</td>
+<td class="num">840</td>
+<td class="num">Yes</td>
+</tr><tr>
+<td class="num idx">5</td>
+<td class="addr">56 Woody Views Way</td>
+<td class="num">18 Mar 2026</td>
+<td class="num">$1,420,000</td>
+<td class="num">1.24</td>
+<td class="num">4</td>
+<td class="num">2</td>
+<td class="num">2</td>
+<td class="num">192</td>
+<td class="num">648</td>
+<td class="num">No</td>
+</tr><tr>
+<td class="num idx">6</td>
+<td class="addr">72 Nardoo Street</td>
+<td class="num">14 Jun 2026</td>
+<td class="num">$1,610,000</td>
+<td class="num">1.33</td>
+<td class="num">5</td>
+<td class="num">2</td>
+<td class="num">4</td>
+<td class="num">233</td>
+<td class="num">547</td>
+<td class="num">Yes</td>
+</tr><tr>
+<td class="num idx">7</td>
+<td class="addr">39 Olympus Drive</td>
+<td class="num">14 Apr 2026</td>
+<td class="num">$1,520,000</td>
+<td class="num">1.14</td>
+<td class="num">4</td>
+<td class="num">2</td>
+<td class="num">2</td>
+<td class="num">176</td>
+<td class="num">700</td>
+<td class="num">No</td>
+</tr><tr>
+<td class="num idx">8</td>
+<td class="addr">25 Huntingdale Crescent</td>
+<td class="num">02 Mar 2026</td>
+<td class="num">$1,731,000</td>
+<td class="num">0.03</td>
+<td class="num">4</td>
+<td class="num">2</td>
+<td class="num">2</td>
+<td class="num">173</td>
+<td class="num">813</td>
+<td class="num">Yes</td>
+</tr></tbody>
+</table>
+</div>
+
+  <div class="prose">
+    <p>Queensland&rsquo;s <em>Property Occupations Act 2014</em> defines a comparative market
+    analysis as comparing the property with at least three sales from the previous six months,
+    of similar standard or condition, within five kilometres. That definition governs a
+    licensed agent answering a seller&rsquo;s question about price; it does not bind this
+    document, but it is a reasonable public yardstick, so here is how this evidence measures
+    against it: <strong>8 sales</strong> against a minimum of three;
+    <strong>8 of 8</strong> within five kilometres (the furthest is
+    1.49&thinsp;km); <strong>7 of 8</strong>
+    within six months.</p>
+  </div>
+
+  <div class="disclosure"><span class="disclosure-label">One sale falls outside the six-month window</span><p>4 Springvale Street (sold October 2025, 9.9 months) sits outside the six-month period. It was retained because it is a close physical match on a nearby street, and its age is handled explicitly by the recency weight in section 6, where it carries the lowest recency score of any sale shown. We disclose it rather than quietly dropping or quietly keeping it.</p></div>
+</section>
+
+<section id="s6">
+  <div class="sec-head"><span class="sec-num">6</span><h2>Adjustment grid</h2></div>
+  <div class="prose">
+    <p>The working. Each column is one comparable sale; each row is one respect in which it
+    differs from the subject. A positive figure means the comparable was inferior in that
+    respect, so its price is adjusted upward to indicate the subject. Negative means the
+    reverse. Every figure shown has had the 0.80 reliability shrinkage
+    applied.</p>
+    <p>Scroll the grid sideways to see all 8 comparables.</p>
+  </div>
+  <div class="grid-scroll" tabindex="0" role="region" aria-label="Adjustment grid, scrollable">
+<table class="grid">
+<thead><tr><th scope="col" class="grid-corner">Adjustment line</th><th scope="col"><span class="grid-addr">7 Beaumaris Court</span><span class="grid-sub">Jul 2026</span></th><th scope="col"><span class="grid-addr">26 Moorabbin Place</span><span class="grid-sub">Jul 2026</span></th><th scope="col"><span class="grid-addr">4 Springvale Street</span><span class="grid-sub">Oct 2025</span></th><th scope="col"><span class="grid-addr">28 Merion Court</span><span class="grid-sub">May 2026</span></th><th scope="col"><span class="grid-addr">56 Woody Views Way</span><span class="grid-sub">Mar 2026</span></th><th scope="col"><span class="grid-addr">72 Nardoo Street</span><span class="grid-sub">Jun 2026</span></th><th scope="col"><span class="grid-addr">39 Olympus Drive</span><span class="grid-sub">Apr 2026</span></th><th scope="col"><span class="grid-addr">25 Huntingdale Crescent</span><span class="grid-sub">Mar 2026</span></th></tr></thead>
+<tbody><tr class="grid-anchor"><th scope="row">Sale price achieved</th><td class="num">$1,275,000</td><td class="num">$1,620,000</td><td class="num">$1,520,000</td><td class="num">$1,810,000</td><td class="num">$1,420,000</td><td class="num">$1,610,000</td><td class="num">$1,520,000</td><td class="num">$1,731,000</td></tr><tr class=""><th scope="row">Land area</th><td class="num pos" title="subject 803.0 vs comparable 470.0 sqm">+$107,359</td><td class="num pos" title="subject 803.0 vs comparable 798.0 sqm">+$1,612</td><td class="num pos" title="subject 803.0 vs comparable 774.0 sqm">+$9,350</td><td class="num neg" title="subject 803.0 vs comparable 840.0 sqm">−$11,929</td><td class="num pos" title="subject 803.0 vs comparable 648.0 sqm">+$49,972</td><td class="num pos" title="subject 803.0 vs comparable 547.0 sqm">+$82,534</td><td class="num pos" title="subject 803.0 vs comparable 700.0 sqm">+$33,207</td><td class="num neg" title="subject 803.0 vs comparable 813.0 sqm">−$3,224</td></tr><tr class=""><th scope="row">Living area</th><td class="num pos" title="subject 192.0 vs comparable 164.11 sqm">+$26,484</td><td class="num neg" title="subject 192.0 vs comparable 213.51 sqm">−$20,426</td><td class="num pos" title="subject 192.0 vs comparable 183.0 sqm">+$8,546</td><td class="num neg" title="subject 192.0 vs comparable 233.0 sqm">−$38,934</td><td class="num pos" title="subject 192.0 vs comparable 191.75 sqm">+$238</td><td class="num neg" title="subject 192.0 vs comparable 233.0 sqm">−$38,934</td><td class="num pos" title="subject 192.0 vs comparable 176.0 sqm">+$15,194</td><td class="num pos" title="subject 192.0 vs comparable 173.0 sqm">+$18,042</td></tr><tr class=""><th scope="row">Bedrooms</th><td class="num pos">+$24,531</td><td class="num neg">−$24,531</td><td class="num nil">—</td><td class="num nil">—</td><td class="num nil">—</td><td class="num neg">−$24,531</td><td class="num nil">—</td><td class="num nil">—</td></tr><tr class=""><th scope="row">Bathrooms</th><td class="num nil">—</td><td class="num nil">—</td><td class="num neg">−$48,000</td><td class="num nil">—</td><td class="num nil">—</td><td class="num nil">—</td><td class="num nil">—</td><td class="num nil">—</td></tr><tr class=""><th scope="row">Car spaces</th><td class="num nil">—</td><td class="num nil">—</td><td class="num nil">—</td><td class="num nil">—</td><td class="num nil">—</td><td class="num neg">−$56,000</td><td class="num nil">—</td><td class="num nil">—</td></tr><tr class=""><th scope="row">Swimming pool</th><td class="num neg">−$60,000</td><td class="num neg">−$60,000</td><td class="num nil">—</td><td class="num neg">−$60,000</td><td class="num nil">—</td><td class="num neg">−$60,000</td><td class="num nil">—</td><td class="num neg">−$60,000</td></tr><tr class="grid-nil"><th scope="row">Storeys</th><td class="num nil">—</td><td class="num nil">—</td><td class="num nil">—</td><td class="num nil">—</td><td class="num nil">—</td><td class="num nil">—</td><td class="num nil">—</td><td class="num nil">—</td></tr><tr class=""><th scope="row">External cladding</th><td class="num nil">—</td><td class="num neg">−$16,000</td><td class="num nil">—</td><td class="num nil">—</td><td class="num neg">−$16,000</td><td class="num neg">−$16,000</td><td class="num neg">−$16,000</td><td class="num neg">−$16,000</td></tr><tr class=""><th scope="row">Ducted air-conditioning</th><td class="num nil">—</td><td class="num nil">—</td><td class="num nil">—</td><td class="num nil">—</td><td class="num nil">—</td><td class="num neg">−$16,000</td><td class="num nil">—</td><td class="num nil">—</td></tr><tr class=""><th scope="row">Age of improvements</th><td class="num neg" title="subject 1987 vs comparable 1991 yr">−$7,526</td><td class="num neg" title="subject 1987 vs comparable 1994 yr">−$13,171</td><td class="num neg" title="subject 1987 vs comparable 1989 yr">−$3,763</td><td class="num neg" title="subject 1987 vs comparable 1988 yr">−$1,882</td><td class="num neg" title="subject 1987 vs comparable 2001 yr">−$26,342</td><td class="num neg" title="subject 1987 vs comparable 2001 yr">−$26,342</td><td class="num neg" title="subject 1987 vs comparable 2001 yr">−$26,342</td><td class="num nil">—</td></tr><tr class="grid-nil"><th scope="row">Water outlook</th><td class="num nil">—</td><td class="num nil">—</td><td class="num nil">—</td><td class="num nil">—</td><td class="num nil">—</td><td class="num nil">—</td><td class="num nil">—</td><td class="num nil">—</td></tr><tr class="grid-nil"><th scope="row">Condition</th><td class="num nil">—</td><td class="num nil">—</td><td class="num nil">—</td><td class="num nil">—</td><td class="num nil">—</td><td class="num nil">—</td><td class="num nil">—</td><td class="num nil">—</td></tr><tr class="grid-inert"><th scope="row">Renovation level<span class="grid-note">withdrawn 07 Aug 2026</span></th><td class="num inert">n/a</td><td class="num inert">n/a</td><td class="num inert">n/a</td><td class="num inert">n/a</td><td class="num inert">n/a</td><td class="num inert">n/a</td><td class="num inert">n/a</td><td class="num inert">n/a</td></tr><tr class="grid-inert"><th scope="row">Kitchen quality<span class="grid-note">withdrawn 07 Aug 2026</span></th><td class="num inert">n/a</td><td class="num inert">n/a</td><td class="num inert">n/a</td><td class="num inert">n/a</td><td class="num inert">n/a</td><td class="num inert">n/a</td><td class="num inert">n/a</td><td class="num inert">n/a</td></tr><tr class="grid-inert"><th scope="row">Renovation quality<span class="grid-note">withdrawn 07 Aug 2026</span></th><td class="num inert">n/a</td><td class="num inert">n/a</td><td class="num inert">n/a</td><td class="num inert">n/a</td><td class="num inert">n/a</td><td class="num inert">n/a</td><td class="num inert">n/a</td><td class="num inert">n/a</td></tr><tr class=""><th scope="row">Beach proximity</th><td class="num pos">+$3,702</td><td class="num pos">+$2,138</td><td class="num pos">+$13,443</td><td class="num pos">+$2,867</td><td class="num pos">+$23,140</td><td class="num pos">+$425</td><td class="num neg">−$602</td><td class="num pos">+$457</td></tr><tr class=""><th scope="row">Street premium</th><td class="num inert">—</td><td class="num inert">—</td><td class="num inert">—</td><td class="num pos">+$24,761</td><td class="num pos">+$94,515</td><td class="num pos">+$97,888</td><td class="num pos">+$54,234</td><td class="num nil">—</td></tr><tr class=""><th scope="row">Micro-location</th><td class="num nil">—</td><td class="num neg">−$58,450</td><td class="num neg">−$3,648</td><td class="num neg">−$54,590</td><td class="num neg">−$1,818</td><td class="num pos">+$27,950</td><td class="num pos">+$1,824</td><td class="num pos">+$4,016</td></tr><tr class=""><th scope="row">Golf course frontage</th><td class="num nil">—</td><td class="num nil">—</td><td class="num nil">—</td><td class="num neg">−$173,760</td><td class="num nil">—</td><td class="num nil">—</td><td class="num nil">—</td><td class="num nil">—</td></tr><tr class="grid-total"><th scope="row">Net adjustment</th><td class="num pos">+$94,550</td><td class="num neg">−$188,828</td><td class="num neg">−$24,072</td><td class="num neg">−$313,467</td><td class="num pos">+$123,705</td><td class="num neg">−$29,010</td><td class="num pos">+$61,515</td><td class="num neg">−$56,709</td></tr><tr class="grid-total-sub"><th scope="row">Net adjustment as % of sale</th><td class="num">+7.4%</td><td class="num">−11.7%</td><td class="num">−1.6%</td><td class="num">−17.3%</td><td class="num">+8.7%</td><td class="num">−1.8%</td><td class="num">+4.0%</td><td class="num">−3.3%</td></tr><tr class="grid-anchor grid-result"><th scope="row">Adjusted value indication</th><td class="num">$1,369,550</td><td class="num">$1,431,172</td><td class="num">$1,495,928</td><td class="num">$1,496,533</td><td class="num">$1,543,705</td><td class="num">$1,580,990</td><td class="num">$1,581,515</td><td class="num">$1,674,291</td></tr><tr class="grid-total-sub"><th scope="row">Weight applied</th><td class="num">0.777</td><td class="num">0.806</td><td class="num">0.831</td><td class="num">0.770</td><td class="num">0.789</td><td class="num">0.867</td><td class="num">0.825</td><td class="num">0.786</td></tr></tbody>
+</table>
+</div>
+
+  <div class="prose">
+    <p>The net adjustment column tells you how hard each sale had to work. A comparable
+    requiring a 17% adjustment is a
+    weaker piece of evidence than one requiring
+    2%, and the weighting in the next
+    section is what accounts for that difference.</p>
+  </div>
+</section>
+
+<section id="s7">
+  <div class="sec-head"><span class="sec-num">7</span><h2>Weighting and reconciliation</h2></div>
+  <div class="prose">
+    <p>Six factors, each scored from zero to one, multiply into a composite weight for each
+    sale. A sale that needed little adjustment, sat close by, sold recently, and had its price
+    independently verified counts for more than one that did not.</p>
+  </div>
+  <div class="grid-scroll" tabindex="0" role="region" aria-label="Weighting factors, scrollable">
+<table class="grid weights">
+<thead><tr><th scope="col" class="grid-corner">Weighting factor</th><th scope="col">7 Beaumaris Court</th><th scope="col">26 Moorabbin Place</th><th scope="col">4 Springvale Street</th><th scope="col">28 Merion Court</th><th scope="col">56 Woody Views Way</th><th scope="col">72 Nardoo Street</th><th scope="col">39 Olympus Drive</th><th scope="col">25 Huntingdale Crescent</th></tr></thead>
+<tbody><tr><th scope="row">Adjustment quality</th><td class="num">0.75</td><td class="num">0.61</td><td class="num">0.95</td><td class="num">0.42</td><td class="num">0.71</td><td class="num">0.94</td><td class="num">0.87</td><td class="num">0.89</td></tr><tr><th scope="row">Adjusted accuracy</th><td class="num">0.56</td><td class="num">0.76</td><td class="num">0.97</td><td class="num">0.98</td><td class="num">0.86</td><td class="num">0.74</td><td class="num">0.74</td><td class="num">0.43</td></tr><tr><th scope="row">Proximity</th><td class="num">0.70</td><td class="num">0.89</td><td class="num">0.81</td><td class="num">0.91</td><td class="num">0.75</td><td class="num">0.73</td><td class="num">0.77</td><td class="num">0.99</td></tr><tr><th scope="row">Recency</th><td class="num">0.90</td><td class="num">0.91</td><td class="num">0.20</td><td class="num">0.74</td><td class="num">0.60</td><td class="num">0.85</td><td class="num">0.68</td><td class="num">0.56</td></tr><tr><th scope="row">Sale verified</th><td class="num">1.00</td><td class="num">1.00</td><td class="num">1.00</td><td class="num">1.00</td><td class="num">1.00</td><td class="num">1.00</td><td class="num">1.00</td><td class="num">1.00</td></tr><tr><th scope="row">Data quality</th><td class="num">1.00</td><td class="num">1.00</td><td class="num">1.00</td><td class="num">1.00</td><td class="num">1.00</td><td class="num">1.00</td><td class="num">1.00</td><td class="num">1.00</td></tr><tr class="grid-total"><th scope="row">Composite weight</th><td class="num">0.777</td><td class="num">0.806</td><td class="num">0.831</td><td class="num">0.770</td><td class="num">0.789</td><td class="num">0.867</td><td class="num">0.825</td><td class="num">0.786</td></tr></tbody>
+</table>
+</div>
+  <div class="prose">
+    <p>Applying those weights to the adjusted indications:</p>
+  </div>
+  <table class="recon">
+<thead><tr><th scope="col">Comparable</th><th scope="col" class="num">Adjusted indication</th>
+<th scope="col" class="num">Weight share</th><th scope="col" class="num">Contribution</th>
+<th scope="col" class="bar-head">Relative weight</th></tr></thead>
+<tbody><tr>
+<td class="addr">7 Beaumaris Court</td>
+<td class="num">$1,369,550</td>
+<td class="num">12.3%</td>
+<td class="num">$168,560</td>
+<td class="bar-cell"><span class="bar" style="--w:92.3%"></span></td>
+</tr><tr>
+<td class="addr">26 Moorabbin Place</td>
+<td class="num">$1,431,172</td>
+<td class="num">12.3%</td>
+<td class="num">$176,144</td>
+<td class="bar-cell"><span class="bar" style="--w:92.3%"></span></td>
+</tr><tr>
+<td class="addr">4 Springvale Street</td>
+<td class="num">$1,495,928</td>
+<td class="num">12.8%</td>
+<td class="num">$191,786</td>
+<td class="bar-cell"><span class="bar" style="--w:96.2%"></span></td>
+</tr><tr>
+<td class="addr">28 Merion Court</td>
+<td class="num">$1,496,533</td>
+<td class="num">11.8%</td>
+<td class="num">$176,514</td>
+<td class="bar-cell"><span class="bar" style="--w:88.5%"></span></td>
+</tr><tr>
+<td class="addr">56 Woody Views Way</td>
+<td class="num">$1,543,705</td>
+<td class="num">12.3%</td>
+<td class="num">$189,994</td>
+<td class="bar-cell"><span class="bar" style="--w:92.3%"></span></td>
+</tr><tr>
+<td class="addr">72 Nardoo Street</td>
+<td class="num">$1,580,990</td>
+<td class="num">13.3%</td>
+<td class="num">$210,799</td>
+<td class="bar-cell"><span class="bar" style="--w:100.0%"></span></td>
+</tr><tr>
+<td class="addr">39 Olympus Drive</td>
+<td class="num">$1,581,515</td>
+<td class="num">12.8%</td>
+<td class="num">$202,758</td>
+<td class="bar-cell"><span class="bar" style="--w:96.2%"></span></td>
+</tr><tr>
+<td class="addr">25 Huntingdale Crescent</td>
+<td class="num">$1,674,291</td>
+<td class="num">12.3%</td>
+<td class="num">$206,067</td>
+<td class="bar-cell"><span class="bar" style="--w:92.3%"></span></td>
+</tr></tbody>
+<tfoot><tr><th scope="row">Weighted mean of these eight &mdash; see note below</th>
+<td class="num"></td><td class="num">100.0%</td>
+<td class="num">$1,522,622</td>
+<td></td></tr></tfoot>
+</table>
+
+  <div class="disclosure">
+    <span class="disclosure-label">The eight are the evidence; the figure is reconciled from all 49</span>
+    <p>The point figure of $1,522,634 is <strong>not</strong> the weighted mean of these eight
+    sales. It is reconciled across the full pool of <strong>49 candidate sales</strong>
+    examined in Robina, then calibrated. The eight set out above are the highest-quality subset,
+    selected to be shown to you as legible evidence &mdash; they carry
+    <strong>19.6% of the total weight</strong> behind the figure.</p>
+    <p>Two consequences you should know. First, the spread of the eight
+    ($1,369,550 &ndash; $1,674,291) is <strong>narrower than the real evidence
+    spread</strong>, which across all 49 runs $1,097,544 &ndash;
+    $1,983,639. The selection shown to you flatters the apparent agreement. Second,
+    the weighted mean of these eight alone comes to $1,522,622 &mdash; within
+    a few hundred dollars of the reported figure. <strong>That closeness is a coincidence of
+    this property, not a property of the method</strong>, and we would rather tell you that
+    than let it read as confirmation.</p>
+    <p>We show eight rather than 49 because a grid of 49 columns is not
+    evidence anyone can check. The full pool is in the downloadable figures.</p>
+  </div>
+
+  <div class="prose">
+    <p>The Robina calibration factor of 1.0189 is applied to the reconciled figure
+    and to both ends of the range, so the band stays centred on the corrected estimate. It
+    corrects a systematic tendency in this suburb measured on
+    08 August 2026.</p>
+    <p>The adopted indications have a standard deviation of $141,458, or
+    9.5% of the mean &mdash; a measure of how much the comparables disagree
+    with each other, which is a different and much smaller thing than how wrong the assessment
+    might be. The band in section 9 is the honest measure of the latter.</p>
+  </div>
+</section>
+
+<section id="s8">
+  <div class="sec-head"><span class="sec-num">8</span><h2>Locational evidence</h2></div>
+  <div class="prose">
+    <p>Two locational adjustments appear in the grid. Both are derived from sales, not from
+    judgement about the desirability of a street.</p>
+    <p><strong>Street premium, +9.51%.</strong>
+    3 sales in Huntingdale Crescent averaged
+    19.02% above the Robina median of
+    $1,528,500. That raw figure is damped by
+    0.5 and capped at 15%, giving the
+    applied 9.51%.</p>
+  </div>
+
+  <ul class="street-list"><li><span class="si-addr">31 Huntingdale Crescent</span><span class="si-date">16 Mar 2026</span><span class="si-price">$1,910,000</span><span class="si-pct">+28.7% vs suburb median</span></li><li><span class="si-addr">25 Huntingdale Crescent</span><span class="si-date">03 Mar 2026</span><span class="si-price">$1,731,000</span><span class="si-pct">+16.6% vs suburb median</span></li><li><span class="si-addr">22 Huntingdale Crescent</span><span class="si-date">03 Oct 2025</span><span class="si-price">$1,565,086</span><span class="si-pct">+11.8% vs suburb median</span></li></ul>
+
+  <div class="prose">
+    <p><strong>Micro-location, +2.99%.</strong> Derived from
+    20 sales within 0.5&thinsp;km, against the same
+    suburb median.</p>
+  </div>
+
+  <div class="disclosure">
+    <span class="disclosure-label">The street premium rests on three sales</span>
+    <p>Three sales is a thin sample, and one of them &mdash; 25 Huntingdale Crescent &mdash; is
+    also an adopted comparable in this assessment. The damping factor of 0.5
+    and the 15% cap exist precisely because a small sample
+    can produce an extreme average: the raw 19.02% is halved
+    before use. Treat the street premium as the least robust input to this assessment.</p>
+  </div>
+</section>
+
+<section id="s9">
+  <div class="sec-head"><span class="sec-num">9</span><h2>How accurate this method has proven to be</h2></div>
+  <div class="prose">
+    <p>We test the method by running it against houses that have since sold, then comparing what
+    it said to what they fetched. The figures below are from the test of
+    08 August 2026, across
+    581 detached house sales between $1,000,000 and $2,000,000 in Robina, Varsity
+    Lakes and Burleigh Waters.</p>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><span class="stat-v">8.05%</span><span class="stat-l">Mean absolute error</span></div>
+    <div class="stat"><span class="stat-v">6.44%</span><span class="stat-l">Median error</span></div>
+    <div class="stat"><span class="stat-v">69%</span><span class="stat-l">Within 10% of the sale price</span></div>
+    <div class="stat"><span class="stat-v">40%</span><span class="stat-l">Within 5% of the sale price</span></div>
+    <div class="stat"><span class="stat-v">&plusmn;12.2%</span><span class="stat-l">Robina band, containing four in five</span></div>
+    <div class="stat"><span class="stat-v">581</span><span class="stat-l">Sales in the test</span></div>
+  </div>
+
+  <div class="prose">
+    <p>The band is an <em>output</em> of that test, not a setting. It is the width that had to
+    be drawn around our figures for four in five actual sales to land inside it, and it differs
+    by suburb: &plusmn;11.2% in Varsity Lakes, &plusmn;12.2% here in Robina, &plusmn;14.0% in
+    Burleigh Waters. A single pooled number would have flattered the strong suburbs and broken
+    the promise in the weak one.</p>
+  </div>
+
+  <div class="disclosure">
+    <span class="disclosure-label">Read the band correctly</span>
+    <p>&plusmn;12.2% is <strong>not a confidence interval</strong> and this report will not
+    describe it as one. Four sales in five landed inside a band of this width. <strong>One in
+    five did not.</strong> Roughly one house in twenty-five sells above every comparable
+    available to assess it, and no method built on comparable sales can anticipate that.</p>
+    <p>We also do not publish a confidence grade for individual properties. When we tested
+    whether our own high-confidence assessments were in fact more accurate than our
+    low-confidence ones, they were not reliably so. Publishing a grade we cannot stand behind
+    would be exactly the unearned reassurance this document is meant to avoid.</p>
+  </div>
+</section>
+
+<section id="s10">
+  <div class="sec-head"><span class="sec-num">10</span><h2>What this document is, and is not</h2></div>
+  <div class="compare">
+    <div class="compare-col is">
+      <h3>It is</h3>
+      <ul>
+        <li>An assessment of market value by direct comparison, with the full working shown.</li>
+        <li>Reconciled from 49 verified sales, with the 8 strongest set out line by line.</li>
+        <li>Accompanied by a band whose width was measured, not chosen.</li>
+        <li>Explicit about every attribute we could not observe.</li>
+        <li>Free, unsolicited, and sent without any obligation to speak to anyone.</li>
+      </ul>
+    </div>
+    <div class="compare-col isnt">
+      <h3>It is not</h3>
+      <ul>
+        <li>A valuation by a Certified Practising Valuer, or usable for lending, tax, probate or court.</li>
+        <li>Based on any inspection, internal or external.</li>
+        <li>A recommendation to sell, hold, buy or list at any price.</li>
+        <li>A forecast &mdash; nothing here predicts where prices move next.</li>
+        <li>A price. Only a buyer sets that.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="s11">
+  <div class="sec-head"><span class="sec-num">11</span><h2>Assumptions and limiting conditions</h2></div>
+  <div class="prose">
+    <ol>
+      <li><strong>No inspection.</strong> Neither the interior nor the exterior has been
+      inspected. All physical attributes are taken from cadastral records, historic listing
+      data and satellite imagery, and are assumed correct.</li>
+      <li><strong>Good repair assumed.</strong> The improvements are assumed to be in
+      structurally sound condition, free of defect, infestation, contamination and hazardous
+      materials. No structural, pest or building survey has been undertaken and none is implied.</li>
+      <li><strong>Title assumed clear.</strong> No title search has been performed. Clear and
+      marketable title is assumed, free of encumbrances, easements, covenants, caveats or
+      disputes not evident from public records.</li>
+      <li><strong>Planning and approvals.</strong> All improvements are assumed to be lawfully
+      erected and approved. No enquiry has been made of the local authority.</li>
+      <li><strong>Flood, bushfire and overlays.</strong> No site-specific hazard assessment has
+      been undertaken for this report. Prospective purchasers should make their own enquiries.</li>
+      <li><strong>Vacant possession.</strong> Value is assessed on the basis of vacant
+      possession of the fee simple interest, with no account taken of any lease, tenancy or
+      occupancy arrangement.</li>
+      <li><strong>Chattels excluded.</strong> The assessment relates to land and improvements
+      only. No furnishings, plant or removable fixtures are included.</li>
+      <li><strong>Market conditions at the date of assessment.</strong> The assessment speaks as
+      at 08 August 2026 and takes no account of events after that date. It
+      assumes an arm&rsquo;s length transaction after adequate marketing, between a willing but
+      not anxious buyer and seller, neither under compulsion.</li>
+      <li><strong>Comparable sale data.</strong> Sale prices are taken from published records
+      and verified where possible; 44 of the 49 sales examined
+      were independently verified. Sales data may be subject to later revision, and the
+      circumstances of any individual sale are not known to us.</li>
+      <li><strong>Currency.</strong> This assessment was computed on
+      08 August 2026 and is 12 days old at the date of this report.
+      It should not be relied upon more than three months after the date of assessment. Later
+      sales in the comparable set will move it.</li>
+    </ol>
+  </div>
+
+  <div class="signature">
+    <div class="sig-block"><span class="sig-l">Prepared by</span>
+      <span class="sig-v">Fields Real Estate<br>Comparable sales engine, version 3</span></div>
+    <div class="sig-block"><span class="sig-l">Method last revised</span>
+      <span class="sig-v">08 August 2026<br>Accuracy re-measured the same day</span></div>
+    <div class="sig-block"><span class="sig-l">Enquiries</span>
+      <span class="sig-v">will@fieldsestate.com.au</span></div>
+    <div class="sig-block"><span class="sig-l">Not signed by a valuer</span>
+      <span class="sig-v">No Certified Practising Valuer has reviewed or signed this document.</span></div>
+  </div>
+
+  <div class="colophon">
+    <p>Fields Real Estate publishes the error rate of this method, the width of its bands and
+    the adjustments it has withdrawn. We have not found another agency or portal that publishes
+    theirs. That is a statement about disclosure, not a claim that our figures are more accurate
+    than anyone else&rsquo;s.</p>
+    <p>Report generated 20 August 2026 &middot; assessment computed
+    08 August 2026 &middot; reference
+    FRE/RBN/27-20260808</p>
+  </div>
+</section>
+
+</div>
+
+<script>
+document.getElementById("dl").addEventListener("click", function () { window.print(); });
+document.getElementById("dlData").addEventListener("click", function () {
+  var rows = [["comparable","sale_date","sale_price","distance_km","net_adjustment","adjusted_indication","weight"]];
+  document.querySelectorAll(".sched tbody tr").forEach(function (tr, i) {
+    var c = tr.querySelectorAll("td");
+    rows.push([c[1].textContent.trim(), c[2].textContent, c[3].textContent, c[4].textContent, "", "", ""]);
+  });
+  var csv = rows.map(function (r) {
+    return r.map(function (v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(",");
+  }).join("\n");
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  a.download = "comparable-sales.csv";
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+</script>
