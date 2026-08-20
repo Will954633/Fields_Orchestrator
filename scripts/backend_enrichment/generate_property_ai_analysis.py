@@ -674,6 +674,53 @@ OUTPUT as JSON only — no markdown, no code fences:
 # Prompt construction
 # ---------------------------------------------------------------------------
 
+def resolve_internal_floor_area(prop: Dict) -> tuple:
+    """Return (value, source, conflict) for INTERNAL living area only.
+
+    Added 2026-08-20 after [FLOOR-AREA-TOTAL-AS-INTERNAL]. Do NOT go back to reading
+    `enriched_data.floor_area_sqm` directly here: that field is written by
+    enrich_properties_for_sale.py:get_floor_area(), whose precedence chain silently
+    degrades from internal → total → root `total_floor_area`, and root
+    `total_floor_area` is itself parse_room_dimensions.py's sum of every room that
+    happens to carry dimensions — for 93 Burleigh Street that summed the covered
+    alfresco and the double carport and produced 331 against a true internal of 220.
+    17.4% of live listings carry a total in that field. So we resolve from sources
+    that are explicitly internal, and return None rather than substituting a total.
+
+    `conflict` is True when the two best internal sources disagree by >15%, so the
+    caller can ask for cautious language instead of asserting a precise figure.
+    """
+    candidates = []  # (value, source) in descending trust
+    fpa = prop.get("floor_plan_analysis") or {}
+    v = (fpa.get("internal_floor_area") or {}).get("value")
+    if v:
+        candidates.append((float(v), "floor_plan_internal"))
+    ofp = ((prop.get("ollama_floor_plan_analysis") or {}).get("floor_plan_data") or {})
+    v = (ofp.get("internal_floor_area") or {}).get("value")
+    if v:
+        candidates.append((float(v), "ollama_floor_plan_internal"))
+    v = (prop.get("processing_status") or {}).get("internal_floor_area_sqm")
+    if v:
+        candidates.append((float(v), "photo_analysis_internal"))
+    v = (prop.get("scraped_data_v2") or {}).get("internal_area_sqm")
+    if v:
+        candidates.append((float(v), "domain_internal"))
+    v = (prop.get("onthehouse_data") or {}).get("floor_area_sqm")
+    if v:
+        candidates.append((float(v), "onthehouse_internal"))
+
+    if not candidates:
+        return (None, None, False)
+
+    best, source = candidates[0]
+    conflict = False
+    for other, _ in candidates[1:]:
+        if other and abs(best - other) / max(best, other) > 0.15:
+            conflict = True
+            break
+    return (best, source, conflict)
+
+
 def build_property_summary(prop: Dict) -> str:
     """Distill the full property doc into the key facts the model needs."""
     lines = []
@@ -687,21 +734,31 @@ def build_property_summary(prop: Dict) -> str:
     if prop.get("lot_size_sqm"):
         lines.append(f"Lot size: {prop['lot_size_sqm']} sqm")
 
-    # Floor area — internal living area is the primary figure (matches website display and valuation model)
-    internal_floor = prop.get("enriched_data", {}).get("floor_area_sqm")
+    # Floor area — only ever assert a figure whose provenance is explicitly INTERNAL.
+    # Previously this read enriched_data.floor_area_sqm and told the model that value
+    # WAS the internal figure while forbidding the correct one, which published a
+    # carport-and-alfresco total as living area on 9 live listings.
+    internal_floor, internal_source, internal_conflict = resolve_internal_floor_area(prop)
     total_floor = (
         prop.get("total_floor_area")
         or (prop.get("floor_plan_analysis") or {}).get("total_floor_area_sqm")
         or (prop.get("house_plan") or {}).get("floor_area_sqm")
         or (prop.get("processing_status") or {}).get("total_floor_area_sqm")
     )
-    if internal_floor:
-        lines.append(f"Internal floor area: {internal_floor} sqm (living area — this is the figure used in valuations and shown on the website)")
-        lines.append(f"  ⚠️ RULE: When citing floor area, ONLY use the internal figure ({internal_floor} sqm). DO NOT cite the total building footprint.")
-        if total_floor and total_floor != internal_floor:
-            lines.append(f"  [For context only — DO NOT CITE] Total building footprint: {total_floor} sqm (includes garage, covered outdoor, external areas)")
-    elif total_floor:
-        lines.append(f"Total floor area: {total_floor} sqm (WARNING: may include external areas — internal living area not separately confirmed. Use cautious language: 'approximately {total_floor} sqm including covered areas')")
+    if internal_floor and not internal_conflict:
+        lines.append(f"Internal floor area: {internal_floor:.0f} sqm (living area; source: {internal_source})")
+        lines.append(f"  ⚠️ RULE: When citing floor area, ONLY use the internal figure ({internal_floor:.0f} sqm). DO NOT cite the total building footprint.")
+        if total_floor and abs(float(total_floor) - internal_floor) > 0.5:
+            lines.append(f"  [For context only — DO NOT CITE] Sum of dimensioned rooms: {total_floor} sqm (may include garage, carport, covered outdoor)")
+    elif internal_floor and internal_conflict:
+        lines.append(
+            f"Internal floor area: sources disagree (best estimate {internal_floor:.0f} sqm from {internal_source}, "
+            f"but other internal sources differ by more than 15%)."
+        )
+        lines.append("  ⚠️ RULE: DO NOT state a floor area figure for this property. The measurements conflict and we cannot verify which is correct. Omit floor area from the analysis entirely rather than citing an unverified number.")
+    else:
+        lines.append("Internal floor area: NOT AVAILABLE — no internal measurement exists for this property.")
+        lines.append("  ⚠️ RULE: DO NOT state or estimate a floor area figure. Do not substitute the total building footprint or a room-dimension sum. Omit floor area from the analysis entirely.")
 
     # Floor plan details
     fpa = prop.get("floor_plan_analysis", {})
@@ -783,10 +840,17 @@ def build_property_summary(prop: Dict) -> str:
                     except ValueError:
                         asking = None
 
-            # Also get valuation (range + midpoint for internal calculations)
-            val_confidence = prop.get("valuation_data", {}).get("confidence", {})
+            # Also get valuation (range + midpoint for internal calculations).
+            # NOTE `.get(k, {})` is not enough here: when the comparable-sales model
+            # breaches its design envelope it writes `range: None` and
+            # `reconciled_valuation: None` rather than omitting the keys, so the
+            # default never applies and `.get("low")` raised AttributeError. That
+            # crashed build_property_summary for every directional-only property —
+            # i.e. editorial could not be generated at all for exactly the homes
+            # whose valuation we suppressed. Use `or {}`.
+            val_confidence = (prop.get("valuation_data") or {}).get("confidence") or {}
             val = val_confidence.get("reconciled_valuation")
-            val_range = val_confidence.get("range", {})
+            val_range = val_confidence.get("range") or {}
             val_range_low = val_range.get("low")
             val_range_high = val_range.get("high")
 
@@ -954,10 +1018,20 @@ def build_property_summary(prop: Dict) -> str:
                     lines.append(f"    {feat}: subject {detail.get('subject_value')} vs comp {detail.get('comp_value')} → ${dollars:+,.0f}")
 
     # Property insights (percentiles)
+    #
+    # floor_area is EXCLUDED — see [FLOOR-AREA-TOTAL-AS-INTERNAL] 2026-08-20. The
+    # percentile basis in `suburb_statistics` is built by generate_suburb_statistics.py
+    # from root `total_floor_area` (a sum of whichever rooms carry dimensions, garage
+    # and covered outdoor included), while the subject value comes from
+    # `enriched_data.floor_area_sqm`, which is an internal figure on 82.6% of listings.
+    # Only 10.2% of subjects are measured on the same quantity as the scale, so every
+    # floor-area percentile is a comparison between unlike quantities and none of them
+    # can be published. Restore this key only once both sides use one resolver.
+    # bedrooms / bathrooms / lot_size are discrete or single-sourced and unaffected.
     insights = prop.get("property_insights", {})
     if insights:
         lines.append("\nSuburb comparison:")
-        for key in ["bedrooms", "floor_area", "lot_size", "bathrooms"]:
+        for key in ["bedrooms", "lot_size", "bathrooms"]:
             ins = insights.get(key, {})
             sc = ins.get("suburbComparison", {})
             if sc:
