@@ -253,12 +253,18 @@ def collect_leads(sm, gc_db) -> dict:
 
     for d in sm["fb_leads"].find():
         f = d.get("fields") or {}
-        add(f.get("email"), f.get("full_name") or f.get("name"), f.get("phone"),
+        # `phone_number` is the Meta form field name — `phone` is never present.
+        add(f.get("email"), f.get("full_name") or f.get("name"),
+            f.get("phone_number") or f.get("phone"),
             f.get("address") or f.get("street_address"),  # buyer-brief forms usually have none
             f"fb_ad:{_s(d.get('campaign_name')) or 'ad'}", ("fb_leads", d["_id"]),
             _s(d.get("created_time")),
             {"campaign_name": d.get("campaign_name"), "ad_name": d.get("ad_name"),
-             "is_organic": d.get("is_organic"), "is_test": d.get("is_test"),
+             # Out-of-market copy-test leads are tagged `test_market` by the puller,
+             # NOT `is_test` — reading only the latter let 7 Brisbane test leads onto
+             # Will's callable list, which the test design explicitly forbids.
+             "is_organic": d.get("is_organic"),
+             "is_test": bool(d.get("is_test") or d.get("test_market")),
              "buyer_area": f.get("area"), "buyer_beds": f.get("bedrooms"),
              "buyer_baths": f.get("bathrooms"), "timeframe": f.get("timeframe"),
              "owns_gc_home": f.get("owns_gc_home")})
