@@ -321,7 +321,7 @@ def calculate_rarity_insights(property_doc, suburb_stats, for_sale_properties):
                 'label': f"Largest lot currently for sale ({lot_size:.0f}m²)",
                 'urgencyLevel': 'high'
             })
-        elif rank <= 5:
+        elif rank is not None and rank <= 5:
             insights.append({
                 'type': 'top_n',
                 'feature': 'lot_size',
@@ -356,7 +356,7 @@ def calculate_rarity_insights(property_doc, suburb_stats, for_sale_properties):
                 'label': f"Largest floor area currently for sale ({floor_area:.0f}m²)",
                 'urgencyLevel': 'high'
             })
-        elif rank <= 5:
+        elif rank is not None and rank <= 5:
             insights.append({
                 'type': 'top_n',
                 'feature': 'floor_area',

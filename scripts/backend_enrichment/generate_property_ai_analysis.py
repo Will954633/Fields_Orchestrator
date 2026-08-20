@@ -674,51 +674,13 @@ OUTPUT as JSON only — no markdown, no code fences:
 # Prompt construction
 # ---------------------------------------------------------------------------
 
-def resolve_internal_floor_area(prop: Dict) -> tuple:
-    """Return (value, source, conflict) for INTERNAL living area only.
-
-    Added 2026-08-20 after [FLOOR-AREA-TOTAL-AS-INTERNAL]. Do NOT go back to reading
-    `enriched_data.floor_area_sqm` directly here: that field is written by
-    enrich_properties_for_sale.py:get_floor_area(), whose precedence chain silently
-    degrades from internal → total → root `total_floor_area`, and root
-    `total_floor_area` is itself parse_room_dimensions.py's sum of every room that
-    happens to carry dimensions — for 93 Burleigh Street that summed the covered
-    alfresco and the double carport and produced 331 against a true internal of 220.
-    17.4% of live listings carry a total in that field. So we resolve from sources
-    that are explicitly internal, and return None rather than substituting a total.
-
-    `conflict` is True when the two best internal sources disagree by >15%, so the
-    caller can ask for cautious language instead of asserting a precise figure.
-    """
-    candidates = []  # (value, source) in descending trust
-    fpa = prop.get("floor_plan_analysis") or {}
-    v = (fpa.get("internal_floor_area") or {}).get("value")
-    if v:
-        candidates.append((float(v), "floor_plan_internal"))
-    ofp = ((prop.get("ollama_floor_plan_analysis") or {}).get("floor_plan_data") or {})
-    v = (ofp.get("internal_floor_area") or {}).get("value")
-    if v:
-        candidates.append((float(v), "ollama_floor_plan_internal"))
-    v = (prop.get("processing_status") or {}).get("internal_floor_area_sqm")
-    if v:
-        candidates.append((float(v), "photo_analysis_internal"))
-    v = (prop.get("scraped_data_v2") or {}).get("internal_area_sqm")
-    if v:
-        candidates.append((float(v), "domain_internal"))
-    v = (prop.get("onthehouse_data") or {}).get("floor_area_sqm")
-    if v:
-        candidates.append((float(v), "onthehouse_internal"))
-
-    if not candidates:
-        return (None, None, False)
-
-    best, source = candidates[0]
-    conflict = False
-    for other, _ in candidates[1:]:
-        if other and abs(best - other) / max(best, other) > 0.15:
-            conflict = True
-            break
-    return (best, source, conflict)
+# resolve_internal_floor_area now lives in shared/floor_area.py so the editorial
+# prompt, the enrichment writer (enrich_properties_for_sale.py) and the suburb-stats
+# scale (generate_suburb_statistics.py) all use ONE implementation — the whole point
+# of [FLOOR-AREA-TOTAL-AS-INTERNAL] is that subject value and comparison scale can
+# never again be different quantities. Re-exported here so existing callers that do
+# `from generate_property_ai_analysis import resolve_internal_floor_area` keep working.
+from shared.floor_area import resolve_internal_floor_area  # noqa: E402,F401
 
 
 def build_property_summary(prop: Dict) -> str:
