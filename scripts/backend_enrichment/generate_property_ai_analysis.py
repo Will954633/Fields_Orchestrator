@@ -338,6 +338,14 @@ _ALLOWED_PROPERTY_TYPES = {t.strip() for t in
 # store_analysis() for the exact clean/minor_flags-only gating logic.
 _AUTO_PUBLISH = os.environ.get("AUTO_PUBLISH", "0").strip().lower() in {"1", "true", "yes", "on"}
 
+# CONJUNCTION_PREVIEW=1 lets us GENERATE editorial for a conjunction property (normally
+# withheld by Guard B) so we can review how the standard editorial voice reads for a
+# buyer page we control — WITHOUT any risk of publishing on a partner agent's listing.
+# It bypasses the skip gate but forces status to 'draft' and never auto-publishes, even
+# under AUTO_PUBLISH=1. Nothing goes live: the website serves only 'published' editorial,
+# and a conjunction property must be agent-approved before any publish. Review-only.
+_CONJUNCTION_PREVIEW = os.environ.get("CONJUNCTION_PREVIEW", "0").strip().lower() in {"1", "true", "yes", "on"}
+
 _TOKEN_LIMIT_CEILING = 40_000
 if _THINKING_MODE == "adaptive":
     # Widening max_tokens costs nothing unless actually used — it's a hard cap,
@@ -3426,7 +3434,14 @@ def store_analysis(db, suburb: str, property_id, analysis: Dict) -> None:
     # genuinely still wrong, out of budget to fix) and "failed_factcheck" —
     # those still need a human look, matching the exact bar Will applied
     # reviewing Tranche A by hand ("published most, happy with the content").
-    if _AUTO_PUBLISH and analysis["status"] != "failed_factcheck" \
+    if _CONJUNCTION_PREVIEW:
+        # Conjunction preview: NEVER publish. Force draft and mark it so a reviewer
+        # (and the register owner) knows this body must be agent-approved before it
+        # can ever go live on a partner's listing.
+        analysis["status"] = "draft"
+        analysis["conjunction_preview"] = True
+        print("  [CONJUNCTION-PREVIEW] status forced to draft — will NOT publish (agent approval required)")
+    elif _AUTO_PUBLISH and analysis["status"] != "failed_factcheck" \
             and analysis.get("_verify_outcome") in ("clean", "minor_flags"):
         analysis["status"] = "published"
         analysis["published_at"] = datetime.now(timezone.utc).isoformat()
@@ -3758,6 +3773,12 @@ def _conjunction_editorial_gate(db, suburb: str, prop: Dict) -> Optional[Dict]:
     non-published editorial, on named agents' listings.
     """
     if not _is_conjunction(prop):
+        return None
+    if _CONJUNCTION_PREVIEW:
+        # Review mode: generate the body so we can see how the standard editorial voice
+        # reads for a conjunction buyer page. Publish is force-disabled downstream, and
+        # the property page suppresses any positioning verdict for conjunction listings.
+        print("  [CONJUNCTION-PREVIEW] gate bypassed for review — draft only, cannot publish")
         return None
     address = prop.get("address") or prop.get("complete_address") or "Unknown"
     now = datetime.now(timezone.utc).isoformat()
