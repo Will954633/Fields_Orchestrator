@@ -162,7 +162,10 @@ def record_ledger(client, lead_id, ts):
 # ---- per-source row builders --------------------------------------------------
 def fb_lead_rows(db):
     for d in db.fb_leads.find({}):
-        if d.get("is_test"):
+        # `test_market` is what fb-lead-puller.py actually writes for out-of-market
+        # copy-test leads; `is_test` is the generic flag. Check BOTH — reading only
+        # `is_test` put 7 Brisbane test leads on the callable sheet (2026-08-20).
+        if d.get("is_test") or d.get("test_market"):
             continue
         fields = d.get("fields", {})
         email = (fields.get("email") or "").lower()
