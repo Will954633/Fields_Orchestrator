@@ -50,7 +50,7 @@ from shared.db import get_client                       # noqa: E402
 from job_status import job_run                         # noqa: E402
 from live_leads_to_sheet import (                      # noqa: E402
     LIVE_SPREADSHEET_ID, AEST, get_sheets, tab_id, set_env_from_file,
-    is_not_a_lead, TAB as LEADS_TAB, HEADERS as LEAD_HEADERS,
+    is_not_a_lead, TAB as LEADS_TAB, HEADERS as LEAD_HEADERS, TEST_EMAILS,
 )
 
 PRUNE_TAB = "Not a Lead"
@@ -79,12 +79,40 @@ def ensure_tab(svc, ssid):
     return sid
 
 
+def fb_is_not_a_lead(d: dict) -> str | None:
+    """Reason this fb_leads doc is not a callable lead, or None if it is one.
+
+    Out-of-market copy-test leads (SEQ ex-GC) must receive NOTHING and must never
+    reach Will's callable list — a Gold Coast report in a Brisbane inbox burns the
+    brand (Will, 2026-07-28). The puller tags them `test_market`; the sheet filtered
+    on `is_test`, so 7 of them sat on the callable list until 2026-08-20.
+    """
+    if d.get("is_test") or d.get("test_market"):
+        return "test_market (out-of-market copy test)"
+    email = ((d.get("fields") or {}).get("email") or "").lower()
+    if email in TEST_EMAILS:
+        return "test email"
+    return None
+
+
 def classify(rows, db):
-    """-> (to_prune, checked, missing). Only property_reports-backed rows are
+    """-> (to_prune, checked, missing). property_reports- and fb_leads-backed rows are
     checkable; other sources have their own generators and are left alone."""
     to_prune, checked, missing = [], 0, 0
     for i, r in enumerate(rows):
         lid = _cell(r, LEAD_ID_COL)
+        if lid.startswith("fb_leads:"):
+            d = db["fb_leads"].find_one({"_id": lid.split(":", 1)[1]})
+            if d is None:
+                missing += 1      # same safety rule — absence is never evidence
+                continue
+            checked += 1
+            why = fb_is_not_a_lead(d)
+            if why:
+                to_prune.append({"row": i + 2, "values": r, "why": why,
+                                 "slug": (d.get("fields") or {}).get("email", ""),
+                                 "lead_id": lid})
+            continue
         if not lid.startswith("property_reports:"):
             continue
         raw = lid.split(":", 1)[1]
