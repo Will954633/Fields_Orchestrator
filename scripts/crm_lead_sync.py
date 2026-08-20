@@ -42,6 +42,11 @@ def upsert_lead(db, lead):
     email = (f.get("email") or "").strip().lower()
     if not email:
         return None
+    # Out-of-market copy-test leads get NO CRM record at all — that is the design
+    # (Will, 2026-07-28: they receive nothing post-submit). Guard added 2026-08-20;
+    # without it --backfill happily manufactures contacts for Brisbane test leads.
+    if lead.get("is_test") or lead.get("test_market"):
+        return None
     brief = {k: f[k] for k in BRIEF_KEYS if f.get(k) not in (None, "")}
     tags = ["fb_lead"]
     if lead.get("form_name"):
@@ -63,7 +68,14 @@ def upsert_lead(db, lead):
                 "engagement_score": BASE_LEAD_SCORE,
             },
             "$set": {
-                "phone": f.get("phone"),
+                # The Meta form field is `phone_number`; `phone` has NEVER existed on a
+                # single fb_leads doc. Reading the wrong key wrote None onto every FB
+                # contact for a year — and because this is $set, not $setOnInsert, it
+                # also wiped any phone the contact had from another source.
+                "phone": f.get("phone_number") or f.get("phone"),
+                # Same class of omission as the phone: the form captures full_name and
+                # nothing ever wrote it, so every FB contact rendered as "(no name)".
+                **({"name": f["full_name"]} if f.get("full_name") else {}),
                 "updated_at": _now(),
                 "last_seen": lead.get("created_time"),
                 "lead_brief": brief,
