@@ -104,6 +104,13 @@ STEPS = [
          "Returning-known-contact activity ledger. Reads crm_contacts; independent of "
          "the worklist, so it still runs if enrichment failed.",
          needs=["crm_sync"], supports_dry_run=False),
+    Step("priority_calls_to_sheet", [PY, f"{ROOT}/scripts/priority_calls_to_sheet.py"],
+         "The Priority tab — who Will actually rings today, from crm_contacts.follow_up_at. "
+         "Runs last because it harvests the Done ticks off the tab and clears them in the "
+         "CRM, so it must see the day's final state. Needs crm_sync only: the follow-ups "
+         "are hand-set by log_contact_touch.py, so this tab is still correct on a night "
+         "when behavioural enrichment fails.",
+         needs=["crm_sync"]),
 ]
 
 
