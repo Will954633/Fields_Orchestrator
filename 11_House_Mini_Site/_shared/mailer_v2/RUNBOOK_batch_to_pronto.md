@@ -144,22 +144,60 @@ Swap bad ones out; the ready pool is usually far larger than the batch.
 
 ---
 
-## 6. Package and send
+## 6. Lay up for the press — ONE file, bleed, marks
+
+Pronto's RIP spec, from John 2026-08-20 — treat it as the standing format, not a
+one-off:
+
+| Question | Answer |
+|---|---|
+| Bleed | **3 mm, with crop + registration marks** (not a tagged TrimBox alone) |
+| File shape | **one combined PDF, 100 pages, in manifest row order** — not 50 files |
+| Colour | **RGB is fine, Pronto convert** — do not embed a CMYK profile |
+
+```bash
+python3 build_pronto_print_pdf.py --batch pronto_batch_YYYY-MM-DD --verify
+python3 build_pronto_print_pdf.py --batch pronto_batch_YYYY-MM-DD --write
+```
+
+Reads `manifest.csv` in row order and lays each A4 page onto a 230×317 sheet:
+trim 210×297, bleed 216×303 (both boxes tagged), crop marks offset 3 mm, reg
+targets mid-edge. Piece *n* lands on pages *2n-1* and *2n*.
+
+⚠ **The artwork is never scaled to create bleed.** Enlarging to fill 3 mm eats
+3 mm of design at every edge, and the tightest text on page 2 sits 5.6 mm off
+trim. The bleed is made by stretching the outermost 0.5 mm of each edge outward
+— exact here only because every edge is flat colour (green band, cream field,
+green CTA band) and no photo reaches an edge. **If the layout changes so that a
+photo or text touches the trim edge, this stops being lossless** — re-render with
+real bleed instead.
+
+⚠ `show_pdf_page` defaults to `keep_proportion=True`, which scales a 0.5 mm
+strip to fit and centres it, leaving a **white hairline** just outside trim. It
+is invisible at page zoom and prints on any cut that runs 1 mm out. That is why
+`bleed_gaps()` checks all 100 pages pixel-wise across the trim line, and why the
+build refuses on a gap. It also re-decodes all 50 QRs **in the combined file** —
+the lay-up is a re-render, so the codes are re-proved after it, not before.
+
+## 6b. Package and send
 
 ```
 Fulfilment — Pronto Direct/            permanent parent, automation targets this
 └── <codes>_<YYYY-MM-DD>/
-    ├── Fields_artwork_50pieces.zip    filenames carry the EXACT code:
-    │                                  Fields_01.1_07_<slug>.pdf
+    ├── Fields_50pieces_100pp_bleed3mm_crops_<date>.pdf   ← the print file
     ├── manifest.csv                   one row per piece, flow_code column
-    └── fulfilment_flows.yaml          so John can see the spec
+    ├── fulfilment_flows.yaml          so John can see the spec
+    └── READ_ME_print_spec_<date>.txt  what changed + the three spec answers
 ```
 
-⚠ **Zipping does not help** — 99% of original, because the PDFs already contain
-compressed JPEGs. 50 pieces ≈ 114 MB, ~5× Gmail's limit. Drive link, always.
+Superseded artwork goes into a dated `SUPERSEDED_..._DO_NOT_PRINT` subfolder —
+never left beside the live file, never silently deleted (John may already hold it).
 
-Keep `manifest.csv` **outside** the zip so John can read the address list in the
-browser without a 114 MB download.
+⚠ **Zipping does not help** — 99% of original, because the PDFs already contain
+compressed JPEGs. 50 pieces ≈ 120 MB, ~5× Gmail's limit. Drive link, always.
+
+Keep `manifest.csv` **outside** any zip so John can read the address list in the
+browser without a 120 MB download.
 
 **Sharing:** grant `sales@prontodirect.com.au` viewer access on the folder. Do not
 use "anyone with the link" — it is a list of home addresses.
