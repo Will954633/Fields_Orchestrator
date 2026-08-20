@@ -9,26 +9,54 @@
 
 ## 0. Blockers — resolve before spending a dollar
 
-### 0.1 The listing may be under contract *right now*
+### 0.1 ✅ RESOLVED — not under offer. But the *advertising* may still say it is.
 
-Our scrape of the current Domain copy (`agents_description`, last updated 2026-08-19):
+**Will confirmed 2026-08-20: the property is not under any offer.** Tyler has engaged us to find
+buyers. No contract, no backup-offer timeframe, no runway constraint. This section is cleared as a
+blocker.
+
+**What it turns into instead — possibly the highest-value finding in this document.**
+
+Our scrape of the listing's own description, `last_updated: 2026-08-19 20:45`, reads:
 
 > "Under Negotiation - Final Submissions **Despite the existence of a current contract** this property
-> remains open to further negotiations with a secondary buyer under limited time frame."
+> remains open to further negotiations with a secondary buyer under limited time frame. Submit all
+> offers before its too late."
 
-`under_contract_detected_at: 2026-05-13`. `price` field is `"Submit All Offers!"`.
+`under_contract_detected_at: 2026-05-13`. That contract evidently fell over — but if the copy was
+never rewritten, **the live advertisement is still telling every buyer they would be a backup offer
+on a property that already has a contract.**
 
-This is a live contract running a backup-offer campaign, not an open listing. It changes what we are
-being asked to do: we would be sourcing a **backup/secondary buyer under a limited timeframe**, not
-running a five-month buyer-acquisition program.
+Consider what that does to a buyer who finds the listing today:
 
-**Action:** confirm with Tyler, in writing, before any spend:
-- Is there a current contract? Conditional or unconditional? What conditions, and when do they expire?
-- If it crashes, do we have a runway — how long?
-- Is the "$1.9m and up" figure the vendor's position *now*, or the pre-contract position?
+- "There's already a contract" → *I'm second in line, why bother inspecting*
+- "Limited time frame" → *I can't do my diligence properly*
+- "Submit all offers before its too late" → *pressure, with no price to anchor to*
 
-Spending on creative for a property that goes unconditional next week is dead money, and advertising
-a property under contract without saying so is a misleading-conduct risk we carry, not Tyler.
+Combined with the price guide being pulled on 6 August (§2.3), the listing currently offers a buyer
+**no price and an apparent existing contract**. That is close to the worst possible combination for
+generating enquiry, and it would explain the 163 days far better than anything about the house.
+
+**✅ Checked against the live page 2026-08-20 — the concern was unfounded. Do not raise it with
+Tyler.** Fetched via `shared/domain_fetch.py` (Bright Data Web Unlocker; direct curl_cffi is
+Akamai-blocked from this VM), HTTP 200, 564,766 bytes, parsed from `__NEXT_DATA__` →
+`listingByIdV2`:
+
+- `listingByIdV2.status` = **LIVE**; `listingSummary.status` = `live`; `soldDetails` = null
+- `listingsMap["2020668300"].listingModel.tags` = **null** — no `underOffer` tag. Good control: two
+  other listings in the same payload (2020908795, 2021035855) *do* carry `tags.key = "underOffer"` /
+  `tagText = "UNDER OFFER"`. This one does not.
+- "Under Negotiation", "current contract", "secondary buyer" — **all absent**. The word "contract"
+  does not appear anywhere in the headline or description.
+
+Tyler has already rewritten the copy. Our stored `agents_description` is stale.
+
+### ⚠ But that raises a pipeline question
+
+Our record's `last_updated` is **2026-08-19 20:45** — last night's run — and it still holds the old
+"Under Negotiation" text. Either the copy changed within the last ~17 hours, or **the nightly scrape
+is not refreshing `agents_description`**. The second would mean stale listing copy across the
+database. Worth an hour to determine which. See §1 task 1.6.
 
 ### 0.2 "Res B, 6m relaxation" does not match our council data
 
