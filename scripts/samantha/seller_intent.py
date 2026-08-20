@@ -37,6 +37,20 @@ from datetime import datetime, timezone
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 from shared.db import get_client  # noqa: E402
 
+# --- Conjunction guard (do-no-harm) -----------------------------------------
+# A "conjunction property" is one LISTED BY ANOTHER AGENCY for which Fields is
+# running a buyer-acquisition conjunction (we find the buyer; the listing agent
+# keeps the vendor). We must NEVER prospect that vendor to switch/re-list — the
+# on-market-expiring "PRIME approach window: offer a candid read + re-list plan"
+# output below is exactly that prohibited prospecting. See fix-history
+# [CONJUNCTION-REGISTER-AND-GUARDS] (2026-08-20): 93 Burleigh Street (Tyler
+# Benson / Coomera Realty) was captured as an on_market_expiring lead.
+try:
+    from scripts.conjunction_register import is_conjunction  # noqa: E402
+except Exception:  # noqa: BLE001 — never let a guard-import failure break the run
+    def is_conjunction(_x):  # type: ignore
+        return False
+
 try:
     from src.mongo_client_factory import cosmos_retry  # noqa: E402
 except Exception:  # pragma: no cover
@@ -390,6 +404,14 @@ def listing_expiry_monitor(sm, gc_db, suburbs=None, dry_run=False):
             if not addr:
                 continue
             slug = d.get("url_slug")
+            # CONJUNCTION GUARD (Guard A): a conjunction property's vendor is
+            # another agency's client — never capture it as a switch/re-list
+            # lead and never alert on it. This is the most upstream chokepoint:
+            # skipping here means no worklist row is created AND no "PRIME
+            # approach" Telegram alert fires. See [CONJUNCTION-REGISTER-AND-GUARDS].
+            if is_conjunction(slug) or is_conjunction(addr):
+                print(f"[listing-expiry] SKIP conjunction property (do-no-harm): {addr}")
+                continue
             key = f"listing:{slug or re.sub(r'[^a-z0-9]+', '', addr.lower())}"
             captured += 1
 

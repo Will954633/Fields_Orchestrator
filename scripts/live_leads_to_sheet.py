@@ -62,6 +62,14 @@ from scripts.property_reports import occupancy_classifier as occ
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "samantha"))
 import seller_intent as sim  # noqa: E402
 
+# Conjunction guard: exclude other agencies' listings we're running a
+# buyer-acquisition conjunction on from any seller-prospecting sheet output.
+try:
+    from scripts.conjunction_register import is_conjunction  # noqa: E402
+except Exception:  # noqa: BLE001
+    def is_conjunction(_x):  # type: ignore
+        return False
+
 # ---- config ---------------------------------------------------------------
 LIVE_SPREADSHEET_ID = "1mRjT_PmjTepF1rDajJlM553Umy47dKa4fHOclrzAKFs"
 TAB = "All Leads"
@@ -493,6 +501,15 @@ def worklist_only_rows(db):
         if origin_colls & COVERED_ORIGIN_COLLECTIONS:
             continue
         if str(d.get("lead_key", "")).startswith("offmarket_view:"):
+            continue
+        # CONJUNCTION GUARD (Guard A, render side): a worklist row for a
+        # conjunction property (another agency's listing) must never surface as
+        # a seller-prospecting lead. This catches rows captured BEFORE the
+        # upstream guard in seller_intent.listing_expiry_monitor existed — e.g.
+        # the pre-existing listing:93-burleigh-street-burleigh-waters row.
+        # See fix-history [CONJUNCTION-REGISTER-AND-GUARDS] (2026-08-20).
+        if is_conjunction(d.get("address")) or is_conjunction(
+                str(d.get("lead_key", "")).removeprefix("listing:")):
             continue
         srcs = d.get("sources") or []
         label = " / ".join(dict.fromkeys(SOURCE_LABELS.get(s, s.replace("_", " ").title())

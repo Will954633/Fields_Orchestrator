@@ -3492,6 +3492,12 @@ def process_cadastral_property(
     if _wf is not None:
         return _wf
 
+    # CONJUNCTION GATE (Guard B) — withhold positioning verdict for a
+    # conjunction property (another agency's listing). See helper above.
+    _cj = _conjunction_editorial_gate(db, suburb, prop)
+    if _cj is not None:
+        return _cj
+
     # Skip if recent cadastral analysis exists (within 7 days) and not forced
     if not force:
         existing = prop.get("ai_analysis") or {}
@@ -3716,6 +3722,64 @@ def _waterfront_editorial_gate(db, suburb: str, prop: Dict) -> Optional[Dict]:
     return skip_record
 
 
+# Conjunction guard import — resolved lazily so an import hiccup can never break
+# the generator (falls back to "nothing is a conjunction", which fails OPEN to
+# normal behaviour only for the registry lookup, never for a KNOWN conjunction).
+try:
+    from scripts.conjunction_register import is_conjunction as _is_conjunction
+except Exception:  # noqa: BLE001
+    def _is_conjunction(_x):  # type: ignore
+        return False
+
+
+def _conjunction_editorial_gate(db, suburb: str, prop: Dict) -> Optional[Dict]:
+    """GUARD B — do-no-harm for other agencies' listings.
+
+    A *conjunction property* is a home listed by ANOTHER agency for which Fields
+    runs a buyer-acquisition conjunction (we find the buyer; the listing agent
+    keeps the vendor). Our editorial pipeline's whole job is to produce a
+    POSITIONING VERDICT — it pre-answers "is this overpriced?", derives a
+    `value_gap`, and writes a verdict connecting a home's weaknesses to its
+    price. Publishing that on a competitor's active listing DISPARAGES that
+    agent's property and their vendor's asking price. We must never do it.
+
+    Rather than surgically neutralise the verdict/value_gap/FAQ fields inside the
+    ~400-line multi-agent flow (not minimal, not reversible, and the verdict,
+    next_steps, CTA hooks and FAQ answers are ALL structurally positioning
+    content), we WITHHOLD generation entirely — mirroring _waterfront_editorial_gate.
+    No adverse positioning verdict is ever generated OR stored for a conjunction.
+    We set status fields only; we do NOT overwrite any existing helpful body.
+
+    Returns a skip record (caller returns it, halting the pipeline) for a
+    conjunction property; None otherwise (pipeline proceeds as normal).
+
+    See fix-history [AGENT-LISTING-DISPARAGEMENT] / [CONJUNCTION-REGISTER-AND-GUARDS]
+    (2026-08-20): 51 listings published an "Overpriced" verdict and 42 leaked
+    non-published editorial, on named agents' listings.
+    """
+    if not _is_conjunction(prop):
+        return None
+    address = prop.get("address") or prop.get("complete_address") or "Unknown"
+    now = datetime.now(timezone.utc).isoformat()
+    skip_record = {
+        "status": "skipped_conjunction",
+        "skipped_reason": "conjunction_property_do_no_harm_2026-08-20",
+        "skipped_at": now,
+        "headline": f"[SKIPPED] {address} — conjunction listing (positioning verdict withheld)",
+    }
+    # Set status flags ONLY — never clobber existing helpful editorial body.
+    set_fields = {"ai_analysis.status": skip_record["status"],
+                  "ai_analysis.skipped_reason": skip_record["skipped_reason"],
+                  "ai_analysis.skipped_at": now}
+    try:
+        cosmos_retry(lambda: db[suburb].update_one({"_id": prop["_id"]}, {"$set": set_fields}),
+                     "conjunction_gate")
+    except Exception as exc:  # noqa: BLE001 — a write hiccup must never let editorial through
+        print(f"  [WARN] conjunction flag write failed for {address}: {exc}")
+    print(f"[SKIP] {address} — CONJUNCTION LISTING (do-no-harm); positioning verdict withheld")
+    return skip_record
+
+
 # Feature vocabulary -> the words a photo-vision "absence" negative uses for it.
 # Used by _scrub_false_absence_negatives to drop step-108 negatives that claim a
 # feature is missing when a GROUND-TRUTH source (floor plan / Domain features
@@ -3820,6 +3884,12 @@ def process_property(db, suburb: str, prop: Dict, api_key: str, force: bool = Fa
     _wf = _waterfront_editorial_gate(db, suburb, prop)
     if _wf is not None:
         return _wf
+
+    # CONJUNCTION GATE (Guard B) — refuse to generate a positioning verdict for
+    # another agency's listing we're running a conjunction on. See helper above.
+    _cj = _conjunction_editorial_gate(db, suburb, prop)
+    if _cj is not None:
+        return _cj
 
     if not force and prop.get("ai_analysis") and prop["ai_analysis"].get("headline"):
         print(f"[SKIP] {address} — already has ai_analysis (use --force to regenerate)")
