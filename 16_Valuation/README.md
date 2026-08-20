@@ -71,6 +71,17 @@ Read these before running any measurement. Each cost real time or produced a wro
 **MAE 8.05%, 80% band ±12.2% ($391,904 on a $1.6M home), n = 581.** Down from $603,574 at the start
 of this work. `accuracy/2026-08-08-figures.md` is the only quotable source.
 
+> **⚠ Open, 2026-08-20:** the 80% bands re-measured at **~72–76%** coverage, not 80% —
+> `experiments/2026-08-20-band-coverage-drift.md`. Held for a full method review, not widened.
+> **`METHODOLOGY_REVIEW_TASK.md` is the live task** (weekly Telegram reminder until Status=DONE).
+
+## Products built on the valuation
+
+- `report_page/` — the **formal valuation report** (valuer-style document, full working shown),
+  for people who distrust online estimates but won't talk to an agent. Renders entirely from
+  `valuation_data`. **Prototype, held from public release** until the band claim is resolved.
+  See `report_page/README.md`.
+
 ## Index
 
 ### Methodology — how it works today
@@ -81,6 +92,7 @@ of this work. `accuracy/2026-08-08-figures.md` is the only quotable source.
 - `05-what-we-exclude.md` — attached dwellings, incomplete records, and the blind-subject rule
 
 ### Experiments — append-only, newest first
+- `2026-08-20-band-coverage-drift.md` — bands now contain ~72–76%; floor-area fix accuracy-neutral (A/B)
 - `2026-08-08-comparable-selection.md` — the post-adjustment filter keyed to the cohort median
 - `2026-08-08-where-the-headroom-is.md` — the ceiling is selection, not coverage (+ a correction)
 - `2026-08-07-enrichment-contribution-scoping.md` — four enrichment hypotheses, all rejected;
@@ -90,6 +102,7 @@ of this work. `accuracy/2026-08-08-figures.md` is the only quotable source.
 - `2026-08-07-outlier-list.md` — the 50 worst misses, with links
 
 ### Decisions
+- `2026-08-20-valuation-report-page.md` — the formal valuation report product; held from release
 - `2026-08-07-range-meaning.md` — coverage vs width; the band became an empirical 80% band
 
 ### Accuracy
