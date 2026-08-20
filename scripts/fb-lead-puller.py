@@ -46,6 +46,11 @@ SELLER_FORM_IDS = {
     "1961613607744103",  # GC Seller Intent (report) — name+email+phone
     "1689297792302611",  # GC Sold-Price Alerts — name+email+phone
     "1307646261451971",  # GC Seller Intent (report+address)
+    "2542687336206872",  # Independent Listing Analysis (carousel) — name+email+phone
+                         # Missing until 2026-08-20: its 4 leads (all with phones) fell
+                         # through to the generic buyer notify(), which renders neither
+                         # name nor phone, so Will got an email-only alert for four
+                         # phone-bearing seller leads.
 }
 
 # OUT-OF-MARKET copy-test forms (SEQ ex-GC). Captured SILENTLY as signal only:
@@ -288,7 +293,11 @@ def main():
                     notify_ayh(fields, form["name"], lead.get("created_time"), result)
             elif form["id"] in TEST_FORM_IDS:
                 # out-of-market signal only: store tagged, NO notify / CRM / fulfilment
+                # Write BOTH flags. `test_market` is the descriptive one; `is_test` is
+                # the flag every downstream consumer already filters on, and writing
+                # only the former is how 7 of these reached Will's callable sheet.
                 doc["test_market"] = True
+                doc["is_test"] = True
                 coll.insert_one(doc)
                 print(f"    [test-market] captured silently (no follow-up)")
             elif form["id"] in SELLER_FORM_IDS:
