@@ -50,6 +50,16 @@ DETECTION SIGNALS (any one is sufficient)
      confirm which lot is the subject, so its adjacency call may describe the wider
      frame, not this lot — same guard detect_golf_course_backing uses). A MISSING
      pin_confirmed key (older captures) is treated as proceed-as-before.
+  4. OSM `waterfront_premium_eligible` — the pre-computed eligibility flag
+     (backfill_osm_water_features.py, canal/lake/river 30 m, coastline 50 m).
+  5. OSM geometric fallback (added 2026-08-20): measured distance to a genuine
+     water body within WATERFRONT_GEOMETRIC_FALLBACK_M when signal 4's flag is
+     absent/stale/False and Signals 1-3 are silent. This closes the blind spot
+     where a cadastral/sold/timeline-only lakefront home — no text, no vision,
+     and a `waterfront_premium_eligible` flag left False because the 2026-08-07
+     lakefront backfill never re-processed it — was scored dry despite sitting
+     ~20 m from a lake, leaking a ~$5.1M-class canal/lake home into the DRY
+     comparable pool. Drains/streams/ditches are excluded. See _osm_distance_signal.
 
 IMPORTANT — water_proximity is matched against an explicit allowlist, NOT a substring.
 A naive `'front' in water_proximity` test wrongly flags the literal value
@@ -82,6 +92,27 @@ WATER_PROXIMITY_FRONT = frozenset({
     'lake_front', 'lakefront', 'canal_front', 'canalfront',
     'river_front', 'riverfront', 'ocean_front', 'oceanfront',
     'beach_front', 'beachfront', 'broadwater_front',
+})
+
+# ── Geometric fallback (Signal 5, added 2026-08-20). ──────────────────────────
+# Distance (metres) within which a parcel sitting beside a GENUINE water body is
+# treated as waterfront when no other signal fired and the pre-computed
+# `waterfront_premium_eligible` flag is not already True. See the block in
+# detect_waterfront() for the full rationale. 35 m, not the backfill's 30 m: the
+# stored distance is measured from the parcel CENTROID, so true frontage distance
+# is systematically shorter — a 5 m margin absorbs that plus geometry rounding.
+# This gate feeds a conservative SUPPRESSION decision (a false positive only
+# keeps us quiet about a home), so erring slightly generous is the safe side.
+WATERFRONT_GEOMETRIC_FALLBACK_M = 35
+
+# nearest_water_type values that carry a genuine waterfront character for the
+# geometric fallback. Deliberately EXCLUDES 'drain', 'stream', 'ditch',
+# 'waterway' — stormwater/drainage lines that a parcel can sit metres from while
+# being entirely dry stock (67 such homes in Burleigh Waters alone sit <=8 m from
+# a drain/stream/ditch). Only these premium bodies may trip the distance rule.
+GEOMETRIC_FALLBACK_WATER_TYPES = frozenset({
+    'canal', 'river', 'coastline', 'water_body', 'lake',
+    'estuary', 'broadwater', 'lagoon', 'marina', 'inlet',
 })
 
 
@@ -126,6 +157,67 @@ def _satellite_signal(doc):
         borderline = isinstance(water_prox, str) and 'adjacent' in water_prox.strip().lower()
         return 'satellite_backs_onto', borderline, {'water_proximity': water_prox, 'backs_onto': backs_onto}
     return None, False, None
+
+
+def _osm_distance_signal(doc):
+    """Geometric fallback (Signal 5): parcel measured within
+    WATERFRONT_GEOMETRIC_FALLBACK_M of a genuine water body.
+
+    Returns a detail dict when it fires, else None.
+
+    WHY THIS EXISTS (2026-08-20) — the stale-OSM blind spot
+    ────────────────────────────────────────────────────────────────────────────
+    Signal 4 above consumes the pre-computed `waterfront_premium_eligible`
+    boolean. That flag is only as good as the last time `backfill_osm_water_features.py`
+    ran over the document. The LAKEFRONT branch of that backfill (water bodies
+    within 30 m → `waterfront_type: 'lakefront'`, eligible True) was ADDED on
+    2026-08-07, after many documents already carried a `water_features` block. On
+    every such stale document the nearest feature is a lake — `nearest_water_type:
+    'water_body'`, a real measured `distance_to_water_m` — yet `waterfront_type`
+    is still `'none'` and `waterfront_premium_eligible` is `False`, because that
+    branch never re-processed it (`osm_location_features.metadata.water_backfilled_at`
+    is null). Cadastral / sold / timeline-only documents are the worst hit: they
+    carry no listing text and no vision pass, so Signals 1-3 are all silent, and
+    Signal 4 reads a stale False — the detector had NOTHING to work from and
+    returned dry for a home sitting 20 m from a lake.
+
+    Measured 2026-08-20 across the three core suburbs: 365 documents (88 Burleigh
+    Waters, 236 Robina, 41 Varsity Lakes) sit within 35 m of a `water_body` with a
+    stale not-eligible flag and were classified dry — every one of them a home a
+    fresh OSM pass would already flag. That is precisely how a ~$5.1M-class
+    canal/lake home leaks into the DRY comparable pool and drags a dry subject's
+    valuation upward, the exact failure the out-of-scope policy exists to prevent.
+
+    This signal recovers those homes WITHOUT depending on the backfill having run,
+    by reading the raw measured geometry that is already on the document:
+      • a canal within the fallback distance (`distance_to_canal_m`), or
+      • the nearest overall water body being one of GEOMETRIC_FALLBACK_WATER_TYPES
+        (drains/streams/ditches excluded) within `distance_to_water_m`.
+    It is skipped when `waterfront_premium_eligible` is already True (Signal 4
+    owns that case and outranks this one).
+    """
+    wf = (doc.get('osm_location_features') or {}).get('water_features') or {}
+    if not isinstance(wf, dict):
+        return None
+    # Signal 4 already handles a positively-eligible parcel; do not double-report.
+    if wf.get('waterfront_premium_eligible') is True:
+        return None
+
+    # A measured canal within range is the strongest geometric case (canal
+    # frontage is the specialist market the policy most wants to exclude).
+    canal_d = wf.get('distance_to_canal_m')
+    if isinstance(canal_d, (int, float)) and canal_d <= WATERFRONT_GEOMETRIC_FALLBACK_M:
+        return {'nearest_water_type': 'canal', 'distance_to_water_m': canal_d,
+                'via': 'distance_to_canal_m', 'threshold_m': WATERFRONT_GEOMETRIC_FALLBACK_M}
+
+    dist = wf.get('distance_to_water_m')
+    ntype = wf.get('nearest_water_type')
+    if not isinstance(dist, (int, float)) or dist > WATERFRONT_GEOMETRIC_FALLBACK_M:
+        return None
+    if isinstance(ntype, str) and ntype.strip().lower() in GEOMETRIC_FALLBACK_WATER_TYPES:
+        return {'nearest_water_type': ntype, 'distance_to_water_m': dist,
+                'via': 'distance_to_water_m', 'threshold_m': WATERFRONT_GEOMETRIC_FALLBACK_M}
+    return None
 
 
 def detect_waterfront(doc):
@@ -188,6 +280,18 @@ def detect_waterfront(doc):
             'nearest_water_type': osm_water.get('nearest_water_type'),
         }
 
+    # Signal 5: geometric fallback — measured proximity to a genuine water body
+    # when the eligibility flag is absent/stale/False and no other signal fired.
+    # See _osm_distance_signal() for the stale-backfill rationale. This is an
+    # ADDITIVE positive signal: it can only turn a dry result waterfront, never
+    # the reverse (this function carries no 'confident dry' signal to override),
+    # so it never contradicts a text/vision/eligible-flag call — those still win
+    # the `reason`. It ranks LAST because it is a derived, threshold-based rescue
+    # rather than an explicit assertion of frontage.
+    geo_detail = _osm_distance_signal(doc)
+    if geo_detail:
+        signals['osm_water_distance'] = geo_detail
+
     # Signal 0: explicit flag already present (manual override or a prior backfill).
     explicit = bool(doc.get('is_waterfront') or doc.get('waterfront_premium_eligible'))
     if explicit:
@@ -195,15 +299,18 @@ def detect_waterfront(doc):
 
     is_waterfront = explicit or bool(
         signals.get('photo_vision') or signals.get('listing_text') or sat_reason
-        or signals.get('osm_water_frontage')
+        or signals.get('osm_water_frontage') or signals.get('osm_water_distance')
     )
 
     # Strongest evidence-based reason first (more informative than the persisted
-    # flag). Measured geometry outranks vision and text — it is the only signal
-    # with a metre distance behind it.
+    # flag). Measured eligibility geometry outranks vision and text — it is the
+    # only signal with a metre distance AND a calibrated eligibility decision
+    # behind it. The geometric-distance fallback ranks LAST: it is a derived
+    # rescue for stale/missing eligibility, weaker than an explicit assertion.
     reason = None
     for candidate in ('osm_water_frontage', 'photo_vision', 'listing_text',
-                      'satellite_water_proximity', 'satellite_backs_onto'):
+                      'satellite_water_proximity', 'satellite_backs_onto',
+                      'osm_water_distance'):
         if candidate in signals:
             reason = candidate
             break
