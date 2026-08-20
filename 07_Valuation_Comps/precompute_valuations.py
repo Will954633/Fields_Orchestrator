@@ -2539,9 +2539,46 @@ def resolve_floor_area(doc):
     return internal
 
 
+_MIN_FLOOR_AREA_DEFAULT = 40
+_MIN_FLOOR_AREA_HOUSE = 80
+_DETACHED_TYPES = {'house'}
+
+
+def min_floor_area_for(doc):
+    """The smallest floor area that is physically credible for this dwelling type.
+
+    40 sqm is a plausible studio or one-bed unit; it is never a detached house.
+    The flat 40 guard added 2026-04-02 caught 28 Merion Court (floor_area_sqm=30,
+    a scraped ROOM dimension) but still passes bad scrapes in the 40-80 band, and
+    unlike the Merion case those DO reach the reported valuation — 36 valued
+    Houses across the three target suburbs carried an authoritative floor area
+    under 80 sqm. Raising the floor for houses only sends them to the building
+    -area fallback, which is populated for them.
+
+    See logs/fix-history/2026-08-20.md [VAL-FLOOR-SANITY].
+
+    IMPORTANT: mirrored in
+    Fields_Orchestrator/scripts/property_reports/inline_features.py — keep in sync.
+    """
+    ptype = (doc.get('property_type') or '').strip().lower()
+    if ptype not in _DETACHED_TYPES:
+        return _MIN_FLOOR_AREA_DEFAULT
+    # property_type='House' is not proof of a detached house — units are
+    # mislabelled that way (31002/42 Laver Drive, 45/23 Thorngate Drive), and for
+    # those a 62-77 sqm floor area is correct, not a bad scrape. Require the
+    # cadastral unit number to be absent AND the address to carry no unit prefix
+    # before applying the higher floor.
+    if doc.get('UNIT_NUMBER'):
+        return _MIN_FLOOR_AREA_DEFAULT
+    addr = (doc.get('complete_address') or doc.get('address') or '').strip()
+    if re.match(r'^\s*[\w-]+\s*/', addr):
+        return _MIN_FLOOR_AREA_DEFAULT
+    return _MIN_FLOOR_AREA_HOUSE
+
+
 def _resolve_internal_and_building(doc):
     """Returns (internal_living, building_area, source). See resolve_floor_area."""
-    MIN_FLOOR_AREA = 40
+    MIN_FLOOR_AREA = min_floor_area_for(doc)
     pvd = doc.get('property_valuation_data', {}) or {}
     old_layout = pvd.get('layout', {}) if isinstance(pvd.get('layout'), dict) else {}
     fpa = doc.get('floor_plan_analysis', {}) if isinstance(doc.get('floor_plan_analysis'), dict) else {}
@@ -3185,16 +3222,23 @@ def extract_images(doc, max_images=5):
 def basic_features(doc):
     """Extract basic features for tooltips"""
     pvd = doc.get('property_valuation_data', {})
-    layout = pvd.get('layout', {})
-    fpa = doc.get('floor_plan_analysis', {})
-    enriched = doc.get('enriched_data', {})
-    house_plan = doc.get('house_plan', {}) if isinstance(doc.get('house_plan'), dict) else {}
+    # `.get(k, {})` returns None when the key EXISTS holding null, which it does
+    # on some docs — that is the `AttributeError: 'NoneType' object has no
+    # attribute 'get'` that failed 2 properties on every batch_value_offmarket
+    # run (e.g. 4 Moorhen Place, Burleigh Waters). Coerce on type, not presence.
+    pvd = pvd if isinstance(pvd, dict) else {}
+    layout = pvd.get('layout') if isinstance(pvd.get('layout'), dict) else {}
+    fpa = doc.get('floor_plan_analysis') if isinstance(doc.get('floor_plan_analysis'), dict) else {}
+    enriched = doc.get('enriched_data') if isinstance(doc.get('enriched_data'), dict) else {}
+    house_plan = doc.get('house_plan') if isinstance(doc.get('house_plan'), dict) else {}
 
-    floor_area = (resolve_numeric(doc.get('floor_area_sqm')) or
-                  resolve_numeric(layout.get('floor_area_sqm')) or
-                  resolve_numeric(fpa.get('internal_floor_area')) or
-                  resolve_numeric(house_plan.get('floor_area_sqm')) or
-                  resolve_numeric(enriched.get('floor_area_sqm')))
+    # Use the ONE authoritative resolver. This helper used to run its own
+    # priority chain with no sanity floor, reading doc.floor_area_sqm FIRST —
+    # the field resolve_floor_area ranks LAST precisely because it is
+    # unreliable. That is how 28 Merion Court published "30 m²" on a house that
+    # sold for $1,810,000, on the same card that correctly said "233 m²".
+    # See logs/fix-history/2026-08-20.md [VAL-FLOOR-SANITY].
+    floor_area = resolve_floor_area(doc)
 
     fpa_land = resolve_numeric(fpa.get('total_land_area', {}).get('value')
                                if isinstance(fpa.get('total_land_area'), dict)

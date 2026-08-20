@@ -111,7 +111,32 @@ def _resolve_numeric(val: Any) -> Optional[float]:
 
 # Minimum believable internal area (m²) for a dwelling. Below this, a value is
 # almost certainly a single room dimension scraped by mistake, not floor area.
+# 40 is plausible for a studio or one-bed unit but never for a detached house,
+# so houses get a higher floor — bad scrapes in the 40-80 band otherwise reach
+# the valuation. See logs/fix-history/2026-08-20.md [VAL-FLOOR-SANITY].
 _MIN_FLOOR_AREA = 40
+_MIN_FLOOR_AREA_HOUSE = 80
+_DETACHED_TYPES = {"house"}
+
+
+def _min_floor_area_for(doc: Dict[str, Any]) -> int:
+    """Smallest credible internal area for this dwelling type.
+
+    IMPORTANT: mirrored from
+    Feilds_Website/07_Valuation_Comps/precompute_valuations.py::min_floor_area_for —
+    keep the two in sync.
+    """
+    ptype = (doc.get("property_type") or "").strip().lower()
+    if ptype not in _DETACHED_TYPES:
+        return _MIN_FLOOR_AREA
+    # property_type='House' is not proof of a detached house — units are
+    # mislabelled that way, and for those a 62-77 sqm floor area is correct.
+    if doc.get("UNIT_NUMBER"):
+        return _MIN_FLOOR_AREA
+    addr = (doc.get("complete_address") or doc.get("address") or "").strip()
+    if re.match(r"^\s*[\w-]+\s*/", addr):
+        return _MIN_FLOOR_AREA
+    return _MIN_FLOOR_AREA_HOUSE
 
 
 def resolve_floor_areas(doc: Dict[str, Any]):
@@ -170,9 +195,10 @@ def resolve_floor_areas(doc: Dict[str, Any]):
         (_resolve_numeric(doc.get("floor_area_sqm")), "legacy_floor_area"),
         (_resolve_numeric(layout.get("floor_area_sqm")), "legacy_layout"),
     ]
+    min_floor = _min_floor_area_for(doc)
     internal_living, source = None, None
     for val, src in internal_candidates:
-        if val and val >= _MIN_FLOOR_AREA:
+        if val and val >= min_floor:
             internal_living, source = val, src
             break
 
@@ -180,7 +206,7 @@ def resolve_floor_areas(doc: Dict[str, Any]):
         _resolve_numeric(doc.get("total_floor_area"))
         or _resolve_numeric(house_plan.get("floor_area_sqm"))
     )
-    if building_area and building_area < _MIN_FLOOR_AREA:
+    if building_area and building_area < min_floor:
         building_area = None
 
     # Physical sanity: internal-living CANNOT exceed building area (building =
