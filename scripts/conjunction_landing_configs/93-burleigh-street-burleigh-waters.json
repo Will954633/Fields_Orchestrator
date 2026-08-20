@@ -1,0 +1,137 @@
+{
+  "price": "$1,915,000",
+  "price_label": "Guide",
+  "title": "93 Burleigh Street, Burleigh Waters — the case for it, the compromises, the numbers | Fields",
+  "description": "822m² about 1.5km from Burleigh Beach. The only non-waterfront house over 800m² currently for sale within 1.5km of the sand. What that means at $1,915,000 — with the comparable sales, the trade-offs and the data.",
+  "og_title": "93 Burleigh Street, Burleigh Waters — 822m² near Burleigh Beach",
+  "og_description": "The only non-waterfront house over 800m² listed within 1.5km of Burleigh Beach. The case for it, the compromises and the numbers — at $1,915,000.",
+  "eyebrow": "Burleigh Waters &middot; 822m² &middot; ~1.5km to Burleigh Beach",
+  "h1": "93 Burleigh Street",
+  "hero_sub": "The case for it, the compromises, and the numbers. Not a listing — an honest look at one property, with the comparable sales laid out so you can decide for yourself.",
+  "hero_image_alt": "Aerial view of 93 Burleigh Street showing the 822m² block outlined",
+  "cta_primary": "Ask about the property",
+  "cta_secondary": "See the numbers",
+  "cta_secondary_anchor": "#numbers",
+
+  "sections": [
+    {
+      "type": "intro",
+      "heading": "Why it's interesting at $1,915,000",
+      "lead_p": "You can't renovate a location, and you can't renovate land. This property is one of the few near Burleigh Beach that gives you a large, non-waterfront block — and it's priced below what comparable blocks have sold for.",
+      "stats": [
+        {"value": "822m²", "label": "of land (Queensland cadastre)"},
+        {"value": "~1.5km", "label": "straight-line to Burleigh Beach"},
+        {"value": "$2,330", "label": "per m² of land at this guide"}
+      ],
+      "body_html": "On our data, <b>93 Burleigh Street is the only non-waterfront house on more than 800m² currently listed for sale within 1.5km of Burleigh Beach.</b> Every other block of that size in the same radius fronts a canal, and is priced well above $2.7m."
+    },
+    {
+      "type": "comps",
+      "anchor": "numbers",
+      "heading": "What recently sold around here",
+      "intro": "In the 24 months to 20 August 2026, seven non-waterfront houses on 800m² or more sold within 1.7km of Burleigh Beach. Here's every one of them:",
+      "columns": ["Sold", "Address", "Land", "Price", "Condition"],
+      "num_columns": [2, 3],
+      "rows": [
+        ["Dec 2024", "5 Turaco Ct", "833m²", "$2,196,785", "fully renovated"],
+        ["Jul 2025", "59 Bluejay St", "858m²", "$2,475,000", "fully renovated"],
+        ["Apr 2026", "29 Acanthus Ave", "844m²", "$2,850,000", "—"],
+        ["May 2025", "17 Kingfisher Cr", "900m²", "$2,850,000", "renovated 5–10 yrs"],
+        ["Nov 2024", "15 Curlew Cr", "815m²", "$2,930,000", "updated"],
+        ["Feb 2025", "200 Acanthus Ave", "913m²", "$3,465,000", "renovated"],
+        ["Aug 2025", "85 Burleigh St", "929m²", "$3,475,000", "renovated"]
+      ],
+      "subject_row": ["—", "93 Burleigh St (this home)", "822m²", "$1,915,000", "original 1975"],
+      "footer_html": "<b>None of the seven sold below $2,196,785.</b> Five of them had been renovated in the last ten years. The guide here sits below all of them — and the difference is condition, which is the one thing on this list you can change.",
+      "methodology_intro": "Comparable sales are drawn from Fields' property database of sold records to 20 August 2026 (sources: Domain and onthehouse listing data, reconciled). Land areas are from the Queensland cadastre. Distances are straight-line to Burleigh Heads Beach, not walking routes — the walk is longer and crosses the Gold Coast Highway. \"Non-waterfront\" excludes canal and lake-fronting blocks."
+    },
+    {
+      "type": "bullets",
+      "heading": "What makes this block different",
+      "items": [
+        "<b>822m² and dry.</b> About 155m from the nearest mapped water — you get the land without the cost or the exposure of a canal frontage.",
+        "<b>Regular, usable shape.</b> A wide street frontage running back to a deep rear yard. Not a narrow or awkward block.",
+        "<b>A real workshop.</b> A freestanding 7.0m × 6.2m shed at the rear, with driveway access past the carport — room for a boat, a trailer, tools or a workshop.",
+        "<b>Parking for four,</b> across a double carport and driveway."
+      ],
+      "note": "Block dimensions and shed access are being confirmed at the inspection this Saturday; figures above are from the site plan and cadastre."
+    },
+    {
+      "type": "spend",
+      "heading": "What you'd need to spend money on",
+      "lead_p": "We're not going to pretend it's finished. It isn't.",
+      "paragraphs": [
+        "It's an original 1975 home — the kitchen has laminate benchtops, the bathrooms and flooring are dated, and the presentation is of its era. That's exactly why it's priced where it is. What we can't yet tell you from photos is the difference between <em>cosmetically dated</em> and <em>needs real structural money</em> — we're documenting that at Saturday's inspection and will update this page with what we find."
+      ],
+      "callout": {
+        "h3": "The honest comparison",
+        "body": "5 Turaco Court — a fully renovated house on a similar 833m² block near the beach — sold for $2,196,785. At this guide you're roughly $280,000 below that, with the renovation still ahead of you. The question worth asking yourself is whether you'd rather buy someone else's finished taste, or create your own."
+      }
+    },
+    {
+      "type": "downstairs",
+      "heading": "What you could do with the downstairs",
+      "paragraphs": [
+        "The floor plan shows something the standard advertising doesn't mention: downstairs, separate from the four bedrooms upstairs, there's a large multi-purpose room (6.3m × 5.1m) with its own kitchenette, its own bathroom and a laundry.",
+        "What that could suit — teenagers who want their own space, an adult child at home, parents who need independence, or a work-from-home setup away from the main living areas."
+      ],
+      "note": "We describe what the floor plan draws — a kitchenette, a bathroom and a large room. We're confirming access and whether it closes off from the main house at the inspection, and we make no claim about approved dual living or rental use."
+    },
+    {
+      "type": "flood",
+      "heading": "The flood overlay, explained properly",
+      "intro": "If you searched this address, you'll have seen a flood overlay. Here's what it actually means — both halves of it.",
+      "bullets": [
+        "Gold Coast City Plan flags a flood overlay, and a flood assessment would be required for a development application.",
+        "The designated flood level is 4.18m; the mapped ground level is 4.03m — about 0.15m below — with a modelled depth under 30cm in a design flood event.",
+        "The address falls in <b>none of the five insurance-industry flood probability zones</b> (from the 1-in-5-year band through to the 1-in-2000-year band)."
+      ],
+      "summary": "In short: the council's planning overlay is more conservative than the insurance industry's own model. Both are true, and you deserve both.",
+      "note": "Sources: Gold Coast City Council ArcGIS flood mapping; Insurance Council of Australia flood zone data."
+    },
+    {
+      "type": "fit",
+      "heading": "Who it's for — and who it isn't",
+      "for": {
+        "h3": "A good fit if you want",
+        "items": [
+          "A big Burleigh block near the beach without paying a canal-front price",
+          "To renovate to your own taste over time",
+          "A genuine shed / workshop and parking",
+          "Room for extended family or a separate downstairs space"
+        ]
+      },
+      "against": {
+        "h3": "Not a fit if you want",
+        "items": [
+          "A home that's already finished and move-in perfect",
+          "A pool already in place",
+          "A waterfront position",
+          "The largest house on the street — the value here is the land, not the floor size"
+        ]
+      }
+    },
+    {
+      "type": "redevelopment",
+      "heading": "What's known about redevelopment",
+      "paragraphs": [
+        "The property is in a Low density residential zone. The owners have indicated additional planning detail which we're in the process of confirming with documentation — until we've verified it, we're not going to make any development claim. If you're looking at this as a build or development site, tell us in the form below and we'll share what we can substantiate."
+      ]
+    },
+    {
+      "type": "enquiry",
+      "anchor": "enquire",
+      "heading": "Ask about the property, or arrange to inspect",
+      "lead_p": "There's an inspection this <b>Saturday 22 August, 1:00–1:30pm</b>. Or leave your details and we'll get back to you.",
+      "interest_label": "What interests you most about it?",
+      "interest_options": [
+        "The land and location",
+        "Renovating it",
+        "Rebuilding / the future potential",
+        "The shed / workshop / parking",
+        "Space for extended family (the downstairs)",
+        "Just want to know more"
+      ]
+    }
+  ]
+}
