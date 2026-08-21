@@ -21,9 +21,12 @@ from dotenv import load_dotenv  # noqa: E402
 load_dotenv(REPO / ".env")
 
 from scripts.job_status import job_run  # noqa: E402
-from scripts.publish_offmarket_artifacts import publish, SUBURBS  # noqa: E402
+from scripts.publish_offmarket_artifacts import publish  # noqa: E402
 
 BLOB_ROOT = Path("/data/blobs")
+# V5 renders only in the measured suburbs (v5Eligible == V4_SUBURBS), and the
+# market-update generator supports exactly these — so we only pre-warm these.
+V5_SUBURBS = ["robina", "burleigh_waters", "varsity_lakes"]
 
 
 def has_artifact(slug: str, kind: str) -> bool:
@@ -39,7 +42,7 @@ def candidates(limit: int | None) -> list[str]:
 
     db = get_gold_coast_db()
     out: list[str] = []
-    for suburb in SUBURBS:
+    for suburb in V5_SUBURBS:
         cur = db[suburb].find(
             {
                 "listing_status": {"$nin": ["for_sale", "sold"]},
