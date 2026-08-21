@@ -754,6 +754,102 @@ def build_hero(client, doc, suburb_key, slug, out_dir) -> dict | None:
         return None
 
 
+def build_cards(bundle: dict) -> list[dict]:
+    """Deterministic 'market update' card ladder for the website.
+
+    Emits the same minted facts the article uses, as RAW numbers, so the site
+    can render its own stat cards + sparklines. No AI, no extra data fetch — it
+    reads only what `build()` already assembled in `bundle`. Each optional
+    section (suburb median, days-on-market, macro) is independently guarded, so
+    a property missing one still gets a coherent (shorter) ladder. This is what
+    makes it scale to the whole off-market book: suburb facts are shared, the
+    per-property work is the comps min/max already computed for the article.
+    """
+    b = bundle
+    comps = b.get("comps") or []
+    sm, dom, macro = b.get("suburb"), b.get("dom"), b.get("macro")
+    suburb = b.get("suburb_display") or b.get("suburb_key") or "the suburb"
+    street = b.get("address_short") or "your home"
+    cards: list[dict] = []
+
+    # 1 — hook
+    cards.append({
+        "type": "hook",
+        "headline": "The headlines say one thing. Your street says another.",
+        "sub": f"The {len(comps)} most recent sales near {street}, each adjusted to this "
+               f"home, set against the national numbers.",
+    })
+
+    # 2 — national headline stat (Cotality quarter move)
+    if macro and macro.get("stats"):
+        s = macro["stats"][0]
+        nums = s.get("numbers") or []
+        q = nums[1] if len(nums) > 1 else (nums[0] if nums else None)
+        if q is not None:
+            cards.append({
+                "type": "national-stat",
+                "headline": "Nationally, values are falling",
+                "stat": q, "fmt": "pct",
+                "source": ", ".join(x for x in (s.get("source"), s.get("period")) if x),
+            })
+
+    # 3 — local median (+ series)
+    if sm and sm.get("median_now") is not None:
+        yoy = sm.get("yoy_pct")
+        cards.append({
+            "type": "local-median",
+            "headline": (f"{suburb}'s median is {'up' if (yoy or 0) >= 0 else 'down'} "
+                         f"{abs(yoy):.1f}% this year") if yoy is not None else f"{suburb}'s median",
+            "stat": sm["median_now"], "fmt": "money",
+            "yoy_pct": yoy,
+            # Last ~16 quarters — a recent-trend sparkline, not the whole 1991→ history.
+            "series": [{"period": p.get("period"), "value": p.get("rolling_median")}
+                       for p in (sm.get("series") or [])
+                       if p.get("rolling_median") and not p.get("is_in_progress")][-16:],
+            "source": "Fields, from Domain and onthehouse.com.au records",
+        })
+
+    # 4 — days on market (+ series)
+    if dom and dom.get("latest") is not None:
+        cards.append({
+            "type": "days-on-market",
+            "headline": f"Homes here take {dom['latest']} days to sell",
+            "stat": dom["latest"], "fmt": "days",
+            "yoy_days": dom.get("yoy_days"),
+            "series": [{"period": p.get("period"), "value": p.get("median_days_on_market")}
+                       for p in (dom.get("timeline") or [])
+                       if p.get("median_days_on_market") and (p.get("transaction_count") or 0) > 0],
+            "source": "Fields Market Intelligence",
+        })
+
+    # 5 — nearby sales range (the valuation is always a range, never a point)
+    adj = [c["adjusted_price"] for c in comps if c.get("adjusted_price") is not None]
+    if adj:
+        nearest = min(comps, key=lambda c: c.get("distance_km", 9e9))
+        furthest = max(comps, key=lambda c: c.get("distance_km", -1.0))
+        cards.append({
+            "type": "nearby-range",
+            "headline": "What those sales say about your home",
+            "stat": [min(adj), max(adj)], "fmt": "range",
+            "source": f"{len(comps)} sales, {nearest.get('distance_km', 0):.2f}"
+                      f"–{furthest.get('distance_km', 0):.2f} km away",
+        })
+
+    # 6 — the contradiction (local vs national)
+    if sm and sm.get("yoy_pct") is not None and macro:
+        yoy = sm["yoy_pct"]
+        cards.append({
+            "type": "contradiction",
+            "headline": "National down. " + suburb +
+                        (" up." if yoy >= 0 else " softer — but not by the headline number."),
+            "stat": yoy, "fmt": "pct",
+            "sub": "The national aggregate and this suburb's own record point in different directions.",
+            "source": "national aggregate vs suburb rolling median",
+        })
+
+    return cards
+
+
 # ---------------------------------------------------------------- driver
 
 def build(address, suburb=None, out_dir=None, want_html=True,
@@ -837,6 +933,15 @@ def build(address, suburb=None, out_dir=None, want_html=True,
         html_path = os.path.join(out_dir, f"{slug}.html")
         with open(html_path, "w") as fh:
             fh.write(md_to_html(md, title, hero, charts))
+
+    # Deterministic card ladder for the website "Market update" rail — same
+    # minted facts as the article, emitted as raw numbers (no AI). Written
+    # unconditionally so it exists even under --no-html.
+    cards_path = os.path.join(out_dir, f"{slug}.cards.json")
+    with open(cards_path, "w") as fh:
+        json.dump({"address": bundle["address_full"],
+                   "suburb": bundle.get("suburb_display"),
+                   "cards": build_cards(bundle)}, fh, indent=2)
 
     return {"ok": True, "address": full_addr, "slug": slug, "md": md_path,
             "html": html_path, "n_comps": len(comps), "radius_km": radius,
