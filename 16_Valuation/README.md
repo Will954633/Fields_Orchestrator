@@ -4,8 +4,49 @@
 appraisal, the property page, the mini-site — is a wrapper around a number and a range. If that
 number is wrong, or the range around it is dishonest, nothing else we build matters.
 
-This folder is the single home for how the valuation works, what we have tested, what we found, and
-what we decided. **Every change to the method gets a dated record here before it ships.**
+This folder is the **index for the whole valuation landscape** — every engine, every surface that
+shows a number, and their current status — and it is the working home for the **detached-house**
+engine specifically. **Every change to a method gets a dated record here before it ships.**
+
+---
+
+## The whole landscape in one screen
+
+There is **more than one valuation method.** They are different methods for different property
+types, not settings of one engine, and they share no code. Full detail: **`engines/README.md`**.
+
+| engine | property type | writes | status | documented in |
+|---|---|---|---|---|
+| **House comparable-sales** | detached houses **$1M–$2M** | `valuation_data` on the doc | **LIVE** nightly + on-demand | **this folder** (`methodology/`, `experiments/`, `accuracy/`) |
+| **Unit comparable-sales** (`UnitValuer`) | attached (unit/apt/townhouse/villa/duplex) | `unit_valuations` collection (**never** `valuation_data`) | **LIVE** daily 04:30 | `15_Off-Market/Units/` |
+| **Unit statutory comparables** | attached (compliance CMA) | own collection | **LIVE** daily 05:15 | `15_Off-Market/Units/` |
+| CatBoost `iteration_08` | houses (ML) | — | **DEAD** (retired 2026-08-05) | `engines/README.md` |
+
+**Surfaces that show a valuation** — `/property`, `/off-market`, `/your-home`, and the formal
+report page. For a detached house they **all read the same stored `valuation_data`** (differences
+are display rounding only). Divergences (units use their own engine; `/property` has a stale-data
+fallback recompute; `/your-home` is a static fixture that can drift; the uncalibrated tier leaks
+softly on `/your-home`) are mapped in **`surfaces.md`**.
+
+> **⚠ Current status, 2026-08-20.** House engine: MAE 8.05%, but the 80% bands re-measured at
+> **~72–76%** coverage (`experiments/2026-08-20-band-coverage-drift.md`) — **held, not widened,
+> pending a full method review.** The formal report page (`report_page/`) is a **prototype held
+> from public release** because it repeats the now-overstated "four in five" claim. The live task
+> with a weekly Telegram reminder is **`METHODOLOGY_REVIEW_TASK.md`**.
+
+## Map of this folder
+
+| path | what it is |
+|---|---|
+| `engines/README.md` | **Every valuation engine** — house, unit, statutory, the dead ones — and how they differ |
+| `surfaces.md` | Every page that shows a number, and whether they agree |
+| `report_page/` | The **formal valuation report** product (prototype, held) |
+| `methodology/` · `experiments/` · `decisions/` · `accuracy/` | The **detached-house** engine's living docs, tests, calls, and figures |
+| `METHODOLOGY_REVIEW_TASK.md` | The open cross-cutting review (bands, calibration, tier) |
+
+⚠ **Scope note:** unless a file says otherwise, `methodology/`, `experiments/` and `accuracy/` in
+this folder describe the **detached-house engine**. The unit engine's own methodology, research and
+development plan live in `15_Off-Market/Units/`; `engines/README.md` maps the differences.
 
 ---
 
@@ -71,16 +112,8 @@ Read these before running any measurement. Each cost real time or produced a wro
 **MAE 8.05%, 80% band ±12.2% ($391,904 on a $1.6M home), n = 581.** Down from $603,574 at the start
 of this work. `accuracy/2026-08-08-figures.md` is the only quotable source.
 
-> **⚠ Open, 2026-08-20:** the 80% bands re-measured at **~72–76%** coverage, not 80% —
-> `experiments/2026-08-20-band-coverage-drift.md`. Held for a full method review, not widened.
-> **`METHODOLOGY_REVIEW_TASK.md` is the live task** (weekly Telegram reminder until Status=DONE).
-
-## Products built on the valuation
-
-- `report_page/` — the **formal valuation report** (valuer-style document, full working shown),
-  for people who distrust online estimates but won't talk to an agent. Renders entirely from
-  `valuation_data`. **Prototype, held from public release** until the band claim is resolved.
-  See `report_page/README.md`.
+(House-engine bands are ⚠ open — see the status note at the top and
+`experiments/2026-08-20-band-coverage-drift.md`.)
 
 ## Index
 
